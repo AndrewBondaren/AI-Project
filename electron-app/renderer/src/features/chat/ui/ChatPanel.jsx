@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import MessageList from "./MessageList";
 import MessageInput from "./MessageInput";
+import { sendMessage } from "../service/chatService";
+import { getSessionId } from "@/common/sessionId";
 
 export default function ChatPanel() {
   const [messages, setMessages] = useState([]);
@@ -8,7 +10,6 @@ export default function ChatPanel() {
 
   const chatRef = useRef(null);
 
-  // 👇 простой авто-скролл ВСЕГДА вниз
   useEffect(() => {
     const el = chatRef.current;
     if (!el) return;
@@ -21,14 +22,17 @@ export default function ChatPanel() {
 
   const handleSend = async (text) => {
     if (!text.trim()) return;
+    const sessionId = getSessionId();
 
     setMessages((prev) => [...prev, { role: "user", text }]);
     setLoading(true);
 
+    const res = await sendMessage(sessionId, text);
+
     setTimeout(() => {
       setMessages((prev) => [
         ...prev,
-        { role: "bot", text: "Echo: " + text }
+        { role: "bot", text: res.response }
       ]);
       setLoading(false);
     }, 400);

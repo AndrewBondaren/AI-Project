@@ -1,4 +1,4 @@
-import ChatPanel from "./features/compiler/ui/ChatPanel";
+import ChatPanel from "./features/chat/ui/ChatPanel";
 
 function App() {
   return <ChatPanel />;
