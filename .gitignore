@@ -23,7 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 
-node_modules/*
+*/electron-app/node_modules/*
+*/electron-app/renderer/node_modules/*
 dist/
 build/
 .env
