@@ -1,5 +1,3 @@
-# infrastructure/llm/qwen_client.py
-
 import httpx
 
 

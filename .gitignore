@@ -25,6 +25,8 @@ dist-ssr
 
 */electron-app/node_modules/*
 */electron-app/renderer/node_modules/*
+*/__pycache__
+*/__pycache__/*
 dist/
 build/
 .env

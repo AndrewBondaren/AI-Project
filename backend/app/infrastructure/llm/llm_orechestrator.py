@@ -1,9 +1,7 @@
-# application/llm/llm_orchestrator.py
-
-from backend.infrastructure.llm.router import LLMRouter
-from backend.application.llm.prompt_builder import PromptBuilder
-from backend.application.llm.response_parser import LLMResponseParser
-from backend.core.config import settings
+from backend.app.infrastructure.llm.router import LLMRouter
+from backend.app.infrastructure.llm.promptBuilder import PromptBuilder
+from backend.app.infrastructure.llm.responseParser import ResponseParser
+from backend.app.core.config import settings
 
 
 class LLMOrchestrator:
@@ -11,7 +9,7 @@ class LLMOrchestrator:
     def __init__(self):
         self.llm = LLMRouter()
         self.prompts = PromptBuilder()
-        self.parser = LLMResponseParser()
+        self.parser = ResponseParser()
 
     async def narrate_combat(self, combat_result, character):
 

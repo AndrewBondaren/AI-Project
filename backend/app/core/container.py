@@ -1,8 +1,6 @@
-# core/container.py
-
-from infrastructure.llm.qwenClient import QwenClient
-from infrastructure.llm.router import LLMRouter
-from core.config import settings
+from app.infrastructure.llm.qwenClient import QwenClient
+from app.infrastructure.llm.router import LLMRouter
+from app.core.config import settings
 
 
 def create_llm_router():

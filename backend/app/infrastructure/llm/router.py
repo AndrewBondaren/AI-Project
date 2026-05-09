@@ -1,7 +1,7 @@
-from infrastructure.llm.qwenClient import QwenClient
+from app.infrastructure.llm.qwenClient import QwenClient
 
 
-class Router:
+class LLMRouter:
     def __init__(self, qwen: QwenClient):
         self.qwen = qwen
 

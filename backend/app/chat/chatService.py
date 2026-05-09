@@ -1,8 +1,6 @@
-# application/chat/chat_service.py
-
-from application.chat.stateBuilder import StateBuilder
-from application.llm.promptBuilder import PromptBuilder
-from application.llm.responseParser import ResponseParser
+from app.chat.stateBuilder import StateBuilder
+from app.infrastructure.llm.promptBuilder import PromptBuilder
+from app.infrastructure.llm.responseParser import ResponseParser
 
 
 class ChatService:
