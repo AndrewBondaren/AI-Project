@@ -1,0 +1,18 @@
+{
+  "name": "ai-project",
+  "version": "1.0.0",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "scripts": {
+    "dev": "chcp 65001 > nul && concurrently \"npm run backend\" \"npm run frontend\" \"npm run electron\"",
+
+    "backend": "cd backend && python -m uvicorn app.core.app:app --reload --port 8000",
+
+    "wait-backend": "cmd /c \"cd electron-app && node scripts/wait-for-backend.js",
+
+    "frontend": "cmd /c \"cd electron-app\\renderer && npm run dev\"",
+
+    "electron": "cmd /c \"cd electron-app\\electron && npm run electron\""
+  }
+}
