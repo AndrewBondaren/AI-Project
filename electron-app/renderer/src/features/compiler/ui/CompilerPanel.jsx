@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { compile } from "../service/compilerService";
+import { sendMessage } from "../service/chatService";
 
 export default function CompilerPanel() {
   const [code, setCode] = useState("");
   const [result, setResult] = useState(null);
 
   const handleCompile = async () => {
-    const res = await compile( code );
-    setResult(res);
+    const data = await sendMessage("test-session", "hello");;
+    setResult(data);
   };
 
   return (

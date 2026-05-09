@@ -1,0 +1,41 @@
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
+
+from application.chat.chatService import ChatService
+from core.container import create_llm_router
+
+
+router = APIRouter()
+
+
+class ChatRequest(BaseModel):
+    session_id: str
+    message: str
+
+
+class ChatResponse(BaseModel):
+    response: str
+
+
+def get_chat_service():
+    llm = create_llm_router()
+    return ChatService(llm)
+
+@router.get("/health")
+def health():
+    return {
+        "status": "ok"
+    }
+
+
+@router.post("/chat", response_model=ChatResponse)
+async def chat(
+    data: ChatRequest,
+    service: ChatService = Depends(get_chat_service)
+):
+    result = await service.handle_message(
+        session_id=data.session_id,
+        message=data.message
+    )
+
+    return ChatResponse(response=result)
