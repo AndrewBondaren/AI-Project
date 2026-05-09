@@ -5,6 +5,10 @@
     "concurrently": "^9.2.1"
   },
   "scripts": {
+    "init": "npm install && cd electron-app && npm install && cd renderer && npm install",
+
+    "init-electron": "cd electron-app && npm install && cd renderer && npm install",
+
     "dev": "chcp 65001 > nul && concurrently \"npm run backend\" \"npm run frontend\" \"npm run electron\"",
 
     "backend": "cd backend && python -m uvicorn app.core.app:app --reload --port 8000",

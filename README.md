@@ -1,9 +1,9 @@
 pip install fastapi uvicorn
 
-*\AI Project\electron-app
-npm install
+# Init Backend
+npm run init
+# Init FrontEnd
+npm run init-electron
 
-npm create vite@latest . -- --template react
-npm install
-
+# Launch app
 npm run dev
