@@ -1,9 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.container import Container
 
 
 def create_app():
     app = FastAPI()
+    app.state.container = Container()
 
     app.add_middleware(
         CORSMiddleware,

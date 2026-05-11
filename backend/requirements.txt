@@ -1,0 +1,34 @@
+# === Core API ===
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+
+# === LLM clients ===
+openai>=1.40.0
+anthropic>=0.25.0
+
+# Qwen через OpenAI-compatible API
+httpx>=0.27.0
+
+# === Data / validation ===
+pydantic>=2.7.0
+
+# === async utilities (очень полезно для streaming / sockets) ===
+anyio>=4.0.0
+
+# === WebSockets (если делаешь streaming чата) ===
+websockets>=12.0
+
+# === config ===
+python-dotenv>=1.0.1
+
+# === logging (норм логирование вместо print) ===
+loguru>=0.7.2
+
+# === optional (если будешь расширять memory / cache слой) ===
+orjson>=3.10.0
+
+# если хочешь стабильный streaming LLM
+sse-starlette>=2.1.0
+
+# если начнёшь делать сложный DI / контейнер
+dependency-injector>=4.41.0
