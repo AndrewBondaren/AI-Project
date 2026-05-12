@@ -1,3 +1,5 @@
+from app.application.llm.clients.baseClient import BaseLLMClient
+
 class LLMRouter:
 
     def __init__(self, qwen_client, openai_client, anthropic_client):

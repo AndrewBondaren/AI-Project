@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from app.chat.chatService import ChatService
+from app.application.chat.chatService import ChatService
 from app.api.deps import get_container
 
 
 router = APIRouter()
 
 class ChatRequest(BaseModel):
-    session_id: str
+    session: str
     message: str
 
 
@@ -33,7 +33,7 @@ async def chat(
 ):
     print("CHAT ENDPOINT HIT"),
     result = await service.handle_message(
-        session_id=data.session_id,
+        session=data.session,
         message=data.message
     )
 

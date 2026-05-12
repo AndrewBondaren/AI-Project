@@ -1,33 +1,16 @@
+from app.application.llm.engine.taskType import TaskType
+
 class ChatService:
 
-    def __init__(
-        self,
-        llmOrchestrator,
-        session_service
-    ):
+    def __init__(self, llm_engine):
+        self.engine = llm_engine
 
-        self.llm = llmOrchestrator
-        self.sessions = session_service
+    async def handle_message(self, session: str, message: str):
 
-    async def handle_message(
-        self,
-        session_id: str,
-        user_message: str
-    ):
-
-        session = await self.sessions.load(
-            session_id
+        result = await self.engine.run(
+            task_type = TaskType.CHAT,
+            message=message,
+            session=session
         )
 
-        session.messages.append({
-            "role": "user",
-            "content": user_message
-        })
-
-        response = await self.llm.generate(
-            session
-        )
-
-        await self.sessions.save(session)
-
-        return response
+        return result

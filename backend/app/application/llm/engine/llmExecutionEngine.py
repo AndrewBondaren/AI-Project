@@ -1,41 +1,43 @@
-from typing import Dict
-from app.application.llm.response.taskType import TaskType
-from app.application.llm.engine.dag.executionGraph import ExecutionGraph
 from app.application.llm.engine.dag.executionState import ExecutionState
+from app.application.llm.engine.graphs.graphRegistryFactory import GraphRegistryFactory
 
 
 class llmExecutionEngine:
 
-    def __init__(self, executor, graph_registry: Dict[TaskType, ExecutionGraph]):
-        self.executor = executor
-        self.graph_registry = graph_registry
+    def __init__(self, dag_executor, router, node_executor_registry, prompt_compiler, prompt_aggregator):
+        self.dag_executor = dag_executor
+        self.router = router
+        self.node_executor_registry = node_executor_registry
+        self.prompt_compiler = prompt_compiler
+        self.prompt_aggregator = prompt_aggregator
 
-    async def run(self, task_type: TaskType, message: str, session):
+    async def run(self, task_type, message, session):
 
-        graph = self.graph_registry[task_type]
+        graph = GraphRegistryFactory.build(task_type)
+
         state = ExecutionState(message, session)
 
-        context = self.build_runtime_context(session)
-
-        return await self.executor.execute(
+        # ======================
+        # DAG EXECUTION
+        # ======================
+        state = await self.dag_executor.execute(
             graph,
             state,
-            context
+            self.build_runtime_context()
         )
+
+        # ======================
+        # PROMPT LAYER
+        # ======================
+        prompt_context = self.prompt_aggregator.build(state, task_type)
+
+        messages = self.prompt_compiler.compile(prompt_context)
+
+        client = self.router.get(session.llm_provider)
+
+        return await client.chat(messages)
     
-    def build_runtime_context(self, session):
-
+    def build_runtime_context(self):
         return {
-            "client": self.router.get(session.llm_provider),
-            "structured_executor": self.structured_executor,
-            "prompt_builder": self.prompt_builder_registry,
+            "node_executor_registry": self.node_executor_registry,
         }
-    def inject_runtime(self, graph, runtime):
-
-        for node in graph.nodes.values():
-
-            if node.type == "llm":
-
-                node.meta["client"] = runtime["client"]
-                node.meta["structured_executor"] = runtime["structured_executor"]
-                node.meta["prompt_builder"] = runtime["prompt_builder"]

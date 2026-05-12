@@ -3,9 +3,17 @@ from app.application.llm.clients.openAIClient import OpenAIClient
 from app.application.llm.clients.anthropicClient import AnthropicClient
 from app.application.llm.engine.dag.DAGExecutor import DAGExecutor
 from app.application.llm.engine.llmExecutionEngine import llmExecutionEngine
-
+from app.application.llm.engine.nodes.pythonNode import PythonNode
+from app.application.llm.engine.nodes.llmNode import LLMNode
+from app.application.llm.engine.nodes.nodeExecutorRegistry import NodeExecutorRegistry
 from app.application.llm.router import LLMRouter
 from app.application.chat.chatService import ChatService
+from app.application.llm.engine.execution.llmNodeExecutor import LLMNodeExecutor
+from app.application.llm.engine.execution.pythonNodeExecutor import PythonNodeExecutor
+from app.application.llm.engine.prompt.promptCompiler import PromptCompiler
+from app.application.llm.engine.prompt.promptAggregator import PromptAggregator
+from app.application.llm.engine.prompt.promptAssambler import PromptAssembler
+from app.application.llm.engine.prompt.dslRegistry import DSLRegistry
 
 from app.core.config import settings
 
@@ -17,17 +25,16 @@ class Container:
         self._qwen_client = None
         self._openai_client = None
         self._anthropic_client = None
-
         self._llm_router = None
-
+        self._llm_engine = None
+        self._dag_executor = None
         self._chat_service = None
+        self._node_executor_registry = None
+        self._dsl_registry = None
+        self._prompt_compiler = None
+        self._prompt_aggregator = None
+        self._prompt_assembler = None
 
-        self._graph_registry = None
-
-    def graph_registry(self):
-        if self._graph_registry is None:
-            self._graph_registry = {}
-        return self._graph_registry
 
     # =====================================================
     # CLIENTS
@@ -63,7 +70,6 @@ class Container:
                 base_url=settings.ANTHROPIC_BASE_URL,
                 api_key=settings.ANTHROPIC_API_KEY
             )
-
         return self._anthropic_client
 
     # =====================================================
@@ -81,6 +87,66 @@ class Container:
             )
 
         return self._llm_router
+    
+    def dag_executor(self):
+        if self._dag_executor is None:
+            self._dag_executor = DAGExecutor()
+        return self._dag_executor
+    
+    def node_executor_registry(self):
+
+        if self._node_executor_registry is None:
+            self._node_executor_registry = NodeExecutorRegistry()
+
+            self._node_executor_registry.register(
+                LLMNode,
+                LLMNodeExecutor()
+            )
+
+            self._node_executor_registry.register(
+                PythonNode,
+                PythonNodeExecutor()
+            )
+
+        return self._node_executor_registry
+    
+    def dsl_registry(self):
+        if self._dsl_registry is None:
+            self._dsl_registry = DSLRegistry(base_path="app/dsl")
+        return self._dsl_registry
+
+
+    def prompt_aggregator(self):
+        if self._prompt_aggregator is None:
+            self._prompt_aggregator = PromptAggregator()
+        return self._prompt_aggregator
+
+
+    def prompt_assembler(self):
+        if self._prompt_assembler is None:
+            self._prompt_assembler = PromptAssembler()
+        return self._prompt_assembler
+
+
+    def prompt_compiler(self):
+        if self._prompt_compiler is None:
+            self._prompt_compiler = PromptCompiler(
+                dsl_registry=self.dsl_registry(),
+                assembler=self.prompt_assembler()
+            )
+        return self._prompt_compiler
+    
+    def llm_engine(self):
+        if self._llm_engine is None:
+            self._llm_engine = llmExecutionEngine(
+                dag_executor=self.dag_executor(),
+                router=self.llm_router(),
+                node_executor_registry=self.node_executor_registry(),
+                prompt_compiler=self.prompt_compiler(),
+                prompt_aggregator=self.prompt_aggregator()
+            )
+
+        return self._llm_engine
 
     # =====================================================
     # SERVICES
@@ -89,27 +155,8 @@ class Container:
     def chat_service(self):
 
         if self._chat_service is None:
-
-            router = self.llm_router()
-            graphs = self.graph_registry()
-
-            executor = DAGExecutor()
-
-            if router is None:
-                raise RuntimeError("Router not initialized")
-
-            if graphs is None:
-                raise RuntimeError("Graph registry not initialized")
-
-            executor = DAGExecutor()
-
-        llm_engine = llmExecutionEngine(
-            executor=executor,
-            graph_registry=graphs
+            self._chat_service = ChatService(
+            llm_engine=self.llm_engine(),
         )
-
-        self._chat_service = ChatService(
-            llm_engine=llm_engine
-        )
-
+            
         return self._chat_service

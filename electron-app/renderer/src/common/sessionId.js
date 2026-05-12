@@ -1,4 +1,4 @@
-const SESSION_KEY = "chat_session_id";
+const SESSION_KEY = "chat_session";
 
 export function getSessionId() {
   let id = localStorage.getItem(SESSION_KEY);

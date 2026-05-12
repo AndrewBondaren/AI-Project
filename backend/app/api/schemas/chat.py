@@ -3,7 +3,7 @@ from typing import Any
 
 
 class ChatRequest(BaseModel):
-    session_id: str
+    session: str
     message: str
 
 

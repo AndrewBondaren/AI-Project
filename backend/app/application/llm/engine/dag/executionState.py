@@ -1,6 +1,6 @@
 from typing import Any, Dict, List
 
-from app.application.llm.engine.ExecutionTrace import ExecutionTrace
+from app.application.llm.engine.execution.executionTrace import ExecutionTrace
 
 
 class ExecutionState:

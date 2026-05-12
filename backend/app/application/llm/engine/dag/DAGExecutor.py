@@ -2,7 +2,7 @@ import asyncio
 
 from typing import Dict, List
 from datetime import datetime, timezone
-from app.application.llm.engine.ExecutionTrace import ExecutionTrace
+from app.application.llm.engine.execution.executionTrace import ExecutionTrace
 
 
 class DAGExecutor:
@@ -17,6 +17,7 @@ class DAGExecutor:
             await self.execute_level(graph, state, level)
 
         state.final_result = state.node_results
+        return state
 
     # -------------------------
     # LEVEL BUILDER (deterministic)
