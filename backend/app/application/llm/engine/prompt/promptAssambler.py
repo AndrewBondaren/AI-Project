@@ -15,7 +15,4 @@ class PromptAssembler:
         if context.errors is not None:
             payload["errors"] = context.errors
 
-        if context.session is not None:
-            payload["session"] = context.session
-
         return json.dumps(payload, ensure_ascii=False)

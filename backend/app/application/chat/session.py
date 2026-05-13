@@ -6,3 +6,4 @@ class Session:
     model: str
     user_id: str
     meta: dict
+    repair_iterations: int

@@ -15,6 +15,7 @@ from app.application.llm.engine.prompt.promptAggregator import PromptAggregator
 from app.application.llm.engine.prompt.promptAssambler import PromptAssembler
 from app.application.llm.engine.prompt.dslRegistry import DSLRegistry
 from app.application.llm.engine.prompt.dslAggregator import DSLAggregator
+from app.application.llm.engine.validation import llmValidation
 
 from app.core.config import settings
 
@@ -36,6 +37,7 @@ class Container:
         self._prompt_aggregator = None
         self._prompt_assembler = None
         self._dsl_aggregator = None
+        self._validator = None
 
 
     # =====================================================
@@ -43,7 +45,6 @@ class Container:
     # =====================================================
 
     def qwen_client(self):
-
         if self._qwen_client is None:
 
             self._qwen_client = QwenClient(
@@ -60,9 +61,7 @@ class Container:
         return self._dsl_aggregator
 
     def openai_client(self):
-
         if self._openai_client is None:
-
             self._openai_client = OpenAIClient(
                 base_url=settings.OPENAI_BASE_URL,
                 api_key=settings.OPENAI_API_KEY
@@ -71,9 +70,7 @@ class Container:
         return self._openai_client
 
     def anthropic_client(self):
-
         if self._anthropic_client is None:
-
             self._anthropic_client = AnthropicClient(
                 base_url=settings.ANTHROPIC_BASE_URL,
                 api_key=settings.ANTHROPIC_API_KEY
@@ -85,9 +82,7 @@ class Container:
     # =====================================================
 
     def llm_router(self):
-
         if self._llm_router is None:
-
             self._llm_router = LLMRouter(
                 qwen_client=self.qwen_client(),
                 openai_client=self.openai_client(),
@@ -102,10 +97,8 @@ class Container:
         return self._dag_executor
     
     def node_executor_registry(self):
-
         if self._node_executor_registry is None:
             self._node_executor_registry = NodeExecutorRegistry()
-
             self._node_executor_registry.register(
                 LLMNode,
                 LLMNodeExecutor(
@@ -146,6 +139,11 @@ class Container:
             )
         return self._prompt_compiler
     
+    def validator(self):
+        if self._validator is None:
+            self._validator = LLMValidator()
+        return self._validator
+    
     def llm_engine(self):
         if self._llm_engine is None:
             self._llm_engine = llmExecutionEngine(
@@ -154,7 +152,8 @@ class Container:
                 node_executor_registry=self.node_executor_registry(),
                 prompt_aggregator=self.prompt_aggregator(),
                 prompt_compiler=self.prompt_compiler(),
-                dsl_aggregator=self.dsl_aggregator()
+                dsl_aggregator=self.dsl_aggregator(),
+                validator=self.validator()
             )
 
         return self._llm_engine
@@ -164,7 +163,6 @@ class Container:
     # =====================================================
 
     def chat_service(self):
-
         if self._chat_service is None:
             self._chat_service = ChatService(
             llm_engine=self.llm_engine(),

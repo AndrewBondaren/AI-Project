@@ -8,7 +8,8 @@ export async function sendChatMessage(sessionId, message) {
       llm_provider: "qwen",
       model: "qwen3.6",
       user_id: "session_1", //sessionId
-      message: message
+      message: message,
+      repair_iterations: 2
     })
   });
 
