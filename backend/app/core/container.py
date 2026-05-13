@@ -14,6 +14,7 @@ from app.application.llm.engine.prompt.promptCompiler import PromptCompiler
 from app.application.llm.engine.prompt.promptAggregator import PromptAggregator
 from app.application.llm.engine.prompt.promptAssambler import PromptAssembler
 from app.application.llm.engine.prompt.dslRegistry import DSLRegistry
+from app.application.llm.engine.prompt.dslAggregator import DSLAggregator
 
 from app.core.config import settings
 
@@ -34,6 +35,7 @@ class Container:
         self._prompt_compiler = None
         self._prompt_aggregator = None
         self._prompt_assembler = None
+        self._dsl_aggregator = None
 
 
     # =====================================================
@@ -50,6 +52,12 @@ class Container:
             )
 
         return self._qwen_client
+    
+    def dsl_aggregator(self):
+        if self._dsl_aggregator is None:
+            self._dsl_aggregator = DSLAggregator()
+
+        return self._dsl_aggregator
 
     def openai_client(self):
 
@@ -100,7 +108,9 @@ class Container:
 
             self._node_executor_registry.register(
                 LLMNode,
-                LLMNodeExecutor()
+                LLMNodeExecutor(
+                    router=self.llm_router()
+                )
             )
 
             self._node_executor_registry.register(
@@ -142,8 +152,9 @@ class Container:
                 dag_executor=self.dag_executor(),
                 router=self.llm_router(),
                 node_executor_registry=self.node_executor_registry(),
+                prompt_aggregator=self.prompt_aggregator(),
                 prompt_compiler=self.prompt_compiler(),
-                prompt_aggregator=self.prompt_aggregator()
+                dsl_aggregator=self.dsl_aggregator()
             )
 
         return self._llm_engine

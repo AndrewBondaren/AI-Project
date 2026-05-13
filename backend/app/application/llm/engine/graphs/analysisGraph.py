@@ -68,6 +68,11 @@ def build_analysis_graph():
         # MERGE OUTPUT (PYTHON)
         # -----------------------------------------
 
+        "response_generation": NodeFactory.llm(
+            id="response_generation",
+            deps=["generate_character"]
+        ),
+
         "merge_output": NodeFactory.python(
             id="merge_output",
             name="Merge Analysis Output",

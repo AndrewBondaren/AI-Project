@@ -11,6 +11,7 @@ class ExecutionState:
         self.node_status: Dict[str, str] = {}
         self.node_results: Dict[str, Any] = {}
         self.node_errors: Dict[str, List[dict]] = {}
+        self.execution_order = []
 
         self.execution_order: List[str] = []
         self.shared_context: Dict[str, Any] = {}

@@ -8,7 +8,7 @@ from app.application.llm.engine.execution.executionTrace import ExecutionTrace
 class DAGExecutor:
 
     async def execute(self, graph, state, context):
-
+        self.registry = context["node_executor_registry"]
         self.context = context
 
         levels = self.build_levels(graph.nodes)
@@ -68,6 +68,7 @@ class DAGExecutor:
 
     async def execute_level(self, graph, state, level_nodes):
 
+        #TODO logic for multiparallel nods
         tasks = [
             self.execute_node(graph.nodes[n], state)
             for n in sorted(level_nodes)
@@ -81,10 +82,14 @@ class DAGExecutor:
                 state.node_status[node_id] = "failed"
                 state.node_errors.setdefault(node_id, []).append(
                     {"error": str(result)}
-            )
-            continue
+                )
+                continue
 
-        state.execution_order.append(node_id)
+            state.node_status[node_id] = "success"
+            state.node_results[node_id] = result
+            #TODO logging when i have logs
+            state.execution_order.append(node_id)
+            state.node_dsl[node_id] = graph.nodes[node_id].dsl
 
     # -------------------------
     # NODE EXECUTION
@@ -107,9 +112,9 @@ class DAGExecutor:
             trace.output = result
             trace.status = "success"
 
-            state.node_status[node.id] = "success"
-            state.node_results[node.id] = result
-
+#            state.node_status[node.id] = "success"
+#            state.node_results[node.id] = result
+            
             return result
 
         except Exception as e:

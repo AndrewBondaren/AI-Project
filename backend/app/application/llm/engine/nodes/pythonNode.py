@@ -6,5 +6,4 @@ from .baseNode import BaseNode
 
 @dataclass
 class PythonNode(BaseNode):
-
     handler: Callable = None

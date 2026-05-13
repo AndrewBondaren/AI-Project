@@ -1,28 +1,21 @@
-from app.application.llm.engine.prompt.promptContext import PromptContext
- 
+from app.application.llm.models import ChatMessage
+
 class PromptCompiler:
 
     def __init__(self, dsl_registry, assembler):
         self.dsl_registry = dsl_registry
         self.assembler = assembler
 
-    def compile(self, context: PromptContext):
+    def compile(self, context):
 
-        dsl_key = self._resolve_dsl(context)
+        dsl_texts = [
+            self.dsl_registry.get(key)
+            for key in context.dsl_keys
+        ]
 
-        dsl = self.dsl_registry.get(dsl_key)
-
-        system = self.assembler.build_system(dsl, context)
-        user = self.assembler.build_user(context)
+        system = "\n\n".join(dsl_texts)
 
         return [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
+            ChatMessage(role="system", content=system),
+            ChatMessage(role="user", content=self.assembler.build_user(context))
         ]
-    
-    def _resolve_dsl(self, context):
-
-        if not context.dsl:
-            raise ValueError("PromptContext missing DSL")
-
-        return context.dsl

@@ -1,13 +1,29 @@
-from app.application.llm.engine.prompt.promptContext import PromptContext
+from app.application.llm.engine.prompt.promtContextDTO import PromptContextDTO
+
 
 class PromptAggregator:
 
-    def build(self, state, task_type):
+    def build(self, state, dsl_keys):
 
-        return PromptContext(
+#        executed_nodes = [
+ #           graph.nodes[node_id]
+  #          for node_id in state.node_results.keys()
+   #     ]
+#
+ #       dsl_keys = [
+  #          node.dsl
+   #         for node in executed_nodes
+    #        if hasattr(node, "dsl") and node.dsl
+     #   ]
+
+        return PromptContextDTO(
+            dsl_keys=dsl_keys,
             message=state.message,
             node_results=state.node_results,
-            session=getattr(state, "session", None),
+             session={
+                "llm_provider": state.session.llm_provider,
+                "user_id": state.session.user_id,
+                "meta": state.session.meta,
+            },
             errors=getattr(state, "errors", None),
-            task_type=task_type,
         )

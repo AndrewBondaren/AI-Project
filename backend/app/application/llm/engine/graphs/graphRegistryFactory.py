@@ -18,7 +18,6 @@ class GraphRegistryFactory:
             raise ValueError(f"No graph builder for task type: {task_type}")
 
         builder = cls._builders[task_type]
-
         nodes = builder()  # ← DSL layer (dict[str, Node])
 
         return ExecutionGraph(nodes)

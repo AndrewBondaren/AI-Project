@@ -15,5 +15,12 @@ def build_chat_graph():
             name="Response Generation",
             dsl="chat_response",
             deps=["intent_detection"]
+        ),
+
+        "generate_character": NodeFactory.llm(
+            id="generate_character",
+            name="Generate Character",
+            dsl="character_generation",
+            deps=["intent_detection"]
         )
     }

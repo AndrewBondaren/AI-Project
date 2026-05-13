@@ -3,7 +3,7 @@ import json
 
 class LLMStructuredExecutor:
 
-    def __init__(self, max_retries: int = 3):
+    def __init__(self, max_retries: int = 5):
         self.max_retries = max_retries
 
     # -----------------------------

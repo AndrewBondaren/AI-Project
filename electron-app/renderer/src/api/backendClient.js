@@ -5,7 +5,9 @@ export async function sendChatMessage(sessionId, message) {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      session: sessionId,
+      llm_provider: "qwen",
+      model: "qwen3.6",
+      user_id: "session_1", //sessionId
       message: message
     })
   });

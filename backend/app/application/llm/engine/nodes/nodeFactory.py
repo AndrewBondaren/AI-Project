@@ -24,25 +24,15 @@ class NodeFactory:
         return LLMNode(
             id=id,
             name=name,
-
             deps=deps or [],
-
             timeout=timeout,
-
             retry_policy=retry_policy,
-
             tags=tags or [],
-
             dsl=dsl,
-
             contract=contract,
-
             provider=provider,
-
             model=model,
-
             temperature=temperature,
-
             max_tokens=max_tokens,
         )
 
@@ -61,14 +51,9 @@ class NodeFactory:
         return PythonNode(
             id=id,
             name=name,
-
             deps=deps or [],
-
             timeout=timeout,
-
             retry_policy=retry_policy,
-
             tags=tags or [],
-
             handler=handler,
         )
