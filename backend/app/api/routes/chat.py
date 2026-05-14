@@ -13,6 +13,7 @@ class ChatRequest(BaseModel):
     model: str
     user_id: str
     message: str
+    repair_iterations: int
 
 
 class ChatResponse(BaseModel):
@@ -38,7 +39,8 @@ async def chat(
         llm_provider=data.llm_provider,
         model=data.model,
         user_id=data.user_id,
-        meta={}
+        meta={},
+        repair_iterations=data.repair_iterations
     )
     result = await service.handle_message(
         session=session,
