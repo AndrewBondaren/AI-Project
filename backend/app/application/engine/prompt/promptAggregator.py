@@ -5,17 +5,6 @@ class PromptAggregator:
 
     def build(self, state, dsl_keys):
 
-#        executed_nodes = [
- #           graph.nodes[node_id]
-  #          for node_id in state.node_results.keys()
-   #     ]
-#
- #       dsl_keys = [
-  #          node.dsl
-   #         for node in executed_nodes
-    #        if hasattr(node, "dsl") and node.dsl
-     #   ]
-
         return PromptContextDTO(
             dsl_keys=dsl_keys,
             message=state.message,

@@ -15,7 +15,6 @@ class BaseNode:
 
     deps: list[str] = field(default_factory=list)
     executor: Optional[type] = None
-    contract: Optional[Type] = None
     rules: list[Rule]
     
     validator: type | None = None

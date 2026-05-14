@@ -1,4 +1,4 @@
-from app.application.engine.dag.StateSnapshot import StateSnapshot
+from app.application.engine.dag.stateSnapshot import StateSnapshot
 
 
 class ExecutionState:
@@ -7,6 +7,7 @@ class ExecutionState:
 
         self.message = message
         self.session = session
+        self.task_type = None
 
         self.node_status = {}
         self.node_results = {}
@@ -15,3 +16,4 @@ class ExecutionState:
         self.shared_context = {}
 
         self.snapshots: list[StateSnapshot] = []
+        self.final_result = None

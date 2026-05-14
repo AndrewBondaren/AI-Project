@@ -2,47 +2,101 @@ import asyncio
 from datetime import datetime, timezone
 
 from app.application.engine.dag.stateSnapshot import StateSnapshot
-from app.application.engine.dag.DAGexecutionTrace import ExecutionTrace
+from app.application.engine.dag.executionTrace import ExecutionTrace
+from app.application.engine.nodes.nodeRegistry import NODE_REGISTRY
+from backend.app.application.engine.dag.executionState import ExecutionState
 
 
 class DAGExecutor:
 
-    async def execute(self, graph, state, context):
+    def __init__(self, validator, repair_orchestrator):
+        self.validator = validator
+        self.repair = repair_orchestrator
 
-        self.registry = context["node_executor_registry"]
-        self.validator = context["contract_validator"]
-        self.repair = context["repair_orchestrator"]
+    async def execute(self, plan, state, context) -> ExecutionState:
+
         self.context = context
 
-        for level in graph.levels:
-
-            await self.execute_level(self, level, graph, state, level_idx)
+        for level_idx, level in enumerate(plan.levels):
+            await self._execute_level(level, plan, state, level_idx)
 
         state.final_result = state.node_results
 
         return state
 
-    async def _run_nodes(self, level, graph, state):
+    # --------------------------------------------------
+
+    async def _execute_level(self, level, plan, state, level_idx):
+
+        await self._run_nodes(level, plan, state)
+        self._create_snapshot(state, level_idx)
+
+    async def _run_nodes(self, level, plan, state):
 
         tasks = [
-            self.execute_node(graph.nodes[node_id], state)
+            self._execute_node(plan.nodes[node_id], state)
             for node_id in level
         ]
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         for node_id, result in zip(level, results):
-
             if isinstance(result, Exception):
-                self.handle_failure(node_id, result, state)
+                self._handle_failure(node_id, result, state)
 
-    async def execute_level(self, level, graph, state, level_idx):
+    async def _execute_node(self, compiled_node, state):
 
-        await self._run_nodes(level, graph, state)
+        node = compiled_node.node
+        state.node_status[node.id] = "running"
+        state.execution_order.append(node.id)
 
-        self.create_snapshot(state, level_idx)
+        trace = ExecutionTrace(
+            node_id=node.id,
+            start_time=datetime.now(timezone.utc),
+            input=dict(state.node_results)
+        )
 
-    def create_snapshot(self, state, level_idx):
+        try:
+            registration = NODE_REGISTRY.get(node.id)
+            executor = self.context["executors"][registration.executor_cls]
+
+            result = await executor.execute(node, state, self.context)
+
+            validation = self.validator.validate(
+                output=result,
+                contract=node.contract
+            )
+
+            if not validation.ok:
+                retried = await self._trigger_retry(node, result, validation, state)
+
+                if retried is not None:
+                    result = retried
+                else:
+                    state.node_status[node.id] = "failed"
+                    trace.status = "failed"
+                    return None
+
+            state.node_status[node.id] = "success"
+            state.node_results[node.id] = result
+            trace.output = result
+            trace.status = "success"
+
+            return result
+
+        except Exception as e:
+            self._handle_failure(node.id, e, state)
+            trace.status = "failed"
+            trace.error = str(e)
+            return None
+
+        finally:
+            trace.end_time = datetime.now(timezone.utc)
+            state.traces.append(trace)
+
+    # --------------------------------------------------
+
+    def _create_snapshot(self, state, level_idx):
 
         snapshot = StateSnapshot(
             level=level_idx,
@@ -54,61 +108,19 @@ class DAGExecutor:
 
         state.snapshots.append(snapshot)
 
-    async def execute_node(self, node, state):
-
-        state.node_status[node.id] = "running"
-
-        trace = ExecutionTrace(
-            node_id=node.id,
-            start_time=datetime.now(timezone.utc),
-            input=dict(state.node_results)
-        )
-
-        try:
-
-            executor = self.registry.get(node.executor_class)
-
-            result = await executor.execute(node, state, self.context)
-
-            validation = self.validator.validate(
-             output=result,
-                contract=node.contract
-            )
-
-            if not validation.ok:
-                state.node_status[node.id] = "failed"
-
-                if result is None:
-                    state.node_status[node.id] = "failed"
-                    return None
-
-            state.node_status[node.id] = "success"
-            state.node_results[node.id] = result
-
-            return result
-
-        except Exception as e:
-
-            return self.handle_exception(node, e, state)
-
-        finally:
-            trace.end_time = datetime.now(timezone.utc)
-            state.traces.append(trace)
-
-    def handle_failure(self, node_id, error, state):
+    def _handle_failure(self, node_id, error, state):
 
         state.node_status[node_id] = "failed"
-
         state.node_errors.setdefault(node_id, []).append({
             "error": str(error)
         })
 
-    def trigger_retry(self, node, output, validation, state):
+    async def _trigger_retry(self, node, output, validation, state):
 
         if not node.retry_policy or not node.retry_policy.get("enabled"):
             return None
 
-        return self.repair.repair_node(
+        return await self.repair.repair_node(
             node=node,
             output=output,
             reason=validation.reason,
