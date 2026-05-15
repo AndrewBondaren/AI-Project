@@ -1,4 +1,4 @@
-from backend.app.application.engine.prompt.promtContextDTO import PromptContextDTO
+from app.application.engine.prompt.promtContextDTO import PromptContextDTO
 
 
 class PromptAggregator:

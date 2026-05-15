@@ -1,7 +1,7 @@
 import json
 from dataclasses import is_dataclass
 from pydantic import BaseModel
-from backend.app.application.engine.validation.validationStatus import ValidationResult, ValidationStatus
+from app.application.engine.validation.validationStatus import ValidationResult, ValidationStatus
 
 
 class ContractValidator:

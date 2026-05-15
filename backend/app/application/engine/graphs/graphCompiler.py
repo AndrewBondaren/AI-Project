@@ -1,7 +1,7 @@
 from collections import defaultdict, deque
 from app.application.engine.graphs.executionPlan import ExecutionPlan
 from app.application.engine.nodes.nodeRegistry import NODE_REGISTRY
-from backend.app.application.engine.nodes.pojo.compiledNode import CompiledNode
+from app.application.engine.nodes.pojo.compiledNode import CompiledNode
 
 
 class GraphCompiler:

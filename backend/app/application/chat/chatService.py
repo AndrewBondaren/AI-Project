@@ -1,4 +1,4 @@
-from backend.app.application.engine.taskType import TaskType
+from app.application.engine.taskType import TaskType
 from app.application.chat.session import Session
 
 class ChatService:

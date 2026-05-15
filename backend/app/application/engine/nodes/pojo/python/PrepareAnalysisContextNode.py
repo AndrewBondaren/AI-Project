@@ -1,4 +1,4 @@
-from backend.app.application.engine.nodes.pojo.PythonNodeSpec import PythonNode
+from app.application.engine.nodes.pojo.pythonNode import PythonNode
 
 
 async def prepare_analysis_context(state):
