@@ -1,4 +1,4 @@
-from app.application.engine.nodes import NodeStatus
+from app.application.engine.nodes.nodeStatus import NodeStatus
 
 
 class NodeRuntimeState:

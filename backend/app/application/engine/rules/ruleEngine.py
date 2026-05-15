@@ -1,9 +1,9 @@
 class RuleEngine:
 
-    def evaluate(self, node, state):
+    def evaluate(self, compiled_node, state) -> bool:
 
-        for fn in node.compiled_rules:
-            if not fn(node, state):
+        for fn in compiled_node.compiled_rules:
+            if not fn(compiled_node.node, state):
                 return False
 
         return True

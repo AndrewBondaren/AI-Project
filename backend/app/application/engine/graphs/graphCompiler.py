@@ -1,6 +1,7 @@
 from collections import defaultdict, deque
 from app.application.engine.graphs.executionPlan import ExecutionPlan
 from app.application.engine.nodes.nodeRegistry import NODE_REGISTRY
+from backend.app.application.engine.nodes.pojo.compiledNode import CompiledNode
 
 
 class GraphCompiler:
@@ -33,15 +34,11 @@ class GraphCompiler:
     # --------------------------------------------------
 
     def _compile_nodes(self, registrations) -> list:
-        """Компилируем rules каждой ноды → CompiledNode"""
-        from app.application.engine.nodes.pojo.compiledNode import CompiledNode
-
         compiled = []
         for node_id, registration in registrations.items():
-            node = registration.node_cls
+            node = registration.node_cls()  # инстанциируем здесь
             compiled_rules = self.rule_compiler.compile(node.rules)
             compiled.append(CompiledNode(node=node, compiled_rules=compiled_rules))
-
         return compiled
 
     def _filter(self, compiled_nodes, state) -> list:

@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 from app.application.engine.dag.stateSnapshot import StateSnapshot
 from app.application.engine.dag.executionTrace import ExecutionTrace
 from app.application.engine.nodes.nodeRegistry import NODE_REGISTRY
-from backend.app.application.engine.dag.executionState import ExecutionState
 
 
 class DAGExecutor:
@@ -13,7 +12,7 @@ class DAGExecutor:
         self.validator = validator
         self.repair = repair_orchestrator
 
-    async def execute(self, plan, state, context) -> ExecutionState:
+    async def execute(self, plan, state, context) -> object:
 
         self.context = context
 
@@ -27,7 +26,6 @@ class DAGExecutor:
     # --------------------------------------------------
 
     async def _execute_level(self, level, plan, state, level_idx):
-
         await self._run_nodes(level, plan, state)
         self._create_snapshot(state, level_idx)
 
@@ -62,16 +60,18 @@ class DAGExecutor:
 
             result = await executor.execute(node, state, self.context)
 
+            # валидация только если есть contract_json
             validation = self.validator.validate(
+                node=node,
                 output=result,
-                contract=node.contract
+                state=state
             )
 
             if not validation.ok:
                 retried = await self._trigger_retry(node, result, validation, state)
 
                 if retried is not None:
-                    result = retried
+                        result = retried
                 else:
                     state.node_status[node.id] = "failed"
                     trace.status = "failed"

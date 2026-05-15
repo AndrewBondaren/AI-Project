@@ -8,18 +8,19 @@ from app.application.engine.rules.Rule import Rule
 @dataclass(frozen=True)
 class BaseNode:
     id: str
-    supported_tasks: list[TaskType]
     name: str
+    supported_tasks: list[TaskType]
+    rules: list[Rule]
+    deps: list[str] = field(default_factory=list)
+
+    executor: Optional[type] = None
+    retry_policy: Optional[dict] = None
+    validator: type | None = None
+    possible_errors: list[type] = field(default_factory=list)
+
     priority: int = 50
     cost: NodeCost = field(default_factory=NodeCost)
-
-    deps: list[str] = field(default_factory=list)
-    executor: Optional[type] = None
-    rules: list[Rule]
-    
-    validator: type | None = None
-    retry_policy: Optional[dict] = None
 #    repair_policy: RepairPolicy | None = None
 
-    possible_errors: list[type] = field(default_factory=list)
+
 #    tags: list[str] = field(default_factory=list)

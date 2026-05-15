@@ -1,5 +1,4 @@
 from typing import Type
-
 from app.application.engine.nodes.nodeRegistration import NodeRegistration
 
 
@@ -17,7 +16,30 @@ class NodeRegistry:
         if not executor_cls:
             raise ValueError(f"Node {node_cls.__name__} missing executor")
 
-        self._nodes[node_id] = NodeRegistration(
+        # инстанциируем чтобы проверить поля
+        try:
+            node = node_cls()
+        except Exception as e:
+            raise ValueError(f"Node {node_cls.__name__} cannot be instantiated: {e}")
+
+        # если есть contract_json — обязан быть validator
+        contract = getattr(node, "contract_json", None)
+        validator = getattr(node, "validator", None)
+
+        if contract and not validator:
+            raise ValueError(
+                f"Node '{node.id}' has contract_json={contract.__name__} "
+                f"but no validator — add validator to the node"
+            )
+
+        # если есть validator — обязан быть contract_json
+        if validator and not contract:
+            raise ValueError(
+                f"Node '{node.id}' has validator={validator.__name__} "
+                f"but no contract_json — add contract_json or remove validator"
+            )
+
+        self._nodes[node.id] = NodeRegistration(
             node_cls=node_cls,
             executor_cls=executor_cls
         )

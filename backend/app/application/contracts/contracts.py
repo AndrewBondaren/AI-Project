@@ -41,12 +41,3 @@ class AnalysisContract(BaseModel):
     summary: str
     conclusions: List[str]
     risks: List[str]
-
-
-CONTRACT_REGISTRY = {
-    "narration": NarrationContract,
-    "scene": SceneContract,
-    "character": CharacterCreationContract,
-    "event": EventContract,
-    "analysis": AnalysisContract,
-}
