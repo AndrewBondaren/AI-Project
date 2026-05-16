@@ -15,6 +15,8 @@ from app.application.engine.prompt.promptAssambler import PromptAssembler
 from app.application.engine.prompt.dslRegistry import DSLRegistry
 from app.application.engine.prompt.dslAggregator import DSLAggregator
 from app.application.engine.validation.llmValidator import LLMValidator
+from app.application.engine.validation.contractValidator import ContractValidator
+from app.application.engine.validation.nodeValidator import NodeValidator
 from app.application.engine.repair.repairOrchestrator import RepairOrchestrator
 from app.application.engine.repair.repairBuilder import RepairBuilder
 from app.application.engine.repair.patchApplier import PatchApplier
@@ -210,7 +212,10 @@ class Container:
 
     def validator(self):
         if self._validator is None:
-            self._validator = LLMValidator()
+            self._validator = LLMValidator(
+                contract_validator=ContractValidator(),
+                node_validator=NodeValidator(),
+            )
         return self._validator
 
     def repair_orchestrator(self):

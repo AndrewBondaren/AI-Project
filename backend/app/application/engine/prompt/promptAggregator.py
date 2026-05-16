@@ -14,5 +14,6 @@ class PromptAggregator:
                 "user_id": state.session.user_id,
                 "meta": state.session.meta,
             },
+            
             errors=getattr(state, "errors", None),
         )

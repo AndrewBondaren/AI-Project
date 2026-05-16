@@ -3,20 +3,23 @@ from app.application.engine.nodes.pojo.llmNode import LLMNode
 from app.application.engine.nodes.nodeRegistry import register
 from app.application.engine.rules.Rule import Rule
 from app.application.engine.execution.llmNodeExecutor import LLMNodeExecutor
-from app.application.contracts.contracts import NarrationContract
+from app.application.contracts.contracts import IntentDetectionContract
 from app.application.engine.taskType import TaskType
+from app.application.engine.validation.validators.IntentDetectionValidator import IntentDetectionValidator
 
 
 @register(executor_cls=LLMNodeExecutor)
 @dataclass(frozen=True)
-class ResponseGenerationNode(LLMNode):
+class IntentDetectionNode(LLMNode):
 
-    id: str = "response_generation"
-    name: str = "Response Generation"
+    id: str = "intent_detection"
+    name: str = "Intent Detection"
 
-    dsl: str = "chat_response"
-    contract: type = NarrationContract
-    temperature: float = 0.5
+    dsl: str = "intent_detection"
+    contract_json: type = IntentDetectionContract
+    validator: type = IntentDetectionValidator
+    temperature: float = 0.2
+    retry_policy: dict = field(default_factory=lambda: {"enabled": True})
 
     supported_tasks: list = field(default_factory=lambda: [TaskType.CHAT])
     rules: list = field(default_factory=lambda: [Rule(type="task", params={})])

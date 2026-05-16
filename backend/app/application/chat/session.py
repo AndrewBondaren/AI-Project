@@ -6,4 +6,6 @@ class Session:
     model: str
     user_id: str
     meta: dict
+    max_tokens: int
     repair_iterations: int
+    timeout: 60

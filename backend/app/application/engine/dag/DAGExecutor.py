@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from app.application.engine.dag.stateSnapshot import StateSnapshot
 from app.application.engine.dag.executionTrace import ExecutionTrace
 from app.application.engine.nodes.nodeRegistry import NODE_REGISTRY
+from app.application.engine.validation.validationStatus import ValidationResult, ValidationStatus
 
 
 class DAGExecutor:
@@ -60,22 +61,26 @@ class DAGExecutor:
 
             result = await executor.execute(node, state, self.context)
 
-            # валидация только если есть contract_json
             validation = self.validator.validate(
                 node=node,
                 output=result,
-                state=state
+                state=state,
             )
 
             if not validation.ok:
-                retried = await self._trigger_retry(node, result, validation, state)
+                result, validation = await self._retry_until_valid(
+                    node=node,
+                    output=result,
+                    validation=validation,
+                    state=state,
+                )
 
-                if retried is not None:
-                        result = retried
-                else:
-                    state.node_status[node.id] = "failed"
-                    trace.status = "failed"
-                    return None
+            if not validation.ok:
+                state.node_status[node.id] = "failed"
+                trace.status = "failed"
+                trace.error = validation.reason
+                self._record_validation_failure(node.id, validation, state)
+                return None
 
             state.node_status[node.id] = "success"
             state.node_results[node.id] = result
@@ -115,14 +120,47 @@ class DAGExecutor:
             "error": str(error)
         })
 
-    async def _trigger_retry(self, node, output, validation, state):
+    async def _retry_until_valid(self, node, output, validation, state):
 
-        if not node.retry_policy or not node.retry_policy.get("enabled"):
-            return None
+        max_attempts = state.session.repair_iterations
+        attempt = 0
 
-        return await self.repair.repair_node(
-            node=node,
-            output=output,
-            reason=validation.reason,
-            state=state
-        )
+        while not validation.ok:
+            if validation.failed:
+                return output, validation
+
+            if attempt >= max_attempts:
+                return output, ValidationResult(
+                    status=ValidationStatus.FAIL,
+                    reason=f"repair_limit_exceeded: {max_attempts}",
+                )
+
+            if not node.retry_policy or not node.retry_policy.get("enabled"):
+                return output, validation
+
+            repaired = await self.repair.repair_node(
+                node=node,
+                output=output,
+                reason=validation.reason,
+                state=state,
+            )
+            attempt += 1
+
+            if repaired is None:
+                return output, validation
+
+            output = repaired
+            validation = self.validator.validate(
+                node=node,
+                output=output,
+                state=state,
+            )
+
+        return output, validation
+
+    def _record_validation_failure(self, node_id, validation, state):
+
+        state.node_errors.setdefault(node_id, []).append({
+            "status": validation.status.value,
+            "error": validation.reason,
+        })

@@ -1,3 +1,7 @@
+import json
+from pydantic import BaseModel
+
+
 class LLMNodeExecutor:
 
     def __init__(self, router):
@@ -7,9 +11,18 @@ class LLMNodeExecutor:
 
         client = self.router.get(state.session.llm_provider)
 
-        result = await client.chat(
+        raw = await client.chat(
             model=node.model,
-            messages=node.messages  # или уже готовые
+            messages=context.get("messages", [])  # временно из context
         )
 
-        return result
+        # десериализация
+        if node.contract_json:
+            try:
+                data = json.loads(raw) if isinstance(raw, str) else raw
+                return node.contract_json.model_validate(data)
+            except Exception as e:
+                # возвращаем сырой результат — ContractValidator поймает
+                return raw
+
+        return raw
