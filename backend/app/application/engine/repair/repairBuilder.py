@@ -1,25 +1,18 @@
-import json
-
-from app.application.engine.prompt.dslRegistry import DSLRegistry
 from app.application.engine.prompt.llmGroupPayloadBuilder import LLMGroupPayloadBuilder
 from app.application.engine.prompt.pojo.llmRepairPayload import LLMRepairPayload
+from app.application.engine.repair.dslFailureProjector import DSLFailureProjector
 
 
 class RepairBuilder:
-    """
-    Собирает repair payload для failed LLM-нод.
-    Вызывается из RepairOrchestrator на каждой итерации repair loop.
-    """
 
-    def __init__(self, payload_builder: LLMGroupPayloadBuilder):
+    def __init__(self, payload_builder: LLMGroupPayloadBuilder, failure_projector: DSLFailureProjector):
         self.payload_builder = payload_builder
-
+        self.failure_projector = failure_projector
 
     def build(
         self,
         failed_nodes: list,
         dsl_keys: dict,
-        node_errors: dict,
         state,
     ) -> LLMRepairPayload:
 
@@ -29,28 +22,12 @@ class RepairBuilder:
             state=state,
         )
 
+        errors = self.failure_projector.project(failed_nodes, state)
+
         return LLMRepairPayload(
             player_message=base.player_message,
             language=base.language,
             contract_json=base.contract_json,
             sections=base.sections,
-            errors=node_errors,
+            errors=errors,
         )
-
-    def _build_contracts(self, nodes) -> dict:
-        return {
-            node.id: node.contract_json.model_json_schema()
-            for node in nodes
-            if node.contract_json is not None
-        }
-
-    def _resolve_dsl(self, keys: list[str]) -> str:
-        parts = [self.dsl_registry.get(key) for key in keys]
-        return "\n\n".join(parts)
-
-    def _collect_deps(self, node, state) -> dict:
-        return {
-            dep: state.node_results.get(dep)
-            for dep in node.deps
-            if dep in state.node_results
-        }

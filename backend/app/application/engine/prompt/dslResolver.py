@@ -1,8 +1,10 @@
-from app.application.engine.validation.nodeValidationContext import NodeValidationContext
 from app.application.engine.validation.validationStatus import ValidationResult
 
 
 class DSLResolver:
+
+    def __init__(self, dsl_registry):
+        self.dsl_registry = dsl_registry
 
     def resolve_patches(self, node, validation: ValidationResult) -> list[str]:
         """
@@ -22,3 +24,7 @@ class DSLResolver:
             if key not in result:
                 result.append(key)
         return result
+    
+    def resolve(self, keys: list[str]) -> str:
+        parts = [self.dsl_registry.get(key) for key in keys]
+        return "\n\n".join(parts)

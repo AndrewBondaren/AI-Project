@@ -63,7 +63,6 @@ class RepairOrchestrator:
             repair_content = self.repair_builder.build(
                 failed_nodes=list(current_failed.values()),
                 dsl_keys=dsl_keys,
-                node_errors=node_errors,
                 state=state,
             )
 
@@ -192,10 +191,3 @@ class RepairOrchestrator:
                 for code in codes
             ],
         )
-
-    def _get_error_codes(self, node_id: str, state) -> list[str]:
-        """Берёт коды последних ошибок ноды для передачи в RepairBuilder."""
-        errors = state.node_errors.get(node_id)
-        if not errors:
-            return []
-        return errors[-1].get("errors", [])
