@@ -118,7 +118,7 @@ class LLMAggregateExecutor:
         """Первый вызов — базовый DSL каждой ноды."""
         payload = {
             "player_message": state.message,
-            "language": "RU",
+            "language": "RU", #Вынести в настройку и принимать из frontEnd
             "contract_json": self._build_contracts(nodes),
         }
         for node in nodes:
@@ -132,7 +132,7 @@ class LLMAggregateExecutor:
         """Repair вызов — только failed ноды с расширенным DSL и описанием ошибок."""
         payload = {
             "player_message": state.message,
-            "language": "RU",
+            "language": "RU", #Вынести в настройку и принимать из frontEnd
             "type": "repair",
             "contract_json": self._build_contracts(
                 [n for n in nodes if n.id in failed_ids]

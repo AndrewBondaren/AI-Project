@@ -10,7 +10,7 @@ class LLMGroupPayloadBuilder:
 
         payload = {
             "player_message": state.message,
-            "language": "RU",
+            "language": "RU", #Вынести в настройку и принимать из frontEnd
             "contract_json": self._build_contracts(nodes),
         }
 
