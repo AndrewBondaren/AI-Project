@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from app.application.engine.dag.executionTrace import ExecutionTrace
 from app.application.engine.nodes.nodeRegistry import NODE_REGISTRY
 from app.application.engine.nodes.pojo.nodeResult import NodeResult
+from app.application.engine.validation.nodeValidationContext import NodeValidationContext
 
 
 class NodeRunner:
@@ -36,19 +37,18 @@ class NodeRunner:
 
             node_result: NodeResult = await executor.execute(node, state, context)
 
-            result, ok = await self.node_validator.validate_with_repair(node, result, state)
-
-            validation = self.node_validator.validate(
+            ctx = NodeValidationContext(
                 node=node,
                 output=node_result.data,
                 state=state,
             )
+            validation = self.node_validator.validate(ctx)
 
-            if not ok:
+            if not validation.ok:
                 state.node_status[node.id] = "failed"
                 state.node_errors.setdefault(node.id, []).append({
                     "status": validation.status.value,
-                    "error": validation.reason,
+                    "errors": [e.code for e in validation.errors],
                 })
                 trace.status = "failed"
                 trace.error = validation.reason

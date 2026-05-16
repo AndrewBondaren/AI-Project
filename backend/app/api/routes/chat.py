@@ -12,9 +12,15 @@ class ChatRequest(BaseModel):
     llm_provider: str
     model: str
     user_id: str
+    meta: dict
     message: str
-    repair_iterations: int
 
+#TODO later
+class ChatSettings(BaseModel):
+    max_tokens: int
+    repair_iterations: int
+    language: str
+    max_passes: int
 
 class ChatResponse(BaseModel):
     response: str
@@ -39,8 +45,10 @@ async def chat(
         llm_provider=data.llm_provider,
         model=data.model,
         user_id=data.user_id,
-        meta={},
-        repair_iterations=data.repair_iterations
+        meta={}, #meta=data.meta
+#        max_tokens=data.max_tokens, #вынести в запрос настроек
+#        repair_iterations=data.repair_iterations, #вынести в запрос настроек
+#        max_passes=data.max_passes #вынести в запрос настроек
     )
     result = await service.handle_message(
         session=session,

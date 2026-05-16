@@ -1,3 +1,7 @@
+from app.application.engine.prompt.pojo.llmPayload import LLMPayload
+from app.application.engine.prompt.pojo.nodeSection import NodeSection
+
+
 class LLMGroupPayloadBuilder:
     """
     Собирает агрегированный JSON-запрос для одной temperature-группы.
@@ -8,19 +12,18 @@ class LLMGroupPayloadBuilder:
 
     def build(self, nodes: list, state) -> dict:
 
-        payload = {
-            "player_message": state.message,
-            "language": "RU", #Вынести в настройку и принимать из frontEnd
-            "contract_json": self._build_contracts(nodes),
-        }
-
-        for node in nodes:
-            payload[node.id] = {
-                "dsl": node.dsl,
-                "context_data": self._collect_deps(node, state),
-            }
-
-        return payload
+        return LLMPayload(
+            player_message=state.message,
+            language=state.session.language,
+            contract_json=self._build_contracts(nodes),
+            sections={
+                node.id: NodeSection(
+                    dsl=self._resolve_dsl(dsl_keys[node.id]),
+                    context_data=self._collect_deps(node, state),
+                )
+                for node in nodes
+            },
+        )
 
     def _build_contracts(self, nodes: list) -> dict:
         return {
@@ -28,6 +31,11 @@ class LLMGroupPayloadBuilder:
             for node in nodes
             if node.contract_json is not None
         }
+    
+    #Уточнить насколько место этому методу тут.
+    def _resolve_dsl(self, keys: list[str]) -> str:
+        parts = [self.dsl_registry.get(key) for key in keys]
+        return "\n\n".join(parts)
 
     def _collect_deps(self, node, state) -> dict:
         return {
