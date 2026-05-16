@@ -1,5 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+from typing import Optional
 
 
 class ValidationStatus(str, Enum):
@@ -11,7 +12,7 @@ class ValidationStatus(str, Enum):
 @dataclass
 class ValidationResult:
     status: ValidationStatus
-    reason: str | None = None
+    errors: list["NodeValidationError"] = field(default_factory=list)
     dsl_patch: list[str] | None = None
 
     @property
@@ -25,3 +26,10 @@ class ValidationResult:
     @property
     def failed(self) -> bool:
         return self.status == ValidationStatus.FAIL
+
+    @property
+    def reason(self) -> str | None:
+        """Обратная совместимость — первый code из errors."""
+        if self.errors:
+            return self.errors[0].code
+        return None

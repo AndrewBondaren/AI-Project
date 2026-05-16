@@ -1,37 +1,46 @@
-import asyncio
 import json
 
-from app.application.engine.nodes.pojo.llmNode import LLMNode
-
+from app.application.engine.validation.validationStatus import ValidationStatus
+from app.application.engine.validation.nodeValidationContext import NodeValidationContext
+from app.application.engine.validation.nodeValidationError import NodeValidationError, NodeErrorSeverity
+from app.application.engine.validation.validationStatus import ValidationResult, ValidationStatus
 
 class LLMAggregateExecutor:
     """
     Выполняет одну LLM temperature-группу как единый агрегированный вызов.
 
     Порядок:
-      1. PromptAggregator собирает запрос из всех нод группы
-      2. Один client.chat() с агрегированным JSON
-      3. Ответ разбивается по node_id — каждая секция валидируется
-         через contract_json ноды
-      4. При WARN — repair loop внутри conversation (до session.repair_iterations)
-      5. Результаты пишутся в state.node_results[node_id]
+      1. LLMGroupPayloadBuilder собирает запрос из всех нод группы
+      2. Один client.chat() на группу
+      3. LLMValidator валидирует каждую секцию:
+           - ContractValidator — структура (contract_json)
+           - NodeValidator     — бизнес-логика (node.validator)
+      4. При ошибках — repair loop внутри той же conversation:
+           - DSLResolver подбирает dsl_patch по типу ошибки
+           - LLMGroupPayloadBuilder пересобирает payload с расширенным DSL
+      5. Все секции прошли → накапливаем в state.pending_patches
+         (PatchApplier применит атомарно в конце всех passes)
+      6. Исчерпали repair_iterations → бросаем исключение
     """
 
-    def __init__(self, payload_builder, router):
+    def __init__(self, payload_builder, llm_validator, dsl_resolver, dsl_registry, router):
         self.payload_builder = payload_builder
+        self.llm_validator = llm_validator
+        self.dsl_resolver = dsl_resolver
+        self.dsl_registry = dsl_registry
         self.router = router
 
     async def execute(self, llm_group, plan, state, context):
 
-        # собираем CompiledNode для нод группы (плоский список из всех уровней)
         node_ids = [nid for level in llm_group.levels for nid in level]
         nodes = [plan.nodes[nid].node for nid in node_ids]
 
         client = self.router.get(state.session.llm_provider)
 
-        # строим агрегированный запрос
-        payload = self.prompt_aggregator.build(nodes=nodes, state=state)
+        # dsl_keys на старте — базовые DSL каждой ноды
+        dsl_keys = {node.id: [node.dsl] for node in nodes}
 
+        payload = self._build_payload(nodes, dsl_keys, state)
         messages = [
             {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}
         ]
@@ -46,56 +55,126 @@ class LLMAggregateExecutor:
                 messages=messages,
             )
 
-            # парсим JSON-ответ
+            # парсим JSON
             try:
                 response = json.loads(raw) if isinstance(raw, str) else raw
             except json.JSONDecodeError as e:
-                messages.append(self._repair_msg(
-                    error=f"JSON parse error: {e}",
-                    raw=raw,
-                    hint="Return a single valid JSON object with keys matching node ids",
-                ))
+                messages.append({"role": "assistant", "content": str(raw)})
+                messages.append(self._json_error_msg(str(e)))
                 attempt += 1
                 continue
 
-            # валидируем каждую секцию через contract_json ноды
-            failed_sections, node_errors = self._validate_sections(nodes, response)
+            # валидируем все секции
+            failed, node_errors = self._validate_all(nodes, response, state, repair_attempt=attempt)
 
-            if not failed_sections:
-                # всё ок — пишем результаты в state
+            if not failed:
+                # все секции прошли — накапливаем патчи
                 for node in nodes:
-                    state.node_results[node.id] = response[node.id]
+                    state.pending_patches.append({
+                        "node_id": node.id,
+                        "output": response[node.id],
+                    })
                     state.node_status[node.id] = "success"
                 return
 
-            # есть ошибки — repair loop
+            # расширяем dsl_keys патчами для упавших нод
+            for node in nodes:
+                if node.id in node_errors:
+                    validation = node_errors[node.id]["validation"]
+                    patch_key = self.dsl_resolver.resolve_patch(node, validation)
+                    dsl_keys[node.id] = self.dsl_resolver.update(dsl_keys[node.id], patch_key)
+
+            # пересобираем payload с расширенным DSL только для failed нод
+            repair_payload = self._build_repair_payload(
+                nodes=nodes,
+                dsl_keys=dsl_keys,
+                failed_ids=list(node_errors.keys()),
+                errors={nid: v["reason"] for nid, v in node_errors.items()},
+                state=state,
+            )
+
             messages.append({"role": "assistant", "content": raw})
-            messages.append(self._repair_msg(
-                error=json.dumps(node_errors, ensure_ascii=False),
-                raw=raw,
-                hint="Fix only the failed sections. Return the full JSON with all node ids.",
-            ))
+            messages.append({
+                "role": "user",
+                "content": json.dumps(repair_payload, ensure_ascii=False),
+            })
             attempt += 1
 
-        # исчерпали попытки — фиксируем ошибки для нод у которых нет результата
-        for node in nodes:
-            if node.id not in state.node_results:
-                state.node_status[node.id] = "failed"
-                state.node_errors.setdefault(node.id, []).append({
-                    "error": "repair_limit_exceeded",
-                })
+        # исчерпали попытки — бросаем исключение, DAGExecutor остановит пайплайн
+        failed_ids = [
+            node.id for node in nodes
+            if node.id not in {p["node_id"] for p in state.pending_patches}
+        ]
+        raise RuntimeError(
+            f"LLMAggregateExecutor: repair_limit_exceeded after {max_attempts} attempts. "
+            f"Failed nodes: {failed_ids}"
+        )
 
     # --------------------------------------------------
+    # BUILD
+    # --------------------------------------------------
 
-    def _validate_sections(
-        self,
-        nodes: list,
-        response: dict,
-    ) -> tuple[list[str], dict]:
-        """
-        Валидирует каждую секцию ответа через contract_json ноды.
-        Возвращает (список id нод с ошибками, dict с описанием ошибок).
-        """
+    def _build_payload(self, nodes, dsl_keys: dict, state) -> dict:
+        """Первый вызов — базовый DSL каждой ноды."""
+        payload = {
+            "player_message": state.message,
+            "language": "RU",
+            "contract_json": self._build_contracts(nodes),
+        }
+        for node in nodes:
+            payload[node.id] = {
+                "dsl": self._resolve_dsl(dsl_keys[node.id]),
+                "context_data": self._collect_deps(node, state),
+            }
+        return payload
+
+    def _build_repair_payload(self, nodes, dsl_keys, failed_ids, errors, state) -> dict:
+        """Repair вызов — только failed ноды с расширенным DSL и описанием ошибок."""
+        payload = {
+            "player_message": state.message,
+            "language": "RU",
+            "type": "repair",
+            "contract_json": self._build_contracts(
+                [n for n in nodes if n.id in failed_ids]
+            ),
+            "errors": {
+                nid: [e.code for e in v["validation"].errors]
+                for nid, v in errors.items()
+            },
+        }
+        for node in nodes:
+            if node.id in failed_ids:
+                payload[node.id] = {
+                    "dsl": self._resolve_dsl(dsl_keys[node.id]),
+                    "context_data": self._collect_deps(node, state),
+                }
+        return payload
+
+    def _resolve_dsl(self, keys: list[str]) -> str:
+        """Читает и склеивает DSL-файлы по ключам."""
+        parts = [self.dsl_registry.get(key) for key in keys]
+        return "\n\n".join(parts)
+
+    def _build_contracts(self, nodes) -> dict:
+        return {
+            node.id: node.contract_json.model_json_schema()
+            for node in nodes
+            if node.contract_json is not None
+        }
+
+    def _collect_deps(self, node, state) -> dict:
+        return {
+            dep: state.node_results.get(dep)
+            for dep in node.deps
+            if dep in state.node_results
+        }
+
+    # --------------------------------------------------
+    # VALIDATE
+    # --------------------------------------------------
+
+    def _validate_all(self, nodes, response, state, repair_attempt: int = 0) -> tuple[list, dict]:
+
         failed = []
         errors = {}
 
@@ -103,28 +182,48 @@ class LLMAggregateExecutor:
             node_id = node.id
 
             if node_id not in response:
+                
+                errors[node_id] = {
+                    "validation": ValidationResult(
+                        status=ValidationStatus.RETRY,
+                        errors=[NodeValidationError(
+                            code="missing_section",
+                            message=f"missing section '{node_id}' in response",
+                            severity=NodeErrorSeverity.RETRY,
+                        )],
+                    ),
+                }
                 failed.append(node_id)
-                errors[node_id] = f"missing section '{node_id}' in response"
                 continue
 
-            if node.contract_json is None:
-                # нет контракта — секция принимается as-is
-                continue
+            ctx = NodeValidationContext(
+                node=node,
+                output=response[node_id],
+                state=state,
+                repair_attempt=repair_attempt,
+            )
 
-            try:
-                node.contract_json.model_validate(response[node_id])
-            except Exception as e:
+            validation = self.llm_validator.validate(ctx)
+
+            if not validation.ok:
                 failed.append(node_id)
-                errors[node_id] = str(e)
+                errors[node_id] = {
+                    "validation": validation,
+                    "reason": validation.reason,
+                }
 
         return failed, errors
 
-    def _repair_msg(self, error: str, raw: str, hint: str) -> dict:
+    # --------------------------------------------------
+    # MESSAGES
+    # --------------------------------------------------
+
+    def _json_error_msg(self, error: str) -> dict:
         return {
             "role": "user",
             "content": json.dumps({
                 "type": "repair",
-                "error": error,
-                "hint": hint,
+                "error": f"JSON parse error: {error}",
+                "hint": "Return a single valid JSON object with keys matching node ids",
             }, ensure_ascii=False),
         }

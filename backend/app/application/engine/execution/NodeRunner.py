@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from app.application.engine.dag.executionTrace import ExecutionTrace
 from app.application.engine.nodes.nodeRegistry import NODE_REGISTRY
+from app.application.engine.nodes.pojo.nodeResult import NodeResult
 
 
 class NodeRunner:
@@ -9,7 +10,7 @@ class NodeRunner:
     def __init__(self, node_validator):
         self.node_validator = node_validator
 
-    async def run(self, compiled_node, state, context) -> object:
+    async def run(self, compiled_node, state, context) -> NodeResult | None:
         """
         Выполняет одну Python-ноду:
           - открывает трейс
@@ -33,22 +34,32 @@ class NodeRunner:
             registration = NODE_REGISTRY.get(node.id)
             executor = context["executors"][registration.executor_cls]
 
-            result = await executor.execute(node, state, context)
+            node_result: NodeResult = await executor.execute(node, state, context)
 
             result, ok = await self.node_validator.validate_with_repair(node, result, state)
 
+            validation = self.node_validator.validate(
+                node=node,
+                output=node_result.data,
+                state=state,
+            )
+
             if not ok:
                 state.node_status[node.id] = "failed"
+                state.node_errors.setdefault(node.id, []).append({
+                    "status": validation.status.value,
+                    "error": validation.reason,
+                })
                 trace.status = "failed"
-                trace.error = state.node_errors.get(node.id, [{}])[-1].get("error")
+                trace.error = validation.reason
                 return None
 
             state.node_status[node.id] = "success"
-            state.node_results[node.id] = result
-            trace.output = result
+            state.node_results[node.id] = node_result.data
+            trace.output = node_result.data
             trace.status = "success"
 
-            return result
+            return node_result
 
         except Exception as e:
             state.node_status[node.id] = "failed"

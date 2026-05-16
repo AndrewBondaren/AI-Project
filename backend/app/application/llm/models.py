@@ -10,9 +10,7 @@ class ChatMessage(BaseModel):
 class LLMResponse(BaseModel):
 
     text: str
-
     data: Dict[str, Any] = Field(default_factory=dict)
-
     raw: str = ""
 
 

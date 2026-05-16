@@ -13,7 +13,5 @@ class NodeValidationError:
 
     code: str
     message: str
-
     severity: NodeErrorSeverity
-
     field: Optional[str] = None
