@@ -23,4 +23,11 @@ class IntentDetectionNode(LLMNode):
 
     supported_tasks: list = field(default_factory=lambda: [TaskType.CHAT])
     rules: list = field(default_factory=lambda: [Rule(type="task", params={})])
-    deps: list = field(default_factory=lambda: ["intent_detection"])
+    deps: list = field(default_factory=list)
+
+    #Error_name: dsl_File_Name
+    dsl_patches: dict = field(default_factory=lambda: {
+        "tone_violation":   "intent_detection_repair_tone",
+        "missing_intent":   "intent_detection_repair_missing_intent",
+        "low_confidence":   "intent_detection_repair_confidence",
+    })

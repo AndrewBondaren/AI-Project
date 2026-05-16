@@ -1,8 +1,9 @@
+from dataclasses import dataclass
 from typing import Optional, Type
 
 from .baseNode import BaseNode
 
-
+@dataclass(frozen=True)
 class LLMNode(BaseNode):
 
     dsl: str = ""

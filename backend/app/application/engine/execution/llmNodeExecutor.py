@@ -1,7 +1,7 @@
 import json
 from pydantic import BaseModel
 
-
+# deprecated 🗑 удалить (после замены регистрации в IntentDetectionNode)
 class LLMNodeExecutor:
 
     def __init__(self, router):

@@ -2,6 +2,9 @@ from collections import defaultdict, deque
 from app.application.engine.graphs.executionPlan import ExecutionPlan
 from app.application.engine.nodes.nodeRegistry import NODE_REGISTRY
 from app.application.engine.nodes.pojo.compiledNode import CompiledNode
+from app.application.engine.nodes.pojo.llmNode import LLMNode
+from app.application.engine.nodes.pojo.pythonNode import PythonNode
+from app.application.engine.dag.excecutionPlan import LLMGroup
 
 
 class GraphCompiler:
@@ -19,21 +22,28 @@ class GraphCompiler:
         compiled_nodes = self._compile_nodes(all_registrations)
         filtered = self._filter(compiled_nodes, state)
 
-        # строим DAG и уровни
-        dag = self._build_dag(filtered)
-        levels = self._topological_levels(dag, filtered)
-        optimized = self._optimize(levels, filtered)
+        # Разбиваем на три группы по типу и phase
+        pre_llm, llm_nodes, post_llm = self._split_by_phase(filtered)
+
+        # Строим топологические уровни для каждой Python-фазы независимо
+        pre_llm_levels  = self._build_levels(pre_llm)
+        post_llm_levels = self._build_levels(post_llm)
+
+        # LLM-ноды группируем по temperature, внутри каждой группы — свои уровни
+        llm_groups = self._build_llm_groups(llm_nodes)
+
 
         return ExecutionPlan(
-            levels=optimized,
-            nodes={n.node.id: n for n in filtered},
-            priority_sorted=[n.node.id for n in sorted(filtered, key=lambda n: -n.node.priority)],
-            estimated_cost=self._estimate_cost(filtered)
+            pre_llm_levels=pre_llm_levels,
+            llm_groups=llm_groups,
+            post_llm_levels=post_llm_levels,
+            nodes={cn.node.id: cn for cn in filtered},
+            estimated_cost=self._estimate_cost(filtered),
         )
 
     # --------------------------------------------------
 
-    def _compile_nodes(self, registrations) -> list:
+    def _compile_nodes(self, registrations) -> list[CompiledNode]:
         compiled = []
         for node_id, registration in registrations.items():
             node = registration.node_cls()  # инстанциируем здесь
@@ -41,33 +51,64 @@ class GraphCompiler:
             compiled.append(CompiledNode(node=node, compiled_rules=compiled_rules))
         return compiled
 
-    def _filter(self, compiled_nodes, state) -> list:
+    def _filter(self, compiled_nodes: list[CompiledNode], state) -> list[CompiledNode]:
         """Оставляем только ноды которые подходят под текущий state"""
         return [
             cn for cn in compiled_nodes
             if self.rule_engine.evaluate(cn, state)
         ]
-
-    def _build_dag(self, compiled_nodes) -> dict[str, list[str]]:
+    
+    def _split_by_phase(
+        self,
+        compiled_nodes: list[CompiledNode],
+    ) -> tuple[list[CompiledNode], list[CompiledNode], list[CompiledNode]]:
         """
-        Строим граф зависимостей.
-        dag[node_id] = [node_id, ...] — список нод от которых зависит нода.
+        Делит ноды на три группы:
+          - pre_llm  — PythonNode с phase="pre_llm"
+          - llm      — LLMNode (phase не используется)
+          - post_llm — PythonNode с phase="post_llm"
         """
-        node_ids = {cn.node.id for cn in compiled_nodes}
-        dag = defaultdict(list)
+        pre_llm  = []
+        llm      = []
+        post_llm = []
 
         for cn in compiled_nodes:
-            for dep in cn.node.deps:
-                if dep not in node_ids:
-                    raise ValueError(
-                        f"Node '{cn.node.id}' depends on '{dep}' "
-                        f"but '{dep}' is not in filtered nodes"
-                    )
-                dag[cn.node.id].append(dep)
+            node = cn.node
+            if isinstance(node, LLMNode):
+                llm.append(cn)
+            elif isinstance(node, PythonNode):
+                if node.phase == "pre_llm":
+                    pre_llm.append(cn)
+                else:
+                    post_llm.append(cn)
+            else:
+                raise TypeError(
+                    f"Node '{node.id}' is neither LLMNode nor PythonNode — "
+                    f"не знаю в какую фазу поставить"
+                )
 
-        return dag
+        return pre_llm, llm, post_llm
+    
+    def _build_llm_groups(self, llm_nodes: list[CompiledNode]) -> list[LLMGroup]:
+        """
+        Группирует LLM-ноды по temperature, строит уровни внутри каждой группы,
+        возвращает группы отсортированные по temperature ASC
+        (низкая temperature → первой: анализ до генерации).
+        """
+        # собираем ноды по температуре
+        buckets: dict[float, list[CompiledNode]] = defaultdict(list)
+        for cn in llm_nodes:
+            buckets[cn.node.temperature].append(cn)
 
-    def _topological_levels(self, dag, compiled_nodes) -> list[list[str]]:
+        groups = []
+        for temperature in sorted(buckets.keys()):
+            group_nodes = buckets[temperature]
+            levels = self._build_levels(group_nodes)
+            groups.append(LLMGroup(temperature=temperature, levels=levels))
+
+        return groups
+
+    def _build_levels(self, dag, compiled_nodes: list[CompiledNode]) -> list[list[str]]:
         """
         Kahn's algorithm — разбивает ноды на уровни.
         Ноды одного уровня можно исполнять параллельно.
@@ -76,60 +117,59 @@ class GraphCompiler:
         level 1 — ноды зависящие только от level 0
         level N — ноды зависящие от level N-1
         """
+        if not compiled_nodes:
+            return []
+    
+        node_ids = {cn.node.id for cn in compiled_nodes}
+        node_map = {cn.node.id: cn for cn in compiled_nodes}
+
         # считаем in-degree (кол-во зависимостей) для каждой ноды
-        in_degree = {cn.node.id: 0 for cn in compiled_nodes}
+        in_degree:  dict[str, int]       = {cn.node.id: 0 for cn in compiled_nodes}
 
         # reverse dag: кто зависит от данной ноды
-        dependents = defaultdict(list)
+        dependents: dict[str, list[str]] = defaultdict(list)
 
-        for node_id, deps in dag.items():
-            in_degree[node_id] = len(deps)
-            for dep in deps:
-                dependents[dep].append(node_id)
+        for cn in compiled_nodes:
+            # учитываем только deps внутри текущего набора (фазы / группы)
+            local_deps = [d for d in cn.node.deps if d in node_ids]
+            in_degree[cn.node.id] = len(local_deps)
+            for dep in local_deps:
+                dependents[dep].append(cn.node.id)
 
         # стартуем с нод у которых нет зависимостей
-        queue = deque([
-            node_id for node_id, degree in in_degree.items()
-            if degree == 0
-        ])
+        queue = deque(
+            node_id for node_id, degree in in_degree.items() if degree == 0
+        )
 
         levels = []
 
         while queue:
             # все ноды в queue — это текущий уровень
             current_level = list(queue)
-            levels.append(current_level)
             queue.clear()
 
-            next_level_candidates = set()
+            # сортируем по приоритету DESC внутри уровня
+            current_level.sort(key=lambda nid: -node_map[nid].node.priority)
+            levels.append(current_level)
 
+            next_candidates: set[str] = set()
             for node_id in current_level:
                 for dependent in dependents[node_id]:
                     in_degree[dependent] -= 1
                     if in_degree[dependent] == 0:
-                        next_level_candidates.add(dependent)
+                        next_candidates.add(dependent)
 
-            queue.extend(next_level_candidates)
+            queue.extend(next_candidates)
 
-        # проверка на циклы
         visited = sum(len(level) for level in levels)
         if visited != len(in_degree):
-            raise ValueError("Cycle detected in DAG")
+            raise ValueError(
+                f"Cycle detected in DAG among nodes: "
+                f"{set(in_degree) - {n for lvl in levels for n in lvl}}"
+            )
 
         return levels
 
-    def _optimize(self, levels, compiled_nodes) -> list[list[str]]:
-        """Сортируем ноды внутри уровня по приоритету"""
-        node_map = {cn.node.id: cn for cn in compiled_nodes}
-
-        return [
-            sorted(
-                level,
-                key=lambda node_id: -node_map[node_id].node.priority
-            )
-            for level in levels
-        ]
-
-    def _estimate_cost(self, compiled_nodes) -> float:
+    def _estimate_cost(self, compiled_nodes: list[CompiledNode]) -> float:
         """Суммируем стоимость всех нод"""
         return sum(cn.node.cost.cpu for cn in compiled_nodes)

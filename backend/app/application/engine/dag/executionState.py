@@ -1,4 +1,5 @@
 from app.application.engine.dag.stateSnapshot import StateSnapshot
+from app.application.engine.dag.executionTrace import ExecutionTrace
 
 
 class ExecutionState:
@@ -9,11 +10,14 @@ class ExecutionState:
         self.session = session
         self.task_type = None
 
-        self.node_status = {}
-        self.node_results = {}
-        self.node_errors = {}
+        self.node_status: dict[str, str] = {}
+        self.node_results: dict[str, object] = {}
+        self.node_errors: dict[str, list] = {}
 
-        self.shared_context = {}
+        self.shared_context: dict = {}
 
+        self.execution_order: list[str] = []
+        self.traces: list[ExecutionTrace] = []
         self.snapshots: list[StateSnapshot] = []
+
         self.final_result = None

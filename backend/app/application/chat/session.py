@@ -8,4 +8,5 @@ class Session:
     meta: dict
     max_tokens: int
     repair_iterations: int
-    timeout: 60
+    max_passes: int = 3 #Todo send from front
+    timeout: int = 60
