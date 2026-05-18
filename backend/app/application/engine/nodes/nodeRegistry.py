@@ -13,8 +13,10 @@ class NodeRegistry:
         if not node_id:
             raise ValueError(f"Node {node_cls.__name__} missing id")
 
-        if not executor_cls:
-            raise ValueError(f"Node {node_cls.__name__} missing executor")
+        try:
+            node = node_cls()
+        except Exception as e:
+            raise ValueError(f"Node {node_cls.__name__} cannot be instantiated: {e}")
 
         # инстанциируем чтобы проверить поля
         try:

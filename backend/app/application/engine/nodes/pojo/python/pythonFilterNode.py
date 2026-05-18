@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import Callable, Awaitable, Any, Optional
 from app.application.engine.nodes.pojo.baseNode import BaseNode
-from app.application.engine.nodes.nodeRegistry import register
 from app.application.engine.execution.pythonNodeExecutor import PythonNodeExecutor
+from app.application.engine.nodes.nodeRegistry import register
 
 
 @dataclass(frozen=True)
