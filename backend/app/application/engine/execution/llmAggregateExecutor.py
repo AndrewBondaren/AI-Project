@@ -39,12 +39,13 @@ class LLMAggregateExecutor:
         client = self.router.get(state.session.llm_provider)
 
         dsl_keys = {node.id: [node.dsl] for node in nodes}
+        enable_thinking = any(node.enable_thinking for node in nodes)
 
         payload = self.payload_builder.build(nodes=nodes, dsl_keys=dsl_keys, state=state)
         messages = [
             ChatMessage(
                 role="user",
-                content=json.dumps(payload.to_dict(), ensure_ascii=False),
+                content=json.dumps(payload.to_dict(), ensure_ascii=False, separators=(",", ":")),
             )
         ]
 
@@ -60,6 +61,7 @@ class LLMAggregateExecutor:
             model=state.session.model,
             messages=messages,
             response_format_schema=payload.response_format_schema,
+            enable_thinking=enable_thinking,
         )
         logger.info(
             "llm_call_end provider=%s model=%s elapsed_ms=%d",
@@ -74,7 +76,7 @@ class LLMAggregateExecutor:
         except json.JSONDecodeError as e:
             raise RuntimeError(f"LLMAggregateExecutor: invalid JSON on first call: {e}")
 
-        messages.append(ChatMessage(role="assistant", content=raw if isinstance(raw, str) else json.dumps(raw)))
+        messages.append(ChatMessage(role="assistant", content=raw if isinstance(raw, str) else json.dumps(raw, separators=(",", ":"))))
 
         # валидируем все секции
         failed, node_errors = self._validate_all(nodes, response, state)
@@ -99,6 +101,7 @@ class LLMAggregateExecutor:
                 messages=messages,
                 client=client,
                 state=state,
+                enable_thinking=enable_thinking,
             )
 
             # мержим repaired с успешными из первого вызова

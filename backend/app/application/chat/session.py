@@ -10,4 +10,4 @@ class Session:
     repair_iterations: int = 3
     language: str = "Русский"
     max_passes: int = 3 #Todo send from front
-    timeout: int = 60
+    timeout: int = 120

@@ -9,7 +9,7 @@ class ChatService:
     async def handle_message(self, session: Session, message: str):
 
         result = await self.engine.run(
-            task_type = TaskType.CHAT,
+            task_type = TaskType.METAGAME_CHAT,
             message=message,
             session=session
         )

@@ -1,3 +1,4 @@
+import io
 import json
 import logging
 import logging.handlers
@@ -28,7 +29,7 @@ def setup_logging(log_file: str = "logs/app.log", level: int = logging.INFO) -> 
 
     formatter = _JsonFormatter()
 
-    console = logging.StreamHandler(sys.stdout)
+    console = logging.StreamHandler(io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_buffering=True))
     console.setFormatter(formatter)
 
     rotating = logging.handlers.RotatingFileHandler(

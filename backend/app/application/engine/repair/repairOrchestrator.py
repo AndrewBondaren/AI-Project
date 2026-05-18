@@ -38,12 +38,8 @@ class RepairOrchestrator:
         messages: list,
         client,
         state,
+        enable_thinking: bool = False,
     ) -> dict:
-        """
-        Чинит failed_nodes внутри текущей conversation (messages).
-        Возвращает dict {node_id: output} для всех успешно починенных нод.
-        Бросает RuntimeError если repair_iterations исчерпаны.
-        """
         """
         Чинит failed_nodes внутри текущей conversation (messages).
         Возвращает dict {node_id: output} для всех успешно починенных нод.
@@ -84,17 +80,18 @@ class RepairOrchestrator:
 
             messages.append(ChatMessage(
                 role="user",
-                content=json.dumps(repair_payload.to_dict(), ensure_ascii=False),
+                content=json.dumps(repair_payload.to_dict(), ensure_ascii=False, separators=(",", ":")),
             ))
 
             raw = await client.chat(
                 model=state.session.model,
                 messages=messages,
                 response_format_schema=repair_payload.response_format_schema,
+                enable_thinking=enable_thinking,
             )
 
             messages.append(
-                ChatMessage(role="assistant", content=raw if isinstance(raw, str) else json.dumps(raw))
+                ChatMessage(role="assistant", content=raw if isinstance(raw, str) else json.dumps(raw, separators=(",", ":")))
             )
 
             # парсим ответ

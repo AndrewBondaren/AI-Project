@@ -15,4 +15,4 @@ class PromptAssembler:
         if context.errors is not None:
             payload["errors"] = context.errors
 
-        return json.dumps(payload, ensure_ascii=False)
+        return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))

@@ -1,5 +1,5 @@
+import json
 import logging
-import re
 import httpx
 
 from app.application.llm.models import ChatMessage, normalize_messages
@@ -7,6 +7,7 @@ from app.application.llm.models import ChatMessage, normalize_messages
 logger = logging.getLogger(__name__)
 
 _THINK_CLOSE = "</think>"
+
 
 
 class QwenClient:
@@ -21,18 +22,28 @@ class QwenClient:
         model: str,
         stream: bool = False,
         response_format_schema: dict | None = None,
+        enable_thinking: bool = False,
     ) -> str:
 
         normalized = normalize_messages(messages)
 
+        messages_payload = [{"role": m.role, "content": m.content} for m in normalized]
+
+        if not enable_thinking:
+            for i in range(len(messages_payload) - 1, -1, -1):
+                if messages_payload[i]["role"] == "user":
+                    messages_payload[i]["content"] += " /no_think"
+                    break
+
         payload = {
             "model": model,
-            "messages": [
-                {"role": m.role, "content": m.content}
-                for m in normalized
-            ],
-            "stream": stream
+            "messages": messages_payload,
+            "stream": stream,
+            "chat_template_kwargs": {"enable_thinking": enable_thinking},
         }
+
+        for msg in messages_payload:
+            logger.debug("qwen_request model=%s role=%s content=%s", model, msg["role"], msg["content"])
 
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.post(
@@ -49,5 +60,5 @@ class QwenClient:
         if _THINK_CLOSE in content:
             content = content[content.rfind(_THINK_CLOSE) + len(_THINK_CLOSE):]
         result = content.strip()
-        logger.debug("qwen_raw=%r result=%r", content, result)
+        logger.debug("qwen_result=%s", result)
         return result

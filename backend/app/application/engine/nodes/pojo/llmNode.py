@@ -10,3 +10,4 @@ class LLMNode(BaseNode):
     temperature: float = field(default=0.0)
     contract_json: Optional[Type] = field(default=None)
     dsl_patches: dict = field(default_factory=dict)
+    enable_thinking: bool = field(default=False)
