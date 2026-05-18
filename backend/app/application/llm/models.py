@@ -1,10 +1,23 @@
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 from pydantic import BaseModel, Field
 
 
 class ChatMessage(BaseModel):
     role: str
     content: str
+
+
+def normalize_messages(messages: list[Any]) -> list[ChatMessage]:
+    normalized: list[ChatMessage] = []
+    for message in messages:
+        if isinstance(message, ChatMessage):
+            normalized.append(message)
+        elif isinstance(message, dict):
+            normalized.append(ChatMessage(**message))
+        else:
+            normalized.append(ChatMessage(role=message.role, content=message.content))
+    return normalized
 
 
 class LLMResponse(BaseModel):

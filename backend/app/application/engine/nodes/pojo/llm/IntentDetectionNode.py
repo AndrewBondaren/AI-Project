@@ -1,11 +1,14 @@
 from dataclasses import dataclass, field
+
+from app.application.contracts.contracts import IntentDetectionContract
+from app.application.engine.nodes.nodeRegistry import register_llm
 from app.application.engine.nodes.pojo.llmNode import LLMNode
 from app.application.engine.rules.Rule import Rule
-from app.application.contracts.contracts import IntentDetectionContract
 from app.application.engine.taskType import TaskType
 from app.application.engine.validation.validators.IntentDetectionValidator import IntentDetectionValidator
 
 
+@register_llm()
 @dataclass(frozen=True, kw_only=True)
 class IntentDetectionNode(LLMNode):
     id: str = "intent_detection"

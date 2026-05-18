@@ -27,7 +27,8 @@ class RepairBuilder:
         return LLMRepairPayload(
             player_message=base.player_message,
             language=base.language,
-            contract_json=base.contract_json,
+            global_dsl=base.global_dsl,
+            response_format_schema=base.response_format_schema,
             sections=base.sections,
             errors=errors,
         )

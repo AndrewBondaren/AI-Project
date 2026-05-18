@@ -1,6 +1,11 @@
 import json
+import logging
+import time
 
+from app.application.llm.models import ChatMessage
 from app.application.engine.validation.validationStatus import ValidationStatus
+
+logger = logging.getLogger(__name__)
 from app.application.engine.validation.nodeValidationContext import NodeValidationContext
 from app.application.engine.validation.nodeValidationError import NodeValidationError, NodeErrorSeverity
 from app.application.engine.validation.validationStatus import ValidationResult
@@ -37,12 +42,30 @@ class LLMAggregateExecutor:
 
         payload = self.payload_builder.build(nodes=nodes, dsl_keys=dsl_keys, state=state)
         messages = [
-            {"role": "user", "content": json.dumps(payload.to_dict(), ensure_ascii=False)}
+            ChatMessage(
+                role="user",
+                content=json.dumps(payload.to_dict(), ensure_ascii=False),
+            )
         ]
 
+        logger.info(
+            "llm_call_start provider=%s model=%s nodes=%s",
+            state.session.llm_provider,
+            state.session.model,
+            [n.id for n in nodes],
+        )
+
+        _t0 = time.perf_counter()
         raw = await client.chat(
             model=state.session.model,
             messages=messages,
+            response_format_schema=payload.response_format_schema,
+        )
+        logger.info(
+            "llm_call_end provider=%s model=%s elapsed_ms=%d",
+            state.session.llm_provider,
+            state.session.model,
+            round((time.perf_counter() - _t0) * 1000),
         )
 
         # парсим JSON
@@ -51,13 +74,15 @@ class LLMAggregateExecutor:
         except json.JSONDecodeError as e:
             raise RuntimeError(f"LLMAggregateExecutor: invalid JSON on first call: {e}")
 
-        messages.append({"role": "assistant", "content": raw})
+        messages.append(ChatMessage(role="assistant", content=raw if isinstance(raw, str) else json.dumps(raw)))
 
         # валидируем все секции
         failed, node_errors = self._validate_all(nodes, response, state)
 
         if failed:
             failed_nodes = [n for n in nodes if n.id in failed]
+
+            logger.warning("llm_validation_failed nodes=%s", failed)
 
             # сохраняем ошибки первого вызова
             for node_id, error_info in node_errors.items():

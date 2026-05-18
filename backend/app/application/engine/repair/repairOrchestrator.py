@@ -1,5 +1,10 @@
 import json
+import logging
 
+from app.application.llm.models import ChatMessage
+from app.application.engine.prompt.schemaBuilder import build_strict_schema
+
+logger = logging.getLogger(__name__)
 from app.application.engine.prompt.dslResolver import DSLResolver
 from app.application.engine.repair.repairBuilder import RepairBuilder
 from app.application.engine.validation.nodeValidationContext import NodeValidationContext
@@ -39,10 +44,21 @@ class RepairOrchestrator:
         Возвращает dict {node_id: output} для всех успешно починенных нод.
         Бросает RuntimeError если repair_iterations исчерпаны.
         """
+        """
+        Чинит failed_nodes внутри текущей conversation (messages).
+        Возвращает dict {node_id: output} для всех успешно починенных нод.
+        Бросает RuntimeError если repair_iterations исчерпаны.
+        """
 
         max_attempts = state.session.repair_iterations
         attempt = 0
         current_failed = {node.id: node for node in failed_nodes}
+
+        logger.warning(
+            "repair_start nodes=%s max_attempts=%d",
+            list(current_failed.keys()),
+            max_attempts,
+        )
 
         while attempt < max_attempts:
 
@@ -60,23 +76,26 @@ class RepairOrchestrator:
             }
 
             # делегируем построение payload в RepairBuilder
-            repair_content = self.repair_builder.build(
+            repair_payload = self.repair_builder.build(
                 failed_nodes=list(current_failed.values()),
                 dsl_keys=dsl_keys,
                 state=state,
             )
 
-            messages.append({
-                "role": "user",
-                "content": repair_content,
-            })
+            messages.append(ChatMessage(
+                role="user",
+                content=json.dumps(repair_payload.to_dict(), ensure_ascii=False),
+            ))
 
             raw = await client.chat(
                 model=state.session.model,
                 messages=messages,
+                response_format_schema=repair_payload.response_format_schema,
             )
 
-            messages.append({"role": "assistant", "content": raw})
+            messages.append(
+                ChatMessage(role="assistant", content=raw if isinstance(raw, str) else json.dumps(raw))
+            )
 
             # парсим ответ
             try:
@@ -101,12 +120,22 @@ class RepairOrchestrator:
                 })
 
             if not still_failed:
+                logger.info(
+                    "repair_success nodes=%s attempt=%d",
+                    list(current_failed.keys()),
+                    attempt,
+                )
                 return {
                     node_id: response[node_id]
                     for node_id in current_failed
                     if node_id in response
                 }
 
+            logger.warning(
+                "repair_attempt_failed attempt=%d still_failed=%s",
+                attempt,
+                still_failed,
+            )
             current_failed = {
                 node_id: node
                 for node_id, node in current_failed.items()
@@ -114,6 +143,11 @@ class RepairOrchestrator:
             }
             attempt += 1
 
+        logger.error(
+            "repair_limit_exceeded nodes=%s max_attempts=%d",
+            list(current_failed.keys()),
+            max_attempts,
+        )
         raise RuntimeError(
             f"RepairOrchestrator: repair_limit_exceeded after {max_attempts} attempts. "
             f"Failed nodes: {list(current_failed.keys())}"

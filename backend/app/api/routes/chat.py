@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
@@ -14,6 +16,7 @@ class ChatRequest(BaseModel):
     user_id: str
     meta: dict
     message: str
+    repair_iterations: int
 
 #TODO later
 class ChatSettings(BaseModel):
@@ -23,7 +26,9 @@ class ChatSettings(BaseModel):
     max_passes: int
 
 class ChatResponse(BaseModel):
-    response: str
+    ok: bool = True
+    response: Any = None
+    error: str | None = None
 
 
 def get_chat_service(container = Depends(get_container)):
@@ -45,9 +50,9 @@ async def chat(
         llm_provider=data.llm_provider,
         model=data.model,
         user_id=data.user_id,
-        meta={}, #meta=data.meta
+        meta=data.meta,
 #        max_tokens=data.max_tokens, #вынести в запрос настроек
-#        repair_iterations=data.repair_iterations, #вынести в запрос настроек
+        repair_iterations=data.repair_iterations, #вынести в запрос настроек
 #        max_passes=data.max_passes #вынести в запрос настроек
     )
     result = await service.handle_message(
@@ -55,4 +60,7 @@ async def chat(
         message=data.message
     )
 
-    return ChatResponse(response=result)
+    if isinstance(result, dict) and result.get("ok") is False:
+        return ChatResponse(ok=False, error=result.get("error"), response=result)
+
+    return ChatResponse(ok=True, response=result)

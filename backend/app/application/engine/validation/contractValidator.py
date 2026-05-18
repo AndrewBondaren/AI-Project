@@ -1,7 +1,7 @@
 import json
 
-from app.application.llm.models import ValidationResult
-from app.application.engine.validation.validationStatus import ValidationStatus
+from app.application.engine.validation.validationStatus import ValidationResult, ValidationStatus
+from app.application.engine.validation.nodeValidationError import NodeValidationError, NodeErrorSeverity
 
 
 class ContractValidator:
@@ -14,7 +14,11 @@ class ContractValidator:
             except Exception as e:
                 return ValidationResult(
                     status=ValidationStatus.RETRY,
-                    reason=f"invalid_json: {str(e)}"
+                    errors=[NodeValidationError(
+                        code="invalid_json",
+                        message=str(e),
+                        severity=NodeErrorSeverity.RETRY,
+                    )],
                 )
 
         try:
@@ -22,7 +26,11 @@ class ContractValidator:
         except Exception as e:
             return ValidationResult(
                 status=ValidationStatus.RETRY,
-                reason=f"schema_mismatch: {str(e)}"
+                errors=[NodeValidationError(
+                    code="schema_mismatch",
+                    message=str(e),
+                    severity=NodeErrorSeverity.RETRY,
+                )],
             )
 
         return ValidationResult(status=ValidationStatus.OK)

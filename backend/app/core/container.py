@@ -27,7 +27,7 @@ from app.application.engine.rules.ruleHandlerRegistry import RuleHandlerRegistry
 from app.application.engine.rules.taskRuleHandler import TaskRuleHandler
 
 # Импорт нод = их регистрация в NODE_REGISTRY
-#import app.application.engine.nodes  # noqa: F401
+import app.application.engine.nodes  # noqa: F401
 
 from app.core.config import settings
 

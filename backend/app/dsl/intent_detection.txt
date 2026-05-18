@@ -1,0 +1,12 @@
+Detect the player's intent from the message.
+
+Return a single JSON object. Top-level key MUST be "intent_detection".
+Value must match IntentDetectionContract: intents (task_type + confidence), optional global_confidence and reasoning.
+
+Rules:
+- Output ONLY valid JSON. No markdown, no explanations, no thinking blocks.
+- Each intent: task_type (valid TaskType value), confidence between 0 and 1.
+- At least one intent required.
+
+Example shape:
+{"intent_detection":{"intents":[{"task_type":"chat","confidence":0.9},...]}}

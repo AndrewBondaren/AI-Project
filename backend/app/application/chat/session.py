@@ -8,6 +8,6 @@ class Session:
     meta: dict
     max_tokens: int = 50000
     repair_iterations: int = 3
-    language: str = "RU"
+    language: str = "Русский"
     max_passes: int = 3 #Todo send from front
     timeout: int = 60

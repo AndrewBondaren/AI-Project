@@ -1,6 +1,9 @@
 from app.application.engine.prompt.dslResolver import DSLResolver
 from app.application.engine.prompt.pojo.llmPayload import LLMPayload
 from app.application.engine.prompt.pojo.nodeSection import NodeSection
+from app.application.engine.prompt.schemaBuilder import build_strict_schema
+
+_GLOBAL_DSL_KEY = "llm_group"
 
 
 class LLMGroupPayloadBuilder:
@@ -12,7 +15,12 @@ class LLMGroupPayloadBuilder:
         return LLMPayload(
             player_message=state.message,
             language=state.session.language,
-            contract_json=self._build_contracts(nodes),
+            global_dsl=self.dsl_resolver.resolve([_GLOBAL_DSL_KEY]),
+            response_format_schema=build_strict_schema({
+                node.id: node.contract_json.model_json_schema()
+                for node in nodes
+                if node.contract_json is not None
+            }),
             sections={
                 node.id: NodeSection(
                     dsl=self.dsl_resolver.resolve(dsl_keys[node.id]),
@@ -21,13 +29,6 @@ class LLMGroupPayloadBuilder:
                 for node in nodes
             },
         )
-
-    def _build_contracts(self, nodes: list) -> dict:
-        return {
-            node.id: node.contract_json.model_json_schema()
-            for node in nodes
-            if node.contract_json is not None
-        }
 
     def _collect_deps(self, node, state) -> dict:
         return {

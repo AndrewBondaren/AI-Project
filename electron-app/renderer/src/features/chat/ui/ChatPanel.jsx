@@ -27,15 +27,27 @@ export default function ChatPanel() {
     setMessages((prev) => [...prev, { role: "user", text }]);
     setLoading(true);
 
-    const res = await sendMessage(sessionId, text);
+    try {
+      const res = await sendMessage(sessionId, text);
 
-    setTimeout(() => {
+      let botText;
+      if (res.ok === false) {
+        botText = res.error ?? JSON.stringify(res.response, null, 2);
+      } else if (typeof res.response === "string") {
+        botText = res.response;
+      } else {
+        botText = JSON.stringify(res.response, null, 2);
+      }
+
+      setMessages((prev) => [...prev, { role: "bot", text: botText }]);
+    } catch (e) {
       setMessages((prev) => [
         ...prev,
-        { role: "bot", text: res.response }
+        { role: "bot", text: `Error: ${e.message}` },
       ]);
+    } finally {
       setLoading(false);
-    }, 400);
+    }
   };
 
   return (

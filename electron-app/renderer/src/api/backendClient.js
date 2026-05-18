@@ -7,11 +7,18 @@ export async function sendChatMessage(sessionId, message) {
     body: JSON.stringify({
       llm_provider: "qwen",
       model: "qwen3.6",
+      meta: {},
       user_id: "session_1", //sessionId
       message: message,
-      repair_iterations: 2
+      repair_iterations: 4
     })
   });
 
-  return res.json();
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.detail ?? data.error ?? `HTTP ${res.status}`);
+  }
+
+  return data;
 }

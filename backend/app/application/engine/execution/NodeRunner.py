@@ -1,9 +1,13 @@
+import logging
 from datetime import datetime, timezone
 
 from app.application.engine.dag.executionTrace import ExecutionTrace
+from app.application.engine.nodes.nodeKind import NodeKind
 from app.application.engine.nodes.nodeRegistry import NODE_REGISTRY
 from app.application.engine.nodes.pojo.nodeResult import NodeResult
 from app.application.engine.validation.nodeValidationContext import NodeValidationContext
+
+logger = logging.getLogger(__name__)
 
 
 class NodeRunner:
@@ -24,6 +28,8 @@ class NodeRunner:
         state.node_status[node.id] = "running"
         state.execution_order.append(node.id)
 
+        logger.info("node_start node_id=%s", node.id)
+
         trace = ExecutionTrace(
             node_id=node.id,
             start_time=datetime.now(timezone.utc),
@@ -33,6 +39,10 @@ class NodeRunner:
 
         try:
             registration = NODE_REGISTRY.get(node.id)
+            if registration.kind != NodeKind.PYTHON:
+                raise TypeError(
+                    f"Node '{node.id}' is LLM — executed via LLMAggregateExecutor, not NodeRunner"
+                )
             executor = context["executors"][registration.executor_cls]
 
             node_result: NodeResult = await executor.execute(node, state, context)
@@ -52,12 +62,19 @@ class NodeRunner:
                 })
                 trace.status = "failed"
                 trace.error = validation.reason
+                logger.warning(
+                    "node_failed node_id=%s reason=%s errors=%s",
+                    node.id,
+                    validation.reason,
+                    [e.code for e in validation.errors],
+                )
                 return None
 
             state.node_status[node.id] = "success"
             state.node_results[node.id] = node_result.data
             trace.output = node_result.data
             trace.status = "success"
+            logger.info("node_success node_id=%s", node.id)
 
             return node_result
 
@@ -66,6 +83,7 @@ class NodeRunner:
             state.node_errors.setdefault(node.id, []).append({"error": str(e)})
             trace.status = "failed"
             trace.error = str(e)
+            logger.exception("node_error node_id=%s", node.id)
             return None
 
         finally:

@@ -1,12 +1,21 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.container import Container
+from app.core.logging_config import setup_logging
+from app.core.log_middleware import RequestLoggingMiddleware
+
+import logging
+
+setup_logging()
 
 
 def create_app():
     app = FastAPI()
     app.state.container = Container()
 
+    setup_logging()
+    logging.getLogger("app.application.llm.clients.qwenClient").setLevel(logging.DEBUG)
+    app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],  # позже сузишь под домен фронта

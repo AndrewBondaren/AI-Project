@@ -6,15 +6,17 @@ from app.application.engine.prompt.pojo.nodeSection import NodeSection
 @dataclass
 class LLMPayload:
     player_message: str
-    language: str # fron front
-    contract_json: dict
+    language: str
+    global_dsl: str
+    response_format_schema: dict
     sections: dict[str, NodeSection]  # node_id → NodeSection
 
     def to_dict(self) -> dict:
         payload = {
             "player_message": self.player_message,
             "language": self.language,
-            "contract_json": self.contract_json,
+            "dsl": self.global_dsl,
+            "response_format": self.response_format_schema,
         }
         for node_id, section in self.sections.items():
             payload[node_id] = asdict(section)

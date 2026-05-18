@@ -1,5 +1,12 @@
+import logging
+import re
 import httpx
-from app.application.llm.models import ChatMessage
+
+from app.application.llm.models import ChatMessage, normalize_messages
+
+logger = logging.getLogger(__name__)
+
+_THINK_CLOSE = "</think>"
 
 
 class QwenClient:
@@ -12,14 +19,17 @@ class QwenClient:
         self,
         messages: list[ChatMessage],
         model: str,
-        stream: bool = False
+        stream: bool = False,
+        response_format_schema: dict | None = None,
     ) -> str:
+
+        normalized = normalize_messages(messages)
 
         payload = {
             "model": model,
             "messages": [
                 {"role": m.role, "content": m.content}
-                for m in messages
+                for m in normalized
             ],
             "stream": stream
         }
@@ -35,4 +45,9 @@ class QwenClient:
 
         data = response.json()
 
-        return data["choices"][0]["message"]["content"]
+        content: str = data["choices"][0]["message"]["content"] or ""
+        if _THINK_CLOSE in content:
+            content = content[content.rfind(_THINK_CLOSE) + len(_THINK_CLOSE):]
+        result = content.strip()
+        logger.debug("qwen_raw=%r result=%r", content, result)
+        return result
