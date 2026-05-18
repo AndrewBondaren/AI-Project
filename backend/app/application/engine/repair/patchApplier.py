@@ -1,6 +1,3 @@
-from typing import Any
-
-
 class PatchApplier:
     """
     Транзакционно применяет накопленные патчи из state.pending_patches.

@@ -26,8 +26,6 @@ class DAGExecutor:
         # Фаза 3: post_llm Python-ноды
         await self._execute_phase(plan.post_llm_levels, plan, state, context, phase="post_llm")
 
-        state.final_result = state.node_results
-
         return state
 
     # --------------------------------------------------
@@ -69,6 +67,7 @@ class DAGExecutor:
                     state.replan_reason = node_result.replan_reason
                 break
 
+    #_create_snapshot — делает dict(state.node_results) и list(state.execution_order) — это shallow copy. Для node_results это потенциально важно: если значения в dict сами являются мутируемыми объектами (например, вложенные dict от LLM), снапшот будет держать ссылки на те же объекты. Сейчас не проблема, но когда появятся post_llm ноды, мутирующие содержимое результатов — снапшот незаметно изменится вместе с ними. Стоит иметь в виду к моменту реализации
     def _create_snapshot(self, state, phase: str, level_idx: int):
         snapshot = StateSnapshot(
             level=level_idx,

@@ -1,6 +1,9 @@
+from app.application.engine.taskType import TaskType
 from app.application.engine.validation.validationStatus import ValidationResult, ValidationStatus
 from app.application.engine.validation.nodeValidationContext import NodeValidationContext
 from app.application.engine.validation.nodeValidationError import NodeValidationError, NodeErrorSeverity
+
+CONFIDENCE_THRESHOLD = 0.5
 
 
 class IntentDetectionValidator:
@@ -8,30 +11,43 @@ class IntentDetectionValidator:
     def validate(self, ctx: NodeValidationContext) -> ValidationResult:
 
         errors = []
+        valid_task_types = {t.value for t in TaskType}
+        intents = ctx.output.get("intents", [])
 
-        # assert 1
-        if not ctx.output.get("intent"):
-            errors.append(NodeValidationError(
-                code="missing_intent",
-                message="Field 'intent' is missing or empty",
-                severity=NodeErrorSeverity.RETRY,
-                field="intent",
-            ))
+        if not intents:
+            return ValidationResult(
+                status=ValidationStatus.RETRY,
+                errors=[NodeValidationError(
+                    code="missing_intent",
+                    message="LLM returned empty intents list",
+                    severity=NodeErrorSeverity.RETRY,
+                    field="intents",
+                )]
+            )
 
-        # assert 2
-        confidence = ctx.output.get("confidence", 0)
-        if confidence < 0.5:
-            errors.append(NodeValidationError(
-                code="low_confidence",
-                message=f"Confidence {confidence} is below threshold 0.5",
-                severity=NodeErrorSeverity.RETRY,
-                field="confidence",
-            ))
+        for idx, intent in enumerate(intents):
+            task_type = intent.get("task_type")
+            confidence = intent.get("confidence", 0)
+
+            if task_type not in valid_task_types:
+                errors.append(NodeValidationError(
+                    code="invalid_task_type",
+                    message=f"intents[{idx}].task_type='{task_type}' is not a valid TaskType",
+                    severity=NodeErrorSeverity.RETRY,
+                    field=f"intents[{idx}].task_type",
+                ))
+
+            if confidence < CONFIDENCE_THRESHOLD:
+                errors.append(NodeValidationError(
+                    code="low_confidence",
+                    message=f"intents[{idx}].task_type='{task_type}' confidence={confidence} below threshold={CONFIDENCE_THRESHOLD}",
+                    severity=NodeErrorSeverity.RETRY,
+                    field=f"intents[{idx}].confidence",
+                ))
 
         if not errors:
             return ValidationResult(status=ValidationStatus.OK)
 
-        # severity: если хоть одна FAIL — весь результат FAIL
         status = (
             ValidationStatus.FAIL
             if any(e.severity == NodeErrorSeverity.FAIL for e in errors)

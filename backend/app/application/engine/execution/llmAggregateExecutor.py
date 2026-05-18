@@ -88,6 +88,8 @@ class LLMAggregateExecutor:
 
         # все секции ok — накапливаем патчи
         for node in nodes:
+            output = response[node.id]
+            state.node_results[node.id] = output
             state.pending_patches.append({
                 "node_id": node.id,
                 "output": response[node.id],

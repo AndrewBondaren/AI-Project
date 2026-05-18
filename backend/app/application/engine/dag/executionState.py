@@ -20,4 +20,8 @@ class ExecutionState:
         self.traces: list[ExecutionTrace] = []
         self.snapshots: list[StateSnapshot] = []
 
+        self.pending_patches: list[dict] = []
+        self.requires_replan: bool = False
+        self.replan_reason: str | None = None
+
         self.final_result = None

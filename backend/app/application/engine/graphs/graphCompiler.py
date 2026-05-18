@@ -1,10 +1,9 @@
 from collections import defaultdict, deque
-from app.application.engine.graphs.executionPlan import ExecutionPlan
 from app.application.engine.nodes.nodeRegistry import NODE_REGISTRY
 from app.application.engine.nodes.pojo.compiledNode import CompiledNode
 from app.application.engine.nodes.pojo.llmNode import LLMNode
 from app.application.engine.nodes.pojo.pythonNode import PythonNode
-from app.application.engine.dag.excecutionPlan import LLMGroup
+from app.application.engine.dag.executionPlan import ExecutionPlan, LLMGroup
 
 
 class GraphCompiler:
@@ -28,7 +27,6 @@ class GraphCompiler:
         # Строим топологические уровни для каждой Python-фазы независимо
         pre_llm_levels  = self._build_levels(pre_llm)
         post_llm_levels = self._build_levels(post_llm)
-
         # LLM-ноды группируем по temperature, внутри каждой группы — свои уровни
         llm_groups = self._build_llm_groups(llm_nodes)
 
@@ -108,7 +106,7 @@ class GraphCompiler:
 
         return groups
 
-    def _build_levels(self, dag, compiled_nodes: list[CompiledNode]) -> list[list[str]]:
+    def _build_levels(self, compiled_nodes: list[CompiledNode]) -> list[list[str]]:
         """
         Kahn's algorithm — разбивает ноды на уровни.
         Ноды одного уровня можно исполнять параллельно.

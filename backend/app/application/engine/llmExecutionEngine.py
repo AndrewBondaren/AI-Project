@@ -31,6 +31,8 @@ class LLMExecutionEngine:
 
             # все passes завершены — применяем патчи атомарно
             self.patch_applier.apply(state)
+            #apply changes
+            state.final_result = state.node_results
 
         except Exception as e:
             return self._error_response(e)
