@@ -6,16 +6,14 @@ from app.application.engine.taskType import TaskType
 from app.application.engine.validation.validators.IntentDetectionValidator import IntentDetectionValidator
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class IntentDetectionNode(LLMNode):
-
     id: str = "intent_detection"
     name: str = "Intent Detection"
 
     validator: type = IntentDetectionValidator
     contract_json: type = IntentDetectionContract
     dsl: str = "intent_detection"
-
     temperature: float = 0.2
     retry_policy: dict = field(default_factory=lambda: {"enabled": True})
 

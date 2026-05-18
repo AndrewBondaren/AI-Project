@@ -1,20 +1,20 @@
+from dataclasses import dataclass, field
+
 from app.application.engine.nodes.pojo.pythonNode import PythonNode
 
 
-async def prepare_analysis_context(state):
-
+async def prepare_analysis_context(state, context=None):
     return {
         "message": state.message,
         "analysis_depth": "deep",
     }
 
 
+@dataclass(frozen=True, kw_only=True)
 class PrepareAnalysisContextNode(PythonNode):
-
-    def __init__(self):
-        super().__init__(
-            id="prepare_context",
-            name="Prepare Analysis Context",
-            deps=[],
-            handler=prepare_analysis_context,
-        )
+    id: str = "prepare_context"
+    name: str = "Prepare Analysis Context"
+    supported_tasks: list = field(default_factory=list)  # или list[TaskType]
+    rules: list = field(default_factory=list)            # или list[Rule]
+    deps: list[str] = field(default_factory=list)
+    handler = prepare_analysis_context  # без field() — callable как class attribute

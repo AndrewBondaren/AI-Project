@@ -3,7 +3,7 @@ from typing import Optional, Type
 
 from .baseNode import BaseNode
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class LLMNode(BaseNode):
 
     dsl: str = field(default="")
