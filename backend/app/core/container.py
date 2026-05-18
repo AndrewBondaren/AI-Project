@@ -7,13 +7,13 @@ from app.application.chat.chatService import ChatService
 from app.application.engine.dag.dagExecutor import DAGExecutor
 from app.application.engine.llmExecutionEngine import LLMExecutionEngine
 from app.application.engine.graphs.graphCompiler import GraphCompiler
-from app.application.engine.execution.llmNodeExecutor import LLMNodeExecutor
 from app.application.engine.execution.pythonNodeExecutor import PythonNodeExecutor
-from app.application.engine.prompt.promptCompiler import PromptCompiler
-from app.application.engine.prompt.promptAggregator import PromptAggregator
-from app.application.engine.prompt.promptAssambler import PromptAssembler
+from app.application.engine.execution.llmAggregateExecutor import LLMAggregateExecutor
+from app.application.engine.execution.NodeRunner import NodeRunner
 from app.application.engine.prompt.dslRegistry import DSLRegistry
 from app.application.engine.prompt.dslAggregator import DSLAggregator
+from app.application.engine.prompt.dslResolver import DSLResolver
+from app.application.engine.prompt.llmGroupPayloadBuilder import LLMGroupPayloadBuilder
 from app.application.engine.validation.llmValidator import LLMValidator
 from app.application.engine.validation.contractValidator import ContractValidator
 from app.application.engine.validation.nodeValidator import NodeValidator
@@ -25,6 +25,9 @@ from app.application.engine.rules.ruleEngine import RuleEngine
 from app.application.engine.rules.ruleCompiler import RuleCompiler
 from app.application.engine.rules.ruleHandlerRegistry import RuleHandlerRegistry
 from app.application.engine.rules.taskRuleHandler import TaskRuleHandler
+
+# Импорт нод = их регистрация в NODE_REGISTRY
+import app.application.engine.nodes  # noqa: F401
 
 from app.core.config import settings
 
@@ -49,20 +52,22 @@ class Container:
         self._graph_compiler = None
 
         # EXECUTION
-        self._dag_executor = None
-        self._llm_node_executor = None
+        self._node_runner = None
         self._python_node_executor = None
+        self._llm_aggregate_executor = None
+        self._dag_executor = None
 
         # PROMPT
         self._dsl_registry = None
         self._dsl_aggregator = None
-        self._prompt_assembler = None
-        self._prompt_aggregator = None
-        self._prompt_compiler = None
+        self._dsl_resolver = None
+        self._payload_builder = None
 
         # VALIDATION & REPAIR
-        self._validator = None
+        self._node_validator = None
+        self._llm_validator = None
         self._repair_orchestrator = None
+        self._patch_applier = None
 
         # ENGINE & SERVICES
         self._llm_engine = None
@@ -145,36 +150,6 @@ class Container:
         return self._graph_compiler
 
     # =====================================================
-    # EXECUTION
-    # =====================================================
-
-    def llm_node_executor(self):
-        if self._llm_node_executor is None:
-            self._llm_node_executor = LLMNodeExecutor(
-                router=self.llm_router()
-            )
-        return self._llm_node_executor
-
-    def python_node_executor(self):
-        if self._python_node_executor is None:
-            self._python_node_executor = PythonNodeExecutor()
-        return self._python_node_executor
-
-    def executors(self) -> dict:
-        return {
-            LLMNodeExecutor: self.llm_node_executor(),
-            PythonNodeExecutor: self.python_node_executor()
-        }
-
-    def dag_executor(self):
-        if self._dag_executor is None:
-            self._dag_executor = DAGExecutor(
-                validator=self.validator(),
-                repair_orchestrator=self.repair_orchestrator()
-            )
-        return self._dag_executor
-
-    # =====================================================
     # PROMPT
     # =====================================================
 
@@ -188,46 +163,98 @@ class Container:
             self._dsl_aggregator = DSLAggregator()
         return self._dsl_aggregator
 
-    def prompt_assembler(self):
-        if self._prompt_assembler is None:
-            self._prompt_assembler = PromptAssembler()
-        return self._prompt_assembler
-
-    def prompt_aggregator(self):
-        if self._prompt_aggregator is None:
-            self._prompt_aggregator = PromptAggregator()
-        return self._prompt_aggregator
-
-    def prompt_compiler(self):
-        if self._prompt_compiler is None:
-            self._prompt_compiler = PromptCompiler(
-                dsl_registry=self.dsl_registry(),
-                assembler=self.prompt_assembler()
+    def dsl_resolver(self):
+        if self._dsl_resolver is None:
+            self._dsl_resolver = DSLResolver(
+                dsl_registry=self.dsl_registry()
             )
-        return self._prompt_compiler
+        return self._dsl_resolver
+
+    def payload_builder(self):
+        if self._payload_builder is None:
+            self._payload_builder = LLMGroupPayloadBuilder(
+                dsl_resolver=self.dsl_resolver()
+            )
+        return self._payload_builder
 
     # =====================================================
-    # VALIDATION & REPAIR
+    # VALIDATION
     # =====================================================
 
-    def validator(self):
-        if self._validator is None:
-            self._validator = LLMValidator(
+    def node_validator(self):
+        if self._node_validator is None:
+            self._node_validator = NodeValidator()
+        return self._node_validator
+
+    def llm_validator(self):
+        if self._llm_validator is None:
+            self._llm_validator = LLMValidator(
                 contract_validator=ContractValidator(),
-                node_validator=NodeValidator(),
+                node_validator=self.node_validator()
             )
-        return self._validator
+        return self._llm_validator
+
+    # =====================================================
+    # REPAIR
+    # =====================================================
+
+    def patch_applier(self):
+        if self._patch_applier is None:
+            self._patch_applier = PatchApplier()
+        return self._patch_applier
 
     def repair_orchestrator(self):
         if self._repair_orchestrator is None:
             self._repair_orchestrator = RepairOrchestrator(
-                router=self.llm_router(),
-                validator=self.validator(),
-                builder=RepairBuilder(),
-                applier=PatchApplier(),
-                projector=DSLFailureProjector()
+                dsl_resolver=self.dsl_resolver(),
+                repair_builder=RepairBuilder(
+                    payload_builder=self.payload_builder(),
+                    failure_projector=DSLFailureProjector()
+                ),
+                llm_validator=self.llm_validator()
             )
         return self._repair_orchestrator
+
+    # =====================================================
+    # EXECUTION
+    # =====================================================
+
+    def python_node_executor(self):
+        if self._python_node_executor is None:
+            self._python_node_executor = PythonNodeExecutor()
+        return self._python_node_executor
+
+    def llm_aggregate_executor(self):
+        if self._llm_aggregate_executor is None:
+            self._llm_aggregate_executor = LLMAggregateExecutor(
+                payload_builder=self.payload_builder(),
+                llm_validator=self.llm_validator(),
+                dsl_resolver=self.dsl_resolver(),
+                dsl_registry=self.dsl_registry(),
+                repair_orchestrator=self.repair_orchestrator(),
+                router=self.llm_router()
+            )
+        return self._llm_aggregate_executor
+
+    def node_runner(self):
+        if self._node_runner is None:
+            self._node_runner = NodeRunner(
+                node_validator=self.node_validator()
+            )
+        return self._node_runner
+
+    def dag_executor(self):
+        if self._dag_executor is None:
+            self._dag_executor = DAGExecutor(
+                node_runner=self.node_runner(),
+                llm_aggregate_executor=self.llm_aggregate_executor()
+            )
+        return self._dag_executor
+
+    def executors(self) -> dict:
+        return {
+            PythonNodeExecutor: self.python_node_executor(),
+        }
 
     # =====================================================
     # ENGINE
@@ -238,12 +265,7 @@ class Container:
             self._llm_engine = LLMExecutionEngine(
                 dag_executor=self.dag_executor(),
                 graph_compiler=self.graph_compiler(),
-                router=self.llm_router(),
-                prompt_aggregator=self.prompt_aggregator(),
-                prompt_compiler=self.prompt_compiler(),
-                dsl_aggregator=self.dsl_aggregator(),
-                validator=self.validator(),
-                repair_orchestrator=self.repair_orchestrator(),
+                patch_applier=self.patch_applier(),
                 executors=self.executors()
             )
         return self._llm_engine
