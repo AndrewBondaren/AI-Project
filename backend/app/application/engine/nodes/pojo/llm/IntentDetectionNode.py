@@ -16,7 +16,7 @@ class IntentDetectionNode(LLMNode):
 
     validator: type = IntentDetectionValidator
     contract_json: type = IntentDetectionContract
-    dsl: str = "intent_detection"
+    dsl: str = "intent_detection/intent_detection"
     temperature: float = 0.2
     retry_policy: dict = field(default_factory=lambda: {"enabled": True})
 
@@ -26,7 +26,7 @@ class IntentDetectionNode(LLMNode):
 
     #Error_name: dsl_File_Name
     dsl_patches: dict = field(default_factory=lambda: {
-        "tone_violation":   "intent_detection_repair_tone",
-        "missing_intent":   "intent_detection_repair_missing_intent",
-        "low_confidence":   "intent_detection_repair_confidence"
+        "tone_violation":   "intent_detection/repair_tone",
+        "missing_intent":   "intent_detection/repair_missing_intent",
+        "low_confidence":   "intent_detection/repair_confidence"
     })

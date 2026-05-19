@@ -65,12 +65,6 @@ class RepairOrchestrator:
                     patch_keys = self.dsl_resolver.resolve_patches(node, last_validation)
                     dsl_keys[node.id] = self.dsl_resolver.update(dsl_keys[node.id], patch_keys)
 
-            # собираем error codes для builder
-            node_errors = {
-                node_id: self._get_error_codes(node_id, state)
-                for node_id in current_failed
-            }
-
             # делегируем построение payload в RepairBuilder
             repair_payload = self.repair_builder.build(
                 failed_nodes=list(current_failed.values()),
