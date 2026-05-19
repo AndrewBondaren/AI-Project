@@ -4,6 +4,8 @@
 INPUT [player_message: str]
 SCHEMA [available_types: List[TaskType] FROM json.response_format]
 CLASSIFY player_message -> List[IntentItem]
+    IF player_message is gibberish
+        SET global_confidence = 0.0
 OUTPUT {[{ task_type: TaskType, confidence: float [0..1] }], global_confidence: float [0..1], reasoning: str }
 CONSTRAINT len(intents) >= 1
 
