@@ -1,4 +1,18 @@
+import re
+from enum import Enum
+
 from app.application.engine.validation.validationStatus import ValidationResult
+
+_PLACEHOLDER_RE = re.compile(r"\{\{(\w+)\}\}")
+
+
+def _fmt_value(v) -> str:
+    if isinstance(v, list):
+        items = [i.value if isinstance(i, Enum) else str(i) for i in v]
+        return "[" + ", ".join(items) + "]"
+    if isinstance(v, Enum):
+        return v.value
+    return str(v)
 
 
 class DSLResolver:
@@ -25,6 +39,9 @@ class DSLResolver:
                 result.append(key)
         return result
     
-    def resolve(self, keys: list[str]) -> str:
+    def resolve(self, keys: list[str], context: dict | None = None) -> str:
         parts = [self.dsl_registry.get(key) for key in keys]
-        return "\n\n".join(parts)
+        text = "\n\n".join(parts)
+        if context:
+            text = _PLACEHOLDER_RE.sub(lambda m: _fmt_value(context.get(m.group(1), m.group(0))), text)
+        return text

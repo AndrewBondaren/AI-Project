@@ -1,13 +1,19 @@
-Detect the player's intent from the message.
+[GOAL]: detect_intent(player_message)
 
-Return a single JSON object. Top-level key MUST be "intent_detection".
-Value must match IntentDetectionContract: intents (task_type + confidence), optional global_confidence and reasoning. 
+[TASK]:
+INPUT [player_message: str]
+SCHEMA [available_types: List[TaskType] FROM json.response_format]
+CLASSIFY player_message -> List[IntentItem]
+OUTPUT {[{ task_type: TaskType, confidence: float [0..1] }], global_confidence: float [0..1], reasoning: str }
+CONSTRAINT len(intents) >= 1
 
+[RULES]:
+ASSERT output_format: JSON ONLY
+REJECT: markdown, explanations, preamble
+ASSERT task_type IN available_types
+ASSERT confidence IN float [0..1] FOR_EACH IntentItem
+ASSERT len(intents) >= 1
+ASSERT global_confidence = AVG([item.confidence FOR item IN intents])
 
-Rules:
-- Output ONLY valid JSON. No markdown, no explanations, no thinking blocks.
-- Each intent: task_type (valid TaskType value), confidence between 0 and 1.
-- At least one intent required.
-
-Example shape:
-{"intent_detection":{"intents":[{"task_type":"chat","confidence":0.9},...]}}
+[EXAMPLE_SHAPE]:
+{"intent_detection":{"intents":[{"task_type":"metagame_chat","confidence":0.6},{"task_type":"scene_narration_render","confidence":0.4}],"global_confidence":0.85,"reasoning":"player asks to continue the story"}}

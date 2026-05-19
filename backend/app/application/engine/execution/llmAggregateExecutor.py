@@ -42,6 +42,9 @@ class LLMAggregateExecutor:
         enable_thinking = any(node.enable_thinking for node in nodes)
 
         payload = self.payload_builder.build(nodes=nodes, dsl_keys=dsl_keys, state=state)
+        # NOTE: весь payload идёт в role="user". Альтернатива — role="system" для global_dsl,
+        # role="user" только для player_message + sections. Некоторые модели точнее следуют
+        # инструкциям в system роли — стоит проверить если intent detection будет давать сбои.
         messages = [
             ChatMessage(
                 role="user",

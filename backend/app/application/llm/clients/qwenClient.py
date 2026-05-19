@@ -29,17 +29,10 @@ class QwenClient:
 
         messages_payload = [{"role": m.role, "content": m.content} for m in normalized]
 
-        if not enable_thinking:
-            for i in range(len(messages_payload) - 1, -1, -1):
-                if messages_payload[i]["role"] == "user":
-                    messages_payload[i]["content"] += " /no_think"
-                    break
-
         payload = {
             "model": model,
             "messages": messages_payload,
             "stream": stream,
-            "chat_template_kwargs": {"enable_thinking": enable_thinking},
         }
 
         for msg in messages_payload:

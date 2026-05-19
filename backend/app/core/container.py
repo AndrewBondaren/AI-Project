@@ -11,7 +11,6 @@ from app.application.engine.execution.pythonNodeExecutor import PythonNodeExecut
 from app.application.engine.execution.llmAggregateExecutor import LLMAggregateExecutor
 from app.application.engine.execution.NodeRunner import NodeRunner
 from app.application.engine.prompt.dslRegistry import DSLRegistry
-from app.application.engine.prompt.dslAggregator import DSLAggregator
 from app.application.engine.prompt.dslResolver import DSLResolver
 from app.application.engine.prompt.llmGroupPayloadBuilder import LLMGroupPayloadBuilder
 from app.application.engine.validation.llmValidator import LLMValidator
@@ -59,7 +58,6 @@ class Container:
 
         # PROMPT
         self._dsl_registry = None
-        self._dsl_aggregator = None
         self._dsl_resolver = None
         self._payload_builder = None
 
@@ -157,11 +155,6 @@ class Container:
         if self._dsl_registry is None:
             self._dsl_registry = DSLRegistry(base_path="app/dsl")
         return self._dsl_registry
-
-    def dsl_aggregator(self):
-        if self._dsl_aggregator is None:
-            self._dsl_aggregator = DSLAggregator()
-        return self._dsl_aggregator
 
     def dsl_resolver(self):
         if self._dsl_resolver is None:

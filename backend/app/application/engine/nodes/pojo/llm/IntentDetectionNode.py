@@ -20,7 +20,7 @@ class IntentDetectionNode(LLMNode):
     temperature: float = 0.2
     retry_policy: dict = field(default_factory=lambda: {"enabled": True})
 
-    supported_tasks: list = field(default_factory=lambda: [TaskType.CHAT])
+    supported_tasks: list = field(default_factory=lambda: [TaskType.METAGAME_CHAT])
     rules: list = field(default_factory=lambda: [Rule(type="task", params={})])
     deps: list = field(default_factory=list)
 
