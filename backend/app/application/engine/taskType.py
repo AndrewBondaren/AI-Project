@@ -2,7 +2,7 @@ from enum import Enum
 
 
 class TaskType(str, Enum):
-    METAGAME_CHAT = "metagame_chat"
+    INTENT_DETECTION = "intent_detection"
 
     #Scene related
     SCENE_NARRATION = "scene_narration_render"

@@ -7,6 +7,7 @@ class ValidationStatus(str, Enum):
     OK = "ok"
     RETRY = "retry"
     FAIL = "fail"
+    USER_ERROR = "user_error"
 
 
 @dataclass

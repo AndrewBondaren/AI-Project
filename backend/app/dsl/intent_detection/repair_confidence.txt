@@ -1,0 +1,16 @@
+[GOAL]: re_evaluate_intent_or_detect_gibberish(player_message)
+
+[TASK]:
+FIRST assess player_message:
+  IF player_message is gibberish / random characters / pure digits / completely uninterpretable with no game context:
+    SET reasoning = "gibberish"
+    SET intents = [{ task_type: <any valid task_type>, confidence: 0.0 }]
+    SET global_confidence = 0.0
+  ELSE:
+    Re-analyze player_message carefully considering all possible game actions and intents
+    Assign correct task_types with updated confidence values
+
+[RULES]:
+ASSERT output_format: JSON ONLY
+REJECT: markdown, explanations, preamble
+ASSERT reasoning = "gibberish" ONLY_IF message has no interpretable meaning in any game context

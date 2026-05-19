@@ -6,6 +6,7 @@ from typing import Optional
 class NodeErrorSeverity(str, Enum):
     RETRY = "retry"
     FAIL = "fail"
+    USER_ERROR = "user_error"
 
 
 @dataclass

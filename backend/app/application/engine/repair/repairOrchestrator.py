@@ -5,6 +5,7 @@ from app.application.llm.models import ChatMessage
 from app.application.engine.prompt.schemaBuilder import build_strict_schema
 
 logger = logging.getLogger(__name__)
+from app.application.engine.errors import UserInputError
 from app.application.engine.prompt.dslResolver import DSLResolver
 from app.application.engine.repair.repairBuilder import RepairBuilder
 from app.application.engine.validation.nodeValidationContext import NodeValidationContext
@@ -184,6 +185,9 @@ class RepairOrchestrator:
             )
 
             validation = self.llm_validator.validate(ctx)
+
+            if validation.status == ValidationStatus.USER_ERROR:
+                raise UserInputError(validation.errors[0].message)
 
             if not validation.ok:
                 failed.append(node_id)

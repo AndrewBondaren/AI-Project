@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from app.application.chat.chatService import ChatService
 from app.application.chat.session import Session
+from app.application.engine.errors import UserInputError
 from app.api.deps import get_container
 
 
@@ -55,10 +56,13 @@ async def chat(
         repair_iterations=data.repair_iterations, #вынести в запрос настроек
 #        max_passes=data.max_passes #вынести в запрос настроек
     )
-    result = await service.handle_message(
-        session=session,
-        message=data.message
-    )
+    try:
+        result = await service.handle_message(
+            session=session,
+            message=data.message
+        )
+    except UserInputError as e:
+        return ChatResponse(ok=False, error=e.message)
 
     if isinstance(result, dict) and result.get("ok") is False:
         return ChatResponse(ok=False, error=result.get("error"), response=result)

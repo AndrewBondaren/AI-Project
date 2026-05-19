@@ -10,6 +10,16 @@ class IntentDetectionValidator:
 
     def validate(self, ctx: NodeValidationContext) -> ValidationResult:
 
+        if ctx.output.get("reasoning") == "gibberish":
+            return ValidationResult(
+                status=ValidationStatus.USER_ERROR,
+                errors=[NodeValidationError(
+                    code="gibberish",
+                    message="Player message is not interpretable",
+                    severity=NodeErrorSeverity.USER_ERROR,
+                )]
+            )
+
         errors = []
         valid_task_types = {t.value for t in TaskType}
         intents = ctx.output.get("intents", [])
