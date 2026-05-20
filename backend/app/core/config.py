@@ -11,5 +11,7 @@ class Settings:
     ANTHROPIC_BASE_URL = os.getenv("ANTHROPIC_BASE_URL", "http://192.168.1.19:1234/v1")
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "sk-local")
 
+    LLM_STREAMING: bool = os.getenv("LLM_STREAMING", "true").lower() != "false"
+
 
 settings = Settings()

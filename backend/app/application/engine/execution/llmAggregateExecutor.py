@@ -4,6 +4,8 @@ import time
 
 from app.application.llm.models import ChatMessage
 from app.application.engine.validation.validationStatus import ValidationStatus
+from app.application.events.eventBus import emit
+from app.application.events.sseEvents import ThinkingEvent
 
 logger = logging.getLogger(__name__)
 from app.application.engine.validation.nodeValidationContext import NodeValidationContext
@@ -59,12 +61,17 @@ class LLMAggregateExecutor:
             [n.id for n in nodes],
         )
 
+        # signal frontend that LLM call is starting
+        _primary_node_id = node_ids[0] if len(node_ids) == 1 else ",".join(node_ids)
+        await emit(ThinkingEvent(node_id=_primary_node_id, text="", elapsed_ms=0))
+
         _t0 = time.perf_counter()
         raw = await client.chat(
             model=state.session.model,
             messages=messages,
             response_format_schema=payload.response_format_schema,
             enable_thinking=enable_thinking,
+            node_id=node_ids[0] if len(node_ids) == 1 else ",".join(node_ids),
         )
         logger.info(
             "llm_call_end provider=%s model=%s elapsed_ms=%d",

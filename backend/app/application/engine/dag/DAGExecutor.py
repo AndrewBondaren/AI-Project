@@ -2,6 +2,8 @@ import asyncio
 
 from app.application.engine.dag.stateSnapshot import StateSnapshot
 from app.application.engine.nodes.pojo.nodeResult import NodeResult
+from app.application.events.eventBus import emit
+from app.application.events.sseEvents import NodeStatusEvent, NodePhase
 
 
 class DAGExecutor:
@@ -21,7 +23,14 @@ class DAGExecutor:
 
         # Фаза 2: LLM-группы ASC по temperature
         for llm_group in plan.llm_groups:
+            node_ids = [nid for level in llm_group.levels for nid in level]
+            task_type = state.task_type.value
+            for nid in node_ids:
+                await emit(NodeStatusEvent(node_id=nid, task_type=task_type, phase=NodePhase.EXECUTING))
             await self.llm_aggregate_executor.execute(llm_group, plan, state, context)
+            for nid in node_ids:
+                phase = NodePhase.DONE if state.node_status.get(nid) == "success" else NodePhase.FAILED
+                await emit(NodeStatusEvent(node_id=nid, task_type=task_type, phase=phase))
 
         # Фаза 3: post_llm Python-ноды
         await self._execute_phase(plan.post_llm_levels, plan, state, context, phase="post_llm")
@@ -37,6 +46,10 @@ class DAGExecutor:
             self._create_snapshot(state, phase=phase, level_idx=level_idx)
 
     async def _run_level(self, level, plan, state, context) -> list:
+        task_type = state.task_type.value
+        for node_id in level:
+            await emit(NodeStatusEvent(node_id=node_id, task_type=task_type, phase=NodePhase.EXECUTING))
+
         tasks = [
             self.node_runner.run(plan.nodes[node_id], state, context)
             for node_id in level
@@ -51,6 +64,9 @@ class DAGExecutor:
                 state.node_errors.setdefault(node_id, []).append({
                     "error": str(result)
                 })
+                await emit(NodeStatusEvent(node_id=node_id, task_type=task_type, phase=NodePhase.FAILED))
+            else:
+                await emit(NodeStatusEvent(node_id=node_id, task_type=task_type, phase=NodePhase.DONE))
 
         return [r for r in results if isinstance(r, NodeResult)]
     

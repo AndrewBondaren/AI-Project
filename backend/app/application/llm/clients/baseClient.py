@@ -7,6 +7,8 @@ class BaseLLMClient(Protocol):
         self,
         messages: list[ChatMessage],
         model: str,
-        stream: bool = False
+        response_format_schema: dict | None = None,
+        enable_thinking: bool = False,
+        node_id: str = "unknown",
     ) -> str:
         ...

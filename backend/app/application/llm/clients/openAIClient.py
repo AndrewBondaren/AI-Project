@@ -10,19 +10,20 @@ logger = logging.getLogger(__name__)
 
 class OpenAIClient:
 
-    def __init__(self, base_url: str, api_key: str):
-        self.client = AsyncOpenAI(base_url=base_url, api_key=api_key)
+    def __init__(self, base_url: str, api_key: str, streaming: bool = True):
+        self.client    = AsyncOpenAI(base_url=base_url, api_key=api_key)
+        self.streaming = streaming
 
     async def chat(
         self,
         messages: list[ChatMessage],
         model: str,
-        stream: bool = False,
         response_format_schema: dict | None = None,
         enable_thinking: bool = False,
+        node_id: str = "unknown",
     ) -> str:
-
-        normalized = normalize_messages(messages)
+        normalized     = normalize_messages(messages)
+        messages_payload = [{"role": m.role, "content": m.content} for m in normalized]
 
         kwargs = {}
         if response_format_schema:
@@ -35,27 +36,50 @@ class OpenAIClient:
                 },
             }
 
-        messages_payload = [{"role": m.role, "content": m.content} for m in normalized]
+        logger.debug("openai_request model=%s messages=%s", model,
+                     json.dumps(self._fmt(messages_payload), ensure_ascii=False, separators=(",", ":")))
 
-        def _fmt(msgs):
-            out = []
-            for m in msgs:
-                try:
-                    content = json.loads(m["content"])
-                except (json.JSONDecodeError, TypeError):
-                    content = m["content"]
-                out.append({"role": m["role"], "content": content})
-            return out
+        if self.streaming:
+            result = await self._chat_streaming(messages_payload, model, kwargs)
+        else:
+            result = await self._chat_full(messages_payload, model, kwargs)
 
-        logger.debug("openai_request model=%s messages=%s", model, json.dumps(_fmt(messages_payload), ensure_ascii=False, separators=(",", ":")))
+        logger.debug("openai_response model=%s result=%s", model, result)
+        return result
 
+    # ------------------------------------------------------------------
+
+    async def _chat_full(self, messages_payload: list[dict], model: str, kwargs: dict) -> str:
         response = await self.client.chat.completions.create(
             model=model,
             messages=messages_payload,
-            stream=stream,
+            stream=False,
             **kwargs,
         )
+        return response.choices[0].message.content
 
-        result = response.choices[0].message.content
-        logger.debug("openai_response model=%s result=%s", model, result)
+    async def _chat_streaming(
+        self, messages_payload: list[dict], model: str, kwargs: dict
+    ) -> str:
+        result = ""
+        async for chunk in await self.client.chat.completions.create(
+            model=model,
+            messages=messages_payload,
+            stream=True,
+            **kwargs,
+        ):
+            token = chunk.choices[0].delta.content
+            if token:
+                result += token
         return result
+
+    @staticmethod
+    def _fmt(msgs: list[dict]) -> list[dict]:
+        out = []
+        for m in msgs:
+            try:
+                content = json.loads(m["content"])
+            except (json.JSONDecodeError, TypeError):
+                content = m["content"]
+            out.append({"role": m["role"], "content": content})
+        return out

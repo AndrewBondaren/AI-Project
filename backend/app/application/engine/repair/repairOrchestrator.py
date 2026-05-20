@@ -3,6 +3,8 @@ import logging
 
 from app.application.llm.models import ChatMessage
 from app.application.engine.prompt.schemaBuilder import build_strict_schema
+from app.application.events.eventBus import emit
+from app.application.events.sseEvents import NodeStatusEvent, NodePhase
 
 logger = logging.getLogger(__name__)
 from app.application.engine.errors import UserInputError
@@ -58,6 +60,10 @@ class RepairOrchestrator:
         )
 
         while attempt < max_attempts:
+
+            task_type = state.task_type.value
+            for node in current_failed.values():
+                await emit(NodeStatusEvent(node_id=node.id, task_type=task_type, phase=NodePhase.REPAIRING))
 
             # расширяем dsl_keys патчами для текущих failed нод
             for node in current_failed.values():

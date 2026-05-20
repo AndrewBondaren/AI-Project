@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 
-export default function MessageInput({ onSend }) {
+export default function MessageInput({ onSend, disabled = false }) {
   const [text, setText] = useState("");
   const ref = useRef(null);
 
   const send = () => {
-    if (!text.trim()) return;
+    if (!text.trim() || disabled) return;
     onSend(text);
     setText("");
   };
@@ -32,7 +32,8 @@ export default function MessageInput({ onSend }) {
           }
         }}
         placeholder="Type message... (Shift+Enter = new line)"
-        style={styles.input}
+        disabled={disabled}
+        style={{ ...styles.input, opacity: disabled ? 0.5 : 1 }}
       />
 
     <button

@@ -79,7 +79,8 @@ class Container:
         if self._qwen_client is None:
             self._qwen_client = QwenClient(
                 base_url=settings.QWEN_BASE_URL,
-                api_key=settings.QWEN_API_KEY
+                api_key=settings.QWEN_API_KEY,
+                streaming=settings.LLM_STREAMING,
             )
         return self._qwen_client
 
@@ -87,7 +88,8 @@ class Container:
         if self._openai_client is None:
             self._openai_client = OpenAIClient(
                 base_url=settings.OPENAI_BASE_URL,
-                api_key=settings.OPENAI_API_KEY
+                api_key=settings.OPENAI_API_KEY,
+                streaming=settings.LLM_STREAMING,
             )
         return self._openai_client
 
@@ -95,7 +97,8 @@ class Container:
         if self._anthropic_client is None:
             self._anthropic_client = AnthropicClient(
                 base_url=settings.ANTHROPIC_BASE_URL,
-                api_key=settings.ANTHROPIC_API_KEY
+                api_key=settings.ANTHROPIC_API_KEY,
+                streaming=settings.LLM_STREAMING,
             )
         return self._anthropic_client
 
