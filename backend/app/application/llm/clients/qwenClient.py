@@ -34,14 +34,22 @@ class QwenClient:
     ) -> str:
         normalized = normalize_messages(messages)
         for m in normalized:
-            logger.debug("qwen_request model=%s role=%s content=%s", model, m.role, m.content)
+            try:
+                content = json.loads(m.content)
+            except Exception:
+                content = m.content
+            logger.debug("qwen_request", extra={"model": model, "role": m.role, "content": content})
 
         if self.streaming:
             result = await self._chat_streaming(normalized, model, node_id)
         else:
             result = await self._chat_full(normalized, model)
 
-        logger.debug("qwen_result=%s", result)
+        try:
+            result_obj = json.loads(result)
+        except Exception:
+            result_obj = result
+        logger.debug("qwen_result", extra={"result": result_obj})
         return result
 
     # ------------------------------------------------------------------

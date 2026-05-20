@@ -9,6 +9,14 @@ from pathlib import Path
 request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
 
 
+_RECORD_BUILTINS = frozenset({
+    "name", "msg", "args", "levelname", "levelno", "pathname", "filename",
+    "module", "exc_info", "exc_text", "stack_info", "lineno", "funcName",
+    "created", "msecs", "relativeCreated", "thread", "threadName", "process",
+    "processName", "message", "asctime", "taskName",
+})
+
+
 class _JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         obj = {
@@ -18,6 +26,9 @@ class _JsonFormatter(logging.Formatter):
             "request_id": request_id_var.get(),
             "msg": record.getMessage(),
         }
+        for key, val in record.__dict__.items():
+            if key not in _RECORD_BUILTINS and not key.startswith("_"):
+                obj[key] = val
         if record.exc_info:
             obj["exc"] = self.formatException(record.exc_info)
         return json.dumps(obj, ensure_ascii=False)

@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from app.core.appSettings import app_settings
 from app.application.llm.language import Language
 from app.application.engine.repair.repairMode import RepairMode
+from app.core.logLevel import LogLevel
 
 router = APIRouter()
 
@@ -22,6 +23,7 @@ class SettingsUpdate(BaseModel):
     repair_iterations:  int  | None = None
     max_passes:         int  | None = None
     repair_mode:        RepairMode | None = None
+    log_level:          LogLevel   | None = None
 
 
 @router.get("/settings")
@@ -36,6 +38,7 @@ def get_settings() -> dict[str, Any]:
         "repair_iterations":  app_settings.repair_iterations,
         "max_passes":         app_settings.max_passes,
         "repair_mode":        app_settings.repair_mode,
+        "log_level":          app_settings.log_level,
     }
 
 

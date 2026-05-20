@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from app.core.defaultConfig import DefaultConfig
 from app.application.llm.language import Language
 from app.application.engine.repair.repairMode import RepairMode
+from app.core.logLevel import LogLevel, to_logging_level
 
 if TYPE_CHECKING:
     from app.core.container import Container
@@ -35,6 +36,9 @@ class AppSettings:
     # --- Anthropic ---
     anthropic_thinking_budget:   int        = 10000
 
+    # --- Logging ---
+    log_level:                   LogLevel   = LogLevel.DEBUG
+
     # internal — set by Container after creation
     _container: "Container | None" = field(default=None, init=False, repr=False, compare=False)
 
@@ -49,16 +53,21 @@ class AppSettings:
             kwargs["language"] = Language(kwargs["language"])
         if "repair_mode" in kwargs:
             kwargs["repair_mode"] = RepairMode(kwargs["repair_mode"])
+        if "log_level" in kwargs:
+            kwargs["log_level"] = LogLevel(kwargs["log_level"])
 
         for key, value in kwargs.items():
             if not hasattr(self, key):
                 raise ValueError(f"Unknown setting: {key!r}")
             setattr(self, key, value)
 
-        # if connection settings changed — invalidate cached clients
         if connection_keys & kwargs.keys():
             if self._container is not None:
                 self._container.invalidate_clients()
+
+        if "log_level" in kwargs:
+            from app.core.logging_config import setup_logging
+            setup_logging(level=to_logging_level(self.log_level))
 
 
 # module-level singleton
