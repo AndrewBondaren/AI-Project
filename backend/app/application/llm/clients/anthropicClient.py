@@ -33,18 +33,21 @@ class AnthropicClient:
         cancel_token=None,
     ) -> str:
         normalized = normalize_messages(messages)
-        payload = [{"role": m.role, "content": m.content} for m in normalized]
+        system = next((m.content for m in normalized if m.role == "system"), None)
+        payload = [{"role": m.role, "content": m.content} for m in normalized if m.role != "system"]
 
         if self.streaming:
-            return await self._chat_streaming(payload, model, node_id, enable_thinking, cancel_token)
-        return await self._chat_full(payload, model, enable_thinking)
+            return await self._chat_streaming(payload, model, node_id, enable_thinking, cancel_token, system)
+        return await self._chat_full(payload, model, enable_thinking, system)
 
     # ------------------------------------------------------------------
 
-    async def _chat_full(self, messages: list[dict], model: str, enable_thinking: bool = False) -> str:
+    async def _chat_full(self, messages: list[dict], model: str, enable_thinking: bool = False, system: str | None = None) -> str:
         kwargs = {}
         if enable_thinking:
             kwargs["thinking"] = {"type": "enabled", "budget_tokens": app_settings.anthropic_thinking_budget}
+        if system:
+            kwargs["system"] = system
         response = await self.client.messages.create(
             model=model,
             max_tokens=2048,
@@ -54,7 +57,7 @@ class AnthropicClient:
         return response.content[0].text
 
     async def _chat_streaming(
-        self, messages: list[dict], model: str, node_id: str, enable_thinking: bool = False, cancel_token=None
+        self, messages: list[dict], model: str, node_id: str, enable_thinking: bool = False, cancel_token=None, system: str | None = None
     ) -> str:
         start         = time.monotonic()
         thinking_text = ""
@@ -64,6 +67,8 @@ class AnthropicClient:
         kwargs = {}
         if enable_thinking:
             kwargs["thinking"] = {"type": "enabled", "budget_tokens": app_settings.anthropic_thinking_budget}
+        if system:
+            kwargs["system"] = system
 
         async with self.client.messages.stream(
             model=model,

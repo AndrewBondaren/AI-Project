@@ -2,6 +2,7 @@ import json
 import logging
 import time
 
+from app.core.appSettings import app_settings
 from app.application.llm.models import ChatMessage
 from app.application.engine.validation.validationStatus import ValidationStatus
 from app.application.events.eventBus import emit
@@ -44,15 +45,25 @@ class LLMAggregateExecutor:
         enable_thinking = any(node.enable_thinking for node in nodes)
 
         payload = self.payload_builder.build(nodes=nodes, dsl_keys=dsl_keys, state=state)
-        # NOTE: весь payload идёт в role="user". Альтернатива — role="system" для global_dsl,
-        # role="user" только для player_message + sections. Некоторые модели точнее следуют
-        # инструкциям в system роли — стоит проверить если intent detection будет давать сбои.
-        messages = [
-            ChatMessage(
-                role="user",
-                content=json.dumps(payload.to_dict(), ensure_ascii=False, separators=(",", ":")),
-            )
-        ]
+
+        if state.session.llm_provider in app_settings.system_role_providers:
+            messages = [
+                ChatMessage(
+                    role="system",
+                    content=payload.global_dsl,
+                ),
+                ChatMessage(
+                    role="user",
+                    content=json.dumps(payload.to_user_dict(), ensure_ascii=False, separators=(",", ":")),
+                ),
+            ]
+        else:
+            messages = [
+                ChatMessage(
+                    role="user",
+                    content=json.dumps(payload.to_dict(), ensure_ascii=False, separators=(",", ":")),
+                ),
+            ]
 
         logger.info(
             "llm_call_start provider=%s model=%s nodes=%s",

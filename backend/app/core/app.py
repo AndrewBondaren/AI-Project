@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.config_manager import ConfigManager
 from app.core.container import Container
 from app.core.logging_config import setup_logging
 from app.core.log_middleware import RequestLoggingMiddleware
@@ -9,13 +10,16 @@ from app.core.logLevel import to_logging_level
 def create_app():
     from app.core.appSettings import app_settings
 
+    config_manager = ConfigManager()
+    loaded = config_manager.load()
+    if loaded:
+        app_settings.update(**loaded)
+
     setup_logging(level=to_logging_level(app_settings.log_level))
 
     app = FastAPI()
-    container = Container()
+    container = Container(config_manager=config_manager)
     app.state.container = container
-
-    app_settings._container = container
 
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(

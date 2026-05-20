@@ -20,6 +20,7 @@ websockets>=12.0
 
 # === config ===
 python-dotenv>=1.0.1
+tomlkit>=0.12.0
 
 # === logging (норм логирование вместо print) ===
 loguru>=0.7.2

@@ -1,4 +1,5 @@
 pip install fastapi uvicorn httpx pydantic
+pip install -r requirements.txt
 
 # Init Backend
 npm run init

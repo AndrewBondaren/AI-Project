@@ -1,3 +1,4 @@
+from app.core.settings_service import SettingsService
 from app.application.llm.clients.qwenClient import QwenClient
 from app.application.llm.clients.openAIClient import OpenAIClient
 from app.application.llm.clients.anthropicClient import AnthropicClient
@@ -34,7 +35,9 @@ from app.core.appSettings import app_settings
 
 class Container:
 
-    def __init__(self):
+    def __init__(self, config_manager):
+        self._config_manager = config_manager
+
         # CLIENTS
         self._qwen_client = None
         self._openai_client = None
@@ -71,6 +74,7 @@ class Container:
         # ENGINE & SERVICES
         self._llm_engine = None
         self._chat_service = None
+        self._settings_service = None
 
     # =====================================================
     # CLIENTS
@@ -286,3 +290,11 @@ class Container:
                 llm_engine=self.llm_engine()
             )
         return self._chat_service
+
+    def settings_service(self):
+        if self._settings_service is None:
+            self._settings_service = SettingsService(
+                config_manager=self._config_manager,
+                container=self,
+            )
+        return self._settings_service

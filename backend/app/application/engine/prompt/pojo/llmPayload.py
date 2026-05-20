@@ -21,3 +21,14 @@ class LLMPayload:
         for node_id, section in self.sections.items():
             payload[node_id] = asdict(section)
         return payload
+
+    def to_user_dict(self) -> dict:
+        """Payload without global_dsl — used when dsl is sent as system message."""
+        payload = {
+            "player_message": self.player_message,
+            "language": self.language,
+            "response_format": self.response_format_schema,
+        }
+        for node_id, section in self.sections.items():
+            payload[node_id] = asdict(section)
+        return payload

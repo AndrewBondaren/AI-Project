@@ -1,0 +1,26 @@
+[llm.qwen]
+base_url = "http://192.168.1.19:1234/v1"
+api_key = "sk-local"
+
+[llm.openai]
+base_url = "http://192.168.1.19:1234/v1"
+api_key = "sk-local"
+
+[llm.anthropic]
+base_url = "http://192.168.1.19:1234/v1"
+api_key = "sk-local"
+thinking_budget = 10000
+
+[behaviour]
+language = "Russian"
+repair_iterations = 4
+max_passes = 3
+max_tokens = 2048
+repair_mode = "maximum"
+system_role_providers = []
+
+[infra]
+streaming = true
+
+[logging]
+level = "debug"
