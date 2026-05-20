@@ -28,7 +28,7 @@ from app.application.engine.rules.taskRuleHandler import TaskRuleHandler
 # Импорт нод = их регистрация в NODE_REGISTRY
 import app.application.engine.nodes  # noqa: F401
 
-from app.core.config import settings
+from app.core.appSettings import app_settings
 
 
 class Container:
@@ -75,30 +75,36 @@ class Container:
     # CLIENTS
     # =====================================================
 
+    def invalidate_clients(self) -> None:
+        self._qwen_client      = None
+        self._openai_client    = None
+        self._anthropic_client = None
+        self._llm_router       = None
+
     def qwen_client(self):
         if self._qwen_client is None:
             self._qwen_client = QwenClient(
-                base_url=settings.QWEN_BASE_URL,
-                api_key=settings.QWEN_API_KEY,
-                streaming=settings.LLM_STREAMING,
+                base_url=app_settings.qwen_base_url,
+                api_key=app_settings.qwen_api_key,
+                streaming=app_settings.llm_streaming,
             )
         return self._qwen_client
 
     def openai_client(self):
         if self._openai_client is None:
             self._openai_client = OpenAIClient(
-                base_url=settings.OPENAI_BASE_URL,
-                api_key=settings.OPENAI_API_KEY,
-                streaming=settings.LLM_STREAMING,
+                base_url=app_settings.openai_base_url,
+                api_key=app_settings.openai_api_key,
+                streaming=app_settings.llm_streaming,
             )
         return self._openai_client
 
     def anthropic_client(self):
         if self._anthropic_client is None:
             self._anthropic_client = AnthropicClient(
-                base_url=settings.ANTHROPIC_BASE_URL,
-                api_key=settings.ANTHROPIC_API_KEY,
-                streaming=settings.LLM_STREAMING,
+                base_url=app_settings.anthropic_base_url,
+                api_key=app_settings.anthropic_api_key,
+                streaming=app_settings.llm_streaming,
             )
         return self._anthropic_client
 
