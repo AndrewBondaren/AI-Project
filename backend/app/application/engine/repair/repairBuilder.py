@@ -31,4 +31,5 @@ class RepairBuilder:
             response_format_schema=base.response_format_schema,
             sections=base.sections,
             errors=errors,
+            mode=state.session.repair_mode,
         )

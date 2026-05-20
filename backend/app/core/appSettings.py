@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from app.core.defaultConfig import DefaultConfig
 from app.application.llm.language import Language
+from app.application.engine.repair.repairMode import RepairMode
 
 if TYPE_CHECKING:
     from app.core.container import Container
@@ -25,10 +26,14 @@ class AppSettings:
     llm_streaming:      bool = field(default_factory=lambda: DefaultConfig.LLM_STREAMING)
 
     # --- Behaviour ---
-    max_tokens:         int  = 2048
-    language:           Language = Language.RUSSIAN
-    repair_iterations:  int  = 4
-    max_passes:         int  = 3
+    max_tokens:                  int        = 2048
+    language:                    Language   = Language.RUSSIAN
+    repair_iterations:           int        = 4
+    max_passes:                  int        = 3
+    repair_mode:                 RepairMode = RepairMode.MAXIMUM
+
+    # --- Anthropic ---
+    anthropic_thinking_budget:   int        = 10000
 
     # internal — set by Container after creation
     _container: "Container | None" = field(default=None, init=False, repr=False, compare=False)
@@ -41,7 +46,9 @@ class AppSettings:
             "llm_streaming",
         }
         if "language" in kwargs:
-            kwargs["language"] = Language(kwargs["language"])  # validates + coerces str → Language
+            kwargs["language"] = Language(kwargs["language"])
+        if "repair_mode" in kwargs:
+            kwargs["repair_mode"] = RepairMode(kwargs["repair_mode"])
 
         for key, value in kwargs.items():
             if not hasattr(self, key):

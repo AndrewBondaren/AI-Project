@@ -4,6 +4,7 @@ import anthropic
 from app.application.llm.models import ChatMessage, normalize_messages
 from app.application.events.eventBus import emit
 from app.application.events.sseEvents import ThinkingEvent
+from app.core.appSettings import app_settings
 
 
 def _now_ms(start: float) -> int:
@@ -33,31 +34,40 @@ class AnthropicClient:
         payload = [{"role": m.role, "content": m.content} for m in normalized]
 
         if self.streaming:
-            return await self._chat_streaming(payload, model, node_id)
-        return await self._chat_full(payload, model)
+            return await self._chat_streaming(payload, model, node_id, enable_thinking)
+        return await self._chat_full(payload, model, enable_thinking)
 
     # ------------------------------------------------------------------
 
-    async def _chat_full(self, messages: list[dict], model: str) -> str:
+    async def _chat_full(self, messages: list[dict], model: str, enable_thinking: bool = False) -> str:
+        kwargs = {}
+        if enable_thinking:
+            kwargs["thinking"] = {"type": "enabled", "budget_tokens": app_settings.anthropic_thinking_budget}
         response = await self.client.messages.create(
             model=model,
             max_tokens=2048,
             messages=messages,
+            **kwargs,
         )
         return response.content[0].text
 
     async def _chat_streaming(
-        self, messages: list[dict], model: str, node_id: str
+        self, messages: list[dict], model: str, node_id: str, enable_thinking: bool = False
     ) -> str:
         start         = time.monotonic()
         thinking_text = ""
         response_text = ""
         think_emitted = False
 
+        kwargs = {}
+        if enable_thinking:
+            kwargs["thinking"] = {"type": "enabled", "budget_tokens": app_settings.anthropic_thinking_budget}
+
         async with self.client.messages.stream(
             model=model,
             max_tokens=2048,
             messages=messages,
+            **kwargs,
         ) as stream:
             async for event in stream:
                 etype = getattr(event, "type", None)

@@ -8,6 +8,9 @@ from pydantic import BaseModel
 from app.application.chat.chatService import ChatService
 from app.application.chat.session import Session
 from app.application.engine.errors import UserInputError
+from app.application.engine.repair.repairMode import RepairMode
+from app.application.llm.language import Language
+from app.core.appSettings import app_settings
 from app.api.deps import get_container
 from app.application.events.eventBus import init_bus, emit, close_bus
 from app.application.events.sseEvents import ResultEvent, ErrorEvent
@@ -15,20 +18,21 @@ from app.application.events.sseEvents import ResultEvent, ErrorEvent
 
 router = APIRouter()
 
+
+class ChatSettings(BaseModel):
+    max_tokens:        int
+    repair_iterations: int
+    repair_mode:       RepairMode
+    language:          Language
+    max_passes:        int
+
+
 class ChatRequest(BaseModel):
     llm_provider: str
     model: str
     user_id: str
     meta: dict
     message: str
-    repair_iterations: int
-
-#TODO later
-class ChatSettings(BaseModel):
-    max_tokens: int
-    repair_iterations: int
-    language: str
-    max_passes: int
 
 class ChatResponse(BaseModel):
     ok: bool = True
@@ -41,9 +45,30 @@ def get_chat_service(container = Depends(get_container)):
 
 @router.get("/health")
 def health():
-    return {
-        "status": "ok"
-    }
+    return {"status": "ok"}
+
+
+@router.get("/chat/settings")
+def get_chat_settings() -> ChatSettings:
+    return ChatSettings(
+        max_tokens=app_settings.max_tokens,
+        repair_iterations=app_settings.repair_iterations,
+        repair_mode=app_settings.repair_mode,
+        language=app_settings.language,
+        max_passes=app_settings.max_passes,
+    )
+
+
+@router.put("/chat/settings")
+def update_chat_settings(data: ChatSettings) -> ChatSettings:
+    app_settings.update(
+        max_tokens=data.max_tokens,
+        repair_iterations=data.repair_iterations,
+        repair_mode=data.repair_mode,
+        language=data.language,
+        max_passes=data.max_passes,
+    )
+    return get_chat_settings()
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -56,9 +81,6 @@ async def chat(
         model=data.model,
         user_id=data.user_id,
         meta=data.meta,
-#        max_tokens=data.max_tokens, #вынести в запрос настроек
-        repair_iterations=data.repair_iterations, #вынести в запрос настроек
-#        max_passes=data.max_passes #вынести в запрос настроек
     )
     try:
         result = await service.handle_message(
@@ -84,7 +106,6 @@ async def chat_stream(
         model=data.model,
         user_id=data.user_id,
         meta=data.meta,
-        repair_iterations=data.repair_iterations,
     )
     queue = init_bus()
 

@@ -50,6 +50,7 @@ export default function ChatPanel() {
         switch (event.type) {
           case "node_status":
             setStatusLabel({ phase: event.phase, task_type: event.task_type });
+            setThinkingMs(null);
             break;
 
           case "thinking":

@@ -4,7 +4,7 @@ import logging
 from app.application.llm.models import ChatMessage
 from app.application.engine.prompt.schemaBuilder import build_strict_schema
 from app.application.events.eventBus import emit
-from app.application.events.sseEvents import NodeStatusEvent, NodePhase
+from app.application.events.sseEvents import NodeStatusEvent, NodePhase, ThinkingEvent
 
 logger = logging.getLogger(__name__)
 from app.application.engine.errors import UserInputError
@@ -84,11 +84,15 @@ class RepairOrchestrator:
                 content=json.dumps(repair_payload.to_dict(), ensure_ascii=False, separators=(",", ":")),
             ))
 
+            node_id = ",".join(current_failed.keys())
+            await emit(ThinkingEvent(node_id=node_id, text="", elapsed_ms=0))
+
             raw = await client.chat(
                 model=state.session.model,
                 messages=messages,
                 response_format_schema=repair_payload.response_format_schema,
                 enable_thinking=enable_thinking,
+                node_id=node_id,
             )
 
             messages.append(

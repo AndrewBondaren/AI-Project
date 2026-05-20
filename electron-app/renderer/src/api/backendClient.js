@@ -4,8 +4,7 @@ const DEFAULT_BODY = {
   llm_provider: "qwen",
   model: "qwen3.6",
   meta: {},
-  user_id: "session_1",
-  repair_iterations: 4,
+  user_id: "session_1"
 };
 
 export async function sendChatMessage(sessionId, message) {
