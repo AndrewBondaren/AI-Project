@@ -1,3 +1,4 @@
+import asyncio
 import time
 import anthropic
 
@@ -29,12 +30,13 @@ class AnthropicClient:
         response_format_schema: dict | None = None,
         enable_thinking: bool = False,
         node_id: str = "unknown",
+        cancel_token=None,
     ) -> str:
         normalized = normalize_messages(messages)
         payload = [{"role": m.role, "content": m.content} for m in normalized]
 
         if self.streaming:
-            return await self._chat_streaming(payload, model, node_id, enable_thinking)
+            return await self._chat_streaming(payload, model, node_id, enable_thinking, cancel_token)
         return await self._chat_full(payload, model, enable_thinking)
 
     # ------------------------------------------------------------------
@@ -52,7 +54,7 @@ class AnthropicClient:
         return response.content[0].text
 
     async def _chat_streaming(
-        self, messages: list[dict], model: str, node_id: str, enable_thinking: bool = False
+        self, messages: list[dict], model: str, node_id: str, enable_thinking: bool = False, cancel_token=None
     ) -> str:
         start         = time.monotonic()
         thinking_text = ""
@@ -70,6 +72,9 @@ class AnthropicClient:
             **kwargs,
         ) as stream:
             async for event in stream:
+                if cancel_token and cancel_token.is_cancelled():
+                    raise asyncio.CancelledError()
+
                 etype = getattr(event, "type", None)
 
                 if etype == "content_block_delta":

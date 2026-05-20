@@ -11,25 +11,24 @@ class GraphCompiler:
     def __init__(self, rule_engine, rule_compiler):
         self.rule_engine = rule_engine
         self.rule_compiler = rule_compiler
+        self._compiled_nodes: list[CompiledNode] | None = None
+
+    def precompile(self) -> None:
+        """Однократная компиляция всех зарегистрированных нод при старте.
+        Должна быть вызвана до первого compile()."""
+        self._compiled_nodes = self._compile_nodes(NODE_REGISTRY.all())
 
     def compile(self, state) -> ExecutionPlan:
+        if self._compiled_nodes is None:
+            raise RuntimeError("GraphCompiler.precompile() must be called before compile()")
 
-        # берём все ноды из registry
-        all_registrations = NODE_REGISTRY.all()
+        filtered = self._filter(self._compiled_nodes, state)
 
-        # компилируем правила и фильтруем
-        compiled_nodes = self._compile_nodes(all_registrations)
-        filtered = self._filter(compiled_nodes, state)
-
-        # Разбиваем на три группы по типу и phase
         pre_llm, llm_nodes, post_llm = self._split_by_phase(filtered)
 
-        # Строим топологические уровни для каждой Python-фазы независимо
         pre_llm_levels  = self._build_levels(pre_llm)
         post_llm_levels = self._build_levels(post_llm)
-        # LLM-ноды группируем по temperature, внутри каждой группы — свои уровни
-        llm_groups = self._build_llm_groups(llm_nodes)
-
+        llm_groups      = self._build_llm_groups(llm_nodes)
 
         return ExecutionPlan(
             pre_llm_levels=pre_llm_levels,

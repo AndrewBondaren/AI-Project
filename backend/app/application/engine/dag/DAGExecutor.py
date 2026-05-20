@@ -1,6 +1,6 @@
 import asyncio
 
-from app.application.engine.dag.stateSnapshot import StateSnapshot
+from app.application.engine.dag.executionLevelSnapshot import ExecutionLevelSnapshot
 from app.application.engine.nodes.pojo.nodeResult import NodeResult
 from app.application.events.eventBus import emit
 from app.application.events.sseEvents import NodeStatusEvent, NodePhase
@@ -24,6 +24,14 @@ class DAGExecutor:
         # Фаза 2: LLM-группы ASC по temperature
         for llm_group in plan.llm_groups:
             node_ids = [nid for level in llm_group.levels for nid in level]
+
+            if state.cancel_token and state.cancel_token.is_cancelled():
+                raise asyncio.CancelledError()
+
+            # skip group if all nodes already completed (resume)
+            if all(nid in state.node_results for nid in node_ids):
+                continue
+
             task_type = state.task_type.value
             for nid in node_ids:
                 await emit(NodeStatusEvent(node_id=nid, task_type=task_type, phase=NodePhase.EXECUTING))
@@ -46,19 +54,27 @@ class DAGExecutor:
             self._create_snapshot(state, phase=phase, level_idx=level_idx)
 
     async def _run_level(self, level, plan, state, context) -> list:
+        if state.cancel_token and state.cancel_token.is_cancelled():
+            raise asyncio.CancelledError()
+
+        # skip nodes already completed (resume)
+        to_run = [nid for nid in level if nid not in state.node_results]
+        if not to_run:
+            return []
+
         task_type = state.task_type.value
-        for node_id in level:
+        for node_id in to_run:
             await emit(NodeStatusEvent(node_id=node_id, task_type=task_type, phase=NodePhase.EXECUTING))
 
         tasks = [
             self.node_runner.run(plan.nodes[node_id], state, context)
-            for node_id in level
+            for node_id in to_run
         ]
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Exception от asyncio.gather — нода упала вне try/except NodeRunner
-        for node_id, result in zip(level, results):
+        for node_id, result in zip(to_run, results):
             if isinstance(result, Exception):
                 state.node_status[node_id] = "failed"
                 state.node_errors.setdefault(node_id, []).append({
@@ -69,7 +85,7 @@ class DAGExecutor:
                 await emit(NodeStatusEvent(node_id=node_id, task_type=task_type, phase=NodePhase.DONE))
 
         return [r for r in results if isinstance(r, NodeResult)]
-    
+
     def _aggregate_replan(self, node_results: list, state):
         """
         Если хоть одна нода уровня вернула requires_replan=True —
@@ -85,7 +101,7 @@ class DAGExecutor:
 
     #_create_snapshot — делает dict(state.node_results) и list(state.execution_order) — это shallow copy. Для node_results это потенциально важно: если значения в dict сами являются мутируемыми объектами (например, вложенные dict от LLM), снапшот будет держать ссылки на те же объекты. Сейчас не проблема, но когда появятся post_llm ноды, мутирующие содержимое результатов — снапшот незаметно изменится вместе с ними. Стоит иметь в виду к моменту реализации
     def _create_snapshot(self, state, phase: str, level_idx: int):
-        snapshot = StateSnapshot(
+        snapshot = ExecutionLevelSnapshot(
             level=level_idx,
             node_results=dict(state.node_results),
             node_status=dict(state.node_status),

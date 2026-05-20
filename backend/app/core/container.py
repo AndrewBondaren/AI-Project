@@ -28,6 +28,7 @@ from app.application.engine.rules.taskRuleHandler import TaskRuleHandler
 # Импорт нод = их регистрация в NODE_REGISTRY
 import app.application.engine.nodes  # noqa: F401
 
+from app.application.cancellation.snapshotStore import snapshot_store
 from app.core.appSettings import app_settings
 
 
@@ -150,10 +151,12 @@ class Container:
 
     def graph_compiler(self):
         if self._graph_compiler is None:
-            self._graph_compiler = GraphCompiler(
+            compiler = GraphCompiler(
                 rule_engine=self.rule_engine(),
                 rule_compiler=self.rule_compiler()
             )
+            compiler.precompile()
+            self._graph_compiler = compiler
         return self._graph_compiler
 
     # =====================================================
@@ -268,7 +271,8 @@ class Container:
                 dag_executor=self.dag_executor(),
                 graph_compiler=self.graph_compiler(),
                 patch_applier=self.patch_applier(),
-                executors=self.executors()
+                executors=self.executors(),
+                snapshot_store=snapshot_store,
             )
         return self._llm_engine
 

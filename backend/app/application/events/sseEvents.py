@@ -9,6 +9,7 @@ class SSEEventType(str, Enum):
     THINKING    = "thinking"
     RESULT      = "result"
     ERROR       = "error"
+    CANCELLED   = "cancelled"
     CHUNK       = "chunk"       # reserved, phase 2
 
 
@@ -43,6 +44,12 @@ class ErrorEvent(BaseModel):
     message: str
 
 
+class CancelledEvent(BaseModel):
+    type:       Literal[SSEEventType.CANCELLED] = SSEEventType.CANCELLED
+    session_id: str
+    request_id: str
+
+
 # reserved — not emitted yet
 class ChunkEvent(BaseModel):
     type:    Literal[SSEEventType.CHUNK] = SSEEventType.CHUNK
@@ -50,4 +57,4 @@ class ChunkEvent(BaseModel):
     text:    str
 
 
-SSEEvent = NodeStatusEvent | ThinkingEvent | ResultEvent | ErrorEvent | ChunkEvent
+SSEEvent = NodeStatusEvent | ThinkingEvent | ResultEvent | ErrorEvent | CancelledEvent | ChunkEvent

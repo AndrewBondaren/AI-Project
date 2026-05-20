@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 
@@ -61,6 +62,9 @@ class RepairOrchestrator:
 
         while attempt < max_attempts:
 
+            if state.cancel_token and state.cancel_token.is_cancelled():
+                raise asyncio.CancelledError()
+
             task_type = state.task_type.value
             for node in current_failed.values():
                 await emit(NodeStatusEvent(node_id=node.id, task_type=task_type, phase=NodePhase.REPAIRING))
@@ -93,6 +97,7 @@ class RepairOrchestrator:
                 response_format_schema=repair_payload.response_format_schema,
                 enable_thinking=enable_thinking,
                 node_id=node_id,
+                cancel_token=state.cancel_token,
             )
 
             messages.append(

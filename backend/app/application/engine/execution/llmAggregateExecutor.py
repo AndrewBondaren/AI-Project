@@ -72,6 +72,7 @@ class LLMAggregateExecutor:
             response_format_schema=payload.response_format_schema,
             enable_thinking=enable_thinking,
             node_id=node_ids[0] if len(node_ids) == 1 else ",".join(node_ids),
+            cancel_token=state.cancel_token,
         )
         logger.info(
             "llm_call_end provider=%s model=%s elapsed_ms=%d",

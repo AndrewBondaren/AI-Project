@@ -10,5 +10,6 @@ class BaseLLMClient(Protocol):
         response_format_schema: dict | None = None,
         enable_thinking: bool = False,
         node_id: str = "unknown",
+        cancel_token=None,
     ) -> str:
         ...

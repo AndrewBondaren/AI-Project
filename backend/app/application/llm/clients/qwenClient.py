@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import time
@@ -31,6 +32,7 @@ class QwenClient:
         response_format_schema: dict | None = None,
         enable_thinking: bool = False,
         node_id: str = "unknown",
+        cancel_token=None,
     ) -> str:
         normalized = normalize_messages(messages)
         for m in normalized:
@@ -41,7 +43,7 @@ class QwenClient:
             logger.debug("qwen_request", extra={"model": model, "role": m.role, "content": content})
 
         if self.streaming:
-            result = await self._chat_streaming(normalized, model, node_id)
+            result = await self._chat_streaming(normalized, model, node_id, cancel_token)
         else:
             result = await self._chat_full(normalized, model)
 
@@ -71,7 +73,7 @@ class QwenClient:
         return self._strip_thinking(content)
 
     async def _chat_streaming(
-        self, normalized: list[ChatMessage], model: str, node_id: str
+        self, normalized: list[ChatMessage], model: str, node_id: str, cancel_token=None
     ) -> str:
         payload = {
             "model": model,
@@ -92,6 +94,9 @@ class QwenClient:
             ) as resp:
                 resp.raise_for_status()
                 async for line in resp.aiter_lines():
+                    if cancel_token and cancel_token.is_cancelled():
+                        raise asyncio.CancelledError()
+
                     if not line.startswith("data: "):
                         continue
                     data_str = line[6:].strip()

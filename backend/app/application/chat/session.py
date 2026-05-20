@@ -8,7 +8,7 @@ from app.application.engine.repair.repairMode import RepairMode
 class Session:
     llm_provider: str
     model:        str
-    user_id:      str
+    session_id:      str
     meta:         dict
 
     max_tokens:        int        = field(default_factory=lambda: app_settings.max_tokens)

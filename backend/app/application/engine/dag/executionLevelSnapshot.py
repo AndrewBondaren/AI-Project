@@ -3,7 +3,7 @@ from typing import Any
 
 
 @dataclass(frozen=True)
-class StateSnapshot:
+class ExecutionLevelSnapshot:
 
     level: int
 

@@ -13,7 +13,10 @@ from app.application.llm.language import Language
 from app.core.appSettings import app_settings
 from app.api.deps import get_container
 from app.application.events.eventBus import init_bus, emit, close_bus
-from app.application.events.sseEvents import ResultEvent, ErrorEvent
+from app.application.events.sseEvents import ResultEvent, ErrorEvent, CancelledEvent
+from app.application.cancellation.cancellationToken import CancellationToken
+from app.application.cancellation.cancellationRegistry import cancellation_registry
+from app.application.cancellation.snapshotStore import snapshot_store
 
 
 router = APIRouter()
@@ -30,9 +33,11 @@ class ChatSettings(BaseModel):
 class ChatRequest(BaseModel):
     llm_provider: str
     model: str
-    user_id: str
+    session_id: str
     meta: dict
     message: str
+    request_id: str
+    resume: bool = False
 
 class ChatResponse(BaseModel):
     ok: bool = True
@@ -71,6 +76,12 @@ def update_chat_settings(data: ChatSettings) -> ChatSettings:
     return get_chat_settings()
 
 
+@router.delete("/chat/stream/{request_id}")
+async def cancel_stream(request_id: str):
+    cancellation_registry.cancel(request_id)
+    return {"ok": True}
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     data: ChatRequest,
@@ -79,7 +90,7 @@ async def chat(
     session = Session(
         llm_provider=data.llm_provider,
         model=data.model,
-        user_id=data.user_id,
+        session_id=data.session_id,
         meta=data.meta,
     )
     try:
@@ -104,23 +115,51 @@ async def chat_stream(
     session = Session(
         llm_provider=data.llm_provider,
         model=data.model,
-        user_id=data.user_id,
+        session_id=data.session_id,
         meta=data.meta,
     )
+
+    # Resolve snapshot for resume / clear for new request
+    if data.resume:
+        snapshot = snapshot_store.load(data.session_id)
+        if snapshot is None:
+            async def _error_gen():
+                yield f"data: {ErrorEvent(message='No snapshot found for session_id').model_dump_json()}\n\n"
+            return StreamingResponse(
+                _error_gen(),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            )
+    else:
+        snapshot_store.delete(data.session_id)
+        snapshot = None
+
+    token = CancellationToken(request_id=data.request_id)
+    cancellation_registry.register(token)
+
     queue = init_bus()
 
     async def run_pipeline():
         try:
-            result = await service.handle_message(session=session, message=data.message)
+            result = await service.handle_message(
+                session=session,
+                message=data.message,
+                cancel_token=token,
+                snapshot=snapshot,
+            )
             if isinstance(result, dict) and result.get("ok") is False:
                 await emit(ErrorEvent(message=result.get("error", "Unknown error")))
             else:
+                snapshot_store.delete(data.session_id)
                 await emit(ResultEvent(response=result))
+        except asyncio.CancelledError:
+            await emit(CancelledEvent(session_id=data.session_id, request_id=data.request_id))
         except UserInputError as e:
             await emit(ErrorEvent(message=e.message))
         except Exception as e:
             await emit(ErrorEvent(message=str(e)))
         finally:
+            cancellation_registry.remove(data.request_id)
             await close_bus()
 
     async def event_generator():
