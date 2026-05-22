@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
 from app.api.utils.json_resolver import JsonResolver
+from app.api.utils.response_helpers import json_or_download
 
 router = APIRouter()
 
@@ -25,6 +26,15 @@ async def import_seed(
         status_code=status_code,
         content={table: r.to_dict() for table, r in results.items()},
     )
+
+
+@router.get("/seed/export")
+async def export_seed(
+    download: bool = False,
+    container=Depends(get_container),
+) -> JSONResponse:
+    data = await container.seed_service().export_all()
+    return json_or_download(data, download, "seed.json")
 
 
 @router.get("/seed/{table}")

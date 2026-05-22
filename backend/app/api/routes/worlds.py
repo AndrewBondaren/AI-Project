@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
 from app.api.utils.json_resolver import JsonResolver
+from app.api.utils.response_helpers import json_or_download
 
 router = APIRouter()
 
@@ -14,6 +15,16 @@ router = APIRouter()
 async def list_worlds(container=Depends(get_container)) -> list[dict]:
     worlds = await container.world_service().get_all()
     return [asdict(w) for w in worlds]
+
+
+@router.get("/worlds/{world_uid}/export")
+async def export_world(
+    world_uid: str,
+    download: bool = False,
+    container=Depends(get_container),
+) -> JSONResponse:
+    bundle = await container.world_bundle_service().export(world_uid)
+    return json_or_download(bundle, download, f"world_{world_uid}.json")
 
 
 @router.get("/worlds/{world_uid}")
@@ -48,10 +59,11 @@ async def import_world(
     file: UploadFile | None = File(default=None),
     path: str | None = Form(default=None),
     container=Depends(get_container),
-) -> dict:
+) -> JSONResponse:
     data = await JsonResolver.resolve(file=file, path=path)
     if not isinstance(data, dict):
-        raise HTTPException(status_code=422, detail="World JSON must be an object, not an array")
-    result = await container.world_service().import_from_json(data)
-    status_code = 200 if result.failed == 0 else 207
-    return JSONResponse(status_code=status_code, content=result.to_dict())
+        raise HTTPException(status_code=422, detail="World bundle JSON must be an object")
+    results = await container.world_bundle_service().import_bundle(data)
+    has_failures = any(r.failed > 0 for r in results.values())
+    status_code = 207 if has_failures else 200
+    return JSONResponse(status_code=status_code, content={k: v.to_dict() for k, v in results.items()})

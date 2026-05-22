@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 
-from app.api.schemas.imports import ImportError, ImportResult
+from app.api.schemas.imports import ImportResult
+from app.application.import_helpers import import_list
 from app.db.models.race import Race
 from app.db.repositories.iRaceRepository import IRaceRepository
 
@@ -23,16 +24,17 @@ class RaceService:
             raise HTTPException(status_code=404, detail=f"Race '{race_uid}' not found")
         return race
 
+    _IMMUTABLE = frozenset({"race_uid", "world_uid"})
+
     async def create(self, world_uid: str, data: dict) -> Race:
-        data["world_uid"] = world_uid
-        race = Race(**data)
+        race = Race(**{**data, "world_uid": world_uid})
         await self._repo.create(race)
         return race
 
     async def update(self, world_uid: str, race_uid: str, data: dict) -> Race:
         race = await self.get_by_id(world_uid, race_uid)
         for key, value in data.items():
-            if hasattr(race, key) and key not in ("race_uid", "world_uid"):
+            if hasattr(race, key) and key not in self._IMMUTABLE:
                 setattr(race, key, value)
         await self._repo.update(race)
         return race
@@ -46,17 +48,6 @@ class RaceService:
     # ------------------------------------------------------------------
 
     async def import_from_json(self, world_uid: str, data: list[dict]) -> ImportResult:
-        total = len(data)
-        succeeded = 0
-        errors: list[ImportError] = []
-
-        for i, row in enumerate(data):
-            try:
-                row["world_uid"] = world_uid
-                race = Race(**row)
-                await self._repo.upsert(race)
-                succeeded += 1
-            except Exception as e:
-                errors.append(ImportError(index=i, message=str(e)))
-
-        return ImportResult(total=total, succeeded=succeeded, failed=len(errors), errors=errors)
+        def prepare(row: dict) -> Race:
+            return Race(**{**row, "world_uid": world_uid})
+        return await import_list(data, prepare, self._repo.upsert)

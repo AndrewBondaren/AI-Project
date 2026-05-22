@@ -45,17 +45,32 @@ class SeedService:
 
         for i, row in enumerate(rows):
             try:
-                cols = list(row.keys())
-                vals = [row[c] for c in cols]
-                placeholders = ", ".join("?" * len(cols))
-                sql = f"INSERT OR REPLACE INTO {table} ({', '.join(cols)}) VALUES ({placeholders})"
-                await self._db.conn.execute(sql, vals)
+                await self._upsert_row(table, row)
                 succeeded += 1
             except Exception as e:
                 errors.append(ImportError(index=i, message=str(e)))
 
         await self._db.conn.commit()
         return ImportResult(total=len(rows), succeeded=succeeded, failed=len(errors), errors=errors)
+
+    async def _upsert_row(self, table: str, row: dict) -> None:
+        cols = list(row.keys())
+        vals = [row[c] for c in cols]
+        placeholders = ", ".join("?" * len(cols))
+        sql = f"INSERT OR REPLACE INTO {table} ({', '.join(cols)}) VALUES ({placeholders})"
+        await self._db.conn.execute(sql, vals)
+
+    # ------------------------------------------------------------------
+    # Export
+    # ------------------------------------------------------------------
+
+    async def export_all(self) -> dict[str, list[dict]]:
+        result = {}
+        for table in ALLOWED_SEED_TABLES:
+            async with self._db.conn.execute(f"SELECT * FROM {table}") as cur:
+                rows = await cur.fetchall()
+            result[table] = [dict(r) for r in rows]
+        return result
 
     # ------------------------------------------------------------------
     # CRUD (режим 2)
@@ -69,11 +84,7 @@ class SeedService:
 
     async def upsert_one(self, table: str, row: dict) -> None:
         self._validate_table(table)
-        cols = list(row.keys())
-        vals = [row[c] for c in cols]
-        placeholders = ", ".join("?" * len(cols))
-        sql = f"INSERT OR REPLACE INTO {table} ({', '.join(cols)}) VALUES ({placeholders})"
-        await self._db.conn.execute(sql, vals)
+        await self._upsert_row(table, row)
         await self._db.conn.commit()
 
     async def delete_one(self, table: str, pk_val: str) -> None:

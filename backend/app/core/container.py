@@ -26,6 +26,7 @@ from app.application.worldData.raceService import RaceService
 from app.application.worldData.worldPerkService import WorldPerkService
 from app.application.worldData.namedLocationService import NamedLocationService
 from app.application.worldData.seedService import SeedService
+from app.application.worldData.worldBundleService import WorldBundleService
 
 from app.application.engine.dag.dagExecutor import DAGExecutor
 from app.application.engine.llmExecutionEngine import LLMExecutionEngine
@@ -77,6 +78,7 @@ class Container:
         self._perk_service: WorldPerkService | None = None
         self._location_service: NamedLocationService | None = None
         self._seed_service: SeedService | None = None
+        self._world_bundle_service: WorldBundleService | None = None
 
         # CLIENTS
         self._qwen_client = None
@@ -387,6 +389,16 @@ class Container:
         if self._seed_service is None:
             self._seed_service = SeedService(db=self._db)
         return self._seed_service
+
+    def world_bundle_service(self) -> WorldBundleService:
+        if self._world_bundle_service is None:
+            self._world_bundle_service = WorldBundleService(
+                world_service=self.world_service(),
+                race_service=self.race_service(),
+                perk_service=self.perk_service(),
+                location_service=self.location_service(),
+            )
+        return self._world_bundle_service
 
     def session_repository(self) -> ISessionRepository:
         if self._session_repository is None:
