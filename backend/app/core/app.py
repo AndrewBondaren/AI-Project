@@ -16,8 +16,11 @@ def make_lifespan(db: Database):
     from app.db.models.npc import Npc
     from app.db.models.player import Player
     from app.db.models.world import World
+    from app.db.models.race import Race
+    from app.db.models.world_perk import WorldPerk
+    from app.db.models.named_location import NamedLocation
 
-    _models = [World, GameSession, Player, Npc, Message]
+    _models = [World, GameSession, Player, Npc, Message, Race, WorldPerk, NamedLocation]
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -59,9 +62,19 @@ def create_app():
 
     from app.api.routes.chat import router as chat_router
     from app.api.routes.settings import router as settings_router
+    from app.api.routes.worlds import router as worlds_router
+    from app.api.routes.races import router as races_router
+    from app.api.routes.perks import router as perks_router
+    from app.api.routes.locations import router as locations_router
+    from app.api.routes.seed import router as seed_router
 
     app.include_router(chat_router, prefix="/api")
     app.include_router(settings_router, prefix="/api")
+    app.include_router(worlds_router, prefix="/api")
+    app.include_router(races_router, prefix="/api")
+    app.include_router(perks_router, prefix="/api")
+    app.include_router(locations_router, prefix="/api")
+    app.include_router(seed_router, prefix="/api")
 
     return app
 

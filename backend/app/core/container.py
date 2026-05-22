@@ -15,6 +15,17 @@ from app.db.repositories.iPlayerRepository import IPlayerRepository
 from app.db.repositories.sqlite.playerRepository import SqlitePlayerRepository
 from app.db.repositories.iNpcRepository import INpcRepository
 from app.db.repositories.sqlite.npcRepository import SqliteNpcRepository
+from app.db.repositories.iRaceRepository import IRaceRepository
+from app.db.repositories.sqlite.raceRepository import SqliteRaceRepository
+from app.db.repositories.iWorldPerkRepository import IWorldPerkRepository
+from app.db.repositories.sqlite.worldPerkRepository import SqliteWorldPerkRepository
+from app.db.repositories.iNamedLocationRepository import INamedLocationRepository
+from app.db.repositories.sqlite.namedLocationRepository import SqliteNamedLocationRepository
+from app.application.world.worldService import WorldService
+from app.application.race.raceService import RaceService
+from app.application.perk.worldPerkService import WorldPerkService
+from app.application.location.namedLocationService import NamedLocationService
+from app.application.seed.seedService import SeedService
 
 from app.application.engine.dag.dagExecutor import DAGExecutor
 from app.application.engine.llmExecutionEngine import LLMExecutionEngine
@@ -56,6 +67,16 @@ class Container:
         self._player_repository: IPlayerRepository | None = None
         self._npc_repository: INpcRepository | None = None
         self._message_repository: IMessageRepository | None = None
+        self._race_repository: IRaceRepository | None = None
+        self._perk_repository: IWorldPerkRepository | None = None
+        self._location_repository: INamedLocationRepository | None = None
+
+        # DOMAIN SERVICES
+        self._world_service: WorldService | None = None
+        self._race_service: RaceService | None = None
+        self._perk_service: WorldPerkService | None = None
+        self._location_service: NamedLocationService | None = None
+        self._seed_service: SeedService | None = None
 
         # CLIENTS
         self._qwen_client = None
@@ -326,6 +347,46 @@ class Container:
         if self._world_repository is None:
             self._world_repository = SqliteWorldRepository(db=self._db)
         return self._world_repository
+
+    def race_repository(self) -> IRaceRepository:
+        if self._race_repository is None:
+            self._race_repository = SqliteRaceRepository(db=self._db)
+        return self._race_repository
+
+    def perk_repository(self) -> IWorldPerkRepository:
+        if self._perk_repository is None:
+            self._perk_repository = SqliteWorldPerkRepository(db=self._db)
+        return self._perk_repository
+
+    def location_repository(self) -> INamedLocationRepository:
+        if self._location_repository is None:
+            self._location_repository = SqliteNamedLocationRepository(db=self._db)
+        return self._location_repository
+
+    def world_service(self) -> WorldService:
+        if self._world_service is None:
+            self._world_service = WorldService(repo=self.world_repository())
+        return self._world_service
+
+    def race_service(self) -> RaceService:
+        if self._race_service is None:
+            self._race_service = RaceService(repo=self.race_repository())
+        return self._race_service
+
+    def perk_service(self) -> WorldPerkService:
+        if self._perk_service is None:
+            self._perk_service = WorldPerkService(repo=self.perk_repository())
+        return self._perk_service
+
+    def location_service(self) -> NamedLocationService:
+        if self._location_service is None:
+            self._location_service = NamedLocationService(repo=self.location_repository())
+        return self._location_service
+
+    def seed_service(self) -> SeedService:
+        if self._seed_service is None:
+            self._seed_service = SeedService(db=self._db)
+        return self._seed_service
 
     def session_repository(self) -> ISessionRepository:
         if self._session_repository is None:

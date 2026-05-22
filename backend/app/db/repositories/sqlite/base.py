@@ -33,6 +33,23 @@ class BaseRepository(Generic[T]):
         await self._db.conn.execute(sql, [*set_vals, pk_val, *self._disc_vals])
         await self._db.conn.commit()
 
+    async def upsert(self, obj: T) -> None:
+        cols, vals = to_row(obj)
+        placeholders = ", ".join("?" * len(cols))
+        sql = f"INSERT OR REPLACE INTO {self._table} ({', '.join(cols)}) VALUES ({placeholders})"
+        await self._db.conn.execute(sql, vals)
+        await self._db.conn.commit()
+
+    async def delete(self, pk_val: Any) -> None:
+        where = f"{self._pk_col} = ?"
+        params: list[Any] = [pk_val]
+        if self._disc_where:
+            where += f" AND {self._disc_where}"
+            params.extend(self._disc_vals)
+        sql = f"DELETE FROM {self._table} WHERE {where}"
+        await self._db.conn.execute(sql, params)
+        await self._db.conn.commit()
+
     async def fetch_one(self, where: str, params: list[Any]) -> T | None:
         sql, full_params = self._build_select(where, params)
         async with self._db.conn.execute(sql, full_params) as cur:

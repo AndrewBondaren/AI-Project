@@ -21,6 +21,12 @@ class SqliteWorldRepository(BaseRepository[World], IWorldRepository):
     async def update(self, world: World) -> None:
         await self.save(world)
 
+    async def upsert(self, world: World) -> None:
+        await super().upsert(world)
+
+    async def delete(self, world_id: str) -> None:
+        await super().delete(world_id)
+
     async def increment_tick(self, world_id: str) -> int:
         await self._db.conn.execute(
             "UPDATE worlds SET current_tick = current_tick + 1 WHERE id = ?",
