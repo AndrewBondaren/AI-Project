@@ -23,7 +23,7 @@ class LLMGroupPayloadBuilder:
             }),
             sections={
                 node.id: NodeSection(
-                    dsl=self.dsl_resolver.resolve(dsl_keys[node.id]),
+                    dsl=self.dsl_resolver.resolve(dsl_keys[node.id], context={"language": state.session.language}),
                     context_data=self._collect_deps(node, state),
                 )
                 for node in nodes
