@@ -10,7 +10,7 @@ class ISessionRepository(ABC):
 
     @abstractmethod
     async def get_by_world_and_character(
-        self, world_id: str, character_id: str
+        self, world_uid: str, character_id: str
     ) -> GameSession | None: ...
 
     @abstractmethod

@@ -9,7 +9,7 @@ class Race:
     __pk__    = "race_uid"
 
     race_uid:     str
-    world_id:     str
+    world_uid:     str
     display_race: str
     created_at:   str
 

@@ -7,7 +7,7 @@ class GameSession:
     __pk__    = "id"
 
     id:                        str
-    world_id:                  str
+    world_uid:                  str
     player_character_id:       str
     created_at:                str
     last_active_at:            str

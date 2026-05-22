@@ -142,12 +142,12 @@ class ImportService:
     ): ...
 
     async def import_world(self, data: dict) -> ImportResult: ...
-    async def import_races(self, world_id: str, data: list[dict]) -> ImportResult: ...
-    async def import_perks(self, world_id: str, data: list[dict]) -> ImportResult: ...
-    async def import_locations(self, world_id: str, data: list[dict]) -> ImportResult: ...
+    async def import_races(self, world_uid: str, data: list[dict]) -> ImportResult: ...
+    async def import_perks(self, world_uid: str, data: list[dict]) -> ImportResult: ...
+    async def import_locations(self, world_uid: str, data: list[dict]) -> ImportResult: ...
 
     async def _upsert_many(self, repo, cls, rows: list[dict], inject: dict = {}) -> ImportResult:
-        # inject — поля которые добавляются к каждой строке (например world_id)
+        # inject — поля которые добавляются к каждой строке (например world_uid)
         # Итерирует rows, конструирует cls(**row | inject), вызывает repo.upsert()
         # Ловит исключения per-row → пишет в errors, продолжает
 ```
@@ -204,7 +204,7 @@ class SeedService:
 ```python
 class IRaceRepository(ABC):
     async def get_by_id(self, race_uid: str) -> Race | None: ...
-    async def get_by_world(self, world_id: str) -> list[Race]: ...
+    async def get_by_world(self, world_uid: str) -> list[Race]: ...
     async def create(self, race: Race) -> None: ...
     async def update(self, race: Race) -> None: ...
     async def upsert(self, race: Race) -> None: ...
@@ -216,7 +216,7 @@ class IRaceRepository(ABC):
 ```python
 class IWorldPerkRepository(ABC):
     async def get_by_id(self, perk_uid: str) -> WorldPerk | None: ...
-    async def get_by_world(self, world_id: str) -> list[WorldPerk]: ...
+    async def get_by_world(self, world_uid: str) -> list[WorldPerk]: ...
     async def create(self, perk: WorldPerk) -> None: ...
     async def update(self, perk: WorldPerk) -> None: ...
     async def upsert(self, perk: WorldPerk) -> None: ...
@@ -228,7 +228,7 @@ class IWorldPerkRepository(ABC):
 ```python
 class INamedLocationRepository(ABC):
     async def get_by_id(self, location_uid: str) -> NamedLocation | None: ...
-    async def get_by_world(self, world_id: str) -> list[NamedLocation]: ...
+    async def get_by_world(self, world_uid: str) -> list[NamedLocation]: ...
     async def get_children(self, parent_uid: str) -> list[NamedLocation]: ...
     async def create(self, loc: NamedLocation) -> None: ...
     async def update(self, loc: NamedLocation) -> None: ...
@@ -247,10 +247,10 @@ Sqlite-реализации — тонкие обёртки над BaseRepositor
 | Метод | URL | Режим | Описание |
 |-------|-----|-------|----------|
 | GET | `/worlds` | 2 | Список всех миров |
-| GET | `/worlds/{world_id}` | 2 | Получить мир |
+| GET | `/worlds/{world_uid}` | 2 | Получить мир |
 | POST | `/worlds` | 2 | Создать мир (JSON body = поля World) |
-| PUT | `/worlds/{world_id}` | 2 | Обновить мир |
-| DELETE | `/worlds/{world_id}` | 2 | Удалить мир |
+| PUT | `/worlds/{world_uid}` | 2 | Обновить мир |
+| DELETE | `/worlds/{world_uid}` | 2 | Удалить мир |
 | POST | `/worlds/import` | 1, 3 | Импорт мира из файла |
 
 Import body (режим 3):
@@ -259,38 +259,38 @@ Import body (режим 3):
 ```
 Import body (режим 1): `multipart/form-data`, поле `file`.
 
-### Races — `POST /api/worlds/{world_id}/races`
+### Races — `POST /api/worlds/{world_uid}/races`
 
 | Метод | URL | Режим | Описание |
 |-------|-----|-------|----------|
-| GET | `/worlds/{world_id}/races` | 2 | Список рас мира |
-| GET | `/worlds/{world_id}/races/{race_uid}` | 2 | Получить расу |
-| POST | `/worlds/{world_id}/races` | 2 | Создать расу |
-| PUT | `/worlds/{world_id}/races/{race_uid}` | 2 | Обновить расу |
-| DELETE | `/worlds/{world_id}/races/{race_uid}` | 2 | Удалить расу |
-| POST | `/worlds/{world_id}/races/import` | 1, 3 | Импорт списка рас |
+| GET | `/worlds/{world_uid}/races` | 2 | Список рас мира |
+| GET | `/worlds/{world_uid}/races/{race_uid}` | 2 | Получить расу |
+| POST | `/worlds/{world_uid}/races` | 2 | Создать расу |
+| PUT | `/worlds/{world_uid}/races/{race_uid}` | 2 | Обновить расу |
+| DELETE | `/worlds/{world_uid}/races/{race_uid}` | 2 | Удалить расу |
+| POST | `/worlds/{world_uid}/races/import` | 1, 3 | Импорт списка рас |
 
 ### Perks — аналогично races
 
 | Метод | URL |
 |-------|-----|
-| GET | `/worlds/{world_id}/perks` |
-| GET | `/worlds/{world_id}/perks/{perk_uid}` |
-| POST | `/worlds/{world_id}/perks` |
-| PUT | `/worlds/{world_id}/perks/{perk_uid}` |
-| DELETE | `/worlds/{world_id}/perks/{perk_uid}` |
-| POST | `/worlds/{world_id}/perks/import` |
+| GET | `/worlds/{world_uid}/perks` |
+| GET | `/worlds/{world_uid}/perks/{perk_uid}` |
+| POST | `/worlds/{world_uid}/perks` |
+| PUT | `/worlds/{world_uid}/perks/{perk_uid}` |
+| DELETE | `/worlds/{world_uid}/perks/{perk_uid}` |
+| POST | `/worlds/{world_uid}/perks/import` |
 
 ### Locations — аналогично races
 
 | Метод | URL |
 |-------|-----|
-| GET | `/worlds/{world_id}/locations` |
-| GET | `/worlds/{world_id}/locations/{location_uid}` |
-| POST | `/worlds/{world_id}/locations` |
-| PUT | `/worlds/{world_id}/locations/{location_uid}` |
-| DELETE | `/worlds/{world_id}/locations/{location_uid}` |
-| POST | `/worlds/{world_id}/locations/import` |
+| GET | `/worlds/{world_uid}/locations` |
+| GET | `/worlds/{world_uid}/locations/{location_uid}` |
+| POST | `/worlds/{world_uid}/locations` |
+| PUT | `/worlds/{world_uid}/locations/{location_uid}` |
+| DELETE | `/worlds/{world_uid}/locations/{location_uid}` |
+| POST | `/worlds/{world_uid}/locations/import` |
 
 ### Seed — `POST /api/seed`
 
@@ -331,7 +331,7 @@ Import body (режим 1): `multipart/form-data`, поле `file`.
   }
 ]
 ```
-`world_id` инжектируется из URL (`/worlds/{world_id}/races/import`), в файле не нужен.
+`world_uid` инжектируется из URL (`/worlds/{world_uid}/races/import`), в файле не нужен.
 
 ### perks.json / locations.json — аналогично races.json.
 

@@ -12,13 +12,13 @@ class SqliteNpcRepository(BaseRepository[Npc], INpcRepository):
     async def get_by_id(self, character_uid: str) -> Npc | None:
         return await self.fetch_one("character_uid = ?", [character_uid])
 
-    async def get_by_world(self, world_id: str) -> list[Npc]:
-        return await self.fetch_all("world_id = ?", [world_id])
+    async def get_by_world(self, world_uid: str) -> list[Npc]:
+        return await self.fetch_all("world_uid = ?", [world_uid])
 
-    async def get_by_location(self, world_id: str, location: str) -> list[Npc]:
+    async def get_by_location(self, world_uid: str, location: str) -> list[Npc]:
         return await self.fetch_all(
-            "world_id = ? AND system_location = ?",
-            [world_id, location],
+            "world_uid = ? AND system_location = ?",
+            [world_uid, location],
         )
 
     async def create(self, npc: Npc) -> None:
@@ -27,14 +27,14 @@ class SqliteNpcRepository(BaseRepository[Npc], INpcRepository):
     async def update(self, npc: Npc) -> None:
         await self.save(npc)
 
-    async def convert_from_player(self, character_uid: str, world_id: str) -> None:
+    async def convert_from_player(self, character_uid: str, world_uid: str) -> None:
         await self._db.conn.execute(
             """
             UPDATE character_sheet
-            SET character_type = 'npc', world_id = ?
+            SET character_type = 'npc', world_uid = ?
             WHERE character_uid = ? AND character_type = 'player'
             """,
-            (world_id, character_uid),
+            (world_uid, character_uid),
         )
         await self._db.conn.commit()
 

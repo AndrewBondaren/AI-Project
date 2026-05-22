@@ -7,10 +7,10 @@ from app.db.mapper import json_nullable_col
 class WorldPerk:
     __table__          = "world_perks"
     __pk__             = "perk_uid"
-    __update_exclude__ = frozenset({"world_id"})
+    __update_exclude__ = frozenset({"world_uid"})
 
     perk_uid:            str
-    world_id:            str
+    world_uid:            str
     system_name:         str
     display_name:        str
 

@@ -10,51 +10,51 @@ from app.api.utils.json_resolver import JsonResolver
 router = APIRouter()
 
 
-@router.get("/worlds/{world_id}/races")
-async def list_races(world_id: str, container=Depends(get_container)) -> list[dict]:
-    races = await container.race_service().get_all(world_id)
+@router.get("/worlds/{world_uid}/races")
+async def list_races(world_uid: str, container=Depends(get_container)) -> list[dict]:
+    races = await container.race_service().get_all(world_uid)
     return [asdict(r) for r in races]
 
 
-@router.get("/worlds/{world_id}/races/{race_uid}")
-async def get_race(world_id: str, race_uid: str, container=Depends(get_container)) -> dict:
-    race = await container.race_service().get_by_id(world_id, race_uid)
+@router.get("/worlds/{world_uid}/races/{race_uid}")
+async def get_race(world_uid: str, race_uid: str, container=Depends(get_container)) -> dict:
+    race = await container.race_service().get_by_id(world_uid, race_uid)
     return asdict(race)
 
 
-@router.post("/worlds/{world_id}/races", status_code=201)
+@router.post("/worlds/{world_uid}/races", status_code=201)
 async def create_race(
-    world_id: str,
+    world_uid: str,
     data: dict[str, Any],
     container=Depends(get_container),
 ) -> dict:
-    race = await container.race_service().create(world_id, data)
+    race = await container.race_service().create(world_uid, data)
     return asdict(race)
 
 
-@router.put("/worlds/{world_id}/races/{race_uid}")
+@router.put("/worlds/{world_uid}/races/{race_uid}")
 async def update_race(
-    world_id: str,
+    world_uid: str,
     race_uid: str,
     data: dict[str, Any],
     container=Depends(get_container),
 ) -> dict:
-    race = await container.race_service().update(world_id, race_uid, data)
+    race = await container.race_service().update(world_uid, race_uid, data)
     return asdict(race)
 
 
-@router.delete("/worlds/{world_id}/races/{race_uid}", status_code=204)
+@router.delete("/worlds/{world_uid}/races/{race_uid}", status_code=204)
 async def delete_race(
-    world_id: str,
+    world_uid: str,
     race_uid: str,
     container=Depends(get_container),
 ) -> None:
-    await container.race_service().delete(world_id, race_uid)
+    await container.race_service().delete(world_uid, race_uid)
 
 
-@router.post("/worlds/{world_id}/races/import")
+@router.post("/worlds/{world_uid}/races/import")
 async def import_races(
-    world_id: str,
+    world_uid: str,
     file: UploadFile | None = File(default=None),
     path: str | None = Form(default=None),
     container=Depends(get_container),
@@ -62,6 +62,6 @@ async def import_races(
     data = await JsonResolver.resolve(file=file, path=path)
     if not isinstance(data, list):
         raise HTTPException(status_code=422, detail="Races JSON must be an array")
-    result = await container.race_service().import_from_json(world_id, data)
+    result = await container.race_service().import_from_json(world_uid, data)
     status_code = 200 if result.failed == 0 else 207
     return JSONResponse(status_code=status_code, content=result.to_dict())

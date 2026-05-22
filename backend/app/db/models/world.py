@@ -6,9 +6,9 @@ from app.db.mapper import bool_col, json_col, json_nullable_col
 @dataclass
 class World:
     __table__ = "worlds"
-    __pk__    = "id"
+    __pk__    = "world_uid"
 
-    id:                         str
+    world_uid:                  str
     name:                       str
     created_at:                 str
     narrative_language:         str  = "ru"

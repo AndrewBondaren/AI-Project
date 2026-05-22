@@ -15,11 +15,11 @@ class SqliteSessionRepository(BaseRepository[GameSession], ISessionRepository):
         return await self.fetch_one("id = ?", [session_id])
 
     async def get_by_world_and_character(
-        self, world_id: str, character_id: str
+        self, world_uid: str, character_id: str
     ) -> GameSession | None:
         return await self.fetch_one(
-            "world_id = ? AND player_character_id = ?",
-            [world_id, character_id],
+            "world_uid = ? AND player_character_id = ?",
+            [world_uid, character_id],
         )
 
     async def create(self, session: GameSession) -> None:

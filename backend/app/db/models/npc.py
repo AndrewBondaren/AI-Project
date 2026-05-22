@@ -8,11 +8,11 @@ class Npc:
     __table__          = "character_sheet"
     __pk__             = "character_uid"
     __discriminator__  = {"character_type": "npc"}
-    __update_exclude__ = frozenset({"world_id"})
+    __update_exclude__ = frozenset({"world_uid"})
 
     character_uid:              str
     display_name:               str 
-    world_id:                   str
+    world_uid:                   str
     created_at:                 str
 
     # identification

@@ -7,10 +7,10 @@ from app.db.mapper import bool_col, json_nullable_col
 class NamedLocation:
     __table__          = "named_locations"
     __pk__             = "location_uid"
-    __update_exclude__ = frozenset({"world_id"})
+    __update_exclude__ = frozenset({"world_uid"})
 
     location_uid:           str
-    world_id:               str
+    world_uid:               str
     display_name:           str
     location_type:          str
     created_at:             str

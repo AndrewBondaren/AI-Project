@@ -12,8 +12,8 @@ class SqliteWorldPerkRepository(BaseRepository[WorldPerk], IWorldPerkRepository)
     async def get_by_id(self, perk_uid: str) -> WorldPerk | None:
         return await self.fetch_one("perk_uid = ?", [perk_uid])
 
-    async def get_by_world(self, world_id: str) -> list[WorldPerk]:
-        return await self.fetch_all("world_id = ?", [world_id], order="display_name ASC")
+    async def get_by_world(self, world_uid: str) -> list[WorldPerk]:
+        return await self.fetch_all("world_uid = ?", [world_uid], order="display_name ASC")
 
     async def create(self, perk: WorldPerk) -> None:
         await self.insert(perk)

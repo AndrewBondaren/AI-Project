@@ -12,8 +12,8 @@ class SqliteRaceRepository(BaseRepository[Race], IRaceRepository):
     async def get_by_id(self, race_uid: str) -> Race | None:
         return await self.fetch_one("race_uid = ?", [race_uid])
 
-    async def get_by_world(self, world_id: str) -> list[Race]:
-        return await self.fetch_all("world_id = ?", [world_id], order="display_race ASC")
+    async def get_by_world(self, world_uid: str) -> list[Race]:
+        return await self.fetch_all("world_uid = ?", [world_uid], order="display_race ASC")
 
     async def create(self, race: Race) -> None:
         await self.insert(race)

@@ -16,9 +16,9 @@ async def list_worlds(container=Depends(get_container)) -> list[dict]:
     return [asdict(w) for w in worlds]
 
 
-@router.get("/worlds/{world_id}")
-async def get_world(world_id: str, container=Depends(get_container)) -> dict:
-    world = await container.world_service().get_by_id(world_id)
+@router.get("/worlds/{world_uid}")
+async def get_world(world_uid: str, container=Depends(get_container)) -> dict:
+    world = await container.world_service().get_by_id(world_uid)
     return asdict(world)
 
 
@@ -28,19 +28,19 @@ async def create_world(data: dict[str, Any], container=Depends(get_container)) -
     return asdict(world)
 
 
-@router.put("/worlds/{world_id}")
+@router.put("/worlds/{world_uid}")
 async def update_world(
-    world_id: str,
+    world_uid: str,
     data: dict[str, Any],
     container=Depends(get_container),
 ) -> dict:
-    world = await container.world_service().update(world_id, data)
+    world = await container.world_service().update(world_uid, data)
     return asdict(world)
 
 
-@router.delete("/worlds/{world_id}", status_code=204)
-async def delete_world(world_id: str, container=Depends(get_container)) -> None:
-    await container.world_service().delete(world_id)
+@router.delete("/worlds/{world_uid}", status_code=204)
+async def delete_world(world_uid: str, container=Depends(get_container)) -> None:
+    await container.world_service().delete(world_uid)
 
 
 @router.post("/worlds/import")

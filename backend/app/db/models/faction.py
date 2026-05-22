@@ -7,7 +7,7 @@ class Faction:
     __pk__    = "faction_uid"
 
     faction_uid:         str
-    world_id:            str
+    world_uid:            str
     display_name:        str
     created_at:          str
 

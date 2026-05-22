@@ -5,11 +5,13 @@ from app.db.mapper import bool_col, json_col
 
 @dataclass
 class Player:
-    __table__         = "character_sheet"
-    __pk__            = "character_uid"
-    __discriminator__ = {"character_type": "player"}
+    __table__          = "character_sheet"
+    __pk__             = "character_uid"
+    __discriminator__  = {"character_type": "player"}
+    __update_exclude__ = frozenset({"world_uid"})
 
     character_uid:          str
+    world_uid:               str
     display_name:           str
     created_at:             str
 
