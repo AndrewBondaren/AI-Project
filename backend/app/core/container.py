@@ -21,11 +21,11 @@ from app.db.repositories.iWorldPerkRepository import IWorldPerkRepository
 from app.db.repositories.sqlite.worldPerkRepository import SqliteWorldPerkRepository
 from app.db.repositories.iNamedLocationRepository import INamedLocationRepository
 from app.db.repositories.sqlite.namedLocationRepository import SqliteNamedLocationRepository
-from app.application.world.worldService import WorldService
-from app.application.race.raceService import RaceService
-from app.application.perk.worldPerkService import WorldPerkService
-from app.application.location.namedLocationService import NamedLocationService
-from app.application.seed.seedService import SeedService
+from app.application.worldData.worldService import WorldService
+from app.application.worldData.raceService import RaceService
+from app.application.worldData.worldPerkService import WorldPerkService
+from app.application.worldData.namedLocationService import NamedLocationService
+from app.application.worldData.seedService import SeedService
 
 from app.application.engine.dag.dagExecutor import DAGExecutor
 from app.application.engine.llmExecutionEngine import LLMExecutionEngine
