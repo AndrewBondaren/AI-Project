@@ -1,0 +1,34 @@
+from dataclasses import dataclass
+
+from app.db.mapper import bool_col, json_nullable_col
+
+
+@dataclass
+class NamedLocation:
+    __table__          = "named_locations"
+    __pk__             = "location_uid"
+    __update_exclude__ = frozenset({"world_id"})
+
+    location_uid:           str
+    world_id:               str
+    display_name:           str
+    location_type:          str
+    created_at:             str
+
+    parent_location_uid:    str | None = None
+    location_subtype:       str | None = None
+    system_terrain:         str | None = None
+    system_description:     str | None = None
+    display_description:    str | None = None
+    glossary_ref:           str | None = None
+    tag_refs:               list | None = json_nullable_col()
+    is_discovered:          bool = bool_col(default=False)
+    is_accessible:          bool = bool_col(default=True)
+    interior_width:         int | None = None
+    interior_height:        int | None = None
+    entry_difficulty:       int | None = None
+    guard_level:            int | None = None
+    system_location_mood:   str | None = None
+    display_location_mood:  str | None = None
+    owner_uid:              str | None = None
+    climate_zone:           str | None = None

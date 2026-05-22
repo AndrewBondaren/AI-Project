@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS worlds (
     resist_schema               TEXT,
     derived_formulas            TEXT,
     action_formulas             TEXT,
+    action_registry             TEXT,
 
     -- inventory
     slots                       TEXT,
@@ -55,6 +56,23 @@ CREATE TABLE IF NOT EXISTS worlds (
     npc_goal_type_registry      TEXT,
     character_trait_registry    TEXT,
     respawn_type_registry       TEXT,
+
+    -- location registries
+    terrain_category_registry   TEXT,
+    terrain_registry            TEXT,
+    road_type_registry          TEXT,
+    location_type_registry      TEXT,
+    climate_zone_registry       TEXT,
+    resource_type_registry      TEXT,
+    weather_type_registry       TEXT,
+    connection_type_registry    TEXT,
+
+    -- faction registries
+    faction_relation_type_registry TEXT,
+
+    -- world map settings
+    season_temp_offsets         TEXT,
+    default_climate_zone        TEXT,
 
     -- custom fields declarations
     player_fields               TEXT,
@@ -98,7 +116,7 @@ CREATE TABLE IF NOT EXISTS character_sheet (
     display_class           TEXT,
     system_gender           TEXT,
     display_gender          TEXT,
-    system_race             TEXT REFERENCES races(race_uid),
+    system_race             TEXT,
     display_race            TEXT,
     system_nickname         TEXT,
     display_nickname        TEXT,
@@ -172,7 +190,12 @@ CREATE TABLE IF NOT EXISTS character_sheet (
     world_schema_version    TEXT,
 
     created_at              TEXT NOT NULL,
-    FOREIGN KEY (world_id) REFERENCES worlds(id)
+    FOREIGN KEY (world_id)             REFERENCES worlds(id),
+    FOREIGN KEY (system_faction_uid)   REFERENCES factions(faction_uid),
+    FOREIGN KEY (home_location_uid)    REFERENCES named_locations(location_uid),
+    FOREIGN KEY (work_location_uid)    REFERENCES named_locations(location_uid),
+    FOREIGN KEY (spawn_location_uid)   REFERENCES named_locations(location_uid),
+    FOREIGN KEY (respawn_location_uid) REFERENCES named_locations(location_uid)
 );
 
 -- ============================================================
@@ -186,8 +209,9 @@ CREATE TABLE IF NOT EXISTS game_sessions (
     created_at                TEXT NOT NULL,
     last_active_at            TEXT NOT NULL,
     UNIQUE (world_id, player_character_id),
-    FOREIGN KEY (world_id)            REFERENCES worlds(id),
-    FOREIGN KEY (player_character_id) REFERENCES character_sheet(character_uid)
+    FOREIGN KEY (world_id)                REFERENCES worlds(id),
+    FOREIGN KEY (player_character_id)     REFERENCES character_sheet(character_uid),
+    FOREIGN KEY (restored_from_snapshot_id) REFERENCES world_snapshots(snapshot_id)
 );
 
 -- ============================================================
@@ -232,6 +256,7 @@ CREATE TABLE IF NOT EXISTS character_states (
     character_id  TEXT NOT NULL,
     type          TEXT NOT NULL,
     effects       TEXT NOT NULL DEFAULT '[]',
+    created_at    TEXT NOT NULL,
     PRIMARY KEY (character_id, type),
     FOREIGN KEY (character_id) REFERENCES character_sheet(character_uid) ON DELETE CASCADE
 );
@@ -270,6 +295,7 @@ CREATE TABLE IF NOT EXISTS character_narrative_states (
     system_duration_type  TEXT NOT NULL,
     display_duration_type TEXT NOT NULL,
     created_at            TEXT NOT NULL,
+    created_at_tick       INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (character_id) REFERENCES character_sheet(character_uid) ON DELETE CASCADE
 );
 
@@ -290,6 +316,26 @@ CREATE TABLE IF NOT EXISTS character_wounds (
 );
 
 -- ============================================================
+-- world_perks  (world perk registry)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS world_perks (
+    perk_uid            TEXT PRIMARY KEY,
+    world_id            TEXT NOT NULL,
+    system_name         TEXT NOT NULL,
+    display_name        TEXT NOT NULL,
+    system_description  TEXT,
+    display_description TEXT,
+    system_rank_value   TEXT,
+    display_rank_value  TEXT,
+    system_tags         TEXT,
+    display_tags        TEXT,
+    system_condition    TEXT,
+    display_condition   TEXT,
+    terrain_access      TEXT,
+    FOREIGN KEY (world_id) REFERENCES worlds(id) ON DELETE CASCADE
+);
+
+-- ============================================================
 -- character_perks  (common perks — uid ref + rank)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS character_perks (
@@ -297,7 +343,8 @@ CREATE TABLE IF NOT EXISTS character_perks (
     perk_uid      TEXT NOT NULL,
     current_rank  TEXT,
     PRIMARY KEY (character_id, perk_uid),
-    FOREIGN KEY (character_id) REFERENCES character_sheet(character_uid) ON DELETE CASCADE
+    FOREIGN KEY (character_id) REFERENCES character_sheet(character_uid) ON DELETE CASCADE,
+    FOREIGN KEY (perk_uid)     REFERENCES world_perks(perk_uid) ON DELETE CASCADE
 );
 
 -- ============================================================
@@ -320,7 +367,8 @@ CREATE TABLE IF NOT EXISTS character_inventory (
     slot          TEXT NOT NULL,
     quantity      INTEGER NOT NULL DEFAULT 1,
     PRIMARY KEY (character_id, item_uid, slot),
-    FOREIGN KEY (character_id) REFERENCES character_sheet(character_uid) ON DELETE CASCADE
+    FOREIGN KEY (character_id) REFERENCES character_sheet(character_uid) ON DELETE CASCADE,
+    FOREIGN KEY (item_uid)     REFERENCES items(item_uid)
 );
 
 -- ============================================================
@@ -405,7 +453,8 @@ CREATE TABLE IF NOT EXISTS combat_state (
     round_number     INTEGER NOT NULL DEFAULT 1,
     round_seconds    INTEGER NOT NULL,
     started_at_tick  INTEGER NOT NULL,
-    FOREIGN KEY (session_id) REFERENCES game_sessions(id)
+    FOREIGN KEY (session_id)   REFERENCES game_sessions(id),
+    FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid)
 );
 
 CREATE TABLE IF NOT EXISTS combat_positions (
@@ -417,6 +466,430 @@ CREATE TABLE IF NOT EXISTS combat_positions (
     PRIMARY KEY (battle_uid, character_uid),
     FOREIGN KEY (battle_uid)    REFERENCES combat_state(battle_uid) ON DELETE CASCADE,
     FOREIGN KEY (character_uid) REFERENCES character_sheet(character_uid)
+);
+
+-- ============================================================
+-- items  (global registry)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS items (
+    item_uid    TEXT PRIMARY KEY,
+    item_name   TEXT NOT NULL,
+    item_type   TEXT NOT NULL,
+    properties  TEXT,
+    weight      INTEGER NOT NULL DEFAULT 0,
+    volume      INTEGER NOT NULL DEFAULT 0
+);
+
+-- ============================================================
+-- world_items  (world-scoped item registry)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS world_items (
+    world_id  TEXT NOT NULL,
+    item_uid  TEXT NOT NULL,
+    PRIMARY KEY (world_id, item_uid),
+    FOREIGN KEY (world_id) REFERENCES worlds(id) ON DELETE CASCADE,
+    FOREIGN KEY (item_uid) REFERENCES items(item_uid) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- factions
+-- ============================================================
+CREATE TABLE IF NOT EXISTS factions (
+    faction_uid          TEXT PRIMARY KEY,
+    world_id             TEXT NOT NULL,
+    display_name         TEXT NOT NULL,
+    system_type          TEXT,
+    display_type         TEXT,
+    system_description   TEXT,
+    display_description  TEXT,
+    created_at           TEXT NOT NULL,
+    FOREIGN KEY (world_id) REFERENCES worlds(id)
+);
+
+-- ============================================================
+-- faction_relations  (one row per pair; bidirectional lookup)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS faction_relations (
+    faction_a_uid   TEXT NOT NULL,
+    faction_b_uid   TEXT NOT NULL,
+    system_relation TEXT NOT NULL,
+    trust           INTEGER NOT NULL DEFAULT 50,
+    PRIMARY KEY (faction_a_uid, faction_b_uid),
+    FOREIGN KEY (faction_a_uid) REFERENCES factions(faction_uid) ON DELETE CASCADE,
+    FOREIGN KEY (faction_b_uid) REFERENCES factions(faction_uid) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- named_locations
+-- ============================================================
+CREATE TABLE IF NOT EXISTS named_locations (
+    location_uid            TEXT PRIMARY KEY,
+    world_id                TEXT NOT NULL,
+    parent_location_uid     TEXT,
+    location_type           TEXT NOT NULL,
+    location_subtype        TEXT,
+    display_name            TEXT NOT NULL,
+    system_terrain          TEXT,
+    system_description      TEXT,
+    display_description     TEXT,
+    glossary_ref            TEXT,
+    tag_refs                TEXT,
+    is_discovered           INTEGER NOT NULL DEFAULT 0,
+    is_accessible           INTEGER NOT NULL DEFAULT 1,
+    interior_width          INTEGER,
+    interior_height         INTEGER,
+    entry_difficulty        INTEGER,
+    guard_level             INTEGER,
+    system_location_mood    TEXT,
+    display_location_mood   TEXT,
+    owner_uid               TEXT,
+    climate_zone            TEXT,
+    created_at              TEXT NOT NULL,
+    FOREIGN KEY (world_id)            REFERENCES worlds(id),
+    FOREIGN KEY (parent_location_uid) REFERENCES named_locations(location_uid),
+    FOREIGN KEY (owner_uid)           REFERENCES character_sheet(character_uid)
+);
+
+-- ============================================================
+-- map_cells
+-- ============================================================
+CREATE TABLE IF NOT EXISTS map_cells (
+    world_id                TEXT NOT NULL,
+    x                       INTEGER NOT NULL,
+    y                       INTEGER NOT NULL,
+    elevation               INTEGER NOT NULL DEFAULT 0,
+    system_terrain          TEXT NOT NULL,
+    travel_modifier_override REAL,
+    danger_level_override   TEXT,
+    gap_width_override      INTEGER,
+    temperature_base        INTEGER,
+    rainfall                INTEGER,
+    location_uid            TEXT,
+    PRIMARY KEY (world_id, x, y),
+    FOREIGN KEY (world_id)    REFERENCES worlds(id),
+    FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid)
+);
+
+-- ============================================================
+-- location_entry_points
+-- ============================================================
+CREATE TABLE IF NOT EXISTS location_entry_points (
+    entry_uid                  TEXT PRIMARY KEY,
+    location_uid               TEXT NOT NULL,
+    x                          INTEGER NOT NULL,
+    y                          INTEGER NOT NULL,
+    leads_to_uid               TEXT,
+    display_name               TEXT NOT NULL,
+    entry_difficulty_override  INTEGER,
+    guard_level_override       INTEGER,
+    is_discovered              INTEGER NOT NULL DEFAULT 0,
+    is_accessible              INTEGER NOT NULL DEFAULT 1,
+    glossary_ref               TEXT,
+    tag_refs                   TEXT,
+    FOREIGN KEY (location_uid)  REFERENCES named_locations(location_uid) ON DELETE CASCADE,
+    FOREIGN KEY (leads_to_uid)  REFERENCES named_locations(location_uid)
+);
+
+-- ============================================================
+-- roads
+-- ============================================================
+CREATE TABLE IF NOT EXISTS roads (
+    road_uid                 TEXT PRIMARY KEY,
+    world_id                 TEXT NOT NULL,
+    display_name             TEXT,
+    road_type                TEXT NOT NULL,
+    travel_modifier_override REAL,
+    from_location            TEXT NOT NULL,
+    to_location              TEXT NOT NULL,
+    is_bidirectional         INTEGER NOT NULL DEFAULT 1,
+    danger_level             TEXT,
+    glossary_ref             TEXT,
+    tag_refs                 TEXT,
+    FOREIGN KEY (world_id)       REFERENCES worlds(id),
+    FOREIGN KEY (from_location)  REFERENCES named_locations(location_uid),
+    FOREIGN KEY (to_location)    REFERENCES named_locations(location_uid)
+);
+
+-- ============================================================
+-- location_connections  (interior logical transitions)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS location_connections (
+    connection_uid   TEXT PRIMARY KEY,
+    world_id         TEXT NOT NULL,
+    from_location    TEXT NOT NULL,
+    to_location      TEXT NOT NULL,
+    is_bidirectional INTEGER NOT NULL DEFAULT 1,
+    connection_type  TEXT NOT NULL,
+    is_locked        INTEGER NOT NULL DEFAULT 0,
+    display_name     TEXT,
+    glossary_ref     TEXT,
+    tag_refs         TEXT,
+    FOREIGN KEY (world_id)      REFERENCES worlds(id),
+    FOREIGN KEY (from_location) REFERENCES named_locations(location_uid),
+    FOREIGN KEY (to_location)   REFERENCES named_locations(location_uid)
+);
+
+-- ============================================================
+-- location_states
+-- ============================================================
+CREATE TABLE IF NOT EXISTS location_states (
+    id                  TEXT PRIMARY KEY,
+    location_uid        TEXT NOT NULL,
+    system_state        TEXT NOT NULL,
+    display_state       TEXT NOT NULL,
+    system_description  TEXT,
+    display_description TEXT,
+    need_modifiers      TEXT,
+    created_at          TEXT NOT NULL,
+    FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- location_objects
+-- ============================================================
+CREATE TABLE IF NOT EXISTS location_objects (
+    object_uid          TEXT PRIMARY KEY,
+    location_uid        TEXT NOT NULL,
+    display_name        TEXT NOT NULL,
+    x                   INTEGER NOT NULL,
+    y                   INTEGER NOT NULL,
+    z                   INTEGER,
+    system_description  TEXT,
+    display_description TEXT,
+    is_interactive      INTEGER NOT NULL DEFAULT 0,
+    item_uid            TEXT,
+    is_accessible       INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid) ON DELETE CASCADE,
+    FOREIGN KEY (item_uid)     REFERENCES items(item_uid)
+);
+
+-- ============================================================
+-- location_weather
+-- ============================================================
+CREATE TABLE IF NOT EXISTS location_weather (
+    location_uid    TEXT PRIMARY KEY,
+    system_weather  TEXT NOT NULL,
+    intensity       INTEGER NOT NULL DEFAULT 50,
+    remaining_ticks INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- location_resources
+-- ============================================================
+CREATE TABLE IF NOT EXISTS location_resources (
+    id             TEXT PRIMARY KEY,
+    location_uid   TEXT NOT NULL,
+    system_resource TEXT NOT NULL,
+    quantity       INTEGER NOT NULL DEFAULT 0,
+    max_quantity   INTEGER NOT NULL,
+    regen_override INTEGER,
+    is_discovered  INTEGER NOT NULL DEFAULT 0,
+    is_accessible  INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- location_faction_influence
+-- ============================================================
+CREATE TABLE IF NOT EXISTS location_faction_influence (
+    id           TEXT PRIMARY KEY,
+    location_uid TEXT NOT NULL,
+    faction_uid  TEXT NOT NULL,
+    influence    INTEGER NOT NULL,
+    created_at   TEXT NOT NULL,
+    FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid) ON DELETE CASCADE,
+    FOREIGN KEY (faction_uid)  REFERENCES factions(faction_uid) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- location_faction_access
+-- ============================================================
+CREATE TABLE IF NOT EXISTS location_faction_access (
+    location_uid TEXT NOT NULL,
+    faction_uid  TEXT NOT NULL,
+    is_allowed   INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (location_uid, faction_uid),
+    FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid) ON DELETE CASCADE,
+    FOREIGN KEY (faction_uid)  REFERENCES factions(faction_uid) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- world_history
+-- ============================================================
+CREATE TABLE IF NOT EXISTS world_history (
+    id                   TEXT PRIMARY KEY,
+    world_id             TEXT NOT NULL,
+    location_uid         TEXT,
+    system_world_date    TEXT,
+    display_world_date   TEXT,
+    system_event_type    TEXT NOT NULL,
+    display_event_type   TEXT NOT NULL,
+    system_description   TEXT NOT NULL,
+    display_description  TEXT,
+    created_at           TEXT NOT NULL,
+    FOREIGN KEY (world_id)    REFERENCES worlds(id),
+    FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid)
+);
+
+-- ============================================================
+-- social_status
+-- ============================================================
+CREATE TABLE IF NOT EXISTS social_status (
+    system_social_status  TEXT PRIMARY KEY,
+    display_social_status TEXT NOT NULL,
+    social_status_weight  INTEGER NOT NULL DEFAULT 0
+);
+
+-- ============================================================
+-- age_type
+-- ============================================================
+CREATE TABLE IF NOT EXISTS age_type (
+    system_age_type  TEXT PRIMARY KEY,
+    display_age_type TEXT NOT NULL
+);
+
+-- ============================================================
+-- appearance lookup tables
+-- ============================================================
+CREATE TABLE IF NOT EXISTS hair_type (
+    system_hair_type  TEXT PRIMARY KEY,
+    display_hair_type TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS hair_shape (
+    system_hair_shape       TEXT PRIMARY KEY,
+    display_hair_shape      TEXT NOT NULL,
+    system_hair_shape_is_auto INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS skin_type (
+    system_skin_type  TEXT PRIMARY KEY,
+    display_skin_type TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS brows_type (
+    system_brows_type  TEXT PRIMARY KEY,
+    display_brows_type TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS brows_shape (
+    system_brows_shape  TEXT PRIMARY KEY,
+    display_brows_shape TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS beard_type (
+    system_beard_type  TEXT PRIMARY KEY,
+    display_beard_type TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS beard_shape (
+    system_beard_shape        TEXT PRIMARY KEY,
+    display_beard_shape       TEXT NOT NULL,
+    system_beard_shape_is_auto INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS eye_type (
+    system_eye_type        TEXT PRIMARY KEY,
+    display_eye_type       TEXT NOT NULL,
+    system_eye_type_weight INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS eye_placement (
+    system_eye_placement  TEXT PRIMARY KEY,
+    display_eye_placement TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS eye_iris_type (
+    system_eye_iris_type  TEXT PRIMARY KEY,
+    display_eye_iris_type TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS eye_lid_type (
+    system_eye_lid_type  TEXT PRIMARY KEY,
+    display_eye_lid_type TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS eye_pupil_type (
+    system_eye_pupil_type  TEXT PRIMARY KEY,
+    display_eye_pupil_type TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS eye_roundness (
+    system_eye_roundness        TEXT PRIMARY KEY,
+    display_eye_roundness       TEXT NOT NULL,
+    system_eye_roundness_weight INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS mouth_type (
+    system_mouth_type  TEXT PRIMARY KEY,
+    display_mouth_type TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS lip_shape (
+    system_lip_shape  TEXT PRIMARY KEY,
+    display_lip_shape TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS teeth_type (
+    system_teeth_type  TEXT PRIMARY KEY,
+    display_teeth_type TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS jaw_shape (
+    system_jaw_shape  TEXT PRIMARY KEY,
+    display_jaw_shape TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS nose_type (
+    system_nose_type  TEXT PRIMARY KEY,
+    display_nose_type TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS nose_shape (
+    system_nose_shape  TEXT PRIMARY KEY,
+    display_nose_shape TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ear_type (
+    system_ear_type  TEXT PRIMARY KEY,
+    display_ear_type TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ear_shape (
+    system_ear_shape  TEXT PRIMARY KEY,
+    display_ear_shape TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS breast_type (
+    system_breast_type  TEXT PRIMARY KEY,
+    display_breast_type TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS breast_shape (
+    system_breast_shape  TEXT PRIMARY KEY,
+    display_breast_shape TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS genitals_type (
+    system_genitals_type  TEXT PRIMARY KEY,
+    display_genitals_type TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS voice_pitch (
+    system_voice_pitch  TEXT PRIMARY KEY,
+    display_voice_pitch TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS voice_timbre (
+    system_voice_timbre  TEXT PRIMARY KEY,
+    display_voice_timbre TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS body_hair_density (
+    system_body_hair_density TEXT PRIMARY KEY,
+    display_body_hair_density TEXT NOT NULL,
+    system_body_hair_weight   INTEGER NOT NULL DEFAULT 0
 );
 
 -- ============================================================
@@ -442,3 +915,26 @@ CREATE INDEX IF NOT EXISTS idx_registry_deps_entity     ON registry_dependencies
 
 CREATE INDEX IF NOT EXISTS idx_snapshots_timeline       ON world_snapshots (timeline_id);
 CREATE INDEX IF NOT EXISTS idx_snapshots_parent         ON world_snapshots (parent_snapshot_id);
+
+CREATE INDEX IF NOT EXISTS idx_races_world              ON races (world_id);
+
+CREATE INDEX IF NOT EXISTS idx_world_perks_world         ON world_perks (world_id);
+
+CREATE INDEX IF NOT EXISTS idx_factions_world           ON factions (world_id);
+
+CREATE INDEX IF NOT EXISTS idx_named_locations_world    ON named_locations (world_id);
+CREATE INDEX IF NOT EXISTS idx_named_locations_parent   ON named_locations (parent_location_uid);
+CREATE INDEX IF NOT EXISTS idx_named_locations_type     ON named_locations (world_id, location_type);
+
+CREATE INDEX IF NOT EXISTS idx_map_cells_location       ON map_cells (location_uid);
+
+CREATE INDEX IF NOT EXISTS idx_roads_world              ON roads (world_id);
+CREATE INDEX IF NOT EXISTS idx_roads_from               ON roads (from_location);
+CREATE INDEX IF NOT EXISTS idx_roads_to                 ON roads (to_location);
+
+CREATE INDEX IF NOT EXISTS idx_location_states_loc      ON location_states (location_uid);
+CREATE INDEX IF NOT EXISTS idx_location_resources_loc   ON location_resources (location_uid);
+CREATE INDEX IF NOT EXISTS idx_location_faction_inf_loc ON location_faction_influence (location_uid);
+
+CREATE INDEX IF NOT EXISTS idx_world_history_world      ON world_history (world_id);
+CREATE INDEX IF NOT EXISTS idx_world_history_location   ON world_history (location_uid);

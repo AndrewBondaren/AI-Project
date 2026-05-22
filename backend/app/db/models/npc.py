@@ -11,7 +11,7 @@ class Npc:
     __update_exclude__ = frozenset({"world_id"})
 
     character_uid:              str
-    display_name:               str
+    display_name:               str 
     world_id:                   str
     created_at:                 str
 

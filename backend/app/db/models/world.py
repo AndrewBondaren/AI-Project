@@ -23,6 +23,7 @@ class World:
     resist_schema:              dict = json_col(default_factory=dict)
     derived_formulas:           dict = json_col(default_factory=dict)
     action_formulas:            dict = json_col(default_factory=dict)
+    action_registry:            list = json_col(default_factory=list)
 
     # inventory
     slots:                      dict = json_col(default_factory=dict)
@@ -60,6 +61,23 @@ class World:
     npc_goal_type_registry:     dict = json_col(default_factory=dict)
     character_trait_registry:   dict = json_col(default_factory=dict)
     respawn_type_registry:      dict = json_col(default_factory=dict)
+
+    # location registries
+    terrain_category_registry:      dict = json_col(default_factory=dict)
+    terrain_registry:               dict = json_col(default_factory=dict)
+    road_type_registry:             dict = json_col(default_factory=dict)
+    location_type_registry:         dict = json_col(default_factory=dict)
+    climate_zone_registry:          dict = json_col(default_factory=dict)
+    resource_type_registry:         dict = json_col(default_factory=dict)
+    weather_type_registry:          dict = json_col(default_factory=dict)
+    connection_type_registry:       dict = json_col(default_factory=dict)
+
+    # faction registries
+    faction_relation_type_registry: dict = json_col(default_factory=dict)
+
+    # world map settings
+    season_temp_offsets:            dict = json_col(default_factory=dict)
+    default_climate_zone:           str | None = None
 
     # custom field declarations
     player_fields:              dict = json_col(default_factory=dict)
