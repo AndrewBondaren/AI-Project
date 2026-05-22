@@ -23,7 +23,7 @@ class DSLResolver:
     def resolve_patches(self, node, validation: ValidationResult) -> list[str]:
         """
         Возвращает список dsl_patch ключей для всех ошибок validation.
-        Одна ошибка → один патч (если объявлен на ноде).
+        Одна ошибка -> один патч (если объявлен на ноде).
         """
         patches = []
         for error in validation.errors:

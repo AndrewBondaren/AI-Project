@@ -9,7 +9,7 @@ class LLMPayload:
     language: str
     global_dsl: str
     response_format_schema: dict
-    sections: dict[str, NodeSection]  # node_id → NodeSection
+    sections: dict[str, NodeSection]  # node_id -> NodeSection
 
     def to_dict(self) -> dict:
         payload = {

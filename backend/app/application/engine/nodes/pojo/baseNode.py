@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Optional, Type
+from typing import Any, ClassVar, Optional, Type
 
 from app.application.engine.taskType import TaskType
 from app.application.engine.nodes.pojo.nodeCost import NodeCost
@@ -22,5 +22,6 @@ class BaseNode:
     cost: NodeCost = field(default_factory=NodeCost)
 #    repair_policy: RepairPolicy | None = None
 
+    context_fields: ClassVar[list[str]] = []
 
 #    tags: list[str] = field(default_factory=list)

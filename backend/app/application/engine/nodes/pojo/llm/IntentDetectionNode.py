@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 from app.application.contracts.contracts import IntentDetectionContract
 from app.application.engine.nodes.nodeRegistry import register_llm
@@ -13,6 +14,7 @@ from app.application.engine.validation.validators.IntentDetectionValidator impor
 class IntentDetectionNode(LLMNode):
     id: str = "intent_detection"
     name: str = "Intent Detection"
+    context_fields: ClassVar[list[str]] = []
 
     validator: type = IntentDetectionValidator
     contract_json: type = IntentDetectionContract

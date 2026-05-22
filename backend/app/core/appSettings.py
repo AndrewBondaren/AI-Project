@@ -34,6 +34,12 @@ class AppSettings:
     # --- Prompt role ---
     system_role_providers:      frozenset  = field(default_factory=frozenset)
 
+    # --- Database ---
+    db_path:                    str        = field(default_factory=lambda: DefaultConfig.DB_PATH)
+
+    # --- Logger overrides ---
+    logger_levels:              dict       = field(default_factory=lambda: dict(DefaultConfig.LOGGER_LEVELS))
+
     # --- Logging ---
     log_level:                  LogLevel   = LogLevel.DEBUG
 

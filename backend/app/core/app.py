@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config_manager import ConfigManager
@@ -5,6 +7,26 @@ from app.core.container import Container
 from app.core.logging_config import setup_logging
 from app.core.log_middleware import RequestLoggingMiddleware
 from app.core.logLevel import to_logging_level
+from app.db.database import Database
+
+
+def make_lifespan(db: Database):
+    from app.db.models.gameSession import GameSession
+    from app.db.models.message import Message
+    from app.db.models.npc import Npc
+    from app.db.models.player import Player
+    from app.db.models.world import World
+
+    _models = [World, GameSession, Player, Npc, Message]
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        await db.connect()
+        await db.apply_migrations()
+        await db.validate_schema(_models)
+        yield
+        await db.disconnect()
+    return lifespan
 
 
 def create_app():
@@ -15,10 +37,15 @@ def create_app():
     if loaded:
         app_settings.update(**loaded)
 
-    setup_logging(level=to_logging_level(app_settings.log_level))
+    setup_logging(
+        level=to_logging_level(app_settings.log_level),
+        logger_levels=app_settings.logger_levels,
+    )
 
-    app = FastAPI()
-    container = Container(config_manager=config_manager)
+    db = Database(path=app_settings.db_path)
+
+    app = FastAPI(lifespan=make_lifespan(db))
+    container = Container(config_manager=config_manager, db=db)
     app.state.container = container
 
     app.add_middleware(RequestLoggingMiddleware)

@@ -23,7 +23,7 @@ class ExecutionPlan:
                             каждая группа — один агрегированный вызов
       3. post_llm_levels  — Python-ноды после LLM (asyncio.gather по уровням)
 
-    nodes — плоский словарь node_id → CompiledNode для быстрого доступа.
+    nodes — плоский словарь node_id -> CompiledNode для быстрого доступа.
     """
     pre_llm_levels:  list[list[str]]     # уровни Kahn внутри pre_llm фазы
     llm_groups:      list[LLMGroup]      # группы по temperature, ASC

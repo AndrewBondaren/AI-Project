@@ -26,7 +26,26 @@ class ConfigManager:
             self._write_defaults()
         with open(self.path, encoding="utf-8") as f:
             data = tomlkit.load(f)
-        return self._to_flat(data)
+        flat = self._to_flat(data)
+        self._migrate(flat)
+        return flat
+
+    def _migrate(self, flat: dict) -> None:
+        defaults = self._default_flat()
+        added = {k: v for k, v in defaults.items() if k not in flat}
+        if added:
+            flat.update(added)
+            self._save_flat(flat)
+
+    def _default_flat(self) -> dict:
+        from app.core.appSettings import AppSettings
+        return self._to_flat(self._to_nested(AppSettings()))
+
+    def _save_flat(self, flat: dict) -> None:
+        from app.core.appSettings import AppSettings
+        s = AppSettings()
+        s.update(**flat)
+        self.save(s)
 
     def save(self, settings) -> None:
         doc = self._to_nested(settings)
@@ -71,6 +90,12 @@ class ConfigManager:
         _copy(result, infra,    "streaming", "llm_streaming")
         _copy(result, logging_, "level",     "log_level")
 
+        database = data.get("database", {})
+        _copy(result, database, "path", "db_path")
+
+        if "logger_levels" in data:
+            result["logger_levels"] = dict(data["logger_levels"])
+
         return result
 
     def _to_nested(self, s) -> dict:
@@ -104,6 +129,10 @@ class ConfigManager:
             "logging": {
                 "level": str(s.log_level),
             },
+            "database": {
+                "path": s.db_path,
+            },
+            "logger_levels": dict(s.logger_levels),
         }
 
 

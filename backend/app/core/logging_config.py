@@ -34,7 +34,11 @@ class _JsonFormatter(logging.Formatter):
         return json.dumps(obj, ensure_ascii=False)
 
 
-def setup_logging(log_file: str = "logs/app.log", level: int = logging.INFO) -> None:
+def setup_logging(
+    log_file: str = "logs/app.log",
+    level: int = logging.INFO,
+    logger_levels: dict[str, str] | None = None,
+) -> None:
     Path(log_file).parent.mkdir(parents=True, exist_ok=True)
 
     formatter = _JsonFormatter()
@@ -55,3 +59,6 @@ def setup_logging(log_file: str = "logs/app.log", level: int = logging.INFO) -> 
     root.handlers.clear()
     root.addHandler(console)
     root.addHandler(rotating)
+
+    for name, lvl in (logger_levels or {}).items():
+        logging.getLogger(name).setLevel(lvl)

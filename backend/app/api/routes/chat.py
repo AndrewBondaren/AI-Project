@@ -48,9 +48,32 @@ class ChatResponse(BaseModel):
 def get_chat_service(container = Depends(get_container)):
     return container.chat_service()
 
+def get_message_repository(container = Depends(get_container)):
+    return container.message_repository()
+
+
 @router.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@router.get("/chat/history")
+async def get_history(
+    session_id: str,
+    repo = Depends(get_message_repository),
+    limit: int | None = None,
+):
+    messages = await repo.get_by_session(session_id, limit=limit)
+    return [
+        {
+            "message_id":  m.message_id,
+            "player_input": m.player_input,
+            "llm_output":   m.llm_output,
+            "game_tick":    m.game_tick,
+            "created_at":   m.created_at,
+        }
+        for m in messages
+    ]
 
 
 @router.get("/chat/settings")

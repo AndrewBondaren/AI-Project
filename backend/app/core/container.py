@@ -4,6 +4,17 @@ from app.application.llm.clients.openAIClient import OpenAIClient
 from app.application.llm.clients.anthropicClient import AnthropicClient
 from app.application.llm.router import LLMRouter
 from app.application.chat.chatService import ChatService
+from app.db.database import Database
+from app.db.repositories.iWorldRepository import IWorldRepository
+from app.db.repositories.sqlite.worldRepository import SqliteWorldRepository
+from app.db.repositories.iSessionRepository import ISessionRepository
+from app.db.repositories.sqlite.sessionRepository import SqliteSessionRepository
+from app.db.repositories.iMessageRepository import IMessageRepository
+from app.db.repositories.sqlite.messageRepository import SqliteMessageRepository
+from app.db.repositories.iPlayerRepository import IPlayerRepository
+from app.db.repositories.sqlite.playerRepository import SqlitePlayerRepository
+from app.db.repositories.iNpcRepository import INpcRepository
+from app.db.repositories.sqlite.npcRepository import SqliteNpcRepository
 
 from app.application.engine.dag.dagExecutor import DAGExecutor
 from app.application.engine.llmExecutionEngine import LLMExecutionEngine
@@ -35,8 +46,16 @@ from app.core.appSettings import app_settings
 
 class Container:
 
-    def __init__(self, config_manager):
+    def __init__(self, config_manager, db: Database):
         self._config_manager = config_manager
+        self._db = db
+
+        # REPOSITORIES
+        self._world_repository: IWorldRepository | None = None
+        self._session_repository: ISessionRepository | None = None
+        self._player_repository: IPlayerRepository | None = None
+        self._npc_repository: INpcRepository | None = None
+        self._message_repository: IMessageRepository | None = None
 
         # CLIENTS
         self._qwen_client = None
@@ -298,3 +317,32 @@ class Container:
                 container=self,
             )
         return self._settings_service
+
+    # =====================================================
+    # REPOSITORIES
+    # =====================================================
+
+    def world_repository(self) -> IWorldRepository:
+        if self._world_repository is None:
+            self._world_repository = SqliteWorldRepository(db=self._db)
+        return self._world_repository
+
+    def session_repository(self) -> ISessionRepository:
+        if self._session_repository is None:
+            self._session_repository = SqliteSessionRepository(db=self._db)
+        return self._session_repository
+
+    def message_repository(self) -> IMessageRepository:
+        if self._message_repository is None:
+            self._message_repository = SqliteMessageRepository(db=self._db)
+        return self._message_repository
+
+    def player_repository(self) -> IPlayerRepository:
+        if self._player_repository is None:
+            self._player_repository = SqlitePlayerRepository(db=self._db)
+        return self._player_repository
+
+    def npc_repository(self) -> INpcRepository:
+        if self._npc_repository is None:
+            self._npc_repository = SqliteNpcRepository(db=self._db)
+        return self._npc_repository

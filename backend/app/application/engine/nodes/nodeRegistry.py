@@ -80,6 +80,7 @@ class NodeRegistry:
             node_cls=node_cls,
             kind=kind,
             executor_cls=executor_cls,
+            context_fields=list(getattr(node, "context_fields", [])),
         )
 
         return node_cls
@@ -91,6 +92,14 @@ class NodeRegistry:
 
     def all(self) -> dict[str, NodeRegistration]:
         return self._nodes
+
+    def context_fields_union(self, node_ids: list[str]) -> set[str]:
+        result: set[str] = set()
+        for node_id in node_ids:
+            reg = self._nodes.get(node_id)
+            if reg:
+                result.update(reg.context_fields)
+        return result
 
 
 NODE_REGISTRY = NodeRegistry()

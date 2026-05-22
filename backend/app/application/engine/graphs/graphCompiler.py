@@ -90,7 +90,7 @@ class GraphCompiler:
         """
         Группирует LLM-ноды по temperature, строит уровни внутри каждой группы,
         возвращает группы отсортированные по temperature ASC
-        (низкая temperature → первой: анализ до генерации).
+        (низкая temperature -> первой: анализ до генерации).
         """
         # собираем ноды по температуре
         buckets: dict[float, list[CompiledNode]] = defaultdict(list)

@@ -1,4 +1,8 @@
 import os
+from pathlib import Path
+
+_BACKEND_DIR = Path(__file__).parent.parent.parent
+_PROJECT_DIR = _BACKEND_DIR.parent
 
 
 class DefaultConfig:
@@ -12,3 +16,8 @@ class DefaultConfig:
     ANTHROPIC_API_KEY  = os.getenv("ANTHROPIC_API_KEY",  "sk-local")
 
     LLM_STREAMING: bool = os.getenv("LLM_STREAMING", "true").lower() != "false"
+
+    DB_PATH: str = os.getenv("DB_PATH", str(_PROJECT_DIR / "db" / "game.db"))
+
+    # Уровни логирования для шумных сторонних логгеров
+    LOGGER_LEVELS: dict = {"aiosqlite": "WARNING"}
