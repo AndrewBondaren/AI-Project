@@ -1,0 +1,153 @@
+{
+  "social_status": [
+    { "system_social_status": "noble",    "display_social_status": "Дворянин",  "social_status_weight": 80 },
+    { "system_social_status": "merchant", "display_social_status": "Торговец",  "social_status_weight": 50 },
+    { "system_social_status": "commoner", "display_social_status": "Простолюдин","social_status_weight": 20 },
+    { "system_social_status": "outcast",  "display_social_status": "Изгой",     "social_status_weight": 5  }
+  ],
+  "age_type": [
+    { "system_age_type": "child",  "display_age_type": "Ребёнок"   },
+    { "system_age_type": "young",  "display_age_type": "Молодой"   },
+    { "system_age_type": "adult",  "display_age_type": "Взрослый"  },
+    { "system_age_type": "middle", "display_age_type": "Средних лет"},
+    { "system_age_type": "elder",  "display_age_type": "Пожилой"   }
+  ],
+  "hair_type": [
+    { "system_hair_type": "short",  "display_hair_type": "Короткие" },
+    { "system_hair_type": "medium", "display_hair_type": "Средние"  },
+    { "system_hair_type": "long",   "display_hair_type": "Длинные"  },
+    { "system_hair_type": "bald",   "display_hair_type": "Лысый"    }
+  ],
+  "hair_shape": [
+    { "system_hair_shape": "straight", "display_hair_shape": "Прямые"    },
+    { "system_hair_shape": "wavy",     "display_hair_shape": "Волнистые" },
+    { "system_hair_shape": "curly",    "display_hair_shape": "Кудрявые"  }
+  ],
+  "skin_type": [
+    { "system_skin_type": "fair",  "display_skin_type": "Светлая" },
+    { "system_skin_type": "tan",   "display_skin_type": "Смуглая" },
+    { "system_skin_type": "dark",  "display_skin_type": "Тёмная"  }
+  ],
+  "brows_type": [
+    { "system_brows_type": "thin",   "display_brows_type": "Тонкие"   },
+    { "system_brows_type": "medium", "display_brows_type": "Средние"  },
+    { "system_brows_type": "thick",  "display_brows_type": "Густые"   }
+  ],
+  "brows_shape": [
+    { "system_brows_shape": "straight", "display_brows_shape": "Прямые"    },
+    { "system_brows_shape": "arched",   "display_brows_shape": "Дугообразные"},
+    { "system_brows_shape": "bushy",    "display_brows_shape": "Кустистые" }
+  ],
+  "beard_type": [
+    { "system_beard_type": "clean",   "display_beard_type": "Гладко выбрит" },
+    { "system_beard_type": "stubble", "display_beard_type": "Щетина"         },
+    { "system_beard_type": "full",    "display_beard_type": "Полная борода"  }
+  ],
+  "beard_shape": [
+    { "system_beard_shape": "round",   "display_beard_shape": "Округлая"  },
+    { "system_beard_shape": "pointed", "display_beard_shape": "Острая"    },
+    { "system_beard_shape": "braided", "display_beard_shape": "Заплетённая"}
+  ],
+  "eye_type": [
+    { "system_eye_type": "round",  "display_eye_type": "Круглые"     },
+    { "system_eye_type": "almond", "display_eye_type": "Миндалевидные"},
+    { "system_eye_type": "hooded", "display_eye_type": "Нависшие"    }
+  ],
+  "eye_placement": [
+    { "system_eye_placement": "close",  "display_eye_placement": "Близко посажены" },
+    { "system_eye_placement": "normal", "display_eye_placement": "Нормально"       },
+    { "system_eye_placement": "wide",   "display_eye_placement": "Широко посажены" }
+  ],
+  "eye_iris_type": [
+    { "system_eye_iris_type": "solid",         "display_eye_iris_type": "Однотонная"    },
+    { "system_eye_iris_type": "gradient",      "display_eye_iris_type": "Градиентная"   },
+    { "system_eye_iris_type": "heterochromia", "display_eye_iris_type": "Гетерохромия"  }
+  ],
+  "eye_lid_type": [
+    { "system_eye_lid_type": "single", "display_eye_lid_type": "Одинарное веко" },
+    { "system_eye_lid_type": "double", "display_eye_lid_type": "Двойное веко"   },
+    { "system_eye_lid_type": "hooded", "display_eye_lid_type": "Нависшее веко"  }
+  ],
+  "eye_pupil_type": [
+    { "system_eye_pupil_type": "round",   "display_eye_pupil_type": "Круглый"     },
+    { "system_eye_pupil_type": "slit",    "display_eye_pupil_type": "Щелевидный"  },
+    { "system_eye_pupil_type": "dilated", "display_eye_pupil_type": "Расширенный" }
+  ],
+  "eye_roundness": [
+    { "system_eye_roundness": "small",  "display_eye_roundness": "Маленькие" },
+    { "system_eye_roundness": "medium", "display_eye_roundness": "Средние"   },
+    { "system_eye_roundness": "large",  "display_eye_roundness": "Большие"   }
+  ],
+  "mouth_type": [
+    { "system_mouth_type": "thin",   "display_mouth_type": "Тонкие губы"  },
+    { "system_mouth_type": "medium", "display_mouth_type": "Средние губы" },
+    { "system_mouth_type": "full",   "display_mouth_type": "Пухлые губы"  }
+  ],
+  "lip_shape": [
+    { "system_lip_shape": "straight", "display_lip_shape": "Прямые"      },
+    { "system_lip_shape": "curved",   "display_lip_shape": "Изогнутые"   },
+    { "system_lip_shape": "bow",      "display_lip_shape": "Лук купидона" }
+  ],
+  "teeth_type": [
+    { "system_teeth_type": "normal", "display_teeth_type": "Нормальные" },
+    { "system_teeth_type": "sharp",  "display_teeth_type": "Острые"     },
+    { "system_teeth_type": "gap",    "display_teeth_type": "С щербиной" }
+  ],
+  "jaw_shape": [
+    { "system_jaw_shape": "square",  "display_jaw_shape": "Квадратная"    },
+    { "system_jaw_shape": "round",   "display_jaw_shape": "Округлая"      },
+    { "system_jaw_shape": "pointed", "display_jaw_shape": "Заострённая"   }
+  ],
+  "nose_type": [
+    { "system_nose_type": "button", "display_nose_type": "Курносый"   },
+    { "system_nose_type": "roman",  "display_nose_type": "Римский"    },
+    { "system_nose_type": "snub",   "display_nose_type": "Вздёрнутый" }
+  ],
+  "nose_shape": [
+    { "system_nose_shape": "straight", "display_nose_shape": "Прямой"    },
+    { "system_nose_shape": "curved",   "display_nose_shape": "Изогнутый" },
+    { "system_nose_shape": "wide",     "display_nose_shape": "Широкий"   }
+  ],
+  "ear_type": [
+    { "system_ear_type": "round",   "display_ear_type": "Округлые"    },
+    { "system_ear_type": "pointed", "display_ear_type": "Заострённые" },
+    { "system_ear_type": "large",   "display_ear_type": "Большие"     }
+  ],
+  "ear_shape": [
+    { "system_ear_shape": "attached",   "display_ear_shape": "Приросшая мочка"   },
+    { "system_ear_shape": "detached",   "display_ear_shape": "Свободная мочка"   },
+    { "system_ear_shape": "prominent",  "display_ear_shape": "Оттопыренные"      }
+  ],
+  "breast_type": [
+    { "system_breast_type": "flat",   "display_breast_type": "Плоская"  },
+    { "system_breast_type": "small",  "display_breast_type": "Маленькая"},
+    { "system_breast_type": "medium", "display_breast_type": "Средняя"  },
+    { "system_breast_type": "large",  "display_breast_type": "Большая"  }
+  ],
+  "breast_shape": [
+    { "system_breast_shape": "round",    "display_breast_shape": "Округлая"   },
+    { "system_breast_shape": "teardrop", "display_breast_shape": "Каплевидная"},
+    { "system_breast_shape": "wide",     "display_breast_shape": "Широкая"    }
+  ],
+  "genitals_type": [
+    { "system_genitals_type": "male",    "display_genitals_type": "Мужской"    },
+    { "system_genitals_type": "female",  "display_genitals_type": "Женский"    },
+    { "system_genitals_type": "neutral", "display_genitals_type": "Нейтральный"}
+  ],
+  "voice_pitch": [
+    { "system_voice_pitch": "high",   "display_voice_pitch": "Высокий"  },
+    { "system_voice_pitch": "medium", "display_voice_pitch": "Средний"  },
+    { "system_voice_pitch": "low",    "display_voice_pitch": "Низкий"   }
+  ],
+  "voice_timbre": [
+    { "system_voice_timbre": "soft",    "display_voice_timbre": "Мягкий"    },
+    { "system_voice_timbre": "neutral", "display_voice_timbre": "Нейтральный"},
+    { "system_voice_timbre": "rough",   "display_voice_timbre": "Грубый"    }
+  ],
+  "body_hair_density": [
+    { "system_body_hair_density": "none",   "display_body_hair_density": "Нет"          },
+    { "system_body_hair_density": "light",  "display_body_hair_density": "Лёгкий"       },
+    { "system_body_hair_density": "medium", "display_body_hair_density": "Средний"      },
+    { "system_body_hair_density": "heavy",  "display_body_hair_density": "Густой"       }
+  ]
+}

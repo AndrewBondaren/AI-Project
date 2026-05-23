@@ -1,0 +1,106 @@
+{
+  "world": {
+    "world_uid": "world-test-001",
+    "name": "Эйдора",
+    "created_at": "2026-05-23T00:00:00",
+    "narrative_language": "ru",
+    "measurement_system": "metric",
+    "stat_schema": {
+      "strength":     { "display": "Сила",       "min": 1, "max": 20 },
+      "agility":      { "display": "Ловкость",   "min": 1, "max": 20 },
+      "endurance":    { "display": "Выносливость","min": 1, "max": 20 },
+      "intelligence": { "display": "Интеллект",  "min": 1, "max": 20 },
+      "perception":   { "display": "Восприятие", "min": 1, "max": 20 },
+      "charisma":     { "display": "Харизма",    "min": 1, "max": 20 }
+    },
+    "hp_enabled": true,
+    "faint_threshold": 0.05,
+    "wounds_enabled": false
+  },
+  "races": [
+    {
+      "race_uid": "race-human",
+      "world_uid": "world-test-001",
+      "display_race": "Человек",
+      "created_at": "2026-05-23T00:00:00",
+      "race_traits": { "adaptive": true, "lifespan_years": 80 }
+    },
+    {
+      "race_uid": "race-elf",
+      "world_uid": "world-test-001",
+      "display_race": "Эльф",
+      "created_at": "2026-05-23T00:00:00",
+      "race_traits": { "night_vision": true, "lifespan_years": 500 }
+    },
+    {
+      "race_uid": "race-dwarf",
+      "world_uid": "world-test-001",
+      "display_race": "Дворф",
+      "created_at": "2026-05-23T00:00:00",
+      "race_traits": { "stone_sense": true, "lifespan_years": 200 }
+    }
+  ],
+  "perks": [
+    {
+      "perk_uid": "perk-iron-will",
+      "world_uid": "world-test-001",
+      "system_name": "iron_will",
+      "display_name": "Железная воля",
+      "system_description": "Resistance to fear and mind effects",
+      "display_description": "Устойчивость к страху и ментальным эффектам"
+    },
+    {
+      "perk_uid": "perk-tracker",
+      "world_uid": "world-test-001",
+      "system_name": "tracker",
+      "display_name": "Следопыт",
+      "system_description": "Enhanced tracking and navigation in wilderness",
+      "display_description": "Улучшенное отслеживание и навигация в дикой местности"
+    }
+  ],
+  "locations": [
+    {
+      "location_uid": "loc-continent-eidor",
+      "world_uid": "world-test-001",
+      "display_name": "Континент Эйдор",
+      "location_type": "continent",
+      "created_at": "2026-05-23T00:00:00",
+      "system_description": "main_continent",
+      "display_description": "Главный континент мира Эйдора"
+    },
+    {
+      "location_uid": "loc-region-northern",
+      "world_uid": "world-test-001",
+      "display_name": "Северные земли",
+      "location_type": "region",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-continent-eidor",
+      "system_terrain": "tundra",
+      "display_description": "Суровые северные территории"
+    },
+    {
+      "location_uid": "loc-city-ironhold",
+      "world_uid": "world-test-001",
+      "display_name": "Айронхолд",
+      "location_type": "city",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-region-northern",
+      "system_terrain": "plains",
+      "display_description": "Укреплённый торговый город на севере",
+      "is_discovered": true,
+      "is_accessible": true,
+      "guard_level": 3
+    },
+    {
+      "location_uid": "loc-tavern-broken-axe",
+      "world_uid": "world-test-001",
+      "display_name": "Таверна «Сломанный топор»",
+      "location_type": "building",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-city-ironhold",
+      "display_description": "Шумная таверна в центре Айронхолда",
+      "is_discovered": true,
+      "is_accessible": true
+    }
+  ]
+}

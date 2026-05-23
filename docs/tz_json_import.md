@@ -370,3 +370,49 @@ def seed_service(self) -> SeedService: ...
 6. Container — регистрация новых репо + сервисов
 7. Роуты: worlds.py, races.py, perks.py, locations.py, seed.py
 8. Регистрация роутеров в главном app
+
+---
+
+## Системные таблицы
+
+### Расы и гендер
+
+Раса использует паттерн prototype inheritance: `race_traits` — базовый уровень,
+гендерные поля (`male`, `female`, `asexual`, `both`) — override/расширение базы.
+
+```
+race_traits   ← декларирует общие правила расы
+├── male       ← переопределяет и дополняет race_traits
+├── female     ← переопределяет и дополняет race_traits
+├── asexual    ← переопределяет и дополняет race_traits
+└── both       ← переопределяет и дополняет race_traits
+```
+
+**Правила мержа** (применяется при инициализации персонажа):
+- Берётся `race_traits` как основа
+- Поверх накладывается `race[gender]` — гендерные значения побеждают при конфликте
+- Списки: стратегия определяется при реализации character service (replace или extend)
+
+**Пример:**
+```json
+{
+  "race_uid": "race-human",
+  "display_race": "Человек",
+  "race_traits": {
+    "lifespan_years": 80,
+    "strength_bonus": 0,
+    "height_range": [160, 190]
+  },
+  "male": {
+    "strength_bonus": 2,
+    "height_range": [170, 200]
+  },
+  "female": {
+    "height_range": [155, 180]
+  }
+}
+```
+
+Итог для мужчины-человека: `lifespan_years: 80, strength_bonus: 2, height_range: [170, 200]`
+
+Все гендерные поля опциональны (`None` по умолчанию). Если гендерный блок отсутствует — используется только `race_traits`.
