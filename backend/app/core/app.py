@@ -67,6 +67,8 @@ def create_app():
     from app.api.routes.perks import router as perks_router
     from app.api.routes.locations import router as locations_router
     from app.api.routes.seed import router as seed_router
+    from app.api.routes.characters import router as characters_router
+    from app.api.routes.sessions import router as sessions_router
 
     app.include_router(chat_router, prefix="/api")
     app.include_router(settings_router, prefix="/api")
@@ -75,6 +77,8 @@ def create_app():
     app.include_router(perks_router, prefix="/api")
     app.include_router(locations_router, prefix="/api")
     app.include_router(seed_router, prefix="/api")
+    app.include_router(characters_router, prefix="/api")
+    app.include_router(sessions_router, prefix="/api")
 
     return app
 

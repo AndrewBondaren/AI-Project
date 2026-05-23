@@ -1,0 +1,27 @@
+{
+  "world_uid": "world-test-001",
+  "display_name": "Арден Стоунхарт",
+  "system_race": "race-human",
+  "display_race": "Человек",
+  "system_gender": "male",
+  "display_gender": "Мужчина",
+  "system_class": "warrior",
+  "display_class": "Воин",
+  "system_social_status": "commoner",
+  "display_social_status": "Простолюдин",
+  "system_age_type": "adult",
+  "display_age_type": "Взрослый",
+  "system_description": "Молодой воин из приграничного города Стоунмир. Бывший стражник, покинувший службу после разрушения родного города.",
+  "system_background": "Вырос в семье кузнеца. Служил в городской страже 5 лет.",
+  "system_motivation": "Найти выживших из своего города и выяснить, кто стоит за нападением.",
+  "system_location": "loc-stonemere",
+  "display_location": "Стоунмир",
+  "system_stats": {
+    "strength": 14,
+    "agility": 10,
+    "endurance": 13,
+    "intelligence": 8,
+    "perception": 11,
+    "charisma": 9
+  }
+}

@@ -1,9 +1,13 @@
 from abc import ABC, abstractmethod
 
 from app.db.models.gameSession import GameSession
+from app.db.models.sessionSummary import SessionSummary
 
 
 class ISessionRepository(ABC):
+
+    @abstractmethod
+    async def get_all_enriched(self) -> list[SessionSummary]: ...
 
     @abstractmethod
     async def get_by_id(self, session_id: str) -> GameSession | None: ...

@@ -27,6 +27,8 @@ from app.application.worldData.worldPerkService import WorldPerkService
 from app.application.worldData.namedLocationService import NamedLocationService
 from app.application.worldData.seedService import SeedService
 from app.application.worldData.worldBundleService import WorldBundleService
+from app.application.worldData.playerService import PlayerService
+from app.application.worldData.gameSessionService import GameSessionService
 
 from app.application.engine.dag.dagExecutor import DAGExecutor
 from app.application.engine.llmExecutionEngine import LLMExecutionEngine
@@ -73,6 +75,8 @@ class Container:
         self._location_repository: INamedLocationRepository | None = None
 
         # DOMAIN SERVICES
+        self._player_service: PlayerService | None = None
+        self._game_session_service: GameSessionService | None = None
         self._world_service: WorldService | None = None
         self._race_service: RaceService | None = None
         self._perk_service: WorldPerkService | None = None
@@ -414,6 +418,20 @@ class Container:
         if self._player_repository is None:
             self._player_repository = SqlitePlayerRepository(db=self._db)
         return self._player_repository
+
+    def player_service(self) -> PlayerService:
+        if self._player_service is None:
+            self._player_service = PlayerService(repo=self.player_repository())
+        return self._player_service
+
+    def game_session_service(self) -> GameSessionService:
+        if self._game_session_service is None:
+            self._game_session_service = GameSessionService(
+                repo=self.session_repository(),
+                world_repo=self.world_repository(),
+                player_repo=self.player_repository(),
+            )
+        return self._game_session_service
 
     def npc_repository(self) -> INpcRepository:
         if self._npc_repository is None:

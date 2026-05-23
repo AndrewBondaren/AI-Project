@@ -1,1 +1,0 @@
-{"main":"main.js","scripts":{"start":"electron ."},"dependencies":{"concurrently":"^9.2.1","electron":"^42.0.0"}}

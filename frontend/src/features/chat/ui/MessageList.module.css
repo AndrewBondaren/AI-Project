@@ -1,0 +1,42 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.empty {
+  color: var(--color-text-faint);
+  text-align: center;
+  margin-top: var(--space-6);
+  font-style: italic;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-width: 820px;
+}
+
+.role {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.text {
+  font-family: inherit;
+  font-size: var(--font-size-base);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+  color: var(--color-text);
+}
+
+.user .role { color: var(--color-accent); }
+
+.system .text {
+  color: var(--color-text-faint);
+  font-style: italic;
+  font-size: var(--font-size-sm);
+}

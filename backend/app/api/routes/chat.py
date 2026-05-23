@@ -51,6 +51,9 @@ def get_chat_service(container = Depends(get_container)):
 def get_message_repository(container = Depends(get_container)):
     return container.message_repository()
 
+def get_session_repository(container = Depends(get_container)):
+    return container.session_repository()
+
 
 @router.get("/health")
 def health():
@@ -108,21 +111,29 @@ async def cancel_stream(request_id: str):
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     data: ChatRequest,
-    service: ChatService = Depends(get_chat_service)
+    service: ChatService = Depends(get_chat_service),
+    session_repo=Depends(get_session_repository),
 ):
+    game_session = await session_repo.get_by_id(data.session_id)
+    if game_session is None:
+        return ChatResponse(ok=False, error=f"Session '{data.session_id}' not found")
+
     session = Session(
         llm_provider=data.llm_provider,
         model=data.model,
         session_id=data.session_id,
-        meta=data.meta,
+        meta={
+            **data.meta,
+            "world_uid": game_session.world_uid,
+            "character_id": game_session.player_character_id,
+        },
     )
     try:
-        result = await service.handle_message(
-            session=session,
-            message=data.message
-        )
+        result = await service.handle_message(session=session, message=data.message)
     except UserInputError as e:
         return ChatResponse(ok=False, error=e.message)
+
+    await session_repo.touch(data.session_id)
 
     if isinstance(result, dict) and result.get("ok") is False:
         return ChatResponse(ok=False, error=result.get("error"), response=result)
@@ -133,13 +144,28 @@ async def chat(
 @router.post("/chat/stream")
 async def chat_stream(
     data: ChatRequest,
-    service: ChatService = Depends(get_chat_service)
+    service: ChatService = Depends(get_chat_service),
+    session_repo=Depends(get_session_repository),
 ):
+    game_session = await session_repo.get_by_id(data.session_id)
+    if game_session is None:
+        async def _error_gen():
+            yield f"data: {ErrorEvent(message=f'Session {data.session_id!r} not found').model_dump_json()}\n\n"
+        return StreamingResponse(
+            _error_gen(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
     session = Session(
         llm_provider=data.llm_provider,
         model=data.model,
         session_id=data.session_id,
-        meta=data.meta,
+        meta={
+            **data.meta,
+            "world_uid": game_session.world_uid,
+            "character_id": game_session.player_character_id,
+        },
     )
 
     # Resolve snapshot for resume / clear for new request
@@ -174,6 +200,7 @@ async def chat_stream(
                 await emit(ErrorEvent(message=result.get("error", "Unknown error")))
             else:
                 snapshot_store.delete(data.session_id)
+                await session_repo.touch(data.session_id)
                 await emit(ResultEvent(response=result))
         except asyncio.CancelledError:
             await emit(CancelledEvent(session_id=data.session_id, request_id=data.request_id))

@@ -1,0 +1,49 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.messageArea {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3);
+  min-height: 0;
+}
+
+.resumeBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.resumeHint {
+  flex: 1;
+  font-style: italic;
+}
+
+.resumeBtn {
+  padding: 3px var(--space-3);
+  font-size: var(--font-size-sm);
+  background: var(--color-accent-dim);
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent-border);
+  border-radius: var(--radius-sm);
+  transition: background 0.15s;
+}
+
+.resumeBtn:hover {
+  background: rgba(99, 102, 241, 0.35);
+}
+
+.inputBar {
+  padding: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}

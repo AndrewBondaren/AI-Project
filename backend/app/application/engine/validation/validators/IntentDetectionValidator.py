@@ -21,7 +21,7 @@ class IntentDetectionValidator:
             )
 
         errors = []
-        valid_task_types = {t.value for t in TaskType}
+        valid_task_types = {t.value for t in TaskType if not t.is_technical}
         intents = ctx.output.get("intents", [])
 
         if not intents:

@@ -1,0 +1,44 @@
+:root {
+  /* Surface */
+  --color-bg:            #0f0f10;
+  --color-surface:       #1a1a1b;
+  --color-surface-2:     #222224;
+
+  /* Borders */
+  --color-border:        rgba(255, 255, 255, 0.08);
+  --color-border-hover:  rgba(255, 255, 255, 0.15);
+
+  /* Text */
+  --color-text:          rgba(255, 255, 255, 0.87);
+  --color-text-muted:    rgba(255, 255, 255, 0.45);
+  --color-text-faint:    rgba(255, 255, 255, 0.25);
+
+  /* Accent */
+  --color-accent:        #6366f1;
+  --color-accent-dim:    rgba(99, 102, 241, 0.2);
+  --color-accent-border: rgba(99, 102, 241, 0.4);
+
+  /* Danger */
+  --color-danger:        rgba(239, 68, 68, 0.8);
+  --color-danger-dim:    rgba(239, 68, 68, 0.15);
+  --color-danger-border: rgba(239, 68, 68, 0.3);
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Typography */
+  --font-size-sm:   12px;
+  --font-size-base: 14px;
+  --font-size-md:   16px;
+  --font-size-lg:   20px;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}

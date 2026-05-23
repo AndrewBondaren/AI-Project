@@ -15,6 +15,9 @@ class SqlitePlayerRepository(BaseRepository[Player], IPlayerRepository):
     async def get_all(self) -> list[Player]:
         return await self.fetch_all(order="created_at DESC")
 
+    async def get_by_world(self, world_uid: str) -> list[Player]:
+        return await self.fetch_all("world_uid = ?", [world_uid], order="created_at DESC")
+
     async def create(self, player: Player) -> None:
         await self.insert(player)
 

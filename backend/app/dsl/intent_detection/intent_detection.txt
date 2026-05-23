@@ -19,4 +19,4 @@ ASSERT global_confidence = AVG([item.confidence FOR item IN intents])
 ASSERT reasoning LANGUAGE = {{language}}
 
 [EXAMPLE_SHAPE]:
-{"intent_detection":{"intents":[{"task_type":"intent_detection","confidence":0.6},{"task_type":"scene_narration_render","confidence":0.4}],"global_confidence":0.85,"reasoning":"player asks to continue the story"}}
+{"intent_detection":{"intents":[{"task_type":"scene_narration_render","confidence":0.9}],"global_confidence":0.9,"reasoning":"player asks to continue the story"}}

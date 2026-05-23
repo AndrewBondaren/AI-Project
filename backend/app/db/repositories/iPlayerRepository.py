@@ -12,6 +12,9 @@ class IPlayerRepository(ABC):
     async def get_all(self) -> list[Player]: ...
 
     @abstractmethod
+    async def get_by_world(self, world_uid: str) -> list[Player]: ...
+
+    @abstractmethod
     async def create(self, player: Player) -> None: ...
 
     @abstractmethod

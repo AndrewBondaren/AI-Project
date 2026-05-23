@@ -39,6 +39,8 @@ class LLMExecutionEngine:
                     context=self._build_context(),
                 )
 
+                self._apply_task_transition(state)
+
                 if not state.requires_replan:
                     break
 
@@ -62,6 +64,20 @@ class LLMExecutionEngine:
             return self._error_response(e)
 
         return state.final_result
+
+    def _apply_task_transition(self, state: ExecutionState) -> None:
+        # Если потребуется несколько технических типов — заменить на реестр:
+        # TASK_TRANSITIONS: dict[TaskType, Callable[[ExecutionState], TaskType | None]]
+        if state.task_type == TaskType.INTENT_DETECTION:
+            result = state.node_results.get("intent_detection", {})
+            intents = result.get("intents", [])
+            if not intents:
+                return
+            top = max(intents, key=lambda x: x.get("confidence", 0))
+            resolved = top.get("task_type")
+            if resolved:
+                state.task_type = TaskType(resolved)
+                state.requires_replan = True
 
     def _build_context(self) -> dict:
         return {
