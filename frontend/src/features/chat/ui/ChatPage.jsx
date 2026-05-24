@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useChatStream } from '../hooks/useChatStream'
 import MessageList from './MessageList'
@@ -7,6 +7,7 @@ import styles from './ChatPage.module.css'
 
 export default function ChatPage() {
   const { sessionId } = useParams()
+  const [historyLimit, setHistoryLimit] = useState(50)
   const { messages, isStreaming, statusLabel, thinkingMs, elapsed, canResume, send, resume, cancel } = useChatStream(sessionId)
   const scrollRef = useRef(null)
 
@@ -34,7 +35,13 @@ export default function ChatPage() {
       )}
 
       <div className={styles.inputBar}>
-        <MessageInput onSend={send} onCancel={cancel} isStreaming={isStreaming} />
+        <MessageInput
+          onSend={send}
+          onCancel={cancel}
+          isStreaming={isStreaming}
+          historyLimit={historyLimit}
+          onHistoryLimitChange={setHistoryLimit}
+        />
       </div>
     </div>
   )

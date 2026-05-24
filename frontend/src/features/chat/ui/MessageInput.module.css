@@ -1,27 +1,59 @@
 .wrapper {
   display: flex;
-  gap: var(--space-2);
-  align-items: flex-end;
-}
-
-.input {
-  flex: 1;
+  flex-direction: column;
   background: var(--color-surface-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  color: var(--color-text);
-  padding: var(--space-2) var(--space-3);
-  resize: none;
-  outline: none;
   transition: border-color 0.15s;
 }
 
-.input:focus {
+.wrapper:focus-within {
   border-color: var(--color-accent);
+}
+
+.input {
+  background: transparent;
+  border: none;
+  color: var(--color-text);
+  padding: var(--space-2) var(--space-3);
+  padding-bottom: 0;
+  resize: none;
+  outline: none;
+  width: 100%;
 }
 
 .input:disabled {
   opacity: 0.5;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-1) var(--space-2);
+}
+
+.limitSelect {
+  appearance: none;
+  background: var(--color-surface-2);
+  border: none;
+  color: var(--color-text-faint);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  outline: none;
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-sm);
+  transition: color 0.15s;
+  min-width: 64px;
+}
+
+.limitSelect:hover {
+  color: var(--color-text-muted);
+}
+
+.limitSelect option {
+  background: var(--color-surface-2);
+  color: var(--color-text);
 }
 
 .actionBtn {
