@@ -2,7 +2,7 @@ from fastapi import HTTPException
 
 from app.api.schemas.imports import ImportResult
 from app.application.import_helpers import import_list
-from app.db.models.named_location import NamedLocation
+from app.db.models.namedLocation import NamedLocation
 from app.db.repositories.iNamedLocationRepository import INamedLocationRepository
 
 
