@@ -3,7 +3,6 @@ import { useParams } from 'react-router-dom'
 import { useChatStream } from '../hooks/useChatStream'
 import MessageList from './MessageList'
 import MessageInput from './MessageInput'
-import StatusBar from './StatusBar'
 import styles from './ChatPage.module.css'
 
 export default function ChatPage() {
@@ -17,20 +16,15 @@ export default function ChatPage() {
     requestAnimationFrame(() => { el.scrollTop = el.scrollHeight })
   }, [messages, isStreaming])
 
+  const pending = isStreaming
+    ? { statusLabel, thinkingMs, elapsed, onCancel: cancel }
+    : null
+
   return (
     <div className={styles.page}>
       <div ref={scrollRef} className={styles.messageArea}>
-        <MessageList messages={messages} />
+        <MessageList messages={messages} pending={pending} />
       </div>
-
-      {isStreaming && (
-        <StatusBar
-          statusLabel={statusLabel}
-          thinkingMs={thinkingMs}
-          elapsed={elapsed}
-          onCancel={cancel}
-        />
-      )}
 
       {canResume && !isStreaming && (
         <div className={styles.resumeBar}>
@@ -40,7 +34,7 @@ export default function ChatPage() {
       )}
 
       <div className={styles.inputBar}>
-        <MessageInput onSend={send} disabled={isStreaming} />
+        <MessageInput onSend={send} onCancel={cancel} isStreaming={isStreaming} />
       </div>
     </div>
   )

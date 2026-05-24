@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import styles from './MessageInput.module.css'
 
-export default function MessageInput({ onSend, disabled }) {
+export default function MessageInput({ onSend, onCancel, isStreaming }) {
   const [text, setText] = useState('')
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !isStreaming) {
       e.preventDefault()
       submit()
     }
@@ -13,7 +13,7 @@ export default function MessageInput({ onSend, disabled }) {
 
   const submit = () => {
     const trimmed = text.trim()
-    if (!trimmed || disabled) return
+    if (!trimmed) return
     onSend(trimmed)
     setText('')
   }
@@ -27,15 +27,22 @@ export default function MessageInput({ onSend, disabled }) {
         onKeyDown={handleKeyDown}
         placeholder="Введи действие... (Enter — отправить, Shift+Enter — новая строка)"
         rows={2}
-        disabled={disabled}
+        disabled={isStreaming}
       />
-      <button
-        className={styles.sendBtn}
-        onClick={submit}
-        disabled={disabled || !text.trim()}
-      >
-        Отправить
-      </button>
+      {isStreaming ? (
+        <button className={`${styles.actionBtn} ${styles.cancelBtn}`} onClick={onCancel} title="Отменить">
+          ■
+        </button>
+      ) : (
+        <button
+          className={`${styles.actionBtn} ${styles.sendBtn}`}
+          onClick={submit}
+          disabled={!text.trim()}
+          title="Отправить"
+        >
+          ↑
+        </button>
+      )}
     </div>
   )
 }
