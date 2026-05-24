@@ -18,7 +18,7 @@ def make_lifespan(db: Database):
     from app.db.models.world import World
     from app.db.models.race import Race
     from app.db.models.world_perk import WorldPerk
-    from app.db.models.named_location import NamedLocation
+    from app.db.models.namedLocation import NamedLocation
 
     _models = [World, GameSession, Player, Npc, Message, Race, WorldPerk, NamedLocation]
 

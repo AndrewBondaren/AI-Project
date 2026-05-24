@@ -35,7 +35,7 @@ from app.application.engine.llmExecutionEngine import LLMExecutionEngine
 from app.application.engine.graphs.graphCompiler import GraphCompiler
 from app.application.engine.execution.pythonNodeExecutor import PythonNodeExecutor
 from app.application.engine.execution.llmAggregateExecutor import LLMAggregateExecutor
-from app.application.engine.execution.NodeRunner import NodeRunner
+from app.application.engine.execution.nodeRunner import NodeRunner
 from app.application.engine.prompt.dslRegistry import DSLRegistry
 from app.application.engine.prompt.dslResolver import DSLResolver
 from app.application.engine.prompt.llmGroupPayloadBuilder import LLMGroupPayloadBuilder

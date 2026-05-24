@@ -1,5 +1,5 @@
 from app.db.database import Database
-from app.db.models.named_location import NamedLocation
+from app.db.models.namedLocation import NamedLocation
 from app.db.repositories.iNamedLocationRepository import INamedLocationRepository
 from app.db.repositories.sqlite.base import BaseRepository
 

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from app.db.models.named_location import NamedLocation
+from app.db.models.namedLocation import NamedLocation
 
 
 class INamedLocationRepository(ABC):

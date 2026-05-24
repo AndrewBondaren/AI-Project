@@ -1,4 +1,4 @@
-from app.application.engine.rules.Rule import Rule
+from app.application.engine.rules.rule import Rule
 
 
 class RuleCompiler:

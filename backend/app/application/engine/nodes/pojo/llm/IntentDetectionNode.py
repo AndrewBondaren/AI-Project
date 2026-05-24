@@ -4,9 +4,9 @@ from typing import ClassVar
 from app.application.contracts.contracts import IntentDetectionContract
 from app.application.engine.nodes.nodeRegistry import register_llm
 from app.application.engine.nodes.pojo.llmNode import LLMNode
-from app.application.engine.rules.Rule import Rule
+from app.application.engine.rules.rule import Rule
 from app.application.engine.taskType import TaskType
-from app.application.engine.validation.validators.IntentDetectionValidator import IntentDetectionValidator
+from app.application.engine.validation.validators.intentDetectionValidator import IntentDetectionValidator
 
 
 @register_llm()

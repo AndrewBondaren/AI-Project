@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import List, Dict, Any
 
-from app.application.contracts.IntentItem import IntentItem
+from app.application.contracts.intentItem import IntentItem
 
 
 #class NarrationContract(BaseModel):
