@@ -12,21 +12,24 @@ from app.db.database import Database
 
 def make_lifespan(db: Database):
     from app.db.models.gameSession import GameSession
-    from app.db.models.message import Message
+    from app.db.models.message import Turn, Message, NodeExecutionLog
     from app.db.models.npc import Npc
     from app.db.models.player import Player
     from app.db.models.world import World
     from app.db.models.race import Race
     from app.db.models.world_perk import WorldPerk
     from app.db.models.namedLocation import NamedLocation
+    from app.db.models.sessionPending import SessionPending
+    from app.db.repositories.sqlite.pendingRepository import SqlitePendingRepository
 
-    _models = [World, GameSession, Player, Npc, Message, Race, WorldPerk, NamedLocation]
+    _models = [World, GameSession, Player, Npc, Turn, Message, NodeExecutionLog, Race, WorldPerk, NamedLocation, SessionPending]
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         await db.connect()
         await db.apply_migrations()
         await db.validate_schema(_models)
+        await SqlitePendingRepository(db).cleanup_stale()
         yield
         await db.disconnect()
     return lifespan

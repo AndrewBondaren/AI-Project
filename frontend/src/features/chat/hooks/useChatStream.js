@@ -1,18 +1,40 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { startStream, cancelStream } from '../service'
+import { getHistory, getPending } from '@/api/chatApi'
 
-export function useChatStream(sessionId) {
-  const [messages,    setMessages]    = useState([])
-  const [isStreaming, setIsStreaming] = useState(false)
-  const [statusLabel, setStatusLabel] = useState(null)
-  const [thinkingMs,  setThinkingMs]  = useState(null)
-  const [elapsed,     setElapsed]     = useState(0)
-  const [canResume,   setCanResume]   = useState(false)
+export function useChatStream(sessionId, historyLimit) {
+  const [messages,      setMessages]      = useState([])
+  const [isStreaming,   setIsStreaming]   = useState(false)
+  const [statusLabel,   setStatusLabel]   = useState(null)
+  const [thinkingMs,    setThinkingMs]    = useState(null)
+  const [elapsed,       setElapsed]       = useState(0)
+  const [canResume,     setCanResume]     = useState(false)
+  const [historyLoaded, setHistoryLoaded] = useState(false)
 
   const requestIdRef   = useRef(null)
   const lastMessageRef = useRef(null)
   const timerRef       = useRef(null)
   const startTimeRef   = useRef(null)
+
+  useEffect(() => {
+    setHistoryLoaded(false)
+    setCanResume(false)
+    Promise.all([
+      getHistory(sessionId, historyLimit),
+      getPending(sessionId).catch(() => null),
+    ])
+      .then(([history, pending]) => {
+        const msgs = [...history]
+        if (pending) {
+          msgs.push({ role: 'pending', text: pending.player_input })
+          lastMessageRef.current = pending.player_input
+          setCanResume(true)
+        }
+        setMessages(msgs)
+      })
+      .catch(() => setMessages([]))
+      .finally(() => setHistoryLoaded(true))
+  }, [sessionId, historyLimit])
 
   const startTimer = () => {
     startTimeRef.current = Date.now()
@@ -81,6 +103,11 @@ export function useChatStream(sessionId) {
     setCanResume(false)
     setStatusLabel(null)
     setThinkingMs(null)
+
+    if (resume) {
+      setMessages(prev => prev.map(m => m.role === 'pending' ? { ...m, role: 'user' } : m))
+    }
+
     startTimer()
 
     try {
@@ -98,11 +125,11 @@ export function useChatStream(sessionId) {
   }, [sessionId, processStream])
 
   const send = useCallback(async (text) => {
-    if (!text.trim() || isStreaming) return
+    if (!text.trim() || isStreaming || !historyLoaded) return
     setCanResume(false)
-    setMessages(prev => [...prev, { role: 'user', text }])
+    setMessages(prev => [...prev.filter(m => m.role !== 'pending'), { role: 'user', text }])
     await runStream(text, false)
-  }, [isStreaming, runStream])
+  }, [isStreaming, historyLoaded, runStream])
 
   const resume = useCallback(() => {
     if (!lastMessageRef.current || isStreaming) return
@@ -113,5 +140,5 @@ export function useChatStream(sessionId) {
     if (requestIdRef.current) cancelStream(requestIdRef.current)
   }, [])
 
-  return { messages, isStreaming, statusLabel, thinkingMs, elapsed, canResume, send, resume, cancel }
+  return { messages, isStreaming, statusLabel, thinkingMs, elapsed, canResume, historyLoaded, send, resume, cancel }
 }

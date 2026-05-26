@@ -226,16 +226,46 @@ CREATE TABLE IF NOT EXISTS scene_participants (
 );
 
 -- ============================================================
--- messages
+-- turns  (один ход игрока — создаётся только при успехе)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS turns (
+    turn_id      TEXT PRIMARY KEY,
+    session_id   TEXT NOT NULL,
+    player_input TEXT NOT NULL,
+    game_tick    INTEGER,
+    created_at   TEXT NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES game_sessions(id) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- messages  (LLM-ответы в рамках хода)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS messages (
     message_id   TEXT PRIMARY KEY,
+    turn_id      TEXT NOT NULL,
     session_id   TEXT NOT NULL,
-    player_input TEXT,
+    message_type TEXT NOT NULL DEFAULT 'narrative',
     llm_output   TEXT,
     game_tick    INTEGER,
     created_at   TEXT NOT NULL,
-    FOREIGN KEY (session_id) REFERENCES game_sessions(id)
+    FOREIGN KEY (turn_id)    REFERENCES turns(turn_id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id) REFERENCES game_sessions(id) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- node_execution_logs  (логи нод — только при успехе)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS node_execution_logs (
+    log_id      TEXT PRIMARY KEY,
+    turn_id     TEXT NOT NULL,
+    session_id  TEXT NOT NULL,
+    node_type   TEXT NOT NULL,
+    node_input  TEXT,
+    node_output TEXT,
+    duration_ms INTEGER,
+    created_at  TEXT NOT NULL,
+    FOREIGN KEY (turn_id)    REFERENCES turns(turn_id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id) REFERENCES game_sessions(id) ON DELETE CASCADE
 );
 
 -- ============================================================
@@ -893,13 +923,27 @@ CREATE TABLE IF NOT EXISTS body_hair_density (
 );
 
 -- ============================================================
+-- session_pending  (Outbox pattern: pending input + snapshot)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS session_pending (
+    session_id   TEXT PRIMARY KEY,
+    player_input TEXT NOT NULL,
+    snapshot     TEXT,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (session_id) REFERENCES game_sessions(id) ON DELETE CASCADE
+);
+
+-- ============================================================
 -- indexes
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_character_sheet_world    ON character_sheet (world_uid);
 CREATE INDEX IF NOT EXISTS idx_character_sheet_location ON character_sheet (system_location);
 CREATE INDEX IF NOT EXISTS idx_character_sheet_type     ON character_sheet (character_type);
 
+CREATE INDEX IF NOT EXISTS idx_turns_session            ON turns    (session_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_messages_turn            ON messages (turn_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_session         ON messages (session_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_node_logs_turn           ON node_execution_logs (turn_id, created_at);
 
 CREATE INDEX IF NOT EXISTS idx_game_sessions_world      ON game_sessions (world_uid);
 

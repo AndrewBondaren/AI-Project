@@ -11,6 +11,8 @@ from app.db.repositories.iSessionRepository import ISessionRepository
 from app.db.repositories.sqlite.sessionRepository import SqliteSessionRepository
 from app.db.repositories.iMessageRepository import IMessageRepository
 from app.db.repositories.sqlite.messageRepository import SqliteMessageRepository
+from app.db.repositories.iPendingRepository import IPendingRepository
+from app.db.repositories.sqlite.pendingRepository import SqlitePendingRepository
 from app.db.repositories.iPlayerRepository import IPlayerRepository
 from app.db.repositories.sqlite.playerRepository import SqlitePlayerRepository
 from app.db.repositories.iNpcRepository import INpcRepository
@@ -70,6 +72,7 @@ class Container:
         self._player_repository: IPlayerRepository | None = None
         self._npc_repository: INpcRepository | None = None
         self._message_repository: IMessageRepository | None = None
+        self._pending_repository: IPendingRepository | None = None
         self._race_repository: IRaceRepository | None = None
         self._perk_repository: IWorldPerkRepository | None = None
         self._location_repository: INamedLocationRepository | None = None
@@ -333,7 +336,9 @@ class Container:
     def chat_service(self):
         if self._chat_service is None:
             self._chat_service = ChatService(
-                llm_engine=self.llm_engine()
+                llm_engine=self.llm_engine(),
+                message_repo=self.message_repository(),
+                pending_repo=self.pending_repository(),
             )
         return self._chat_service
 
@@ -413,6 +418,11 @@ class Container:
         if self._message_repository is None:
             self._message_repository = SqliteMessageRepository(db=self._db)
         return self._message_repository
+
+    def pending_repository(self) -> IPendingRepository:
+        if self._pending_repository is None:
+            self._pending_repository = SqlitePendingRepository(db=self._db)
+        return self._pending_repository
 
     def player_repository(self) -> IPlayerRepository:
         if self._player_repository is None:

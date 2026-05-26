@@ -3,9 +3,9 @@ pip install fastapi uvicorn httpx pydantic
 # Install project for dev
 1. python -m venv .venv
 2. 
-# Windows:
+Windows:
 .venv\Scripts\activate
-# Linux/Mac:
+Linux/Mac:
 source .venv/bin/activate
 3. pip install -r requirements.txt
 

@@ -8,7 +8,7 @@ import styles from './ChatPage.module.css'
 export default function ChatPage() {
   const { sessionId } = useParams()
   const [historyLimit, setHistoryLimit] = useState(50)
-  const { messages, isStreaming, statusLabel, thinkingMs, elapsed, canResume, send, resume, cancel } = useChatStream(sessionId)
+  const { messages, isStreaming, statusLabel, thinkingMs, elapsed, canResume, historyLoaded, send, resume, cancel } = useChatStream(sessionId, historyLimit)
   const scrollRef = useRef(null)
 
   useEffect(() => {
@@ -29,7 +29,7 @@ export default function ChatPage() {
 
       {canResume && !isStreaming && (
         <div className={styles.resumeBar}>
-          <span className={styles.resumeHint}>Запрос был отменён.</span>
+          <span className={styles.resumeHint}>Запрос был прерван.</span>
           <button className={styles.resumeBtn} onClick={resume}>Продолжить</button>
         </div>
       )}
@@ -39,6 +39,7 @@ export default function ChatPage() {
           onSend={send}
           onCancel={cancel}
           isStreaming={isStreaming}
+          disabled={!historyLoaded}
           historyLimit={historyLimit}
           onHistoryLimitChange={setHistoryLimit}
         />

@@ -1,5 +1,6 @@
 from typing import Any
 import asyncio
+import json
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
@@ -17,6 +18,7 @@ from app.application.events.sseEvents import ResultEvent, ErrorEvent, CancelledE
 from app.application.cancellation.cancellationToken import CancellationToken
 from app.application.cancellation.cancellationRegistry import cancellation_registry
 from app.application.cancellation.snapshotStore import snapshot_store
+from app.application.cancellation.sessionSnapshot import SessionSnapshot
 
 
 router = APIRouter()
@@ -54,6 +56,9 @@ def get_message_repository(container = Depends(get_container)):
 def get_session_repository(container = Depends(get_container)):
     return container.session_repository()
 
+def get_pending_repository(container = Depends(get_container)):
+    return container.pending_repository()
+
 
 @router.get("/health")
 def health():
@@ -63,20 +68,10 @@ def health():
 @router.get("/chat/history")
 async def get_history(
     session_id: str,
-    repo = Depends(get_message_repository),
     limit: int | None = None,
+    repo = Depends(get_message_repository),
 ):
-    messages = await repo.get_by_session(session_id, limit=limit)
-    return [
-        {
-            "message_id":  m.message_id,
-            "player_input": m.player_input,
-            "llm_output":   m.llm_output,
-            "game_tick":    m.game_tick,
-            "created_at":   m.created_at,
-        }
-        for m in messages
-    ]
+    return await repo.get_history(session_id, limit=limit)
 
 
 @router.get("/chat/settings")
@@ -100,6 +95,17 @@ def update_chat_settings(data: ChatSettings) -> ChatSettings:
         max_passes=data.max_passes,
     )
     return get_chat_settings()
+
+
+@router.get("/chat/pending")
+async def get_pending(
+    session_id: str,
+    pending_repo = Depends(get_pending_repository),
+):
+    pending = await pending_repo.get(session_id)
+    if pending is None:
+        return None
+    return {"player_input": pending.player_input}
 
 
 @router.delete("/chat/stream/{request_id}")
@@ -146,6 +152,7 @@ async def chat_stream(
     data: ChatRequest,
     service: ChatService = Depends(get_chat_service),
     session_repo=Depends(get_session_repository),
+    pending_repo=Depends(get_pending_repository),
 ):
     game_session = await session_repo.get_by_id(data.session_id)
     if game_session is None:
@@ -172,13 +179,10 @@ async def chat_stream(
     if data.resume:
         snapshot = snapshot_store.load(data.session_id)
         if snapshot is None:
-            async def _error_gen():
-                yield f"data: {ErrorEvent(message='No snapshot found for session_id').model_dump_json()}\n\n"
-            return StreamingResponse(
-                _error_gen(),
-                media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-            )
+            pending = await pending_repo.get(data.session_id)
+            if pending and pending.snapshot:
+                snapshot = SessionSnapshot(**json.loads(pending.snapshot))
+        # no snapshot found → run fresh, not an error
     else:
         snapshot_store.delete(data.session_id)
         snapshot = None

@@ -1,6 +1,6 @@
 import styles from './MessageList.module.css'
 
-const ROLE_LABEL = { user: 'Вы', bot: 'Мастер', system: 'Система' }
+const ROLE_LABEL = { user: 'Вы', bot: 'Мастер', system: 'Система', pending: 'Вы (прервано)' }
 
 function buildPendingText(statusLabel, thinkingMs, elapsed) {
   if (thinkingMs !== null) {

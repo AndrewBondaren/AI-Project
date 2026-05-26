@@ -27,3 +27,9 @@ export async function getHistory(sessionId, limit) {
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
+
+export async function getPending(sessionId) {
+  const res = await fetch(`${API_URL}/chat/pending?session_id=${sessionId}`)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()  // null | {player_input, has_snapshot}
+}

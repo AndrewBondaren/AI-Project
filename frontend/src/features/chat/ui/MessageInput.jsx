@@ -8,11 +8,12 @@ const LIMIT_OPTIONS = [
   { value: null, label: 'Все' },
 ]
 
-export default function MessageInput({ onSend, onCancel, isStreaming, historyLimit, onHistoryLimitChange }) {
+export default function MessageInput({ onSend, onCancel, isStreaming, disabled, historyLimit, onHistoryLimitChange }) {
   const [text, setText] = useState('')
+  const isBlocked = isStreaming || disabled
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey && !isStreaming) {
+    if (e.key === 'Enter' && !e.shiftKey && !isBlocked) {
       e.preventDefault()
       submit()
     }
@@ -34,7 +35,7 @@ export default function MessageInput({ onSend, onCancel, isStreaming, historyLim
         onKeyDown={handleKeyDown}
         placeholder="Введи действие... (Enter — отправить, Shift+Enter — новая строка)"
         rows={2}
-        disabled={isStreaming}
+        disabled={isBlocked}
       />
       <div className={styles.toolbar}>
         <select
@@ -42,6 +43,7 @@ export default function MessageInput({ onSend, onCancel, isStreaming, historyLim
           value={historyLimit ?? ''}
           onChange={e => onHistoryLimitChange(e.target.value === '' ? null : Number(e.target.value))}
           title="Сообщений в истории"
+          disabled={isStreaming}
         >
           {LIMIT_OPTIONS.map(o => (
             <option key={o.label} value={o.value ?? ''}>{o.label}</option>
@@ -55,7 +57,7 @@ export default function MessageInput({ onSend, onCancel, isStreaming, historyLim
           <button
             className={`${styles.actionBtn} ${styles.sendBtn}`}
             onClick={submit}
-            disabled={!text.trim()}
+            disabled={!text.trim() || disabled}
             title="Отправить"
           >
             ↑
