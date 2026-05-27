@@ -1,11 +1,19 @@
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List
 
 from app.application.contracts.intentItem import IntentItem
 
 
-#class NarrationContract(BaseModel):
-#    text: str
+class ActorSnapshot(BaseModel):
+    name: str
+    role: str
+
+
+class ContextSnapContract(BaseModel):
+    location: str
+    situation: str
+    actors: List[ActorSnapshot]
+    player_state: str
 
 
 class IntentDetectionContract(BaseModel):

@@ -5,6 +5,7 @@ from typing import Any
 @dataclass(frozen=True)
 class ExecutionLevelSnapshot:
 
+    phase: str   # "pre_llm" | "post_llm"
     level: int
 
     node_results: dict[str, Any]

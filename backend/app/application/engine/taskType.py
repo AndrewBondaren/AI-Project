@@ -9,6 +9,7 @@ class TaskType(str, Enum):
         return obj
 
     INTENT_DETECTION = ("intent_detection", True)
+    SCENE_INIT       = ("scene_init",       True)
 
     #Scene related
     SCENE_NARRATION = ("scene_narration_render", False)

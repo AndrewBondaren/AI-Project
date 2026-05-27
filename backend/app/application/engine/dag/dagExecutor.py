@@ -1,7 +1,6 @@
 import asyncio
 
 from app.application.engine.dag.executionLevelSnapshot import ExecutionLevelSnapshot
-from app.application.engine.nodes.pojo.nodeResult import NodeResult
 from app.application.events.eventBus import emit
 from app.application.events.sseEvents import NodeStatusEvent, NodePhase
 
@@ -14,12 +13,17 @@ class DAGExecutor:
 
     async def execute(self, plan, state, context) -> object:
 
-        # сбрасываем флаг перед каждым pass
+        # сбрасываем флаги перед каждым pass
         state.requires_replan = False
         state.replan_reason = None
+        state.next_task_type = None
 
         # Фаза 1: pre_llm Python-ноды
         await self._execute_phase(plan.pre_llm_levels, plan, state, context, phase="pre_llm")
+
+        # Gate-нода сигнализировала replan — прерываем до LLM, движок перекомпилирует
+        if state.requires_replan:
+            return state
 
         # Фаза 2: LLM-группы ASC по temperature
         for llm_group in plan.llm_groups:
@@ -49,16 +53,36 @@ class DAGExecutor:
 
     async def _execute_phase(self, levels, plan, state, context, phase: str):
         for level_idx, level in enumerate(levels):
-            node_results = await self._run_level(level, plan, state, context)
-            self._aggregate_replan(node_results, state)
+            await self._run_level(level, plan, state, context)
+
+            # Python-нода не LLM: нет retry, нет repair. Упала — это баг или инфра.
+            # Продолжать выполнение нельзя: gate-ноды не проверены, state не собран.
+            failed = [
+                nid for nid in level
+                if state.node_status.get(nid) == "failed"
+            ]
+            if failed:
+                errors = {nid: state.node_errors.get(nid, []) for nid in failed}
+                raise RuntimeError(
+                    f"Python nodes failed in '{phase}' phase: {failed}. Errors: {errors}"
+                )
+
             self._create_snapshot(state, phase=phase, level_idx=level_idx)
+
+    def _should_skip(self, node_id: str, plan, state) -> bool:
+        if node_id not in state.node_results:
+            return False
+        if state.pass_number == 0:
+            return True  # pass 0: resume-логика — пропускаем уже выполненные
+        # replan pass: gate-ноды с внешним состоянием перезапускаем
+        node = plan.nodes[node_id].node
+        return getattr(node, 'skip_on_replan', True)
 
     async def _run_level(self, level, plan, state, context) -> list:
         if state.cancel_token and state.cancel_token.is_cancelled():
             raise asyncio.CancelledError()
 
-        # skip nodes already completed (resume)
-        to_run = [nid for nid in level if nid not in state.node_results]
+        to_run = [nid for nid in level if not self._should_skip(nid, plan, state)]
         if not to_run:
             return []
 
@@ -84,24 +108,12 @@ class DAGExecutor:
             else:
                 await emit(NodeStatusEvent(node_id=node_id, task_type=task_type, phase=NodePhase.DONE))
 
-        return [r for r in results if isinstance(r, NodeResult)]
-
-    def _aggregate_replan(self, node_results: list, state):
-        """
-        Если хоть одна нода уровня вернула requires_replan=True —
-        выставляем флаг на state. Нода декларирует намерение,
-        DAGExecutor агрегирует.
-        """
-        for node_result in node_results:
-            if node_result.requires_replan:
-                state.requires_replan = True
-                if node_result.replan_reason:
-                    state.replan_reason = node_result.replan_reason
-                break
+        return results
 
     #_create_snapshot — делает dict(state.node_results) и list(state.execution_order) — это shallow copy. Для node_results это потенциально важно: если значения в dict сами являются мутируемыми объектами (например, вложенные dict от LLM), снапшот будет держать ссылки на те же объекты. Сейчас не проблема, но когда появятся post_llm ноды, мутирующие содержимое результатов — снапшот незаметно изменится вместе с ними. Стоит иметь в виду к моменту реализации
     def _create_snapshot(self, state, phase: str, level_idx: int):
         snapshot = ExecutionLevelSnapshot(
+            phase=phase,
             level=level_idx,
             node_results=dict(state.node_results),
             node_status=dict(state.node_status),

@@ -1,8 +1,9 @@
 [GOAL]: detect_intent(player_message)
 
 [TASK]:
-INPUT [player_message: str]
+INPUT [player_message: str, scene_context: ContextSnap FROM context_snap_gatherer]
 SCHEMA [available_types: List[TaskType] FROM json.response_format]
+USE scene_context TO understand current game state when classifying intent
 CLASSIFY player_message -> List[IntentItem]
     IF player_message is gibberish
         SET global_confidence = 0.0

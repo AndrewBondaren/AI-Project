@@ -923,6 +923,20 @@ CREATE TABLE IF NOT EXISTS body_hair_density (
 );
 
 -- ============================================================
+-- session_scene  (текущее состояние сцены на сессию)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS session_scene (
+    session_id   TEXT PRIMARY KEY,
+    location_uid TEXT,
+    description  TEXT NOT NULL,
+    actors       TEXT NOT NULL DEFAULT '[]',
+    updated_at   TEXT NOT NULL,
+    created_at   TEXT NOT NULL,
+    FOREIGN KEY (session_id)   REFERENCES game_sessions(id) ON DELETE CASCADE,
+    FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid)
+);
+
+-- ============================================================
 -- session_pending  (Outbox pattern: pending input + snapshot)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS session_pending (

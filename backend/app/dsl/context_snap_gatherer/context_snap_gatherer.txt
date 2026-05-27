@@ -1,0 +1,21 @@
+[GOAL]: extract_scene_context()
+
+[TASK]:
+INPUT [scene: SessionScene FROM scene_context]
+OUTPUT {
+    location: str,
+    situation: str [1-2 sentences],
+    actors: List[{ name: str, role: str }],
+    player_state: str
+}
+
+[RULES]:
+ASSERT output_format: JSON ONLY
+REJECT: markdown, explanations, preamble
+ASSERT location IS NOT EMPTY
+ASSERT situation IS NOT EMPTY
+ASSERT player_state IS NOT EMPTY
+ASSERT actors IS list [may be empty]
+
+[EXAMPLE_SHAPE]:
+{"context_snap_gatherer":{"location":"Таверна Золотой Петух","situation":"Игрок сидит за столом в шумной таверне. Рядом незнакомец в плаще.","actors":[{"name":"Незнакомец","role":"npc"}],"player_state":"Здоров, усталый после долгой дороги"}}

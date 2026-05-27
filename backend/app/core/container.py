@@ -13,6 +13,8 @@ from app.db.repositories.iMessageRepository import IMessageRepository
 from app.db.repositories.sqlite.messageRepository import SqliteMessageRepository
 from app.db.repositories.iPendingRepository import IPendingRepository
 from app.db.repositories.sqlite.pendingRepository import SqlitePendingRepository
+from app.db.repositories.iSceneRepository import ISceneRepository
+from app.db.repositories.sqlite.sceneRepository import SqliteSceneRepository
 from app.db.repositories.iPlayerRepository import IPlayerRepository
 from app.db.repositories.sqlite.playerRepository import SqlitePlayerRepository
 from app.db.repositories.iNpcRepository import INpcRepository
@@ -34,6 +36,7 @@ from app.application.worldData.gameSessionService import GameSessionService
 
 from app.application.engine.dag.dagExecutor import DAGExecutor
 from app.application.engine.llmExecutionEngine import LLMExecutionEngine
+from app.application.engine.responseResolver import ResponseResolver
 from app.application.engine.graphs.graphCompiler import GraphCompiler
 from app.application.engine.execution.pythonNodeExecutor import PythonNodeExecutor
 from app.application.engine.execution.llmAggregateExecutor import LLMAggregateExecutor
@@ -73,6 +76,7 @@ class Container:
         self._npc_repository: INpcRepository | None = None
         self._message_repository: IMessageRepository | None = None
         self._pending_repository: IPendingRepository | None = None
+        self._scene_repository: ISceneRepository | None = None
         self._race_repository: IRaceRepository | None = None
         self._perk_repository: IWorldPerkRepository | None = None
         self._location_repository: INamedLocationRepository | None = None
@@ -122,6 +126,7 @@ class Container:
 
         # ENGINE & SERVICES
         self._llm_engine = None
+        self._response_resolver = None
         self._chat_service = None
         self._settings_service = None
 
@@ -318,6 +323,11 @@ class Container:
     # ENGINE
     # =====================================================
 
+    def response_resolver(self):
+        if self._response_resolver is None:
+            self._response_resolver = ResponseResolver()
+        return self._response_resolver
+
     def llm_engine(self):
         if self._llm_engine is None:
             self._llm_engine = LLMExecutionEngine(
@@ -326,6 +336,11 @@ class Container:
                 patch_applier=self.patch_applier(),
                 executors=self.executors(),
                 snapshot_store=snapshot_store,
+                response_resolver=self.response_resolver(),
+                repositories={
+                    "scene_repo":    self.scene_repository(),
+                    "location_repo": self.location_repository(),
+                },
             )
         return self._llm_engine
 
@@ -423,6 +438,11 @@ class Container:
         if self._pending_repository is None:
             self._pending_repository = SqlitePendingRepository(db=self._db)
         return self._pending_repository
+
+    def scene_repository(self) -> ISceneRepository:
+        if self._scene_repository is None:
+            self._scene_repository = SqliteSceneRepository(db=self._db)
+        return self._scene_repository
 
     def player_repository(self) -> IPlayerRepository:
         if self._player_repository is None:

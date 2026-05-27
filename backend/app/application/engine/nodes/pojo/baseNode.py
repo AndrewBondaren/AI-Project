@@ -16,7 +16,6 @@ class BaseNode:
 #    executor: Optional[type] = None
     retry_policy: Optional[dict] = None
     validator: type | None = None
-    possible_errors: list[type] = field(default_factory=list)
 
     priority: int = 50
     cost: NodeCost = field(default_factory=NodeCost)

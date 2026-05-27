@@ -24,7 +24,7 @@ class IntentDetectionNode(LLMNode):
 
     supported_tasks: list = field(default_factory=lambda: [TaskType.INTENT_DETECTION])
     rules: list = field(default_factory=lambda: [Rule(type="task", params={})])
-    deps: list = field(default_factory=list)
+    deps: list = field(default_factory=lambda: ["context_snap_gatherer"])
 
     #Error_name: dsl_File_Name
     dsl_patches: dict = field(default_factory=lambda: {

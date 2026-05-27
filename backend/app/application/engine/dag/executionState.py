@@ -23,6 +23,9 @@ class ExecutionState:
         self.pending_patches: list[dict] = []
         self.requires_replan: bool = False
         self.replan_reason: str | None = None
+        self.next_task_type = None   # TaskType | None — Python-нода декларирует переход
+        self.pass_number: int = 0    # инкрементируется LLMExecutionEngine per pass
+        self.user_error: str | None = None  # user_message из PythonNodeError — fallback ответа
 
         #observability (append-only)
         self.traces: list[ExecutionTrace] = []
