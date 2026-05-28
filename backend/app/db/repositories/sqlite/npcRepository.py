@@ -38,6 +38,19 @@ class SqliteNpcRepository(BaseRepository[Npc], INpcRepository):
         )
         await self._db.conn.commit()
 
+    async def get_home_occupied_uids(self, world_uid: str, location_uids: list[str]) -> set[str]:
+        if not location_uids:
+            return set()
+        placeholders = ", ".join("?" * len(location_uids))
+        sql = (
+            f"SELECT DISTINCT home_location_uid FROM character_sheet "
+            f"WHERE character_type = 'npc' AND world_uid = ? "
+            f"AND home_location_uid IN ({placeholders})"
+        )
+        async with self._db.conn.execute(sql, [world_uid, *location_uids]) as cur:
+            rows = await cur.fetchall()
+        return {row[0] for row in rows if row[0]}
+
     async def clear_scene_state(self, character_uid: str) -> None:
         await self._db.conn.execute(
             """

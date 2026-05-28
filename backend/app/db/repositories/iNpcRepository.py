@@ -29,3 +29,10 @@ class INpcRepository(ABC):
     async def clear_scene_state(self, character_uid: str) -> None:
         """Очистить system_current_target и system_current_thoughts при выходе из сцены."""
         ...
+
+    @abstractmethod
+    async def get_home_occupied_uids(self, world_uid: str, location_uids: list[str]) -> set[str]:
+        """Вернуть множество location_uid, в которых хотя бы один NPC прописан
+        (home_location_uid совпадает с одним из location_uids).
+        Используется для фильтрации занятых зданий/помещений при выборе стартовой локации."""
+        ...

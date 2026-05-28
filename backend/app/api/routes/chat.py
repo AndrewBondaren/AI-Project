@@ -40,6 +40,7 @@ class ChatRequest(BaseModel):
     message: str
     request_id: str
     resume: bool = False
+    task_type: str | None = None  # если задан — минует INTENT_DETECTION
 
 class ChatResponse(BaseModel):
     ok: bool = True
@@ -135,7 +136,7 @@ async def chat(
         },
     )
     try:
-        result = await service.handle_message(session=session, message=data.message)
+        result = await service.handle_message(session=session, message=data.message, task_type=data.task_type)
     except UserInputError as e:
         return ChatResponse(ok=False, error=e.message)
 
@@ -199,6 +200,7 @@ async def chat_stream(
                 message=data.message,
                 cancel_token=token,
                 snapshot=snapshot,
+                task_type=data.task_type,
             )
             if isinstance(result, dict) and result.get("ok") is False:
                 await emit(ErrorEvent(message=result.get("error", "Unknown error")))

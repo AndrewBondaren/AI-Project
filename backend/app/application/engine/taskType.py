@@ -8,8 +8,10 @@ class TaskType(str, Enum):
         obj.is_technical = is_technical
         return obj
 
-    INTENT_DETECTION = ("intent_detection", True)
-    SCENE_INIT       = ("scene_init",       True)
+    #Technical (not user-facing) task types
+    INTENT_DETECTION        = ("intent_detection",         True)
+    SCENE_INIT              = ("scene_init",               True)
+    SCENE_START_LOCATION_SELECT   = ("scene_start_location_select",    True)
 
     #Scene related
     SCENE_NARRATION = ("scene_narration_render", False)

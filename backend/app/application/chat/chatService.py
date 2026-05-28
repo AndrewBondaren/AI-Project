@@ -18,13 +18,15 @@ class ChatService:
         self._message_repo = message_repo
         self._pending_repo = pending_repo
 
-    async def handle_message(self, session: Session, message: str, cancel_token=None, snapshot=None):
+    async def handle_message(self, session: Session, message: str, cancel_token=None, snapshot=None, task_type: str | None = None):
         if snapshot is None:
             await self._pending_repo.upsert(session.session_id, message)
 
+        resolved_task_type = TaskType(task_type) if task_type else TaskType.INTENT_DETECTION
+
         try:
             result = await self.engine.run(
-                task_type=TaskType.INTENT_DETECTION,
+                task_type=resolved_task_type,
                 message=message,
                 session=session,
                 cancel_token=cancel_token,

@@ -340,6 +340,8 @@ class Container:
                 repositories={
                     "scene_repo":    self.scene_repository(),
                     "location_repo": self.location_repository(),
+                    "player_repo":   self.player_repository(),
+                    "npc_repo":      self.npc_repository(),
                 },
             )
         return self._llm_engine

@@ -33,6 +33,7 @@ class ResponseResolver:
         TaskType.SCENE_COMBAT:              "scene_combat",
         TaskType.SCENE_CHANGE_LOCATION:     "scene_change_location",
         TaskType.SCENE_INIT:                "scene_init",
+        TaskType.SCENE_START_LOCATION_SELECT:     "scene_start_location_select",
         TaskType.LOCAL_SCENE_ANALYSIS:      "local_scene_analysis",
         TaskType.LOCAL_REGION_ANALYSIS:     "local_region_analysis",
     }
