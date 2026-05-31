@@ -43,9 +43,9 @@ class SqliteNpcRepository(BaseRepository[Npc], INpcRepository):
             return set()
         placeholders = ", ".join("?" * len(location_uids))
         sql = (
-            f"SELECT DISTINCT home_location_uid FROM character_sheet "
+            f"SELECT DISTINCT system_home_location_uid FROM character_sheet "
             f"WHERE character_type = 'npc' AND world_uid = ? "
-            f"AND home_location_uid IN ({placeholders})"
+            f"AND system_home_location_uid IN ({placeholders})"
         )
         async with self._db.conn.execute(sql, [world_uid, *location_uids]) as cur:
             rows = await cur.fetchall()

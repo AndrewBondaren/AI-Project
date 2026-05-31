@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from app.api.deps import get_container
+from app.application.cancellation.snapshotStore import snapshot_store
 from app.application.worldData.gameSessionService import GameSessionService
 
 router = APIRouter()
@@ -38,3 +39,12 @@ async def get_session(
     service: GameSessionService = Depends(get_session_service),
 ):
     return asdict(await service.get_by_id(session_id))
+
+
+@router.delete("/sessions/{session_id}", status_code=204)
+async def delete_session(
+    session_id: str,
+    service: GameSessionService = Depends(get_session_service),
+):
+    snapshot_store.delete(session_id)
+    await service.delete(session_id)

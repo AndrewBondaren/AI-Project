@@ -1,4 +1,4 @@
-import { listSessions as apiListSessions, createSession as apiCreateSession } from '@/api/sessionApi'
+import { listSessions as apiListSessions, createSession as apiCreateSession, deleteSession as apiDeleteSession } from '@/api/sessionApi'
 import { getWorlds, getCharacters, importCharacterFromPath } from '@/api/worldApi'
 import { openFile } from '@/platform/fileSystem'
 
@@ -16,6 +16,10 @@ export async function listCharacters(worldId) {
 
 export async function createSession(worldId, characterId) {
   return apiCreateSession(worldId, characterId)
+}
+
+export async function deleteSession(sessionId) {
+  return apiDeleteSession(sessionId)
 }
 
 export async function importCharacter() {

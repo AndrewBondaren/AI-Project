@@ -34,8 +34,13 @@ class Player:
     display_title:          str | None = None
 
     # location
-    system_location:        str | None = None
-    display_location:       str | None = None
+    system_home_location_uid:   str | None = None
+    system_home_settlement_uid: str | None = None
+    system_location:            str | None = None
+    display_location:           str | None = None
+
+    # faction
+    system_faction_uid:         str | None = None
 
     # money
     system_money:           dict = json_col(default_factory=dict)

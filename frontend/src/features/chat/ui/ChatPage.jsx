@@ -24,7 +24,7 @@ export default function ChatPage() {
   return (
     <div className={styles.page}>
       <div ref={scrollRef} className={styles.messageArea}>
-        <MessageList messages={messages} pending={pending} />
+        <MessageList messages={messages} pending={pending} onSelect={send} />
       </div>
 
       {canResume && !isStreaming && (

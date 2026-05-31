@@ -27,3 +27,11 @@ export async function getSession(sessionId) {
   }
   return res.json()
 }
+
+export async function deleteSession(sessionId) {
+  const res = await fetch(`${API_URL}/sessions/${sessionId}`, { method: 'DELETE' })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.detail ?? `HTTP ${res.status}`)
+  }
+}

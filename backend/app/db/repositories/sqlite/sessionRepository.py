@@ -79,3 +79,9 @@ class SqliteSessionRepository(BaseRepository[GameSession], ISessionRepository):
             (session_id,),
         )
         await self._db.conn.commit()
+
+    async def delete(self, session_id: str) -> None:
+        await self._db.conn.execute(
+            "DELETE FROM combat_state WHERE session_id = ?", (session_id,)
+        )
+        await super().delete(session_id)

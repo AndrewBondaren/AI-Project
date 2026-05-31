@@ -40,3 +40,6 @@ class ISessionRepository(ABC):
 
     @abstractmethod
     async def clear_participants(self, session_id: str) -> None: ...
+
+    @abstractmethod
+    async def delete(self, session_id: str) -> None: ...

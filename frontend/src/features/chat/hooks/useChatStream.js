@@ -24,7 +24,17 @@ export function useChatStream(sessionId, historyLimit) {
       getPending(sessionId).catch(() => null),
     ])
       .then(([history, pending]) => {
-        const msgs = [...history]
+        const msgs = history.map(msg => {
+          if (msg.role === 'bot' && msg.text) {
+            try {
+              const parsed = JSON.parse(msg.text)
+              if (parsed && typeof parsed === 'object' && parsed.type) {
+                return { role: 'bot', data: parsed }
+              }
+            } catch { /* plain text */ }
+          }
+          return msg
+        })
         if (pending) {
           msgs.push({ role: 'pending', text: pending.player_input })
           lastMessageRef.current = pending.player_input
@@ -59,10 +69,13 @@ export function useChatStream(sessionId, historyLimit) {
         setThinkingMs(event.elapsed_ms)
         break
       case 'result': {
-        const text = typeof event.response === 'string'
-          ? event.response
-          : JSON.stringify(event.response, null, 2)
-        setMessages(prev => [...prev, { role: 'bot', text }])
+        const response = event.response
+        if (response && typeof response === 'object' && 'type' in response) {
+          setMessages(prev => [...prev, { role: 'bot', data: response }])
+        } else {
+          const text = typeof response === 'string' ? response : JSON.stringify(response, null, 2)
+          setMessages(prev => [...prev, { role: 'bot', text }])
+        }
         break
       }
       case 'cancelled':
@@ -124,10 +137,11 @@ export function useChatStream(sessionId, historyLimit) {
     }
   }, [sessionId, processStream])
 
-  const send = useCallback(async (text) => {
+  const send = useCallback(async (text, display) => {
     if (!text.trim() || isStreaming || !historyLoaded) return
     setCanResume(false)
-    setMessages(prev => [...prev.filter(m => m.role !== 'pending'), { role: 'user', text }])
+    const userMsg = { role: 'user', text, ...(display ? { displayText: display } : {}) }
+    setMessages(prev => [...prev.filter(m => m.role !== 'pending'), userMsg])
     await runStream(text, false)
   }, [isStreaming, historyLoaded, runStream])
 

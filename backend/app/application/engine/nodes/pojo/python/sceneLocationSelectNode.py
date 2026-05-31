@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Объявленные ошибки
+# Ошибки
 # ---------------------------------------------------------------------------
 
 class InvalidLocationError(PythonNodeError):
@@ -32,6 +32,35 @@ class NoAvailableChildrenError(PythonNodeError):
 
 
 # ---------------------------------------------------------------------------
+# Общая проверка доступности локации для игрока (используется в обеих нодах)
+# ---------------------------------------------------------------------------
+
+def can_start(location, player_uid, player_faction_uid, faction_access_list, npc_home_occupied_uids):
+    """
+    Возвращает True если игрок может начать сцену в данной локации.
+
+    faction_access_list: [(faction_uid, is_allowed), ...] из location_faction_access
+    npc_home_occupied_uids: set uid локаций занятых NPC-резидентами
+    """
+    if location.is_forbidden:
+        # allowlist mode: пускаем только явно разрешённые фракции + владельца
+        allowed = {fa[0] for fa in faction_access_list if fa[1]}
+        if player_faction_uid not in allowed and location.owner_uid != player_uid:
+            return False
+    else:
+        # denylist mode: блокируем явно запрещённые фракции
+        banned = {fa[0] for fa in faction_access_list if not fa[1]}
+        if player_faction_uid in banned:
+            return False
+
+    if not location.is_public:
+        if location.location_uid in npc_home_occupied_uids:
+            return False
+
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Node 1: валидация + дочерние локации
 # ---------------------------------------------------------------------------
 
@@ -40,8 +69,8 @@ class NoAvailableChildrenError(PythonNodeError):
 class SceneLocationChildrenNode(PythonNode):
     """
     Валидирует выбранную локацию и возвращает список доступных дочерних.
-    Фильтрует здания/помещения с NPC-резидентами (home_location_uid).
-    children: [] означает leaf-ноду — здание без подразделений.
+    Фильтр: is_accessible + faction-aware can_start.
+    children: [] означает leaf — здание/комната без подразделений.
     """
 
     id:   str = "scene_location_children"
@@ -61,6 +90,7 @@ class SceneLocationChildrenNode(PythonNode):
     async def execute(self, state, context) -> NodeResult:
         location_uid = state.message.strip()
         world_uid    = state.session.meta.get("world_uid")
+        character_id = state.session.meta.get("character_id")
 
         location = await context["location_repo"].get_by_id(location_uid)
         if location is None or location.world_uid != world_uid:
@@ -73,13 +103,26 @@ class SceneLocationChildrenNode(PythonNode):
 
         available = children
         if children:
-            child_uids    = [c.location_uid for c in children]
-            occupied_uids = await context["npc_repo"].get_home_occupied_uids(world_uid, child_uids)
-            available     = [c for c in children if c.location_uid not in occupied_uids]
+            player = await context["player_repo"].get_by_id(character_id) if character_id else None
+            player_uid         = player.character_uid if player else None
+            player_faction_uid = player.system_faction_uid if player else None
+
+            child_uids         = [c.location_uid for c in children]
+            faction_access_map = await context["location_repo"].get_faction_access_bulk(child_uids)
+            occupied_uids      = await context["npc_repo"].get_home_occupied_uids(world_uid, child_uids)
+
+            available = [
+                c for c in children
+                if can_start(
+                    c, player_uid, player_faction_uid,
+                    faction_access_map.get(c.location_uid, []),
+                    occupied_uids,
+                )
+            ]
 
             if not available:
                 raise NoAvailableChildrenError(
-                    f"All {len(children)} children of '{location_uid}' are NPC-occupied"
+                    f"All {len(children)} children of '{location_uid}' are blocked (faction/NPC)"
                 )
 
         logger.info(
@@ -123,18 +166,15 @@ class SceneStartLocationSelectNode(PythonNode):
     possible_errors: list = field(default_factory=list)
 
     async def execute(self, state, context) -> NodeResult:
-        data         = state.node_results["scene_location_children"]
-        location_uid = data["location_uid"]
+        data          = state.node_results["scene_location_children"]
+        location_uid  = data["location_uid"]
         location_name = data["location_name"]
-        children     = data["children"]
+        children      = data["children"]
 
         if children:
             return NodeResult(data={
                 "type": "select_child",
-                "parent": {
-                    "uid":  location_uid,
-                    "name": location_name,
-                },
+                "parent": {"uid": location_uid, "name": location_name},
                 "children": children,
             })
 
@@ -142,6 +182,7 @@ class SceneStartLocationSelectNode(PythonNode):
         scene = SessionScene(
             session_id=state.session.session_id,
             location_uid=location_uid,
+            level_uid=None,  # заполняется когда location_levels реализованы
             description=data["location_description"],
             actors=[],
             created_at=now,

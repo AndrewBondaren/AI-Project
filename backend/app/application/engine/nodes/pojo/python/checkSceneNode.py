@@ -25,6 +25,14 @@ class SceneNotFoundError(PythonNodeError):
     user_message = "Сцена не инициализирована."
 
 
+class SceneLocationSelectPendingError(PythonNodeError):
+    """session_scene существует, но location_uid не задан — идёт выбор локации."""
+    code = "scene_location_select_pending"
+    requires_replan = True
+    next_task_type = TaskType.SCENE_START_LOCATION_SELECT
+    user_message = "Выберите локацию для начала игры."
+
+
 class LocationNotFoundError(PythonNodeError):
     """location_uid в сцене указывает на несуществующую локацию — битые данные."""
     code = "location_not_found"
@@ -57,6 +65,7 @@ class CheckSceneNode(PythonNode):
     deps:           list = field(default_factory=list)
     possible_errors: list = field(default_factory=lambda: [
         SceneNotFoundError,
+        SceneLocationSelectPendingError,
         LocationNotFoundError,
     ])
 
@@ -69,6 +78,10 @@ class CheckSceneNode(PythonNode):
         scene = await context["scene_repo"].get(state.session.session_id)
         if scene is None:
             raise SceneNotFoundError(f"No scene for session '{state.session.session_id}'")
+        if scene.location_uid is None:
+            raise SceneLocationSelectPendingError(
+                f"Session '{state.session.session_id}' has draft scene — location selection pending"
+            )
 
         state.shared_context["scene"] = scene
 

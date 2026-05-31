@@ -74,7 +74,7 @@ class Npc:
     display_faction_rank:       str | None = None
 
     # spawn / respawn
-    home_location_uid:          str | None = None
+    system_home_location_uid:          str | None = None
     work_location_uid:          str | None = None
     spawn_location_uid:         str | None = None
     can_respawn:                bool = bool_col(default=False)

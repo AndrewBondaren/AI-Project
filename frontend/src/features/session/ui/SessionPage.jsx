@@ -1,10 +1,23 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSessions } from '../hooks/useSessions'
 import styles from './SessionPage.module.css'
 
 export default function SessionPage() {
-  const { sessions, loading, error } = useSessions()
+  const { sessions, loading, error, deleteSession } = useSessions()
   const navigate = useNavigate()
+  const [deletingId, setDeletingId] = useState(null)
+
+  const handleDelete = async (e, id) => {
+    e.stopPropagation()
+    if (!window.confirm('Удалить сессию? Это действие нельзя отменить.')) return
+    setDeletingId(id)
+    try {
+      await deleteSession(id)
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   return (
     <div className={styles.page}>
@@ -35,7 +48,16 @@ export default function SessionPage() {
             <span className={s.character_name ? styles.cardCharacter : styles.cardDeleted}>
               {s.character_name ?? 'Персонаж удалён'}
             </span>
-            <span className={styles.cardDate}>{formatDate(s.last_active_at)}</span>
+            <div className={styles.cardFooter}>
+              <span className={styles.cardDate}>{formatDate(s.last_active_at)}</span>
+              <button
+                className={styles.deleteBtn}
+                disabled={deletingId === s.id}
+                onClick={e => handleDelete(e, s.id)}
+              >
+                {deletingId === s.id ? '...' : 'Удалить'}
+              </button>
+            </div>
           </li>
         ))}
       </ul>

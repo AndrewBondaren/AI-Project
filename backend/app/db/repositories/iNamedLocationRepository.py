@@ -15,6 +15,18 @@ class INamedLocationRepository(ABC):
     async def get_children(self, parent_uid: str) -> list[NamedLocation]: ...
 
     @abstractmethod
+    async def get_tree(self, world_uid: str) -> dict[str, int]:
+        """uid → depth для всех локаций мира через WITH RECURSIVE CTE."""
+        ...
+
+    @abstractmethod
+    async def get_faction_access_bulk(
+        self, location_uids: list[str]
+    ) -> dict[str, list[tuple[str, bool]]]:
+        """location_uid → [(faction_uid, is_allowed), ...] из location_faction_access."""
+        ...
+
+    @abstractmethod
     async def create(self, loc: NamedLocation) -> None: ...
 
     @abstractmethod

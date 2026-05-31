@@ -81,8 +81,37 @@
   font-style: italic;
 }
 
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--space-1);
+}
+
 .cardDate {
   font-size: var(--font-size-sm);
   color: var(--color-text-faint);
-  margin-top: var(--space-1);
+}
+
+.deleteBtn {
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-faint);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.deleteBtn:hover:not(:disabled) {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.deleteBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }

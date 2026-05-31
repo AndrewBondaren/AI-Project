@@ -17,18 +17,20 @@ class NamedLocation:
 
     parent_location_uid:    str | None = None
     location_subtype:       str | None = None
-    system_terrain:         str | None = None
     system_description:     str | None = None
     display_description:    str | None = None
     glossary_ref:           str | None = None
     tag_refs:               list | None = json_nullable_col()
     is_discovered:          bool = bool_col(default=False)
     is_accessible:          bool = bool_col(default=True)
-    interior_width:         int | None = None
-    interior_height:        int | None = None
     entry_difficulty:       int | None = None
     guard_level:            int | None = None
     system_location_mood:   str | None = None
     display_location_mood:  str | None = None
     owner_uid:              str | None = None
     climate_zone:           str | None = None
+    state_uid:              str | None = None
+    city_size:              str | None = None
+    economic_tier:          str | None = None
+    is_public:              bool = bool_col(default=False)
+    is_forbidden:           bool = bool_col(default=False)

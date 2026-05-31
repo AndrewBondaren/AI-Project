@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { listSessions } from '../service'
+import { useCallback, useEffect, useState } from 'react'
+import { listSessions, deleteSession as deleteSessionService } from '../service'
 
 export function useSessions() {
   const [sessions, setSessions] = useState([])
@@ -13,5 +13,10 @@ export function useSessions() {
       .finally(() => setLoading(false))
   }, [])
 
-  return { sessions, loading, error }
+  const deleteSession = useCallback(async (id) => {
+    await deleteSessionService(id)
+    setSessions(prev => prev.filter(s => s.id !== id))
+  }, [])
+
+  return { sessions, loading, error, deleteSession }
 }
