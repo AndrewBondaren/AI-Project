@@ -570,6 +570,21 @@ CREATE TABLE IF NOT EXISTS faction_relations (
 );
 
 -- ============================================================
+-- states
+-- ============================================================
+CREATE TABLE IF NOT EXISTS states (
+    state_uid           TEXT PRIMARY KEY,
+    world_uid           TEXT NOT NULL,
+    display_name        TEXT NOT NULL,
+    government_type     TEXT,
+    display_description TEXT,
+    created_at          TEXT NOT NULL,
+    FOREIGN KEY (world_uid) REFERENCES worlds(world_uid)
+);
+
+CREATE INDEX IF NOT EXISTS idx_states_world ON states (world_uid);
+
+-- ============================================================
 -- named_locations
 -- ============================================================
 CREATE TABLE IF NOT EXISTS named_locations (
@@ -596,6 +611,7 @@ CREATE TABLE IF NOT EXISTS named_locations (
     economic_tier           TEXT,
     is_public               INTEGER NOT NULL DEFAULT 0,
     is_forbidden            INTEGER NOT NULL DEFAULT 0,
+    is_selectable           INTEGER NOT NULL DEFAULT 1,
     created_at              TEXT NOT NULL,
     FOREIGN KEY (world_uid)            REFERENCES worlds(world_uid),
     FOREIGN KEY (parent_location_uid) REFERENCES named_locations(location_uid),

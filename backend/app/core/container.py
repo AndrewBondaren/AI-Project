@@ -25,10 +25,16 @@ from app.db.repositories.iWorldPerkRepository import IWorldPerkRepository
 from app.db.repositories.sqlite.worldPerkRepository import SqliteWorldPerkRepository
 from app.db.repositories.iNamedLocationRepository import INamedLocationRepository
 from app.db.repositories.sqlite.namedLocationRepository import SqliteNamedLocationRepository
+from app.db.repositories.iMapCellRepository import IMapCellRepository
+from app.db.repositories.sqlite.mapCellRepository import SqliteMapCellRepository
+from app.db.repositories.iStateRepository import IStateRepository
+from app.db.repositories.sqlite.stateRepository import SqliteStateRepository
 from app.application.worldData.worldService import WorldService
 from app.application.worldData.raceService import RaceService
 from app.application.worldData.worldPerkService import WorldPerkService
 from app.application.worldData.namedLocationService import NamedLocationService
+from app.application.worldData.mapCellService import MapCellService
+from app.application.worldData.stateService import StateService
 from app.application.worldData.seedService import SeedService
 from app.application.worldData.worldBundleService import WorldBundleService
 from app.application.worldData.playerService import PlayerService
@@ -80,6 +86,8 @@ class Container:
         self._race_repository: IRaceRepository | None = None
         self._perk_repository: IWorldPerkRepository | None = None
         self._location_repository: INamedLocationRepository | None = None
+        self._map_cell_repository: IMapCellRepository | None = None
+        self._state_repository: IStateRepository | None = None
 
         # DOMAIN SERVICES
         self._player_service: PlayerService | None = None
@@ -88,6 +96,8 @@ class Container:
         self._race_service: RaceService | None = None
         self._perk_service: WorldPerkService | None = None
         self._location_service: NamedLocationService | None = None
+        self._map_cell_service: MapCellService | None = None
+        self._state_service: StateService | None = None
         self._seed_service: SeedService | None = None
         self._world_bundle_service: WorldBundleService | None = None
 
@@ -342,6 +352,8 @@ class Container:
                     "location_repo": self.location_repository(),
                     "player_repo":   self.player_repository(),
                     "npc_repo":      self.npc_repository(),
+                    "world_repo":    self.world_repository(),
+                    "state_repo":    self.state_repository(),
                 },
             )
         return self._llm_engine
@@ -391,6 +403,16 @@ class Container:
             self._location_repository = SqliteNamedLocationRepository(db=self._db)
         return self._location_repository
 
+    def map_cell_repository(self) -> IMapCellRepository:
+        if self._map_cell_repository is None:
+            self._map_cell_repository = SqliteMapCellRepository(db=self._db)
+        return self._map_cell_repository
+
+    def state_repository(self) -> IStateRepository:
+        if self._state_repository is None:
+            self._state_repository = SqliteStateRepository(db=self._db)
+        return self._state_repository
+
     def world_service(self) -> WorldService:
         if self._world_service is None:
             self._world_service = WorldService(repo=self.world_repository())
@@ -411,6 +433,16 @@ class Container:
             self._location_service = NamedLocationService(repo=self.location_repository())
         return self._location_service
 
+    def map_cell_service(self) -> MapCellService:
+        if self._map_cell_service is None:
+            self._map_cell_service = MapCellService(repo=self.map_cell_repository())
+        return self._map_cell_service
+
+    def state_service(self) -> StateService:
+        if self._state_service is None:
+            self._state_service = StateService(repo=self.state_repository())
+        return self._state_service
+
     def seed_service(self) -> SeedService:
         if self._seed_service is None:
             self._seed_service = SeedService(db=self._db)
@@ -423,6 +455,8 @@ class Container:
                 race_service=self.race_service(),
                 perk_service=self.perk_service(),
                 location_service=self.location_service(),
+                map_cell_service=self.map_cell_service(),
+                state_service=self.state_service(),
             )
         return self._world_bundle_service
 

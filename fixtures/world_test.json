@@ -6,17 +6,62 @@
     "narrative_language": "ru",
     "measurement_system": "metric",
     "stat_schema": {
-      "strength":     { "display": "Сила",       "min": 1, "max": 20 },
-      "agility":      { "display": "Ловкость",   "min": 1, "max": 20 },
-      "endurance":    { "display": "Выносливость","min": 1, "max": 20 },
-      "intelligence": { "display": "Интеллект",  "min": 1, "max": 20 },
-      "perception":   { "display": "Восприятие", "min": 1, "max": 20 },
-      "charisma":     { "display": "Харизма",    "min": 1, "max": 20 }
+      "strength":     { "display": "Сила",        "min": 1, "max": 20 },
+      "agility":      { "display": "Ловкость",    "min": 1, "max": 20 },
+      "endurance":    { "display": "Выносливость", "min": 1, "max": 20 },
+      "intelligence": { "display": "Интеллект",   "min": 1, "max": 20 },
+      "perception":   { "display": "Восприятие",  "min": 1, "max": 20 },
+      "charisma":     { "display": "Харизма",     "min": 1, "max": 20 }
     },
     "hp_enabled": true,
     "faint_threshold": 0.05,
-    "wounds_enabled": false
+    "wounds_enabled": false,
+    "location_type_registry": {
+      "continent": { "display": "Континент" },
+      "region":    { "display": "Регион" },
+      "kingdom":   { "display": "Королевство" },
+      "empire":    { "display": "Империя" },
+      "duchy":     { "display": "Герцогство" },
+      "city":      { "display": "Город" },
+      "town":      { "display": "Посёлок" },
+      "village":   { "display": "Деревня" },
+      "district":  { "display": "Район" },
+      "square":    { "display": "Площадь" },
+      "street":    { "display": "Улица" },
+      "building":  { "display": "Здание" },
+      "gate":      { "display": "Ворота" },
+      "room":      { "display": "Комната" },
+      "dungeon":   { "display": "Подземелье" },
+      "cave":      { "display": "Пещера" },
+      "camp":      { "display": "Лагерь" }
+    },
+    "terrain_registry": {
+      "tundra":  { "display": "Тундра",          "travel_modifier": 0.7, "temperature_base": -15 },
+      "plains":  { "display": "Равнина",          "travel_modifier": 1.0, "temperature_base": 5   },
+      "forest":  { "display": "Лес",              "travel_modifier": 0.8, "temperature_base": 2   },
+      "urban":   { "display": "Городская застройка", "travel_modifier": 1.0, "temperature_base": 0 },
+      "road":    { "display": "Дорога",           "travel_modifier": 1.3, "temperature_base": 0   },
+      "water":   { "display": "Вода",             "travel_modifier": 0.3, "temperature_base": -5  }
+    }
   },
+  "states": [
+    {
+      "state_uid": "state-iron-crown",
+      "world_uid": "world-test-001",
+      "display_name": "Железная Корона",
+      "government_type": "kingdom",
+      "display_description": "Суровое северное королевство, управляемое военной знатью. Контролирует горные перевалы и торговые пути севера.",
+      "created_at": "2026-05-23T00:00:00"
+    },
+    {
+      "state_uid": "state-amber-league",
+      "world_uid": "world-test-001",
+      "display_name": "Янтарная Лига",
+      "government_type": "republic",
+      "display_description": "Торговая республика южного побережья. Богатство построено на морской торговле и контроле над портами.",
+      "created_at": "2026-05-23T00:00:00"
+    }
+  ],
   "races": [
     {
       "race_uid": "race-human",
@@ -66,7 +111,9 @@
       "location_type": "continent",
       "created_at": "2026-05-23T00:00:00",
       "system_description": "main_continent",
-      "display_description": "Главный континент мира Эйдора"
+      "display_description": "Главный континент мира Эйдора",
+      "is_accessible": false,
+      "is_selectable": false
     },
     {
       "location_uid": "loc-region-northern",
@@ -75,8 +122,9 @@
       "location_type": "region",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-continent-eidor",
-      "system_terrain": "tundra",
-      "display_description": "Суровые северные территории"
+      "display_description": "Суровые северные территории",
+      "is_accessible": false,
+      "is_selectable": false
     },
     {
       "location_uid": "loc-city-ironhold",
@@ -85,11 +133,13 @@
       "location_type": "city",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-region-northern",
-      "system_terrain": "plains",
       "display_description": "Укреплённый торговый город на севере",
       "is_discovered": true,
       "is_accessible": true,
-      "guard_level": 3
+      "is_public": true,
+      "guard_level": 3,
+      "city_size": "large",
+      "state_uid": "state-iron-crown"
     },
     {
       "location_uid": "loc-tavern-broken-axe",
@@ -98,9 +148,219 @@
       "location_type": "building",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-city-ironhold",
-      "display_description": "Шумная таверна в центре Айронхолда",
+      "display_description": "Шумная таверна в центре Айронхолда. Старые дубовые балки, очаг и запах пива.",
       "is_discovered": true,
-      "is_accessible": true
+      "is_accessible": true,
+      "is_public": true
+    },
+    {
+      "location_uid": "loc-market-ironhold",
+      "world_uid": "world-test-001",
+      "display_name": "Рыночная площадь",
+      "location_type": "square",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-city-ironhold",
+      "display_description": "Главная торговая площадь Айронхолда. По утрам заполняется лавками и торговцами со всего севера.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true
+    },
+    {
+      "location_uid": "loc-blacksmith-ironhold",
+      "world_uid": "world-test-001",
+      "display_name": "Кузница «Молот и наковальня»",
+      "location_type": "building",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-city-ironhold",
+      "display_description": "Мастерская кузнеца Бронна. Угольный дым, звон металла и полки с инструментами.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": false
+    },
+    {
+      "location_uid": "loc-city-gate-ironhold",
+      "world_uid": "world-test-001",
+      "display_name": "Северные ворота",
+      "location_type": "gate",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-city-ironhold",
+      "display_description": "Массивные каменные ворота с постоянной стражей. Главный въезд в Айронхолд с севера.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true,
+      "guard_level": 5,
+      "is_forbidden": true
+    },
+    {
+      "location_uid": "loc-tavern-common-room",
+      "world_uid": "world-test-001",
+      "display_name": "Общий зал",
+      "location_type": "room",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-tavern-broken-axe",
+      "display_description": "Просторный зал с длинными столами и очагом посередине. Место сбора местных и путников.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true
+    },
+    {
+      "location_uid": "loc-tavern-room-1",
+      "world_uid": "world-test-001",
+      "display_name": "Комната № 1",
+      "location_type": "room",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-tavern-broken-axe",
+      "display_description": "Небольшая съёмная комната с кроватью, столом и запирающейся дверью.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": false
+    },
+
+    {
+      "location_uid": "loc-region-southern",
+      "world_uid": "world-test-001",
+      "display_name": "Южные земли",
+      "location_type": "region",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-continent-eidor",
+      "display_description": "Тёплые южные территории с плодородными равнинами и торговыми портами.",
+      "is_accessible": false,
+      "is_selectable": false
+    },
+    {
+      "location_uid": "loc-city-amberport",
+      "world_uid": "world-test-001",
+      "display_name": "Амберпорт",
+      "location_type": "city",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-region-southern",
+      "display_description": "Оживлённый портовый город на южном побережье. Перекрёсток торговых путей со всего континента.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true,
+      "city_size": "large",
+      "state_uid": "state-amber-league"
+    },
+    {
+      "location_uid": "loc-amberport-harbor",
+      "world_uid": "world-test-001",
+      "display_name": "Портовые доки",
+      "location_type": "district",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-city-amberport",
+      "display_description": "Шумный район доков. Запах соли и рыбы, скрип снастей, крики матросов.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true
+    },
+    {
+      "location_uid": "loc-amberport-tavern",
+      "world_uid": "world-test-001",
+      "display_name": "Таверна «Золотой якорь»",
+      "location_type": "building",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-city-amberport",
+      "display_description": "Любимое место моряков и купцов. Дешёвое вино, хорошая еда и новости со всего побережья.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true
+    },
+    {
+      "location_uid": "loc-amberport-market",
+      "world_uid": "world-test-001",
+      "display_name": "Торговая набережная",
+      "location_type": "square",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-city-amberport",
+      "display_description": "Длинная набережная с рядами лавок. Торгуют специями, тканями и морскими товарами.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true
+    },
+    {
+      "location_uid": "loc-amberport-tavern-hall",
+      "world_uid": "world-test-001",
+      "display_name": "Общий зал",
+      "location_type": "room",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-amberport-tavern",
+      "display_description": "Просторный зал с видом на гавань. По вечерам здесь играют карты и рассказывают небылицы о дальних морях.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true
     }
+  ],
+  "map_cells": [
+    { "x": 0, "y": -2, "z":  3, "system_terrain": "tundra", "temperature_base": -30, "location_uid": "loc-region-northern" },
+    { "x": 1, "y": -2, "z":  3, "system_terrain": "tundra", "temperature_base": -30, "location_uid": "loc-region-northern" },
+    { "x": 2, "y": -2, "z":  2, "system_terrain": "tundra", "temperature_base": -25, "location_uid": "loc-region-northern" },
+    { "x": 3, "y": -2, "z":  3, "system_terrain": "tundra", "temperature_base": -30, "location_uid": "loc-region-northern" },
+    { "x": 4, "y": -2, "z":  3, "system_terrain": "tundra", "temperature_base": -30, "location_uid": "loc-region-northern" },
+
+    { "x": 0, "y": -1, "z":  2, "system_terrain": "tundra", "temperature_base": -24, "location_uid": "loc-region-northern" },
+    { "x": 1, "y": -1, "z":  3, "system_terrain": "tundra", "temperature_base": -28, "location_uid": "loc-region-northern" },
+    { "x": 2, "y": -1, "z":  1, "system_terrain": "tundra", "temperature_base": -18, "location_uid": "loc-region-northern" },
+    { "x": 3, "y": -1, "z":  3, "system_terrain": "tundra", "temperature_base": -28, "location_uid": "loc-region-northern" },
+    { "x": 4, "y": -1, "z":  2, "system_terrain": "tundra", "temperature_base": -24, "location_uid": "loc-region-northern" },
+
+    { "x": 0, "y":  0, "z":  2, "system_terrain": "tundra", "temperature_base": -22, "location_uid": "loc-region-northern" },
+    { "x": 1, "y":  0, "z":  2, "system_terrain": "tundra", "temperature_base": -22, "location_uid": "loc-region-northern" },
+    { "x": 2, "y":  0, "z":  1, "system_terrain": "tundra", "temperature_base": -18, "location_uid": "loc-region-northern" },
+    { "x": 3, "y":  0, "z":  2, "system_terrain": "tundra", "temperature_base": -22, "location_uid": "loc-region-northern" },
+    { "x": 4, "y":  0, "z":  2, "system_terrain": "tundra", "temperature_base": -22, "location_uid": "loc-region-northern" },
+
+    { "x": 0, "y":  1, "z":  1, "system_terrain": "tundra", "temperature_base": -16, "location_uid": "loc-region-northern" },
+    { "x": 1, "y":  1, "z":  2, "system_terrain": "tundra", "temperature_base": -20, "location_uid": "loc-region-northern" },
+    { "x": 2, "y":  1, "z": -1, "system_terrain": "tundra", "temperature_base":  -8, "location_uid": "loc-region-northern" },
+    { "x": 3, "y":  1, "z":  2, "system_terrain": "tundra", "temperature_base": -20, "location_uid": "loc-region-northern" },
+    { "x": 4, "y":  1, "z":  1, "system_terrain": "tundra", "temperature_base": -16, "location_uid": "loc-region-northern" },
+
+    { "x": 0, "y":  2, "z": -1, "system_terrain": "tundra", "temperature_base":  -8, "location_uid": "loc-region-northern" },
+    { "x": 1, "y":  2, "z":  0, "system_terrain": "urban",  "temperature_base":  -5, "location_uid": "loc-city-ironhold" },
+    { "x": 2, "y":  2, "z":  0, "system_terrain": "road",   "temperature_base":  -5, "location_uid": "loc-city-ironhold" },
+    { "x": 3, "y":  2, "z":  0, "system_terrain": "urban",  "temperature_base":  -5, "location_uid": "loc-city-ironhold" },
+    { "x": 4, "y":  2, "z": -1, "system_terrain": "tundra", "temperature_base":  -8, "location_uid": "loc-region-northern" },
+
+    { "x": 0, "y":  3, "z": -1, "system_terrain": "tundra", "temperature_base":  -8, "location_uid": "loc-region-northern" },
+    { "x": 1, "y":  3, "z":  0, "system_terrain": "urban",  "temperature_base":  -5, "location_uid": "loc-city-ironhold" },
+    { "x": 2, "y":  3, "z":  0, "system_terrain": "urban",  "temperature_base":  -5, "location_uid": "loc-city-ironhold" },
+    { "x": 3, "y":  3, "z":  0, "system_terrain": "urban",  "temperature_base":  -5, "location_uid": "loc-city-ironhold" },
+    { "x": 4, "y":  3, "z": -1, "system_terrain": "tundra", "temperature_base":  -8, "location_uid": "loc-region-northern" },
+
+    { "x": 0, "y":  4, "z": -1, "system_terrain": "plains", "temperature_base":  -5, "location_uid": "loc-region-northern" },
+    { "x": 1, "y":  4, "z":  0, "system_terrain": "plains", "temperature_base":  -4, "location_uid": "loc-region-northern" },
+    { "x": 2, "y":  4, "z": -1, "system_terrain": "plains", "temperature_base":  -3, "location_uid": "loc-region-northern" },
+    { "x": 3, "y":  4, "z":  0, "system_terrain": "plains", "temperature_base":  -4, "location_uid": "loc-region-northern" },
+    { "x": 4, "y":  4, "z": -1, "system_terrain": "plains", "temperature_base":  -5, "location_uid": "loc-region-northern" },
+
+    { "x": 0, "y":  5, "z": -1, "system_terrain": "plains", "temperature_base":   2, "location_uid": "loc-region-southern" },
+    { "x": 1, "y":  5, "z":  0, "system_terrain": "plains", "temperature_base":   4, "location_uid": "loc-region-southern" },
+    { "x": 2, "y":  5, "z":  0, "system_terrain": "road",   "temperature_base":   5, "location_uid": "loc-region-southern" },
+    { "x": 3, "y":  5, "z":  0, "system_terrain": "plains", "temperature_base":   4, "location_uid": "loc-region-southern" },
+    { "x": 4, "y":  5, "z": -1, "system_terrain": "plains", "temperature_base":   2, "location_uid": "loc-region-southern" },
+
+    { "x": 0, "y":  6, "z":  0, "system_terrain": "plains", "temperature_base":  10, "location_uid": "loc-region-southern" },
+    { "x": 1, "y":  6, "z":  0, "system_terrain": "urban",  "temperature_base":  12, "location_uid": "loc-city-amberport" },
+    { "x": 2, "y":  6, "z":  0, "system_terrain": "urban",  "temperature_base":  12, "location_uid": "loc-city-amberport" },
+    { "x": 3, "y":  6, "z":  0, "system_terrain": "urban",  "temperature_base":  12, "location_uid": "loc-city-amberport" },
+    { "x": 4, "y":  6, "z": -1, "system_terrain": "water",  "temperature_base":   9, "location_uid": "loc-region-southern" },
+
+    { "x": 0, "y":  7, "z":  0, "system_terrain": "plains", "temperature_base":  10, "location_uid": "loc-region-southern" },
+    { "x": 1, "y":  7, "z":  0, "system_terrain": "urban",  "temperature_base":  12, "location_uid": "loc-city-amberport" },
+    { "x": 2, "y":  7, "z":  0, "system_terrain": "road",   "temperature_base":  12, "location_uid": "loc-city-amberport" },
+    { "x": 3, "y":  7, "z": -1, "system_terrain": "urban",  "temperature_base":  11, "location_uid": "loc-city-amberport" },
+    { "x": 4, "y":  7, "z": -1, "system_terrain": "water",  "temperature_base":   9, "location_uid": "loc-region-southern" },
+
+    { "x": 0, "y":  8, "z": -1, "system_terrain": "plains", "temperature_base":   8, "location_uid": "loc-region-southern" },
+    { "x": 1, "y":  8, "z": -1, "system_terrain": "water",  "temperature_base":   7, "location_uid": "loc-region-southern" },
+    { "x": 2, "y":  8, "z": -1, "system_terrain": "water",  "temperature_base":   7, "location_uid": "loc-region-southern" },
+    { "x": 3, "y":  8, "z": -2, "system_terrain": "water",  "temperature_base":   6, "location_uid": "loc-region-southern" },
+    { "x": 4, "y":  8, "z": -2, "system_terrain": "water",  "temperature_base":   6, "location_uid": "loc-region-southern" },
+
+    { "x": 0, "y":  9, "z": -2, "system_terrain": "water",  "temperature_base":   5, "location_uid": "loc-region-southern" },
+    { "x": 1, "y":  9, "z": -2, "system_terrain": "water",  "temperature_base":   5, "location_uid": "loc-region-southern" },
+    { "x": 2, "y":  9, "z": -2, "system_terrain": "water",  "temperature_base":   5, "location_uid": "loc-region-southern" },
+    { "x": 3, "y":  9, "z": -2, "system_terrain": "water",  "temperature_base":   5, "location_uid": "loc-region-southern" },
+    { "x": 4, "y":  9, "z": -2, "system_terrain": "water",  "temperature_base":   5, "location_uid": "loc-region-southern" }
   ]
 }

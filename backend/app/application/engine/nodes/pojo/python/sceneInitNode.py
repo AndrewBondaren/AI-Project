@@ -8,12 +8,25 @@ from app.application.engine.nodes.nodeRegistry import register_python
 from app.application.engine.nodes.pojo.nodeResult import NodeResult
 from app.application.engine.nodes.pojo.pythonNode import PythonNode
 from app.application.engine.nodes.pojo.pythonNodeError import PythonNodeError
-from app.application.engine.nodes.pojo.python.sceneLocationSelectNode import can_start
+from app.application.engine.nodes.pojo.python.sceneLocationSelectNode import can_start, _resolve_type_display
 from app.application.engine.rules.rule import Rule
 from app.application.engine.taskType import TaskType
 from app.db.models.sessionScene import SessionScene
 
 logger = logging.getLogger(__name__)
+
+
+def _find_ancestor_at_depth(start_uid, uid_to_loc, depth_map, target_depth):
+    """Walk up the tree from start_uid until reaching target_depth. Returns uid or None."""
+    current = start_uid
+    while current:
+        if depth_map.get(current) == target_depth:
+            return current
+        loc = uid_to_loc.get(current)
+        if loc is None:
+            break
+        current = loc.parent_location_uid
+    return None
 
 
 class NoLocationsAvailableError(PythonNodeError):
@@ -45,6 +58,9 @@ class SceneInitNode(PythonNode):
         if not all_locations:
             raise NoLocationsAvailableError(f"No locations found for world '{world_uid}'")
 
+        world = await context["world_repo"].get_by_id(world_uid)
+        type_registry = world.location_type_registry if world else {}
+
         uid_to_loc = {loc.location_uid: loc for loc in all_locations}
 
         player = None
@@ -61,29 +77,13 @@ class SceneInitNode(PythonNode):
         # Глубина через WITH RECURSIVE CTE — всегда точна, нет проблемы синхронизации
         depth_map = await context["location_repo"].get_tree(world_uid)
 
-        if home_uid:
-            target_depth = depth_map.get(home_uid)
-        elif home_settlement_uid:
-            settlement_depth = depth_map.get(home_settlement_uid)
-            target_depth = (settlement_depth + 1) if settlement_depth is not None else None
-        else:
-            target_depth = None
+        # Всегда стартуем с минимальной глубины селектабельных локаций
+        selectable = [l for l in all_locations if l.is_selectable and depth_map.get(l.location_uid, 0) > 0]
+        if not selectable:
+            raise NoLocationsAvailableError(f"No selectable locations found for world '{world_uid}'")
 
-        if target_depth is not None:
-            candidates = [
-                l for l in all_locations
-                if depth_map.get(l.location_uid) == target_depth and l.is_accessible
-            ]
-        else:
-            non_root = [l for l in all_locations if depth_map.get(l.location_uid, 0) > 0]
-            if non_root:
-                min_depth = min(depth_map[l.location_uid] for l in non_root)
-                candidates = [
-                    l for l in non_root
-                    if depth_map.get(l.location_uid) == min_depth and l.is_accessible
-                ]
-            else:
-                candidates = []
+        min_depth  = min(depth_map[l.location_uid] for l in selectable)
+        candidates = [l for l in selectable if depth_map.get(l.location_uid) == min_depth]
 
         # Faction-aware фильтр (тот же can_start что в SceneLocationChildrenNode)
         player_uid         = player.character_uid if player else None
@@ -107,14 +107,26 @@ class SceneInitNode(PythonNode):
                 f"No accessible locations at suitable depth for world '{world_uid}'"
             )
 
-        sorted_locations = sorted(
-            locations,
-            key=lambda l: (0 if l.location_uid == home_uid else 1, l.display_name),
+        # Найти предка домашней локации на уровне min_depth для сортировки
+        home_region_uid = _find_ancestor_at_depth(
+            home_uid or home_settlement_uid, uid_to_loc, depth_map, min_depth
         )
 
+        sorted_locations = sorted(
+            locations,
+            key=lambda l: (0 if l.location_uid == home_region_uid else 1, l.display_name),
+        )
+
+        # Batch fetch государств для показанных локаций
+        state_uids = list({l.state_uid for l in sorted_locations if l.state_uid})
+        states_map: dict[str, str] = {}
+        if state_uids:
+            fetched = await context["state_repo"].get_by_uids(state_uids)
+            states_map = {s.state_uid: s.display_name for s in fetched}
+
         logger.info(
-            "scene_init | locations=%d home_uid=%s target_depth=%s",
-            len(sorted_locations), home_uid, target_depth,
+            "scene_init | locations=%d home_uid=%s home_region=%s min_depth=%d",
+            len(sorted_locations), home_uid, home_region_uid, min_depth,
         )
 
         now = datetime.now(timezone.utc).isoformat()
@@ -133,9 +145,11 @@ class SceneInitNode(PythonNode):
             "parent":   None,
             "children": [
                 {
-                    "uid":     loc.location_uid,
-                    "name":    loc.display_name,
-                    "is_home": loc.location_uid == home_uid,
+                    "uid":          loc.location_uid,
+                    "name":         loc.display_name,
+                    "type_display": _resolve_type_display(loc.location_type, type_registry),
+                    "state_name":   states_map.get(loc.state_uid) if loc.state_uid else None,
+                    "is_home":      loc.location_uid == home_region_uid,
                 }
                 for loc in sorted_locations
             ],

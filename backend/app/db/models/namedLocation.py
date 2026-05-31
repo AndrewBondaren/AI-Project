@@ -34,3 +34,4 @@ class NamedLocation:
     economic_tier:          str | None = None
     is_public:              bool = bool_col(default=False)
     is_forbidden:           bool = bool_col(default=False)
+    is_selectable:          bool = bool_col(default=True)

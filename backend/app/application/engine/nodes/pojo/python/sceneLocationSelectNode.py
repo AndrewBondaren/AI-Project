@@ -31,9 +31,22 @@ class NoAvailableChildrenError(PythonNodeError):
     user_message = "Все помещения здесь заняты. Попробуйте выбрать другое место."
 
 
+class LocationNotAccessibleError(PythonNodeError):
+    code = "location_not_accessible"
+    requires_replan = False
+    user_message = "Эта локация не является конечной точкой размещения. Выберите конкретное место внутри."
+
+
 # ---------------------------------------------------------------------------
 # Общая проверка доступности локации для игрока (используется в обеих нодах)
 # ---------------------------------------------------------------------------
+
+def _resolve_type_display(location_type: str, registry: dict) -> str | None:
+    entry = registry.get(location_type)
+    if not entry:
+        return None
+    return entry.get("display") if isinstance(entry, dict) else str(entry)
+
 
 def can_start(location, player_uid, player_faction_uid, faction_access_list, npc_home_occupied_uids):
     """
@@ -92,6 +105,9 @@ class SceneLocationChildrenNode(PythonNode):
         world_uid    = state.session.meta.get("world_uid")
         character_id = state.session.meta.get("character_id")
 
+        world    = await context["world_repo"].get_by_id(world_uid)
+        type_registry = world.location_type_registry if world else {}
+
         location = await context["location_repo"].get_by_id(location_uid)
         if location is None or location.world_uid != world_uid:
             raise InvalidLocationError(
@@ -99,7 +115,7 @@ class SceneLocationChildrenNode(PythonNode):
             )
 
         children = await context["location_repo"].get_children(location_uid)
-        children = [c for c in children if c.is_accessible]
+        children = [c for c in children if c.is_selectable]
 
         available = children
         if children:
@@ -125,6 +141,13 @@ class SceneLocationChildrenNode(PythonNode):
                     f"All {len(children)} children of '{location_uid}' are blocked (faction/NPC)"
                 )
 
+        # Batch fetch государств для дочерних локаций
+        state_uids = list({c.state_uid for c in available if c.state_uid})
+        states_map: dict[str, str] = {}
+        if state_uids:
+            fetched = await context["state_repo"].get_by_uids(state_uids)
+            states_map = {s.state_uid: s.display_name for s in fetched}
+
         logger.info(
             "scene_location_children | uid=%s children_total=%d available=%d",
             location_uid, len(children), len(available),
@@ -134,8 +157,14 @@ class SceneLocationChildrenNode(PythonNode):
             "location_uid":         location.location_uid,
             "location_name":        location.display_name,
             "location_description": location.display_description or location.system_description or "",
+            "is_accessible":        location.is_accessible,
             "children": [
-                {"uid": c.location_uid, "name": c.display_name}
+                {
+                    "uid":          c.location_uid,
+                    "name":         c.display_name,
+                    "type_display": _resolve_type_display(c.location_type, type_registry),
+                    "state_name":   states_map.get(c.state_uid) if c.state_uid else None,
+                }
                 for c in available
             ],
         })
@@ -163,7 +192,7 @@ class SceneStartLocationSelectNode(PythonNode):
     supported_tasks: list = field(default_factory=lambda: [TaskType.SCENE_START_LOCATION_SELECT])
     rules:           list = field(default_factory=lambda: [Rule(type="task", params={})])
     deps:            list = field(default_factory=lambda: ["scene_location_children"])
-    possible_errors: list = field(default_factory=list)
+    possible_errors: list = field(default_factory=lambda: [LocationNotAccessibleError])
 
     async def execute(self, state, context) -> NodeResult:
         data          = state.node_results["scene_location_children"]
@@ -177,6 +206,11 @@ class SceneStartLocationSelectNode(PythonNode):
                 "parent": {"uid": location_uid, "name": location_name},
                 "children": children,
             })
+
+        if not data.get("is_accessible", True):
+            raise LocationNotAccessibleError(
+                f"Location '{location_uid}' is not accessible and has no selectable children"
+            )
 
         now = datetime.now(timezone.utc).isoformat()
         scene = SessionScene(

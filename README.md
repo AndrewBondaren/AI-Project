@@ -25,6 +25,10 @@ Example
 curl -X POST http://localhost:8000/api/seed/import -F "path=e:/AI Project/fixtures/seed.json"
 curl -X POST http://localhost:8000/api/worlds/import -F "path=e:/AI Project/fixtures/world_test.json"
 curl -X POST http://localhost:8000/api/characters/import -F "path=e:/AI Project/fixtures/character_test.json"
+curl -X POST http://localhost:8000/api/worlds/world-test-001/map/import -F "path=e:/AI Project/fixtures/map_cells_ironhold.json"
+
+All:
+curl -X POST http://localhost:8000/api/worlds/import -F "path=e:/AI Project/fixtures/world_test.json"
 
 
 # 1. Создать сессию

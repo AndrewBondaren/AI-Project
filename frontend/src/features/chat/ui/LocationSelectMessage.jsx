@@ -10,7 +10,16 @@ function LocationButtons({ children, isActive, isStreaming, onSelect }) {
           disabled={!isActive || isStreaming}
           onClick={() => onSelect?.(child.uid, child.name)}
         >
-          {child.name}
+          <span className={styles.btnBody}>
+            <span className={styles.btnName}>{child.name}</span>
+            {(child.type_display || child.state_name) && (
+              <span className={styles.btnMeta}>
+                {child.type_display && <span className={styles.btnType}>{child.type_display}</span>}
+                {child.type_display && child.state_name && <span className={styles.btnMetaSep}>·</span>}
+                {child.state_name && <span className={styles.btnState}>{child.state_name}</span>}
+              </span>
+            )}
+          </span>
           {child.is_home && <span className={styles.homeTag}>дом</span>}
         </button>
       ))}

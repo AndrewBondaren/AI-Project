@@ -52,6 +52,42 @@
   font-weight: 600;
 }
 
+.btnBody {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.btnName {
+  font-size: var(--font-size-base);
+  font-weight: 500;
+}
+
+.btnMeta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btnType {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.btnMetaSep {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  opacity: 0.5;
+}
+
+.btnState {
+  font-size: var(--font-size-sm);
+  color: var(--color-accent);
+  font-weight: 400;
+}
+
 /* Scene ready card */
 .sceneReady {
   display: flex;
