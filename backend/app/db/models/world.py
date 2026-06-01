@@ -91,6 +91,7 @@ class World:
     z_min:                          int | None = None
     elevation_lapse_rate:           float | None = None
     g:                              float = 1.0
+    map_cell_size_m:                int = 3000  # world surface cell size in meters, multiples of 1000
 
     # custom field declarations
     player_fields:              dict = json_col(default_factory=dict)

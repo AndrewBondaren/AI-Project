@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS worlds (
     z_min                       INTEGER,
     elevation_lapse_rate        REAL,
     g                           REAL NOT NULL DEFAULT 1.0,
+    map_cell_size_m             INTEGER NOT NULL DEFAULT 3000,
 
     -- custom fields declarations
     player_fields               TEXT,
@@ -612,6 +613,10 @@ CREATE TABLE IF NOT EXISTS named_locations (
     is_public               INTEGER NOT NULL DEFAULT 0,
     is_forbidden            INTEGER NOT NULL DEFAULT 0,
     is_selectable           INTEGER NOT NULL DEFAULT 1,
+    map_x                   INTEGER,
+    map_y                   INTEGER,
+    map_z                   INTEGER,
+    is_mobile               INTEGER NOT NULL DEFAULT 0,
     created_at              TEXT NOT NULL,
     FOREIGN KEY (world_uid)            REFERENCES worlds(world_uid),
     FOREIGN KEY (parent_location_uid) REFERENCES named_locations(location_uid),
@@ -1068,6 +1073,8 @@ CREATE INDEX IF NOT EXISTS idx_named_locations_world    ON named_locations (worl
 CREATE INDEX IF NOT EXISTS idx_named_locations_parent   ON named_locations (parent_location_uid);
 CREATE INDEX IF NOT EXISTS idx_named_locations_type     ON named_locations (world_uid, location_type);
 CREATE INDEX IF NOT EXISTS idx_named_locations_public   ON named_locations (world_uid, is_public);
+
+CREATE INDEX IF NOT EXISTS idx_map_cells_location_z     ON map_cells (world_uid, location_uid, z);
 
 CREATE INDEX IF NOT EXISTS idx_location_levels_location ON location_levels (location_uid);
 CREATE INDEX IF NOT EXISTS idx_location_passages_from   ON location_passages (from_level_uid);

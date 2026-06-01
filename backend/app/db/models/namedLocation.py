@@ -35,3 +35,7 @@ class NamedLocation:
     is_public:              bool = bool_col(default=False)
     is_forbidden:           bool = bool_col(default=False)
     is_selectable:          bool = bool_col(default=True)
+    map_x:                  int | None = None
+    map_y:                  int | None = None
+    map_z:                  int | None = None
+    is_mobile:              bool = bool_col(default=False)

@@ -25,3 +25,21 @@ class MapCellService:
 
     async def clear(self, world_uid: str) -> None:
         await self._repo.delete_by_world(world_uid)
+
+    async def has_cells(self, world_uid: str) -> bool:
+        return await self._repo.exists_by_world(world_uid)
+
+    async def get_location_uids_with_cells(self, world_uid: str) -> frozenset[str]:
+        """Returns location_uids of all locations that already have at least one cell."""
+        uids = await self._repo.get_location_uids_with_cells(world_uid)
+        return frozenset(uids)
+
+    async def save_generated(self, cells: list[MapCell]) -> ImportResult:
+        """Persist generator output in a single transaction.
+        Uses INSERT OR IGNORE — explicit fixture cells are never overwritten."""
+        inserted = await self._repo.insert_bulk_ignore(cells)
+        return ImportResult(
+            total=len(cells),
+            succeeded=inserted,
+            failed=0,
+        )
