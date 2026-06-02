@@ -55,7 +55,7 @@ class WorldBundleService:
             "states":    [asdict(s) for s in states],
         }
 
-    async def import_bundle(self, data: dict) -> dict[str, ImportResult]:
+    async def import_bundle(self, data: dict) -> tuple[dict[str, ImportResult], bool]:
         if "world" not in data:
             raise HTTPException(status_code=422, detail="Bundle must contain 'world' key")
 
@@ -71,6 +71,7 @@ class WorldBundleService:
             world_uid = data["world"]["world_uid"]
 
         results: dict[str, ImportResult] = {}
+        rolled_back = False
         try:
             async with self._db.transaction():
                 results["world"] = await self._world.import_from_json(data["world"])
@@ -94,9 +95,9 @@ class WorldBundleService:
                 if any(r.failed > 0 for r in results.values()):
                     raise _ImportFailed()
         except _ImportFailed:
-            pass
+            rolled_back = True
 
-        return results
+        return results, rolled_back
 
 
 def _remap_bundle(data: dict, version_n: int, strip_suffix) -> dict:

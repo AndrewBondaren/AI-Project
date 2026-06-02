@@ -54,4 +54,4 @@ class NamedLocationService:
     async def import_from_json(self, world_uid: str, data: list[dict]) -> ImportResult:
         def prepare(row: dict) -> NamedLocation:
             return NamedLocation(**{**row, "world_uid": world_uid})
-        return await import_list(data, prepare, self._repo.upsert)
+        return await import_list(data, prepare, self._repo.upsert, id_key="location_uid")

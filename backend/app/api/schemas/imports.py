@@ -8,8 +8,9 @@ class PathImportRequest(BaseModel):
 
 @dataclass
 class ImportError:
-    index:   int
-    message: str
+    index:     int
+    message:   str
+    entity_id: str | None = None
 
 
 @dataclass
@@ -24,5 +25,5 @@ class ImportResult:
             "total":     self.total,
             "succeeded": self.succeeded,
             "failed":    self.failed,
-            "errors":    [{"index": e.index, "message": e.message} for e in self.errors],
+            "errors":    [{"index": e.index, "entity_id": e.entity_id, "message": e.message} for e in self.errors],
         }
