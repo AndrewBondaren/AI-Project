@@ -39,6 +39,15 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
             await self._db.conn.commit()
         return inserted
 
+    async def get_by_location(self, location_uid: str) -> list[MapCell]:
+        return await self.fetch_all("location_uid = ?", [location_uid])
+
+    async def has_cells_for_location(self, location_uid: str) -> bool:
+        sql = "SELECT 1 FROM map_cells WHERE location_uid = ? LIMIT 1"
+        async with self._db.conn.execute(sql, [location_uid]) as cur:
+            row = await cur.fetchone()
+        return row is not None
+
     async def delete_by_world(self, world_uid: str) -> None:
         await self._db.conn.execute(
             "DELETE FROM map_cells WHERE world_uid = ?", [world_uid]

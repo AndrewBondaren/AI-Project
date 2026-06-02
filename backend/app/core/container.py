@@ -348,12 +348,13 @@ class Container:
                 snapshot_store=snapshot_store,
                 response_resolver=self.response_resolver(),
                 repositories={
-                    "scene_repo":    self.scene_repository(),
-                    "location_repo": self.location_repository(),
-                    "player_repo":   self.player_repository(),
-                    "npc_repo":      self.npc_repository(),
-                    "world_repo":    self.world_repository(),
-                    "state_repo":    self.state_repository(),
+                    "scene_repo":     self.scene_repository(),
+                    "location_repo":  self.location_repository(),
+                    "player_repo":    self.player_repository(),
+                    "npc_repo":       self.npc_repository(),
+                    "world_repo":     self.world_repository(),
+                    "state_repo":     self.state_repository(),
+                    "map_cell_repo":  self.map_cell_repository(),
                 },
             )
         return self._llm_engine
