@@ -6,10 +6,18 @@ export async function getWorlds() {
   return res.json()
 }
 
-export async function getCharacters(worldUid) {
-  const params = new URLSearchParams({ world_uid: worldUid })
-  const res = await fetch(`${API_URL}/characters?${params}`)
+export async function getCharacters() {
+  const res = await fetch(`${API_URL}/characters`)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return res.json()
+}
+
+export async function copyCharacter(characterUid) {
+  const res = await fetch(`${API_URL}/characters/${characterUid}/copy`, { method: 'POST' })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.detail ?? `HTTP ${res.status}`)
+  }
   return res.json()
 }
 

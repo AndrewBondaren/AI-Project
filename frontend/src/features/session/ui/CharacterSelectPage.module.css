@@ -86,13 +86,38 @@
   cursor: not-allowed;
 }
 
+.cardRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .cardName {
   font-size: var(--font-size-md);
   font-weight: 600;
   color: var(--color-text);
+  flex: 1;
 }
 
 .cardMeta {
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
+}
+
+.sessionBadge {
+  font-size: var(--font-size-xs);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.sessionSame {
+  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
+  color: var(--color-accent);
+}
+
+.sessionOther {
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
 }

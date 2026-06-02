@@ -24,12 +24,8 @@ async def import_character(
 
 
 @router.get("/characters")
-async def list_characters(
-    world_uid: str | None = None,
-    service: PlayerService = Depends(get_player_service),
-):
-    players = await service.get_all(world_uid=world_uid)
-    return [asdict(p) for p in players]
+async def list_characters(service: PlayerService = Depends(get_player_service)):
+    return await service.get_all()
 
 
 @router.get("/characters/{character_uid}")
@@ -46,6 +42,15 @@ async def create_character(
     service: PlayerService = Depends(get_player_service),
 ):
     return asdict(await service.create(data))
+
+
+@router.post("/characters/{character_uid}/copy", status_code=201)
+async def copy_character(
+    character_uid: str,
+    service: PlayerService = Depends(get_player_service),
+):
+    player = await service.copy(character_uid)
+    return asdict(player)
 
 
 @router.delete("/characters/{character_uid}", status_code=204)

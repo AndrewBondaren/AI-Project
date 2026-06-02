@@ -451,6 +451,7 @@ class Container:
     def world_bundle_service(self) -> WorldBundleService:
         if self._world_bundle_service is None:
             self._world_bundle_service = WorldBundleService(
+                db=self._db,
                 world_service=self.world_service(),
                 race_service=self.race_service(),
                 perk_service=self.perk_service(),

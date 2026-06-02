@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { listCharacters, importCharacter } from '../service'
 
-export function useCharacters(worldId) {
+export function useCharacters() {
   const [characters, setCharacters] = useState([])
   const [loading,    setLoading]    = useState(true)
   const [importing,  setImporting]  = useState(false)
@@ -11,13 +11,13 @@ export function useCharacters(worldId) {
     setLoading(true)
     setError(null)
     try {
-      setCharacters(await listCharacters(worldId))
+      setCharacters(await listCharacters())
     } catch (e) {
       setError(e.message)
     } finally {
       setLoading(false)
     }
-  }, [worldId])
+  }, [])
 
   useEffect(() => { load() }, [load])
 

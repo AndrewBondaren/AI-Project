@@ -1,3 +1,4 @@
+import dataclasses
 import uuid
 from datetime import datetime, timezone
 
@@ -12,10 +13,8 @@ class PlayerService:
     def __init__(self, repo: IPlayerRepository) -> None:
         self._repo = repo
 
-    async def get_all(self, world_uid: str | None = None) -> list[Player]:
-        if world_uid is not None:
-            return await self._repo.get_by_world(world_uid)
-        return await self._repo.get_all()
+    async def get_all(self) -> list[dict]:
+        return await self._repo.get_all_enriched()
 
     async def get_by_id(self, character_uid: str) -> Player:
         player = await self._repo.get_by_id(character_uid)
@@ -29,6 +28,15 @@ class PlayerService:
             "created_at": datetime.now(timezone.utc).isoformat(),
             **data,
         }
+        player = Player(**data)
+        await self._repo.create(player)
+        return player
+
+    async def copy(self, character_uid: str) -> Player:
+        original = await self.get_by_id(character_uid)
+        data = dataclasses.asdict(original)
+        data["character_uid"] = str(uuid.uuid4())
+        data["created_at"] = datetime.now(timezone.utc).isoformat()
         player = Player(**data)
         await self._repo.create(player)
         return player

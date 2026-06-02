@@ -71,7 +71,7 @@ class ConfigManager:
 
         result: dict = {}
 
-        _copy(result, qwen,       "base_url",        "qwen_base_url")
+        _copy(result, qwen,       "base_url",         "qwen_base_url")
         _copy(result, qwen,       "api_key",          "qwen_api_key")
         _copy(result, openai_,    "base_url",         "openai_base_url")
         _copy(result, openai_,    "api_key",          "openai_api_key")

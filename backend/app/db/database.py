@@ -1,8 +1,11 @@
 import logging
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from pathlib import Path
 
 import aiosqlite
+
+_in_transaction: ContextVar[bool] = ContextVar("_in_transaction", default=False)
 
 log = logging.getLogger(__name__)
 
@@ -83,6 +86,7 @@ class Database:
 
     @asynccontextmanager
     async def transaction(self):
+        token = _in_transaction.set(True)
         await self._conn.execute("BEGIN")
         try:
             yield self._conn
@@ -90,6 +94,8 @@ class Database:
         except Exception:
             await self._conn.execute("ROLLBACK")
             raise
+        finally:
+            _in_transaction.reset(token)
 
     @property
     def conn(self) -> aiosqlite.Connection:

@@ -45,8 +45,6 @@ class GameSessionService:
         player = await self._player_repo.get_by_id(character_id)
         if player is None:
             raise HTTPException(status_code=404, detail=f"Character '{character_id}' not found")
-        if player.world_uid != world_uid:
-            raise HTTPException(status_code=400, detail="Character does not belong to this world")
 
         existing = await self._repo.get_by_world_and_character(world_uid, character_id)
         if existing:

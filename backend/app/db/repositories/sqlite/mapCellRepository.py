@@ -1,4 +1,4 @@
-from app.db.database import Database
+from app.db.database import Database, _in_transaction
 from app.db.mapper import to_row
 from app.db.models.mapCell import MapCell
 from app.db.repositories.iMapCellRepository import IMapCellRepository
@@ -35,11 +35,13 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
             _, vals = to_row(cell)
             cur = await self._db.conn.execute(sql, vals)
             inserted += cur.rowcount
-        await self._db.conn.commit()
+        if not _in_transaction.get():
+            await self._db.conn.commit()
         return inserted
 
     async def delete_by_world(self, world_uid: str) -> None:
         await self._db.conn.execute(
             "DELETE FROM map_cells WHERE world_uid = ?", [world_uid]
         )
-        await self._db.conn.commit()
+        if not _in_transaction.get():
+            await self._db.conn.commit()

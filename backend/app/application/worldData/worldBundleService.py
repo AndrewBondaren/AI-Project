@@ -6,18 +6,24 @@ from fastapi import HTTPException
 
 from app.api.schemas.imports import ImportResult
 from app.application.worldData.mapCellService import MapCellService
-from app.utils.graph import topo_sort
 from app.application.worldData.namedLocationService import NamedLocationService
 from app.application.worldData.raceService import RaceService
 from app.application.worldData.stateService import StateService
 from app.application.worldData.worldPerkService import WorldPerkService
 from app.application.worldData.worldService import WorldService
+from app.db.database import Database
+from app.utils.graph import topo_sort
+
+
+class _ImportFailed(Exception):
+    pass
 
 
 class WorldBundleService:
 
     def __init__(
         self,
+        db: Database,
         world_service: WorldService,
         race_service: RaceService,
         perk_service: WorldPerkService,
@@ -25,6 +31,7 @@ class WorldBundleService:
         map_cell_service: MapCellService,
         state_service: StateService,
     ) -> None:
+        self._db        = db
         self._world     = world_service
         self._races     = race_service
         self._perks     = perk_service
@@ -64,24 +71,30 @@ class WorldBundleService:
             world_uid = data["world"]["world_uid"]
 
         results: dict[str, ImportResult] = {}
-        results["world"] = await self._world.import_from_json(data["world"])
+        try:
+            async with self._db.transaction():
+                results["world"] = await self._world.import_from_json(data["world"])
+                if results["world"].failed > 0:
+                    raise _ImportFailed()
 
-        if results["world"].failed > 0:
-            return results
+                sections = {
+                    "races":     self._races,
+                    "perks":     self._perks,
+                    "states":    self._states,
+                    "locations": self._locations,
+                    "map_cells": self._map_cells,
+                }
+                for key, svc in sections.items():
+                    if key in data:
+                        section_data = data[key]
+                        if key == "locations":
+                            section_data = topo_sort(section_data, "location_uid", "parent_location_uid")
+                        results[key] = await svc.import_from_json(world_uid, section_data)
 
-        sections = {
-            "races":     self._races,
-            "perks":     self._perks,
-            "states":    self._states,
-            "locations": self._locations,
-            "map_cells": self._map_cells,
-        }
-        for key, svc in sections.items():
-            if key in data:
-                section_data = data[key]
-                if key == "locations":
-                    section_data = topo_sort(section_data, "location_uid", "parent_location_uid")
-                results[key] = await svc.import_from_json(world_uid, section_data)
+                if any(r.failed > 0 for r in results.values()):
+                    raise _ImportFailed()
+        except _ImportFailed:
+            pass
 
         return results
 

@@ -1,5 +1,5 @@
 import { listSessions as apiListSessions, createSession as apiCreateSession, deleteSession as apiDeleteSession } from '@/api/sessionApi'
-import { getWorlds, getCharacters, importCharacterFromPath } from '@/api/worldApi'
+import { getWorlds, getCharacters, copyCharacter as apiCopyCharacter, importCharacterFromPath } from '@/api/worldApi'
 import { openFile } from '@/platform/fileSystem'
 
 export async function listSessions() {
@@ -10,8 +10,8 @@ export async function listWorlds() {
   return getWorlds()
 }
 
-export async function listCharacters(worldId) {
-  return getCharacters(worldId)
+export async function listCharacters() {
+  return getCharacters()
 }
 
 export async function createSession(worldId, characterId) {
@@ -20,6 +20,10 @@ export async function createSession(worldId, characterId) {
 
 export async function deleteSession(sessionId) {
   return apiDeleteSession(sessionId)
+}
+
+export async function copyCharacter(characterUid) {
+  return apiCopyCharacter(characterUid)
 }
 
 export async function importCharacter() {
