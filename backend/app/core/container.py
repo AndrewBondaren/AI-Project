@@ -1,4 +1,4 @@
-from app.core.settings_service import SettingsService
+from app.core.settingsService import SettingsService
 from app.application.llm.clients.qwenClient import QwenClient
 from app.application.llm.clients.openAIClient import OpenAIClient
 from app.application.llm.clients.anthropicClient import AnthropicClient

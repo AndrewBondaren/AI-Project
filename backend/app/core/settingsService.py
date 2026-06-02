@@ -1,5 +1,5 @@
 from app.core.appSettings import app_settings
-from app.core.logging_config import setup_logging
+from app.core.loggingConfig import setup_logging
 from app.core.logLevel import to_logging_level
 
 

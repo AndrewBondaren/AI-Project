@@ -13,11 +13,6 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
     async def get_by_world(self, world_uid: str) -> list[MapCell]:
         return await self.fetch_all("world_uid = ?", [world_uid])
 
-    async def exists_by_world(self, world_uid: str) -> bool:
-        sql = "SELECT 1 FROM map_cells WHERE world_uid = ? LIMIT 1"
-        async with self._db.conn.execute(sql, [world_uid]) as cur:
-            return await cur.fetchone() is not None
-
     async def get_location_uids_with_cells(self, world_uid: str) -> set[str]:
         sql = ("SELECT DISTINCT location_uid FROM map_cells "
                "WHERE world_uid = ? AND location_uid IS NOT NULL")

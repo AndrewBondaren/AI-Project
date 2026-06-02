@@ -115,28 +115,31 @@ class TerrainGeneratorService:
             if zone:
                 city_zones[city.location_uid] = zone
 
-        # Expand each city into a footprint based on city_size_registry radius.
-        # Cities in skip_location_uids have explicit fixture cells — skip their footprint
-        # but keep them in city_centers so Voronoi climate assignment still works.
+        # Expand each city into a footprint.
+        # all_footprints: every city (including skipped) — used for stable bounding box.
+        # city_footprint: only non-skipped cities — used for urban cell assignment.
         # cell (x, y) → owning city; first-claimed wins on overlap.
-        city_footprint: dict[tuple[int, int], NamedLocation] = {}
+        all_footprints:  dict[tuple[int, int], NamedLocation] = {}
+        city_footprint:  dict[tuple[int, int], NamedLocation] = {}
         for city in city_list:
-            if city.location_uid in skip_location_uids:
-                continue
             radius = self._get_city_radius(city, world)
             cx, cy = city.map_x, city.map_y
             for dy in range(-radius, radius + 1):
                 for dx in range(-radius, radius + 1):
                     pos = (cx + dx, cy + dy)
-                    if pos not in city_footprint:
-                        city_footprint[pos] = city
+                    if pos not in all_footprints:
+                        all_footprints[pos] = city
+                    if city.location_uid not in skip_location_uids:
+                        if pos not in city_footprint:
+                            city_footprint[pos] = city
 
-        # Grid bounds: driven by footprint extremes + padding
-        if city_footprint:
-            x_min = min(p[0] for p in city_footprint) - padding
-            x_max = max(p[0] for p in city_footprint) + padding
-            y_min = min(p[1] for p in city_footprint) - padding
-            y_max = max(p[1] for p in city_footprint) + padding
+        # Grid bounds: always driven by ALL footprints so the grid is stable
+        # regardless of which cities are already in the DB (skip_location_uids).
+        if all_footprints:
+            x_min = min(p[0] for p in all_footprints) - padding
+            x_max = max(p[0] for p in all_footprints) + padding
+            y_min = min(p[1] for p in all_footprints) - padding
+            y_max = max(p[1] for p in all_footprints) + padding
         else:
             x_min = min(l.map_x for l in anchors) - padding
             x_max = max(l.map_x for l in anchors) + padding
@@ -154,6 +157,9 @@ class TerrainGeneratorService:
                     terrain = "urban" if "urban" in terrain_reg else _z_to_terrain(0, terrain_reg)
                     loc_uid = city.location_uid
                     climate = self._city_climate(city, city_zones, world)
+                elif pos in all_footprints:
+                    # Skipped city footprint — explicit cells already in DB, don't touch.
+                    continue
                 else:
                     nearest = self._nearest_city(x, y, city_centers)
                     climate = self._city_climate(nearest, city_zones, world) if nearest else (

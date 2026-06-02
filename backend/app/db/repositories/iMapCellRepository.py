@@ -9,9 +9,6 @@ class IMapCellRepository(ABC):
     async def get_by_world(self, world_uid: str) -> list[MapCell]: ...
 
     @abstractmethod
-    async def exists_by_world(self, world_uid: str) -> bool: ...
-
-    @abstractmethod
     async def get_location_uids_with_cells(self, world_uid: str) -> set[str]: ...
 
     @abstractmethod

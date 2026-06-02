@@ -26,9 +26,6 @@ class MapCellService:
     async def clear(self, world_uid: str) -> None:
         await self._repo.delete_by_world(world_uid)
 
-    async def has_cells(self, world_uid: str) -> bool:
-        return await self._repo.exists_by_world(world_uid)
-
     async def get_location_uids_with_cells(self, world_uid: str) -> frozenset[str]:
         """Returns location_uids of all locations that already have at least one cell."""
         uids = await self._repo.get_location_uids_with_cells(world_uid)

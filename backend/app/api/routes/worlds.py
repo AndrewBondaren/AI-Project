@@ -44,9 +44,19 @@ async def update_world(
     world_uid: str,
     data: dict[str, Any],
     container=Depends(get_container),
-) -> dict:
-    world = await container.world_service().update(world_uid, data)
-    return asdict(world)
+) -> JSONResponse:
+    result = await container.world_service().update(world_uid, data)
+
+    if result.requires_force:
+        return JSONResponse(status_code=200, content={
+            "warning": result.warning,
+            "requires_force": True,
+        })
+
+    if result.map_cells_invalidated:
+        await container.map_cell_service().clear(world_uid)
+
+    return JSONResponse(status_code=200, content=asdict(result.world))
 
 
 @router.delete("/worlds/{world_uid}", status_code=204)

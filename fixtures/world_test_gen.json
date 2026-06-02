@@ -1,0 +1,247 @@
+{
+  "world": {
+    "world_uid": "world-test-002",
+    "name": "Эйдора (генерация)",
+    "created_at": "2026-05-23T00:00:00",
+    "narrative_language": "ru",
+    "measurement_system": "metric",
+    "stat_schema": {
+      "strength":     { "display": "Сила",        "min": 1, "max": 20 },
+      "agility":      { "display": "Ловкость",    "min": 1, "max": 20 },
+      "endurance":    { "display": "Выносливость", "min": 1, "max": 20 },
+      "intelligence": { "display": "Интеллект",   "min": 1, "max": 20 },
+      "perception":   { "display": "Восприятие",  "min": 1, "max": 20 },
+      "charisma":     { "display": "Харизма",     "min": 1, "max": 20 }
+    },
+    "hp_enabled": true,
+    "faint_threshold": 0.05,
+    "wounds_enabled": false,
+    "location_type_registry": {
+      "continent": { "display": "Континент" },
+      "region":    { "display": "Регион" },
+      "kingdom":   { "display": "Королевство" },
+      "empire":    { "display": "Империя" },
+      "duchy":     { "display": "Герцогство" },
+      "city":      { "display": "Город" },
+      "town":      { "display": "Посёлок" },
+      "village":   { "display": "Деревня" },
+      "district":  { "display": "Район" },
+      "square":    { "display": "Площадь" },
+      "street":    { "display": "Улица" },
+      "building":  { "display": "Здание" },
+      "gate":      { "display": "Ворота" },
+      "room":      { "display": "Комната" },
+      "dungeon":   { "display": "Подземелье" },
+      "cave":      { "display": "Пещера" },
+      "camp":      { "display": "Лагерь" }
+    },
+    "map_cell_size_m": 3000,
+    "terrain_registry": {
+      "tundra":  { "display": "Тундра",             "travel_modifier": 0.7, "temperature_base": -15 },
+      "plains":  { "display": "Равнина",             "travel_modifier": 1.0, "temperature_base": 5   },
+      "forest":  { "display": "Лес",                 "travel_modifier": 0.8, "temperature_base": 2   },
+      "urban":   { "display": "Городская застройка", "travel_modifier": 1.0, "temperature_base": 0   },
+      "road":    { "display": "Дорога",              "travel_modifier": 1.3, "temperature_base": 0   },
+      "water":   { "display": "Вода",                "travel_modifier": 0.3, "temperature_base": -5  }
+    },
+    "city_size_registry": {
+      "hamlet":      { "display": "Хутор",        "radius": 0 },
+      "village":     { "display": "Деревня",      "radius": 0 },
+      "town":        { "display": "Посёлок",      "radius": 1 },
+      "city":        { "display": "Город",        "radius": 1 },
+      "metropolis":  { "display": "Метрополис",   "radius": 2 },
+      "megalopolis": { "display": "Мегалополис",  "radius": 3 }
+    }
+  },
+  "states": [
+    {
+      "state_uid": "state-iron-crown-002",
+      "world_uid": "world-test-002",
+      "display_name": "Железная Корона",
+      "government_type": "kingdom",
+      "display_description": "Суровое северное королевство, управляемое военной знатью. Контролирует горные перевалы и торговые пути севера.",
+      "created_at": "2026-05-23T00:00:00"
+    },
+    {
+      "state_uid": "state-amber-league-002",
+      "world_uid": "world-test-002",
+      "display_name": "Янтарная Лига",
+      "government_type": "republic",
+      "display_description": "Торговая республика южного побережья. Богатство построено на морской торговле и контроле над портами.",
+      "created_at": "2026-05-23T00:00:00"
+    }
+  ],
+  "races": [
+    {
+      "race_uid": "race-human-002",
+      "world_uid": "world-test-002",
+      "display_race": "Человек",
+      "created_at": "2026-05-23T00:00:00",
+      "race_traits": { "adaptive": true, "lifespan_years": 80 }
+    },
+    {
+      "race_uid": "race-elf-002",
+      "world_uid": "world-test-002",
+      "display_race": "Эльф",
+      "created_at": "2026-05-23T00:00:00",
+      "race_traits": { "night_vision": true, "lifespan_years": 500 }
+    },
+    {
+      "race_uid": "race-dwarf-002",
+      "world_uid": "world-test-002",
+      "display_race": "Дворф",
+      "created_at": "2026-05-23T00:00:00",
+      "race_traits": { "stone_sense": true, "lifespan_years": 200 }
+    }
+  ],
+  "perks": [
+    {
+      "perk_uid": "perk-iron-will-002",
+      "world_uid": "world-test-002",
+      "system_name": "iron_will",
+      "display_name": "Железная воля",
+      "system_description": "Resistance to fear and mind effects",
+      "display_description": "Устойчивость к страху и ментальным эффектам"
+    },
+    {
+      "perk_uid": "perk-tracker-002",
+      "world_uid": "world-test-002",
+      "system_name": "tracker",
+      "display_name": "Следопыт",
+      "system_description": "Enhanced tracking and navigation in wilderness",
+      "display_description": "Улучшенное отслеживание и навигация в дикой местности"
+    }
+  ],
+  "locations": [
+    {
+      "location_uid": "loc-continent-eidor-002",
+      "world_uid": "world-test-002",
+      "display_name": "Континент Эйдор",
+      "location_type": "continent",
+      "created_at": "2026-05-23T00:00:00",
+      "system_description": "main_continent",
+      "display_description": "Главный континент мира Эйдоры",
+      "is_accessible": false,
+      "is_selectable": false
+    },
+    {
+      "location_uid": "loc-region-northern-002",
+      "world_uid": "world-test-002",
+      "display_name": "Северные земли",
+      "location_type": "region",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-continent-eidor-002",
+      "display_description": "Суровые северные территории",
+      "is_accessible": false,
+      "is_selectable": false
+    },
+    {
+      "location_uid": "loc-city-ironhold-002",
+      "world_uid": "world-test-002",
+      "display_name": "Айронхолд",
+      "location_type": "city",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-region-northern-002",
+      "display_description": "Укреплённый торговый город на севере",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true,
+      "guard_level": 3,
+      "city_size": "city",
+      "state_uid": "state-iron-crown-002",
+      "map_x": 2,
+      "map_y": 2,
+      "map_z": 0
+    },
+    {
+      "location_uid": "loc-tavern-broken-axe-002",
+      "world_uid": "world-test-002",
+      "display_name": "Таверна «Сломанный топор»",
+      "location_type": "building",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-city-ironhold-002",
+      "display_description": "Шумная таверна в центре Айронхолда. Старые дубовые балки, очаг и запах пива.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true
+    },
+    {
+      "location_uid": "loc-market-ironhold-002",
+      "world_uid": "world-test-002",
+      "display_name": "Рыночная площадь",
+      "location_type": "square",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-city-ironhold-002",
+      "display_description": "Главная торговая площадь Айронхолда.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true
+    },
+    {
+      "location_uid": "loc-city-gate-ironhold-002",
+      "world_uid": "world-test-002",
+      "display_name": "Северные ворота",
+      "location_type": "gate",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-city-ironhold-002",
+      "display_description": "Массивные каменные ворота с постоянной стражей.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true,
+      "guard_level": 5,
+      "is_forbidden": true
+    },
+    {
+      "location_uid": "loc-region-southern-002",
+      "world_uid": "world-test-002",
+      "display_name": "Южные земли",
+      "location_type": "region",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-continent-eidor-002",
+      "display_description": "Тёплые южные территории с плодородными равнинами и торговыми портами.",
+      "is_accessible": false,
+      "is_selectable": false
+    },
+    {
+      "location_uid": "loc-city-amberport-002",
+      "world_uid": "world-test-002",
+      "display_name": "Амберпорт",
+      "location_type": "city",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-region-southern-002",
+      "display_description": "Оживлённый портовый город на южном побережье.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true,
+      "city_size": "city",
+      "state_uid": "state-amber-league-002",
+      "map_x": 2,
+      "map_y": 6,
+      "map_z": 0
+    },
+    {
+      "location_uid": "loc-amberport-harbor-002",
+      "world_uid": "world-test-002",
+      "display_name": "Портовые доки",
+      "location_type": "district",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-city-amberport-002",
+      "display_description": "Шумный район доков. Запах соли и рыбы, скрип снастей, крики матросов.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true
+    },
+    {
+      "location_uid": "loc-amberport-tavern-002",
+      "world_uid": "world-test-002",
+      "display_name": "Таверна «Золотой якорь»",
+      "location_type": "building",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-city-amberport-002",
+      "display_description": "Любимое место моряков и купцов.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true
+    }
+  ]
+}
