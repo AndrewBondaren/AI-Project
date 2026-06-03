@@ -60,6 +60,8 @@ CREATE TABLE IF NOT EXISTS worlds (
     -- location registries
     terrain_category_registry   TEXT,
     terrain_registry            TEXT,
+    material_category_registry  TEXT,
+    material_use_type_registry  TEXT,
     material_registry           TEXT,
     cell_state_registry         TEXT,
     danger_level_registry       TEXT,

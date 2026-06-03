@@ -65,6 +65,8 @@ class World:
     # location registries
     terrain_category_registry:      dict = json_col(default_factory=dict)
     terrain_registry:               dict = json_col(default_factory=dict)
+    material_category_registry:     dict = json_col(default_factory=dict)
+    material_use_type_registry:     dict = json_col(default_factory=dict)
     material_registry:              dict = json_col(default_factory=dict)
     cell_state_registry:            dict = json_col(default_factory=dict)
     danger_level_registry:          dict = json_col(default_factory=dict)

@@ -42,6 +42,7 @@
 | `default_z_height` | int | optional | Высота потолка по умолчанию для всех уровней. Default: `3` |
 | `min_z_height` | int | optional | Минимально допустимая высота потолка любого уровня. Default: `2` |
 | `gap_policy` | string | optional | Поведение для gap-областей (внутри bounding box, вне всех комнат): `"clip"`, `"fill"`, `"random"`. Default: `"clip"` |
+| `wealth_level` | string | optional | Уровень богатства здания для выбора материалов: `"poor"`, `"common"`, `"wealthy"`, `"noble"`, `"royal"`. Default: `"common"` |
 | `levels` | array | required | Массив уровней, минимум 1 |
 | `connections` | array | required | Межкомнатные связи и лестницы |
 
@@ -108,8 +109,8 @@ level_z = level.z_height ?? max(room_z for room in level.rooms)
 | `room_id` | string | required | Локальный ID внутри шаблона; используется в connections и attach_to |
 | `room_type` | string | required | Смысловой тип: common_hall, kitchen, cellar, corridor, guest_room, etc. |
 | `display_name` | string | required | Название для `NamedLocation.display_name` |
-| `shape_type` | string \| string[] | required | Форма footprint (см. раздел 3.7). Строка = фиксированная; массив = генератор выбирает один случайно |
-| `size` | object | required | Объект размера комнаты (см. раздел 3.4) |
+| `shape_type` | string \| string[] | required | Форма footprint (см. раздел 3.8). Строка = фиксированная; массив = генератор выбирает один случайно |
+| `size` | object | required | Объект размера комнаты (см. раздел 3.5) |
 | `required` | bool | required | Если true — комната всегда генерируется |
 | `count` | int | conditional | Фиксированное кол-во экземпляров (только при `required: true`) |
 | `count_range` | [int, int] | conditional | Диапазон кол-ва (только при `required: false`) |
@@ -118,6 +119,7 @@ level_z = level.z_height ?? max(room_z for room in level.rooms)
 | `attach_wall` | string | conditional | Обязателен если `attach_to` задан. `"north"`, `"south"`, `"east"`, `"west"`, `"both"`, `"any"` |
 | `max_overhang` | int | optional | Макс. выступ за границы ground floor footprint в ячейках. Default: `0`. Разрешён только для `room_type: "balcony"`. Без `has_column`: не более 2. С `has_column`: не более 4 |
 | `has_column` | bool | optional | Балкон опирается на колонны. Увеличивает лимит `max_overhang` до 4. Генератор размещает ячейки `column` на ground floor под выступающими углами балкона |
+| `wealth_level` | string | optional | Переопределяет уровень богатства для этой комнаты. Если не задан — берётся из шаблона |
 | `entry_point` | object | optional | Объявляет главный вход здания на этой комнате. Только одна комната в шаблоне |
 | `back_entry_point` | object | optional | Объявляет чёрный вход здания на этой комнате. Только одна комната в шаблоне |
 
@@ -138,7 +140,7 @@ level_z = level.z_height ?? max(room_z for room in level.rooms)
 
 ---
 
-### 3.4 Объект size
+### 3.5 Объект size
 
 Три допустимые формы — взаимно исключающие по `size_type`:
 
@@ -180,7 +182,7 @@ else:
 
 ---
 
-### 3.5 Поля entry_point / back_entry_point (на комнате)
+### 3.6 Поля entry_point / back_entry_point (на комнате)
 
 | Поле | Тип | Описание |
 |------|-----|----------|
@@ -192,7 +194,7 @@ else:
 
 ---
 
-### 3.6 Поля connection
+### 3.7 Поля connection
 
 | Поле | Тип | Описание |
 |------|-----|----------|
@@ -200,13 +202,15 @@ else:
 | `to_room` | string | `room_id` цели |
 | `passage_type` | string | `doorway`, `staircase`, `archway`, etc. |
 | `required` | bool | Если обе комнаты сгенерированы — проход обязателен |
+| `position` | string | optional. Только для `staircase`. Позиция ячейки лестницы внутри `to_room`: `"center"`, `"north"`, `"south"`, `"east"`, `"west"`, `"northwest"`, `"northeast"`, `"southwest"`, `"southeast"`. Если не задан — авто-резолв |
+| `staircase_type` | string | optional. Только для `staircase`. Тип лестницы (см. раздел 3.9). Если не задан — авто-резолв по `z_height` |
 
-Если одна из комнат не сгенерирована (optional + count=0) — connection пропускается.  
+Если одна из комнат не была сгенерирована (например, пропущена из-за ограничений footprint верхнего этажа) — connection пропускается.  
 Для `staircase`: `from_level_uid.z ≠ to_level_uid.z`; ячейка типа `staircase` на обоих уровнях.
 
 ---
 
-### 3.7 shape_type
+### 3.8 shape_type
 
 `shape_type` — строка или массив строк. Если массив — генератор выбирает один случайно через `rng.choice(shape_type)`.
 
@@ -232,6 +236,43 @@ else:
 | `circle` | диаметр | игнорируется |
 
 В v1 любой `shape_type` кроме `rectangle` и `square` → `UnsupportedShapeError` при загрузке шаблона.
+
+---
+
+### 3.9 Типы лестниц (staircase_type)
+
+| `staircase_type` | Footprint | Описание | Применение |
+|---|---|---|---|
+| `spiral_small` | 1×2 (2 ячейки) | Крутая, размещается у края стены | Чердак, подвал, тесные пространства |
+| `spiral_standard` | 2×2 (4 ячейки) | Идёт по кругу | Башни, вторичные лестницы |
+| `standard` | 2×2 (4 ячейки) | П-образная без пробела: два марша + площадка | Стандартный этаж-в-этаж |
+| `straight` | 1×N (формула) | Прямой марш без площадки | Большие здания, парадные лестницы |
+
+**Формула длины `straight`:**
+
+```
+stair_length = max(2, ceil(z_height * 1.3))
+```
+
+| z_height | stair_length |
+|---|---|
+| 2 | 3 |
+| 3 | 4 |
+| 5 | 7 |
+| 10 | 13 |
+| 20 | 26 |
+
+Коэффициент 1.3 соответствует углу ~38° (комфортная лестница, соотношение проступи к подступёнку).
+
+**Авто-резолв `staircase_type`:**
+
+```
+если staircase_type не задан:
+    если z_height <= 5 → standard
+    иначе              → straight
+```
+
+> Детальная геометрия ячеек каждого типа (шаги, площадки, перила) — дополняется отдельно.
 
 ---
 
@@ -501,6 +542,61 @@ width = rng.randint(width_range[0], width_range[1])
 depth = rng.randint(depth_range[0], depth_range[1])  # игнорируется для square/circle/semicircle
 ```
 
+### 8.5b Resolve: материалы комнаты
+
+**Структура записи в `world.material_registry`:**
+
+```json
+"stone": {
+  "display_name": "Камень",
+  "category": ["construction", "mineral"],
+  "use_type": ["wall", "column"],
+  "wealth_level": "common",
+  "hardness": 3
+}
+```
+
+| Поле | Тип | Описание |
+|---|---|---|
+| `display_name` | string | Отображаемое название |
+| `category` | string[] | Одна или несколько из: `construction`, `metal`, `crafted`, `refined`, `raw`, `organic`, `consumable`, `mineral`, `magic` + кастомные из `world.material_category_registry` |
+| `use_type` | string[] | `wall`, `floor`, `column`, `door`, `gate`, `railing`, `ceiling`, `roof`, `any` |
+| `wealth_level` | string | `poor` → `common` → `wealthy` → `noble` → `royal` |
+| `hardness` | int (1–5) | Твёрдость для `ExcavationNode` |
+| `components` | string[] | optional. Компоненты для `crafted`/`refined` материалов |
+
+Базовые категории фиксированы в движке (`MaterialCategory` enum). Мир может добавлять кастомные через `world.material_category_registry`.
+
+**Алгоритм выбора материала:**
+
+```
+effective_wealth = room.wealth_level ?? template.wealth_level ?? "common"
+wealth_order     = ["poor", "common", "wealthy", "noble", "royal"]
+
+def find_candidates(use):
+    candidates = [uid for uid, mat in world.material_registry.items()
+                  if "construction" in mat.category
+                  AND use in mat.use_type
+                  AND mat.wealth_level == effective_wealth]
+
+    если candidates пуст:
+        -- fallback: искать ближайший уровень вниз
+        idx = wealth_order.index(effective_wealth)
+        for level in reversed(wealth_order[:idx]):
+            candidates = [... mat.wealth_level == level ...]
+            если candidates: break
+        если всё ещё пуст:
+            candidates = [uid for uid, mat in world.material_registry.items()
+                          if "construction" in mat.category AND use in mat.use_type]
+        если всё ещё пуст → log WARNING, return default_material
+    return candidates
+
+wall_material  = rng.choice(find_candidates("wall"))
+floor_material = rng.choice(find_candidates("floor"))
+```
+
+Порядок богатства (от низшего): `poor` → `common` → `wealthy` → `noble` → `royal`.
+
 ### 8.6 Layout: размещение комнат
 
 Два режима — определяются наличием `attach_to` на уровне:
@@ -586,7 +682,15 @@ while sum(widths) > corridor_length и actual_count > 0:
 ```
 
 Прикреплённые комнаты не переносятся в "следующую строку" — только вдоль стен коридора.  
-При `attach_wall: "both"` — чередуются по обе стороны; `"any"` → выбирает `rng`.  
+При `attach_wall: "both"` — чередуются по обе стороны.
+
+`"any"` — генератор выбирает сторону по позиции лестницы в коридоре:
+```
+staircase.position IN (north, northeast, northwest) → attach_wall = "south"
+staircase.position IN (south, southeast, southwest) → attach_wall = "north"
+staircase.position IN (east, west, center)          → attach_wall = rng.choice(["north", "south"])
+staircase-connection к коридору отсутствует         → attach_wall = rng.choice(["north", "south"])
+```  
 Дверной проём — на стене комнаты, смежной с коридором.
 
 **Ограничение верхних этажей (overhang rule):**
@@ -602,7 +706,21 @@ room.y_min >= footprint.y_min - allowed
 room.y_max <= footprint.y_max + allowed
 ```
 
-Если комната выходит за `allowed` при row-packing — генератор переносит её на следующую строку или обрезает до границы.
+Если комната выходит за `allowed`:
+```
+новый_width = min(room.width, footprint.x_max - room.x0 + allowed)
+новый_depth = min(room.depth, footprint.y_max - room.y0 + allowed)
+
+если новый_width < size.width_range[0] OR новый_depth < size.depth_range[0]:
+    если required == true → GenerationError
+                             "Комната '{room_id}': невозможно вписать в footprint — "
+                             "обрезка нарушает минимальный размер"
+    иначе → пропустить комнату + WARNING
+иначе:
+    log WARNING "Комната '{room_id}': размер обрезан до {новый_width}×{новый_depth} "
+                "для соответствия footprint верхнего этажа"
+    использовать новый_width, новый_depth
+```
 
 Балкон с `has_column: true` → ячейки `column` (is_structural=True) размещаются на **ground floor** (z_offset=0) под каждым выступающим углом балкона. `column` — terrain type, `cell_material` = wall_material здания.
 
@@ -644,11 +762,22 @@ effective_policy = gap_policy
             room_type     = "utility_space",
             display_name  = "Техническое помещение",
             location_type = "room",
+            is_accessible = True,
             parent_location_uid = building.location_uid,
         )
         gap-ячейки → floor, location_uid = utility_room
         граница gap-области с соседней комнатой → shared segment (Проход 3)
         граница gap-области с внешней стеной → уже покрыта Проходом 1
+
+        -- авто-дверь: найти самый длинный shared segment с соседней комнатой
+        best_neighbor = argmax(len(shared_segment) for neighbor in adjacent_rooms)
+        поставить door в центре shared_segment(utility_room, best_neighbor)
+        создать LocationPassage(
+            passage_type     = "doorway",
+            is_bidirectional = True,
+            from_room        = utility_room,
+            to_room          = best_neighbor,
+        )
 ```
 
 **Проход 2 — пол комнат**
@@ -693,8 +822,33 @@ to_level_uid      = level_uid(level_of(connection.to_room))
 
 **`staircase`:**
 - `from_level_uid.z ≠ to_level_uid.z` — обязательное условие; нарушение → `ValidationError`
-- Ячейка `staircase` размещается в центре from_room и в центре to_room
 - Если `count_range > 1` у целевой комнаты — connection адресует instance_0 (первый экземпляр)
+
+Позиция staircase-ячейки в `to_room` — из поля `position` на connection. Если `position` не задан:
+```
+to_room.room_type == "corridor"              → edge (west или east, rng.choice)
+to_room.room_type IN ("common_hall", "hall") → center
+иначе                                        → edge
+```
+
+Позиция staircase-ячейки в `from_room` — симметрично: тот же приоритет по room_type from_room.
+
+> Детальная структура лестниц (геометрия ячеек, типы маршей) — дополняется отдельно.
+
+**Авто-резолв staircase (fallback):**
+
+Если уровень `isolated=false` и ни один `staircase`-connection к нему не объявлен:
+```
+log WARNING "Уровень '{display_name}': staircase не объявлен — авто-резолв"
+
+to_room = первая комната с room_type "corridor"
+          ?? первая с room_type "common_hall"
+          ?? комната с наибольшим degree в connection-графе уровня
+          ?? первая в rooms[]
+
+from_room = комната смежного уровня по той же приоритетной цепочке
+```
+Авто-резолв создаёт `LocationPassage` типа `staircase` и staircase-ячейки аналогично явному connection.
 
 **`entry_point` / `back_entry_point`:**
 - `LocationPassage` с `from_level_uid = null` (внешнее пространство) → `to_level_uid` уровня комнаты
@@ -749,7 +903,11 @@ class BuildingGeneratorService:
 - Комната с `entry_point` или `back_entry_point` + явным `perimeter_required: false` → ValidationWarning (не ошибка; генератор форсирует периметр)
 - Комната с `attach_to` + `entry_point`/`back_entry_point` → ValidationWarning (архитектурно некорректно)
 - `perimeter_required: true` + degree в connection-графе > 1 → ValidationWarning (периметр не гарантирован)
+- Connection-граф каждого уровня (intra-level doorway/archway connections) ацикличен — циклы → `ValidationError` ("кольцевые связи не поддерживаются: комната не может быть смежна с двумя уже размещёнными")
 - `connection.passage_type == "staircase"` + `from_room` и `to_room` на одном `z_offset` → ValidationError
+- `staircase_type` не из `{"spiral_small", "spiral_standard", "standard", "straight"}` → ValidationError
+- `staircase_type` задан на non-staircase connection → ValidationWarning (игнорируется)
+- `position` задан на non-staircase connection → ValidationWarning (игнорируется)
 - `connection.passage_type != "staircase"` + `from_room` и `to_room` на разных `z_offset` → ValidationError
 - `connection` к `room_id` с `count_range > 1` → ValidationWarning (адресует instance_0)
 - `max_overhang > 0` допустим только для `room_type: "balcony"`
@@ -853,6 +1011,6 @@ bridge_possible = gap <= A.actual_overhang + B.actual_overhang
 |--------|--------|
 | `template_uid` на `NamedLocation` здания | Решено: хранится на здании; RESTRICT при удалении; замена → перегенерация всех зданий |
 | Общие стены смежных комнат: `location_uid = building` или одной из комнат? | Решено: building, `is_structural=True`; комнаты генерируют только пол |
-| `attach_wall: "any"` — генератор выбирает сторону по seed или по свободному месту? | Открыт |
+| `attach_wall: "any"` — генератор выбирает сторону по seed или по свободному месту? | Решено: зависит от позиции лестницы в коридоре |
 | Внешний контур здания — bounding box или реальный периметр? | Решено: реальный контур + `gap_policy: "clip"/"fill"/"random"` |
 | `count_range: [0, 0]` допустимо? | Решено: минимум `[1, 1]` → `ValidationError` если `count_range[0] < 1` |
