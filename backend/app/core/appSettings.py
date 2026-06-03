@@ -4,6 +4,7 @@ from app.core.defaultConfig import DefaultConfig
 from app.application.llm.language import Language
 from app.application.engine.repair.repairMode import RepairMode
 from app.core.logLevel import LogLevel
+from app.core.distanceUnit import DistanceUnit
 
 
 @dataclass
@@ -22,11 +23,15 @@ class AppSettings:
     llm_streaming:      bool = field(default_factory=lambda: DefaultConfig.LLM_STREAMING)
 
     # --- Behaviour ---
-    max_tokens:                 int        = 2048
-    language:                   Language   = Language.RUSSIAN
-    repair_iterations:          int        = 4
-    max_passes:                 int        = 3
-    repair_mode:                RepairMode = RepairMode.MAXIMUM
+    max_tokens:                 int          = 2048
+    language:                   Language     = Language.RUSSIAN
+    repair_iterations:          int          = 4
+    max_passes:                 int          = 3
+    repair_mode:                RepairMode   = RepairMode.MAXIMUM
+
+    # --- World units ---
+    distance_unit:              DistanceUnit = DistanceUnit.METERS
+    cell_size:                  int          = 10  # метров в одной ячейке карты
 
     # --- Anthropic ---
     anthropic_thinking_budget:  int        = 10000
@@ -50,6 +55,8 @@ class AppSettings:
             kwargs["repair_mode"] = RepairMode(kwargs["repair_mode"])
         if "log_level" in kwargs:
             kwargs["log_level"] = LogLevel(kwargs["log_level"])
+        if "distance_unit" in kwargs:
+            kwargs["distance_unit"] = DistanceUnit(kwargs["distance_unit"])
         if "system_role_providers" in kwargs:
             kwargs["system_role_providers"] = frozenset(kwargs["system_role_providers"])
 
