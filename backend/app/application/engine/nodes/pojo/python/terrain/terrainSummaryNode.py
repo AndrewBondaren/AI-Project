@@ -67,10 +67,11 @@ class TerrainSummaryNode(PythonNode):
                 "distance_unit":     unit.value,
             })
 
-        terrain_types  = sorted({c["system_terrain"] for c in cells if c.get("system_terrain")})
-        materials      = sorted({c["cell_material"]   for c in cells if c.get("cell_material")})
+        terrain_types  = sorted({c["system_terrain"] for c in cells if c.get("system_terrain")}
+                               | {c["system_building_element"] for c in cells if c.get("system_building_element")})
+        materials      = sorted({c["system_material"]  for c in cells if c.get("system_material")})
         has_structural = any(c.get("is_structural") for c in cells)
-        danger_levels  = sorted({c["danger_level_override"] for c in cells if c.get("danger_level_override")})
+        danger_levels  = sorted({c["system_danger_level_override"] for c in cells if c.get("system_danger_level_override")})
 
         modifiers = [c["travel_modifier_override"] for c in cells if c.get("travel_modifier_override") is not None]
         travel_difficulty = round(sum(modifiers) / len(modifiers), 2) if modifiers else None

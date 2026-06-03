@@ -23,9 +23,9 @@ class BuildingLayout:
     rooms:    list[NamedLocation]
 
 
-_FLOOR_TERRAIN  = "floor"
-_WALL_TERRAIN   = "wall"
-_DOOR_TERRAIN   = "door"
+_FLOOR_ELEMENT  = "floor"
+_WALL_ELEMENT   = "wall"
+_DOOR_ELEMENT   = "door"
 
 _DEFAULT_WALL_MATERIAL  = "stone"
 _DEFAULT_FLOOR_MATERIAL = "wood"
@@ -103,8 +103,8 @@ class BuildingGeneratorService:
             location_uid=room_uid,
             world_uid=building.world_uid,
             display_name=display_name,
-            location_type="room",
-            location_subtype=room_type,  # system_room из room_type_registry
+            system_location_type="room",
+            system_location_subtype=room_type,
             created_at=datetime.now(timezone.utc).isoformat(),
             parent_location_uid=building.location_uid,
             is_accessible=True,
@@ -149,14 +149,14 @@ class BuildingGeneratorService:
 
                 if on_perimeter:
                     if x == door_x and y == door_y:
-                        terrain = _DOOR_TERRAIN
+                        element = _DOOR_ELEMENT
                         is_structural = False
                     else:
-                        terrain = _WALL_TERRAIN
+                        element = _WALL_ELEMENT
                         is_structural = True
                     material = wall_material
                 else:
-                    terrain = _FLOOR_TERRAIN
+                    element = _FLOOR_ELEMENT
                     is_structural = False
                     material = floor_material
 
@@ -165,8 +165,8 @@ class BuildingGeneratorService:
                     x=x,
                     y=y,
                     z=z,
-                    system_terrain=terrain,
-                    cell_material=material,
+                    system_building_element=element,
+                    system_material=material,
                     is_structural=is_structural,
                     location_uid=location_uid,
                 ))

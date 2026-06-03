@@ -147,7 +147,7 @@ class SceneInitNode(PythonNode):
                 {
                     "uid":          loc.location_uid,
                     "name":         loc.display_name,
-                    "type_display": _resolve_type_display(loc.location_type, type_registry),
+                    "type_display": _resolve_type_display(loc.system_location_type, type_registry),
                     "state_name":   states_map.get(loc.state_uid) if loc.state_uid else None,
                     "is_home":      loc.location_uid == home_region_uid,
                 }

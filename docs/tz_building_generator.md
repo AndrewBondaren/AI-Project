@@ -42,7 +42,8 @@
 | `default_z_height` | int | optional | Высота потолка по умолчанию для всех уровней. Default: `3` |
 | `min_z_height` | int | optional | Минимально допустимая высота потолка любого уровня. Default: `2` |
 | `gap_policy` | string | optional | Поведение для gap-областей (внутри bounding box, вне всех комнат): `"clip"`, `"fill"`, `"random"`. Default: `"clip"` |
-| `wealth_level` | string | optional | Уровень богатства здания для выбора материалов: `"poor"`, `"common"`, `"wealthy"`, `"noble"`, `"royal"`. Default: `"common"` |
+| `wealth_level` | string | optional | Уровень богатства здания для выбора материалов: `"poor"`, `"common"`, `"wealthy"`, `"noble"`, `"royal"`. Default: `"common"`. Всегда имеет значение после резолва — используется как fallback если `room.wealth_level` не задан |
+| `building_context` | string | optional | Контекст здания для фильтрации материалов лестницы-ladder: `"indoor"`, `"underground"`, `"nautical"`. Default: `"indoor"` |
 | `levels` | array | required | Массив уровней, минимум 1 |
 | `connections` | array | required | Межкомнатные связи и лестницы |
 
@@ -243,6 +244,7 @@ else:
 
 | `staircase_type` | Footprint | Описание | Применение |
 |---|---|---|---|
+| `ladder` | 1×1 (1 ячейка) | Приставная лестница; не стационарная. Материал из `world.material_registry` по `building_context` | Подвалы, чердаки, бедные постройки |
 | `spiral_small` | 1×2 (2 ячейки) | Крутая, размещается у края стены | Чердак, подвал, тесные пространства |
 | `spiral_standard` | 2×2 (4 ячейки) | Идёт по кругу | Башни, вторичные лестницы |
 | `standard` | 2×2 (4 ячейки) | П-образная без пробела: два марша + площадка | Стандартный этаж-в-этаж |
@@ -267,12 +269,41 @@ stair_length = max(2, ceil(z_height * 1.3))
 **Авто-резолв `staircase_type`:**
 
 ```
+effective_wealth = to_room.wealth_level ?? template.wealth_level
+
 если staircase_type не задан:
+    если z_height <= 3 AND effective_wealth IN ("poor", "common") → ladder
     если z_height <= 5 → standard
     иначе              → straight
 ```
 
 > Детальная геометрия ячеек каждого типа (шаги, площадки, перила) — дополняется отдельно.
+
+**Размещение блока лестницы по `position`:**
+
+`position` применяется к `to_room`. Позиция `from_room` — всегда авто-резолв (см. раздел 8.8).
+
+| `position` | `ladder` (1×1) | `spiral_small` (1×2) | `spiral_standard` (2×2) | `standard` (2×2 П) | `straight` (1×N) |
+|---|---|---|---|---|---|
+| `north` | 1 ячейка у сев. стены, центрирована по X | 2 ячейки вдоль сев. стены, центрированы по X | блок 2×2 у сев. стены, центрирован по X | блок 2×2 у сев. стены, центрирован по X; **П открывается на юг** | 1×N идёт на юг, центрирован по X |
+| `south` | аналогично | аналогично | аналогично | **П открывается на север** | идёт на север |
+| `east` | 1 ячейка у вост. стены, центрирована по Y | 2 ячейки вдоль вост. стены, центрированы по Y | у вост. стены, центрирован по Y | **П открывается на запад** | 1×N идёт на запад, центрирован по Y |
+| `west` | аналогично | аналогично | аналогично | **П открывается на восток** | идёт на восток |
+| `center` | 1 ячейка в центре комнаты | 2 ячейки по оси Y, центрированы XY | блок 2×2 в центре | блок 2×2 в центре; **П открывается на юг** | 1×N по оси Y, центрирован по X |
+| `northwest` | угол NW | угол в NW; длинная ось вдоль сев. стены | угол 2×2 в NW-угол | `ValidationWarning` → авто-резолв к `north` | `ValidationWarning` → авто-резолв к `north` |
+| `northeast` | угол NE | угол в NE; длинная ось вдоль сев. стены | угол 2×2 в NE-угол | авто-резолв к `north` | авто-резолв к `north` |
+| `southwest` | угол SW | угол в SW; длинная ось вдоль юж. стены | угол 2×2 в SW-угол | авто-резолв к `south` | авто-резолв к `south` |
+| `southeast` | угол SE | угол в SE; длинная ось вдоль юж. стены | угол 2×2 в SE-угол | авто-резолв к `south` | авто-резолв к `south` |
+
+`standard` (П-образная): **П открывается в сторону, противоположную стене** — entry-ячейка всегда ближайшая к центру комнаты сторона блока.
+
+`straight`: если `stair_length` превышает доступную глубину комнаты в направлении движения:
+```
+→ GenerationError "Лестница '{connection}': stair_length={N} не вмещается
+  в to_room '{room_id}' (доступная глубина={D})"
+```
+
+Если блок не вмещается в комнату при заданном `position` по другой причине — сдвиг к ближайшей допустимой позиции + `log WARNING`.
 
 ---
 
@@ -593,6 +624,25 @@ def find_candidates(use):
 
 wall_material  = rng.choice(find_candidates("wall"))
 floor_material = rng.choice(find_candidates("floor"))
+
+# ladder: материал из world.material_registry по building_context + wealth_level
+если staircase_type == "ladder":
+    LADDER_CONTEXT_CATEGORIES = {
+        "indoor":      ("organic", "metal", "refined"),
+        "underground": ("organic", "metal", "refined", "crafted"),
+        "nautical":    ("organic", "metal", "refined", "crafted"),
+    }
+    allowed = LADDER_CONTEXT_CATEGORIES[template.building_context ?? "indoor"]
+
+    ladder_material = rng.choice([uid for uid, mat in world.material_registry.items()
+                                  if any(c in mat.category for c in allowed)
+                                  AND mat.wealth_level == effective_wealth])
+    если пуст → fallback по wealth (тот же allowed) + WARNING
+    если всё ещё пуст → log WARNING, return default_material
+
+    # indoor + common:      wood (organic) ✓  rope (crafted) ✗  stone ✗
+    # underground + poor:   wood ✓  rope ✓  iron ✓  stone ✗
+    # nautical + wealthy:   дерево ✓  верёвка ✓  бронза ✗ (нет metal в nautical)
 ```
 
 Порядок богатства (от низшего): `poor` → `common` → `wealthy` → `noble` → `royal`.
@@ -741,7 +791,7 @@ room_cells = union всех (x, y) footprint всех комнат уровня
             поставить wall на (nx, ny)  -- exterior wall
 ```
 
-| Ячейка | `system_terrain` | `is_structural` | `location_uid` |
+| Ячейка | `system_building_element` | `is_structural` | `location_uid` |
 |--------|-----------------|-----------------|----------------|
 | Внешняя стена | `wall` | `True` | building |
 | Дверь entry_point / back_entry_point | `door` | `False` | building |
@@ -784,7 +834,7 @@ effective_policy = gap_policy
 
 Для каждой комнаты вызов cell-генератора по `shape_type` — только interior-ячейки:
 
-| Ячейка | `system_terrain` | `is_structural` | `location_uid` |
+| Ячейка | `system_building_element` | `is_structural` | `location_uid` |
 |--------|-----------------|-----------------|----------------|
 | Пол | `floor` | `False` | room |
 
@@ -794,7 +844,7 @@ effective_policy = gap_policy
 
 Для каждого ребра BFS-графа (пары смежных комнат) — shared segment: единственная стена на границе двух комнат. Стена принадлежит зданию.
 
-| Ячейка | `system_terrain` | `is_structural` | `location_uid` |
+| Ячейка | `system_building_element` | `is_structural` | `location_uid` |
 |--------|-----------------|-----------------|----------------|
 | Несущая стена (shared segment) | `wall` | `True` | building |
 | Дверной проём в несущей стене | `door` | `False` | building |
@@ -894,8 +944,10 @@ class BuildingGeneratorService:
 - `size.size_type` + `size.width_range`/`size.depth_range` одновременно → ValidationError
 - `size.size_type` отсутствует и `size.width_range` не задан → ValidationError
 - `width_range[0] ≤ width_range[1]`, то же для `depth_range`, `count_range`, `z_range`
-- `count_range[0] < 1` → `ValidationError` (минимум `[1, 1]`)
+- `required: false` + `count_range` отсутствует → `ValidationError` ("room '{room_id}': required=false требует count_range")
+- `count_range[0] < 1` → `ValidationError` ("room '{room_id}': count_range минимум [1, 1]")
 - `gap_policy` не из `{"clip", "fill", "random"}` → `ValidationError`
+- `building_context` не из `{"indoor", "underground", "nautical"}` → `ValidationError`
 - Нет дублирующихся `room_id` в рамках всего шаблона (не только уровня)
 - `effective_z_height ≥ min_z_height` для каждого уровня
 - Все `shape_type` — валидные значения `ShapeType`; v1: + `is_supported = True`
@@ -905,7 +957,7 @@ class BuildingGeneratorService:
 - `perimeter_required: true` + degree в connection-графе > 1 → ValidationWarning (периметр не гарантирован)
 - Connection-граф каждого уровня (intra-level doorway/archway connections) ацикличен — циклы → `ValidationError` ("кольцевые связи не поддерживаются: комната не может быть смежна с двумя уже размещёнными")
 - `connection.passage_type == "staircase"` + `from_room` и `to_room` на одном `z_offset` → ValidationError
-- `staircase_type` не из `{"spiral_small", "spiral_standard", "standard", "straight"}` → ValidationError
+- `staircase_type` не из `{"ladder", "spiral_small", "spiral_standard", "standard", "straight"}` → ValidationError
 - `staircase_type` задан на non-staircase connection → ValidationWarning (игнорируется)
 - `position` задан на non-staircase connection → ValidationWarning (игнорируется)
 - `connection.passage_type != "staircase"` + `from_room` и `to_room` на разных `z_offset` → ValidationError
@@ -946,7 +998,7 @@ class BuildingGeneratorService:
 для каждой edge-ячейки балкона (выступающий край):
     scan_radius = 3  # клетки
     has_support = EXISTS map_cell WHERE
-        system_terrain = "column"
+        system_building_element = "column"
         AND distance(edge_cell, column_cell) <= scan_radius
         AND z = level.z  -- колонна на том же уровне или ниже
 

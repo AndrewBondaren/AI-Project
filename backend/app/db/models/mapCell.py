@@ -12,12 +12,14 @@ class MapCell:
     x:                          int
     y:                          int
     z:                          int
-    system_terrain:             str
 
-    cell_material:              str | None = None
-    is_structural:              bool = bool_col(default=False)
-    travel_modifier_override:   float | None = None
-    danger_level_override:      str | None = None
+    system_terrain:             str | None = None   # тип рельефа из terrain_registry (grass, water, dirt, ...)
+    system_building_element:   str | None = None   # строительный элемент (wall, floor, door, window, ...)
+
+    system_material:                str | None = None
+    is_structural:                  bool = bool_col(default=False)
+    travel_modifier_override:       float | None = None
+    system_danger_level_override:   str | None = None
     gap_width_override:         int | None = None
     temperature_base:           int | None = None
     rainfall:                   int | None = None

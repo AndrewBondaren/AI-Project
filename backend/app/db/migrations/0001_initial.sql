@@ -594,8 +594,8 @@ CREATE TABLE IF NOT EXISTS named_locations (
     location_uid            TEXT PRIMARY KEY,
     world_uid                TEXT NOT NULL,
     parent_location_uid     TEXT,
-    location_type           TEXT NOT NULL,
-    location_subtype        TEXT,
+    system_location_type    TEXT NOT NULL,
+    system_location_subtype TEXT,
     display_name            TEXT NOT NULL,
     system_description      TEXT,
     display_description     TEXT,
@@ -608,10 +608,10 @@ CREATE TABLE IF NOT EXISTS named_locations (
     system_location_mood    TEXT,
     display_location_mood   TEXT,
     owner_uid               TEXT,
-    climate_zone            TEXT,
+    system_climate_zone     TEXT,
     state_uid               TEXT,
-    city_size               TEXT,
-    economic_tier           TEXT,
+    system_city_size        TEXT,
+    system_economic_tier    TEXT,
     is_public               INTEGER NOT NULL DEFAULT 0,
     is_forbidden            INTEGER NOT NULL DEFAULT 0,
     is_selectable           INTEGER NOT NULL DEFAULT 1,
@@ -633,11 +633,12 @@ CREATE TABLE IF NOT EXISTS map_cells (
     x                       INTEGER NOT NULL,
     y                       INTEGER NOT NULL,
     z                       INTEGER NOT NULL,
-    system_terrain          TEXT NOT NULL,
-    cell_material           TEXT,
-    is_structural           INTEGER NOT NULL DEFAULT 0,
-    travel_modifier_override REAL,
-    danger_level_override   TEXT,
+    system_terrain                TEXT,
+    system_building_element       TEXT,
+    system_material               TEXT,
+    is_structural                 INTEGER NOT NULL DEFAULT 0,
+    travel_modifier_override      REAL,
+    system_danger_level_override  TEXT,
     gap_width_override      INTEGER,
     temperature_base        INTEGER,
     rainfall                INTEGER,
@@ -729,7 +730,7 @@ CREATE TABLE IF NOT EXISTS location_passages (
     to_x             INTEGER NOT NULL,
     to_y             INTEGER NOT NULL,
     is_bidirectional INTEGER NOT NULL DEFAULT 1,
-    passage_type     TEXT NOT NULL,
+    system_passage_type TEXT NOT NULL,
     display_name     TEXT,
     glossary_ref     TEXT,
     tag_refs         TEXT,
@@ -1073,7 +1074,7 @@ CREATE INDEX IF NOT EXISTS idx_factions_world           ON factions (world_uid);
 
 CREATE INDEX IF NOT EXISTS idx_named_locations_world    ON named_locations (world_uid);
 CREATE INDEX IF NOT EXISTS idx_named_locations_parent   ON named_locations (parent_location_uid);
-CREATE INDEX IF NOT EXISTS idx_named_locations_type     ON named_locations (world_uid, location_type);
+CREATE INDEX IF NOT EXISTS idx_named_locations_type     ON named_locations (world_uid, system_location_type);
 CREATE INDEX IF NOT EXISTS idx_named_locations_public   ON named_locations (world_uid, is_public);
 
 CREATE INDEX IF NOT EXISTS idx_map_cells_location_z     ON map_cells (world_uid, location_uid, z);

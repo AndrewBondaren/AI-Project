@@ -16,7 +16,7 @@ class LocationPassage:
     to_level_uid:    str
     to_x:            int
     to_y:            int
-    passage_type:    str
+    system_passage_type: str
 
     is_bidirectional: bool     = bool_col(default=True)
     display_name:     str | None = None

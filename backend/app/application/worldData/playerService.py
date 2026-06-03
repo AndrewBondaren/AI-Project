@@ -23,10 +23,11 @@ class PlayerService:
         return player
 
     async def create(self, data: dict) -> Player:
+        known = {f.name for f in dataclasses.fields(Player)}
         data = {
             "character_uid": str(uuid.uuid4()),
             "created_at": datetime.now(timezone.utc).isoformat(),
-            **data,
+            **{k: v for k, v in data.items() if k in known},
         }
         player = Player(**data)
         await self._repo.create(player)
