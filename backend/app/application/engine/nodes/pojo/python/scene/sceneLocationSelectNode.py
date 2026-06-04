@@ -45,7 +45,7 @@ def _resolve_type_display(location_type: str, registry: dict) -> str | None:
     entry = registry.get(location_type)
     if not entry:
         return None
-    return entry.get("display") if isinstance(entry, dict) else str(entry)
+    return entry.get("display_name") if isinstance(entry, dict) else str(entry)
 
 
 def can_start(location, player_uid, player_faction_uid, faction_access_list, npc_home_occupied_uids):

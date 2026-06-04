@@ -34,7 +34,7 @@
 
 | Поле | Тип | Обязательность | Описание |
 |------|-----|---------------|----------|
-| `template_uid` | string | required | Уникальный идентификатор шаблона |
+| `system_name` | string | required | Уникальный системный идентификатор шаблона: `"tavern_1"`, `"manor_std"`. Используется для генерации `template_uid = uuid5(NAMESPACE_DNS, system_name)` |
 | `structure_type` | string | required | Смысловой тип: tavern, shop, dungeon, house, etc. |
 | `display_name` | string | required | Отображаемое название шаблона |
 | `description` | string | optional | Описание для UI |
@@ -42,8 +42,11 @@
 | `default_z_height` | int | optional | Высота потолка по умолчанию для всех уровней. Default: `3` |
 | `min_z_height` | int | optional | Минимально допустимая высота потолка любого уровня. Default: `2` |
 | `gap_policy` | string | optional | Поведение для gap-областей (внутри bounding box, вне всех комнат): `"clip"`, `"fill"`, `"random"`. Default: `"clip"` |
-| `wealth_level` | string | optional | Уровень богатства здания для выбора материалов: `"poor"`, `"common"`, `"wealthy"`, `"noble"`, `"royal"`. Default: `"common"`. Всегда имеет значение после резолва — используется как fallback если `room.wealth_level` не задан |
+| `economic_tier` | string | optional | Экономический уровень здания для выбора материалов: ref → `worlds.item_value_tier_registry`. Default: `"standard"`. Всегда имеет значение после резолва — используется как fallback если `room.economic_tier` не задан |
 | `building_context` | string | optional | Контекст здания для фильтрации материалов лестницы-ladder: `"indoor"`, `"underground"`, `"nautical"`. Default: `"indoor"` |
+| `window_z_ratio` | float | optional | Пропорциональная высота окон по умолчанию для всех уровней: `window_z = floor(z_height * ratio)`. Default: `0.4`. Переопределяется на уровне через `level.window_z_ratio` или `level.window_z_offset` |
+| `door_height_ratio` | float | optional | Коэффициент высоты дверей для `z_height >= 4`: `door_height = floor(z_height * ratio)`. Default: `0.75` |
+| `door_height_max` | int | optional | Максимальная высота двери в z-юнитах. Default: `5`. Cap для высоких этажей — дверь не растёт бесконечно |
 | `levels` | array | required | Массив уровней, минимум 1 |
 | `connections` | array | required | Межкомнатные связи и лестницы |
 
@@ -58,6 +61,8 @@
 | `z_offset` | int | required | Смещение этажа: `0` = земля, `1` = второй этаж, `-1` = подвал |
 | `display_name` | string | required | Название: "Первый этаж", "Подвал", "Чердак" |
 | `z_height` | int | optional | Высота потолка в z-юнитах. Если не задана — берётся `default_z_height` шаблона |
+| `window_z_offset` | int | optional | Явная высота окон от base_z этажа. Переопределяет `window_z_ratio`. Используется когда нужен точный контроль |
+| `window_z_ratio` | float | optional | Пропорциональная высота окон: `window_z = floor(z_height * ratio)`. Переопределяет `template.window_z_ratio` для этого уровня |
 | `isolated` | bool | optional | Уровень не имеет физического прохода из других уровней. Default: `false` |
 | `access_mechanic` | string[] | optional | Способы доступа к изолированному уровню: `"excavation"`, `"teleport"`. Пустой массив = недостижим без механики. Игнорируется если `isolated: false` |
 | `rooms` | array | required | Список комнат на уровне, минимум 1 |
@@ -108,8 +113,10 @@ level_z = level.z_height ?? max(room_z for room in level.rooms)
 | Поле | Тип | Обязательность | Описание |
 |------|-----|---------------|----------|
 | `room_id` | string | required | Локальный ID внутри шаблона; используется в connections и attach_to |
-| `room_type` | string | required | Смысловой тип: common_hall, kitchen, cellar, corridor, guest_room, etc. |
+| `room_type` | string | required | Смысловой тип: common_hall, kitchen, cellar, corridor, guest_room, etc. Должен существовать в `worlds.room_type_registry` — валидируется при импорте шаблона в мир |
 | `display_name` | string | required | Название для `NamedLocation.display_name` |
+| `is_public` | bool | required | Комната доступна для всех. Зависит от контекста здания: холл таверны = true, холл частного дома = false |
+| `is_forbidden` | bool | required | Комната запрещена для входа. Зависит от контекста здания: палуба лайнера = false, палуба военного корабля = true |
 | `shape_type` | string \| string[] | required | Форма footprint (см. раздел 3.8). Строка = фиксированная; массив = генератор выбирает один случайно |
 | `size` | object | required | Объект размера комнаты (см. раздел 3.5) |
 | `required` | bool | required | Если true — комната всегда генерируется |
@@ -120,9 +127,10 @@ level_z = level.z_height ?? max(room_z for room in level.rooms)
 | `attach_wall` | string | conditional | Обязателен если `attach_to` задан. `"north"`, `"south"`, `"east"`, `"west"`, `"both"`, `"any"` |
 | `max_overhang` | int | optional | Макс. выступ за границы ground floor footprint в ячейках. Default: `0`. Разрешён только для `room_type: "balcony"`. Без `has_column`: не более 2. С `has_column`: не более 4 |
 | `has_column` | bool | optional | Балкон опирается на колонны. Увеличивает лимит `max_overhang` до 4. Генератор размещает ячейки `column` на ground floor под выступающими углами балкона |
-| `wealth_level` | string | optional | Переопределяет уровень богатства для этой комнаты. Если не задан — берётся из шаблона |
+| `economic_tier` | string | optional | Переопределяет экономический уровень для этой комнаты. Если не задан — берётся из шаблона |
 | `entry_point` | object | optional | Объявляет главный вход здания на этой комнате. Только одна комната в шаблоне |
 | `back_entry_point` | object | optional | Объявляет чёрный вход здания на этой комнате. Только одна комната в шаблоне |
+| `wall_openings` | array | optional | Отверстия в стенах комнаты: окна, бойницы, люки, иллюминаторы и др. (см. раздел 3.10) |
 
 **Правило `perimeter_required` + entry_point:**
 
@@ -189,8 +197,41 @@ else:
 |------|-----|----------|
 | `wall` | string | Стена: `north`, `south`, `east`, `west` |
 | `passage_type` | string | `main_entrance`, `service_entrance` |
+| `width` | int | optional. Ширина проёма в ячейках. Default: `1`. `2` = двустворчатая, `3+` = воротный проём |
+| `door_height` | int | optional. Явная высота проёма в z-юнитах. Если не задана — авто-резолв (см. ниже) |
+| `frame_material` | string\|null | optional. Материал дверной коробки. Fallback: `wall_material` комнаты |
+| `panel_material` | string\|null | optional. Материал дверного полотна. Fallback: `economic_tier` → `material_registry`. `null` = открытый проём |
 
-Вход размещается на центральной ячейке указанной стены. Тип terrain: `door`.
+**Авто-резолв `door_height`:**
+
+```
+если door_height задан явно → использовать
+если z_height <= 3:
+    door_height = z_height - 1
+иначе:
+    door_height = min(
+        floor(z_height * template.door_height_ratio),  -- default 0.75
+        template.door_height_max                        -- default 5
+    )
+
+Примеры (ratio=0.75, max=5):
+  z=2  → 1    z=3  → 2    z=4  → 3
+  z=6  → 4    z=7  → 5    z=10 → 5 (cap)
+  z=20 → 5    (cap)
+```
+
+Валидация: `door_height >= 1` и `door_height < z_height` → иначе `ValidationError`.
+
+**Центрирование:** `entry_point` всегда центрируется на указанной стене.
+
+```
+mid = len(wall_cells) // 2
+если width нечётный: cells = [mid - width//2 .. mid + width//2]
+если width чётный:   cells = [mid - width//2 .. mid + width//2 - 1]
+```
+
+Каждая ячейка проёма: `system_terrain = "door"`, `is_structural = false`, `system_material = frame_material`.  
+`cell_states`: `system_state = "closed"` для каждой ячейки.  
 `LocationPassage` создаётся с `from_level_uid = null` (внешнее пространство) → `to_level_uid` уровня этой комнаты.
 
 ---
@@ -203,8 +244,39 @@ else:
 | `to_room` | string | `room_id` цели |
 | `passage_type` | string | `doorway`, `staircase`, `archway`, etc. |
 | `required` | bool | Если обе комнаты сгенерированы — проход обязателен |
+| `width` | int | optional. Только для `doorway`/`archway`. Ширина проёма в ячейках. Default: `1` |
+| `door_height` | int | optional. Только для `doorway`/`archway`. Явная высота проёма. Если не задана — тот же авто-резолв что в `entry_point` |
+| `frame_material` | string\|null | optional. Материал дверной коробки / арки. Fallback: `wall_material` from_room |
+| `panel_material` | string\|null | optional. Только для `doorway`. Материал дверного полотна. Fallback: `economic_tier` → `material_registry`. `null` = проём без двери |
+| `step_material` | string\|null | optional. Только для `staircase`. Материал ступеней. Fallback: `floor_material` from_room |
+| `railing_material` | string\|null | optional. Только для `staircase`. Материал поручня. `null` = без поручня. Fallback: `economic_tier` → `material_registry` |
 | `position` | string | optional. Только для `staircase`. Позиция ячейки лестницы внутри `to_room`: `"center"`, `"north"`, `"south"`, `"east"`, `"west"`, `"northwest"`, `"northeast"`, `"southwest"`, `"southeast"`. Если не задан — авто-резолв |
 | `staircase_type` | string | optional. Только для `staircase`. Тип лестницы (см. раздел 3.9). Если не задан — авто-резолв по `z_height` |
+
+**Fallback материалов:**
+
+```
+frame_material:   connection.frame_material ?? room.wall_material ?? find_candidates("wall")
+panel_material:   connection.panel_material ?? find_candidates("door")   -- null = проём
+step_material:    connection.step_material  ?? room.floor_material ?? find_candidates("floor")
+railing_material: connection.railing_material ?? find_candidates("railing") -- null = без поручня
+```
+
+`find_candidates` — тот же алгоритм что в 8.5b: фильтр по `use_type` + `economic_tier` + fallback вниз по `tiers_sorted`.
+
+**Центрирование doorway на общей стене:**
+
+```
+shared_segment = общие ячейки границы двух комнат
+mid = len(shared_segment) // 2
+если width нечётный: cells = [mid - width//2 .. mid + width//2]
+если width чётный:   cells = [mid - width//2 .. mid + width//2 - 1]
+если width > len(shared_segment) → width = len(shared_segment) + WARNING
+```
+
+**Разбиваемость двери:** определяется `material_registry[panel_material].breakable`.  
+Деревянная дверь (`breakable: true`) → состояние `broken` доступно.  
+Железная дверь (`breakable: false`) → только `closed` / `open` / `locked`.
 
 Если одна из комнат не была сгенерирована (например, пропущена из-за ограничений footprint верхнего этажа) — connection пропускается.  
 Для `staircase`: `from_level_uid.z ≠ to_level_uid.z`; ячейка типа `staircase` на обоих уровнях.
@@ -269,10 +341,14 @@ stair_length = max(2, ceil(z_height * 1.3))
 **Авто-резолв `staircase_type`:**
 
 ```
-effective_wealth = to_room.wealth_level ?? template.wealth_level
+effective_tier = to_room.economic_tier ?? template.economic_tier
+
+tiers_sorted = sorted(item_value_tier_registry, key=lambda t: t.base_value)  -- ASC
+tier_rank    = tiers_sorted.index(effective_tier)   -- 0 = самый дешёвый
+tier_count   = len(tiers_sorted)
 
 если staircase_type не задан:
-    если z_height <= 3 AND effective_wealth IN ("poor", "common") → ladder
+    если z_height <= 3 AND tier_rank < ceil(tier_count / 3) → ladder  -- нижняя треть реестра
     если z_height <= 5 → standard
     иначе              → straight
 ```
@@ -307,11 +383,122 @@ effective_wealth = to_room.wealth_level ?? template.wealth_level
 
 ---
 
+### 3.10 Поля wall_opening
+
+`wall_openings` — массив объектов. Каждый объект описывает один тип отверстия на стенах комнаты.
+
+| Поле | Тип | Обязательность | Описание |
+|---|---|---|---|
+| `terrain_type` | string | required | ref → `terrain_registry`. Тип ячейки: `window`, `arrow_slit`, `porthole`, `vent`, `hatch`, etc. Должен иметь `terrain_category: "barrier"` |
+| `wall` | string | required | На какой стене размещать: `"north"`, `"south"`, `"east"`, `"west"`, `"any"`, `"all"`, `"perimeter"`, `"interior"` |
+| `frame_material` | string | optional | ref → `material_registry`. Материал рамы. Если не задан — берётся из `wall_material` комнаты |
+| `glass_material` | string\|null | optional | ref → `material_registry`. Материал заполнения (стекло, кристалл). `null` = нет заполнения (бойница, решётка). Default: `null` |
+| `count` | int | conditional | Фиксированное кол-во. Взаимоисключает `count_range` |
+| `count_range` | [int, int] | conditional | Диапазон кол-ва. Взаимоисключает `count` |
+| `distribution` | string | optional | Расположение вдоль стены: `"evenly"`, `"random"`, `"centered"`. Default: `"evenly"` |
+| `size` | int | optional | Ширина отверстия в ячейках. Default: `1` |
+
+**Значения `wall`:**
+
+| Значение | Описание |
+|---|---|
+| `"north"` / `"south"` / `"east"` / `"west"` | Конкретная стена; только exterior-ячейки этого направления |
+| `"any"` | Генератор выбирает одну exterior-стену случайно |
+| `"all"` | Все exterior-стены комнаты |
+| `"perimeter"` | Все exterior-стены (default — окна всегда наружу) |
+| `"interior"` | Только interior-стены (явный opt-in; используется для внутренних окон-передаточных) |
+
+**Default `wall`: `"perimeter"`** — окна смотрят наружу по умолчанию.
+
+---
+
+**Общие правила размещения:**
+
+**Правило 1 — наружу по умолчанию.**  
+`wall` без явного `"interior"` → только exterior wall-ячейки (сосед не принадлежит ни одной комнате).
+
+**Правило 2 — симметричное кратное размещение.**
+
+```
+available = exterior_wall_cells
+    - door_cells (±1 ячейка от двери)
+    - corner_cells (±1 от угла footprint)
+
+spacing = 1   -- минимальный зазор между отверстиями
+max_count = floor((len(available) + spacing) / (size + spacing))
+count = min(resolved_count, max_count)
+
+-- симметричное размещение по центру стены:
+total_width = count * size + (count - 1) * spacing
+start_offset = floor((len(available) - total_width) / 2)
+positions = [start_offset + i * (size + spacing) for i in 0..count-1]
+```
+
+Если `count_range` задан — берётся максимальный count который вписывается симметрично.  
+Если `count = 0` после вычислений → log WARNING "Стена слишком короткая для размещения отверстия", пропустить.
+
+**Правило 3 — единая высота окон на этаже.**
+
+```
+window_z = level.window_z_offset                      -- явный override (приоритет 1)
+         ?? floor(z_height * level.window_z_ratio)    -- пропорция уровня (приоритет 2)
+         ?? floor(z_height * template.window_z_ratio) -- пропорция шаблона (приоритет 3)
+         ?? floor(z_height * 0.4)                     -- системный дефолт
+```
+
+Все `wall_openings` на данном уровне размещаются на `z = level.base_z + window_z`.  
+Разные этажи с разной `z_height` имеют разный физический `window_z` — это архитектурно корректно: высокий первый этаж имеет окна физически выше, чем низкий второй.
+
+**Конфликт interior-окон:** если две смежные комнаты обе объявляют `wall: "interior"` на одну стену — размещает комната с меньшим `room_id` лексикографически.
+
+**Состояния отверстия (`cell_states`):**
+
+| Состояние | Условие | Эффект |
+|---|---|---|
+| `closed` | default | Непроходимо; `glass_material` блокирует видимость если `transparent: false` |
+| `open` | если рама позволяет | Проходимо (лезть/прыгать); ветер, температура проникают |
+| `broken` | `glass_material.breakable = true` + урон | Стекло уничтожено, рама цела; проходимо с уроном от осколков |
+| `destroyed` | рама разрушена | Полная дыра в стене; проходимо свободно |
+
+Разбиваемость определяется `material_registry[glass_material].breakable`. Рама без стекла (`glass_material: null`) — состояния `closed`/`open`/`destroyed` (нет `broken`).
+
+**Примеры:**
+
+```json
+// Таверна — деревянные рамы, обычное стекло, бьётся
+"wall_openings": [
+  { "terrain_type": "window", "frame_material": "wood", "glass_material": "glass",
+    "wall": "perimeter", "count_range": [2, 4], "distribution": "evenly", "size": 1 }
+]
+
+// Замковая бойница — каменная, без стекла
+"wall_openings": [
+  { "terrain_type": "arrow_slit", "frame_material": "stone", "glass_material": null,
+    "wall": "all", "count_range": [2, 6], "distribution": "evenly", "size": 1 }
+]
+
+// Каюта корабля — железный иллюминатор, толстое стекло (не бьётся)
+"wall_openings": [
+  { "terrain_type": "porthole", "frame_material": "iron", "glass_material": "thick_glass",
+    "wall": "east", "count": 1, "distribution": "centered", "size": 1 }
+]
+
+// Современная квартира — панорамное окно на юг
+"wall_openings": [
+  { "terrain_type": "window", "frame_material": "aluminum", "glass_material": "tempered_glass",
+    "wall": "south", "count": 1, "distribution": "centered", "size": 4 }
+]
+```
+
+`terrain_type` — любой тип из `terrain_registry` с `terrain_category: "barrier"`. Новые типы (бойница, иллюминатор, вентиляционная шахта) добавляются в реестр без изменения генератора.
+
+---
+
 ## 4. Пример: tavern_1
 
 ```json
 {
-  "template_uid":    "tavern_1",
+  "system_name":     "tavern_1",
   "structure_type":  "tavern",
   "display_name":    "Таверна тип 1",
   "description":     "Двухэтажная таверна с подвалом. 1й этаж: прямое соединение (нет коридора). 2й этаж: коридор с жилыми комнатами по обе стороны.",
@@ -432,9 +619,10 @@ effective_wealth = to_room.wealth_level ?? template.wealth_level
 
 ```sql
 CREATE TABLE IF NOT EXISTS building_templates (
-    template_uid   TEXT PRIMARY KEY,
-    structure_type TEXT NOT NULL,
+    template_uid   TEXT PRIMARY KEY,   -- UUID5 hash: uuid5(NAMESPACE_DNS, system_name)
+    system_name    TEXT NOT NULL UNIQUE, -- user-defined key: "tavern_1", "manor_std"
     display_name   TEXT NOT NULL,
+    structure_type TEXT NOT NULL,
     version        TEXT NOT NULL DEFAULT '1.0',
     data           TEXT NOT NULL,   -- JSON blob (полный шаблон)
     source_file    TEXT             -- путь к исходному файлу, для дебага
@@ -445,16 +633,16 @@ CREATE TABLE IF NOT EXISTS building_templates (
 
 **Удаление шаблона — RESTRICT:**
 
-Шаблон нельзя удалить если хотя бы одно здание (`NamedLocation` с `template_uid`) ссылается на него. Приложение проверяет это до удаления и возвращает список зданий пользователю.
+Шаблон нельзя удалить если хотя бы одно здание (`NamedLocation` с `system_template_uid`) ссылается на него. Приложение проверяет это до удаления и возвращает список зданий пользователю.
 
 **Замена шаблона (update in-place):**
 
-Пользователь может загрузить новый JSON с тем же `template_uid` — выполняется `UPDATE building_templates SET data=..., version=..., source_file=... WHERE template_uid=?` после валидации.
+Пользователь может загрузить новый JSON с тем же `system_name` — выполняется `UPDATE building_templates SET data=..., version=..., source_file=... WHERE template_uid=?` после валидации.
 
-Если здания уже используют этот `template_uid`:
+Если здания уже используют этот `system_template_uid`:
 ```
 1. log WARNING "N зданий будут перегенерированы по новому шаблону"
-2. для каждого здания с template_uid:
+2. для каждого здания с system_template_uid:
      удалить существующие map_cells здания и его комнат
      удалить существующие NamedLocation комнат
      удалить существующие LocationPassage, LocationLevel здания
@@ -470,12 +658,12 @@ CREATE TABLE IF NOT EXISTS building_templates (
 
 ```json
 [
-  { "template_uid": "tavern_1",  "imported_at": "2026-06-03T00:00:00Z" },
-  { "template_uid": "manor_std", "imported_at": "2026-06-03T00:00:00Z" }
+  { "system_template_uid": "<uuid5>", "display_template_name": "Таверна тип 1",  "imported_at": "2026-06-03T00:00:00Z" },
+  { "system_template_uid": "<uuid5>", "display_template_name": "Манор стандарт", "imported_at": "2026-06-03T00:00:00Z" }
 ]
 ```
 
-Генератор читает `template_uid` отсюда, затем загружает полный JSON из `building_templates`.
+Генератор читает `system_template_uid` отсюда, затем загружает полный JSON из `building_templates`.
 
 ---
 
@@ -485,7 +673,7 @@ CREATE TABLE IF NOT EXISTS building_templates (
 
 - Пользователь загружает JSON-файл через UI (аналог импорта миров, см. tz_json_import.md)
 - Один файл = один шаблон
-- При загрузке: JSON валидируется через `validate_template()`; `template_uid` upsert по PK
+- При загрузке: JSON валидируется через `validate_template()`; `template_uid = uuid5(system_name)` upsert по PK
 - Шаблон хранится в `building_templates.data` как JSON blob
 
 ### 6.2 Импорт шаблона в мир
@@ -505,7 +693,7 @@ CREATE TABLE IF NOT EXISTS building_templates (
     иначе → ImportWarning (шаблон импортируется, но комната не будет сгенерирована в v1)
 ```
 
-При успехе: `template_uid` добавляется в `worlds.building_template_registry`.  
+При успехе: `system_template_uid` + `display_template_name` добавляются в `worlds.building_template_registry`.  
 Импортированный шаблон можно удалить из мира (убрать из реестра) — глобальная запись в `building_templates` не затрагивается.
 
 ---
@@ -521,15 +709,15 @@ class BuildingLayout:
     rooms:     list[NamedLocation]   # под-локации здания (каждая комната)
 ```
 
-Здание (`NamedLocation` с `location_type="building"`):
-- `template_uid` — ссылка на `building_templates.template_uid`; RESTRICT при удалении шаблона
+Здание (`NamedLocation` с `system_location_type="building"`):
+- `system_template_uid` — ссылка на `building_templates.template_uid`; RESTRICT при удалении шаблона
 - `map_x, map_y, map_z` — origin здания в глобальных координатах
 
 Каждая комната — `NamedLocation` с:
-- `location_type = "room"`, `location_subtype = room_type` из шаблона
+- `system_location_type = "room"`, `system_location_subtype = room_type` из шаблона
 - `parent_location_uid = building.location_uid`
 - `map_x, map_y, map_z` — origin (левый нижний угол) footprint комнаты в глобальных координатах
-- `is_public / is_forbidden` — из `room_type_registry.default_is_public/forbidden`
+- `is_public / is_forbidden` — из полей шаблона на комнате (не из реестра; реестр не хранит дефолты доступа)
 
 ---
 
@@ -578,54 +766,93 @@ depth = rng.randint(depth_range[0], depth_range[1])  # игнорируется 
 **Структура записи в `world.material_registry`:**
 
 ```json
-"stone": {
-  "display_name": "Камень",
-  "category": ["construction", "mineral"],
-  "use_type": ["wall", "column"],
-  "wealth_level": "common",
-  "hardness": 3
-}
+[
+  {
+    "system_material":    "stone",
+    "display_name":       "Камень",
+    "glossary_ref":       null,
+    "material_category":  "solid",
+    "tags":               ["construction", "mineral"],
+    "use_type":           ["wall", "floor", "column"],
+    "economic_tier":      "standard",
+    "hardness":           3,
+    "density":            250,
+    "structural_strength": 0.8,
+    "flammable":          false,
+    "freezable":          false,
+    "corrodible":         true,
+    "meltable":           false,
+    "mineable":           true,
+    "transparent":        false,
+    "components":         null
+  }
+]
 ```
 
 | Поле | Тип | Описание |
 |---|---|---|
+| `system_material` | string | Уникальный ключ материала |
 | `display_name` | string | Отображаемое название |
-| `category` | string[] | Одна или несколько из: `construction`, `metal`, `crafted`, `refined`, `raw`, `organic`, `consumable`, `mineral`, `magic` + кастомные из `world.material_category_registry` |
+| `glossary_ref` | string\|null | nullable; ref → `lore_registry`; лор-описание для LLM |
+| `material_category` | string | Физическое состояние: `solid`, `liquid`, `gas` |
+| `tags` | string[] | Классификационные теги: `construction`, `metal`, `crafted`, `refined`, `raw`, `organic`, `consumable`, `mineral`, `magic` + кастомные |
 | `use_type` | string[] | `wall`, `floor`, `column`, `door`, `gate`, `railing`, `ceiling`, `roof`, `any` |
-| `wealth_level` | string | `poor` → `common` → `wealthy` → `noble` → `royal` |
+| `economic_tier` | string | ref → `worlds.item_value_tier_registry.system_tier` |
 | `hardness` | int (1–5) | Твёрдость для `ExcavationNode` |
-| `components` | string[] | optional. Компоненты для `crafted`/`refined` материалов |
+| `density` | int | Плотность; используется физикой (утопание, слоение жидкостей) |
+| `structural_strength` | float (0–1) | Прочность; null для liquid/gas |
+| `flammable` | bool | Горит. Default: false |
+| `freezable` | bool | Замерзает. Default: false |
+| `corrodible` | bool | Поддаётся коррозии. Default: true |
+| `meltable` | bool | Плавится. Default: false |
+| `mineable` | bool | Добывается. Default: false |
+| `transparent` | bool | Прозрачен. Default: false |
+| `components` | string[]\|null | optional. Компоненты для `crafted`/`refined` материалов |
+| `temp_damage` | bool | только liquid/gas. Наносит температурный урон |
+| `vision_block` | bool | только liquid/gas. Блокирует видимость |
 
-Базовые категории фиксированы в движке (`MaterialCategory` enum). Мир может добавлять кастомные через `world.material_category_registry`.
+`material_category` фиксирован в движке (solid/liquid/gas). `tags` — расширяемы через `world.material_tag_registry` (N+1).
+
+**Прослойка: сортировка тиров по `base_value`:**
+
+```
+tiers_sorted = sorted(item_value_tier_registry, key=lambda t: t.base_value)  -- ASC; строится один раз на генерацию
+tier_value(tier) = item_value_tier_registry[tier].base_value
+```
+
+Все сравнения тиров — через `tier_value()` и позицию в `tiers_sorted`. Никаких хардкоженных имён и числовых порогов.
 
 **Алгоритм выбора материала:**
 
 ```
-effective_wealth = room.wealth_level ?? template.wealth_level ?? "common"
-wealth_order     = ["poor", "common", "wealthy", "noble", "royal"]
+effective_tier = room.economic_tier ?? template.economic_tier ?? tiers_sorted[len//2].system_tier
 
 def find_candidates(use):
-    candidates = [uid for uid, mat in world.material_registry.items()
-                  if "construction" in mat.category
-                  AND use in mat.use_type
-                  AND mat.wealth_level == effective_wealth]
+    candidates = [mat["system_material"] for mat in world.material_registry
+                  if "construction" in mat["tags"]
+                  AND use in mat["use_type"]
+                  AND mat["economic_tier"] == effective_tier]
 
     если candidates пуст:
-        -- fallback: искать ближайший уровень вниз
-        idx = wealth_order.index(effective_wealth)
-        for level in reversed(wealth_order[:idx]):
-            candidates = [... mat.wealth_level == level ...]
+        -- fallback: ближайший тир вниз по base_value
+        current_val = tier_value(effective_tier)
+        lower = [t for t in tiers_sorted if t.base_value < current_val]
+        for tier in reversed(lower):  -- от ближайшего вниз
+            candidates = [mat["system_material"] for mat in world.material_registry
+                          if "construction" in mat["tags"]
+                          AND use in mat["use_type"]
+                          AND mat["economic_tier"] == tier.system_tier]
             если candidates: break
         если всё ещё пуст:
-            candidates = [uid for uid, mat in world.material_registry.items()
-                          if "construction" in mat.category AND use in mat.use_type]
+            candidates = [mat["system_material"] for mat in world.material_registry
+                          if "construction" in mat["tags"] AND use in mat["use_type"]]
         если всё ещё пуст → log WARNING, return default_material
     return candidates
 
 wall_material  = rng.choice(find_candidates("wall"))
 floor_material = rng.choice(find_candidates("floor"))
 
-# ladder: материал из world.material_registry по building_context + wealth_level
+# ladder: материал из world.material_registry по building_context + economic_tier
 если staircase_type == "ladder":
     LADDER_CONTEXT_CATEGORIES = {
         "indoor":      ("organic", "metal", "refined"),
@@ -634,18 +861,17 @@ floor_material = rng.choice(find_candidates("floor"))
     }
     allowed = LADDER_CONTEXT_CATEGORIES[template.building_context ?? "indoor"]
 
-    ladder_material = rng.choice([uid for uid, mat in world.material_registry.items()
-                                  if any(c in mat.category for c in allowed)
-                                  AND mat.wealth_level == effective_wealth])
-    если пуст → fallback по wealth (тот же allowed) + WARNING
+    ladder_material = rng.choice([mat["system_material"] for mat in world.material_registry
+                                  if any(c in mat["tags"] for c in allowed)
+                                  AND mat["economic_tier"] == effective_tier])
+    если пуст → fallback вниз по tiers_sorted (тот же allowed) + WARNING
     если всё ещё пуст → log WARNING, return default_material
 
-    # indoor + common:      wood (organic) ✓  rope (crafted) ✗  stone ✗
-    # underground + poor:   wood ✓  rope ✓  iron ✓  stone ✗
-    # nautical + wealthy:   дерево ✓  верёвка ✓  бронза ✗ (нет metal в nautical)
+    -- tags фильтрация по контексту:
+    -- indoor + standard:      wood (tags: organic) ✓  rope (tags: crafted) ✗  stone ✗
+    -- underground + basic:    wood ✓  rope ✓  iron (tags: metal) ✓  stone ✗
+    -- nautical + quality:     дерево ✓  верёвка ✓  бронза (tags: metal) ✓
 ```
-
-Порядок богатства (от низшего): `poor` → `common` → `wealthy` → `noble` → `royal`.
 
 ### 8.6 Layout: размещение комнат
 
@@ -809,9 +1035,9 @@ effective_policy = gap_policy
 если effective_policy == "fill":
     для каждой связной gap-области:
         создать NamedLocation(
-            room_type     = "utility_space",
-            display_name  = "Техническое помещение",
-            location_type = "room",
+            system_location_subtype = "utility_space",
+            display_name            = "Техническое помещение",
+            system_location_type    = "room",
             is_accessible = True,
             parent_location_uid = building.location_uid,
         )
@@ -936,6 +1162,8 @@ class BuildingGeneratorService:
 
 `validate_template` проверяет:
 - Все обязательные поля присутствуют
+- `room_type` каждой комнаты существует в `worlds.room_type_registry` → иначе `ImportError`
+- `is_public` и `is_forbidden` присутствуют на каждой комнате → иначе `ValidationError`
 - Ровно одна комната имеет `entry_point` (если нужен вход)
 - Не более одной комнаты с `back_entry_point`
 - `entry_point.room_id` и `back_entry_point.room_id` существуют в `levels[].rooms`
@@ -1061,7 +1289,7 @@ bridge_possible = gap <= A.actual_overhang + B.actual_overhang
 
 | Вопрос | Статус |
 |--------|--------|
-| `template_uid` на `NamedLocation` здания | Решено: хранится на здании; RESTRICT при удалении; замена → перегенерация всех зданий |
+| `system_template_uid` на `NamedLocation` здания | Решено: хранится на здании; RESTRICT при удалении; замена → перегенерация всех зданий |
 | Общие стены смежных комнат: `location_uid = building` или одной из комнат? | Решено: building, `is_structural=True`; комнаты генерируют только пол |
 | `attach_wall: "any"` — генератор выбирает сторону по seed или по свободному месту? | Решено: зависит от позиции лестницы в коридоре |
 | Внешний контур здания — bounding box или реальный периметр? | Решено: реальный контур + `gap_policy: "clip"/"fill"/"random"` |

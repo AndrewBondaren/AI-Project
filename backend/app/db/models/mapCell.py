@@ -13,7 +13,7 @@ class MapCell:
     y:                          int
     z:                          int
 
-    system_terrain:             str | None = None   # тип рельефа из terrain_registry (grass, water, dirt, ...)
+    system_terrain:             str | None = None   # тип рельефа из terrain_registry (plains, tundra, forest, liquid_body, urban, road, floor, wall, ...)
     system_building_element:   str | None = None   # строительный элемент (wall, floor, door, window, ...)
 
     system_material:                str | None = None

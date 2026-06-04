@@ -64,10 +64,10 @@ class World:
 
     # location registries
     terrain_category_registry:      dict = json_col(default_factory=dict)
-    terrain_registry:               dict = json_col(default_factory=dict)
+    terrain_registry:               list = json_col(default_factory=list)
     material_category_registry:     dict = json_col(default_factory=dict)
     material_use_type_registry:     dict = json_col(default_factory=dict)
-    material_registry:              dict = json_col(default_factory=dict)
+    material_registry:              list = json_col(default_factory=list)
     cell_state_registry:            dict = json_col(default_factory=dict)
     danger_level_registry:          dict = json_col(default_factory=dict)
     road_type_registry:             dict = json_col(default_factory=dict)
@@ -77,7 +77,7 @@ class World:
     climate_zone_registry:          dict = json_col(default_factory=dict)
     weather_type_registry:          dict = json_col(default_factory=dict)
     resource_type_registry:         dict = json_col(default_factory=dict)
-    city_size_registry:             dict = json_col(default_factory=dict)
+    city_size_registry:             list = json_col(default_factory=list)
     item_value_tier_registry:       dict = json_col(default_factory=dict)
     building_template_registry:     dict = json_col(default_factory=dict)
     room_type_registry:             dict = json_col(default_factory=dict)
