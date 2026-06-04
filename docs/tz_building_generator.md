@@ -47,6 +47,7 @@
 | `window_z_ratio` | float | optional | Пропорциональная высота окон по умолчанию для всех уровней: `window_z = floor(z_height * ratio)`. Default: `0.4`. Переопределяется на уровне через `level.window_z_ratio` или `level.window_z_offset` |
 | `door_height_ratio` | float | optional | Коэффициент высоты дверей для `z_height >= 4`: `door_height = floor(z_height * ratio)`. Default: `0.75` |
 | `door_height_max` | int | optional | Максимальная высота двери в z-юнитах. Default: `5`. Cap для высоких этажей — дверь не растёт бесконечно |
+| `underground_expansion` | int | optional | Макс. расширение подземных уровней за границы ground floor footprint в ячейках. Default: `2`. Защита от конфликта с соседними зданиями |
 | `levels` | array | required | Массив уровней, минимум 1 |
 | `connections` | array | required | Межкомнатные связи и лестницы |
 
@@ -131,6 +132,8 @@ level_z = level.z_height ?? max(room_z for room in level.rooms)
 | `entry_point` | object | optional | Объявляет главный вход здания на этой комнате. Только одна комната в шаблоне |
 | `back_entry_point` | object | optional | Объявляет чёрный вход здания на этой комнате. Только одна комната в шаблоне |
 | `wall_openings` | array | optional | Отверстия в стенах комнаты: окна, бойницы, люки, иллюминаторы и др. (см. раздел 3.10) |
+| `underground_fallback` | bool | optional | Если комнату невозможно разместить на текущем уровне — перенести на уровень ниже. Default: `false`. Уместно для складских, подсобных, кладовых, котельных |
+| `shape_params` | object | conditional | Параметры специфичные для формы. Обязателен для `l_shape` и `t_shape`. Игнорируется для остальных |
 
 **Правило `perimeter_required` + entry_point:**
 
@@ -191,6 +194,51 @@ else:
 
 ---
 
+### 3.5b Объект shape_params
+
+Обязателен для `l_shape` и `t_shape`. Для остальных форм игнорируется.
+
+**`l_shape`:**
+
+```json
+{
+  "arm_width_range": [2, 4],
+  "arm_depth_range": [3, 5],
+  "arm_corner": "northeast"
+}
+```
+
+| Поле | Описание |
+|---|---|
+| `arm_width_range` | Ширина руки (вдоль оси X). Обязательно |
+| `arm_depth_range` | Глубина руки (вдоль оси Y). Обязательно |
+| `arm_corner` | Угол прикрепления руки: `"northeast"` \| `"northwest"` \| `"southeast"` \| `"southwest"` \| `"any"`. Default: `"any"` (rng выбирает) |
+
+Геометрия: `R1` (main body: `width × depth`) ∪ `R2` (arm: `arm_width × arm_depth`, смещён в указанный угол).
+
+---
+
+**`t_shape`:**
+
+```json
+{
+  "stem_width_range": [2, 3],
+  "stem_wall": "south"
+}
+```
+
+| Поле | Описание |
+|---|---|
+| `stem_width_range` | Ширина стержня. Обязательно. Должна быть < `size.width_range[0]` |
+| `stem_wall` | С какой стороны балки выходит стержень: `"north"` \| `"south"` \| `"east"` \| `"west"` \| `"any"`. Default: `"any"` |
+
+Геометрия: `R1` (балка: `width × depth`) ∪ `R2` (стержень: `stem_width × depth`, центрирован вдоль `stem_wall`).  
+Глубина стержня = `size.depth_range` (бо́льшая из двух осей). Балка занимает `arm_depth`... но так как T-shape использует `width × depth` для bounding box, стержень = часть этого box.
+
+Валидация: `stem_width_range[1] < size.width_range[0]` → иначе `ValidationError` (стержень шире балки).
+
+---
+
 ### 3.6 Поля entry_point / back_entry_point (на комнате)
 
 | Поле | Тип | Описание |
@@ -201,6 +249,7 @@ else:
 | `door_height` | int | optional. Явная высота проёма в z-юнитах. Если не задана — авто-резолв (см. ниже) |
 | `frame_material` | string\|null | optional. Материал дверной коробки. Fallback: `wall_material` комнаты |
 | `panel_material` | string\|null | optional. Материал дверного полотна. Fallback: `economic_tier` → `material_registry`. `null` = открытый проём |
+| `access_type` | string | optional. Переход снаружи к двери при перепаде высот. `"auto"` \| `"none"` \| `"steps"` \| `"porch"`. Default: `"auto"` |
 
 **Авто-резолв `door_height`:**
 
@@ -233,6 +282,48 @@ mid = len(wall_cells) // 2
 Каждая ячейка проёма: `system_terrain = "door"`, `is_structural = false`, `system_material = frame_material`.  
 `cell_states`: `system_state = "closed"` для каждой ячейки.  
 `LocationPassage` создаётся с `from_level_uid = null` (внешнее пространство) → `to_level_uid` уровня этой комнаты.
+
+**Авто-резолв `access_type` (выполняется ассемблером):**
+
+```
+gap = building.map_z - terrain_z[entry_x, entry_y]
+
+если gap <= 0:              access_type = "none"   -- вход с уровня земли
+если gap in [1, 2]:         access_type = "steps"  -- 1–2 ступени
+если gap >= 3:              access_type = "porch"  -- крыльцо
+```
+
+Явный `access_type` в шаблоне переопределяет авто-резолв.
+
+| `access_type` | Ячейки | NamedLocation | subtype |
+|---|---|---|---|
+| `"none"` | — | — | — |
+| `"steps"` | `staircase` от terrain до door; ширина = `entry_point.width` | ✓ всегда | `entrance_steps` |
+| `"porch"` | `floor`-платформа на уровне двери + `staircase` вниз | ✓ всегда | `porch` |
+
+`NamedLocation` создаётся для любого ненулевого `access_type` — LLM должен описывать место перед входом как отдельную сцену.
+
+**`entrance_steps`**: транзитная локация (1–2 ступени); `display_name` = "Ступени"; `is_public = true`; `is_outdoor = true`; `is_sheltered = false`; `is_transit = true`.  
+Движок проходит через неё автоматически — отдельная сцена не создаётся. LLM описывает ступени как часть описания при входе в здание.
+
+**`porch`**: полноценная сцена; `display_name` = "Крыльцо"; `is_public = true`; `is_outdoor = true`.  
+- `porch_has_roof: false` → `is_sheltered = false` (открытое крыльцо, полная погода)  
+- `porch_has_roof: true` → `is_sheltered = true` (навес; дождь не достаёт, ливень/шторм проникает)
+
+`LocationPassage`:
+```
+"none"  → from_level_uid = null (внешнее) → to_level_uid = entry_room
+"steps" → from_level_uid = null           → to_level_uid = entry_room
+          (ступени — транзитная зона, не отдельный уровень)
+"porch" → from_level_uid = null           → to_level_uid = entry_room
+          + внутренний passage: porch → entry_room через дверь
+```
+
+Материалы:
+```
+step_material  = context.porch_material ?? building.parent_floor_material
+porch_material = context.porch_material ?? building.parent_floor_material
+```
 
 ---
 
@@ -291,11 +382,11 @@ mid = len(shared_segment) // 2
 |---|---|---|---|
 | `rectangle` | Прямоугольник | `x ∈ [x₀, x₀+w)` AND `y ∈ [y₀, y₀+d)`; стена на границе, пол внутри | **v1** |
 | `square` | Квадрат | то же; `w = d = min(width, depth)` | **v1** |
-| `semicircle` | Полукруг; плоская стена на стороне среза | `(x−cx)² + (y−cy)² ≤ r²` AND `y ≥ cy`; `r = width / 2` | v2 |
-| `semi_oval` | Полуовал; плоская стена сверху | `(x/a)² + (y/b)² ≤ 1` AND `y ≥ 0`; `a = width / 2`, `b = depth` | v2 |
-| `l_shape` | Г-образный; параметры `arm_width`, `arm_depth` | `R1 ∪ R2`; R1 = main body (`width × depth`), R2 = arm смещён в угол | v2 |
-| `t_shape` | Т-образный; параметр `arm_depth` | `R1 ∪ R2 ∪ R3`; R1 = горизонтальная балка (`width × arm_depth`), R2/R3 = столбы | v2 |
-| `circle` | Круг | `(x−cx)² + (y−cy)² ≤ r²`; `r = width / 2` | v2 |
+| `semicircle` | Полукруг; плоская стена на стороне среза | `(x−cx)² + (y−cy)² ≤ r²` AND `y ≥ cy`; `r = width / 2` | **v1** |
+| `semi_oval` | Полуовал; плоская стена сверху | `(x/a)² + (y/b)² ≤ 1` AND `y ≥ 0`; `a = width / 2`, `b = depth` | **v1** |
+| `l_shape` | Г-образный; параметры `arm_width`, `arm_depth` | `R1 ∪ R2`; R1 = main body (`width × depth`), R2 = arm смещён в угол | **v1** |
+| `t_shape` | Т-образный; параметр `arm_depth` | `R1 ∪ R2 ∪ R3`; R1 = горизонтальная балка (`width × arm_depth`), R2/R3 = столбы | **v1** |
+| `circle` | Круг | `(x−cx)² + (y−cy)² ≤ r²`; `r = width / 2` | **v1** |
 | `polygon` | Произвольный полигон | ray-casting test для набора вершин из шаблона | v3 |
 
 `width_range` / `depth_range` по shape_type:
@@ -308,7 +399,34 @@ mid = len(shared_segment) // 2
 | `semi_oval` | ширина (2a) | глубина полуоси (b) |
 | `circle` | диаметр | игнорируется |
 
-В v1 любой `shape_type` кроме `rectangle` и `square` → `UnsupportedShapeError` при загрузке шаблона.
+**Алгоритм генерации ячеек shape-agnostic:**
+
+Стены и полы строятся одинаково для любой формы — по множеству room_cells:
+```
+room_cells = {(x,y) : формула shape_type = true}
+для (x,y) в room_cells → floor
+для (x,y) в room_cells, сосед (nx,ny) ∉ room_cells → wall на (nx,ny)
+```
+
+**Выпрямление стены под дверь (chord flattening) — для circle, semicircle, semi_oval:**
+
+Если на комнате объявлен `entry_point.wall` или `back_entry_point.wall`, на соответствующем краю вырезается плоский сегмент (хорда) шириной `entry_point.width`:
+
+```
+wall = "north" → extremal_y = min(y) в room_cells
+    flat_x_start = cx - floor(width / 2)
+    flat_x_end   = cx + ceil(width / 2) - 1
+
+    для x в [flat_x_start, flat_x_end]:
+        заменить ячейки кривой стены на прямые wall-ячейки при y = extremal_y
+        (отсечь ячейки room_cells у которых y < extremal_y в этом диапазоне x)
+```
+
+Комната остаётся почти круглой, но имеет прямой участок у входа. Архитектурно корректно — реальные круглые залы с дверями всегда имеют такой срез.
+
+`wall_openings` на круглой стене — `window_z` единый, а симметричное размещение по дуге считается через arc-length вдоль exterior_wall_cells.
+
+В v1 `polygon` → `UnsupportedShapeError` при загрузке шаблона.
 
 ---
 
@@ -353,8 +471,6 @@ tier_count   = len(tiers_sorted)
     иначе              → straight
 ```
 
-> Детальная геометрия ячеек каждого типа (шаги, площадки, перила) — дополняется отдельно.
-
 **Размещение блока лестницы по `position`:**
 
 `position` применяется к `to_room`. Позиция `from_room` — всегда авто-резолв (см. раздел 8.8).
@@ -373,13 +489,36 @@ tier_count   = len(tiers_sorted)
 
 `standard` (П-образная): **П открывается в сторону, противоположную стене** — entry-ячейка всегда ближайшая к центру комнаты сторона блока.
 
-`straight`: если `stair_length` превышает доступную глубину комнаты в направлении движения:
+**Проверка fit перед размещением:**
+
+Перед тем как поставить лестницу, проверяется что её footprint вписывается в `to_room`:
+
 ```
-→ GenerationError "Лестница '{connection}': stair_length={N} не вмещается
-  в to_room '{room_id}' (доступная глубина={D})"
+fit(staircase_type, to_room):
+    ladder          → 1×1  → всегда fit
+    spiral_small    → 1×2  → to_room.width >= 1 AND to_room.depth >= 2
+    spiral_standard → 2×2  → to_room.width >= 2 AND to_room.depth >= 2
+    standard        → 2×2  → то же
+    straight        → 1×N  → to_room в направлении движения >= stair_length
+                           где stair_length = max(2, ceil(z_height * 1.3))
 ```
 
-Если блок не вмещается в комнату при заданном `position` по другой причине — сдвиг к ближайшей допустимой позиции + `log WARNING`.
+Если `staircase_type` задан явно и не вписывается — применяется **fallback chain**:
+
+```
+straight → standard → spiral_standard → spiral_small → ladder
+```
+
+Каждый тип проверяется через `fit()`. Первый подходящий используется.
+Если в шаблоне задан явный `staircase_type` и он не прошёл fit — начать fallback с следующего по chain.
+`ladder` (1×1) проходит fit всегда — GenerationError невозможен только из-за лестницы.
+
+```
+log WARNING "Лестница '{connection}': {original_type} не вписывается
+             в to_room '{room_id}' — заменена на {fallback_type}"
+```
+
+Если блок вписывается по размеру, но не вписывается при заданном `position` — сдвиг к ближайшей допустимой позиции + `log WARNING`.
 
 ---
 
@@ -719,6 +858,11 @@ class BuildingLayout:
 - `map_x, map_y, map_z` — origin (левый нижний угол) footprint комнаты в глобальных координатах
 - `is_public / is_forbidden` — из полей шаблона на комнате (не из реестра; реестр не хранит дефолты доступа)
 
+Здание (`NamedLocation` типа `building`) после генерации получает:
+- `system_template_uid` — ссылка на использованный шаблон
+- `parent_wall_material` — резолвленный wall_material (ref → `world.material_registry`); fallback для ассемблера и LLM-контекста
+- `parent_floor_material` — резолвленный floor_material (ref → `world.material_registry`)
+
 ---
 
 ## 8. Алгоритм генерации
@@ -899,20 +1043,86 @@ placed = {}
 
 для каждой комнаты room из BFS:
     если room не размещена:
-        выбрать свободную сторону у уже размещённого соседа
-            (приоритет: east → south → west → north)
-        разместить room смежно с соседом
-        placed[room.room_id] = (origin_x, origin_y)
+        neighbors_placed = [n for n in graph.neighbors(room) if n in placed]
+
+        если len(neighbors_placed) >= 2:
+            -- Комната должна касаться двух уже размещённых соседей (цикл в графе)
+            найти угловую позицию где room одновременно смежна с neighbors_placed[0] и [1]:
+                перебрать свободные позиции вдоль стен обоих соседей
+                первая позиция где room касается обоих → разместить
+            если угловая позиция не найдена:
+                log WARNING "Room '{room_id}': кольцевая связь с {n0} и {n1}
+                             геометрически невозможна — связь с {n1} пропущена"
+                разместить смежно только с neighbors_placed[0] (доминантный сосед)
+
+        иначе:
+            выбрать свободную сторону у уже размещённого соседа
+                (приоритет: east → south → west → north)
+
+        если свободная сторона найдена:
+            разместить room смежно с соседом
+            placed[room.room_id] = (origin_x, origin_y)
+        иначе (нет свободных сторон):
+            → underground_fallback(room, current_level)
     добавить соседей room в очередь
 ```
 
 Комнаты без connections (изолированные вершины) размещаются после BFS в оставшееся свободное пространство.
 
-**Шаг 3 — perimeter_required**
+**Underground fallback:**
+
+```
+def underground_fallback(room, current_level):
+    если room.underground_fallback == false:
+        если room.required == false → пропустить + log WARNING
+        иначе → GenerationError "Комната '{room_id}': нет места на уровне {z_offset}"
+
+    target_z = current_level.z_offset - 1
+
+    если уровень с target_z не существует:
+        создать новый уровень:
+            z_offset    = target_z
+            display_name = "Подуровень {target_z}"
+            z_height    = template.default_z_height
+        log INFO "Авто-создан уровень z_offset={target_z} для '{room_id}'"
+
+    разместить room на уровне target_z (свободное пространство)
+
+    все connections к room от current_level → конвертировать в staircase
+        если staircase-connection уже есть между уровнями → добавить room в тот же уровень
+        иначе → создать новый staircase connection (авто-резолв room-приёмника на current_level)
+
+    log INFO "Комната '{room_id}' перенесена на уровень z_offset={target_z}"
+```
+
+Если на target_z тоже нет места → рекурсия на target_z - 1 (глубже), но не более 2 уровней вниз → GenerationError.
+
+**Шаг 3 — perimeter_required + entry_point wall direction**
 
 `perimeter_required`-комнаты являются листьями графа (degree=1) — BFS автоматически ставит их на край, т.к. их единственный сосед уже размещён. Дополнительного алгоритма не требуется.
 
 Валидация: `perimeter_required=true` + degree > 1 → `ValidationWarning` (смежность с несколькими комнатами не гарантирует периметр).
+
+**Направленное размещение по `entry_point.wall`:**
+
+Если на комнате объявлен `entry_point` или `back_entry_point` с конкретной стеной — BFS ставит комнату так, чтобы эта стена оказалась на внешнем периметре здания:
+
+```
+entry_point.wall = "south" → комната ставится в нижний ряд footprint (south-грань = exterior)
+entry_point.wall = "north" → верхний ряд
+entry_point.wall = "east"  → правый столбец
+entry_point.wall = "west"  → левый столбец
+```
+
+Если нужная позиция занята другой комнатой:
+```
+1. Попробовать соседнюю свободную позицию вдоль того же края
+2. Если весь край занят → разместить на любом свободном периметре + log WARNING
+   "Room '{room_id}': entry_point.wall={wall} недостижима — размещена на другом периметре"
+3. Если периметра нет вообще → GenerationError
+```
+
+`perimeter_required` форсируется автоматически для всех комнат с `entry_point` / `back_entry_point`.
 
 **Пример — первый этаж таверны:**
 ```
@@ -982,6 +1192,21 @@ room.y_min >= footprint.y_min - allowed
 room.y_max <= footprint.y_max + allowed
 ```
 
+**Ограничение подземных этажей (underground expansion rule):**
+
+Подземные уровни (`z_offset < 0`) могут быть шире ground floor — нет гравитационного ограничения. Но расширение ограничено чтобы не конфликтовать с соседними зданиями.
+
+Для каждой комнаты с `z_offset < 0`:
+```
+expansion = template.underground_expansion  -- default: 2
+room.x_min >= footprint.x_min - expansion
+room.x_max <= footprint.x_max + expansion
+room.y_min >= footprint.y_min - expansion
+room.y_max <= footprint.y_max + expansion
+```
+
+Если комната не вписывается даже с учётом `expansion` — обрезать до допустимых границ (тот же алгоритм что для верхних этажей, но с `expansion` вместо `max_overhang`). Обрезка ниже `width_range[0]` / `depth_range[0]` → пропустить + WARNING (или GenerationError если `required=true`).
+
 Если комната выходит за `allowed`:
 ```
 новый_width = min(room.width, footprint.x_max - room.x0 + allowed)
@@ -1046,7 +1271,17 @@ effective_policy = gap_policy
         граница gap-области с внешней стеной → уже покрыта Проходом 1
 
         -- авто-дверь: найти самый длинный shared segment с соседней комнатой
-        best_neighbor = argmax(len(shared_segment) for neighbor in adjacent_rooms)
+        -- исключить сегменты уже занятые дверью другого gap-региона
+        candidates = sorted(adjacent_rooms,
+                            key=lambda r: len(shared_segment(utility_room, r)),
+                            reverse=True)
+        best_neighbor = first candidate WHERE shared_segment не содержит уже размещённую door
+        если все сегменты заняты:
+            best_neighbor = candidates[0]  -- использовать лучшего несмотря на занятость
+            смещать door на ±1 ячейку от центра пока не найдём свободную позицию
+            если позиции нет → gap-регион остаётся без двери + log WARNING
+                               "Gap-регион: все сегменты с '{best_neighbor}' заняты"
+
         поставить door в центре shared_segment(utility_room, best_neighbor)
         создать LocationPassage(
             passage_type     = "doorway",
@@ -1183,7 +1418,7 @@ class BuildingGeneratorService:
 - Комната с `entry_point` или `back_entry_point` + явным `perimeter_required: false` → ValidationWarning (не ошибка; генератор форсирует периметр)
 - Комната с `attach_to` + `entry_point`/`back_entry_point` → ValidationWarning (архитектурно некорректно)
 - `perimeter_required: true` + degree в connection-графе > 1 → ValidationWarning (периметр не гарантирован)
-- Connection-граф каждого уровня (intra-level doorway/archway connections) ацикличен — циклы → `ValidationError` ("кольцевые связи не поддерживаются: комната не может быть смежна с двумя уже размещёнными")
+- Циклы в connection-графе (intra-level doorway/archway) → `ValidationWarning`; генератор пытается разместить геометрически (см. ниже)
 - `connection.passage_type == "staircase"` + `from_room` и `to_room` на одном `z_offset` → ValidationError
 - `staircase_type` не из `{"ladder", "spiral_small", "spiral_standard", "standard", "straight"}` → ValidationError
 - `staircase_type` задан на non-staircase connection → ValidationWarning (игнорируется)
@@ -1199,14 +1434,317 @@ class BuildingGeneratorService:
 - `isolated: true` + `access_mechanic: []` (пустой или не задан) → `ValidationWarning` ("уровень недостижим без механики доступа")
 - `isolated: false` + `access_mechanic` задан → `ValidationWarning` ("access_mechanic игнорируется на не-изолированном уровне")
 - `access_mechanic` содержит неизвестное значение → `ValidationError`
+- `underground_fallback: true` + `required: true` — допустимо; fallback создаст уровень если нужно
+- `underground_fallback: true` + `required: false` — бессмысленно (required=false и так пропускается); `ValidationWarning`
 
 ---
 
-## 11. Что НЕ входит в v1
+## 11. StructureAssembler
+
+`BuildingGeneratorService` генерирует **interior box** — комнаты, стены, проходы. Он не знает, стоит ли здание на земле, парит в мегаструктуре или является палубой корабля.
+
+`StructureAssembler` — обёртка, которая добавляет **фундамент** и **крышу** в зависимости от контекста здания.
+
+```
+BuildingGeneratorService.generate_from_template()  →  interior box
+           ↓
+StructureAssembler.assemble()                       →  полный BuildingLayout
+```
+
+---
+
+### 11.1 StructureContext
+
+```python
+@dataclass
+class StructureContext:
+    foundation_type:     str              # "none" | "slab" | "perimeter" | "full" | "stilts" | "hull"
+    roof_type:           str | list[str]  # строка или список → выбирает по footprint; "auto" = авто
+    foundation_depth:    int   = 1        # z-юниты вглубь; только для "slab" / "hull"
+    slope_step:          float = 1.0      # ячеек shrink за 1 z-юнит; 1.0 ≈ 45°
+    foundation_material: str | None = None  # Fallback: building.parent_wall_material
+    roof_material:       str | None = None  # Fallback: building.parent_wall_material
+    porch_material:      str | None = None  # Fallback: building.parent_floor_material
+    porch_has_roof:      bool = False       # Навес над крыльцом → создаёт NamedLocation
+```
+
+---
+
+### 11.2 Типы фундамента
+
+**Инвариант:** пол здания (`building.map_z`) всегда плоский. Terrain под ним может быть неровным — фундамент адаптируется.
+
+Ассемблер читает terrain под footprint здания из `map_cells` перед генерацией:
+
+```
+для каждой (x, y) в footprint:
+    terrain_z[x,y] = max(z) WHERE world_uid AND x AND y  -- поверхностная ячейка
+    gap[x,y] = building.map_z - terrain_z[x,y]           -- сколько ячеек заполнить
+    если gap[x,y] <= 0: ячейка не нужна (terrain на уровне пола или выше)
+```
+
+**Конфликт с terrain:** foundation-ячейки заменяют terrain-ячейки на тех же (x, y, z) — INSERT OR REPLACE.
+
+| `foundation_type` | Описание | Глубина | Форма |
+|---|---|---|---|
+| `"none"` | Нет фундамента | — | — |
+| `"slab"` | Монолитная плита фиксированной толщины | `foundation_depth` (не читает terrain) | все (x,y) footprint |
+| `"perimeter"` | Периметральная лента вдоль рельефа | `gap[x,y]` per-column | только внешний контур |
+| `"full"` | Полный массив вдоль рельефа | `gap[x,y]` per-column | все (x,y) footprint |
+| `"stilts"` | Колонны-опоры | `gap[x,y]` per-column | N support-точек; между ними `open_space` |
+| `"hull"` | Корпусная плита | `foundation_depth` (не читает terrain) | все (x,y) footprint |
+
+**`"slab"` vs `"perimeter"`:**
+- `"slab"` — terrain заранее выровнен или нужна строго заданная толщина; глубина фиксирована
+- `"perimeter"` / `"full"` — неровный рельеф; фундамент заполняет разрыв между terrain и полом здания per-column
+
+Ячейки фундамента: `is_structural = True`, `location_uid = building.location_uid`.
+
+**Подвал ниже фундамента:**
+
+Уровни с `z_offset < 0` смещаются ниже фундаментного слоя. Ассемблер применяет поправку к z-расчёту раздела 3.2:
+
+```
+z(z_offset < 0) = building.map_z
+                  - context.foundation_depth     ← пропуск фундаментного слоя
+                  - Σ(z_height for z_offset in N..-1)
+```
+
+Пример: `foundation_depth=2`, подвал `z_height=3`:
+```
+foundation:  z = -2, -1        (фундаментный слой)
+basement:    z = -5, -4, -3    (ниже фундамента)
+```
+
+Для `foundation_type="none"`: `foundation_depth=0` → поправка не применяется, поведение как прежде.
+
+**Лестница через фундамент:** staircase-ячейки имеют `system_building_element="staircase"` и перезаписывают foundation-ячейки на тех же (x,y,z) — INSERT OR REPLACE. Здание побеждает над фундаментом.
+
+---
+
+### 11.3 Типы крыши
+
+Крыша — геометрический алгоритм поверх **реального контура** здания. Ассемблер читает фактический footprint из `BuildingLayout` и строит крышу по нему — форма крыши зависит от формы здания.
+
+`roof_type` — строка или массив строк. Если массив — ассемблер выбирает первый совместимый тип по форме footprint:
+```
+roof_type = ["hip", "gable", "flat"]
+→ пробует hip (прямоугольник?), затем gable, fallback flat
+```
+
+---
+
+**Базовые z-координаты:**
+```
+roof_base_z = z(top_level) + z_height(top_level)
+```
+
+Ячейки крыши: `system_terrain = "roof"`, `is_structural = True`, `location_uid = building.location_uid`.
+
+---
+
+**Алгоритм shrink (общий для скатных крыш):**
+
+Скатная крыша строится послойно: каждый z-слой — footprint, сжатый внутрь на `slope_step` ячеек:
+
+```
+для z = roof_base_z, roof_base_z+1, roof_base_z+2 ...:
+    layer_footprint = shrink(outer_footprint, offset=(z - roof_base_z) * slope_step)
+    если layer_footprint пуст → остановить
+    создать roof-ячейки для layer_footprint
+```
+
+`slope_step` (default: 1) — как быстро крыша сужается. `slope_step=1` ≈ 45°; `slope_step=0.5` ≈ пологая; `slope_step=2` ≈ крутая.
+
+---
+
+**Типы крыш:**
+
+| `roof_type` | Русское название | Shrink-направление | Совместимость footprint | Статус |
+|---|---|---|---|---|
+| `"none"` | Нет крыши | — | любой | v1 |
+| `"flat"` | Плоская | нет (1 слой) | любой | v1 |
+| `"gable"` | Двускатная | north + south (или east + west) | прямоугольник | v1 |
+| `"hip"` | Вальмовая | все 4 стороны равномерно | прямоугольник / квадрат | v2 |
+| `"half_hip"` | Полувальмовая | 2 скоса + 2 вальмовых торца | прямоугольник | v2 |
+| `"pyramid"` | Шатровая | все 4 стороны, сходятся в точку | квадрат / near-square | v2 |
+| `"multi_gable"` | Многощиповая | несколько gable-секций | сложный (L/T/неровный) | v2 |
+| `"mansard"` | Мансардная | крутой нижний скат + пологий верх | прямоугольник | v2 |
+| `"battlements"` | Зубцы | чередующиеся wall/open_space по периметру | любой | v2 |
+| `"hull"` | Корпусная крышка | нет (1 слой, hull-материал) | любой | v1 |
+
+---
+
+**Двускатная (`"gable"`) — v1:**
+
+```
+ось конька: вдоль длинной стороны прямоугольника
+shrink: только по короткой оси (north + south)
+конёк: центральный ряд ячеек на max z
+```
+
+Пример, прямоугольник 10×6, slope_step=1:
+```
+roof_base_z+0: 10×6  (полный периметр)
+roof_base_z+1: 10×4  (shrink по N+S на 1)
+roof_base_z+2: 10×2  (shrink ещё на 1)
+roof_base_z+3: 10×0  → конёк: 10×1
+```
+
+---
+
+**Мансардная (`"mansard"`) — v2:**
+
+Два пояса:
+```
+нижний пояс (slope_step=2, steep): занимает ~40% высоты крыши
+верхний пояс (slope_step=0.5, shallow): плоская зона → жилое пространство (мансарда)
+```
+Жилая зона мансарды → `LocationLevel` с типом `attic` на `roof_base_z + lower_height`.  
+Доступ: лестница от верхнего этажа (см. 11.3.1).
+
+---
+
+**Совместимость `roof_type` × `shape_type`:**
+
+| `shape_type` | `gable` | `hip` | `pyramid` | `flat` | `hull` | `none` |
+|---|---|---|---|---|---|---|
+| `rectangle` | ✓ | ✓ | — | ✓ | ✓ | ✓ |
+| `square` | деген. | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `circle` | ✗ | — | ✓ (конус) | ✓ | ✓ | ✓ |
+| `semicircle` | ✗ | — | — | ✓ | ✓ | ✓ |
+| `semi_oval` | ✗ | — | — | ✓ | ✓ | ✓ |
+| `l_shape` | ✗ | ✓ (valley) | — | ✓ | ✓ | ✓ |
+| `t_shape` | ✗ | ✓ (два valley) | — | ✓ | ✓ | ✓ |
+
+`gable` требует две чётко противоположные параллельные стороны — не применим к круглым и составным формам.  
+`pyramid` требует near-square footprint — для circle естественно даёт конус.  
+`l_shape`/`t_shape` + `hip` → shrink-алгоритм создаёт **valley (ендову)** в местах соединения секций — архитектурно корректно.
+
+**Несовместимая комбинация → fallback:**
+```
+если roof_type несовместим с shape_type здания:
+    fallback: hip → flat
+    log WARNING "roof_type={type} несовместим с shape={shape} — заменён на {fallback}"
+```
+
+---
+
+**Авто-выбор по фактическому footprint:**
+
+`"auto"` анализирует **building_footprint** — union всех room_cells после layout. Не зависит от `shape_type` отдельных комнат (BFS может создать L-форму из прямоугольных комнат).
+
+```
+building_footprint = union(room_cells for all rooms on level)
+bbox               = bounding_box(building_footprint)
+coverage           = len(building_footprint) / (bbox.width × bbox.height)
+aspect             = max(bbox.width, bbox.height) / min(bbox.width, bbox.height)
+
+если coverage < 0.75:
+    → сложная форма (L/T/нерегулярная) → "hip"
+иначе если aspect > 2.0:
+    → вытянутый прямоугольник → "gable"
+иначе если aspect ≤ 1.2:
+    → near-square / квадрат → "pyramid"
+иначе:
+    → "hip"
+```
+
+`coverage < 0.75` — footprint занимает менее 75% bounding box → L/T-форма или нерегулярный контур → valley при hip корректна.
+
+Примеры:
+```
+10×10 square room:          coverage=1.0, aspect=1.0  → pyramid
+14×4 corridor + 3×4 rooms:  coverage=0.65, aspect=3.5 → hip (coverage < 0.75)
+12×6 rect hall:             coverage=1.0, aspect=2.0  → gable
+L-shape (все rect комнаты): coverage=0.7, aspect=1.3  → hip
+```
+
+---
+
+### 11.3.1 Доступ на крышу
+
+`"flat"` и `"mansard"` создают жилую зону на крыше → нужен `LocationLevel` + стaircase.
+
+**v1:** roof-ячейки генерируются, `LocationLevel` не создаётся. Крыша физически существует, но недостижима через навигацию — только через игровые механики.
+
+**v2:** добавить `roof_access_room: str | None` в `StructureContext`. Ассемблер создаёт `LocationLevel` + staircase от указанной комнаты верхнего этажа (`None` = авто-выбор).
+
+---
+
+Крыша строится в самом конце — после того как `BuildingGeneratorService` вернул полный layout с реальным footprint.
+
+---
+
+### 11.4 Интерфейс
+
+```python
+class StructureAssembler:
+
+    def assemble(
+        self,
+        world:         World,
+        building:      NamedLocation,
+        template:      dict,
+        context:       StructureContext,
+        terrain_cells: list[MapCell] | None = None,
+        # terrain_cells актуален только для ground-based зданий.
+        # Для корабля, космического корабля, среза мегаздания — None:
+        # нет terrain под зданием, foundation_type = "hull" | "none"
+    ) -> BuildingLayout:
+        layout = BuildingGeneratorService().generate_from_template(world, building, template)
+        if context.foundation_type != "none":
+            layout.cells.extend(self._generate_foundation(layout, context, terrain_cells))
+        if context.roof_type != "none":
+            layout.cells.extend(self._generate_roof(layout, context))
+        return layout
+```
+
+`terrain_cells` — запрашиваются вызывающим кодом до вызова ассемблера для ground-based зданий:
+```
+terrain_cells = map_cell_repo.get_surface_cells(world_uid, footprint_xy_list)
+```
+Для `foundation_type in ("hull", "none")` — `terrain_cells = None`; ассемблер не читает рельеф.
+
+---
+
+### 11.5 Примеры контекстов
+
+| Здание | `foundation_type` | `roof_type` | Примечание |
+|---|---|---|---|
+| Таверна (v1) | `"perimeter"` | `"gable"` | двускатная; длинная ось = конёк |
+| Таверна (v2) | `"perimeter"` | `["hip", "gable"]` | предпочтительно вальмовая |
+| Дом жилой | `"perimeter"` | `["hip", "gable", "flat"]` | авто по форме |
+| Замок, башня (v1) | `"full"` | `"flat"` | плоская; battlements → v2 |
+| Замок, башня (v2) | `"full"` | `["battlements", "hip"]` | зубцы или вальмовая |
+| Особняк с мансардой | `"full"` | `"mansard"` | жилой чердак; v2 |
+| Шатровая башня | `"full"` | `"pyramid"` | square footprint; v2 |
+| Современный дом | `"slab"` | `"flat"` | terrain выровнен |
+| Дом на сваях / пристань | `"stilts"` | `"gable"` | над водой; uneven terrain |
+| Срез мегаздания (Cyberpunk) | `"none"` | `"none"` | нет terrain; нет крыши |
+| Палуба корабля | `"hull"` | `"hull"` | terrain_cells = None |
+| Палуба космического корабля | `"hull"` | `"hull"` | terrain_cells = None |
+| Пещерный комплекс | `"none"` | `"none"` | скала вокруг = и есть стены |
+| Подземный данж | `"none"` | `"flat"` | потолок = flat, пол на terrain |
+
+---
+
+### 11.6 Источник контекста
+
+`StructureContext` не хранится в шаблоне — шаблон описывает только interior.  
+Контекст определяется на вызывающем уровне:
+
+- `CityGeneratorService` вызывает `StructureAssembler` с контекстом на основе `location_type` здания и настроек мира
+- При ручном размещении здания — пользователь выбирает контекст в UI
+- `building_template_registry` может хранить рекомендованный контекст (`default_structure_context`) как подсказку — не обязательный
+
+---
+
+## 12. Что НЕ входит в v1
 
 | Фича | Статус |
 |------|--------|
-| shape_type: semicircle, semi_oval, l_shape, t_shape, circle, polygon | v2/v3 |
+| shape_type: polygon (ray-casting по произвольным вершинам) | v3 |
 | Явное позиционирование комнат (координаты в шаблоне) | v2 |
 | Вращение/зеркало здания при размещении | v2 |
 | terrain_overrides на уровне комнаты | v2 |
@@ -1216,9 +1754,9 @@ class BuildingGeneratorService:
 
 ---
 
-## 12. Механика колонн и мостов
+## 13. Механика колонн и мостов
 
-### 12.1 Column proximity algorithm
+### 13.1 Column proximity algorithm
 
 Вместо статичного флага `has_column: true` в шаблоне — динамическая проверка в рантайме:
 
@@ -1248,7 +1786,7 @@ actual_overhang = min(room.max_overhang, effective_max_overhang)
 
 Это делает алгоритм открытым: чужая колонна во дворе тоже считается опорой.
 
-### 12.2 Bridge между зданиями
+### 13.2 Bridge между зданиями
 
 Балконная механика как шаблон для перехода между зданиями на верхнем этаже:
 
@@ -1274,7 +1812,7 @@ bridge_possible = gap <= A.actual_overhang + B.actual_overhang
 - Подвесной мост между башнями
 - Знатный дом с внутренним двором — крытые галереи на втором этаже
 
-### 12.3 Статус
+### 13.3 Статус
 
 | Компонент | Статус |
 |---|---|
@@ -1285,7 +1823,7 @@ bridge_possible = gap <= A.actual_overhang + B.actual_overhang
 
 ---
 
-## 13. Открытые вопросы
+## 14. Открытые вопросы
 
 | Вопрос | Статус |
 |--------|--------|
@@ -1294,3 +1832,9 @@ bridge_possible = gap <= A.actual_overhang + B.actual_overhang
 | `attach_wall: "any"` — генератор выбирает сторону по seed или по свободному месту? | Решено: зависит от позиции лестницы в коридоре |
 | Внешний контур здания — bounding box или реальный периметр? | Решено: реальный контур + `gap_policy: "clip"/"fill"/"random"` |
 | `count_range: [0, 0]` допустимо? | Решено: минимум `[1, 1]` → `ValidationError` если `count_range[0] < 1` |
+| `arm_width`/`arm_depth` для `l_shape`/`t_shape` — как задаётся в объекте `size` | Решено: отдельный объект `shape_params` на уровне комнаты (раздел 3.5b) |
+| Valley-ячейки (`hip` на `l_shape`/`t_shape`) — какой terrain type | Решено: все ячейки крыши = `roof`; valley — геометрический эффект shrink, не отдельный тип |
+| `dominant shape_type` для `auto` крыши — алгоритм определения | Решено: анализ фактического footprint (coverage + aspect ratio), не shape_type комнат |
+| `porch`/`entrance_steps` — добавить как субтипы в `location_type_registry` | Решено: субтипы `room` в реестре; `is_outdoor` override на уровне записи |
+| `is_transit` — поведение в engine flow (сквозной переход без остановки сцены) | Решено: `SceneStartLocationSelectNode` пропускает транзитную локацию и идёт к следующей через passage |
+| `StructureAreaAssembler` — алгоритм вывода `StructureContext` | закрывается в отдельном ТЗ; см. [tz_assembler_hierarchy.md](tz_assembler_hierarchy.md) |

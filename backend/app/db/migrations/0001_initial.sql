@@ -588,6 +588,19 @@ CREATE TABLE IF NOT EXISTS states (
 CREATE INDEX IF NOT EXISTS idx_states_world ON states (world_uid);
 
 -- ============================================================
+-- building_templates  (глобальная библиотека шаблонов зданий)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS building_templates (
+    template_uid   TEXT PRIMARY KEY,
+    system_name    TEXT NOT NULL UNIQUE,
+    display_name   TEXT NOT NULL,
+    structure_type TEXT NOT NULL,
+    version        TEXT NOT NULL DEFAULT '1.0',
+    data           TEXT NOT NULL,
+    source_file    TEXT
+);
+
+-- ============================================================
 -- named_locations
 -- ============================================================
 CREATE TABLE IF NOT EXISTS named_locations (
@@ -619,10 +632,17 @@ CREATE TABLE IF NOT EXISTS named_locations (
     map_y                   INTEGER,
     map_z                   INTEGER,
     is_mobile               INTEGER NOT NULL DEFAULT 0,
+    system_template_uid     TEXT,
+    parent_wall_material    TEXT,
+    parent_floor_material   TEXT,
+    is_outdoor              INTEGER,
+    is_sheltered            INTEGER NOT NULL DEFAULT 0,
+    is_transit              INTEGER NOT NULL DEFAULT 0,
     created_at              TEXT NOT NULL,
     FOREIGN KEY (world_uid)            REFERENCES worlds(world_uid),
     FOREIGN KEY (parent_location_uid) REFERENCES named_locations(location_uid),
-    FOREIGN KEY (owner_uid)           REFERENCES character_sheet(character_uid)
+    FOREIGN KEY (owner_uid)           REFERENCES character_sheet(character_uid),
+    FOREIGN KEY (system_template_uid) REFERENCES building_templates(template_uid)
 );
 
 -- ============================================================
@@ -668,11 +688,13 @@ CREATE TABLE IF NOT EXISTS cell_states (
 -- location_levels (этажи / уровни локации)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS location_levels (
-    level_uid     TEXT PRIMARY KEY,
-    location_uid  TEXT NOT NULL,
-    z             INTEGER NOT NULL,
-    display_name  TEXT NOT NULL,
-    is_accessible INTEGER NOT NULL DEFAULT 1,
+    level_uid       TEXT PRIMARY KEY,
+    location_uid    TEXT NOT NULL,
+    z               INTEGER NOT NULL,
+    display_name    TEXT NOT NULL,
+    is_accessible   INTEGER NOT NULL DEFAULT 1,
+    isolated        INTEGER NOT NULL DEFAULT 0,
+    access_mechanic TEXT,
     FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid) ON DELETE CASCADE
 );
 

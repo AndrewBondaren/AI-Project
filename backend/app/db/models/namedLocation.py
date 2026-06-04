@@ -39,3 +39,9 @@ class NamedLocation:
     map_y:                      int | None = None
     map_z:                      int | None = None
     is_mobile:                  bool = bool_col(default=False)
+    system_template_uid:        str | None = None
+    parent_wall_material:       str | None = None
+    parent_floor_material:      str | None = None
+    is_outdoor:                 bool | None = None
+    is_sheltered:               bool = bool_col(default=False)
+    is_transit:                 bool = bool_col(default=False)
