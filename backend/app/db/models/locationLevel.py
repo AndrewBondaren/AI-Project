@@ -11,6 +11,7 @@ class LocationLevel:
     level_uid:     str
     location_uid:  str
     z:             int
+    z_height:      int
     display_name:  str
 
     is_accessible:  bool = bool_col(default=True)

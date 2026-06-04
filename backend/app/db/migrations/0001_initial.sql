@@ -691,6 +691,7 @@ CREATE TABLE IF NOT EXISTS location_levels (
     level_uid       TEXT PRIMARY KEY,
     location_uid    TEXT NOT NULL,
     z               INTEGER NOT NULL,
+    z_height        INTEGER NOT NULL DEFAULT 3,
     display_name    TEXT NOT NULL,
     is_accessible   INTEGER NOT NULL DEFAULT 1,
     isolated        INTEGER NOT NULL DEFAULT 0,
@@ -743,20 +744,20 @@ CREATE TABLE IF NOT EXISTS roads (
 -- location_passages (переходы между уровнями / комнатами)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS location_passages (
-    passage_uid      TEXT PRIMARY KEY,
-    world_uid         TEXT NOT NULL,
-    from_level_uid   TEXT NOT NULL,
-    from_x           INTEGER NOT NULL,
-    from_y           INTEGER NOT NULL,
-    to_level_uid     TEXT NOT NULL,
-    to_x             INTEGER NOT NULL,
-    to_y             INTEGER NOT NULL,
-    is_bidirectional INTEGER NOT NULL DEFAULT 1,
+    passage_uid         TEXT PRIMARY KEY,
+    world_uid           TEXT NOT NULL,
+    to_level_uid        TEXT NOT NULL,
+    to_x                INTEGER NOT NULL,
+    to_y                INTEGER NOT NULL,
     system_passage_type TEXT NOT NULL,
-    display_name     TEXT,
-    glossary_ref     TEXT,
-    tag_refs         TEXT,
-    FOREIGN KEY (world_uid)       REFERENCES worlds(world_uid),
+    from_level_uid      TEXT,        -- NULL = внешнее пространство (entry_point снаружи)
+    from_x              INTEGER,
+    from_y              INTEGER,
+    is_bidirectional    INTEGER NOT NULL DEFAULT 1,
+    display_name        TEXT,
+    glossary_ref        TEXT,
+    tag_refs            TEXT,
+    FOREIGN KEY (world_uid)      REFERENCES worlds(world_uid),
     FOREIGN KEY (from_level_uid) REFERENCES location_levels(level_uid),
     FOREIGN KEY (to_level_uid)   REFERENCES location_levels(level_uid)
 );

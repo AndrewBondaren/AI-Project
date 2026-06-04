@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class BuildingElement(str, Enum):
+class StructureElement(str, Enum):
     WALL      = "wall"
     FLOOR     = "floor"
     DOOR      = "door"

@@ -48,6 +48,7 @@
 | `door_height_ratio` | float | optional | Коэффициент высоты дверей для `z_height >= 4`: `door_height = floor(z_height * ratio)`. Default: `0.75` |
 | `door_height_max` | int | optional | Максимальная высота двери в z-юнитах. Default: `5`. Cap для высоких этажей — дверь не растёт бесконечно |
 | `underground_expansion` | int | optional | Макс. расширение подземных уровней за границы ground floor footprint в ячейках. Default: `2`. Защита от конфликта с соседними зданиями |
+| `foundation_depth` | int | optional | Глубина фундамента в z-юнитах. Default: `1`. Передаётся в `StructureContext` если не задан явно (`context.foundation_depth ?? template.foundation_depth ?? 1`) |
 | `levels` | array | required | Массив уровней, минимум 1 |
 | `connections` | array | required | Межкомнатные связи и лестницы |
 

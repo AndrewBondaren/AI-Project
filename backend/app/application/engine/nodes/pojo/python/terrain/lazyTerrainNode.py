@@ -9,7 +9,7 @@ from app.application.engine.nodes.pojo.pythonNode import PythonNode
 from app.application.engine.nodes.pojo.pythonNodeError import PythonNodeError
 from app.application.engine.rules.rule import Rule
 from app.application.engine.taskType import TaskType
-from app.application.worldData.generators.terrainGeneratorService import TerrainGeneratorService
+from app.application.worldData.generators.terrain.terrainGeneratorService import TerrainGeneratorService
 
 logger = logging.getLogger(__name__)
 

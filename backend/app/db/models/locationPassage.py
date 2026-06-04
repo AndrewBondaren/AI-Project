@@ -10,13 +10,14 @@ class LocationPassage:
 
     passage_uid:     str
     world_uid:       str
-    from_level_uid:  str
-    from_x:          int
-    from_y:          int
     to_level_uid:    str
     to_x:            int
     to_y:            int
     system_passage_type: str
+
+    from_level_uid:  str | None = None   # null = внешнее пространство (entry_point)
+    from_x:          int | None = None
+    from_y:          int | None = None
 
     is_bidirectional: bool     = bool_col(default=True)
     display_name:     str | None = None

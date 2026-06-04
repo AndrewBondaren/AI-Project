@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from app.api.deps import get_container
 from app.api.utils.json_resolver import JsonResolver
 from app.api.utils.response_helpers import json_or_download
-from app.application.worldData.generators.terrainGeneratorService import TerrainGeneratorService
+from app.application.worldData.generators.terrain.terrainGeneratorService import TerrainGeneratorService
 
 router = APIRouter()
 
