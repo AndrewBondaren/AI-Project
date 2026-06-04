@@ -30,3 +30,7 @@ dist-ssr
 dist/
 build/
 .env
+
+# Database
+db/
+*.db

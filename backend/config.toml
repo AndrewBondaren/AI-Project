@@ -26,7 +26,7 @@ streaming = true
 level = "debug"
 
 [database]
-path = "E:\\AI Project\\db\\game.db"
+path = "../db/game.db"
 
 [logger_levels]
 aiosqlite = "WARNING"

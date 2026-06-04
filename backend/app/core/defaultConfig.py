@@ -17,7 +17,7 @@ class DefaultConfig:
 
     LLM_STREAMING: bool = os.getenv("LLM_STREAMING", "true").lower() != "false"
 
-    DB_PATH: str = os.getenv("DB_PATH", str(_PROJECT_DIR / "db" / "game.db"))
+    DB_PATH: str = os.getenv("DB_PATH", "../db/game.db")
 
     # Уровни логирования для шумных сторонних логгеров
     LOGGER_LEVELS: dict = {"aiosqlite": "WARNING"}
