@@ -139,6 +139,7 @@ def instantiate_level_rooms(
                 required=required,
                 wall_material=wall_mat,
                 floor_material=floor_mat,
+                economic_tier=room_def.get("economic_tier"),
                 attach_to=room_def.get("attach_to"),
                 attach_wall=room_def.get("attach_wall"),
                 perimeter_required=room_def.get("perimeter_required", False),

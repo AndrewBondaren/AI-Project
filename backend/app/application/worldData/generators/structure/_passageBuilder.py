@@ -10,6 +10,7 @@ Three sources of passages:
   3. Staircase connections           → staircase cell(s) in each room + cross-level passage
 """
 import logging
+import math
 import uuid
 from random import Random
 
@@ -17,10 +18,16 @@ from app.application.worldData.generators.structure._roomInstance import _RoomIn
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
 from app.db.models.mapCell import MapCell
+from app.db.models.world import World
 
 logger = logging.getLogger(__name__)
 
 _NEIGHBOURS = ((1, 0), (-1, 0), (0, 1), (0, -1))
+
+class _EmptyWorld:
+    item_value_tier_registry = []
+
+_EMPTY_WORLD = _EmptyWorld()
 _WALL_DIRS  = {"south": (0, -1), "north": (0, 1), "east": (1, 0), "west": (-1, 0)}
 
 
@@ -193,50 +200,248 @@ def _build_entry_point(
 # ---------------------------------------------------------------------------
 # 3. Staircase passages
 
-def _stair_position(room: _RoomInstance, position: str | None, rng: Random) -> tuple[int, int]:
+def _resolve_staircase_type(
+    conn: dict,
+    fr_room: _RoomInstance,
+    to_room: _RoomInstance,
+    template: dict,
+    world: World,
+    z_height: int,
+) -> str:
     """
-    Return (x, y) for staircase cell inside the room.
-    Uses room footprint interior cells — picks one based on position hint.
+    Auto-resolve staircase_type.
+
+    Priority:
+      1. Явный staircase_type в connection — использовать как есть.
+      2. Переход поверхность ↔ подземный уровень → trapdoor (1×1 люк в полу).
+         Семантика: скрытый вход в подвал/погреб, занимает 1 ячейку.
+      3. Стандартный авто-резолв по z_height + economic_tier (ТЗ 3.9):
+         - нижняя треть тиров AND z_height <= 3  → ladder
+         - z_height <= 5                          → standard
+         - иначе                                  → straight
+
+    trapdoor:
+      - footprint 1×1 (не занимает комнату)
+      - system_building_element = "staircase" (пока), в будущем "trapdoor"
+      - TODO: отдельный building_element "trapdoor" вместо "staircase"
+      - TODO: cell_state "closed" → walkable=True (ходить по закрытому люку можно),
+              cell_state "open"   → walkable=True + даёт доступ к уровню ниже.
+              Отличие от door: door closed = непроходимо; trapdoor closed = проходимо.
+      - TODO: NamedLocation subtype="cellar_hatch" с is_transit=True
+      - TODO: материал — wood/iron по economic_tier (не floor_material)
+
+    ladder:
+      - TODO: movable определяется не типом лестницы, а материалом и контекстом:
+              • деревянная лестница у стены         → movable item (StructureInteriorAssembler)
+              • железная лестница в бетоне           → structural, fixed (строительный элемент)
+              • верёвочная лестница                  → movable item
+              • магическая/призванная лестница       → особая механика (spell item)
+              Источник: material_registry[material].movable (bool) или ladder_fixed: bool на connection.
+      - TODO: для fixed ladder — строительный генератор размещает ячейки staircase по всем z
+              (аналогично standard), is_structural определяется material.structural_strength.
+      - TODO: для movable ladder — генератор создаёт только shaft (дыра в перекрытии),
+              сама лестница = item размещённый StructureInteriorAssembler.
+              Если убрать: MovementNode проверяет альтернативы (Athletics, другой movable object).
+    """
+    explicit = conn.get("staircase_type")
+    if explicit:
+        return explicit
+
+    # Переход поверхность ↔ подземный
+    going_underground = (fr_room.z_offset >= 0 and to_room.z_offset < 0)
+    coming_up         = (fr_room.z_offset < 0  and to_room.z_offset >= 0)
+    if going_underground or coming_up:
+        return "trapdoor"
+
+    tiers = sorted(
+        world.item_value_tier_registry or [],
+        key=lambda t: t.get("base_value", 0),
+    )
+    effective_tier = to_room.economic_tier or template.get("economic_tier")
+
+    tier_count = len(tiers)
+    tier_rank: int | None = None
+    if tiers and effective_tier:
+        for i, t in enumerate(tiers):
+            if t.get("system_tier") == effective_tier:
+                tier_rank = i
+                break
+
+    if (tier_rank is not None
+            and z_height <= 3
+            and tier_rank < math.ceil(tier_count / 3)):
+        return "ladder"
+
+    if z_height <= 5:
+        return "standard"
+    return "straight"
+
+
+_FALLBACK_CHAIN = ["straight", "standard", "spiral_standard", "spiral_small", "ladder"]
+
+
+def _stair_fits(stair_type: str, room: _RoomInstance, z_height: int) -> bool:
+    """True если footprint лестницы вписывается во внутренние размеры комнаты."""
+    iw = max(0, room.width  - 2)   # interior width
+    id_ = max(0, room.depth - 2)   # interior depth
+
+    if stair_type in ("ladder", "trapdoor"):
+        return True
+    if stair_type in ("standard", "spiral_standard"):
+        return iw >= 2 and id_ >= 2
+    if stair_type == "spiral_small":
+        return iw >= 1 and id_ >= 2
+    if stair_type == "straight":
+        length = max(2, math.ceil(z_height * 1.3))
+        return iw >= length or id_ >= length
+    return True
+
+
+def _apply_fit_fallback(
+    initial_type: str,
+    room: _RoomInstance,
+    z_height: int,
+    conn_label: str,
+) -> str:
+    """
+    Если initial_type не вписывается — применяет fallback chain.
+    ladder/trapdoor всегда fit.
+    """
+    if _stair_fits(initial_type, room, z_height):
+        return initial_type
+
+    start = (_FALLBACK_CHAIN.index(initial_type) + 1
+             if initial_type in _FALLBACK_CHAIN else 0)
+
+    for candidate in _FALLBACK_CHAIN[start:]:
+        if _stair_fits(candidate, room, z_height):
+            logger.warning(
+                "staircase %s: %r не вписывается в room=%r (%dx%d interior) — заменена на %r",
+                conn_label, initial_type, room.room_id,
+                max(0, room.width - 2), max(0, room.depth - 2), candidate,
+            )
+            return candidate
+
+    return "ladder"  # ladder 1×1 — всегда fit
+
+
+def _stair_footprint(
+    staircase_type: str,
+    anchor: tuple[int, int],
+    z_height: int,
+    rng: Random,
+) -> list[tuple[int, int]]:
+    """
+    Return list of (x, y) cells for the staircase block at ONE z-level.
+    anchor = top-left corner of the block.
+
+    TODO: лестницы должны физически существовать на каждом z между fr_level.z и to_level.z.
+          Сейчас: по 1 ячейке на каждом из двух этажей.
+          Должно быть: ячейки staircase на всех промежуточных z (z=0, 1, 2, 3 для z_height=3).
+          Это даёт: боёвку на ступенях, многоуровневые лестницы, физику падения.
+          _build_staircase должен итерировать range(min_z, max_z+1) и для каждого z
+          размещать footprint этого z-слоя (для straight — footprint сдвигается вдоль оси).
+    """
+    ax, ay = anchor
+    if staircase_type in ("ladder", "trapdoor"):
+        return [(ax, ay)]
+    if staircase_type in ("standard", "spiral_standard", "spiral_small"):
+        # 2×2 block
+        return [(ax, ay), (ax + 1, ay), (ax, ay + 1), (ax + 1, ay + 1)]
+    if staircase_type == "straight":
+        length = max(2, math.ceil(z_height * 1.3))
+        return [(ax, ay + i) for i in range(length)]
+    # Unknown → ladder fallback
+    logger.warning("staircase: unknown type %r, using ladder", staircase_type)
+    return [(ax, ay)]
+
+
+def _has_free_exit(
+    anchor: tuple[int, int],
+    stair_fp: list[tuple[int, int]],
+    room_fp: set[tuple[int, int]],
+) -> bool:
+    """
+    True если хотя бы одна из ячеек лестницы имеет соседа внутри footprint комнаты,
+    который НЕ является частью самой лестницы.
+    Гарантирует что вход/выход лестницы не упирается в стену.
+    """
+    stair_set = set(stair_fp)
+    for (x, y) in stair_set:
+        for dx, dy in _NEIGHBOURS:
+            nb = (x + dx, y + dy)
+            if nb in room_fp and nb not in stair_set:
+                return True
+    return False
+
+
+def _stair_anchor(
+    room: _RoomInstance,
+    staircase_type: str,
+    position: str | None,
+    rng: Random,
+    z_height: int = 3,
+) -> tuple[int, int]:
+    """
+    Find anchor (top-left corner of staircase block) inside room footprint.
+    Ensures staircase has at least one free adjacent cell (exit not blocked by wall).
     """
     from app.application.worldData.generators.structure._cellBuilder import _interior
 
-    interior = list(_interior(room.get_footprint()))
-    if not interior:
-        # Fallback: any footprint cell
-        interior = list(room.get_footprint())
+    fp = room.get_footprint()
+    interior = list(_interior(fp)) or list(fp)
 
     pos = position or ("center" if room.room_type in ("common_hall", "hall") else "edge")
 
+    block_w, block_h = (1, 1)
+    if staircase_type in ("standard", "spiral_standard"):
+        block_w, block_h = 2, 2
+    elif staircase_type == "spiral_small":
+        block_w, block_h = 1, 2
+
+    xs = sorted({x for (x, _) in interior})
+    ys = sorted({y for (_, y) in interior})
+
     if pos == "center":
-        xs = [x for (x, _) in interior]
-        ys = [y for (_, y) in interior]
         cx = (min(xs) + max(xs)) // 2
         cy = (min(ys) + max(ys)) // 2
-        # Find closest interior cell to center
-        return min(interior, key=lambda p: abs(p[0] - cx) + abs(p[1] - cy))
+        return cx, cy
 
     if pos in ("east", "northeast", "southeast"):
-        max_x = max(x for (x, _) in interior)
-        candidates = [(x, y) for (x, y) in interior if x == max_x]
+        ax = max(xs) - block_w + 1
+        ay = (min(ys) + max(ys)) // 2
     elif pos in ("west", "northwest", "southwest"):
-        min_x = min(x for (x, _) in interior)
-        candidates = [(x, y) for (x, y) in interior if x == min_x]
+        ax = min(xs)
+        ay = (min(ys) + max(ys)) // 2
     elif pos == "north":
-        max_y = max(y for (_, y) in interior)
-        candidates = [(x, y) for (x, y) in interior if y == max_y]
+        ax = (min(xs) + max(xs)) // 2
+        ay = max(ys) - block_h + 1
     elif pos == "south":
-        min_y = min(y for (_, y) in interior)
-        candidates = [(x, y) for (x, y) in interior if y == min_y]
-    else:  # "edge" or unknown
-        edge = rng.choice(["east", "west"])
-        if edge == "east":
-            max_x = max(x for (x, _) in interior)
-            candidates = [(x, y) for (x, y) in interior if x == max_x]
+        ax = (min(xs) + max(xs)) // 2
+        ay = min(ys)
+    else:  # "edge"
+        if rng.choice([True, False]):
+            ax = max(xs) - block_w + 1
         else:
-            min_x = min(x for (x, _) in interior)
-            candidates = [(x, y) for (x, y) in interior if x == min_x]
+            ax = min(xs)
+        ay = (min(ys) + max(ys)) // 2
 
-    return rng.choice(candidates) if candidates else rng.choice(interior)
+    # Проверяем что вход/выход лестницы не упирается в стену.
+    # Если якорь в тупике — сдвигаем к центру пока не найдём свободный выход.
+    stair_fp = _stair_footprint(staircase_type, (ax, ay), z_height, rng)
+    if not _has_free_exit((ax, ay), stair_fp, fp):
+        cx = (min(xs) + max(xs)) // 2
+        cy = (min(ys) + max(ys)) // 2
+        for candidate in [(cx, cy), (cx - 1, cy), (cx + 1, cy), (cx, cy - 1), (cx, cy + 1)]:
+            fp_c = _stair_footprint(staircase_type, candidate, z_height, rng)
+            if _has_free_exit(candidate, fp_c, fp):
+                logger.warning(
+                    "staircase anchor shifted for room=%r: (%d,%d) had no exit → (%d,%d)",
+                    room.room_id, ax, ay, candidate[0], candidate[1],
+                )
+                return candidate
+
+    return ax, ay
 
 
 def _build_staircase(
@@ -248,20 +453,45 @@ def _build_staircase(
     cells: dict[tuple, MapCell],
     world_uid: str,
     building_uid: str,
+    world: World,
+    template: dict,
     rng: Random,
 ) -> LocationPassage | None:
-    pos_hint = conn.get("position")
-    mat = conn.get("step_material") or fr.floor_material
+    z_height   = abs(to_level.z - fr_level.z)
+    conn_label = f"{conn['from_room']}→{conn['to_room']}"
+    stair_type = _resolve_staircase_type(conn, fr, to, template, world, z_height)
+    stair_type = _apply_fit_fallback(stair_type, to, z_height, conn_label)
+    mat        = conn.get("step_material") or fr.floor_material
 
-    to_pos  = _stair_position(to, pos_hint, rng)
-    fr_pos  = _stair_position(fr, None, rng)
+    logger.info("staircase %s: type=%s z_height=%d", conn_label, stair_type, z_height)
 
-    tx, ty = to_pos
-    fx, fy = fr_pos
+    pos_hint  = conn.get("position")
+    to_anchor = _stair_anchor(to, stair_type, pos_hint, rng, z_height)
+    fr_anchor = _stair_anchor(fr, stair_type, None,     rng, z_height)
+    # TODO: staircase anchor overlap — смещать fr_anchor если позиция уже занята
+    #       другой лестницей этой же комнаты (см. описание выше в файле).
 
-    cells[(fx, fy, fr_level.z)] = _stair_cell(fx, fy, fr_level.z, world_uid, building_uid, mat)
-    cells[(tx, ty, to_level.z)] = _stair_cell(tx, ty, to_level.z, world_uid, building_uid, mat)
+    z_lo = min(fr_level.z, to_level.z)
+    z_hi = max(fr_level.z, to_level.z)
 
+    if stair_type == "trapdoor":
+        # Люк: каждый конец размещается в своей комнате независимо.
+        # fr_anchor → fr_level.z, to_anchor → to_level.z.
+        for (x, y) in _stair_footprint(stair_type, fr_anchor, z_height, rng):
+            cells[(x, y, fr_level.z)] = _stair_cell(x, y, fr_level.z, world_uid, building_uid, mat)
+        for (x, y) in _stair_footprint(stair_type, to_anchor, z_height, rng):
+            cells[(x, y, to_level.z)] = _stair_cell(x, y, to_level.z, world_uid, building_uid, mat)
+    else:
+        # Физическая лестница: единый x,y footprint по всем z от z_lo до z_hi.
+        # Используем to_anchor — позиция в комнате назначения, которая также входит
+        # в footprint исходной комнаты (обе комнаты вертикально стекированы).
+        fp = _stair_footprint(stair_type, to_anchor, z_height, rng)
+        for z in range(z_lo, z_hi + 1):
+            for (x, y) in fp:
+                cells[(x, y, z)] = _stair_cell(x, y, z, world_uid, building_uid, mat)
+
+    tx, ty = to_anchor
+    fx, fy = fr_anchor
     passage_uid = _det_uuid(building_uid, "stair", conn["from_room"], conn["to_room"])
     return LocationPassage(
         passage_uid=passage_uid,
@@ -289,9 +519,17 @@ def build_passages(
     world_uid: str,
     building_uid: str,
     rng: Random,
+    world: World | None = None,
+    template: dict | None = None,
 ) -> list[LocationPassage]:
     passages: list[LocationPassage] = []
-    placed = {r.room_id: r for r in rooms if r.placed}
+
+    # room_id → list of all placed instances (multiple when count > 1)
+    placed_by_id: dict[str, list[_RoomInstance]] = {}
+    for r in rooms:
+        if r.placed:
+            placed_by_id.setdefault(r.room_id, []).append(r)
+
     all_union: set[tuple[int, int]] = set()
     for r in rooms:
         if r.placed:
@@ -299,27 +537,35 @@ def build_passages(
 
     # --- doorway / staircase connections ---
     for conn in connections:
-        fr = placed.get(conn["from_room"])
-        to = placed.get(conn["to_room"])
-        if fr is None or to is None:
-            continue  # one room skipped during layout
+        fr_list = placed_by_id.get(conn["from_room"], [])
+        to_list = placed_by_id.get(conn["to_room"], [])
+        if not fr_list or not to_list:
+            continue
 
         fr_offset = room_z_offsets[conn["from_room"]]
         to_offset = room_z_offsets[conn["to_room"]]
         fr_level  = levels[fr_offset]
         to_level  = levels[to_offset]
-
-        ptype = conn.get("passage_type", "doorway")
+        ptype     = conn.get("passage_type", "doorway")
 
         if ptype == "staircase":
-            p = _build_staircase(conn, fr, to, fr_level, to_level,
-                                 cells, world_uid, building_uid, rng)
+            # Staircase addresses instance_0 of each side per ТЗ
+            p = _build_staircase(conn, fr_list[0], to_list[0], fr_level, to_level,
+                                 cells, world_uid, building_uid,
+                                 world or _EMPTY_WORLD, template or {}, rng)
+            if p:
+                passages.append(p)
         else:
-            p = _build_doorway(conn, fr, to, fr_level, to_level,
-                               cells, world_uid, building_uid)
-
-        if p:
-            passages.append(p)
+            # Doorway: create a passage for every (fr, to) pair that shares a wall.
+            # Typically fr has 1 instance (corridor), to has N instances (guest rooms).
+            for fr in fr_list:
+                fr_fp = fr.get_footprint()
+                for to in to_list:
+                    if fr_fp & to.get_footprint():   # physically adjacent
+                        p = _build_doorway(conn, fr, to, fr_level, to_level,
+                                           cells, world_uid, building_uid)
+                        if p:
+                            passages.append(p)
 
     # --- entry points ---
     for room in rooms:

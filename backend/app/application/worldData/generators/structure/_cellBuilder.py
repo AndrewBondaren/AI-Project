@@ -97,12 +97,17 @@ def pass2_floors(
     world_uid: str,
     room_uids: dict[str, str],   # uid_key → location_uid
 ) -> list[MapCell]:
+    """
+    Floor cells for ALL footprint cells of each room.
+    Pass 3 will overwrite shared-perimeter cells with walls afterward.
+    Exterior walls (Pass 1) are outside the footprint — no conflict.
+    """
     cells: list[MapCell] = []
     for room in rooms:
         if not room.placed:
             continue
         loc_uid = room_uids[room.uid_key]
-        for (x, y) in _interior(room.get_footprint()):
+        for (x, y) in room.get_footprint():
             cells.append(_floor_cell(x, y, z, world_uid, loc_uid, room.floor_material))
     return cells
 
@@ -118,21 +123,21 @@ def pass3_interior_walls(
     building_uid: str,
     wall_material: str,
 ) -> list[MapCell]:
-    placed = {r.room_id: r for r in rooms if r.placed}
+    """
+    Interior walls for ALL physically adjacent room pairs (shared footprint cells).
+    Connections are used only to determine door placement (Pass 9), not wall creation.
+    Any two rooms whose footprints overlap get a wall at the shared segment.
+    """
+    placed = [r for r in rooms if r.placed]
     seen: dict[tuple[int, int], MapCell] = {}
 
-    for conn in connections:
-        if conn.get("passage_type") == "staircase":
-            continue
-        fr = placed.get(conn["from_room"])
-        to = placed.get(conn["to_room"])
-        if fr is None or to is None:
-            continue
-
-        shared = fr.get_footprint() & to.get_footprint()
-        for (x, y) in shared:
-            if (x, y) not in seen:
-                seen[(x, y)] = _wall_cell(x, y, z, world_uid, building_uid, wall_material)
+    for i, r1 in enumerate(placed):
+        fp1 = r1.get_footprint()
+        for r2 in placed[i + 1:]:
+            shared = fp1 & r2.get_footprint()
+            for (x, y) in shared:
+                if (x, y) not in seen:
+                    seen[(x, y)] = _wall_cell(x, y, z, world_uid, building_uid, wall_material)
 
     return list(seen.values())
 

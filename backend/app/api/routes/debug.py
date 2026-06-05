@@ -1,0 +1,123 @@
+"""
+Debug endpoints — только для разработки и тестирования.
+Не должны использоваться в production flow.
+"""
+from dataclasses import asdict
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
+
+from app.api.deps import get_container
+from app.api.utils.json_resolver import JsonResolver
+from app.application.worldData.generators.structure.structureGeneratorService import (
+    StructureGeneratorService,
+)
+from app.application.worldData.generators.structure._gridRenderer import render_all_levels
+from app.db.models.namedLocation import NamedLocation
+from datetime import datetime, timezone
+
+router = APIRouter(prefix="/debug", tags=["debug"])
+
+_structure_generator = StructureGeneratorService()
+
+
+@router.post("/worlds/{world_uid}/generate-structure")
+async def debug_generate_structure(
+    world_uid: str,
+    map_x: int = 0,
+    map_y: int = 0,
+    map_z: int = 0,
+    wall_material: str = "stone",
+    floor_material: str = "wood",
+    file: UploadFile | None = File(default=None),
+    path: str | None = Form(default=None),
+    container=Depends(get_container),
+) -> JSONResponse:
+    """
+    Генерирует структуру здания из шаблона и возвращает layout.
+
+    Принимает JSON-шаблон через file upload или path к файлу.
+    Мир берётся из БД по world_uid.
+    Здание создаётся как временный объект с переданными координатами.
+
+    Возвращает: cells, levels, passages, rooms + сводка по элементам.
+    """
+    template = await JsonResolver.resolve(file=file, path=path)
+    if not isinstance(template, dict):
+        raise HTTPException(status_code=422, detail="Template must be a JSON object")
+
+    world = await container.world_service().get_by_id(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+
+    building = NamedLocation(
+        location_uid=f"debug-building-{world_uid}",
+        world_uid=world_uid,
+        display_name="[Debug] " + template.get("display_name", "Building"),
+        system_location_type="building",
+        created_at=datetime.now(timezone.utc).isoformat(),
+        map_x=map_x,
+        map_y=map_y,
+        map_z=map_z,
+        parent_wall_material=wall_material,
+        parent_floor_material=floor_material,
+    )
+
+    layout = _structure_generator.generate_from_template(world, building, template)
+
+    from collections import Counter
+    element_counts = Counter(c.system_building_element for c in layout.cells)
+    grids = render_all_levels(layout.cells)
+
+    return JSONResponse({
+        "summary": {
+            "levels":   len(layout.levels),
+            "rooms":    len(layout.rooms),
+            "cells":    len(layout.cells),
+            "passages": len(layout.passages),
+            "elements": dict(element_counts),
+        },
+        "levels": [
+            {
+                "level_uid":    lvl.level_uid,
+                "z":            lvl.z,
+                "z_height":     lvl.z_height,
+                "display_name": lvl.display_name,
+                "isolated":     lvl.isolated,
+            }
+            for lvl in sorted(layout.levels, key=lambda l: l.z)
+        ],
+        "rooms": [
+            {
+                "location_uid":            r.location_uid,
+                "display_name":            r.display_name,
+                "system_location_subtype": r.system_location_subtype,
+                "origin":                  {"x": r.map_x, "y": r.map_y, "z": r.map_z},
+                "is_public":               r.is_public,
+                "is_forbidden":            r.is_forbidden,
+            }
+            for r in layout.rooms
+        ],
+        "passages": [
+            {
+                "passage_uid":        p.passage_uid,
+                "system_passage_type": p.system_passage_type,
+                "from_level_uid":     p.from_level_uid,
+                "from_xy":            [p.from_x, p.from_y],
+                "to_level_uid":       p.to_level_uid,
+                "to_xy":              [p.to_x, p.to_y],
+                "is_bidirectional":   p.is_bidirectional,
+            }
+            for p in layout.passages
+        ],
+        "grids": {str(z): grid for z, grid in grids.items()},
+        "cells": [
+            {
+                "x": c.x, "y": c.y, "z": c.z,
+                "element":    c.system_building_element,
+                "material":   c.system_material,
+                "structural": c.is_structural,
+            }
+            for c in layout.cells
+        ],
+    })

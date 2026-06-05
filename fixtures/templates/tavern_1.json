@@ -49,7 +49,7 @@
           "room_type":    "kitchen",
           "display_name": "Кухня",
           "shape_type":   ["square", "rectangle"],
-          "size":         { "size_type": "small" },
+          "size":         { "size_type": "medium" },
           "required":     true,
           "count":        1,
           "is_public":    false,
@@ -70,7 +70,7 @@
           "room_type":    "corridor",
           "display_name": "Коридор",
           "shape_type":   "rectangle",
-          "size":         { "width_range": [8, 14], "depth_range": [2, 2] },
+          "size":         { "width_range": [8, 14], "depth_range": [3, 3] },
           "required":     true,
           "count":        1,
           "is_public":    false,
@@ -101,7 +101,7 @@
       "required":     true
     },
     {
-      "from_room":    "main_hall",
+      "from_room":    "kitchen",
       "to_room":      "cellar",
       "passage_type": "staircase",
       "required":     true

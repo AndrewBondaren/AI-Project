@@ -205,6 +205,7 @@ class StructureGeneratorService:
             cells_dict, all_rooms, connections,
             levels, room_z_offsets,
             world.world_uid, building.location_uid, rng,
+            world=world, template=template,
         )
         logger.info(
             "generate_from_template | passages=%d total_cells=%d",

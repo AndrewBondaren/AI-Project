@@ -75,6 +75,7 @@ def create_app():
     from app.api.routes.characters import router as characters_router
     from app.api.routes.sessions import router as sessions_router
     from app.api.routes.map import router as map_router
+    from app.api.routes.debug import router as debug_router
 
     app.include_router(chat_router, prefix="/api")
     app.include_router(settings_router, prefix="/api")
@@ -86,6 +87,7 @@ def create_app():
     app.include_router(characters_router, prefix="/api")
     app.include_router(sessions_router, prefix="/api")
     app.include_router(map_router, prefix="/api")
+    app.include_router(debug_router, prefix="/api")
 
     return app
 

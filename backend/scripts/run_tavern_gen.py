@@ -81,3 +81,27 @@ from collections import Counter
 counts = Counter(c.system_building_element for c in layout.cells)
 for elem, n in sorted(counts.items()):
     print(f"  {elem}: {n}")
+
+from app.application.worldData.generators.structure._gridRenderer import render_level, render_all_levels
+
+if len(sys.argv) > 1 and sys.argv[1] == "all":
+    # Все z-уровни включая промежуточные (лестницы)
+    all_z = sorted({c.z for c in layout.cells})
+    level_z_set = {lvl.z for lvl in layout.levels}
+    labels = {-3: "Подвал", 0: "Первый этаж", 3: "Второй этаж"}
+    for z in all_z:
+        tag = f" [{labels[z]}]" if z in labels else " [промежуточный]"
+        marker = "★" if z in level_z_set else "·"
+        grid = render_level(layout.cells, z_target=z)
+        print(f"\n{marker} z={z:+d}{tag}")
+        print(grid if grid else "  (нет ячеек)")
+else:
+    target = int(sys.argv[1]) if len(sys.argv) > 1 else 0
+    labels = {-3: "Подвал", 0: "Первый этаж", 3: "Второй этаж"}
+    label  = labels.get(target, f"z={target}")
+    grid = render_level(layout.cells, z_target=target)
+    if grid:
+        print(f"\n--- Сетка: {label} (z={target}) ---")
+        print(grid)
+    else:
+        print(f"\n[{label}] нет ячеек на z={target}")

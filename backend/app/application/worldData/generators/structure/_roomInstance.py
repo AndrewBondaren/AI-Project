@@ -27,6 +27,7 @@ class _RoomInstance:
 
     wall_material:  str
     floor_material: str
+    economic_tier:  str | None = None
 
     # Layout — проставляются в _layoutEngine
     origin_x: int | None = None
