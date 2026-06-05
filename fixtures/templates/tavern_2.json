@@ -1,0 +1,198 @@
+{
+  "system_name":      "tavern_2",
+  "structure_type":   "tavern",
+  "display_name":     "Таверна тип 2",
+  "description":      "Трёхэтажная таверна с подвалом. 1й этаж: прямое соединение. 2й и 3й этажи: коридоры с жилыми комнатами по обе стороны.",
+  "version":          "1.0",
+  "default_z_height": 3,
+  "min_z_height":     2,
+
+  "levels": [
+    {
+      "z_offset":    -1,
+      "display_name": "Подвал",
+      "rooms": [
+        {
+          "room_id":      "cellar",
+          "room_type":    "cellar",
+          "display_name": "Подвал",
+          "shape_type":   "rectangle",
+          "size":         { "size_type": "medium" },
+          "required":     true,
+          "count":        1,
+          "is_public":    false,
+          "is_forbidden": false
+        }
+      ]
+    },
+    {
+      "z_offset":    0,
+      "display_name": "Первый этаж",
+      "rooms": [
+        {
+          "room_id":      "main_hall",
+          "room_type":    "common_hall",
+          "display_name": "Главный зал",
+          "shape_type":   "square",
+          "size":         { "size_type": "big" },
+          "required":     true,
+          "count":        1,
+          "is_public":    true,
+          "is_forbidden": false,
+          "entry_point": {
+            "wall":         "south",
+            "passage_type": "main_entrance"
+          }
+        },
+        {
+          "room_id":      "kitchen",
+          "room_type":    "kitchen",
+          "display_name": "Кухня",
+          "shape_type":   ["square", "rectangle"],
+          "size":         { "size_type": "medium" },
+          "required":     true,
+          "count":        1,
+          "is_public":    false,
+          "is_forbidden": false,
+          "back_entry_point": {
+            "wall":         "north",
+            "passage_type": "service_entrance"
+          }
+        }
+      ]
+    },
+    {
+      "z_offset":    1,
+      "display_name": "Второй этаж",
+      "rooms": [
+        {
+          "room_id":      "staircase_room",
+          "room_type":    "stairwell",
+          "display_name": "Лестничная клетка",
+          "shape_type":   "rectangle",
+          "size":         { "width_range": [4, 4], "depth_range": [5, 5] },
+          "required":     true,
+          "count":        1,
+          "is_public":    false,
+          "is_forbidden": false
+        },
+        {
+          "room_id":      "corridor",
+          "room_type":    "corridor",
+          "display_name": "Коридор",
+          "shape_type":   "rectangle",
+          "size":         { "width_range": [12, 18], "depth_range": [3, 3] },
+          "required":     true,
+          "count":        1,
+          "is_public":    false,
+          "is_forbidden": false
+        },
+        {
+          "room_id":      "guest_room",
+          "room_type":    "guest_room",
+          "display_name": "Комната для съёма",
+          "shape_type":   "rectangle",
+          "size":         { "width_range": [5, 7], "depth_range": [5, 8] },
+          "required":     false,
+          "count_range":  [2, 4],
+          "is_public":    false,
+          "is_forbidden": false,
+          "attach_to":    "corridor",
+          "attach_wall":  "both"
+        }
+      ]
+    },
+    {
+      "z_offset":    2,
+      "display_name": "Третий этаж",
+      "rooms": [
+        {
+          "room_id":      "staircase_room_2",
+          "room_type":    "stairwell",
+          "display_name": "Лестничная клетка",
+          "shape_type":   "rectangle",
+          "size":         { "width_range": [4, 4], "depth_range": [5, 5] },
+          "required":     true,
+          "count":        1,
+          "is_public":    false,
+          "is_forbidden": false
+        },
+        {
+          "room_id":      "corridor_2",
+          "room_type":    "corridor",
+          "display_name": "Коридор",
+          "shape_type":   "rectangle",
+          "size":         { "width_range": [12, 18], "depth_range": [3, 3] },
+          "required":     true,
+          "count":        1,
+          "is_public":    false,
+          "is_forbidden": false
+        },
+        {
+          "room_id":      "guest_room_2",
+          "room_type":    "guest_room",
+          "display_name": "Комната для съёма",
+          "shape_type":   "rectangle",
+          "size":         { "width_range": [5, 7], "depth_range": [5, 8] },
+          "required":     false,
+          "count_range":  [2, 4],
+          "is_public":    false,
+          "is_forbidden": false,
+          "attach_to":    "corridor_2",
+          "attach_wall":  "both"
+        }
+      ]
+    }
+  ],
+
+  "connections": [
+    {
+      "from_room":    "main_hall",
+      "to_room":      "kitchen",
+      "passage_type": "doorway",
+      "required":     true
+    },
+    {
+      "from_room":    "kitchen",
+      "to_room":      "cellar",
+      "passage_type": "staircase",
+      "required":     true
+    },
+    {
+      "from_room":    "main_hall",
+      "to_room":      "staircase_room",
+      "passage_type": "staircase",
+      "required":     true
+    },
+    {
+      "from_room":    "staircase_room",
+      "to_room":      "corridor",
+      "passage_type": "archway",
+      "required":     true
+    },
+    {
+      "from_room":    "corridor",
+      "to_room":      "guest_room",
+      "passage_type": "doorway",
+      "required":     true
+    },
+    {
+      "from_room":    "staircase_room",
+      "to_room":      "staircase_room_2",
+      "passage_type": "staircase",
+      "required":     true
+    },
+    {
+      "from_room":    "staircase_room_2",
+      "to_room":      "corridor_2",
+      "passage_type": "archway",
+      "required":     true
+    },
+    {
+      "from_room":    "corridor_2",
+      "to_room":      "guest_room_2",
+      "passage_type": "doorway",
+      "required":     true
+    }
+  ]
+}

@@ -238,17 +238,21 @@ class StructureGeneratorService:
         # Tuple is (x_min, y_min, x_max, y_max) of all placed room cells on that level.
         level_footprint_bounds: dict[int, tuple[int, int, int, int]] = {}
 
+        # Rooms that were placed as staircase destinations (their origin = staircase anchor).
+        # When such a room is itself the source of another staircase, reuse its origin as
+        # the next anchor — keeps both staircases in the same XY footprint (shared shaft).
+        staircase_destination_rooms: set[str] = set()
+
         for z_offset in layout_order:
             start_x, start_y = level_start.get(z_offset, (bx, by))
             level       = levels[z_offset]
             level_rooms = [r for r in all_rooms if r.z_offset == z_offset]
 
-            # Pass parent-level bounds so north/south rooms are clamped to available space.
-            # Upper floors constrained by the floor directly below; lower by the floor above.
+            # Pass parent-level bounds so rooms on upper floors don't overhang the floor below.
+            # Only z_offset > 0 (above-ground): upper floors constrained by floor directly below.
+            # z_offset <= 0 (ground + underground): cellars extend freely — dug into the ground.
             if z_offset > 0:
                 parent_bounds = level_footprint_bounds.get(z_offset - 1)
-            elif z_offset < 0:
-                parent_bounds = level_footprint_bounds.get(z_offset + 1)
             else:
                 parent_bounds = None
 
@@ -313,12 +317,25 @@ class StructureGeneratorService:
                 to_level  = levels[to_z]
                 z_height  = abs(to_level.z - level.z)
                 stair_type = _infer_stair_type_for_anchor(conn, z_offset, to_z, z_height)
-                anchor = _stair_anchor(fr_room, stair_type, conn.get("position"), rng, z_height)
+
+                if fr_id in staircase_destination_rooms:
+                    # fr_room was itself placed via a staircase anchor from the level below.
+                    # Reuse its origin so the upward staircase shares the same XY footprint —
+                    # one continuous shaft with separate entry/exit cells per floor.
+                    anchor = (fr_room.origin_x, fr_room.origin_y)
+                    logger.info(
+                        "generate_from_template | through-staircase z_offset=%d->%d: room=%r reuse origin (%d,%d)",
+                        z_offset, to_z, fr_id, anchor[0], anchor[1],
+                    )
+                else:
+                    anchor = _stair_anchor(fr_room, stair_type, conn.get("position"), rng, z_height)
+                    logger.info(
+                        "generate_from_template | staircase anchor z_offset=%d->%d: room=%r anchor=(%d,%d) type=%s",
+                        z_offset, to_z, fr_id, anchor[0], anchor[1], stair_type,
+                    )
+
                 level_start[to_z] = anchor
-                logger.info(
-                    "generate_from_template | staircase anchor z_offset=%d->%d: room=%r anchor=(%d,%d) type=%s",
-                    z_offset, to_z, fr_id, anchor[0], anchor[1], stair_type,
-                )
+                staircase_destination_rooms.add(to_id)
 
         # Step 5.5: stairwell mutation — widen narrow rooms before cell generation
         apply_stairwell_mutations(

@@ -284,6 +284,62 @@ def _layout_mode_b(
 
 
 # ---------------------------------------------------------------------------
+# Bounds clipping
+
+def _clip_to_bounds(rooms: list[_RoomInstance], bounds: tuple[int, int, int, int]) -> None:
+    """
+    After mode A placement, clip any room dimension that extends beyond bounds.
+    Mode B pre-clamps north/south depth using available space; this catches
+    east/west overhangs from mode A (e.g. corridor extending past x_max).
+    Must run BEFORE mode B so attached rooms use the corrected host dimensions.
+    """
+    x_min, y_min, x_max, y_max = bounds
+    for room in rooms:
+        if not room.placed:
+            continue
+        # East overhang
+        east = room.origin_x + room.width - 1
+        if east > x_max:
+            new_w = max(3, x_max - room.origin_x + 1)
+            if new_w != room.width:
+                logger.info(
+                    "clip_to_bounds | room=%r width %d->%d (x_max=%d)",
+                    room.room_id, room.width, new_w, x_max,
+                )
+                room.width = new_w
+        # West overhang
+        if room.origin_x < x_min:
+            overshoot = x_min - room.origin_x
+            new_w = max(3, room.width - overshoot)
+            logger.info(
+                "clip_to_bounds | room=%r west overshoot=%d width %d->%d, origin_x %d->%d",
+                room.room_id, overshoot, room.width, new_w, room.origin_x, x_min,
+            )
+            room.origin_x = x_min
+            room.width = new_w
+        # North overhang (mode B handles depth pre-clamp; this catches mode A rooms)
+        north = room.origin_y + room.depth - 1
+        if north > y_max:
+            new_d = max(3, y_max - room.origin_y + 1)
+            if new_d != room.depth:
+                logger.info(
+                    "clip_to_bounds | room=%r depth %d->%d (y_max=%d)",
+                    room.room_id, room.depth, new_d, y_max,
+                )
+                room.depth = new_d
+        # South overhang
+        if room.origin_y < y_min:
+            overshoot = y_min - room.origin_y
+            new_d = max(3, room.depth - overshoot)
+            logger.info(
+                "clip_to_bounds | room=%r south overshoot=%d depth %d->%d, origin_y %d->%d",
+                room.room_id, overshoot, room.depth, new_d, room.origin_y, y_min,
+            )
+            room.origin_y = y_min
+            room.depth = new_d
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 
 def layout_level(
@@ -298,10 +354,15 @@ def layout_level(
     Mode A (BFS) runs first; Mode B (attach_to) runs after.
 
     bounds = (x_min, y_min, x_max, y_max) of the parent level's footprint.
-    Passed to Mode B so north/south rooms are clamped to the parent's extent.
+    Mode A rooms are clipped to bounds BEFORE mode B runs, so attached rooms
+    are positioned relative to already-corrected host dimensions.
     """
     mode_a_rooms = [r for r in rooms if r.attach_to is None]
     _layout_mode_a(mode_a_rooms, connections, building_x, building_y)
+
+    # Clip mode A rooms to parent bounds before attaching mode B rooms to them.
+    if bounds is not None:
+        _clip_to_bounds([r for r in mode_a_rooms if r.placed], bounds)
 
     all_placed = [r for r in rooms if r.placed]
     _layout_mode_b(rooms, all_placed, bounds=bounds)
