@@ -78,7 +78,7 @@ class World:
     weather_type_registry:          dict = json_col(default_factory=dict)
     resource_type_registry:         dict = json_col(default_factory=dict)
     city_size_registry:             list = json_col(default_factory=list)
-    item_value_tier_registry:       dict = json_col(default_factory=dict)
+    economic_tier_registry:         list = json_col(default_factory=list)
     building_template_registry:     dict = json_col(default_factory=dict)
     room_type_registry:             dict = json_col(default_factory=dict)
     barrier_template_registry:      dict = json_col(default_factory=dict)

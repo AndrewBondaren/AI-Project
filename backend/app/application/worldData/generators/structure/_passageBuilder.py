@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 _NEIGHBOURS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 
 class _EmptyWorld:
-    item_value_tier_registry = []
+    economic_tier_registry = []
 
 _EMPTY_WORLD = _EmptyWorld()
 _WALL_DIRS  = {"south": (0, -1), "north": (0, 1), "east": (1, 0), "west": (-1, 0)}
@@ -340,7 +340,7 @@ def _resolve_staircase_type(
         return "trapdoor"
 
     tiers = sorted(
-        world.item_value_tier_registry or [],
+        world.economic_tier_registry or [],
         key=lambda t: t.get("base_value", 0),
     )
     effective_tier = to_room.economic_tier or template.get("economic_tier")

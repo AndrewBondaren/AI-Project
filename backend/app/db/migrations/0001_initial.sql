@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS worlds (
     weather_type_registry       TEXT,
     resource_type_registry      TEXT,
     city_size_registry          TEXT,
-    item_value_tier_registry    TEXT,
+    economic_tier_registry      TEXT,
     building_template_registry  TEXT,
     room_type_registry          TEXT,
     barrier_template_registry   TEXT,

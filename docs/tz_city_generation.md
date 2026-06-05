@@ -159,7 +159,7 @@ LLM получает:
 display_name, display_description, display_location_mood,
 dominant_material → display_name из material_registry,
 architectural_style → lore_registry[glossary_ref],
-economic_tier → display_tier из item_value_tier_registry,
+economic_tier → display_tier из economic_tier_registry,
 state → display_name из states
 ```
 

@@ -10,8 +10,7 @@ _DEFAULT_FLOOR_MATERIAL = "wood"
 
 
 def _tiers_sorted(world: World) -> list[dict]:
-    """item_value_tier_registry отсортированный по base_value ASC."""
-    registry = world.item_value_tier_registry or []
+    registry = world.economic_tier_registry or []
     return sorted(registry, key=lambda t: t.get("base_value", 0))
 
 

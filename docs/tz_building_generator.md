@@ -42,7 +42,7 @@
 | `default_z_height` | int | optional | Высота потолка по умолчанию для всех уровней. Default: `3` |
 | `min_z_height` | int | optional | Минимально допустимая высота потолка любого уровня. Default: `2` |
 | `gap_policy` | string | optional | Поведение для gap-областей (внутри bounding box, вне всех комнат): `"clip"`, `"fill"`, `"random"`. Default: `"clip"` |
-| `economic_tier` | string | optional | Экономический уровень здания для выбора материалов: ref → `worlds.item_value_tier_registry`. Default: `"standard"`. Всегда имеет значение после резолва — используется как fallback если `room.economic_tier` не задан |
+| `economic_tier` | string | optional | Экономический уровень здания для выбора материалов: ref → `worlds.economic_tier_registry`. Default: `"standard"`. Всегда имеет значение после резолва — используется как fallback если `room.economic_tier` не задан |
 | `building_context` | string | optional | Контекст здания для фильтрации материалов лестницы-ladder: `"indoor"`, `"underground"`, `"nautical"`. Default: `"indoor"` |
 | `window_z_ratio` | float | optional | Пропорциональная высота окон по умолчанию для всех уровней: `window_z = floor(z_height * ratio)`. Default: `0.4`. Переопределяется на уровне через `level.window_z_ratio` или `level.window_z_offset` |
 | `door_height_ratio` | float | optional | Коэффициент высоты дверей для `z_height >= 4`: `door_height = floor(z_height * ratio)`. Default: `0.75` |
@@ -462,7 +462,7 @@ stair_length = max(2, ceil(z_height * 1.3))
 ```
 effective_tier = to_room.economic_tier ?? template.economic_tier
 
-tiers_sorted = sorted(item_value_tier_registry, key=lambda t: t.base_value)  -- ASC
+tiers_sorted = sorted(economic_tier_registry, key=lambda t: t.base_value)  -- ASC
 tier_rank    = tiers_sorted.index(effective_tier)   -- 0 = самый дешёвый
 tier_count   = len(tiers_sorted)
 
@@ -942,7 +942,7 @@ depth = rng.randint(depth_range[0], depth_range[1])  # игнорируется 
 | `material_category` | string | Физическое состояние: `solid`, `liquid`, `gas` |
 | `tags` | string[] | Классификационные теги: `construction`, `metal`, `crafted`, `refined`, `raw`, `organic`, `consumable`, `mineral`, `magic` + кастомные |
 | `use_type` | string[] | `wall`, `floor`, `column`, `door`, `gate`, `railing`, `ceiling`, `roof`, `any` |
-| `economic_tier` | string | ref → `worlds.item_value_tier_registry.system_tier` |
+| `economic_tier` | string | ref → `worlds.economic_tier_registry.system_tier` |
 | `hardness` | int (1–5) | Твёрдость для `ExcavationNode` |
 | `density` | int | Плотность; используется физикой (утопание, слоение жидкостей) |
 | `structural_strength` | float (0–1) | Прочность; null для liquid/gas |
@@ -961,8 +961,8 @@ depth = rng.randint(depth_range[0], depth_range[1])  # игнорируется 
 **Прослойка: сортировка тиров по `base_value`:**
 
 ```
-tiers_sorted = sorted(item_value_tier_registry, key=lambda t: t.base_value)  -- ASC; строится один раз на генерацию
-tier_value(tier) = item_value_tier_registry[tier].base_value
+tiers_sorted = sorted(economic_tier_registry, key=lambda t: t.base_value)  -- ASC; строится один раз на генерацию
+tier_value(tier) = economic_tier_registry[tier].base_value
 ```
 
 Все сравнения тиров — через `tier_value()` и позицию в `tiers_sorted`. Никаких хардкоженных имён и числовых порогов.
