@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import uuid
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from random import Random
@@ -10,9 +11,10 @@ logger = logging.getLogger(__name__)
 from app.application.worldData.generators.structure._cellBuilder import build_level_cells
 from app.application.worldData.generators.structure._errors import GenerationError, UnsupportedShapeError
 from app.application.worldData.generators.structure._layoutEngine import layout_level
-from app.application.worldData.generators.structure._passageBuilder import build_passages
+from app.application.worldData.generators.structure._passageBuilder import build_passages, _stair_anchor
 from app.application.worldData.generators.structure._roomFactory import instantiate_level_rooms
 from app.application.worldData.generators.structure._roomInstance import _RoomInstance
+from app.application.worldData.generators.structure._staircaseMutation import apply_stairwell_mutations
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
 from app.db.models.mapCell import MapCell
@@ -76,6 +78,70 @@ def _build_levels(template: dict, building: NamedLocation,
 
 
 # ---------------------------------------------------------------------------
+# Level layout ordering — propagate staircase anchors across levels
+
+def _staircase_layout_order(
+    template: dict,
+    room_z_offsets: dict[str, int],
+) -> list[int]:
+    """
+    BFS from z_offset=0 through staircase connections.
+    Ensures each level is laid out only after its staircase-connected neighbour,
+    so we can propagate anchor positions.
+    Unreachable levels are appended at the end in template order.
+    """
+    all_z = [level_def["z_offset"] for level_def in template["levels"]]
+    adj: dict[int, list[int]] = {z: [] for z in all_z}
+    for conn in template.get("connections", []):
+        if conn.get("passage_type") != "staircase":
+            continue
+        fr_z = room_z_offsets.get(conn["from_room"])
+        to_z = room_z_offsets.get(conn["to_room"])
+        if fr_z is not None and to_z is not None and fr_z != to_z:
+            adj[fr_z].append(to_z)
+            adj[to_z].append(fr_z)
+
+    start = 0 if 0 in adj else (all_z[0] if all_z else 0)
+    visited: set[int] = {start}
+    order: list[int] = [start]
+    queue: deque[int] = deque([start])
+    while queue:
+        z = queue.popleft()
+        for nz in adj.get(z, []):
+            if nz not in visited:
+                visited.add(nz)
+                order.append(nz)
+                queue.append(nz)
+    for z in all_z:
+        if z not in visited:
+            order.append(z)
+    return order
+
+
+def _infer_stair_type_for_anchor(
+    conn: dict,
+    fr_z_offset: int,
+    to_z_offset: int,
+    z_height: int,
+) -> str:
+    """
+    Lightweight stair-type inference used only to pick the correct anchor size
+    during layout propagation (before to_room is placed).
+    Does NOT need to_room — uses only z-offset direction and z_height.
+    Explicit staircase_type on the connection always wins.
+    """
+    if conn.get("staircase_type"):
+        return conn["staircase_type"]
+    if fr_z_offset >= 0 and to_z_offset < 0:
+        return "trapdoor"
+    if fr_z_offset < 0 and to_z_offset >= 0:
+        return "trapdoor"
+    if z_height <= 5:
+        return "standard"
+    return "straight"
+
+
+# ---------------------------------------------------------------------------
 # Room → NamedLocation
 
 def _room_to_named_location(
@@ -130,11 +196,13 @@ class StructureGeneratorService:
         rng = Random(_make_seed(world.world_uid, building.location_uid))
 
         # Step 1: levels
+        logger.info("=== PHASE: resolve levels ===")
         z_heights = _resolve_z_heights(template)
         levels    = _build_levels(template, building, z_heights)   # z_offset → LocationLevel
-        logger.info("generate_from_template | levels=%s", sorted(levels))
+        logger.info("levels resolved: %s", {z: (l.z, l.z_height) for z, l in levels.items()})
 
         # Step 2–3: instantiate rooms per level
+        logger.info("=== PHASE: instantiate rooms ===")
         all_rooms: list[_RoomInstance] = []
         room_z_offsets: dict[str, int] = {}   # room_id → z_offset
 
@@ -153,28 +221,112 @@ class StructureGeneratorService:
             )
 
         # Step 4–5: layout per level
+        logger.info("=== PHASE: layout (order propagation) ===")
+        # Propagate staircase anchor positions: z_offset=0 first, then connected levels
+        # so that each level starts where its staircase lands on the source level.
         bx = building.map_x or 0
         by = building.map_y or 0
         connections = template.get("connections", [])
 
-        for level_def in template["levels"]:
-            z_offset    = level_def["z_offset"]
+        layout_order = _staircase_layout_order(template, room_z_offsets)
+        level_start: dict[int, tuple[int, int]] = {layout_order[0]: (bx, by)}
+
+        # Index placed rooms by id — built incrementally as levels are laid out
+        all_placed_by_id: dict[str, _RoomInstance] = {}
+
+        # Footprint bounds per z_offset — used to constrain attach_to rooms on adjacent levels.
+        # Tuple is (x_min, y_min, x_max, y_max) of all placed room cells on that level.
+        level_footprint_bounds: dict[int, tuple[int, int, int, int]] = {}
+
+        for z_offset in layout_order:
+            start_x, start_y = level_start.get(z_offset, (bx, by))
+            level       = levels[z_offset]
             level_rooms = [r for r in all_rooms if r.z_offset == z_offset]
-            layout_level(level_rooms, connections, bx, by)
-            placed = sum(1 for r in level_rooms if r.placed)
+
+            # Pass parent-level bounds so north/south rooms are clamped to available space.
+            # Upper floors constrained by the floor directly below; lower by the floor above.
+            if z_offset > 0:
+                parent_bounds = level_footprint_bounds.get(z_offset - 1)
+            elif z_offset < 0:
+                parent_bounds = level_footprint_bounds.get(z_offset + 1)
+            else:
+                parent_bounds = None
+
+            layout_level(level_rooms, connections, start_x, start_y, bounds=parent_bounds)
+
+            # Record this level's footprint bounds for use by adjacent levels.
+            placed_rooms_this = [r for r in level_rooms if r.placed]
+            if placed_rooms_this:
+                all_fp: set[tuple[int, int]] = set()
+                for r in placed_rooms_this:
+                    all_fp |= r.get_footprint()
+                level_footprint_bounds[z_offset] = (
+                    min(x for x, y in all_fp),
+                    min(y for x, y in all_fp),
+                    max(x for x, y in all_fp),
+                    max(y for x, y in all_fp),
+                )
+                logger.info(
+                    "layout | z_offset=%d footprint_bounds=%s",
+                    z_offset, level_footprint_bounds[z_offset],
+                )
+
+            placed  = sum(1 for r in level_rooms if r.placed)
             skipped = len(level_rooms) - placed
             logger.info(
-                "generate_from_template | z_offset=%d layout done: placed=%d skipped=%d",
-                z_offset, placed, skipped,
+                "layout | z_offset=%d start=(%d,%d) placed=%d skipped=%d",
+                z_offset, start_x, start_y, placed, skipped,
             )
+            for r in level_rooms:
+                if r.placed:
+                    logger.info(
+                        "layout | z_offset=%d  room=%-20s  origin=(%d,%d)  size=%dx%d  extra_cells=%d",
+                        z_offset, r.room_id, r.origin_x, r.origin_y,
+                        r.width, r.depth, len(r.extra_cells),
+                    )
+                else:
+                    logger.warning("layout | z_offset=%d  room=%s NOT PLACED", z_offset, r.room_id)
             if skipped:
                 skipped_ids = [r.room_id for r in level_rooms if not r.placed]
                 logger.warning(
-                    "generate_from_template | z_offset=%d rooms not placed: %s",
+                    "layout | z_offset=%d rooms not placed: %s",
                     z_offset, skipped_ids,
                 )
 
+            # Record placed rooms and propagate staircase anchors to adjacent levels
+            for r in level_rooms:
+                if r.placed:
+                    all_placed_by_id[r.room_id] = r
+
+            for conn in connections:
+                if conn.get("passage_type") != "staircase":
+                    continue
+                fr_id = conn["from_room"]
+                to_id = conn["to_room"]
+                fr_z  = room_z_offsets.get(fr_id)
+                to_z  = room_z_offsets.get(to_id)
+                if fr_z != z_offset or to_z is None or to_z in level_start:
+                    continue
+                fr_room = all_placed_by_id.get(fr_id)
+                if fr_room is None:
+                    continue
+                to_level  = levels[to_z]
+                z_height  = abs(to_level.z - level.z)
+                stair_type = _infer_stair_type_for_anchor(conn, z_offset, to_z, z_height)
+                anchor = _stair_anchor(fr_room, stair_type, conn.get("position"), rng, z_height)
+                level_start[to_z] = anchor
+                logger.info(
+                    "generate_from_template | staircase anchor z_offset=%d->%d: room=%r anchor=(%d,%d) type=%s",
+                    z_offset, to_z, fr_id, anchor[0], anchor[1], stair_type,
+                )
+
+        # Step 5.5: stairwell mutation — widen narrow rooms before cell generation
+        apply_stairwell_mutations(
+            connections, all_rooms, room_z_offsets, levels, world, template,
+        )
+
         # Step 6–8: assign UIDs + generate cells per level
+        logger.info("=== PHASE: cell generation ===")
         room_uids: dict[str, str] = {}   # uid_key → location_uid
         for room in all_rooms:
             if room.placed:
@@ -190,7 +342,7 @@ class StructureGeneratorService:
 
             before = len(cells_dict)
             for cell in build_level_cells(
-                level_rooms, connections, level.z,
+                level_rooms, connections, level.z, level.z_height,
                 world.world_uid, building.location_uid,
                 wall_mat, room_uids,
             ):
@@ -213,6 +365,7 @@ class StructureGeneratorService:
         )
 
         # Step 12: assemble result
+        logger.info("=== PHASE: assemble result ===")
         placed_rooms = [r for r in all_rooms if r.placed]
         named_locations = [
             _room_to_named_location(

@@ -42,6 +42,11 @@ class _RoomInstance:
     back_entry_point:    dict | None = None
     shape_params:        dict = field(default_factory=dict)
 
+    # Stairwell mutation: extra cells added to base footprint at generation time.
+    # Used to widen the entry end of a corridor so a standard staircase can fit.
+    # Same room UID — no door needed; cells are treated as part of the room.
+    extra_cells: set[tuple[int, int]] = field(default_factory=set)
+
     @property
     def placed(self) -> bool:
         return self.origin_x is not None
@@ -54,7 +59,7 @@ class _RoomInstance:
     def get_footprint(self) -> set[tuple[int, int]]:
         if not self.placed:
             return set()
-        return room_footprint(
+        base = room_footprint(
             self.shape_type,
             self.origin_x,
             self.origin_y,
@@ -62,3 +67,4 @@ class _RoomInstance:
             self.depth,
             self.shape_params,
         )
+        return base | self.extra_cells

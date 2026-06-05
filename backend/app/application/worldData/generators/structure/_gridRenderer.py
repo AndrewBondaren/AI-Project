@@ -31,6 +31,7 @@ def render_level(cells: list[MapCell], z_target: int) -> str:
     x0, x1 = min(xs) - 1, max(xs) + 1
     y0, y1 = min(ys) - 1, max(ys) + 1
 
+    prefix = 6  # len("  21 |") — y-label + " |"
     lines: list[str] = [f"x: {x0}..{x1}  y: {y0}..{y1}"]
 
     for y in range(y1, y0 - 1, -1):
@@ -40,6 +41,21 @@ def render_level(cells: list[MapCell], z_target: int) -> str:
             for x in range(x0, x1 + 1)
         )
         lines.append(f"{y:4d} |{row}|")
+
+    # X-axis labels: one row per digit position (hundreds, tens, units)
+    x_range = range(x0, x1 + 1)
+    max_abs = max(abs(x0), abs(x1))
+    digit_rows = 3 if max_abs >= 100 else 2 if max_abs >= 10 else 1
+    pad = " " * prefix
+    for d in range(digit_rows):
+        power = digit_rows - 1 - d
+        row_label = "".join(
+            str(abs(x) // (10 ** power) % 10) if x >= 0 else
+            ("-" if abs(x) // (10 ** power) % 10 == 0 and d == 0 else
+             str(abs(x) // (10 ** power) % 10))
+            for x in x_range
+        )
+        lines.append(f"{pad} {row_label} ")
 
     return "\n".join(lines)
 

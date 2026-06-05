@@ -1,25 +1,23 @@
 """
-Cell generation — 3 passes per level.
+Cell generation — 2 passes per level.
 
 Room coordinate model:
   Room footprints INCLUDE their 1-cell perimeter.
   Adjacent rooms share exactly ONE perimeter column/row (the interior wall).
   shared_cells = footprint_A ∩ footprint_B
 
-Pass 1 — exterior walls:
-  For every cell in union(all room footprints), each neighbor outside union → wall cell.
-  Walls belong to building (location_uid = building_uid).
-
 Pass 2 — room floors:
-  Interior cells = room footprint cells where all 4 neighbours are also in the footprint.
-  Each interior cell → floor, location_uid = room.
+  Each footprint cell → floor, location_uid = room. (base z only)
+  Pass 3 will overwrite perimeter cells with walls.
 
-Pass 3 — interior walls:
-  For each connected room pair: shared = fp_A ∩ fp_B → wall cells (building).
-  These cells were perimeter for both rooms, so Pass 2 didn't touch them.
+Pass 3 — walls:
+  Every perimeter cell (footprint minus interior) of every room → wall cell (building).
+  Covers both shared perimeter between adjacent rooms AND unshared exterior perimeter.
+  Because footprints include perimeter, pass 3 alone handles the full building shell —
+  no extra exterior pass needed.
 
-All cells on a level share the same z = level.z (floor plane).
-z_height is stored on LocationLevel and used for window/stair calculations, not for extra z-layers.
+z_height: pass 3 walls are repeated for every z in [z_base, z_base + z_height - 1].
+  Floor (Pass 2) is generated only at z_base.
 """
 from app.application.worldData.generators.structure._roomInstance import _RoomInstance
 from app.db.models.mapCell import MapCell
@@ -68,27 +66,6 @@ def _floor_cell(x: int, y: int, z: int, world_uid: str, room_uid: str,
 
 
 # ---------------------------------------------------------------------------
-# Pass 1
-
-def pass1_exterior_walls(
-    rooms: list[_RoomInstance],
-    z: int,
-    world_uid: str,
-    building_uid: str,
-    wall_material: str,
-) -> list[MapCell]:
-    union = _union(rooms)
-    exterior: set[tuple[int, int]] = set()
-    for (x, y) in union:
-        for dx, dy in _NEIGHBOURS:
-            nb = (x + dx, y + dy)
-            if nb not in union:
-                exterior.add(nb)
-    return [_wall_cell(x, y, z, world_uid, building_uid, wall_material)
-            for (x, y) in exterior]
-
-
-# ---------------------------------------------------------------------------
 # Pass 2
 
 def pass2_floors(
@@ -124,18 +101,20 @@ def pass3_interior_walls(
     wall_material: str,
 ) -> list[MapCell]:
     """
-    Interior walls for ALL physically adjacent room pairs (shared footprint cells).
-    Connections are used only to determine door placement (Pass 9), not wall creation.
-    Any two rooms whose footprints overlap get a wall at the shared segment.
+    Walls for every perimeter cell of every room (footprint minus interior).
+    Covers both shared perimeter (between adjacent rooms) and unshared perimeter
+    (outer face of a room with no neighbour on that side).
+    Pass 2 placed floor at every footprint cell; this overwrites perimeter cells with wall.
+    Passage builder later replaces specific wall cells with door/archway cells.
     """
     placed = [r for r in rooms if r.placed]
     seen: dict[tuple[int, int], MapCell] = {}
 
-    for i, r1 in enumerate(placed):
-        fp1 = r1.get_footprint()
-        for r2 in placed[i + 1:]:
-            shared = fp1 & r2.get_footprint()
-            for (x, y) in shared:
+    for room in placed:
+        fp = room.get_footprint()
+        interior = _interior(fp)
+        for (x, y) in fp:
+            if (x, y) not in interior:
                 if (x, y) not in seen:
                     seen[(x, y)] = _wall_cell(x, y, z, world_uid, building_uid, wall_material)
 
@@ -149,14 +128,24 @@ def build_level_cells(
     rooms: list[_RoomInstance],
     connections: list[dict],
     z: int,
+    z_height: int,
     world_uid: str,
     building_uid: str,
     wall_material: str,
     room_uids: dict[str, str],
 ) -> list[MapCell]:
-    """Run all 3 passes and return combined cell list."""
+    """
+    Run all 3 passes and return combined cell list.
+    Walls (Pass 1 + Pass 3) are generated for every z in [z, z + z_height - 1].
+    Floor (Pass 2) is generated only at the base z.
+    """
     cells: list[MapCell] = []
-    cells.extend(pass1_exterior_walls(rooms, z, world_uid, building_uid, wall_material))
+
+    # Floor only at base level
     cells.extend(pass2_floors(rooms, z, world_uid, room_uids))
-    cells.extend(pass3_interior_walls(rooms, connections, z, world_uid, building_uid, wall_material))
+
+    # Walls for every z in the room's full height span
+    for z_layer in range(z, z + z_height):
+        cells.extend(pass3_interior_walls(rooms, connections, z_layer, world_uid, building_uid, wall_material))
+
     return cells

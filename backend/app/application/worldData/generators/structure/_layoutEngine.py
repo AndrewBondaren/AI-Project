@@ -194,11 +194,21 @@ def _layout_mode_a(rooms: list[_RoomInstance], connections: list[dict],
 # ---------------------------------------------------------------------------
 # Mode B — corridor attach_to
 
-def _layout_mode_b(rooms: list[_RoomInstance], all_placed: list[_RoomInstance]) -> None:
+def _layout_mode_b(
+    rooms: list[_RoomInstance],
+    all_placed: list[_RoomInstance],
+    bounds: tuple[int, int, int, int] | None = None,
+) -> None:
+    """
+    bounds = (x_min, y_min, x_max, y_max) of the level below.
+    When provided, north/south room depths are clamped so they don't
+    exceed the parent level's footprint. Template depth_range is treated
+    as a desired maximum; the generator resolves what actually fits.
+    """
     attach_rooms = [r for r in rooms if r.attach_to is not None and not r.placed]
     if not attach_rooms:
         return
-    logger.info("layout mode_b | attach_rooms=%d", len(attach_rooms))
+    logger.info("layout mode_b | attach_rooms=%d  bounds=%s", len(attach_rooms), bounds)
 
     by_host: dict[str, list[_RoomInstance]] = {}
     for r in attach_rooms:
@@ -207,7 +217,7 @@ def _layout_mode_b(rooms: list[_RoomInstance], all_placed: list[_RoomInstance]) 
     for host_id, group in by_host.items():
         host = _by_id(all_placed, host_id)
         if host is None or not host.placed:
-            logger.warning("layout mode_b | host=%r not placed — skipping %d attached room(s)", host_id, len(attached))
+            logger.warning("layout mode_b | host=%r not placed — skipping %d attached room(s)", host_id, len(group))
             continue
 
         attach_wall = group[0].attach_wall or "both"
@@ -223,10 +233,20 @@ def _layout_mode_b(rooms: list[_RoomInstance], all_placed: list[_RoomInstance]) 
                 (north_side if i % 2 == 0 else south_side).append(room)
 
         # North side: rooms placed above host, sharing host's north perimeter
-        cursor_x = host.origin_x + 1
+        cursor_x = host.origin_x
         for room in north_side:
             room.origin_x = cursor_x
             room.origin_y = host.origin_y + host.depth - 1  # share north wall
+            if bounds is not None:
+                # clamp depth so north face <= parent level's y_max
+                available = bounds[3] - room.origin_y + 1
+                clamped = max(1, min(room.depth, available))
+                if clamped != room.depth:
+                    logger.info(
+                        "layout mode_b | room=%r north depth %d -> %d (bounds y_max=%d)",
+                        room.room_id, room.depth, clamped, bounds[3],
+                    )
+                    room.depth = clamped
             if not _has_conflict(room, all_placed):
                 all_placed.append(room)
                 cursor_x += room.width - 1
@@ -237,8 +257,20 @@ def _layout_mode_b(rooms: list[_RoomInstance], all_placed: list[_RoomInstance]) 
                 room.origin_x = room.origin_y = None
 
         # South side: rooms placed below host, sharing host's south perimeter
-        cursor_x = host.origin_x + 1
+        cursor_x = host.origin_x
         for room in south_side:
+            if bounds is not None:
+                # clamp depth so south face >= parent level's y_min
+                # south room's origin_y = host.origin_y - depth + 1, so:
+                # available depth = host.origin_y - bounds[1] + 1
+                available = host.origin_y - bounds[1] + 1
+                clamped = max(1, min(room.depth, available))
+                if clamped != room.depth:
+                    logger.info(
+                        "layout mode_b | room=%r south depth %d -> %d (bounds y_min=%d)",
+                        room.room_id, room.depth, clamped, bounds[1],
+                    )
+                    room.depth = clamped
             room.origin_x = cursor_x
             room.origin_y = host.origin_y - room.depth + 1  # share south wall
             if not _has_conflict(room, all_placed):
@@ -259,13 +291,17 @@ def layout_level(
     connections: list[dict],
     building_x: int,
     building_y: int,
+    bounds: tuple[int, int, int, int] | None = None,
 ) -> None:
     """
     Places all rooms on a level in-place.
     Mode A (BFS) runs first; Mode B (attach_to) runs after.
+
+    bounds = (x_min, y_min, x_max, y_max) of the parent level's footprint.
+    Passed to Mode B so north/south rooms are clamped to the parent's extent.
     """
     mode_a_rooms = [r for r in rooms if r.attach_to is None]
     _layout_mode_a(mode_a_rooms, connections, building_x, building_y)
 
     all_placed = [r for r in rooms if r.placed]
-    _layout_mode_b(rooms, all_placed)
+    _layout_mode_b(rooms, all_placed, bounds=bounds)
