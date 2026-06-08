@@ -24,3 +24,4 @@ class MapCell:
     temperature_base:           int | None = None
     rainfall:                   int | None = None
     location_uid:               str | None = None
+    railing_sides:              str | None = None  # comma-separated N/S/E/W faces with a railing

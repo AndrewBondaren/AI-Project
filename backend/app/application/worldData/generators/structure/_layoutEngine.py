@@ -194,6 +194,141 @@ def _layout_mode_a(rooms: list[_RoomInstance], connections: list[dict],
 # ---------------------------------------------------------------------------
 # Mode B — corridor attach_to
 
+def _place_rooms_on_side(
+    side: str,
+    rooms: list[_RoomInstance],
+    host: _RoomInstance,
+    all_placed: list[_RoomInstance],
+    bounds: tuple[int, int, int, int] | None,
+) -> None:
+    """
+    Place rooms along one side of host.
+
+    north/south: cursor moves along x, rooms extend perpendicularly in y.
+    east/west:   cursor moves along y, rooms extend perpendicularly in x.
+    """
+    horizontal = side in ("north", "south")
+    cursor = host.origin_x if horizontal else host.origin_y
+
+    for room in rooms:
+        # Set initial origin
+        if side == "north":
+            room.origin_x = cursor
+            room.origin_y = host.origin_y + host.depth - 1
+        elif side == "south":
+            room.origin_x = cursor
+            room.origin_y = None  # resolved after depth clamp
+        elif side == "east":
+            room.origin_x = host.origin_x + host.width - 1
+            room.origin_y = cursor
+        else:  # west
+            room.origin_x = None  # resolved after width clamp
+            room.origin_y = cursor
+
+        if bounds is not None:
+            x_min, y_min, x_max, y_max = bounds
+
+            if side == "north":
+                # Extent: y grows north — clamp depth by y_max
+                avail_d = y_max - room.origin_y + 1
+                clamped_d = max(1, min(room.depth, avail_d))
+                if clamped_d != room.depth:
+                    logger.info("layout mode_b | room=%r north depth %d->%d", room.room_id, room.depth, clamped_d)
+                    room.depth = clamped_d
+                # Cursor: x grows east — clamp width by x_max
+                if cursor + room.width - 1 > x_max:
+                    clamped_w = x_max - cursor + 1
+                    if clamped_w < 3:
+                        logger.warning("layout mode_b | room=%r z=%d skipped — no x-space (north, x_max=%d)", room.room_id, room.z_offset, x_max)
+                        room.origin_x = room.origin_y = None
+                        continue
+                    logger.info("layout mode_b | room=%r north width %d->%d", room.room_id, room.width, clamped_w)
+                    room.width = clamped_w
+
+            elif side == "south":
+                # Extent: y grows south — available = host.origin_y - y_min + 1
+                avail_d = host.origin_y - y_min + 1
+                clamped_d = max(1, min(room.depth, avail_d))
+                if clamped_d != room.depth:
+                    logger.info("layout mode_b | room=%r south depth %d->%d", room.room_id, room.depth, clamped_d)
+                    room.depth = clamped_d
+                # Cursor: x grows east — clamp width by x_max
+                if cursor + room.width - 1 > x_max:
+                    clamped_w = x_max - cursor + 1
+                    if clamped_w < 3:
+                        logger.warning("layout mode_b | room=%r z=%d skipped — no x-space (south, x_max=%d)", room.room_id, room.z_offset, x_max)
+                        room.origin_x = room.origin_y = None
+                        continue
+                    logger.info("layout mode_b | room=%r south width %d->%d", room.room_id, room.width, clamped_w)
+                    room.width = clamped_w
+
+            elif side == "east":
+                # Extent: x grows east — clamp width by x_max
+                avail_w = x_max - room.origin_x + 1
+                clamped_w = max(1, min(room.width, avail_w))
+                if clamped_w < 3:
+                    logger.warning("layout mode_b | room=%r z=%d skipped — no x-space (east, x_max=%d)", room.room_id, room.z_offset, x_max)
+                    room.origin_x = room.origin_y = None
+                    continue
+                if clamped_w != room.width:
+                    logger.info("layout mode_b | room=%r east width %d->%d", room.room_id, room.width, clamped_w)
+                    room.width = clamped_w
+                # Cursor: y grows north — clamp depth by y_max
+                if cursor + room.depth - 1 > y_max:
+                    clamped_d = y_max - cursor + 1
+                    if clamped_d < 3:
+                        logger.warning("layout mode_b | room=%r z=%d skipped — no y-space (east, y_max=%d)", room.room_id, room.z_offset, y_max)
+                        room.origin_x = room.origin_y = None
+                        continue
+                    logger.info("layout mode_b | room=%r east depth %d->%d", room.room_id, room.depth, clamped_d)
+                    room.depth = clamped_d
+
+            else:  # west
+                # Extent: x grows west — available = host.origin_x - x_min + 1
+                avail_w = host.origin_x - x_min + 1
+                clamped_w = max(1, min(room.width, avail_w))
+                if clamped_w < 3:
+                    logger.warning("layout mode_b | room=%r z=%d skipped — no x-space (west, x_min=%d)", room.room_id, room.z_offset, x_min)
+                    room.origin_x = room.origin_y = None
+                    continue
+                if clamped_w != room.width:
+                    logger.info("layout mode_b | room=%r west width %d->%d", room.room_id, room.width, clamped_w)
+                    room.width = clamped_w
+                # Cursor: y grows north — clamp depth by y_max
+                if cursor + room.depth - 1 > y_max:
+                    clamped_d = y_max - cursor + 1
+                    if clamped_d < 3:
+                        logger.warning("layout mode_b | room=%r z=%d skipped — no y-space (west, y_max=%d)", room.room_id, room.z_offset, y_max)
+                        room.origin_x = room.origin_y = None
+                        continue
+                    logger.info("layout mode_b | room=%r west depth %d->%d", room.room_id, room.depth, clamped_d)
+                    room.depth = clamped_d
+
+        # Resolve deferred origin components
+        if side == "south":
+            room.origin_y = host.origin_y - room.depth + 1
+        elif side == "west":
+            room.origin_x = host.origin_x - room.width + 1
+
+        # 2×2 interior check — both dims ≤ 2 is not a usable room
+        if (room.width - 2) <= 2 and (room.depth - 2) <= 2:
+            logger.warning(
+                "layout mode_b | room=%r z=%d skipped — interior %dx%d (both dims ≤ 2)",
+                room.room_id, room.z_offset, room.width - 2, room.depth - 2,
+            )
+            room.origin_x = room.origin_y = None
+            continue
+
+        if not _has_conflict(room, all_placed):
+            all_placed.append(room)
+            cursor += (room.width - 1) if horizontal else (room.depth - 1)
+        elif room.required:
+            raise GenerationError(f"Room {room.room_id!r}: no corridor slot ({side})")
+        else:
+            logger.warning("layout mode_b | room=%r z=%d skipped — %s wall full", room.room_id, room.z_offset, side)
+            room.origin_x = room.origin_y = None
+
+
 def _layout_mode_b(
     rooms: list[_RoomInstance],
     all_placed: list[_RoomInstance],
@@ -201,9 +336,11 @@ def _layout_mode_b(
 ) -> None:
     """
     bounds = (x_min, y_min, x_max, y_max) of the level below.
-    When provided, north/south room depths are clamped so they don't
-    exceed the parent level's footprint. Template depth_range is treated
-    as a desired maximum; the generator resolves what actually fits.
+
+    attach_wall values: "north", "south", "east", "west" — explicit side.
+    "both" / "any" — auto-detect from host orientation:
+      horizontal host (width >= depth) → north + south
+      vertical host   (depth > width)  → east  + west
     """
     attach_rooms = [r for r in rooms if r.attach_to is not None and not r.placed]
     if not attach_rooms:
@@ -222,65 +359,16 @@ def _layout_mode_b(
 
         attach_wall = group[0].attach_wall or "both"
 
-        north_side: list[_RoomInstance] = []
-        south_side: list[_RoomInstance] = []
-        for i, room in enumerate(group):
-            if attach_wall == "north":
-                north_side.append(room)
-            elif attach_wall == "south":
-                south_side.append(room)
-            else:  # "both" or "any"
-                (north_side if i % 2 == 0 else south_side).append(room)
-
-        # North side: rooms placed above host, sharing host's north perimeter
-        cursor_x = host.origin_x
-        for room in north_side:
-            room.origin_x = cursor_x
-            room.origin_y = host.origin_y + host.depth - 1  # share north wall
-            if bounds is not None:
-                # clamp depth so north face <= parent level's y_max
-                available = bounds[3] - room.origin_y + 1
-                clamped = max(1, min(room.depth, available))
-                if clamped != room.depth:
-                    logger.info(
-                        "layout mode_b | room=%r north depth %d -> %d (bounds y_max=%d)",
-                        room.room_id, room.depth, clamped, bounds[3],
-                    )
-                    room.depth = clamped
-            if not _has_conflict(room, all_placed):
-                all_placed.append(room)
-                cursor_x += room.width - 1
-            elif room.required:
-                raise GenerationError(f"Room {room.room_id!r}: no corridor slot (north)")
-            else:
-                logger.warning("layout mode_b | room=%r z=%d skipped — corridor north wall full", room.room_id, room.z_offset)
-                room.origin_x = room.origin_y = None
-
-        # South side: rooms placed below host, sharing host's south perimeter
-        cursor_x = host.origin_x
-        for room in south_side:
-            if bounds is not None:
-                # clamp depth so south face >= parent level's y_min
-                # south room's origin_y = host.origin_y - depth + 1, so:
-                # available depth = host.origin_y - bounds[1] + 1
-                available = host.origin_y - bounds[1] + 1
-                clamped = max(1, min(room.depth, available))
-                if clamped != room.depth:
-                    logger.info(
-                        "layout mode_b | room=%r south depth %d -> %d (bounds y_min=%d)",
-                        room.room_id, room.depth, clamped, bounds[1],
-                    )
-                    room.depth = clamped
-            room.origin_x = cursor_x
-            room.origin_y = host.origin_y - room.depth + 1  # share south wall
-            if not _has_conflict(room, all_placed):
-                all_placed.append(room)
-                cursor_x += room.width - 1
-            elif room.required:
-                raise GenerationError(f"Room {room.room_id!r}: no corridor slot (south)")
-            else:
-                logger.warning("layout mode_b | room=%r z=%d skipped — corridor south wall full", room.room_id, room.z_offset)
-                room.origin_x = room.origin_y = None
+        if attach_wall in ("north", "south", "east", "west"):
+            _place_rooms_on_side(attach_wall, group, host, all_placed, bounds)
+        else:  # "both" or "any" — auto-detect from host orientation
+            horizontal = host.width >= host.depth
+            side_a = "north" if horizontal else "east"
+            side_b = "south" if horizontal else "west"
+            side_a_rooms = [group[i] for i in range(0, len(group), 2)]
+            side_b_rooms = [group[i] for i in range(1, len(group), 2)]
+            _place_rooms_on_side(side_a, side_a_rooms, host, all_placed, bounds)
+            _place_rooms_on_side(side_b, side_b_rooms, host, all_placed, bounds)
 
 
 # ---------------------------------------------------------------------------
@@ -300,17 +388,31 @@ def _clip_to_bounds(rooms: list[_RoomInstance], bounds: tuple[int, int, int, int
         # East overhang
         east = room.origin_x + room.width - 1
         if east > x_max:
-            new_w = max(3, x_max - room.origin_x + 1)
-            if new_w != room.width:
-                logger.info(
-                    "clip_to_bounds | room=%r width %d->%d (x_max=%d)",
-                    room.room_id, room.width, new_w, x_max,
+            if room.origin_x > x_max - 2:
+                # No space for even a minimal room — unplace
+                logger.warning(
+                    "clip_to_bounds | room=%r unplaced — origin_x=%d leaves no space (x_max=%d)",
+                    room.room_id, room.origin_x, x_max,
                 )
-                room.width = new_w
+                room.origin_x = room.origin_y = None
+                continue
+            new_w = x_max - room.origin_x + 1
+            logger.info(
+                "clip_to_bounds | room=%r width %d->%d (x_max=%d)",
+                room.room_id, room.width, new_w, x_max,
+            )
+            room.width = new_w
         # West overhang
-        if room.origin_x < x_min:
+        if room.placed and room.origin_x < x_min:
+            if room.origin_x + room.width - 1 < x_min + 2:
+                logger.warning(
+                    "clip_to_bounds | room=%r unplaced — east edge=%d leaves no space (x_min=%d)",
+                    room.room_id, room.origin_x + room.width - 1, x_min,
+                )
+                room.origin_x = room.origin_y = None
+                continue
             overshoot = x_min - room.origin_x
-            new_w = max(3, room.width - overshoot)
+            new_w = room.width - overshoot
             logger.info(
                 "clip_to_bounds | room=%r west overshoot=%d width %d->%d, origin_x %d->%d",
                 room.room_id, overshoot, room.width, new_w, room.origin_x, x_min,
@@ -318,19 +420,34 @@ def _clip_to_bounds(rooms: list[_RoomInstance], bounds: tuple[int, int, int, int
             room.origin_x = x_min
             room.width = new_w
         # North overhang (mode B handles depth pre-clamp; this catches mode A rooms)
+        if not room.placed:
+            continue
         north = room.origin_y + room.depth - 1
         if north > y_max:
-            new_d = max(3, y_max - room.origin_y + 1)
-            if new_d != room.depth:
-                logger.info(
-                    "clip_to_bounds | room=%r depth %d->%d (y_max=%d)",
-                    room.room_id, room.depth, new_d, y_max,
+            if room.origin_y > y_max - 2:
+                logger.warning(
+                    "clip_to_bounds | room=%r unplaced — origin_y=%d leaves no space (y_max=%d)",
+                    room.room_id, room.origin_y, y_max,
                 )
-                room.depth = new_d
+                room.origin_x = room.origin_y = None
+                continue
+            new_d = y_max - room.origin_y + 1
+            logger.info(
+                "clip_to_bounds | room=%r depth %d->%d (y_max=%d)",
+                room.room_id, room.depth, new_d, y_max,
+            )
+            room.depth = new_d
         # South overhang
-        if room.origin_y < y_min:
+        if room.placed and room.origin_y < y_min:
+            if room.origin_y + room.depth - 1 < y_min + 2:
+                logger.warning(
+                    "clip_to_bounds | room=%r unplaced — north edge=%d leaves no space (y_min=%d)",
+                    room.room_id, room.origin_y + room.depth - 1, y_min,
+                )
+                room.origin_x = room.origin_y = None
+                continue
             overshoot = y_min - room.origin_y
-            new_d = max(3, room.depth - overshoot)
+            new_d = room.depth - overshoot
             logger.info(
                 "clip_to_bounds | room=%r south overshoot=%d depth %d->%d, origin_y %d->%d",
                 room.room_id, overshoot, room.depth, new_d, room.origin_y, y_min,

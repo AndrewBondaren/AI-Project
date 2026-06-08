@@ -663,6 +663,7 @@ CREATE TABLE IF NOT EXISTS map_cells (
     temperature_base        INTEGER,
     rainfall                INTEGER,
     location_uid            TEXT,
+    railing_sides           TEXT,
     PRIMARY KEY (world_uid, x, y, z),
     FOREIGN KEY (world_uid)    REFERENCES worlds(world_uid),
     FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid)

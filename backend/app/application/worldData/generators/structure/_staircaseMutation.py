@@ -35,7 +35,7 @@ def _block_size(stair_type: str, z_height: int) -> tuple[int, int]:
         return (1, 2)
     if stair_type == "straight":
         length = max(2, math.ceil(z_height * 1.3))
-        return (1, length)
+        return (2, length)
     return (1, 1)
 
 

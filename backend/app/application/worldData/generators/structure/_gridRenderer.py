@@ -5,27 +5,35 @@ ASCII-визуализация уровня здания.
 from app.db.models.mapCell import MapCell
 
 _SYMBOLS: dict[str, str] = {
-    "wall":      "#",
-    "floor":     ".",
-    "door":      "D",
-    "staircase": "S",
-    "window":    "W",
-    "column":    "C",
-    "railing":   "r",
-    "trapdoor":  "T",
+    "wall":           "#",
+    "floor":          ".",
+    "door":           "D",
+    "staircase":      "S",
+    "staircase_base": "B",
+    "void":           " ",
+    "window":         "W",
+    "column":         "C",
+    "railing":        "r",
+    "trapdoor":       "T",
 }
 
 
-def render_level(cells: list[MapCell], z_target: int) -> str:
+def render_level(
+    cells: list[MapCell],
+    z_target: int,
+    anchor_dirs: dict[tuple[int, int], str] | None = None,
+) -> str:
     """
     Возвращает ASCII-сетку уровня z=z_target.
     Y убывает сверху вниз (север вверху).
+    anchor_dirs: (x,y) → '↑'/'↓'/'↕' — якоря лестниц с направлением.
     Пустая строка если ячеек на этом z нет.
     """
     level_cells = {(c.x, c.y): c for c in cells if c.z == z_target}
     if not level_cells:
         return ""
 
+    anchor_dirs = anchor_dirs or {}
     xs = [x for (x, _) in level_cells]
     ys = [y for (_, y) in level_cells]
     x0, x1 = min(xs) - 1, max(xs) + 1
@@ -36,7 +44,9 @@ def render_level(cells: list[MapCell], z_target: int) -> str:
 
     for y in range(y1, y0 - 1, -1):
         row = "".join(
-            _SYMBOLS.get(level_cells[(x, y)].system_building_element, "?")
+            anchor_dirs[(x, y)] if (x, y) in anchor_dirs and (x, y) in level_cells
+            else "r" if (x, y) in level_cells and level_cells[(x, y)].railing_sides
+            else _SYMBOLS.get(level_cells[(x, y)].system_building_element, "?")
             if (x, y) in level_cells else " "
             for x in range(x0, x1 + 1)
         )
