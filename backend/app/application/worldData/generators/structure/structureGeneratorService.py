@@ -211,6 +211,7 @@ class StructureGeneratorService:
             level      = levels[z_offset]
             level_rooms = instantiate_level_rooms(
                 level_def, template, level.z_height, z_offset, world, rng,
+                building_tier=building.system_economic_tier,
             )
             for room in level_rooms:
                 room_z_offsets[room.room_id] = z_offset
@@ -340,6 +341,7 @@ class StructureGeneratorService:
         # Step 5.5: stairwell mutation — widen narrow rooms before cell generation
         apply_stairwell_mutations(
             connections, all_rooms, room_z_offsets, levels, world, template,
+            building_tier=building.system_economic_tier,
         )
 
         # Step 6–8: assign UIDs + generate cells per level
@@ -375,6 +377,7 @@ class StructureGeneratorService:
             levels, room_z_offsets,
             world.world_uid, building.location_uid, rng,
             world=world, template=template,
+            building_tier=building.system_economic_tier,
         )
         logger.info(
             "generate_from_template | passages=%d total_cells=%d",

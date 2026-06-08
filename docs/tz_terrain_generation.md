@@ -7,6 +7,8 @@ metadata:
   originSessionId: 633eddca-8d16-4119-94ab-ef548d071851
 ---
 
+> **Архитектура нод:** ноды terrain-домена пишут только в `state.terrain_context: TerrainContext` — типизированный контекст на `ExecutionState`. `shared_context` не использовать как канал передачи данных. См. `tz_engine_node_context.md`.
+
 ## Назначение
 
 `TerrainGeneratorService` — чистая утилита (pure stateless, нет репозиториев, нет async).

@@ -78,10 +78,11 @@ def resolve_room_materials(
     template_tier: str | None,
     rng: Random,
     room_id: str = "",
+    building_tier: str | None = None,
 ) -> tuple[str, str]:
     """Возвращает (wall_material, floor_material) для комнаты."""
     tiers = _tiers_sorted(world)
-    effective = room_tier or template_tier or _median_tier(tiers)
+    effective = room_tier or template_tier or building_tier or _median_tier(tiers)
 
     wall  = resolve_material(world, "wall",  effective, rng, _DEFAULT_WALL_MATERIAL,  context=room_id)
     floor = resolve_material(world, "floor", effective, rng, _DEFAULT_FLOOR_MATERIAL, context=room_id)

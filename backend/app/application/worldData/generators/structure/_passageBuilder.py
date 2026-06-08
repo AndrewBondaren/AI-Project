@@ -14,6 +14,7 @@ import math
 import uuid
 from random import Random
 
+from app.application.worldData.generators._economicTierBands import BAND_COMMON, BAND_POOR, band_of
 from app.application.worldData.generators.structure._cellBuilder import _interior
 from app.application.worldData.generators.structure._roomInstance import _RoomInstance
 from app.db.models.locationLevel import LocationLevel
@@ -293,6 +294,7 @@ def _resolve_staircase_type(
     template: dict,
     world: World,
     z_height: int,
+    building_tier: str | None = None,
 ) -> str:
     """
     Auto-resolve staircase_type.
@@ -339,24 +341,12 @@ def _resolve_staircase_type(
     if going_underground or coming_up:
         return "trapdoor"
 
-    tiers = sorted(
-        world.economic_tier_registry or [],
-        key=lambda t: t.get("base_value", 0),
-    )
-    effective_tier = to_room.economic_tier or template.get("economic_tier")
+    effective_tier = to_room.economic_tier or template.get("economic_tier") or building_tier
 
-    tier_count = len(tiers)
-    tier_rank: int | None = None
-    if tiers and effective_tier:
-        for i, t in enumerate(tiers):
-            if t.get("system_tier") == effective_tier:
-                tier_rank = i
-                break
-
-    if (tier_rank is not None
-            and z_height <= 3
-            and tier_rank < math.ceil(tier_count / 3)):
-        return "ladder"
+    if z_height <= 3 and effective_tier:
+        b = band_of(world, effective_tier)
+        if b in (BAND_POOR, BAND_COMMON):
+            return "ladder"
 
     if z_height <= 5:
         return "standard"
@@ -366,13 +356,14 @@ def _resolve_staircase_type(
 _FALLBACK_CHAIN = ["straight", "standard", "spiral_standard", "spiral_small", "ladder"]
 
 
-def _stair_fits(stair_type: str, room: _RoomInstance, z_height: int) -> bool:
+def _stair_fits(stair_type: str, room: _RoomInstance, z_height: int, include_extra: bool = True) -> bool:
     """True если footprint лестницы вписывается во внутренние размеры комнаты.
-    Учитывает extra_cells (stairwell mutation) через реальный footprint."""
+    include_extra=True (default): учитывает extra_cells через реальный footprint.
+    include_extra=False: проверяет базовый размер (до stairwell mutation)."""
     if stair_type in ("ladder", "trapdoor"):
         return True
 
-    if room.extra_cells:
+    if include_extra and room.extra_cells:
         # Use actual footprint interior — extra_cells may have widened the room
         interior = _interior(room.get_footprint())
         if not interior:
@@ -540,6 +531,43 @@ def _stair_anchor(
     return ax, ay
 
 
+def _free_stair_anchor(
+    anchor: tuple[int, int],
+    stair_type: str,
+    z: int,
+    z_height: int,
+    room: _RoomInstance,
+    cells: dict,
+    rng: Random,
+    conn_label: str,
+    role: str,
+) -> tuple[int, int]:
+    """Shift anchor if its staircase footprint overlaps already-placed cells at z.
+    Searches interior cells sorted by distance from original anchor."""
+    interior = set(_interior(room.get_footprint())) or room.get_footprint()
+
+    def fits_free(a: tuple[int, int]) -> bool:
+        fp = set(_stair_footprint(stair_type, a, z_height, rng))
+        return fp <= interior and not any(cells.get((x, y, z)) for (x, y) in fp)
+
+    if fits_free(anchor):
+        return anchor
+
+    for ax, ay in sorted(interior, key=lambda p: abs(p[0] - anchor[0]) + abs(p[1] - anchor[1])):
+        if fits_free((ax, ay)):
+            logger.warning(
+                "staircase %s: %s anchor shifted (%d,%d)->(%d,%d) — overlap with existing staircase",
+                conn_label, role, anchor[0], anchor[1], ax, ay,
+            )
+            return ax, ay
+
+    logger.warning(
+        "staircase %s: %s anchor (%d,%d) overlaps existing staircase, no free slot — keeping original",
+        conn_label, role, anchor[0], anchor[1],
+    )
+    return anchor
+
+
 def _build_staircase(
     conn: dict,
     fr: _RoomInstance,
@@ -552,10 +580,11 @@ def _build_staircase(
     world: World,
     template: dict,
     rng: Random,
+    building_tier: str | None = None,
 ) -> LocationPassage | None:
     z_height   = abs(to_level.z - fr_level.z)
     conn_label = f"{conn['from_room']}->{conn['to_room']}"
-    desired    = _resolve_staircase_type(conn, fr, to, template, world, z_height)
+    desired    = _resolve_staircase_type(conn, fr, to, template, world, z_height, building_tier)
     stair_type = _apply_fit_fallback(desired, to, z_height, conn_label)
     mat        = conn.get("step_material") or fr.floor_material
 
@@ -566,13 +595,13 @@ def _build_staircase(
 
     pos_hint  = conn.get("position")
     to_anchor = _stair_anchor(to, stair_type, pos_hint, rng, z_height)
+    to_anchor = _free_stair_anchor(to_anchor, stair_type, to_level.z, z_height, to, cells, rng, conn_label, "to")
     fr_anchor = _stair_anchor(fr, stair_type, None,     rng, z_height)
+    fr_anchor = _free_stair_anchor(fr_anchor, stair_type, fr_level.z, z_height, fr, cells, rng, conn_label, "fr")
     logger.info(
         "staircase %s: to_anchor=%s (room=%r) fr_anchor=%s (room=%r)",
         conn_label, to_anchor, to.room_id, fr_anchor, fr.room_id,
     )
-    # TODO: staircase anchor overlap — смещать fr_anchor если позиция уже занята
-    #       другой лестницей этой же комнаты (см. описание выше в файле).
 
     z_lo = min(fr_level.z, to_level.z)
     z_hi = max(fr_level.z, to_level.z)
@@ -626,6 +655,7 @@ def build_passages(
     rng: Random,
     world: World | None = None,
     template: dict | None = None,
+    building_tier: str | None = None,
 ) -> list[LocationPassage]:
     logger.info("=== PHASE: build_passages ===")
     passages: list[LocationPassage] = []
@@ -674,7 +704,8 @@ def build_passages(
             # Staircase addresses instance_0 of each side per ТЗ
             p = _build_staircase(conn, fr_list[0], to_list[0], fr_level, to_level,
                                  cells, world_uid, building_uid,
-                                 world or _EMPTY_WORLD, template or {}, rng)
+                                 world or _EMPTY_WORLD, template or {}, rng,
+                                 building_tier=building_tier)
             if p:
                 passages.append(p)
         elif ptype == "archway":

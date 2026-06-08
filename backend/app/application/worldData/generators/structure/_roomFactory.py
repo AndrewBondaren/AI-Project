@@ -100,6 +100,7 @@ def instantiate_level_rooms(
     z_offset: int,
     world: World,
     rng: Random,
+    building_tier: str | None = None,
 ) -> list[_RoomInstance]:
     instances: list[_RoomInstance] = []
 
@@ -120,7 +121,7 @@ def instantiate_level_rooms(
 
         room_tier = room_def.get("economic_tier")
         template_tier = template.get("economic_tier")
-        wall_mat, floor_mat = resolve_room_materials(world, room_tier, template_tier, rng, room_id=room_id)
+        wall_mat, floor_mat = resolve_room_materials(world, room_tier, template_tier, rng, room_id=room_id, building_tier=building_tier)
 
         for idx in range(count):
             suffix = f" {idx + 1}" if count > 1 else ""

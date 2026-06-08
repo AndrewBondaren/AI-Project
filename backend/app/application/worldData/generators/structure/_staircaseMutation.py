@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Helpers (mirror _passageBuilder to avoid circular import)
+# Helpers
 
 def _block_size(stair_type: str, z_height: int) -> tuple[int, int]:
     """(width, depth) of the staircase block footprint."""
@@ -37,21 +37,6 @@ def _block_size(stair_type: str, z_height: int) -> tuple[int, int]:
         length = max(2, math.ceil(z_height * 1.3))
         return (1, length)
     return (1, 1)
-
-
-def _fits(stair_type: str, room: _RoomInstance, z_height: int) -> bool:
-    iw  = max(0, room.width  - 2)
-    id_ = max(0, room.depth  - 2)
-    if stair_type in ("ladder", "trapdoor"):
-        return True
-    if stair_type in ("standard", "spiral_standard"):
-        return iw >= 2 and id_ >= 2
-    if stair_type == "spiral_small":
-        return iw >= 1 and id_ >= 2
-    if stair_type == "straight":
-        length = max(2, math.ceil(z_height * 1.3))
-        return iw >= length or id_ >= length
-    return True
 
 
 # ---------------------------------------------------------------------------
@@ -146,6 +131,7 @@ def apply_stairwell_mutations(
     levels: dict[int, LocationLevel],
     world: World,
     template: dict,
+    building_tier: str | None = None,
 ) -> None:
     """
     Scan staircase connections and mutate to_room where needed.
@@ -154,6 +140,7 @@ def apply_stairwell_mutations(
     """
     from app.application.worldData.generators.structure._passageBuilder import (
         _resolve_staircase_type,
+        _stair_fits,
     )
 
     logger.info("=== PHASE: stairwell_mutation ===")
@@ -185,7 +172,7 @@ def apply_stairwell_mutations(
             continue
 
         z_height = abs(levels[to_offset].z - levels[fr_offset].z)
-        desired  = _resolve_staircase_type(conn, fr_room, to_room, template, world, z_height)
+        desired  = _resolve_staircase_type(conn, fr_room, to_room, template, world, z_height, building_tier)
 
         logger.info(
             "stairwell_mutation | %s->%s: desired=%s to_room=%r size=%dx%d z_height=%d",
@@ -200,7 +187,7 @@ def apply_stairwell_mutations(
             )
             continue
 
-        already_fits = _fits(desired, to_room, z_height)
+        already_fits = _stair_fits(desired, to_room, z_height, include_extra=False)
         if already_fits:
             logger.info(
                 "stairwell_mutation | %s->%s: no mutation needed -- %s already fits",
