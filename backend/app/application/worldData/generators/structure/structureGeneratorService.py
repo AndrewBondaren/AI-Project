@@ -11,10 +11,10 @@ logger = logging.getLogger(__name__)
 from app.application.worldData.generators.structure._cellBuilder import build_level_cells
 from app.application.worldData.generators.structure._errors import GenerationError, UnsupportedShapeError
 from app.application.worldData.generators.structure._layoutEngine import layout_level
-from app.application.worldData.generators.structure._passageBuilder import build_passages, _stair_anchor
+from app.application.worldData.generators.structure._passageBuilder import build_passages
 from app.application.worldData.generators.structure._roomFactory import instantiate_level_rooms
 from app.application.worldData.generators.structure._roomInstance import _RoomInstance
-from app.application.worldData.generators.structure._staircaseMutation import apply_stairwell_mutations
+from app.application.worldData.generators.structure.staircase._base import sw_anchor
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
 from app.db.models.mapCell import MapCell
@@ -315,34 +315,16 @@ class StructureGeneratorService:
                 fr_room = all_placed_by_id.get(fr_id)
                 if fr_room is None:
                     continue
-                to_level  = levels[to_z]
-                z_height  = abs(to_level.z - level.z)
-                stair_type = _infer_stair_type_for_anchor(conn, z_offset, to_z, z_height)
-
-                if fr_id in staircase_destination_rooms:
-                    # fr_room was itself placed via a staircase anchor from the level below.
-                    # Reuse its origin so the upward staircase shares the same XY footprint —
-                    # one continuous shaft with separate entry/exit cells per floor.
-                    anchor = (fr_room.origin_x, fr_room.origin_y)
-                    logger.info(
-                        "generate_from_template | through-staircase z_offset=%d->%d: room=%r reuse origin (%d,%d)",
-                        z_offset, to_z, fr_id, anchor[0], anchor[1],
-                    )
-                else:
-                    anchor = _stair_anchor(fr_room, stair_type, conn.get("position"), rng, z_height)
-                    logger.info(
-                        "generate_from_template | staircase anchor z_offset=%d->%d: room=%r anchor=(%d,%d) type=%s",
-                        z_offset, to_z, fr_id, anchor[0], anchor[1], stair_type,
-                    )
+                anchor = sw_anchor(fr_room)
+                logger.info(
+                    "generate_from_template | staircase anchor z_offset=%d->%d: room=%r anchor=(%d,%d)",
+                    z_offset, to_z, fr_id, anchor[0], anchor[1],
+                )
 
                 level_start[to_z] = anchor
                 staircase_destination_rooms.add(to_id)
 
-        # Step 5.5: stairwell mutation — widen narrow rooms before cell generation
-        apply_stairwell_mutations(
-            connections, all_rooms, room_z_offsets, levels, world, template,
-            building_tier=building.system_economic_tier,
-        )
+        # Step 5.5: stairwell mutation skipped — room size pre-set by template (ТЗ § 8)
 
         # Step 6–8: assign UIDs + generate cells per level
         logger.info("=== PHASE: cell generation ===")
@@ -384,7 +366,12 @@ class StructureGeneratorService:
             len(passages), len(cells_dict),
         )
 
-        # Step 12: assemble result
+        # Step 12: post-processing (railings, windows, …)
+        logger.info("=== PHASE: post_process ===")
+        from app.application.worldData.generators.structure._structurePostProcess import run as post_process
+        post_process(cells_dict)
+
+        # Step 13: assemble result
         logger.info("=== PHASE: assemble result ===")
         placed_rooms = [r for r in all_rooms if r.placed]
         named_locations = [

@@ -9,6 +9,13 @@ from random import Random
 from app.application.worldData.generators.structure._errors import UnsupportedShapeError
 from app.application.worldData.generators.structure._materialResolver import resolve_room_materials
 from app.application.worldData.generators.structure._roomInstance import _RoomInstance
+from app.application.worldData.generators.structure._shapeResolver import SizeShapeResolver
+from app.application.worldData.generators.structure.ladderSize import (
+    STRAIGHT_SIZE_PRESETS, StraightSize,
+    USHAPE_SIZE_PRESETS, UShapeSize,
+    SPIRAL_SIZE_PRESETS, SpiralSize,
+    StaircaseSizePreset,
+)
 from app.application.worldData.generators.structure.roomSize import ROOM_SIZE_PRESETS, RoomSize
 from app.application.worldData.generators.structure.shapeType import ShapeType, _V1_SHAPES
 from app.db.models.world import World
@@ -17,8 +24,16 @@ logger = logging.getLogger(__name__)
 
 _SHAPES_WITHOUT_DEPTH = {ShapeType.SQUARE, ShapeType.CIRCLE, ShapeType.SEMICIRCLE}
 
+_STAIRCASE_PRESETS: dict[str, StaircaseSizePreset] = {
+    **{e.value: p for e, p in STRAIGHT_SIZE_PRESETS.items()},
+    **{e.value: p for e, p in USHAPE_SIZE_PRESETS.items()},
+    **{e.value: p for e, p in SPIRAL_SIZE_PRESETS.items()},
+}
+
 
 def _resolve_shape(room_def: dict, rng: Random) -> ShapeType:
+    if "shape_type" not in room_def:
+        return SizeShapeResolver.from_size_def(room_def.get("size", {}))
     raw = room_def["shape_type"]
     chosen = rng.choice(raw) if isinstance(raw, list) else raw
     try:
@@ -40,7 +55,12 @@ def _resolve_size(
     size = room_def["size"]
     size_type = size.get("size_type")
 
-    if size_type:
+    if size_type and size_type in _STAIRCASE_PRESETS:
+        sc_preset = _STAIRCASE_PRESETS[size_type]
+        wr = sc_preset.width_range
+        dr = sc_preset.depth_range or sc_preset.width_range
+        zr = [level_z_height, level_z_height]
+    elif size_type:
         preset = ROOM_SIZE_PRESETS[RoomSize(size_type)]
         wr = preset.width_range
         dr = preset.depth_range

@@ -66,15 +66,18 @@
       "display_name": "Второй этаж",
       "rooms": [
         {
-          "room_id":      "staircase_room",
-          "room_type":    "stairwell",
-          "display_name": "Лестничная клетка",
-          "shape_type":   "rectangle",
-          "size":         { "width_range": [4, 4], "depth_range": [5, 5] },
-          "required":     true,
-          "count":        1,
-          "is_public":    false,
-          "is_forbidden": false
+          "room_id":        "staircase_room",
+          "room_type":      "stairwell",
+          "staircase_type": "u_shape",
+          "display_name":   "Лестничная клетка",
+          "size":           { "size_type": "sq_medium" },
+          "facing":         "north",
+          "has_walls":      true,
+          "in_a_room":      false,
+          "required":       true,
+          "count":          1,
+          "is_public":      false,
+          "is_forbidden":   false
         },
         {
           "room_id":      "corridor",
@@ -107,15 +110,18 @@
       "display_name": "Третий этаж",
       "rooms": [
         {
-          "room_id":      "staircase_room_2",
-          "room_type":    "stairwell",
-          "display_name": "Лестничная клетка",
-          "shape_type":   "rectangle",
-          "size":         { "width_range": [4, 4], "depth_range": [5, 5] },
-          "required":     true,
-          "count":        1,
-          "is_public":    false,
-          "is_forbidden": false
+          "room_id":        "staircase_room_2",
+          "room_type":      "stairwell",
+          "staircase_type": "u_shape",
+          "display_name":   "Лестничная клетка",
+          "size":           { "size_type": "sq_medium" },
+          "facing":         "north",
+          "has_walls":      true,
+          "in_a_room":      false,
+          "required":       true,
+          "count":          1,
+          "is_public":      false,
+          "is_forbidden":   false
         },
         {
           "room_id":      "corridor_2",

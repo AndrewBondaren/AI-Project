@@ -15,6 +15,7 @@ _SYMBOLS: dict[str, str] = {
     "column":         "C",
     "railing":        "r",
     "trapdoor":       "T",
+    "archway":        "'",
 }
 
 
@@ -45,7 +46,8 @@ def render_level(
     for y in range(y1, y0 - 1, -1):
         row = "".join(
             anchor_dirs[(x, y)] if (x, y) in anchor_dirs and (x, y) in level_cells
-            else "r" if (x, y) in level_cells and level_cells[(x, y)].railing_sides
+            else (level_cells[(x, y)].railing_sides[0].lower() if len(level_cells[(x, y)].railing_sides) == 1 else "r")
+                if (x, y) in level_cells and level_cells[(x, y)].railing_sides
             else _SYMBOLS.get(level_cells[(x, y)].system_building_element, "?")
             if (x, y) in level_cells else " "
             for x in range(x0, x1 + 1)
@@ -65,7 +67,7 @@ def render_level(
              str(abs(x) // (10 ** power) % 10))
             for x in x_range
         )
-        lines.append(f"{pad} {row_label} ")
+        lines.append(f"{pad}{row_label}")
 
     return "\n".join(lines)
 

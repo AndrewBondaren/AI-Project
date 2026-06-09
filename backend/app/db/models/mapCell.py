@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from app.db.mapper import bool_col
+from app.db.mapper import bool_col, json_nullable_col
 
 
 @dataclass
@@ -24,4 +24,4 @@ class MapCell:
     temperature_base:           int | None = None
     rainfall:                   int | None = None
     location_uid:               str | None = None
-    railing_sides:              str | None = None  # comma-separated N/S/E/W faces with a railing
+    railing_sides:              list[str] | None = json_nullable_col(default=None)  # JSON array of faces: ["N"], ["E","N"], etc.

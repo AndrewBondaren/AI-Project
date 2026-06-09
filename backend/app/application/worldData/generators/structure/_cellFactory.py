@@ -1,0 +1,61 @@
+from app.db.models.mapCell import MapCell
+
+
+def _door_cell(x: int, y: int, z: int, world_uid: str, building_uid: str, material: str) -> MapCell:
+    return MapCell(
+        world_uid=world_uid, x=x, y=y, z=z,
+        system_building_element="door",
+        system_material=material,
+        is_structural=False,
+        location_uid=building_uid,
+    )
+
+
+def _stair_cell(x: int, y: int, z: int, world_uid: str, building_uid: str, material: str) -> MapCell:
+    return MapCell(
+        world_uid=world_uid, x=x, y=y, z=z,
+        system_building_element="staircase",
+        system_material=material,
+        is_structural=False,
+        location_uid=building_uid,
+    )
+
+
+def _trapdoor_cell(x: int, y: int, z: int, world_uid: str, building_uid: str, material: str) -> MapCell:
+    return MapCell(
+        world_uid=world_uid, x=x, y=y, z=z,
+        system_building_element="trapdoor",
+        system_material=material,
+        is_structural=False,
+        location_uid=building_uid,
+    )
+
+
+def _void_cell(x: int, y: int, z: int, world_uid: str, building_uid: str) -> MapCell:
+    return MapCell(
+        world_uid=world_uid, x=x, y=y, z=z,
+        system_building_element="void",
+        system_material=None,
+        is_structural=False,
+        location_uid=building_uid,
+    )
+
+
+def _open_cell(x: int, y: int, z: int, world_uid: str, building_uid: str, material: str) -> MapCell:
+    return MapCell(
+        world_uid=world_uid, x=x, y=y, z=z,
+        system_building_element="archway",
+        system_material=material,
+        is_structural=False,
+        location_uid=building_uid,
+    )
+
+
+def _floor_cell(x: int, y: int, z: int, world_uid: str, building_uid: str, material: str) -> MapCell:
+    return MapCell(
+        world_uid=world_uid, x=x, y=y, z=z,
+        system_building_element="floor",
+        system_material=material,
+        is_structural=False,
+        location_uid=building_uid,
+    )

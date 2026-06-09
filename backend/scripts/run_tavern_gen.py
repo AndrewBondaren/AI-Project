@@ -97,7 +97,7 @@ for rc in sorted(railing_cells):
     print(f"    ({rc[0]},{rc[1]},z={rc[2]}) {rc[3]}")
 
 from app.application.worldData.generators.structure._gridRenderer import render_level, render_all_levels
-from app.application.worldData.generators.structure._passageBuilder import _spiral_perimeter
+from app.application.worldData.generators.structure.staircase._spiral import spiral_perimeter as _spiral_perimeter
 
 level_uid_to_z = {lvl.level_uid: lvl.z for lvl in layout.levels}
 anchor_dirs_by_z: dict[int, dict[tuple[int, int], str]] = {}
@@ -111,7 +111,7 @@ def _add_dir(z, x, y, direction):
         return
     d = anchor_dirs_by_z.setdefault(z, {})
     existing = d.get((x, y))
-    d[(x, y)] = "↕" if (existing and existing != direction) else direction
+    d[(x, y)] = direction
 
 for p in layout.passages:
     if p.system_passage_type != "staircase":
@@ -121,12 +121,16 @@ for p in layout.passages:
     if fr_z is None or to_z is None or p.from_x is None:
         continue
 
-    # Спиральная лестница: from_anchor == to_anchor
-    if p.from_x == p.to_x and p.from_y == p.to_y:
+    # Spiral: to=(anchor/SW-corner), from=(exit cell) — both inside same 2×2 block.
+    # Detect by checking if from is on the perimeter of the 2×2 block at to.
+    _perim_test = _spiral_perimeter(p.to_x, p.to_y, 3, 3)
+    if (p.from_x, p.from_y) in _perim_test:
         z_lo_p, z_hi_p = min(fr_z, to_z), max(fr_z, to_z)
         z_h = z_hi_p - z_lo_p
-        perimeter = _spiral_perimeter(p.to_x, p.to_y, 2, 2)
+        start_off = _perim_test.index((p.from_x, p.from_y))
+        perimeter = _spiral_perimeter(p.to_x, p.to_y, 3, 3, start_off)
         n = len(perimeter)
+        entry_x, entry_y = perimeter[0]
         # Trail-стрелки: ступень k → trail на z_s+1
         for k in range(z_h):
             sx, sy = perimeter[(k + 1) % n]
@@ -135,9 +139,9 @@ for p in layout.passages:
             z_trail = z_lo_p + k + 1
             if z_lo_p <= z_trail < z_hi_p:
                 anchor_dirs_by_z.setdefault(z_trail, {})[(sx, sy)] = sym
-        # Вход C0 на z_lo, выход perimeter[z_h % n] на z_hi
+        # Вход perimeter[0] на z_lo, выход perimeter[z_h%n] на z_hi
         ex, ey = perimeter[z_h % n]
-        _add_dir(z_lo_p, p.to_x, p.to_y, "↑" if to_z > fr_z else "↓")
+        _add_dir(z_lo_p, entry_x, entry_y, "↑" if to_z > fr_z else "↓")
         _add_dir(z_hi_p, ex, ey, "↓" if fr_z < to_z else "↑")
     else:
         _add_dir(fr_z, p.from_x, p.from_y, "↑" if to_z > fr_z else "↓")
