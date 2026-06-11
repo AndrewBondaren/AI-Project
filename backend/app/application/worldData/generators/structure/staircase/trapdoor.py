@@ -1,8 +1,8 @@
 """
 Trapdoor builder — 1×1 люк в полу для перехода поверхность ↔ подземный уровень.
 """
-from app.application.worldData.generators.structure._cellFactory import _trapdoor_cell
-from app.application.worldData.generators.structure.staircase._base import (
+from app.application.worldData.generators.structure.cellFactory import _trapdoor_cell
+from app.application.worldData.generators.structure.staircase.base import (
     StaircaseBuilder, sw_anchor,
 )
 

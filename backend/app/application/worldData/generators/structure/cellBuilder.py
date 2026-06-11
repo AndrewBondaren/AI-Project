@@ -19,7 +19,7 @@ Pass 3 — walls:
 z_height: pass 3 walls are repeated for every z in [z_base, z_base + z_height - 1].
   Floor (Pass 2) is generated only at z_base.
 """
-from app.application.worldData.generators.structure._roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.roomInstance import _RoomInstance
 from app.db.models.mapCell import MapCell
 
 _NEIGHBOURS = ((1, 0), (-1, 0), (0, 1), (0, -1))

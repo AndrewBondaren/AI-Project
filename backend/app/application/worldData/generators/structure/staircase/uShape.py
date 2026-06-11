@@ -7,16 +7,18 @@ import math
 import random
 from dataclasses import dataclass
 
-from app.application.worldData.generators.structure._cellBuilder import _interior
-from app.application.worldData.generators.structure._cellFactory import (
+from app.application.worldData.generators.structure.cellBuilder import _interior
+from app.application.worldData.generators.structure.cellFactory import (
     _stair_cell, _stair_anchor_cell, _stair_floor_cell, _floor_cell, _void_cell,
 )
-from app.application.worldData.generators.structure.staircase._base import (
+from app.application.worldData.generators.structure.staircase.base import (
     StaircaseBuilder, check_headroom,
 )
-from app.application.worldData.generators.structure.staircase._validator import (
-    validate_u_shape_anchors,
+from app.application.worldData.generators.structure.staircase.validator import (
+    UShapeValidator,
 )
+
+_validator = UShapeValidator()
 
 
 # Initial march direction per TZ facing (facing = far end direction)
@@ -320,13 +322,19 @@ class UShapeBuilder(StaircaseBuilder):
                 f"candidates_checked={debug_types!r}"
             )
 
-        validate_u_shape_anchors(
-            fr_anchor, to_anchor,
+        _shaft_fp = set(self.shaft.get_footprint()) if self.shaft is not None else set()
+        _shaft_int = set(_interior(self.shaft.get_footprint())) if self.shaft is not None else set()
+        _validator.validate(
+            fr_anchor=fr_anchor,
+            to_anchor=to_anchor,
             last_stair=(lx, ly),
             exit_v=(Vx, Vy),
             z_lo=self.z_lo, z_top=self.z_top,
             cells=self.cells,
             conn_label=self.conn_label,
+            shaft_footprint=_shaft_fp,
+            shaft_interior=_shaft_int,
+            facing=facing,
         )
 
         return fr_anchor, to_anchor

@@ -6,11 +6,11 @@
 import logging
 from random import Random
 
-from app.application.worldData.generators.structure._errors import UnsupportedShapeError
-from app.application.worldData.generators.structure._materialResolver import resolve_room_materials
-from app.application.worldData.generators.structure._roomInstance import _RoomInstance
-from app.application.worldData.generators.structure._shapeResolver import SizeShapeResolver
-from app.application.worldData.generators.structure.ladderSize import (
+from app.application.worldData.generators.structure.errors import UnsupportedShapeError
+from app.application.worldData.generators.structure.materialResolver import resolve_room_materials
+from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.shapeResolver import SizeShapeResolver
+from app.application.worldData.generators.structure.staircase.staircaseSize import (
     STRAIGHT_SIZE_PRESETS, StraightSize,
     USHAPE_SIZE_PRESETS, UShapeSize,
     SPIRAL_SIZE_PRESETS, SpiralSize,

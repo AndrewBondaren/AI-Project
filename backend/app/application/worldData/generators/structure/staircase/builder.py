@@ -7,12 +7,12 @@ Staircase builder — оркестратор.
 import logging
 import uuid
 
-from app.application.worldData.generators.structure._roomInstance import _RoomInstance
-from app.application.worldData.generators.structure.staircase._straight  import StraightBuilder
-from app.application.worldData.generators.structure.staircase._uShape    import UShapeBuilder
-from app.application.worldData.generators.structure.staircase._spiral    import SpiralBuilder
-from app.application.worldData.generators.structure.staircase._trapdoor  import TrapdoorBuilder
-from app.application.worldData.generators.structure.staircase._base      import StaircaseBuilder
+from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.staircase.straight  import StraightBuilder
+from app.application.worldData.generators.structure.staircase.uShape    import UShapeBuilder
+from app.application.worldData.generators.structure.staircase.spiral    import SpiralBuilder
+from app.application.worldData.generators.structure.staircase.trapdoor  import TrapdoorBuilder
+from app.application.worldData.generators.structure.staircase.base      import StaircaseBuilder
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
 from app.db.models.mapCell import MapCell

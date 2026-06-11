@@ -15,8 +15,8 @@ Interior = full bbox shrunk by 1 on each side (excludes perimeter).
 import logging
 from collections import deque
 
-from app.application.worldData.generators.structure._errors import GenerationError
-from app.application.worldData.generators.structure._roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.errors import GenerationError
+from app.application.worldData.generators.structure.roomInstance import _RoomInstance
 
 logger = logging.getLogger(__name__)
 

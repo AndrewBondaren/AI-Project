@@ -2,7 +2,7 @@
 Spiral staircase — путь по периметру квадратного void-пространства.
 ТЗ: docs/tz_staircase_generation.md § 6
 """
-from app.application.worldData.generators.structure.staircase._base import StaircaseBuilder
+from app.application.worldData.generators.structure.staircase.base import StaircaseBuilder
 
 
 def spiral_perimeter(ax: int, ay: int, W: int, H: int, start: int = 0) -> list[tuple[int, int]]:

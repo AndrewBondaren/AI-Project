@@ -8,16 +8,16 @@ from random import Random
 
 logger = logging.getLogger(__name__)
 
-from app.application.worldData.generators.structure._cellBuilder import build_level_cells
-from app.application.worldData.generators.structure._errors import GenerationError, UnsupportedShapeError
-from app.application.worldData.generators.structure._layoutEngine import layout_level
-from app.application.worldData.generators.structure._passageBuilder import build_passages
-from app.application.worldData.generators.structure._roomFactory import instantiate_level_rooms
-from app.application.worldData.generators.structure._roomInstance import _RoomInstance
-from app.application.worldData.generators.structure.staircase._shaftFactory import (
+from app.application.worldData.generators.structure.cellBuilder import build_level_cells
+from app.application.worldData.generators.structure.errors import GenerationError, UnsupportedShapeError
+from app.application.worldData.generators.structure.layoutEngine import layout_level
+from app.application.worldData.generators.structure.passages import build_passages
+from app.application.worldData.generators.structure.roomFactory import instantiate_level_rooms
+from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.staircase.shaftFactory import (
     instantiate_shaft_rooms, _NO_SHAFT_TYPES,
 )
-from app.application.worldData.generators.structure.staircase._shaftPlacer import make_shaft_placer
+from app.application.worldData.generators.structure.staircase.shaftPlacer import make_shaft_placer
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
 from app.db.models.mapCell import MapCell
@@ -424,7 +424,7 @@ class StructureGeneratorService:
 
         # Step 12: post-processing (railings, windows, …)
         logger.info("=== PHASE: post_process ===")
-        from app.application.worldData.generators.structure._structurePostProcess import run as post_process
+        from app.application.worldData.generators.structure.structurePostProcess import run as post_process
         post_process(cells_dict)
 
         # Step 13: assemble result

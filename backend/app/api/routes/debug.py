@@ -12,7 +12,7 @@ from app.api.utils.json_resolver import JsonResolver
 from app.application.worldData.generators.structure.structureGeneratorService import (
     StructureGeneratorService,
 )
-from app.application.worldData.generators.structure._gridRenderer import render_all_levels
+from app.application.worldData.generators.structure.gridRenderer import render_all_levels
 from app.db.models.namedLocation import NamedLocation
 from datetime import datetime, timezone
 

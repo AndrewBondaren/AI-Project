@@ -3,8 +3,8 @@ Base staircase builder. Each type inherits and implements build().
 """
 from abc import ABC, abstractmethod
 
-from app.application.worldData.generators.structure._cellBuilder import _interior
-from app.application.worldData.generators.structure._roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.cellBuilder import _interior
+from app.application.worldData.generators.structure.roomInstance import _RoomInstance
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.mapCell import MapCell
 

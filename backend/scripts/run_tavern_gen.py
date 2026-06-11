@@ -109,7 +109,7 @@ if _stair_cells:
 else:
     print("  (нет ячеек)")
 
-from app.application.worldData.generators.structure._gridRenderer import render_level, render_all_levels
+from app.application.worldData.generators.structure.gridRenderer import render_level, render_all_levels
 
 level_uid_to_z = {lvl.level_uid: lvl.z for lvl in layout.levels}
 anchor_dirs_by_z: dict[int, dict[tuple[int, int], str]] = {}

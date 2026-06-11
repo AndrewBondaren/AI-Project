@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.application.worldData.generators.structure._shapes import room_footprint
+from app.application.worldData.generators.structure.shapes import room_footprint
 
 
 @dataclass

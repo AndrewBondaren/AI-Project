@@ -2,7 +2,7 @@
 Straight staircase — один марш, строго одно направление.
 ТЗ: docs/tz_staircase_generation.md § 4
 """
-from app.application.worldData.generators.structure.staircase._base import StaircaseBuilder
+from app.application.worldData.generators.structure.staircase.base import StaircaseBuilder
 
 
 class StraightBuilder(StaircaseBuilder):
