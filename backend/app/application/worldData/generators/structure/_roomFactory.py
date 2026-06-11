@@ -168,6 +168,9 @@ def instantiate_level_rooms(
                 entry_point=room_def.get("entry_point"),
                 back_entry_point=room_def.get("back_entry_point"),
                 shape_params=shape_params,
+                staircase_type=room_def.get("staircase_type"),
+                facing=room_def.get("facing"),
             ))
+            logger.info("factory | %r staircase_type=%r", room_id, room_def.get("staircase_type"))
 
     return instances

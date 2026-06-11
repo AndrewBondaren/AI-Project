@@ -52,7 +52,8 @@
 | `underground_expansion` | int | optional | Макс. расширение подземных уровней за границы ground floor footprint в ячейках. Default: `2`. Защита от конфликта с соседними зданиями |
 | `foundation_depth` | int | optional | Глубина фундамента в z-юнитах. Default: `1`. Передаётся в `StructureContext` если не задан явно (`context.foundation_depth ?? template.foundation_depth ?? 1`) |
 | `levels` | array | required | Массив уровней, минимум 1 |
-| `connections` | array | required | Межкомнатные связи и лестницы |
+| `connections` | array | optional | Горизонтальные межкомнатные связи (doorway, archway). Лестницы сюда не входят. Комнаты с `attach_to` генерируют проход имплицитно — их можно не перечислять здесь. |
+| `staircases` | array | optional | Вертикальные связи (лестницы). Каждая лестница объявляет `stops` — упорядоченный список room_id снизу вверх. Shaft автогенерируется и не объявляется в `levels[].rooms`. Если не задан — авто-резолв (раздел 8.8). |
 
 `entry_point` и `back_entry_point` объявляются **на комнате** (поле `entry_point` / `back_entry_point` в room-объекте), не на верхнем уровне шаблона.
 
@@ -129,6 +130,7 @@ level_z = level.z_height ?? max(room_z for room in level.rooms)
 | `perimeter_required` | bool | optional | Комната должна касаться внешней стены здания. Default: `false`. Принудительно `true` если объявлен `entry_point` или `back_entry_point` (см. правило ниже) |
 | `attach_to` | string | optional | `room_id` комнаты-хоста (коридора); эта комната прикрепляется вдоль его стены |
 | `attach_wall` | string | conditional | Обязателен если `attach_to` задан. `"north"`, `"south"`, `"east"`, `"west"`, `"both"`, `"any"` |
+| `passage_type` | string | optional | Тип прохода к комнате-хосту при `attach_to`. Default: `"doorway"`. Заменяет явный connection entry. |
 | `max_overhang` | int | optional | Макс. выступ за границы ground floor footprint в ячейках. Default: `0`. Разрешён только для `room_type: "balcony"`. Без `has_column`: не более 2. С `has_column`: не более 4 |
 | `has_column` | bool | optional | Балкон опирается на колонны. Увеличивает лимит `max_overhang` до 4. Генератор размещает ячейки `column` на ground floor под выступающими углами балкона |
 | `economic_tier` | string | optional | Переопределяет экономический уровень для этой комнаты. Если не задан — берётся из шаблона |
@@ -332,20 +334,21 @@ porch_material = context.porch_material ?? building.parent_floor_material
 
 ### 3.7 Поля connection
 
+`connections` содержит только **горизонтальные** связи между комнатами на одном уровне.
+Лестницы объявляются в `staircases` (раздел 3.7b). `passage_type: "staircase"` в connections запрещён.
+
+Комнаты с `attach_to` не требуют явной connection-записи — проход имплицитен через поле `passage_type` комнаты (раздел 3.4).
+
 | Поле | Тип | Описание |
 |------|-----|----------|
 | `from_room` | string | `room_id` источника |
-| `to_room` | string | `room_id` цели |
-| `passage_type` | string | `doorway`, `staircase`, `archway`, etc. |
+| `to_room` | string | `room_id` цели. Оба должны быть на одном `z_offset`. |
+| `passage_type` | string | `doorway`, `archway`. `staircase` запрещён — используй `staircases[]`. |
 | `required` | bool | Если обе комнаты сгенерированы — проход обязателен |
-| `width` | int | optional. Только для `doorway`/`archway`. Ширина проёма в ячейках. Default: `1` |
-| `door_height` | int | optional. Только для `doorway`/`archway`. Явная высота проёма. Если не задана — тот же авто-резолв что в `entry_point` |
+| `width` | int | optional. Ширина проёма в ячейках. Default: `1` |
+| `door_height` | int | optional. Явная высота проёма. Если не задана — тот же авто-резолв что в `entry_point` |
 | `frame_material` | string\|null | optional. Материал дверной коробки / арки. Fallback: `wall_material` from_room |
 | `panel_material` | string\|null | optional. Только для `doorway`. Материал дверного полотна. Fallback: `economic_tier` → `material_registry`. `null` = проём без двери |
-| `step_material` | string\|null | optional. Только для `staircase`. Материал ступеней. Fallback: `floor_material` from_room |
-| `railing_material` | string\|null | optional. Только для `staircase`. Материал поручня. `null` = без поручня. Fallback: `economic_tier` → `material_registry` |
-| `position` | string | optional. Только для `staircase`. Позиция ячейки лестницы внутри `to_room`: `"center"`, `"north"`, `"south"`, `"east"`, `"west"`, `"northwest"`, `"northeast"`, `"southwest"`, `"southeast"`. Если не задан — авто-резолв |
-| `staircase_type` | string | optional. Только для `staircase`. Тип лестницы (см. раздел 3.9). Если не задан — авто-резолв по `z_height` |
 
 **Fallback материалов:**
 
@@ -374,6 +377,80 @@ mid = len(shared_segment) // 2
 
 Если одна из комнат не была сгенерирована (например, пропущена из-за ограничений footprint верхнего этажа) — connection пропускается.  
 Для `staircase`: `from_level_uid.z ≠ to_level_uid.z`; ячейка типа `staircase` на обоих уровнях.
+
+---
+
+### 3.7b Поля staircase (массив `staircases`)
+
+Лестница объявляется как отдельная сущность, не как комната. Shaft (шахта) автогенерируется.
+
+| Поле | Тип | Обязательность | Описание |
+|------|-----|---------------|----------|
+| `staircase_id` | string | optional | Локальный ID для отладки и логов. Авто: `"staircase_{from}_{to}"` |
+| `staircase_type` | string | optional | Тип лестницы (см. раздел 3.9). Авто-резолв по `z_height` если не задан |
+| `size` | object | optional | Размер shaft (см. раздел 3.5). Авто-резолв если не задан |
+| `facing` | string | optional | Сторона выхода shaft к `to_room`. `"north"`, `"south"`, `"east"`, `"west"`. Авто-резолв по позиции to_room если не задан |
+| `has_walls` | bool | optional | Shaft замкнут стенами. Default: `true`. При `false` — shaft обязан быть внутри здания. |
+| `outside` | bool | optional | Только при `has_walls: true`. Default: `false`. При `true` — shaft edge-mounted: три стороны снаружи, внешние стены заменяются на floor, facing-сторона через archway к зданию. |
+| `in_a_room` | bool | optional | Shaft embedded внутри помещения. Default: `false`. Несовместим с `outside: true`. |
+| `embed_in` | string | conditional | `room_id` родителя при `in_a_room: true` |
+| `stops` | string[] | required | Упорядоченный список `room_id` снизу вверх. Минимум 2 элемента. Генератор создаёт один shaft-сегмент на каждую соседнюю пару. |
+
+**Правило `stops`:**
+
+```
+"stops": ["main_hall", "corridor", "corridor_2"]
+→ сегмент 1: shaft между main_hall (z=0) и corridor (z=3)
+→ сегмент 2: shaft между corridor (z=3) и corridor_2 (z=6)
+→ оба сегмента выровнены по XY (одна непрерывная шахта)
+```
+
+Shaft позиционируется так, чтобы `facing`-сторона shaft прилегала к стене `to_room`.
+Архитектурное следствие: shaft всегда смежен с комнатой назначения, никогда не стоит посреди уровня.
+
+Якоря (`fr_anchor`, `to_anchor`) всегда на `facing`-стороне shaft.
+
+**Размещение shaft по `outside`:**
+
+| `outside` | Поведение генератора |
+|---|---|
+| `false` | Shaft размещается как обычная комната. Прочие стороны могут быть interior или exterior. |
+| `true` | Shaft форсированно edge-mounted. Три стороны за периметром здания. Facing-сторона = единственная interior-стена (archway). Exterior стены shaft заменяются на `floor`. |
+
+```
+outside: true, facing=east:
+
+[exterior]
+┌──────┐
+│shaft │──archway──[corridor]──[rooms...]
+└──────┘
+[exterior]
+```
+
+Переход shaft → to_room (archway при `has_walls: true`) создаётся **автоматически** — объявлять его в `connections` не нужно.
+
+Shaft НЕ генерирует пол внутри interior. Пол на `z_top` предоставляет `to_room`.
+
+**Пример — многоэтажная таверна:**
+
+```json
+"staircases": [
+  {
+    "staircase_id":   "main_staircase",
+    "staircase_type": "u_shape",
+    "size":           { "size_type": "sq_small" },
+    "facing":         "north",
+    "stops":          ["main_hall", "corridor", "corridor_2"]
+  },
+  {
+    "staircase_id":   "cellar_staircase",
+    "staircase_type": "u_shape",
+    "size":           { "size_type": "sq_small" },
+    "facing":         "north",
+    "stops":          ["kitchen", "cellar"]
+  }
+]
+```
 
 ---
 
@@ -821,7 +898,8 @@ window_z = level.window_z_offset                      -- явный override (п
           "required":     false,
           "count_range":  [2, 6],
           "attach_to":    "corridor",
-          "attach_wall":  "both"
+          "attach_wall":  "both",
+          "passage_type": "doorway"
         }
       ]
     }
@@ -833,24 +911,23 @@ window_z = level.window_z_offset                      -- явный override (п
       "to_room":      "kitchen",
       "passage_type": "doorway",
       "required":     true
+    }
+  ],
+
+  "staircases": [
+    {
+      "staircase_id":   "main_staircase",
+      "staircase_type": "u_shape",
+      "size":           { "size_type": "sq_small" },
+      "facing":         "north",
+      "stops":          ["main_hall", "corridor"]
     },
     {
-      "from_room":    "main_hall",
-      "to_room":      "cellar",
-      "passage_type": "staircase",
-      "required":     true
-    },
-    {
-      "from_room":    "main_hall",
-      "to_room":      "corridor",
-      "passage_type": "staircase",
-      "required":     true
-    },
-    {
-      "from_room":    "corridor",
-      "to_room":      "guest_room",
-      "passage_type": "doorway",
-      "required":     true
+      "staircase_id":   "cellar_staircase",
+      "staircase_type": "u_shape",
+      "size":           { "size_type": "sq_small" },
+      "facing":         "north",
+      "stops":          ["cellar", "main_hall"]
     }
   ]
 }
@@ -1437,24 +1514,40 @@ from_level_uid    = level_uid(level_of(connection.from_room))
 to_level_uid      = level_uid(level_of(connection.to_room))
 ```
 
-**`staircase`:**
-- `from_level_uid.z ≠ to_level_uid.z` — обязательное условие; нарушение → `ValidationError`
-- Если `count_range > 1` у целевой комнаты — connection адресует instance_0 (первый экземпляр)
+**Лестницы (`staircases[]`):**
 
-Позиция staircase-ячейки в `to_room` — из поля `position` на connection. Если `position` не задан:
+Каждая запись в `staircases[]` порождает один или несколько `LocationPassage` типа `staircase`.
+Для N stops: N−1 пар → N−1 пассажей.
+
+```
+for i in range(len(stops) - 1):
+    fr_room = stops[i]
+    to_room = stops[i + 1]
+    assert level_of(fr_room).z < level_of(to_room).z   -- stops упорядочены снизу вверх
+    create LocationPassage(staircase, fr_room, to_room)
+    place shaft segment between fr_room and to_room
+```
+
+Shaft для каждой пары `(fr_room, to_room)`:
+- z_lo = fr_room.level.z, z_top = to_room.level.z
+- Позиция XY: shaft прилегает к `to_room` с `facing`-стороны
+- Все сегменты одной лестницы выровнены по XY (одна вертикальная колонна)
+
+`fr_anchor` (from_room side), `to_anchor` (to_room side):
 ```
 to_room.room_type == "corridor"              → edge (west или east, rng.choice)
 to_room.room_type IN ("common_hall", "hall") → center
 иначе                                        → edge
 ```
 
-Позиция staircase-ячейки в `from_room` — симметрично: тот же приоритет по room_type from_room.
+`to_anchor` — ячейка `floor` в `to_room` на `z_top` непосредственно у shaft-opening.
+`fr_anchor` — ячейка `stair_anchor` в shaft на `z_lo`, примыкающая к fr_room.
 
-> Детальная 3D-модель ячеек лестниц — см. раздел 3.9.1.
+> Детальная 3D-модель ячеек лестниц — см. раздел 3.9.1. Параметры shaft — см. tz_staircase_generation.md.
 
 **Авто-резолв staircase (fallback):**
 
-Если уровень `isolated=false` и ни один `staircase`-connection к нему не объявлен:
+Если уровень `isolated=false` и ни одна запись `staircases[]` не адресует этот уровень:
 ```
 log WARNING "Уровень '{display_name}': staircase не объявлен — авто-резолв"
 
@@ -1465,7 +1558,7 @@ to_room = первая комната с room_type "corridor"
 
 from_room = комната смежного уровня по той же приоритетной цепочке
 ```
-Авто-резолв создаёт `LocationPassage` типа `staircase` и staircase-ячейки аналогично явному connection.
+Авто-резолв создаёт shaft с параметрами по умолчанию и `LocationPassage` типа `staircase`.
 
 **`entry_point` / `back_entry_point`:**
 - `LocationPassage` с `from_level_uid = null` (внешнее пространство) → `to_level_uid` уровня комнаты
@@ -1509,6 +1602,8 @@ class BuildingGeneratorService:
 - Не более одной комнаты с `back_entry_point`
 - `entry_point.room_id` и `back_entry_point.room_id` существуют в `levels[].rooms`
 - Все `connections[].from_room` и `.to_room` существуют в `levels[].rooms`
+- `connections[].passage_type == "staircase"` → `ValidationError` ("используй staircases[]")
+- `connection.from_room` и `.to_room` на разных `z_offset` → `ValidationError` ("горизонтальные связи только на одном уровне; вертикальные — в staircases[]")
 - `attach_to` комнаты ссылается на `room_id` того же уровня
 - `size.size_type` + `size.width_range`/`size.depth_range` одновременно → ValidationError
 - `size.size_type` отсутствует и `size.width_range` не задан → ValidationError
@@ -1525,11 +1620,13 @@ class BuildingGeneratorService:
 - Комната с `attach_to` + `entry_point`/`back_entry_point` → ValidationWarning (архитектурно некорректно)
 - `perimeter_required: true` + degree в connection-графе > 1 → ValidationWarning (периметр не гарантирован)
 - Циклы в connection-графе (intra-level doorway/archway) → `ValidationWarning`; генератор пытается разместить геометрически (см. ниже)
-- `connection.passage_type == "staircase"` + `from_room` и `to_room` на одном `z_offset` → ValidationError
-- `staircase_type` не из `{"ladder", "spiral_small", "spiral_standard", "standard", "straight"}` → ValidationError
-- `staircase_type` задан на non-staircase connection → ValidationWarning (игнорируется)
-- `position` задан на non-staircase connection → ValidationWarning (игнорируется)
-- `connection.passage_type != "staircase"` + `from_room` и `to_room` на разных `z_offset` → ValidationError
+- `staircases[].stops` < 2 элементов → `ValidationError`
+- `outside: true` + `has_walls: false` → `ValidationError` ("outside требует has_walls: true")
+- `outside: true` + `in_a_room: true` → `ValidationError` ("outside и in_a_room несовместимы")
+- Все `stops[]` элементы существуют в `levels[].rooms` → иначе `ValidationError`
+- `stops` не упорядочены по возрастанию z → `ValidationError` ("stops должны идти снизу вверх")
+- `staircase_type` не из `{"ladder", "spiral_small", "spiral_standard", "standard", "straight", "u_shape"}` → ValidationError
+- `staircase` room_type в `levels[].rooms` → `ValidationError` ("shaft не объявляется в rooms; используй staircases[]")
 - `connection` к `room_id` с `count_range > 1` → ValidationWarning (адресует instance_0)
 - `max_overhang > 0` допустим только для `room_type: "balcony"`
 - `max_overhang > 2` требует `has_column: true`

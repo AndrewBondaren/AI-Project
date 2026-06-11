@@ -25,3 +25,5 @@ class MapCell:
     rainfall:                   int | None = None
     location_uid:               str | None = None
     railing_sides:              list[str] | None = json_nullable_col(default=None)  # JSON array of faces: ["N"], ["E","N"], etc.
+    system_facing:              str | None = None   # cardinal direction this cell faces/moves toward (north/south/east/west)
+    display_facing:             str | None = None   # localised label for system_facing ("север", "к выходу", …)

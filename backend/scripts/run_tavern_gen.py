@@ -96,8 +96,20 @@ print(f"  [railing cells: {len(railing_cells)}]")
 for rc in sorted(railing_cells):
     print(f"    ({rc[0]},{rc[1]},z={rc[2]}) {rc[3]}")
 
+print("\n--- Лестница: все ячейки ---")
+_STAIR_TYPES = {"staircase", "stair_anchor", "stair_floor"}
+_stair_cells = sorted(
+    [(c.x, c.y, c.z, c.system_building_element) for c in layout.cells
+     if c.system_building_element in _STAIR_TYPES],
+    key=lambda c: (c[2], c[0], c[1]),
+)
+if _stair_cells:
+    for _x, _y, _z, _t in _stair_cells:
+        print(f"  ({_x},{_y},z={_z:+d}) {_t}")
+else:
+    print("  (нет ячеек)")
+
 from app.application.worldData.generators.structure._gridRenderer import render_level, render_all_levels
-from app.application.worldData.generators.structure.staircase._spiral import spiral_perimeter as _spiral_perimeter
 
 level_uid_to_z = {lvl.level_uid: lvl.z for lvl in layout.levels}
 anchor_dirs_by_z: dict[int, dict[tuple[int, int], str]] = {}
@@ -109,10 +121,9 @@ _MOVE_SYM: dict[tuple[int, int], str] = {
 def _add_dir(z, x, y, direction):
     if z is None or x is None:
         return
-    d = anchor_dirs_by_z.setdefault(z, {})
-    existing = d.get((x, y))
-    d[(x, y)] = direction
+    anchor_dirs_by_z.setdefault(z, {})[x, y] = direction
 
+# Entry/exit arrows from passage endpoints
 for p in layout.passages:
     if p.system_passage_type != "staircase":
         continue
@@ -120,32 +131,53 @@ for p in layout.passages:
     to_z = level_uid_to_z.get(p.to_level_uid)
     if fr_z is None or to_z is None or p.from_x is None:
         continue
+    _add_dir(fr_z, p.from_x, p.from_y, "↑" if to_z > fr_z else "↓")
+    _add_dir(to_z, p.to_x, p.to_y, "↓" if fr_z < to_z else "↑")
 
-    # Spiral: to=(anchor/SW-corner), from=(exit cell) — both inside same 2×2 block.
-    # Detect by checking if from is on the perimeter of the 2×2 block at to.
-    _perim_test = _spiral_perimeter(p.to_x, p.to_y, 3, 3)
-    if (p.from_x, p.from_y) in _perim_test:
-        z_lo_p, z_hi_p = min(fr_z, to_z), max(fr_z, to_z)
-        z_h = z_hi_p - z_lo_p
-        start_off = _perim_test.index((p.from_x, p.from_y))
-        perimeter = _spiral_perimeter(p.to_x, p.to_y, 3, 3, start_off)
-        n = len(perimeter)
-        entry_x, entry_y = perimeter[0]
-        # Trail-стрелки: ступень k → trail на z_s+1
-        for k in range(z_h):
-            sx, sy = perimeter[(k + 1) % n]
-            nx, ny = perimeter[(k + 2) % n]
-            sym = _MOVE_SYM.get((nx - sx, ny - sy), "?")
-            z_trail = z_lo_p + k + 1
-            if z_lo_p <= z_trail < z_hi_p:
-                anchor_dirs_by_z.setdefault(z_trail, {})[(sx, sy)] = sym
-        # Вход perimeter[0] на z_lo, выход perimeter[z_h%n] на z_hi
-        ex, ey = perimeter[z_h % n]
-        _add_dir(z_lo_p, entry_x, entry_y, "↑" if to_z > fr_z else "↓")
-        _add_dir(z_hi_p, ex, ey, "↓" if fr_z < to_z else "↑")
-    else:
-        _add_dir(fr_z, p.from_x, p.from_y, "↑" if to_z > fr_z else "↓")
-        _add_dir(to_z, p.to_x, p.to_y, "↓" if fr_z < to_z else "↑")
+# Trail arrows: march direction inferred from consecutive staircase cells
+_stair_by_z: dict[int, list[tuple[int, int]]] = {}
+for _c in layout.cells:
+    if _c.system_building_element in ("staircase", "stair_anchor"):
+        _stair_by_z.setdefault(_c.z, []).append((_c.x, _c.y))
+
+_sorted_stair_z = sorted(_stair_by_z)
+for _z_k in _sorted_stair_z:
+    _nxt_z = _z_k + 1
+    if _nxt_z not in _stair_by_z:
+        continue
+    _cur_cells = _stair_by_z[_z_k]
+    _nxt_cells = _stair_by_z[_nxt_z]
+    if len(_cur_cells) == 1 and len(_nxt_cells) == 1:
+        _cx, _cy = _cur_cells[0]
+        _nx, _ny = _nxt_cells[0]
+        _sym = _MOVE_SYM.get((_nx - _cx, _ny - _cy))
+        if _sym and (_nx, _ny) not in anchor_dirs_by_z.get(_nxt_z, {}):
+            _add_dir(_nxt_z, _nx, _ny, _sym)
+
+# Back-fill: staircase cells with no arrow yet — infer from z±1 unit neighbour
+_all_stair_z = sorted(_stair_by_z)
+for _i, _z_k in enumerate(_all_stair_z):
+    _cells = _stair_by_z[_z_k]
+    if len(_cells) != 1:
+        continue
+    _px, _py = _cells[0]
+    if (_px, _py) in anchor_dirs_by_z.get(_z_k, {}):
+        continue
+    # Try z+1
+    _sym = None
+    if _i + 1 < len(_all_stair_z):
+        _nz = _all_stair_z[_i + 1]
+        if _nz == _z_k + 1 and len(_stair_by_z[_nz]) == 1:
+            _nx2, _ny2 = _stair_by_z[_nz][0]
+            _sym = _MOVE_SYM.get((_nx2 - _px, _ny2 - _py))
+    # Try z-1
+    if _sym is None and _i > 0:
+        _pz = _all_stair_z[_i - 1]
+        if _pz == _z_k - 1 and len(_stair_by_z[_pz]) == 1:
+            _px2, _py2 = _stair_by_z[_pz][0]
+            _sym = _MOVE_SYM.get((_px - _px2, _py - _py2))
+    if _sym:
+        _add_dir(_z_k, _px, _py, _sym)
 
 if _z_filter is not None:
     labels = {-3: "Подвал", 0: "Первый этаж", 3: "Второй этаж"}

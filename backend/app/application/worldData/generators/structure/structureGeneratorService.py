@@ -14,7 +14,10 @@ from app.application.worldData.generators.structure._layoutEngine import layout_
 from app.application.worldData.generators.structure._passageBuilder import build_passages
 from app.application.worldData.generators.structure._roomFactory import instantiate_level_rooms
 from app.application.worldData.generators.structure._roomInstance import _RoomInstance
-from app.application.worldData.generators.structure.staircase._base import sw_anchor
+from app.application.worldData.generators.structure.staircase._shaftFactory import (
+    instantiate_shaft_rooms, _NO_SHAFT_TYPES,
+)
+from app.application.worldData.generators.structure.staircase._shaftPlacer import make_shaft_placer
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
 from app.db.models.mapCell import MapCell
@@ -85,21 +88,21 @@ def _staircase_layout_order(
     room_z_offsets: dict[str, int],
 ) -> list[int]:
     """
-    BFS from z_offset=0 through staircase connections.
+    BFS from z_offset=0 through staircase stops.
     Ensures each level is laid out only after its staircase-connected neighbour,
     so we can propagate anchor positions.
     Unreachable levels are appended at the end in template order.
     """
     all_z = [level_def["z_offset"] for level_def in template["levels"]]
     adj: dict[int, list[int]] = {z: [] for z in all_z}
-    for conn in template.get("connections", []):
-        if conn.get("passage_type") != "staircase":
-            continue
-        fr_z = room_z_offsets.get(conn["from_room"])
-        to_z = room_z_offsets.get(conn["to_room"])
-        if fr_z is not None and to_z is not None and fr_z != to_z:
-            adj[fr_z].append(to_z)
-            adj[to_z].append(fr_z)
+    for sc in template.get("staircases", []):
+        stops = sc.get("stops", [])
+        for i in range(len(stops) - 1):
+            fr_z = room_z_offsets.get(stops[i])
+            to_z = room_z_offsets.get(stops[i + 1])
+            if fr_z is not None and to_z is not None and fr_z != to_z:
+                adj[fr_z].append(to_z)
+                adj[to_z].append(fr_z)
 
     start = 0 if 0 in adj else (all_z[0] if all_z else 0)
     visited: set[int] = {start}
@@ -116,29 +119,6 @@ def _staircase_layout_order(
         if z not in visited:
             order.append(z)
     return order
-
-
-def _infer_stair_type_for_anchor(
-    conn: dict,
-    fr_z_offset: int,
-    to_z_offset: int,
-    z_height: int,
-) -> str:
-    """
-    Lightweight stair-type inference used only to pick the correct anchor size
-    during layout propagation (before to_room is placed).
-    Does NOT need to_room — uses only z-offset direction and z_height.
-    Explicit staircase_type on the connection always wins.
-    """
-    if conn.get("staircase_type"):
-        return conn["staircase_type"]
-    if fr_z_offset >= 0 and to_z_offset < 0:
-        return "trapdoor"
-    if fr_z_offset < 0 and to_z_offset >= 0:
-        return "trapdoor"
-    if z_height <= 5:
-        return "standard"
-    return "straight"
 
 
 # ---------------------------------------------------------------------------
@@ -215,11 +195,35 @@ class StructureGeneratorService:
             )
             for room in level_rooms:
                 room_z_offsets[room.room_id] = z_offset
+                if room.staircase_type:
+                    logger.info("post-instantiate: %r staircase_type=%r", room.room_id, room.staircase_type)
             all_rooms.extend(level_rooms)
             logger.info(
                 "generate_from_template | z_offset=%d instantiated %d rooms",
                 z_offset, len(level_rooms),
             )
+
+        # Instantiate shaft rooms from staircases[] and add to all_rooms
+        shaft_rooms = instantiate_shaft_rooms(
+            template, room_z_offsets, levels, world, rng,
+            building_tier=building.system_economic_tier,
+        )
+        for sr in shaft_rooms:
+            room_z_offsets[sr.room_id] = sr.z_offset
+        all_rooms.extend(shaft_rooms)
+
+        # Build lookup: staircase_id → shaft instances ordered by instance_idx (bottom→top)
+        shaft_by_staircase: dict[str, list[_RoomInstance]] = {}
+        for sr in shaft_rooms:
+            if sr.staircase_id:
+                shaft_by_staircase.setdefault(sr.staircase_id, []).append(sr)
+        for lst in shaft_by_staircase.values():
+            lst.sort(key=lambda r: r.instance_idx)
+
+        logger.info(
+            "generate_from_template | shaft rooms instantiated: %d across %d staircases",
+            len(shaft_rooms), len(shaft_by_staircase),
+        )
 
         # Step 4–5: layout per level
         logger.info("=== PHASE: layout (order propagation) ===")
@@ -239,15 +243,32 @@ class StructureGeneratorService:
         # Tuple is (x_min, y_min, x_max, y_max) of all placed room cells on that level.
         level_footprint_bounds: dict[int, tuple[int, int, int, int]] = {}
 
-        # Rooms that were placed as staircase destinations (their origin = staircase anchor).
-        # When such a room is itself the source of another staircase, reuse its origin as
-        # the next anchor — keeps both staircases in the same XY footprint (shared shaft).
-        staircase_destination_rooms: set[str] = set()
-
         for z_offset in layout_order:
             start_x, start_y = level_start.get(z_offset, (bx, by))
             level       = levels[z_offset]
             level_rooms = [r for r in all_rooms if r.z_offset == z_offset]
+
+            # Build synthetic archway connections: shaft (pre-placed on to_z) ↔ to_room.
+            # These give BFS a graph edge so corridor is placed adjacent to the shaft.
+            synth_conns = list(connections)
+            for sc in template.get("staircases", []):
+                sc_type = sc.get("staircase_type", "u_shape")
+                if sc_type in _NO_SHAFT_TYPES:
+                    continue
+                sc_id   = sc.get("staircase_id", "staircase")
+                stops   = sc.get("stops", [])
+                shaft_list = shaft_by_staircase.get(sc_id, [])
+                for i, stop_id in enumerate(stops):
+                    if i == 0:
+                        continue  # fr_stop shaft is placed by AdjacentShaftPlacer, not BFS
+                    if room_z_offsets.get(stop_id) != z_offset:
+                        continue
+                    if i < len(shaft_list):
+                        synth_conns.append({
+                            "from_room": shaft_list[i].room_id,
+                            "to_room":   stop_id,
+                            "passage_type": "archway",
+                        })
 
             # Pass parent-level bounds so rooms on upper floors don't overhang the floor below.
             # Only z_offset > 0 (above-ground): upper floors constrained by floor directly below.
@@ -257,10 +278,63 @@ class StructureGeneratorService:
             else:
                 parent_bounds = None
 
-            layout_level(level_rooms, connections, start_x, start_y, bounds=parent_bounds)
+            layout_level(level_rooms, synth_conns, start_x, start_y, bounds=parent_bounds)
+
+            # Record rooms placed by BFS now so AdjacentShaftPlacer can find fr_room.
+            for r in level_rooms:
+                if r.placed:
+                    all_placed_by_id[r.room_id] = r
+
+            # AdjacentShaftPlacer: place fr_z shaft instances after BFS on this level.
+            # (to_z shafts are already pre-placed by XY alignment from a previous iteration.)
+            for sc in template.get("staircases", []):
+                sc_type = sc.get("staircase_type", "u_shape")
+                if sc_type in _NO_SHAFT_TYPES:
+                    continue
+                sc_id  = sc.get("staircase_id", "staircase")
+                stops  = sc.get("stops", [])
+                if not stops:
+                    continue
+                fr_stop_z = room_z_offsets.get(stops[0])
+                if fr_stop_z != z_offset:
+                    continue  # this staircase doesn't start on current level
+
+                fr_room = all_placed_by_id.get(stops[0])
+                if fr_room is None:
+                    continue
+
+                shaft_list = shaft_by_staircase.get(sc_id, [])
+                if not shaft_list:
+                    continue
+                shaft_fr = shaft_list[0]  # idx=0, fr_z shaft
+
+                placed_on_level = [r for r in all_rooms if r.z_offset == z_offset and r.placed]
+                placer = make_shaft_placer(sc)
+                success = placer.place(shaft_fr, fr_room, placed_on_level)
+
+                if success:
+                    # Multi-stop XY alignment: all other shaft instances → same XY as shaft_fr
+                    for shaft_other in shaft_list[1:]:
+                        shaft_other.origin_x = shaft_fr.origin_x
+                        shaft_other.origin_y = shaft_fr.origin_y
+
+                    # Set level_start for all to_z levels of this staircase
+                    for i in range(1, len(stops)):
+                        to_stop_z = room_z_offsets.get(stops[i])
+                        if to_stop_z is not None and to_stop_z not in level_start:
+                            level_start[to_stop_z] = (shaft_fr.origin_x, shaft_fr.origin_y)
+
+                    logger.info(
+                        "layout | staircase=%r shaft at (%d,%d), level_start propagated to %s",
+                        sc_id, shaft_fr.origin_x, shaft_fr.origin_y,
+                        [room_z_offsets.get(s) for s in stops[1:]],
+                    )
+                else:
+                    logger.error("layout | staircase=%r shaft placement failed on z=%d", sc_id, z_offset)
 
             # Record this level's footprint bounds for use by adjacent levels.
-            placed_rooms_this = [r for r in level_rooms if r.placed]
+            # Run after shaft placer so shaft cells are included in bounds.
+            placed_rooms_this = [r for r in all_rooms if r.z_offset == z_offset and r.placed]
             if placed_rooms_this:
                 all_fp: set[tuple[int, int]] = set()
                 for r in placed_rooms_this:
@@ -276,11 +350,11 @@ class StructureGeneratorService:
                     z_offset, level_footprint_bounds[z_offset],
                 )
 
-            placed  = sum(1 for r in level_rooms if r.placed)
-            skipped = len(level_rooms) - placed
+            placed_count  = sum(1 for r in placed_rooms_this)
+            skipped = len(level_rooms) - placed_count
             logger.info(
                 "layout | z_offset=%d start=(%d,%d) placed=%d skipped=%d",
-                z_offset, start_x, start_y, placed, skipped,
+                z_offset, start_x, start_y, placed_count, skipped,
             )
             for r in level_rooms:
                 if r.placed:
@@ -298,39 +372,18 @@ class StructureGeneratorService:
                     z_offset, skipped_ids,
                 )
 
-            # Record placed rooms and propagate staircase anchors to adjacent levels
-            for r in level_rooms:
-                if r.placed:
+            # Also record shaft rooms placed after BFS (AdjacentShaftPlacer output)
+            for r in all_rooms:
+                if r.z_offset == z_offset and r.placed and r.room_id not in all_placed_by_id:
                     all_placed_by_id[r.room_id] = r
-
-            for conn in connections:
-                if conn.get("passage_type") != "staircase":
-                    continue
-                fr_id = conn["from_room"]
-                to_id = conn["to_room"]
-                fr_z  = room_z_offsets.get(fr_id)
-                to_z  = room_z_offsets.get(to_id)
-                if fr_z != z_offset or to_z is None or to_z in level_start:
-                    continue
-                fr_room = all_placed_by_id.get(fr_id)
-                if fr_room is None:
-                    continue
-                anchor = sw_anchor(fr_room)
-                logger.info(
-                    "generate_from_template | staircase anchor z_offset=%d->%d: room=%r anchor=(%d,%d)",
-                    z_offset, to_z, fr_id, anchor[0], anchor[1],
-                )
-
-                level_start[to_z] = anchor
-                staircase_destination_rooms.add(to_id)
 
         # Step 5.5: stairwell mutation skipped — room size pre-set by template (ТЗ § 8)
 
         # Step 6–8: assign UIDs + generate cells per level
         logger.info("=== PHASE: cell generation ===")
-        room_uids: dict[str, str] = {}   # uid_key → location_uid
+        room_uids: dict[str, str] = {}   # uid_key → location_uid (shaft rooms excluded)
         for room in all_rooms:
-            if room.placed:
+            if room.placed and not room.is_shaft:
                 uid = _det_uuid(building.location_uid, room.uid_key)
                 room_uids[room.uid_key] = uid
 
@@ -354,6 +407,9 @@ class StructureGeneratorService:
             )
 
         # Step 9–11: passages (mutates cells_dict for door/staircase cells)
+        for _r in all_rooms:
+            if _r.staircase_type:
+                logger.info("pre-passages room staircase_type: %r  %r", _r.room_id, _r.staircase_type)
         passages = build_passages(
             cells_dict, all_rooms, connections,
             levels, room_z_offsets,
@@ -373,7 +429,7 @@ class StructureGeneratorService:
 
         # Step 13: assemble result
         logger.info("=== PHASE: assemble result ===")
-        placed_rooms = [r for r in all_rooms if r.placed]
+        placed_rooms = [r for r in all_rooms if r.placed and not r.is_shaft]
         named_locations = [
             _room_to_named_location(
                 room, building,

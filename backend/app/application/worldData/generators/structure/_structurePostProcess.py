@@ -39,4 +39,4 @@ def _apply_railings(cells: dict[tuple, MapCell]) -> None:
 
 def run(cells: dict[tuple, MapCell]) -> None:
     """Все пост-обработки структуры в порядке применения."""
-    _apply_railings(cells)
+    # _apply_railings(cells)

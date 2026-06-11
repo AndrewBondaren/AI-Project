@@ -8,7 +8,7 @@ _SYMBOLS: dict[str, str] = {
     "wall":           "#",
     "floor":          ".",
     "door":           "D",
-    "staircase":      "S",
+    "stair_floor":    "_",
     "staircase_base": "B",
     "void":           " ",
     "window":         "W",
@@ -17,6 +17,26 @@ _SYMBOLS: dict[str, str] = {
     "trapdoor":       "T",
     "archway":        "'",
 }
+
+_FACING_ARROW: dict[str, str] = {
+    "north": "↑", "south": "↓", "east": "→", "west": "←",
+}
+
+_STAIR_ELEMENTS = {"staircase", "stair_anchor"}
+
+
+def _cell_symbol(cell: MapCell) -> str:
+    elem = cell.system_building_element
+    if elem in _STAIR_ELEMENTS:
+        if not cell.system_facing:
+            raise ValueError(
+                f"stair cell ({cell.x},{cell.y},z={cell.z}) "
+                f"element={elem!r} has no system_facing"
+            )
+        return _FACING_ARROW[cell.system_facing]
+    if cell.railing_sides:
+        return cell.railing_sides[0].lower() if len(cell.railing_sides) == 1 else "r"
+    return _SYMBOLS.get(elem, "?")
 
 
 def render_level(
@@ -27,7 +47,7 @@ def render_level(
     """
     Возвращает ASCII-сетку уровня z=z_target.
     Y убывает сверху вниз (север вверху).
-    anchor_dirs: (x,y) → '↑'/'↓'/'↕' — якоря лестниц с направлением.
+    anchor_dirs: (x,y) → '↑'/'↓'/'↕' — якоря лестниц с направлением (passage endpoints).
     Пустая строка если ячеек на этом z нет.
     """
     level_cells = {(c.x, c.y): c for c in cells if c.z == z_target}
@@ -46,10 +66,8 @@ def render_level(
     for y in range(y1, y0 - 1, -1):
         row = "".join(
             anchor_dirs[(x, y)] if (x, y) in anchor_dirs and (x, y) in level_cells
-            else (level_cells[(x, y)].railing_sides[0].lower() if len(level_cells[(x, y)].railing_sides) == 1 else "r")
-                if (x, y) in level_cells and level_cells[(x, y)].railing_sides
-            else _SYMBOLS.get(level_cells[(x, y)].system_building_element, "?")
-            if (x, y) in level_cells else " "
+            else _cell_symbol(level_cells[(x, y)]) if (x, y) in level_cells
+            else " "
             for x in range(x0, x1 + 1)
         )
         lines.append(f"{y:4d} |{row}|")

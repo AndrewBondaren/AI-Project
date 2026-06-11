@@ -32,7 +32,7 @@ def check_headroom(
     for (x, y, z) in path_cells:
         for dz in range(1, clearance + 1):
             z_check = z + dz
-            if not (z_lo < z_check < z_top):
+            if z_check > z_top:
                 continue
             above = cells.get((x, y, z_check))
             if above is not None and above.system_building_element in _SOLID_ELEMENTS:
@@ -54,6 +54,7 @@ class StaircaseBuilder(ABC):
         building_uid: str,
         mat: str,
         conn_label: str,
+        shaft: _RoomInstance | None = None,
     ) -> None:
         self.fr           = fr
         self.to           = to
@@ -64,6 +65,7 @@ class StaircaseBuilder(ABC):
         self.building_uid = building_uid
         self.mat          = mat
         self.conn_label   = conn_label
+        self.shaft        = shaft       # shaft instance (new schema); None = old schema
         self.z_height     = abs(to_level.z - fr_level.z)
         self.z_lo         = min(fr_level.z, to_level.z)
         self.z_top        = max(fr_level.z, to_level.z)

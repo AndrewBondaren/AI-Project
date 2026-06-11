@@ -81,7 +81,7 @@ def pass2_floors(
     """
     cells: list[MapCell] = []
     for room in rooms:
-        if not room.placed:
+        if not room.placed or room.is_shaft:
             continue
         loc_uid = room_uids[room.uid_key]
         for (x, y) in room.get_footprint():

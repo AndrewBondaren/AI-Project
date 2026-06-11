@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 
 _DIRECTIONS = ("east", "north", "west", "south")
 
+_OPPOSITE = {"north": "south", "south": "north", "east": "west", "west": "east"}
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -142,16 +144,28 @@ def _layout_mode_a(rooms: list[_RoomInstance], connections: list[dict],
         return
 
     graph = _build_graph(rooms, connections)
-    start = _find_start(rooms, connections, graph)
-    logger.info("layout mode_a | start_room=%s total=%d", start.room_id, len(rooms))
 
     placed: list[_RoomInstance] = []
     visited: set[str] = set()
-    queue: deque[_RoomInstance] = deque([start])
+    queue: deque[_RoomInstance] = deque()
 
-    start.origin_x, start.origin_y = bx, by
-    placed.append(start)
-    visited.add(start.room_id)
+    # Pre-placed rooms (shaft instances): seed BFS without overwriting their origin.
+    for room in rooms:
+        if room.placed:
+            placed.append(room)
+            visited.add(room.room_id)
+            queue.append(room)
+
+    if not queue:
+        # Classic init: no pre-placed rooms — choose start and set its origin.
+        start = _find_start(rooms, connections, graph)
+        logger.info("layout mode_a | start_room=%s total=%d", start.room_id, len(rooms))
+        start.origin_x, start.origin_y = bx, by
+        placed.append(start)
+        visited.add(start.room_id)
+        queue.append(start)
+    else:
+        logger.info("layout mode_a | pre-placed=%d total=%d (shaft-anchored BFS)", len(placed), len(rooms))
 
     while queue:
         current = queue.popleft()
@@ -164,8 +178,10 @@ def _layout_mode_a(rooms: list[_RoomInstance], connections: list[dict],
                 continue
             queue.append(nbr)
 
-            # Try to place adjacent to current first, then any placed room
-            placed_ok = _try_adjacent(nbr, current, _DIRECTIONS[0], placed)
+            # Try to place adjacent to current first, then any placed room.
+            # Staircase rooms: prefer near-side (opposite of facing = far end).
+            preferred = _OPPOSITE[current.facing] if current.facing else _DIRECTIONS[0]
+            placed_ok = _try_adjacent(nbr, current, preferred, placed)
             if not placed_ok:
                 placed_ok = _place_next_to_any(nbr, placed)
 
@@ -480,6 +496,19 @@ def layout_level(
     # Clip mode A rooms to parent bounds before attaching mode B rooms to them.
     if bounds is not None:
         _clip_to_bounds([r for r in mode_a_rooms if r.placed], bounds)
+
+    # Re-place any mode_a room that clip_to_bounds unplaced.
+    already_placed = [r for r in mode_a_rooms if r.placed]
+    for room in mode_a_rooms:
+        if not room.placed:
+            if _place_next_to_any(room, already_placed):
+                already_placed.append(room)
+                logger.info("layout re-place after clip | room=%r placed at (%d,%d)",
+                            room.room_id, room.origin_x, room.origin_y)
+            elif room.required:
+                raise GenerationError(f"Room {room.room_id!r}: no space after clip re-place")
+            else:
+                logger.warning("layout re-place after clip | room=%r skipped", room.room_id)
 
     all_placed = [r for r in rooms if r.placed]
     _layout_mode_b(rooms, all_placed, bounds=bounds)

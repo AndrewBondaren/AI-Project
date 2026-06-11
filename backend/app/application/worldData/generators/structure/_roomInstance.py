@@ -33,6 +33,12 @@ class _RoomInstance:
     origin_x: int | None = None
     origin_y: int | None = None
 
+    # Stairwell
+    staircase_type: str | None = None
+    facing:         str | None = None
+    is_shaft:       bool = False
+    staircase_id:   str | None = None
+
     # Опциональные поля из room_def
     attach_to:           str | None = None
     attach_wall:         str | None = None
