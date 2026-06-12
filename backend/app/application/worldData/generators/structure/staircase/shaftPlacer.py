@@ -14,10 +14,7 @@ from app.application.worldData.generators.structure.layoutEngine import (
     _try_adjacent, _place_next_to_any, _DIRECTIONS,
 )
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
-
 logger = logging.getLogger(__name__)
-
-_OPPOSITE = {"north": "south", "south": "north", "east": "west", "west": "east"}
 
 
 class ShaftPlacer(ABC):

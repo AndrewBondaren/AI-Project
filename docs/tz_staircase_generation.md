@@ -1,5 +1,143 @@
 # ТЗ: Генерация лестниц
 
+## 0. Шпаргалка: алгоритм u_shape
+
+### Шаг 1. Инварианты
+
+```
+march_depth = depth − 1
+```
+`march_depth` — кол-во ступеней на один марш (последний марш всегда depth−1).
+
+---
+
+```
+N₁ = width + 2·depth − 2        (facing север/юг)
+N₁ = 2·width + 2·depth − 4      (facing восток/запад)
+N₂ = 2·width + 2·depth − 4
+```
+`N₁` — кол-во ячеек пути первого марша.  
+`N₂` — кол-во ячеек пути второго и последующих маршей.  
+`width` — ширина interior шахты. `depth` — глубина interior шахты.
+
+---
+
+```
+march_count = ceil((z_height − 1) / march_depth)
+```
+`march_count` — кол-во прямых отрезков пути (маршей).  
+`z_height` — высота лестницы в z-уровнях.
+
+---
+
+```
+total_N = N₁ + N₂ × (march_count − 1)
+assert total_N ≥ z_height
+```
+Валидация: ячеек пути должно хватать для всех ступеней.
+
+---
+
+```
+flat = N₁ − z_height                                          (march_count == 1)
+flat_per_march = ceil((total_N − z_height) / march_count)     (march_count > 1)
+assert z_height ≥ total_N − flat_per_march × march_count
+```
+`flat` / `flat_per_march` — кол-во горизонтальных ячеек (stair_floor) на одну площадку.  
+`ceil` округляет вверх: если `(total_N − z_height)` не делится ровно на `march_count`, отдельные площадки получат `flat_per_march − 1` ячеек, а «лишние» размещаются по правилам приоритета — это не ошибка.  
+Геометрическая ошибка — когда `z_height < total_N − flat_per_march × march_count` (недостаточно ступеней для покрытия пути) или нарушение потолочного зазора в 2 ячейки.
+
+---
+
+```
+ideal     = width
+optimal   = width + 2 × (depth − 2)
+mid_ideal = width × 2
+```
+Пороговые значения для правил расстановки flat.
+
+---
+
+### Шаг 2. Построение пути
+
+Путь строится directed graph обходом interior: старт в fr_anchor, вектор V = V_init, поворот только в точках конца сегмента — V меняется на 90° по turn_vector. Оба прохода (подсчёт N и построение) используют один и тот же метод поворота.
+
+```
+anchors = [fr_anchor, far_anchor]   ← чередуются по маршам
+z = z_lo
+V = V_init                          ← начальное направление марша
+
+для каждого марша i в range(march_count):
+    pos = anchors[i % 2]
+    steps = depth         (не последний марш, i < march_count−1)
+    steps = march_depth   (последний марш)
+
+    для шага в range(steps):
+        place staircase(pos, z)
+        pos += V;  z += 1
+
+    если i < march_count − 1:
+        tv = +turn_vector если i%2==0 иначе −turn_vector
+        расставить flat_per_march ячеек stair_floor по правилам приоритета
+        pos += tv × flat_per_march
+
+    V = −V
+```
+`anchors` — стартовые XY-позиции маршей: чётные от fr_anchor, нечётные от far_anchor.  
+`V_init` — направление первого марша (определяется из facing).  
+`turn_vector` — направление поворота (перпендикуляр маршу, определяется из позиции fr_anchor).  
+`V` — текущий вектор марша, инвертируется после каждого марша.  
+`steps` — кол-во ступеней на данном марше.
+
+---
+
+### Правила распределения flat
+
+U-образная лестница: вход и выход находятся на **одной стене** (near wall / anchor side), в противоположных углах. Far end — стена разворота. Это свойство шахты, фиксировано на весь подъём.
+
+**Марш 1 (march_index == 0)** — near wall входит в pseudo-column, Pool 2 недоступен:
+
+| Условие | Pool | Ячейки |
+|---|---|---|
+| flat ≤ ideal | 1 | Far end, центр первым |
+| flat > ideal | 1 + 3 | + Боковые стены, от far end к near, tv-сторона первой |
+
+**Марши 2+ (march_index > 0)** — near wall свободен:
+
+| Условие | Pool | Ячейки |
+|---|---|---|
+| flat ≤ ideal | 1 | Far end, центр первым |
+| flat ≤ mid_ideal | 1 + 2 | + Anchor side (near wall), центр первым |
+| flat > mid_ideal | 1 + 2 + 3 | + Боковые стены, от far end к near, tv-сторона первой |
+
+Размер каждого пула:
+- Pool 1 = `far_sz` = `ideal`
+- Pool 2 = `far_sz` → итого `mid_ideal = 2 × ideal`
+- Pool 3 = `2 × lat` → итого `mid_ideal + 2 × lat`
+
+---
+
+### Псевдо-колонна (void-блок)
+
+```
+# Марш 1
+pseudo = (w−2) × (d−1)
+       = центральный блок (w−2)×(d−2)
+       + средние ячейки стены якорей (исключая сами якоря по краям)
+
+# Марши 2+
+pseudo = (w−2) × (d−2)   ← только центральный блок
+```
+
+`w` — width interior, `d` — depth interior.  
+Стена якорей — near side (ближняя сторона, где стоят fr_anchor и far_anchor).  
+Все ячейки pseudo = `void` на всех z.
+
+`far end` — торцевая стена шахты напротив fr_anchor.  
+`anchor side` — стена, где стоит якорь текущего марша.
+
+---
+
 ## 1. Основной принцип
 
 **Лестница — транспортный механизм**, соединяющий две комнаты или коридора на разных уровнях.
@@ -264,13 +402,33 @@ fr_anchor ≠ to_anchor (Инвариант 6).
 **Headroom**: над каждой ячейкой пути — минимум 2 свободных ячейки по высоте. Нарушение = ошибка генерации.
 
 ### Описание
-N последовательных маршей, соединённых landing (floor) у торцевых стен.
-Количество маршей вычисляется — не фиксировано:
-```
-march_depth = depth_interior − 1
-march_count = ceil(z_height / march_depth)
-```
+N последовательных маршей, соединённых landing (stair_floor) у торцевых стен.
 Марши чередуют направление: ↑ ↓ ↑ ↓ ...
+
+**Глубина марша (`march_depth`):**
+- march_count = 1 → `march_depth = depth_interior − 1`
+- march_count > 1, не последний марш → `march_depth = depth_interior`
+- march_count > 1, последний марш → `march_depth = depth_interior − 1`
+
+**Количество ячеек пути (`N`):**
+
+| Условие | Формула |
+|---|---|
+| Первый марш, N/S facing | `N₁ = width + 2·depth − 2` |
+| Первый марш, E/W facing | `N₁ = 2·width + 2·depth − 4` |
+| Второй и последующие марши (любой facing) | `N = 2·width + 2·depth − 4` |
+
+**Определение march_count:**
+```
+min_z(march=1) = depth − 1
+min_z(march=2) = depth + (depth − 1) = 2·depth − 1
+
+если z_height < min_z(march=2) → march_count = 1
+если z_height ≥ min_z(march=2) → march_count = 2
+(аналогично для march > 2)
+```
+
+Для 3×3 interior: min_z(march=2) = 5, т.е. z_height < 5 → march_count = 1.
 
 ### Комната
 
@@ -301,15 +459,35 @@ march_count = ceil(z_height / march_depth)
 
 ### Стандартные примеры: 3×3 interior (north = вверх на диаграмме)
 
-Стандартная u-лестница имеет **широкую площадку на всю ширину/высоту дальнего края** (full-width landing). Для 3×3: 4 staircase + 3 stair_floor → z_height=5.
+Легенда: стрелка = staircase (+1z), `[_]` = stair_floor (z не меняется), `[X]` = void, `[.]` = corridor floor на z_top (builder не генерирует).
+
+#### z_height=3, march_count=1 (N=7, flat=4)
+
+flat=4 ≤ optimal(5) → приоритет far end. Far end (север) = 3 ячейки, ещё 1 adjacent.
+
+**facing=north** (коридор юг):
+```
+[_][_][_]    ← far end (3 flat)
+[↑][X][_]    ← adjacent single flat (west col, 1 cell)
+[↑][X][↓]
+[.][.][.]   ← corridor floor at z_top
+```
+Путь: fr=(0,0)↑ (0,1)↑ (0,2)_(1,2)_(2,2)_ (2,1)_ → последний stair у (2,1)? 
+
+> Примечание: конкретная раскладка flat зависит от реализации приоритетных правил.
+
+#### z_height=5, march_count=2 (N₁=7, N₂=8, flat_per_march=5)
+
+flat=5 = optimal(5) → приоритет far end + adjacent.
 
 **facing=north** (коридор юг, площадка север):
 ```
-[_][_][_]
+[_][_][_]    ← far end landing (3 flat)
 [↑][X][↓]
 [↑][X][↓]
 [.][.][.]   ← corridor floor at z_top
 ```
+4 staircase + 3 stair_floor (оставшиеся 2 flat — часть near-end landing второго марша или смежные).
 
 **facing=south** (коридор север, площадка юг):
 ```
@@ -332,10 +510,6 @@ march_count = ceil(z_height / march_depth)
 [.][X][X][_]   ← corridor floor at z_top (west)
 [.][←][←][_]
 ```
-
-Легенда: стрелка = staircase (1 z-переход), `[_]` = stair_floor (горизонтальный поворот), `[X]` = void, `[.]` = corridor floor на z_top (builder не генерирует).
-
-> **TODO**: Пересмотреть стандартные шаблоны зданий под оптимальные высоты этажей. Высота этажа (z_height) должна оптимально совпадать с размером комнаты лестницы чтобы избегать неравномерных последних маршей. Для 3×3 interior стандарт: z_height=5 (1 loop), 9 (2 loops), 13 (3 loops).
 
 ### Расширение комнаты
 
@@ -375,22 +549,40 @@ facing=east, 2-col (5 строк)    facing=south, sq_medium 4×4 interior
 
 **Структура пути по маршам:**
 ```
-Марш 1: вдоль одной стены  z_lo → z_lo+march_depth−1      (вектор V)
-[_][_]...[_] поворот: горизонтально у far end              (z не меняется, кол-во = landing_width)
-Марш 2: вдоль другой стены z_lo+march_depth → ...         (вектор −V)
+Марш 1: вдоль одной стены  (вектор V),  march_depth ступеней
+[_]...[_] поворот у far end             (z не меняется, landing_flat ячеек)
+Марш 2: вдоль другой стены (вектор −V), march_depth_last ступеней
 ...
 ```
-`march_depth = depth_interior − 1` — стaircase-ячеек на один марш (last row/col = landing).
-`landing_width` — кол-во `stair_floor` ячеек на full far-edge. Базово = `width_interior` (N/S) или `depth_interior` (E/W). При multi-loop может быть меньше.
-`march_count = ceil(z_height / march_depth)`.
 
-**Равномерное распределение ступеней по маршам (divmod):**
+**Расчёт flat ячеек:**
 ```
-q, r = divmod(z_height, march_count)
-Марши 0..r-1  → q+1 ступеней
-Марши r..N-1  → q   ступеней
+# march_count = 1
+flat = ceil(N₁ / march_depth)
+
+# march_count = 2
+total_flat = (N₁ + N₂) − z_height
+flat_per_march = total_flat / 2
 ```
-Это предотвращает ситуацию когда последний марш содержит почти только `stair_floor` и одну ступень. Все марши получаются примерно одинаковой длины.
+
+**Рейтинг расположения flat (для любого марша):**
+```
+ideal     = width_interior
+optimal   = width_interior + 2 × (depth_interior − 2)
+mid_ideal = width_interior × 2
+```
+
+**Правила распределения flat (по убыванию приоритета):**
+
+| Условие | Приоритетная сторона |
+|---|---|
+| flat == 1 | Центральная ячейка far end |
+| flat ≤ ideal | Far end; центральная ячейка в приоритете |
+| flat ≤ optimal | Far end; примыкающие одиночные ячейки тоже приоритетны |
+| flat > mid_ideal И промежуточный марш (нет якоря) | Far end + anchor side |
+
+`[_]` stair_floor размещается приоритетно у **far end** (направление `facing`).
+Near-end landing использует `-turn_vector`.
 
 Если выход блокирован или нарушены правила → пересчитать с другим начальным направлением.
 
@@ -400,7 +592,7 @@ q, r = divmod(z_height, march_count)
 |---|---|
 | `fr_anchor` | Первая ячейка пути (`stair_anchor`) на z_lo. Всегда в угловой ячейке interior на near side. |
 | `far_anchor` | Стартовая позиция нечётных маршей. Диагонально противоположный угол interior от `fr_anchor`: `(width_interior−1 − fr_anchor.x, depth_interior−1 − fr_anchor.y)` в координатах interior. |
-| `to_anchor` | Последняя ячейка пути (`staircase`) на z_top−1. Шаг с неё ведёт на `floor` коридора на z_top. |
+| `to_anchor` | `floor`-ячейка на z_top у entry-стороны шахты (arch threshold). Никогда внутри shaft interior. Сосед со стороны, противоположной exit_v, на z_top−1 — лестничная ячейка (`staircase` или `stair_anchor`) с `system_facing` в направлении exit_v. |
 
 `fr_anchor ≠ to_anchor` — инвариант 6.
 
@@ -439,32 +631,50 @@ _build_u_shape(params, z_lo, z_height) → List[Cell]
 
 **Шаг 1. `_compute_u_params(room, z_height)`:**
 ```
-facing, width_interior, depth_interior  ← из комнаты
-march_depth     = depth_interior − 1
-march_count     = ceil(z_height / march_depth)   ← вычисляется ДО path_2d_len
-path_2d_len     = ветвление по march_count (N/S facing; для E/W w↔d):
-                    march_count == 1 → 0 landing, нет формулы (только один марш)
-                    march_count == 2 → 2×march_depth + (width_interior − 1)
-                    march_count >  2 → 2×march_depth + 2×(width_interior − 1)
+facing, w = width_interior, d = depth_interior  ← из комнаты
 
-                  вычисляется directed graph обходом interior:
-                  старт в fr_anchor, V = начальное направление
-                  поворот только в точках конца сегмента → V меняется на 90° по turn_vector
-                  граф универсален для всех facing и форм комнат
+# Количество ячеек пути
+is_ns = facing in ("north", "south")
+N1 = (w + 2*d - 2) if is_ns else (2*w + 2*d - 4)   # первый марш
+N2 = 2*w + 2*d - 4                                   # второй и далее
 
-                  ВАЖНО: оба прохода (подсчёт path_2d_len и построение пути) используют
-                  один и тот же метод поворота — расхождение логики между ними недопустимо
-march_count     = ceil(z_height / march_depth)
-loops           = ceil(march_count / 2)
-total_stair_floor = (path_2d_len × loops) − z_height
-stair_floor_per_march = ceil(total_stair_floor / march_count)
-far_wall_size   = width_interior (N/S) или depth_interior (E/W)
-if stair_floor_per_march ≤ far_wall_size:
-    landing_width = stair_floor_per_march
+# march_count (порог: минимальный z_height для каждого числа маршей)
+min_z_2 = d + (d - 1)     # минимальный z_height для march_count=2
+if z_height < min_z_2:
+    march_count = 1
 else:
-    расширяем landing на смежные стены
-turn_vector     = направление от стены fr_anchor к противоположной стене
+    march_count = 2        # аналогично для 3+
+
+# march_depth
+march_depth      = d - 1   # для march_count=1 и для последнего марша
+march_depth_mid  = d       # для не-последних маршей при march_count > 1
+
+# flat ячеек
+if march_count == 1:
+    flat = ceil(N1 / march_depth)
+else:
+    total_flat     = (N1 + N2) - z_height
+    flat_per_march = total_flat / march_count
+
+# рейтинг расположения flat
+ideal     = w
+optimal   = w + 2 * (d - 2)
+mid_ideal = w * 2
+
+loops        = ceil(march_count / 2)
+turn_vector  = направление от стены fr_anchor к противоположной стене
+
+# поворот
+tv = +turn_vector для чётных маршей (0, 2, 4…) — far-end landing
+tv = -turn_vector для нечётных маршей (1, 3, 5…) — near-end landing
 ```
+
+N (path_2d_len) вычисляется directed graph обходом interior:
+старт в fr_anchor, V = начальное направление,
+поворот только в точках конца сегмента → V меняется на 90° по turn_vector.
+Граф универсален для всех facing и форм комнат.
+
+ВАЖНО: оба прохода (подсчёт N и построение пути) используют один и тот же метод поворота — расхождение логики между ними недопустимо.
 
 `turn_vector` — определяется один раз из позиции якоря:
 - facing=north, якорь у западной стены → `turn_vector = (1, 0)` (east)
@@ -478,22 +688,23 @@ turn_vector     = направление от стены fr_anchor к проти
 ```
 anchors = [fr_anchor.(x,y), far_anchor.(x,y)]   ← чередуются
 
-z   = z_lo
-V   = начальное направление (от fr_anchor к far end)
-q, r = divmod(z_height, march_count)
+z = z_lo
+V = начальное направление (от fr_anchor к far end)
 
 для каждого марша i в range(march_count):
-    pos = (anchors[i % 2], z)
+    pos = anchors[i % 2]
 
-    steps = q+1 если i < r иначе q
+    # фиксированная глубина марша (не divmod)
+    steps = march_depth_mid если i < march_count − 1 иначе march_depth
 
     для каждого шага в range(steps):
         place staircase(pos, z)
         pos += V;  z += 1
 
-    если i < march_count − 1:   ← последний марш — без landing (to_anchor)
+    если i < march_count − 1:   ← последний марш — без landing
         tv = +turn_vector если i % 2 == 0 иначе −turn_vector
-        для каждой ячейки в range(landing_width):
+        # flat_per_march ячеек согласно правилам приоритета из Шага 1
+        для каждой ячейки в range(flat_per_march):
             place stair_floor(pos, z)   ← z не меняется
             pos += tv
 
@@ -559,14 +770,13 @@ Edge case — landing расширяется на смежные стены (sta
 
 **fr_anchor** = `stair_anchor`, первая ячейка пути на z_lo.
 
-**to_anchor** = последняя ячейка пути (`staircase`) на z_top−1.
-Шаг с to_anchor ведёт строго по вектору последнего шага пути на `floor`-ячейку коридора/комнаты на z_top.
+**to_anchor** = `floor`-ячейка на z_top у entry-стороны шахты (arch threshold).
 
-Правило определения целевой ячейки:
-- Вектор последнего шага: `(dx, dy) = path[-1] − path[-2]`
-- Целевая ячейка: `(path[-1].x + dx, path[-1].y + dy, z_top)`
-- Тип целевой ячейки должен быть `floor`. Диагональные переходы запрещены.
-- Если целевая ячейка не `floor` → ошибка генерации с координатами ячейки, её типом, и координатами to_anchor.
+Правила:
+- Тип: `floor` на z_top.
+- Позиция: стена шахты со стороны entry (не внутри shaft interior). Совпадает по XY с archway между shaft и to_room.
+- Сосед: ячейка `(to_anchor.x − exit_v.x, to_anchor.y − exit_v.y, z_top−1)` — лестничная (`staircase` или `stair_anchor`) с `system_facing == exit_v`. Без диагоналей.
+- Если нет подходящей ячейки → ошибка генерации с координатами to_anchor и соседа.
 
 fr_anchor ≠ to_anchor (Инвариант 6).
 

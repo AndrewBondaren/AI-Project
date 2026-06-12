@@ -17,6 +17,9 @@ from app.application.worldData.generators.structure.staircase.staircaseSize impo
     USHAPE_SIZE_PRESETS,
     SPIRAL_SIZE_PRESETS,
 )
+from app.application.worldData.generators.structure.staircase.uShapeHelper import (
+    u_shape_march_depth,
+)
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.world import World
 
@@ -108,8 +111,7 @@ def instantiate_shaft_rooms(
                 seg_z_height = abs(lv_to.z - lv_fr.z)
                 max_z_height = max(max_z_height, seg_z_height)
 
-        march_depth = depth - 3  # interior depth = depth - 2, march_depth = interior - 1
-        if staircase_type == "u_shape" and march_depth < 1:
+        if staircase_type == "u_shape" and u_shape_march_depth(depth) < 1:
             logger.error(
                 "shaft factory | %r: shaft depth=%d gives march_depth=%d < 1 for u_shape",
                 staircase_id, depth, march_depth,

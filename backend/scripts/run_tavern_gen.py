@@ -7,6 +7,7 @@
     python scripts/run_tavern_gen.py tavern_2 world_test
     python scripts/run_tavern_gen.py tavern_1 world_test 0
 """
+import io
 import json
 import logging
 import sys
@@ -15,6 +16,30 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
+
+_OUT_FILE = Path(__file__).parent / "last_output.txt"
+
+
+class _Tee(io.TextIOBase):
+    def __init__(self, *streams):
+        self._streams = streams
+
+    def write(self, s):
+        for st in self._streams:
+            st.write(s)
+        return len(s)
+
+    def flush(self):
+        for st in self._streams:
+            try:
+                st.flush()
+            except Exception:
+                pass
+
+
+_file_handle = open(_OUT_FILE, "w", encoding="utf-8")
+sys.stdout = _Tee(sys.__stdout__, _file_handle)
+sys.stderr = _Tee(sys.__stderr__, _file_handle)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -132,7 +157,7 @@ for p in layout.passages:
     if fr_z is None or to_z is None or p.from_x is None:
         continue
     _add_dir(fr_z, p.from_x, p.from_y, "↑" if to_z > fr_z else "↓")
-    _add_dir(to_z, p.to_x, p.to_y, "↓" if fr_z < to_z else "↑")
+    _add_dir(to_z, p.to_x, p.to_y, "$")
 
 # Trail arrows: march direction inferred from consecutive staircase cells
 _stair_by_z: dict[int, list[tuple[int, int]]] = {}

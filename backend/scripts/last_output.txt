@@ -1,0 +1,631 @@
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | start building=bld-tavern_2-test-001 template=tavern_2
+INFO | app.application.worldData.generators.structure.structureGeneratorService | === PHASE: resolve levels ===
+INFO | app.application.worldData.generators.structure.structureGeneratorService | levels resolved: {-1: (-3, 3), 0: (0, 3), 1: (3, 3), 2: (6, 3)}
+INFO | app.application.worldData.generators.structure.structureGeneratorService | === PHASE: instantiate rooms ===
+WARNING | app.application.worldData.generators.structure.roomFactory | Room 'cellar': z_range дало 4, уровень ограничен 3 — потолок обрезан
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=cellar), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=cellar), using default 'wood'
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'cellar' staircase_type=None
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | z_offset=-1 instantiated 1 rooms
+WARNING | app.application.worldData.generators.structure.roomFactory | Room 'main_hall': z_range дало 5, уровень ограничен 3 — потолок обрезан
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=main_hall), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=main_hall), using default 'wood'
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'main_hall' staircase_type=None
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=kitchen), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=kitchen), using default 'wood'
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'kitchen' staircase_type=None
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | z_offset=0 instantiated 2 rooms
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=corridor), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=corridor), using default 'wood'
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'corridor' staircase_type=None
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=corridor_w), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=corridor_w), using default 'wood'
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'corridor_w' staircase_type=None
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=guest_room), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=guest_room), using default 'wood'
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'guest_room' staircase_type=None
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'guest_room' staircase_type=None
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'guest_room' staircase_type=None
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'guest_room' staircase_type=None
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=guest_room_w), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=guest_room_w), using default 'wood'
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'guest_room_w' staircase_type=None
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'guest_room_w' staircase_type=None
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'guest_room_w' staircase_type=None
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | z_offset=1 instantiated 9 rooms
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=corridor_2), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=corridor_2), using default 'wood'
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'corridor_2' staircase_type=None
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=corridor_2_w), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=corridor_2_w), using default 'wood'
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'corridor_2_w' staircase_type=None
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=guest_room_2), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=guest_room_2), using default 'wood'
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'guest_room_2' staircase_type=None
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'guest_room_2' staircase_type=None
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=guest_room_2_w), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=guest_room_2_w), using default 'wood'
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'guest_room_2_w' staircase_type=None
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'guest_room_2_w' staircase_type=None
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | z_offset=2 instantiated 6 rooms
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=main_staircase), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=main_staircase), using default 'wood'
+INFO | app.application.worldData.generators.structure.staircase.shaftFactory | shaft factory | 'main_staircase' idx=0 z_offset=0 size=5x5 max_z_height=3
+INFO | app.application.worldData.generators.structure.staircase.shaftFactory | shaft factory | 'main_staircase' idx=1 z_offset=1 size=5x5 max_z_height=3
+INFO | app.application.worldData.generators.structure.staircase.shaftFactory | shaft factory | 'main_staircase' idx=2 z_offset=2 size=5x5 max_z_height=3
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=west_staircase), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=west_staircase), using default 'wood'
+INFO | app.application.worldData.generators.structure.staircase.shaftFactory | shaft factory | 'west_staircase' idx=0 z_offset=0 size=5x5 max_z_height=3
+INFO | app.application.worldData.generators.structure.staircase.shaftFactory | shaft factory | 'west_staircase' idx=1 z_offset=1 size=5x5 max_z_height=3
+INFO | app.application.worldData.generators.structure.staircase.shaftFactory | shaft factory | 'west_staircase' idx=2 z_offset=2 size=5x5 max_z_height=3
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | shaft rooms instantiated: 6 across 2 staircases
+INFO | app.application.worldData.generators.structure.structureGeneratorService | === PHASE: layout (order propagation) ===
+INFO | app.application.worldData.generators.structure.layoutEngine | layout mode_a | start_room=main_hall total=4
+INFO | app.application.worldData.generators.structure.staircase.shaftPlacer | AdjacentShaftPlacer | shaft='shaft_main_staircase_0' placed at (10,34) adjacent to fr_room='main_hall'
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | staircase='main_staircase' shaft at (10,34), level_start propagated to [1, 2]
+INFO | app.application.worldData.generators.structure.staircase.shaftPlacer | AdjacentShaftPlacer | shaft='shaft_west_staircase_0' placed at (6,10) adjacent to fr_room='main_hall'
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | staircase='west_staircase' shaft at (6,10), level_start propagated to [1, 2]
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=0 footprint_bounds=(6, 10, 42, 38)
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=0 start=(10,10) placed=4 skipped=0
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=0  room=main_hall             origin=(10,10)  size=25x25  extra_cells=0
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=0  room=kitchen               origin=(34,10)  size=9x9  extra_cells=0
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=0  room=shaft_main_staircase_0  origin=(10,34)  size=5x5  extra_cells=0
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=0  room=shaft_west_staircase_0  origin=(6,10)  size=5x5  extra_cells=0
+INFO | app.application.worldData.generators.structure.layoutEngine | layout mode_a | pre-placed=2 total=4 (shaft-anchored BFS)
+INFO | app.application.worldData.generators.structure.layoutEngine | layout mode_b | attach_rooms=7  bounds=(6, 10, 42, 38)
+WARNING | app.application.worldData.generators.structure.layoutEngine | layout mode_b | room='guest_room' z=1 skipped — Facing.NORTH wall full
+WARNING | app.application.worldData.generators.structure.layoutEngine | layout mode_b | room='guest_room' z=1 skipped — Facing.NORTH wall full
+INFO | app.application.worldData.generators.structure.layoutEngine | layout mode_b | room='guest_room_w' west width 8->5
+WARNING | app.application.worldData.generators.structure.layoutEngine | layout mode_b | room='guest_room_w' z=1 skipped — Facing.WEST wall full
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1 footprint_bounds=(6, 10, 23, 38)
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1 start=(10,34) placed=8 skipped=3
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=corridor              origin=(10,32)  size=14x3  extra_cells=0
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=corridor_w            origin=(10,10)  size=3x17  extra_cells=0
+WARNING | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=guest_room NOT PLACED
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=guest_room            origin=(10,28)  size=6x5  extra_cells=0
+WARNING | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=guest_room NOT PLACED
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=guest_room            origin=(15,28)  size=6x5  extra_cells=0
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=guest_room_w          origin=(12,10)  size=8x5  extra_cells=0
+WARNING | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=guest_room_w NOT PLACED
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=guest_room_w          origin=(12,14)  size=8x5  extra_cells=0
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=shaft_main_staircase_1  origin=(10,34)  size=5x5  extra_cells=0
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=shaft_west_staircase_1  origin=(6,10)  size=5x5  extra_cells=0
+WARNING | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1 rooms not placed: ['guest_room', 'guest_room', 'guest_room_w']
+INFO | app.application.worldData.generators.structure.layoutEngine | layout mode_a | start_room=cellar total=1
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=-1 footprint_bounds=(10, 10, 21, 21)
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=-1 start=(10,10) placed=1 skipped=0
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=-1  room=cellar                origin=(10,10)  size=12x12  extra_cells=0
+INFO | app.application.worldData.generators.structure.layoutEngine | layout mode_a | pre-placed=2 total=4 (shaft-anchored BFS)
+INFO | app.application.worldData.generators.structure.layoutEngine | layout mode_b | attach_rooms=4  bounds=(6, 10, 23, 38)
+INFO | app.application.worldData.generators.structure.layoutEngine | layout mode_b | room='guest_room_2' north depth 6->5
+WARNING | app.application.worldData.generators.structure.layoutEngine | layout mode_b | room='guest_room_2' z=2 skipped — Facing.NORTH wall full
+INFO | app.application.worldData.generators.structure.layoutEngine | layout mode_b | room='guest_room_2_w' west width 6->5
+WARNING | app.application.worldData.generators.structure.layoutEngine | layout mode_b | room='guest_room_2_w' z=2 skipped — Facing.WEST wall full
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=2 footprint_bounds=(6, 10, 21, 38)
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=2 start=(10,34) placed=6 skipped=2
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=2  room=corridor_2            origin=(10,32)  size=12x3  extra_cells=0
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=2  room=corridor_2_w          origin=(10,10)  size=3x15  extra_cells=0
+WARNING | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=2  room=guest_room_2 NOT PLACED
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=2  room=guest_room_2          origin=(10,27)  size=7x6  extra_cells=0
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=2  room=guest_room_2_w        origin=(12,10)  size=6x6  extra_cells=0
+WARNING | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=2  room=guest_room_2_w NOT PLACED
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=2  room=shaft_main_staircase_2  origin=(10,34)  size=5x5  extra_cells=0
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=2  room=shaft_west_staircase_2  origin=(6,10)  size=5x5  extra_cells=0
+WARNING | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=2 rooms not placed: ['guest_room_2', 'guest_room_2_w']
+INFO | app.application.worldData.generators.structure.structureGeneratorService | === PHASE: cell generation ===
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | z_offset=-1 cells generated: 232
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | z_offset=0 cells generated: 1001
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | z_offset=1 cells generated: 492
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | z_offset=2 cells generated: 386
+INFO | app.application.worldData.generators.structure.structureGeneratorService | pre-passages room staircase_type: 'shaft_main_staircase_0'  'u_shape'
+INFO | app.application.worldData.generators.structure.structureGeneratorService | pre-passages room staircase_type: 'shaft_main_staircase_1'  'u_shape'
+INFO | app.application.worldData.generators.structure.structureGeneratorService | pre-passages room staircase_type: 'shaft_main_staircase_2'  'u_shape'
+INFO | app.application.worldData.generators.structure.structureGeneratorService | pre-passages room staircase_type: 'shaft_west_staircase_0'  'u_shape'
+INFO | app.application.worldData.generators.structure.structureGeneratorService | pre-passages room staircase_type: 'shaft_west_staircase_1'  'u_shape'
+INFO | app.application.worldData.generators.structure.structureGeneratorService | pre-passages room staircase_type: 'shaft_west_staircase_2'  'u_shape'
+INFO | app.application.worldData.generators.structure.passages.builder | === PHASE: build_passages ===
+INFO | app.application.worldData.generators.structure.staircase.builder | build_staircase: main_staircase  main_hall→corridor  stair_type='u_shape'  z_height=3
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape main_staircase  main_hall→corridor march=0 flat=4  ideal=3 mid_ideal=6 optimal=5  facing=north turn_v=(-1, 0)
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape main_staircase  main_hall→corridor march=0  pool1 far_end=[(12, 37), (11, 37), (13, 37)]
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape main_staircase  main_hall→corridor march=0  pool3 side_walls=[(11, 36), (13, 36)]
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape main_staircase  main_hall→corridor march=0  stair_floor → [(12, 37), (11, 37), (13, 37), (11, 36)]
+INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape main_staircase  main_hall→corridor _build_u_shape_first: z_lo=0 z_height=3 flat_march1=4 fr_anchor=(13, 35) facing=north path_len=7 flat_set={(11, 36), (13, 37), (11, 37), (12, 37)}
+INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape main_staircase  main_hall→corridor _build_u_shape_first done: 3 stair cells, 4 floor cells, z_final=3
+INFO | app.application.worldData.generators.structure.staircase.builder | build_staircase: main_staircase  corridor→corridor_2  stair_type='u_shape'  z_height=3
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape main_staircase  corridor→corridor_2 march=0 flat=4  ideal=3 mid_ideal=6 optimal=5  facing=north turn_v=(-1, 0)
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape main_staircase  corridor→corridor_2 march=0  pool1 far_end=[(12, 37), (11, 37), (13, 37)]
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape main_staircase  corridor→corridor_2 march=0  pool3 side_walls=[(11, 36), (13, 36)]
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape main_staircase  corridor→corridor_2 march=0  stair_floor → [(12, 37), (11, 37), (13, 37), (11, 36)]
+INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape main_staircase  corridor→corridor_2 _build_u_shape_first: z_lo=3 z_height=3 flat_march1=4 fr_anchor=(13, 35) facing=north path_len=7 flat_set={(11, 36), (13, 37), (11, 37), (12, 37)}
+INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape main_staircase  corridor→corridor_2 _build_u_shape_first done: 3 stair cells, 4 floor cells, z_final=6
+INFO | app.application.worldData.generators.structure.staircase.builder | build_staircase: west_staircase  main_hall→corridor_w  stair_type='u_shape'  z_height=3
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  main_hall→corridor_w march=0 flat=4  ideal=3 mid_ideal=6 optimal=5  facing=west turn_v=(0, 1)
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  main_hall→corridor_w march=0  pool1 far_end=[(7, 12), (7, 11), (7, 13)]
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  main_hall→corridor_w march=0  pool3 side_walls=[(8, 13), (8, 11)]
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  main_hall→corridor_w march=0  stair_floor → [(7, 12), (7, 11), (7, 13), (8, 13)]
+INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape west_staircase  main_hall→corridor_w _build_u_shape_first: z_lo=0 z_height=3 flat_march1=4 fr_anchor=(9, 11) facing=west path_len=7 flat_set={(8, 13), (7, 11), (7, 12), (7, 13)}
+INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape west_staircase  main_hall→corridor_w _build_u_shape_first done: 3 stair cells, 4 floor cells, z_final=3
+INFO | app.application.worldData.generators.structure.staircase.builder | build_staircase: west_staircase  corridor_w→corridor_2_w  stair_type='u_shape'  z_height=3
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  corridor_w→corridor_2_w march=0 flat=4  ideal=3 mid_ideal=6 optimal=5  facing=west turn_v=(0, 1)
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  corridor_w→corridor_2_w march=0  pool1 far_end=[(7, 12), (7, 11), (7, 13)]
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  corridor_w→corridor_2_w march=0  pool3 side_walls=[(8, 13), (8, 11)]
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  corridor_w→corridor_2_w march=0  stair_floor → [(7, 12), (7, 11), (7, 13), (8, 13)]
+INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape west_staircase  corridor_w→corridor_2_w _build_u_shape_first: z_lo=3 z_height=3 flat_march1=4 fr_anchor=(9, 11) facing=west path_len=7 flat_set={(8, 13), (7, 11), (7, 12), (7, 13)}
+INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape west_staircase  corridor_w→corridor_2_w _build_u_shape_first done: 3 stair cells, 4 floor cells, z_final=6
+INFO | app.application.worldData.generators.structure.staircase.builder | build_staircase: cellar_staircase  cellar→kitchen  stair_type='trapdoor'  z_height=3
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | passages=20 total_cells=2225
+INFO | app.application.worldData.generators.structure.structureGeneratorService | === PHASE: post_process ===
+INFO | app.application.worldData.generators.structure.structureGeneratorService | === PHASE: assemble result ===
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | done building=bld-tavern_2-test-001 rooms=13 cells=2225 passages=20
+
+=== РЕЗУЛЬТАТ ===
+Уровней:   4
+Комнат:    13
+Ячеек:     2225
+Проходов:  20
+
+--- Уровни ---
+  z=-3  z_height=3  'Подвал'
+  z=+0  z_height=3  'Первый этаж'
+  z=+3  z_height=3  'Второй этаж'
+  z=+6  z_height=3  'Третий этаж'
+
+--- Комнаты ---
+  [cellar] 'Подвал'  origin=(10,10)  z=-3
+  [common_hall] 'Главный зал'  origin=(10,10)  z=0
+  [kitchen] 'Кухня'  origin=(34,10)  z=0
+  [corridor] 'Коридор Север'  origin=(10,32)  z=3
+  [corridor] 'Коридор Запад'  origin=(10,10)  z=3
+  [guest_room] 'Комната для съёма 2'  origin=(10,28)  z=3
+  [guest_room] 'Комната для съёма 4'  origin=(15,28)  z=3
+  [guest_room] 'Комната для съёма 1'  origin=(12,10)  z=3
+  [guest_room] 'Комната для съёма 3'  origin=(12,14)  z=3
+  [corridor] 'Коридор Север'  origin=(10,32)  z=6
+  [corridor] 'Коридор Запад'  origin=(10,10)  z=6
+  [guest_room] 'Комната для съёма 2'  origin=(10,27)  z=6
+  [guest_room] 'Комната для съёма 1'  origin=(12,10)  z=6
+
+--- Проходы ---
+  doorway  44c32c99-0cdf-52e1-8170-03a483c866d2 -> 44c32c99-0cdf-52e1-8170-03a483c866d2  to=(34,14)
+  doorway  c48ddaa4-59a4-53af-8b11-1c13520ecbe0 -> c48ddaa4-59a4-53af-8b11-1c13520ecbe0  to=(13,32)
+  doorway  c48ddaa4-59a4-53af-8b11-1c13520ecbe0 -> c48ddaa4-59a4-53af-8b11-1c13520ecbe0  to=(18,32)
+  doorway  c48ddaa4-59a4-53af-8b11-1c13520ecbe0 -> c48ddaa4-59a4-53af-8b11-1c13520ecbe0  to=(12,12)
+  doorway  c48ddaa4-59a4-53af-8b11-1c13520ecbe0 -> c48ddaa4-59a4-53af-8b11-1c13520ecbe0  to=(12,16)
+  doorway  73fef290-c9b5-5826-90bc-6dbe8e3db5a7 -> 73fef290-c9b5-5826-90bc-6dbe8e3db5a7  to=(13,32)
+  doorway  73fef290-c9b5-5826-90bc-6dbe8e3db5a7 -> 73fef290-c9b5-5826-90bc-6dbe8e3db5a7  to=(12,13)
+  archway  44c32c99-0cdf-52e1-8170-03a483c866d2 -> 44c32c99-0cdf-52e1-8170-03a483c866d2  to=(12,34)
+  archway  c48ddaa4-59a4-53af-8b11-1c13520ecbe0 -> c48ddaa4-59a4-53af-8b11-1c13520ecbe0  to=(12,34)
+  staircase  44c32c99-0cdf-52e1-8170-03a483c866d2 -> c48ddaa4-59a4-53af-8b11-1c13520ecbe0  to=(11,34)
+  archway  73fef290-c9b5-5826-90bc-6dbe8e3db5a7 -> 73fef290-c9b5-5826-90bc-6dbe8e3db5a7  to=(12,34)
+  staircase  c48ddaa4-59a4-53af-8b11-1c13520ecbe0 -> 73fef290-c9b5-5826-90bc-6dbe8e3db5a7  to=(11,34)
+  archway  44c32c99-0cdf-52e1-8170-03a483c866d2 -> 44c32c99-0cdf-52e1-8170-03a483c866d2  to=(10,12)
+  archway  c48ddaa4-59a4-53af-8b11-1c13520ecbe0 -> c48ddaa4-59a4-53af-8b11-1c13520ecbe0  to=(10,12)
+  staircase  44c32c99-0cdf-52e1-8170-03a483c866d2 -> c48ddaa4-59a4-53af-8b11-1c13520ecbe0  to=(10,13)
+  archway  73fef290-c9b5-5826-90bc-6dbe8e3db5a7 -> 73fef290-c9b5-5826-90bc-6dbe8e3db5a7  to=(10,12)
+  staircase  c48ddaa4-59a4-53af-8b11-1c13520ecbe0 -> 73fef290-c9b5-5826-90bc-6dbe8e3db5a7  to=(10,13)
+  staircase  f93a1ec3-4b80-5560-8e6f-d9b263a33c8e -> 44c32c99-0cdf-52e1-8170-03a483c866d2  to=(35,11)
+  main_entrance  exterior -> 44c32c99-0cdf-52e1-8170-03a483c866d2  to=(22,10)
+  service_entrance  exterior -> 44c32c99-0cdf-52e1-8170-03a483c866d2  to=(39,18)
+
+--- Элементы ячеек ---
+  archway: 36
+  door: 9
+  floor: 864
+  stair_anchor: 4
+  stair_floor: 16
+  staircase: 8
+  trapdoor: 4
+  void: 60
+  wall: 1224
+  [railing cells: 0]
+
+--- Лестница: все ячейки ---
+  (9,11,z=+0) stair_anchor
+  (13,35,z=+0) stair_anchor
+  (8,11,z=+1) staircase
+  (13,36,z=+1) staircase
+  (7,11,z=+2) stair_floor
+  (7,12,z=+2) stair_floor
+  (7,13,z=+2) stair_floor
+  (8,13,z=+2) stair_floor
+  (9,13,z=+2) staircase
+  (11,35,z=+2) staircase
+  (11,36,z=+2) stair_floor
+  (11,37,z=+2) stair_floor
+  (12,37,z=+2) stair_floor
+  (13,37,z=+2) stair_floor
+  (9,11,z=+3) stair_anchor
+  (13,35,z=+3) stair_anchor
+  (8,11,z=+4) staircase
+  (13,36,z=+4) staircase
+  (7,11,z=+5) stair_floor
+  (7,12,z=+5) stair_floor
+  (7,13,z=+5) stair_floor
+  (8,13,z=+5) stair_floor
+  (9,13,z=+5) staircase
+  (11,35,z=+5) staircase
+  (11,36,z=+5) stair_floor
+  (11,37,z=+5) stair_floor
+  (12,37,z=+5) stair_floor
+  (13,37,z=+5) stair_floor
+
+★ z=-3 [Подвал]
+x: 9..22  y: 9..22
+  22 |              |
+  21 | ############ |
+  20 | #..........# |
+  19 | #..........# |
+  18 | #..........# |
+  17 | #..........# |
+  16 | #..........# |
+  15 | #..........# |
+  14 | #..........# |
+  13 | #..........# |
+  12 | #..........# |
+  11 | #↑.........# |
+  10 | ############ |
+   9 |              |
+      01111111111222
+      90123456789012
+
+· z=-2 [промежуточный]
+x: 9..22  y: 9..22
+  22 |              |
+  21 | ############ |
+  20 | #          # |
+  19 | #          # |
+  18 | #          # |
+  17 | #          # |
+  16 | #          # |
+  15 | #          # |
+  14 | #          # |
+  13 | #          # |
+  12 | #          # |
+  11 | #          # |
+  10 | ############ |
+   9 |              |
+      01111111111222
+      90123456789012
+
+· z=-1 [промежуточный]
+x: 9..22  y: 9..22
+  22 |              |
+  21 | ############ |
+  20 | #          # |
+  19 | #          # |
+  18 | #          # |
+  17 | #          # |
+  16 | #          # |
+  15 | #          # |
+  14 | #          # |
+  13 | #          # |
+  12 | #          # |
+  11 | #          # |
+  10 | ############ |
+   9 |              |
+      01111111111222
+      90123456789012
+
+★ z=+0 [Первый этаж]
+x: 5..43  y: 9..39
+  39 |                                       |
+  38 |     #####                             |
+  37 |     #...#                             |
+  36 |     #. .#                             |
+  35 |     #. ↑#                             |
+  34 |     #...#####################         |
+  33 |     #.......................#         |
+  32 |     #.......................#         |
+  31 |     #.......................#         |
+  30 |     #.......................#         |
+  29 |     #.......................#         |
+  28 |     #.......................#         |
+  27 |     #.......................#         |
+  26 |     #.......................#         |
+  25 |     #.......................#         |
+  24 |     #.......................#         |
+  23 |     #.......................#         |
+  22 |     #.......................#         |
+  21 |     #.......................#         |
+  20 |     #.......................#         |
+  19 |     #.......................#         |
+  18 |     #.......................#####D### |
+  17 |     #.......................#.......# |
+  16 |     #.......................#.......# |
+  15 |     #.......................#.......# |
+  14 | #####.......................D.......# |
+  13 | #...........................#.......# |
+  12 | #.  ........................#.......# |
+  11 | #..↑........................#$......# |
+  10 | ################D#################### |
+   9 |                                       |
+      000001111111111222222222233333333334444
+      567890123456789012345678901234567890123
+
+· z=+1 [промежуточный]
+x: 5..43  y: 9..39
+  39 |                                       |
+  38 |     #####                             |
+  37 |     #   #                             |
+  36 |     #  ↑#                             |
+  35 |     #   #                             |
+  34 |     #'''#####################         |
+  33 |     #                       #         |
+  32 |     #                       #         |
+  31 |     #                       #         |
+  30 |     #                       #         |
+  29 |     #                       #         |
+  28 |     #                       #         |
+  27 |     #                       #         |
+  26 |     #                       #         |
+  25 |     #                       #         |
+  24 |     #                       #         |
+  23 |     #                       #         |
+  22 |     #                       #         |
+  21 |     #                       #         |
+  20 |     #                       #         |
+  19 |     #                       #         |
+  18 |     #                       ######### |
+  17 |     #                       #       # |
+  16 |     #                       #       # |
+  15 |     #                       #       # |
+  14 | #####                       #       # |
+  13 | #   '                       #       # |
+  12 | #   '                       #       # |
+  11 | # ← '                       #T      # |
+  10 | ##################################### |
+   9 |                                       |
+      000001111111111222222222233333333334444
+      567890123456789012345678901234567890123
+
+· z=+2 [промежуточный]
+x: 5..43  y: 9..39
+  39 |                                       |
+  38 |     #####                             |
+  37 |     #___#                             |
+  36 |     #_  #                             |
+  35 |     #↓  #                             |
+  34 |     #'''#####################         |
+  33 |     #                       #         |
+  32 |     #                       #         |
+  31 |     #                       #         |
+  30 |     #                       #         |
+  29 |     #                       #         |
+  28 |     #                       #         |
+  27 |     #                       #         |
+  26 |     #                       #         |
+  25 |     #                       #         |
+  24 |     #                       #         |
+  23 |     #                       #         |
+  22 |     #                       #         |
+  21 |     #                       #         |
+  20 |     #                       #         |
+  19 |     #                       #         |
+  18 |     #                       ######### |
+  17 |     #                       #       # |
+  16 |     #                       #       # |
+  15 |     #                       #       # |
+  14 | #####                       #       # |
+  13 | #__→'                       #       # |
+  12 | #_  '                       #       # |
+  11 | #_  '                       #T      # |
+  10 | ##################################### |
+   9 |                                       |
+      000001111111111222222222233333333334444
+      567890123456789012345678901234567890123
+
+★ z=+3 [Второй этаж]
+x: 5..24  y: 9..39
+  39 |                    |
+  38 |     #####          |
+  37 |     #...#          |
+  36 |     #. .#          |
+  35 |     #. ↑#          |
+  34 |     #$..########## |
+  33 |     #............# |
+  32 |     ###D####D##### |
+  31 |     #....#....#    |
+  30 |     #....#....#    |
+  29 |     #....#....#    |
+  28 |     ###########    |
+  27 |                    |
+  26 |     ###            |
+  25 |     #.#            |
+  24 |     #.#            |
+  23 |     #.#            |
+  22 |     #.#            |
+  21 |     #.#            |
+  20 |     #.#            |
+  19 |     #.#            |
+  18 |     #.########     |
+  17 |     #.#......#     |
+  16 |     #.D......#     |
+  15 |     #.#......#     |
+  14 | #####.########     |
+  13 | #...$.#......#     |
+  12 | #.  ..D......#     |
+  11 | #..↑..#......#     |
+  10 | ##############     |
+   9 |                    |
+      00000111111111122222
+      56789012345678901234
+
+· z=+4 [промежуточный]
+x: 5..24  y: 9..39
+  39 |                    |
+  38 |     #####          |
+  37 |     #   #          |
+  36 |     #  ↑#          |
+  35 |     #   #          |
+  34 |     #'''########## |
+  33 |     #            # |
+  32 |     ############## |
+  31 |     #    #    #    |
+  30 |     #    #    #    |
+  29 |     #    #    #    |
+  28 |     ###########    |
+  27 |                    |
+  26 |     ###            |
+  25 |     # #            |
+  24 |     # #            |
+  23 |     # #            |
+  22 |     # #            |
+  21 |     # #            |
+  20 |     # #            |
+  19 |     # #            |
+  18 |     # ########     |
+  17 |     # #      #     |
+  16 |     # #      #     |
+  15 |     # #      #     |
+  14 | ##### ########     |
+  13 | #   ' #      #     |
+  12 | #   ' #      #     |
+  11 | # ← ' #      #     |
+  10 | ##############     |
+   9 |                    |
+      00000111111111122222
+      56789012345678901234
+
+· z=+5 [промежуточный]
+x: 5..24  y: 9..39
+  39 |                    |
+  38 |     #####          |
+  37 |     #___#          |
+  36 |     #_  #          |
+  35 |     #↓  #          |
+  34 |     #'''########## |
+  33 |     #            # |
+  32 |     ############## |
+  31 |     #    #    #    |
+  30 |     #    #    #    |
+  29 |     #    #    #    |
+  28 |     ###########    |
+  27 |                    |
+  26 |     ###            |
+  25 |     # #            |
+  24 |     # #            |
+  23 |     # #            |
+  22 |     # #            |
+  21 |     # #            |
+  20 |     # #            |
+  19 |     # #            |
+  18 |     # ########     |
+  17 |     # #      #     |
+  16 |     # #      #     |
+  15 |     # #      #     |
+  14 | ##### ########     |
+  13 | #__→' #      #     |
+  12 | #_  ' #      #     |
+  11 | #_  ' #      #     |
+  10 | ##############     |
+   9 |                    |
+      00000111111111122222
+      56789012345678901234
+
+★ z=+6 [Третий этаж]
+x: 5..22  y: 9..39
+  39 |                  |
+  38 |     #####        |
+  37 |     #   #        |
+  36 |     #   #        |
+  35 |     #   #        |
+  34 |     #$..######## |
+  33 |     #..........# |
+  32 |     ###D######## |
+  31 |     #.....#      |
+  30 |     #.....#      |
+  29 |     #.....#      |
+  28 |     #.....#      |
+  27 |     #######      |
+  26 |                  |
+  25 |                  |
+  24 |     ###          |
+  23 |     #.#          |
+  22 |     #.#          |
+  21 |     #.#          |
+  20 |     #.#          |
+  19 |     #.#          |
+  18 |     #.#          |
+  17 |     #.#          |
+  16 |     #.#          |
+  15 |     #.######     |
+  14 | #####.#....#     |
+  13 | #   $.D....#     |
+  12 | #   ..#....#     |
+  11 | #   ..#....#     |
+  10 | ############     |
+   9 |                  |
+      000001111111111222
+      567890123456789012
+
+· z=+7 [промежуточный]
+x: 5..22  y: 9..39
+  39 |                  |
+  38 |     #####        |
+  37 |     #   #        |
+  36 |     #   #        |
+  35 |     #   #        |
+  34 |     #'''######## |
+  33 |     #          # |
+  32 |     ############ |
+  31 |     #     #      |
+  30 |     #     #      |
+  29 |     #     #      |
+  28 |     #     #      |
+  27 |     #######      |
+  26 |                  |
+  25 |                  |
+  24 |     ###          |
+  23 |     # #          |
+  22 |     # #          |
+  21 |     # #          |
+  20 |     # #          |
+  19 |     # #          |
+  18 |     # #          |
+  17 |     # #          |
+  16 |     # #          |
+  15 |     # ######     |
+  14 | ##### #    #     |
+  13 | #   ' #    #     |
+  12 | #   ' #    #     |
+  11 | #   ' #    #     |
+  10 | ############     |
+   9 |                  |
+      000001111111111222
+      567890123456789012
+
+· z=+8 [промежуточный]
+x: 5..22  y: 9..39
+  39 |                  |
+  38 |     #####        |
+  37 |     #   #        |
+  36 |     #   #        |
+  35 |     #   #        |
+  34 |     #'''######## |
+  33 |     #          # |
+  32 |     ############ |
+  31 |     #     #      |
+  30 |     #     #      |
+  29 |     #     #      |
+  28 |     #     #      |
+  27 |     #######      |
+  26 |                  |
+  25 |                  |
+  24 |     ###          |
+  23 |     # #          |
+  22 |     # #          |
+  21 |     # #          |
+  20 |     # #          |
+  19 |     # #          |
+  18 |     # #          |
+  17 |     # #          |
+  16 |     # #          |
+  15 |     # ######     |
+  14 | ##### #    #     |
+  13 | #   ' #    #     |
+  12 | #   ' #    #     |
+  11 | #   ' #    #     |
+  10 | ############     |
+   9 |                  |
+      000001111111111222
+      567890123456789012

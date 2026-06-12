@@ -16,13 +16,18 @@ import logging
 from collections import deque
 
 from app.application.worldData.generators.structure.errors import GenerationError
+from app.application.worldData.generators.structure.facing import Facing
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
 
 logger = logging.getLogger(__name__)
 
-_DIRECTIONS = ("east", "north", "west", "south")
-
-_OPPOSITE = {"north": "south", "south": "north", "east": "west", "west": "east"}
+_DIRECTIONS = (Facing.EAST, Facing.NORTH, Facing.WEST, Facing.SOUTH)
+_OPPOSITE: dict[Facing, Facing] = {
+    Facing.NORTH: Facing.SOUTH,
+    Facing.SOUTH: Facing.NORTH,
+    Facing.EAST:  Facing.WEST,
+    Facing.WEST:  Facing.EAST,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -48,21 +53,21 @@ def _has_conflict(room: _RoomInstance, placed: list[_RoomInstance]) -> bool:
     return any(_interior_overlaps(room, p) for p in placed if p is not room)
 
 
-def _origin_adjacent(room: _RoomInstance, anchor: _RoomInstance, direction: str) -> tuple[int, int]:
+def _origin_adjacent(room: _RoomInstance, anchor: _RoomInstance, direction: Facing) -> tuple[int, int]:
     """Compute (x0, y0) to place room adjacent to anchor in given direction."""
     ax, ay = anchor.origin_x, anchor.origin_y
     aw, ad = anchor.width, anchor.depth
-    if direction == "east":
+    if direction == Facing.EAST:
         return ax + aw - 1, ay
-    if direction == "north":
+    if direction == Facing.NORTH:
         return ax, ay + ad - 1
-    if direction == "west":
+    if direction == Facing.WEST:
         return ax - room.width + 1, ay
     # south
     return ax, ay - room.depth + 1
 
 
-def _try_adjacent(room: _RoomInstance, anchor: _RoomInstance, direction: str,
+def _try_adjacent(room: _RoomInstance, anchor: _RoomInstance, direction: Facing,
                   placed: list[_RoomInstance]) -> bool:
     x0, y0 = _origin_adjacent(room, anchor, direction)
     room.origin_x, room.origin_y = x0, y0
@@ -178,9 +183,10 @@ def _layout_mode_a(rooms: list[_RoomInstance], connections: list[dict],
                 continue
             queue.append(nbr)
 
-            # Try to place adjacent to current first, then any placed room.
-            # Staircase rooms: prefer near-side (opposite of facing = far end).
-            preferred = _OPPOSITE[current.facing] if current.facing else _DIRECTIONS[0]
+            if current.is_shaft and current.facing:
+                preferred = _OPPOSITE.get(Facing(current.facing), _DIRECTIONS[0])
+            else:
+                preferred = _DIRECTIONS[0]
             placed_ok = _try_adjacent(nbr, current, preferred, placed)
             if not placed_ok:
                 placed_ok = _place_next_to_any(nbr, placed)
@@ -211,7 +217,7 @@ def _layout_mode_a(rooms: list[_RoomInstance], connections: list[dict],
 # Mode B — corridor attach_to
 
 def _place_rooms_on_side(
-    side: str,
+    side: Facing,
     rooms: list[_RoomInstance],
     host: _RoomInstance,
     all_placed: list[_RoomInstance],
@@ -223,18 +229,18 @@ def _place_rooms_on_side(
     north/south: cursor moves along x, rooms extend perpendicularly in y.
     east/west:   cursor moves along y, rooms extend perpendicularly in x.
     """
-    horizontal = side in ("north", "south")
+    horizontal = side in (Facing.NORTH, Facing.SOUTH)
     cursor = host.origin_x if horizontal else host.origin_y
 
     for room in rooms:
         # Set initial origin
-        if side == "north":
+        if side == Facing.NORTH:
             room.origin_x = cursor
             room.origin_y = host.origin_y + host.depth - 1
-        elif side == "south":
+        elif side == Facing.SOUTH:
             room.origin_x = cursor
             room.origin_y = None  # resolved after depth clamp
-        elif side == "east":
+        elif side == Facing.EAST:
             room.origin_x = host.origin_x + host.width - 1
             room.origin_y = cursor
         else:  # west
@@ -244,7 +250,7 @@ def _place_rooms_on_side(
         if bounds is not None:
             x_min, y_min, x_max, y_max = bounds
 
-            if side == "north":
+            if side == Facing.NORTH:
                 # Extent: y grows north — clamp depth by y_max
                 avail_d = y_max - room.origin_y + 1
                 clamped_d = max(1, min(room.depth, avail_d))
@@ -261,7 +267,7 @@ def _place_rooms_on_side(
                     logger.info("layout mode_b | room=%r north width %d->%d", room.room_id, room.width, clamped_w)
                     room.width = clamped_w
 
-            elif side == "south":
+            elif side == Facing.SOUTH:
                 # Extent: y grows south — available = host.origin_y - y_min + 1
                 avail_d = host.origin_y - y_min + 1
                 clamped_d = max(1, min(room.depth, avail_d))
@@ -278,7 +284,7 @@ def _place_rooms_on_side(
                     logger.info("layout mode_b | room=%r south width %d->%d", room.room_id, room.width, clamped_w)
                     room.width = clamped_w
 
-            elif side == "east":
+            elif side == Facing.EAST:
                 # Extent: x grows east — clamp width by x_max
                 avail_w = x_max - room.origin_x + 1
                 clamped_w = max(1, min(room.width, avail_w))
@@ -321,9 +327,9 @@ def _place_rooms_on_side(
                     room.depth = clamped_d
 
         # Resolve deferred origin components
-        if side == "south":
+        if side == Facing.SOUTH:
             room.origin_y = host.origin_y - room.depth + 1
-        elif side == "west":
+        elif side == Facing.WEST:
             room.origin_x = host.origin_x - room.width + 1
 
         # 2×2 interior check — both dims ≤ 2 is not a usable room
@@ -375,12 +381,14 @@ def _layout_mode_b(
 
         attach_wall = group[0].attach_wall or "both"
 
-        if attach_wall in ("north", "south", "east", "west"):
-            _place_rooms_on_side(attach_wall, group, host, all_placed, bounds)
-        else:  # "both" or "any" — auto-detect from host orientation
+        try:
+            side = Facing(attach_wall)
+            _place_rooms_on_side(side, group, host, all_placed, bounds)
+        except ValueError:
+            # "both" or "any" — auto-detect from host orientation
             horizontal = host.width >= host.depth
-            side_a = "north" if horizontal else "east"
-            side_b = "south" if horizontal else "west"
+            side_a = Facing.NORTH if horizontal else Facing.EAST
+            side_b = Facing.SOUTH if horizontal else Facing.WEST
             side_a_rooms = [group[i] for i in range(0, len(group), 2)]
             side_b_rooms = [group[i] for i in range(1, len(group), 2)]
             _place_rooms_on_side(side_a, side_a_rooms, host, all_placed, bounds)
