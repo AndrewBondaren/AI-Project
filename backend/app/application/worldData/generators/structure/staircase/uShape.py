@@ -421,7 +421,8 @@ class UShapeBuilder(StaircaseBuilder):
             facing=facing
         )
 
-        # Fill non-path interior: floor at z_lo (base), void above (shaft), z_top untouched
+        # Fill all non-path interior cells with void.
+        # Base floor is handled by the post-step below.
         path_set = {(x, y, z) for x, y, z in stair_cells + floor_cells}
         interior_set = {(x, y) for x, y in interior if (x, y) not in pseudo}
 
@@ -429,17 +430,7 @@ class UShapeBuilder(StaircaseBuilder):
             for (x, y) in interior_set:
                 if (x, y, z) in path_set:
                     continue
-                if z == self.z_lo and prev_anchor is None:
-                    # First flight: fill shaft base with floor so it has a visible bottom.
-                    # Subsequent flights leave the shaft interior open (void) —
-                    # the shaft continues above the previous flight.
-                    self.cells[(x, y, z)] = _floor_cell(
-                        x, y, z, self.world_uid, self.building_uid, self.mat
-                    )
-                else:
-                    self.cells[(x, y, z)] = _void_cell(
-                        x, y, z, self.world_uid, self.building_uid,
-                    )
+                self.cells[(x, y, z)] = _void_cell(x, y, z, self.world_uid, self.building_uid)
 
         # Pseudo-column → void on all z
         for (px, py) in pseudo:
@@ -447,6 +438,16 @@ class UShapeBuilder(StaircaseBuilder):
                 self.cells[(px, py, z)] = _void_cell(
                     px, py, z, self.world_uid, self.building_uid,
                 )
+
+        # Base floor post-step: first flight only (prev_anchor is None = no to_anchor at z_lo).
+        # Fills any void cells at z_lo — including pseudo-column positions — with floor.
+        if prev_anchor is None:
+            for (x, y) in {(x, y) for x, y in interior}:
+                c = self.cells.get((x, y, self.z_lo))
+                if c is not None and c.system_building_element == "void":
+                    self.cells[(x, y, self.z_lo)] = _floor_cell(
+                        x, y, self.z_lo, self.world_uid, self.building_uid, self.mat
+                    )
 
         check_headroom(stair_cells, self.cells, self.conn_label, 2, self.z_lo, self.z_top)
 

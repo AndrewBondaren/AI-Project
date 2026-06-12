@@ -148,18 +148,18 @@ def _add_dir(z, x, y, direction):
         return
     anchor_dirs_by_z.setdefault(z, {})[x, y] = direction
 
-# Entry/exit arrows from passage endpoints
+# Exit markers for staircase passage endpoints (to_anchor only)
 for p in layout.passages:
     if p.system_passage_type != "staircase":
         continue
-    fr_z = level_uid_to_z.get(p.from_level_uid)
     to_z = level_uid_to_z.get(p.to_level_uid)
-    if fr_z is None or to_z is None or p.from_x is None:
+    if to_z is None:
         continue
-    _add_dir(fr_z, p.from_x, p.from_y, "↑" if to_z > fr_z else "↓")
     _add_dir(to_z, p.to_x, p.to_y, "$")
 
-# Trail arrows: march direction inferred from consecutive staircase cells
+# Trail arrows: real movement vector from consecutive staircase cells.
+# Applied to both the current cell and the next so the start anchor
+# shows its true direction rather than a generic "↑".
 _stair_by_z: dict[int, list[tuple[int, int]]] = {}
 for _c in layout.cells:
     if _c.system_building_element in ("staircase", "stair_anchor"):
@@ -176,8 +176,11 @@ for _z_k in _sorted_stair_z:
         _cx, _cy = _cur_cells[0]
         _nx, _ny = _nxt_cells[0]
         _sym = _MOVE_SYM.get((_nx - _cx, _ny - _cy))
-        if _sym and (_nx, _ny) not in anchor_dirs_by_z.get(_nxt_z, {}):
-            _add_dir(_nxt_z, _nx, _ny, _sym)
+        if _sym:
+            if (_cx, _cy) not in anchor_dirs_by_z.get(_z_k, {}):
+                _add_dir(_z_k, _cx, _cy, _sym)
+            if (_nx, _ny) not in anchor_dirs_by_z.get(_nxt_z, {}):
+                _add_dir(_nxt_z, _nx, _ny, _sym)
 
 # Back-fill: staircase cells with no arrow yet — infer from z±1 unit neighbour
 _all_stair_z = sorted(_stair_by_z)

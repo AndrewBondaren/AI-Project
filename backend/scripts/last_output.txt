@@ -132,7 +132,7 @@ INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u
 INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape main_staircase  main_hall→corridor _build_u_shape_first: z_lo=0 z_height=3 flat_march1=4 fr_anchor=(11, 35) facing=north path_len=7 flat_set={(13, 36), (13, 37), (11, 37), (12, 37)}
 INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape main_staircase  main_hall→corridor _build_u_shape_first done: 3 stair cells, 4 floor cells, z_final=3
 INFO | app.application.worldData.generators.structure.staircase.builder | build_staircase: main_staircase  corridor→corridor_2  stair_type='u_shape'  z_height=3
-INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape main_staircase  corridor→corridor_2: detected prev stair_anchor at (11, 35), choosing opposite corner
+INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape main_staircase  corridor→corridor_2: detected prev stair_anchor at (11, 35), reusing same corner
 INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape main_staircase  corridor→corridor_2 march=0 flat=4  ideal=3 mid_ideal=6 optimal=5  facing=north turn_v=(1, 0)
 INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape main_staircase  corridor→corridor_2 march=0  pool1 far_end=[(12, 37), (11, 37), (13, 37)]
 INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape main_staircase  corridor→corridor_2 march=0  pool3 side_walls=[(13, 36), (11, 36)]
@@ -140,19 +140,19 @@ INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u
 INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape main_staircase  corridor→corridor_2 _build_u_shape_first: z_lo=3 z_height=3 flat_march1=4 fr_anchor=(11, 35) facing=north path_len=7 flat_set={(13, 36), (13, 37), (11, 37), (12, 37)}
 INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape main_staircase  corridor→corridor_2 _build_u_shape_first done: 3 stair cells, 4 floor cells, z_final=6
 INFO | app.application.worldData.generators.structure.staircase.builder | build_staircase: west_staircase  main_hall→corridor_w  stair_type='u_shape'  z_height=3
-INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  main_hall→corridor_w march=0 flat=4  ideal=3 mid_ideal=6 optimal=5  facing=west turn_v=(0, -1)
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  main_hall→corridor_w march=0 flat=4  ideal=3 mid_ideal=6 optimal=5  facing=west turn_v=(0, 1)
 INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  main_hall→corridor_w march=0  pool1 far_end=[(7, 12), (7, 11), (7, 13)]
-INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  main_hall→corridor_w march=0  pool3 side_walls=[(8, 11), (8, 13)]
-INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  main_hall→corridor_w march=0  stair_floor → [(7, 12), (7, 11), (7, 13), (8, 11)]
-INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape west_staircase  main_hall→corridor_w _build_u_shape_first: z_lo=0 z_height=3 flat_march1=4 fr_anchor=(9, 13) facing=west path_len=7 flat_set={(7, 11), (7, 12), (7, 13), (8, 11)}
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  main_hall→corridor_w march=0  pool3 side_walls=[(8, 13), (8, 11)]
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  main_hall→corridor_w march=0  stair_floor → [(7, 12), (7, 11), (7, 13), (8, 13)]
+INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape west_staircase  main_hall→corridor_w _build_u_shape_first: z_lo=0 z_height=3 flat_march1=4 fr_anchor=(9, 11) facing=west path_len=7 flat_set={(8, 13), (7, 11), (7, 12), (7, 13)}
 INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape west_staircase  main_hall→corridor_w _build_u_shape_first done: 3 stair cells, 4 floor cells, z_final=3
 INFO | app.application.worldData.generators.structure.staircase.builder | build_staircase: west_staircase  corridor_w→corridor_2_w  stair_type='u_shape'  z_height=3
-INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape west_staircase  corridor_w→corridor_2_w: detected prev stair_anchor at (9, 13), choosing opposite corner
-INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  corridor_w→corridor_2_w march=0 flat=4  ideal=3 mid_ideal=6 optimal=5  facing=west turn_v=(0, -1)
+INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape west_staircase  corridor_w→corridor_2_w: detected prev stair_anchor at (9, 11), reusing same corner
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  corridor_w→corridor_2_w march=0 flat=4  ideal=3 mid_ideal=6 optimal=5  facing=west turn_v=(0, 1)
 INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  corridor_w→corridor_2_w march=0  pool1 far_end=[(7, 12), (7, 11), (7, 13)]
-INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  corridor_w→corridor_2_w march=0  pool3 side_walls=[(8, 11), (8, 13)]
-INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  corridor_w→corridor_2_w march=0  stair_floor → [(7, 12), (7, 11), (7, 13), (8, 11)]
-INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape west_staircase  corridor_w→corridor_2_w _build_u_shape_first: z_lo=3 z_height=3 flat_march1=4 fr_anchor=(9, 13) facing=west path_len=7 flat_set={(7, 11), (7, 12), (7, 13), (8, 11)}
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  corridor_w→corridor_2_w march=0  pool3 side_walls=[(8, 13), (8, 11)]
+INFO | app.application.worldData.generators.structure.staircase.uShapeHelper | u_shape west_staircase  corridor_w→corridor_2_w march=0  stair_floor → [(7, 12), (7, 11), (7, 13), (8, 13)]
+INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape west_staircase  corridor_w→corridor_2_w _build_u_shape_first: z_lo=3 z_height=3 flat_march1=4 fr_anchor=(9, 11) facing=west path_len=7 flat_set={(8, 13), (7, 11), (7, 12), (7, 13)}
 INFO | app.application.worldData.generators.structure.staircase.uShape | u_shape west_staircase  corridor_w→corridor_2_w _build_u_shape_first done: 3 stair cells, 4 floor cells, z_final=6
 INFO | app.application.worldData.generators.structure.staircase.builder | build_staircase: cellar_staircase  cellar→kitchen  stair_type='trapdoor'  z_height=3
 INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | passages=20 total_cells=2225
@@ -202,9 +202,9 @@ INFO | app.application.worldData.generators.structure.structureGeneratorService 
   staircase  c48ddaa4-59a4-53af-8b11-1c13520ecbe0 -> 73fef290-c9b5-5826-90bc-6dbe8e3db5a7  to=(13,34)
   archway  44c32c99-0cdf-52e1-8170-03a483c866d2 -> 44c32c99-0cdf-52e1-8170-03a483c866d2  to=(10,12)
   archway  c48ddaa4-59a4-53af-8b11-1c13520ecbe0 -> c48ddaa4-59a4-53af-8b11-1c13520ecbe0  to=(10,12)
-  staircase  44c32c99-0cdf-52e1-8170-03a483c866d2 -> c48ddaa4-59a4-53af-8b11-1c13520ecbe0  to=(10,11)
+  staircase  44c32c99-0cdf-52e1-8170-03a483c866d2 -> c48ddaa4-59a4-53af-8b11-1c13520ecbe0  to=(10,13)
   archway  73fef290-c9b5-5826-90bc-6dbe8e3db5a7 -> 73fef290-c9b5-5826-90bc-6dbe8e3db5a7  to=(10,12)
-  staircase  c48ddaa4-59a4-53af-8b11-1c13520ecbe0 -> 73fef290-c9b5-5826-90bc-6dbe8e3db5a7  to=(10,11)
+  staircase  c48ddaa4-59a4-53af-8b11-1c13520ecbe0 -> 73fef290-c9b5-5826-90bc-6dbe8e3db5a7  to=(10,13)
   staircase  f93a1ec3-4b80-5560-8e6f-d9b263a33c8e -> 44c32c99-0cdf-52e1-8170-03a483c866d2  to=(35,11)
   main_entrance  exterior -> 44c32c99-0cdf-52e1-8170-03a483c866d2  to=(22,10)
   service_entrance  exterior -> 44c32c99-0cdf-52e1-8170-03a483c866d2  to=(39,18)
@@ -212,39 +212,39 @@ INFO | app.application.worldData.generators.structure.structureGeneratorService 
 --- Элементы ячеек ---
   archway: 36
   door: 9
-  floor: 852
+  floor: 856
   stair_anchor: 4
   stair_floor: 16
   staircase: 8
   trapdoor: 4
-  void: 72
+  void: 68
   wall: 1224
   [railing cells: 0]
 
 --- Лестница: все ячейки ---
-  (9,13,z=+0) stair_anchor
+  (9,11,z=+0) stair_anchor
   (11,35,z=+0) stair_anchor
-  (8,13,z=+1) staircase
+  (8,11,z=+1) staircase
   (11,36,z=+1) staircase
   (7,11,z=+2) stair_floor
   (7,12,z=+2) stair_floor
   (7,13,z=+2) stair_floor
-  (8,11,z=+2) stair_floor
-  (9,11,z=+2) staircase
+  (8,13,z=+2) stair_floor
+  (9,13,z=+2) staircase
   (11,37,z=+2) stair_floor
   (12,37,z=+2) stair_floor
   (13,35,z=+2) staircase
   (13,36,z=+2) stair_floor
   (13,37,z=+2) stair_floor
-  (9,13,z=+3) stair_anchor
+  (9,11,z=+3) stair_anchor
   (11,35,z=+3) stair_anchor
-  (8,13,z=+4) staircase
+  (8,11,z=+4) staircase
   (11,36,z=+4) staircase
   (7,11,z=+5) stair_floor
   (7,12,z=+5) stair_floor
   (7,13,z=+5) stair_floor
-  (8,11,z=+5) stair_floor
-  (9,11,z=+5) staircase
+  (8,13,z=+5) stair_floor
+  (9,13,z=+5) staircase
   (11,37,z=+5) stair_floor
   (12,37,z=+5) stair_floor
   (13,35,z=+5) staircase
@@ -264,7 +264,7 @@ x: 9..22  y: 9..22
   14 | #..........# |
   13 | #..........# |
   12 | #..........# |
-  11 | #↑.........# |
+  11 | #T.........# |
   10 | ############ |
    9 |              |
       01111111111222
@@ -313,8 +313,8 @@ x: 5..43  y: 9..39
   39 |                                       |
   38 |     #####                             |
   37 |     #...#                             |
-  36 |     #. .#                             |
-  35 |     #↑ .#                             |
+  36 |     #...#                             |
+  35 |     #↑..#                             |
   34 |     #...#####################         |
   33 |     #.......................#         |
   32 |     #.......................#         |
@@ -336,9 +336,9 @@ x: 5..43  y: 9..39
   16 |     #.......................#.......# |
   15 |     #.......................#.......# |
   14 | #####.......................D.......# |
-  13 | #..↑........................#.......# |
-  12 | #.  ........................#.......# |
-  11 | #...........................#$......# |
+  13 | #...........................#.......# |
+  12 | #...........................#.......# |
+  11 | #..←........................#$......# |
   10 | ################D#################### |
    9 |                                       |
       000001111111111222222222233333333334444
@@ -372,9 +372,9 @@ x: 5..43  y: 9..39
   16 |     #                       #       # |
   15 |     #                       #       # |
   14 | #####                       #       # |
-  13 | # ← '                       #       # |
+  13 | #   '                       #       # |
   12 | #   '                       #       # |
-  11 | #   '                       #T      # |
+  11 | # ← '                       #T      # |
   10 | ##################################### |
    9 |                                       |
       000001111111111222222222233333333334444
@@ -408,9 +408,9 @@ x: 5..43  y: 9..39
   16 |     #                       #       # |
   15 |     #                       #       # |
   14 | #####                       #       # |
-  13 | #_  '                       #       # |
+  13 | #__→'                       #       # |
   12 | #_  '                       #       # |
-  11 | #__→'                       #T      # |
+  11 | #_  '                       #T      # |
   10 | ##################################### |
    9 |                                       |
       000001111111111222222222233333333334444
@@ -444,9 +444,9 @@ x: 5..24  y: 9..39
   16 |     #.D......#     |
   15 |     #.#......#     |
   14 | #####.########     |
-  13 | #  ↑..#......#     |
+  13 | #   $.#......#     |
   12 | #   ..D......#     |
-  11 | #   $.#......#     |
+  11 | #  ←..#......#     |
   10 | ##############     |
    9 |                    |
       00000111111111122222
@@ -480,9 +480,9 @@ x: 5..24  y: 9..39
   16 |     # #      #     |
   15 |     # #      #     |
   14 | ##### ########     |
-  13 | # ← ' #      #     |
+  13 | #   ' #      #     |
   12 | #   ' #      #     |
-  11 | #   ' #      #     |
+  11 | # ← ' #      #     |
   10 | ##############     |
    9 |                    |
       00000111111111122222
@@ -516,9 +516,9 @@ x: 5..24  y: 9..39
   16 |     # #      #     |
   15 |     # #      #     |
   14 | ##### ########     |
-  13 | #_  ' #      #     |
+  13 | #__→' #      #     |
   12 | #_  ' #      #     |
-  11 | #__→' #      #     |
+  11 | #_  ' #      #     |
   10 | ##############     |
    9 |                    |
       00000111111111122222
@@ -552,9 +552,9 @@ x: 5..22  y: 9..39
   16 |     #.#          |
   15 |     #.######     |
   14 | #####.#....#     |
-  13 | #   ..D....#     |
+  13 | #   $.D....#     |
   12 | #   ..#....#     |
-  11 | #   $.#....#     |
+  11 | #   ..#....#     |
   10 | ############     |
    9 |                  |
       000001111111111222
