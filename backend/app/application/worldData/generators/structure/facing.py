@@ -6,3 +6,6 @@ class Facing(str, Enum):
     SOUTH = "south"
     EAST  = "east"
     WEST  = "west"
+
+    def __str__(self) -> str:
+        return self.value

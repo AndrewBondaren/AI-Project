@@ -13,6 +13,7 @@ from app.application.worldData.generators.structure.roomInstance import _RoomIns
 from app.application.worldData.generators.structure.passages.archway import _build_archway
 from app.application.worldData.generators.structure.passages.doorway import _build_doorway
 from app.application.worldData.generators.structure.passages.entry import _build_entry_point
+from app.application.worldData.generators.structure.staircase.base import check_all_stair_headrooms
 from app.application.worldData.generators.structure.staircase.builder import build_staircase
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
@@ -205,6 +206,9 @@ def build_passages(
             )
             if p:
                 passages.append(p)
+
+    # --- Post-generation headroom check (catches cross-segment conflicts) ---
+    check_all_stair_headrooms(cells)
 
     # --- Entry points ---
     for room in rooms:

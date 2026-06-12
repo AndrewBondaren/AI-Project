@@ -1,6 +1,7 @@
 """
 Base staircase builder. Each type inherits and implements build().
 """
+import logging
 from abc import ABC, abstractmethod
 
 from app.application.worldData.generators.structure.cellBuilder import _interior
@@ -8,7 +9,10 @@ from app.application.worldData.generators.structure.roomInstance import _RoomIns
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.mapCell import MapCell
 
-_SOLID_ELEMENTS = {"wall", "floor", "column", "staircase_base"}
+logger = logging.getLogger(__name__)
+
+_SOLID_ELEMENTS = {"wall", "floor", "column"}
+_STAIR_ELEMENTS = {"staircase", "stair_anchor"}
 
 
 def sw_anchor(room: _RoomInstance) -> tuple[int, int]:
@@ -39,6 +43,25 @@ def check_headroom(
                 raise ValueError(
                     f"staircase {conn_label!r}: headroom blocked at "
                     f"({x},{y},z={z_check}) by {above.system_building_element!r}"
+                )
+
+
+def check_all_stair_headrooms(cells: dict, clearance: int = 2) -> None:
+    """
+    Постпроверка после того как все марши построены.
+    Проверяет каждую staircase/stair_anchor ячейку — нет ли solid-блокера
+    на clearance уровней выше (включая ячейки других маршей).
+    """
+    for (x, y, z), cell in cells.items():
+        if cell.system_building_element not in _STAIR_ELEMENTS:
+            continue
+        for dz in range(1, clearance + 1):
+            above = cells.get((x, y, z + dz))
+            if above is not None and above.system_building_element in _SOLID_ELEMENTS:
+                logger.error(
+                    "headroom | (%d,%d,z=%d) %s blocked at z=%d by %r",
+                    x, y, z, cell.system_building_element, z + dz,
+                    above.system_building_element,
                 )
 
 
