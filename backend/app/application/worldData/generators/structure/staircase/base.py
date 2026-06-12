@@ -11,8 +11,15 @@ from app.db.models.mapCell import MapCell
 
 logger = logging.getLogger(__name__)
 
-_SOLID_ELEMENTS = {"wall", "floor", "column"}
-_STAIR_ELEMENTS = {"staircase", "stair_anchor"}
+# Всё что НЕ является проходимым — блокирует просвет над лестницей.
+_PASSABLE_ELEMENTS = {"archway", "void"}
+
+# Ячейки шахты, над которыми проверяется просвет.
+_STAIR_ELEMENTS = {"staircase", "stair_anchor", "stair_floor"}
+
+
+def _blocks_headroom(elem: str) -> bool:
+    return elem not in _PASSABLE_ELEMENTS
 
 
 def sw_anchor(room: _RoomInstance) -> tuple[int, int]:
@@ -39,7 +46,7 @@ def check_headroom(
             if z_check > z_top:
                 continue
             above = cells.get((x, y, z_check))
-            if above is not None and above.system_building_element in _SOLID_ELEMENTS:
+            if above is not None and _blocks_headroom(above.system_building_element):
                 raise ValueError(
                     f"staircase {conn_label!r}: headroom blocked at "
                     f"({x},{y},z={z_check}) by {above.system_building_element!r}"
@@ -49,15 +56,15 @@ def check_headroom(
 def check_all_stair_headrooms(cells: dict, clearance: int = 2) -> None:
     """
     Постпроверка после того как все марши построены.
-    Проверяет каждую staircase/stair_anchor ячейку — нет ли solid-блокера
-    на clearance уровней выше (включая ячейки других маршей).
+    Проверяет все ячейки шахты — нет ли блокера на clearance уровней выше.
+    Блокером считается всё кроме archway и void.
     """
     for (x, y, z), cell in cells.items():
         if cell.system_building_element not in _STAIR_ELEMENTS:
             continue
         for dz in range(1, clearance + 1):
             above = cells.get((x, y, z + dz))
-            if above is not None and above.system_building_element in _SOLID_ELEMENTS:
+            if above is not None and _blocks_headroom(above.system_building_element):
                 logger.error(
                     "headroom | (%d,%d,z=%d) %s blocked at z=%d by %r",
                     x, y, z, cell.system_building_element, z + dz,

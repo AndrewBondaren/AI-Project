@@ -61,10 +61,11 @@ def _turn(march_index: int, turn_vector: tuple[int, int]) -> tuple[int, int]:
 
 def _compute_fr_anchor(
     ax: int, ay: int, w: int, d: int, facing: str,
+    prev_fr_anchor: tuple[int, int] | None = None,
 ) -> tuple[tuple[int, int], tuple[int, int], tuple[int, int]]:
     """
-    Random fr_anchor from two valid near-side corners.
     Returns (fr_anchor, far_anchor, turn_vector).
+    If prev_fr_anchor given, picks the opposite near-side corner deterministically.
     far_anchor = diagonally opposite corner in interior.
     """
     if facing == "north":
@@ -80,7 +81,15 @@ def _compute_fr_anchor(
         choices = [((ax+w-1, ay),     (0, +1)),
                    ((ax+w-1, ay+d-1), (0, -1))]
 
-    fr, tv = random.choice(choices)
+    if prev_fr_anchor is not None:
+        # Reuse the same near-wall corner as the previous flight's fr_anchor.
+        # In a single-march U-path the last stair always lands at the OPPOSITE corner,
+        # so using the same corner avoids placing the anchor on top of that last stair.
+        same = [c for c in choices if c[0] == prev_fr_anchor]
+        fr, tv = same[0] if same else choices[0]
+    else:
+        fr, tv = random.choice(choices)
+
     fx, fy = fr
     far = (2*ax + w-1 - fx, 2*ay + d-1 - fy)
     return fr, far, tv
@@ -89,6 +98,7 @@ def _compute_fr_anchor(
 def _compute_u_params(
     ax: int, ay: int, w: int, d: int, facing: str, z_height: int,
     conn_label: str = "",
+    prev_fr_anchor: tuple[int, int] | None = None,
 ) -> UShapeParams:
     march_depth     = (d - 1) if facing in _NS else (w - 1)
     march_depth_mid = d       if facing in _NS else w
@@ -122,7 +132,7 @@ def _compute_u_params(
     else:
         flat_per_march = 0
 
-    fr_anchor, far_anchor, turn_vector = _compute_fr_anchor(ax, ay, w, d, facing)
+    fr_anchor, far_anchor, turn_vector = _compute_fr_anchor(ax, ay, w, d, facing, prev_fr_anchor)
 
     return UShapeParams(
         facing=facing,
@@ -334,7 +344,24 @@ class UShapeBuilder(StaircaseBuilder):
                 f"u_shape {self.conn_label}: interior {w}×{d} too small"
             )
 
-        params = _compute_u_params(ax, ay, w, d, facing, self.z_height, self.conn_label)
+        interior_xy = {(x, y) for x, y in interior}
+        prev_anchor: tuple[int, int] | None = None
+        for (cx, cy, cz), cell in self.cells.items():
+            if cz >= self.z_lo:
+                continue
+            if (cx, cy) not in interior_xy:
+                continue
+            if cell.system_building_element == "stair_anchor":
+                prev_anchor = (cx, cy)
+                break
+        if prev_anchor is not None:
+            logger.info(
+                "u_shape %s: detected prev stair_anchor at %s, reusing same corner",
+                self.conn_label, prev_anchor,
+            )
+
+        params = _compute_u_params(ax, ay, w, d, facing, self.z_height, self.conn_label,
+                                   prev_fr_anchor=prev_anchor)
 
         # Pseudo-column per TZ §0:
         #   march 1:  (w−2)×(d−1) — center block + middle cells of anchor wall
@@ -402,7 +429,10 @@ class UShapeBuilder(StaircaseBuilder):
             for (x, y) in interior_set:
                 if (x, y, z) in path_set:
                     continue
-                if z == self.z_lo:
+                if z == self.z_lo and prev_anchor is None:
+                    # First flight: fill shaft base with floor so it has a visible bottom.
+                    # Subsequent flights leave the shaft interior open (void) —
+                    # the shaft continues above the previous flight.
                     self.cells[(x, y, z)] = _floor_cell(
                         x, y, z, self.world_uid, self.building_uid, self.mat
                     )
