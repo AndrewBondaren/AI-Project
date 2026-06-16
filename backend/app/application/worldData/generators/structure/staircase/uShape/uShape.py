@@ -12,13 +12,13 @@ from app.application.worldData.generators.structure.cellFactory import (
 from app.application.worldData.generators.structure.staircase.base import (
     StaircaseBuilder, check_headroom,
 )
-from app.application.worldData.generators.structure.staircase.validator import (
+from app.application.worldData.generators.structure.staircase.uShape.uShapeValidator import (
     UShapeValidator,
 )
 from app.application.worldData.generators.structure.staircase.facingHelper import (
     _V_TO_FACING,
 )
-from app.application.worldData.generators.structure.staircase.uShapeHelper import (
+from app.application.worldData.generators.structure.staircase.uShape.uShapeHelper import (
     flat_positions,
     _path_intermediates,
     _NS,

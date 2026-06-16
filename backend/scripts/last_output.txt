@@ -1,0 +1,1096 @@
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | start building=bld-manor_1-test-001 template=manor_1
+INFO | app.application.worldData.generators.structure.structureGeneratorService | === PHASE: resolve levels ===
+INFO | app.application.worldData.generators.structure.structureGeneratorService | levels resolved: {0: (0, 15), 1: (15, 15)}
+INFO | app.application.worldData.generators.structure.structureGeneratorService | === PHASE: instantiate rooms ===
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=great_hall), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=great_hall), using default 'wood'
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'great_hall' staircase_type=None
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | z_offset=0 instantiated 1 rooms
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=gallery_n), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=gallery_n), using default 'wood'
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'gallery_n' staircase_type=None
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=gallery_e), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=gallery_e), using default 'wood'
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'gallery_e' staircase_type=None
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=chamber), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=chamber), using default 'wood'
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'chamber' staircase_type=None
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'chamber' staircase_type=None
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'chamber' staircase_type=None
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=chamber_e), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=chamber_e), using default 'wood'
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'chamber_e' staircase_type=None
+INFO | app.application.worldData.generators.structure.roomFactory | factory | 'chamber_e' staircase_type=None
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | z_offset=1 instantiated 7 rooms
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=south_stair), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=south_stair), using default 'wood'
+INFO | app.application.worldData.generators.structure.staircase.shaftFactory | shaft factory | 'south_stair' idx=0 z_offset=0 size=5x5 max_z_height=15
+INFO | app.application.worldData.generators.structure.staircase.shaftFactory | shaft factory | 'south_stair' idx=1 z_offset=1 size=5x5 max_z_height=15
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'wall' material found (room=east_stair), using default 'stone'
+WARNING | app.application.worldData.generators.structure.materialResolver | resolve_material: no 'floor' material found (room=east_stair), using default 'wood'
+INFO | app.application.worldData.generators.structure.staircase.shaftFactory | shaft factory | 'east_stair' idx=0 z_offset=0 size=5x5 max_z_height=15
+INFO | app.application.worldData.generators.structure.staircase.shaftFactory | shaft factory | 'east_stair' idx=1 z_offset=1 size=5x5 max_z_height=15
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | shaft rooms instantiated: 4 across 2 staircases
+INFO | app.application.worldData.generators.structure.structureGeneratorService | === PHASE: layout (order propagation) ===
+INFO | app.application.worldData.generators.structure.layoutEngine | layout mode_a | start_room=great_hall total=3
+INFO | app.application.worldData.generators.structure.staircase.shaftPlacer | AdjacentShaftPlacer | shaft='shaft_south_stair_0' placed at (10,6) adjacent to fr_room='great_hall'
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | staircase='south_stair' shaft at (10,6), level_start propagated to [1]
+INFO | app.application.worldData.generators.structure.staircase.shaftPlacer | AdjacentShaftPlacer | shaft='shaft_east_stair_0' placed at (33,10) adjacent to fr_room='great_hall'
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | staircase='east_stair' shaft at (33,10), level_start propagated to [1]
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=0 footprint_bounds=(10, 6, 37, 33)
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=0 start=(10,10) placed=3 skipped=0
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=0  room=great_hall            origin=(10,10)  size=24x24  extra_cells=0
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=0  room=shaft_south_stair_0   origin=(10,6)  size=5x5  extra_cells=0
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=0  room=shaft_east_stair_0    origin=(33,10)  size=5x5  extra_cells=0
+INFO | app.application.worldData.generators.structure.layoutEngine | layout mode_a | pre-placed=2 total=4 (shaft-anchored BFS)
+INFO | app.application.worldData.generators.structure.layoutEngine | layout mode_b | attach_rooms=5  bounds=(10, 6, 37, 33)
+WARNING | app.application.worldData.generators.structure.layoutEngine | layout mode_b | room='chamber' z=1 skipped — south wall full
+INFO | app.application.worldData.generators.structure.layoutEngine | layout mode_b | room='chamber_e' east width 8->5
+WARNING | app.application.worldData.generators.structure.layoutEngine | layout mode_b | room='chamber_e' z=1 skipped — east wall full
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1 footprint_bounds=(10, 6, 37, 23)
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1 start=(10,6) placed=7 skipped=2
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=gallery_n             origin=(10,10)  size=16x3  extra_cells=0
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=gallery_e             origin=(31,10)  size=3x14  extra_cells=0
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=chamber               origin=(10,12)  size=5x5  extra_cells=0
+WARNING | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=chamber NOT PLACED
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=chamber               origin=(14,12)  size=5x5  extra_cells=0
+WARNING | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=chamber_e NOT PLACED
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=chamber_e             origin=(24,10)  size=8x6  extra_cells=0
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=shaft_south_stair_1   origin=(10,6)  size=5x5  extra_cells=0
+INFO | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1  room=shaft_east_stair_1    origin=(33,10)  size=5x5  extra_cells=0
+WARNING | app.application.worldData.generators.structure.structureGeneratorService | layout | z_offset=1 rooms not placed: ['chamber', 'chamber_e']
+INFO | app.application.worldData.generators.structure.structureGeneratorService | === PHASE: cell generation ===
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | z_offset=0 cells generated: 2194
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | z_offset=1 cells generated: 1850
+INFO | app.application.worldData.generators.structure.structureGeneratorService | pre-passages room staircase_type: 'shaft_south_stair_0'  'u_shape'
+INFO | app.application.worldData.generators.structure.structureGeneratorService | pre-passages room staircase_type: 'shaft_south_stair_1'  'u_shape'
+INFO | app.application.worldData.generators.structure.structureGeneratorService | pre-passages room staircase_type: 'shaft_east_stair_0'  'u_shape'
+INFO | app.application.worldData.generators.structure.structureGeneratorService | pre-passages room staircase_type: 'shaft_east_stair_1'  'u_shape'
+INFO | app.application.worldData.generators.structure.passages.builder | === PHASE: build_passages ===
+INFO | app.application.worldData.generators.structure.staircase.builder | build_staircase: south_stair  great_hall->gallery_n  stair_type='u_shape'  z_height=15
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape south_stair  great_hall->gallery_n _build_u_shape: z_lo=0 z_height=15 march_count=5 march_depth=2 march_depth_mid=3 fr_anchor=(13, 9) far_anchor=(11, 7) facing=south
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape south_stair  great_hall->gallery_n march=0: start=(13,9) z=0 steps=3 V=(0,-1) is_last=False
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape south_stair  great_hall->gallery_n march=0: placed 3 staircase cells, z now=3
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape south_stair  great_hall->gallery_n march=0->1: landing path (13, 7)->(11, 7) via [(12, 7)]
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape south_stair  great_hall->gallery_n march=1: start=(11,7) z=3 steps=3 V=(0,1) is_last=False
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape south_stair  great_hall->gallery_n march=1: placed 3 staircase cells, z now=6
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape south_stair  great_hall->gallery_n march=1->2: landing path (11, 9)->(13, 9) via [(12, 9)]
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape south_stair  great_hall->gallery_n march=2: start=(13,9) z=6 steps=3 V=(0,-1) is_last=False
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape south_stair  great_hall->gallery_n march=2: placed 3 staircase cells, z now=9
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape south_stair  great_hall->gallery_n march=2->3: landing path (13, 7)->(11, 7) via [(12, 7)]
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape south_stair  great_hall->gallery_n march=3: start=(11,7) z=9 steps=3 V=(0,1) is_last=False
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape south_stair  great_hall->gallery_n march=3: placed 3 staircase cells, z now=12
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape south_stair  great_hall->gallery_n march=3->4: landing path (11, 9)->(11, 7) via [(12, 9), (13, 9), (13, 8), (13, 7), (12, 7)]
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape south_stair  great_hall->gallery_n march=4: start=(11,7) z=12 steps=3 V=(0,1) is_last=True
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape south_stair  great_hall->gallery_n march=4: placed 3 staircase cells, z now=15
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape south_stair  great_hall->gallery_n _build_u_shape done: 15 stair cells, 8 floor cells, z_final=15
+INFO | app.application.worldData.generators.structure.staircase.builder | build_staircase: east_stair  great_hall->gallery_e  stair_type='u_shape'  z_height=15
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape east_stair  great_hall->gallery_e _build_u_shape: z_lo=0 z_height=15 march_count=5 march_depth=2 march_depth_mid=3 fr_anchor=(34, 11) far_anchor=(36, 13) facing=east
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape east_stair  great_hall->gallery_e march=0: start=(34,11) z=0 steps=3 V=(1,0) is_last=False
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape east_stair  great_hall->gallery_e march=0: placed 3 staircase cells, z now=3
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape east_stair  great_hall->gallery_e march=0->1: landing path (36, 11)->(36, 13) via [(36, 12)]
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape east_stair  great_hall->gallery_e march=1: start=(36,13) z=3 steps=3 V=(-1,0) is_last=False
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape east_stair  great_hall->gallery_e march=1: placed 3 staircase cells, z now=6
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape east_stair  great_hall->gallery_e march=1->2: landing path (34, 13)->(34, 11) via [(34, 12)]
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape east_stair  great_hall->gallery_e march=2: start=(34,11) z=6 steps=3 V=(1,0) is_last=False
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape east_stair  great_hall->gallery_e march=2: placed 3 staircase cells, z now=9
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape east_stair  great_hall->gallery_e march=2->3: landing path (36, 11)->(36, 13) via [(36, 12)]
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape east_stair  great_hall->gallery_e march=3: start=(36,13) z=9 steps=3 V=(-1,0) is_last=False
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape east_stair  great_hall->gallery_e march=3: placed 3 staircase cells, z now=12
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape east_stair  great_hall->gallery_e march=3->4: landing path (34, 13)->(36, 13) via [(34, 12), (34, 11), (35, 11), (36, 11), (36, 12)]
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape east_stair  great_hall->gallery_e march=4: start=(36,13) z=12 steps=3 V=(-1,0) is_last=True
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape east_stair  great_hall->gallery_e march=4: placed 3 staircase cells, z now=15
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape east_stair  great_hall->gallery_e _build_u_shape done: 15 stair cells, 8 floor cells, z_final=15
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | passages=10 total_cells=4332
+INFO | app.application.worldData.generators.structure.structureGeneratorService | === PHASE: post_process ===
+INFO | app.application.worldData.generators.structure.structureGeneratorService | === PHASE: assemble result ===
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | done building=bld-manor_1-test-001 rooms=6 cells=4332 passages=10
+
+=== РЕЗУЛЬТАТ ===
+Уровней:   2
+Комнат:    6
+Ячеек:     4332
+Проходов:  10
+
+--- Уровни ---
+  z=+0  z_height=15  'Первый этаж'
+  z=+15  z_height=15  'Второй этаж'
+
+--- Комнаты ---
+  [common_hall] 'Парадный зал'  origin=(10,10)  z=0
+  [corridor] 'Северная галерея'  origin=(10,10)  z=15
+  [corridor] 'Восточная галерея'  origin=(31,10)  z=15
+  [guest_room] 'Покои 1'  origin=(10,12)  z=15
+  [guest_room] 'Покои 3'  origin=(14,12)  z=15
+  [guest_room] 'Покои 2'  origin=(24,10)  z=15
+
+--- Проходы ---
+  doorway  5da8f79b-760b-5169-a008-060e06583e87 -> 5da8f79b-760b-5169-a008-060e06583e87  to=(12,12)
+  doorway  5da8f79b-760b-5169-a008-060e06583e87 -> 5da8f79b-760b-5169-a008-060e06583e87  to=(16,12)
+  doorway  5da8f79b-760b-5169-a008-060e06583e87 -> 5da8f79b-760b-5169-a008-060e06583e87  to=(31,13)
+  archway  52f50a0c-fa34-53b6-bda7-4a06af0a57ae -> 52f50a0c-fa34-53b6-bda7-4a06af0a57ae  to=(12,10)
+  archway  5da8f79b-760b-5169-a008-060e06583e87 -> 5da8f79b-760b-5169-a008-060e06583e87  to=(12,10)
+  staircase  52f50a0c-fa34-53b6-bda7-4a06af0a57ae -> 5da8f79b-760b-5169-a008-060e06583e87  to=(11,10)
+  archway  52f50a0c-fa34-53b6-bda7-4a06af0a57ae -> 52f50a0c-fa34-53b6-bda7-4a06af0a57ae  to=(33,12)
+  archway  5da8f79b-760b-5169-a008-060e06583e87 -> 5da8f79b-760b-5169-a008-060e06583e87  to=(33,12)
+  staircase  52f50a0c-fa34-53b6-bda7-4a06af0a57ae -> 5da8f79b-760b-5169-a008-060e06583e87  to=(33,13)
+  main_entrance  exterior -> 52f50a0c-fa34-53b6-bda7-4a06af0a57ae  to=(24,10)
+
+--- Элементы ячеек ---
+  archway: 168
+  door: 4
+  floor: 577
+  stair_anchor: 2
+  stair_floor: 16
+  staircase: 28
+  void: 226
+  wall: 3311
+  [railing cells: 0]
+
+--- Лестница: все ячейки ---
+  (13,9,z=+0) stair_anchor   facing=south
+  (34,11,z=+0) stair_anchor   facing=east
+  (13,8,z=+1) staircase      facing=south
+  (35,11,z=+1) staircase      facing=east
+  (13,7,z=+2) staircase      facing=west
+  (36,11,z=+2) staircase      facing=north
+  (11,7,z=+3) staircase      facing=north
+  (12,7,z=+3) stair_floor    facing=west
+  (36,12,z=+3) stair_floor    facing=north
+  (36,13,z=+3) staircase      facing=west
+  (11,8,z=+4) staircase      facing=north
+  (35,13,z=+4) staircase      facing=west
+  (11,9,z=+5) staircase      facing=east
+  (34,13,z=+5) staircase      facing=south
+  (12,9,z=+6) stair_floor    facing=east
+  (13,9,z=+6) staircase      facing=south
+  (34,11,z=+6) staircase      facing=east
+  (34,12,z=+6) stair_floor    facing=south
+  (13,8,z=+7) staircase      facing=south
+  (35,11,z=+7) staircase      facing=east
+  (13,7,z=+8) staircase      facing=west
+  (36,11,z=+8) staircase      facing=north
+  (11,7,z=+9) staircase      facing=north
+  (12,7,z=+9) stair_floor    facing=west
+  (36,12,z=+9) stair_floor    facing=north
+  (36,13,z=+9) staircase      facing=west
+  (11,8,z=+10) staircase      facing=north
+  (35,13,z=+10) staircase      facing=west
+  (11,9,z=+11) staircase      facing=east
+  (34,13,z=+11) staircase      facing=south
+  (11,7,z=+12) staircase      facing=north
+  (12,7,z=+12) stair_floor    facing=west
+  (12,9,z=+12) stair_floor    facing=east
+  (13,7,z=+12) stair_floor    facing=west
+  (13,8,z=+12) stair_floor    facing=south
+  (13,9,z=+12) stair_floor    facing=south
+  (34,11,z=+12) stair_floor    facing=east
+  (34,12,z=+12) stair_floor    facing=south
+  (35,11,z=+12) stair_floor    facing=east
+  (36,11,z=+12) stair_floor    facing=north
+  (36,12,z=+12) stair_floor    facing=north
+  (36,13,z=+12) staircase      facing=west
+  (11,8,z=+13) staircase      facing=north
+  (35,13,z=+13) staircase      facing=west
+  (11,9,z=+14) staircase      facing=north
+  (34,13,z=+14) staircase      facing=west
+
+★ z=+0 [Первый этаж]
+x: 9..38  y: 5..34
+  34 |                              |
+  33 | ########################     |
+  32 | #......................#     |
+  31 | #......................#     |
+  30 | #......................#     |
+  29 | #......................#     |
+  28 | #......................#     |
+  27 | #......................#     |
+  26 | #......................#     |
+  25 | #......................#     |
+  24 | #......................#     |
+  23 | #......................#     |
+  22 | #......................#     |
+  21 | #......................#     |
+  20 | #......................#     |
+  19 | #......................#     |
+  18 | #......................#     |
+  17 | #......................#     |
+  16 | #......................#     |
+  15 | #......................#     |
+  14 | #......................##### |
+  13 | #..........................# |
+  12 | #..........................# |
+  11 | #.......................→..# |
+  10 | #...##########D############# |
+   9 | #..↓#                        |
+   8 | #...#                        |
+   7 | #...#                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+1 [промежуточный]
+x: 9..38  y: 5..34
+  34 |                              |
+  33 | ########################     |
+  32 | #                      #     |
+  31 | #                      #     |
+  30 | #                      #     |
+  29 | #                      #     |
+  28 | #                      #     |
+  27 | #                      #     |
+  26 | #                      #     |
+  25 | #                      #     |
+  24 | #                      #     |
+  23 | #                      #     |
+  22 | #                      #     |
+  21 | #                      #     |
+  20 | #                      #     |
+  19 | #                      #     |
+  18 | #                      #     |
+  17 | #                      #     |
+  16 | #                      #     |
+  15 | #                      #     |
+  14 | #                      ##### |
+  13 | #                      '   # |
+  12 | #                      '   # |
+  11 | #                      ' → # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #  ↓#                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+2 [промежуточный]
+x: 9..38  y: 5..34
+  34 |                              |
+  33 | ########################     |
+  32 | #                      #     |
+  31 | #                      #     |
+  30 | #                      #     |
+  29 | #                      #     |
+  28 | #                      #     |
+  27 | #                      #     |
+  26 | #                      #     |
+  25 | #                      #     |
+  24 | #                      #     |
+  23 | #                      #     |
+  22 | #                      #     |
+  21 | #                      #     |
+  20 | #                      #     |
+  19 | #                      #     |
+  18 | #                      #     |
+  17 | #                      #     |
+  16 | #                      #     |
+  15 | #                      #     |
+  14 | #                      ##### |
+  13 | #                      '   # |
+  12 | #                      '   # |
+  11 | #                      '  ↑# |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #   #                        |
+   7 | #  ←#                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+3 [промежуточный]
+x: 9..38  y: 5..34
+  34 |                              |
+  33 | ########################     |
+  32 | #                      #     |
+  31 | #                      #     |
+  30 | #                      #     |
+  29 | #                      #     |
+  28 | #                      #     |
+  27 | #                      #     |
+  26 | #                      #     |
+  25 | #                      #     |
+  24 | #                      #     |
+  23 | #                      #     |
+  22 | #                      #     |
+  21 | #                      #     |
+  20 | #                      #     |
+  19 | #                      #     |
+  18 | #                      #     |
+  17 | #                      #     |
+  16 | #                      #     |
+  15 | #                      #     |
+  14 | #                      ##### |
+  13 | #                      '  ←# |
+  12 | #                      '  _# |
+  11 | #                      '   # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #   #                        |
+   7 | #↑_ #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+4 [промежуточный]
+x: 9..38  y: 5..34
+  34 |                              |
+  33 | ########################     |
+  32 | #                      #     |
+  31 | #                      #     |
+  30 | #                      #     |
+  29 | #                      #     |
+  28 | #                      #     |
+  27 | #                      #     |
+  26 | #                      #     |
+  25 | #                      #     |
+  24 | #                      #     |
+  23 | #                      #     |
+  22 | #                      #     |
+  21 | #                      #     |
+  20 | #                      #     |
+  19 | #                      #     |
+  18 | #                      #     |
+  17 | #                      #     |
+  16 | #                      #     |
+  15 | #                      #     |
+  14 | #                      ##### |
+  13 | #                      ' ← # |
+  12 | #                      '   # |
+  11 | #                      '   # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #↑  #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+5 [промежуточный]
+x: 9..38  y: 5..34
+  34 |                              |
+  33 | ########################     |
+  32 | #                      #     |
+  31 | #                      #     |
+  30 | #                      #     |
+  29 | #                      #     |
+  28 | #                      #     |
+  27 | #                      #     |
+  26 | #                      #     |
+  25 | #                      #     |
+  24 | #                      #     |
+  23 | #                      #     |
+  22 | #                      #     |
+  21 | #                      #     |
+  20 | #                      #     |
+  19 | #                      #     |
+  18 | #                      #     |
+  17 | #                      #     |
+  16 | #                      #     |
+  15 | #                      #     |
+  14 | #                      ##### |
+  13 | #                      '↓  # |
+  12 | #                      '   # |
+  11 | #                      '   # |
+  10 | #'''######################## |
+   9 | #→  #                        |
+   8 | #   #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+6 [промежуточный]
+x: 9..38  y: 5..34
+  34 |                              |
+  33 | ########################     |
+  32 | #                      #     |
+  31 | #                      #     |
+  30 | #                      #     |
+  29 | #                      #     |
+  28 | #                      #     |
+  27 | #                      #     |
+  26 | #                      #     |
+  25 | #                      #     |
+  24 | #                      #     |
+  23 | #                      #     |
+  22 | #                      #     |
+  21 | #                      #     |
+  20 | #                      #     |
+  19 | #                      #     |
+  18 | #                      #     |
+  17 | #                      #     |
+  16 | #                      #     |
+  15 | #                      #     |
+  14 | #                      ##### |
+  13 | #                      '   # |
+  12 | #                      '_  # |
+  11 | #                      '→  # |
+  10 | #'''######################## |
+   9 | # _↓#                        |
+   8 | #   #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+7 [промежуточный]
+x: 9..38  y: 5..34
+  34 |                              |
+  33 | ########################     |
+  32 | #                      #     |
+  31 | #                      #     |
+  30 | #                      #     |
+  29 | #                      #     |
+  28 | #                      #     |
+  27 | #                      #     |
+  26 | #                      #     |
+  25 | #                      #     |
+  24 | #                      #     |
+  23 | #                      #     |
+  22 | #                      #     |
+  21 | #                      #     |
+  20 | #                      #     |
+  19 | #                      #     |
+  18 | #                      #     |
+  17 | #                      #     |
+  16 | #                      #     |
+  15 | #                      #     |
+  14 | #                      ##### |
+  13 | #                      '   # |
+  12 | #                      '   # |
+  11 | #                      ' → # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #  ↓#                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+8 [промежуточный]
+x: 9..38  y: 5..34
+  34 |                              |
+  33 | ########################     |
+  32 | #                      #     |
+  31 | #                      #     |
+  30 | #                      #     |
+  29 | #                      #     |
+  28 | #                      #     |
+  27 | #                      #     |
+  26 | #                      #     |
+  25 | #                      #     |
+  24 | #                      #     |
+  23 | #                      #     |
+  22 | #                      #     |
+  21 | #                      #     |
+  20 | #                      #     |
+  19 | #                      #     |
+  18 | #                      #     |
+  17 | #                      #     |
+  16 | #                      #     |
+  15 | #                      #     |
+  14 | #                      ##### |
+  13 | #                      '   # |
+  12 | #                      '   # |
+  11 | #                      '  ↑# |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #   #                        |
+   7 | #  ←#                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+9 [промежуточный]
+x: 9..38  y: 5..34
+  34 |                              |
+  33 | ########################     |
+  32 | #                      #     |
+  31 | #                      #     |
+  30 | #                      #     |
+  29 | #                      #     |
+  28 | #                      #     |
+  27 | #                      #     |
+  26 | #                      #     |
+  25 | #                      #     |
+  24 | #                      #     |
+  23 | #                      #     |
+  22 | #                      #     |
+  21 | #                      #     |
+  20 | #                      #     |
+  19 | #                      #     |
+  18 | #                      #     |
+  17 | #                      #     |
+  16 | #                      #     |
+  15 | #                      #     |
+  14 | #                      ##### |
+  13 | #                      '  ←# |
+  12 | #                      '  _# |
+  11 | #                      '   # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #   #                        |
+   7 | #↑_ #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+10 [промежуточный]
+x: 9..38  y: 5..34
+  34 |                              |
+  33 | ########################     |
+  32 | #                      #     |
+  31 | #                      #     |
+  30 | #                      #     |
+  29 | #                      #     |
+  28 | #                      #     |
+  27 | #                      #     |
+  26 | #                      #     |
+  25 | #                      #     |
+  24 | #                      #     |
+  23 | #                      #     |
+  22 | #                      #     |
+  21 | #                      #     |
+  20 | #                      #     |
+  19 | #                      #     |
+  18 | #                      #     |
+  17 | #                      #     |
+  16 | #                      #     |
+  15 | #                      #     |
+  14 | #                      ##### |
+  13 | #                      ' ← # |
+  12 | #                      '   # |
+  11 | #                      '   # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #↑  #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+11 [промежуточный]
+x: 9..38  y: 5..34
+  34 |                              |
+  33 | ########################     |
+  32 | #                      #     |
+  31 | #                      #     |
+  30 | #                      #     |
+  29 | #                      #     |
+  28 | #                      #     |
+  27 | #                      #     |
+  26 | #                      #     |
+  25 | #                      #     |
+  24 | #                      #     |
+  23 | #                      #     |
+  22 | #                      #     |
+  21 | #                      #     |
+  20 | #                      #     |
+  19 | #                      #     |
+  18 | #                      #     |
+  17 | #                      #     |
+  16 | #                      #     |
+  15 | #                      #     |
+  14 | #                      ##### |
+  13 | #                      '↓  # |
+  12 | #                      '   # |
+  11 | #                      '   # |
+  10 | #'''######################## |
+   9 | #→  #                        |
+   8 | #   #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+12 [промежуточный]
+x: 9..38  y: 5..34
+  34 |                              |
+  33 | ########################     |
+  32 | #                      #     |
+  31 | #                      #     |
+  30 | #                      #     |
+  29 | #                      #     |
+  28 | #                      #     |
+  27 | #                      #     |
+  26 | #                      #     |
+  25 | #                      #     |
+  24 | #                      #     |
+  23 | #                      #     |
+  22 | #                      #     |
+  21 | #                      #     |
+  20 | #                      #     |
+  19 | #                      #     |
+  18 | #                      #     |
+  17 | #                      #     |
+  16 | #                      #     |
+  15 | #                      #     |
+  14 | #                      ##### |
+  13 | #                      '  ←# |
+  12 | #                      '_ _# |
+  11 | #                      '___# |
+  10 | #'''######################## |
+   9 | # __#                        |
+   8 | #  _#                        |
+   7 | #↑__#                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+13 [промежуточный]
+x: 9..38  y: 5..34
+  34 |                              |
+  33 | ########################     |
+  32 | #                      #     |
+  31 | #                      #     |
+  30 | #                      #     |
+  29 | #                      #     |
+  28 | #                      #     |
+  27 | #                      #     |
+  26 | #                      #     |
+  25 | #                      #     |
+  24 | #                      #     |
+  23 | #                      #     |
+  22 | #                      #     |
+  21 | #                      #     |
+  20 | #                      #     |
+  19 | #                      #     |
+  18 | #                      #     |
+  17 | #                      #     |
+  16 | #                      #     |
+  15 | #                      #     |
+  14 | #                      ##### |
+  13 | #                      ' ← # |
+  12 | #                      '   # |
+  11 | #                      '   # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #↑  #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+14 [промежуточный]
+x: 9..38  y: 5..34
+  34 |                              |
+  33 | ########################     |
+  32 | #                      #     |
+  31 | #                      #     |
+  30 | #                      #     |
+  29 | #                      #     |
+  28 | #                      #     |
+  27 | #                      #     |
+  26 | #                      #     |
+  25 | #                      #     |
+  24 | #                      #     |
+  23 | #                      #     |
+  22 | #                      #     |
+  21 | #                      #     |
+  20 | #                      #     |
+  19 | #                      #     |
+  18 | #                      #     |
+  17 | #                      #     |
+  16 | #                      #     |
+  15 | #                      #     |
+  14 | #                      ##### |
+  13 | #                      '←  # |
+  12 | #                      '   # |
+  11 | #                      '   # |
+  10 | #'''######################## |
+   9 | #↑  #                        |
+   8 | #   #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+★ z=+15 [Второй этаж]
+x: 9..38  y: 5..24
+  24 |                              |
+  23 |                      ###     |
+  22 |                      #.#     |
+  21 |                      #.#     |
+  20 |                      #.#     |
+  19 |                      #.#     |
+  18 |                      #.#     |
+  17 |                      #.#     |
+  16 | #########            #.#     |
+  15 | #...#...#     ########.#     |
+  14 | #...#...#     #......#.##### |
+  13 | #...#...#     #......D.$   # |
+  12 | ##D###D#########.....#..   # |
+  11 | #.............##.....#..   # |
+  10 | #$..######################## |
+   9 | #   #                        |
+   8 | #   #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+16 [промежуточный]
+x: 9..38  y: 5..24
+  24 |                              |
+  23 |                      ###     |
+  22 |                      # #     |
+  21 |                      # #     |
+  20 |                      # #     |
+  19 |                      # #     |
+  18 |                      # #     |
+  17 |                      # #     |
+  16 | #########            # #     |
+  15 | #   #   #     ######## #     |
+  14 | #   #   #     #      # ##### |
+  13 | #   #   #     #      # '   # |
+  12 | ################     # '   # |
+  11 | #             ##     # '   # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #   #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+17 [промежуточный]
+x: 9..38  y: 5..24
+  24 |                              |
+  23 |                      ###     |
+  22 |                      # #     |
+  21 |                      # #     |
+  20 |                      # #     |
+  19 |                      # #     |
+  18 |                      # #     |
+  17 |                      # #     |
+  16 | #########            # #     |
+  15 | #   #   #     ######## #     |
+  14 | #   #   #     #      # ##### |
+  13 | #   #   #     #      # '   # |
+  12 | ################     # '   # |
+  11 | #             ##     # '   # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #   #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+18 [промежуточный]
+x: 9..38  y: 5..24
+  24 |                              |
+  23 |                      ###     |
+  22 |                      # #     |
+  21 |                      # #     |
+  20 |                      # #     |
+  19 |                      # #     |
+  18 |                      # #     |
+  17 |                      # #     |
+  16 | #########            # #     |
+  15 | #   #   #     ######## #     |
+  14 | #   #   #     #      # ##### |
+  13 | #   #   #     #      # '   # |
+  12 | ################     # '   # |
+  11 | #             ##     # '   # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #   #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+19 [промежуточный]
+x: 9..38  y: 5..24
+  24 |                              |
+  23 |                      ###     |
+  22 |                      # #     |
+  21 |                      # #     |
+  20 |                      # #     |
+  19 |                      # #     |
+  18 |                      # #     |
+  17 |                      # #     |
+  16 | #########            # #     |
+  15 | #   #   #     ######## #     |
+  14 | #   #   #     #      # ##### |
+  13 | #   #   #     #      # '   # |
+  12 | ################     # '   # |
+  11 | #             ##     # '   # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #   #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+20 [промежуточный]
+x: 9..38  y: 5..24
+  24 |                              |
+  23 |                      ###     |
+  22 |                      # #     |
+  21 |                      # #     |
+  20 |                      # #     |
+  19 |                      # #     |
+  18 |                      # #     |
+  17 |                      # #     |
+  16 | #########            # #     |
+  15 | #   #   #     ######## #     |
+  14 | #   #   #     #      # ##### |
+  13 | #   #   #     #      # '   # |
+  12 | ################     # '   # |
+  11 | #             ##     # '   # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #   #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+21 [промежуточный]
+x: 9..38  y: 5..24
+  24 |                              |
+  23 |                      ###     |
+  22 |                      # #     |
+  21 |                      # #     |
+  20 |                      # #     |
+  19 |                      # #     |
+  18 |                      # #     |
+  17 |                      # #     |
+  16 | #########            # #     |
+  15 | #   #   #     ######## #     |
+  14 | #   #   #     #      # ##### |
+  13 | #   #   #     #      # '   # |
+  12 | ################     # '   # |
+  11 | #             ##     # '   # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #   #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+22 [промежуточный]
+x: 9..38  y: 5..24
+  24 |                              |
+  23 |                      ###     |
+  22 |                      # #     |
+  21 |                      # #     |
+  20 |                      # #     |
+  19 |                      # #     |
+  18 |                      # #     |
+  17 |                      # #     |
+  16 | #########            # #     |
+  15 | #   #   #     ######## #     |
+  14 | #   #   #     #      # ##### |
+  13 | #   #   #     #      # '   # |
+  12 | ################     # '   # |
+  11 | #             ##     # '   # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #   #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+23 [промежуточный]
+x: 9..38  y: 5..24
+  24 |                              |
+  23 |                      ###     |
+  22 |                      # #     |
+  21 |                      # #     |
+  20 |                      # #     |
+  19 |                      # #     |
+  18 |                      # #     |
+  17 |                      # #     |
+  16 | #########            # #     |
+  15 | #   #   #     ######## #     |
+  14 | #   #   #     #      # ##### |
+  13 | #   #   #     #      # '   # |
+  12 | ################     # '   # |
+  11 | #             ##     # '   # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #   #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+24 [промежуточный]
+x: 9..38  y: 5..24
+  24 |                              |
+  23 |                      ###     |
+  22 |                      # #     |
+  21 |                      # #     |
+  20 |                      # #     |
+  19 |                      # #     |
+  18 |                      # #     |
+  17 |                      # #     |
+  16 | #########            # #     |
+  15 | #   #   #     ######## #     |
+  14 | #   #   #     #      # ##### |
+  13 | #   #   #     #      # '   # |
+  12 | ################     # '   # |
+  11 | #             ##     # '   # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #   #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+25 [промежуточный]
+x: 9..38  y: 5..24
+  24 |                              |
+  23 |                      ###     |
+  22 |                      # #     |
+  21 |                      # #     |
+  20 |                      # #     |
+  19 |                      # #     |
+  18 |                      # #     |
+  17 |                      # #     |
+  16 | #########            # #     |
+  15 | #   #   #     ######## #     |
+  14 | #   #   #     #      # ##### |
+  13 | #   #   #     #      # '   # |
+  12 | ################     # '   # |
+  11 | #             ##     # '   # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #   #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+26 [промежуточный]
+x: 9..38  y: 5..24
+  24 |                              |
+  23 |                      ###     |
+  22 |                      # #     |
+  21 |                      # #     |
+  20 |                      # #     |
+  19 |                      # #     |
+  18 |                      # #     |
+  17 |                      # #     |
+  16 | #########            # #     |
+  15 | #   #   #     ######## #     |
+  14 | #   #   #     #      # ##### |
+  13 | #   #   #     #      # '   # |
+  12 | ################     # '   # |
+  11 | #             ##     # '   # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #   #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+27 [промежуточный]
+x: 9..38  y: 5..24
+  24 |                              |
+  23 |                      ###     |
+  22 |                      # #     |
+  21 |                      # #     |
+  20 |                      # #     |
+  19 |                      # #     |
+  18 |                      # #     |
+  17 |                      # #     |
+  16 | #########            # #     |
+  15 | #   #   #     ######## #     |
+  14 | #   #   #     #      # ##### |
+  13 | #   #   #     #      # '   # |
+  12 | ################     # '   # |
+  11 | #             ##     # '   # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #   #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+28 [промежуточный]
+x: 9..38  y: 5..24
+  24 |                              |
+  23 |                      ###     |
+  22 |                      # #     |
+  21 |                      # #     |
+  20 |                      # #     |
+  19 |                      # #     |
+  18 |                      # #     |
+  17 |                      # #     |
+  16 | #########            # #     |
+  15 | #   #   #     ######## #     |
+  14 | #   #   #     #      # ##### |
+  13 | #   #   #     #      # '   # |
+  12 | ################     # '   # |
+  11 | #             ##     # '   # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #   #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678
+
+· z=+29 [промежуточный]
+x: 9..38  y: 5..24
+  24 |                              |
+  23 |                      ###     |
+  22 |                      # #     |
+  21 |                      # #     |
+  20 |                      # #     |
+  19 |                      # #     |
+  18 |                      # #     |
+  17 |                      # #     |
+  16 | #########            # #     |
+  15 | #   #   #     ######## #     |
+  14 | #   #   #     #      # ##### |
+  13 | #   #   #     #      # '   # |
+  12 | ################     # '   # |
+  11 | #             ##     # '   # |
+  10 | #'''######################## |
+   9 | #   #                        |
+   8 | #   #                        |
+   7 | #   #                        |
+   6 | #####                        |
+   5 |                              |
+      011111111112222222222333333333
+      901234567890123456789012345678

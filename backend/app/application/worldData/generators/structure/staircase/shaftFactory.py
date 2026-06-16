@@ -17,7 +17,7 @@ from app.application.worldData.generators.structure.staircase.staircaseSize impo
     USHAPE_SIZE_PRESETS,
     SPIRAL_SIZE_PRESETS,
 )
-from app.application.worldData.generators.structure.staircase.uShapeHelper import (
+from app.application.worldData.generators.structure.staircase.uShape.uShapeHelper import (
     u_shape_march_depth,
 )
 from app.db.models.locationLevel import LocationLevel
