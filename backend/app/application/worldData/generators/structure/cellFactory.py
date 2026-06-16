@@ -69,13 +69,17 @@ def _stair_anchor_cell(
     )
 
 
-def _stair_floor_cell(x: int, y: int, z: int, world_uid: str, building_uid: str, material: str) -> MapCell:
+def _stair_floor_cell(
+    x: int, y: int, z: int, world_uid: str, building_uid: str, material: str,
+    facing: str | None = None,
+) -> MapCell:
     return MapCell(
         world_uid=world_uid, x=x, y=y, z=z,
         system_building_element="stair_floor",
         system_material=material,
         is_structural=False,
         location_uid=building_uid,
+        system_facing=facing,
     )
 
 

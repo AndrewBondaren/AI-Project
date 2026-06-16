@@ -5,6 +5,7 @@ import logging
 from abc import ABC, abstractmethod
 
 from app.application.worldData.generators.structure.cellBuilder import _interior
+from app.application.worldData.generators.structure.cellFactory import _floor_cell, _void_cell
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.mapCell import MapCell
@@ -95,11 +96,34 @@ class StaircaseBuilder(ABC):
         self.building_uid = building_uid
         self.mat          = mat
         self.conn_label   = conn_label
-        self.shaft        = shaft       # shaft instance (new schema); None = old schema
-        self.z_height     = abs(to_level.z - fr_level.z)
-        self.z_lo         = min(fr_level.z, to_level.z)
-        self.z_top        = max(fr_level.z, to_level.z)
+        self.shaft           = shaft       # shaft instance (new schema); None = old schema
+        self.z_height        = abs(to_level.z - fr_level.z)
+        self.z_lo            = min(fr_level.z, to_level.z)
+        self.z_top           = max(fr_level.z, to_level.z)
+        self.path_set: set[tuple[int, int, int]] = set()
+        self._is_first_flight: bool = True
 
     @abstractmethod
     def build(self) -> tuple[tuple[int, int], tuple[int, int]]:
-        """Returns (fr_anchor, to_anchor)."""
+        """Places stair cells, sets self.path_set. Returns (fr_anchor, to_anchor)."""
+
+    def clear_shaft(self) -> None:
+        """All shaft interior cells not in path_set → void."""
+        if self.shaft is None:
+            return
+        interior = set(_interior(self.shaft.get_footprint()))
+        for z in range(self.z_lo, self.z_top + 1):
+            for (x, y) in interior:
+                if (x, y, z) not in self.path_set:
+                    self.cells[(x, y, z)] = _void_cell(x, y, z, self.world_uid, self.building_uid)
+
+    def lay_base_floor(self) -> None:
+        """void → floor at z_lo (first flight only)."""
+        if not self._is_first_flight or self.shaft is None:
+            return
+        for (x, y) in _interior(self.shaft.get_footprint()):
+            c = self.cells.get((x, y, self.z_lo))
+            if c is not None and c.system_building_element == "void":
+                self.cells[(x, y, self.z_lo)] = _floor_cell(
+                    x, y, self.z_lo, self.world_uid, self.building_uid, self.mat
+                )

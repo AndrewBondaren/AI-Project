@@ -128,9 +128,15 @@ _stair_cells = sorted(
      if c.system_building_element in _STAIR_TYPES],
     key=lambda c: (c[2], c[0], c[1]),
 )
+_stair_facing = {
+    (c.x, c.y, c.z): c.system_facing
+    for c in layout.cells
+    if c.system_building_element in _STAIR_TYPES
+}
 if _stair_cells:
     for _x, _y, _z, _t in _stair_cells:
-        print(f"  ({_x},{_y},z={_z:+d}) {_t}")
+        _f = _stair_facing.get((_x, _y, _z)) or "-"
+        print(f"  ({_x},{_y},z={_z:+d}) {_t:<14} facing={_f}")
 else:
     print("  (нет ячеек)")
 

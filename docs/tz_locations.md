@@ -12,20 +12,59 @@ metadata:
 **Уровень 1 — `map_cells`** — сырая матрица местности (sparse 3D grid):
 ```sql
 map_cells (
-  world_id, x, y, z,            -- PK; z глобальный, 1 единица = 3м; отрицательный = ниже уровня моря
-  system_terrain,               -- ref → worlds.terrain_registry (структурный тип)
-  cell_material,                -- nullable; ref → worlds.material_registry; null = материал implicit в terrain
-  travel_modifier_override,     -- nullable; перекрывает terrain_registry.travel_modifier
-  danger_level_override,        -- nullable; перекрывает terrain_registry.danger_level
-  gap_width_override,           -- nullable int (метры); перекрывает terrain_registry.gap_width
-  is_structural,                -- bool; несущая ячейка; учитывается в расчёте обрушения здания
-  temperature_base,             -- nullable int; заполняется нодой генерации из climate_zone + z; null для indoor
-  rainfall,                     -- nullable int 0–100; null для indoor
-  location_uid                  -- nullable FK → named_locations
+  world_uid, x, y, z,                  -- PK; z глобальный, 1 единица = 1м; отрицательный = ниже уровня моря
+  system_terrain,                       -- nullable ref → worlds.terrain_registry; тип рельефа (plains, forest, liquid_body, ...)
+  system_building_element,             -- nullable; тип строительного элемента (floor, wall, door, staircase, ...); см. §Building elements
+  system_material,                      -- nullable ref → worlds.material_registry; null = материал implicit в terrain
+  is_structural,                        -- bool; несущая ячейка; учитывается в расчёте обрушения здания
+  travel_modifier_override,             -- nullable; перекрывает terrain_registry.travel_modifier
+  system_danger_level_override,         -- nullable; перекрывает terrain_registry.danger_level
+  gap_width_override,                   -- nullable int (метры); перекрывает terrain_registry.gap_width
+  temperature_base,                     -- nullable int; заполняется нодой генерации из climate_zone + z; null для indoor
+  rainfall,                             -- nullable int 0–100; null для indoor
+  location_uid,                         -- nullable FK → named_locations
+  railing_sides,                        -- nullable JSON array; стороны с перилами: ["N"], ["E","N"], ...
+  system_facing,                        -- nullable; cardinal direction (north/south/east/west); куда смотрит/движется элемент
+  display_facing                        -- nullable; локализованная метка facing ("север", "к выходу", ...)
 )
-INDEX (world_id, x, y, z)
+PRIMARY KEY (world_uid, x, y, z)
+INDEX (world_uid, location_uid, z)
+INDEX (world_uid, x, y)
 ```
 Весь мир — единое 3D-пространство. z=0 = уровень моря. Поверхностный terrain, подземелья, интерьеры — все в одной системе координат. **x = y = z = 1м на ячейку** — единая шкала без конвертаций. Этаж здания = 3 z-юнита (конвенция). LLM сырую матрицу не получает — только `named_locations`.
+
+### `system_terrain` vs `system_building_element`
+
+Два независимых слоя описания ячейки:
+
+| Поле | Назначение | Реестр | Примеры |
+|---|---|---|---|
+| `system_terrain` | Тип рельефа — наружная природная среда | `worlds.terrain_registry` | `plains`, `forest`, `liquid_body`, `crevice` |
+| `system_building_element` | Строительный элемент — indoor геометрия | фиксированный enum движка | `floor`, `wall`, `door`, `staircase`, `stair_floor`, `void`, `archway` |
+
+**Правила заполнения:**
+- Outdoor ячейки (terrain) → `system_terrain` заполнен, `system_building_element = null`
+- Indoor ячейки (здание) → `system_building_element` заполнен, `system_terrain = null`
+- Оба null → аномалия; движок логирует WARNING
+- Оба заполнены → не используется; зарезервировано под будущие terrain-overrides зданий
+
+**Фиксированный список `system_building_element`** (не расширяется пользователем):
+
+| Значение | Описание | `system_facing` используется? |
+|---|---|---|
+| `floor` | Напольная плита | нет |
+| `wall` | Стена | нет |
+| `roof` | Крыша — верхняя поверхность, открыта погоде | нет |
+| `door` | Дверь | нет |
+| `window` | Окно | нет |
+| `archway` | Арочный проём — пассивно проходим | нет |
+| `void` | Пустое пространство внутри шахты / pseudo-column | нет |
+| `open_space` | Открытое пространство (воздух) | нет |
+| `staircase` | Ступень лестницы | **да** — указывает на следующую ступень вверх |
+| `stair_anchor` | Первая ступень лестницы (якорь входа) | **да** — указывает на следующую ступень |
+| `stair_floor` | Горизонтальная площадка (landing) между маршами | **да** — указывает на следующий элемент в цепи |
+
+`system_facing` на лестничных элементах реализует **linked-list chain**: каждый элемент смотрит на следующий в пути. В угловой ячейке (двух стенок рядом) направление обязано меняться.
 
 ### Стратегия инициализации `map_cells`
 
@@ -54,27 +93,35 @@ INDEX (world_id, x, y, z)
 ```sql
 named_locations (
   location_uid, world_uid,
-  display_name,                 -- обязательное, отображаемое имя
-  location_type,                -- ref → worlds.location_type_registry.system_type
-  created_at,                   -- ISO timestamp
-  parent_location_uid,          -- nullable FK → self (дерево иерархии, NULL у корней)
-  location_subtype,             -- nullable
+  display_name,                   -- обязательное, отображаемое имя
+  system_location_type,           -- ref → worlds.location_type_registry.system_type
+  system_location_subtype,        -- nullable ref → location_type_registry[type].subtypes
+  created_at,                     -- ISO timestamp
+  parent_location_uid,            -- nullable FK → self (дерево иерархии, NULL у корней)
   system_description, display_description,
-  glossary_ref, tag_refs,       -- JSON array
-  is_discovered,                -- bool default False; скрыта до исследования
-  is_accessible,                -- bool default True; управляется движком через события
-  -- interior_width / interior_height убраны; размер уровня implicit из map_cells ячеек
-  entry_difficulty,             -- nullable int 0–100; физическое препятствие входа
-  guard_level,                  -- nullable int 0–100; охраняемость
-  system_location_mood,         -- nullable; LLM-нарратив атмосферы на основе location_states
-  display_location_mood,        -- "Город охватила паника. На улицах пусто."
-  owner_uid,                    -- nullable FK → character_sheet; персональный владелец
-  climate_zone,                 -- nullable ref → worlds.climate_zone_registry; null = наследует от parent
-  state_uid,                    -- nullable; soft ref → states; orphan = ничейная, движок логирует
-  city_size,                    -- nullable; ref → worlds.city_size_registry; актуально для settlement
-  economic_tier,                -- nullable; ref → worlds.economic_tier_registry; null = наследует от parent; если у всех предков null → медианный тир (index = floor(count/2) по base_value ASC) + лог WARNING
-  is_public,                    -- bool default false; публичная локация — NPC-занятость не блокирует старт игрока
-  is_forbidden                  -- bool default false; restricted-зона — location_faction_access переходит в режим allowlist
+  glossary_ref, tag_refs,         -- JSON array
+  is_discovered,                  -- bool default False; скрыта до исследования
+  is_accessible,                  -- bool default True; управляется движком через события
+  is_selectable,                  -- bool default True; False = локация недоступна для выбора игроком в SceneInit/drill-down
+  entry_difficulty,               -- nullable int 0–100; физическое препятствие входа
+  guard_level,                    -- nullable int 0–100; охраняемость
+  system_location_mood,           -- nullable; LLM-нарратив атмосферы на основе location_states
+  display_location_mood,          -- "Город охватила паника. На улицах пусто."
+  owner_uid,                      -- nullable FK → character_sheet; персональный владелец
+  system_climate_zone,            -- nullable ref → worlds.climate_zone_registry; null = наследует от parent
+  state_uid,                      -- nullable; soft ref → states; orphan = ничейная, движок логирует
+  system_city_size,               -- nullable ref → worlds.city_size_registry; актуально для settlement
+  system_economic_tier,           -- nullable ref → worlds.economic_tier_registry; null = наследует от parent; если у всех предков null → медианный тир (index = floor(count/2) по base_value ASC) + лог WARNING
+  is_public,                      -- bool default False; публичная локация — NPC-занятость не блокирует старт игрока
+  is_forbidden,                   -- bool default False; restricted-зона — location_faction_access переходит в режим allowlist
+  is_outdoor,                     -- nullable bool; override поверх location_type_registry.is_outdoor; null = берётся из реестра
+  is_sheltered,                   -- bool default False; навес над outdoor-локацией; non-penetrating погода не влияет
+  is_transit,                     -- bool default False; транзитная локация — движок не создаёт SessionScene; LLM описывает как часть перехода
+  is_mobile,                      -- bool default False; локация может перемещаться (корабль, дирижабль); позиция через map_x/y/z
+  map_x, map_y, map_z,            -- nullable int; глобальные координаты локации на карте мира
+  system_template_uid,            -- nullable FK → building_templates; из какого шаблона сгенерировано здание
+  parent_wall_material,           -- nullable ref → material_registry; материал стен здания (наследуется из шаблона)
+  parent_floor_material           -- nullable ref → material_registry; материал полов здания
 )
 -- __update_exclude__ = {"world_uid"} — world_uid неизменяем при update
 -- Инвариант: is_public=true AND is_forbidden=true — невалидная комбинация; движок логирует WARNING

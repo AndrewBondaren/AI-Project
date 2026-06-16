@@ -1,21 +1,21 @@
 {
   "system_name":      "manor_1",
   "structure_type":   "manor",
-  "display_name":     "Особняк тип 1",
-  "description":      "Трёхэтажный жилой особняк. Большой главный холл с прямой лестницей вдоль северной стены. Боковая гостиная со стандартной спиральной лестницей. Спальни на 2-м и 3-м этажах.",
+  "display_name":     "Манор тип 1",
+  "description":      "Двухэтажный манор. Две u_shape лестницы: facing=south и facing=east. rect_standard shaft (5×5 экстерьер, 3×3 интерьер).",
   "version":          "1.0",
-  "default_z_height": 3,
+  "default_z_height": 15,
 
   "levels": [
     {
-      "z_offset":    0,
+      "z_offset":     0,
       "display_name": "Первый этаж",
       "rooms": [
         {
-          "room_id":      "main_hall",
+          "room_id":      "great_hall",
           "room_type":    "common_hall",
-          "display_name": "Главный холл",
-          "shape_type":   "rectangle",
+          "display_name": "Парадный зал",
+          "shape_type":   "square",
           "size":         { "size_type": "big" },
           "required":     true,
           "count":        1,
@@ -25,98 +25,59 @@
             "wall":         "south",
             "passage_type": "main_entrance"
           }
-        },
-        {
-          "room_id":      "side_room",
-          "room_type":    "living_room",
-          "display_name": "Гостиная",
-          "shape_type":   ["square", "rectangle"],
-          "size":         { "size_type": "medium" },
-          "required":     true,
-          "count":        1,
-          "is_public":    false,
-          "is_forbidden": false
         }
       ]
     },
     {
-      "z_offset":    1,
+      "z_offset":     1,
       "display_name": "Второй этаж",
       "rooms": [
         {
-          "room_id":      "upper_landing",
-          "room_type":    "stairwell",
-          "display_name": "Лестничная площадка",
+          "room_id":      "gallery_n",
+          "room_type":    "corridor",
+          "display_name": "Северная галерея",
           "shape_type":   "rectangle",
-          "size":         { "width_range": [10, 14], "depth_range": [10, 14] },
+          "size":         { "width_range": [12, 16], "depth_range": [3, 3] },
           "required":     true,
           "count":        1,
           "is_public":    false,
           "is_forbidden": false
         },
         {
-          "room_id":      "side_stair_room",
-          "room_type":    "stairwell",
-          "display_name": "Лестничная клетка",
+          "room_id":      "gallery_e",
+          "room_type":    "corridor",
+          "display_name": "Восточная галерея",
           "shape_type":   "rectangle",
-          "size":         { "width_range": [4, 5], "depth_range": [5, 6] },
+          "size":         { "width_range": [3, 3], "depth_range": [12, 16] },
           "required":     true,
           "count":        1,
           "is_public":    false,
           "is_forbidden": false
         },
         {
-          "room_id":      "bedroom",
-          "room_type":    "bedroom",
-          "display_name": "Спальня",
+          "room_id":      "chamber",
+          "room_type":    "guest_room",
+          "display_name": "Покои",
           "shape_type":   "rectangle",
-          "size":         { "width_range": [5, 7], "depth_range": [6, 8] },
+          "size":         { "width_range": [5, 8], "depth_range": [5, 8] },
           "required":     false,
-          "count_range":  [2, 3],
+          "count_range":  [1, 3],
           "is_public":    false,
           "is_forbidden": false,
-          "attach_to":    "upper_landing",
+          "attach_to":    "gallery_n",
           "attach_wall":  "both"
-        }
-      ]
-    },
-    {
-      "z_offset":    2,
-      "display_name": "Третий этаж",
-      "rooms": [
-        {
-          "room_id":      "upper_landing_2",
-          "room_type":    "stairwell",
-          "display_name": "Лестничная площадка",
-          "shape_type":   "rectangle",
-          "size":         { "width_range": [10, 14], "depth_range": [10, 14] },
-          "required":     true,
-          "count":        1,
-          "is_public":    false,
-          "is_forbidden": false
         },
         {
-          "room_id":      "side_stair_room_2",
-          "room_type":    "stairwell",
-          "display_name": "Лестничная клетка",
+          "room_id":      "chamber_e",
+          "room_type":    "guest_room",
+          "display_name": "Покои",
           "shape_type":   "rectangle",
-          "size":         { "width_range": [4, 5], "depth_range": [5, 6] },
-          "required":     true,
-          "count":        1,
-          "is_public":    false,
-          "is_forbidden": false
-        },
-        {
-          "room_id":      "bedroom_2",
-          "room_type":    "bedroom",
-          "display_name": "Спальня",
-          "shape_type":   "rectangle",
-          "size":         { "width_range": [5, 7], "depth_range": [6, 8] },
+          "size":         { "width_range": [5, 8], "depth_range": [5, 8] },
           "required":     false,
-          "count_range":  [2, 3],
+          "count_range":  [1, 3],
           "is_public":    false,
           "is_forbidden": false,
-          "attach_to":    "upper_landing_2",
+          "attach_to":    "gallery_e",
           "attach_wall":  "both"
         }
       ]
@@ -125,64 +86,35 @@
 
   "connections": [
     {
-      "from_room":    "main_hall",
-      "to_room":      "side_room",
+      "from_room":    "gallery_n",
+      "to_room":      "chamber",
       "passage_type": "doorway",
       "required":     true
     },
     {
-      "from_room":      "main_hall",
-      "to_room":        "upper_landing",
-      "passage_type":   "staircase",
-      "staircase_type": "straight",
-      "position":       "north",
-      "required":       true
-    },
-    {
-      "from_room":      "side_room",
-      "to_room":        "side_stair_room",
-      "passage_type":   "staircase",
-      "staircase_type": "standard",
-      "required":       true
-    },
-    {
-      "from_room":      "upper_landing",
-      "to_room":        "upper_landing_2",
-      "passage_type":   "staircase",
-      "staircase_type": "straight",
-      "position":       "north",
-      "required":       true
-    },
-    {
-      "from_room":      "side_stair_room",
-      "to_room":        "side_stair_room_2",
-      "passage_type":   "staircase",
-      "staircase_type": "standard",
-      "required":       true
-    },
-    {
-      "from_room":    "upper_landing",
-      "to_room":      "side_stair_room",
-      "passage_type": "archway",
-      "required":     true
-    },
-    {
-      "from_room":    "upper_landing_2",
-      "to_room":      "side_stair_room_2",
-      "passage_type": "archway",
-      "required":     true
-    },
-    {
-      "from_room":    "upper_landing",
-      "to_room":      "bedroom",
+      "from_room":    "gallery_e",
+      "to_room":      "chamber_e",
       "passage_type": "doorway",
       "required":     true
+    }
+  ],
+
+  "staircases": [
+    {
+      "staircase_id":   "south_stair",
+      "staircase_type": "u_shape",
+      "size":           { "size_type": "rect_standard" },
+      "facing":         "south",
+      "has_walls":      true,
+      "stops":          ["great_hall", "gallery_n"]
     },
     {
-      "from_room":    "upper_landing_2",
-      "to_room":      "bedroom_2",
-      "passage_type": "doorway",
-      "required":     true
+      "staircase_id":   "east_stair",
+      "staircase_type": "u_shape",
+      "size":           { "size_type": "rect_standard" },
+      "facing":         "east",
+      "has_walls":      true,
+      "stops":          ["great_hall", "gallery_e"]
     }
   ]
 }

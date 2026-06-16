@@ -48,7 +48,7 @@ def build_staircase(
         # New schema: staircase_type and id come from sc_entry (staircases[] array)
         stair_type = conn_or_entry.get("staircase_type", "u_shape")
         sc_id      = conn_or_entry.get("staircase_id", "?")
-        conn_label = f"{sc_id}  {fr.room_id}→{to.room_id}"
+        conn_label = f"{sc_id}  {fr.room_id}->{to.room_id}"
     else:
         # Old schema: type inferred from to.staircase_type + underground check
         conn_label        = f"{conn_or_entry['from_room']}->{conn_or_entry['to_room']}"
@@ -70,6 +70,8 @@ def build_staircase(
 
     try:
         fr_anchor, to_anchor = builder.build()
+        builder.clear_shaft()
+        builder.lay_base_floor()
     except NotImplementedError:
         logger.error("staircase %s: %s not implemented", conn_label, stair_type)
         return None
