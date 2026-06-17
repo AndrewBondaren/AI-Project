@@ -65,20 +65,6 @@
       "display_name": "Второй этаж",
       "rooms": [
         {
-          "room_id":        "staircase_room",
-          "room_type":      "stairwell",
-          "staircase_type": "spiral",
-          "display_name":   "Лестничная клетка",
-          "size":           { "size_type": "spiral_3" },
-          "facing":         "north",
-          "has_walls":      true,
-          "in_a_room":      false,
-          "required":       true,
-          "count":          1,
-          "is_public":      false,
-          "is_forbidden":   false
-        },
-        {
           "room_id":      "corridor",
           "room_type":    "corridor",
           "display_name": "Коридор",
@@ -106,6 +92,17 @@
     }
   ],
 
+  "staircases": [
+    {
+      "staircase_id":   "main_stair",
+      "staircase_type": "u_shape",
+      "size":           { "width_range": [4, 4], "depth_range": [5, 5] },
+      "facing":         "north",
+      "has_walls":      true,
+      "stops":          ["main_hall", "corridor"]
+    }
+  ],
+
   "connections": [
     {
       "from_room":    "main_hall",
@@ -117,18 +114,6 @@
       "from_room":    "kitchen",
       "to_room":      "cellar",
       "passage_type": "staircase",
-      "required":     true
-    },
-    {
-      "from_room":    "main_hall",
-      "to_room":      "staircase_room",
-      "passage_type": "staircase",
-      "required":     true
-    },
-    {
-      "from_room":    "staircase_room",
-      "to_room":      "corridor",
-      "passage_type": "archway",
       "required":     true
     },
     {

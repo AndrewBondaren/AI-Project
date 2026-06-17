@@ -68,6 +68,9 @@ def _build_u_shape_first_march(
     for _ in range(leg3):
         path_xy.append((cx, cy)); cx -= Vx;  cy -= Vy
 
+    # flat_positions здесь используется для РЕАЛЬНОГО размещения:
+    # single-march проходит весь U-путь сразу, flat_set определяет
+    # какие ячейки пути становятся stair_floor вместо staircase.
     flat_set = set(flat_positions(
         params.flat_march1,
         params.ax, params.ay, params.width_int, params.depth_int,
@@ -181,6 +184,8 @@ def _place_landing(
     )
 
     if march_flat > 0 and w > 0:
+        # flat_positions здесь используется ТОЛЬКО для диагностики (match=False ожидаем
+        # для L-маршей — фактическое размещение идёт через BFS + embedded corner).
         fp_cells = flat_positions(march_flat, ax, ay, w, d, facing, turn_vector, march_index=i, conn_label=conn_label)
         bfs_xy   = set(intermediates)
         fp_xy    = set(fp_cells)
