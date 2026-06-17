@@ -165,6 +165,10 @@ def _place_landing(
     mat: str,
     conn_label: str,
     march_facing: str | None,
+    march_flat: int = 0,
+    ax: int = 0, ay: int = 0, w: int = 0, d: int = 0,
+    facing: str = "north",
+    turn_vector: tuple[int, int] = (1, 0),
 ) -> list[tuple[int, int, int]]:
     """
     BFS path from end of march i to start of march i+1.
@@ -175,10 +179,21 @@ def _place_landing(
     intermediates = _path_intermediates(
         end_pos, next_start, interior_set, forbidden_at_z, corner_set, next_march_dir
     )
-    logger.info(
-        "u_shape %s march=%d->%d: landing path %s->%s via %s",
-        conn_label, i, next_i, end_pos, next_start, intermediates,
-    )
+
+    if march_flat > 0 and w > 0:
+        fp_cells = flat_positions(march_flat, ax, ay, w, d, facing, turn_vector, march_index=i, conn_label=conn_label)
+        bfs_xy   = set(intermediates)
+        fp_xy    = set(fp_cells)
+        logger.info(
+            "u_shape %s march=%d->%d: landing BFS=%d flat_target=%d  bfs=%s  fp=%s  match=%s",
+            conn_label, i, next_i, len(intermediates), march_flat,
+            sorted(bfs_xy), sorted(fp_xy), bfs_xy == fp_xy,
+        )
+    else:
+        logger.info(
+            "u_shape %s march=%d->%d: landing path %s->%s via %s",
+            conn_label, i, next_i, end_pos, next_start, intermediates,
+        )
 
     chain = intermediates
     first_next_xy = chain[0] if chain else next_start
@@ -281,11 +296,11 @@ def _build_u_shape(
     for i in range(params.march_count):
         is_last = (i == params.march_count - 1)
         px, py, mvx, mvy = _march_start(i, is_last, params, anchors, (Vx, Vy))
-        steps = params.steps_march_0 if (i == 0 and not is_last) else params.march_depth_mid
+        steps = params.march_steps[i]
 
         logger.info(
-            "u_shape %s march=%d: start=(%d,%d) z=%d steps=%d V=(%d,%d) is_last=%s",
-            conn_label, i, px, py, z, steps, mvx, mvy, is_last,
+            "u_shape %s march=%d: start=(%d,%d) z=%d steps=%d flat_target=%d V=(%d,%d) is_last=%s",
+            conn_label, i, px, py, z, steps, params.march_flat[i], mvx, mvy, is_last,
         )
 
         march_cells = _place_march_cells(px, py, z, steps, mvx, mvy, world_uid, building_uid, mat, cells)
@@ -308,6 +323,9 @@ def _build_u_shape(
                 i, end_pos, (next_px, next_py), (next_mvx, next_mvy),
                 z, interior_set, corner_set, stair_cells, cells,
                 world_uid, building_uid, mat, conn_label, _V_TO_FACING.get((mvx, mvy)),
+                march_flat=params.march_flat[i],
+                ax=params.ax, ay=params.ay, w=params.width_int, d=params.depth_int,
+                facing=params.facing, turn_vector=params.turn_vector,
             )
             floor_cells.extend(new_floor)
 

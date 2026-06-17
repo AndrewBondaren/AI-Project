@@ -28,7 +28,8 @@ class UShapeParams:
     march_depth: int       # depth−1 (used for validation only)
     march_depth_mid: int   # steps per full march (= d for NS, w for EW)
     march_count: int
-    steps_march_0: int     # steps in march 0 (1..march_depth_mid); last march always march_depth_mid
+    march_steps: list[int]  # steps per march; len==march_count; each ≤ march_depth_mid
+    march_flat: list[int]   # target stair_floor cells per march; len==march_count; last=0
     flat_per_march: int    # stair_floor cells per landing (0 for march_count=1)
     flat_march1: int       # stair_floor cells for single-march path
     turn_vector: tuple[int, int]
@@ -91,11 +92,20 @@ def _compute_u_params(
     # March 0 gets the remainder: steps_march_0 = (z_height−1) % march_depth_mid + 1 ∈ [1, march_depth_mid].
     # Total: steps_march_0 + (march_count−1) * march_depth_mid = z_height.
     if z_height <= N1:
-        march_count   = 1
-        steps_march_0 = z_height  # not used for march_count=1 path
+        march_count = 1
+        march_steps = [z_height]  # not used for march_count=1 path
     else:
-        steps_march_0 = (z_height - 1) % march_depth_mid + 1
-        march_count   = (z_height - steps_march_0) // march_depth_mid + 1
+        march_count = (z_height + march_depth_mid - 1) // march_depth_mid
+        # Even march_count: odd last index avoids same-wall BFS detour.
+        if march_count % 2 == 1:
+            new_count = march_count + 1
+            if z_height - march_depth_mid >= new_count - 1:
+                march_count = new_count
+        # Last march must be exactly march_depth_mid steps for correct shaft exit.
+        remaining   = z_height - march_depth_mid
+        non_last    = march_count - 1
+        base, extra = divmod(remaining, non_last)
+        march_steps = [base + (1 if i < extra else 0) for i in range(non_last)] + [march_depth_mid]
 
     march_cross = w if facing in _NS else d
     flat_march1 = N1 - z_height if march_count == 1 else 0
@@ -112,6 +122,12 @@ def _compute_u_params(
     else:
         flat_per_march = 0
 
+    # Геометрический инвариант u-shape: march_steps[i] + landing[i] = march_depth_mid + 1.
+    if march_count == 1:
+        march_flat = [0]
+    else:
+        march_flat = [march_depth_mid + 1 - s for s in march_steps[:-1]] + [0]
+
     fr_anchor, far_anchor, turn_vector = _compute_fr_anchor(ax, ay, w, d, facing, prev_fr_anchor)
 
     return UShapeParams(
@@ -121,7 +137,8 @@ def _compute_u_params(
         march_depth=march_depth,
         march_depth_mid=march_depth_mid,
         march_count=march_count,
-        steps_march_0=steps_march_0,
+        march_steps=march_steps,
+        march_flat=march_flat,
         flat_per_march=flat_per_march,
         flat_march1=flat_march1,
         turn_vector=turn_vector,
@@ -368,8 +385,14 @@ def flat_positions(
         pool1 = _anchor_side_cells(ax, ay, w, d, facing)
         pool2 = _far_end_cells(ax, ay, w, d, facing)
 
-    candidates.extend(pool1)
-    logger.info("u_shape %s march=%d  pool1=%s", conn_label, march_index, pool1)
+    # Если на стену выделяется ровно 2 клетки — ставим по углам, иначе от центра.
+    cells_for_pool1 = min(flat, ideal)
+    if cells_for_pool1 == 2 and len(pool1) >= 2:
+        ordered_pool1 = [pool1[-2], pool1[-1]] + pool1[:-2]
+    else:
+        ordered_pool1 = pool1
+    candidates.extend(ordered_pool1)
+    logger.info("u_shape %s march=%d  pool1=%s (corners=%s)", conn_label, march_index, ordered_pool1, cells_for_pool1 == 2)
 
     if march_index == 0:
         if flat > ideal:
@@ -378,8 +401,13 @@ def flat_positions(
             logger.info("u_shape %s march=%d  pool3 side_walls=%s", conn_label, march_index, side)
     else:
         if flat > ideal:
-            candidates.extend(pool2)
-            logger.info("u_shape %s march=%d  pool2=%s", conn_label, march_index, pool2)
+            cells_for_pool2 = min(flat - cells_for_pool1, len(pool2))
+            if cells_for_pool2 == 2 and len(pool2) >= 2:
+                ordered_pool2 = [pool2[-2], pool2[-1]] + pool2[:-2]
+            else:
+                ordered_pool2 = pool2
+            candidates.extend(ordered_pool2)
+            logger.info("u_shape %s march=%d  pool2=%s (corners=%s)", conn_label, march_index, ordered_pool2, cells_for_pool2 == 2)
         if flat > mid_ideal:
             side = _side_wall_cells(ax, ay, w, d, facing, turn_vector)
             candidates.extend(side)
