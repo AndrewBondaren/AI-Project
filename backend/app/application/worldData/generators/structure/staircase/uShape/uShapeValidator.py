@@ -41,20 +41,22 @@ logger = logging.getLogger(__name__)
 #     return False
 
 
-def _validate_stair_floor_chain(
+def _traverse_stair_floor_chain(
     cells: dict,
     start: tuple[int, int, int],
     expected_next: tuple[int, int, int],
     conn_label: str,
     march_idx: int,
-) -> None:
+) -> int:
     """
     Traversal linked-list цепочки stair_floor начиная с start.
     Каждая stair_floor ячейка смотрит на следующую по system_facing (горизонтально, тот же z).
     Цепочка должна завершиться на expected_next (первая ступень следующего марша).
+    Возвращает длину цепочки (кол-во пройденных stair_floor ячеек).
     """
     cx, cy, z = start
     visited: set[tuple[int, int, int]] = set()
+    chain_len = 0
     while True:
         key = (cx, cy, z)
         if key in visited:
@@ -62,7 +64,7 @@ def _validate_stair_floor_chain(
                 "u_shape %s [landing %d]: цикл в stair_floor цепочке на (%d,%d,z=%d)",
                 conn_label, march_idx, cx, cy, z,
             )
-            return
+            return chain_len
         visited.add(key)
         cell = cells.get(key)
         if cell is None:
@@ -70,7 +72,7 @@ def _validate_stair_floor_chain(
                 "u_shape %s [landing %d]: нет ячейки на (%d,%d,z=%d)",
                 conn_label, march_idx, cx, cy, z,
             )
-            return
+            return chain_len
         elem = cell.system_building_element
         if elem in ("staircase", "stair_anchor"):
             if key != expected_next:
@@ -80,21 +82,60 @@ def _validate_stair_floor_chain(
                     conn_label, march_idx, cx, cy, z,
                     expected_next[0], expected_next[1], expected_next[2],
                 )
-            return
+            return chain_len
         if elem != "stair_floor":
             logger.error(
                 "u_shape %s [landing %d]: неожиданный элемент %r на (%d,%d,z=%d)",
                 conn_label, march_idx, elem, cx, cy, z,
             )
-            return
+            return chain_len
         if not cell.system_facing:
             logger.error(
                 "u_shape %s [landing %d]: stair_floor (%d,%d,z=%d) без facing",
                 conn_label, march_idx, cx, cy, z,
             )
-            return
+            return chain_len
         dx, dy = _V_INIT[cell.system_facing]
         cx, cy = cx + dx, cy + dy
+        chain_len += 1
+
+
+def _validate_stair_floor_chain(
+    cells: dict,
+    start: tuple[int, int, int],
+    expected_next: tuple[int, int, int],
+    conn_label: str,
+    march_idx: int,
+) -> None:
+    """Стандартная валидация stair_floor цепочки (priority=CENTER)."""
+    logger.info(
+        "u_shape %s [landing %d]: priority=CENTER stair_floor от %s к %s",
+        conn_label, march_idx, start, expected_next,
+    )
+    _traverse_stair_floor_chain(cells, start, expected_next, conn_label, march_idx)
+
+
+def _validate_stair_floor_chain_corners(
+    cells: dict,
+    start: tuple[int, int, int],
+    expected_next: tuple[int, int, int],
+    conn_label: str,
+    march_idx: int,
+) -> None:
+    """
+    Валидация stair_floor цепочки для flat=2 corners (priority=CORNERS).
+    Ожидает ровно 1 stair_floor ячейку — угловой переход между двумя staircase.
+    """
+    logger.info(
+        "u_shape %s [landing %d]: priority=CORNERS stair_floor от %s к %s",
+        conn_label, march_idx, start, expected_next,
+    )
+    chain_len = _traverse_stair_floor_chain(cells, start, expected_next, conn_label, march_idx)
+    if chain_len != 1:
+        logger.error(
+            "u_shape %s [landing %d]: priority=CORNERS ожидает цепочку длиной 1, получено %d",
+            conn_label, march_idx, chain_len,
+        )
 
 
 class UShapeValidator(StaircaseValidator):
@@ -143,13 +184,25 @@ class UShapeValidator(StaircaseValidator):
                 )
             elif nb_elem == "stair_floor":
                 expected = stair_cells[idx + 1]
-                _validate_stair_floor_chain(
-                    cells,
-                    start=(sx + dx, sy + dy, sz + 1),
-                    expected_next=expected,
-                    conn_label=conn_label,
-                    march_idx=idx,
-                )
+                chain_start = (sx + dx, sy + dy, sz + 1)
+                # Dispatch: 1-клеточная цепочка → corners, длиннее → center.
+                # Проверяем длину заранее через peek одного шага.
+                peek_cell = cells.get(chain_start)
+                peek_next = None
+                if peek_cell and peek_cell.system_facing:
+                    pdx, pdy = _V_INIT[peek_cell.system_facing]
+                    peek_next = cells.get((chain_start[0] + pdx, chain_start[1] + pdy, chain_start[2]))
+                is_corners = peek_next is not None and peek_next.system_building_element in _STAIR_DIRECTIONAL
+                if is_corners:
+                    _validate_stair_floor_chain_corners(
+                        cells, start=chain_start, expected_next=expected,
+                        conn_label=conn_label, march_idx=idx,
+                    )
+                else:
+                    _validate_stair_floor_chain(
+                        cells, start=chain_start, expected_next=expected,
+                        conn_label=conn_label, march_idx=idx,
+                    )
 
     def validate(
         self,

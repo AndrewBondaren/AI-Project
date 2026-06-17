@@ -245,6 +245,55 @@ def _place_landing(
     return floor_cells
 
 
+def _place_l_march(
+    i: int,
+    anchor: tuple[int, int],
+    mvx: int, mvy: int,
+    z: int,
+    turn_vector: tuple[int, int],
+    world_uid: str, building_uid: str, mat: str,
+    cells: dict,
+    conn_label: str = "",
+) -> tuple[list[tuple[int, int, int]], tuple[int, int, int]]:
+    """
+    L-образный марш для flat=2: 2 staircase + 1 embedded stair_floor на повороте.
+
+    Геометрия:
+      inner_start  = anchor + (mvx, mvy)          — первая ступень (угол anchor → stair_floor)
+      corner_pos   = inner_start + (mvx, mvy)      — embedded stair_floor (угол шахты)
+      step2_pos    = corner_pos + perp             — вторая ступень
+
+    perp = turn_vector для чётных маршей (i%2==0), -turn_vector для нечётных.
+    Возвращает (stair_cells=[step1, step2], corner_sf=(x,y,z+1)).
+    """
+    tvx, tvy = turn_vector
+    perp = (tvx, tvy) if i % 2 == 0 else (-tvx, -tvy)
+    ppx, ppy = perp
+
+    ix, iy = anchor[0] + mvx, anchor[1] + mvy    # inner_start
+    cx, cy = ix + mvx, iy + mvy                   # corner_pos (embedded stair_floor)
+    sx2, sy2 = cx + ppx, cy + ppy                 # step2 staircase
+
+    primary_facing = _V_TO_FACING.get((mvx, mvy))
+    perp_facing    = _V_TO_FACING.get((ppx, ppy))
+
+    # Шаг 1: staircase на inner_start
+    cells[(ix, iy, z)] = _stair_cell(ix, iy, z, world_uid, building_uid, mat, facing=primary_facing)
+    # Embedded stair_floor на углу (z+1 — следующий уровень посадки)
+    cells[(cx, cy, z + 1)] = _stair_floor_cell(cx, cy, z + 1, world_uid, building_uid, mat, facing=perp_facing)
+    # Шаг 2: staircase за углом
+    cells[(sx2, sy2, z + 1)] = _stair_cell(sx2, sy2, z + 1, world_uid, building_uid, mat, facing=perp_facing)
+
+    logger.info(
+        "u_shape %s march=%d L-march: anchor=%s inner=(%d,%d,z=%d) corner_sf=(%d,%d,z=%d) step2=(%d,%d,z=%d) perp=%s",
+        conn_label, i, anchor, ix, iy, z, cx, cy, z + 1, sx2, sy2, z + 1, perp_facing,
+    )
+
+    stair_cells = [(ix, iy, z), (sx2, sy2, z + 1)]
+    corner_sf   = (cx, cy, z + 1)
+    return stair_cells, corner_sf
+
+
 def _build_u_shape(
     params: UShapeParams,
     z_lo: int,
@@ -295,35 +344,59 @@ def _build_u_shape(
 
     for i in range(params.march_count):
         is_last = (i == params.march_count - 1)
+        flat    = params.march_flat[i]
+        use_l   = not is_last and flat == 2 and params.width_int >= 3
         px, py, mvx, mvy = _march_start(i, is_last, params, anchors, (Vx, Vy))
         steps = params.march_steps[i]
 
         logger.info(
-            "u_shape %s march=%d: start=(%d,%d) z=%d steps=%d flat_target=%d V=(%d,%d) is_last=%s",
-            conn_label, i, px, py, z, steps, params.march_flat[i], mvx, mvy, is_last,
+            "u_shape %s march=%d: start=(%d,%d) z=%d steps=%d flat_target=%d V=(%d,%d) is_last=%s use_l=%s",
+            conn_label, i, px, py, z, steps, flat, mvx, mvy, is_last, use_l,
         )
 
-        march_cells = _place_march_cells(px, py, z, steps, mvx, mvy, world_uid, building_uid, mat, cells)
-        stair_cells.extend(march_cells)
-        z += steps
+        if use_l:
+            anchor = (px, py)
+            march_cells, corner_sf = _place_l_march(
+                i, anchor, mvx, mvy, z,
+                params.turn_vector,
+                world_uid, building_uid, mat, cells, conn_label,
+            )
+            stair_cells.extend(march_cells)
+            floor_cells.append(corner_sf)
+            z += 2  # всегда 2 staircase-ступени у L-марша
+        else:
+            march_cells = _place_march_cells(px, py, z, steps, mvx, mvy, world_uid, building_uid, mat, cells)
+            stair_cells.extend(march_cells)
+            z += steps
 
         logger.info(
             "u_shape %s march=%d: placed %d staircase cells, z now=%d",
-            conn_label, i, steps, z,
+            conn_label, i, len(march_cells), z,
         )
 
         if not is_last:
-            next_i = i + 1
+            next_i       = i + 1
             next_is_last = (next_i == params.march_count - 1)
+            next_flat    = params.march_flat[next_i]
+            next_use_l   = not next_is_last and next_flat == 2 and params.width_int >= 3
+
             next_px, next_py, next_mvx, next_mvy = _march_start(
                 next_i, next_is_last, params, anchors, (-Vx, -Vy)
             )
+            # Если следующий марш L-образный, лендинг ведём к inner_start (anchor+step),
+            # а не к самому anchor: это освобождает угол-anchor в stair_floor.
+            if next_use_l:
+                land_target_x = next_px + next_mvx
+                land_target_y = next_py + next_mvy
+            else:
+                land_target_x, land_target_y = next_px, next_py
+
             end_pos = (march_cells[-1][0], march_cells[-1][1])
             new_floor = _place_landing(
-                i, end_pos, (next_px, next_py), (next_mvx, next_mvy),
+                i, end_pos, (land_target_x, land_target_y), (next_mvx, next_mvy),
                 z, interior_set, corner_set, stair_cells, cells,
                 world_uid, building_uid, mat, conn_label, _V_TO_FACING.get((mvx, mvy)),
-                march_flat=params.march_flat[i],
+                march_flat=flat,
                 ax=params.ax, ay=params.ay, w=params.width_int, d=params.depth_int,
                 facing=params.facing, turn_vector=params.turn_vector,
             )
