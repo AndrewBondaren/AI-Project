@@ -40,7 +40,7 @@ _DEFAULT_SIZE: dict[str, str] = {
     "standard": "standard",
     "spiral":   "spiral_3",
 }
-_NO_SHAFT_TYPES = {"trapdoor"}
+_NO_SHAFT_TYPES = {"vertical_ladder", "external_vertical_ladder"}
 
 
 def _resolve_shaft_size(sc_entry: dict, staircase_type: str) -> tuple[int, int]:

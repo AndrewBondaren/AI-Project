@@ -11,7 +11,7 @@ from app.application.worldData.generators.structure.roomInstance import _RoomIns
 from app.application.worldData.generators.structure.staircase.straight  import StraightBuilder
 from app.application.worldData.generators.structure.staircase.uShape    import UShapeBuilder
 from app.application.worldData.generators.structure.staircase.spiral    import SpiralBuilder
-from app.application.worldData.generators.structure.staircase.trapdoor  import TrapdoorBuilder
+from app.application.worldData.generators.structure.staircase.verticalLadder  import VerticalLadderBuilder, ExternalVerticalLadderBuilder
 from app.application.worldData.generators.structure.staircase.base      import StaircaseBuilder
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
@@ -23,7 +23,8 @@ _BUILDERS: dict[str, type[StaircaseBuilder]] = {
     "straight": StraightBuilder,
     "u_shape":  UShapeBuilder,
     "spiral":   SpiralBuilder,
-    "trapdoor": TrapdoorBuilder,
+    "vertical_ladder":          VerticalLadderBuilder,
+    "external_vertical_ladder": ExternalVerticalLadderBuilder,
 }
 
 
@@ -66,6 +67,7 @@ def build_staircase(
     builder = _BUILDERS[stair_type](
         fr, to, fr_level, to_level, cells, world_uid, building_uid, mat, conn_label,
         shaft=shaft,
+        sc_entry=conn_or_entry,
     )
 
     try:

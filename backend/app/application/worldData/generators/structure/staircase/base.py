@@ -86,6 +86,7 @@ class StaircaseBuilder(ABC):
         mat: str,
         conn_label: str,
         shaft: _RoomInstance | None = None,
+        sc_entry: dict | None = None,
     ) -> None:
         self.fr           = fr
         self.to           = to
@@ -97,6 +98,7 @@ class StaircaseBuilder(ABC):
         self.mat          = mat
         self.conn_label   = conn_label
         self.shaft           = shaft       # shaft instance (new schema); None = old schema
+        self.sc_entry        = sc_entry    # raw staircases[] entry; None = old schema
         self.z_height        = abs(to_level.z - fr_level.z)
         self.z_lo            = min(fr_level.z, to_level.z)
         self.z_top           = max(fr_level.z, to_level.z)

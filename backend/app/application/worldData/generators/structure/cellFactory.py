@@ -83,6 +83,26 @@ def _stair_floor_cell(
     )
 
 
+def _window_cell(x: int, y: int, z: int, world_uid: str, building_uid: str, material: str) -> MapCell:
+    return MapCell(
+        world_uid=world_uid, x=x, y=y, z=z,
+        system_building_element="window",
+        system_material=material,
+        is_structural=False,
+        location_uid=building_uid,
+    )
+
+
+def _ladder_cell(x: int, y: int, z: int, world_uid: str, building_uid: str, material: str) -> MapCell:
+    return MapCell(
+        world_uid=world_uid, x=x, y=y, z=z,
+        system_building_element="ladder",
+        system_material=material,
+        is_structural=False,
+        location_uid=building_uid,
+    )
+
+
 def _floor_cell(x: int, y: int, z: int, world_uid: str, building_uid: str, material: str) -> MapCell:
     return MapCell(
         world_uid=world_uid, x=x, y=y, z=z,

@@ -100,6 +100,25 @@
       "facing":         "north",
       "has_walls":      true,
       "stops":          ["main_hall", "corridor"]
+    },
+    {
+      "staircase_id":   "cellar_ladder",
+      "staircase_type": "vertical_ladder",
+      "is_movable":     false,
+      "has_trapdoor":   true,
+      "near_wall":      false,
+      "on_the_edge":    false,
+      "stops":          ["cellar", "kitchen"]
+    },
+    {
+      "staircase_id":   "cellar_exit_ladder",
+      "staircase_type": "external_vertical_ladder",
+      "is_movable":     false,
+      "has_trapdoor":   false,
+      "facing":         "north",
+      "has_walls":      false,
+      "open_wall_shaft": null,
+      "stops":          ["cellar", "main_hall"]
     }
   ],
 
@@ -108,12 +127,6 @@
       "from_room":    "main_hall",
       "to_room":      "kitchen",
       "passage_type": "doorway",
-      "required":     true
-    },
-    {
-      "from_room":    "kitchen",
-      "to_room":      "cellar",
-      "passage_type": "staircase",
       "required":     true
     },
     {

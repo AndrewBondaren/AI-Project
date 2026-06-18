@@ -9,10 +9,12 @@ Builds all passages for a structure:
 import logging
 from random import Random
 
+from app.application.worldData.generators.structure.cellFactory import _floor_cell, _open_cell
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.archway import _build_archway
 from app.application.worldData.generators.structure.passages.doorway import _build_doorway
 from app.application.worldData.generators.structure.passages.entry import _build_entry_point
+from app.application.worldData.generators.structure.passages.shared import _det_uuid
 from app.application.worldData.generators.structure.staircase.base import check_all_stair_headrooms
 from app.application.worldData.generators.structure.staircase.builder import build_staircase
 from app.db.models.locationLevel import LocationLevel
@@ -21,6 +23,69 @@ from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
 logger = logging.getLogger(__name__)
+
+_NEIGHBORS = ((1, 0), (-1, 0), (0, 1), (0, -1))
+
+
+def _build_edge_ladder_passage(
+    fr_anchor:    tuple[int, int],
+    fr_room:      _RoomInstance,
+    fr_level:     LocationLevel,
+    cells:        dict[tuple, MapCell],
+    world_uid:    str,
+    building_uid: str,
+    sc_id:        str = "?",
+) -> "LocationPassage | None":
+    """
+    Прорубает проход в стене комнаты к вертикальной лестнице снаружи.
+
+    fr_anchor находится за периметром fr_room. Находим стеновую ячейку footprint fr_room,
+    смежную с fr_anchor, и заменяем её на floor + open — аналог archway шириной 1.
+    """
+    ax, ay = fr_anchor
+    fr_fp  = fr_room.get_footprint()
+
+    wall_cell: tuple[int, int] | None = None
+    for dx, dy in _NEIGHBORS:
+        nb = (ax + dx, ay + dy)
+        if nb in fr_fp:
+            wall_cell = nb
+            break
+
+    if wall_cell is None:
+        logger.error(
+            "edge_ladder %r: fr_anchor (%d,%d) не смежен ни с одной ячейкой footprint %r — "
+            "проход не построен",
+            sc_id, ax, ay, fr_room.room_id,
+        )
+        return None
+
+    wx, wy   = wall_cell
+    z_base   = fr_level.z
+    mat      = fr_room.floor_material
+
+    cells[(wx, wy, z_base)] = _floor_cell(wx, wy, z_base, world_uid, building_uid, mat)
+    for z in range(z_base + 1, z_base + fr_level.z_height):
+        cells[(wx, wy, z)] = _open_cell(wx, wy, z, world_uid, building_uid, mat)
+
+    logger.info(
+        "edge_ladder %r: passage at (%d,%d) z=%d..%d (fr_anchor=%s, room=%r)",
+        sc_id, wx, wy, z_base, z_base + fr_level.z_height - 1, fr_anchor, fr_room.room_id,
+    )
+
+    passage_uid = _det_uuid(building_uid, "edge_ladder", sc_id, fr_room.room_id)
+    return LocationPassage(
+        passage_uid=passage_uid,
+        world_uid=world_uid,
+        from_level_uid=fr_level.level_uid,
+        from_x=wx,
+        from_y=wy,
+        to_level_uid=fr_level.level_uid,
+        to_x=ax,
+        to_y=ay,
+        system_passage_type="archway",
+        is_bidirectional=True,
+    )
 
 
 def build_passages(
@@ -179,6 +244,13 @@ def build_passages(
                 )
                 if p:
                     passages.append(p)
+                    if sc_type == "external_vertical_ladder" or (sc_type == "vertical_ladder" and sc.get("on_the_edge", False)):
+                        ep = _build_edge_ladder_passage(
+                            (p.from_x, p.from_y), fr_room, fr_level,
+                            cells, world_uid, building_uid, sc_id=sc_id,
+                        )
+                        if ep:
+                            passages.append(ep)
 
     # Old schema (backward compat): connections[passage_type=staircase].
     elif staircase_conns:

@@ -15,6 +15,7 @@ _SYMBOLS: dict[str, str] = {
     "column":         "C",
     "railing":        "r",
     "trapdoor":       "T",
+    "ladder":         "H",
     "archway":        "'",
 }
 
