@@ -129,6 +129,8 @@ class VerticalLadderBuilder(StaircaseBuilder):
             fr_footprint=set(self.fr.get_footprint()),
             to_footprint=set(self.to.get_footprint()),
             on_the_edge=on_the_edge,
+            is_movable=is_movable,
+            has_trapdoor=has_trapdoor,
         )
 
         return fr_anchor, to_anchor

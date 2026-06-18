@@ -121,6 +121,26 @@ print(f"  [railing cells: {len(railing_cells)}]")
 for rc in sorted(railing_cells):
     print(f"    ({rc[0]},{rc[1]},z={rc[2]}) {rc[3]}")
 
+print("\n--- Вертикальные лестницы: якоря ---")
+_LADDER_TYPES = {"ladder", "trapdoor"}
+_ladder_raw = sorted(
+    [(c.x, c.y, c.z, c.system_building_element) for c in layout.cells
+     if c.system_building_element in _LADDER_TYPES],
+    key=lambda c: (c[0], c[1], c[2]),
+)
+if _ladder_raw:
+    from itertools import groupby as _groupby
+    for (lx, ly), _grp in _groupby(_ladder_raw, key=lambda c: (c[0], c[1])):
+        _cells = list(_grp)
+        _ladder_z  = [c[2] for c in _cells if c[3] == "ladder"]
+        _trapdoor_z = [c[2] for c in _cells if c[3] == "trapdoor"]
+        _z_lo  = min(_ladder_z) if _ladder_z else "?"
+        _z_top = max(_ladder_z) if _ladder_z else "?"
+        _td    = f"  trapdoor z={_trapdoor_z[0]:+d}" if _trapdoor_z else ""
+        print(f"  anchor=({lx},{ly})  ladder z={_z_lo:+d}..{_z_top:+d}{_td}")
+else:
+    print("  (нет ячеек)")
+
 print("\n--- Лестница: все ячейки ---")
 _STAIR_TYPES = {"staircase", "stair_anchor", "stair_floor"}
 _stair_cells = sorted(

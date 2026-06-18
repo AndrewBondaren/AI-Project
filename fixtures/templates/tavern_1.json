@@ -105,7 +105,7 @@
       "staircase_id":   "cellar_ladder",
       "staircase_type": "vertical_ladder",
       "is_movable":     false,
-      "has_trapdoor":   true,
+      "has_trapdoor":   false,
       "near_wall":      false,
       "on_the_edge":    false,
       "stops":          ["cellar", "kitchen"]
@@ -114,7 +114,7 @@
       "staircase_id":   "cellar_exit_ladder",
       "staircase_type": "external_vertical_ladder",
       "is_movable":     false,
-      "has_trapdoor":   false,
+      "has_trapdoor":   true,
       "facing":         "north",
       "has_walls":      false,
       "open_wall_shaft": null,

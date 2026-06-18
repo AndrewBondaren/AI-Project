@@ -66,26 +66,26 @@ INFO | app.application.worldData.generators.structure.structureGeneratorService 
 INFO | app.application.worldData.generators.structure.structureGeneratorService | pre-passages room staircase_type: 'shaft_main_stair_1'  'u_shape'
 INFO | app.application.worldData.generators.structure.passages.builder | === PHASE: build_passages ===
 INFO | app.application.worldData.generators.structure.staircase.builder | build_staircase: main_stair  main_hall->corridor  stair_type='u_shape'  z_height=3
-INFO | app.application.worldData.generators.structure.staircase.uShape.uShapeHelper | u_shape main_stair  main_hall->corridor march=0 flat=3  ideal=2 mid_ideal=4 optimal=4  facing=north turn_v=(-1, 0)
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShapeHelper | u_shape main_stair  main_hall->corridor march=0 flat=3  ideal=2 mid_ideal=4 optimal=4  facing=north turn_v=(1, 0)
 INFO | app.application.worldData.generators.structure.staircase.uShape.uShapeHelper | u_shape main_stair  main_hall->corridor march=0  pool1=[(11, 30), (12, 30)] (corners=True)
-INFO | app.application.worldData.generators.structure.staircase.uShape.uShapeHelper | u_shape main_stair  main_hall->corridor march=0  pool3 side_walls=[(11, 29), (12, 29)]
-INFO | app.application.worldData.generators.structure.staircase.uShape.uShapeHelper | u_shape main_stair  main_hall->corridor march=0  stair_floor -> [(11, 30), (12, 30), (11, 29)]
-INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape main_stair  main_hall->corridor _build_u_shape_first_march: z_lo=0 z_height=3 flat_march1=3 fr_anchor=(12, 28) facing=north path_len=6 flat_set={(11, 29), (11, 30), (12, 30)}
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShapeHelper | u_shape main_stair  main_hall->corridor march=0  pool3 side_walls=[(12, 29), (11, 29)]
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShapeHelper | u_shape main_stair  main_hall->corridor march=0  stair_floor -> [(11, 30), (12, 30), (12, 29)]
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape main_stair  main_hall->corridor _build_u_shape_first_march: z_lo=0 z_height=3 flat_march1=3 fr_anchor=(11, 28) facing=north path_len=6 flat_set={(11, 30), (12, 29), (12, 30)}
 INFO | app.application.worldData.generators.structure.staircase.uShape.uShape | u_shape main_stair  main_hall->corridor _build_u_shape_first_march done: 3 stair cells, 3 floor cells, z_final=3
-INFO | app.application.worldData.generators.structure.staircase.uShape.uShapeValidator | u_shape main_stair  main_hall->corridor [landing 1]: priority=CENTER stair_floor от (12, 30, 2) к (11, 28, 2)
+INFO | app.application.worldData.generators.structure.staircase.uShape.uShapeValidator | u_shape main_stair  main_hall->corridor [landing 1]: priority=CENTER stair_floor от (11, 30, 2) к (12, 28, 2)
 INFO | app.application.worldData.generators.structure.staircase.builder | build_staircase: cellar_ladder  cellar->kitchen  stair_type='vertical_ladder'  z_height=3
-INFO | app.application.worldData.generators.structure.staircase.verticalLadder.verticalLadder | vertical_ladder cellar_ladder  cellar->kitchen  fixed (29,12) z=-3..-1 +trapdoor
+INFO | app.application.worldData.generators.structure.staircase.verticalLadder.verticalLadder | vertical_ladder cellar_ladder  cellar->kitchen  fixed (29,12) z=-3..-1
 INFO | app.application.worldData.generators.structure.staircase.builder | build_staircase: cellar_exit_ladder  cellar->main_hall  stair_type='external_vertical_ladder'  z_height=3
-INFO | app.application.worldData.generators.structure.staircase.verticalLadder.verticalLadder | vertical_ladder cellar_exit_ladder  cellar->main_hall  fixed (26,13) z=-3..-1
-INFO | app.application.worldData.generators.structure.passages.builder | edge_ladder 'cellar_exit_ladder': passage at (27,13) z=-3..-1 (fr_anchor=(26, 13), room='cellar')
-INFO | app.application.worldData.generators.structure.structureGeneratorService | passages | count=11  total_cells=1035
+INFO | app.application.worldData.generators.structure.staircase.verticalLadder.verticalLadder | vertical_ladder cellar_exit_ladder  cellar->main_hall  fixed (28,21) z=-3..-1 +trapdoor
+INFO | app.application.worldData.generators.structure.passages.builder | edge_ladder 'cellar_exit_ladder': passage at (28,20) z=-3..-1 (fr_anchor=(28, 21), room='cellar')
+INFO | app.application.worldData.generators.structure.structureGeneratorService | passages | count=11  total_cells=1036
 INFO | app.application.worldData.generators.structure.structureGeneratorService | === PHASE: assemble result ===
-INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | done building=bld-tavern_1-test-001 rooms=6 cells=1035 passages=11
+INFO | app.application.worldData.generators.structure.structureGeneratorService | generate_from_template | done building=bld-tavern_1-test-001 rooms=6 cells=1036 passages=11
 
 === РЕЗУЛЬТАТ ===
 Уровней:   3
 Комнат:    6
-Ячеек:     1035
+Ячеек:     1036
 Проходов:  11
 
 --- Уровни ---
@@ -107,17 +107,17 @@ INFO | app.application.worldData.generators.structure.structureGeneratorService 
   doorway  d4812a56-22f4-5ba4-a986-eac17b789313 -> d4812a56-22f4-5ba4-a986-eac17b789313  to=(16,25)
   archway  5f6be06d-fe8a-5036-a905-d6cf0afb9bf8 -> 5f6be06d-fe8a-5036-a905-d6cf0afb9bf8  to=(12,27)
   archway  d4812a56-22f4-5ba4-a986-eac17b789313 -> d4812a56-22f4-5ba4-a986-eac17b789313  to=(12,27)
-  staircase  5f6be06d-fe8a-5036-a905-d6cf0afb9bf8 -> d4812a56-22f4-5ba4-a986-eac17b789313  to=(11,27)
+  staircase  5f6be06d-fe8a-5036-a905-d6cf0afb9bf8 -> d4812a56-22f4-5ba4-a986-eac17b789313  to=(12,27)
   staircase  68a9d21a-9f4e-5d63-9fa1-1872d72f8577 -> 5f6be06d-fe8a-5036-a905-d6cf0afb9bf8  to=(29,12)
-  staircase  68a9d21a-9f4e-5d63-9fa1-1872d72f8577 -> 5f6be06d-fe8a-5036-a905-d6cf0afb9bf8  to=(26,13)
-  archway  68a9d21a-9f4e-5d63-9fa1-1872d72f8577 -> 68a9d21a-9f4e-5d63-9fa1-1872d72f8577  to=(26,13)
+  staircase  68a9d21a-9f4e-5d63-9fa1-1872d72f8577 -> 5f6be06d-fe8a-5036-a905-d6cf0afb9bf8  to=(28,21)
+  archway  68a9d21a-9f4e-5d63-9fa1-1872d72f8577 -> 68a9d21a-9f4e-5d63-9fa1-1872d72f8577  to=(28,21)
   main_entrance  exterior -> 5f6be06d-fe8a-5036-a905-d6cf0afb9bf8  to=(19,10)
   service_entrance  exterior -> 5f6be06d-fe8a-5036-a905-d6cf0afb9bf8  to=(32,19)
 
 --- Элементы ячеек ---
   archway: 10
   door: 5
-  floor: 408
+  floor: 409
   ladder: 6
   stair_anchor: 1
   stair_floor: 3
@@ -127,67 +127,74 @@ INFO | app.application.worldData.generators.structure.structureGeneratorService 
   wall: 586
   [railing cells: 0]
 
+--- Вертикальные лестницы: якоря ---
+  anchor=(28,21)  ladder z=-3..-1  trapdoor z=+0
+  anchor=(29,12)  ladder z=-3..-1
+
 --- Лестница: все ячейки ---
-  (12,28,z=+0) stair_anchor   facing=north
-  (12,29,z=+1) staircase      facing=north
-  (11,28,z=+2) staircase      facing=south
-  (11,29,z=+2) stair_floor    facing=south
-  (11,30,z=+2) stair_floor    facing=south
-  (12,30,z=+2) stair_floor    facing=west
+  (11,28,z=+0) stair_anchor   facing=north
+  (11,29,z=+1) staircase      facing=north
+  (11,30,z=+2) stair_floor    facing=east
+  (12,28,z=+2) staircase      facing=south
+  (12,29,z=+2) stair_floor    facing=south
+  (12,30,z=+2) stair_floor    facing=south
 
 ★ z=-3 [Подвал]
-x: 25..33  y: 9..21
-  21 |         |
-  20 |  ###### |
-  19 |  #....# |
-  18 |  #....# |
-  17 |  #....# |
-  16 |  #....# |
-  15 |  #....# |
-  14 |  #....# |
-  13 | H.....# |
-  12 |  #.H..# |
-  11 |  #....# |
-  10 |  ###### |
-   9 |         |
-      222223333
-      567890123
+x: 26..33  y: 9..22
+  22 |        |
+  21 |  H     |
+  20 | #.#### |
+  19 | #....# |
+  18 | #....# |
+  17 | #....# |
+  16 | #....# |
+  15 | #....# |
+  14 | #....# |
+  13 | #....# |
+  12 | #.H..# |
+  11 | #....# |
+  10 | ###### |
+   9 |        |
+      22223333
+      67890123
 
 · z=-2 [промежуточный]
-x: 25..33  y: 9..21
-  21 |         |
-  20 |  ###### |
-  19 |  #    # |
-  18 |  #    # |
-  17 |  #    # |
-  16 |  #    # |
-  15 |  #    # |
-  14 |  #    # |
-  13 | H'    # |
-  12 |  # H  # |
-  11 |  #    # |
-  10 |  ###### |
-   9 |         |
-      222223333
-      567890123
+x: 26..33  y: 9..22
+  22 |        |
+  21 |  H     |
+  20 | #'#### |
+  19 | #    # |
+  18 | #    # |
+  17 | #    # |
+  16 | #    # |
+  15 | #    # |
+  14 | #    # |
+  13 | #    # |
+  12 | # H  # |
+  11 | #    # |
+  10 | ###### |
+   9 |        |
+      22223333
+      67890123
 
 · z=-1 [промежуточный]
-x: 25..33  y: 9..21
-  21 |         |
-  20 |  ###### |
-  19 |  #    # |
-  18 |  #    # |
-  17 |  #    # |
-  16 |  #    # |
-  15 |  #    # |
-  14 |  #    # |
-  13 | H'    # |
-  12 |  # H  # |
-  11 |  #    # |
-  10 |  ###### |
-   9 |         |
-      222223333
-      567890123
+x: 26..33  y: 9..22
+  22 |        |
+  21 |  H     |
+  20 | #'#### |
+  19 | #    # |
+  18 | #    # |
+  17 | #    # |
+  16 | #    # |
+  15 | #    # |
+  14 | #    # |
+  13 | #    # |
+  12 | # H  # |
+  11 | #    # |
+  10 | ###### |
+   9 |        |
+      22223333
+      67890123
 
 ★ z=+0 [Первый этаж]
 x: 9..37  y: 9..32
@@ -195,14 +202,14 @@ x: 9..37  y: 9..32
   31 | ####                        |
   30 | #..#                        |
   29 | #..#                        |
-  28 | #.↑#                        |
+  28 | #↑.#                        |
   27 | #..###############          |
   26 | #................#          |
   25 | #................#          |
   24 | #................#          |
   23 | #................#          |
   22 | #................#          |
-  21 | #................#          |
+  21 | #................#$         |
   20 | #................#          |
   19 | #................#####D#### |
   18 | #................#........# |
@@ -210,7 +217,7 @@ x: 9..37  y: 9..32
   16 | #................#........# |
   15 | #................D........# |
   14 | #................#........# |
-  13 | #...............$#........# |
+  13 | #................#........# |
   12 | #................#.$......# |
   11 | #................#........# |
   10 | #########D################# |
@@ -223,7 +230,7 @@ x: 9..37  y: 9..32
   32 |                             |
   31 | ####                        |
   30 | #  #                        |
-  29 | # ↑#                        |
+  29 | #↑ #                        |
   28 | #  #                        |
   27 | #''###############          |
   26 | #                #          |
@@ -252,8 +259,8 @@ x: 9..37  y: 9..32
   32 |                             |
   31 | ####                        |
   30 | #__#                        |
-  29 | #_ #                        |
-  28 | #↓ #                        |
+  29 | # _#                        |
+  28 | # ↓#                        |
   27 | #''###############          |
   26 | #                #          |
   25 | #                #          |
@@ -283,7 +290,7 @@ x: 9..26  y: 18..32
   30 | #  #             |
   29 | #  #             |
   28 | #  #             |
-  27 | #$.############# |
+  27 | #.$############# |
   26 | #..............# |
   25 | ##D###D######### |
   24 | #...#...#        |

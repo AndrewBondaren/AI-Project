@@ -39,6 +39,21 @@ class VerticalLadderParams:
     open_wall_shaft: str | None    = None    # материал окна в стенах шахты; None → глухие стены
 
 
+def _is_corner_cell(
+    wx: int, wy: int,
+    fr_wall: set[tuple[int, int]],
+    exclude: tuple[int, int],
+) -> bool:
+    """Угловая ячейка периметра — имеет соседей-периметр по обеим осям (не считая интерьер)."""
+    wall_nb = [
+        (wx + ddx, wy + ddy)
+        for ddx, ddy in _NEIGHBORS
+        if (wx + ddx, wy + ddy) in fr_wall
+        and (wx + ddx, wy + ddy) != exclude
+    ]
+    return any(nx != wx for nx, ny in wall_nb) and any(ny != wy for nx, ny in wall_nb)
+
+
 def _has_adjacent(x: int, y: int, z: int, cells: dict, elements: set[str]) -> bool:
     return any(
         (cell := cells.get((x + dx, y + dy, z))) is not None
@@ -55,6 +70,7 @@ def _compute_vertical_ladder_anchor(
     near_wall:   bool,
     on_the_edge: bool,
     facing:      str | None = None,
+    is_movable:  bool = False,
 ) -> tuple[int, int]:
     """
     on_the_edge=True  — якорь снаружи fr; facing задаёт сторону.
@@ -62,7 +78,7 @@ def _compute_vertical_ladder_anchor(
     default           — якорь внутри, без стен и дверей рядом.
     """
     if on_the_edge:
-        return _anchor_outside(fr, to, cells, z_lo, facing=facing)
+        return _anchor_outside(fr, to, cells, z_lo, facing=facing, is_movable=is_movable)
 
     fr_int = set(_interior(fr.get_footprint()))
     to_int = set(_interior(to.get_footprint()))
@@ -97,11 +113,12 @@ def _compute_vertical_ladder_anchor(
 
 
 def _anchor_outside(
-    fr:     _RoomInstance,
-    to:     _RoomInstance,
-    cells:  dict,
-    z_lo:   int,
-    facing: str | None = None,
+    fr:         _RoomInstance,
+    to:         _RoomInstance,
+    cells:      dict,
+    z_lo:       int,
+    facing:     str | None = None,
+    is_movable: bool = False,
 ) -> tuple[int, int]:
     """
     Якорь — одна ячейка снаружи fr.
@@ -109,6 +126,7 @@ def _anchor_outside(
     facing задаёт в каком направлении смотреть (north/south/east/west).
     Если facing=None — выбирается любая свободная сторона.
     Предпочтение — wall-ячейки, пересекающие XY footprint to.
+    Для фиксированных лестниц (not is_movable) угловые позиции исключаются.
     """
     fr_fp   = fr.get_footprint()
     fr_int  = set(_interior(fr_fp))
@@ -123,11 +141,12 @@ def _anchor_outside(
             ox, oy = wx + dx, wy + dy
             if (ox, oy) in fr_fp:
                 continue
-            # Если задан facing — принимаем только направление (dx,dy) == facing_vec
             if facing_vec and (dx, dy) != facing_vec:
                 continue
             cell = cells.get((ox, oy, z_lo))
             if cell and cell.system_building_element in _WALL_ELEMENTS | _DOOR_ELEMENTS:
+                continue
+            if not is_movable and _is_corner_cell(wx, wy, fr_wall, (ox, oy)):
                 continue
             candidates.append(((wx, wy), (ox, oy)))
 
@@ -168,7 +187,7 @@ def _compute_vertical_ladder_params(
     open_wall_shaft: str | None = None,
 ) -> VerticalLadderParams:
     anchor = _compute_vertical_ladder_anchor(
-        fr, to, cells, z_lo, near_wall, on_the_edge, facing=facing,
+        fr, to, cells, z_lo, near_wall, on_the_edge, facing=facing, is_movable=is_movable,
     )
     return VerticalLadderParams(
         anchor=anchor, is_movable=is_movable,
