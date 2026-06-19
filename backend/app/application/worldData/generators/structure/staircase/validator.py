@@ -74,6 +74,23 @@ class StaircaseValidator(ABC):
             )
 
     @abstractmethod
+    def _check_anchors(
+        self,
+        fr_anchor:  tuple[int, int],
+        to_anchor:  tuple[int, int],
+        z_lo:       int,
+        z_top:      int,
+        cells:      dict,
+        conn_label: str,
+        **kwargs,
+    ) -> None:
+        """
+        Проверяет наличие и корректность местоположения fr_anchor и to_anchor.
+        Вызывается первым в validate() каждого субкласса.
+        """
+        ...
+
+    @abstractmethod
     def _check_stair_path(
         self,
         stair_cells: list[tuple[int, int, int]],

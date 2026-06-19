@@ -1,0 +1,238 @@
+"""
+Подземный тоннель — соединяет якорь лестницы с нижней комнатой при z_lo < 0.
+ТЗ: docs/tz_staircase_generation.md §8.1
+
+Используется любым staircase-builder'ом, у которого якорь оказывается
+снаружи footprint нижней комнаты на подземном уровне.
+"""
+from __future__ import annotations
+
+import logging
+from collections import deque
+
+from app.application.worldData.generators.structure.cellBuilder import _wall_cell
+from app.application.worldData.generators.structure.cellFactory import _floor_cell, _open_cell
+from app.application.worldData.generators.structure.facing import Facing
+from app.application.worldData.generators.structure.passages.doorPlacer import DoorPlacer
+
+logger = logging.getLogger(__name__)
+
+_NEIGHBORS = ((1, 0), (-1, 0), (0, 1), (0, -1))
+
+_VEC_TO_FACING: dict[tuple[int, int], Facing] = {
+    (1,  0): Facing.EAST,
+    (-1, 0): Facing.WEST,
+    (0,  1): Facing.NORTH,
+    (0, -1): Facing.SOUTH,
+}
+
+
+def _bfs_min_turns(
+    start:     tuple[int, int],
+    target_fp: set[tuple[int, int]],
+    blocked:   set[tuple[int, int]],
+) -> list[tuple[int, int]]:
+    """
+    0-1 BFS от start до ближайшей ячейки target_fp с минимальным числом поворотов.
+
+    Прямое движение (тот же dir_idx) = cost 0 → deque front.
+    Поворот (смена dir_idx)           = cost 1 → deque back.
+    State: (x, y, dir_idx); dir_idx=-1 для стартового псевдо-узла (нет направления).
+
+    Возвращает путь [(x, y), ...] от start до первой ячейки в target_fp включительно.
+    При неудаче возвращает [start].
+    """
+    INF = float("inf")
+    dist: dict[tuple[int, int, int], float] = {}
+    prev: dict[tuple[int, int, int], tuple[int, int, int] | None] = {}
+
+    start_key: tuple[int, int, int] = (start[0], start[1], -1)
+    dist[start_key] = 0.0
+    prev[start_key] = None
+
+    dq: deque[tuple[int, int, int]] = deque([start_key])
+    found_key: tuple[int, int, int] | None = None
+
+    all_x = [start[0]] + [x for x, _ in target_fp]
+    all_y = [start[1]] + [y for _, y in target_fp]
+    margin = max(max(all_x) - min(all_x), max(all_y) - min(all_y), 4)
+    x_min, x_max = min(all_x) - margin, max(all_x) + margin
+    y_min, y_max = min(all_y) - margin, max(all_y) + margin
+
+    while dq and found_key is None:
+        cx, cy, cd = dq.popleft()
+        cur_cost = dist[(cx, cy, cd)]
+
+        if (cx, cy) in target_fp and cd != -1:
+            found_key = (cx, cy, cd)
+            break
+
+        for di, (dx, dy) in enumerate(_NEIGHBORS):
+            nx, ny = cx + dx, cy + dy
+            if not (x_min <= nx <= x_max and y_min <= ny <= y_max):
+                continue
+            if (nx, ny) in blocked and (nx, ny) not in target_fp:
+                continue
+            turn_cost = 0 if (cd == -1 or di == cd) else 1
+            new_cost  = cur_cost + turn_cost
+            key = (nx, ny, di)
+            if new_cost < dist.get(key, INF):
+                dist[key] = new_cost
+                prev[key] = (cx, cy, cd)
+                if turn_cost == 0:
+                    dq.appendleft(key)
+                else:
+                    dq.append(key)
+
+    if found_key is None:
+        logger.warning("_bfs_min_turns: путь от %s до target_fp не найден", start)
+        return [start]
+
+    path_keys: list[tuple[int, int, int]] = []
+    key: tuple[int, int, int] | None = found_key
+    while key is not None:
+        path_keys.append(key)
+        key = prev.get(key)
+    path_keys.reverse()
+
+    return [(x, y) for x, y, _ in path_keys]
+
+
+class UndergroundTunnelBuilder:
+    """
+    Строит 1-ячеечный подземный тоннель от anchor до footprint нижней комнаты.
+
+    Использование:
+        UndergroundTunnelBuilder(cells, world_uid, building_uid, mat,
+                                 z_lo, z_top, conn_label).build(anchor, fr_fp)
+    """
+
+    def __init__(
+        self,
+        cells:        dict,
+        world_uid:    str,
+        building_uid: str,
+        mat:          str,
+        z_lo:         int,
+        z_top:        int,
+        conn_label:   str = "?",
+    ) -> None:
+        self.cells        = cells
+        self.world_uid    = world_uid
+        self.building_uid = building_uid
+        self.mat          = mat
+        self.z_lo         = z_lo
+        self.z_top        = z_top
+        self.conn_label   = conn_label
+
+    def build(
+        self,
+        anchor: tuple[int, int],
+        fr_fp:  set[tuple[int, int]],
+    ) -> bool:
+        """
+        Строит тоннель от anchor до fr_fp.
+
+        Вызывать только при z_lo < 0 и anchor ∉ fr_fp.
+        Возвращает True если тоннель построен.
+        """
+        if anchor in fr_fp:
+            return False
+
+        blocked = {
+            (x, y)
+            for (x, y, z), cell in self.cells.items()
+            if z == self.z_lo
+            and cell.system_building_element == "wall"
+            and (x, y) not in fr_fp
+        }
+
+        # Целимся во внутренние (не-стеновые) ячейки нижней комнаты, чтобы путь
+        # проходил сквозь периметральную стену, а не упирался в неё.
+        fr_interior = {
+            (x, y)
+            for (x, y, z), cell in self.cells.items()
+            if z == self.z_lo
+            and (x, y) in fr_fp
+            and cell.system_building_element != "wall"
+        }
+        target = fr_interior if fr_interior else fr_fp
+
+        path = _bfs_min_turns(anchor, target, blocked)
+        if len(path) < 2:
+            logger.error(
+                "underground_tunnel %s: путь не найден от %s до нижней комнаты",
+                self.conn_label, anchor,
+            )
+            return False
+
+        self._place_tunnel(path, fr_fp)
+        return True
+
+    def _place_tunnel(
+        self,
+        path:  list[tuple[int, int]],
+        fr_fp: set[tuple[int, int]],
+    ) -> None:
+        """
+        path[0]    = anchor лестницы (shaft-ячейки уже размещены, стены добавляем)
+        path[1..-3]= тоннельный пол
+        path[-2]   = пролом в стене нижней комнаты → дверь
+        path[-1]   = первая внутренняя ячейка нижней комнаты → floor
+        """
+        path_set_2d = {(x, y) for x, y in path}
+        wu, bu, mat = self.world_uid, self.building_uid, self.mat
+
+        def _floor_open(x: int, y: int) -> None:
+            self.cells[(x, y, self.z_lo)] = _floor_cell(x, y, self.z_lo, wu, bu, mat)
+            for z in range(self.z_lo + 1, self.z_top):
+                self.cells[(x, y, z)] = _open_cell(x, y, z, wu, bu, mat)
+
+        door_placer = DoorPlacer(self.cells, wu, bu)
+
+        def _side_walls(x: int, y: int, skip: tuple[int, int] | None = None) -> None:
+            for ddx in (-1, 0, 1):
+                for ddy in (-1, 0, 1):
+                    if ddx == 0 and ddy == 0:
+                        continue
+                    nx, ny = x + ddx, y + ddy
+                    if (nx, ny) == skip:
+                        continue
+                    if (nx, ny) in path_set_2d or (nx, ny) in fr_fp:
+                        continue
+                    for z in range(self.z_lo, self.z_top):
+                        if (nx, ny, z) not in self.cells:
+                            self.cells[(nx, ny, z)] = _wall_cell(nx, ny, z, wu, bu, mat)
+
+        # Якорь — только стены (shaft-ячейки не трогаем)
+        ax, ay = path[0]
+        _side_walls(ax, ay, skip=path[1])
+
+        if len(path) >= 3:
+            # Тоннельный пол
+            for x, y in path[1:-2]:
+                _floor_open(x, y)
+                _side_walls(x, y)
+
+            # Дверь на пролом в стене нижней комнаты
+            bx, by = path[-2]
+            px, py = path[-3]
+            facing = _VEC_TO_FACING[(bx - px, by - py)]
+            door_placer.place_wall_breach(bx, by, self.z_lo, self.z_top, mat, facing, self.conn_label)
+            _side_walls(bx, by)
+        else:
+            # Якорь прямо у стены — дверь поставить некуда
+            logger.warning(
+                "underground_tunnel %s: путь слишком короткий (%d ячеек), дверь не размещена",
+                self.conn_label, len(path),
+            )
+
+        # Первая внутренняя ячейка нижней комнаты
+        ex, ey = path[-1]
+        _floor_open(ex, ey)
+        _side_walls(ex, ey)
+
+        logger.info(
+            "underground_tunnel %s: %d ячеек от %s до %s (z=%d..%d)",
+            self.conn_label, len(path) - 1, path[0], path[-1], self.z_lo, self.z_top - 1,
+        )

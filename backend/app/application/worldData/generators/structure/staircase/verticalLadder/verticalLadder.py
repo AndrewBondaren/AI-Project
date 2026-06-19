@@ -7,7 +7,9 @@ from __future__ import annotations
 import logging
 
 from app.application.worldData.generators.structure.cellBuilder import _wall_cell
-from app.application.worldData.generators.structure.cellFactory import _ladder_cell, _trapdoor_cell, _window_cell
+from app.application.worldData.generators.structure.cellFactory import (
+    _ladder_cell, _trapdoor_cell, _window_cell,
+)
 from app.application.worldData.generators.structure.staircase.base import StaircaseBuilder
 from app.application.worldData.generators.structure.staircase.verticalLadder.verticalLadderHelper import (
     VerticalLadderParams,

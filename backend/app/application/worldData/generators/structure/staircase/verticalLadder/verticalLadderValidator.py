@@ -94,6 +94,27 @@ class VerticalLadderValidator(StaircaseValidator):
                 conn_label, ax, ay,
             )
 
+    def _check_anchors(
+        self,
+        fr_anchor:  tuple[int, int],
+        to_anchor:  tuple[int, int],
+        z_lo:       int,
+        z_top:      int,
+        cells:      dict,
+        conn_label: str,
+        **kwargs,
+    ) -> None:
+        ax, ay       = fr_anchor
+        has_trapdoor = kwargs.get("has_trapdoor", False)
+        fr_footprint = kwargs.get("fr_footprint")
+        to_footprint = kwargs.get("to_footprint")
+        on_the_edge  = kwargs.get("on_the_edge", False)
+        self._check_anchor_xy(fr_anchor, to_anchor, conn_label)
+        self._check_fr_footprint(ax, ay, fr_footprint, on_the_edge, conn_label)
+        self._check_ladder_cell(ax, ay, z_top, cells, conn_label)
+        self._check_top_cell(ax, ay, z_top, cells, conn_label, has_trapdoor)
+        self._check_to_footprint(ax, ay, to_footprint, conn_label)
+
     def validate(
         self,
         fr_anchor:    tuple[int, int],
@@ -107,13 +128,11 @@ class VerticalLadderValidator(StaircaseValidator):
         on_the_edge:  bool = False,
         **kwargs,
     ) -> None:
-        ax, ay       = fr_anchor
-        has_trapdoor = kwargs.get("has_trapdoor", False)
-        self._check_anchor_xy(fr_anchor, to_anchor, conn_label)
-        self._check_fr_footprint(ax, ay, fr_footprint, on_the_edge, conn_label)
-        self._check_ladder_cell(ax, ay, z_top, cells, conn_label)
-        self._check_top_cell(ax, ay, z_top, cells, conn_label, has_trapdoor)
-        self._check_to_footprint(ax, ay, to_footprint, conn_label)
+        self._check_anchors(
+            fr_anchor, to_anchor, z_lo, z_top, cells, conn_label,
+            fr_footprint=fr_footprint, to_footprint=to_footprint,
+            on_the_edge=on_the_edge, **kwargs,
+        )
 
 
 class ExternalVerticalLadderValidator(VerticalLadderValidator):
@@ -128,17 +147,17 @@ class ExternalVerticalLadderValidator(VerticalLadderValidator):
         self,
         ax:           int,
         ay:           int,
-        fr_footprint: set[tuple[int, int]] | None,
+        to_footprint: set[tuple[int, int]] | None,
         conn_label:   str,
     ) -> None:
-        if fr_footprint is None:
+        if to_footprint is None:
             return
-        fr_wall = fr_footprint - set(_interior(fr_footprint))
+        to_wall = to_footprint - set(_interior(to_footprint))
         for dx, dy in _NEIGHBORS:
             wx, wy = ax + dx, ay + dy
-            if (wx, wy) not in fr_wall:
+            if (wx, wy) not in to_wall:
                 continue
-            if _is_corner_cell(wx, wy, fr_wall, (ax, ay)):
+            if _is_corner_cell(wx, wy, to_wall, (ax, ay)):
                 logger.error(
                     "external_vertical_ladder %s [угол здания]: якорь (%d,%d) прилегает "
                     "к угловой ячейке (%d,%d) — фиксированная лестница на углу недопустима",
@@ -166,4 +185,4 @@ class ExternalVerticalLadderValidator(VerticalLadderValidator):
         )
         ax, ay = fr_anchor
         if not kwargs.get("is_movable", False):
-            self._check_not_at_corner(ax, ay, fr_footprint, conn_label)
+            self._check_not_at_corner(ax, ay, to_footprint, conn_label)

@@ -91,7 +91,16 @@ def render_level(
     return "\n".join(lines)
 
 
-def render_all_levels(cells: list[MapCell]) -> dict[int, str]:
-    """Возвращает словарь z → ASCII-сетка для всех z-уровней."""
+def render_all_levels(
+    cells:   list[MapCell],
+    markers: dict[tuple[int, int, int], str] | None = None,
+) -> dict[int, str]:
+    """Возвращает словарь z → ASCII-сетка для всех z-уровней.
+
+    markers: (x, y, z) → символ — перекрывает стандартный символ ячейки.
+    """
     z_values = sorted({c.z for c in cells})
-    return {z: render_level(cells, z) for z in z_values}
+    z_markers: dict[int, dict[tuple[int, int], str]] = {}
+    for (x, y, z), sym in (markers or {}).items():
+        z_markers.setdefault(z, {})[x, y] = sym
+    return {z: render_level(cells, z, anchor_dirs=z_markers.get(z)) for z in z_values}

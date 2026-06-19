@@ -78,7 +78,8 @@ def _compute_vertical_ladder_anchor(
     default           — якорь внутри, без стен и дверей рядом.
     """
     if on_the_edge:
-        return _anchor_outside(fr, to, cells, z_lo, facing=facing, is_movable=is_movable)
+        # Якорь снаружи верхней комнаты (to) — fr=нижняя после нормализации в базовом классе
+        return _anchor_outside(to, fr, cells, z_lo, facing=facing, is_movable=is_movable)
 
     fr_int = set(_interior(fr.get_footprint()))
     to_int = set(_interior(to.get_footprint()))

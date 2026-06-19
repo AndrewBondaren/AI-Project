@@ -67,7 +67,15 @@ async def debug_generate_structure(
 
     from collections import Counter
     element_counts = Counter(c.system_building_element for c in layout.cells)
-    grids = render_all_levels(layout.cells)
+
+    levels_by_uid = {lvl.level_uid: lvl.z for lvl in layout.levels}
+    markers: dict[tuple[int, int, int], str] = {}
+    for p in layout.passages:
+        if p.system_passage_type == "staircase":
+            tz = levels_by_uid.get(p.to_level_uid)
+            if tz is not None:
+                markers[(p.to_x, p.to_y, tz)] = "$"
+    grids = render_all_levels(layout.cells, markers=markers)
 
     return JSONResponse({
         "summary": {
@@ -117,6 +125,8 @@ async def debug_generate_structure(
                 "element":    c.system_building_element,
                 "material":   c.system_material,
                 "structural": c.is_structural,
+                "facing":     c.system_facing,
+                "railing":    c.railing_sides if hasattr(c, "railing_sides") else None,
             }
             for c in layout.cells
         ],

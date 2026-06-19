@@ -245,8 +245,11 @@ def build_passages(
                 if p:
                     passages.append(p)
                     if sc_type == "external_vertical_ladder" or (sc_type == "vertical_ladder" and sc.get("on_the_edge", False)):
+                        # Прорубаем стену верхней комнаты — якорь снаружи её периметра
+                        _upper_room  = to_room  if to_level.z > fr_level.z else fr_room
+                        _upper_level = to_level if to_level.z > fr_level.z else fr_level
                         ep = _build_edge_ladder_passage(
-                            (p.from_x, p.from_y), fr_room, fr_level,
+                            (p.from_x, p.from_y), _upper_room, _upper_level,
                             cells, world_uid, building_uid, sc_id=sc_id,
                         )
                         if ep:

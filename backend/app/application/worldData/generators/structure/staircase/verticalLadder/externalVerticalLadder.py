@@ -1,10 +1,13 @@
 """
 External vertical ladder — лестница снаружи здания.
 Наследует VerticalLadderBuilder, всегда on_the_edge=True, near_wall=True.
-ТЗ: docs/tz_staircase_generation.md §8
+ТЗ: docs/tz_staircase_generation.md §8.1
 """
 from __future__ import annotations
 
+from app.application.worldData.generators.structure.staircase.undergroundTunnel import (
+    UndergroundTunnelBuilder,
+)
 from app.application.worldData.generators.structure.staircase.verticalLadder.verticalLadder import (
     VerticalLadderBuilder,
 )
@@ -21,4 +24,18 @@ class ExternalVerticalLadderBuilder(VerticalLadderBuilder):
         entry["on_the_edge"] = True
         entry["near_wall"]   = True
         self.sc_entry = entry
-        return super().build()
+
+        fr_anchor, to_anchor = super().build()
+
+        if self.z_lo < 0:
+            UndergroundTunnelBuilder(
+                cells=self.cells,
+                world_uid=self.world_uid,
+                building_uid=self.building_uid,
+                mat=self.mat,
+                z_lo=self.z_lo,
+                z_top=self.z_top,
+                conn_label=self.conn_label,
+            ).build(fr_anchor, set(self.fr.get_footprint()))
+
+        return fr_anchor, to_anchor

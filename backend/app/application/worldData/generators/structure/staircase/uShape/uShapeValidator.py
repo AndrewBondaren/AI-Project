@@ -204,24 +204,23 @@ class UShapeValidator(StaircaseValidator):
                         conn_label=conn_label, march_idx=idx,
                     )
 
-    def validate(
+    def _check_anchors(
         self,
-        fr_anchor:       tuple[int, int],
-        to_anchor:       tuple[int, int],
-        last_stair:      tuple[int, int],
-        exit_v:          tuple[int, int],
-        z_lo:            int,
-        z_top:           int,
-        cells:           dict,
-        conn_label:      str,
-        shaft_footprint: set[tuple[int, int]],
-        shaft_interior:  set[tuple[int, int]],
-        facing:          str,
-        stair_cells:     list[tuple[int, int, int]] | None = None,
-        turn_vector:     tuple[int, int] | None = None,
+        fr_anchor:  tuple[int, int],
+        to_anchor:  tuple[int, int],
+        z_lo:       int,
+        z_top:      int,
+        cells:      dict,
+        conn_label: str,
+        **kwargs,
     ) -> None:
         fx, fy = fr_anchor
         tx, ty = to_anchor
+        facing          = kwargs["facing"]
+        exit_v          = kwargs["exit_v"]
+        last_stair      = kwargs["last_stair"]
+        shaft_interior  = kwargs["shaft_interior"]
+        shaft_footprint = kwargs["shaft_footprint"]
         Vx, Vy = _V_INIT[facing]
 
         # ── fr_anchor: stair_anchor на z_lo ──────────────────────────────────
@@ -293,6 +292,28 @@ class UShapeValidator(StaircaseValidator):
                     conn_label, nb_x, nb_y, z_top - 1,
                     got_facing, expected_facing, Vx, Vy,
                 )
+
+    def validate(
+        self,
+        fr_anchor:       tuple[int, int],
+        to_anchor:       tuple[int, int],
+        last_stair:      tuple[int, int],
+        exit_v:          tuple[int, int],
+        z_lo:            int,
+        z_top:           int,
+        cells:           dict,
+        conn_label:      str,
+        shaft_footprint: set[tuple[int, int]],
+        shaft_interior:  set[tuple[int, int]],
+        facing:          str,
+        stair_cells:     list[tuple[int, int, int]] | None = None,
+        turn_vector:     tuple[int, int] | None = None,
+    ) -> None:
+        self._check_anchors(
+            fr_anchor, to_anchor, z_lo, z_top, cells, conn_label,
+            facing=facing, exit_v=exit_v, last_stair=last_stair,
+            shaft_interior=shaft_interior, shaft_footprint=shaft_footprint,
+        )
 
         # ── поворот: turn_vector ⊥ V_init ────────────────────────────────────
         Vx, Vy = _V_INIT[facing]

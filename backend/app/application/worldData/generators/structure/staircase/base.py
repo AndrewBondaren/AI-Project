@@ -88,6 +88,11 @@ class StaircaseBuilder(ABC):
         shaft: _RoomInstance | None = None,
         sc_entry: dict | None = None,
     ) -> None:
+        # Нормализация: fr = нижняя комната (меньший z), to = верхняя
+        if fr_level.z > to_level.z:
+            fr, to = to, fr
+            fr_level, to_level = to_level, fr_level
+
         self.fr           = fr
         self.to           = to
         self.fr_level     = fr_level

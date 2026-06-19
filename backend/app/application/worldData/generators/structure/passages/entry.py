@@ -3,8 +3,8 @@ Entry-point passage builder (main entrance / service entrance).
 """
 import logging
 
-from app.application.worldData.generators.structure.cellFactory import _door_cell
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.passages.doorPlacer import DoorPlacer
 from app.application.worldData.generators.structure.passages.shared import (
     _center_slice, _det_uuid, _exterior_cells_on_wall,
 )
@@ -39,8 +39,9 @@ def _build_entry_point(
     mat = ep.get("frame_material") or room.wall_material
     z = level.z
 
+    placer = DoorPlacer(cells, world_uid, building_uid)
     for (x, y) in door_cells:
-        cells[(x, y, z)] = _door_cell(x, y, z, world_uid, building_uid, mat)
+        placer.place(x, y, z, mat)
 
     cx, cy = door_cells[len(door_cells) // 2]
     passage_uid = _det_uuid(building_uid, f"entry{suffix}", room.room_id)
