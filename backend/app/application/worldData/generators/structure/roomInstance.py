@@ -48,6 +48,8 @@ class _RoomInstance:
     back_entry_point:    dict | None = None
     shape_params:        dict = field(default_factory=dict)
 
+    wall_openings: list[dict] = field(default_factory=list)
+
     # Stairwell mutation: extra cells added to base footprint at generation time.
     # Used to widen the entry end of a corridor so a standard staircase can fit.
     # Same room UID — no door needed; cells are treated as part of the room.

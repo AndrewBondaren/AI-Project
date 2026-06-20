@@ -115,3 +115,17 @@ def _floor_cell(x: int, y: int, z: int, world_uid: str, building_uid: str, mater
         is_structural=False,
         location_uid=building_uid,
     )
+
+
+def _opening_cell(
+    x: int, y: int, z: int,
+    world_uid: str, building_uid: str,
+    terrain_type: str, material: str,
+) -> MapCell:
+    return MapCell(
+        world_uid=world_uid, x=x, y=y, z=z,
+        system_building_element=terrain_type,
+        system_material=material,
+        is_structural=False,
+        location_uid=building_uid,
+    )

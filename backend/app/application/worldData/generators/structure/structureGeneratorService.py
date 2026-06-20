@@ -18,6 +18,7 @@ from app.application.worldData.generators.structure.staircase.shaftFactory impor
     instantiate_shaft_rooms, _NO_SHAFT_TYPES,
 )
 from app.application.worldData.generators.structure.staircase.shaftPlacer import make_shaft_placer
+from app.application.worldData.generators.structure.passages.wallOpening import place_wall_openings
 from app.application.worldData.generators.structure.structurePostProcess import run as _post_process
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
@@ -189,6 +190,8 @@ class StructureGeneratorService:
         passages = self._run_passages(
             template, building, levels, all_rooms, room_z_offsets, cells_dict, world, rng,
         )
+
+        self._place_wall_openings(template, building, levels, all_rooms, cells_dict, world, rng)
 
         _post_process(cells_dict)
 
@@ -497,6 +500,32 @@ class StructureGeneratorService:
         )
         logger.info("passages | count=%d  total_cells=%d", len(passages), len(cells_dict))
         return passages
+
+    # ------------------------------------------------------------------
+    # Phase: wall openings
+
+    def _place_wall_openings(
+        self,
+        template: dict,
+        building: NamedLocation,
+        levels: dict[int, LocationLevel],
+        all_rooms: list[_RoomInstance],
+        cells_dict: dict[tuple, MapCell],
+        world: World,
+        rng: Random,
+    ) -> None:
+        logger.info("=== PHASE: wall openings ===")
+        for level_def in template["levels"]:
+            z_offset    = level_def["z_offset"]
+            level       = levels[z_offset]
+            level_rooms = [
+                r for r in all_rooms
+                if r.z_offset == z_offset and r.placed and not r.is_shaft
+            ]
+            place_wall_openings(
+                level_rooms, cells_dict, level, level_def, template,
+                world.world_uid, building.location_uid, rng,
+            )
 
     # ------------------------------------------------------------------
     # Phase: assemble result
