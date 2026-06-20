@@ -23,6 +23,7 @@ def _build_entry_point(
     cells: dict[tuple, MapCell],
     world_uid: str,
     building_uid: str,
+    passage_height: int,
     suffix: str = "",
 ) -> LocationPassage | None:
     direction = ep.get("wall", "south")
@@ -39,9 +40,10 @@ def _build_entry_point(
     mat = ep.get("frame_material") or room.wall_material
     z = level.z
 
+    height = max(ep.get("height", passage_height), passage_height)
     placer = DoorPlacer(cells, world_uid, building_uid)
     for (x, y) in door_cells:
-        placer.place(x, y, z, mat)
+        placer.place(x, y, z, mat, height=height)
 
     cx, cy = door_cells[len(door_cells) // 2]
     passage_uid = _det_uuid(building_uid, f"entry{suffix}", room.room_id)

@@ -36,6 +36,7 @@
       "camp":      { "display_name": "Лагерь" }
     },
     "map_cell_size_m": 3000,
+    "default_passage_height": 2,
     "lore_registry": {
       "terrain_plains":      { "display_name": "Равнина",               "description": "Открытая ровная местность. Хорошо проходимая, слабоопасная." },
       "terrain_tundra":      { "display_name": "Тундра",                "description": "Холодная открытая местность с вечной мерзлотой. Сложно проходимая." },

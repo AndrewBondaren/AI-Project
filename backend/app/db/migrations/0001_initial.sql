@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS worlds (
     elevation_lapse_rate        REAL,
     g                           REAL NOT NULL DEFAULT 1.0,
     map_cell_size_m             INTEGER NOT NULL DEFAULT 3000,
+    default_passage_height      INTEGER NOT NULL DEFAULT 2,
 
     -- custom fields declarations
     player_fields               TEXT,

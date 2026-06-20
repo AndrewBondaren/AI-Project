@@ -133,6 +133,23 @@ def _print_results(data: dict, z_filter: int | None) -> None:
     for rc in sorted(railing_cells):
         print(f"    ({rc[0]},{rc[1]},z={rc[2]}) {rc[3]}")
 
+    validation = data.get("validation", {})
+    warnings   = validation.get("warnings", [])
+    print(f"\n--- Валидация ({validation.get('count', 0)} предупреждений) ---")
+    if warnings:
+        for w in warnings:
+            print(f"  ⚠  {w}")
+    else:
+        print("  ОК")
+
+    # Spot-check: tunnel exit at z=-2 and z=-1
+    spot_coords = [(23, 10, -2), (23, 10, -1), (22, 10, -2), (22, 10, -1)]
+    spot_map = {(c["x"], c["y"], c["z"]): c["element"] for c in cells}
+    spot_hits = [(x, y, z, spot_map.get((x, y, z), "<MISSING>")) for x, y, z in spot_coords]
+    print("\n--- Spot check ячеек (23,10) и (22,10) ---")
+    for x, y, z, elem in spot_hits:
+        print(f"  ({x},{y},z={z:+d}): {elem}")
+
     print("\n--- Лестница: все ячейки ---")
     level_z = {lvl["level_uid"]: lvl["z"] for lvl in data["levels"]}
     rows: list[tuple[int, int, int, str, str | None]] = [

@@ -3,6 +3,7 @@ Debug endpoints — только для разработки и тестиров
 Не должны использоваться в production flow.
 """
 from dataclasses import asdict
+import logging
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
@@ -15,6 +16,17 @@ from app.application.worldData.generators.structure.structureGeneratorService im
 from app.application.worldData.generators.structure.gridRenderer import render_all_levels
 from app.db.models.namedLocation import NamedLocation
 from datetime import datetime, timezone
+
+
+class _LogCapture(logging.Handler):
+    """Перехватывает WARNING+ записи во время генерации для возврата в debug-ответе."""
+
+    def __init__(self) -> None:
+        super().__init__(logging.WARNING)
+        self.records: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(self.format(record))
 
 router = APIRouter(prefix="/debug", tags=["debug"])
 
@@ -63,7 +75,13 @@ async def debug_generate_structure(
         parent_floor_material=floor_material,
     )
 
-    layout = _structure_generator.generate_from_template(world, building, template)
+    capture = _LogCapture()
+    gen_logger = logging.getLogger("app.application.worldData.generators")
+    gen_logger.addHandler(capture)
+    try:
+        layout = _structure_generator.generate_from_template(world, building, template)
+    finally:
+        gen_logger.removeHandler(capture)
 
     from collections import Counter
     element_counts = Counter(c.system_building_element for c in layout.cells)
@@ -84,6 +102,10 @@ async def debug_generate_structure(
             "cells":    len(layout.cells),
             "passages": len(layout.passages),
             "elements": dict(element_counts),
+        },
+        "validation": {
+            "warnings": capture.records,
+            "count":    len(capture.records),
         },
         "levels": [
             {

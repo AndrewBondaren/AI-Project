@@ -20,6 +20,7 @@ def _build_doorway(
     cells: dict[tuple, MapCell],
     world_uid: str,
     building_uid: str,
+    passage_height: int,
 ) -> LocationPassage | None:
     import logging
     logger = logging.getLogger(__name__)
@@ -37,9 +38,10 @@ def _build_doorway(
     mat = conn.get("frame_material") or fr.wall_material
     z = fr_level.z
 
+    height = max(conn.get("height", passage_height), passage_height)
     placer = DoorPlacer(cells, world_uid, building_uid)
     for (x, y) in door_cells:
-        placer.place(x, y, z, mat)
+        placer.place(x, y, z, mat, height=height)
 
     cx, cy = door_cells[len(door_cells) // 2]
     passage_uid = _det_uuid(building_uid, "door", conn["from_room"], conn["to_room"])

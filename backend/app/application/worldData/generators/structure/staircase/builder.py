@@ -42,7 +42,9 @@ def build_staircase(
     world_uid: str,
     building_uid: str,
     mat: str,
+    *,
     shaft: "_RoomInstance | None" = None,
+    passage_height: int,
 ) -> "LocationPassage | None":
     is_new_schema = shaft is not None or "staircase_id" in conn_or_entry
     if is_new_schema:
@@ -68,6 +70,7 @@ def build_staircase(
         fr, to, fr_level, to_level, cells, world_uid, building_uid, mat, conn_label,
         shaft=shaft,
         sc_entry=conn_or_entry,
+        passage_height=passage_height,
     )
 
     try:

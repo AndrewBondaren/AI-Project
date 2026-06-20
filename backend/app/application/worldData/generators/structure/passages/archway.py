@@ -10,6 +10,10 @@ from app.application.worldData.generators.structure.cellFactory import (
     _floor_cell, _open_cell,
 )
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.passages.archwayValidator import (
+    validate_archway_frame,
+    validate_archway_through,
+)
 from app.application.worldData.generators.structure.passages.shared import (
     _center_slice, _det_uuid, _shared_segment,
 )
@@ -29,7 +33,9 @@ def _build_archway(
     cells: dict[tuple, MapCell],
     world_uid: str,
     building_uid: str,
+    passage_height: int,
     other_rooms: list | None = None,
+    deferred: list | None = None,
 ) -> LocationPassage | None:
     shared = _shared_segment(fr, to)
     if not shared:
@@ -62,6 +68,13 @@ def _build_archway(
         cells[(x, y, z_base)] = _floor_cell(x, y, z_base, world_uid, building_uid, mat)
         for z_layer in range(z_base + 1, z_base + fr_level.z_height):
             cells[(x, y, z_layer)] = _open_cell(x, y, z_layer, world_uid, building_uid, mat)
+
+    conn_label = f"{conn.get('from_room', '?')}->{conn.get('to_room', '?')}"
+    validate_archway_frame(cells, arch_cells, z_base, conn_label)
+    if deferred is not None:
+        deferred.append((arch_cells, z_base, conn_label))
+    else:
+        validate_archway_through(cells, arch_cells, z_base, conn_label)
 
     cx, cy = arch_cells[len(arch_cells) // 2]
     passage_uid = _det_uuid(building_uid, "arch", conn["from_room"], conn["to_room"])

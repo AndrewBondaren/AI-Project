@@ -12,6 +12,10 @@ from random import Random
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _open_cell
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.archway import _build_archway
+from app.application.worldData.generators.structure.passages.archwayValidator import (
+    validate_archway_through,
+    validate_all_archway_frames,
+)
 from app.application.worldData.generators.structure.passages.doorway import _build_doorway
 from app.application.worldData.generators.structure.passages.entry import _build_entry_point
 from app.application.worldData.generators.structure.passages.shared import _det_uuid
@@ -102,7 +106,9 @@ def build_passages(
     building_tier: str | None = None,
 ) -> list[LocationPassage]:
     logger.info("=== PHASE: build_passages ===")
+    passage_height: int = world.default_passage_height if world is not None else 2
     passages: list[LocationPassage] = []
+    deferred_arch: list[tuple[list, int, str]] = []
 
     placed_by_id: dict[str, list[_RoomInstance]] = {}
     for r in rooms:
@@ -147,6 +153,7 @@ def build_passages(
                     if fr.get_footprint() & to.get_footprint():
                         p = _build_archway(conn, fr, to, fr_level, to_level,
                                            cells, world_uid, building_uid,
+                                           passage_height=passage_height,
                                            other_rooms=same_level_rooms)
                         if p:
                             passages.append(p)
@@ -155,7 +162,8 @@ def build_passages(
                 for to in to_list:
                     if fr.get_footprint() & to.get_footprint():
                         p = _build_doorway(conn, fr, to, fr_level, to_level,
-                                           cells, world_uid, building_uid)
+                                           cells, world_uid, building_uid,
+                                           passage_height=passage_height)
                         if p:
                             passages.append(p)
 
@@ -216,7 +224,9 @@ def build_passages(
                                            if room_z_offsets.get(r.room_id) == fr_offset]
                     p = _build_archway(arch_conn_fr, shaft_fr, fr_room, fr_level, fr_level,
                                        cells, world_uid, building_uid,
-                                       other_rooms=same_level_rooms_fr)
+                                       passage_height=passage_height,
+                                       other_rooms=same_level_rooms_fr,
+                                       deferred=deferred_arch)
                     if p:
                         passages.append(p)
 
@@ -228,7 +238,9 @@ def build_passages(
                                         if room_z_offsets.get(r.room_id) == to_offset]
                     p = _build_archway(arch_conn, shaft_to, to_room, to_level, to_level,
                                        cells, world_uid, building_uid,
-                                       other_rooms=same_level_rooms)
+                                       passage_height=passage_height,
+                                       other_rooms=same_level_rooms,
+                                       deferred=deferred_arch)
                     if p:
                         passages.append(p)
 
@@ -241,6 +253,7 @@ def build_passages(
                     sc, fr_room, to_room, fr_level, to_level,
                     cells, world_uid, building_uid, mat,
                     shaft=shaft_fr,
+                    passage_height=passage_height,
                 )
                 if p:
                     passages.append(p)
@@ -278,12 +291,20 @@ def build_passages(
             p = build_staircase(
                 conn, fr_list[0], to_list[0], fr_level, to_level,
                 cells, world_uid, building_uid, mat,
+                passage_height=passage_height,
             )
             if p:
                 passages.append(p)
 
     # --- Post-generation headroom check (catches cross-segment conflicts) ---
-    check_all_stair_headrooms(cells)
+    check_all_stair_headrooms(cells, clearance=passage_height)
+
+    # --- Deferred archway through-validation (runs after all staircase cells are placed) ---
+    for arch_cells, z, conn_label in deferred_arch:
+        validate_archway_through(cells, arch_cells, z, conn_label)
+
+    # --- Post-gen frame scan: все archway-ячейки должны быть от стены до стены ---
+    validate_all_archway_frames(cells)
 
     # --- Entry points ---
     for room in rooms:
@@ -295,13 +316,15 @@ def build_passages(
 
         if room.entry_point:
             p = _build_entry_point(room, room.entry_point, level,
-                                   same_level_union, cells, world_uid, building_uid)
+                                   same_level_union, cells, world_uid, building_uid,
+                                   passage_height=passage_height)
             if p:
                 passages.append(p)
 
         if room.back_entry_point:
             p = _build_entry_point(room, room.back_entry_point, level,
                                    same_level_union, cells, world_uid, building_uid,
+                                   passage_height=passage_height,
                                    suffix="_back")
             if p:
                 passages.append(p)

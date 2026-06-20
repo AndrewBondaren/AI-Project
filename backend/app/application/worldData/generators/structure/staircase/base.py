@@ -85,8 +85,10 @@ class StaircaseBuilder(ABC):
         building_uid: str,
         mat: str,
         conn_label: str,
+        *,
         shaft: _RoomInstance | None = None,
         sc_entry: dict | None = None,
+        passage_height: int,
     ) -> None:
         # Нормализация: fr = нижняя комната (меньший z), to = верхняя
         if fr_level.z > to_level.z:
@@ -102,8 +104,9 @@ class StaircaseBuilder(ABC):
         self.building_uid = building_uid
         self.mat          = mat
         self.conn_label   = conn_label
-        self.shaft           = shaft       # shaft instance (new schema); None = old schema
-        self.sc_entry        = sc_entry    # raw staircases[] entry; None = old schema
+        self.shaft           = shaft          # shaft instance (new schema); None = old schema
+        self.sc_entry        = sc_entry       # raw staircases[] entry; None = old schema
+        self.passage_height  = passage_height
         self.z_height        = abs(to_level.z - fr_level.z)
         self.z_lo            = min(fr_level.z, to_level.z)
         self.z_top           = max(fr_level.z, to_level.z)

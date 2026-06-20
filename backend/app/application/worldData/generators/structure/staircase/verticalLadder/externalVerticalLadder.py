@@ -36,6 +36,7 @@ class ExternalVerticalLadderBuilder(VerticalLadderBuilder):
                 z_lo=self.z_lo,
                 z_top=self.z_top,
                 conn_label=self.conn_label,
+                passage_height=self.passage_height,
             ).build(fr_anchor, set(self.fr.get_footprint()))
 
         return fr_anchor, to_anchor

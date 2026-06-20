@@ -13,7 +13,7 @@ from collections import deque
 from app.application.worldData.generators.structure.cellBuilder import _wall_cell
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _open_cell
 from app.application.worldData.generators.structure.facing import Facing
-from app.application.worldData.generators.structure.passages.doorPlacer import DoorPlacer
+from app.application.worldData.generators.structure.passages.wallBreachPlacer import WallBreachPlacer
 
 logger = logging.getLogger(__name__)
 
@@ -109,21 +109,24 @@ class UndergroundTunnelBuilder:
 
     def __init__(
         self,
-        cells:        dict,
-        world_uid:    str,
-        building_uid: str,
-        mat:          str,
-        z_lo:         int,
-        z_top:        int,
-        conn_label:   str = "?",
+        cells:          dict,
+        world_uid:      str,
+        building_uid:   str,
+        mat:            str,
+        z_lo:           int,
+        z_top:          int,
+        *,
+        conn_label:     str = "?",
+        passage_height: int,
     ) -> None:
-        self.cells        = cells
-        self.world_uid    = world_uid
-        self.building_uid = building_uid
-        self.mat          = mat
-        self.z_lo         = z_lo
-        self.z_top        = z_top
-        self.conn_label   = conn_label
+        self.cells          = cells
+        self.world_uid      = world_uid
+        self.building_uid   = building_uid
+        self.mat            = mat
+        self.z_lo           = z_lo
+        self.z_top          = z_top
+        self.conn_label     = conn_label
+        self.passage_height = passage_height
 
     def build(
         self,
@@ -188,7 +191,7 @@ class UndergroundTunnelBuilder:
             for z in range(self.z_lo + 1, self.z_top):
                 self.cells[(x, y, z)] = _open_cell(x, y, z, wu, bu, mat)
 
-        door_placer = DoorPlacer(self.cells, wu, bu)
+        wall_breach_placer = WallBreachPlacer(self.cells, wu, bu)
 
         def _side_walls(x: int, y: int, skip: tuple[int, int] | None = None) -> None:
             for ddx in (-1, 0, 1):
@@ -218,7 +221,7 @@ class UndergroundTunnelBuilder:
             bx, by = path[-2]
             px, py = path[-3]
             facing = _VEC_TO_FACING[(bx - px, by - py)]
-            door_placer.place_wall_breach(bx, by, self.z_lo, self.z_top, mat, facing, self.conn_label)
+            wall_breach_placer.place_for_corridor(bx, by, self.z_lo, self.z_top, mat, facing, self.passage_height, self.conn_label)
             _side_walls(bx, by)
         else:
             # Якорь прямо у стены — дверь поставить некуда
@@ -227,9 +230,10 @@ class UndergroundTunnelBuilder:
                 self.conn_label, len(path),
             )
 
-        # Первая внутренняя ячейка нижней комнаты
+        # Первая внутренняя ячейка нижней комнаты — только пол на z_lo,
+        # выше — implicit open air внутри комнаты (open_cell не нужен).
         ex, ey = path[-1]
-        _floor_open(ex, ey)
+        self.cells[(ex, ey, self.z_lo)] = _floor_cell(ex, ey, self.z_lo, wu, bu, mat)
         _side_walls(ex, ey)
 
         logger.info(
