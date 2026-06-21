@@ -41,16 +41,7 @@
           "entry_point": {
             "wall":         "south",
             "passage_type": "main_entrance"
-          },
-          "wall_openings": [
-            {
-              "opening_type": "window",
-              "wall": "perimeter",
-              "count_range": [2, 4],
-              "distribution": "evenly",
-              "size": 1
-            }
-          ]
+          }
         },
         {
           "room_id":      "kitchen",
@@ -65,16 +56,7 @@
           "back_entry_point": {
             "wall":         "north",
             "passage_type": "service_entrance"
-          },
-          "wall_openings": [
-            {
-              "opening_type": "window",
-              "wall": "perimeter",
-              "count": 1,
-              "distribution": "centered",
-              "size": 1
-            }
-          ]
+          }
         }
       ]
     },
@@ -104,16 +86,7 @@
           "is_public":    false,
           "is_forbidden": false,
           "attach_to":    "corridor",
-          "attach_wall":  "both",
-          "wall_openings": [
-            {
-              "opening_type": "window",
-              "wall": "perimeter",
-              "count": 1,
-              "distribution": "centered",
-              "size": 1
-            }
-          ]
+          "attach_wall":  "both"
         }
       ]
     }

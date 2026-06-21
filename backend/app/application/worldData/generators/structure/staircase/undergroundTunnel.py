@@ -188,7 +188,7 @@ class UndergroundTunnelBuilder:
 
         def _floor_open(x: int, y: int) -> None:
             self.cells[(x, y, self.z_lo)] = _floor_cell(x, y, self.z_lo, wu, bu, mat)
-            for z in range(self.z_lo + 1, self.z_top):
+            for z in range(self.z_lo + 1, self.z_lo + self.passage_height):
                 self.cells[(x, y, z)] = _open_cell(x, y, z, wu, bu, mat)
 
         wall_breach_placer = WallBreachPlacer(self.cells, wu, bu)
@@ -203,7 +203,7 @@ class UndergroundTunnelBuilder:
                         continue
                     if (nx, ny) in path_set_2d or (nx, ny) in fr_fp:
                         continue
-                    for z in range(self.z_lo, self.z_top):
+                    for z in range(self.z_lo, self.z_lo + self.passage_height):
                         if (nx, ny, z) not in self.cells:
                             self.cells[(nx, ny, z)] = _wall_cell(nx, ny, z, wu, bu, mat)
 

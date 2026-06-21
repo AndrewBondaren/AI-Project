@@ -170,7 +170,6 @@ def instantiate_level_rooms(
                 shape_params=shape_params,
                 staircase_type=room_def.get("staircase_type"),
                 facing=room_def.get("facing"),
-                wall_openings=room_def.get("wall_openings", []),
             ))
             logger.info("factory | %r staircase_type=%r", room_id, room_def.get("staircase_type"))
 

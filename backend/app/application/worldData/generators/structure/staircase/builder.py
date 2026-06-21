@@ -47,7 +47,7 @@ def build_staircase(
     *,
     shaft: "_RoomInstance | None" = None,
     passage_height: int,
-) -> "LocationPassage | None":
+) -> "tuple[LocationPassage | None, StaircaseBuilder | None]":
     is_new_schema = shaft is not None or "staircase_id" in conn_or_entry
     if is_new_schema:
         # New schema: staircase_type and id come from sc_entry (staircases[] array)
@@ -66,7 +66,7 @@ def build_staircase(
 
     if stair_type not in _BUILDERS:
         logger.error("staircase %s: unknown staircase_type=%r", conn_label, stair_type)
-        return None
+        return None, None
 
     builder = _BUILDERS[stair_type](
         fr, to, fr_level, to_level, cells, world_uid, building_uid, mat, conn_label,
@@ -81,7 +81,7 @@ def build_staircase(
         builder.lay_base_floor()
     except NotImplementedError:
         logger.error("staircase %s: %s not implemented", conn_label, stair_type)
-        return None
+        return None, None
 
     fx, fy = fr_anchor
     tx, ty = to_anchor
@@ -91,7 +91,7 @@ def build_staircase(
     else:
         passage_uid = _det_uuid(building_uid, "stair",
                                 conn_or_entry["from_room"], conn_or_entry["to_room"])
-    return LocationPassage(
+    passage = LocationPassage(
         passage_uid=passage_uid,
         world_uid=world_uid,
         from_level_uid=fr_level.level_uid,
@@ -103,3 +103,4 @@ def build_staircase(
         system_passage_type=PassageType.STAIRCASE,
         is_bidirectional=True,
     )
+    return passage, builder

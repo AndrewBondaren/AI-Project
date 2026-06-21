@@ -61,6 +61,48 @@ def _has_adjacent(x: int, y: int, z: int, cells: dict, elements: set[str]) -> bo
     )
 
 
+def _shoot_beyond_building(
+    fr:     _RoomInstance,
+    cells:  dict,
+    z_top:  int,
+    facing: str | None,
+) -> tuple[int, int] | None:
+    """
+    Ищет первую незанятую позицию снаружи ВСЕГО здания, стреляя лучами
+    из внешних стен fr в направлении facing через занятые ячейки здания.
+    """
+    occupied_top = {(x, y) for (x, y, z) in cells if z == z_top}
+    fr_fp  = set(fr.get_footprint())
+    fr_int = set(_interior(fr_fp))
+    fr_wall = fr_fp - fr_int
+
+    if facing:
+        shoot_dirs = [_FACING_VEC[Facing(facing)]]
+    else:
+        shoot_dirs = list(_FACING_VEC.values())
+
+    candidates: list[tuple[int, int, int]] = []  # (x, y, steps)
+    for dx, dy in shoot_dirs:
+        for wx, wy in fr_wall:
+            out_x, out_y = wx + dx, wy + dy
+            if (out_x, out_y) in fr_fp:
+                continue
+            cx, cy, steps = out_x, out_y, 0
+            while (cx, cy) in occupied_top and steps < 200:
+                cx += dx
+                cy += dy
+                steps += 1
+            if (cx, cy) not in occupied_top:
+                candidates.append((cx, cy, steps))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda c: (c[2], c[0], c[1]))
+    best_x, best_y, _ = candidates[0]
+    return (best_x, best_y)
+
+
 def _has_stair_anchor_nearby(x: int, y: int, z: int, cells: dict) -> bool:
     """Есть ли STAIR_ANCHOR в радиусе 1 ячейки (включая саму ячейку) на уровне z."""
     for dx, dy in ((0, 0), *_NEIGHBORS):
@@ -184,8 +226,11 @@ def _anchor_outside(
             candidates.append(((wx, wy), (ox, oy)))
 
     if not candidates:
+        exterior = _shoot_beyond_building(fr, cells, z_top, facing)
+        if exterior is not None:
+            return exterior
         logger.warning(
-            "vertical_ladder on_the_edge %r (facing=%r): нет свободной внешней позиции — fallback SW interior",
+            "vertical_ladder on_the_edge %r (facing=%r): нет внешней позиции — fallback SW interior",
             fr.room_id, facing,
         )
         fallback = sorted(fr_int)

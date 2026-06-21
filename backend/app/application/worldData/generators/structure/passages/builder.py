@@ -251,7 +251,7 @@ def build_passages(
                                    sc_id, i)
                     continue
 
-                p = build_staircase(
+                p, sc_builder = build_staircase(
                     sc, fr_room, to_room, fr_level, to_level,
                     cells, world_uid, building_uid, mat,
                     shaft=shaft_fr,
@@ -259,16 +259,19 @@ def build_passages(
                 )
                 if p:
                     passages.append(p)
+                    if sc_builder:
+                        passages.extend(sc_builder.extra_passages)
                     if sc_type == StaircaseType.EXTERNAL_VERTICAL_LADDER or (sc_type == StaircaseType.VERTICAL_LADDER and sc.get("on_the_edge", False)):
-                        # Прорубаем стену верхней комнаты — якорь снаружи её периметра
-                        _upper_room  = to_room  if to_level.z > fr_level.z else fr_room
-                        _upper_level = to_level if to_level.z > fr_level.z else fr_level
-                        ep = _build_edge_ladder_passage(
-                            (p.from_x, p.from_y), _upper_room, _upper_level,
-                            cells, world_uid, building_uid, sc_id=sc_id,
-                        )
-                        if ep:
-                            passages.append(ep)
+                        if not getattr(sc_builder, "skip_edge_ladder", False):
+                            # Прорубаем стену верхней комнаты — якорь снаружи её периметра
+                            _upper_room  = to_room  if to_level.z > fr_level.z else fr_room
+                            _upper_level = to_level if to_level.z > fr_level.z else fr_level
+                            ep = _build_edge_ladder_passage(
+                                (p.from_x, p.from_y), _upper_room, _upper_level,
+                                cells, world_uid, building_uid, sc_id=sc_id,
+                            )
+                            if ep:
+                                passages.append(ep)
 
     # Old schema (backward compat): connections[passage_type=staircase].
     elif staircase_conns:
@@ -290,13 +293,15 @@ def build_passages(
             to_level  = levels[to_offset]
             mat       = conn.get("step_material") or fr_list[0].floor_material
 
-            p = build_staircase(
+            p, sc_builder = build_staircase(
                 conn, fr_list[0], to_list[0], fr_level, to_level,
                 cells, world_uid, building_uid, mat,
                 passage_height=passage_height,
             )
             if p:
                 passages.append(p)
+                if sc_builder:
+                    passages.extend(sc_builder.extra_passages)
 
     # --- Post-generation headroom check (catches cross-segment conflicts) ---
     check_all_stair_headrooms(cells, clearance=passage_height)

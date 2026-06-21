@@ -5,10 +5,11 @@
     python scripts/debug_structure.py <template> [options]
 
 Примеры:
+    python scripts/debug_structure.py tavern_1
+    python scripts/debug_structure.py tavern_1 --world ../fixtures/world_test.json
+    python scripts/debug_structure.py tavern_1 --world world-test-001
+    python scripts/debug_structure.py tavern_1 --x 5 --y 5 --z 0 --all
     python scripts/debug_structure.py ../fixtures/templates/tavern_1.json
-    python scripts/debug_structure.py ../fixtures/templates/tavern_1.json --world ../fixtures/world_test.json
-    python scripts/debug_structure.py ../fixtures/templates/tavern_1.json --world world-test-001
-    python scripts/debug_structure.py ../fixtures/templates/tavern_1.json --x 5 --y 5 --z 0 --all
 """
 
 import argparse
@@ -92,10 +93,26 @@ async def _create_minimal_world(client: httpx.AsyncClient, world_uid: str) -> st
     return world_uid
 
 
+_TEMPLATES_DIR = Path(__file__).parent.parent.parent / "fixtures" / "templates"
+
+
+def _resolve_template(template_arg: str) -> Path:
+    p = Path(template_arg)
+    if p.suffix == ".json":
+        return p
+    # короткое имя: tavern_1 → fixtures/templates/tavern_1.json
+    candidate = _TEMPLATES_DIR / f"{template_arg}.json"
+    if candidate.exists():
+        return candidate
+    return p  # вернём как есть, run() выдаст внятную ошибку
+
+
 async def run(args: argparse.Namespace) -> None:
-    template_path = Path(args.template)
+    template_path = _resolve_template(args.template)
     if not template_path.exists():
-        print(f"[!] Шаблон не найден: {template_path}", file=sys.stderr)
+        available = sorted(p.stem for p in _TEMPLATES_DIR.glob("*.json")) if _TEMPLATES_DIR.exists() else []
+        hint = f"  Доступные: {', '.join(available)}" if available else ""
+        print(f"[!] Шаблон не найден: {template_path}{hint and chr(10) + hint}", file=sys.stderr)
         sys.exit(1)
 
     async with httpx.AsyncClient(timeout=30) as client:
@@ -205,7 +222,7 @@ def _print_results(data: dict, show_all: bool, target_z: int | None, verbose: bo
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Debug: генерация структуры через API")
-    parser.add_argument("template", help="Путь к JSON-шаблону (напр. ../fixtures/templates/tavern_1.json)")
+    parser.add_argument("template", help="Имя шаблона (tavern_1) или полный путь к JSON-файлу")
     parser.add_argument("--world", default="../fixtures/world_test.json",
                         help="Путь к фикстуре мира или world_uid (default: ../fixtures/world_test.json)")
     parser.add_argument("--x",     type=int, default=10, help="map_x (default: 10)")
