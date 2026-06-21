@@ -13,16 +13,17 @@ from app.api.utils.json_resolver import JsonResolver
 from app.application.worldData.generators.structure.structureGeneratorService import (
     StructureGeneratorService,
 )
-from app.application.worldData.generators.structure.gridRenderer import render_all_levels
+from app.application.worldData.generators.structure.gridRenderer import render_all_levels, FACING_ARROW
+from app.application.worldData.generators.facing import Facing
 from app.db.models.namedLocation import NamedLocation
 from datetime import datetime, timezone
 
 
 class _LogCapture(logging.Handler):
-    """Перехватывает WARNING+ записи во время генерации для возврата в debug-ответе."""
+    """Перехватывает записи во время генерации для возврата в debug-ответе."""
 
-    def __init__(self) -> None:
-        super().__init__(logging.WARNING)
+    def __init__(self, level: int = logging.WARNING) -> None:
+        super().__init__(level)
         self.records: list[str] = []
 
     def emit(self, record: logging.LogRecord) -> None:
@@ -41,6 +42,7 @@ async def debug_generate_structure(
     map_z: int = 0,
     wall_material: str = "stone",
     floor_material: str = "wood",
+    verbose: bool = False,
     file: UploadFile | None = File(default=None),
     path: str | None = Form(default=None),
     container=Depends(get_container),
@@ -75,7 +77,8 @@ async def debug_generate_structure(
         parent_floor_material=floor_material,
     )
 
-    capture = _LogCapture()
+    log_level = logging.DEBUG if verbose else logging.WARNING
+    capture = _LogCapture(level=log_level)
     gen_logger = logging.getLogger("app.application.worldData.generators")
     gen_logger.addHandler(capture)
     try:
@@ -87,12 +90,18 @@ async def debug_generate_structure(
     element_counts = Counter(c.system_building_element for c in layout.cells)
 
     levels_by_uid = {lvl.level_uid: lvl.z for lvl in layout.levels}
+    cells_by_xyz  = {(c.x, c.y, c.z): c for c in layout.cells}
     markers: dict[tuple[int, int, int], str] = {}
     for p in layout.passages:
         if p.system_passage_type == "staircase":
             tz = levels_by_uid.get(p.to_level_uid)
             if tz is not None:
                 markers[(p.to_x, p.to_y, tz)] = "$"
+            fz = levels_by_uid.get(p.from_level_uid)
+            if fz is not None:
+                cell = cells_by_xyz.get((p.from_x, p.from_y, fz))
+                if cell and cell.system_facing:
+                    markers[(p.from_x, p.from_y, fz)] = FACING_ARROW.get(Facing(cell.system_facing), "@")
     grids = render_all_levels(layout.cells, markers=markers)
 
     return JSONResponse({

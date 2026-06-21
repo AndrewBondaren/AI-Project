@@ -13,18 +13,20 @@ from app.application.worldData.generators.structure.staircase.uShape    import U
 from app.application.worldData.generators.structure.staircase.spiral    import SpiralBuilder
 from app.application.worldData.generators.structure.staircase.verticalLadder  import VerticalLadderBuilder, ExternalVerticalLadderBuilder
 from app.application.worldData.generators.structure.staircase.base      import StaircaseBuilder
+from app.application.worldData.generators.structure.staircase.staircaseType import StaircaseType
+from app.application.worldData.generators.structure.passages.passageType import PassageType
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
 from app.db.models.mapCell import MapCell
 
 logger = logging.getLogger(__name__)
 
-_BUILDERS: dict[str, type[StaircaseBuilder]] = {
-    "straight": StraightBuilder,
-    "u_shape":  UShapeBuilder,
-    "spiral":   SpiralBuilder,
-    "vertical_ladder":          VerticalLadderBuilder,
-    "external_vertical_ladder": ExternalVerticalLadderBuilder,
+_BUILDERS: dict[StaircaseType, type[StaircaseBuilder]] = {
+    StaircaseType.STRAIGHT:                 StraightBuilder,
+    StaircaseType.U_SHAPE:                  UShapeBuilder,
+    StaircaseType.SPIRAL:                   SpiralBuilder,
+    StaircaseType.VERTICAL_LADDER:          VerticalLadderBuilder,
+    StaircaseType.EXTERNAL_VERTICAL_LADDER: ExternalVerticalLadderBuilder,
 }
 
 
@@ -98,6 +100,6 @@ def build_staircase(
         to_level_uid=to_level.level_uid,
         to_x=tx,
         to_y=ty,
-        system_passage_type="staircase",
+        system_passage_type=PassageType.STAIRCASE,
         is_bidirectional=True,
     )

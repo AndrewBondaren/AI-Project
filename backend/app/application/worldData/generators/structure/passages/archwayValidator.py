@@ -5,13 +5,11 @@ from __future__ import annotations
 
 import logging
 
-logger = logging.getLogger(__name__)
+from app.application.worldData.generators.structure.structureElement import (
+    StructureElement, _WALKABLE_ELEMENTS,
+)
 
-_PASSABLE = {
-    "floor", "door", "archway",
-    "staircase", "stair_floor", "stair_anchor",
-    "ladder", "trapdoor",
-}
+logger = logging.getLogger(__name__)
 
 
 def _line_axes(arch_cells: list[tuple[int, int]]) -> tuple[tuple[int, int], tuple[int, int]]:
@@ -41,7 +39,7 @@ def validate_archway_frame(
     ]:
         nb = cells.get((nx, ny, z))
         elem = nb.system_building_element if nb else None
-        if elem != "wall":
+        if elem != StructureElement.WALL:
             logger.warning(
                 "archway %s (z=%d): %s=(%d,%d) elem=%s — ожидается wall",
                 conn_label, z, side, nx, ny, elem,
@@ -55,7 +53,7 @@ def validate_all_archway_frames(cells: dict) -> None:
     """
     by_z: dict[int, set[tuple[int, int]]] = {}
     for (x, y, z), cell in cells.items():
-        if cell.system_building_element == "archway":
+        if cell.system_building_element == StructureElement.ARCHWAY:
             by_z.setdefault(z, set()).add((x, y))
 
     for z, pos_set in by_z.items():
@@ -94,14 +92,14 @@ def _check_frame_h(cells: dict, run: list[tuple[int, int]], z: int) -> None:
     e_nb = cells.get((xn + 1, y, z))
     w_elem = w_nb.system_building_element if w_nb else None
     e_elem = e_nb.system_building_element if e_nb else None
-    if w_elem != "wall" and e_elem != "wall":
+    if w_elem != StructureElement.WALL and e_elem != StructureElement.WALL:
         return  # оба конца без стены — open-ячейки над аркой, не валидируем
-    if w_elem != "wall":
+    if w_elem != StructureElement.WALL:
         logger.error(
             "archway scan H (z=%d): y=%d x=%d..%d | frame_w=(%d,%d) elem=%s — ожидается wall",
             z, y, x0, xn, x0 - 1, y, w_elem,
         )
-    if e_elem != "wall":
+    if e_elem != StructureElement.WALL:
         logger.error(
             "archway scan H (z=%d): y=%d x=%d..%d | frame_e=(%d,%d) elem=%s — ожидается wall",
             z, y, x0, xn, xn + 1, y, e_elem,
@@ -116,14 +114,14 @@ def _check_frame_v(cells: dict, run: list[tuple[int, int]], z: int) -> None:
     n_nb = cells.get((x, yn + 1, z))
     s_elem = s_nb.system_building_element if s_nb else None
     n_elem = n_nb.system_building_element if n_nb else None
-    if s_elem != "wall" and n_elem != "wall":
+    if s_elem != StructureElement.WALL and n_elem != StructureElement.WALL:
         return  # оба конца без стены — open-ячейки над аркой, не валидируем
-    if s_elem != "wall":
+    if s_elem != StructureElement.WALL:
         logger.error(
             "archway scan V (z=%d): x=%d y=%d..%d | frame_s=(%d,%d) elem=%s — ожидается wall",
             z, x, y0, yn, x, y0 - 1, s_elem,
         )
-    if n_elem != "wall":
+    if n_elem != StructureElement.WALL:
         logger.error(
             "archway scan V (z=%d): x=%d y=%d..%d | frame_n=(%d,%d) elem=%s — ожидается wall",
             z, x, y0, yn, x, yn + 1, n_elem,
@@ -136,7 +134,7 @@ def validate_archway_through(
     z: int,
     conn_label: str = "?",
 ) -> None:
-    """По обе стороны прохода (перпендикулярно линии) каждая ячейка арки должна быть passable."""
+    """По обе стороны прохода (перпендикулярно линии) каждая ячейка арки должна быть walkable."""
     if not arch_cells:
         return
     _, (tdx, tdy) = _line_axes(arch_cells)
@@ -144,8 +142,8 @@ def validate_archway_through(
         for nx, ny in [(x + tdx, y + tdy), (x - tdx, y - tdy)]:
             nb = cells.get((nx, ny, z))
             elem = nb.system_building_element if nb else None
-            if elem not in _PASSABLE:
+            if elem not in _WALKABLE_ELEMENTS:
                 logger.warning(
-                    "archway %s (%d,%d,z=%d): through=(%d,%d) elem=%s — ожидается passable",
+                    "archway %s (%d,%d,z=%d): through=(%d,%d) elem=%s — ожидается walkable",
                     conn_label, x, y, z, nx, ny, elem,
                 )

@@ -8,24 +8,23 @@ import logging
 from dataclasses import dataclass, field
 
 from app.application.worldData.generators.structure.cellBuilder import _interior
+from app.application.worldData.generators.facing import Facing
+from app.application.worldData.generators.structure.structureElement import (
+    StructureElement, _WALL_ELEMENTS, _PASSABLE_ELEMENTS,
+)
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
 
 logger = logging.getLogger(__name__)
 
-_WALL_ELEMENTS  = {"wall", "column"}
-_DOOR_ELEMENTS  = {"door"}
+_DOOR_ELEMENTS: frozenset[StructureElement] = frozenset({StructureElement.DOOR})
 _NEIGHBORS      = ((1, 0), (-1, 0), (0, 1), (0, -1))
 
 # north=+y, south=-y, east=+x, west=-x (соответствует shaftPlacer.py)
-_FACING_VEC: dict[str, tuple[int, int]] = {
-    "north": (0,  1),
-    "south": (0, -1),
-    "east":  (1,  0),
-    "west":  (-1, 0),
-}
-_OPPOSITE: dict[str, str] = {
-    "north": "south", "south": "north",
-    "east":  "west",  "west":  "east",
+_FACING_VEC: dict[Facing, tuple[int, int]] = {
+    Facing.NORTH: (0,  1),
+    Facing.SOUTH: (0, -1),
+    Facing.EAST:  (1,  0),
+    Facing.WEST:  (-1, 0),
 }
 
 
@@ -62,15 +61,27 @@ def _has_adjacent(x: int, y: int, z: int, cells: dict, elements: set[str]) -> bo
     )
 
 
+def _has_stair_anchor_nearby(x: int, y: int, z: int, cells: dict) -> bool:
+    """Есть ли STAIR_ANCHOR в радиусе 1 ячейки (включая саму ячейку) на уровне z."""
+    for dx, dy in ((0, 0), *_NEIGHBORS):
+        cell = cells.get((x + dx, y + dy, z))
+        if cell and cell.system_building_element == StructureElement.STAIR_ANCHOR:
+            return True
+    return False
+
+
+
 def _compute_vertical_ladder_anchor(
-    fr:          _RoomInstance,
-    to:          _RoomInstance,
-    cells:       dict,
-    z_lo:        int,
-    near_wall:   bool,
-    on_the_edge: bool,
-    facing:      str | None = None,
-    is_movable:  bool = False,
+    fr:             _RoomInstance,
+    to:             _RoomInstance,
+    cells:          dict,
+    z_lo:           int,
+    z_top:          int,
+    near_wall:      bool,
+    on_the_edge:    bool,
+    passage_height: int,
+    facing:         str | None = None,
+    is_movable:     bool = False,
 ) -> tuple[int, int]:
     """
     on_the_edge=True  — якорь снаружи fr; facing задаёт сторону.
@@ -79,7 +90,7 @@ def _compute_vertical_ladder_anchor(
     """
     if on_the_edge:
         # Якорь снаружи верхней комнаты (to) — fr=нижняя после нормализации в базовом классе
-        return _anchor_outside(to, fr, cells, z_lo, facing=facing, is_movable=is_movable)
+        return _anchor_outside(to, fr, cells, z_lo, z_top, facing=facing, is_movable=is_movable)
 
     fr_int = set(_interior(fr.get_footprint()))
     to_int = set(_interior(to.get_footprint()))
@@ -97,6 +108,22 @@ def _compute_vertical_ladder_anchor(
         if _has_adjacent(x, y, z_lo, cells, _DOOR_ELEMENTS):
             continue
         if not near_wall and _has_adjacent(x, y, z_lo, cells, _WALL_ELEMENTS):
+            continue
+        cell_lo = cells.get((x, y, z_lo))
+        if cell_lo is None or cell_lo.system_building_element != StructureElement.FLOOR:
+            continue
+        cell_top = cells.get((x, y, z_top))
+        if cell_top is None or cell_top.system_building_element != StructureElement.FLOOR:
+            continue
+        if any(
+            (c := cells.get((x, y, z_top + dz))) is not None
+            and c.system_building_element not in _PASSABLE_ELEMENTS
+            for dz in range(1, passage_height + 1)
+        ):
+            continue
+        if _has_stair_anchor_nearby(x, y, z_lo, cells):
+            continue
+        if _has_stair_anchor_nearby(x, y, z_top, cells):
             continue
         valid.append((x, y))
 
@@ -118,6 +145,7 @@ def _anchor_outside(
     to:         _RoomInstance,
     cells:      dict,
     z_lo:       int,
+    z_top:      int,
     facing:     str | None = None,
     is_movable: bool = False,
 ) -> tuple[int, int]:
@@ -134,7 +162,7 @@ def _anchor_outside(
     to_fp   = to.get_footprint()
     fr_wall = fr_fp - fr_int
 
-    facing_vec = _FACING_VEC.get(facing) if facing else None
+    facing_vec = _FACING_VEC.get(Facing(facing)) if facing else None
 
     candidates: list[tuple[tuple[int, int], tuple[int, int]]] = []  # (wall_xy, outside_xy)
     for wx, wy in fr_wall:
@@ -144,8 +172,12 @@ def _anchor_outside(
                 continue
             if facing_vec and (dx, dy) != facing_vec:
                 continue
-            cell = cells.get((ox, oy, z_lo))
-            if cell and cell.system_building_element in _WALL_ELEMENTS | _DOOR_ELEMENTS:
+            cell_lo = cells.get((ox, oy, z_lo))
+            if cell_lo and cell_lo.system_building_element in _WALL_ELEMENTS | _DOOR_ELEMENTS:
+                continue
+            if cells.get((ox, oy, z_top)) is not None:
+                continue
+            if _has_stair_anchor_nearby(ox, oy, z_top, cells):
                 continue
             if not is_movable and _is_corner_cell(wx, wy, fr_wall, (ox, oy)):
                 continue
@@ -179,16 +211,19 @@ def _compute_vertical_ladder_params(
     to:              _RoomInstance,
     cells:           dict,
     z_lo:            int,
+    z_top:           int,
     is_movable:      bool,
     has_trapdoor:    bool,
     near_wall:       bool,
     on_the_edge:     bool,
+    passage_height:  int,
     has_walls:       bool       = False,
     facing:          str | None = None,
     open_wall_shaft: str | None = None,
 ) -> VerticalLadderParams:
     anchor = _compute_vertical_ladder_anchor(
-        fr, to, cells, z_lo, near_wall, on_the_edge, facing=facing, is_movable=is_movable,
+        fr, to, cells, z_lo, z_top, near_wall, on_the_edge,
+        passage_height=passage_height, facing=facing, is_movable=is_movable,
     )
     return VerticalLadderParams(
         anchor=anchor, is_movable=is_movable,

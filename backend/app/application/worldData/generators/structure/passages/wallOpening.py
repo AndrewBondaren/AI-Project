@@ -4,49 +4,47 @@ Wall openings: windows, arrow slits, portholes, vents, etc.
 Called after passages are built — needs door positions to exclude ±1 around them.
 Replaces wall cells with opening cells at window_z height in cells_dict (in-place).
 
-glass_material and cell_states (closed/open/broken) — v2.
+cell_states (closed/open/broken) — v2.
 Arc-length distribution for circular rooms — v2.
 Interior window conflict resolution — v2 (last-write-wins for now).
 """
 import logging
-import math
 from random import Random
 
 from app.application.worldData.generators.structure.cellFactory import _opening_cell
+from app.application.worldData.generators.structure.materialResolver import resolve_material
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.facing import Facing
 from app.application.worldData.generators.structure.structureElement import (
-    StructureElement, _WALL_OPENING_TYPES,
+    StructureElement, _WALL_OPENING_TYPES, _DOOR_ELEMENTS,
 )
 from app.application.worldData.generators.structure.passages.wallDistributor import (
     DISTRIBUTOR_BY_TYPE,
+    DISTRIBUTOR_BY_DISTRIBUTION,
+)
+from app.application.worldData.generators.structure.passages.wallZAdjuster import (
+    ZADJUSTER_BY_TYPE,
 )
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.mapCell import MapCell
+from app.db.models.world import World
 
 logger = logging.getLogger(__name__)
 
-_DIR_DELTA: dict[str, tuple[int, int]] = {
-    "north": (0, +1),
-    "south": (0, -1),
-    "east":  (+1, 0),
-    "west":  (-1, 0),
+# use_type keys for resolve_material; None = no filling (open slit)
+_GLASS_USE_TYPE: dict[StructureElement, str | None] = {
+    StructureElement.WINDOW:     "window_glass",
+    StructureElement.PORTHOLE:   "porthole_glass",
+    StructureElement.VENT:       "vent_mesh",
+    StructureElement.ARROW_SLIT: None,
 }
 
-_DOOR_ELEMENTS = frozenset({"door", "archway"})
-
-
-# ---------------------------------------------------------------------------
-# window_z resolver
-
-def resolve_window_z(level_def: dict, template: dict, z_height: int) -> int:
-    if level_def.get("window_z_offset") is not None:
-        return level_def["window_z_offset"]
-    ratio = (
-        level_def.get("window_z_ratio")
-        or template.get("window_z_ratio")
-        or 0.4
-    )
-    return math.floor(z_height * ratio)
+_DIR_DELTA: dict[Facing, tuple[int, int]] = {
+    Facing.NORTH: (0, +1),
+    Facing.SOUTH: (0, -1),
+    Facing.EAST:  (+1, 0),
+    Facing.WEST:  (-1, 0),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -72,38 +70,46 @@ def _get_wall_cells(
     wall: str,
     all_fp: set[tuple[int, int]],
     rng: Random,
-) -> list[tuple[int, int]]:
+) -> tuple[list[tuple[int, int]], dict[tuple[int, int], str]]:
+    """Return (cells, facings) where facings maps each cell to the cardinal direction it faces outward."""
     if wall in _DIR_DELTA:
-        return _cells_for_direction(room, wall, all_fp)
+        cells = _cells_for_direction(room, wall, all_fp)
+        return cells, {c: wall for c in cells}
 
     if wall == "any":
         direction = rng.choice(["north", "south", "east", "west"])
-        return _cells_for_direction(room, direction, all_fp)
+        cells = _cells_for_direction(room, direction, all_fp)
+        return cells, {c: direction for c in cells}
 
     if wall in ("all", "perimeter"):
         seen: set[tuple[int, int]] = set()
         result: list[tuple[int, int]] = []
+        facings: dict[tuple[int, int], str] = {}
         for d in ("north", "south", "east", "west"):
             for c in _cells_for_direction(room, d, all_fp):
                 if c not in seen:
                     seen.add(c)
                     result.append(c)
-        return result
+                    facings[c] = d
+        return result, facings
 
     if wall == "interior":
         fp = room.get_footprint()
         seen2: set[tuple[int, int]] = set()
         result2: list[tuple[int, int]] = []
+        facings2: dict[tuple[int, int], str] = {}
         for (x, y) in fp:
-            for dx, dy in _DIR_DELTA.values():
+            for dir_name, (dx, dy) in _DIR_DELTA.items():
                 nb = (x + dx, y + dy)
                 if nb in all_fp and nb not in fp and (x, y) not in seen2:
                     seen2.add((x, y))
                     result2.append((x, y))
-        return result2
+                    facings2[(x, y)] = dir_name
+                    break
+        return result2, facings2
 
     logger.warning("wall_openings: unknown wall=%r on room %r — skipping", wall, room.room_id)
-    return []
+    return [], {}
 
 
 # ---------------------------------------------------------------------------
@@ -134,11 +140,13 @@ def _exclude_doors(
     return [c for c in cells if c not in forbidden]
 
 
-def _resolve_count(opening: dict, rng: Random) -> int:
+def _resolve_count(opening: dict) -> tuple[int, int]:
+    """Return (target_count, min_count). target = max to attempt; min = threshold below which we skip."""
     if "count" in opening:
-        return opening["count"]
+        n = opening["count"]
+        return n, n
     cr = opening["count_range"]
-    return rng.randint(cr[0], cr[1])
+    return cr[1], cr[0]
 
 
 # ---------------------------------------------------------------------------
@@ -149,8 +157,7 @@ def place_wall_openings(
     cells_dict: dict[tuple, MapCell],
     level: LocationLevel,
     level_def: dict,
-    template: dict,
-    world_uid: str,
+    world: World,
     building_uid: str,
     rng: Random,
 ) -> None:
@@ -162,13 +169,17 @@ def place_wall_openings(
     for r in rooms:
         all_fp |= r.get_footprint()
 
-    window_z = resolve_window_z(level_def, template, level.z_height)
-    abs_z    = level.z + window_z
-    z_base   = level.z
+    z_base    = level.z
+    world_uid = world.world_uid
+
+    # Interior-wall conflict resolution: lex-smaller room_id claims cells first.
+    # Non-interior openings are unaffected by this ordering.
+    rooms_with_openings.sort(key=lambda r: r.room_id)
+    interior_claimed: set[tuple[int, int]] = set()
 
     logger.info(
-        "wall_openings | z_offset=%d  window_z=%d  abs_z=%d  rooms=%d",
-        level_def["z_offset"], window_z, abs_z, len(rooms_with_openings),
+        "wall_openings | z_offset=%d  rooms=%d",
+        level_def["z_offset"], len(rooms_with_openings),
     )
 
     for room in rooms_with_openings:
@@ -194,9 +205,11 @@ def place_wall_openings(
             distribution = opening.get("distribution", "evenly")
             frame_mat    = opening.get("frame_material") or room.wall_material
 
-            wall_cells = _get_wall_cells(room, wall, all_fp, rng)
+            wall_cells, facings = _get_wall_cells(room, wall, all_fp, rng)
             wall_cells = _exclude_corners(wall_cells)
             wall_cells = _exclude_doors(wall_cells, cells_dict, z_base)
+            if wall == "interior":
+                wall_cells = [c for c in wall_cells if c not in interior_claimed]
 
             if not wall_cells:
                 logger.warning(
@@ -205,27 +218,45 @@ def place_wall_openings(
                 )
                 continue
 
-            count      = _resolve_count(opening, rng)
-            distributor = DISTRIBUTOR_BY_TYPE[element]
-            groups     = distributor.place(wall_cells, count, size, distribution, rng)
+            count, min_count = _resolve_count(opening)
+            distributor = (
+                DISTRIBUTOR_BY_DISTRIBUTION.get(distribution)
+                or DISTRIBUTOR_BY_TYPE[element]
+            )
+            groups      = distributor.place(wall_cells, count, size, distribution, rng)
 
-            if not groups:
+            if len(groups) < min_count:
                 logger.warning(
                     "wall_openings | room=%r opening_type=%r: стена слишком короткая для размещения "
-                    "(available=%d, count=%d, size=%d)",
-                    room.room_id, element.value, len(wall_cells), count, size,
+                    "(available=%d, target=%d, min=%d, placed=%d, size=%d)",
+                    room.room_id, element.value, len(wall_cells), count, min_count, len(groups), size,
                 )
                 continue
 
+            zadjuster    = ZADJUSTER_BY_TYPE[element]
+            z_list       = zadjuster.resolve(level.z, room.z_height)
+
+            glass_use    = _GLASS_USE_TYPE.get(element)
+            glass_mat    = (
+                resolve_material(world, glass_use, room.economic_tier, rng, glass_use)
+                if glass_use else None
+            )
+
             placed = 0
-            for group in groups:
-                for (x, y) in group:
-                    cells_dict[(x, y, abs_z)] = _opening_cell(
-                        x, y, abs_z, world_uid, building_uid, element.value, frame_mat,
-                    )
-                    placed += 1
+            for abs_z in z_list:
+                for group in groups:
+                    for (x, y) in group:
+                        cells_dict[(x, y, abs_z)] = _opening_cell(
+                            x, y, abs_z, world_uid, building_uid, element.value, frame_mat,
+                            glass_material=glass_mat,
+                            system_facing=facings.get((x, y)),
+                        )
+                        placed += 1
+
+            if wall == "interior":
+                interior_claimed |= {(x, y) for group in groups for (x, y) in group}
 
             logger.info(
-                "wall_openings | room=%-20s opening_type=%-12s wall=%-9s placed=%d",
-                room.room_id, element.value, wall, placed,
+                "wall_openings | room=%-20s opening_type=%-12s wall=%-9s z=%s placed=%d",
+                room.room_id, element.value, wall, z_list, placed,
             )

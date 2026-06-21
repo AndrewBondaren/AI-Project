@@ -3,15 +3,16 @@ U-shape staircase validator.
 """
 import logging
 
-from app.application.worldData.generators.structure.facing import Facing
+from app.application.worldData.generators.facing import Facing
+from app.application.worldData.generators.structure.structureElement import (
+    StructureElement, _STAIR_ELEMENTS, _STAIR_DIRECTIONAL,
+)
 from app.application.worldData.generators.structure.staircase.facingHelper import (
     _V_INIT, _V_TO_FACING,
 )
 from app.application.worldData.generators.structure.staircase.validator import StaircaseValidator
 
 _NS = frozenset({Facing.NORTH, Facing.SOUTH})
-_STAIR_ELEMENTS = {"staircase", "stair_anchor", "stair_floor"}
-_STAIR_DIRECTIONAL = {"staircase", "stair_anchor"}
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +75,7 @@ def _traverse_stair_floor_chain(
             )
             return chain_len
         elem = cell.system_building_element
-        if elem in ("staircase", "stair_anchor"):
+        if elem in _STAIR_DIRECTIONAL:
             if key != expected_next:
                 logger.error(
                     "u_shape %s [landing %d]: цепочка stair_floor привела к (%d,%d,z=%d), "
@@ -83,7 +84,7 @@ def _traverse_stair_floor_chain(
                     expected_next[0], expected_next[1], expected_next[2],
                 )
             return chain_len
-        if elem != "stair_floor":
+        if elem != StructureElement.STAIR_FLOOR:
             logger.error(
                 "u_shape %s [landing %d]: неожиданный элемент %r на (%d,%d,z=%d)",
                 conn_label, march_idx, elem, cx, cy, z,
@@ -226,7 +227,7 @@ class UShapeValidator(StaircaseValidator):
         # ── fr_anchor: stair_anchor на z_lo ──────────────────────────────────
         fr_cell = cells.get((fx, fy, z_lo))
         got = fr_cell.system_building_element if fr_cell else "пусто"
-        if got != "stair_anchor":
+        if got != StructureElement.STAIR_ANCHOR:
             logger.error(
                 "u_shape %s [fr_anchor тип]: ячейка (%d,%d,z=%d) должна быть 'stair_anchor', "
                 "получено %r. fr_anchor=%s, z_lo=%d, facing=%r",

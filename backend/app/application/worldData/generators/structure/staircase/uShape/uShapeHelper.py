@@ -38,13 +38,22 @@ class UShapeParams:
     V_init: tuple[int, int]
 
 
+def _is_anchor_free(pos: tuple[int, int], z_lo: int, cells: dict) -> bool:
+    """Free = floor cell or absent. Occupied = anything else (wall, stair_anchor, etc.)."""
+    cell = cells.get((pos[0], pos[1], z_lo))
+    return cell is None or cell.system_building_element == "floor"
+
+
 def _compute_fr_anchor(
     ax: int, ay: int, w: int, d: int, facing: str,
     prev_fr_anchor: tuple[int, int] | None = None,
+    cells: dict | None = None,
+    z_lo: int = 0,
 ) -> tuple[tuple[int, int], tuple[int, int], tuple[int, int]]:
     """
     Returns (fr_anchor, far_anchor, turn_vector).
     If prev_fr_anchor given, reuses the same near-side corner deterministically.
+    Otherwise picks randomly, preferring a free corner (floor or absent).
     far_anchor = diagonally opposite corner in interior.
     """
     if facing == "north":
@@ -67,7 +76,16 @@ def _compute_fr_anchor(
         same = [c for c in choices if c[0] == prev_fr_anchor]
         fr, tv = same[0] if same else choices[0]
     else:
-        fr, tv = random.choice(choices)
+        first, second = random.choice(choices), None
+        second = choices[1] if choices[0] is first else choices[0]
+        # Prefer a free corner; fall back to the other if first is occupied.
+        if cells is not None and not _is_anchor_free(first[0], z_lo, cells):
+            logger.warning(
+                "u_shape: fr_anchor candidate %s at z=%d is occupied — trying other corner",
+                first[0], z_lo,
+            )
+            first, second = second, first
+        fr, tv = first
 
     fx, fy = fr
     far = (2*ax + w-1 - fx, 2*ay + d-1 - fy)
@@ -78,6 +96,8 @@ def _compute_u_params(
     ax: int, ay: int, w: int, d: int, facing: str, z_height: int,
     conn_label: str = "",
     prev_fr_anchor: tuple[int, int] | None = None,
+    cells: dict | None = None,
+    z_lo: int = 0,
 ) -> UShapeParams:
     march_depth     = (d - 1) if facing in _NS else (w - 1)
     march_depth_mid = d       if facing in _NS else w
@@ -128,7 +148,7 @@ def _compute_u_params(
     else:
         march_flat = [march_depth_mid + 1 - s for s in march_steps[:-1]] + [0]
 
-    fr_anchor, far_anchor, turn_vector = _compute_fr_anchor(ax, ay, w, d, facing, prev_fr_anchor)
+    fr_anchor, far_anchor, turn_vector = _compute_fr_anchor(ax, ay, w, d, facing, prev_fr_anchor, cells=cells, z_lo=z_lo)
 
     return UShapeParams(
         facing=facing,

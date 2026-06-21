@@ -3,9 +3,15 @@ Shared helpers for passage builders.
 """
 import uuid
 
+from app.application.worldData.generators.facing import Facing
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
 
-_WALL_DIRS = {"south": (0, -1), "north": (0, 1), "east": (1, 0), "west": (-1, 0)}
+_WALL_DIRS: dict[Facing, tuple[int, int]] = {
+    Facing.SOUTH: (0, -1),
+    Facing.NORTH: (0,  1),
+    Facing.EAST:  (1,  0),
+    Facing.WEST:  (-1, 0),
+}
 
 
 def _det_uuid(*parts: str) -> str:

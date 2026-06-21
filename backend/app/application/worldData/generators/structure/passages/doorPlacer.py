@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 from app.application.worldData.generators.structure.cellFactory import _door_cell
-from app.application.worldData.generators.structure.facing import Facing
+from app.application.worldData.generators.facing import Facing
 from app.application.worldData.generators.structure.passages.doorValidator import validate_door_cell
 
 

@@ -5,6 +5,7 @@ import logging
 
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.doorPlacer import DoorPlacer
+from app.application.worldData.generators.structure.passages.passageType import PassageType
 from app.application.worldData.generators.structure.passages.shared import (
     _center_slice, _det_uuid, _exterior_cells_on_wall,
 )
@@ -56,6 +57,6 @@ def _build_entry_point(
         to_level_uid=level.level_uid,
         to_x=cx,
         to_y=cy,
-        system_passage_type=ep.get("passage_type", "main_entrance"),
+        system_passage_type=ep.get("passage_type", PassageType.MAIN_ENTRANCE),
         is_bidirectional=False,
     )

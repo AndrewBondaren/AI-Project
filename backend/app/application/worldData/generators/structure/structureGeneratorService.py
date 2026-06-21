@@ -523,8 +523,8 @@ class StructureGeneratorService:
                 if r.z_offset == z_offset and r.placed and not r.is_shaft
             ]
             place_wall_openings(
-                level_rooms, cells_dict, level, level_def, template,
-                world.world_uid, building.location_uid, rng,
+                level_rooms, cells_dict, level, level_def,
+                world, building.location_uid, rng,
             )
 
     # ------------------------------------------------------------------

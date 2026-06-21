@@ -107,9 +107,10 @@ class VerticalLadderBuilder(StaircaseBuilder):
 
         params = _compute_vertical_ladder_params(
             self.fr, self.to,
-            cells=self.cells, z_lo=self.z_lo,
+            cells=self.cells, z_lo=self.z_lo, z_top=self.z_top,
             is_movable=is_movable, has_trapdoor=has_trapdoor,
             near_wall=near_wall, on_the_edge=on_the_edge,
+            passage_height=self.passage_height,
             has_walls=has_walls, facing=facing,
             open_wall_shaft=open_wall_shaft,
         )

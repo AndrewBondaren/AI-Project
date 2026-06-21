@@ -146,15 +146,45 @@ class SolidRunDistributor(WallDistributor):
         return [target[start + i * size: start + i * size + size] for i in range(count)]
 
 
+class CenteredDistributor(WallDistributor):
+    """
+    Symmetric placement on the full flat wall (ignores door-segment boundaries).
+
+    count=1  →  # # # W # # #   (one block at center)
+    count=2  →  # W # # # W #   (two blocks symmetric around center)
+
+    Selected by distribution="centered", overrides the type-based distributor.
+    """
+
+    def place(
+        self,
+        wall_cells: list[tuple[int, int]],
+        count: int,
+        size: int,
+        distribution: str,
+        rng: Random,
+    ) -> list[list[tuple[int, int]]]:
+        if not wall_cells:
+            return []
+        return _symmetric_placement(wall_cells, count, size, spacing=1)
+
+
 # ---------------------------------------------------------------------------
 # Registry
 
 _SEGMENTED  = SegmentedDistributor()
 _SOLID_RUN  = SolidRunDistributor()
+_CENTERED   = CenteredDistributor()
 
+# Selected by opening_type (default when distribution != "centered")
 DISTRIBUTOR_BY_TYPE: dict[StructureElement, WallDistributor] = {
     StructureElement.WINDOW:     _SEGMENTED,
     StructureElement.PORTHOLE:   _SEGMENTED,
     StructureElement.VENT:       _SEGMENTED,
     StructureElement.ARROW_SLIT: _SOLID_RUN,
+}
+
+# Overrides type-based selection when distribution field matches
+DISTRIBUTOR_BY_DISTRIBUTION: dict[str, WallDistributor] = {
+    "centered": _CENTERED,
 }

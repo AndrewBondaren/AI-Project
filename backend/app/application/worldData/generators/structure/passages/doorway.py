@@ -3,6 +3,7 @@ Doorway passage builder.
 """
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.doorPlacer import DoorPlacer
+from app.application.worldData.generators.structure.passages.passageType import PassageType
 from app.application.worldData.generators.structure.passages.shared import (
     _center_slice, _det_uuid, _shared_segment,
 )
@@ -54,6 +55,6 @@ def _build_doorway(
         to_level_uid=to_level.level_uid,
         to_x=cx,
         to_y=cy,
-        system_passage_type=conn.get("passage_type", "doorway"),
+        system_passage_type=conn.get("passage_type", PassageType.DOORWAY),
         is_bidirectional=True,
     )

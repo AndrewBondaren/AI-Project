@@ -11,15 +11,12 @@ from __future__ import annotations
 
 import logging
 
-from app.application.worldData.generators.structure.facing import Facing
+from app.application.worldData.generators.facing import Facing
+from app.application.worldData.generators.structure.structureElement import (
+    StructureElement, _WALKABLE_ELEMENTS,
+)
 
 logger = logging.getLogger(__name__)
-
-_PASSABLE = {
-    "floor", "door", "archway",
-    "staircase", "stair_floor", "stair_anchor",
-    "ladder", "trapdoor",
-}
 
 # ось «через» дверь (facing и противоположное) — (dx, dy)
 _THROUGH: dict[Facing, tuple[int, int]] = {
@@ -58,7 +55,7 @@ def validate_door_cell(
     ]:
         nb = cells.get((nx, ny, z))
         elem = nb.system_building_element if nb else None
-        if elem not in _PASSABLE:
+        if elem not in _WALKABLE_ELEMENTS:
             logger.warning(
                 "door %s (%d,%d,z=%d) facing=%s: %s=%s ожидается проходимая ячейка",
                 conn_label, x, y, z, facing.value, side, elem,
@@ -70,7 +67,7 @@ def validate_door_cell(
     ]:
         nb = cells.get((nx, ny, z))
         elem = nb.system_building_element if nb else None
-        if elem != "wall":
+        if elem != StructureElement.WALL:
             logger.warning(
                 "door %s (%d,%d,z=%d) facing=%s: %s=%s ожидается wall",
                 conn_label, x, y, z, facing.value, side, elem,

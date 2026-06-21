@@ -7,17 +7,13 @@ from abc import ABC, abstractmethod
 from app.application.worldData.generators.structure.cellBuilder import _interior
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _void_cell
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.structureElement import (
+    StructureElement, _PASSABLE_ELEMENTS, _STAIR_ELEMENTS,
+)
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.mapCell import MapCell
 
 logger = logging.getLogger(__name__)
-
-# Всё что НЕ является проходимым — блокирует просвет над лестницей.
-_PASSABLE_ELEMENTS = {"archway", "void"}
-
-# Ячейки шахты, над которыми проверяется просвет.
-_STAIR_ELEMENTS = {"staircase", "stair_anchor", "stair_floor"}
-
 
 def _blocks_headroom(elem: str) -> bool:
     return elem not in _PASSABLE_ELEMENTS
@@ -67,7 +63,7 @@ def check_all_stair_headrooms(cells: dict, clearance: int = 2) -> None:
             above = cells.get((x, y, z + dz))
             if above is not None and _blocks_headroom(above.system_building_element):
                 logger.error(
-                    "headroom | (%d,%d,z=%d) %s blocked at z=%d by %r",
+                    "headroom | (%d,%d,z=%d) %s blocked at z=%d by %s",
                     x, y, z, cell.system_building_element, z + dz,
                     above.system_building_element,
                 )
@@ -133,7 +129,7 @@ class StaircaseBuilder(ABC):
             return
         for (x, y) in _interior(self.shaft.get_footprint()):
             c = self.cells.get((x, y, self.z_lo))
-            if c is not None and c.system_building_element == "void":
+            if c is not None and c.system_building_element == StructureElement.VOID:
                 self.cells[(x, y, self.z_lo)] = _floor_cell(
                     x, y, self.z_lo, self.world_uid, self.building_uid, self.mat
                 )

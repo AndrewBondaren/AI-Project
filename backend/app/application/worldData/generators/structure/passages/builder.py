@@ -18,9 +18,11 @@ from app.application.worldData.generators.structure.passages.archwayValidator im
 )
 from app.application.worldData.generators.structure.passages.doorway import _build_doorway
 from app.application.worldData.generators.structure.passages.entry import _build_entry_point
+from app.application.worldData.generators.structure.passages.passageType import PassageType
 from app.application.worldData.generators.structure.passages.shared import _det_uuid
 from app.application.worldData.generators.structure.staircase.base import check_all_stair_headrooms
 from app.application.worldData.generators.structure.staircase.builder import build_staircase
+from app.application.worldData.generators.structure.staircase.staircaseType import StaircaseType
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
 from app.db.models.mapCell import MapCell
@@ -87,7 +89,7 @@ def _build_edge_ladder_passage(
         to_level_uid=fr_level.level_uid,
         to_x=ax,
         to_y=ay,
-        system_passage_type="archway",
+        system_passage_type=PassageType.ARCHWAY,
         is_bidirectional=True,
     )
 
@@ -131,8 +133,8 @@ def build_passages(
     staircase_conns: list[dict] = []
 
     for conn in connections:
-        ptype = conn.get("passage_type", "doorway")
-        if ptype == "staircase":
+        ptype = conn.get("passage_type", PassageType.DOORWAY)
+        if ptype == PassageType.STAIRCASE:
             staircase_conns.append(conn)
             continue
 
@@ -146,7 +148,7 @@ def build_passages(
         fr_level  = levels[fr_offset]
         to_level  = levels[to_offset]
 
-        if ptype == "archway":
+        if ptype == PassageType.ARCHWAY:
             same_level_rooms = [r for r in rooms if room_z_offsets.get(r.room_id) == fr_offset]
             for fr in fr_list:
                 for to in to_list:
@@ -257,7 +259,7 @@ def build_passages(
                 )
                 if p:
                     passages.append(p)
-                    if sc_type == "external_vertical_ladder" or (sc_type == "vertical_ladder" and sc.get("on_the_edge", False)):
+                    if sc_type == StaircaseType.EXTERNAL_VERTICAL_LADDER or (sc_type == StaircaseType.VERTICAL_LADDER and sc.get("on_the_edge", False)):
                         # Прорубаем стену верхней комнаты — якорь снаружи её периметра
                         _upper_room  = to_room  if to_level.z > fr_level.z else fr_room
                         _upper_level = to_level if to_level.z > fr_level.z else fr_level

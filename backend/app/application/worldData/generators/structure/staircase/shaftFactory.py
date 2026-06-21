@@ -12,6 +12,7 @@ from random import Random
 
 from app.application.worldData.generators.structure.materialResolver import resolve_room_materials
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.staircase.staircaseType import StaircaseType
 from app.application.worldData.generators.structure.staircase.staircaseSize import (
     STRAIGHT_SIZE_PRESETS,
     USHAPE_SIZE_PRESETS,
@@ -35,12 +36,15 @@ _PRESET_MAP: dict[str, tuple[int, int]] = {
 }
 
 _DEFAULT_SIZE: dict[str, str] = {
-    "u_shape":  "sq_small",
-    "straight": "standard",
-    "standard": "standard",
-    "spiral":   "spiral_3",
+    StaircaseType.U_SHAPE:  "sq_small",
+    StaircaseType.STRAIGHT: "standard",
+    "standard":             "standard",
+    StaircaseType.SPIRAL:   "spiral_3",
 }
-_NO_SHAFT_TYPES = {"vertical_ladder", "external_vertical_ladder"}
+_NO_SHAFT_TYPES: frozenset[StaircaseType] = frozenset({
+    StaircaseType.VERTICAL_LADDER,
+    StaircaseType.EXTERNAL_VERTICAL_LADDER,
+})
 
 
 def _resolve_shaft_size(sc_entry: dict, staircase_type: str) -> tuple[int, int]:
@@ -111,7 +115,7 @@ def instantiate_shaft_rooms(
                 seg_z_height = abs(lv_to.z - lv_fr.z)
                 max_z_height = max(max_z_height, seg_z_height)
 
-        if staircase_type == "u_shape" and u_shape_march_depth(depth) < 1:
+        if staircase_type == StaircaseType.U_SHAPE and u_shape_march_depth(depth) < 1:
             logger.error(
                 "shaft factory | %r: shaft depth=%d gives march_depth=%d < 1 for u_shape",
                 staircase_id, depth, march_depth,

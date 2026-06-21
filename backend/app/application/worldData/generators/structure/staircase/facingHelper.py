@@ -1,4 +1,4 @@
-from app.application.worldData.generators.structure.facing import Facing
+from app.application.worldData.generators.facing import Facing
 
 _OPPOSITE: dict[str, str] = {
     Facing.NORTH: Facing.SOUTH,

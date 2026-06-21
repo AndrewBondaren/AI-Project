@@ -14,6 +14,7 @@ from app.application.worldData.generators.structure.passages.archwayValidator im
     validate_archway_frame,
     validate_archway_through,
 )
+from app.application.worldData.generators.structure.passages.passageType import PassageType
 from app.application.worldData.generators.structure.passages.shared import (
     _center_slice, _det_uuid, _shared_segment,
 )
@@ -87,6 +88,6 @@ def _build_archway(
         to_level_uid=to_level.level_uid,
         to_x=cx,
         to_y=cy,
-        system_passage_type="archway",
+        system_passage_type=PassageType.ARCHWAY,
         is_bidirectional=True,
     )

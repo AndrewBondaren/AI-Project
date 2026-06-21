@@ -106,6 +106,8 @@ async def run(args: argparse.Namespace) -> None:
             params["wall_material"] = args.wall
         if args.floor:
             params["floor_material"] = args.floor
+        if args.verbose:
+            params["verbose"] = "true"
 
         print(f"\n[→] Генерация: world={world_uid}  template={template_path.name}  pos=({args.x},{args.y},{args.z})\n")
 
@@ -122,10 +124,14 @@ async def run(args: argparse.Namespace) -> None:
 
         data = r.json()
 
-    _print_results(data, show_all=args.all, target_z=args.show_z)
+    _print_results(data, show_all=args.all, target_z=args.show_z, verbose=args.verbose)
 
 
-def _print_results(data: dict, show_all: bool, target_z: int | None) -> None:
+_STAIR_TYPES  = {"staircase", "stair_anchor", "stair_floor"}
+_LADDER_TYPES = {"ladder", "trapdoor"}
+
+
+def _print_results(data: dict, show_all: bool, target_z: int | None, verbose: bool = False) -> None:
     s = data["summary"]
     print("=== ИТОГ ===")
     print(f"  Уровней:  {s['levels']}")
@@ -140,8 +146,37 @@ def _print_results(data: dict, show_all: bool, target_z: int | None) -> None:
 
     print("\n--- Проходы ---")
     for p in data["passages"]:
+        if p["system_passage_type"] == "staircase":
+            continue
         fr = p["from_level_uid"] or "exterior"
         print(f"  {p['system_passage_type']:12s}  {fr} → {p['to_level_uid']}  to=({p['to_xy'][0]},{p['to_xy'][1]})")
+
+    validation = data.get("validation", {})
+    warnings = validation.get("warnings", [])
+    label = "--- Логи генерации ---" if verbose else f"--- Предупреждения ({validation.get('count', 0)}) ---"
+    if warnings or verbose:
+        print(f"\n{label}")
+        for w in warnings:
+            print(f"  {w}")
+
+    print("\n--- Лестница: все ячейки ---")
+    level_z = {lvl["level_uid"]: lvl["z"] for lvl in data["levels"]}
+    cells = data["cells"]
+    rows: list[tuple[int, int, int, str, str | None]] = [
+        (c["x"], c["y"], c["z"], "fr_anchor" if c["element"] == "stair_anchor" else c["element"], c.get("facing"))
+        for c in cells if c["element"] in _STAIR_TYPES | _LADDER_TYPES
+    ]
+    for p in data["passages"]:
+        if p["system_passage_type"] != "staircase":
+            continue
+        tz = level_z.get(p["to_level_uid"], 0)
+        rows.append((p["to_xy"][0], p["to_xy"][1], tz, "to_anchor", None))
+    if rows:
+        for x, y, z, t, facing in sorted(rows, key=lambda c: (c[2], c[0], c[1])):
+            f = f"facing={facing}" if facing else ""
+            print(f"  ({x},{y},z={z:+d}) {t:<14} {f}".rstrip())
+    else:
+        print("  (нет ячеек)")
 
     grids: dict[str, str] = data["grids"]
     level_zs = {lvl["z"] for lvl in data["levels"]}
@@ -181,6 +216,8 @@ def main() -> None:
     parser.add_argument("--all",   action="store_true", help="Показать все z включая промежуточные лестницы")
     parser.add_argument("--show-z", type=int, default=None, metavar="Z",
                         help="Показать только конкретный z-уровень")
+    parser.add_argument("--verbose", action="store_true",
+                        help="Показать DEBUG/INFO логи генерации")
     args = parser.parse_args()
     asyncio.run(run(args))
 

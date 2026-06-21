@@ -458,7 +458,8 @@ class UShapeBuilder(StaircaseBuilder):
             )
 
         params = _compute_u_params(ax, ay, w, d, facing, self.z_height, self.conn_label,
-                                   prev_fr_anchor=prev_anchor)
+                                   prev_fr_anchor=prev_anchor,
+                                   cells=self.cells, z_lo=self.z_lo)
 
         if params.march_depth < 1:
             raise ValueError(
