@@ -13,15 +13,13 @@ from app.application.worldData.generators.structure.cellFactory import _floor_ce
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.passageType import PassageType
 from app.application.worldData.generators.structure.passages.wallBreachPlacer import WallBreachPlacer
-from app.application.worldData.generators.structure.staircase.undergroundTunnel import (
-    _bfs_min_turns, _VEC_TO_FACING,
-)
+from app.application.worldData.generators.structure.passages.tunnelPathFinder import TunnelPathFinder
+from app.application.worldData.generators.structure.staircase.undergroundTunnel import _VEC_TO_FACING
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
 
 logger = logging.getLogger(__name__)
 
-_NEIGHBORS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 
 
 def _det_uuid(*parts: str) -> str:
@@ -81,7 +79,7 @@ class SurfaceCorridorBuilder:
         }
         target = to_interior if to_interior else to_fp
 
-        path = _bfs_min_turns(anchor, target, blocked)
+        path = TunnelPathFinder().find_path(anchor, target, blocked)
         if len(path) < 2:
             logger.error(
                 "surface_corridor %s: путь не найден от %s до комнаты %r",

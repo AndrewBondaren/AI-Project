@@ -19,6 +19,7 @@ from app.application.worldData.generators.structure.staircase.shaftFactory impor
 )
 from app.application.worldData.generators.structure.staircase.shaftPlacer import make_shaft_placer
 from app.application.worldData.generators.structure.passages.wallOpening import place_wall_openings
+from app.application.worldData.generators.structure.passages.corridorTrimmer import trim_corridor_rooms
 from app.application.worldData.generators.structure.structurePostProcess import run as _post_process
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
@@ -54,6 +55,15 @@ def _resolve_z_heights(template: dict) -> dict[int, int]:
     default = template.get("default_z_height", 3)
     return {
         level_def["z_offset"]: level_def.get("z_height") or default
+        for level_def in template["levels"]
+    }
+
+
+def _resolve_template_z_heights(template: dict) -> dict[int, int | None]:
+    """z_offset → explicit z_height from template (None if not specified at all)."""
+    template_default = template.get("default_z_height")
+    return {
+        level_def["z_offset"]: level_def.get("z_height") or template_default
         for level_def in template["levels"]
     }
 
@@ -177,11 +187,12 @@ class StructureGeneratorService:
         rng = Random(_make_seed(world.world_uid, building.location_uid))
 
         z_heights = _resolve_z_heights(template)
+        template_z_heights = _resolve_template_z_heights(template)
         levels    = _build_levels(template, building, z_heights)
         logger.info("levels resolved: %s", {z: (l.z, l.z_height) for z, l in levels.items()})
 
         all_rooms, room_z_offsets, shaft_by_staircase = self._instantiate_rooms(
-            template, building, levels, world, rng,
+            template, building, levels, world, rng, template_z_heights,
         )
         self._layout_rooms(template, building, all_rooms, room_z_offsets, shaft_by_staircase)
 
@@ -212,9 +223,11 @@ class StructureGeneratorService:
         levels: dict[int, LocationLevel],
         world: World,
         rng: Random,
+        template_z_heights: dict[int, int | None] | None = None,
     ) -> tuple[list[_RoomInstance], dict[str, int], dict[str, list[_RoomInstance]]]:
         """Steps 2-3: instantiate template rooms + shaft rooms per level."""
         logger.info("=== PHASE: instantiate rooms ===")
+        template_z_heights = template_z_heights or {}
         all_rooms: list[_RoomInstance] = []
         room_z_offsets: dict[str, int] = {}
 
@@ -224,6 +237,7 @@ class StructureGeneratorService:
             level_rooms = instantiate_level_rooms(
                 level_def, template, level.z_height, z_offset, world, rng,
                 building_tier=building.system_economic_tier,
+                template_z_height=template_z_heights.get(z_offset),
             )
             for room in level_rooms:
                 room_z_offsets[room.room_id] = z_offset
@@ -297,6 +311,8 @@ class StructureGeneratorService:
             self._propagate_trapdoor_starts(
                 z_offset, template, room_z_offsets, all_placed_by_id, level_start,
             )
+
+            trim_corridor_rooms(all_rooms, template)
 
             placed_rooms_this = [r for r in all_rooms if r.z_offset == z_offset and r.placed]
             if placed_rooms_this:

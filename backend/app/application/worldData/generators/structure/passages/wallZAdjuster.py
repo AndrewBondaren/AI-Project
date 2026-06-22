@@ -8,6 +8,9 @@ ZAdjuster.resolve(z_base, z_height) → list[int]
     z_base   — absolute Z of the room floor (level.z)
     z_height — room ceiling height in cells (room.z_height)
     Returns  — list of absolute Z values; WallDistributor runs for each.
+
+WindowHeightResolver decides how many z-levels a window spans.
+    calculate(z_height) → int
 """
 from __future__ import annotations
 
@@ -15,6 +18,20 @@ import math
 from abc import ABC, abstractmethod
 
 from app.application.worldData.generators.structure.structureElement import StructureElement
+
+
+class WindowHeightResolver(ABC):
+    @abstractmethod
+    def calculate(self, z_height: int) -> int:
+        ...
+
+
+class ProportionalWindowHeight(WindowHeightResolver):
+    def __init__(self, ratio: float) -> None:
+        self._ratio = ratio
+
+    def calculate(self, z_height: int) -> int:
+        return max(1, int(z_height * self._ratio))
 
 
 class ZAdjuster(ABC):
@@ -25,15 +42,19 @@ class ZAdjuster(ABC):
 
 class MiddleCellZAdjuster(ZAdjuster):
     """
-    Mid-height wall cell (floor=0, ceiling=z_height-1).
-    Formula: z_height // 2
-    z_height=3 → offset=1, z_height=4 → offset=2, z_height=5 → offset=2
+    Centered window spanning height_resolver.calculate(z_height) z-levels.
+    Window is centered vertically: start = (z_height - window_h) // 2
     """
+
+    def __init__(self, height_resolver: WindowHeightResolver) -> None:
+        self._height = height_resolver
 
     def resolve(self, z_base: int, z_height: int) -> list[int]:
         if z_height <= 0:
             return []
-        return [z_base + z_height // 2]
+        wh = self._height.calculate(z_height)
+        start = z_base + (z_height - wh) // 2
+        return list(range(start, start + wh))
 
 
 class ShaftZAdjuster(ZAdjuster):
@@ -58,7 +79,7 @@ class ShaftZAdjuster(ZAdjuster):
 # ---------------------------------------------------------------------------
 # Registry
 
-_MIDDLE_CELL = MiddleCellZAdjuster()
+_MIDDLE_CELL = MiddleCellZAdjuster(ProportionalWindowHeight(0.4))
 
 ZADJUSTER_BY_TYPE: dict[StructureElement, ZAdjuster] = {
     StructureElement.WINDOW:     _MIDDLE_CELL,

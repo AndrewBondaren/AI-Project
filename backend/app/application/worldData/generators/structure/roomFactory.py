@@ -50,6 +50,7 @@ def _resolve_size(
     shape: ShapeType,
     level_z_height: int,
     rng: Random,
+    template_z_height: int | None = None,
 ) -> tuple[int, int, int]:
     """Возвращает (width, depth, room_z_height)."""
     size = room_def["size"]
@@ -64,11 +65,15 @@ def _resolve_size(
         preset = ROOM_SIZE_PRESETS[RoomSize(size_type)]
         wr = preset.width_range
         dr = preset.depth_range
-        zr = size.get("z_range") or list(preset.z_range)
+        # template > preset; room z_range overrides both
+        tz = [template_z_height, template_z_height] if template_z_height else None
+        zr = size.get("z_range") or tz or list(preset.z_range)
     else:
         wr = size["width_range"]
         dr = size.get("depth_range", [3, 3])
-        zr = size.get("z_range", [3, 3])
+        # template > hardcoded default; room z_range overrides both
+        tz = [template_z_height, template_z_height] if template_z_height else None
+        zr = size.get("z_range") or tz or [3, 3]
 
     width = rng.randint(wr[0], wr[1])
     depth = rng.randint(dr[0], dr[1]) if shape not in _SHAPES_WITHOUT_DEPTH else width
@@ -121,6 +126,7 @@ def instantiate_level_rooms(
     world: World,
     rng: Random,
     building_tier: str | None = None,
+    template_z_height: int | None = None,
 ) -> list[_RoomInstance]:
     instances: list[_RoomInstance] = []
 
@@ -137,7 +143,7 @@ def instantiate_level_rooms(
 
         shape = _resolve_shape(room_def, rng)
         shape_params = _resolve_shape_params(room_def, rng)
-        width, depth, room_z = _resolve_size(room_def, shape, level_z_height, rng)
+        width, depth, room_z = _resolve_size(room_def, shape, level_z_height, rng, template_z_height)
 
         room_tier = room_def.get("economic_tier")
         template_tier = template.get("economic_tier")

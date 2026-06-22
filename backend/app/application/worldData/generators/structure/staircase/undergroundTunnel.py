@@ -8,16 +8,14 @@
 from __future__ import annotations
 
 import logging
-from collections import deque
 
 from app.application.worldData.generators.structure.cellBuilder import _wall_cell
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _open_cell
 from app.application.worldData.generators.facing import Facing
 from app.application.worldData.generators.structure.passages.wallBreachPlacer import WallBreachPlacer
+from app.application.worldData.generators.structure.passages.tunnelPathFinder import TunnelPathFinder
 
 logger = logging.getLogger(__name__)
-
-_NEIGHBORS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 
 _VEC_TO_FACING: dict[tuple[int, int], Facing] = {
     (1,  0): Facing.EAST,
@@ -25,77 +23,6 @@ _VEC_TO_FACING: dict[tuple[int, int], Facing] = {
     (0,  1): Facing.NORTH,
     (0, -1): Facing.SOUTH,
 }
-
-
-def _bfs_min_turns(
-    start:     tuple[int, int],
-    target_fp: set[tuple[int, int]],
-    blocked:   set[tuple[int, int]],
-) -> list[tuple[int, int]]:
-    """
-    0-1 BFS от start до ближайшей ячейки target_fp с минимальным числом поворотов.
-
-    Прямое движение (тот же dir_idx) = cost 0 → deque front.
-    Поворот (смена dir_idx)           = cost 1 → deque back.
-    State: (x, y, dir_idx); dir_idx=-1 для стартового псевдо-узла (нет направления).
-
-    Возвращает путь [(x, y), ...] от start до первой ячейки в target_fp включительно.
-    При неудаче возвращает [start].
-    """
-    INF = float("inf")
-    dist: dict[tuple[int, int, int], float] = {}
-    prev: dict[tuple[int, int, int], tuple[int, int, int] | None] = {}
-
-    start_key: tuple[int, int, int] = (start[0], start[1], -1)
-    dist[start_key] = 0.0
-    prev[start_key] = None
-
-    dq: deque[tuple[int, int, int]] = deque([start_key])
-    found_key: tuple[int, int, int] | None = None
-
-    all_x = [start[0]] + [x for x, _ in target_fp]
-    all_y = [start[1]] + [y for _, y in target_fp]
-    margin = max(max(all_x) - min(all_x), max(all_y) - min(all_y), 4)
-    x_min, x_max = min(all_x) - margin, max(all_x) + margin
-    y_min, y_max = min(all_y) - margin, max(all_y) + margin
-
-    while dq and found_key is None:
-        cx, cy, cd = dq.popleft()
-        cur_cost = dist[(cx, cy, cd)]
-
-        if (cx, cy) in target_fp and cd != -1:
-            found_key = (cx, cy, cd)
-            break
-
-        for di, (dx, dy) in enumerate(_NEIGHBORS):
-            nx, ny = cx + dx, cy + dy
-            if not (x_min <= nx <= x_max and y_min <= ny <= y_max):
-                continue
-            if (nx, ny) in blocked and (nx, ny) not in target_fp:
-                continue
-            turn_cost = 0 if (cd == -1 or di == cd) else 1
-            new_cost  = cur_cost + turn_cost
-            key = (nx, ny, di)
-            if new_cost < dist.get(key, INF):
-                dist[key] = new_cost
-                prev[key] = (cx, cy, cd)
-                if turn_cost == 0:
-                    dq.appendleft(key)
-                else:
-                    dq.append(key)
-
-    if found_key is None:
-        logger.warning("_bfs_min_turns: путь от %s до target_fp не найден", start)
-        return [start]
-
-    path_keys: list[tuple[int, int, int]] = []
-    key: tuple[int, int, int] | None = found_key
-    while key is not None:
-        path_keys.append(key)
-        key = prev.get(key)
-    path_keys.reverse()
-
-    return [(x, y) for x, y, _ in path_keys]
 
 
 class UndergroundTunnelBuilder:
@@ -161,7 +88,7 @@ class UndergroundTunnelBuilder:
         }
         target = fr_interior if fr_interior else fr_fp
 
-        path = _bfs_min_turns(anchor, target, blocked)
+        path = TunnelPathFinder().find_path(anchor, target, blocked)
         if len(path) < 2:
             logger.error(
                 "underground_tunnel %s: путь не найден от %s до нижней комнаты",
