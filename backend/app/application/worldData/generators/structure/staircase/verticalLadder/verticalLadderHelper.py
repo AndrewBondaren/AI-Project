@@ -33,7 +33,7 @@ class VerticalLadderParams:
     anchor:       tuple[int, int]           # XY-позиция лестницы; fr_anchor == to_anchor
     is_movable:   bool
     has_trapdoor: bool                       # физический люк на z_top
-    has_walls:       bool          = False   # стены вокруг столба (3 стороны, кроме entry)
+    has_walls:       bool          = False   # стены вокруг столба лестницы
     facing:          str | None    = None    # направление «наружу» (для has_walls)
     open_wall_shaft: str | None    = None    # материал окна в стенах шахты; None → глухие стены
 

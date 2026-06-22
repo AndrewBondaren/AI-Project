@@ -6,15 +6,12 @@ from __future__ import annotations
 
 import logging
 
-from app.application.worldData.generators.structure.cellBuilder import _wall_cell
 from app.application.worldData.generators.structure.cellFactory import (
-    _ladder_cell, _trapdoor_cell, _window_cell,
+    _ladder_cell, _trapdoor_cell,
 )
 from app.application.worldData.generators.structure.staircase.base import StaircaseBuilder
 from app.application.worldData.generators.structure.staircase.verticalLadder.verticalLadderHelper import (
     VerticalLadderParams,
-    _FACING_VEC,
-    _NEIGHBORS,
     _compute_vertical_ladder_params,
 )
 from app.application.worldData.generators.structure.staircase.verticalLadder.verticalLadderValidator import (
@@ -24,41 +21,13 @@ from app.application.worldData.generators.structure.staircase.verticalLadder.ver
 logger = logging.getLogger(__name__)
 
 
-def _place_enclosure_walls(
-    ax: int, ay: int,
-    z_lo: int, z_top: int,
-    facing: str | None,
-    world_uid: str, building_uid: str, mat: str,
-    cells: dict,
-    open_wall_shaft: str | None = None,
-) -> None:
-    """
-    Стены вокруг столба лестницы — 3 стороны, кроме entry (сторона здания).
-    entry = направление, противоположное facing.
-    Если facing не задан — закрываем все 4 стороны.
-    open_wall_shaft — материал окна; если задан, стены заменяются окнами.
-    """
-    facing_vec = _FACING_VEC.get(facing) if facing else None
-    entry_vec  = (-facing_vec[0], -facing_vec[1]) if facing_vec else None
-
-    for dx, dy in _NEIGHBORS:
-        if (dx, dy) == entry_vec:
-            continue  # эту сторону прорубит edge_ladder_passage
-        wx, wy = ax + dx, ay + dy
-        for z in range(z_lo, z_top):
-            if (wx, wy, z) not in cells:
-                if open_wall_shaft:
-                    cells[(wx, wy, z)] = _window_cell(wx, wy, z, world_uid, building_uid, open_wall_shaft)
-                else:
-                    cells[(wx, wy, z)] = _wall_cell(wx, wy, z, world_uid, building_uid, mat)
-
-
 class VerticalLadderBuilder(StaircaseBuilder):
     _validator = VerticalLadderValidator()
 
     def _build_fixed(
         self,
         params: VerticalLadderParams,
+        on_the_edge: bool,
     ) -> tuple[set[tuple[int, int, int]], tuple[int, int], tuple[int, int]]:
         ax, ay = params.anchor
         path_set: set[tuple[int, int, int]] = set()
@@ -72,16 +41,13 @@ class VerticalLadderBuilder(StaircaseBuilder):
                 ax, ay, self.z_top, self.world_uid, self.building_uid, self.mat,
             )
 
-        if params.has_walls:
-            _place_enclosure_walls(
-                ax, ay, self.z_lo, self.z_top, params.facing,
-                self.world_uid, self.building_uid, self.mat, self.cells,
-                open_wall_shaft=params.open_wall_shaft,
-            )
+        place_walls = params.has_walls or (on_the_edge and self.z_lo < 0)
+        if place_walls:
+            self._place_shaft_enclosure({(ax, ay)}, open_wall_shaft=params.open_wall_shaft)
 
         extras = []
         if params.has_trapdoor: extras.append("+trapdoor")
-        if params.has_walls:    extras.append("+walls")
+        if place_walls:         extras.append("+walls")
         logger.info(
             "vertical_ladder %s  fixed (%d,%d) z=%d..%d%s",
             self.conn_label, ax, ay, self.z_lo, self.z_top - 1,
@@ -92,6 +58,7 @@ class VerticalLadderBuilder(StaircaseBuilder):
     def _build_movable(
         self,
         params: VerticalLadderParams,
+        on_the_edge: bool,
     ) -> tuple[set[tuple[int, int, int]], tuple[int, int], tuple[int, int]]:
         raise NotImplementedError(f"vertical_ladder {self.conn_label}: movable not implemented")
 
@@ -116,9 +83,9 @@ class VerticalLadderBuilder(StaircaseBuilder):
         )
 
         if params.is_movable:
-            path_set, fr_anchor, to_anchor = self._build_movable(params)
+            path_set, fr_anchor, to_anchor = self._build_movable(params, on_the_edge)
         else:
-            path_set, fr_anchor, to_anchor = self._build_fixed(params)
+            path_set, fr_anchor, to_anchor = self._build_fixed(params, on_the_edge)
 
         self.path_set = path_set
 

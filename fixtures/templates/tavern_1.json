@@ -107,7 +107,7 @@
       "is_movable":     false,
       "has_trapdoor":   false,
       "near_wall":      false,
-      "on_the_edge":    false,
+      "on_the_edge":    true,
       "stops":          ["cellar", "kitchen"]
     },
     {
@@ -116,7 +116,7 @@
       "is_movable":     false,
       "has_trapdoor":   true,
       "facing":         "north",
-      "has_walls":      true,
+      "has_walls":      false,
       "open_wall_shaft": null,
       "stops":          ["cellar", "guest_room"]
     }

@@ -69,12 +69,20 @@ class UndergroundTunnelBuilder:
         if anchor in fr_fp:
             return False
 
+        anchor_shell = {
+            (anchor[0] + dx, anchor[1] + dy)
+            for dx in (-1, 0, 1)
+            for dy in (-1, 0, 1)
+            if not (dx == 0 and dy == 0)
+        }
+
         blocked = {
             (x, y)
             for (x, y, z), cell in self.cells.items()
             if z == self.z_lo
             and cell.system_building_element == "wall"
             and (x, y) not in fr_fp
+            and (x, y) not in anchor_shell
         }
 
         # Целимся во внутренние (не-стеновые) ячейки нижней комнаты, чтобы путь
@@ -113,30 +121,43 @@ class UndergroundTunnelBuilder:
         path_set_2d = {(x, y) for x, y in path}
         wu, bu, mat = self.world_uid, self.building_uid, self.mat
 
+        def _fits(h: int) -> bool:
+            for x, y in path[1:]:
+                for dz in range(1, h):
+                    existing = self.cells.get((x, y, self.z_lo + dz))
+                    if existing and existing.system_building_element != "wall":
+                        return False
+            return True
+
+        if _fits(self.passage_height):
+            actual_height = self.passage_height
+        elif _fits(3):
+            actual_height = 3
+        else:
+            actual_height = 2
+
         def _floor_open(x: int, y: int) -> None:
             self.cells[(x, y, self.z_lo)] = _floor_cell(x, y, self.z_lo, wu, bu, mat)
-            for z in range(self.z_lo + 1, self.z_lo + self.passage_height):
+            for z in range(self.z_lo + 1, self.z_lo + actual_height):
                 self.cells[(x, y, z)] = _open_cell(x, y, z, wu, bu, mat)
 
         wall_breach_placer = WallBreachPlacer(self.cells, wu, bu)
 
-        def _side_walls(x: int, y: int, skip: tuple[int, int] | None = None) -> None:
+        def _side_walls(x: int, y: int) -> None:
             for ddx in (-1, 0, 1):
                 for ddy in (-1, 0, 1):
                     if ddx == 0 and ddy == 0:
                         continue
                     nx, ny = x + ddx, y + ddy
-                    if (nx, ny) == skip:
-                        continue
                     if (nx, ny) in path_set_2d or (nx, ny) in fr_fp:
                         continue
-                    for z in range(self.z_lo, self.z_lo + self.passage_height):
+                    for z in range(self.z_lo, self.z_lo + actual_height):
                         if (nx, ny, z) not in self.cells:
                             self.cells[(nx, ny, z)] = _wall_cell(nx, ny, z, wu, bu, mat)
 
         # Якорь — только стены (shaft-ячейки не трогаем)
         ax, ay = path[0]
-        _side_walls(ax, ay, skip=path[1])
+        _side_walls(ax, ay)
 
         if len(path) >= 3:
             # Тоннельный пол
@@ -148,7 +169,7 @@ class UndergroundTunnelBuilder:
             bx, by = path[-2]
             px, py = path[-3]
             facing = _VEC_TO_FACING[(bx - px, by - py)]
-            wall_breach_placer.place_for_corridor(bx, by, self.z_lo, self.z_top, mat, facing, self.passage_height, self.conn_label)
+            wall_breach_placer.place_for_corridor(bx, by, self.z_lo, self.z_lo + actual_height, mat, facing, actual_height, self.conn_label)
             _side_walls(bx, by)
         else:
             # Якорь прямо у стены — дверь поставить некуда

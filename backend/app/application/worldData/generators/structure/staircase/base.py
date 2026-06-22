@@ -4,8 +4,8 @@ Base staircase builder. Each type inherits and implements build().
 import logging
 from abc import ABC, abstractmethod
 
-from app.application.worldData.generators.structure.cellBuilder import _interior
-from app.application.worldData.generators.structure.cellFactory import _floor_cell, _void_cell
+from app.application.worldData.generators.structure.cellBuilder import _interior, _wall_cell
+from app.application.worldData.generators.structure.cellFactory import _floor_cell, _void_cell, _window_cell
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.structureElement import (
     StructureElement, _PASSABLE_ELEMENTS, _STAIR_ELEMENTS,
@@ -124,6 +124,31 @@ class StaircaseBuilder(ABC):
             for (x, y) in interior:
                 if (x, y, z) not in self.path_set:
                     self.cells[(x, y, z)] = _void_cell(x, y, z, self.world_uid, self.building_uid)
+
+    def _place_shaft_enclosure(
+        self,
+        shaft_interior: set[tuple[int, int]],
+        open_wall_shaft: str | None = None,
+    ) -> None:
+        # замыкает периметр шахты: каждый 8-сосед снаружи shaft_interior → стена/окно
+        for ax, ay in shaft_interior:
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    if dx == 0 and dy == 0:
+                        continue
+                    wx, wy = ax + dx, ay + dy
+                    if (wx, wy) in shaft_interior:
+                        continue
+                    for z in range(self.z_lo, self.z_top):
+                        if (wx, wy, z) not in self.cells:
+                            if open_wall_shaft:
+                                self.cells[(wx, wy, z)] = _window_cell(
+                                    wx, wy, z, self.world_uid, self.building_uid, open_wall_shaft,
+                                )
+                            else:
+                                self.cells[(wx, wy, z)] = _wall_cell(
+                                    wx, wy, z, self.world_uid, self.building_uid, self.mat,
+                                )
 
     def lay_base_floor(self) -> None:
         """void → floor at z_lo (first flight only)."""
