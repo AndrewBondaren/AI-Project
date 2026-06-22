@@ -222,7 +222,10 @@
     },
     {
       "staircase_id":   "cellar_staircase",
-      "staircase_type": "trapdoor",
+      "staircase_type": "vertical_ladder",
+      "has_trapdoor":   true,
+      "on_the_edge":    true,
+      "closed_exit":    true,
       "stops":          ["cellar", "kitchen"]
     }
   ]
