@@ -521,7 +521,7 @@ class StructureGeneratorService:
             level       = levels[z_offset]
             level_rooms = [
                 r for r in all_rooms
-                if r.z_offset == z_offset and r.placed and not r.is_shaft
+                if r.z_offset == z_offset and r.placed
             ]
             level_fp: set[tuple[int, int]] = set()
             for r in level_rooms:

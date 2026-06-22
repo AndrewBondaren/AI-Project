@@ -44,16 +44,16 @@ def _exterior_cells(
     return cells
 
 
-def _adaptive_corner_cut(cells: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    """
-    §3.10 Правило 2, step 2: adaptive corner exclusion.
-    n ≤ 2 → skip; cut = clamp(n−3, 0, 2)
-    """
+def _corner_cut(cells: list[tuple[int, int]], cut: int) -> list[tuple[int, int]]:
     n = len(cells)
     if n <= 2:
         return []
-    cut = max(0, min(2, n - 3))
     return cells[cut: n - cut] if cut > 0 else list(cells)
+
+
+def _adaptive_corner_cut(cells: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """§3.10 Правило 2, step 2: cut = clamp(n−3, 0, 2)"""
+    return _corner_cut(cells, max(0, min(2, len(cells) - 3)))
 
 
 def compute_exterior_wall_profiles(
@@ -61,17 +61,14 @@ def compute_exterior_wall_profiles(
     all_fp: set[tuple[int, int]],
     z_base: int,
 ) -> dict[str, ExteriorWallProfile]:
-    """
-    For each placed non-shaft room, compute exterior wall available cells per direction.
-    Returns mapping room.uid_key → ExteriorWallProfile.
-    """
     profiles: dict[str, ExteriorWallProfile] = {}
     for room in rooms:
-        if not room.placed or room.is_shaft:
+        if not room.placed:
             continue
         walls: dict[str, list[tuple[int, int]]] = {}
         for direction in ("north", "south", "east", "west"):
-            cells = _adaptive_corner_cut(_exterior_cells(room, direction, all_fp))
+            raw = _exterior_cells(room, direction, all_fp)
+            cells = _corner_cut(raw, 1) if room.is_shaft else _adaptive_corner_cut(raw)
             if cells:
                 walls[direction] = cells
         profiles[room.uid_key] = ExteriorWallProfile(

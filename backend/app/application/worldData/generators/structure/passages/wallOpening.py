@@ -12,6 +12,7 @@ import logging
 import math
 from random import Random
 
+from app.application.worldData.generators.facing import Facing
 from app.application.worldData.generators.structure.cellFactory import _opening_cell
 from app.application.worldData.generators.structure.materialResolver import resolve_material
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
@@ -69,14 +70,35 @@ def _exclude_doors(
     return [c for c in cells if c not in forbidden]
 
 
-def _zone_positions(seg: list[tuple[int, int]]) -> list[tuple[int, int]]:
+def _zone_positions(
+    seg: list[tuple[int, int]],
+    shaft_facing: Facing | None = None,
+    direction: str | None = None,
+) -> list[tuple[int, int]]:
     """
     Zone-center placement (§3.10 Правило 2, step 5).
-    count = max(1, len // 3)
-    pos[i] = floor((i + 0.5) * len / count)
+    count = max(1, len // 3).
+    For shaft perpendicular walls, center index depends on which end is missing:
+      facing=SOUTH + E/W wall (high-y absent) → n//2
+      facing=WEST  + N/S wall (high-x absent) → n//2
+      facing=NORTH + E/W wall (low-y absent)  → (n-1)//2
+      facing=EAST  + N/S wall (low-x absent)  → (n-1)//2
+    Multi window: floor((i + 0.5) * n / count).
     """
     n = len(seg)
     count = max(1, n // 3)
+    if count == 1:
+        idx = (n - 1) // 2
+        if shaft_facing is not None and direction is not None:
+            if shaft_facing == Facing.SOUTH and direction in (Facing.EAST, Facing.WEST):
+                idx = n // 2
+            elif shaft_facing == Facing.WEST and direction in (Facing.NORTH, Facing.SOUTH):
+                idx = n // 2
+            elif shaft_facing == Facing.NORTH and direction in (Facing.EAST, Facing.WEST):
+                idx = (n - 1) // 2
+            elif shaft_facing == Facing.EAST and direction in (Facing.NORTH, Facing.SOUTH):
+                idx = (n - 1) // 2
+        return [seg[idx]]
     return [seg[min(math.floor((i + 0.5) * n / count), n - 1)] for i in range(count)]
 
 
@@ -113,12 +135,16 @@ def place_wall_openings(
         zadjuster = ZADJUSTER_BY_TYPE[element]
         z_list = zadjuster.resolve(level.z, profile.z_height)
 
+        shaft_facing = room.facing if room.is_shaft else None
         placed = 0
         for direction, wall_cells in profile.walls.items():
             available = _exclude_doors(wall_cells, cells_dict, level.z)
             for seg in _split_by_gaps(available):
-                for (x, y) in _zone_positions(seg):
+                for (x, y) in _zone_positions(seg, shaft_facing=shaft_facing, direction=direction):
                     for abs_z in z_list:
+                        existing = cells_dict.get((x, y, abs_z))
+                        if not existing or existing.system_building_element != StructureElement.WALL.value:
+                            continue
                         cells_dict[(x, y, abs_z)] = _opening_cell(
                             x, y, abs_z, world.world_uid, building_uid,
                             element.value, room.wall_material,

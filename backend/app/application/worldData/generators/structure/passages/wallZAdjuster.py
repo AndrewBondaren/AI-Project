@@ -25,18 +25,15 @@ class ZAdjuster(ABC):
 
 class MiddleCellZAdjuster(ZAdjuster):
     """
-    Middle cell of room height, rounded up.
-
-    Odd  z_height=5 → offset=3  (ceil(5/2))
-    Even z_height=4 → offset=2  (4/2)
-    Formula: min((z_height + 1) // 2, z_height - 1)
+    Mid-height wall cell (floor=0, ceiling=z_height-1).
+    Formula: z_height // 2
+    z_height=3 → offset=1, z_height=4 → offset=2, z_height=5 → offset=2
     """
 
     def resolve(self, z_base: int, z_height: int) -> list[int]:
         if z_height <= 0:
             return []
-        z_offset = min((z_height + 1) // 2, z_height - 1)
-        return [z_base + z_offset]
+        return [z_base + z_height // 2]
 
 
 class ShaftZAdjuster(ZAdjuster):
