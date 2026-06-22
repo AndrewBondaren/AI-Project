@@ -5,6 +5,7 @@ Vertical ladder validator.
 import logging
 
 from app.application.worldData.generators.structure.cellBuilder import _interior
+from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
 from app.application.worldData.generators.structure.staircase.validator import StaircaseValidator
 from app.application.worldData.generators.structure.staircase.verticalLadder.verticalLadderHelper import (
     _NEIGHBORS,
@@ -94,6 +95,24 @@ class VerticalLadderValidator(StaircaseValidator):
                 conn_label, ax, ay,
             )
 
+    def _check_anchor_headroom(
+        self,
+        ax:             int,
+        ay:             int,
+        z_top:          int,
+        cells:          dict,
+        passage_height: int,
+        conn_label:     str,
+    ) -> None:
+        checker = PassageHeightChecker(cells, passage_height)
+        for dz in range(1, passage_height + 1):
+            above = cells.get((ax, ay, z_top + dz))
+            if above is not None and checker._blocks_headroom(above.system_building_element):
+                logger.error(
+                    "vertical_ladder %s [headroom]: (%d,%d,z=%d) заблокирован на z=%d (%s)",
+                    conn_label, ax, ay, z_top, z_top + dz, above.system_building_element,
+                )
+
     def _check_anchors(
         self,
         fr_anchor:  tuple[int, int],
@@ -104,16 +123,18 @@ class VerticalLadderValidator(StaircaseValidator):
         conn_label: str,
         **kwargs,
     ) -> None:
-        ax, ay       = fr_anchor
-        has_trapdoor = kwargs.get("has_trapdoor", False)
-        fr_footprint = kwargs.get("fr_footprint")
-        to_footprint = kwargs.get("to_footprint")
-        on_the_edge  = kwargs.get("on_the_edge", False)
+        ax, ay         = fr_anchor
+        has_trapdoor   = kwargs.get("has_trapdoor", False)
+        fr_footprint   = kwargs.get("fr_footprint")
+        to_footprint   = kwargs.get("to_footprint")
+        on_the_edge    = kwargs.get("on_the_edge", False)
+        passage_height = kwargs.get("passage_height", 2)
         self._check_anchor_xy(fr_anchor, to_anchor, conn_label)
         self._check_fr_footprint(ax, ay, fr_footprint, on_the_edge, conn_label)
         self._check_ladder_cell(ax, ay, z_top, cells, conn_label)
         self._check_top_cell(ax, ay, z_top, cells, conn_label, has_trapdoor)
         self._check_to_footprint(ax, ay, to_footprint, conn_label)
+        self._check_anchor_headroom(ax, ay, z_top, cells, passage_height, conn_label)
 
     def validate(
         self,

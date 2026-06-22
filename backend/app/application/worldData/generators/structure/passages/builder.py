@@ -9,9 +9,9 @@ Builds all passages for a structure:
 import logging
 from random import Random
 
-from app.application.worldData.generators.structure.cellFactory import _floor_cell, _open_cell
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.archway import _build_archway
+from app.application.worldData.generators.structure.passages.staircaseTunnelOrchestrator import StaircaseTunnelOrchestrator
 from app.application.worldData.generators.structure.passages.archwayValidator import (
     validate_archway_through,
     validate_all_archway_frames,
@@ -19,8 +19,7 @@ from app.application.worldData.generators.structure.passages.archwayValidator im
 from app.application.worldData.generators.structure.passages.doorway import _build_doorway
 from app.application.worldData.generators.structure.passages.entry import _build_entry_point
 from app.application.worldData.generators.structure.passages.passageType import PassageType
-from app.application.worldData.generators.structure.passages.shared import _det_uuid
-from app.application.worldData.generators.structure.staircase.base import check_all_stair_headrooms
+from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
 from app.application.worldData.generators.structure.staircase.builder import build_staircase
 from app.application.worldData.generators.structure.staircase.staircaseType import StaircaseType
 from app.db.models.locationLevel import LocationLevel
@@ -31,67 +30,6 @@ from app.db.models.world import World
 logger = logging.getLogger(__name__)
 
 _NEIGHBORS = ((1, 0), (-1, 0), (0, 1), (0, -1))
-
-
-def _build_edge_ladder_passage(
-    fr_anchor:    tuple[int, int],
-    fr_room:      _RoomInstance,
-    fr_level:     LocationLevel,
-    cells:        dict[tuple, MapCell],
-    world_uid:    str,
-    building_uid: str,
-    sc_id:        str = "?",
-) -> "LocationPassage | None":
-    """
-    Прорубает проход в стене комнаты к вертикальной лестнице снаружи.
-
-    fr_anchor находится за периметром fr_room. Находим стеновую ячейку footprint fr_room,
-    смежную с fr_anchor, и заменяем её на floor + open — аналог archway шириной 1.
-    """
-    ax, ay = fr_anchor
-    fr_fp  = fr_room.get_footprint()
-
-    wall_cell: tuple[int, int] | None = None
-    for dx, dy in _NEIGHBORS:
-        nb = (ax + dx, ay + dy)
-        if nb in fr_fp:
-            wall_cell = nb
-            break
-
-    if wall_cell is None:
-        logger.error(
-            "edge_ladder %r: fr_anchor (%d,%d) не смежен ни с одной ячейкой footprint %r — "
-            "проход не построен",
-            sc_id, ax, ay, fr_room.room_id,
-        )
-        return None
-
-    wx, wy   = wall_cell
-    z_base   = fr_level.z
-    mat      = fr_room.floor_material
-
-    cells[(wx, wy, z_base)] = _floor_cell(wx, wy, z_base, world_uid, building_uid, mat)
-    for z in range(z_base + 1, z_base + fr_level.z_height):
-        cells[(wx, wy, z)] = _open_cell(wx, wy, z, world_uid, building_uid, mat)
-
-    logger.info(
-        "edge_ladder %r: passage at (%d,%d) z=%d..%d (fr_anchor=%s, room=%r)",
-        sc_id, wx, wy, z_base, z_base + fr_level.z_height - 1, fr_anchor, fr_room.room_id,
-    )
-
-    passage_uid = _det_uuid(building_uid, "edge_ladder", sc_id, fr_room.room_id)
-    return LocationPassage(
-        passage_uid=passage_uid,
-        world_uid=world_uid,
-        from_level_uid=fr_level.level_uid,
-        from_x=wx,
-        from_y=wy,
-        to_level_uid=fr_level.level_uid,
-        to_x=ax,
-        to_y=ay,
-        system_passage_type=PassageType.ARCHWAY,
-        is_bidirectional=True,
-    )
 
 
 def build_passages(
@@ -172,6 +110,7 @@ def build_passages(
     # --- Pass 2: staircases ---
 
     # New schema: iterate template["staircases"] and build per segment using shaft instances.
+
     if template and template.get("staircases"):
         shaft_by_id: dict[str, list[_RoomInstance]] = {}
         for r in rooms:
@@ -262,16 +201,24 @@ def build_passages(
                     if sc_builder:
                         passages.extend(sc_builder.extra_passages)
                     if sc_type == StaircaseType.EXTERNAL_VERTICAL_LADDER or (sc_type == StaircaseType.VERTICAL_LADDER and sc.get("on_the_edge", False)):
-                        if not getattr(sc_builder, "skip_edge_ladder", False):
-                            # Прорубаем стену верхней комнаты — якорь снаружи её периметра
-                            _upper_room  = to_room  if to_level.z > fr_level.z else fr_room
-                            _upper_level = to_level if to_level.z > fr_level.z else fr_level
-                            ep = _build_edge_ladder_passage(
-                                (p.from_x, p.from_y), _upper_room, _upper_level,
-                                cells, world_uid, building_uid, sc_id=sc_id,
-                            )
-                            if ep:
-                                passages.append(ep)
+                        _upper_room  = to_room  if to_level.z > fr_level.z else fr_room
+                        _upper_level = to_level if to_level.z > fr_level.z else fr_level
+                        _lower_room  = fr_room  if to_level.z > fr_level.z else to_room
+                        _lower_level = fr_level if to_level.z > fr_level.z else to_level
+                        anchor = (p.from_x, p.from_y)
+
+                        orchestrator = StaircaseTunnelOrchestrator(
+                            cells, world_uid, building_uid, mat,
+                            z_top=_upper_level.z,
+                            conn_label=sc_id,
+                            passage_height=passage_height,
+                        )
+                        ep = orchestrator.connect(anchor, _upper_room, _upper_level, sc_id=sc_id)
+                        if ep:
+                            passages.append(ep)
+                        ep = orchestrator.connect(anchor, _lower_room, _lower_level, sc_id=sc_id)
+                        if ep:
+                            passages.append(ep)
 
     # Old schema (backward compat): connections[passage_type=staircase].
     elif staircase_conns:
@@ -304,7 +251,7 @@ def build_passages(
                     passages.extend(sc_builder.extra_passages)
 
     # --- Post-generation headroom check (catches cross-segment conflicts) ---
-    check_all_stair_headrooms(cells, clearance=passage_height)
+    PassageHeightChecker(cells, passage_height).check_all_stair_headrooms(clearance=passage_height)
 
     # --- Deferred archway through-validation (runs after all staircase cells are placed) ---
     for arch_cells, z, conn_label in deferred_arch:

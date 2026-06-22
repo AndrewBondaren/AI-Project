@@ -11,6 +11,7 @@ import logging
 
 from app.application.worldData.generators.structure.cellBuilder import _wall_cell
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _open_cell
+from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
 from app.application.worldData.generators.facing import Facing
 from app.application.worldData.generators.structure.passages.wallBreachPlacer import WallBreachPlacer
 from app.application.worldData.generators.structure.passages.tunnelPathFinder import TunnelPathFinder
@@ -59,15 +60,15 @@ class UndergroundTunnelBuilder:
         self,
         anchor: tuple[int, int],
         fr_fp:  set[tuple[int, int]],
-    ) -> bool:
+    ) -> tuple[int, int] | None:
         """
         Строит тоннель от anchor до fr_fp.
 
         Вызывать только при z_lo < 0 и anchor ∉ fr_fp.
-        Возвращает True если тоннель построен.
+        Возвращает координаты ячейки пролома (bx, by) или None если тоннель не построен.
         """
         if anchor in fr_fp:
-            return False
+            return None
 
         anchor_shell = {
             (anchor[0] + dx, anchor[1] + dy)
@@ -102,16 +103,15 @@ class UndergroundTunnelBuilder:
                 "underground_tunnel %s: путь не найден от %s до нижней комнаты",
                 self.conn_label, anchor,
             )
-            return False
+            return None
 
-        self._place_tunnel(path, fr_fp)
-        return True
+        return self._place_tunnel(path, fr_fp)
 
     def _place_tunnel(
         self,
         path:  list[tuple[int, int]],
         fr_fp: set[tuple[int, int]],
-    ) -> None:
+    ) -> tuple[int, int] | None:
         """
         path[0]    = anchor лестницы (shaft-ячейки уже размещены, стены добавляем)
         path[1..-3]= тоннельный пол
@@ -121,20 +121,14 @@ class UndergroundTunnelBuilder:
         path_set_2d = {(x, y) for x, y in path}
         wu, bu, mat = self.world_uid, self.building_uid, self.mat
 
-        def _fits(h: int) -> bool:
-            for x, y in path[1:]:
-                for dz in range(1, h):
-                    existing = self.cells.get((x, y, self.z_lo + dz))
-                    if existing and existing.system_building_element != "wall":
-                        return False
-            return True
+        checker = PassageHeightChecker(self.cells, self.passage_height)
 
-        if _fits(self.passage_height):
-            actual_height = self.passage_height
-        elif _fits(3):
-            actual_height = 3
-        else:
-            actual_height = 2
+        def _fits(h: int) -> bool:
+            return all(checker.fits_column(x, y, self.z_lo + 1, h - 1) for x, y in path[1:])
+
+        actual_height = (
+            self.passage_height if _fits(self.passage_height) else checker.min_height
+        )
 
         def _floor_open(x: int, y: int) -> None:
             self.cells[(x, y, self.z_lo)] = _floor_cell(x, y, self.z_lo, wu, bu, mat)
@@ -159,6 +153,8 @@ class UndergroundTunnelBuilder:
         ax, ay = path[0]
         _side_walls(ax, ay)
 
+        breach_xy: tuple[int, int] | None = None
+
         if len(path) >= 3:
             # Тоннельный пол
             for x, y in path[1:-2]:
@@ -171,6 +167,7 @@ class UndergroundTunnelBuilder:
             facing = _VEC_TO_FACING[(bx - px, by - py)]
             wall_breach_placer.place_for_corridor(bx, by, self.z_lo, self.z_lo + actual_height, mat, facing, actual_height, self.conn_label)
             _side_walls(bx, by)
+            breach_xy = (bx, by)
         else:
             # Якорь прямо у стены — дверь поставить некуда
             logger.warning(
@@ -188,3 +185,4 @@ class UndergroundTunnelBuilder:
             "underground_tunnel %s: %d ячеек от %s до %s (z=%d..%d)",
             self.conn_label, len(path) - 1, path[0], path[-1], self.z_lo, self.z_top - 1,
         )
+        return breach_xy

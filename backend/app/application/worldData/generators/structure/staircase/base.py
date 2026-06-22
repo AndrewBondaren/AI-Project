@@ -6,17 +6,13 @@ from abc import ABC, abstractmethod
 
 from app.application.worldData.generators.structure.cellBuilder import _interior, _wall_cell
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _void_cell, _window_cell
+from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
-from app.application.worldData.generators.structure.structureElement import (
-    StructureElement, _PASSABLE_ELEMENTS, _STAIR_ELEMENTS,
-)
+from app.application.worldData.generators.structure.structureElement import StructureElement
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.mapCell import MapCell
 
 logger = logging.getLogger(__name__)
-
-def _blocks_headroom(elem: str) -> bool:
-    return elem not in _PASSABLE_ELEMENTS
 
 
 def sw_anchor(room: _RoomInstance) -> tuple[int, int]:
@@ -27,46 +23,6 @@ def sw_anchor(room: _RoomInstance) -> tuple[int, int]:
     xs = [x for x, _ in interior]
     ys = [y for _, y in interior]
     return (min(xs), min(ys))
-
-
-def check_headroom(
-    path_cells: list[tuple[int, int, int]],
-    cells: dict,
-    conn_label: str,
-    clearance: int,
-    z_lo: int,
-    z_top: int,
-) -> None:
-    for (x, y, z) in path_cells:
-        for dz in range(1, clearance + 1):
-            z_check = z + dz
-            if z_check > z_top:
-                continue
-            above = cells.get((x, y, z_check))
-            if above is not None and _blocks_headroom(above.system_building_element):
-                raise ValueError(
-                    f"staircase {conn_label!r}: headroom blocked at "
-                    f"({x},{y},z={z_check}) by {above.system_building_element!r}"
-                )
-
-
-def check_all_stair_headrooms(cells: dict, clearance: int = 2) -> None:
-    """
-    Постпроверка после того как все марши построены.
-    Проверяет все ячейки шахты — нет ли блокера на clearance уровней выше.
-    Блокером считается всё кроме archway и void.
-    """
-    for (x, y, z), cell in cells.items():
-        if cell.system_building_element not in _STAIR_ELEMENTS:
-            continue
-        for dz in range(1, clearance + 1):
-            above = cells.get((x, y, z + dz))
-            if above is not None and _blocks_headroom(above.system_building_element):
-                logger.error(
-                    "headroom | (%d,%d,z=%d) %s blocked at z=%d by %s",
-                    x, y, z, cell.system_building_element, z + dz,
-                    above.system_building_element,
-                )
 
 
 class StaircaseBuilder(ABC):
@@ -125,12 +81,38 @@ class StaircaseBuilder(ABC):
                 if (x, y, z) not in self.path_set:
                     self.cells[(x, y, z)] = _void_cell(x, y, z, self.world_uid, self.building_uid)
 
+    def _shaft_neighbors(self, shaft_interior: set[tuple[int, int]]) -> list[tuple[int, int]]:
+        return list({
+            (ax + dx, ay + dy)
+            for ax, ay in shaft_interior
+            for dx in (-1, 0, 1)
+            for dy in (-1, 0, 1)
+            if not (dx == 0 and dy == 0)
+            and (ax + dx, ay + dy) not in shaft_interior
+        })
+
     def _place_shaft_enclosure(
         self,
         shaft_interior: set[tuple[int, int]],
         open_wall_shaft: str | None = None,
     ) -> None:
-        # замыкает периметр шахты: каждый 8-сосед снаружи shaft_interior → стена/окно
+        shaft_height = self.z_top - self.z_lo
+        checker = PassageHeightChecker(self.cells, self.passage_height)
+        actual_height = checker.resolve_height(
+            self._shaft_neighbors(shaft_interior), self.z_lo, shaft_height,
+        )
+        if actual_height is None:
+            logger.warning(
+                "shaft_enclosure %s: не удалось разместить стены — нет подходящей высоты",
+                self.conn_label,
+            )
+            return
+        if actual_height < shaft_height:
+            logger.warning(
+                "shaft_enclosure %s: высота уменьшена %d→%d",
+                self.conn_label, shaft_height, actual_height,
+            )
+        z_hi = self.z_lo + actual_height
         for ax, ay in shaft_interior:
             for dx in (-1, 0, 1):
                 for dy in (-1, 0, 1):
@@ -139,7 +121,7 @@ class StaircaseBuilder(ABC):
                     wx, wy = ax + dx, ay + dy
                     if (wx, wy) in shaft_interior:
                         continue
-                    for z in range(self.z_lo, self.z_top):
+                    for z in range(self.z_lo, z_hi):
                         if (wx, wy, z) not in self.cells:
                             if open_wall_shaft:
                                 self.cells[(wx, wy, z)] = _window_cell(
@@ -149,6 +131,57 @@ class StaircaseBuilder(ABC):
                                 self.cells[(wx, wy, z)] = _wall_cell(
                                     wx, wy, z, self.world_uid, self.building_uid, self.mat,
                                 )
+        if actual_height < shaft_height:
+            for ax, ay in shaft_interior:
+                if (ax, ay, z_hi) not in self.cells:
+                    self.cells[(ax, ay, z_hi)] = _wall_cell(
+                        ax, ay, z_hi, self.world_uid, self.building_uid, self.mat,
+                    )
+
+    def _place_shaft_enclosure_closed(
+        self,
+        shaft_interior: set[tuple[int, int]],
+        z_hi: int,
+        open_wall_shaft: str | None = None,
+    ) -> None:
+        self._place_shaft_enclosure(shaft_interior, open_wall_shaft=open_wall_shaft)
+        ext_height = z_hi - self.z_top
+        if ext_height <= 0:
+            return
+        checker = PassageHeightChecker(self.cells, self.passage_height)
+        actual_ext = checker.resolve_height(
+            self._shaft_neighbors(shaft_interior), self.z_top, ext_height,
+        )
+        if actual_ext is None:
+            logger.warning(
+                "shaft_enclosure_closed %s: не удалось расширить стены выше z_top — пропускаем",
+                self.conn_label,
+            )
+            return
+        if actual_ext < ext_height:
+            logger.warning(
+                "shaft_enclosure_closed %s: расширение уменьшено %d→%d",
+                self.conn_label, ext_height, actual_ext,
+            )
+        z_ceiling = self.z_top + actual_ext
+        for ax, ay in shaft_interior:
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    if dx == 0 and dy == 0:
+                        continue
+                    wx, wy = ax + dx, ay + dy
+                    if (wx, wy) in shaft_interior:
+                        continue
+                    for z in range(self.z_top, z_ceiling + 1):
+                        if (wx, wy, z) not in self.cells:
+                            self.cells[(wx, wy, z)] = _wall_cell(
+                                wx, wy, z, self.world_uid, self.building_uid, self.mat,
+                            )
+        for ax, ay in shaft_interior:
+            if (ax, ay, z_ceiling) not in self.cells:
+                self.cells[(ax, ay, z_ceiling)] = _floor_cell(
+                    ax, ay, z_ceiling, self.world_uid, self.building_uid, self.mat,
+                )
 
     def lay_base_floor(self) -> None:
         """void → floor at z_lo (first flight only)."""

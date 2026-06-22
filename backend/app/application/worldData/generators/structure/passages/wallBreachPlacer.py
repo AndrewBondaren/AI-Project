@@ -8,7 +8,7 @@ place_for_corridor() — пробой стены для горизонтальн
 """
 from __future__ import annotations
 
-from app.application.worldData.generators.structure.cellFactory import _door_cell, _open_cell
+from app.application.worldData.generators.structure.cellFactory import _door_cell, _floor_cell, _open_cell
 from app.application.worldData.generators.facing import Facing
 from app.application.worldData.generators.structure.passages.doorValidator import validate_door_cell
 
@@ -18,6 +18,22 @@ class WallBreachPlacer:
         self._cells = cells
         self._wu    = world_uid
         self._bu    = building_uid
+
+    def place_for_archway(
+        self,
+        x: int,
+        y: int,
+        z_lo: int,
+        z_hi: int,
+        mat: str,
+    ) -> None:
+        """
+        Floor на z_lo + open на z_lo+1..z_hi-1, без двери.
+        Используется для пробоя стены без дверного проёма — арочный вход.
+        """
+        self._cells[(x, y, z_lo)] = _floor_cell(x, y, z_lo, self._wu, self._bu, mat)
+        for z in range(z_lo + 1, z_hi):
+            self._cells[(x, y, z)] = _open_cell(x, y, z, self._wu, self._bu, mat)
 
     def place_for_shaft(
         self,

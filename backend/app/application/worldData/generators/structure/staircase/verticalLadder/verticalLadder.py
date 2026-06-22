@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 
 from app.application.worldData.generators.structure.cellFactory import (
-    _ladder_cell, _trapdoor_cell,
+    _floor_cell, _ladder_cell, _trapdoor_cell,
 )
 from app.application.worldData.generators.structure.staircase.base import StaircaseBuilder
 from app.application.worldData.generators.structure.staircase.verticalLadder.verticalLadderHelper import (
@@ -23,6 +23,10 @@ logger = logging.getLogger(__name__)
 
 class VerticalLadderBuilder(StaircaseBuilder):
     _validator = VerticalLadderValidator()
+
+    @property
+    def _on_the_edge(self) -> bool:
+        return (self.sc_entry or {}).get("on_the_edge", False)
 
     def _build_fixed(
         self,
@@ -40,10 +44,19 @@ class VerticalLadderBuilder(StaircaseBuilder):
             self.cells[(ax, ay, self.z_top)] = _trapdoor_cell(
                 ax, ay, self.z_top, self.world_uid, self.building_uid, self.mat,
             )
+        else:
+            self.cells.setdefault(
+                (ax, ay, self.z_top),
+                _floor_cell(ax, ay, self.z_top, self.world_uid, self.building_uid, self.mat),
+            )
 
         place_walls = params.has_walls or (on_the_edge and self.z_lo < 0)
         if place_walls:
-            self._place_shaft_enclosure({(ax, ay)}, open_wall_shaft=params.open_wall_shaft)
+            if params.closed_exit:
+                z_hi = self.z_top + self.to_level.z_height
+                self._place_shaft_enclosure_closed({(ax, ay)}, z_hi=z_hi, open_wall_shaft=params.open_wall_shaft)
+            else:
+                self._place_shaft_enclosure({(ax, ay)}, open_wall_shaft=params.open_wall_shaft)
 
         extras = []
         if params.has_trapdoor: extras.append("+trapdoor")
@@ -67,10 +80,11 @@ class VerticalLadderBuilder(StaircaseBuilder):
         is_movable   = entry.get("is_movable",   False)
         has_trapdoor = entry.get("has_trapdoor", False)
         near_wall    = entry.get("near_wall",    False)
-        on_the_edge  = entry.get("on_the_edge",  False)
+        on_the_edge  = self._on_the_edge
         has_walls        = entry.get("has_walls",        False)
         facing           = entry.get("facing",           None)
         open_wall_shaft  = entry.get("open_wall_shaft",  None)
+        closed_exit      = entry.get("closed_exit",      False)
 
         params = _compute_vertical_ladder_params(
             self.fr, self.to,
@@ -79,7 +93,7 @@ class VerticalLadderBuilder(StaircaseBuilder):
             near_wall=near_wall, on_the_edge=on_the_edge,
             passage_height=self.passage_height,
             has_walls=has_walls, facing=facing,
-            open_wall_shaft=open_wall_shaft,
+            open_wall_shaft=open_wall_shaft, closed_exit=closed_exit,
         )
 
         if params.is_movable:
@@ -101,6 +115,7 @@ class VerticalLadderBuilder(StaircaseBuilder):
             on_the_edge=on_the_edge,
             is_movable=is_movable,
             has_trapdoor=has_trapdoor,
+            passage_height=self.passage_height,
         )
 
         return fr_anchor, to_anchor

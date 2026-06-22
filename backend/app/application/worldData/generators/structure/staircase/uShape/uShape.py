@@ -9,9 +9,8 @@ from app.application.worldData.generators.structure.cellBuilder import _interior
 from app.application.worldData.generators.structure.cellFactory import (
     _stair_cell, _stair_anchor_cell, _stair_floor_cell,
 )
-from app.application.worldData.generators.structure.staircase.base import (
-    StaircaseBuilder, check_headroom,
-)
+from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
+from app.application.worldData.generators.structure.staircase.base import StaircaseBuilder
 from app.application.worldData.generators.structure.staircase.uShape.uShapeValidator import (
     UShapeValidator,
 )
@@ -486,7 +485,9 @@ class UShapeBuilder(StaircaseBuilder):
             facing=facing
         )
 
-        check_headroom(stair_cells, self.cells, self.conn_label, 2, self.z_lo, self.z_top)
+        PassageHeightChecker(self.cells, self.passage_height).check_headroom(
+            stair_cells, self.conn_label, 2, self.z_lo, self.z_top,
+        )
 
         fr_anchor = (fx, fy)
 

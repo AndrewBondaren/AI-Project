@@ -108,6 +108,7 @@
       "has_trapdoor":   false,
       "near_wall":      false,
       "on_the_edge":    true,
+      "closed_exit":    true,
       "stops":          ["cellar", "kitchen"]
     },
     {

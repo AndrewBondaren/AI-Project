@@ -36,6 +36,7 @@ class VerticalLadderParams:
     has_walls:       bool          = False   # стены вокруг столба лестницы
     facing:          str | None    = None    # направление «наружу» (для has_walls)
     open_wall_shaft: str | None    = None    # материал окна в стенах шахты; None → глухие стены
+    closed_exit:     bool          = False   # закрытая шахта: стены до верха to_level + потолок
 
 
 def _is_corner_cell(
@@ -265,6 +266,7 @@ def _compute_vertical_ladder_params(
     has_walls:       bool       = False,
     facing:          str | None = None,
     open_wall_shaft: str | None = None,
+    closed_exit:     bool       = False,
 ) -> VerticalLadderParams:
     anchor = _compute_vertical_ladder_anchor(
         fr, to, cells, z_lo, z_top, near_wall, on_the_edge,
@@ -273,5 +275,5 @@ def _compute_vertical_ladder_params(
     return VerticalLadderParams(
         anchor=anchor, is_movable=is_movable,
         has_trapdoor=has_trapdoor, has_walls=has_walls, facing=facing,
-        open_wall_shaft=open_wall_shaft,
+        open_wall_shaft=open_wall_shaft, closed_exit=closed_exit,
     )
