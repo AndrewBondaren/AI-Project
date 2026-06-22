@@ -20,6 +20,7 @@ from app.application.worldData.generators.structure.staircase.shaftFactory impor
 from app.application.worldData.generators.structure.staircase.shaftPlacer import make_shaft_placer
 from app.application.worldData.generators.structure.passages.wallOpening import place_wall_openings
 from app.application.worldData.generators.structure.passages.corridorTrimmer import trim_corridor_rooms
+from app.application.worldData.generators.structure.passages.corridorConnector import connect_corridors
 from app.application.worldData.generators.structure.structurePostProcess import run as _post_process
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
@@ -200,6 +201,12 @@ class StructureGeneratorService:
 
         passages = self._run_passages(
             template, building, levels, all_rooms, room_z_offsets, cells_dict, world, rng,
+        )
+
+        connect_corridors(
+            all_rooms, cells_dict, levels,
+            world.world_uid, building.location_uid,
+            building.parent_wall_material or "stone",
         )
 
         self._place_wall_openings(template, building, levels, all_rooms, cells_dict, world, rng)
