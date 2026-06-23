@@ -10,6 +10,7 @@ from collections import deque
 
 from app.application.worldData.generators.structure.cellBuilder import _wall_cell
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _open_cell
+from app.application.worldData.generators.structure.structureElement import StructureElement
 from app.application.worldData.generators.facing import Facing
 from app.application.worldData.generators.structure.passages.tunnelPathFinder import TunnelPathFinder
 from app.application.worldData.generators.structure.passages.wallBreachPlacer import WallBreachPlacer
@@ -206,6 +207,9 @@ def _exterior_candidates(
     """
     Returns free cells adjacent to fp where the breach would open into a walkable interior.
     Skips candidates where the "through" cell (opposite side of the breach) is a wall.
+    Skips candidates where the through-cell at z_floor+1 is an ARCHWAY (open) cell —
+    this means the breach wall is already an archway threshold (e.g. staircase entry);
+    the tunnel should breach a different wall cell instead.
     """
     result: set[tuple[int, int]] = set()
     for cx, cy in fp:
@@ -217,6 +221,11 @@ def _exterior_candidates(
             tx, ty = cx - dx, cy - dy
             cell = cells.get((tx, ty, z_floor))
             if cell and cell.system_building_element == "wall":
+                continue
+            # If the cell above the through-cell is an archway (open), the breach
+            # position is already an archway threshold — skip, find a different candidate.
+            above = cells.get((tx, ty, z_floor + 1))
+            if above and above.system_building_element == StructureElement.ARCHWAY:
                 continue
             result.add((ex, ey))
     return list(result)
