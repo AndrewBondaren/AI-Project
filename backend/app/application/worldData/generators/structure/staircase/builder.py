@@ -1,4 +1,4 @@
-"""
+﻿"""
 Staircase builder — оркестратор.
 
 Читает staircase_type из room definition, диспатчит к нужному builder-классу,
@@ -7,7 +7,7 @@ Staircase builder — оркестратор.
 import logging
 import uuid
 
-from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.staircase.straight  import StraightBuilder
 from app.application.worldData.generators.structure.staircase.uShape    import UShapeBuilder
 from app.application.worldData.generators.structure.staircase.spiral    import SpiralBuilder

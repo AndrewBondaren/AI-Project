@@ -1,4 +1,4 @@
-"""
+﻿"""
 Vertical ladder staircase — вспомогательные функции.
 ТЗ: docs/tz_staircase_generation.md §8
 """
@@ -12,7 +12,7 @@ from app.application.worldData.generators.facing import Facing
 from app.application.worldData.generators.structure.structureElement import (
     StructureElement, _WALL_ELEMENTS, _PASSABLE_ELEMENTS,
 )
-from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 
 logger = logging.getLogger(__name__)
 

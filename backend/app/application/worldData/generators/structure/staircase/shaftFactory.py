@@ -1,4 +1,4 @@
-"""
+﻿"""
 Shaft factory — creates _RoomInstance(is_shaft=True) from staircases[] template entries.
 
 One _RoomInstance is created per z_offset that a shaft appears on.
@@ -11,7 +11,7 @@ import logging
 from random import Random
 
 from app.application.worldData.generators.structure.materialResolver import resolve_room_materials
-from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.staircase.staircaseType import StaircaseType
 from app.application.worldData.generators.structure.staircase.staircaseSize import (
     STRAIGHT_SIZE_PRESETS,

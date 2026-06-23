@@ -1,4 +1,4 @@
-"""
+﻿"""
 Post-layout trimming of corridor rooms.
 Runs after layout_level (mode_b), before cell generation and wall_openings.
 ТЗ: docs/tz_corridor_trim.md
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 
 logger = logging.getLogger(__name__)
 

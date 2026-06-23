@@ -1,4 +1,4 @@
-import hashlib
+﻿import hashlib
 import logging
 import uuid
 from collections import deque
@@ -12,8 +12,8 @@ from app.application.worldData.generators.structure.cellBuilder import build_lev
 from app.application.worldData.generators.structure.errors import GenerationError, UnsupportedShapeError
 from app.application.worldData.generators.structure.layoutEngine import layout_level
 from app.application.worldData.generators.structure.passages import build_passages
-from app.application.worldData.generators.structure.roomFactory import instantiate_level_rooms
-from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.room.roomFactory import instantiate_level_rooms
+from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.staircase.shaftFactory import (
     instantiate_shaft_rooms, _NO_SHAFT_TYPES,
 )
@@ -69,21 +69,21 @@ def _resolve_template_z_heights(template: dict) -> dict[int, int | None]:
     }
 
 
-def _compute_level_z(building_map_z: int, z_offset: int, z_heights: dict[int, int]) -> int:
+def _compute_level_z(building_map_z: int, z_offset: int, z_heights: dict[int, int], foundation_depth: int = 0) -> int:
     if z_offset == 0:
         return building_map_z
     if z_offset > 0:
         return building_map_z + sum(z_heights[k] for k in range(0, z_offset))
-    return building_map_z - sum(z_heights[k] for k in range(z_offset, 0))
+    return building_map_z - foundation_depth - sum(z_heights[k] for k in range(z_offset, 0))
 
 
 def _build_levels(template: dict, building: NamedLocation,
-                  z_heights: dict[int, int]) -> dict[int, LocationLevel]:
+                  z_heights: dict[int, int], foundation_depth: int = 0) -> dict[int, LocationLevel]:
     return {
         level_def["z_offset"]: LocationLevel(
             level_uid=_det_uuid(building.location_uid, f"level_{level_def['z_offset']}"),
             location_uid=building.location_uid,
-            z=_compute_level_z(building.map_z, level_def["z_offset"], z_heights),
+            z=_compute_level_z(building.map_z, level_def["z_offset"], z_heights, foundation_depth),
             z_height=z_heights[level_def["z_offset"]],
             display_name=level_def["display_name"],
             isolated=level_def.get("isolated", False),
@@ -179,17 +179,21 @@ class StructureGeneratorService:
         world: World,
         building: NamedLocation,
         template: dict,
+        ground_z: int | None = None,
+        foundation_depth: int = 0,
     ) -> StructureLayout:
         logger.info(
             "generate_from_template | start building=%s template=%s",
             building.location_uid, template.get("system_name", "?"),
         )
 
+        ground_z = ground_z if ground_z is not None else building.map_z
+
         rng = Random(_make_seed(world.world_uid, building.location_uid))
 
         z_heights = _resolve_z_heights(template)
         template_z_heights = _resolve_template_z_heights(template)
-        levels    = _build_levels(template, building, z_heights)
+        levels    = _build_levels(template, building, z_heights, foundation_depth)
         logger.info("levels resolved: %s", {z: (l.z, l.z_height) for z, l in levels.items()})
 
         all_rooms, room_z_offsets, shaft_by_staircase = self._instantiate_rooms(
@@ -201,6 +205,7 @@ class StructureGeneratorService:
 
         passages = self._run_passages(
             template, building, levels, all_rooms, room_z_offsets, cells_dict, world, rng,
+            ground_z=ground_z,
         )
 
         connect_corridors(
@@ -210,7 +215,7 @@ class StructureGeneratorService:
             world.default_passage_height,
         )
 
-        self._place_wall_openings(template, building, levels, all_rooms, cells_dict, world, rng)
+        self._place_wall_openings(template, building, levels, all_rooms, cells_dict, world, rng, ground_z=ground_z)
 
         _post_process(cells_dict)
 
@@ -510,6 +515,7 @@ class StructureGeneratorService:
         cells_dict: dict[tuple, MapCell],
         world: World,
         rng: Random,
+        ground_z: int = 0,
     ) -> list[LocationPassage]:
         """Steps 9-11: build passages (mutates cells_dict for door/staircase cells)."""
         for r in all_rooms:
@@ -521,6 +527,7 @@ class StructureGeneratorService:
             world.world_uid, building.location_uid, rng,
             world=world, template=template,
             building_tier=building.system_economic_tier,
+            ground_z=ground_z,
         )
         logger.info("passages | count=%d  total_cells=%d", len(passages), len(cells_dict))
         return passages
@@ -537,6 +544,7 @@ class StructureGeneratorService:
         cells_dict: dict[tuple, MapCell],
         world: World,
         rng: Random,
+        ground_z: int = 0,
     ) -> None:
         logger.info("=== PHASE: wall openings ===")
 
@@ -553,6 +561,7 @@ class StructureGeneratorService:
             place_wall_openings(
                 level_rooms, level_fp, cells_dict, level,
                 world, building.location_uid, rng,
+                ground_z=ground_z,
             )
 
     # ------------------------------------------------------------------

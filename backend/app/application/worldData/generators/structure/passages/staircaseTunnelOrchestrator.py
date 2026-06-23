@@ -1,4 +1,4 @@
-"""
+﻿"""
 Оркестратор соединения якоря лестницы с целевой комнатой.
 
 Стратегия выбирается по контексту:
@@ -13,7 +13,7 @@ import uuid
 
 from app.application.worldData.generators.structure.passages.passageType import PassageType
 from app.application.worldData.generators.structure.passages.wallBreachPlacer import WallBreachPlacer
-from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.staircase.surfaceCorridor import SurfaceCorridorBuilder
 from app.application.worldData.generators.structure.staircase.undergroundTunnel import UndergroundTunnelBuilder
 from app.db.models.locationLevel import LocationLevel
@@ -45,6 +45,7 @@ class StaircaseTunnelOrchestrator:
         *,
         conn_label:     str = "?",
         passage_height: int,
+        ground_z:       int = 0,
     ) -> None:
         self.cells          = cells
         self.world_uid      = world_uid
@@ -53,6 +54,7 @@ class StaircaseTunnelOrchestrator:
         self.z_top          = z_top
         self.conn_label     = conn_label
         self.passage_height = passage_height
+        self.ground_z       = ground_z
 
     def connect(
         self,
@@ -68,7 +70,7 @@ class StaircaseTunnelOrchestrator:
             if wall_cell in room_fp:
                 return self._archway(anchor, wall_cell, room, level, sc_id)
 
-        if level.z >= 0:
+        if level.z >= self.ground_z:
             return self._surface(anchor, room, level, sc_id)
         return self._underground(anchor, room, level, sc_id)
 

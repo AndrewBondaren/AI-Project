@@ -1,4 +1,4 @@
-"""
+﻿"""
 Создаёт _RoomInstance объекты из room_def шаблона.
 Решает: count, shape_type, размеры, shape_params, материалы, z_height.
 Координаты (origin_x/y) не проставляются — это задача _layoutEngine.
@@ -8,7 +8,7 @@ from random import Random
 
 from app.application.worldData.generators.structure.errors import UnsupportedShapeError
 from app.application.worldData.generators.structure.materialResolver import resolve_room_materials
-from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.shapeResolver import SizeShapeResolver
 from app.application.worldData.generators.structure.staircase.staircaseSize import (
     STRAIGHT_SIZE_PRESETS, StraightSize,
@@ -16,7 +16,7 @@ from app.application.worldData.generators.structure.staircase.staircaseSize impo
     SPIRAL_SIZE_PRESETS, SpiralSize,
     StaircaseSizePreset,
 )
-from app.application.worldData.generators.structure.roomSize import ROOM_SIZE_PRESETS, RoomSize
+from app.application.worldData.generators.structure.room.roomSize import ROOM_SIZE_PRESETS, RoomSize
 from app.application.worldData.generators.structure.shapeType import ShapeType, _V1_SHAPES
 from app.db.models.world import World
 

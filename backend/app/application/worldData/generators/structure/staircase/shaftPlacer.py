@@ -1,4 +1,4 @@
-"""
+﻿"""
 ShaftPlacer — стратегии размещения shaft в пространстве здания.
 ТЗ: docs/tz_staircase_generation.md §11
 
@@ -13,7 +13,7 @@ from abc import ABC, abstractmethod
 from app.application.worldData.generators.structure.layoutEngine import (
     _try_adjacent, _place_next_to_any, _DIRECTIONS,
 )
-from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 logger = logging.getLogger(__name__)
 
 

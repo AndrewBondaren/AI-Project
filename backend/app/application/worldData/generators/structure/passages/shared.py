@@ -1,10 +1,10 @@
-"""
+﻿"""
 Shared helpers for passage builders.
 """
 import uuid
 
 from app.application.worldData.generators.facing import Facing
-from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 
 _WALL_DIRS: dict[Facing, tuple[int, int]] = {
     Facing.SOUTH: (0, -1),

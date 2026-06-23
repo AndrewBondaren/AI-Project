@@ -1,4 +1,4 @@
-"""
+﻿"""
 Surface corridor — соединяет внешний якорь лестницы с верхней комнатой на уровне z_top.
 Аналог UndergroundTunnelBuilder, но работает горизонтально на поверхности.
 ТЗ: docs/tz_staircase_generation.md §8.1
@@ -10,7 +10,7 @@ import uuid
 
 from app.application.worldData.generators.structure.cellBuilder import _interior, _wall_cell
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _open_cell
-from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.passageType import PassageType
 from app.application.worldData.generators.structure.passages.wallBreachPlacer import WallBreachPlacer
 from app.application.worldData.generators.structure.passages.tunnelPathFinder import TunnelPathFinder

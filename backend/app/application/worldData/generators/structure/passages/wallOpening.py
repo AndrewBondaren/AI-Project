@@ -1,4 +1,4 @@
-"""
+﻿"""
 Wall opening placement. Implements §3.10 of tz_building_generator.md.
 
 Algorithm per direction per room:
@@ -15,7 +15,7 @@ from random import Random
 from app.application.worldData.generators.facing import Facing
 from app.application.worldData.generators.structure.cellFactory import _opening_cell
 from app.application.worldData.generators.structure.materialResolver import resolve_material
-from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.wallOpeningResolver import (
     ExteriorWallProfile,
     compute_exterior_wall_profiles,
@@ -110,9 +110,10 @@ def place_wall_openings(
     world: World,
     building_uid: str,
     rng: Random,
+    ground_z: int = 0,
 ) -> None:
     # §3.11: underground levels get no openings
-    if level.z < 0:
+    if level.z < ground_z:
         return
 
     occupied_xy = all_fp | {

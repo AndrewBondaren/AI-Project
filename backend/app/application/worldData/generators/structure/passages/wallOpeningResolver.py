@@ -1,4 +1,4 @@
-"""
+﻿"""
 Exterior wall profile computation for algorithmic window placement.
 See tz_building_generator.md §3.10 Правило 2, §3.11.
 """
@@ -7,7 +7,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
-from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 
 _DIR_DELTA: dict[str, tuple[int, int]] = {
     "north": (0, +1),

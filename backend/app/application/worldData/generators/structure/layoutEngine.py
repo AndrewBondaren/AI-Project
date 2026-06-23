@@ -1,4 +1,4 @@
-"""
+﻿"""
 Layout engine: sets origin_x/origin_y on each _RoomInstance.
 
 Coordinate system: x increases east, y increases north.
@@ -17,7 +17,7 @@ from collections import deque
 
 from app.application.worldData.generators.structure.errors import GenerationError
 from app.application.worldData.generators.facing import Facing
-from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 
 logger = logging.getLogger(__name__)
 

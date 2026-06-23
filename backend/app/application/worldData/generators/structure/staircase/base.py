@@ -1,4 +1,4 @@
-"""
+﻿"""
 Base staircase builder. Each type inherits and implements build().
 """
 import logging
@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from app.application.worldData.generators.structure.cellBuilder import _interior, _wall_cell
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _void_cell, _window_cell
 from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
-from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.structureElement import StructureElement
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.mapCell import MapCell

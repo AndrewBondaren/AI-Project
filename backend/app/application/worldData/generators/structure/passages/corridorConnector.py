@@ -1,4 +1,4 @@
-"""
+﻿"""
 Post-passages corridor connector.
 Runs after passages (build_passages), before wall_openings.
 ТЗ: docs/tz_corridor_connect.md
@@ -14,7 +14,7 @@ from app.application.worldData.generators.structure.structureElement import Stru
 from app.application.worldData.generators.facing import Facing
 from app.application.worldData.generators.structure.passages.tunnelPathFinder import TunnelPathFinder
 from app.application.worldData.generators.structure.passages.wallBreachPlacer import WallBreachPlacer
-from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.db.models.locationLevel import LocationLevel
 
 logger = logging.getLogger(__name__)

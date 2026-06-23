@@ -1,4 +1,4 @@
-"""
+﻿"""
 Main passage orchestrator.
 
 Builds all passages for a structure:
@@ -9,7 +9,7 @@ Builds all passages for a structure:
 import logging
 from random import Random
 
-from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.archway import _build_archway
 from app.application.worldData.generators.structure.passages.staircaseTunnelOrchestrator import StaircaseTunnelOrchestrator
 from app.application.worldData.generators.structure.passages.archwayValidator import (
@@ -44,6 +44,7 @@ def build_passages(
     world: World | None = None,
     template: dict | None = None,
     building_tier: str | None = None,
+    ground_z: int = 0,
 ) -> list[LocationPassage]:
     logger.info("=== PHASE: build_passages ===")
     passage_height: int = world.default_passage_height if world is not None else 2
@@ -212,6 +213,7 @@ def build_passages(
                             z_top=_upper_level.z,
                             conn_label=sc_id,
                             passage_height=passage_height,
+                            ground_z=ground_z,
                         )
                         ep = orchestrator.connect(anchor, _upper_room, _upper_level, sc_id=sc_id)
                         if ep:

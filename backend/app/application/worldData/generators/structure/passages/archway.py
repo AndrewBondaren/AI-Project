@@ -1,4 +1,4 @@
-"""
+﻿"""
 Archway passage builder.
 
 Rule: arch frame starts one z-level above the floor (z_base + 1).
@@ -9,7 +9,7 @@ import logging
 from app.application.worldData.generators.structure.cellFactory import (
     _floor_cell, _open_cell,
 )
-from app.application.worldData.generators.structure.roomInstance import _RoomInstance
+from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.archwayValidator import (
     validate_archway_frame,
     validate_archway_through,
