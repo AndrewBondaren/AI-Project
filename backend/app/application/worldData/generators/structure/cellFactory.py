@@ -118,6 +118,16 @@ def _floor_cell(x: int, y: int, z: int, world_uid: str, building_uid: str, mater
     )
 
 
+def _roof_cell(x: int, y: int, z: int, world_uid: str, building_uid: str, material: str) -> MapCell:
+    return MapCell(
+        world_uid=world_uid, x=x, y=y, z=z,
+        system_building_element=StructureElement.ROOF,
+        system_material=material,
+        is_structural=True,
+        location_uid=building_uid,
+    )
+
+
 def _opening_cell(
     x: int, y: int, z: int,
     world_uid: str, building_uid: str,

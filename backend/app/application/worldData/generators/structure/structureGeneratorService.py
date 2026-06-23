@@ -515,7 +515,7 @@ class StructureGeneratorService:
         cells_dict: dict[tuple, MapCell],
         world: World,
         rng: Random,
-        ground_z: int = 0,
+        ground_z: int,
     ) -> list[LocationPassage]:
         """Steps 9-11: build passages (mutates cells_dict for door/staircase cells)."""
         for r in all_rooms:
@@ -544,7 +544,7 @@ class StructureGeneratorService:
         cells_dict: dict[tuple, MapCell],
         world: World,
         rng: Random,
-        ground_z: int = 0,
+        ground_z: int,
     ) -> None:
         logger.info("=== PHASE: wall openings ===")
 

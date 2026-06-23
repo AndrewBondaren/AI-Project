@@ -10,6 +10,26 @@ from app.db.models.world import World
 _NEIGHBORS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 
 
+def _fill_column(
+    x: int, y: int, z_lo: int, z_hi: int, wu: str, bu: str, mat: str,
+) -> list[MapCell]:
+    """Floor at z_lo, walls above. Empty if z_lo >= z_hi."""
+    result: list[MapCell] = []
+    for z in range(z_lo, z_hi):
+        if z == z_lo:
+            result.append(_floor_cell(x, y, z, wu, bu, mat))
+        else:
+            result.append(_wall_cell(x, y, z, wu, bu, mat))
+    return result
+
+
+def _perimeter_only(footprint: set[tuple[int, int]]) -> set[tuple[int, int]]:
+    return {
+        (x, y) for x, y in footprint
+        if not all((x + dx, y + dy) in footprint for dx, dy in _NEIGHBORS)
+    }
+
+
 class FoundationBuilder:
     """
     Builds foundation cells below ground_z based on context.foundation_type.
@@ -30,11 +50,11 @@ class FoundationBuilder:
         terrain_surface: dict[tuple[int, int], int],
         ground_z: int,
     ) -> None:
-        self.world_uid      = world.world_uid
-        self.building_uid   = building.location_uid
-        self.context        = context
+        self.world_uid       = world.world_uid
+        self.building_uid    = building.location_uid
+        self.context         = context
         self.terrain_surface = terrain_surface
-        self.ground_z       = ground_z
+        self.ground_z        = ground_z
         self.mat = (
             context.foundation_material
             or building.parent_wall_material
@@ -53,35 +73,20 @@ class FoundationBuilder:
         return []
 
     def _slab(self, footprint: set[tuple[int, int]]) -> list[MapCell]:
-        fd   = self.context.foundation_depth
+        fd  = self.context.foundation_depth
         z_lo = self.ground_z - fd
         wu, bu, mat = self.world_uid, self.building_uid, self.mat
         result: list[MapCell] = []
         for x, y in footprint:
-            for z in range(z_lo, self.ground_z):
-                if z == z_lo:
-                    result.append(_floor_cell(x, y, z, wu, bu, mat))
-                else:
-                    result.append(_wall_cell(x, y, z, wu, bu, mat))
+            result.extend(_fill_column(x, y, z_lo, self.ground_z, wu, bu, mat))
         return result
 
     def _full(self, footprint: set[tuple[int, int]]) -> list[MapCell]:
-        fd   = self.context.foundation_depth
+        fd  = self.context.foundation_depth
         wu, bu, mat = self.world_uid, self.building_uid, self.mat
         result: list[MapCell] = []
         for x, y in footprint:
             surface_z = self.terrain_surface.get((x, y), self.ground_z - fd - 1)
             z_lo = min(surface_z + 1, self.ground_z - fd)
-            for z in range(z_lo, self.ground_z):
-                if z == z_lo:
-                    result.append(_floor_cell(x, y, z, wu, bu, mat))
-                else:
-                    result.append(_wall_cell(x, y, z, wu, bu, mat))
+            result.extend(_fill_column(x, y, z_lo, self.ground_z, wu, bu, mat))
         return result
-
-
-def _perimeter_only(footprint: set[tuple[int, int]]) -> set[tuple[int, int]]:
-    return {
-        (x, y) for x, y in footprint
-        if not all((x + dx, y + dy) in footprint for dx, dy in _NEIGHBORS)
-    }

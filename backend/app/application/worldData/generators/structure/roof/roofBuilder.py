@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import math
-
-from app.application.worldData.generators.structure.roof.gableRoof import GableRoof, _roof_cell
+from app.application.worldData.generators.structure.cellFactory import _roof_cell
+from app.application.worldData.generators.structure.roof.gableRoof import GableRoof, _shrink_roof_loop
 from app.application.worldData.generators.structure.structureContext import StructureContext
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
@@ -43,12 +42,10 @@ class RoofBuilder:
         if rt not in _SUPPORTED:
             return []
 
-        # footprint = ground-floor XY
         footprint = {(c.x, c.y) for c in cells if c.z == self.ground_z}
         if not footprint:
             return []
 
-        # top_z = first z above the highest existing cell
         top_z = max(c.z for c in cells) + 1
 
         if rt == "flat":
@@ -76,28 +73,16 @@ class RoofBuilder:
 
     def _hull(self, footprint: set[tuple[int, int]], top_z: int) -> list[MapCell]:
         """Hip/pyramid roof: shrink on both axes per z-unit."""
+        slope = self.context.slope_step
+        if slope <= 0:
+            raise ValueError(f"slope_step must be > 0, got {slope}")
         xs = [x for x, _ in footprint]
         ys = [y for _, y in footprint]
-        x_min, x_max = min(xs), max(xs)
-        y_min, y_max = min(ys), max(ys)
-
-        slope = self.context.slope_step
-        half  = min(x_max - x_min + 1, y_max - y_min + 1) / 2
-        peak  = math.ceil(half / slope)
-
         wu, bu, mat = self.world_uid, self.building_uid, self.mat
-        result: list[MapCell] = []
-
-        for dz in range(peak + 1):
-            shrink = int(dz * slope)
-            x_lo = x_min + shrink
-            x_hi = x_max - shrink
-            y_lo = y_min + shrink
-            y_hi = y_max - shrink
-            if x_lo > x_hi or y_lo > y_hi:
-                break
-            for x, y in footprint:
-                if x_lo <= x <= x_hi and y_lo <= y <= y_hi:
-                    result.append(_roof_cell(x, y, top_z + dz, wu, bu, mat))
-
-        return result
+        return _shrink_roof_loop(
+            footprint, top_z,
+            x_min=min(xs), x_max=max(xs),
+            y_min=min(ys), y_max=max(ys),
+            shrink_x=True, shrink_y=True,
+            slope=slope, wu=wu, bu=bu, mat=mat,
+        )
