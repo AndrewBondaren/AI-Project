@@ -3,11 +3,12 @@ Entry-point passage builder (main entrance / service entrance).
 """
 import logging
 
+from app.application.worldData.generators.facing import Facing
 from app.application.worldData.generators.structure.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.doorPlacer import DoorPlacer
 from app.application.worldData.generators.structure.passages.passageType import PassageType
 from app.application.worldData.generators.structure.passages.shared import (
-    _center_slice, _det_uuid, _exterior_cells_on_wall,
+    _DIRECTION_FACING, _det_uuid, _exterior_cells_on_wall,
 )
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
@@ -37,14 +38,23 @@ def _build_entry_point(
         return None
 
     width = ep.get("width", 1)
-    door_cells = _center_slice(ext_cells, width)
     mat = ep.get("frame_material") or room.wall_material
     z = level.z
 
-    height = max(ep.get("height", passage_height), passage_height)
-    placer = DoorPlacer(cells, world_uid, building_uid)
-    for (x, y) in door_cells:
-        placer.place(x, y, z, mat, height=height)
+    height  = max(ep.get("height", passage_height), passage_height)
+    facing  = _DIRECTION_FACING.get(direction, Facing.NORTH)
+    label   = f"entry:{room.room_id}"
+    placer  = DoorPlacer(cells, world_uid, building_uid)
+    valid   = placer.filter_passable_from_center(ext_cells, z, facing, allow_exterior=True)
+    if not valid:
+        logger.warning("entry_point room %r: нет валидных кандидатов на стене", room.room_id)
+        return None
+    door_cells = valid[:width]
+    placed  = [p for p in door_cells if placer.place(x=p[0], y=p[1], z=z, mat=mat, height=height, facing=facing, conn_label=label, allow_exterior=True)]
+    if not placed:
+        logger.warning("entry_point room %r: все позиции входа заблокированы", room.room_id)
+        return None
+    door_cells = placed
 
     cx, cy = door_cells[len(door_cells) // 2]
     passage_uid = _det_uuid(building_uid, f"entry{suffix}", room.room_id)

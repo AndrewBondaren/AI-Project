@@ -29,12 +29,13 @@ _VEC_TO_FACING: dict[tuple[int, int], Facing] = {
 
 
 def connect_corridors(
-    all_rooms:    list[_RoomInstance],
-    cells:        dict,
-    levels:       dict[int, LocationLevel],
-    world_uid:    str,
-    building_uid: str,
-    wall_mat:     str,
+    all_rooms:      list[_RoomInstance],
+    cells:          dict,
+    levels:         dict[int, LocationLevel],
+    world_uid:      str,
+    building_uid:   str,
+    wall_mat:       str,
+    passage_height: int,
 ) -> None:
     """
     For each level: find disconnected corridor pairs, build connecting tunnels.
@@ -102,6 +103,7 @@ def connect_corridors(
             _build_tunnel(
                 path, cells, world_uid, building_uid, wall_mat,
                 z_floor, z_height, A, B, non_corridor_fp, actual_w,
+                passage_height,
             )
             logger.info(
                 "connect | z=%d  %r ↔ %r: built tunnel  len=%d  w=%d",
@@ -290,6 +292,7 @@ def _build_tunnel(
     B:               _RoomInstance,
     non_corridor_fp: set[tuple[int, int]],
     width:           int,
+    passage_height:  int,
 ) -> None:
     a_fp = A.get_footprint()
     b_fp = B.get_footprint()
@@ -309,7 +312,7 @@ def _build_tunnel(
     all_path_cells = _expand_path(path, width)
 
     wu, bu = world_uid, building_uid
-    passage_height = min(z_height, 3)
+    passage_height = min(z_height - 1, passage_height)
 
     logger.info(
         "connect _build_tunnel | path[0]=%s path[-1]=%s breach_a=%s breach_b=%s",

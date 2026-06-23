@@ -40,11 +40,12 @@ def trim_corridor_rooms(
 
         attached       = [r for r in placed if r.attach_to == corridor.room_id]
         other_fp_cells = _other_shaft_cells(sc_id, corridor.z_offset, shaft_by_sc)
+        protected_cells = other_fp_cells | set(shaft.get_footprint())
 
         if corridor.depth >= corridor.width:
-            _trim_y(corridor, shaft, attached, other_fp_cells)
+            _trim_y(corridor, shaft, attached, protected_cells)
         else:
-            _trim_x(corridor, shaft, attached, other_fp_cells)
+            _trim_x(corridor, shaft, attached, protected_cells)
 
 
 # ---------------------------------------------------------------------------

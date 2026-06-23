@@ -5,7 +5,7 @@ from app.application.worldData.generators.structure.roomInstance import _RoomIns
 from app.application.worldData.generators.structure.passages.doorPlacer import DoorPlacer
 from app.application.worldData.generators.structure.passages.passageType import PassageType
 from app.application.worldData.generators.structure.passages.shared import (
-    _center_slice, _det_uuid, _shared_segment,
+    _det_uuid, _doorway_facing, _shared_segment,
 )
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
@@ -35,14 +35,23 @@ def _build_doorway(
     if width > len(shared):
         width = len(shared)
 
-    door_cells = _center_slice(shared, width)
     mat = conn.get("frame_material") or fr.wall_material
     z = fr_level.z
 
-    height = max(conn.get("height", passage_height), passage_height)
-    placer = DoorPlacer(cells, world_uid, building_uid)
-    for (x, y) in door_cells:
-        placer.place(x, y, z, mat, height=height)
+    height  = max(conn.get("height", passage_height), passage_height)
+    facing  = _doorway_facing(shared)
+    label   = f"{conn['from_room']}->{conn['to_room']}"
+    placer  = DoorPlacer(cells, world_uid, building_uid)
+    valid   = placer.filter_passable_from_center(shared, z, facing)
+    if not valid:
+        logger.warning("doorway %r->%r: нет валидных кандидатов на стене", conn["from_room"], conn["to_room"])
+        return None
+    door_cells = valid[:width]
+    placed  = [p for p in door_cells if placer.place(x=p[0], y=p[1], z=z, mat=mat, height=height, facing=facing, conn_label=label)]
+    if not placed:
+        logger.warning("doorway %r->%r: все позиции двери заблокированы", conn["from_room"], conn["to_room"])
+        return None
+    door_cells = placed
 
     cx, cy = door_cells[len(door_cells) // 2]
     passage_uid = _det_uuid(building_uid, "door", conn["from_room"], conn["to_room"])

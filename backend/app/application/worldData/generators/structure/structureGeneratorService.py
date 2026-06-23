@@ -207,6 +207,7 @@ class StructureGeneratorService:
             all_rooms, cells_dict, levels,
             world.world_uid, building.location_uid,
             building.parent_wall_material or "stone",
+            world.default_passage_height,
         )
 
         self._place_wall_openings(template, building, levels, all_rooms, cells_dict, world, rng)

@@ -33,6 +33,26 @@ def _center_slice(cells: list[tuple[int, int]], width: int) -> list[tuple[int, i
     return cells[start: start + width]
 
 
+def _doorway_facing(shared: list[tuple[int, int]]) -> Facing:
+    """Return facing axis for a doorway in the given shared wall segment.
+
+    Horizontal wall (all cells same y) → NORTH (walk along y-axis).
+    Vertical wall (all cells same x) → EAST (walk along x-axis).
+    """
+    if len(shared) < 2:
+        return Facing.NORTH
+    ys = {y for _, y in shared}
+    return Facing.NORTH if len(ys) == 1 else Facing.EAST
+
+
+_DIRECTION_FACING: dict[str, Facing] = {
+    "north": Facing.NORTH,
+    "south": Facing.SOUTH,
+    "east":  Facing.EAST,
+    "west":  Facing.WEST,
+}
+
+
 def _exterior_cells_on_wall(
     room: _RoomInstance,
     direction: str,
