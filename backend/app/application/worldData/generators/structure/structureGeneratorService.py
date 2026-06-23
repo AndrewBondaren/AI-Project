@@ -171,7 +171,7 @@ class StructureGeneratorService:
     Pure utility — no repositories, no async.
     Deterministic: same world_uid + same building_uid → same layout.
     Generates interior box: rooms, walls, passages.
-    Foundation + roof + porch — StructureAssembler (layer above).
+    Foundation + roof + porch — BuildingAssembler (layer above).
     """
 
     def generate_from_template(

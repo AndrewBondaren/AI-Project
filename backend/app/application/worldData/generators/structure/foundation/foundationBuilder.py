@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.application.worldData.generators.structure.cellBuilder import _wall_cell
 from app.application.worldData.generators.structure.cellFactory import _floor_cell
-from app.application.worldData.generators.structure.structureContext import StructureContext
+from app.application.worldData.generators.assemblers.structureAssembler.structureContext import StructureContext
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -34,7 +34,7 @@ class FoundationBuilder:
     """
     Builds foundation cells below ground_z based on context.foundation_type.
 
-    Priority: staircase cells from generator are NOT overwritten (enforced by StructureAssembler).
+    Priority: staircase cells from generator are NOT overwritten (enforced by BuildingAssembler).
 
     Types (v1):
       slab      — fd-thick slab at full footprint

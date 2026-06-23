@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.application.worldData.generators.structure.cellFactory import _roof_cell
 from app.application.worldData.generators.structure.roof.gableRoof import GableRoof, _shrink_roof_loop
-from app.application.worldData.generators.structure.structureContext import StructureContext
+from app.application.worldData.generators.assemblers.structureAssembler.structureContext import StructureContext
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -17,7 +17,7 @@ class RoofBuilder:
     flat   — single layer at top_z covering ground-floor footprint
     gable  — shrink on short axis (ridge line)
     hull   — shrink on both axes (hip/pyramid)
-    none   — no roof (guard at StructureAssembler level)
+    none   — no roof (guard at BuildingAssembler level)
     """
 
     def __init__(

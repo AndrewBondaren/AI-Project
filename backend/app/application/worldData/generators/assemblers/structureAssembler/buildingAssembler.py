@@ -1,6 +1,8 @@
+from app.application.worldData.generators.assemblers.structureAssembler.assemblerRegistry import ASSEMBLER_REGISTRY
+from app.application.worldData.generators.assemblers.structureAssembler.baseStructureAssembler import BaseStructureAssembler
 from app.application.worldData.generators.structure.foundation.foundationBuilder import FoundationBuilder
 from app.application.worldData.generators.structure.roof.roofBuilder import RoofBuilder
-from app.application.worldData.generators.structure.structureContext import StructureContext
+from app.application.worldData.generators.assemblers.structureAssembler.structureContext import StructureContext
 from app.application.worldData.generators.structure.structureGeneratorService import (
     StructureGeneratorService,
     StructureLayout,
@@ -19,9 +21,10 @@ def _build_terrain_surface(terrain_cells: list[MapCell]) -> dict[tuple[int, int]
     return surface
 
 
-class StructureAssembler:
+@ASSEMBLER_REGISTRY.register("building")
+class BuildingAssembler(BaseStructureAssembler):
     """
-    Wraps StructureGeneratorService with foundation + roof.
+    Assembler for above-ground structures: interior + optional foundation + optional roof.
 
     Cell priority (high → low):
       staircase cells from generator  — never overwritten
