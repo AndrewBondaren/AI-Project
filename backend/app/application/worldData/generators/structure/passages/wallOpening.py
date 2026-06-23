@@ -115,7 +115,12 @@ def place_wall_openings(
     if level.z < 0:
         return
 
-    profiles = compute_exterior_wall_profiles(rooms, all_fp, level.z)
+    occupied_xy = all_fp | {
+        (x, y)
+        for (x, y, z), cell in cells_dict.items()
+        if z == level.z and cell.system_building_element != StructureElement.WALL.value
+    }
+    profiles = compute_exterior_wall_profiles(rooms, occupied_xy, level.z)
     logger.info("wall_openings | z=%d  rooms=%d", level.z, len(rooms))
 
     for room in rooms:
