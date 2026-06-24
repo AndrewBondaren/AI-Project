@@ -19,27 +19,43 @@ CityAssembler
 
 ### CityAssembler
 **Знает:** city skeleton (economic_tier, architectural_style, dominant_material, settlement_density)  
-**Делает:** сетка улиц, типы кварталов, слоты зданий  
+**Делает:**
+- занимает ячейки карты мира под поселение
+- планирует город на ячейках; понимает топологию по z (наземный / подземный / воздушный — одновременно)
+- управляет топологией соединения ячеек города между собой (улицы, мосты, тоннели)
+- строит сетку улиц, определяет типы кварталов, нарезает слоты под здания
+
 **Подробнее:** [tz_city_generation.md](tz_city_generation.md)
 
 ### DistrictAssembler
 **Знает:** тип квартала, city skeleton  
-**Делает:** назначает `building_template` каждому слоту по structure_type + economic_tier  
+**Делает:**
+- вызывается несколько раз на каждой ячейке города — формирует несколько районов на одной ячейке
+- управляет топологией соединения районов между собой
+- выделяет размеры участков (`AreaSlot`) в зависимости от шаблонов построек в районе
+- назначает `building_template` каждому слоту по `structure_type` + `economic_tier`
+- имеет собственный шаблон типа района (аналог `building_template` — описывает структуру квартала)
+
 **Подробнее:** [tz_city_generation.md](tz_city_generation.md) — раздел 6 (алгоритм заполнения кварталов)
 
 ### StructureAreaAssembler
-**Знает:** слот (позиция + размер), шаблон, city skeleton, terrain  
+**Знает:** `AreaSlot` (список координат участка + facing), шаблон, city skeleton, terrain  
 **Делает:**
-- планировка участка: двор, забор (`barrier_template_registry`), малые постройки
+- полностью понимает топологию своей зоны и что находится в ней
+- знает facing area (сторона к улице = направление главного входа)
+- вычисляет координаты и размеры здания внутри участка из шаблона (`footprint` из `building_template_registry`)
 - выводит `StructureContext` из `structure_type` + `architectural_style` + terrain
-- вызывает `StructureAssembler`
+- планировка участка: двор, забор (`barrier_template_registry`; probability из шаблона), малые постройки
+- вызывает `StructureAssembler` для каждого здания на участке (главного и малых)
 
 **Источник `StructureContext`:** этот слой. Только он знает достаточно для вывода контекста.  
+**`AreaSlot`:** список (x, y) координат + `ground_z` + `facing: Facing` (какая сторона смотрит на улицу).  
 **Подробнее:** [tz_building_generator.md](tz_building_generator.md) — раздел 11 (StructureAssembler, StructureContext)
 
 ### StructureAssembler
 **Знает:** `StructureContext`, terrain_cells  
 **Делает:** фундамент + крыльцо/ступени + крыша поверх interior box  
+**Может быть вызван вне иерархии** — для кораблей, данжей и других структур, способных к перемещению (`is_mobile=true`).  
 **Подробнее:** [tz_building_generator.md](tz_building_generator.md) — раздел 11
 
 ### StructureGenerator (BuildingGeneratorService)
@@ -303,3 +319,190 @@ def generate_from_template(
 2. `_compute_level_z`: для `z_offset < 0` вычитать `foundation_depth`
 3. `place_wall_openings(... ground_z=ground_z)` — заменить `level.z < 0` на `level.z < ground_z`
 4. `StaircaseTunnelOrchestrator(... ground_z=ground_z)` — заменить `level.z >= 0` на `level.z >= ground_z`
+
+---
+
+## 7. Архитектура StructureAreaAssembler
+
+### 7.1 Контракты и типы данных
+
+**`CitySkeleton`** — поля скелета города, передаются сверху вниз по всей иерархии:
+
+```python
+@dataclass
+class CitySkeleton:
+    economic_tier:        str | None   # ref → worlds.economic_tier_registry
+    architectural_style:  str | None   # ref → worlds.architectural_style_registry
+    dominant_material:    str | None   # ref → worlds.material_registry
+    settlement_density:   str | None   # "sparse" | "medium" | "dense"
+    system_city_size:     str | None   # ref → worlds.city_size_registry
+    system_location_mood: str | None   # ref → worlds.location_mood_registry
+```
+
+Источник данных: поля `NamedLocation` поселения. Собирается `CityAssembler` и передаётся вниз без изменений.
+
+---
+
+**`AreaSlot`** — участок, выделенный `DistrictAssembler`:
+
+```python
+@dataclass
+class AreaSlot:
+    cells:    list[tuple[int, int]]   # (x, y) координаты участка без z
+    ground_z: int                      # уровень земли
+    facing:   Facing                   # сторона участка к улице → ориентация главного входа
+```
+
+`facing` определяет:
+- на какой стене здания будет `entry_point`
+- откуда идёт ворота в заборе
+
+---
+
+**`AreaLayout`** — результат сборки участка:
+
+```python
+@dataclass
+class AreaLayout:
+    building_location: NamedLocation          # создан StructureAreaAssembler
+    building_layout:   StructureLayout        # главное здание (из StructureAssembler)
+    barrier_cells:     list[MapCell]          # забор / стена (пусто до реализации)
+    yard_cells:        list[MapCell]          # двор (нет ТЗ)
+    small_layouts:     list[StructureLayout]  # малые постройки (нет ТЗ)
+```
+
+Возвращается вместо плоского `StructureLayout` — участок многоуровневый, слои не мешать.
+
+---
+
+### 7.2 Интерфейс StructureAreaAssembler
+
+```python
+class StructureAreaAssembler:
+
+    def assemble(
+        self,
+        world:         World,
+        slot:          AreaSlot,
+        template:      dict,
+        city_skeleton: CitySkeleton,
+        terrain_cells: list[MapCell] | None = None,
+    ) -> AreaLayout:
+        # 1. _place_building() — создаёт NamedLocation здания
+        #    вычисляет map_x/map_y/map_z из slot.cells + template footprint + slot.facing
+        # 2. _derive_context() — выводит StructureContext
+        #    из structure_type + architectural_style + terrain
+        # 3. ASSEMBLER_REGISTRY.get(structure_type).assemble(...)
+        #    → StructureLayout главного здания
+        # 4. _build_barrier() — генерирует забор по периметру slot.cells
+        #    probability из template["perimeter_barrier"]
+        # 5. yard_cells — нет ТЗ → []
+        # 6. small_layouts — нет ТЗ → []
+```
+
+Лог `INFO` на входе: `template.system_name`, `slot.facing`, `len(slot.cells)`.
+
+---
+
+### 7.3 Приватные методы (все скелетные — raise NotImplementedError)
+
+| Метод | Вход | Выход | Что делает |
+|---|---|---|---|
+| `_place_building` | `world, slot, template` | `NamedLocation` | Вычисляет позицию здания внутри участка; создаёт `NamedLocation` с `map_x/y/z` |
+| `_derive_context` | `template, city_skeleton, slot, terrain_cells` | `StructureContext` | Алгоритм: `structure_type` + `architectural_style` → foundation/roof; не описан (см. открытые вопросы) |
+| `_build_barrier` | `world, slot, template` | `list[MapCell]` | Забор по периметру slot.cells; читает `template["perimeter_barrier"]` + probability roll |
+
+---
+
+### 7.4 Файловая структура
+
+```
+generators/assemblers/
+  __init__.py
+  citySkeleton.py                     # CitySkeleton dataclass (shared; течёт City→District→Area)
+
+  cityAssembler/                      # скелет — следующий этап
+    __init__.py
+    cityAssembler.py
+    cityLayout.py                     # результат CityAssembler
+
+  districtAssembler/                  # скелет — следующий этап
+    __init__.py
+    districtSlot.py                   # входной контракт (от CityAssembler)
+    districtAssembler.py
+    districtLayout.py                 # результат DistrictAssembler
+
+  areaAssembler/                      # реализовано (скелет)
+    __init__.py
+    areaSlot.py                       # входной контракт (от DistrictAssembler)
+    areaLayout.py                     # результат StructureAreaAssembler
+    structureAreaAssembler.py
+
+  structureAssembler/                 # реализовано
+    __init__.py
+    assemblerRegistry.py
+    baseStructureAssembler.py
+    buildingAssembler.py
+    ruinsAssembler.py
+    resourceExtractionAssembler.py
+    vastHullAssembler.py
+    structureContext.py               # входной контракт (от StructureAreaAssembler)
+```
+
+**Принцип именования:**
+- `*Slot` живёт у **получателя** — это его входной контракт
+- `*Layout` живёт там же — это его выходной контракт
+- `citySkeleton` — исключение; cross-cutting, на уровне `assemblers/`
+
+---
+
+### 7.5 Система координат
+
+Единая система координат (x, y, z) в метрах — одна для всего движка (map_cells, NamedLocation, всё).
+
+**Глобальная ячейка карты** — конфигурируемая единица планирования города:
+```
+cell_size_m = world.map_settings["global_cell_size_m"]   # из БД; не хардкодится
+```
+
+Разграничение по слоям:
+
+| Слой | Единица | Тип в коде |
+|---|---|---|
+| `CityAssembler` | планирует в глобальных ячейках `(cell_x, cell_y)` сетки города | `int` |
+| `DistrictSlot` | мировые метры — `CityAssembler` вычисляет и укладывает в слот вместе с шаблоном | `int` |
+| `DistrictAssembler` | работает в мировых метрах из `slot.origin_x/y, width_m, depth_m` | `int` |
+| `AreaSlot` | абсолютные (x, y) в метрах; список ячеек | `list[tuple[int,int]]` |
+
+Один район может занимать всю глобальную ячейку: `width_m = depth_m = cell_size_m`.
+
+**`worlds.map_settings`** — добавить ключ:
+```json
+{ "global_cell_size_m": <int> }
+```
+Это новый ключ в существующем JSON-поле `worlds.map_settings` — схема БД не меняется, миграция не нужна. Устанавливается при создании мира.
+
+---
+
+### 7.6 Порядок реализации (снизу вверх)
+
+1. `citySkeleton.py` — чистый dataclass, нет зависимостей
+2. `areaSlot.py` — чистый dataclass, зависит только от `Facing`
+3. `areaLayout.py` — dataclass, зависит от `StructureLayout`, `MapCell`, `NamedLocation`
+4. `structureAreaAssembler.py` — оркестратор, зависит от всего выше + `ASSEMBLER_REGISTRY` + `StructureContext`
+
+Каждый шаг компилируется и импортируется независимо до следующего. Контракты зафиксированы на уровне типов — реализацию приватных методов дописывать по мере появления ТЗ.
+
+---
+
+### 7.6 Открытые вопросы
+
+| Вопрос | Статус |
+|---|---|
+| `_derive_context` — алгоритм вывода `StructureContext` из `structure_type` + `architectural_style` | не описан |
+| `_place_building` — правила позиционирования здания внутри участка (центрирование, offset от забора, facing-alignment) | не описан |
+| `_build_barrier` — алгоритм генерации ячеек забора по списку координат участка | не описан |
+| Малые постройки на участке | нет ТЗ |
+| `AreaLayout` ↔ `DistrictAssembler` — как район агрегирует результаты нескольких участков | нет ТЗ |
+| `DistrictAssembler` — механика дорог (внутренние улицы, тротуары, соединение с городскими магистралями) | нет ТЗ; `street_cells` в `DistrictLayout` зарезервированы |
+| `DistrictSlot.facing` — нужна ли ориентация к главной улице города на уровне района | отложено |
