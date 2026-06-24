@@ -14,7 +14,7 @@ from random import Random
 
 from app.application.worldData.generators.utils.facing import Facing
 from app.application.worldData.generators.structure.cellFactory import _opening_cell
-from app.application.worldData.generators.structure.materialResolver import resolve_material
+from app.application.worldData.generators.utils.materialResolver import resolve_material
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.wallOpeningResolver import (
     ExteriorWallProfile,
