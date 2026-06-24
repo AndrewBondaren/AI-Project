@@ -11,7 +11,7 @@ from collections import deque
 from app.application.worldData.generators.structure.cellBuilder import _wall_cell
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _open_cell
 from app.application.worldData.generators.structure.structureElement import StructureElement
-from app.application.worldData.generators.facing import Facing
+from app.application.worldData.generators.utils.facing import Facing
 from app.application.worldData.generators.structure.passages.tunnelPathFinder import TunnelPathFinder
 from app.application.worldData.generators.structure.passages.wallBreachPlacer import WallBreachPlacer
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance

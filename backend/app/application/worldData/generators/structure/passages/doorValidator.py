@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 
-from app.application.worldData.generators.facing import Facing
+from app.application.worldData.generators.utils.facing import Facing
 from app.application.worldData.generators.structure.structureElement import (
     StructureElement, _WALKABLE_ELEMENTS,
 )

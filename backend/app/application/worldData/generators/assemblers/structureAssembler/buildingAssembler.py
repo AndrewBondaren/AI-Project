@@ -1,5 +1,9 @@
+import logging
+
 from app.application.worldData.generators.assemblers.structureAssembler.assemblerRegistry import ASSEMBLER_REGISTRY
 from app.application.worldData.generators.assemblers.structureAssembler.baseStructureAssembler import BaseStructureAssembler
+
+logger = logging.getLogger(__name__)
 from app.application.worldData.generators.structure.foundation.foundationBuilder import FoundationBuilder
 from app.application.worldData.generators.structure.roof.roofBuilder import RoofBuilder
 from app.application.worldData.generators.assemblers.structureAssembler.structureContext import StructureContext
@@ -40,6 +44,10 @@ class BuildingAssembler(BaseStructureAssembler):
         context: StructureContext,
         terrain_cells: list[MapCell] | None = None,
     ) -> StructureLayout:
+        logger.info(
+            "BuildingAssembler | template=%s building=%s",
+            template.get("system_name", "?"), building.location_uid,
+        )
         ground_z        = context.ground_z if context.ground_z is not None else building.map_z
         terrain_surface = _build_terrain_surface(terrain_cells) if terrain_cells else {}
         fd              = context.foundation_depth if context.foundation_type != "none" else 0

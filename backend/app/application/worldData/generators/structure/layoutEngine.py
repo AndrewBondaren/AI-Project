@@ -16,7 +16,7 @@ import logging
 from collections import deque
 
 from app.application.worldData.generators.structure.errors import GenerationError
-from app.application.worldData.generators.facing import Facing
+from app.application.worldData.generators.utils.facing import Facing
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 
 logger = logging.getLogger(__name__)

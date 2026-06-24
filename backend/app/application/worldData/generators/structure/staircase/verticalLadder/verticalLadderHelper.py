@@ -8,7 +8,7 @@ import logging
 from dataclasses import dataclass, field
 
 from app.application.worldData.generators.structure.cellBuilder import _interior
-from app.application.worldData.generators.facing import Facing
+from app.application.worldData.generators.utils.facing import Facing
 from app.application.worldData.generators.structure.structureElement import (
     StructureElement, _WALL_ELEMENTS, _PASSABLE_ELEMENTS,
 )

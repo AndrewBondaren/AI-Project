@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 
-from app.application.worldData.generators.facing import Facing
+from app.application.worldData.generators.utils.facing import Facing
 from app.application.worldData.generators.structure.cellFactory import _door_cell
 from app.application.worldData.generators.structure.passages.doorValidator import (
     _THROUGH,

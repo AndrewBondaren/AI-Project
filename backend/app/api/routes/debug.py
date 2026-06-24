@@ -14,7 +14,7 @@ from app.application.worldData.generators.structure.structureGeneratorService im
     StructureGeneratorService,
 )
 from app.application.worldData.generators.structure.gridRenderer import render_all_levels, FACING_ARROW
-from app.application.worldData.generators.facing import Facing
+from app.application.worldData.generators.utils.facing import Facing
 from app.db.models.namedLocation import NamedLocation
 from datetime import datetime, timezone
 

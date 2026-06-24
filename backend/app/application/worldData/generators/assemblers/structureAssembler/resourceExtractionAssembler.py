@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 
 from app.application.worldData.generators.assemblers.structureAssembler.assemblerRegistry import ASSEMBLER_REGISTRY
@@ -6,6 +7,8 @@ from app.application.worldData.generators.structure.structureGeneratorService im
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -34,4 +37,8 @@ class ResourceExtractionAssembler(BaseStructureAssembler):
         context: ResourceExtractionContext,
         terrain_cells: list[MapCell] | None = None,
     ) -> StructureLayout:
+        logger.info(
+            "ResourceExtractionAssembler | template=%s building=%s",
+            template.get("system_name", "?"), building.location_uid,
+        )
         raise NotImplementedError

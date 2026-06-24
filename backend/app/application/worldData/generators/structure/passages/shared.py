@@ -3,7 +3,7 @@ Shared helpers for passage builders.
 """
 import uuid
 
-from app.application.worldData.generators.facing import Facing
+from app.application.worldData.generators.utils.facing import Facing
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 
 _WALL_DIRS: dict[Facing, tuple[int, int]] = {
