@@ -15,6 +15,20 @@ CityAssembler
 
 ---
 
+## 1.1 Архитектурный принцип: semantic-first generation
+
+`economic_tier` — это **семантический дескриптор намерения**, а не конфигурация конкретных деталей. Разработчик описывает *что* (бедный район, богатый квартал), генератор сам разворачивает из этого *как*:
+
+- материал дороги и покрытие
+- тип и плотность освещения
+- ширина тротуара, наличие бордюра
+- тип и качество забора
+- шаблон здания из `building_template_registry`
+
+Этот принцип действует на всех уровнях иерархии. Ни один слой не хардкодит конкретные значения — все детали резолвятся через реестры по тиру и стилю.
+
+---
+
 ## 2. Слои
 
 ### CityAssembler
@@ -44,7 +58,7 @@ CityAssembler
 - полностью понимает топологию своей зоны и что находится в ней
 - знает facing area (сторона к улице = направление главного входа)
 - вычисляет координаты и размеры здания внутри участка из шаблона (`footprint` из `building_template_registry`)
-- выводит `StructureContext` из `structure_type` + `architectural_style` + terrain
+- выводит `StructureContext` из `structure_type` + terrain + `economic_tier`
 - планировка участка: двор, забор (`barrier_template_registry`; probability из шаблона), малые постройки
 - вызывает `StructureAssembler` для каждого здания на участке (главного и малых)
 
@@ -131,6 +145,7 @@ CityAssembler
 class StructureContext:
     foundation_type:     str               # "none"|"slab"|"perimeter"|"full"|"stilts"|"hull"
     roof_type:           str | list[str]   # "none"|"flat"|"gable"|"hull"|"auto" или список с приоритетом
+    facing:              Facing | None = None  # сторона главного входа; None → определяется шаблоном
     foundation_depth:    int   = 1         # z-юниты вглубь; для "slab"/"hull" — фикс. толщина
     slope_step:          float = 1.0       # shrink за 1 z-юнит; 1.0 ≈ 45°; только для скатных крыш
     foundation_material: str | None = None # fallback: building.parent_wall_material
@@ -139,6 +154,9 @@ class StructureContext:
     porch_has_roof:      bool = False      # навес над крыльцом
     ground_z:            int | None = None # None → building.map_z
 ```
+
+`facing` пробрасывается из `AreaSlot.facing` через `StructureAreaAssembler._derive_context`.
+`None` означает что шаблон сам определяет расположение входа (для изолированных структур без улицы).
 
 `StructureContext` не хранится в шаблоне — шаблон описывает только interior.
 Источник: `StructureAreaAssembler` (из city-пайплайна) или ручной выбор в UI.
@@ -173,20 +191,20 @@ terrain_surface: dict[tuple[int,int], int]
 
 ---
 
-### 6.3 Хардкоды z=0 в генераторе — баги и фикс
+### 6.3 Хардкоды z=0 в генераторе — ✅ реализовано
 
 Три места в `StructureGeneratorService` и его подсистемах используют `z = 0` как уровень земли:
 
-| Файл | Место | Проблема | Фикс |
-|---|---|---|---|
-| `passages/wallOpening.py:115` | `if level.z < 0: return` | Нет окон на подземных уровнях | `level.z < ground_z` |
-| `passages/staircaseTunnelOrchestrator.py:71` | `if level.z >= 0:` | Выбор surface vs underground стратегии тоннеля | `level.z >= ground_z` |
-| `staircase/builder.py:60-61` | `fr.z_offset >= 0 and to.z_offset < 0` | Авто-выбор типа лестницы (old schema) | `fr.z_offset` относителен шаблону — **ok**, не трогать |
+| Файл | Место | Статус |
+|---|---|---|
+| `passages/wallOpening.py:116` | `if level.z < ground_z: return` | ✅ исправлено |
+| `passages/staircaseTunnelOrchestrator.py:73` | `if level.z >= self.ground_z:` | ✅ исправлено |
+| `staircase/builder.py:60-61` | `fr.z_offset >= 0 and to.z_offset < 0` | не трогать — `z_offset` относителен шаблону, всегда корректен |
 
-`z_offset` в шаблоне (0 = ground floor) — всегда корректен, не зависит от абсолютных координат.
+`z_offset` в шаблоне (0 = ground floor) — не зависит от абсолютных координат.
 `level.z` — абсолютная координата в мире — сравнивать только с `ground_z`.
 
-**Интерфейс:** `ground_z` передаётся через `generate_from_template`:
+`ground_z` передаётся через `generate_from_template`:
 
 ```python
 StructureGeneratorService().generate_from_template(
@@ -198,21 +216,14 @@ StructureGeneratorService().generate_from_template(
 
 ---
 
-### 6.4 basement z-shift — сдвиг подвалов под фундамент
+### 6.4 basement z-shift — ✅ реализовано
 
-**Проблема:** при наличии фундамента подвальные уровни должны располагаться ниже фундаментного слоя.
+При наличии фундамента подвальные уровни располагаются ниже фундаментного слоя.
 
-Текущий `_compute_level_z` для `z_offset < 0`:
-```
-z = building.map_z - Σ(z_height for z_offset in N..-1)
-```
-
-Нужно:
+`_compute_level_z` для `z_offset < 0`:
 ```
 z = building.map_z - foundation_depth - Σ(z_height for z_offset in N..-1)
 ```
-
-Фикс: добавить `foundation_depth: int = 0` в `generate_from_template` → пробросить в `_compute_level_z`.
 
 Пример, `foundation_depth=2`, подвал `z_height=3`, `building.map_z=0`:
 ```
@@ -545,7 +556,7 @@ Envelope здания (реальные размеры по x/y/z) нельзя 
 
 | Вопрос | Статус |
 |---|---|
-| `_derive_context` — алгоритм вывода `StructureContext` из `structure_type` + `architectural_style` | не описан |
+| `_derive_context` — алгоритм вывода `StructureContext` из `structure_type` + terrain + `economic_tier` | не описан |
 | `_place_building` — правила позиционирования здания внутри участка (центрирование, offset от забора, facing-alignment) | не описан |
 | `_build_barrier` — алгоритм генерации ячеек забора по списку координат участка | не описан |
 | Малые постройки на участке | нет ТЗ |
