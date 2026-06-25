@@ -132,7 +132,7 @@ def _apply_through_roads(
     """
     Для каждой пары through_road (вход + выход на противоположных гранях)
     соединяет ближайшие узлы сетки прямым коридором.
-    Узлы из CityAssembler (entry_nodes) добавляются в node_grid и
+    Узлы из SettlementAssembler (entry_nodes) добавляются в node_grid и
     подключаются к ближайшему узлу сетки на своей грани.
     """
     through_map: dict[str, ConnectionEntry] = {}
@@ -157,7 +157,7 @@ def _apply_through_roads(
         if exit_entry is None:
             continue
 
-        # Вставляем pre-built узлы CityAssembler в граф
+        # Вставляем pre-built узлы SettlementAssembler в граф
         node_in  = entry.node
         node_out = exit_entry.node
 

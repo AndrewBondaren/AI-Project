@@ -10,14 +10,14 @@ class DistrictSlot:
     """
     Позиция размещённого шаблона района.
 
-    Создаётся CityAssembler после проверки placement_conditions шаблона.
+    Создаётся SettlementAssembler после проверки placement_conditions шаблона.
     district_template — уже выбранный шаблон; условия гарантированно выполнены.
 
-    Координаты в мировых метрах — вычислены CityAssembler из:
+    Координаты в мировых метрах — вычислены SettlementAssembler из:
         origin_x = cell_x * cell_size_m + offset
         cell_size_m = world.map_cell_size_m
 
-    entry_nodes — точки входа/выхода на гранях района, созданные CityAssembler.
+    entry_nodes — точки входа/выхода на гранях района, созданные SettlementAssembler.
     DistrictAssembler прокладывает through_road-коридоры от этих точек,
     затем строит внутреннюю сетку вокруг них.
     """

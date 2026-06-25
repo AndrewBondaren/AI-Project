@@ -4,7 +4,7 @@ from dataclasses import dataclass
 @dataclass
 class CitySkeleton:
     """
-    Поля скелета поселения. Создаётся CityAssembler из NamedLocation поселения
+    Поля скелета поселения. Создаётся SettlementAssembler из NamedLocation поселения
     и передаётся вниз по иерархии без изменений.
 
     Все поля nullable — поселение может существовать без части атрибутов.

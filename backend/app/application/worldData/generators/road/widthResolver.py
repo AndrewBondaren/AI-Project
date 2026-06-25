@@ -28,7 +28,7 @@ def resolve_width(
     None — у типов без физических ячеек (portal, air_route, sea_route).
 
     settlement_gate наследует ширину продолжающегося ребра — резолв выполняется
-    на уровне CityAssembler, не здесь.
+    на уровне SettlementAssembler, не здесь.
     """
     if connection_type in _FIXED:
         return _FIXED[connection_type]

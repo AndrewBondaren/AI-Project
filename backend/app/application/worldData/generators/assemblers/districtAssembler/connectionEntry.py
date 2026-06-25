@@ -6,7 +6,7 @@ from app.db.models.connectionNode import ConnectionNode
 @dataclass
 class ConnectionEntry:
     """
-    Точка входа/выхода на границе района — создаётся CityAssembler и передаётся в DistrictSlot.
+    Точка входа/выхода на границе района — создаётся SettlementAssembler и передаётся в DistrictSlot.
 
     role="through_road"  — сквозная дорога; paired_exit_uid указывает на узел выхода
                            на противоположной грани района. DistrictAssembler прокладывает
