@@ -484,28 +484,9 @@ effective_guard_level      = entry_point.guard_level_override      ?? location.g
 
 ## Дороги
 
-### `worlds.road_type_registry` (N+1)
-```json
-[
-  { "system_road_type": "royal_road",  "glossary_ref": "road_royal",  "travel_modifier": 0.8 },
-  { "system_road_type": "common_road", "glossary_ref": "road_common", "travel_modifier": 1.0 },
-  { "system_road_type": "trail",       "glossary_ref": "road_trail",  "travel_modifier": 1.3 }
-]
-```
-`display_road_type` и лор-описание — из `lore_registry` по `glossary_ref`; `travel_modifier < 1.0` = быстрее базы.
-
-### `roads`
-```sql
-roads (
-  road_uid, world_id, display_name,
-  road_type,                    -- ref → worlds.road_type_registry
-  travel_modifier_override,     -- nullable
-  from_location, to_location,   -- FK → named_locations
-  is_bidirectional,
-  danger_level,
-  glossary_ref, tag_refs
-)
-```
+> Модель дорог перенесена в [tz_structure_connections.md](tz_structure_connections.md).  
+> `worlds.road_type_registry` и таблица `roads` упразднены — заменены графом `ConnectionNode` / `ConnectionEdge`.  
+> `travel_modifier` вычисляется из `road_settings.base_travel_modifier`, `economic_tier_registry.road_tier_bonus` и `edge.condition` — см. раздел 3.7 в `tz_structure_connections.md`.
 
 ### Маршрутный отчёт LLM
 

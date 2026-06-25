@@ -46,7 +46,7 @@
 | `glossary_ref` | string\|null | LLM | nullable; ref → `lore_registry`; лор-описание |
 | `material_category` | string | физика | Физическое состояние: `solid`, `liquid`, `gas` |
 | `tags` | string[] | генератор зданий | Классификация: `construction`, `metal`, `crafted`, `refined`, `raw`, `organic`, `consumable`, `mineral`, `magic` + кастомные |
-| `use_type` | string[] | генератор зданий | `wall`, `floor`, `column`, `door`, `gate`, `railing`, `ceiling`, `roof`, `any` |
+| `use_type` | string[] | генератор зданий, дороги | `wall`, `floor`, `column`, `door`, `gate`, `railing`, `ceiling`, `roof`, `road`, `any` |
 | `economic_tier` | string\|null | генератор зданий | ref → `economic_tier_registry`; null для liquid/gas |
 | `hardness` | int (1–5)\|null | ExcavationNode | Твёрдость; null для liquid/gas |
 | `density` | int | физика | Плотность; слоение жидкостей, плавучесть твёрдых |
