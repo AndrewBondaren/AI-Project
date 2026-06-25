@@ -1,4 +1,5 @@
 import logging
+import random
 
 from app.application.worldData.generators.assemblers.areaAssembler.areaLayout import AreaLayout
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
@@ -6,6 +7,9 @@ from app.application.worldData.generators.assemblers.areaAssembler.structureArea
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtLayout import DistrictLayout
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
+from app.application.worldData.generators.road.districtRoadGenerator import DistrictRoadGenerator
+from app.db.models.connectionEdge import ConnectionEdge
+from app.db.models.connectionNode import ConnectionNode
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
@@ -42,11 +46,12 @@ class DistrictAssembler:
             )
             area_layouts.append(layout)
 
-        street_cells = self._plan_streets(slot)
+        nodes, edges = self._plan_streets(slot, city_skeleton, world.world_uid)
 
         return DistrictLayout(
-            area_layouts=area_layouts,
-            street_cells=street_cells,
+            area_layouts     = area_layouts,
+            connection_nodes = nodes,
+            connection_edges = edges,
         )
 
     def _plan_area_slots(self, slot: DistrictSlot) -> list[AreaSlot]:
@@ -70,9 +75,12 @@ class DistrictAssembler:
         """
         raise NotImplementedError
 
-    def _plan_streets(self, slot: DistrictSlot) -> list[MapCell]:
-        """
-        Генерирует ячейки внутренних улиц района.
-        Нет ТЗ — механика дорог не описана.
-        """
-        raise NotImplementedError
+    def _plan_streets(
+        self,
+        slot:          DistrictSlot,
+        city_skeleton: CitySkeleton,
+        world_uid:     str,
+    ) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
+        generator = DistrictRoadGenerator()
+        rng       = random.Random(f"{slot.origin_x}_{slot.origin_y}")
+        return generator.generate(slot, city_skeleton, world_uid, rng)

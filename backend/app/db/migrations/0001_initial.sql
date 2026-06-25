@@ -1068,6 +1068,68 @@ CREATE TABLE IF NOT EXISTS session_pending (
 );
 
 -- ============================================================
+-- connection_nodes
+-- ============================================================
+CREATE TABLE IF NOT EXISTS connection_nodes (
+    node_uid        TEXT PRIMARY KEY,
+    x               INTEGER NOT NULL,
+    y               INTEGER NOT NULL,
+    z               INTEGER NOT NULL,
+    node_type       TEXT NOT NULL,   -- "intersection"|"settlement_gate"|"portal"|"building_entrance"|"location_hub"|"waypoint"
+    graph_level     TEXT NOT NULL,   -- "world"|"city"|"district"|"area"
+    world_uid       TEXT NOT NULL REFERENCES worlds(world_uid),
+    location_uid    TEXT REFERENCES named_locations(location_uid),
+
+    -- только для node_type="portal"
+    portal_type                      TEXT,
+    portal_destinations              TEXT,        -- JSON: list[dict]
+    portal_bidirectional             INTEGER,     -- 0|1|null
+    portal_is_active                 INTEGER,     -- 0|1|null
+    portal_blocked_behavior_override TEXT
+);
+
+-- ============================================================
+-- connection_edges
+-- ============================================================
+CREATE TABLE IF NOT EXISTS connection_edges (
+    edge_uid            TEXT PRIMARY KEY,
+    from_node_uid       TEXT NOT NULL REFERENCES connection_nodes(node_uid),
+    to_node_uid         TEXT NOT NULL REFERENCES connection_nodes(node_uid),
+    connection_type     TEXT NOT NULL,
+    graph_level         TEXT NOT NULL,
+    world_uid           TEXT NOT NULL REFERENCES worlds(world_uid),
+
+    bidirectional       INTEGER NOT NULL DEFAULT 1,
+    lanes_per_side      INTEGER NOT NULL DEFAULT 1,
+    width_cells         INTEGER,
+    bridge_subtype      TEXT,
+    parent_edge_uid     TEXT REFERENCES connection_edges(edge_uid),
+    side                TEXT,                -- "left"|"right"; только для sidewalk
+    material            TEXT,
+    condition           INTEGER NOT NULL DEFAULT 100,
+    features            TEXT,                -- JSON: list[string]
+    lighting_type       TEXT,
+    danger_level        TEXT NOT NULL DEFAULT 'none',
+    has_sidewalk        INTEGER NOT NULL DEFAULT 0,
+    under_construction  INTEGER NOT NULL DEFAULT 0,
+    under_repair        INTEGER NOT NULL DEFAULT 0,
+    street_objects      TEXT,                -- JSON: list[dict]
+    traversal_conditions TEXT               -- JSON: dict
+);
+
+-- ============================================================
+-- connection_edge_cells
+-- ============================================================
+CREATE TABLE IF NOT EXISTS connection_edge_cells (
+    edge_uid    TEXT NOT NULL REFERENCES connection_edges(edge_uid) ON DELETE CASCADE,
+    x           INTEGER NOT NULL,
+    y           INTEGER NOT NULL,
+    z           INTEGER NOT NULL,
+    seq         INTEGER NOT NULL,   -- порядок ячеек вдоль ребра
+    PRIMARY KEY (edge_uid, x, y, z)
+);
+
+-- ============================================================
 -- indexes
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_character_sheet_world    ON character_sheet (world_uid);
@@ -1128,3 +1190,14 @@ CREATE INDEX IF NOT EXISTS idx_location_faction_inf_loc ON location_faction_infl
 
 CREATE INDEX IF NOT EXISTS idx_world_history_world      ON world_history (world_uid);
 CREATE INDEX IF NOT EXISTS idx_world_history_location   ON world_history (location_uid);
+
+CREATE INDEX IF NOT EXISTS idx_conn_nodes_world         ON connection_nodes (world_uid);
+CREATE INDEX IF NOT EXISTS idx_conn_nodes_location      ON connection_nodes (world_uid, location_uid);
+CREATE INDEX IF NOT EXISTS idx_conn_nodes_level         ON connection_nodes (world_uid, graph_level);
+
+CREATE INDEX IF NOT EXISTS idx_conn_edges_world         ON connection_edges (world_uid);
+CREATE INDEX IF NOT EXISTS idx_conn_edges_from          ON connection_edges (from_node_uid);
+CREATE INDEX IF NOT EXISTS idx_conn_edges_to            ON connection_edges (to_node_uid);
+CREATE INDEX IF NOT EXISTS idx_conn_edges_level         ON connection_edges (world_uid, graph_level);
+
+CREATE INDEX IF NOT EXISTS idx_conn_edge_cells_edge     ON connection_edge_cells (edge_uid);
