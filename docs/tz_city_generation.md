@@ -227,6 +227,7 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 | `economic_tier_range` | object | optional | `{ "min": "poor", "max": "exceptional" }` — диапазон тиров зданий в районе |
 | `density` | string | optional | `"sparse"`, `"medium"`, `"dense"`. Переопределяет `city_skeleton.settlement_density` для этого района |
 | `street_layout` | string | optional | Алгоритм раскладки улиц района (см. 9.5). `null` = наследует от города |
+| `connections` | array | optional | Объявления дорог внутри района: тип, sidewalk, роль. Не объявленные — генератор определяет сам. Формат — см. 9.5 |
 | `required_structures` | array | optional | Особые обязательные постройки (ратуша, храм, рынок) — см. 9.4 |
 
 ### 9.3 Условия появления (`placement_conditions`)
@@ -288,6 +289,37 @@ Civic-постройки (ратуша, рынок, храм) объявляют
 
 Референс алгоритмов: Parish & Müller (2001) — паттерны `grid / radial / organic` применяются на уровне района, а не города целиком.  
 `DistrictAssembler` получает `street_layout` из шаблона и вызывает соответствующий генератор улиц.
+
+### 9.5.1 Объявления соединений (`connections`)
+
+Шаблон района может явно объявить нужные дороги и коннекты. Если `connections` не задан — генератор определяет их самостоятельно на основе `street_layout` и `district_type`.
+
+```json
+"connections": [
+  {
+    "connection_type": "road",
+    "role":            "main_street",
+    "sidewalk":        true,
+    "lanes_per_side":  1
+  },
+  {
+    "connection_type": "alley",
+    "role":            "back_alley",
+    "sidewalk":        false,
+    "lanes_per_side":  null
+  }
+]
+```
+
+| Поле | Обязательность | Описание |
+|---|---|---|
+| `connection_type` | required | ref → `connection_type_registry.system_connection_type` |
+| `role` | optional | Семантическая роль внутри района (`"main_street"`, `"back_alley"`, `"service_road"`, …); движок использует для приоритизации при планировке |
+| `sidewalk` | optional | `true` / `false`; `null` = генератор решает по контексту |
+| `lanes_per_side` | optional | Переопределяет `road_settings.default_lanes_per_side`; `null` = берётся из road_settings |
+
+`DistrictAssembler` читает объявления и генерирует `ConnectionEdge` с `has_sidewalk` из поля `sidewalk`.  
+Необъявленные дороги генератор добавляет сам если `street_layout` это предполагает.
 
 ### 9.6 Алгоритм размещения районов (`CityAssembler`)
 
