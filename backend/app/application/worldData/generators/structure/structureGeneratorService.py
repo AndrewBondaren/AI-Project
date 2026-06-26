@@ -250,7 +250,12 @@ class StructureGeneratorService:
             level       = levels[z_offset]
             level_rooms = instantiate_level_rooms(
                 level_def, template, level.z_height, z_offset, world, rng,
-                building_tier=TierResolver.resolve(building=building),
+                building_tier=TierResolver.resolve(
+                    world=world,
+                    building=building,
+                    building_band=TierResolver.band_from_template(template),
+                    rng=rng,
+                ),
                 template_z_height=template_z_heights.get(z_offset),
             )
             for room in level_rooms:
@@ -262,7 +267,12 @@ class StructureGeneratorService:
 
         shaft_rooms = instantiate_shaft_rooms(
             template, room_z_offsets, levels, world, rng,
-            building_tier=TierResolver.resolve(building=building),
+            building_tier=TierResolver.resolve(
+                world=world,
+                building=building,
+                building_band=TierResolver.band_from_template(template),
+                rng=rng,
+            ),
         )
         for sr in shaft_rooms:
             room_z_offsets[sr.room_id] = sr.z_offset
@@ -527,7 +537,12 @@ class StructureGeneratorService:
             levels, room_z_offsets,
             world.world_uid, building.location_uid, rng,
             world=world, template=template,
-            building_tier=TierResolver.resolve(building=building),
+            building_tier=TierResolver.resolve(
+                world=world,
+                building=building,
+                building_band=TierResolver.band_from_template(template),
+                rng=rng,
+            ),
             ground_z=ground_z,
         )
         logger.info("passages | count=%d  total_cells=%d", len(passages), len(cells_dict))
@@ -548,6 +563,12 @@ class StructureGeneratorService:
         ground_z: int,
     ) -> None:
         logger.info("=== PHASE: wall openings ===")
+        building_tier = TierResolver.resolve(
+            world=world,
+            building=building,
+            building_band=TierResolver.band_from_template(template),
+            rng=rng,
+        )
 
         for level_def in template["levels"]:
             z_offset    = level_def["z_offset"]
@@ -563,6 +584,7 @@ class StructureGeneratorService:
                 level_rooms, level_fp, cells_dict, level,
                 world, building.location_uid, rng,
                 ground_z=ground_z,
+                building_tier=building_tier,
             )
 
     # ------------------------------------------------------------------

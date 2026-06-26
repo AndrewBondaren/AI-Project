@@ -51,3 +51,19 @@ def median_system_tier(registry: Registry | None) -> str | None:
     if not tiers:
         return None
     return tiers[len(tiers) // 2].get("system_tier")
+
+
+def tiers_within_rank_delta(
+    registry: Registry | None,
+    center:   str | None,
+    delta:    int = 1,
+) -> list[str]:
+    """system_tier в пределах ±delta rank от center (для ±1 совместимости district/building)."""
+    if not center:
+        return []
+    center_rank = tier_rank(registry, center)
+    return [
+        entry["system_tier"]
+        for i, entry in enumerate(tiers_sorted(registry))
+        if abs(i - center_rank) <= delta
+    ]

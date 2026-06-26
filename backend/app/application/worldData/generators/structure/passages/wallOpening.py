@@ -15,6 +15,7 @@ from random import Random
 from app.application.worldData.generators.utils.facing import Facing
 from app.application.worldData.generators.structure.cellFactory import _opening_cell
 from app.application.worldData.generators.utils.materialResolver import resolve_material
+from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.wallOpeningResolver import (
     ExteriorWallProfile,
@@ -111,6 +112,7 @@ def place_wall_openings(
     building_uid: str,
     rng: Random,
     ground_z: int = 0,
+    building_tier: str | None = None,
 ) -> None:
     # §3.11: underground levels get no openings
     if level.z < ground_z:
@@ -133,8 +135,14 @@ def place_wall_openings(
         element = StructureElement.WINDOW
 
         glass_use = _GLASS_USE_TYPE.get(element)
+        glass_tier = TierResolver.resolve(
+            world=world,
+            room_tier=room.economic_tier,
+            building_tier=building_tier,
+            rng=rng,
+        )
         glass_mat = (
-            resolve_material(world, glass_use, room.economic_tier, rng, glass_use)
+            resolve_material(world, glass_use, glass_tier, rng, glass_use)
             if glass_use else None
         )
 

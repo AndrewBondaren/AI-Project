@@ -147,7 +147,10 @@ def instantiate_level_rooms(
 
         room_tier = room_def.get("economic_tier")
         template_tier = template.get("economic_tier")
-        wall_mat, floor_mat = resolve_room_materials(world, room_tier, template_tier, rng, room_id=room_id, building_tier=building_tier)
+        wall_mat, floor_mat = resolve_room_materials(
+            world, room_tier, template_tier, rng, room_id=room_id,
+            building_tier=building_tier, template=template,
+        )
 
         for idx in range(count):
             suffix = f" {idx + 1}" if count > 1 else ""

@@ -36,7 +36,7 @@ class SettlementAssembler:
             settlement.system_economic_tier,
         )
 
-        skeleton       = self._build_skeleton(settlement)
+        skeleton       = self._build_skeleton(world, settlement)
         logger.info(
             "CitySkeleton | economic_tier=%s architectural_style=%s dominant_material=%s"
             " settlement_density=%s city_size=%s mood=%s",
@@ -78,9 +78,9 @@ class SettlementAssembler:
             barrier_cells=barrier_cells,
         )
 
-    def _build_skeleton(self, settlement: NamedLocation) -> CitySkeleton:
+    def _build_skeleton(self, world: World, settlement: NamedLocation) -> CitySkeleton:
         return CitySkeleton(
-            economic_tier=        TierResolver.resolve(city=settlement),
+            economic_tier=        TierResolver.resolve(world=world, city=settlement),
             architectural_style=  getattr(settlement, "architectural_style",  None),
             dominant_material=    getattr(settlement, "dominant_material",    None),
             settlement_density=   getattr(settlement, "settlement_density",   None),

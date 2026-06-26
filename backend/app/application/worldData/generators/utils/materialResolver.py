@@ -1,8 +1,11 @@
 import logging
 from random import Random
 
+from app.application.worldData.generators.utils.tierRegistry import (
+    median_system_tier,
+    tiers_sorted,
+)
 from app.application.worldData.generators.utils.tierResolver import TierResolver
-from app.application.worldData.generators.utils.tierRegistry import median_system_tier
 from app.db.models.world import World
 
 logger = logging.getLogger(__name__)
@@ -68,13 +71,16 @@ def resolve_room_materials(
     rng: Random,
     room_id: str = "",
     building_tier: str | None = None,
+    template: dict | None = None,
 ) -> tuple[str, str]:
     """Возвращает (wall_material, floor_material) для комнаты."""
-    effective = (
-        room_tier
-        or template_tier
-        or building_tier
-        or median_system_tier(world.economic_tier_registry)
+    effective = TierResolver.resolve(
+        world=world,
+        room_tier=room_tier,
+        template_tier=template_tier,
+        building_tier=building_tier,
+        building_band=TierResolver.band_from_template(template),
+        rng=rng,
     )
 
     wall  = resolve_material(world, "wall",  effective, rng, _DEFAULT_WALL_MATERIAL,  context=room_id)

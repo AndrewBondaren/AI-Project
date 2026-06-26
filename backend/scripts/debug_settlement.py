@@ -75,7 +75,7 @@ def test_city_shared_nodes() -> None:
     )
 
     assembler = SettlementAssembler()
-    skeleton = assembler._build_skeleton(settlement)
+    skeleton = assembler._build_skeleton(world, settlement)
     slots = plan_district_slots(world, settlement, skeleton, None)
 
     assert len(slots) == 4, f"expected 4 districts, got {len(slots)}"

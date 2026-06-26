@@ -1,4 +1,6 @@
-from app.application.worldData.generators.utils.tierRegistry import tiers_sorted
+from random import Random
+
+from app.application.worldData.generators.utils.tierRegistry import tier_rank, tiers_sorted
 from app.db.models.world import World
 
 BAND_POOR    = "poor"
@@ -54,3 +56,30 @@ def band_of(world: World, system_tier: str) -> str | None:
 def tiers_for_band(world: World, band: str) -> list[str]:
     """Returns all system_tier values that belong to the given abstract band."""
     return [k for k, v in tier_band_map(world).items() if v == band]
+
+
+def materialize_band(
+    world:       World,
+    band:        str,
+    rng:         Random,
+    anchor_tier: str | None = None,
+) -> str | None:
+    """
+    Разворачивает economic_tier_band в один system_tier из registry мира.
+    anchor_tier (обычно tier города) — предпочтение ближайшего тира в band.
+    """
+    candidates = tiers_for_band(world, band)
+    if not candidates:
+        return None
+    if anchor_tier is None:
+        return rng.choice(candidates)
+
+    anchor_rank = tier_rank(world.economic_tier_registry, anchor_tier)
+    ordered = [
+        t["system_tier"]
+        for t in tiers_sorted(world.economic_tier_registry)
+        if t["system_tier"] in candidates
+    ]
+    if not ordered:
+        return rng.choice(candidates)
+    return min(ordered, key=lambda t: abs(tier_rank(world.economic_tier_registry, t) - anchor_rank))

@@ -163,9 +163,9 @@ economic_tier_band
 | `settlementAssembler._build_skeleton` | `TierResolver.resolve(city=…)` |
 | `planner/placement.py` | `tier_at_least`, `tier_at_most` |
 | `materialResolver.py` | `median_system_tier`, `tiers_sorted`, fallback вниз |
-| `sidewalkWidthResolver.py` | `tier_entry` (+ hardcoded fallback) |
-| `structureGeneratorService.py` | `TierResolver.resolve(building=…)` → materials |
-| `economicTierBands.py` | определён; **внешних потребителей пока нет** |
+| `sidewalkWidthResolver.py` | `tier_entry` + `band_of` fallback |
+| `structureGeneratorService.py` | `TierResolver.resolve(world, building, band, rng)` |
+| `economicTierBands.py` | `materialize_band`, `band_of` в sidewalk fallback |
 
 Соседи (не дублировать):
 

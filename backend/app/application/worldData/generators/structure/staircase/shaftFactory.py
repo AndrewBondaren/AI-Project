@@ -122,7 +122,8 @@ def instantiate_shaft_rooms(
             )
 
         wall_mat, floor_mat = resolve_room_materials(
-            world, None, None, rng, room_id=staircase_id, building_tier=building_tier,
+            world, None, None, rng, room_id=staircase_id,
+            building_tier=building_tier, template=template,
         )
 
         for idx, z_off in enumerate(z_offsets):
