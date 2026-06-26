@@ -26,13 +26,22 @@ class DistrictAssembler:
         terrain_cells: list[MapCell] | None = None,
     ) -> DistrictLayout:
         template = slot.district_template
+        connections = template.get("connections") or []
+        primary = connections[0] if connections else {}
         logger.info(
-            "DistrictAssembler | district_type=%s origin=(%d,%d) size=%dx%d",
+            "DistrictAssembler | template=%s district_type=%s origin=(%d,%d) size=%dx%d"
+            " street_layout=%s algorithm=%s connection_type=%s sidewalk=%s"
+            " area_slots=0 (v1 deferred)",
+            template.get("system_name", "?"),
             template.get("district_type", "?"),
             slot.origin_x,
             slot.origin_y,
             slot.width_m,
             slot.depth_m,
+            template.get("street_layout") or "grid",
+            "DistrictRoadGenerator",
+            primary.get("connection_type") or "road",
+            primary.get("sidewalk"),
         )
 
         area_slots     = self._plan_area_slots(slot)
@@ -48,6 +57,13 @@ class DistrictAssembler:
 
         nodes, edges = self._plan_streets(slot, city_skeleton, world.world_uid)
 
+        logger.info(
+            "DistrictAssembler done | template=%s district_nodes=%d district_edges=%d",
+            template.get("system_name", "?"),
+            len(nodes),
+            len(edges),
+        )
+
         return DistrictLayout(
             area_layouts     = area_layouts,
             connection_nodes = nodes,
@@ -56,11 +72,11 @@ class DistrictAssembler:
 
     def _plan_area_slots(self, slot: DistrictSlot) -> list[AreaSlot]:
         """
-        Нарезает район на участки под здания.
-        Размеры участков выводятся из footprint шаблонов зданий
-        из slot.district_template + settlement_density.
+        v1: участки под здания не нарезаются — только дорожная сетка района.
+        generate-first bin-packing — следующий этап (tz_assembler_hierarchy §7.7).
         """
-        raise NotImplementedError
+        _ = slot
+        return []
 
     def _assign_template(
         self,

@@ -8,6 +8,7 @@ from random import Random
 
 logger = logging.getLogger(__name__)
 
+from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.generators.structure.cellBuilder import build_level_cells
 from app.application.worldData.generators.structure.errors import GenerationError, UnsupportedShapeError
 from app.application.worldData.generators.structure.layoutEngine import layout_level
@@ -249,7 +250,7 @@ class StructureGeneratorService:
             level       = levels[z_offset]
             level_rooms = instantiate_level_rooms(
                 level_def, template, level.z_height, z_offset, world, rng,
-                building_tier=building.system_economic_tier,
+                building_tier=TierResolver.resolve(building=building),
                 template_z_height=template_z_heights.get(z_offset),
             )
             for room in level_rooms:
@@ -261,7 +262,7 @@ class StructureGeneratorService:
 
         shaft_rooms = instantiate_shaft_rooms(
             template, room_z_offsets, levels, world, rng,
-            building_tier=building.system_economic_tier,
+            building_tier=TierResolver.resolve(building=building),
         )
         for sr in shaft_rooms:
             room_z_offsets[sr.room_id] = sr.z_offset
@@ -526,7 +527,7 @@ class StructureGeneratorService:
             levels, room_z_offsets,
             world.world_uid, building.location_uid, rng,
             world=world, template=template,
-            building_tier=building.system_economic_tier,
+            building_tier=TierResolver.resolve(building=building),
             ground_z=ground_z,
         )
         logger.info("passages | count=%d  total_cells=%d", len(passages), len(cells_dict))

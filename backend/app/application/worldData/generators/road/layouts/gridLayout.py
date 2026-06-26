@@ -19,14 +19,10 @@ from app.application.worldData.generators.road.widthResolver import resolve_widt
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 
-_BLOCK_SIZE_BY_DENSITY: dict[str, int] = {
-    "dense":  50,
-    "medium": 80,
-    "sparse": 120,
-}
-_DEFAULT_BLOCK_SIZE = 80
-
-# Типы дорог для которых sidewalk имеет смысл по умолчанию
+from app.application.worldData.generators.road.blockSize import (
+    DEFAULT_BLOCK_SIZE,
+    block_size_for_density,
+)
 _AUTO_SIDEWALK_TYPES = {"road", "highway"}
 
 
@@ -43,10 +39,8 @@ def generate_grid(
     W,  D  = slot.width_m,  slot.depth_m
     z      = slot.ground_z
 
-    block_size = _BLOCK_SIZE_BY_DENSITY.get(
-        skeleton.settlement_density or "medium",
-        _DEFAULT_BLOCK_SIZE,
-    )
+    density = slot.district_template.get("density") or skeleton.settlement_density
+    block_size = block_size_for_density(density)
 
     # Количество линий по каждой оси (включая границы района)
     n_cols = max(2, W // block_size + 1)   # вертикальные линии

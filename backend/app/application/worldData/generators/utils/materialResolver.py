@@ -1,23 +1,14 @@
 import logging
 from random import Random
 
+from app.application.worldData.generators.utils.tierResolver import TierResolver
+from app.application.worldData.generators.utils.tierRegistry import median_system_tier
 from app.db.models.world import World
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_WALL_MATERIAL  = "stone"
 _DEFAULT_FLOOR_MATERIAL = "wood"
-
-
-def _tiers_sorted(world: World) -> list[dict]:
-    registry = world.economic_tier_registry or []
-    return sorted(registry, key=lambda t: t.get("base_value", 0))
-
-
-def _median_tier(tiers: list[dict]) -> str | None:
-    if not tiers:
-        return None
-    return tiers[len(tiers) // 2].get("system_tier")
 
 
 def resolve_material(
@@ -33,8 +24,8 @@ def resolve_material(
     Fallback: ближайший тир вниз → любой подходящий → default.
     """
     registry = world.material_registry or []
-    tiers = _tiers_sorted(world)
-    tier = effective_tier or _median_tier(tiers) or ""
+    tiers = tiers_sorted(world.economic_tier_registry)
+    tier = effective_tier or median_system_tier(world.economic_tier_registry) or ""
 
     def candidates_for(t: str) -> list[str]:
         return [
@@ -47,7 +38,6 @@ def resolve_material(
     found = candidates_for(tier)
 
     if not found:
-        # fallback вниз по base_value
         current_val = next(
             (t.get("base_value", 0) for t in tiers if t.get("system_tier") == tier), 0
         )
@@ -57,7 +47,6 @@ def resolve_material(
                 break
 
     if not found:
-        # любой подходящий, без фильтра по тиру
         found = [
             m["system_material"] for m in registry
             if "construction" in m.get("tags", [])
@@ -81,8 +70,12 @@ def resolve_room_materials(
     building_tier: str | None = None,
 ) -> tuple[str, str]:
     """Возвращает (wall_material, floor_material) для комнаты."""
-    tiers = _tiers_sorted(world)
-    effective = room_tier or template_tier or building_tier or _median_tier(tiers)
+    effective = (
+        room_tier
+        or template_tier
+        or building_tier
+        or median_system_tier(world.economic_tier_registry)
+    )
 
     wall  = resolve_material(world, "wall",  effective, rng, _DEFAULT_WALL_MATERIAL,  context=room_id)
     floor = resolve_material(world, "floor", effective, rng, _DEFAULT_FLOOR_MATERIAL, context=room_id)

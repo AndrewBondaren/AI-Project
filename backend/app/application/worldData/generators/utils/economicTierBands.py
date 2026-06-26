@@ -1,3 +1,4 @@
+from app.application.worldData.generators.utils.tierRegistry import tiers_sorted
 from app.db.models.world import World
 
 BAND_POOR    = "poor"
@@ -21,10 +22,7 @@ def tier_band_map(world: World) -> dict[str, str]:
     N=1: single tier → middle.
     N=2: index 0 → poor, index 1 → rich.
     """
-    tiers = sorted(
-        world.economic_tier_registry or [],
-        key=lambda t: t.get("base_value", 0),
-    )
+    tiers = tiers_sorted(world.economic_tier_registry)
     n = len(tiers)
     if n == 0:
         return {}
