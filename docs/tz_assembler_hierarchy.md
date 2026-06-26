@@ -3,7 +3,7 @@
 ## 1. Структура
 
 ```
-CityAssembler
+SettlementAssembler
     └── DistrictAssembler
             └── StructureAreaAssembler
                     └── StructureAssembler
@@ -31,12 +31,12 @@ CityAssembler
 
 ## 2. Слои
 
-### CityAssembler
+### SettlementAssembler
 **Знает:** city skeleton (economic_tier, architectural_style, dominant_material, settlement_density)  
 **Делает:**
 - занимает ячейки карты мира под поселение
-- планирует город на ячейках; понимает топологию по z (наземный / подземный / воздушный — одновременно)
-- управляет топологией соединения ячеек города между собой (улицы, мосты, тоннели)
+- планирует поселение на ячейках; понимает топологию по z (наземный / подземный / воздушный — одновременно)
+- управляет топологией соединения ячеек поселения между собой (улицы, мосты, тоннели)
 - строит сетку улиц, определяет типы кварталов, нарезает слоты под здания
 
 **Подробнее:** [tz_city_generation.md](tz_city_generation.md)
@@ -94,7 +94,7 @@ CityAssembler
 
 | Сценарий | Точка входа |
 |---|---|
-| Полная городская генерация | `CityAssembler` |
+| Полная городская генерация | `SettlementAssembler` |
 | Отдельный квартал | `DistrictAssembler` |
 | Здание на участке (ручное размещение, редактор) | `StructureAreaAssembler` |
 | Корабль, данж, изолированное здание | `StructureAssembler` |
@@ -106,7 +106,7 @@ CityAssembler
 ## 4. Поток данных
 
 ```
-CityAssembler
+SettlementAssembler
   city_skeleton → DistrictAssembler
     district_type + template_slot → StructureAreaAssembler
       StructureContext (выводится здесь) → StructureAssembler
@@ -350,7 +350,7 @@ class CitySkeleton:
     system_location_mood: str | None   # ref → worlds.location_mood_registry
 ```
 
-Источник данных: поля `NamedLocation` поселения. Собирается `CityAssembler` и передаётся вниз без изменений.
+Источник данных: поля `NamedLocation` поселения. Собирается `SettlementAssembler` и передаётся вниз без изменений.
 
 ---
 
@@ -432,14 +432,15 @@ generators/assemblers/
   __init__.py
   citySkeleton.py                     # CitySkeleton dataclass (shared; течёт City→District→Area)
 
-  cityAssembler/                      # скелет — следующий этап
+  settlementAssembler/                # реализовано (скелет + граф дорог)
     __init__.py
-    cityAssembler.py
-    cityLayout.py                     # результат CityAssembler
+    settlementAssembler.py
+    settlementLayout.py               # результат SettlementAssembler
 
-  districtAssembler/                  # скелет — следующий этап
+  districtAssembler/                  # реализовано (скелет + генерация улиц)
     __init__.py
-    districtSlot.py                   # входной контракт (от CityAssembler)
+    connectionEntry.py                # точка входа/выхода на грани района
+    districtSlot.py                   # входной контракт (от SettlementAssembler)
     districtAssembler.py
     districtLayout.py                 # результат DistrictAssembler
 
@@ -536,7 +537,7 @@ Envelope здания (реальные размеры по x/y/z) нельзя 
 
 #### Кэш
 
-- Живёт на уровне сборки одного города (`CityAssembler.assemble` создаёт и передаёт вниз)
+- Живёт на уровне сборки одного поселения (`SettlementAssembler.assemble` создаёт и передаёт вниз)
 - Ключ: `template["system_name"]`
 - Значение: `StructureLayout`
 - Один шаблон → одна генерация на весь город, переиспользуется во всех районах
@@ -561,5 +562,5 @@ Envelope здания (реальные размеры по x/y/z) нельзя 
 | `_build_barrier` — алгоритм генерации ячеек забора по списку координат участка | не описан |
 | Малые постройки на участке | нет ТЗ |
 | `AreaLayout` ↔ `DistrictAssembler` — как район агрегирует результаты нескольких участков | нет ТЗ |
-| `DistrictAssembler` — механика дорог (внутренние улицы, тротуары, соединение с городскими магистралями) | нет ТЗ; `street_cells` в `DistrictLayout` зарезервированы |
+| `DistrictAssembler` — механика дорог (внутренние улицы, тротуары, соединение с городскими магистралями) | реализовано: `DistrictRoadGenerator` + `gridLayout`; граф в `connection_nodes/edges` |
 | `DistrictSlot.facing` — нужна ли ориентация к главной улице города на уровне района | отложено |
