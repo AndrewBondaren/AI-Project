@@ -1,20 +1,36 @@
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.defaults import (
-    DEFAULT_FOOTPRINT_MULTIPLIER,
+    DEFAULT_DISTRICT_TEMPLATES,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.defaults import (
-    DEFAULT_DISTRICT_TEMPLATES,
+    DEFAULT_FOOTPRINT_MULTIPLIER,
+)
+from app.application.worldData.generators.coordinates import (
+    cell_size_m,
+    grid_dimension,
+    settlement_grid_rect as _settlement_grid_rect,
+    settlement_meter_rect as _settlement_meter_rect,
+    settlement_origin_m,
 )
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
-
-def cell_size_m(world: World) -> int:
-    map_settings = getattr(world, "map_settings", None) or {}
-    if isinstance(map_settings, dict):
-        val = map_settings.get("global_cell_size_m")
-        if val is not None:
-            return int(val)
-    return int(world.map_cell_size_m or 3000)
+# Re-export convert hub (legacy import path for settlement stack).
+__all__ = [
+    "cell_in_footprint_grid",
+    "cell_in_footprint_meters",
+    "cell_size_m",
+    "district_templates",
+    "footprint_gate_coordinates",
+    "footprint_gate_line_coords",
+    "footprint_grid_rect",
+    "footprint_meter_rect",
+    "footprint_multiplier",
+    "footprint_side_m",
+    "grid_dimension",
+    "settlement_grid_rect",
+    "settlement_meter_rect",
+    "settlement_origin",
+]
 
 
 def footprint_multiplier(world: World, system_city_size: str | None) -> float:
@@ -37,16 +53,9 @@ def footprint_side_m(world: World, system_city_size: str | None) -> int:
     return max(cs, int(round(mult * cs)))
 
 
-def grid_dimension(side_m: int, cell_m: int) -> int:
-    return max(1, round(side_m / cell_m))
-
-
 def settlement_origin(settlement: NamedLocation) -> tuple[int, int, int]:
-    return (
-        settlement.map_x if settlement.map_x is not None else 0,
-        settlement.map_y if settlement.map_y is not None else 0,
-        settlement.map_z if settlement.map_z is not None else 0,
-    )
+    origin = settlement_origin_m(settlement)
+    return origin.x, origin.y, origin.z
 
 
 def footprint_gate_line_coords(origin: int, side_m: int, cell_m: int) -> list[int]:
@@ -81,6 +90,17 @@ def footprint_gate_coordinates(
     return gates
 
 
+def settlement_grid_rect(
+    world:             World,
+    settlement:        NamedLocation,
+    system_city_size:  str | None = None,
+):
+    cell_m = cell_size_m(world)
+    size = system_city_size if system_city_size is not None else settlement.system_city_size
+    side_m = footprint_side_m(world, size)
+    return _settlement_grid_rect(settlement, cell_m, side_m)
+
+
 def footprint_grid_rect(
     world:             World,
     settlement:        NamedLocation,
@@ -89,15 +109,10 @@ def footprint_grid_rect(
     """
     Прямоугольник footprint в индексах global map grid [gx0, gy0) × [gy0, gy1).
     map_x/map_y поселения — метры; grid = origin // cell_size_m + offset.
+
+    Deprecated name — prefer settlement_grid_rect(...).as_tuple().
     """
-    cell_m = cell_size_m(world)
-    ox, oy, _ = settlement_origin(settlement)
-    size = system_city_size if system_city_size is not None else settlement.system_city_size
-    side_m = footprint_side_m(world, size)
-    n = grid_dimension(side_m, cell_m)
-    gx0 = ox // cell_m
-    gy0 = oy // cell_m
-    return gx0, gy0, gx0 + n, gy0 + n
+    return settlement_grid_rect(world, settlement, system_city_size).as_tuple()
 
 
 def cell_in_footprint_grid(
@@ -107,16 +122,26 @@ def cell_in_footprint_grid(
     return gx0 <= x < gx1 and gy0 <= y < gy1
 
 
+def settlement_meter_rect(
+    world:             World,
+    settlement:        NamedLocation,
+    system_city_size:  str | None = None,
+):
+    size = system_city_size if system_city_size is not None else settlement.system_city_size
+    side_m = footprint_side_m(world, size)
+    return _settlement_meter_rect(settlement, side_m)
+
+
 def footprint_meter_rect(
     world:             World,
     settlement:        NamedLocation,
     system_city_size:  str | None = None,
 ) -> tuple[int, int, int, int, int]:
-    """Footprint в метрах [ox, oy) × [x1, y1) и ground z."""
-    ox, oy, gz = settlement_origin(settlement)
-    size = system_city_size if system_city_size is not None else settlement.system_city_size
-    side_m = footprint_side_m(world, size)
-    return ox, oy, ox + side_m, oy + side_m, gz
+    """Footprint в метрах [ox, oy) × [x1, y1) и ground z.
+
+    Deprecated name — prefer settlement_meter_rect(...).as_tuple().
+    """
+    return settlement_meter_rect(world, settlement, system_city_size).as_tuple()
 
 
 def cell_in_footprint_meters(

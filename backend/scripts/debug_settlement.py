@@ -531,6 +531,129 @@ def test_phase_f_map_occupancy() -> None:
     print("phase F map occupancy checks: OK")
 
 
+def test_coordinate_spaces_anchor_3000() -> None:
+    """
+    NC-1: settlement at map_x=3000 must use grid index 1 and meter origin 3000.
+    Smoke at map_x=0 masks mixing grid index with absolute meters.
+    """
+    from app.application.worldData.generators.assemblers.settlementAssembler.planner.districts import (
+        plan_district_slots,
+    )
+    from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
+        cell_size_m,
+        footprint_gate_coordinates,
+        footprint_grid_rect,
+        footprint_meter_rect,
+        footprint_side_m,
+        settlement_grid_rect,
+        settlement_meter_rect,
+        settlement_origin,
+    )
+    from app.application.worldData.generators.assemblers.settlementAssembler.planner.mapOccupancy import (
+        plan_footprint_occupancy_cells,
+    )
+    from app.application.worldData.generators.coordinates import (
+        settlement_origin_m,
+    )
+
+    world = World(
+        world_uid="world-test-nc1",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        map_cell_size_m=3000,
+        city_size_registry=[
+            {"system_size": "town", "display_size": "Town", "footprint_multiplier": 1.0},
+            {"system_size": "city", "display_size": "City", "footprint_multiplier": 2.0},
+        ],
+    )
+    town = NamedLocation(
+        location_uid="city-nc1-town",
+        world_uid="world-test-nc1",
+        display_name="Easthold",
+        system_location_type="city",
+        created_at="2026-01-01T00:00:00",
+        system_city_size="town",
+        system_economic_tier="standard",
+        map_x=3000,
+        map_y=0,
+        map_z=0,
+    )
+    town.settlement_density = "medium"
+
+    cell_m = cell_size_m(world)
+    assert cell_m == 3000
+
+    origin = settlement_origin_m(town)
+    assert (origin.x, origin.y, origin.z) == (3000, 0, 0)
+    assert settlement_origin(town) == (3000, 0, 0)
+
+    side_m = footprint_side_m(world, town.system_city_size)
+    assert side_m == 3000
+
+    grid_rect = settlement_grid_rect(world, town)
+    assert grid_rect.as_tuple() == (1, 0, 2, 1)
+    assert footprint_grid_rect(world, town) == (1, 0, 2, 1)
+
+    meter_rect = settlement_meter_rect(world, town)
+    assert meter_rect.as_tuple() == (3000, 0, 6000, 3000, 0)
+    assert footprint_meter_rect(world, town) == (3000, 0, 6000, 3000, 0)
+
+    gate_coords = footprint_gate_coordinates(3000, 0, side_m, cell_m)
+    assert (3000, 0) in gate_coords
+    assert (6000, 0) in gate_coords
+    assert (3000, 3000) in gate_coords
+    assert (6000, 3000) in gate_coords
+    assert (0, 0) not in gate_coords
+    assert (0, 3000) not in gate_coords
+
+    assembler = SettlementAssembler()
+    skeleton = assembler._build_skeleton(world, town)
+    slots = plan_district_slots(world, town, skeleton, None)
+    assert len(slots) == 1
+    assert slots[0].origin_x == 3000
+    assert slots[0].origin_y == 0
+
+    occ = plan_footprint_occupancy_cells(world, town)
+    assert len(occ) == 1
+    assert (occ[0].x, occ[0].y) == (1, 0), "occupancy uses world surface grid index, not meters"
+
+    layout = assembler.assemble(world, town)
+    assert layout.connection_nodes, "town should have city connection nodes"
+    assert min(n.x for n in layout.connection_nodes) >= 3000
+    assert min(n.y for n in layout.connection_nodes) >= 0
+    assert max(n.x for n in layout.connection_nodes) <= 6000
+    assert max(n.y for n in layout.connection_nodes) <= 3000
+
+    city = NamedLocation(
+        location_uid="city-nc1-city",
+        world_uid="world-test-nc1",
+        display_name="Eastgrid",
+        system_location_type="city",
+        created_at="2026-01-01T00:00:00",
+        system_city_size="city",
+        system_economic_tier="standard",
+        map_x=3000,
+        map_y=0,
+        map_z=0,
+    )
+    city.settlement_density = "medium"
+    assert settlement_grid_rect(world, city).as_tuple() == (1, 0, 3, 2)
+    assert settlement_meter_rect(world, city).as_tuple() == (3000, 0, 9000, 6000, 0)
+
+    sk_city = assembler._build_skeleton(world, city)
+    city_slots = plan_district_slots(world, city, sk_city, None)
+    assert len(city_slots) == 4
+    origins = {(s.origin_x, s.origin_y) for s in city_slots}
+    assert origins == {
+        (3000, 0),
+        (6000, 0),
+        (3000, 3000),
+        (6000, 3000),
+    }
+
+    print("coordinate spaces anchor 3000 checks: OK")
+
+
 def main() -> None:
     world = World(
         world_uid="world-test",
@@ -562,6 +685,7 @@ def main() -> None:
     test_phase_e_building_cache()
     test_phase_area_barriers()
     test_phase_f_map_occupancy()
+    test_coordinate_spaces_anchor_3000()
     test_city_shared_nodes()
 
 
