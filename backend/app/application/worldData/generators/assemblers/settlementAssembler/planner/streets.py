@@ -47,6 +47,35 @@ def _make_node(
     )
 
 
+def footprint_gate_line_coords(origin: int, side_m: int, cell_m: int) -> list[int]:
+    """Координаты settlement_gate вдоль одной оси (кратны cell_m + far edge)."""
+    n_steps = max(1, round(side_m / cell_m))
+    coords = [origin + i * cell_m for i in range(n_steps + 1)]
+    end = origin + side_m
+    if coords[-1] != end:
+        coords.append(end)
+    return coords
+
+
+def footprint_gate_coordinates(
+    origin_x: int,
+    origin_y: int,
+    side_m:   int,
+    cell_m:   int,
+) -> set[tuple[int, int]]:
+    """Все (x, y) settlement_gate на периметре footprint — те же, что plan_city_street_grid."""
+    xs = footprint_gate_line_coords(origin_x, side_m, cell_m)
+    ys = footprint_gate_line_coords(origin_y, side_m, cell_m)
+    gates: set[tuple[int, int]] = set()
+    for x in xs:
+        gates.add((x, origin_y))
+        gates.add((x, origin_y + side_m))
+    for y in ys:
+        gates.add((origin_x, y))
+        gates.add((origin_x + side_m, y))
+    return gates
+
+
 def _grid_lines(origin: int, side_m: int, block: int) -> list[int]:
     """Координаты origin, origin+block, … origin+side_m (границы включены)."""
     lines = [origin]
@@ -218,13 +247,8 @@ def plan_city_street_grid(
         node = _make_node(x, y, ground_z, "settlement_gate", "city", world_uid, label)
         return register(node)
 
-    n_steps = max(1, round(side_m / cell_m))
-    xs = [origin_x + i * cell_m for i in range(n_steps + 1)]
-    ys = [origin_y + i * cell_m for i in range(n_steps + 1)]
-    if xs[-1] != origin_x + side_m:
-        xs.append(origin_x + side_m)
-    if ys[-1] != origin_y + side_m:
-        ys.append(origin_y + side_m)
+    xs = footprint_gate_line_coords(origin_x, side_m, cell_m)
+    ys = footprint_gate_line_coords(origin_y, side_m, cell_m)
 
     south_gates = [gate(x, origin_y, "gate_s") for x in xs]
     north_gates = [gate(x, origin_y + side_m, "gate_n") for x in xs]

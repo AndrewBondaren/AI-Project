@@ -219,6 +219,87 @@ def test_phase_e_building_cache() -> None:
     print("phase E building cache checks: OK")
 
 
+def test_phase_d_barriers() -> None:
+    """Perimeter wall + gates aligned with settlement_gate coords; hamlet has no wall."""
+    from random import Random
+
+    from app.application.worldData.generators.assemblers.settlementAssembler.planner.barriers import (
+        plan_settlement_barriers,
+        should_have_settlement_wall,
+    )
+    from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
+        cell_size_m,
+        footprint_side_m,
+        settlement_origin,
+    )
+    from app.application.worldData.generators.assemblers.settlementAssembler.planner.streets import (
+        footprint_gate_coordinates,
+    )
+
+    world = World(
+        world_uid="world-test-d",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        map_cell_size_m=3000,
+        city_size_registry=[
+            {"system_size": "town", "display_size": "Town", "footprint_multiplier": 1.0},
+            {"system_size": "city", "display_size": "City", "footprint_multiplier": 2.0},
+            {"system_size": "hamlet", "display_size": "Hamlet", "footprint_multiplier": 0.5},
+        ],
+    )
+    assembler = SettlementAssembler()
+
+    hamlet = NamedLocation(
+        location_uid="city-d-hamlet",
+        world_uid="world-test-d",
+        display_name="Hollow",
+        system_location_type="city",
+        created_at="2026-01-01T00:00:00",
+        system_city_size="hamlet",
+        system_economic_tier="standard",
+        map_x=0,
+        map_y=0,
+        map_z=0,
+    )
+    sk_h = assembler._build_skeleton(world, hamlet)
+    assert not should_have_settlement_wall(hamlet, sk_h, Random(0))
+    assert plan_settlement_barriers(world, hamlet, sk_h, Random(0)) == []
+
+    city = NamedLocation(
+        location_uid="city-d-city",
+        world_uid="world-test-d",
+        display_name="Wallhold",
+        system_location_type="city",
+        created_at="2026-01-01T00:00:00",
+        system_city_size="city",
+        system_economic_tier="standard",
+        map_x=0,
+        map_y=0,
+        map_z=0,
+    )
+    city.settlement_density = "medium"
+    sk_c = assembler._build_skeleton(world, city)
+    rng = Random(f"{world.world_uid}_{city.location_uid}_barriers")
+    barriers = plan_settlement_barriers(world, city, sk_c, rng)
+    assert len(barriers) > 0
+
+    ox, oy, gz = settlement_origin(city)
+    side_m = footprint_side_m(world, sk_c.system_city_size)
+    gate_coords = footprint_gate_coordinates(ox, oy, side_m, cell_size_m(world))
+    barrier_by_xy = {(c.x, c.y): c for c in barriers}
+    assert gate_coords <= set(barrier_by_xy)
+    for x, y in gate_coords:
+        assert barrier_by_xy[(x, y)].system_terrain == "gate"
+    wall_cells = [c for c in barriers if c.system_terrain == "wall"]
+    assert wall_cells
+    assert all(c.location_uid == city.location_uid for c in barriers)
+    assert all(c.z == gz for c in barriers)
+
+    layout = assembler.assemble(world, city)
+    assert len(layout.barrier_cells) == len(barriers)
+    print("phase D barriers checks: OK")
+
+
 def test_phase_f_map_occupancy() -> None:
     """Footprint occupancy + collect_map_cells + needs_geometry heuristic."""
     from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
@@ -324,6 +405,7 @@ def main() -> None:
 
     _run_case("town 1x1", world, settlement)
     test_phase_c_placement()
+    test_phase_d_barriers()
     test_phase_e_building_cache()
     test_phase_f_map_occupancy()
     test_city_shared_nodes()

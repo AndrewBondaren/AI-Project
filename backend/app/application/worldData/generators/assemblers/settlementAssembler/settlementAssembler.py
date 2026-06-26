@@ -8,8 +8,8 @@ SettlementAssembler — оркестратор генерации поселен
   ✅ Фаза B — semantic-first city edges (material, has_sidewalk, sidewalk_width log)
   ✅ Фаза C — placement (specialization, economic compat, ground_z, required_structures)
   ✅ Фаза E — building cache, area slots, cached layout in StructureAreaAssembler
+  ✅ Фаза D — perimeter barriers (barrier_template_registry)
   ✅ Фаза F — map occupancy, layoutCells, SettlementGeneratorService, lazy_settlement node
-  ⬜ Фаза D — barriers
   ⬜ Фаза G–H — organic footprint, z-topology
 
 ТЗ: docs/tz_assembler_hierarchy.md, tz_city_generation.md, tz_structure_connections.md §5
@@ -30,6 +30,9 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.mapOccupancy import (
     plan_footprint_occupancy_cells,
+)
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.barriers import (
+    plan_settlement_barriers,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.streets import plan_city_street_grid
 from app.application.worldData.generators.utils.tierResolver import TierResolver
@@ -88,7 +91,7 @@ class SettlementAssembler:
         city_nodes, city_edges = self._plan_street_grid(
             world, settlement, skeleton, district_slots,
         )
-        barrier_cells = self._plan_barriers(settlement, skeleton, district_slots)
+        barrier_cells = self._plan_barriers(world, settlement, skeleton)
         occupancy_cells = plan_footprint_occupancy_cells(world, settlement, skeleton.system_city_size)
 
         logger.info(
@@ -146,10 +149,9 @@ class SettlementAssembler:
 
     def _plan_barriers(
         self,
-        settlement:     NamedLocation,
-        skeleton:       CitySkeleton,
-        district_slots: list[DistrictSlot],
+        world:      World,
+        settlement: NamedLocation,
+        skeleton:   CitySkeleton,
     ) -> list[MapCell]:
-        """v1: стены не генерируются — отложено до barrier_template_registry."""
-        _ = (settlement, skeleton, district_slots)
-        return []
+        rng = random.Random(f"{world.world_uid}_{settlement.location_uid}_barriers")
+        return plan_settlement_barriers(world, settlement, skeleton, rng)

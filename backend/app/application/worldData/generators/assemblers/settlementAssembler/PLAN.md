@@ -64,13 +64,15 @@ _build_skeleton
 
 ---
 
-## Фаза D — Barriers ⬜
+## Фаза D — Barriers ✅
 
-| Задача | Статус |
-|---|---|
-| `_plan_barriers` → `barrier_template_registry` | ⬜ stub |
-| Perimeter wall по footprint + tier | ⬜ |
-| `SettlementLayout.barrier_cells` заполнен | ⬜ |
+| Задача | Статус | Где |
+|---|---|---|
+| `_plan_barriers` → `barrier_template_registry` | ✅ | `planner/barriers.py`, `barrierDefaults.py` |
+| Perimeter wall по footprint + tier | ✅ | `plan_settlement_barriers`, gate coords = `footprint_gate_coordinates` |
+| `SettlementLayout.barrier_cells` заполнен | ✅ | `settlementAssembler.py` |
+
+**Acceptance:** town/city → `barrier_cells` > 0; gate terrain на координатах settlement_gate; hamlet/village → 0.
 
 ---
 
