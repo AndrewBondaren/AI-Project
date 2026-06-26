@@ -49,6 +49,51 @@ def settlement_origin(settlement: NamedLocation) -> tuple[int, int, int]:
     )
 
 
+def footprint_grid_rect(
+    world:             World,
+    settlement:        NamedLocation,
+    system_city_size:  str | None = None,
+) -> tuple[int, int, int, int]:
+    """
+    Прямоугольник footprint в индексах global map grid [gx0, gy0) × [gy0, gy1).
+    map_x/map_y поселения — метры; grid = origin // cell_size_m + offset.
+    """
+    cell_m = cell_size_m(world)
+    ox, oy, _ = settlement_origin(settlement)
+    size = system_city_size if system_city_size is not None else settlement.system_city_size
+    side_m = footprint_side_m(world, size)
+    n = grid_dimension(side_m, cell_m)
+    gx0 = ox // cell_m
+    gy0 = oy // cell_m
+    return gx0, gy0, gx0 + n, gy0 + n
+
+
+def cell_in_footprint_grid(
+    x: int, y: int,
+    gx0: int, gy0: int, gx1: int, gy1: int,
+) -> bool:
+    return gx0 <= x < gx1 and gy0 <= y < gy1
+
+
+def footprint_meter_rect(
+    world:             World,
+    settlement:        NamedLocation,
+    system_city_size:  str | None = None,
+) -> tuple[int, int, int, int, int]:
+    """Footprint в метрах [ox, oy) × [x1, y1) и ground z."""
+    ox, oy, gz = settlement_origin(settlement)
+    size = system_city_size if system_city_size is not None else settlement.system_city_size
+    side_m = footprint_side_m(world, size)
+    return ox, oy, ox + side_m, oy + side_m, gz
+
+
+def cell_in_footprint_meters(
+    x: int, y: int,
+    ox: int, oy: int, x1: int, y1: int,
+) -> bool:
+    return ox <= x < x1 and oy <= y < y1
+
+
 def district_templates(world: World) -> list[dict]:
     registry = getattr(world, "district_template_registry", None)
     if registry:

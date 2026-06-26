@@ -8,8 +8,14 @@ DEFAULT_DISTRICT_TEMPLATES: list[dict] = [
         "system_name":           "civic_center",
         "display_name":          "Центральный квартал",
         "district_type":         "civic",
-        "placement_conditions":  [{"type": "min_city_size", "size": "town"}],
+        "placement_conditions":  [
+            {"type": "min_city_size", "size": "town"},
+            {"type": "cell_zone", "zone": "center"},
+        ],
         "max_per_city":          1,
+        "required_structures":   [
+            {"building_template": "town_hall", "count": 1, "position": "center"},
+        ],
         "street_layout":         "grid",
         "connections":           [{"connection_type": "road", "role": "main_street", "sidewalk": True}],
     },
@@ -75,6 +81,6 @@ class CellZone(StrEnum):
 
 DISTRICT_TYPE_PREFERENCE: dict[CellZone, tuple[str, ...]] = {
     CellZone.CENTER: ("civic", "commercial", "residential"),
-    CellZone.EDGE:   ("commercial", "residential", "industrial", "port"),
+    CellZone.EDGE:   ("port", "commercial", "residential", "industrial"),
     CellZone.INNER:  ("residential", "commercial", "industrial"),
 }

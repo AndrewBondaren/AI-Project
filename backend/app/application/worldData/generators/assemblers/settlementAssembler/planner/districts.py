@@ -17,6 +17,9 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.streets import (
     plan_settlement_entries,
 )
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.terrain import (
+    resolve_ground_z,
+)
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -81,19 +84,24 @@ def plan_district_slots(
             width_m, depth_m = slot_dimensions(template, cell_m, rng)
             dtype = template.get("district_type", "?")
             placed_types[dtype] = placed_types.get(dtype, 0) + 1
+            slot_ground_z = resolve_ground_z(
+                settlement, origin_x, origin_y, width_m, depth_m, terrain_cells,
+            )
+            required = list(template.get("required_structures") or [])
 
             slots.append(DistrictSlot(
                 origin_x=origin_x,
                 origin_y=origin_y,
                 width_m=width_m,
                 depth_m=depth_m,
-                ground_z=ground_z,
+                ground_z=slot_ground_z,
                 district_template=template,
+                required_structures=required,
             ))
 
             logger.info(
                 "DistrictSlot created | cell=(%d,%d) template=%s district_type=%s"
-                " origin=(%d,%d) size=%dx%d ground_z=%d",
+                " origin=(%d,%d) size=%dx%d ground_z=%d required_structures=%d",
                 cell_x,
                 cell_y,
                 template.get("system_name", "?"),
@@ -102,7 +110,8 @@ def plan_district_slots(
                 origin_y,
                 width_m,
                 depth_m,
-                ground_z,
+                slot_ground_z,
+                len(required),
             )
 
     plan_settlement_entries(slots, skeleton, ox, oy, side_m, world.world_uid)

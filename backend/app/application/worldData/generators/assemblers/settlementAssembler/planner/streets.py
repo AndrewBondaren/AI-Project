@@ -1,16 +1,34 @@
 import logging
 import uuid
+from random import Random
 
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.connectionEntry import ConnectionEntry
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import grid_dimension
 from app.application.worldData.generators.road.blockSize import block_size_for_density
+from app.application.worldData.generators.road.sidewalkWidthResolver import resolve_sidewalk_width
 from app.application.worldData.generators.road.widthResolver import resolve_width
+from app.application.worldData.generators.utils.materialResolver import resolve_material
+from app.application.worldData.generators.utils.facing import Facing
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
+from app.db.models.world import World
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_ROAD_MATERIAL = "dirt_road"
+
+
+def _city_has_sidewalk(skeleton: CitySkeleton) -> bool:
+    """Perimeter/inter-district city roads: sidewalk unless settlement is sparse."""
+    return skeleton.settlement_density != "sparse"
+
+
+def _city_road_material(world: World, skeleton: CitySkeleton, rng: Random) -> str:
+    return resolve_material(
+        world, "road", skeleton.economic_tier, rng, _DEFAULT_ROAD_MATERIAL,
+    )
 
 
 def _make_node(
@@ -93,11 +111,11 @@ def plan_settlement_entries(
             east = get_node(ox + w, y, z, "through_e")
             entries.append(ConnectionEntry(
                 node=west, connection_type=conn_type, role="through_road",
-                facing="W", paired_exit_uid=east.node_uid,
+                facing=Facing.WEST, paired_exit_uid=east.node_uid,
             ))
             entries.append(ConnectionEntry(
                 node=east, connection_type=conn_type, role="through_road",
-                facing="E", paired_exit_uid=west.node_uid,
+                facing=Facing.EAST, paired_exit_uid=west.node_uid,
             ))
 
         slot_x = _lines_in_range(x_lines, ox, ox + w)
@@ -106,11 +124,11 @@ def plan_settlement_entries(
             north = get_node(x, oy + d, z, "through_n")
             entries.append(ConnectionEntry(
                 node=south, connection_type=conn_type, role="through_road",
-                facing="S", paired_exit_uid=north.node_uid,
+                facing=Facing.SOUTH, paired_exit_uid=north.node_uid,
             ))
             entries.append(ConnectionEntry(
                 node=north, connection_type=conn_type, role="through_road",
-                facing="N", paired_exit_uid=south.node_uid,
+                facing=Facing.NORTH, paired_exit_uid=south.node_uid,
             ))
 
         x = ox + block
@@ -118,7 +136,7 @@ def plan_settlement_entries(
             node = get_node(x, oy, z, "entry_s")
             entries.append(ConnectionEntry(
                 node=node, connection_type=conn_type, role="entry_point",
-                facing="S", paired_exit_uid=None,
+                facing=Facing.SOUTH, paired_exit_uid=None,
             ))
             x += block
 
@@ -170,6 +188,8 @@ def plan_city_street_grid(
     cell_m:         int,
     district_slots: list[DistrictSlot],
     world_uid:      str,
+    world:          World,
+    rng:            Random,
     skeleton:       CitySkeleton,
 ) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
     """
@@ -212,6 +232,16 @@ def plan_city_street_grid(
     east_gates  = [gate(origin_x + side_m, y, "gate_e") for y in ys]
 
     width = resolve_width("road", lanes_per_side=1, bidirectional=True)
+    road_material = _city_road_material(world, skeleton, rng)
+    has_sidewalk  = _city_has_sidewalk(skeleton)
+    sidewalk_width = resolve_sidewalk_width(skeleton.economic_tier, rng, world)
+    logger.info(
+        "plan_city_street_grid | tier=%r material=%r has_sidewalk=%s sidewalk_width=%d",
+        skeleton.economic_tier,
+        road_material,
+        has_sidewalk,
+        sidewalk_width,
+    )
 
     def link_chain(chain: list[ConnectionNode], conn_type: str = "road") -> None:
         for a, b in zip(chain, chain[1:]):
@@ -223,7 +253,8 @@ def plan_city_street_grid(
                 bidirectional=True,
                 lanes_per_side=1,
                 width_cells=width,
-                has_sidewalk=True,
+                material=road_material,
+                has_sidewalk=has_sidewalk,
                 graph_level="city",
                 world_uid=world_uid,
             ))
@@ -282,7 +313,8 @@ def plan_city_street_grid(
                 bidirectional=True,
                 lanes_per_side=1,
                 width_cells=width,
-                has_sidewalk=True,
+                material=road_material,
+                has_sidewalk=has_sidewalk,
                 graph_level="city",
                 world_uid=world_uid,
             ))

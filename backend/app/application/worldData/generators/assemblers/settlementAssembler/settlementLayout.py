@@ -16,9 +16,11 @@ class SettlementLayout:
                         settlement_gate-узлы на границах map_cell,
                         intersection-узлы на стыках районов.
     connection_edges  — рёбра графа дорог уровня "city".
+    occupancy_cells   — global map grid: urban footprint, location_uid = settlement.
     barrier_cells     — ячейки городских стен и укреплений.
     """
     district_layouts:  list[DistrictLayout]
     connection_nodes:  list[ConnectionNode] = field(default_factory=list)
     connection_edges:  list[ConnectionEdge] = field(default_factory=list)
+    occupancy_cells:   list[MapCell]        = field(default_factory=list)
     barrier_cells:     list[MapCell]        = field(default_factory=list)

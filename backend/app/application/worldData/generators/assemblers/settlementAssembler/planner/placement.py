@@ -7,6 +7,9 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     CellZone,
     DISTRICT_TYPE_PREFERENCE,
 )
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.economic import (
+    check_district_economic_compat,
+)
 from app.application.worldData.generators.utils.tierRegistry import (
     tier_at_least,
     tier_at_most,
@@ -54,6 +57,20 @@ def _check_adjacent_terrain(
     return count >= min_count
 
 
+def template_specialization_key(template: dict) -> tuple[int, int, int, int]:
+    """
+    Специализированные шаблоны выше общих (tz_city_generation §9.6).
+    Больше условий / ограничений → выше приоритет.
+    """
+    conditions = template.get("placement_conditions") or []
+    return (
+        len(conditions),
+        1 if template.get("max_per_city") is not None else 0,
+        1 if template.get("required_structures") else 0,
+        1 if template.get("economic_tier_range") or template.get("economic_tier_band") else 0,
+    )
+
+
 def check_placement_conditions(
     template:      dict,
     settlement:    NamedLocation,
@@ -65,15 +82,21 @@ def check_placement_conditions(
     terrain_cells: list[MapCell] | None,
     placed_types:  dict[str, int],
     world:         World,
+    cell_x:        int | None = None,
+    cell_y:        int | None = None,
+    grid_n:        int | None = None,
 ) -> bool:
-    conditions = template.get("placement_conditions") or []
-    if not conditions:
-        return True
-
     max_per = template.get("max_per_city")
     dtype = template.get("district_type")
     if max_per is not None and placed_types.get(dtype, 0) >= max_per:
         return False
+
+    if not check_district_economic_compat(template, skeleton, world):
+        return False
+
+    conditions = template.get("placement_conditions") or []
+    if not conditions:
+        return True
 
     registry = world.economic_tier_registry
     city_rank = _city_size_rank(skeleton.system_city_size)
@@ -97,6 +120,12 @@ def check_placement_conditions(
                 return False
         elif ctype == "adjacent_terrain":
             if not _check_adjacent_terrain(cond, origin_x, origin_y, width_m, depth_m, terrain_cells):
+                return False
+        elif ctype == "cell_zone":
+            if cell_x is None or grid_n is None:
+                return False
+            required = cond.get("zone")
+            if _cell_zone(cell_x, cell_y or 0, grid_n).value != required:
                 return False
         else:
             return False
@@ -134,6 +163,7 @@ def select_district_template(
         if check_placement_conditions(
             t, settlement, skeleton, origin_x, origin_y, width_m, depth_m,
             terrain_cells, placed_types, world,
+            cell_x, cell_y, grid_n,
         )
     ]
     if not eligible:
@@ -144,11 +174,11 @@ def select_district_template(
         return None
 
     eligible.sort(
-        key=lambda t: (
-            -len(t.get("placement_conditions") or []),
-            t.get("system_name", ""),
-        )
+        key=lambda t: (template_specialization_key(t), t.get("system_name", "")),
+        reverse=True,
     )
+    best_key = template_specialization_key(eligible[0])
+    pool = [t for t in eligible if template_specialization_key(t) == best_key]
 
     zone = _cell_zone(cell_x, cell_y, grid_n)
     preferred = DISTRICT_TYPE_PREFERENCE[zone]
@@ -157,15 +187,16 @@ def select_district_template(
 
     chosen: dict | None = None
     for pref in preferred:
-        typed = [t for t in eligible if t.get("district_type") == pref]
+        typed = [t for t in pool if t.get("district_type") == pref]
         if typed:
             chosen = rng.choice(typed)
-            algorithm = "position_preference"
+            algorithm = "specialization+position"
             matched_pref = pref
             break
 
     if chosen is None:
-        chosen = rng.choice(eligible)
+        chosen = rng.choice(pool)
+        algorithm = "specialization"
 
     logger.info(
         "DistrictTemplate select | cell=(%d,%d) zone=%s eligible=%d algorithm=%s"

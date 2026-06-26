@@ -28,3 +28,4 @@ class DistrictSlot:
     ground_z:          int
     district_template: dict                      # выбранный шаблон; placement_conditions проверены
     entry_nodes:       list[ConnectionEntry] = field(default_factory=list)
+    required_structures: list[dict] = field(default_factory=list)  # tz_city_generation §9.4

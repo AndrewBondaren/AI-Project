@@ -19,10 +19,8 @@ from app.application.worldData.generators.road.widthResolver import resolve_widt
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 
-from app.application.worldData.generators.road.blockSize import (
-    DEFAULT_BLOCK_SIZE,
-    block_size_for_density,
-)
+from app.application.worldData.generators.road.blockSize import block_size_for_density
+from app.application.worldData.generators.utils.facing import Facing, snap_bbox_edge_to_grid
 _AUTO_SIDEWALK_TYPES = {"road", "highway"}
 
 
@@ -187,21 +185,15 @@ def _snap_to_grid(
     ox: int, oy: int,
     step_x: int, step_y: int,
     n_cols: int, n_rows: int,
-    facing: str,
+    facing: Facing,
 ) -> tuple[int, int]:
-    """
-    Возвращает (col, row) ближайшего узла сетки к точке входа на данной грани.
-    Для N/S граней фиксируем row (0 или n_rows-1), snap по col.
-    Для E/W граней фиксируем col (n_cols-1 или 0), snap по row.
-    """
-    rel_x = node.x - ox
-    rel_y = node.y - oy
-
-    if facing in ("N", "S"):
-        col   = max(0, min(n_cols - 1, round(rel_x / step_x)))
-        row   = 0 if facing == "S" else n_rows - 1
-    else:  # E / W
-        col   = n_cols - 1 if facing == "E" else 0
-        row   = max(0, min(n_rows - 1, round(rel_y / step_y)))
-
-    return (col, row)
+    """(col, row) ближайшего узла сетки к точке входа на грани/углу bbox."""
+    return snap_bbox_edge_to_grid(
+        facing,
+        node.x - ox,
+        node.y - oy,
+        step_x,
+        step_y,
+        n_cols,
+        n_rows,
+    )

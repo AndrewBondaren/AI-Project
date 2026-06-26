@@ -29,15 +29,53 @@ from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
-__all__ = ["StructureGeneratorService", "StructureLayout", "UnsupportedShapeError", "GenerationError"]
+__all__ = [
+    "StructureGeneratorService",
+    "StructureLayout",
+    "OccupiedFootprint",
+    "compute_occupied_footprint",
+    "UnsupportedShapeError",
+    "GenerationError",
+]
+
+
+@dataclass(frozen=True)
+class OccupiedFootprint:
+    """Фактический bbox здания на ground_z (1 cell = 1 m), для bin-packing."""
+    min_x:  int
+    min_y:  int
+    width:  int
+    depth:  int
 
 
 @dataclass
 class StructureLayout:
-    cells:    list[MapCell]
-    levels:   list[LocationLevel]
-    passages: list[LocationPassage]
-    rooms:    list[NamedLocation]
+    cells:               list[MapCell]
+    levels:              list[LocationLevel]
+    passages:            list[LocationPassage]
+    rooms:               list[NamedLocation]
+    occupied_footprint:  OccupiedFootprint | None = None
+
+
+def compute_occupied_footprint(
+    cells:    list[MapCell],
+    ground_z: int,
+) -> OccupiedFootprint | None:
+    plane = [c for c in cells if c.z == ground_z]
+    if not plane:
+        plane = cells
+    if not plane:
+        return None
+    xs = [c.x for c in plane]
+    ys = [c.y for c in plane]
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+    return OccupiedFootprint(
+        min_x=min_x,
+        min_y=min_y,
+        width=max_x - min_x + 1,
+        depth=max_y - min_y + 1,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -609,11 +647,14 @@ class StructureGeneratorService:
             for room in all_rooms
             if room.placed and not room.is_shaft
         ]
+        cell_list = list(cells_dict.values())
+        ground_z = building.map_z or 0
         return StructureLayout(
-            cells=list(cells_dict.values()),
+            cells=cell_list,
             levels=list(levels.values()),
             passages=passages,
             rooms=named_locations,
+            occupied_footprint=compute_occupied_footprint(cell_list, ground_z),
         )
 
     def validate_template(self, data: dict) -> list[str]:

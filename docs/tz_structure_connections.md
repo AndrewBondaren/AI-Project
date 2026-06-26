@@ -419,7 +419,7 @@ blocked_behavior_override: str | None  # переопределяет world.mech
 ### 5.1 Поток сборки
 
 ```
-CityAssembler
+SettlementAssembler
   └─ _plan_district_slots()  → DistrictSlot[] с entry_nodes внутри каждого (см. 5.2)
   └─ _plan_street_grid()     → ConnectionNode[] + ConnectionEdge[] уровня "city"
                                 settlement_gate-узлы на границах map_cell
@@ -441,7 +441,7 @@ WorldGenerator (отдельно)
 
 ### 5.2 ConnectionEntry — точки входа в район
 
-`CityAssembler` создаёт entry_nodes до генерации районов и вкладывает их в каждый `DistrictSlot`.
+`SettlementAssembler` создаёт entry_nodes до генерации районов и вкладывает их в каждый `DistrictSlot`.
 
 ```python
 @dataclass
@@ -461,7 +461,7 @@ class ConnectionEntry:
 | `entry_point` | Одиночный узел на грани без парного выхода | Подключает к внутренней сети района |
 
 **Принцип расстановки entry_nodes (`through_road`):**  
-CityAssembler ставит узлы с шагом `block_size` — той же константой, что будет использовать DistrictAssembler для внутренней сетки. Это гарантирует, что entry_nodes совпадут с узлами сетки без дополнительного snap-алгоритма.
+SettlementAssembler ставит узлы с шагом `block_size` — той же константой, что будет использовать DistrictAssembler для внутренней сетки. Это гарантирует, что entry_nodes совпадут с узлами сетки без дополнительного snap-алгоритма.
 
 `block_size` по `settlement_density` (см. раздел 9, фаза 3): `dense=50м / medium=80м / sparse=120м`.
 
@@ -477,7 +477,7 @@ Settlement_gate-узлы ставятся на границах map_cell (коо
 entry_nodes: list[ConnectionEntry] = field(default_factory=list)
 ```
 
-`CityLayout`, `DistrictLayout`, `AreaLayout` расширяются полями:
+`SettlementLayout`, `DistrictLayout`, `AreaLayout` расширяются полями:
 ```python
 connection_nodes: list[ConnectionNode] = field(default_factory=list)
 connection_edges: list[ConnectionEdge] = field(default_factory=list)
@@ -641,7 +641,7 @@ generators/
 ### Фаза 6 — Обновление Layout-объектов assembler-иерархии
 
 15. `DistrictLayout` — добавить `connection_nodes: list[ConnectionNode]`, `connection_edges: list[ConnectionEdge]`
-16. `CityLayout` — добавить `connection_nodes: list[ConnectionNode]`, `connection_edges: list[ConnectionEdge]`
+16. `SettlementLayout` — добавить `connection_nodes: list[ConnectionNode]`, `connection_edges: list[ConnectionEdge]`
 
 ### Фаза 7 — Подключение к ассемблерам
 
@@ -658,6 +658,6 @@ generators/
 | Алгоритм прокладки `highway` между городами — A* с weighted cost function; референс: [Procedural Generation of Roads](https://www.researchgate.net/publication/229707505_Procedural_Generation_of_Roads), tmwhere | отложено — зависит от terrain v2 |
 | Алгоритм городской сетки улиц — референс: Parish & Müller (2001), tmwhere; паттерны: grid / radial / organic | отложено — реализуется при написании DistrictAssembler |
 | `air_route` узлы — всегда `structure_type="air_dock"` или могут быть произвольные точки | открыт |
-| Морской путь (`sea_route`) — нужен отдельный мировой WorldGenerator или часть CityAssembler | открыт |
+| Морской путь (`sea_route`) — нужен отдельный мировой WorldGenerator или часть SettlementAssembler | открыт |
 | Связь `connection_edge_cells` с `map_cells` — физическое изменение terrain-ячеек при прокладке (раздел 3.5) | закрыт |
 | Traversal в реальном времени — как engine проверяет `traversal_conditions` при движении | нет ТЗ |
