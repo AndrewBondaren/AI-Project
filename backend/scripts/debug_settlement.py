@@ -219,6 +219,158 @@ def test_phase_e_building_cache() -> None:
     print("phase E building cache checks: OK")
 
 
+def test_phase_area_barriers() -> None:
+    """perimeter_barrier on building template → AreaLayout.barrier_cells + layoutCells."""
+    from random import Random
+
+    from app.application.worldData.generators.assemblers.areaAssembler.planner.areaBarriers import (
+        should_build_area_barrier,
+    )
+    from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
+        collect_map_cells_from_layout,
+    )
+    from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
+        lookup_building_template,
+    )
+
+    assert should_build_area_barrier(
+        {"perimeter_barrier": {"template": "stone_fence", "probability": 1.0}},
+        Random(0),
+    )
+    assert not should_build_area_barrier(
+        {"perimeter_barrier": {"template": None, "probability": 0}},
+        Random(0),
+    )
+
+    world = World(
+        world_uid="world-test-area",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        map_cell_size_m=3000,
+        city_size_registry=[
+            {"system_size": "town", "display_size": "Town", "footprint_multiplier": 1.0},
+        ],
+    )
+    settlement = NamedLocation(
+        location_uid="city-area",
+        world_uid="world-test-area",
+        display_name="Fencehold",
+        system_location_type="city",
+        created_at="2026-01-01T00:00:00",
+        system_city_size="town",
+        system_economic_tier="standard",
+        map_x=0,
+        map_y=0,
+        map_z=0,
+    )
+    settlement.settlement_density = "medium"
+
+    town_hall = lookup_building_template(world, "town_hall")
+    assert town_hall is not None
+    assert town_hall.get("perimeter_barrier", {}).get("template") == "stone_fence"
+
+    layout = SettlementAssembler().assemble(world, settlement)
+    area = layout.district_layouts[0].area_layouts[0]
+    assert len(area.barrier_cells) > 0
+    assert any(c.system_terrain == "gate" for c in area.barrier_cells)
+    assert all(c.location_uid == area.building_location.location_uid for c in area.barrier_cells)
+
+    flat = collect_map_cells_from_layout(world, settlement, layout)
+    area_barrier_xy = {(c.x, c.y, c.z) for c in area.barrier_cells}
+    assert area_barrier_xy <= {(c.x, c.y, c.z) for c in flat}
+
+    print("phase area barriers checks: OK")
+
+
+def test_phase_b_travel_and_sidewalk() -> None:
+    """road_tier_bonus resolver + per-district has_sidewalk on city entry links."""
+    from app.application.worldData.generators.assemblers.settlementAssembler.planner.defaults import (
+        DEFAULT_DISTRICT_TEMPLATES,
+    )
+    from app.application.worldData.generators.road.connectionPolicy import resolve_has_sidewalk
+    from app.application.worldData.generators.road.roadTravelResolver import (
+        effective_travel_modifier,
+        resolve_road_tier_bonus,
+    )
+    from app.db.models.connectionEdge import ConnectionEdge
+
+    industrial = next(
+        t for t in DEFAULT_DISTRICT_TEMPLATES if t["system_name"] == "industrial_quarter"
+    )
+    civic = next(
+        t for t in DEFAULT_DISTRICT_TEMPLATES if t["system_name"] == "civic_center"
+    )
+    assert resolve_has_sidewalk(industrial) is False
+    assert resolve_has_sidewalk(civic) is True
+
+    world = World(
+        world_uid="world-test-b",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        map_cell_size_m=3000,
+        economic_tier_registry=[
+            {
+                "system_tier": "standard",
+                "base_value": 2,
+                "road_tier_bonus": 1.0,
+                "road_tier_durability": 1.0,
+            },
+            {
+                "system_tier": "premium",
+                "base_value": 3,
+                "road_tier_bonus": 0.95,
+                "road_tier_durability": 1.3,
+            },
+        ],
+        material_registry=[
+            {
+                "system_material": "dirt_road",
+                "economic_tier": "premium",
+                "structural_strength": 0.3,
+                "tags": ["construction"],
+                "use_type": ["road"],
+            },
+        ],
+        city_size_registry=[
+            {"system_size": "town", "display_size": "Town", "footprint_multiplier": 1.0},
+        ],
+    )
+    assert resolve_road_tier_bonus(world, "premium") == 0.95
+
+    edge = ConnectionEdge(
+        edge_uid="test-edge",
+        from_node_uid="a",
+        to_node_uid="b",
+        connection_type="road",
+        graph_level="city",
+        world_uid="world-test-b",
+        material="dirt_road",
+        condition=100,
+    )
+    assert effective_travel_modifier(world, edge) == 0.95
+
+    settlement = NamedLocation(
+        location_uid="city-b",
+        world_uid="world-test-b",
+        display_name="Roadhold",
+        system_location_type="city",
+        created_at="2026-01-01T00:00:00",
+        system_city_size="town",
+        system_economic_tier="standard",
+        map_x=0,
+        map_y=0,
+        map_z=0,
+    )
+    settlement.settlement_density = "medium"
+    layout = SettlementAssembler().assemble(world, settlement)
+    entry_edges = [e for e in layout.connection_edges if e.edge_uid.startswith("city_link_")]
+    assert entry_edges, "town should have city entry link edges"
+    for e in entry_edges:
+        assert e.has_sidewalk is True, "default civic/residential templates have sidewalk=True"
+
+    print("phase B travel + sidewalk checks: OK")
+
+
 def test_phase_d_barriers() -> None:
     """Perimeter wall + gates aligned with settlement_gate coords; hamlet has no wall."""
     from random import Random
@@ -232,7 +384,7 @@ def test_phase_d_barriers() -> None:
         footprint_side_m,
         settlement_origin,
     )
-    from app.application.worldData.generators.assemblers.settlementAssembler.planner.streets import (
+    from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
         footprint_gate_coordinates,
     )
 
@@ -405,8 +557,10 @@ def main() -> None:
 
     _run_case("town 1x1", world, settlement)
     test_phase_c_placement()
+    test_phase_b_travel_and_sidewalk()
     test_phase_d_barriers()
     test_phase_e_building_cache()
+    test_phase_area_barriers()
     test_phase_f_map_occupancy()
     test_city_shared_nodes()
 

@@ -11,14 +11,13 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
     cell_size_m,
+    footprint_gate_coordinates,
     footprint_side_m,
     settlement_origin,
 )
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.streets import (
-    footprint_gate_coordinates,
-)
 from app.application.worldData.generators.road.blockSize import block_size_for_density
-from app.application.worldData.generators.utils.materialResolver import resolve_material
+from app.application.worldData.generators.barrier.material import pick_barrier_material
+from app.application.worldData.generators.barrier.perimeter import perimeter_ring_bbox
 from app.application.worldData.generators.utils.tierRegistry import tier_rank
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
@@ -55,6 +54,7 @@ def pick_barrier_template_type(
     skeleton: CitySkeleton,
     rng:      Random,
 ) -> str | None:
+    """v1 эвристика — polish pass: `.cursor/plans/settlement-assembler.md` § pick_barrier_template_type."""
     registry = world.economic_tier_registry or []
     tier = skeleton.economic_tier or "standard"
     rank = tier_rank(registry, tier) if registry else 2
@@ -75,11 +75,8 @@ def _pick_template_material(
     skeleton: CitySkeleton,
     rng:      Random,
 ) -> str:
-    pick_from = (template.get("wall_material") or {}).get("pick_from") or []
-    if pick_from:
-        return rng.choice(pick_from)
-    return resolve_material(
-        world, "wall", skeleton.economic_tier, rng, default="stone",
+    return pick_barrier_material(
+        world, template, skeleton.economic_tier, rng, default="stone",
     )
 
 
@@ -89,27 +86,9 @@ def _perimeter_ring(
     side_m:   int,
     step_m:   int,
 ) -> list[tuple[int, int]]:
-    """Точки периметра footprint (метры), шаг step_m."""
-    x0, y0 = origin_x, origin_y
-    x1, y1 = origin_x + side_m, origin_y + side_m
-    step = max(1, step_m)
-    points: list[tuple[int, int]] = []
-
-    for x in range(x0, x1 + 1, step):
-        points.append((x, y0))
-        if y1 != y0:
-            points.append((x, y1))
-    for y in range(y0 + step, y1, step):
-        points.append((x0, y))
-        if x1 != x0:
-            points.append((x1, y))
-
-    # углы при крупном шаге
-    for corner in ((x0, y0), (x1, y0), (x0, y1), (x1, y1)):
-        if corner not in points:
-            points.append(corner)
-
-    return points
+    return perimeter_ring_bbox(
+        origin_x, origin_y, origin_x + side_m, origin_y + side_m, step_m,
+    )
 
 
 def plan_settlement_barriers(

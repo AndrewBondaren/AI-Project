@@ -71,6 +71,7 @@ def collect_map_cells_from_layout(
                 area.building_location,
             )
             cells.extend(bound.cells)
+            cells.extend(area.barrier_cells)
         cells.extend(district.barrier_cells)
 
     cells.extend(layout.barrier_cells)

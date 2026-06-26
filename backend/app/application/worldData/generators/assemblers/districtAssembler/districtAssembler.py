@@ -11,9 +11,6 @@ from app.application.worldData.generators.assemblers.districtAssembler.districtS
 from app.application.worldData.generators.assemblers.districtAssembler.planner.areaSlots import (
     plan_area_placements,
 )
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.economic import (
-    building_tier_compatible,
-)
 from app.application.worldData.generators.road.districtRoadGenerator import DistrictRoadGenerator
 from app.application.worldData.generators.structure.structureGeneratorService import StructureLayout
 from app.db.models.connectionEdge import ConnectionEdge
@@ -104,36 +101,6 @@ class DistrictAssembler:
             connection_nodes = nodes,
             connection_edges = edges,
         )
-
-    def _assign_template(
-        self,
-        area_slot,
-        district_template: dict,
-        city_skeleton:     CitySkeleton,
-        world:             World,
-    ) -> dict:
-        """
-        Выбирает building_template для участка.
-        Фильтр: structure_type совместим с district_type;
-                economic_tier совместим с city_skeleton.economic_tier (±1 тир).
-        """
-        _ = area_slot
-        registry = world.building_template_registry or []
-        allowed = district_template.get("allowed_structure_types")
-        candidates = [
-            bt for bt in registry
-            if building_tier_compatible(bt, city_skeleton, world)
-            and (
-                not allowed
-                or (bt.get("structure_type") or bt.get("system_type")) in allowed
-            )
-        ]
-        if not candidates:
-            raise ValueError(
-                f"No building template for district {district_template.get('system_name')!r}"
-                f" tier={city_skeleton.economic_tier!r}"
-            )
-        return candidates[0]
 
     def _plan_streets(
         self,

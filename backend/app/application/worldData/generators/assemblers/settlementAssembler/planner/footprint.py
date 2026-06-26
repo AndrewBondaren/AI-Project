@@ -49,6 +49,38 @@ def settlement_origin(settlement: NamedLocation) -> tuple[int, int, int]:
     )
 
 
+def footprint_gate_line_coords(origin: int, side_m: int, cell_m: int) -> list[int]:
+    """Координаты settlement_gate вдоль одной оси (кратны cell_m + far edge)."""
+    n_steps = max(1, round(side_m / cell_m))
+    coords = [origin + i * cell_m for i in range(n_steps + 1)]
+    end = origin + side_m
+    if coords[-1] != end:
+        coords.append(end)
+    return coords
+
+
+def footprint_gate_coordinates(
+    origin_x: int,
+    origin_y: int,
+    side_m:   int,
+    cell_m:   int,
+) -> set[tuple[int, int]]:
+    """
+    Все (x, y) settlement_gate на периметре footprint (метры).
+    Общий контракт для plan_city_street_grid и plan_settlement_barriers.
+    """
+    xs = footprint_gate_line_coords(origin_x, side_m, cell_m)
+    ys = footprint_gate_line_coords(origin_y, side_m, cell_m)
+    gates: set[tuple[int, int]] = set()
+    for x in xs:
+        gates.add((x, origin_y))
+        gates.add((x, origin_y + side_m))
+    for y in ys:
+        gates.add((origin_x, y))
+        gates.add((origin_x + side_m, y))
+    return gates
+
+
 def footprint_grid_rect(
     world:             World,
     settlement:        NamedLocation,

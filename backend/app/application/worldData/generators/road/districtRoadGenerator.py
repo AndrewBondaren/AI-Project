@@ -19,6 +19,11 @@ from app.application.worldData.generators.road.layouts.courtyardLayout import ge
 from app.application.worldData.generators.road.layouts.gridLayout import generate_grid
 from app.application.worldData.generators.road.layouts.organicLayout import generate_organic
 from app.application.worldData.generators.road.layouts.radialLayout import generate_radial
+from app.application.worldData.generators.road.connectionPolicy import (
+    primary_connection,
+    resolve_has_sidewalk,
+    resolve_lanes_per_side,
+)
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 
@@ -31,19 +36,6 @@ _LAYOUT_FN = {
     "cul_de_sac": generate_cul_de_sac,
     "courtyard":  generate_courtyard,
 }
-
-# Дефолтный auto_sidewalk по типу дороги (если template не задаёт явно)
-_AUTO_SIDEWALK: dict[str, bool] = {
-    "road":    True,
-    "highway": True,
-}
-
-# Дефолтное кол-во полос если не задано в connections[]
-_DEFAULT_LANES: dict[str, int] = {
-    "road":    1,
-    "highway": 2,
-}
-
 
 class DistrictRoadGenerator:
 
@@ -59,18 +51,11 @@ class DistrictRoadGenerator:
 
         template      = slot.district_template
         street_layout = template.get("street_layout") or "grid"
-        connections   = template.get("connections") or []
 
-        primary         = connections[0] if connections else {}
+        primary         = primary_connection(template)
         connection_type = primary.get("connection_type") or "road"
-        lanes_per_side  = primary.get("lanes_per_side") or _DEFAULT_LANES.get(connection_type, 1)
-
-        sidewalk_decl = primary.get("sidewalk")
-        has_sidewalk  = (
-            sidewalk_decl
-            if sidewalk_decl is not None
-            else _AUTO_SIDEWALK.get(connection_type, False)
-        )
+        lanes_per_side  = resolve_lanes_per_side(template, connection_type)
+        has_sidewalk    = resolve_has_sidewalk(template, connection_type)
 
         fn = _LAYOUT_FN.get(street_layout)
         if fn is None:

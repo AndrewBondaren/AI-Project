@@ -113,7 +113,7 @@ economic_tier_band
 Правила:
 
 1. Explicit `system_tier` сильнее band на том же и более глубоком уровне → здание `"premium"` побеждает band района.
-2. Band района разворачивается только если у здания tier не задан; опционально clamp ±1 от tier города ([tz_city_generation.md](tz_city_generation.md), `districtAssembler._assign_template`).
+2. Band района разворачивается только если у здания tier не задан; опционально clamp ±1 от tier города ([tz_city_generation.md](tz_city_generation.md), `building_tier_compatible` в `plan_area_placements`).
 3. Tier города — якорь для `placement_conditions` (`economic_tier_min` / `economic_tier_max`).
 4. После получения одного `system_tier` — только `tierRegistry`.
 
@@ -194,6 +194,6 @@ economic_tier_band
 
 1. Подключить `economicTierBands` в `sidewalkWidthResolver` (fallback через `band_of`, не по raw имени tier).
 2. Реализовать разворот `economic_tier_band` в `TierResolver` / отдельном `BandResolver`.
-3. `districtAssembler._assign_template`: `economic_tier_range` + ±1 через `tier_rank`.
+3. `plan_area_placements` / `buildingCache`: `economic_tier_range` + ±1 через `building_tier_compatible` и `tier_rank`.
 4. **Validator** при import и в редакторе миров (§6) — после стабилизации fallback-тестов.
 5. При включении validator: рассмотреть `tier_rank(unknown) → -1` или явный `is_known_tier()`, чтобы сравнения не маскировали битые ref.

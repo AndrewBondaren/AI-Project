@@ -1,4 +1,5 @@
 import logging
+import random
 
 from app.application.worldData.generators.assemblers.areaAssembler.areaLayout import AreaLayout
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
@@ -6,10 +7,13 @@ from app.application.worldData.generators.assemblers.citySkeleton import CitySke
 from app.application.worldData.generators.assemblers import structureAssembler as _structure_assemblers  # noqa: F401
 from app.application.worldData.generators.assemblers.structureAssembler.assemblerRegistry import ASSEMBLER_REGISTRY
 from app.application.worldData.generators.assemblers.structureAssembler.structureContext import StructureContext
+from app.application.worldData.generators.structure.layoutTranslate import translate_layout
+from app.application.worldData.generators.assemblers.areaAssembler.planner.areaBarriers import (
+    plan_area_barrier_cells,
+)
 from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
     rebind_layout_to_building,
 )
-from app.application.worldData.generators.structure.layoutTranslate import translate_layout
 from app.application.worldData.generators.structure.structureGeneratorService import StructureLayout
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
@@ -83,7 +87,9 @@ class StructureAreaAssembler:
 
         building_layout = rebind_layout_to_building(building_layout, building)
 
-        barrier_cells = self._build_barrier(world, slot, template)
+        barrier_cells = self._build_barrier(
+            world, slot, template, building, city_skeleton,
+        )
 
         return AreaLayout(
             building_location=building,
@@ -116,10 +122,13 @@ class StructureAreaAssembler:
 
     def _build_barrier(
         self,
-        world:    World,
-        slot:     AreaSlot,
-        template: dict,
+        world:         World,
+        slot:          AreaSlot,
+        template:      dict,
+        building:      NamedLocation,
+        city_skeleton: CitySkeleton,
     ) -> list[MapCell]:
-        """v1: заборы участка — отложено (фаза D / area barriers)."""
-        _ = (world, slot, template)
-        return []
+        rng = random.Random(f"{building.location_uid}_barrier")
+        return plan_area_barrier_cells(
+            world, slot, template, building, city_skeleton, rng,
+        )

@@ -5,9 +5,14 @@ from random import Random
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.connectionEntry import ConnectionEntry
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import grid_dimension
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
+    footprint_gate_line_coords,
+    grid_dimension,
+)
 from app.application.worldData.generators.road.blockSize import block_size_for_density
+from app.application.worldData.generators.road.connectionPolicy import resolve_has_sidewalk
 from app.application.worldData.generators.road.sidewalkWidthResolver import resolve_sidewalk_width
+from app.application.worldData.generators.road.roadTravelResolver import effective_travel_modifier
 from app.application.worldData.generators.road.widthResolver import resolve_width
 from app.application.worldData.generators.utils.materialResolver import resolve_material
 from app.application.worldData.generators.utils.facing import Facing
@@ -45,35 +50,6 @@ def _make_node(
         graph_level=graph_level,
         world_uid=world_uid,
     )
-
-
-def footprint_gate_line_coords(origin: int, side_m: int, cell_m: int) -> list[int]:
-    """Координаты settlement_gate вдоль одной оси (кратны cell_m + far edge)."""
-    n_steps = max(1, round(side_m / cell_m))
-    coords = [origin + i * cell_m for i in range(n_steps + 1)]
-    end = origin + side_m
-    if coords[-1] != end:
-        coords.append(end)
-    return coords
-
-
-def footprint_gate_coordinates(
-    origin_x: int,
-    origin_y: int,
-    side_m:   int,
-    cell_m:   int,
-) -> set[tuple[int, int]]:
-    """Все (x, y) settlement_gate на периметре footprint — те же, что plan_city_street_grid."""
-    xs = footprint_gate_line_coords(origin_x, side_m, cell_m)
-    ys = footprint_gate_line_coords(origin_y, side_m, cell_m)
-    gates: set[tuple[int, int]] = set()
-    for x in xs:
-        gates.add((x, origin_y))
-        gates.add((x, origin_y + side_m))
-    for y in ys:
-        gates.add((origin_x, y))
-        gates.add((origin_x + side_m, y))
-    return gates
 
 
 def _grid_lines(origin: int, side_m: int, block: int) -> list[int]:
@@ -338,10 +314,23 @@ def plan_city_street_grid(
                 lanes_per_side=1,
                 width_cells=width,
                 material=road_material,
-                has_sidewalk=has_sidewalk,
+                has_sidewalk=resolve_has_sidewalk(
+                    slot.district_template, entry.connection_type,
+                ),
                 graph_level="city",
                 world_uid=world_uid,
             ))
+
+    entry_links = [e for e in edges if e.edge_uid.startswith("city_link_")]
+    if entry_links:
+        sample = entry_links[0]
+        logger.info(
+            "plan_city_street_grid | sample_entry_link effective_travel_modifier=%.3f"
+            " has_sidewalk=%s material=%r",
+            effective_travel_modifier(world, sample),
+            sample.has_sidewalk,
+            sample.material,
+        )
 
     corridor_algo = (
         "perimeter_ring+inter_district_corridors" if grid_n > 1 else "perimeter_ring"

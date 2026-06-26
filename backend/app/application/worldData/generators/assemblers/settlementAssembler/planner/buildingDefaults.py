@@ -11,6 +11,7 @@ DEFAULT_BUILDING_TEMPLATES: list[dict] = [
             "foundation_type": "slab",
             "roof_type":       "gable",
         },
+        "perimeter_barrier": {"template": "stone_fence", "probability": 1.0},
         "levels": [
             {
                 "z_offset":     0,
