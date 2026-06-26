@@ -17,7 +17,12 @@ def cell_size_m(world: World) -> int:
         val = map_settings.get("global_cell_size_m")
         if val is not None:
             return int(val)
-    return int(world.map_cell_size_m or 3000)
+    v = world.map_cell_size_m
+    if v is None:
+        raise ValueError(
+            f"world {getattr(world, 'world_uid', '?')} missing map_cell_size_m"
+        )
+    return int(v)
 
 
 def grid_dimension(side_m: int, cell_m: int) -> int:

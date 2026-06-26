@@ -8,7 +8,9 @@ Skeleton на NamedLocation — фаза 1 (world create).
 import logging
 
 from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
+    collect_geometry_meter_cells,
     collect_map_cells_from_layout,
+    collect_surface_grid_cells,
     needs_settlement_geometry,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.mapOccupancy import (
@@ -60,6 +62,14 @@ class SettlementGeneratorService:
     ) -> list[MapCell]:
         return collect_map_cells_from_layout(world, settlement, layout)
 
+    def collect_surface_grid_cells(self, layout: SettlementLayout) -> list[MapCell]:
+        """WORLD_SURFACE_GRID occupancy — grid index in x/y."""
+        return collect_surface_grid_cells(layout)
+
+    def collect_geometry_meter_cells(self, layout: SettlementLayout) -> list[MapCell]:
+        """WORLD_LOCAL_METERS — buildings + barriers."""
+        return collect_geometry_meter_cells(layout)
+
     def generate_map_cells(
         self,
         world:         World,
@@ -67,12 +77,16 @@ class SettlementGeneratorService:
         terrain_cells: list[MapCell] | None = None,
     ) -> tuple[SettlementLayout, list[MapCell]]:
         layout = self.generate_layout(world, settlement, terrain_cells)
-        cells  = self.collect_map_cells(world, settlement, layout)
+        grid_cells   = self.collect_surface_grid_cells(layout)
+        meter_cells  = self.collect_geometry_meter_cells(layout)
+        cells        = grid_cells + meter_cells
         logger.info(
-            "SettlementGeneratorService | settlement=%s map_cells=%d occupancy=%d",
+            "SettlementGeneratorService | settlement=%s map_cells=%d "
+            "surface_grid=%d meter_geometry=%d",
             settlement.location_uid,
             len(cells),
-            len(layout.occupancy_cells),
+            len(grid_cells),
+            len(meter_cells),
         )
         return layout, cells
 

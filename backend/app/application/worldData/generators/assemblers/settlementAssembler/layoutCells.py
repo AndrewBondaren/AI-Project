@@ -1,5 +1,6 @@
 """Flatten SettlementLayout → map_cells for persist."""
 
+import logging
 from dataclasses import replace
 
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
@@ -13,6 +14,8 @@ from app.application.worldData.generators.structure.structureGeneratorService im
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+
+logger = logging.getLogger(__name__)
 
 _SETTLEMENT_TYPES = frozenset({"city", "town", "village", "camp", "hamlet"})
 
@@ -42,27 +45,29 @@ def needs_settlement_geometry(
 ) -> bool:
     """
     True если в footprint ещё нет сгенерированной застройки (building elements).
-    Urban-only terrain от eager/lazy terrain не считается geometry.
+    Urban-only terrain / occupancy grid cells не считаются geometry.
+
+    Проверяет только WORLD_LOCAL_METERS: system_building_element в meter rect footprint.
     """
     if settlement.system_location_type not in _SETTLEMENT_TYPES:
         return False
     ox, oy, x1, y1, _ = footprint_meter_rect(world, settlement)
     for cell in existing_cells:
-        if (
-            cell.system_building_element
-            and cell_in_footprint_meters(cell.x, cell.y, ox, oy, x1, y1)
-        ):
+        if not cell.system_building_element:
+            continue
+        if cell_in_footprint_meters(cell.x, cell.y, ox, oy, x1, y1):
             return False
     return True
 
 
-def collect_map_cells_from_layout(
-    world:      World,
-    settlement: NamedLocation,
-    layout:     SettlementLayout,
-) -> list[MapCell]:
-    """occupancy + building interior cells + barriers."""
-    cells: list[MapCell] = list(layout.occupancy_cells)
+def collect_surface_grid_cells(layout: SettlementLayout) -> list[MapCell]:
+    """WORLD_SURFACE_GRID: footprint occupancy (grid index in MapCell.x/y)."""
+    return list(layout.occupancy_cells)
+
+
+def collect_geometry_meter_cells(layout: SettlementLayout) -> list[MapCell]:
+    """WORLD_LOCAL_METERS: building interior/outdoor cells + settlement/district/area barriers."""
+    cells: list[MapCell] = []
 
     for district in layout.district_layouts:
         for area in district.area_layouts:
@@ -75,4 +80,27 @@ def collect_map_cells_from_layout(
         cells.extend(district.barrier_cells)
 
     cells.extend(layout.barrier_cells)
+    return cells
+
+
+def collect_map_cells_from_layout(
+    world:      World,
+    settlement: NamedLocation,
+    layout:     SettlementLayout,
+) -> list[MapCell]:
+    """
+    Persist batch: surface grid occupancy + meter geometry.
+    Option A — spaces stay separate until DB carries coordinate_space (v2).
+    """
+    grid_cells = collect_surface_grid_cells(layout)
+    meter_cells = collect_geometry_meter_cells(layout)
+    cells = grid_cells + meter_cells
+    logger.info(
+        "collect_map_cells_from_layout | settlement=%s total=%d "
+        "surface_grid=%d meter_geometry=%d",
+        settlement.location_uid,
+        len(cells),
+        len(grid_cells),
+        len(meter_cells),
+    )
     return cells

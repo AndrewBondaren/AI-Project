@@ -1,7 +1,14 @@
 import hashlib
-from collections import defaultdict
 from typing import Optional
 
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
+    settlement_grid_rect,
+)
+from app.application.worldData.generators.coordinates import (
+    cell_size_m,
+    meters_to_grid_x,
+    meters_to_grid_y,
+)
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -93,6 +100,7 @@ class TerrainGeneratorService:
         z_max       = world.z_max if world.z_max is not None else 4
 
         uid_map: dict[str, NamedLocation] = {l.location_uid: l for l in locations}
+        cell_m = cell_size_m(world)
 
         # Anchor locations: have physical map coords and are not mobile
         anchors = [
@@ -103,10 +111,14 @@ class TerrainGeneratorService:
         if not anchors:
             return []
 
-        # City anchors list + center lookup for Voronoi
+        # City anchors + Voronoi centers in world surface grid indices (not meter anchor).
         city_list = [l for l in anchors if l.system_location_type in _CITY_TYPES]
         city_centers: dict[tuple[int, int], NamedLocation] = {
-            (l.map_x, l.map_y): l for l in city_list
+            (
+                meters_to_grid_x(city.map_x, cell_m),
+                meters_to_grid_y(city.map_y, cell_m),
+            ): city
+            for city in city_list
         }
 
         # Zone for each city: walk up tree to first zone-type ancestor
@@ -116,18 +128,17 @@ class TerrainGeneratorService:
             if zone:
                 city_zones[city.location_uid] = zone
 
-        # Expand each city into a footprint.
+        # Expand each city into a footprint (same grid rect as settlement occupancy).
         # all_footprints: every city (including skipped) — used for stable bounding box.
         # city_footprint: only non-skipped cities — used for urban cell assignment.
-        # cell (x, y) → owning city; first-claimed wins on overlap.
+        # cell (gx, gy) → owning city; first-claimed wins on overlap.
         all_footprints:  dict[tuple[int, int], NamedLocation] = {}
         city_footprint:  dict[tuple[int, int], NamedLocation] = {}
         for city in city_list:
-            radius = self._get_city_radius(city, world)
-            cx, cy = city.map_x, city.map_y
-            for dy in range(-radius, radius + 1):
-                for dx in range(-radius, radius + 1):
-                    pos = (cx + dx, cy + dy)
+            rect = settlement_grid_rect(world, city)
+            for gy in range(rect.gy0, rect.gy1):
+                for gx in range(rect.gx0, rect.gx1):
+                    pos = (gx, gy)
                     if pos not in all_footprints:
                         all_footprints[pos] = city
                     if city.location_uid not in skip_location_uids:
@@ -142,10 +153,10 @@ class TerrainGeneratorService:
             y_min = min(p[1] for p in all_footprints) - padding
             y_max = max(p[1] for p in all_footprints) + padding
         else:
-            x_min = min(l.map_x for l in anchors) - padding
-            x_max = max(l.map_x for l in anchors) + padding
-            y_min = min(l.map_y for l in anchors) - padding
-            y_max = max(l.map_y for l in anchors) + padding
+            x_min = min(meters_to_grid_x(l.map_x, cell_m) for l in anchors) - padding
+            x_max = max(meters_to_grid_x(l.map_x, cell_m) for l in anchors) + padding
+            y_min = min(meters_to_grid_y(l.map_y, cell_m) for l in anchors) - padding
+            y_max = max(meters_to_grid_y(l.map_y, cell_m) for l in anchors) + padding
 
         cells: list[MapCell] = []
         for y in range(y_min, y_max + 1):
@@ -229,16 +240,6 @@ class TerrainGeneratorService:
         )]
 
     # ------------------------------------------------------------------
-
-    def _get_city_radius(self, city: NamedLocation, world: World) -> int:
-        """Look up footprint radius from city_size_registry. Defaults to 0 (single cell)."""
-        if not city.system_city_size:
-            return 0
-        registry = world.city_size_registry or []
-        for entry in registry:
-            if entry.get("system_size") == city.system_city_size:
-                return entry.get("radius", 0)
-        return 0
 
     def _find_zone(
         self,

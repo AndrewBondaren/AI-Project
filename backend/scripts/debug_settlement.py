@@ -654,6 +654,167 @@ def test_coordinate_spaces_anchor_3000() -> None:
     print("coordinate spaces anchor 3000 checks: OK")
 
 
+def _urban_surface_cells(cells: list[MapCell]) -> set[tuple[int, int]]:
+    return {(c.x, c.y) for c in cells if c.system_terrain == "urban"}
+
+
+def _grid_rect_positions(gx0: int, gy0: int, gx1: int, gy1: int) -> set[tuple[int, int]]:
+    return {(gx, gy) for gy in range(gy0, gy1) for gx in range(gx0, gx1)}
+
+
+def test_phase_3_terrain_footprint() -> None:
+    """Terrain urban footprint must match settlement_grid_rect / occupancy (grid index space)."""
+    from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
+        settlement_grid_rect,
+    )
+    from app.application.worldData.generators.assemblers.settlementAssembler.planner.mapOccupancy import (
+        plan_footprint_occupancy_cells,
+    )
+    from app.application.worldData.generators.terrain.terrainGeneratorService import (
+        TerrainGeneratorService,
+    )
+
+    terrain_reg = [
+        {"system_terrain": "urban", "glossary_ref": "terrain_urban"},
+        {"system_terrain": "plains", "glossary_ref": "terrain_plains"},
+    ]
+    size_reg = [
+        {"system_size": "town", "display_size": "Town", "footprint_multiplier": 1.0},
+        {"system_size": "city", "display_size": "City", "footprint_multiplier": 2.0},
+    ]
+
+    def _city(
+        world_uid: str,
+        uid: str,
+        size: str,
+        map_x: int,
+        map_y: int = 0,
+    ) -> NamedLocation:
+        return NamedLocation(
+            location_uid=uid,
+            world_uid=world_uid,
+            display_name=uid,
+            system_location_type="city",
+            created_at="2026-01-01T00:00:00",
+            system_city_size=size,
+            system_economic_tier="standard",
+            map_x=map_x,
+            map_y=map_y,
+            map_z=0,
+        )
+
+    svc = TerrainGeneratorService()
+
+    world = World(
+        world_uid="world-test-terrain",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        map_cell_size_m=3000,
+        terrain_registry=terrain_reg,
+        city_size_registry=size_reg,
+    )
+    town_anchor = _city("world-test-terrain", "town-0", "town", 0)
+    cells_origin = svc.generate_surface(world, [town_anchor])
+    expected_origin = _grid_rect_positions(*settlement_grid_rect(world, town_anchor).as_tuple())
+    assert _urban_surface_cells(cells_origin) == expected_origin == {(0, 0)}
+
+    town_east = _city("world-test-terrain", "town-3k", "town", 3000)
+    cells_east = svc.generate_surface(world, [town_east])
+    expected_east = _grid_rect_positions(*settlement_grid_rect(world, town_east).as_tuple())
+    occ_east = {(c.x, c.y) for c in plan_footprint_occupancy_cells(world, town_east)}
+    assert _urban_surface_cells(cells_east) == expected_east == occ_east == {(1, 0)}
+
+    city_east = _city("world-test-terrain", "city-3k", "city", 3000)
+    cells_city = svc.generate_surface(world, [city_east])
+    rect_city = settlement_grid_rect(world, city_east).as_tuple()
+    expected_city = _grid_rect_positions(*rect_city)
+    assert _urban_surface_cells(cells_city) == expected_city
+    assert expected_city == {(1, 0), (2, 0), (1, 1), (2, 1)}
+
+    world_5k = World(
+        world_uid="world-test-terrain-5k",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        map_cell_size_m=5000,
+        terrain_registry=terrain_reg,
+        city_size_registry=size_reg,
+    )
+    town_5k = _city("world-test-terrain-5k", "town-5k", "town", 5000)
+    cells_5k = svc.generate_surface(world_5k, [town_5k])
+    assert _urban_surface_cells(cells_5k) == {(1, 0)}
+
+    print("phase 3 terrain footprint checks: OK")
+
+
+def test_phase_4_collect_map_cells() -> None:
+    """Split persist: surface grid occupancy vs meter geometry (Option A)."""
+    from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
+        collect_geometry_meter_cells,
+        collect_map_cells_from_layout,
+        collect_surface_grid_cells,
+        needs_settlement_geometry,
+    )
+    from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
+        cell_in_footprint_meters,
+        footprint_meter_rect,
+    )
+    from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
+        SettlementGeneratorService,
+    )
+
+    world = World(
+        world_uid="world-test-p4",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        map_cell_size_m=3000,
+        city_size_registry=[
+            {"system_size": "town", "display_size": "Town", "footprint_multiplier": 1.0},
+        ],
+    )
+    settlement = NamedLocation(
+        location_uid="city-p4",
+        world_uid="world-test-p4",
+        display_name="Splithold",
+        system_location_type="city",
+        created_at="2026-01-01T00:00:00",
+        system_city_size="town",
+        system_economic_tier="standard",
+        map_x=3000,
+        map_y=0,
+        map_z=0,
+    )
+    settlement.settlement_density = "medium"
+
+    layout = SettlementAssembler().assemble(world, settlement)
+    grid_cells = collect_surface_grid_cells(layout)
+    meter_cells = collect_geometry_meter_cells(layout)
+    merged = collect_map_cells_from_layout(world, settlement, layout)
+
+    assert grid_cells == layout.occupancy_cells
+    assert len(grid_cells) == 1
+    assert (grid_cells[0].x, grid_cells[0].y) == (1, 0)
+    assert not any(c.system_building_element for c in grid_cells)
+
+    assert len(meter_cells) > 0
+    assert any(c.system_building_element for c in meter_cells)
+    ox, oy, x1, y1, _ = footprint_meter_rect(world, settlement)
+    for c in meter_cells:
+        if not c.system_building_element:
+            continue
+        assert cell_in_footprint_meters(c.x, c.y, ox, oy, x1, y1), (
+            f"building cell ({c.x},{c.y}) outside meter footprint"
+        )
+
+    assert merged == grid_cells + meter_cells
+    assert {id(c) for c in grid_cells}.isdisjoint({id(c) for c in meter_cells})
+
+    svc = SettlementGeneratorService()
+    assert needs_settlement_geometry(settlement, world, grid_cells) is True
+    assert svc.needs_geometry(settlement, world, merged) is False
+
+    print("phase 4 collect_map_cells checks: OK")
+
+
 def main() -> None:
     world = World(
         world_uid="world-test",
@@ -686,6 +847,8 @@ def main() -> None:
     test_phase_area_barriers()
     test_phase_f_map_occupancy()
     test_coordinate_spaces_anchor_3000()
+    test_phase_3_terrain_footprint()
+    test_phase_4_collect_map_cells()
     test_city_shared_nodes()
 
 
