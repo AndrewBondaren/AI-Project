@@ -31,8 +31,8 @@ PARCEL_GAP_M = 8
 class AreaPlacement:
     area_slot:   AreaSlot
     template:    dict
-    building_x:  int
-    building_y:  int
+    building_x:  int  # WORLD_LOCAL_METERS
+    building_y:  int  # WORLD_LOCAL_METERS
 
 
 def _district_bounds(slot: DistrictSlot) -> tuple[int, int, int, int]:

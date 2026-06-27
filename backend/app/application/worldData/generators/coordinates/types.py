@@ -6,6 +6,7 @@ GridY = NewType("GridY", int)
 MeterX = NewType("MeterX", int)
 MeterY = NewType("MeterY", int)
 MeterZ = NewType("MeterZ", int)
+MeterDelta = NewType("MeterDelta", int)
 
 
 @dataclass(frozen=True, slots=True)

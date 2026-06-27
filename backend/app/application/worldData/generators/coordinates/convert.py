@@ -5,6 +5,7 @@ from app.application.worldData.generators.coordinates.types import (
     GridX,
     GridY,
     LocalMeterCoord,
+    MeterDelta,
     MeterX,
     MeterY,
     MeterZ,
@@ -50,4 +51,22 @@ def settlement_origin_m(settlement: NamedLocation) -> LocalMeterCoord:
         x=MeterX(settlement.map_x if settlement.map_x is not None else 0),
         y=MeterY(settlement.map_y if settlement.map_y is not None else 0),
         z=MeterZ(settlement.map_z if settlement.map_z is not None else 0),
+    )
+
+
+def coarse_tile_offset_m(tile_index: int, cell_m: int) -> MeterDelta:
+    """Offset in WORLD_LOCAL_METERS for tile_index steps on coarse surface grid."""
+    return MeterDelta(tile_index * cell_m)
+
+
+def coarse_cell_meter_xy(
+    origin: LocalMeterCoord,
+    cell_x: int,
+    cell_y: int,
+    cell_m: int,
+) -> tuple[MeterX, MeterY]:
+    """Origin of coarse grid cell (cell_x, cell_y) relative to settlement anchor."""
+    return (
+        MeterX(origin.x + coarse_tile_offset_m(cell_x, cell_m)),
+        MeterY(origin.y + coarse_tile_offset_m(cell_y, cell_m)),
     )

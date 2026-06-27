@@ -43,6 +43,7 @@ def _make_node(
     world_uid: str,
     tag: str,
 ) -> ConnectionNode:
+    """ConnectionNode x/y/z in WORLD_LOCAL_METERS."""
     return ConnectionNode(
         node_uid=f"{tag}_{x}_{y}_{z}_{uuid.uuid4().hex[:8]}",
         x=x, y=y, z=z,
@@ -85,6 +86,7 @@ def plan_settlement_entries(
 ) -> None:
     """
     Заполняет slot.entry_nodes для всех районов.
+    CoordinateSpace: WORLD_LOCAL_METERS on ConnectionNode x/y/z.
     Узлы на (x, y, z) дедуплицируются — соседние районы делят узел на общей границе.
     through_road: пары W↔E и S↔N на гранях с шагом block_size.
     entry_point: узлы на южной грани с шагом block_size.
@@ -199,6 +201,7 @@ def plan_city_street_grid(
 ) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
     """
     settlement_gate на периметре footprint + кольцевая магистраль.
+    CoordinateSpace: WORLD_LOCAL_METERS (origin_x/y, side_m, cell_m for gate spacing).
     Для n>1: city-level коридоры на внутренних границах между районами.
     """
     nodes: list[ConnectionNode] = []

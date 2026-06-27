@@ -10,10 +10,12 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     lookup_barrier_template,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
-    cell_size_m,
     footprint_gate_coordinates,
     footprint_side_m,
-    settlement_origin,
+)
+from app.application.worldData.generators.coordinates import (
+    cell_size_m,
+    settlement_origin_m,
 )
 from app.application.worldData.generators.road.blockSize import block_size_for_density
 from app.application.worldData.generators.barrier.material import pick_barrier_material
@@ -114,13 +116,13 @@ def plan_settlement_barriers(
         )
         return []
 
-    ox, oy, gz = settlement_origin(settlement)
+    origin = settlement_origin_m(settlement)
     side_m = footprint_side_m(world, skeleton.system_city_size)
     cell_m = cell_size_m(world)
     step_m = block_size_for_density(skeleton.settlement_density)
 
-    gate_coords = footprint_gate_coordinates(ox, oy, side_m, cell_m)
-    ring = set(_perimeter_ring(ox, oy, side_m, step_m))
+    gate_coords = footprint_gate_coordinates(origin.x, origin.y, side_m, cell_m)
+    ring = set(_perimeter_ring(origin.x, origin.y, side_m, step_m))
     ring |= gate_coords
 
     material = _pick_template_material(world, template, skeleton, rng)
@@ -132,7 +134,7 @@ def plan_settlement_barriers(
             world_uid=world.world_uid,
             x=x,
             y=y,
-            z=gz,
+            z=origin.z,
             system_terrain="gate" if is_gate else "wall",
             system_material=material,
             is_structural=True,

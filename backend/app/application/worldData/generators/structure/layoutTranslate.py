@@ -1,14 +1,20 @@
-"""Смещение StructureLayout в мировые координаты (reuse из settlement cache)."""
+"""Смещение StructureLayout в WORLD_LOCAL_METERS (reuse из settlement cache)."""
 
 from dataclasses import replace
 
+from app.application.worldData.generators.coordinates.types import MeterDelta
 from app.application.worldData.generators.structure.structureGeneratorService import (
     OccupiedFootprint,
     StructureLayout,
 )
 
 
-def translate_layout(layout: StructureLayout, dx: int, dy: int) -> StructureLayout:
+def translate_layout(
+    layout: StructureLayout,
+    dx: MeterDelta | int,
+    dy: MeterDelta | int,
+) -> StructureLayout:
+    """Apply meter-space offset to all layout coordinates."""
     if dx == 0 and dy == 0:
         return layout
 

@@ -5,11 +5,22 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     DEFAULT_FOOTPRINT_MULTIPLIER,
 )
 from app.application.worldData.generators.coordinates import (
+    cell_in_local_meter_rect,
+    cell_in_surface_grid_rect,
     cell_size_m,
     grid_dimension,
     settlement_grid_rect as _settlement_grid_rect,
     settlement_meter_rect as _settlement_meter_rect,
     settlement_origin_m,
+)
+from app.application.worldData.generators.coordinates.types import (
+    GridX,
+    GridY,
+    LocalMeterRect,
+    MeterX,
+    MeterY,
+    MeterZ,
+    SurfaceGridRect,
 )
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -107,8 +118,8 @@ def footprint_grid_rect(
     system_city_size:  str | None = None,
 ) -> tuple[int, int, int, int]:
     """
-    Прямоугольник footprint в индексах global map grid [gx0, gy0) × [gy0, gy1).
-    map_x/map_y поселения — метры; grid = origin // cell_size_m + offset.
+    Прямоугольник footprint в индексах global map grid [gx0, gx1) × [gy0, gy1).
+    map_x/map_y поселения — WORLD_LOCAL_METERS; grid via settlement_grid_rect.
 
     Deprecated name — prefer settlement_grid_rect(...).as_tuple().
     """
@@ -119,7 +130,16 @@ def cell_in_footprint_grid(
     x: int, y: int,
     gx0: int, gy0: int, gx1: int, gy1: int,
 ) -> bool:
-    return gx0 <= x < gx1 and gy0 <= y < gy1
+    return cell_in_surface_grid_rect(
+        x,
+        y,
+        SurfaceGridRect(
+            gx0=GridX(gx0),
+            gy0=GridY(gy0),
+            gx1=GridX(gx1),
+            gy1=GridY(gy1),
+        ),
+    )
 
 
 def settlement_meter_rect(
@@ -148,7 +168,17 @@ def cell_in_footprint_meters(
     x: int, y: int,
     ox: int, oy: int, x1: int, y1: int,
 ) -> bool:
-    return ox <= x < x1 and oy <= y < y1
+    return cell_in_local_meter_rect(
+        x,
+        y,
+        LocalMeterRect(
+            x0=MeterX(ox),
+            y0=MeterY(oy),
+            x1=MeterX(x1),
+            y1=MeterY(y1),
+            z=MeterZ(0),
+        ),
+    )
 
 
 def district_templates(world: World) -> list[dict]:

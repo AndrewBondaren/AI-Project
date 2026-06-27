@@ -83,7 +83,7 @@ class TerrainGeneratorService:
         """
         Step 1 eager init: generate one surface cell per (x, y) in bounding box.
 
-        City anchors expand into footprints based on city_size_registry radius.
+        City anchors expand into footprints via settlement_grid_rect (same as settlement occupancy).
         Surrounding grid is filled with climate-based terrain via nearest-city Voronoi.
 
         skip_location_uids: cities whose cells already exist in DB — their footprint is

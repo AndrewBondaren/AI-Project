@@ -4,9 +4,9 @@ import logging
 from dataclasses import replace
 
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
-    cell_in_footprint_meters,
-    footprint_meter_rect,
+    settlement_meter_rect,
 )
+from app.application.worldData.generators.coordinates import cell_in_local_meter_rect
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import (
     SettlementLayout,
 )
@@ -51,11 +51,11 @@ def needs_settlement_geometry(
     """
     if settlement.system_location_type not in _SETTLEMENT_TYPES:
         return False
-    ox, oy, x1, y1, _ = footprint_meter_rect(world, settlement)
+    rect = settlement_meter_rect(world, settlement)
     for cell in existing_cells:
         if not cell.system_building_element:
             continue
-        if cell_in_footprint_meters(cell.x, cell.y, ox, oy, x1, y1):
+        if cell_in_local_meter_rect(cell.x, cell.y, rect):
             return False
     return True
 

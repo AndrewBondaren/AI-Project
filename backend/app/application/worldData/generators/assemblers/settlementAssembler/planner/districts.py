@@ -4,11 +4,14 @@ import random
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
-    cell_size_m,
     district_templates,
     footprint_side_m,
+)
+from app.application.worldData.generators.coordinates import (
+    cell_size_m,
+    coarse_cell_meter_xy,
     grid_dimension,
-    settlement_origin,
+    settlement_origin_m,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.placement import (
     select_district_template,
@@ -40,7 +43,7 @@ def plan_district_slots(
     cell_m = cell_size_m(world)
     side_m = footprint_side_m(world, skeleton.system_city_size)
     n      = grid_dimension(side_m, cell_m)
-    ox, oy, ground_z = settlement_origin(settlement)
+    origin = settlement_origin_m(settlement)
     templates = district_templates(world)
 
     logger.info(
@@ -52,9 +55,9 @@ def plan_district_slots(
         cell_m,
         n,
         n,
-        ox,
-        oy,
-        ground_z,
+        origin.x,
+        origin.y,
+        origin.z,
         skeleton.system_city_size,
         skeleton.settlement_density,
         len(templates),
@@ -65,8 +68,7 @@ def plan_district_slots(
 
     for cell_y in range(n):
         for cell_x in range(n):
-            origin_x = ox + cell_x * cell_m
-            origin_y = oy + cell_y * cell_m
+            origin_x, origin_y = coarse_cell_meter_xy(origin, cell_x, cell_y, cell_m)
 
             template = select_district_template(
                 templates, settlement, skeleton, world,
@@ -114,7 +116,7 @@ def plan_district_slots(
                 len(required),
             )
 
-    plan_settlement_entries(slots, skeleton, ox, oy, side_m, world.world_uid)
+    plan_settlement_entries(slots, skeleton, origin.x, origin.y, side_m, world.world_uid)
 
     logger.info(
         "plan_district_slots done | settlement=%s slots=%d",

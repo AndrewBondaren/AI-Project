@@ -3,8 +3,11 @@
 import logging
 
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
-    footprint_grid_rect,
-    settlement_origin,
+    settlement_grid_rect,
+)
+from app.application.worldData.generators.coordinates import (
+    CoordinateSpace,
+    settlement_origin_m,
 )
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
@@ -28,32 +31,34 @@ def plan_footprint_occupancy_cells(
 ) -> list[MapCell]:
     """
     Маркирует global map cells под footprint поселения.
-    location_uid = settlement; z = settlement.map_z.
+    CoordinateSpace: WORLD_SURFACE_GRID (MapCell.x/y = grid index).
     """
-    _, _, gz = settlement_origin(settlement)
-    gx0, gy0, gx1, gy1 = footprint_grid_rect(world, settlement, system_city_size)
+    origin = settlement_origin_m(settlement)
+    rect = settlement_grid_rect(world, settlement, system_city_size)
     terrain = _surface_terrain(world)
 
     cells: list[MapCell] = []
-    for gy in range(gy0, gy1):
-        for gx in range(gx0, gx1):
+    for gy in range(rect.gy0, rect.gy1):
+        for gx in range(rect.gx0, rect.gx1):
             cells.append(MapCell(
                 world_uid=world.world_uid,
                 x=gx,
                 y=gy,
-                z=gz,
+                z=origin.z,
                 system_terrain=terrain,
                 location_uid=settlement.location_uid,
             ))
 
     logger.info(
-        "plan_footprint_occupancy | settlement=%s grid=(%d,%d)-(%d,%d) z=%d cells=%d terrain=%s",
+        "plan_footprint_occupancy | settlement=%s space=%s grid=(%d,%d)-(%d,%d)"
+        " z=%d cells=%d terrain=%s",
         settlement.location_uid,
-        gx0,
-        gy0,
-        gx1,
-        gy1,
-        gz,
+        CoordinateSpace.WORLD_SURFACE_GRID,
+        rect.gx0,
+        rect.gy0,
+        rect.gx1,
+        rect.gy1,
+        origin.z,
         len(cells),
         terrain,
     )

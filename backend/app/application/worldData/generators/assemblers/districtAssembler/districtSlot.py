@@ -13,9 +13,9 @@ class DistrictSlot:
     Создаётся SettlementAssembler после проверки placement_conditions шаблона.
     district_template — уже выбранный шаблон; условия гарантированно выполнены.
 
-    Координаты в мировых метрах — вычислены SettlementAssembler из:
-        origin_x = cell_x * cell_size_m + offset
-        cell_size_m = world.map_cell_size_m
+    Координаты в WORLD_LOCAL_METERS — вычислены SettlementAssembler из:
+        origin = settlement_origin_m(settlement)
+        (origin_x, origin_y) = coarse_cell_meter_xy(origin, cell_x, cell_y, cell_size_m(world))
 
     entry_nodes — точки входа/выхода на гранях района, созданные SettlementAssembler.
     DistrictAssembler прокладывает through_road-коридоры от этих точек,

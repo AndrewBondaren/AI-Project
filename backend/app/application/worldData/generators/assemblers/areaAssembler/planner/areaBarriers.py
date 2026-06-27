@@ -57,6 +57,7 @@ def plan_area_barrier_cells(
 ) -> list[MapCell]:
     """
     Забор вокруг footprint участка (slot.cells) + margin.
+    CoordinateSpace: WORLD_LOCAL_METERS (parcel bbox from slot.cells).
     Gate — на грани slot.facing (сторона улицы).
     """
     if not slot.cells:
