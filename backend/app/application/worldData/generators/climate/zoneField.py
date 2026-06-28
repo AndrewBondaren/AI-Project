@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from app.application.worldData.generators.climate.math import dist_sq
 from app.application.worldData.generators.coordinates import (
     meters_to_grid_x,
     meters_to_grid_y,
@@ -8,10 +9,6 @@ from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 ZONE_LOCATION_TYPES = frozenset({"region", "kingdom", "empire", "duchy"})
-
-
-def _dist_sq(x1: int, y1: int, x2: int, y2: int) -> int:
-    return (x1 - x2) ** 2 + (y1 - y2) ** 2
 
 
 @dataclass(frozen=True)
@@ -24,7 +21,7 @@ class ZoneClimateField:
         best      = None
         best_dist = float("inf")
         for (cx, cy), loc in self.zone_centers.items():
-            d = _dist_sq(gx, gy, cx, cy)
+            d = dist_sq(gx, gy, cx, cy)
             if d < best_dist:
                 best_dist = d
                 best      = loc

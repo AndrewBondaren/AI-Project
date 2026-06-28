@@ -22,6 +22,10 @@ def run_anchor_collect_pass(
     cell_m   = cell_size_m(world)
     uid_map  = {loc.location_uid: loc for loc in locations}
     manual   = collect_manual_anchors(locations, cell_m)
-    features = detect_terrain_features(heightmap_cells)
+    features = detect_terrain_features(heightmap_cells, world.world_uid)
     auto     = auto_anchors_from_features(features, world, uid_map, pole_field)
-    return build_merged_field(manual, auto, locations, cell_m)
+    return build_merged_field(
+        manual, auto, locations, cell_m,
+        world=world,
+        include_admin_fallback=pole_field.is_empty(),
+    )

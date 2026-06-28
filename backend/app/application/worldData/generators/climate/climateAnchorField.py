@@ -1,10 +1,7 @@
 from dataclasses import dataclass
 
 from app.application.worldData.generators.climate.climateAnchor import ClimateAnchorPoint
-
-
-def _dist_sq(x1: int, y1: int, x2: int, y2: int) -> int:
-    return (x1 - x2) ** 2 + (y1 - y2) ** 2
+from app.application.worldData.generators.climate.math import dist_sq
 
 
 @dataclass(frozen=True)
@@ -17,7 +14,7 @@ class ClimateAnchorField:
         best      = None
         best_dist = float("inf")
         for anchor in self.anchors:
-            d = _dist_sq(gx, gy, anchor.gx, anchor.gy)
+            d = dist_sq(gx, gy, anchor.gx, anchor.gy)
             if d < best_dist:
                 best_dist = d
                 best      = anchor

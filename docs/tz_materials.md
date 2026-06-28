@@ -206,7 +206,8 @@ pressure(cell) = sum(density * height for fluid_cells above)
 - ниже `cool_temp` или выше `heat_temp` → `liquid_mult = 0` (снег/град — runtime через `weather_type_registry`)
 - outer 10% полосы — smoothstep (как tier temp blend)
 
-Fallback: `water` → первый `liquid` в registry → built-in `{ cool_temp: 0, heat_temp: 100 }`.
+Fallback: `water` → первый `liquid` в registry → built-in `{ cool_temp: 0, heat_temp: 100 }`.  
+При fallback — `logger.warning` (once per world); каждый расчёт — `logger.debug`. См. [`tz_climate.md`](./tz_climate.md) § precipitation.
 
 Не привязывать к 0°C / 100°C на уровне движка — только к полям материала.
 

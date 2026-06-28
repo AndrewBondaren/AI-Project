@@ -2570,7 +2570,22 @@ LLM получает объекты как факты: `"chest at (3,1,0), torch
 
 ### Климат и погода
 
-**Принцип:** пользователь задаёт `climate_zone` на уровне `named_locations`; нода генерации вычисляет `temperature_base` и `rainfall` для каждой `map_cells` автоматически. Пользователь никогда не редактирует параметры ячеек вручную.
+> **Eager generate (реализовано):** pole/local tiers, tier resolve, precipitation liquid — см. [`tz_climate.md`](./tz_climate.md) v2.2.  
+> Ниже — модель данных и runtime; формулы с `neighbor_blend` / `random(variance)` — **отложены**.
+
+**Принцип:** мастер задаёт world-level registries и якоря на `named_locations`; генератор вычисляет `temperature_base` и `rainfall` для каждой `map_cells`. Игрок не редактирует параметры ячеек.
+
+**World-поля климата (кроме registries):**
+
+| Поле | Смысл |
+|---|---|
+| `climate_temperature_peak_min/max` | абсолютный коридор; clamp на eager |
+| `climate_pole_mode`, `climate_pole_preset` | pole autoresolve (mode — CL-4 open) |
+| `climate_local_influence_fraction` | радиус local override × bbox diagonal |
+| `precipitation_liquid` | ref → `material_registry`; rainfall = moisture × liquid phase |
+| `default_climate_zone` | fallback pole fade / resolve |
+| `elevation_lapse_rate` | °C на 100 m (default 0.65) |
+| `season_temp_offsets` | runtime only |
 
 **Никаких ограничений на климат.** Система поддерживает любой сеттинг — реалистичный, фэнтезийный, sci-fi, абсурдный:
 - `base_temperature` — без ограничений: -200°C (космическая станция), +500°C (вулканический мир), 0 (вечная мерзлота)
@@ -2611,20 +2626,26 @@ resolve_climate(location):
 
 ---
 
-**Нода генерации — вычисление параметров ячейки:**
-```
-temperature_base = zone.base_temperature
-                 + elevation_lapse_rate × (elevation / 100)     -- высота охлаждает
-                 + Σ(neighbor_zone.base_temperature × w(dist))  -- влияние соседних зон
-                 + random(±zone.temperature_variance)
+**Eager generate — текущая формула (v2.2, см. `tz_climate.md`):**
 
-rainfall         = zone.base_rainfall
-                 + Σ(neighbor_zone.base_rainfall × w(dist))
-                 + random(±zone.rainfall_variance)
 ```
-`w(dist)` — убывающий вес по расстоянию (в пределах `neighbor_blend_radius`).
+sample           = tierResolve(pole_field, local_field, gx, gy)
+temperature_base = clamp(base - lapse×(z/100), peak_min, peak_max)
+rainfall         = round(zone.base_rainfall × liquid_mult(temp, precipitation_liquid))
+```
 
-**Вертикальный климат:** тропическая зона у подножия горы → при высоком `elevation` ячейки вершины получают арктические параметры несмотря на `climate_zone = tropical`. `climate_zone` остаётся меткой локации, параметры ячеек отражают реальный климат.
+`map_cells.rainfall` на eager — **жидкие** осадки; снег/град — runtime через `weather_type_registry` + zone moisture.
+
+**Отложено (не в eager pipeline):**
+
+```
+temperature_base += Σ(neighbor × w(dist)) + random(±variance)
+rainfall         += Σ(neighbor × w(dist)) + random(±variance)
+```
+
+`w(dist)` — в пределах `neighbor_blend_radius` (поле не в модели).
+
+**Высота:** lapse охлаждает/греет по `elevation_lapse_rate`; elevation **не** мапится напрямую в arctic zone (pole/local anchors — см. `tz_climate.md`).
 
 ---
 

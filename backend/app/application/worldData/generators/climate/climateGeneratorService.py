@@ -115,7 +115,7 @@ class ClimateGeneratorService:
         from app.application.worldData.generators.climate.tierResolve import resolve_tier_sample
 
         return resolve_tier_sample(
-            self, world, uid_map, pole_field, local_field, gx, gy,
+            self, world, pole_field, local_field, gx, gy,
         )
 
     def sample_at_grid(

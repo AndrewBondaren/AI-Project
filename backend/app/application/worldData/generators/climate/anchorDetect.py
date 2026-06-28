@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Literal
 
+from app.application.worldData.generators.climate.loggingHelpers import warn_once
 from app.db.models.mapCell import MapCell
 
 TerrainFeatureKind = Literal["peak", "basin", "water"]
@@ -41,7 +42,10 @@ def _neighbors8(gx: int, gy: int) -> list[tuple[int, int]]:
     ]
 
 
-def detect_terrain_features(cells: list[MapCell]) -> list[TerrainFeaturePoint]:
+def detect_terrain_features(
+    cells: list[MapCell],
+    world_uid: str | None = None,
+) -> list[TerrainFeaturePoint]:
     """
     Terrain-aware feature points: local extrema relative to neighbors.
     Does not assign climate — N+1 worlds are not Earth.
@@ -80,6 +84,14 @@ def detect_terrain_features(cells: list[MapCell]) -> list[TerrainFeaturePoint]:
                 )))
 
     candidates.sort(key=lambda item: item[0], reverse=True)
+    if world_uid and len(candidates) > MAX_AUTO_FEATURES:
+        warn_once(
+            world_uid,
+            "auto_features_capped",
+            "climate anchor | world=%s terrain features capped at %d (candidates=%d)",
+            MAX_AUTO_FEATURES,
+            len(candidates),
+        )
     seen: set[tuple[int, int]] = set()
     result: list[TerrainFeaturePoint] = []
     for _, feature in candidates:

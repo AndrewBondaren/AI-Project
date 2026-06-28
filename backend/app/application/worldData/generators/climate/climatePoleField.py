@@ -7,17 +7,9 @@ from app.application.worldData.generators.climate.climatePole import (
     ClimatePolePoint,
 )
 from app.application.worldData.generators.climate.climateZone import ClimateZone
+from app.application.worldData.generators.climate.math import dist_euclidean, smoothstep
 from app.application.worldData.generators.climate.registry import profile_for
 from app.db.models.world import World
-
-
-def _dist(x1: int, y1: int, x2: int, y2: int) -> float:
-    return math.hypot(x1 - x2, y1 - y2)
-
-
-def _smoothstep(t: float) -> float:
-    t = max(0.0, min(1.0, t))
-    return t * t * (3.0 - 2.0 * t)
 
 
 @dataclass(frozen=True)
@@ -87,9 +79,9 @@ class ClimatePoleField:
                 base_temperature_override=pole.base_temperature,
             )
 
-        dist  = _dist(gx, gy, pole.gx, pole.gy)
+        dist  = dist_euclidean(gx, gy, pole.gx, pole.gy)
         denom = max(1.0, bbox.diagonal() * 0.5)
-        t     = _smoothstep(dist / denom)
+        t     = smoothstep(dist / denom)
 
         temp = round(pole.base_temperature + (default_prof.base_temperature - pole.base_temperature) * t)
         elev = round(
@@ -115,7 +107,7 @@ class ClimatePoleField:
     ) -> PoleClimateSample:
         weights: list[float] = []
         for pole in self.poles:
-            d = _dist(gx, gy, pole.gx, pole.gy)
+            d = dist_euclidean(gx, gy, pole.gx, pole.gy)
             weights.append(pole.weight / (d + POLE_BLEND_EPS) ** POLE_BLEND_POWER)
 
         total = sum(weights)

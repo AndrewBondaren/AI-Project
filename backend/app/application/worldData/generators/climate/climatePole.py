@@ -20,6 +20,11 @@ class PoleSource(StrEnum):
     AUTORESOLVE = "autoresolve"
 
 
+class PoleMode(StrEnum):
+    MANUAL      = "manual"
+    AUTORESOLVE = "autoresolve"
+
+
 @dataclass(frozen=True)
 class ClimatePolePoint:
     gx:                  int

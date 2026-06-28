@@ -1,15 +1,17 @@
-import hashlib
-
+from app.application.worldData.generators.climate.loggingHelpers import warn_once
 from app.application.worldData.generators.climate.climatePole import (
     CLIMATE_POLE_TYPE,
     DEFAULT_PEAK_MAX,
     DEFAULT_PEAK_MIN,
     ClimatePolePoint,
     PoleKind,
+    PoleMode,
     PoleSource,
 )
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField, GridBBox
 from app.application.worldData.generators.climate.climateZone import ClimateZone
+from app.application.worldData.generators.climate.locations import static_climate_poles
+from app.application.worldData.generators.climate.math import world_seed
 from app.application.worldData.generators.coordinates import (
     meters_to_grid_x,
     meters_to_grid_y,
@@ -50,13 +52,9 @@ def infer_pole_kind(location: NamedLocation) -> str:
     return PoleKind.NEUTRAL
 
 
-def _static_poles(locations: list[NamedLocation]) -> list[NamedLocation]:
-    return [
-        loc for loc in locations
-        if loc.system_location_type == CLIMATE_POLE_TYPE
-        and loc.map_x is not None and loc.map_y is not None
-        and loc.map_z is not None and not loc.is_mobile
-    ]
+def _should_autoresolve(world: World) -> bool:
+    mode = (world.climate_pole_mode or PoleMode.AUTORESOLVE).lower()
+    return mode == PoleMode.AUTORESOLVE
 
 
 def collect_manual_pole(
@@ -64,11 +62,24 @@ def collect_manual_pole(
     locations: list[NamedLocation],
     cell_m: int,
 ) -> ClimatePolePoint | None:
-    poles = _static_poles(locations)
+    poles = static_climate_poles(locations)
     if not poles:
         return None
+    if len(poles) > 1:
+        warn_once(
+            world.world_uid,
+            "multiple_poles",
+            "climate_pole | world=%s declared %d poles; using first only",
+            len(poles),
+        )
     loc = poles[0]
     if not loc.system_climate_zone:
+        warn_once(
+            world.world_uid,
+            f"pole_no_zone:{loc.location_uid}",
+            "climate_pole | world=%s pole=%s has no system_climate_zone; ignored",
+            loc.location_uid,
+        )
         return None
     peak_min, peak_max = peak_bounds(world)
     kind = infer_pole_kind(loc)
@@ -82,10 +93,6 @@ def collect_manual_pole(
         location_uid=loc.location_uid,
         source=PoleSource.MANUAL,
     )
-
-
-def _world_seed(world: World) -> int:
-    return int(hashlib.md5(world.world_uid.encode()).hexdigest()[:8], 16)
 
 
 def _preset_pole_specs(preset: str) -> list[tuple[str, str]]:
@@ -106,7 +113,7 @@ def autoresolve_poles(
 ) -> list[ClimatePolePoint]:
     peak_min, peak_max = peak_bounds(world)
     specs              = _preset_pole_specs(world.climate_pole_preset)
-    seed               = _world_seed(world)
+    seed               = world_seed(world)
     cx                 = (bbox.x_min + bbox.x_max) // 2
     cy                 = (bbox.y_min + bbox.y_max) // 2
     points: list[ClimatePolePoint] = []
@@ -153,8 +160,19 @@ def resolve_pole_field(
     if manual is not None:
         return ClimatePoleField(poles=(manual,), bbox=bbox)
 
+    if not _should_autoresolve(world):
+        warn_once(
+            world.world_uid,
+            "manual_mode_no_pole",
+            "climate_pole | world=%s mode=manual with no climate_pole; empty pole field",
+        )
+        return ClimatePoleField(poles=(), bbox=bbox)
+
     if bbox is None:
-        return ClimatePoleField(poles=tuple(autoresolve_poles(world, GridBBox(0, 1, 0, 1))), bbox=bbox)
+        return ClimatePoleField(
+            poles=tuple(autoresolve_poles(world, GridBBox(0, 1, 0, 1))),
+            bbox=bbox,
+        )
 
     return ClimatePoleField(
         poles=tuple(autoresolve_poles(world, bbox)),

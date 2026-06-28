@@ -1,23 +1,9 @@
+from app.application.worldData.generators.climate.terrainZ import z_to_terrain
 from app.application.worldData.generators.assemblers.climateAssembler import ClimateOrchestratorService
 from app.application.worldData.generators.climate import ClimateGeneratorService
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
-
-
-def _z_to_terrain(z: int, terrain_set: set[str]) -> str:
-    if z >= 2:
-        candidates = ["tundra", "plains"]
-    elif z == 1:
-        candidates = ["forest", "plains"]
-    elif z == 0:
-        candidates = ["plains"]
-    else:
-        candidates = ["liquid_body", "plains"]
-    for t in candidates:
-        if t in terrain_set:
-            return t
-    return next(iter(terrain_set), "plains")
 
 
 class TerrainGeneratorService:
@@ -63,7 +49,7 @@ class TerrainGeneratorService:
         return [MapCell(
             world_uid=world.world_uid,
             x=x, y=y, z=z,
-            system_terrain=_z_to_terrain(z, terrain_set),
+            system_terrain=z_to_terrain(z, terrain_set),
             temperature_base=temp,
             rainfall=rainfall,
             location_uid=location.location_uid,

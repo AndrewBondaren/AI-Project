@@ -2,6 +2,9 @@
 
 import logging
 
+from app.application.worldData.generators.climate.loggingHelpers import warn_once
+from app.application.worldData.generators.climate.loggingHelpers import debug_once
+from app.application.worldData.generators.climate.math import smoothstep
 from app.application.worldData.generators.climate.poleResolve import peak_bounds
 from app.db.models.world import World
 
@@ -19,27 +22,12 @@ _FALLBACK_WATER: dict = {
     "heat_temp":          100,
 }
 
-_warned_liquid_fallbacks: set[tuple[str, str]] = set()
-
-
-def _warn_liquid_fallback_once(world_uid: str, reason: str, msg: str, *args: object) -> None:
-    key = (world_uid, reason)
-    if key in _warned_liquid_fallbacks:
-        return
-    _warned_liquid_fallbacks.add(key)
-    logger.warning(msg, world_uid, *args)
-
 
 def _material_entry(world: World, system_material: str) -> dict | None:
     for entry in world.material_registry or []:
         if isinstance(entry, dict) and entry.get("system_material") == system_material:
             return entry
     return None
-
-
-def _smoothstep(t: float) -> float:
-    t = max(0.0, min(1.0, t))
-    return t * t * (3.0 - 2.0 * t)
 
 
 def resolve_world_precipitation_liquid(world: World) -> dict:
@@ -52,47 +40,41 @@ def resolve_world_precipitation_liquid(world: World) -> dict:
     if entry is not None and entry.get("material_category") == "liquid":
         return entry
 
-    if entry is not None:
-        _warn_liquid_fallback_once(
-            world.world_uid,
-            f"not_liquid:{key}",
-            "precipitation_liquid fallback | world=%s requested=%s is not liquid (category=%s); trying water",
-            key,
-            entry.get("material_category"),
-        )
-    elif world.precipitation_liquid:
-        _warn_liquid_fallback_once(
-            world.world_uid,
-            f"missing:{key}",
-            "precipitation_liquid fallback | world=%s requested=%s not in material_registry; trying water",
-            key,
-        )
-
     water = _material_entry(world, DEFAULT_PRECIPITATION_LIQUID)
     if water is not None:
-        if key != DEFAULT_PRECIPITATION_LIQUID or entry is not None:
-            _warn_liquid_fallback_once(
+        if entry is not None:
+            warn_once(
                 world.world_uid,
-                f"resolved_water:{key}",
-                "precipitation_liquid fallback | world=%s using registry water instead of requested=%s",
+                f"not_liquid:{key}",
+                "precipitation_liquid fallback | world=%s requested=%s is not liquid (category=%s); using water",
+                key,
+                entry.get("material_category"),
+            )
+        elif key != DEFAULT_PRECIPITATION_LIQUID:
+            warn_once(
+                world.world_uid,
+                f"missing:{key}",
+                "precipitation_liquid fallback | world=%s requested=%s not in material_registry; using water",
                 key,
             )
         return water
 
     for entry in world.material_registry or []:
         if isinstance(entry, dict) and entry.get("material_category") == "liquid":
-            _warn_liquid_fallback_once(
+            warn_once(
                 world.world_uid,
                 "first_liquid",
-                "precipitation_liquid fallback | world=%s water missing; using first liquid=%s",
+                "precipitation_liquid fallback | world=%s requested=%s; water missing; using first liquid=%s",
+                key,
                 entry.get("system_material"),
             )
             return entry
 
-    _warn_liquid_fallback_once(
+    warn_once(
         world.world_uid,
         "builtin_water",
-        "precipitation_liquid fallback | world=%s no liquid in material_registry; using built-in water defaults",
+        "precipitation_liquid fallback | world=%s requested=%s; no liquid in material_registry; using built-in water defaults",
+        key,
     )
     return _FALLBACK_WATER
 
@@ -107,7 +89,11 @@ def _phase_bounds(entry: dict) -> tuple[int | None, int | None]:
     return cool, heat
 
 
-def liquid_precipitation_mult(temp: int, liquid_entry: dict) -> float:
+def liquid_precipitation_mult(
+    temp: int,
+    liquid_entry: dict,
+    world_uid: str | None = None,
+) -> float:
     """
     0..1 multiplier: liquid precipitation possible when temp is inside material phase band.
     Outer 10% of band uses smoothstep (same compromise as tier temp blend).
@@ -118,6 +104,16 @@ def liquid_precipitation_mult(temp: int, liquid_entry: dict) -> float:
 
     if cool is not None and heat is not None:
         if heat <= cool:
+            if world_uid:
+                material = liquid_entry.get("system_material", "?")
+                warn_once(
+                    world_uid,
+                    f"invalid_phase_band:{material}",
+                    "liquid_precipitation_mult | world=%s material=%s heat_temp=%s <= cool_temp=%s; using mult=1.0",
+                    material,
+                    heat,
+                    cool,
+                )
             return 1.0
         if temp <= cool or temp >= heat:
             return 0.0
@@ -126,10 +122,10 @@ def liquid_precipitation_mult(temp: int, liquid_entry: dict) -> float:
         inner_hi = heat - span * LIQUID_BAND_OUTER
         if temp <= inner_lo:
             band = inner_lo - cool
-            return _smoothstep((temp - cool) / band) if band > 0 else 1.0
+            return smoothstep((temp - cool) / band) if band > 0 else 1.0
         if temp >= inner_hi:
             band = heat - inner_hi
-            return _smoothstep((heat - temp) / band) if band > 0 else 1.0
+            return smoothstep((heat - temp) / band) if band > 0 else 1.0
         return 1.0
 
     if cool is not None:
@@ -138,7 +134,7 @@ def liquid_precipitation_mult(temp: int, liquid_entry: dict) -> float:
         band = max(1, abs(cool) // 10 + 10)
         if temp >= cool + band:
             return 1.0
-        return _smoothstep((temp - cool) / band)
+        return smoothstep((temp - cool) / band)
 
     assert heat is not None
     if temp >= heat:
@@ -146,19 +142,30 @@ def liquid_precipitation_mult(temp: int, liquid_entry: dict) -> float:
     band = max(1, abs(heat) // 10 + 10)
     if temp <= heat - band:
         return 1.0
-    return _smoothstep((heat - temp) / band)
+    return smoothstep((heat - temp) / band)
 
 
 def clamp_temperature_to_peak(world: World, temp: int) -> int:
     peak_min, peak_max = peak_bounds(world)
-    return max(peak_min, min(peak_max, temp))
+    clamped            = max(peak_min, min(peak_max, temp))
+    if clamped != temp:
+        debug_once(
+            world.world_uid,
+            "peak_clamp",
+            "temperature clamp | world=%s raw=%d -> clamped=%d peak=[%d,%d]",
+            temp,
+            clamped,
+            peak_min,
+            peak_max,
+        )
+    return clamped
 
 
 def effective_rainfall(moisture: int, temp: int, world: World) -> int:
     requested_liquid = world.precipitation_liquid or DEFAULT_PRECIPITATION_LIQUID
     liquid           = resolve_world_precipitation_liquid(world)
     cool, heat       = _phase_bounds(liquid)
-    mult             = liquid_precipitation_mult(temp, liquid)
+    mult             = liquid_precipitation_mult(temp, liquid, world.world_uid)
     rainfall         = max(0, min(100, round(moisture * mult)))
 
     logger.debug(

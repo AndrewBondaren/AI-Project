@@ -2,7 +2,7 @@
 
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
-**Обновлено:** climate v2.1 pole/local + CL-2 tier resolve (2026-06).
+**Обновлено:** climate v2.2 precipitation + peak clamp; v2.1 pole/tier resolve (2026-06).
 
 **Связанные документы:**
 
@@ -282,12 +282,19 @@ system_city_size ∈ city+       → city_wall
 | ID | Результат |
 |---|---|
 | **CL-2** | `tierResolve.py`: pole base + world-relative `climate_local_influence_fraction` + temp smoothstep band |
+| **CL-15** | `precipitation_liquid`, `precipitation.py`, peak clamp, debug/warning logs |
+| **CL-4** | `PoleMode` + `_should_autoresolve` in `poleResolve.py` |
+| **CL-2b** | `include_admin_fallback=pole_field.is_empty()` |
+| **CL-2a, CL-2e** | tierResolve: drop uid_map; modifier bbox fallback |
+| **CL-10..CL-12, DR-5** | `climate/math.py`, `locations.py`, `terrainZ.py`; heightmap purity |
+| **CL-5** | partial: warning on >1 `climate_pole` (import validator still open) |
 | **CL-13** | `tz_climate.md` § tier resolution синхронизирован |
+| **CL-14** | `tz_climate.md` § merge vs resolve admin zones |
 | **R-14** | Climate вынесен из terrain → `generators/climate/` + assembler |
 | **FM-1** | `TerrainGeneratorService` → thin facade (~70 строк) |
 | **CL-1** | pole/local tiers, passes, orchestrator, auto без elevation→zone (остаток: **CL-2b** admin merge) |
 
-Smoke: `test_climate_*`, `test_climate_tier_resolve` в `debug_settlement.py`.
+Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 
 ### P1 — settlement / coordinates
 
@@ -306,10 +313,10 @@ Smoke: `test_climate_*`, `test_climate_tier_resolve` в `debug_settlement.py`.
 | NC-3, NC-4 | Barrier contract в product docs | open |
 | DR-1, FM-3 | span_lines; barrier pick | open |
 | **CL-3** | Единый `ClimateSpatialSample` / Protocol | open |
-| **CL-4** | `climate_pole_mode` читать или удалить поле | open |
-| **CL-2b** | Admin в `build_merged_field`, но не в tier resolve — мёртвые anchors | open |
-| **CL-10, CL-11** | heightmap pass purity; `_non_surface_anchor_cells` | open |
-| **CL-12, DR-5** | Shared helpers: anchors, z_to_terrain, seed, smoothstep/dist | open |
+| **CL-4** | `climate_pole_mode` в `poleResolve.py` | **resolved** |
+| **CL-2b** | Admin не merge при active pole | **resolved** |
+| **CL-10, CL-11** | heightmap: pole_field.sample only; public helpers | **resolved** |
+| **CL-12, DR-5** | Shared helpers → `climate/math.py`, `locations.py`, `terrainZ.py` | **resolved** |
 
 ### P3 — когда будет время
 
@@ -319,13 +326,13 @@ Smoke: `test_climate_*`, `test_climate_tier_resolve` в `debug_settlement.py`.
 | NC-6..NC-9 | Docs / model fields / validators | open |
 | DR-2, DR-3, DR-4 | API cleanup после Phase 6 | open |
 | **CL-5..CL-9** | pole runtime validation; RecalcTrigger; legacy coarse; CGS split | open |
-| **CL-2a, CL-2c..CL-2e, CL-14** | tierResolve edge cases + doc (см. § CL) | open / accepted |
+| **CL-2a, CL-2c..CL-2e** | tierResolve edge cases (см. § CL) | open / accepted |
 
 ---
 
 ## Climate v2.1 — smells registry (CL)
 
-**Status:** `partial` — eager pipeline ✅ · tier resolve ✅ · polish CL-3..CL-12 open  
+**Status:** `partial` — eager v2.2 ✅ · tier resolve ✅ · precipitation ✅ · polish CL-3..CL-12 open  
 **Refs:** [tz_climate.md](./tz_climate.md)
 
 ### Implicit contracts
@@ -334,16 +341,16 @@ Smoke: `test_climate_*`, `test_climate_tier_resolve` в `debug_settlement.py`.
 |---|---|---|---|---|---|
 | CL-2 | high | — | ~~Global local Voronoi kills pole~~ | `tierResolve.py` | **resolved** |
 | CL-3 | medium | P2 | `PoleClimateSample` vs `SurfaceClimateSample`; tier blend добавляет 3-й путь маппинга | единый spatial sample | open |
-| CL-4 | medium | P2 | `climate_pole_mode` не читается в `poleResolve.py` | read mode или drop field | open |
-| CL-5 | medium | P3 | Max 1 `climate_pole` только на import | validator upsert + resolve assert | open |
+| CL-4 | medium | P2 | ~~`climate_pole_mode` не читается~~ | `PoleMode` + `_should_autoresolve` | **resolved** |
+| CL-5 | medium | P3 | Max 1 `climate_pole` — warning at resolve; import validator open | validator upsert + resolve assert | **partial** |
 | CL-6 | low | P3 | `pole_kind` / `weight` через convention на `NamedLocation` | contract или doc | open |
 | CL-7 | low | P3 | `RecalcTrigger` stub в `recalculate()` | bbox routing или `@stub` | open |
 | CL-8 | low | P3 | Legacy `build_coarse_field` / `build_zone_field` в main path не используются | deprecate / v1 entry | open |
-| CL-2a | low | P3 | `uid_map` в `resolve_tier_sample` не используется | убрать или walk-up local | open |
-| CL-2b | medium | P2 | Admin anchors в `build_merged_field`, но tier resolve их skip → мёртвые entries в `local_field` | не merge admin при active pole; split fields | open |
+| CL-2a | low | P3 | ~~`uid_map` в `resolve_tier_sample` не используется~~ | removed param | **resolved** |
+| CL-2b | medium | P2 | ~~Admin anchors мёртвые в merge~~ | `include_admin_fallback=pole_field.is_empty()` | **resolved** |
 | CL-2c | info | P3 | `r` cap `dist_to_2nd/2` **per-cell** — неочевидно из ТЗ | doc / comment in `tierResolve` | open |
 | CL-2d | info | — | Скачок zone/rainfall на `dist = r` (temp smooth, zone hard) | accepted v2.2 compromise; zone blend → v3 | **accepted** |
-| CL-2e | info | P3 | `pole_field.bbox is None` → modifiers игнорируются | assert bbox on resolve или fallback doc | open |
+| CL-2e | info | P3 | ~~`pole_field.bbox is None` → modifiers игнорируются~~ | `_influence_diagonal` fallback from modifiers | **resolved** |
 
 ### God-object / concentration
 
@@ -355,21 +362,21 @@ Smoke: `test_climate_*`, `test_climate_tier_resolve` в `debug_settlement.py`.
 
 | ID | Severity | P | Проблема | Fix | Status |
 |---|---|---|---|---|---|
-| CL-10 | medium | P2 | `heightmapPass`: terrain + pole climate bias | shared sampler; pure terrain pass | open |
-| CL-11 | medium | P2 | `_non_surface_anchor_cells` + private heightmap imports | fixture pass; public helpers | open |
+| CL-10 | medium | P2 | ~~`heightmapPass`: terrain + pole climate bias~~ | `pole_field.sample` only; no CGS import | **resolved** |
+| CL-11 | medium | P2 | ~~`_non_surface_anchor_cells` private imports~~ | `locations.py` + `terrainZ.py` | **resolved** |
 
 ### Duplication (climate)
 
 | ID | Severity | P | Проблема | Fix | Status |
 |---|---|---|---|---|---|
-| CL-12 | medium | P2 | `_static_anchors`, `_z_to_terrain`, `_world_seed` × файлов | shared hub (см. DR-5) | open |
+| CL-12 | medium | P2 | ~~`_static_anchors`, `_z_to_terrain`, `_world_seed` × файлов~~ | `climate/math.py`, `locations.py`, `terrainZ.py` | **resolved** |
 
 ### Docs / product sync
 
 | ID | Severity | P | Проблема | Fix | Status |
 |---|---|---|---|---|---|
 | CL-13 | info | — | Tier resolution docs vs code | synced in `tz_climate.md` | **resolved** |
-| CL-14 | info | P3 | Таблица tier-2 в `tz_climate.md` всё ещё lists admin fallback; cell resolve admin off | уточнить «merge vs resolve» в docs | open |
+| CL-14 | info | P3 | ~~Таблица tier-2 lists admin fallback; cell resolve admin off~~ | merge vs resolve в `tz_climate.md` | **resolved** |
 | CL-15 | medium | — | Rainfall = raw zone moisture; Earth freeze hardcoded | `precipitation_liquid` + `precipitation.py` + peak clamp | **resolved** |
 
 ---
@@ -388,5 +395,6 @@ Smoke: `test_climate_*`, `test_climate_tier_resolve` в `debug_settlement.py`.
 | Дата | Изменение |
 |---|---|
 | 2026-06 | NC-1 Phase 1–5; `tz_terrain_generation.md` full rework (Phase 6) |
+| 2026-06 | Climate polish sprint: CL-4, CL-2a/2b/2e, CL-10..12, DR-5 |
 | 2026-06 | Climate v2.1: pole/local tiers, `tierResolve.py`, CL-2/CL-13 resolved |
-| 2026-06 | Polish backlog rework; CL-2a..CL-2e, CL-14, DR-5 added; FM-1 resolved |
+| 2026-06 | Polish backlog rework; CL-2a..CL-2e, DR-5 added; FM-1 resolved |

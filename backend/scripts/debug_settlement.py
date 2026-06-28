@@ -1009,6 +1009,109 @@ def test_climate_pole_tier() -> None:
     print("climate pole tier checks: OK")
 
 
+def test_climate_pole_mode_manual() -> None:
+    """CL-4: climate_pole_mode=manual without pole → empty field, no autoresolve."""
+    from app.application.worldData.generators.climate.climatePole import PoleMode
+    from app.application.worldData.generators.climate.climatePoleField import GridBBox
+    from app.application.worldData.generators.climate.poleResolve import resolve_pole_field
+
+    world = World(
+        world_uid="world-test-pole-manual",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        map_cell_size_m=3000,
+        climate_pole_mode=PoleMode.MANUAL,
+        climate_pole_preset="ice",
+    )
+    region = NamedLocation(
+        location_uid="region-manual",
+        world_uid=world.world_uid,
+        display_name="R",
+        system_location_type="region",
+        created_at="2026-01-01T00:00:00",
+        system_climate_zone="desert",
+        map_x=0,
+        map_y=0,
+        map_z=0,
+    )
+    bbox = GridBBox(-2, 2, -2, 2)
+    field = resolve_pole_field(world, [region], 3000, bbox)
+    assert field.is_empty()
+
+    world_auto = World(
+        world_uid="world-test-pole-auto",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        map_cell_size_m=3000,
+        climate_pole_mode=PoleMode.AUTORESOLVE,
+        climate_pole_preset="ice",
+    )
+    field_auto = resolve_pole_field(world_auto, [region], 3000, bbox)
+    assert len(field_auto.poles) == 1
+
+    print("climate pole mode manual checks: OK")
+
+
+def test_climate_admin_merge_skipped_with_pole() -> None:
+    """CL-2b: admin zones not merged into local_field when pole tier active."""
+    from app.application.worldData.generators.assemblers.climateAssembler.passes.anchorCollectPass import (
+        run_anchor_collect_pass,
+    )
+    from app.application.worldData.generators.climate.poleResolve import resolve_pole_field
+    from app.application.worldData.generators.coordinates import cell_size_m
+
+    world = World(
+        world_uid="world-test-admin-skip",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        map_cell_size_m=3000,
+        climate_pole_preset="ice",
+        terrain_registry=[{"system_terrain": "plains", "glossary_ref": "terrain_plains"}],
+    )
+    region = NamedLocation(
+        location_uid="region-admin",
+        world_uid=world.world_uid,
+        display_name="R",
+        system_location_type="region",
+        created_at="2026-01-01T00:00:00",
+        system_climate_zone="desert",
+        map_x=0,
+        map_y=0,
+        map_z=0,
+    )
+    from app.application.worldData.generators.assemblers.climateAssembler.passes.heightmapPass import (
+        grid_bbox_from_locations,
+        run_heightmap_pass,
+    )
+
+    cell_m     = cell_size_m(world)
+    bbox       = grid_bbox_from_locations([region], cell_m, 2)
+    pole_field = resolve_pole_field(world, [region], cell_m, bbox)
+    heightmap  = run_heightmap_pass(world, [region], pole_field, 2)
+    field      = run_anchor_collect_pass(world, [region], heightmap, pole_field)
+
+    assert not pole_field.is_empty()
+    assert field.is_empty()
+
+    pole_empty = resolve_pole_field(
+        World(
+            world_uid="world-test-admin-fallback",
+            name="Test",
+            created_at="2026-01-01T00:00:00",
+            map_cell_size_m=3000,
+            climate_pole_mode="manual",
+        ),
+        [region],
+        cell_m,
+        bbox,
+    )
+    field_legacy = run_anchor_collect_pass(world, [region], heightmap, pole_empty)
+    assert len(field_legacy.anchors) == 1
+    assert field_legacy.anchors[0].source.value == "admin"
+
+    print("climate admin merge skip checks: OK")
+
+
 def test_climate_tier_resolve() -> None:
     """CL-2: pole base + local override in world-relative radius; admin ignored."""
     from app.application.worldData.generators.assemblers.climateAssembler import ClimateOrchestratorService
@@ -1139,6 +1242,101 @@ def test_climate_precipitation_liquid() -> None:
     print("climate precipitation liquid checks: OK")
 
 
+def test_climate_logging_warnings() -> None:
+    """Logging: warn_once on fallbacks; debug_once on peak clamp."""
+    import logging
+    from io import StringIO
+
+    from app.application.worldData.generators.climate import ClimateGeneratorService
+    from app.application.worldData.generators.climate.climatePole import PoleMode
+    from app.application.worldData.generators.climate.loggingHelpers import _debugged, _warned
+    from app.application.worldData.generators.climate.poleResolve import resolve_pole_field
+    from app.application.worldData.generators.climate.registry import profile_for
+
+    _warned.clear()
+    _debugged.clear()
+
+    warn_buf = StringIO()
+    warn_handler = logging.StreamHandler(warn_buf)
+    warn_handler.setLevel(logging.WARNING)
+    climate_log = logging.getLogger("app.application.worldData.generators.climate")
+    climate_log.addHandler(warn_handler)
+    climate_log.setLevel(logging.WARNING)
+
+    resolve_pole_field(
+        World(
+            world_uid="world-log-manual",
+            name="Test",
+            created_at="2026-01-01T00:00:00",
+            climate_pole_mode=PoleMode.MANUAL,
+        ),
+        [],
+        3000,
+        None,
+    )
+    profile_for(
+        World(world_uid="world-log-unknown", name="Test", created_at="2026-01-01T00:00:00"),
+        "not_a_real_climate_zone",
+    )
+    resolve_pole_field(
+        World(
+            world_uid="world-log-pole-bad",
+            name="Test",
+            created_at="2026-01-01T00:00:00",
+            map_cell_size_m=3000,
+        ),
+        [
+            NamedLocation(
+                location_uid="pole-bad",
+                world_uid="world-log-pole-bad",
+                display_name="Bad",
+                system_location_type="climate_pole",
+                created_at="2026-01-01T00:00:00",
+                map_x=0,
+                map_y=0,
+                map_z=0,
+            ),
+        ],
+        3000,
+        None,
+    )
+
+    warn_out = warn_buf.getvalue()
+    assert "mode=manual" in warn_out
+    assert "unknown system_climate=not_a_real_climate_zone" in warn_out
+    assert "no system_climate_zone" in warn_out
+    climate_log.removeHandler(warn_handler)
+
+    _debugged.clear()
+    debug_buf = StringIO()
+    debug_handler = logging.StreamHandler(debug_buf)
+    debug_handler.setLevel(logging.DEBUG)
+    helpers_log = logging.getLogger("app.application.worldData.generators.climate.loggingHelpers")
+    helpers_log.addHandler(debug_handler)
+    helpers_log.setLevel(logging.DEBUG)
+
+    svc = ClimateGeneratorService()
+    temp, _ = svc.weather_at_elevation(
+        World(
+            world_uid="world-log-clamp",
+            name="Test",
+            created_at="2026-01-01T00:00:00",
+            climate_temperature_peak_min=-60,
+            climate_temperature_peak_max=45,
+            climate_zone_registry=[
+                {"system_climate": "arctic", "base_temperature": -100, "base_rainfall": 5},
+            ],
+        ),
+        "arctic",
+        0,
+    )
+    assert temp == -60
+    assert "temperature clamp" in debug_buf.getvalue()
+    helpers_log.removeHandler(debug_handler)
+
+    print("climate logging warnings checks: OK")
+
+
 def test_phase_4_collect_map_cells() -> None:
     """Split persist: surface grid occupancy vs meter geometry (Option A)."""
     from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
@@ -1248,8 +1446,11 @@ def main() -> None:
     test_climate_orchestrator_passes()
     test_climate_detect_relative_elevation()
     test_climate_pole_tier()
+    test_climate_pole_mode_manual()
+    test_climate_admin_merge_skipped_with_pole()
     test_climate_tier_resolve()
     test_climate_precipitation_liquid()
+    test_climate_logging_warnings()
     test_phase_4_collect_map_cells()
     test_city_shared_nodes()
 

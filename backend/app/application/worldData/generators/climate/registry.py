@@ -3,6 +3,7 @@ from app.application.worldData.generators.climate.climateZone import (
     enum_default_profile,
     fallback_profile,
 )
+from app.application.worldData.generators.climate.loggingHelpers import warn_once
 from app.db.models.world import World
 
 
@@ -51,5 +52,13 @@ def profile_for(world: World, system_climate: str) -> ClimateZoneProfile:
         key = entry.get("system_climate")
         if key == system_climate:
             return _entry_to_profile(entry, base)
+
+    if enum_default is None:
+        warn_once(
+            world.world_uid,
+            f"unknown_climate:{system_climate}",
+            "climate_zone profile | world=%s unknown system_climate=%s; using temperate defaults",
+            system_climate,
+        )
 
     return base

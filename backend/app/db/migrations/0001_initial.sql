@@ -84,6 +84,12 @@ CREATE TABLE IF NOT EXISTS worlds (
     -- world map settings
     season_temp_offsets         TEXT,
     default_climate_zone        TEXT,
+    climate_temperature_peak_min INTEGER,
+    climate_temperature_peak_max INTEGER,
+    climate_pole_mode           TEXT,
+    climate_pole_preset         TEXT,
+    climate_local_influence_fraction REAL,
+    precipitation_liquid        TEXT,
     z_max                       INTEGER,
     z_min                       INTEGER,
     elevation_lapse_rate        REAL,

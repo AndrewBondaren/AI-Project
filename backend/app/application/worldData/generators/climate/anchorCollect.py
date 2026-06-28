@@ -5,7 +5,10 @@ from app.application.worldData.generators.climate.climateAnchor import (
     AnchorSource,
     ClimateAnchorPoint,
 )
+from app.application.worldData.generators.climate.loggingHelpers import warn_once
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
+from app.application.worldData.generators.climate.locations import static_map_anchors
+from app.application.worldData.generators.climate.math import dist_sq
 from app.application.worldData.generators.coordinates import (
     meters_to_grid_x,
     meters_to_grid_y,
@@ -14,20 +17,12 @@ from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
-def _static_anchors(locations: list[NamedLocation]) -> list[NamedLocation]:
-    return [
-        loc for loc in locations
-        if loc.map_x is not None and loc.map_y is not None
-        and loc.map_z is not None and not loc.is_mobile
-    ]
-
-
 def collect_manual_anchors(
     locations: list[NamedLocation],
     cell_m: int,
 ) -> list[ClimateAnchorPoint]:
     points: list[ClimateAnchorPoint] = []
-    for loc in _static_anchors(locations):
+    for loc in static_map_anchors(locations):
         if loc.system_location_type != CLIMATE_ANCHOR_TYPE:
             continue
         if not loc.system_climate_zone:
@@ -47,7 +42,7 @@ def collect_admin_anchors(
     cell_m: int,
 ) -> list[ClimateAnchorPoint]:
     points: list[ClimateAnchorPoint] = []
-    for loc in _static_anchors(locations):
+    for loc in static_map_anchors(locations):
         if loc.system_location_type not in ADMIN_ZONE_TYPES:
             continue
         climate = loc.system_climate_zone
@@ -81,22 +76,35 @@ def build_merged_field(
     auto: list[ClimateAnchorPoint],
     locations: list[NamedLocation],
     cell_m: int,
+    *,
+    world: World,
+    include_admin_fallback: bool = True,
 ) -> ClimateAnchorField:
-    """Pass 2+ climate: manual first, then auto outside manual exclusion, then admin fallback."""
+    """
+    Pass 2+ climate: manual first, then auto outside manual exclusion.
+    Admin fallback only when no local modifiers and include_admin_fallback (legacy v1).
+    """
     merged: list[ClimateAnchorPoint] = list(manual)
     exclusion_sq = MANUAL_EXCLUSION_GRID ** 2
 
     for candidate in auto:
-        if any(_dist_sq(candidate.gx, candidate.gy, m.gx, m.gy) <= exclusion_sq for m in manual):
+        if any(dist_sq(candidate.gx, candidate.gy, m.gx, m.gy) <= exclusion_sq for m in manual):
             continue
         merged.append(candidate)
 
     if merged:
         return ClimateAnchorField(tuple(merged))
 
+    if not include_admin_fallback:
+        admin = collect_admin_anchors(locations, cell_m)
+        if admin:
+            warn_once(
+                world.world_uid,
+                "admin_skipped_active_pole",
+                "climate anchor | world=%s admin zones skipped (active pole tier); count=%d",
+                len(admin),
+            )
+        return ClimateAnchorField(())
+
     admin = collect_admin_anchors(locations, cell_m)
     return ClimateAnchorField(tuple(admin))
-
-
-def _dist_sq(x1: int, y1: int, x2: int, y2: int) -> int:
-    return (x1 - x2) ** 2 + (y1 - y2) ** 2

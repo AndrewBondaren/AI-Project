@@ -15,7 +15,7 @@ metadata:
 
 **Задача:** heightmap **дикой местности** — elevation (`z`), `system_terrain`.
 
-**Климат** — отдельный модуль [`ClimateGeneratorService`](docs/tz_climate.md); terrain вызывает его per cell (`temperature_base`, `rainfall`, `typical_elevation_z`).
+**Климат** — отдельный модуль [`ClimateGeneratorService`](./tz_climate.md) + `ClimateOrchestratorService`; terrain — thin facade. Per cell: pole/tier sample → `temperature_base` (lapse + peak clamp) → `rainfall` (moisture × liquid mult).
 
 **Не задача terrain:**
 
@@ -32,7 +32,8 @@ metadata:
 
 ```
 app/application/worldData/generators/
-  climate/climateGeneratorService.py   ← climate (Voronoi, temperature, rainfall)
+  assemblers/climateAssembler/       ← orchestrator + passes (см. tz_climate.md)
+  climate/                           ← pole, tier, precipitation
   terrain/terrainGeneratorService.py   ← pure generator (wilderness heightmap)
   coordinates/                           ← convert hub (grid ↔ meters)
   assemblers/settlementAssembler/        ← urban occupancy + geometry
@@ -177,14 +178,17 @@ z = clamp(base_z + noise, z_min, z_max)
 
 Fallback если тип отсутствует в `world.terrain_registry`.
 
-### Температура (v1, упрощённая)
+### Температура и rainfall (v2.2)
+
+Полная формула — [`tz_climate.md`](./tz_climate.md) § ClimateGeneratorService API.
 
 ```
-temperature_base = climate_base_temp - z × lapse_rate
-lapse_rate = world.elevation_lapse_rate ?? 7.0
+temperature_base = clamp(base - lapse × (z/100), peak_min, peak_max)
+rainfall         = round(zone.base_rainfall × liquid_mult(temp, precipitation_liquid))
+lapse            = world.elevation_lapse_rate ?? 0.65
 ```
 
-Полная формула с сезонами — отложена.
+Сезоны и `weather_type_registry` — runtime (`ClimateRuntimeAssembler`), не eager map.
 
 ---
 
