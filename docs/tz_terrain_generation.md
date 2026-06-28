@@ -28,9 +28,11 @@ metadata:
 
 **Production:** материализация мира (S → O → C → CL) — только **engine DAG**; frontend и игрок **не** вызывают HTTP generate-*.
 
-**Debug:** `POST …/map/generate-*` в `map.py` — **постоянный** harness для точечных тестов (`debug_settlement.py`, curl, изолированный pass). Те же generator/orchestrator функции, что и ноды; маршруты **оставляем**, но это не product path.
+**Debug:** `POST …/map/generate-*` в `map.py` — **постоянный** harness для точечных тестов (curl, изолированный pass). Те же generator/orchestrator функции, что и ноды; маршруты **оставляем**, но это не product path.
 
-> **Код:** ✅ TR-1 impl (2026-06) — § Impl queue, § План реализации. Legacy `assemble_full` остаётся для climate-only regen paths.
+**Скриптовые smoke/integration-тесты** passes с persist — **только через HTTP** к running backend (`http://localhost:8000/api`), не через прямой import генераторов. Эталон: `scripts/debug_structure.py`, `scripts/debug_ladder.py`. Подробно — [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) § «Три входа».
+
+> **Код:** ✅ TR-1b + DBG-1 (2026-06). Legacy `assemble_full` — climate-only regen paths.
 
 **Не задача terrain (как отдельного домена):**
 
@@ -318,7 +320,7 @@ flowchart LR
 | Shared input | `ClimatePoleField`, bbox — **данные** в аргументах, не скрытый вызов чужого generator |
 | Между pass | pass N+1 читает **DB**, не in-memory monolith |
 
-**Код (interim):** `TerrainGeneratorService` пока вызывает `run_pole_resolve_pass` внутри — **нарушение**; target: нода отдаёт `pole_field` аргументом.
+**Код:** ✅ TR-1b (2026-06) — pole resolve в `MapCellService` / `map.py`; generator принимает `pole_field`. ⬜ `debug_settlement` pipeline — HTTP (DBG-1).
 
 **Вне очереди materialization (другие вещи):**
 
@@ -333,7 +335,7 @@ flowchart LR
 | `generate-ores` / `generate-caves` | STUB — layer upsert |
 | `generate-climate` | climate + liquid overlay |
 
-> **Interim backend:** handlers `map/generate-*` — для отладки; **target orchestration:** ноды DAG.
+> **Debug harness:** handlers `map/generate-*` — path **2**; **production orchestration:** ноды DAG (path **1**). См. [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) § «Три входа».
 
 `INSERT OR IGNORE` **недостаточен** для multi-pass — нужен **selective upsert** / patch по layer kind (terrain vs ore vs cave).
 
@@ -403,7 +405,8 @@ Generator **не** знает про threads/SQL — только `(world, locat
 
 ## План реализации (код → ТЗ)
 
-> **Статус:** ✅ **реализовано 2026-06** (Фазы 0–8). Остаётся: lazy caves gameplay (п.8), M-3 movement resolver, NC-1c, `world_map_version`.
+> **Статус:** ✅ **Фазы 0–8** (generators + debug API) — 2026-06.  
+> **Дальше без DAG:** § Phase 9+ блок «Сейчас». **Engine DAG / ноды — отдельная сессия с мастером**, код не трогаем до согласования.
 
 ### Принципы исполнения
 
@@ -425,7 +428,7 @@ Generator **не** знает про threads/SQL — только `(world, locat
 | **5** | `generate_z_slice` API + repo `get_z_slice` | *(не impl queue п.8)* | lazy column; engine node ⬜ |
 | **6** | `world_bounds` v2 extent | п.11 | skeleton на declared bounds |
 | **7** | Magma band + `antipode_xy` (M-1…M-5) | п.12, TR-M | STUB; M-3 movement DEFERRED |
-| **8** | DAG: `generate_climate`, … | tz_climate § DAG | orchestration на нодах |
+| **8** | DAG: `generate_climate`, … | tz_climate § DAG | ✅ зарегистрировано; **новые ноды / wiring — отложено** (см. § Phase 9+) |
 
 ```mermaid
 flowchart TB
@@ -463,9 +466,85 @@ Regen: clear map → снова **S → O → C → CL**.
 
 ### Definition of Done
 
-- [x] Очередь **S → O → C → CL** (generators + interim handlers)
+- [x] Очередь **S → O → C → CL** (generators + debug handlers / DAG target)
 - [x] Impl queue п.1–11; п.12 partial; п.8 DEFERRED
 - [x] TR-1 closed в `tz_generator_technical_debt.md`
+- [x] Phase 9+ «Сейчас» — TR-1b, DBG-1 (§ ниже)
+- [ ] Phase 9+ «DAG» — **отложено**, проектируем отдельно с мастером
+
+---
+
+## Phase 9+ — план (2026-06)
+
+> **Baseline:** generators + `map.py` debug harness ✅.  
+> **Решение:** **engine DAG и ноды не трогаем** до отдельной сессии проектирования с мастером. Сейчас — generators, persist, debug API, smoke-скрипты.
+
+### Сейчас (без DAG)
+
+| Фаза | Содержание | Приёмка |
+|---|---|---|
+| **9 TR-1b** | Pole **вне** `TerrainGeneratorService`: `generate_surface(..., pole_field)`; `build_surface_heightmap` — то же. Caller: **`map.py` / `MapCellService`** (path 2), не нода | mock `ClimatePoleField` в unit; `run_pole_resolve_pass` только в orchestration layer (route/service) |
+| **A DBG-1** | `debug_settlement` pipeline smoke → HTTP; `debug_api_helpers.py` | те же asserts; backend running; этalon `debug_structure` / `debug_ladder` **не менять** |
+| **B Ores/caves** *(опционально)* | Замена STUB в `oresGenerator` / `cavesGenerator` | debug `POST generate-ores/caves`; merge rules в repo |
+| **C Regen doc** | § «Регенерация при map_cell_size_m» — явный manual path через debug API до DAG | ТЗ + `WorldService` warning; auto re-run — только после DAG |
+
+**Порядок:** `9 TR-1b` → `A DBG-1` параллельно после 9; B/C по приоритету продукта.
+
+### Потом — DAG (отдельно с мастером, код не трогаем)
+
+> Спека и impl **только после совместного ревью** [`tz_world_generation_dag.md`](./tz_world_generation_dag.md). Ниже — **target**, не backlog для агента.
+
+```mermaid
+flowchart TB
+  subgraph mat [Materialization DAG — target]
+    CW[check_world_materialization]
+    PR[resolve_pole_field node]
+    GS[generate_surface node]
+    GO[generate_ores]
+    GCv[generate_caves]
+    GCl[generate_climate]
+    CW --> PR --> GS --> GO --> GCv --> GCl
+  end
+  subgraph play [Gameplay — уже есть, не менять без ревью]
+    CT[check_terrain]
+    LT[lazy_terrain]
+    LS[lazy_settlement]
+  end
+  mat --> play
+```
+
+| Блок | Содержание |
+|---|---|
+| Gate | `check_world_materialization` |
+| Nodes | `generate_surface`, `generate_ores`, `generate_caves`, chain `generate_climate` |
+| Wiring | trigger первого входа игрока; deps; `supported_tasks` |
+| Regen | auto re-run materialization после `map_cell_size_m` |
+
+**Vertical slice (после DAG-сессии):** новый мир → первый chat turn → S→O→C→CL в БД без ручного curl.
+
+### Backlog (не блокирует «Сейчас»)
+
+| ID | Задача |
+|---|---|
+| impl queue **п.8** | Lazy caves/mines ~20 cells |
+| **TR-M / M-3** | Magma movement resolver |
+| **NC-1c** | Grid coords в `generate_minimal` |
+| **`world_map_version`** | После materialization |
+| **`generate_z_slice` node** | Lazy column в gameplay |
+| Parallel chunks v2 | Perf |
+
+### Definition of Done
+
+**Сейчас:**
+
+- [x] TR-1b — pole не внутри `TerrainGeneratorService`
+- [x] DBG-1 — pipeline smoke через HTTP
+
+**DAG (после сессии с мастером):**
+
+- [ ] Очередь S→O→C→CL на path **1**
+- [ ] `lazy_terrain` остаётся repair, не подменяет materialization
+- [ ] `tz_world_generation_dag.md` — карта нод согласована
 
 ---
 
@@ -831,6 +910,9 @@ PK `(world_uid, x, y, z)` — точечные запросы; индекс по
 
 | Дата | Изменение |
 |---|---|
+| 2026-06 | § Phase 9+: DAG отложен (сессия с мастером); «Сейчас» = TR-1b + DBG-1 |
+| 2026-06 | § Phase 9+ — production DAG materialization (план после TR-1) |
+| 2026-06 | § Роли: production DAG vs debug harness vs script tests через HTTP |
 | 2026-06 | § План реализации (код → ТЗ) + TR-1 impl (Фазы 0–8) |
 | 2026-06 | **M-3:** movement resolver — trigger на bottom/void, **±z flip** на antipode; см. tz_locations |
 | 2026-06 | Magma band: thickness ≥1 z; teleport **z_magma_bottom → antipode z_magma_bottom** (edge case) |

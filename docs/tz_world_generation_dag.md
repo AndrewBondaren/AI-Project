@@ -6,7 +6,8 @@ metadata:
   type: project
 ---
 
-> **Статус документа:** **черновик — не утверждён.** Карта нод, trigger paths (master / lazy / player), player build и interim→target миграция — рабочая спека до ревью; не является обязательным контрактом для реализации.
+> **Статус документа:** **черновик — не утверждён.** Карта нод, trigger paths (master / lazy / player), player build — рабочая спека до ревью.  
+> **Impl:** новые ноды и wiring materialization — **отложены**; проектируем **отдельно с мастером**. До сессии — generators + debug API (`map.py`), см. [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Phase 9+ «Сейчас».
 
 ## Назначение
 
@@ -98,6 +99,66 @@ Master и player используют **те же** generator functions, что 
 
 ---
 
+## Три входа (целевая картина, утверждено 2026-06)
+
+Один и тот же generator library, **три разрешённых способа вызова** — не смешивать:
+
+```mermaid
+flowchart LR
+  subgraph prod [Production]
+    DAG[Engine DAG nodes]
+  end
+  subgraph dbg [Debug harness]
+    MAP["map.py POST generate-*"]
+    DBG["debug.py generate-structure"]
+  end
+  subgraph unit [In-process unit]
+    PY["import pure helpers"]
+  end
+  subgraph lib [Generator library]
+    G[generators / orchestrators]
+  end
+  DAG --> G
+  MAP --> G
+  DBG --> G
+  PY --> G
+```
+
+| Вход | Когда | Persist | Примеры |
+|---|---|---|---|
+| **1. Engine DAG** | load мира, gameplay, materialization | ноды → repos | `generate_climate`, `lazy_terrain`, target `generate_surface` |
+| **2. Debug HTTP** | скриптовые smoke, ручной regen, изолированный pass | handlers → `MapCellService` | `POST …/map/generate-surface`, `POST …/debug/…/generate-structure` |
+| **3. In-process import** | **только** pure logic без pipeline persist | нет (или mock cells in memory) | формулы climate, `SettlementAssembler` layout, pole math |
+
+### Инварианты
+
+1. **Frontend и игрок** — только path **1** (DAG). Никогда path **2**.
+2. **Path 2 не заменяет path 1** — debug harness **остаётся навсегда** для точечных прогонов; production не дублирует HTTP.
+3. **Path 3 не подменяет path 2** для smoke passes с записью в БД: если тест создаёт world/locations/map через persist — это path **2**.
+4. **Generators не оркестрируют соседние домены** — очередь `surface → ores → caves → climate` собирается на **нодах** (path 1) или в **debug handlers** (path 2), не внутри `TerrainGeneratorService`.
+
+### Скриптовые тесты (`backend/scripts/`)
+
+| Правило | Содержание |
+|---|---|
+| **Pipeline smoke** | world + locations + `generate-*` + assert на `GET …/map` — **HTTP** к running backend (`BASE_URL = http://localhost:8000/api`). Backend **уже запущен мастером** до скрипта. |
+| **Сервер** | Агент **не** стартует backend (`start.py`, `uvicorn`, `npm run backend`); поднятие сервера — только пользователь. |
+| **Эталон паттерна** | `debug_structure.py`, `debug_ladder.py` — `httpx` → `/api/debug/…` или `/api/worlds/…/map/generate-*`. **Канонический образец;** менять только по явному решению мастера проекта. |
+| **Settlement / terrain smoke** | `debug_settlement.py` — **target:** pipeline-тесты (surface, climate, materialization) перевести на path **2**; чистые unit (layout, формулы без API) могут остаться path **3**. |
+| **Не product** | debug-скрипты не вызываются из React/Electron; не подменяют DAG в сессии игрока. |
+
+**Структура smoke-скрипта (как `debug_structure`):**
+
+1. `ensure_world` — `GET/POST /api/worlds`
+2. при необходимости — `POST …/locations`, `DELETE …/map`
+3. `POST …/map/generate-surface` → `generate-climate` → … (очередь pass)
+4. `GET …/map` — assert на cells
+5. опционально — `DELETE /api/worlds/{uid}` для cleanup
+
+**Отдельной роли «admin» в продукте нет.** Мастер — JSON-редактор `settings/world`; debug HTTP — не UI мастера, а инструмент разработчика.
+
+---
+
 ## Карта нод ↔ generators
 
 ### Реализовано (engine)
@@ -131,12 +192,13 @@ sequenceDiagram
   LS->>LS: map_cell_repo upsert
 ```
 
-### Debug API (`map.py`) — оставить, не product path
+### Debug API (`map.py`, `debug.py`) — оставить, не product path
 
-Точечное тестирование passes без полного DAG: `debug_settlement.py`, curl, ручной regen. **Не** вызывается из frontend / player flow.
+Точечное тестирование passes без полного DAG. **Не** вызывается из frontend / player flow. См. § «Три входа» — path **2**.
 
 | Endpoint | Generator / persist | Production caller (DAG) |
 |---|---|---|
+| `POST …/debug/worlds/{uid}/generate-structure` | structure stack | lazy settlement / `generate_building` ⬜ |
 | `POST …/map/generate-surface` | `TerrainGeneratorService` + `save_terrain_batch` | `generate_surface` node ⬜ |
 | `POST …/map/generate-ores` | `generate_ores` + `save_pass` | ores pass node ⬜ |
 | `POST …/map/generate-caves` | `generate_caves` + `save_pass` | caves pass node ⬜ |
@@ -280,4 +342,7 @@ Generator-side work **может** опережать ноды (как climate e
 
 | Дата | Изменение |
 |---|---|
+| 2026-06 | § script tests: агент не стартует backend — только пользователь |
+| 2026-06 | Impl DAG/nodes **отложен** — сессия с мастером; target-спека без обязательства к коду |
+| 2026-06 | § «Три входа» — production DAG / debug HTTP / in-process unit; правила script tests |
 | 2026-06 | v1 — generator library pattern; 4 domains; node map; player build model; debug `map.py` harness vs DAG production (**черновик, не утверждён**) |

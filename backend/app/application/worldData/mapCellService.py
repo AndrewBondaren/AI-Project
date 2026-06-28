@@ -3,6 +3,9 @@ from dataclasses import asdict
 
 from app.api.schemas.imports import ImportResult
 from app.application.import_helpers import import_list
+from app.application.worldData.generators.assemblers.climateAssembler.passes.poleResolvePass import (
+    run_pole_resolve_pass,
+)
 from app.application.worldData.generators.terrain.terrainGeneratorService import TerrainGeneratorService
 from app.db.models.mapCell import MapCell
 from app.db.repositories.iMapCellRepository import IMapCellRepository
@@ -63,7 +66,10 @@ class MapCellService:
         padding: int = 2,
         chunk_size: int = 32,
     ) -> ImportResult:
-        heightmap, n_eff = generator.build_surface_heightmap(world, locations, padding)
+        pole_field = run_pole_resolve_pass(world, locations, padding)
+        heightmap, n_eff = generator.build_surface_heightmap(
+            world, locations, pole_field, padding,
+        )
         if heightmap is None:
             return ImportResult(total=0, succeeded=0, failed=0)
 
@@ -95,6 +101,23 @@ class MapCellService:
             sum(1 for _ in chunks),
         )
         return ImportResult(total=total, succeeded=succeeded, failed=0)
+
+    async def save_z_slice(
+        self,
+        generator: TerrainGeneratorService,
+        world,
+        locations: list,
+        gx: int,
+        gy: int,
+        z_lo: int,
+        z_hi: int,
+        padding: int = 2,
+    ) -> ImportResult:
+        pole_field = run_pole_resolve_pass(world, locations, padding)
+        cells      = generator.generate_z_slice(
+            world, locations, pole_field, gx, gy, z_lo, z_hi, padding,
+        )
+        return await self.save_pass(cells, "terrain")
 
     async def get_z_slice(
         self,

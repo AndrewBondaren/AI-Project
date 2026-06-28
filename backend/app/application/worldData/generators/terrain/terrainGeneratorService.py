@@ -1,6 +1,4 @@
-from app.application.worldData.generators.assemblers.climateAssembler.passes.poleResolvePass import (
-    run_pole_resolve_pass,
-)
+from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
 from app.application.worldData.generators.climate.terrainZ import z_to_terrain
 from app.application.worldData.generators.terrain.passes.columnFillPass import (
     run_column_fill,
@@ -18,16 +16,18 @@ class TerrainGeneratorService:
     """
     Pure terrain skeleton generator — no climate fields on generate_surface.
     Climate: separate pass via ClimateOrchestratorService (DAG / materialization queue).
+
+    Pole field is **caller-provided** (MapCellService / map.py debug harness) — TR-1b.
     """
 
     def generate_surface(
         self,
         world: World,
         locations: list[NamedLocation],
+        pole_field: ClimatePoleField,
         padding: int = 2,
     ) -> list[MapCell]:
-        pole_field = run_pole_resolve_pass(world, locations, padding)
-        heightmap  = run_surface_pass(world, locations, pole_field, padding)
+        heightmap = run_surface_pass(world, locations, pole_field, padding)
         if heightmap is None:
             return []
         n_eff = run_gap_analysis(world, heightmap)
@@ -47,10 +47,10 @@ class TerrainGeneratorService:
         self,
         world: World,
         locations: list[NamedLocation],
+        pole_field: ClimatePoleField,
         padding: int = 2,
     ) -> tuple[SurfaceHeightmap | None, dict[tuple[int, int], int]]:
-        pole_field = run_pole_resolve_pass(world, locations, padding)
-        heightmap  = run_surface_pass(world, locations, pole_field, padding)
+        heightmap = run_surface_pass(world, locations, pole_field, padding)
         if heightmap is None:
             return None, {}
         return heightmap, run_gap_analysis(world, heightmap)
@@ -59,13 +59,16 @@ class TerrainGeneratorService:
         self,
         world: World,
         locations: list[NamedLocation],
+        pole_field: ClimatePoleField,
         gx: int,
         gy: int,
         z_lo: int,
         z_hi: int,
         padding: int = 2,
     ) -> list[MapCell]:
-        heightmap, n_eff = self.build_surface_heightmap(world, locations, padding)
+        heightmap, n_eff = self.build_surface_heightmap(
+            world, locations, pole_field, padding,
+        )
         if heightmap is None or (gx, gy) not in heightmap.surface_z:
             return []
         return run_column_fill_single(world, heightmap, n_eff, gx, gy, z_lo, z_hi)

@@ -61,7 +61,7 @@ app/application/engine/nodes/pojo/python/climate/   ← ⬜ последняя �
 app/api/routes/map.py                  ← debug harness (POST …/generate-*); production — DAG
 ```
 
-**Вызов:** production — DAG-ноды → orchestrator / runtime assembler. `map.py` generate-* — только debug; те же функции, без HTTP в product flow.
+**Вызов:** production — DAG-ноды → orchestrator / runtime assembler. `map.py` generate-* — path **2** (debug); те же функции, без HTTP в product flow. Script smoke — § «Три входа» в [`tz_world_generation_dag.md`](./tz_world_generation_dag.md).
 
 ---
 
@@ -578,16 +578,16 @@ def recalculate(
 
 ### Smoke tests
 
-`backend/scripts/debug_settlement.py`:
+`backend/scripts/debug_settlement.py` — **target:** pipeline-тесты через HTTP (path **2**, см. [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) § «Три входа»). ⬜ часть тестов ещё in-process.
 
-- `test_climate_zone_voronoi`
-- `test_climate_registry_override`
-- `test_climate_temperature_formula`
-- `test_climate_manual_anchor_voronoi`
-- `test_climate_orchestrator_passes`
-- `test_climate_detect_relative_elevation`
-- `test_climate_pole_tier`
-- `test_climate_tier_resolve`
+- `test_climate_zone_voronoi` — unit (path 3) OK
+- `test_climate_registry_override` — unit (path 3) OK
+- `test_climate_temperature_formula` — unit (path 3) OK
+- `test_climate_manual_anchor_voronoi` — **→ API** (`generate-surface` + `generate-climate`)
+- `test_climate_orchestrator_passes` — **→ API**
+- `test_climate_detect_relative_elevation` — unit (path 3) OK
+- `test_climate_pole_tier` — unit (path 3) OK
+- `test_climate_tier_resolve` — **→ API**
 - `test_climate_precipitation_liquid`
 
 ---
@@ -872,6 +872,7 @@ class VolumeClimateContext:
 
 | Дата | Версия | Изменение |
 |---|---|---|
+| 2026-06 | v2.4.1 | cross-link § «Три входа»; smoke tests path 2 vs path 3 |
 | 2026-06 | v2.4 | § volume climate: A tunnels, B hive multi-z skeleton, C co-located edge case |
 | 2026-06 | v2.3 | три процесса (eager/recalc/runtime); контракты ChangeEvent/RecalcRequest; спека DAG nodes |
 | 2026-06 | v2.2.3 | § отказоустойчивость: fallback как design, validator отложен до контрактов |

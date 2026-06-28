@@ -167,8 +167,9 @@ async def generate_z_slice_route(
     world     = await world_svc.get_by_id(world_uid)
     locations = await location_svc.get_all(world_uid)
 
-    cells  = _terrain_generator.generate_z_slice(world, locations, gx, gy, z_lo, z_hi)
-    result = await map_svc.save_pass(cells, "terrain")
+    result = await map_svc.save_z_slice(
+        _terrain_generator, world, locations, gx, gy, z_lo, z_hi,
+    )
 
     status_code = 200 if result.failed == 0 else 207
     return JSONResponse(status_code=status_code, content=result.to_dict())

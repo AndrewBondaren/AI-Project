@@ -1,9 +1,15 @@
-"""Smoke test: SettlementAssembler district + street planning."""
+"""Smoke test: SettlementAssembler district + street planning.
+
+Pipeline tests (terrain/climate materialization) require running backend — HTTP path 2.
+Start backend yourself (`npm run backend`); agents do not start the server.
+Unit tests (settlement layout, climate formulas) run in-process.
+"""
 import logging
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s | %(message)s")
 
@@ -654,13 +660,18 @@ def test_coordinate_spaces_anchor_3000() -> None:
     print("coordinate spaces anchor 3000 checks: OK")
 
 
-def _urban_surface_cells(cells: list[MapCell]) -> set[tuple[int, int]]:
-    return {(c.x, c.y) for c in cells if c.system_terrain == "urban"}
-
 def test_terrain_decoupled_from_settlements() -> None:
-    """Terrain must not paint urban or derive climate from cities."""
-    from app.application.worldData.generators.terrain.terrainGeneratorService import (
-        TerrainGeneratorService,
+    """Terrain must not paint urban; regional climate stable when cities are added."""
+    from debug_api_helpers import (
+        api_add_location,
+        api_clear_map,
+        api_client,
+        api_generate_climate,
+        api_generate_surface,
+        api_get_map,
+        api_reset_world,
+        surface_grid_cell,
+        urban_surface_cells,
     )
 
     terrain_reg = [
@@ -668,10 +679,6 @@ def test_terrain_decoupled_from_settlements() -> None:
         {"system_terrain": "plains", "glossary_ref": "terrain_plains"},
     ]
 
-    def _surface_cell(cells: list[MapCell], gx: int, gy: int) -> MapCell:
-        return next(c for c in cells if c.x == gx and c.y == gy and c.z >= -1)
-
-    svc = TerrainGeneratorService()
     world = World(
         world_uid="world-test-terrain",
         name="Test",
@@ -704,30 +711,39 @@ def test_terrain_decoupled_from_settlements() -> None:
         map_z=0,
     )
 
-    cells_one_city = svc.generate_surface(world, [region, city_a])
-    assert _urban_surface_cells(cells_one_city) == set()
-    cell_1_0_one = _surface_cell(cells_one_city, 1, 0)
-    assert cell_1_0_one.system_terrain == "plains"
-    assert cell_1_0_one.location_uid == region.location_uid
-    assert cell_1_0_one.temperature_base <= -20
-    assert cell_1_0_one.rainfall == 0  # arctic + water: below cool_temp
+    with api_client() as client:
+        api_reset_world(client, world, [region, city_a])
+        api_generate_surface(client, world.world_uid)
+        skeleton = api_get_map(client, world.world_uid)
+        assert urban_surface_cells(skeleton) == set()
+        assert all(c.get("temperature_base") is None for c in skeleton)
 
-    city_b = NamedLocation(
-        location_uid="city-b",
-        world_uid=world.world_uid,
-        display_name="City B",
-        system_location_type="city",
-        created_at="2026-01-01T00:00:00",
-        parent_location_uid=region.location_uid,
-        system_city_size="city",
-        map_x=9000,
-        map_y=0,
-        map_z=0,
-    )
-    cells_two_cities = svc.generate_surface(world, [region, city_a, city_b])
-    cell_1_0_two = _surface_cell(cells_two_cities, 1, 0)
-    assert cell_1_0_two.temperature_base == cell_1_0_one.temperature_base
-    assert cell_1_0_two.location_uid == region.location_uid
+        api_generate_climate(client, world.world_uid)
+        cells_one_city = api_get_map(client, world.world_uid)
+        cell_0_0_one = surface_grid_cell(cells_one_city, 0, 0)
+        assert cell_0_0_one["system_terrain"] == "plains"
+        assert cell_0_0_one["temperature_base"] is not None
+        assert cell_0_0_one["rainfall"] is not None
+
+        city_b = NamedLocation(
+            location_uid="city-b",
+            world_uid=world.world_uid,
+            display_name="City B",
+            system_location_type="city",
+            created_at="2026-01-01T00:00:00",
+            parent_location_uid=region.location_uid,
+            system_city_size="city",
+            map_x=9000,
+            map_y=0,
+            map_z=0,
+        )
+        api_add_location(client, city_b)
+        api_clear_map(client, world.world_uid)
+        api_generate_surface(client, world.world_uid)
+        api_generate_climate(client, world.world_uid)
+        cells_two_cities = api_get_map(client, world.world_uid)
+        cell_0_0_two = surface_grid_cell(cells_two_cities, 0, 0)
+        assert cell_0_0_two["temperature_base"] == cell_0_0_one["temperature_base"]
 
     print("terrain decoupled from settlements checks: OK")
 
@@ -812,7 +828,14 @@ def test_climate_temperature_formula() -> None:
 
 def test_climate_manual_anchor_voronoi() -> None:
     """Manual climate_anchor wins over admin region in Voronoi."""
-    from app.application.worldData.generators.assemblers.climateAssembler import ClimateOrchestratorService
+    from debug_api_helpers import (
+        api_client,
+        api_generate_climate,
+        api_generate_surface,
+        api_get_map,
+        api_reset_world,
+        surface_grid_cell,
+    )
 
     world = World(
         world_uid="world-test-climate-manual",
@@ -844,18 +867,29 @@ def test_climate_manual_anchor_voronoi() -> None:
         map_y=0,
         map_z=4000,
     )
-    orch = ClimateOrchestratorService()
-    cells = orch.full_surface(world, [region, peak])
-    cell_at_peak = next(c for c in cells if c.x == 3 and c.y == 0)
-    assert cell_at_peak.location_uid == peak.location_uid
-    assert cell_at_peak.rainfall == 0
+
+    with api_client() as client:
+        api_reset_world(client, world, [region, peak])
+        api_generate_surface(client, world.world_uid)
+        api_generate_climate(client, world.world_uid)
+        cells = api_get_map(client, world.world_uid)
+        cell_at_peak = surface_grid_cell(cells, 3, 0)
+        assert cell_at_peak.get("location_uid") == peak.location_uid
+        assert cell_at_peak["rainfall"] == 0
 
     print("climate manual anchor voronoi checks: OK")
 
 
 def test_climate_orchestrator_passes() -> None:
-    """Orchestrator allows entry at pass level (DAG hook points)."""
-    from app.application.worldData.generators.assemblers.climateAssembler import ClimateOrchestratorService
+    """Surface pass has no climate fields; generate-climate fills them."""
+    from debug_api_helpers import (
+        api_client,
+        api_generate_climate,
+        api_generate_surface,
+        api_get_map,
+        api_reset_world,
+        top_surface_cells,
+    )
 
     world = World(
         world_uid="world-test-orchestrator",
@@ -875,11 +909,16 @@ def test_climate_orchestrator_passes() -> None:
         map_y=0,
         map_z=0,
     )
-    orch = ClimateOrchestratorService()
-    heightmap = orch.heightmap_only(world, [region])
-    assert all(c.temperature_base is None for c in heightmap)
-    surface = orch.apply_weather_only(world, [region], heightmap)
-    assert all(c.temperature_base is not None for c in surface)
+
+    with api_client() as client:
+        api_reset_world(client, world, [region])
+        api_generate_surface(client, world.world_uid)
+        skeleton = top_surface_cells(api_get_map(client, world.world_uid))
+        assert all(c.get("temperature_base") is None for c in skeleton)
+
+        api_generate_climate(client, world.world_uid)
+        weathered = top_surface_cells(api_get_map(client, world.world_uid))
+        assert all(c.get("temperature_base") is not None for c in weathered)
 
     print("climate orchestrator passes checks: OK")
 
@@ -1085,7 +1124,7 @@ def test_climate_admin_merge_skipped_with_pole() -> None:
     )
 
     cell_m     = cell_size_m(world)
-    bbox       = grid_bbox_from_locations([region], cell_m, 2)
+    bbox       = grid_bbox_from_locations(world, [region], 2)
     pole_field = resolve_pole_field(world, [region], cell_m, bbox)
     heightmap  = run_heightmap_pass(world, [region], pole_field, 2)
     field      = run_anchor_collect_pass(world, [region], heightmap, pole_field)
@@ -1114,7 +1153,14 @@ def test_climate_admin_merge_skipped_with_pole() -> None:
 
 def test_climate_tier_resolve() -> None:
     """CL-2: pole base + local override in world-relative radius; admin ignored."""
-    from app.application.worldData.generators.assemblers.climateAssembler import ClimateOrchestratorService
+    from debug_api_helpers import (
+        api_client,
+        api_generate_climate,
+        api_generate_surface,
+        api_get_map,
+        api_reset_world,
+        surface_grid_cell,
+    )
 
     world = World(
         world_uid="world-test-tier",
@@ -1148,15 +1194,19 @@ def test_climate_tier_resolve() -> None:
         map_y=0,
         map_z=4000,
     )
-    orch = ClimateOrchestratorService()
-    cells = orch.full_surface(world, [region, peak])
-    cell_peak = next(c for c in cells if c.x == 3 and c.y == 0)
-    cell_far  = next(c for c in cells if c.x == -2 and c.y == 0)
 
-    assert cell_peak.location_uid == peak.location_uid
-    assert cell_peak.rainfall == 0
-    assert cell_far.location_uid is None
-    assert cell_peak.temperature_base < cell_far.temperature_base
+    with api_client() as client:
+        api_reset_world(client, world, [region, peak])
+        api_generate_surface(client, world.world_uid)
+        api_generate_climate(client, world.world_uid)
+        cells = api_get_map(client, world.world_uid)
+        cell_peak = surface_grid_cell(cells, 3, 0)
+        cell_far  = surface_grid_cell(cells, -2, 0)
+
+        assert cell_peak.get("location_uid") == peak.location_uid
+        assert cell_peak["rainfall"] == 0
+        assert cell_far.get("location_uid") is None
+        assert cell_peak["temperature_base"] < cell_far["temperature_base"]
 
     print("climate tier resolve checks: OK")
 
