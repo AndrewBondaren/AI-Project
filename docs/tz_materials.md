@@ -196,6 +196,22 @@ pressure(cell) = sum(density * height for fluid_cells above)
 
 ---
 
+## 7.1 Climate: `precipitation_liquid`
+
+`World.precipitation_liquid` → запись в `material_registry` с `material_category: "liquid"`.
+
+Генератор климата использует **`cool_temp` / `heat_temp`** (и наличие `cool_into` / `heat_into`) как **фазовую полосу** жидких осадков:
+
+- `temp` внутри полосы → `liquid_mult ≈ 1`
+- ниже `cool_temp` или выше `heat_temp` → `liquid_mult = 0` (снег/град — runtime через `weather_type_registry`)
+- outer 10% полосы — smoothstep (как tier temp blend)
+
+Fallback: `water` → первый `liquid` в registry → built-in `{ cool_temp: 0, heat_temp: 100 }`.
+
+Не привязывать к 0°C / 100°C на уровне движка — только к полям материала.
+
+---
+
 ## 8. Открытые вопросы
 
 | Вопрос | Статус |

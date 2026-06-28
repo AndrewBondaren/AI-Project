@@ -5,6 +5,10 @@ from app.application.worldData.generators.climate.anchorCollect import build_coa
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
 from app.application.worldData.generators.climate.climateZone import ClimateZone
+from app.application.worldData.generators.climate.precipitation import (
+    clamp_temperature_to_peak,
+    effective_rainfall,
+)
 from app.application.worldData.generators.climate.registry import profile_for
 from app.application.worldData.generators.climate.zoneField import (
     ZoneClimateField,
@@ -146,7 +150,9 @@ class ClimateGeneratorService:
         )
         lapse = world.elevation_lapse_rate if world.elevation_lapse_rate is not None else DEFAULT_LAPSE_RATE
         temp  = round(base - lapse * (z / 100))
-        return temp, profile.base_rainfall
+        temp  = clamp_temperature_to_peak(world, temp)
+        rain  = effective_rainfall(profile.base_rainfall, temp, world)
+        return temp, rain
 
     def _zone_climate(
         self,

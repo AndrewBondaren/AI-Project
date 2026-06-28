@@ -370,6 +370,7 @@ Smoke: `test_climate_*`, `test_climate_tier_resolve` в `debug_settlement.py`.
 |---|---|---|---|---|---|
 | CL-13 | info | — | Tier resolution docs vs code | synced in `tz_climate.md` | **resolved** |
 | CL-14 | info | P3 | Таблица tier-2 в `tz_climate.md` всё ещё lists admin fallback; cell resolve admin off | уточнить «merge vs resolve» в docs | open |
+| CL-15 | medium | — | Rainfall = raw zone moisture; Earth freeze hardcoded | `precipitation_liquid` + `precipitation.py` + peak clamp | **resolved** |
 
 ---
 

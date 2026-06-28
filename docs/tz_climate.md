@@ -80,6 +80,67 @@ Hardcoded dicts из terrain **удалены**. Дефолты — в `ClimateZ
 Полюса **не** берут enum-temp как абсолют — derived из коридора (см. ниже).  
 `season_temp_offsets` — runtime сдвиг от `temperature_base`, не переписывает eager map.
 
+**Три слоя температуры (A):**
+
+| Слой | Смысл |
+|---|---|
+| `climate_temperature_peak_min/max` | Абсолютный коридор мира (сезоны, экзотика) |
+| `base_temperature` зоны / pole inset 20% | **Опорные** точки градиента, не потолок ячейки |
+| `MapCell.temperature_base` | profile + lapse + override; **clamp** к `[peak_min, peak_max]` на eager |
+
+Inset 20% у полюса — только derived temp полюса, не лимит ячейки.  
+Arctic **−60°C** на ячейке: `peak_min: -60` + override в `climate_zone_registry`, не enum `−25`.
+
+**Preset vs лимит (B):** enum и fallback `−40…45` в коде — **земной preset** для импорта и pole math, когда peak не задан. Они **не** запрещают Titan (−179) или Venus (+430): мастер задаёт `peak_min/max` и registry. Отдельного `climate_preset` в v1 нет.
+
+### `precipitation_liquid` (v2.2)
+
+```json
+{
+  "precipitation_liquid": "water",
+  "material_registry": [
+    {
+      "system_material": "water",
+      "material_category": "liquid",
+      "cool_into": "ice",
+      "cool_temp": 0,
+      "heat_into": "steam",
+      "heat_temp": 100
+    }
+  ]
+}
+```
+
+| Поле | Default | Смысл |
+|---|---|---|
+| `precipitation_liquid` | `"water"` | ref → `material_registry`; fallback: `water` → первый `liquid` |
+
+**Rainfall на ячейке (C):**
+
+```
+moisture     = zone.base_rainfall          # влажность зоны, не обнуляется при замерзании
+liquid_mult  = f(temp, cool_temp, heat_temp, cool_into, heat_into)   # 0..1, outer 10% smoothstep
+rainfall     = round(moisture × liquid_mult)   # жидкие осадки в eager map
+```
+
+Снег/град — `weather_type_registry` по temp + moisture; при `temp ≤ cool_temp` liquid_mult = 0, moisture в зоне сохраняется для runtime.
+
+**Пример холодного мира (D):**
+
+```json
+{
+  "climate_temperature_peak_min": -60,
+  "climate_temperature_peak_max": 35,
+  "precipitation_liquid": "water",
+  "climate_zone_registry": [
+    { "system_climate": "arctic", "base_temperature": -55, "base_rainfall": 20 }
+  ]
+}
+```
+
+При `temp = -55` и `precipitation_liquid: "water"` → `rainfall = 0` (ниже `cool_temp`).  
+Для жидких осадков в мороз — другой liquid (напр. `cool_temp: -80`) или снег через `weather_type_registry`.
+
 ### Хранение полюсов (гибрид C — утверждено)
 
 | Данные | Где |

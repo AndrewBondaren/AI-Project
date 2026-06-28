@@ -710,7 +710,7 @@ def test_terrain_decoupled_from_settlements() -> None:
     assert cell_1_0_one.system_terrain == "plains"
     assert cell_1_0_one.location_uid == region.location_uid
     assert cell_1_0_one.temperature_base <= -20
-    assert cell_1_0_one.rainfall == 20
+    assert cell_1_0_one.rainfall == 0  # arctic + water: below cool_temp
 
     city_b = NamedLocation(
         location_uid="city-b",
@@ -802,7 +802,10 @@ def test_climate_temperature_formula() -> None:
     )
     temp, rainfall = svc.weather_at_elevation(world, "arctic", 1000)
     assert temp == -32
-    assert rainfall == 20
+    assert rainfall == 0
+
+    temp_t, rain_t = svc.weather_at_elevation(world, "temperate", 0)
+    assert rain_t == 55
 
     print("climate temperature formula checks: OK")
 
@@ -845,7 +848,7 @@ def test_climate_manual_anchor_voronoi() -> None:
     cells = orch.full_surface(world, [region, peak])
     cell_at_peak = next(c for c in cells if c.x == 3 and c.y == 0)
     assert cell_at_peak.location_uid == peak.location_uid
-    assert cell_at_peak.rainfall == 20
+    assert cell_at_peak.rainfall == 0
 
     print("climate manual anchor voronoi checks: OK")
 
@@ -1009,7 +1012,6 @@ def test_climate_pole_tier() -> None:
 def test_climate_tier_resolve() -> None:
     """CL-2: pole base + local override in world-relative radius; admin ignored."""
     from app.application.worldData.generators.assemblers.climateAssembler import ClimateOrchestratorService
-    from app.application.worldData.generators.climate.registry import profile_for
 
     world = World(
         world_uid="world-test-tier",
@@ -1049,11 +1051,92 @@ def test_climate_tier_resolve() -> None:
     cell_far  = next(c for c in cells if c.x == -2 and c.y == 0)
 
     assert cell_peak.location_uid == peak.location_uid
-    assert cell_peak.rainfall == profile_for(world, "arctic").base_rainfall
+    assert cell_peak.rainfall == 0
     assert cell_far.location_uid is None
     assert cell_peak.temperature_base < cell_far.temperature_base
 
     print("climate tier resolve checks: OK")
+
+
+def test_climate_precipitation_liquid() -> None:
+    """CL-15: rainfall = moisture × liquid phase band; peak clamp."""
+    from app.application.worldData.generators.climate import ClimateGeneratorService
+    from app.application.worldData.generators.climate.precipitation import (
+        effective_rainfall,
+        liquid_precipitation_mult,
+        resolve_world_precipitation_liquid,
+    )
+
+    water_world = World(
+        world_uid="world-test-precip",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        material_registry=[
+            {
+                "system_material": "water",
+                "material_category": "liquid",
+                "cool_into": "ice",
+                "cool_temp": 0,
+                "heat_into": "steam",
+                "heat_temp": 100,
+            },
+        ],
+    )
+    liquid = resolve_world_precipitation_liquid(water_world)
+    assert liquid["system_material"] == "water"
+    assert liquid_precipitation_mult(15, liquid) == 1.0
+    assert liquid_precipitation_mult(-10, liquid) == 0.0
+    assert effective_rainfall(55, 15, water_world) == 55
+    assert effective_rainfall(55, -10, water_world) == 0
+
+    cold_world = World(
+        world_uid="world-test-precip-cold",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        climate_temperature_peak_min=-60,
+        climate_temperature_peak_max=35,
+        climate_zone_registry=[
+            {"system_climate": "arctic", "base_temperature": -55, "base_rainfall": 20},
+        ],
+        material_registry=water_world.material_registry,
+    )
+    svc = ClimateGeneratorService()
+    temp, rain = svc.weather_at_elevation(cold_world, "arctic", 0)
+    assert temp == -55
+    assert rain == 0
+
+    ammonia_world = World(
+        world_uid="world-test-precip-ammonia",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        precipitation_liquid="ammonia",
+        material_registry=[
+            {
+                "system_material": "ammonia",
+                "material_category": "liquid",
+                "cool_into": "ice",
+                "cool_temp": -80,
+                "heat_into": "gas",
+                "heat_temp": -30,
+            },
+        ],
+    )
+    assert effective_rainfall(40, -55, ammonia_world) == 40
+
+    peak_world = World(
+        world_uid="world-test-peak-clamp",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        climate_temperature_peak_min=-60,
+        climate_temperature_peak_max=45,
+        climate_zone_registry=[
+            {"system_climate": "arctic", "base_temperature": -100, "base_rainfall": 5},
+        ],
+    )
+    temp_clamped, _ = svc.weather_at_elevation(peak_world, "arctic", 0)
+    assert temp_clamped == -60
+
+    print("climate precipitation liquid checks: OK")
 
 
 def test_phase_4_collect_map_cells() -> None:
@@ -1166,6 +1249,7 @@ def main() -> None:
     test_climate_detect_relative_elevation()
     test_climate_pole_tier()
     test_climate_tier_resolve()
+    test_climate_precipitation_liquid()
     test_phase_4_collect_map_cells()
     test_city_shared_nodes()
 
