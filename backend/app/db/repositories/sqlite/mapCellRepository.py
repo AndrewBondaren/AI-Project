@@ -24,7 +24,6 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
         await super().upsert(cell)
 
     async def insert_bulk_ignore(self, cells: list[MapCell]) -> int:
-        """INSERT OR IGNORE in a single transaction. Returns actual inserted count."""
         if not cells:
             return 0
         cols, _ = to_row(cells[0])
@@ -38,6 +37,83 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
         if not _in_transaction.get():
             await self._db.conn.commit()
         return inserted
+
+    async def _upsert_partial(
+        self,
+        cells: list[MapCell],
+        update_clause: str,
+        where_clause: str,
+    ) -> int:
+        if not cells:
+            return 0
+        cols, _ = to_row(cells[0])
+        placeholders = ", ".join("?" * len(cols))
+        sql = (
+            f"INSERT INTO map_cells ({', '.join(cols)}) VALUES ({placeholders}) "
+            f"ON CONFLICT(world_uid, x, y, z) DO UPDATE SET {update_clause} "
+            f"WHERE {where_clause}"
+        )
+        count = 0
+        for cell in cells:
+            _, vals = to_row(cell)
+            cur = await self._db.conn.execute(sql, vals)
+            count += cur.rowcount
+        if not _in_transaction.get():
+            await self._db.conn.commit()
+        return count
+
+    async def upsert_terrain_skeleton(self, cells: list[MapCell]) -> int:
+        return await self._upsert_partial(
+            cells,
+            "system_terrain = excluded.system_terrain",
+            "map_cells.system_building_element IS NULL",
+        )
+
+    async def upsert_climate_fields(self, cells: list[MapCell]) -> int:
+        return await self._upsert_partial(
+            cells,
+            "temperature_base = excluded.temperature_base, "
+            "rainfall = excluded.rainfall, "
+            "location_uid = excluded.location_uid, "
+            "system_terrain = excluded.system_terrain",
+            "map_cells.system_building_element IS NULL",
+        )
+
+    async def upsert_ore_markers(self, cells: list[MapCell]) -> int:
+        return await self._upsert_partial(
+            cells,
+            "system_material = excluded.system_material",
+            "map_cells.system_building_element IS NULL",
+        )
+
+    async def upsert_cave_carve(self, cells: list[MapCell]) -> int:
+        return await self._upsert_partial(
+            cells,
+            "system_terrain = excluded.system_terrain",
+            "map_cells.system_building_element IS NULL "
+            "AND map_cells.system_material IS NULL",
+        )
+
+    async def get_z_slice(
+        self,
+        world_uid: str,
+        x_min: int,
+        x_max: int,
+        y_min: int,
+        y_max: int,
+        z_min: int,
+        z_max: int,
+    ) -> list[MapCell]:
+        sql = (
+            "SELECT * FROM map_cells WHERE world_uid = ? "
+            "AND x BETWEEN ? AND ? AND y BETWEEN ? AND ? "
+            "AND z BETWEEN ? AND ?"
+        )
+        params = [world_uid, x_min, x_max, y_min, y_max, z_min, z_max]
+        async with self._db.conn.execute(sql, params) as cur:
+            rows = await cur.fetchall()
+        from app.db.mapper import from_row
+        return [from_row(MapCell, r) for r in rows]
 
     async def get_by_location(self, location_uid: str) -> list[MapCell]:
         return await self.fetch_all("location_uid = ?", [location_uid])

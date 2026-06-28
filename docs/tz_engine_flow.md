@@ -161,6 +161,8 @@ while attempt < repair_iterations:
 LLM получает уже локализованный контекст — не координаты, не system-ключи.  
 Детали алгоритма и структура scene_context уточняются при реализации ноды.
 
+Стык generators ↔ DAG — [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) (**черновик**, не дублировать здесь).
+
 ---
 
 ## Открытые вопросы / будущие расширения

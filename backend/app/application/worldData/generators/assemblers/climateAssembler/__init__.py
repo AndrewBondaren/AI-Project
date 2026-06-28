@@ -9,10 +9,16 @@ from app.application.worldData.generators.assemblers.climateAssembler.climateSur
     ClimateSurfaceAssembler,
     ClimateSurfaceResult,
 )
-from app.application.worldData.generators.assemblers.climateAssembler.types import RecalcTrigger
+from app.application.worldData.generators.assemblers.climateAssembler.types import (
+    ClimateChangeEvent,
+    ClimateRecalcRequest,
+    RecalcTrigger,
+)
 
 __all__ = [
+    "ClimateChangeEvent",
     "ClimateOrchestratorService",
+    "ClimateRecalcRequest",
     "ClimateRuntimeAssembler",
     "ClimateSurfaceAssembler",
     "ClimateSurfaceResult",

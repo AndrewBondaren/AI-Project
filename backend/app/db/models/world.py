@@ -97,6 +97,10 @@ class World:
     precipitation_liquid:           str | None = None   # ref → material_registry; fallback water
     z_max:                          int | None = None
     z_min:                          int | None = None
+    map_subsurface_depth:           int | None = None   # N_base for skeleton band; default 20
+    world_bounds:                   dict | None = json_nullable_col(default=None)
+    magma_band_thickness:           int | None = None   # 0/null = skip magma band
+    closed_planet_grid:             bool = bool_col(default=False)
     elevation_lapse_rate:           float | None = None
     g:                              float = 1.0
     map_cell_size_m:                int = 3000  # world surface cell size in meters, multiples of 1000

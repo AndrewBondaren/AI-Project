@@ -251,6 +251,8 @@ Perimeter не учитывает template района — v1 compromise.
 | ID | Severity | Где | Fix | P |
 |---|---|---|---|---|
 | FM-1 | medium | `TerrainGeneratorService` monolith | thin facade → `ClimateOrchestratorService` | resolved |
+| **TR-1** | **high** | Multi-pass terrain skeleton + admin pass split | ✅ impl 2026-06 — см. [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Impl queue |
+| **TR-M** | low | Magma antipode teleport (edge case) | **partial** — skeleton band + `antipode_xy`; M-3 movement ⬜ |
 | FM-2 | medium | `streets.plan_city_street_grid` | split graph vs policy | P3 |
 | FM-3 | low | `pick_barrier_template_type` | registry-driven pick; см. § ниже | P2 |
 
@@ -287,7 +289,7 @@ system_city_size ∈ city+       → city_wall
 | **CL-2b** | `include_admin_fallback=pole_field.is_empty()` |
 | **CL-2a, CL-2e** | tierResolve: drop uid_map; modifier bbox fallback |
 | **CL-10..CL-12, DR-5** | `climate/math.py`, `locations.py`, `terrainZ.py`; heightmap purity |
-| **CL-5** | partial: warning on >1 `climate_pole` (import validator still open) |
+| **CL-5** | runtime fallback ✅ (>1 pole и др.); import validator ⬜ после фиксации JSON-контрактов |
 | **CL-13** | `tz_climate.md` § tier resolution синхронизирован |
 | **CL-14** | `tz_climate.md` § merge vs resolve admin zones |
 | **R-14** | Climate вынесен из terrain → `generators/climate/` + assembler |
@@ -325,14 +327,15 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | MR-4, FM-2 | Split `streets.py` | open |
 | NC-6..NC-9 | Docs / model fields / validators | open |
 | DR-2, DR-3, DR-4 | API cleanup после Phase 6 | open |
-| **CL-5..CL-9** | pole runtime validation; RecalcTrigger; legacy coarse; CGS split | open |
+| **CL-7** | contracts `ClimateChangeEvent`/`ClimateRecalcRequest` ✅; node routing spec ✅; generator impl + node ⬜ |
+| **CL-5, CL-6, CL-8, CL-9** | validator; pole contract; legacy deprecate; CGS split | open |
 | **CL-2a, CL-2c..CL-2e** | tierResolve edge cases (см. § CL) | open / accepted |
 
 ---
 
 ## Climate v2.1 — smells registry (CL)
 
-**Status:** `partial` — eager v2.2 ✅ · tier resolve ✅ · precipitation ✅ · polish CL-3..CL-12 open  
+**Status:** `partial` — eager v2.3 ✅ · contracts recalc/runtime ✅ · generator impl recalc/weather ⬜ · DAG nodes ⬜  
 **Refs:** [tz_climate.md](./tz_climate.md)
 
 ### Implicit contracts
@@ -342,9 +345,9 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | CL-2 | high | — | ~~Global local Voronoi kills pole~~ | `tierResolve.py` | **resolved** |
 | CL-3 | medium | P2 | `PoleClimateSample` vs `SurfaceClimateSample`; tier blend добавляет 3-й путь маппинга | единый spatial sample | open |
 | CL-4 | medium | P2 | ~~`climate_pole_mode` не читается~~ | `PoleMode` + `_should_autoresolve` | **resolved** |
-| CL-5 | medium | P3 | Max 1 `climate_pole` — warning at resolve; import validator open | validator upsert + resolve assert | **partial** |
+| CL-5 | medium | P3 | Import validator max 1 `climate_pole`, refs — **отложен** до фиксации JSON-контрактов | validator upsert (+ editor); runtime fallback **не убирать** | **partial** — fallback ✅ |
 | CL-6 | low | P3 | `pole_kind` / `weight` через convention на `NamedLocation` | contract или doc | open |
-| CL-7 | low | P3 | `RecalcTrigger` stub в `recalculate()` | bbox routing или `@stub` | open |
+| CL-7 | low | P3 | ~~RecalcTrigger stub~~ | contracts ✅; routing в `recalculate_climate` node; generator impl ⬜ | **partial** |
 | CL-8 | low | P3 | Legacy `build_coarse_field` / `build_zone_field` в main path не используются | deprecate / v1 entry | open |
 | CL-2a | low | P3 | ~~`uid_map` в `resolve_tier_sample` не используется~~ | removed param | **resolved** |
 | CL-2b | medium | P2 | ~~Admin anchors мёртвые в merge~~ | `include_admin_fallback=pole_field.is_empty()` | **resolved** |
@@ -395,6 +398,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | Дата | Изменение |
 |---|---|
 | 2026-06 | NC-1 Phase 1–5; `tz_terrain_generation.md` full rework (Phase 6) |
+| 2026-06 | **Terrain TZ утверждено:** multi-pass skeleton, N_eff, admin pass order; TR-1 open (код vs ТЗ) |
 | 2026-06 | Climate polish sprint: CL-4, CL-2a/2b/2e, CL-10..12, DR-5 |
 | 2026-06 | Climate v2.1: pole/local tiers, `tierResolve.py`, CL-2/CL-13 resolved |
 | 2026-06 | Polish backlog rework; CL-2a..CL-2e, DR-5 added; FM-1 resolved |

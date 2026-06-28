@@ -5,13 +5,14 @@ from app.db.models.world import World
 
 @dataclass(frozen=True)
 class WeatherSnapshot:
-    """Runtime weather hook for future DAG resolve_weather node."""
+    """Runtime weather — output of resolve_weather (see tz_climate.md § runtime)."""
 
     season:                str | None
     temperature_base:      int
     effective_temperature: int
     rainfall:              int
     system_weather:        str | None = None
+    intensity:             int = 0   # 0 until tick loop; contract reserved
 
 
 class ClimateRuntimeAssembler:

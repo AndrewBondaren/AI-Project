@@ -2,7 +2,7 @@ import logging
 
 from dataclasses import dataclass
 
-from app.application.worldData.generators.assemblers.climateAssembler.types import RecalcTrigger
+from app.application.worldData.generators.assemblers.climateAssembler.types import ClimateRecalcRequest
 from app.application.worldData.generators.climate.climateAnchor import AnchorSource
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.climate.climateGeneratorService import ClimateGeneratorService
@@ -15,6 +15,9 @@ from app.application.worldData.generators.assemblers.climateAssembler.passes.cel
 )
 from app.application.worldData.generators.assemblers.climateAssembler.passes.heightmapPass import (
     run_heightmap_pass,
+)
+from app.application.worldData.generators.assemblers.climateAssembler.passes.liquidOverlayPass import (
+    run_liquid_overlay_pass,
 )
 from app.application.worldData.generators.assemblers.climateAssembler.passes.poleResolvePass import (
     run_pole_resolve_pass,
@@ -118,6 +121,32 @@ class ClimateSurfaceAssembler:
             surface_cells=surface + extra,
         )
 
+    def apply_climate_pass(
+        self,
+        world: World,
+        locations: list[NamedLocation],
+        heightmap_cells: list[MapCell],
+        padding: int = 2,
+    ) -> list[MapCell]:
+        """Admin generate-climate: weather + liquid overlay on existing terrain cells."""
+        pole_field = run_pole_resolve_pass(world, locations, padding)
+        anchor_field = run_anchor_collect_pass(
+            world, locations, heightmap_cells, pole_field,
+        )
+        weathered = run_cell_weather_pass(
+            world, locations, pole_field, anchor_field, heightmap_cells, self._climate,
+        )
+        extra = self._non_surface_anchor_cells(world, locations)
+        combined = weathered + extra
+        overlaid = run_liquid_overlay_pass(world, combined)
+        logger.info(
+            "climate pass | world=%s apply_climate | cells=%d liquid_overlay=%d",
+            world.world_uid,
+            len(combined),
+            len(overlaid),
+        )
+        return overlaid
+
     def heightmap_only(
         self,
         world: World,
@@ -148,13 +177,16 @@ class ClimateSurfaceAssembler:
         world: World,
         locations: list[NamedLocation],
         heightmap_cells: list[MapCell],
-        trigger: RecalcTrigger,
+        request: ClimateRecalcRequest,
     ) -> list[MapCell]:
         """
-        Recalc hook for future DAG node — re-runs anchor collect + weather, keeps z/terrain.
+        Partial climate update — separate process from assemble_full (see tz_climate.md).
+        Executes passes per ClimateRecalcRequest; returns subset of cells for upsert.
         """
-        _ = trigger
-        return self.apply_weather_only(world, locations, heightmap_cells)
+        result = self.apply_weather_only(world, locations, heightmap_cells)
+        if request.run_cell_weather:
+            result = run_liquid_overlay_pass(world, result)
+        return result
 
     def _non_surface_anchor_cells(
         self,

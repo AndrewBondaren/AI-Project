@@ -443,6 +443,48 @@ jump_result         = jump_formula(character_stats)    -- из worlds.action_for
 - NPC решает через `system_npc_goal` + `system_traits`
 - `aerial` terrain_access → обходит расщелину без прыжка
 
+### Magma antipode — переход через планету (M-3)
+
+> Edge case **круглой планеты**. Генерация magma band и `antipode_xy` — [tz_terrain_generation.md § Planet topology](tz_terrain_generation.md#planet-topology-круглая-планета-voxel-grid). **Impl ⬜** после TR-1; не блокирует vertical slice.
+
+Movement resolver обрабатывает **technical teleport** при пробое magma band — не magic teleport и не fall-through void.
+
+**Нормальное вертикальное движение (outdoor):**
+
+| Intent | Δz | Условие |
+|---|---|---|
+| «глубже» / down | −1 | target cell существует, проходима |
+| «выше» / up | +1 | target cell существует, проходима |
+
+**Magma band (сторона A):** те же правила в колонке `(gx, gy)`; все cells band = `system_terrain: magma`.
+
+**Trigger `magma_antipode_teleport`:**
+
+```
+IF cell at (gx, gy, z) is magma
+AND z == z_magma_bottom(gx, gy)
+AND (intent == deeper OR target z-1 has no map_cell)
+THEN
+  (gx', gy') = antipode_xy(gx, gy, world_bounds)
+  z'         = z_magma_bottom(gx', gy')
+  position   = (gx', gy', z')
+  emit       magma_antipode_crossing
+  apply      vertical_intent_flip = true   // до выхода из magma band на B
+```
+
+**±z flip (утверждено):** после teleport игрок логически «вышел на другую сторону планеты». Пока `z ≤ z_magma_top(gx', gy')` на antipode:
+
+| Intent игрока | На стороне A (до bottom) | На стороне B (после teleport) |
+|---|---|---|
+| «глубже» | Δz **−1** | Δz **+1** (к surface antipode) |
+| «выше» | Δz **+1** | Δz **−1** |
+
+Когда `z > z_magma_top(gx', gy')` — flip снимается, обычная семантика z.
+
+**Pathfinding:** A* не строит рёбра в void под `z_magma_bottom`. Единственный выход вниз с bottom — `magma_antipode_teleport`. Обратный путь (surface B → magma → bottom B → teleport → magma A) — симметричное правило при достижении bottom B.
+
+**Narration:** `magma_antipode_crossing` — отдельный payload для LLM (`from`, `to`, optional heat/damage); не смешивать с `location_passages` / magic `access_mechanic: teleport`.
+
 ---
 
 ## Точки входа
@@ -1176,6 +1218,7 @@ repositories = {
 | Текущая локация в UI | нет заголовка/хлебной крошки в чате |
 | Нода генерации мира | вычисление `temperature_base`, `rainfall`, `location_resources` при процедурной генерации |
 | Система построек | добыча ресурсов через постройки (шахта, лесопилка) — отложено |
+| Magma antipode (M-3) | movement resolver: bottom→bottom teleport, ±z flip — контракт в § Magma antipode; impl ⬜ (TR-M) |
 | Магия как terrain access | магическое передвижение = действие, не пассивный перк — отложено до системы магии |
 | Система последствий событий | логика `is_accessible = false` при катаклизмах — отложено до событийной системы |
 | Coordinate bridging local↔global | `location_passages.(from_x, from_y)` и `location_objects.(x, y)` — локальные координаты; offset = MIN(map_cells.x/y WHERE location_uid=X AND z=Z); нигде не хранится, вычисляется при выходе из interior |

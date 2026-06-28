@@ -2,7 +2,7 @@ from app.application.worldData.generators.assemblers.climateAssembler.climateSur
     ClimateSurfaceAssembler,
     ClimateSurfaceResult,
 )
-from app.application.worldData.generators.assemblers.climateAssembler.types import RecalcTrigger
+from app.application.worldData.generators.assemblers.climateAssembler.types import ClimateRecalcRequest
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
 from app.application.worldData.generators.climate.climateGeneratorService import ClimateGeneratorService
@@ -13,8 +13,12 @@ from app.db.models.world import World
 
 class ClimateOrchestratorService:
     """
-    Facade for admin API and future DAG nodes — no engine imports.
-    Entry at any pass level (SettlementGeneratorService pattern).
+    Facade for DAG nodes and interim admin API — no engine imports.
+
+    Three processes (tz_climate.md § v2.3):
+      1. full_surface / heightmap_only / apply_weather_only — eager generate
+      2. recalculate(ClimateRecalcRequest) — partial update on existing heightmap
+    Runtime weather: ClimateRuntimeAssembler (process 3).
     """
 
     def __init__(
@@ -65,11 +69,22 @@ class ClimateOrchestratorService:
             anchor_field=anchor_field,
         )
 
+    def apply_climate_pass(
+        self,
+        world: World,
+        locations: list[NamedLocation],
+        heightmap_cells: list[MapCell],
+        padding: int = 2,
+    ) -> list[MapCell]:
+        return self._surface.apply_climate_pass(
+            world, locations, heightmap_cells, padding,
+        )
+
     def recalculate(
         self,
         world: World,
         locations: list[NamedLocation],
         heightmap_cells: list[MapCell],
-        trigger: RecalcTrigger,
+        request: ClimateRecalcRequest,
     ) -> list[MapCell]:
-        return self._surface.recalculate(world, locations, heightmap_cells, trigger)
+        return self._surface.recalculate(world, locations, heightmap_cells, request)

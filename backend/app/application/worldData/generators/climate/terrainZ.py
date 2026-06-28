@@ -1,16 +1,7 @@
-"""Elevation → terrain type mapping for surface cells (CL-12)."""
+"""Re-export skeleton terrain mapping from terrain module."""
 
-
-def z_to_terrain(z: int, terrain_set: set[str]) -> str:
-    if z >= 2:
-        candidates = ["tundra", "plains"]
-    elif z == 1:
-        candidates = ["forest", "plains"]
-    elif z == 0:
-        candidates = ["plains"]
-    else:
-        candidates = ["liquid_body", "plains"]
-    for t in candidates:
-        if t in terrain_set:
-            return t
-    return next(iter(terrain_set), "plains")
+from app.application.worldData.generators.terrain.terrainZ import (  # noqa: F401
+    surface_terrain_at_z,
+    subsurface_terrain_at_z,
+    z_to_terrain,
+)

@@ -21,6 +21,38 @@ class IMapCellRepository(ABC):
         ...
 
     @abstractmethod
+    async def upsert_terrain_skeleton(self, cells: list[MapCell]) -> int:
+        """Upsert system_terrain for skeleton cells; skips building_element cells."""
+        ...
+
+    @abstractmethod
+    async def upsert_climate_fields(self, cells: list[MapCell]) -> int:
+        """Upsert temperature_base, rainfall, location_uid, system_terrain (liquid overlay)."""
+        ...
+
+    @abstractmethod
+    async def upsert_ore_markers(self, cells: list[MapCell]) -> int:
+        """Upsert system_material ore markers."""
+        ...
+
+    @abstractmethod
+    async def upsert_cave_carve(self, cells: list[MapCell]) -> int:
+        """Carve caves — system_terrain only when no ore material."""
+        ...
+
+    @abstractmethod
+    async def get_z_slice(
+        self,
+        world_uid: str,
+        x_min: int,
+        x_max: int,
+        y_min: int,
+        y_max: int,
+        z_min: int,
+        z_max: int,
+    ) -> list[MapCell]: ...
+
+    @abstractmethod
     async def get_by_location(self, location_uid: str) -> list[MapCell]: ...
 
     @abstractmethod
