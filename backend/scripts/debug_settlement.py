@@ -1006,6 +1006,56 @@ def test_climate_pole_tier() -> None:
     print("climate pole tier checks: OK")
 
 
+def test_climate_tier_resolve() -> None:
+    """CL-2: pole base + local override in world-relative radius; admin ignored."""
+    from app.application.worldData.generators.assemblers.climateAssembler import ClimateOrchestratorService
+    from app.application.worldData.generators.climate.registry import profile_for
+
+    world = World(
+        world_uid="world-test-tier",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        map_cell_size_m=3000,
+        terrain_registry=[{"system_terrain": "plains", "glossary_ref": "terrain_plains"}],
+        climate_pole_preset="binary",
+        climate_local_influence_fraction=0.25,
+        default_climate_zone="temperate",
+    )
+    region = NamedLocation(
+        location_uid="region-tier",
+        world_uid=world.world_uid,
+        display_name="Region",
+        system_location_type="region",
+        created_at="2026-01-01T00:00:00",
+        system_climate_zone="desert",
+        map_x=0,
+        map_y=0,
+        map_z=0,
+    )
+    peak = NamedLocation(
+        location_uid="anchor-tier-peak",
+        world_uid=world.world_uid,
+        display_name="Peak",
+        system_location_type="climate_anchor",
+        created_at="2026-01-01T00:00:00",
+        system_climate_zone="arctic",
+        map_x=9000,
+        map_y=0,
+        map_z=4000,
+    )
+    orch = ClimateOrchestratorService()
+    cells = orch.full_surface(world, [region, peak])
+    cell_peak = next(c for c in cells if c.x == 3 and c.y == 0)
+    cell_far  = next(c for c in cells if c.x == -2 and c.y == 0)
+
+    assert cell_peak.location_uid == peak.location_uid
+    assert cell_peak.rainfall == profile_for(world, "arctic").base_rainfall
+    assert cell_far.location_uid is None
+    assert cell_peak.temperature_base < cell_far.temperature_base
+
+    print("climate tier resolve checks: OK")
+
+
 def test_phase_4_collect_map_cells() -> None:
     """Split persist: surface grid occupancy vs meter geometry (Option A)."""
     from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
@@ -1115,6 +1165,7 @@ def main() -> None:
     test_climate_orchestrator_passes()
     test_climate_detect_relative_elevation()
     test_climate_pole_tier()
+    test_climate_tier_resolve()
     test_phase_4_collect_map_cells()
     test_city_shared_nodes()
 

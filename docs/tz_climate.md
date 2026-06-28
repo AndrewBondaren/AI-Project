@@ -85,6 +85,7 @@ Hardcoded dicts из terrain **удалены**. Дефолты — в `ClimateZ
 | Данные | Где |
 |---|---|
 | `climate_temperature_peak_min/max` | `World` |
+| `climate_local_influence_fraction` | `World` (default 0.1 × bbox diagonal) |
 | `climate_pole_mode`: `"manual"` \| `"autoresolve"` | `World` |
 | `climate_pole_preset`: `ice` \| `desert` \| `binary` \| … | `World` (autoresolve) |
 | **Manual pole (max 1)** | `named_location`, `system_location_type = "climate_pole"` |
@@ -180,10 +181,13 @@ flowchart TB
 
 **На ячейке:**
 
-1. `sample_pole_field(gx, gy)` — tier 1
-2. `sample_local_field(gx, gy)` — tier 2 (nearest Voronoi)
-3. Local **перебивает** pole вблизи anchor (exclusion grid = 2 cells)
-4. `weather_at_elevation(world, zone, z)` → `temperature_base`, `rainfall`
+1. `sample_pole_field(gx, gy)` — tier 1 (всегда)
+2. Modifiers = `climate_anchor` manual + auto (**ADMIN не участвует** при active pole)
+3. `r = bbox.diagonal × climate_local_influence_fraction` (default 0.1); cap `min(r, dist_to_2nd_modifier / 2)`
+4. `dist ≤ r`: zone/rainfall от nearest modifier; temp из profile
+5. Внешние 20% `[0.8r … r]`: zone/rainfall still local; **temp** smoothstep к pole base
+6. `dist > r` → pole sample
+7. `weather_at_elevation(world, zone, z, base_override?)`
 
 ---
 

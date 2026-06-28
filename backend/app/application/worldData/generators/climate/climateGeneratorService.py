@@ -108,10 +108,11 @@ class ClimateGeneratorService:
         gx: int,
         gy: int,
     ) -> SurfaceClimateSample:
-        """Tier 2 local Voronoi when non-empty; otherwise tier 1 pole field."""
-        if not local_field.is_empty():
-            return self.sample_at_anchor_field(world, uid_map, local_field, gx, gy)
-        return self.sample_at_pole_field(world, pole_field, gx, gy)
+        from app.application.worldData.generators.climate.tierResolve import resolve_tier_sample
+
+        return resolve_tier_sample(
+            self, world, uid_map, pole_field, local_field, gx, gy,
+        )
 
     def sample_at_grid(
         self,

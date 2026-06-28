@@ -93,6 +93,7 @@ class World:
     climate_temperature_peak_max:     int | None = None
     climate_pole_mode:              str | None = None   # manual | autoresolve
     climate_pole_preset:            str | None = None   # ice | desert | binary | …
+    climate_local_influence_fraction: float | None = None  # × bbox diagonal for local override
     z_max:                          int | None = None
     z_min:                          int | None = None
     elevation_lapse_rate:           float | None = None
