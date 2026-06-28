@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 
+from app.application.worldData.generators.climate.climatePole import CLIMATE_POLE_TYPE
 from app.api.schemas.imports import ImportResult
 from app.application.import_helpers import import_list
 from app.db.models.namedLocation import NamedLocation
@@ -52,6 +53,16 @@ class NamedLocationService:
     # ------------------------------------------------------------------
 
     async def import_from_json(self, world_uid: str, data: list[dict]) -> ImportResult:
+        pole_count = sum(
+            1 for row in data
+            if row.get("system_location_type") == CLIMATE_POLE_TYPE
+        )
+        if pole_count > 1:
+            raise HTTPException(
+                status_code=422,
+                detail="At most one climate_pole location per world import",
+            )
+
         def prepare(row: dict) -> NamedLocation:
             return NamedLocation(**{**row, "world_uid": world_uid})
         return await import_list(data, prepare, self._repo.upsert, id_key="location_uid")

@@ -67,7 +67,10 @@
 | R-7 | `road_tier_bonus` отсутствовал | `roadTravelResolver.py` | resolved |
 | R-8 | `PLAN.md` в дереве кода | `.cursor/plans/` | resolved |
 | R-9 | NC-1 anchor=0 маскирует mix grid/meters | `generators/coordinates/` Phase 1–5 | partial → см. NC-1 |
-| R-10 | Terrain footprint `(map_x±1)` | `settlement_grid_rect` в `TerrainGeneratorService` | resolved |
+| R-10 | Terrain footprint `(map_x±1)` | `settlement_grid_rect` в terrain (removed) | resolved |
+| R-13 | Terrain coupled to cities (urban fallback + city Voronoi) | wilderness + zone Voronoi only | resolved |
+| R-14 | Climate logic inside terrain | `generators/climate/` + terrain delegates | resolved |
+| CL-1 | Climate Voronoi from admin zones only | climate_anchor + orchestrator passes | partial |
 | R-11 | `collect_map_cells` silent mix | split `collect_surface_grid_*` / `collect_geometry_meter_*` | resolved |
 | R-12 | Inline `// cell_size_m` в planners | только `coordinates/convert.py` | resolved |
 
@@ -98,7 +101,7 @@ LOCATION_LOCAL_METERS  x, y, z    interior — v2, отложено
 **Сделано (Phase 1–5):**
 
 - `generators/coordinates/` — convert hub, typed rects, `settlement_origin_m`
-- Terrain urban footprint = `settlement_grid_rect`
+- Terrain decoupled from cities; urban via settlement / explicit `map_cells`
 - Persist split Option A (grid occupancy + meter geometry)
 - Smoke `map_x=0` и `map_x=3000`, `cell_m=5000`
 
@@ -109,7 +112,7 @@ LOCATION_LOCAL_METERS  x, y, z    interior — v2, отложено
 | NC-1a | medium | `MapCell` PK без `coordinate_space`; merged upsert без tag | v2 DB column или Option B |
 | NC-1b | ~~medium~~ | ~~Product docs § coordinates~~ | ✅ `tz_terrain_generation.md` rework |
 | NC-1c | medium | Non-city anchors в terrain: `x=anchor.map_x` (meters?) vs cities (grid) | `meters_to_grid` или явный point-anchor contract |
-| NC-1d | low | Voronoi climate: grid corner anchor, не центр footprint | doc или center-of-rect |
+| NC-1d | low | Voronoi climate: grid corner of **zone** anchor, не центр rect | doc или center-of-rect |
 | NC-1e | low | Half-open meter rect `[x0,x1)` vs gates **on** boundary `y=side_m` | inclusive boundary helper или doc |
 | NC-1f | info | NewType phantom — ORM/`ConnectionNode`/`DistrictSlot` still `int` | discipline + boundaries; optional strict mypy |
 | NC-1g | low | `map_settings.global_cell_size_m` — ghost override, нет на `World` | поле модели или удалить ветку |
@@ -224,7 +227,7 @@ Perimeter не учитывает template района — v1 compromise.
 | LC-3 | area → settlement.layoutCells.rebind | medium | `generators/structure/layoutRebind.py` | open |
 | LC-4 | settlement.buildingCache → area.derive_structure_context | medium | `structureAssembler/structureContext.py` | open |
 | LC-5 | settlement.barriers → settlement.barrierDefaults | low | same as LC-1 | open |
-| LC-6 | terrain → settlement.planner.footprint | medium | terrain → `coordinates/` + neutral footprint sizing | open |
+| LC-6 | terrain → settlement.planner.footprint | medium | removed — terrain uses `coordinates/` only | resolved |
 
 ---
 
@@ -243,7 +246,7 @@ Perimeter не учитывает template района — v1 compromise.
 
 | ID | Severity | Где | Fix | P |
 |---|---|---|---|---|
-| FM-1 | medium | `TerrainGeneratorService.generate_surface` | extract footprint, fill, anchors | P2 |
+| FM-1 | medium | `TerrainGeneratorService.generate_surface` | extract z-fill; climate → climate module | partial |
 | FM-2 | medium | `streets.plan_city_street_grid` | split graph vs policy | P3 |
 | FM-3 | low | `pick_barrier_template_type` | registry-driven pick; см. § ниже | P2 |
 
@@ -272,7 +275,7 @@ system_city_size ∈ city+       → city_wall
 |---|---|---|
 | P1 | ~~NC-1b~~ | ✅ `tz_terrain_generation.md` rework |
 | P1 | NC-1a | Persist contract / optional `coordinate_space` column |
-| P1 | LC-1..LC-4, LC-6 | Neutral packages; terrain decouple from settlement footprint path |
+| P1 | LC-1..LC-4 | Neutral packages |
 | P1 | NC-2 | Parcel cells в `areaSlots` |
 | P2 | MR-1, MR-2, MR-6 | Split cache / rebind / footprint facade |
 | P2 | NC-3, NC-4 | Barrier contract в product docs |

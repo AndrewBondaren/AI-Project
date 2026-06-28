@@ -657,19 +657,8 @@ def test_coordinate_spaces_anchor_3000() -> None:
 def _urban_surface_cells(cells: list[MapCell]) -> set[tuple[int, int]]:
     return {(c.x, c.y) for c in cells if c.system_terrain == "urban"}
 
-
-def _grid_rect_positions(gx0: int, gy0: int, gx1: int, gy1: int) -> set[tuple[int, int]]:
-    return {(gx, gy) for gy in range(gy0, gy1) for gx in range(gx0, gx1)}
-
-
-def test_phase_3_terrain_footprint() -> None:
-    """Terrain urban footprint must match settlement_grid_rect / occupancy (grid index space)."""
-    from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
-        settlement_grid_rect,
-    )
-    from app.application.worldData.generators.assemblers.settlementAssembler.planner.mapOccupancy import (
-        plan_footprint_occupancy_cells,
-    )
+def test_terrain_decoupled_from_settlements() -> None:
+    """Terrain must not paint urban or derive climate from cities."""
     from app.application.worldData.generators.terrain.terrainGeneratorService import (
         TerrainGeneratorService,
     )
@@ -678,72 +667,343 @@ def test_phase_3_terrain_footprint() -> None:
         {"system_terrain": "urban", "glossary_ref": "terrain_urban"},
         {"system_terrain": "plains", "glossary_ref": "terrain_plains"},
     ]
-    size_reg = [
-        {"system_size": "town", "display_size": "Town", "footprint_multiplier": 1.0},
-        {"system_size": "city", "display_size": "City", "footprint_multiplier": 2.0},
-    ]
 
-    def _city(
-        world_uid: str,
-        uid: str,
-        size: str,
-        map_x: int,
-        map_y: int = 0,
-    ) -> NamedLocation:
-        return NamedLocation(
-            location_uid=uid,
-            world_uid=world_uid,
-            display_name=uid,
-            system_location_type="city",
-            created_at="2026-01-01T00:00:00",
-            system_city_size=size,
-            system_economic_tier="standard",
-            map_x=map_x,
-            map_y=map_y,
-            map_z=0,
-        )
+    def _surface_cell(cells: list[MapCell], gx: int, gy: int) -> MapCell:
+        return next(c for c in cells if c.x == gx and c.y == gy and c.z >= -1)
 
     svc = TerrainGeneratorService()
-
     world = World(
         world_uid="world-test-terrain",
         name="Test",
         created_at="2026-01-01T00:00:00",
         map_cell_size_m=3000,
         terrain_registry=terrain_reg,
-        city_size_registry=size_reg,
+        default_climate_zone="temperate",
     )
-    town_anchor = _city("world-test-terrain", "town-0", "town", 0)
-    cells_origin = svc.generate_surface(world, [town_anchor])
-    expected_origin = _grid_rect_positions(*settlement_grid_rect(world, town_anchor).as_tuple())
-    assert _urban_surface_cells(cells_origin) == expected_origin == {(0, 0)}
+    region = NamedLocation(
+        location_uid="region-north",
+        world_uid=world.world_uid,
+        display_name="North",
+        system_location_type="region",
+        created_at="2026-01-01T00:00:00",
+        system_climate_zone="arctic",
+        map_x=0,
+        map_y=0,
+        map_z=0,
+    )
+    city_a = NamedLocation(
+        location_uid="city-a",
+        world_uid=world.world_uid,
+        display_name="City A",
+        system_location_type="city",
+        created_at="2026-01-01T00:00:00",
+        parent_location_uid=region.location_uid,
+        system_city_size="town",
+        map_x=3000,
+        map_y=0,
+        map_z=0,
+    )
 
-    town_east = _city("world-test-terrain", "town-3k", "town", 3000)
-    cells_east = svc.generate_surface(world, [town_east])
-    expected_east = _grid_rect_positions(*settlement_grid_rect(world, town_east).as_tuple())
-    occ_east = {(c.x, c.y) for c in plan_footprint_occupancy_cells(world, town_east)}
-    assert _urban_surface_cells(cells_east) == expected_east == occ_east == {(1, 0)}
+    cells_one_city = svc.generate_surface(world, [region, city_a])
+    assert _urban_surface_cells(cells_one_city) == set()
+    cell_1_0_one = _surface_cell(cells_one_city, 1, 0)
+    assert cell_1_0_one.system_terrain == "plains"
+    assert cell_1_0_one.location_uid == region.location_uid
+    assert cell_1_0_one.temperature_base <= -20
+    assert cell_1_0_one.rainfall == 20
 
-    city_east = _city("world-test-terrain", "city-3k", "city", 3000)
-    cells_city = svc.generate_surface(world, [city_east])
-    rect_city = settlement_grid_rect(world, city_east).as_tuple()
-    expected_city = _grid_rect_positions(*rect_city)
-    assert _urban_surface_cells(cells_city) == expected_city
-    assert expected_city == {(1, 0), (2, 0), (1, 1), (2, 1)}
+    city_b = NamedLocation(
+        location_uid="city-b",
+        world_uid=world.world_uid,
+        display_name="City B",
+        system_location_type="city",
+        created_at="2026-01-01T00:00:00",
+        parent_location_uid=region.location_uid,
+        system_city_size="city",
+        map_x=9000,
+        map_y=0,
+        map_z=0,
+    )
+    cells_two_cities = svc.generate_surface(world, [region, city_a, city_b])
+    cell_1_0_two = _surface_cell(cells_two_cities, 1, 0)
+    assert cell_1_0_two.temperature_base == cell_1_0_one.temperature_base
+    assert cell_1_0_two.location_uid == region.location_uid
 
-    world_5k = World(
-        world_uid="world-test-terrain-5k",
+    print("terrain decoupled from settlements checks: OK")
+
+
+def test_climate_zone_voronoi() -> None:
+    """Climate at grid cell follows nearest zone anchor, not cities."""
+    from app.application.worldData.generators.climate import ClimateGeneratorService
+
+    svc = ClimateGeneratorService()
+    world = World(
+        world_uid="world-test-climate-voronoi",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=5000,
-        terrain_registry=terrain_reg,
-        city_size_registry=size_reg,
+        map_cell_size_m=3000,
+        default_climate_zone="temperate",
     )
-    town_5k = _city("world-test-terrain-5k", "town-5k", "town", 5000)
-    cells_5k = svc.generate_surface(world_5k, [town_5k])
-    assert _urban_surface_cells(cells_5k) == {(1, 0)}
+    region = NamedLocation(
+        location_uid="region-north",
+        world_uid=world.world_uid,
+        display_name="North",
+        system_location_type="region",
+        created_at="2026-01-01T00:00:00",
+        system_climate_zone="arctic",
+        map_x=0,
+        map_y=0,
+        map_z=0,
+    )
+    uid_map = {region.location_uid: region}
+    field = svc.build_zone_field(world, [region], 3000)
+    sample = svc.sample_at_grid(world, uid_map, field, 5, 0)
+    assert sample.system_climate_zone == "arctic"
+    assert sample.zone_location_uid == region.location_uid
+    assert sample.typical_elevation_z == 4
 
-    print("phase 3 terrain footprint checks: OK")
+    print("climate zone voronoi checks: OK")
+
+
+def test_climate_registry_override() -> None:
+    """world.climate_zone_registry overrides enum defaults."""
+    from app.application.worldData.generators.climate.registry import profile_for
+
+    world = World(
+        world_uid="world-test-climate-registry",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        climate_zone_registry=[
+            {
+                "system_climate": "arctic",
+                "base_temperature": -40,
+                "base_rainfall": 5,
+            },
+        ],
+    )
+    profile = profile_for(world, "arctic")
+    assert profile.base_temperature == -40
+    assert profile.base_rainfall == 5
+    assert profile.typical_elevation_z == 4
+
+    print("climate registry override checks: OK")
+
+
+def test_climate_temperature_formula() -> None:
+    """temperature_base = base_temperature - lapse × (z / 100)."""
+    from app.application.worldData.generators.climate import ClimateGeneratorService
+
+    svc = ClimateGeneratorService()
+    world = World(
+        world_uid="world-test-climate-formula",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        elevation_lapse_rate=0.65,
+    )
+    temp, rainfall = svc.weather_at_elevation(world, "arctic", 1000)
+    assert temp == -32
+    assert rainfall == 20
+
+    print("climate temperature formula checks: OK")
+
+
+def test_climate_manual_anchor_voronoi() -> None:
+    """Manual climate_anchor wins over admin region in Voronoi."""
+    from app.application.worldData.generators.assemblers.climateAssembler import ClimateOrchestratorService
+
+    world = World(
+        world_uid="world-test-climate-manual",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        map_cell_size_m=3000,
+        terrain_registry=[{"system_terrain": "plains", "glossary_ref": "terrain_plains"}],
+        default_climate_zone="temperate",
+    )
+    region = NamedLocation(
+        location_uid="region-temp",
+        world_uid=world.world_uid,
+        display_name="Region",
+        system_location_type="region",
+        created_at="2026-01-01T00:00:00",
+        system_climate_zone="temperate",
+        map_x=0,
+        map_y=0,
+        map_z=0,
+    )
+    peak = NamedLocation(
+        location_uid="anchor-arctic-peak",
+        world_uid=world.world_uid,
+        display_name="Peak",
+        system_location_type="climate_anchor",
+        created_at="2026-01-01T00:00:00",
+        system_climate_zone="arctic",
+        map_x=9000,
+        map_y=0,
+        map_z=4000,
+    )
+    orch = ClimateOrchestratorService()
+    cells = orch.full_surface(world, [region, peak])
+    cell_at_peak = next(c for c in cells if c.x == 3 and c.y == 0)
+    assert cell_at_peak.location_uid == peak.location_uid
+    assert cell_at_peak.rainfall == 20
+
+    print("climate manual anchor voronoi checks: OK")
+
+
+def test_climate_orchestrator_passes() -> None:
+    """Orchestrator allows entry at pass level (DAG hook points)."""
+    from app.application.worldData.generators.assemblers.climateAssembler import ClimateOrchestratorService
+
+    world = World(
+        world_uid="world-test-orchestrator",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        map_cell_size_m=3000,
+        terrain_registry=[{"system_terrain": "plains", "glossary_ref": "terrain_plains"}],
+    )
+    region = NamedLocation(
+        location_uid="region-o",
+        world_uid=world.world_uid,
+        display_name="R",
+        system_location_type="region",
+        created_at="2026-01-01T00:00:00",
+        system_climate_zone="temperate",
+        map_x=0,
+        map_y=0,
+        map_z=0,
+    )
+    orch = ClimateOrchestratorService()
+    heightmap = orch.heightmap_only(world, [region])
+    assert all(c.temperature_base is None for c in heightmap)
+    surface = orch.apply_weather_only(world, [region], heightmap)
+    assert all(c.temperature_base is not None for c in surface)
+
+    print("climate orchestrator passes checks: OK")
+
+
+def test_climate_detect_relative_elevation() -> None:
+    """Auto anchors: terrain features only; zone from pole field, not elevation."""
+    from app.application.worldData.generators.climate.anchorAssign import auto_anchors_from_features
+    from app.application.worldData.generators.climate.anchorDetect import detect_terrain_features
+    from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField, GridBBox
+    from app.application.worldData.generators.climate.poleResolve import resolve_pole_field
+    from app.db.models.world import World
+
+    world_uid = "world-test-detect"
+    world = World(
+        world_uid=world_uid,
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        map_cell_size_m=3000,
+        climate_pole_preset="desert",
+        default_climate_zone="desert",
+    )
+    bbox = GridBBox(0, 4, 0, 4)
+    pole_field = resolve_pole_field(world, [], 3000, bbox)
+
+    def _cell(gx: int, gy: int, z: int, terrain: str = "plains") -> MapCell:
+        return MapCell(
+            world_uid=world_uid, x=gx, y=gy, z=z, system_terrain=terrain,
+        )
+
+    plateau = [_cell(0, 0, 3200), _cell(1, 0, 3200), _cell(0, 1, 3200), _cell(1, 1, 3200)]
+    assert detect_terrain_features(plateau) == []
+
+    peak_row = plateau + [_cell(2, 0, 3400), _cell(2, 1, 3200), _cell(3, 0, 3200)]
+    features = detect_terrain_features(peak_row)
+    assert len(features) == 1
+    assert features[0].gx == 2 and features[0].gy == 0
+
+    auto = auto_anchors_from_features(features, world, {}, pole_field)
+    assert len(auto) == 1
+    assert auto[0].system_climate_zone == "desert"
+
+    gorge = [
+        _cell(0, 0, 3000), _cell(1, 0, 3000), _cell(2, 0, 3000),
+        _cell(0, 1, 3000), _cell(1, 1, 2850), _cell(2, 1, 3000),
+        _cell(0, 2, 3000), _cell(1, 2, 3000), _cell(2, 2, 3000),
+    ]
+    gorge_auto = auto_anchors_from_features(
+        detect_terrain_features(gorge), world, {}, pole_field,
+    )
+    assert len(gorge_auto) == 1
+    assert gorge_auto[0].system_climate_zone == "desert"
+
+    lake = [
+        _cell(0, 0, 3000), _cell(1, 0, 3000),
+        _cell(0, 1, 3000), _cell(1, 1, 2990, "liquid_body"),
+    ]
+    lake_auto = auto_anchors_from_features(
+        detect_terrain_features(lake), world, {}, pole_field,
+    )
+    assert len(lake_auto) == 1
+
+    print("climate detect relative elevation checks: OK")
+
+
+def test_climate_pole_tier() -> None:
+    """Pole field: N=1 fade, derived temp from peak bounds, manual climate_pole."""
+    from app.application.worldData.generators.climate import ClimateGeneratorService
+    from app.application.worldData.generators.climate.climatePoleField import GridBBox
+    from app.application.worldData.generators.climate.poleResolve import (
+        derived_pole_temperature,
+        resolve_pole_field,
+    )
+    from app.application.worldData.generators.climate.climatePole import PoleKind
+
+    assert derived_pole_temperature(PoleKind.COLD, -40, 45) == -23
+    assert derived_pole_temperature(PoleKind.HOT, -40, 45) == 28
+
+    world = World(
+        world_uid="world-test-pole",
+        name="Test",
+        created_at="2026-01-01T00:00:00",
+        map_cell_size_m=3000,
+        climate_temperature_peak_min=-40,
+        climate_temperature_peak_max=45,
+        climate_pole_preset="ice",
+        default_climate_zone="temperate",
+    )
+    region = NamedLocation(
+        location_uid="region-pole",
+        world_uid=world.world_uid,
+        display_name="R",
+        system_location_type="region",
+        created_at="2026-01-01T00:00:00",
+        system_climate_zone="temperate",
+        map_x=0,
+        map_y=0,
+        map_z=0,
+    )
+    bbox = GridBBox(-2, 2, -2, 2)
+    field = resolve_pole_field(world, [region], 3000, bbox)
+    assert len(field.poles) == 1
+    assert field.poles[0].system_climate_zone == "arctic"
+
+    svc = ClimateGeneratorService()
+    pole = field.poles[0]
+    assert pole.base_temperature == -23
+    at_pole = svc.sample_at_pole_field(world, field, pole.gx, pole.gy)
+    assert at_pole.base_temperature_override == -23
+    assert at_pole.system_climate_zone == "arctic"
+
+    pole_loc = NamedLocation(
+        location_uid="pole-manual",
+        world_uid=world.world_uid,
+        display_name="Cold pole",
+        system_location_type="climate_pole",
+        created_at="2026-01-01T00:00:00",
+        system_climate_zone="arctic",
+        system_location_subtype="cold",
+        map_x=0,
+        map_y=9000,
+        map_z=0,
+    )
+    manual_field = resolve_pole_field(world, [region, pole_loc], 3000, bbox)
+    assert len(manual_field.poles) == 1
+    assert manual_field.poles[0].location_uid == pole_loc.location_uid
+
+    print("climate pole tier checks: OK")
 
 
 def test_phase_4_collect_map_cells() -> None:
@@ -847,7 +1107,14 @@ def main() -> None:
     test_phase_area_barriers()
     test_phase_f_map_occupancy()
     test_coordinate_spaces_anchor_3000()
-    test_phase_3_terrain_footprint()
+    test_terrain_decoupled_from_settlements()
+    test_climate_zone_voronoi()
+    test_climate_registry_override()
+    test_climate_temperature_formula()
+    test_climate_manual_anchor_voronoi()
+    test_climate_orchestrator_passes()
+    test_climate_detect_relative_elevation()
+    test_climate_pole_tier()
     test_phase_4_collect_map_cells()
     test_city_shared_nodes()
 

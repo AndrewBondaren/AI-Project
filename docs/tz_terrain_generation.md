@@ -1,6 +1,6 @@
 ---
 name: tz-terrain-generation
-description: "ТЗ генерации terrain — TerrainGeneratorService, eager/lazy/repair, координаты surface grid, связь с settlement"
+description: "ТЗ генерации terrain — TerrainGeneratorService, eager/lazy/repair, координаты surface grid, граница с settlement"
 metadata:
   node_type: memory
   type: project
@@ -13,9 +13,16 @@ metadata:
 `TerrainGeneratorService` — **pure utility** (без репозиториев, без async).  
 Вход: `(World, list[NamedLocation])` → выход: `list[MapCell]`.
 
-**Задача:** heightmap поверхности мира — elevation (`z`), `system_terrain`, климат, urban **fallback** footprint для городов без явных ячеек.
+**Задача:** heightmap **дикой местности** — elevation (`z`), `system_terrain`.
 
-**Не задача terrain:** улицы, здания, заборы поселения — это `SettlementAssembler` / lazy settlement (см. `tz_city_generation.md`).
+**Климат** — отдельный модуль [`ClimateGeneratorService`](docs/tz_climate.md); terrain вызывает его per cell (`temperature_base`, `rainfall`, `typical_elevation_z`).
+
+**Не задача terrain:**
+
+- urban footprint и форма города — `SettlementAssembler`, явные `map_cells`, lazy occupancy;
+- улицы, здания, заборы — settlement pipeline (см. `tz_city_generation.md`).
+
+**Почему отделено от городов:** поселение может быть построено или уничтожено; климат и elevation региона не должны пересчитываться от списка городов.
 
 **Why utility, not service:** нужен и в worldData (eager API), и в engine-нодах (lazy/repair) без DI-контейнера.
 
@@ -25,12 +32,13 @@ metadata:
 
 ```
 app/application/worldData/generators/
-  terrain/terrainGeneratorService.py     ← pure generator
+  climate/climateGeneratorService.py   ← climate (Voronoi, temperature, rainfall)
+  terrain/terrainGeneratorService.py   ← pure generator (wilderness heightmap)
   coordinates/                           ← convert hub (grid ↔ meters)
-  assemblers/settlementAssembler/        ← lazy geometry (отдельный pipeline)
+  assemblers/settlementAssembler/        ← urban occupancy + geometry
 
 app/application/worldData/
-  mapCellService.py                      ← persist, skip_location_uids
+  mapCellService.py                      ← persist (INSERT OR IGNORE)
 
 app/api/routes/map.py                    ← POST …/map/generate-surface
 
@@ -49,18 +57,18 @@ app/application/engine/nodes/pojo/python/terrain/
 
 | Слой | Кто генерирует | Когда | `MapCell` semantics |
 |---|---|---|---|
-| Surface heightmap + climate | `TerrainGeneratorService.generate_surface` | Eager admin / первичная карта | `x,y` = **world surface grid index**; `z` = метры |
-| Urban fallback footprint | тот же `generate_surface` | Если у города нет явных cells | grid tiles `urban` в rect footprint |
-| Footprint occupancy mark | `plan_footprint_occupancy_cells` | Lazy settlement / world create | grid index (как terrain urban) |
+| Surface heightmap | `TerrainGeneratorService.generate_surface` | Eager admin | `x,y` grid index; `z` meters; `system_terrain` |
+| Climate params | `ClimateGeneratorService` (via terrain) | Eager admin | `temperature_base`, `rainfall`; см. `tz_climate.md` |
+| Urban footprint occupancy | `plan_footprint_occupancy_cells` | Lazy settlement / world create | grid index; `system_terrain=urban` (или explicit fixture) |
 | Streets, buildings, barriers | `SettlementAssembler` | Lazy settlement (gameplay) | **world local meters** (fine 1m step) |
 
 **Приоритет источников формы города:**
 
-1. **Явные** `map_cells` в БД / fixture (`skip_location_uids`) — канон.
-2. **Lazy settlement** — geometry + occupancy при первом входе.
-3. **Terrain fallback** — прямоугольный urban rect, если города ещё нет в DB.
+1. **Явные** `map_cells` в БД / fixture — канон (любая форма).
+2. **Lazy settlement** — occupancy + geometry при первом входе.
+3. **Terrain** — **не** участвует в urban.
 
-Terrain **не перезаписывает** явные ячейки. Settlement **добавляет** meter-geometry поверх occupancy.
+`save_generated` использует `INSERT OR IGNORE` — явные ячейки не перезаписываются при повторном `generate-surface`.
 
 ---
 
@@ -74,16 +82,15 @@ Terrain **не перезаписывает** явные ячейки. Settlemen
 
 ```
 POST /worlds/{world_uid}/map/generate-surface
-  └─ MapCellService.get_location_uids_with_cells(world_uid)  → skip_location_uids
-  └─ TerrainGeneratorService.generate_surface(world, locations, skip_location_uids=…)
-  └─ MapCellService.save_generated(cells)
+  └─ TerrainGeneratorService.generate_surface(world, locations)
+  └─ MapCellService.save_generated(cells)   # INSERT OR IGNORE
 ```
 
 **Eager steps (roadmap):**
 
 | Step | Содержание | Статус |
 |---|---|---|
-| 1 | Surface heightmap + urban fallback | ✅ реализовано |
+| 1 | Wilderness heightmap + climate via ClimateGenerator | ✅ |
 | 2 | Структурные объекты (деревья, камни, …) | ⬜ отложено |
 | 3 | Буфер ±10z вокруг anchor | ⬜ отложено |
 
@@ -115,31 +122,7 @@ MovementNode / AreaLoadNode
 
 **Триггер:** named_location без единой `map_cell` (orphan-tolerant design, `tz_locations.md`).
 
-**Flow:** `lazyTerrainNode` → `generate_minimal(world, location)` → upsert одной anchor cell.
-
----
-
-## Два уровня sourcing ячеек города
-
-### 1. Явные (canonical)
-
-`map_cells` с `location_uid = city_uid` в fixture/БД — **источник истины**. Любая форма (L-shape, дыры, …).
-
-```python
-skip_location_uids = await map_cell_repo.get_location_uids_with_cells(world_uid)
-cells = generator.generate_surface(world, locations, skip_location_uids=skip_location_uids)
-```
-
-Город из `skip_location_uids`:
-
-- **не** получает urban fallback footprint;
-- **остаётся** в Voronoi для климата вокруг.
-
-### 2. Fallback (generated)
-
-Если у города **нет** cells в DB — urban rect из **`settlement_grid_rect`** (тот же контракт, что settlement occupancy).
-
-**Не используется** legacy `city_size_registry.radius` и шаг ±1 от `(map_x, map_y)`.
+**Flow:** `lazyTerrainNode` → `generate_minimal(world, location)` → upsert одной anchor cell (wilderness terrain, не urban).
 
 ---
 
@@ -153,50 +136,27 @@ def generate_surface(
     world: World,
     locations: list[NamedLocation],
     padding: int = 2,
-    skip_location_uids: frozenset[str] = frozenset(),
 ) -> list[MapCell]:
 ```
-
-### Footprint rect (fallback urban)
-
-Согласован с `tz_city_generation.md` §6.1 и `SettlementAssembler`:
-
-```
-cell_m   = world.map_cell_size_m  (override: map_settings.global_cell_size_m)
-side_m   = footprint_multiplier(system_city_size) × cell_m
-n_tiles  = grid_dimension(side_m, cell_m)   # ≥ 1
-
-gx0 = map_x // cell_m
-gy0 = map_y // cell_m
-rect = [gx0, gy0, gx0 + n_tiles, gy0 + n_tiles)   # grid indices
-```
-
-Реализация: `generators/coordinates/` + `settlement_grid_rect(world, city)`.
-
-**Пример** (`cell_m=3000`, town `footprint_multiplier=1.0`, `map_x=3000`):
-
-| Поле | Значение |
-|---|---|
-| Meter origin | `(3000, 0)` |
-| Grid rect | `(1, 0) – (2, 1)` — одна coarse tile |
-| Urban cells | `(gx, gy) = (1, 0)` |
 
 ### Шаги
 
 1. **Anchors** — `map_x/y/z IS NOT NULL`, `is_mobile=False`.
-2. **City list** — типы `city`, `town`, `village`, `camp`.
-3. **City footprint** — для каждого города: все `(gx, gy)` в `settlement_grid_rect`; если `location_uid ∉ skip_location_uids` → urban.
-4. **Bounding box** — min/max grid coords всех footprints ± `padding`.
-5. **Fill grid** — для каждого `(gx, gy)` в bbox:
-   - в `city_footprint` → `urban`, `z=city.map_z`, `location_uid=city.uid`;
-   - иначе → Voronoi климат от ближайшего города, `z = base_z(climate) + noise`, terrain от z.
-6. **Non-city anchors** — одна cell на `(map_x, map_y, map_z)` для типов вне `_CITY_TYPES` (шахты, …).
+2. **Zone centers** — типы `region`, `kingdom`, `empire`, `duchy` с координатами → grid index через `meters_to_grid_*`.
+3. **Bounding box** — min/max grid coords **всех** anchors (города только расширяют bbox своей anchor-точкой, без footprint) ± `padding`.
+4. **Fill grid** — для каждого `(gx, gy)` в bbox:
+   - Voronoi климат от ближайшей **зоны** (не города);
+   - `z = base_z(climate) + noise`, `system_terrain` от z;
+   - `location_uid` = uid зоны (или `None`, если zone anchors нет).
+5. **Non-surface anchors** (`map_z != 0`) — одна cell на `(map_x, map_y, map_z)` (шахты, подземные точки).
 
 ### Voronoi (v1)
 
-- Центры городов: `(meters_to_grid_x(map_x), meters_to_grid_y(map_y))` — **grid index**, не meter anchor.
-- Расстояние: евклидово в grid space (шаг = один coarse tile, не `cell_m` метров).
-- **Ограничение v1:** центр = угол anchor-тайла, не geometric center footprint — см. `tz_generator_technical_debt.md` NC-1d.
+- Центры: **zone-type** locations с `map_x/y`.
+- Расстояние: евклидово в grid space.
+- Города **не** участвуют — добавление/удаление settlement не меняет климат соседних tiles.
+- Если zone anchors нет → `world.default_climate_zone`.
+- **Ограничение v1:** центр = grid index anchor-точки зоны — см. NC-1d в tech debt.
 
 ### Noise (детерминированный)
 
@@ -230,11 +190,11 @@ lapse_rate = world.elevation_lapse_rate ?? 7.0
 
 ## `generate_minimal`
 
-Одна anchor cell для repair. Координаты: **`map_x`, `map_y`, `map_z` как в БД** (метры для anchor позиции named_location).
+Одна anchor cell для repair. Координаты: **`map_x`, `map_y`, `map_z` как в БД**.
 
-Для city-type при наличии `urban` в registry → `system_terrain=urban`.
+Wilderness `system_terrain` от z — **не urban**. Urban — settlement или explicit import.
 
-**Ограничение v1:** не конвертирует в grid index — см. NC-1c в tech debt (несогласованность с surface loop для non-city).
+**Ограничение v1:** не конвертирует в grid index — см. NC-1c в tech debt.
 
 ---
 
@@ -265,99 +225,43 @@ lapse_rate = world.elevation_lapse_rate ?? 7.0
 │  Settlement: districts, streets, gates, barriers, buildings  │
 │  ConnectionNode.x/y — метры                                  │
 └─────────────────────────────────────────────────────────────┘
-         │  translate_layout (MeterDelta)
-         ▼
-┌─────────────────────────────────────────────────────────────┐
-│  LOCATION_LOCAL_METERS (v2, interior)                      │
-│  generator cache (0,0) → translate → world meters            │
-└─────────────────────────────────────────────────────────────┘
 ```
 
-### Таблица: кто что пишет в `MapCell`
+### Кто пишет какие координаты
 
-| Producer | `x`, `y` | `z` | Space |
+| Generator | x/y space | z | Notes |
 |---|---|---|---|
-| `generate_surface` (wilderness) | grid index | meters (elevation) | surface grid + z meters |
-| `generate_surface` (urban fallback) | grid index | `city.map_z` | surface grid |
-| `plan_footprint_occupancy` | grid index | `settlement.map_z` | surface grid |
-| Settlement geometry (buildings, barriers) | meters | meters | world local meters |
-| `generate_minimal` | `location.map_x/y` | `location.map_z` | anchor meters (v1) |
-| Non-city anchor in step 6 | `anchor.map_x/y` | `anchor.map_z` | anchor meters (v1, NC-1c) |
-
-**PK:** `(world_uid, x, y, z)` — разные z не конфликтуют.
-
-Persist v1 (**Option A**): grid occupancy и meter geometry могут coexist в одной таблице без колонки `coordinate_space`; split только на уровне generator (`collect_surface_grid_cells` / `collect_geometry_meter_cells`). Колонка `coordinate_space` — v2 (optional).
-
-### `map_cell_size_m`
-
-- Хранится: `worlds.map_cell_size_m` (default **3000** в модели).
-- Override: `world.map_settings["global_cell_size_m"]` (если задан).
-- **Динамический** per world: целое, **кратно 1000** (типично 2000, 3000, 5000…).
-- Валидация при save: `WorldService` — минимум и кратность (см. код).
-- Conversion **только** в `generators/coordinates/convert.py`:
-
-```python
-gx = map_x_meters // cell_m
-meter_origin_of_tile = gx * cell_m
-```
-
-### z всегда в метрах
-
-`z` — elevation / этажность в **метрах** (Эверест 8849, шахта -20).  
-Конвенция этажа ≈ 3 z-units (3 m потолок) — display, не отдельная сетка.
+| `generate_surface` (wilderness) | grid index | meters (elevation) | zone climate |
+| `plan_footprint_occupancy_cells` | grid index | surface | urban occupancy |
+| `SettlementAssembler` geometry | world local meters | meters | after translate |
+| `generate_minimal` | raw anchor (repair) | anchor map_z | NC-1c |
 
 ---
 
-## Многослойные локации на одной `(x, y)`
+## Named locations — роль в terrain
 
-Вертикальное стекирование валидно (город z=0, шахта z=-20 на той же surface tile — разные PK по z).
-
-### Поля `named_locations`
-
-| Поле | Семантика |
+| Поле | Terrain usage |
 |---|---|
-| `map_x`, `map_y` | позиция anchor в **метрах** |
-| `map_z` | базовый z (нижняя граница); null у нарративных / mobile |
+| `map_x/y` | anchor → grid index для bbox; zone → Voronoi center |
+| `map_z` | `0` = surface (wilderness loop); `!= 0` → extra anchor cell |
+| `system_location_type` | zone types → climate Voronoi; cities → только bbox point |
+| `system_climate_zone` | на zone / в иерархии для `_resolve_climate` |
+| `parent_location_uid` | walk-up для climate на non-surface anchors |
 | `is_mobile` | true → static anchor не создаётся |
 
-### Якорная cell (step 6 / minimal)
+### Якорная cell (minimal / non-surface)
 
 ```python
 if location.map_z is not None and not location.is_mobile:
-    create anchor at (map_x, map_y, map_z)
+    if map_z != 0:
+        create anchor at (map_x, map_y, map_z)
 ```
 
-| Локация | `map_z` | `is_mobile` | Якорь |
-|---|---|---|---|
-| Город на поверхности | `0` | false | ✓ (surface через footprint / minimal) |
-| Шахта | `-20` | false | ✓ |
-| Подземный город | `-1000` | false | ✓ |
-| Дрейфующий корабль | null | true | ✗ |
-
-### Мобильные локации
-
-Runtime позиция — `mobile_location_positions` (архитектурный задел, не реализовано). См. прежний § в истории документа.
-
----
-
-## Будущие алгоритмы footprint (v2+)
-
-Текущий v1 — **прямоугольный rect** = `settlement_grid_rect`. Планируемые замены **внутри** `TerrainGeneratorService`:
-
-| Алгоритм | Принцип |
-|---|---|
-| Road-following | urban вдоль дорожной сети |
-| Organic growth | рост от центра + noise |
-| Coastline | обрезка по берегу |
-| LLM-assisted | JSON список grid cells |
-
-Выбор — через `location_subtype` или world policy. Coordinate contract (grid index on surface) сохраняется.
-
----
-
-## Подсистемы по типу локации (roadmap)
-
-Стратегия `LocationSubGenerator` для mine/cave/dungeon — без изменений концепции; реализация отложена. См. предыдущие примеры в tech debt.
+| Локация | `map_z` | Terrain |
+|---|---|---|
+| Город на поверхности | `0` | wilderness tile в bbox (urban — settlement) |
+| Шахта | `-20` | ✓ extra anchor |
+| Подземный город | `-1000` | ✓ extra anchor |
 
 ---
 
@@ -375,12 +279,12 @@ PK `(world_uid, x, y, z)` — точечные запросы; индекс по
 
 | Элемент | Статус |
 |---|---|
-| `generate_surface` + `skip_location_uids` | ✅ |
-| Footprint = `settlement_grid_rect` | ✅ |
+| `generate_surface` wilderness + zone Voronoi | ✅ |
+| Terrain decoupled from cities / settlement footprint | ✅ |
 | Coordinate convert hub | ✅ |
 | `POST …/map/generate-surface` | ✅ |
 | `lazyTerrainNode` + `generate_minimal` | ✅ |
-| `lazy_settlement` (geometry) | ✅ отдельная нода |
+| `lazy_settlement` (geometry + urban occupancy) | ✅ отдельная нода |
 | `generate_z_slice` lazy region | ⬜ |
 | Eager step 2–3 (structures, buffer) | ⬜ |
 | Non-city anchor grid alignment (NC-1c) | ⬜ |
@@ -410,17 +314,14 @@ PK `(world_uid, x, y, z)` — точечные запросы; индекс по
 
 - `generate_z_slice` API: bounds vs `location_uid + z`.
 - Non-city anchors: grid index vs meter anchor на surface PK.
+- Zone без `map_x/y`: только `default_climate_zone` для Voronoi (нет полигонов).
 - Option B: normalize all surface cells to meter corners `(gx * cell_m, gy * cell_m)`.
-- Terrain decouple from `settlementAssembler.planner.footprint` → neutral package (LC-6).
 
 ---
 
 ## Связанные документы
 
-| Документ | Связь |
-|---|---|
-| `tz_city_generation.md` | footprint_multiplier, lazy settlement |
-| `tz_locations.md` | anchors, orphan repair |
-| `tz_assembler_hierarchy.md` | assembler stack |
-| `tz_generator_technical_debt.md` | NC-1, LC-6, open smells |
-| `.cursor/plans/coordinate-spaces.md` | implementation phases |
+- `tz_city_generation.md` — settlement, occupancy, urban
+- `tz_locations.md` — named_location fields
+- `tz_generator_technical_debt.md` — NC-1, smells
+- `project_data_storage_tz.md` — map_cells schema

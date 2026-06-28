@@ -89,6 +89,10 @@ class World:
     # world map settings
     season_temp_offsets:            dict = json_col(default_factory=dict)
     default_climate_zone:           str | None = None
+    climate_temperature_peak_min:     int | None = None
+    climate_temperature_peak_max:     int | None = None
+    climate_pole_mode:              str | None = None   # manual | autoresolve
+    climate_pole_preset:            str | None = None   # ice | desert | binary | …
     z_max:                          int | None = None
     z_min:                          int | None = None
     elevation_lapse_rate:           float | None = None

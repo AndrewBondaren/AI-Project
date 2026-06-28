@@ -61,12 +61,10 @@ async def generate_surface(
     world_svc    = container.world_service()
     location_svc = container.location_service()
 
-    world              = await world_svc.get_by_id(world_uid)
-    locations          = await location_svc.get_all(world_uid)
-    skip_location_uids = await map_svc.get_location_uids_with_cells(world_uid)
+    world     = await world_svc.get_by_id(world_uid)
+    locations = await location_svc.get_all(world_uid)
 
-    cells  = _terrain_generator.generate_surface(world, locations,
-                                                  skip_location_uids=skip_location_uids)
+    cells  = _terrain_generator.generate_surface(world, locations)
     result = await map_svc.save_generated(cells)
 
     status_code = 200 if result.failed == 0 else 207
