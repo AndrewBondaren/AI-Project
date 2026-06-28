@@ -1,4 +1,5 @@
 from app.application.worldData.generators.terrain.passes.gapAnalysisPass import n_base
+from app.application.worldData.generators.terrain.worldMapSettings import world_z_min
 from app.application.worldData.generators.terrain.terrainZ import (
     magma_terrain,
     subsurface_terrain_at_z,
@@ -30,7 +31,7 @@ def run_column_fill(
 ) -> list[MapCell]:
     """Pass 2: fill solid columns (optional rect slice for chunking)."""
     terrain_set = _terrain_set(world)
-    z_min       = world.z_min if world.z_min is not None else -3
+    z_min       = world_z_min(world)
     magma_thick = _magma_thickness(world)
     use_magma   = magma_thick > 0 and bool(world.closed_planet_grid)
 

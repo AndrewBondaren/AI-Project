@@ -138,3 +138,17 @@ class WorldService:
         if v % 1000 != 0:
             raise HTTPException(status_code=422,
                 detail="map_cell_size_m must be a multiple of 1000")
+
+        if world.grid_bbox_padding < 0:
+            raise HTTPException(status_code=422,
+                detail="grid_bbox_padding must be >= 0")
+
+        chunk = world.terrain_chunk_columns
+        if not isinstance(chunk, int) or isinstance(chunk, bool) or chunk < 1:
+            raise HTTPException(status_code=422,
+                detail="terrain_chunk_columns must be an integer >= 1")
+
+        depth = world.map_subsurface_depth
+        if not isinstance(depth, int) or isinstance(depth, bool) or depth < 10:
+            raise HTTPException(status_code=422,
+                detail="map_subsurface_depth must be an integer >= 10")

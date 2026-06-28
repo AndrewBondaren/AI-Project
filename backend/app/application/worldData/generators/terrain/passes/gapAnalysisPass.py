@@ -1,12 +1,6 @@
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+from app.application.worldData.generators.terrain.worldMapSettings import n_base
 from app.db.models.world import World
-
-
-def n_base(world: World) -> int:
-    depth = world.map_subsurface_depth
-    if depth is not None and depth > 0:
-        return depth
-    return 20
 
 
 def _neighbors4(gx: int, gy: int) -> list[tuple[int, int]]:

@@ -9,9 +9,8 @@ from app.db.models.world import World
 def run_pole_resolve_pass(
     world: World,
     locations: list[NamedLocation],
-    padding: int = 2,
 ) -> ClimatePoleField:
     """Pass 0: manual climate_pole (max 1) or autoresolve N≥1 poles."""
     cell_m = cell_size_m(world)
-    bbox   = grid_bbox_from_locations(world, locations, padding)
+    bbox   = grid_bbox_from_locations(world, locations)
     return resolve_pole_field(world, locations, cell_m, bbox)

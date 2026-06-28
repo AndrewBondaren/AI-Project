@@ -2,7 +2,8 @@
 
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
-**Обновлено:** climate v2.2 precipitation + peak clamp; v2.1 pole/tier resolve (2026-06).
+**Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py`.  
+**Обновлено:** post TR-1b/DBG-1 architecture review — terrain/map orchestration smells (2026-06).
 
 **Связанные документы:**
 
@@ -50,7 +51,10 @@
 | `districtAssembler/planner/areaSlots.py` | 250+ | bin-packing + tier filter + slot factory |
 | `planner/placement.py` | 220+ | specialization + conditions + zone |
 | `planner/barriers.py` | 175+ | size policy + tier pick + plan + emit |
-| `terrain/terrainGeneratorService.py` | ~70 | thin facade → `ClimateOrchestratorService` (was monolith — см. FM-1) |
+| `terrain/terrainGeneratorService.py` | ~120 | thin facade + passes (was monolith — см. FM-1) |
+| `climateAssembler/climateSurfaceAssembler.py` | ~220 | orchestrator + `_non_surface_anchor_cells` cell synthesis |
+| `scripts/debug_settlement.py` | ~1500 | settlement + coordinates + terrain + climate smoke (см. DBG-2) |
+| `climate/precipitation.py` | ~180 | physics + liquid overlay helpers |
 | `planner/footprint.py` | 190+ | sizing + gates + coordinate facade + deprecated aliases |
 
 ---
@@ -216,6 +220,7 @@ Perimeter не учитывает template района — v1 compromise.
 | MR-4 | low | `streets.py` | graph + policy | policy → `road/` | open |
 | MR-5 | info | `settlementAssembler/planner/` defaults | smoke defaults cross-import | `generators/defaults/` | open |
 | MR-6 | medium | `footprint.py` | sizing + gates + facade + deprecated + `district_templates` | split `footprintSizing.py` + thin facade | open |
+| MR-7 | medium | `mapCellService.py` | CRUD/import + `save_terrain_batch` (pole, chunking, gap stats, persist) | `TerrainBatchOrchestrator` или DAG node; service → repo only | open |
 
 ---
 
@@ -243,6 +248,9 @@ Perimeter не учитывает template района — v1 compromise.
 | DR-3 | low | `settlement_origin_m` + `settlement_origin()` tuple | dual API | один путь | P3 |
 | DR-4 | low | `(cell_m, side_m, size)` в каждом caller | повтор bundle resolution | `SettlementFootprintContext` dataclass | P3 |
 | DR-5 | low | `_smoothstep`, `_dist` (hypot) | `climatePoleField.py` + `tierResolve.py` | `generators/climate/math.py` или shared | P2 |
+| DR-6 | low | `terrain_set` comprehension | inline ×6 (`columnFillPass`, `heightmapPass`, `liquidOverlayPass`, `cavesGenerator`, `generate_minimal`, `_non_surface_anchor_cells`); `_terrain_set` только в `columnFillPass` | `terrain_registry_set(world)` в `terrain/terrainZ.py` | P2 |
+| DR-7 | low | lazy single-cell weather MapCell | `TerrainGeneratorService.generate_minimal` ≈ `ClimateSurfaceAssembler._non_surface_anchor_cells` | shared `build_weathered_anchor_cell(...)` | P3 |
+| MAP-1 | low | `api/routes/map.py` | 4× fetch world/locations; 6× `status_code`/`JSONResponse`; module-level `_terrain_generator` / `_climate_orchestrator` | route dep `load_world_context`; container factory | P3 |
 
 ---
 
@@ -257,6 +265,70 @@ Perimeter не учитывает template района — v1 compromise.
 | **TR-M** | low | Magma antipode teleport (edge case) | **partial** — skeleton band + `antipode_xy`; M-3 movement ⬜ |
 | FM-2 | medium | `streets.plan_city_street_grid` | split graph vs policy | P3 |
 | FM-3 | low | `pick_barrier_template_type` | registry-driven pick; см. § ниже | P2 |
+| DBG-2 | medium | `scripts/debug_settlement.py` monolith (~1500 строк) | split `debug_climate.py` / core settlement smoke; shared `make_test_world()` | P2 |
+
+---
+
+## Terrain / map orchestration — smells registry (TR)
+
+**Status:** post TR-1b + DBG-1 review (2026-06). Terrain generator isolation ✅; smells сместились в orchestration, debug harness, implicit pass contracts.
+
+**Refs:** [tz_terrain_generation.md](./tz_terrain_generation.md), [tz_world_generation_dag.md](./tz_world_generation_dag.md) § «Три входа».
+
+### Hardcodes
+
+| ID | Severity | P | Проблема | Fix | Status |
+|---|---|---|---|---|---|
+| TR-3 | medium | P2 | ~~Defaults разбросаны: padding, chunk, N_base, z bounds~~ | `World` fields + `terrain/worldMapSettings.py` (`world_z_min/max` fallback −8000…8000) | **resolved** |
+| TR-H1 | low | P3 | Terrain type fallbacks в `terrainZ.py`: `"plains"`, `["earth","plains"]`, `"magma"` | registry-driven или explicit world default terrain | open |
+| TR-H2 | info | P3 | Stubs ores/caves: 3%, `"iron"`, XOR magic constants | OK до Phase B; пометить в terrain TZ | accepted |
+
+### God-object / concentration
+
+| ID | Severity | P | Проблема | Fix | Status |
+|---|---|---|---|---|---|
+| TR-G1 | low | P3 | `ClimateGeneratorService` utility god (sampling + weather + legacy Voronoi) | см. **CL-9** — split physics | open |
+| DBG-2 | medium | P2 | `debug_settlement.py` — mega harness (settlement + NC + terrain + climate) | split modules + test factories | open |
+
+### Large modules (terrain/climate zone)
+
+Passes (`surfacePass`, `columnFillPass`, …) — OK (40–96 строк). Fat: `climateSurfaceAssembler` ~220, `precipitation` ~180, `poleResolve` ~180, `debug_settlement` ~1500.
+
+### Duplication
+
+| ID | Severity | P | Проблема | Fix | Status |
+|---|---|---|---|---|---|
+| DR-6 | low | P2 | `terrain_set` inline ×6 | `terrain_registry_set(world)` | open |
+| DR-7 | low | P3 | lazy anchor cell builder duplicated | shared helper | open |
+| MAP-1 | low | P3 | `map.py` route boilerplate | deps / helper | open |
+| TR-2 | medium | P2 | Debug path S→CL: `run_pole_resolve_pass` в `save_terrain_batch` **и снова** в `apply_climate_pass`; idempotent, но лишняя работа + implicit «pole одинаков между HTTP-вызовами» | orchestrated batch endpoint или shared pole snapshot между pass'ами | open |
+
+### Mixed responsibility
+
+| ID | Severity | P | Проблема | Fix | Status |
+|---|---|---|---|---|---|
+| MR-7 | medium | P2 | `MapCellService.save_terrain_batch` / `save_z_slice`: persist layer знает pole, chunking, gap logging | extract `TerrainBatchOrchestrator` (симметрия с `ClimateOrchestratorService`) | open |
+| TR-5 | low | P3 | `TerrainGeneratorService.generate_minimal` — terrain facade + inline climate (lazy gameplay) | lazy node: stub + climate pass или shared DR-7 helper; document until DAG | open |
+| TR-8 | medium | P2 | `ClimateSurfaceAssembler._non_surface_anchor_cells` — orchestrator синтезирует MapCell (imports вынесены — CL-11 ✅, pass extraction — нет) | `passes/nonSurfaceAnchorPass.py` | open |
+| MAP-2 | low | P3 | `map.py` — HTTP + pipeline wiring + module singleton generators | container / deps | open |
+
+### Implicit contracts / side effects
+
+| ID | Severity | P | Проблема | Fix | Status |
+|---|---|---|---|---|---|
+| TR-6 | medium | P2 | `save_pass(layer: str)` — `"terrain"`/`"climate"`/`"ore"`/`"cave"`; какие поля перезаписывает — только в repo, не в типе | enum + documented upsert field matrix (`tz_terrain_generation.md` или repo docstring) | open |
+| TR-7 | low | P3 | Два persist API: `save_generated` → INSERT OR IGNORE (lazy); `save_pass` → layer upsert | document semantics; converge when DAG stable | open |
+| TR-4 | medium | P3 | `save_z_slice` / `generate_z_slice`: полный heightmap + gap analysis для одной `(gx, gy)` | cache heightmap per world bbox или explicit lazy contract | open |
+| CL-16 | low | P3 | `cellWeatherPass`: `location_uid` берётся из `sample.zone_location_uid`, не из исходного cell | doc или preserve cell attribution | open |
+| CL-7 | low | P3 | `ClimateSurfaceAssembler.recalculate`: weather **всегда**; `run_cell_weather` gate'ит только liquid overlay — misleading flag | fix flag semantics + impl (см. CL §) | partial |
+
+### Рекомендуемый порядок (без DAG)
+
+1. **TR-2** — убрать double pole-resolve на debug S→CL  
+2. **MR-7** — extract terrain batch orchestrator из `MapCellService`  
+3. **DR-6** — `terrain_registry_set`  
+4. **DBG-2** — split debug scripts  
+5. **TR-6** — upsert field matrix doc  
 
 ---
 
@@ -321,6 +393,11 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | **CL-2b** | Admin не merge при active pole | **resolved** |
 | **CL-10, CL-11** | heightmap: pole_field.sample only; public helpers | **resolved** |
 | **CL-12, DR-5** | Shared helpers → `climate/math.py`, `locations.py`, `terrainZ.py` | **resolved** |
+| **TR-2** | Double pole-resolve debug S→CL | open |
+| **MR-7, TR-8** | MapCellService orchestration; non-surface pass extraction | open |
+| **DR-6, DBG-2** | `terrain_registry_set`; split `debug_settlement.py` | open |
+| ~~**TR-3**~~ | Generation defaults → `worldMapSettings.py` | **resolved** |
+| **TR-6** | Layer upsert matrix | open |
 
 ### P3 — когда будет время
 
@@ -332,6 +409,8 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | **CL-7** | contracts `ClimateChangeEvent`/`ClimateRecalcRequest` ✅; node routing spec ✅; generator impl + node ⬜ |
 | **CL-5, CL-6, CL-8, CL-9** | validator; pole contract; legacy deprecate; CGS split | open |
 | **CL-2a, CL-2c..CL-2e** | tierResolve edge cases (см. § CL) | open / accepted |
+| **TR-4, TR-5, TR-7** | z-slice full recompute; `generate_minimal`; dual persist API | open |
+| **DR-7, MAP-1, MAP-2, CL-16** | lazy cell helper; map.py boilerplate; location_uid attribution | open |
 
 ---
 
@@ -383,6 +462,13 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | CL-13 | info | — | Tier resolution docs vs code | synced in `tz_climate.md` | **resolved** |
 | CL-14 | info | P3 | ~~Таблица tier-2 lists admin fallback; cell resolve admin off~~ | merge vs resolve в `tz_climate.md` | **resolved** |
 | CL-15 | medium | — | Rainfall = raw zone moisture; Earth freeze hardcoded | `precipitation_liquid` + `precipitation.py` + peak clamp | **resolved** |
+| CL-16 | low | P3 | `cellWeatherPass` `location_uid` from zone sample, not source cell | doc or preserve cell attribution | open |
+
+### Mixed responsibility (post CL-11)
+
+| ID | Severity | P | Проблема | Fix | Status |
+|---|---|---|---|---|---|
+| TR-8 | medium | P2 | `_non_surface_anchor_cells` still in assembler | `passes/nonSurfaceAnchorPass.py` | open |
 
 ---
 
@@ -399,6 +485,9 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 
 | Дата | Изменение |
 |---|---|
+| 2026-06 | TR-3 resolved: `worldMapSettings` incl. `world_z_min/max` fallback −8000…8000 |
+| 2026-06 | TR-3 partial: `grid_bbox_padding`, `terrain_chunk_columns`, `map_subsurface_depth` on `World` + `worldMapSettings.py` |
+| 2026-06 | Post TR-1b/DBG-1 review: § TR registry (TR-2..TR-8, TR-H*, TR-G1), DR-6/7, MAP-1/2, MR-7, DBG-2, CL-16 |
 | 2026-06 | DBG-1: debug_settlement pipeline tests → HTTP API (TZ § «Три входа») |
 | 2026-06 | NC-1 Phase 1–5; `tz_terrain_generation.md` full rework (Phase 6) |
 | 2026-06 | **Terrain TZ утверждено:** multi-pass skeleton, N_eff, materialization pass order; TR-1 open (код vs ТЗ) |

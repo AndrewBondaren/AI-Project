@@ -25,9 +25,8 @@ class TerrainGeneratorService:
         world: World,
         locations: list[NamedLocation],
         pole_field: ClimatePoleField,
-        padding: int = 2,
     ) -> list[MapCell]:
-        heightmap = run_surface_pass(world, locations, pole_field, padding)
+        heightmap = run_surface_pass(world, locations, pole_field)
         if heightmap is None:
             return []
         n_eff = run_gap_analysis(world, heightmap)
@@ -48,9 +47,8 @@ class TerrainGeneratorService:
         world: World,
         locations: list[NamedLocation],
         pole_field: ClimatePoleField,
-        padding: int = 2,
     ) -> tuple[SurfaceHeightmap | None, dict[tuple[int, int], int]]:
-        heightmap = run_surface_pass(world, locations, pole_field, padding)
+        heightmap = run_surface_pass(world, locations, pole_field)
         if heightmap is None:
             return None, {}
         return heightmap, run_gap_analysis(world, heightmap)
@@ -64,10 +62,9 @@ class TerrainGeneratorService:
         gy: int,
         z_lo: int,
         z_hi: int,
-        padding: int = 2,
     ) -> list[MapCell]:
         heightmap, n_eff = self.build_surface_heightmap(
-            world, locations, pole_field, padding,
+            world, locations, pole_field,
         )
         if heightmap is None or (gx, gy) not in heightmap.surface_z:
             return []

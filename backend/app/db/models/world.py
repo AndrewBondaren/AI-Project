@@ -97,7 +97,9 @@ class World:
     precipitation_liquid:           str | None = None   # ref → material_registry; fallback water
     z_max:                          int | None = None
     z_min:                          int | None = None
-    map_subsurface_depth:           int | None = None   # N_base for skeleton band; default 20
+    map_subsurface_depth:           int = 20            # N_base skeleton band; min 10
+    grid_bbox_padding:              int = 2             # anchor bbox ± cells (v1 extent)
+    terrain_chunk_columns:          int = 32            # column-fill persist chunk side
     world_bounds:                   dict | None = json_nullable_col(default=None)
     magma_band_thickness:           int | None = None   # 0/null = skip magma band
     closed_planet_grid:             bool = bool_col(default=False)

@@ -33,25 +33,22 @@ class ClimateOrchestratorService:
         self,
         world: World,
         locations: list[NamedLocation],
-        padding: int = 2,
     ) -> list[MapCell]:
-        return self._surface.assemble_full(world, locations, padding).surface_cells
+        return self._surface.assemble_full(world, locations).surface_cells
 
     def full_surface_detailed(
         self,
         world: World,
         locations: list[NamedLocation],
-        padding: int = 2,
     ) -> ClimateSurfaceResult:
-        return self._surface.assemble_full(world, locations, padding)
+        return self._surface.assemble_full(world, locations)
 
     def heightmap_only(
         self,
         world: World,
         locations: list[NamedLocation],
-        padding: int = 2,
     ) -> list[MapCell]:
-        return self._surface.heightmap_only(world, locations, padding)
+        return self._surface.heightmap_only(world, locations)
 
     def apply_weather_only(
         self,
@@ -74,10 +71,9 @@ class ClimateOrchestratorService:
         world: World,
         locations: list[NamedLocation],
         heightmap_cells: list[MapCell],
-        padding: int = 2,
     ) -> list[MapCell]:
         return self._surface.apply_climate_pass(
-            world, locations, heightmap_cells, padding,
+            world, locations, heightmap_cells,
         )
 
     def recalculate(

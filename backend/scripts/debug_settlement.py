@@ -1124,7 +1124,7 @@ def test_climate_admin_merge_skipped_with_pole() -> None:
     )
 
     cell_m     = cell_size_m(world)
-    bbox       = grid_bbox_from_locations(world, [region], 2)
+    bbox       = grid_bbox_from_locations(world, [region])
     pole_field = resolve_pole_field(world, [region], cell_m, bbox)
     heightmap  = run_heightmap_pass(world, [region], pole_field, 2)
     field      = run_anchor_collect_pass(world, [region], heightmap, pole_field)

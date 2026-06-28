@@ -68,9 +68,8 @@ class ClimateSurfaceAssembler:
         self,
         world: World,
         locations: list[NamedLocation],
-        padding: int = 2,
     ) -> ClimateSurfaceResult:
-        pole_field = run_pole_resolve_pass(world, locations, padding)
+        pole_field = run_pole_resolve_pass(world, locations)
         logger.info(
             "climate pass | world=%s pole_resolve | poles=%d preset=%s mode=%s",
             world.world_uid,
@@ -79,7 +78,7 @@ class ClimateSurfaceAssembler:
             world.climate_pole_mode or "autoresolve",
         )
 
-        heightmap = run_heightmap_pass(world, locations, pole_field, padding)
+        heightmap = run_heightmap_pass(world, locations, pole_field)
         z_lo, z_hi = _z_range(heightmap)
         logger.info(
             "climate pass | world=%s heightmap | cells=%d z_range=[%s,%s]",
@@ -126,10 +125,9 @@ class ClimateSurfaceAssembler:
         world: World,
         locations: list[NamedLocation],
         heightmap_cells: list[MapCell],
-        padding: int = 2,
     ) -> list[MapCell]:
         """Climate pass on existing terrain cells: weather + liquid overlay."""
-        pole_field = run_pole_resolve_pass(world, locations, padding)
+        pole_field = run_pole_resolve_pass(world, locations)
         anchor_field = run_anchor_collect_pass(
             world, locations, heightmap_cells, pole_field,
         )
@@ -151,10 +149,9 @@ class ClimateSurfaceAssembler:
         self,
         world: World,
         locations: list[NamedLocation],
-        padding: int = 2,
     ) -> list[MapCell]:
-        pole_field = run_pole_resolve_pass(world, locations, padding)
-        return run_heightmap_pass(world, locations, pole_field, padding)
+        pole_field = run_pole_resolve_pass(world, locations)
+        return run_heightmap_pass(world, locations, pole_field)
 
     def apply_weather_only(
         self,

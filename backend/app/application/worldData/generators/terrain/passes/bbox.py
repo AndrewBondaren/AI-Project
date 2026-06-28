@@ -5,6 +5,7 @@ from app.application.worldData.generators.coordinates import (
     meters_to_grid_x,
     meters_to_grid_y,
 )
+from app.application.worldData.generators.terrain.worldMapSettings import grid_bbox_padding
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -22,8 +23,8 @@ def _bounds_dict(world: World) -> dict | None:
 def grid_bbox_from_locations(
     world: World,
     locations: list[NamedLocation],
-    padding: int,
 ) -> GridBBox | None:
+    padding = grid_bbox_padding(world)
     declared = _bounds_dict(world)
     if declared is not None:
         return GridBBox(

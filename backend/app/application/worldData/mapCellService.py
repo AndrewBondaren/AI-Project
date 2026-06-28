@@ -7,6 +7,7 @@ from app.application.worldData.generators.assemblers.climateAssembler.passes.pol
     run_pole_resolve_pass,
 )
 from app.application.worldData.generators.terrain.terrainGeneratorService import TerrainGeneratorService
+from app.application.worldData.generators.terrain.worldMapSettings import n_base, terrain_chunk_columns
 from app.db.models.mapCell import MapCell
 from app.db.repositories.iMapCellRepository import IMapCellRepository
 
@@ -63,12 +64,10 @@ class MapCellService:
         generator: TerrainGeneratorService,
         world,
         locations: list,
-        padding: int = 2,
-        chunk_size: int = 32,
     ) -> ImportResult:
-        pole_field = run_pole_resolve_pass(world, locations, padding)
+        pole_field = run_pole_resolve_pass(world, locations)
         heightmap, n_eff = generator.build_surface_heightmap(
-            world, locations, pole_field, padding,
+            world, locations, pole_field,
         )
         if heightmap is None:
             return ImportResult(total=0, succeeded=0, failed=0)
@@ -76,13 +75,13 @@ class MapCellService:
         total = 0
         succeeded = 0
         n_eff_gt = 0
-        from app.application.worldData.generators.terrain.passes.gapAnalysisPass import n_base
 
         base = n_base(world)
         for v in n_eff.values():
             if v > base:
                 n_eff_gt += 1
 
+        chunk_size = terrain_chunk_columns(world)
         chunks = list(TerrainGeneratorService.iter_column_chunks(heightmap, chunk_size))
         for rect in chunks:
             chunk_cells = generator.generate_surface_chunk(
@@ -111,11 +110,10 @@ class MapCellService:
         gy: int,
         z_lo: int,
         z_hi: int,
-        padding: int = 2,
     ) -> ImportResult:
-        pole_field = run_pole_resolve_pass(world, locations, padding)
+        pole_field = run_pole_resolve_pass(world, locations)
         cells      = generator.generate_z_slice(
-            world, locations, pole_field, gx, gy, z_lo, z_hi, padding,
+            world, locations, pole_field, gx, gy, z_lo, z_hi,
         )
         return await self.save_pass(cells, "terrain")
 

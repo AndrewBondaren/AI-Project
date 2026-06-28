@@ -4,6 +4,7 @@ from app.application.worldData.generators.climate.math import world_seed
 from app.application.worldData.generators.coordinates import cell_size_m
 from app.application.worldData.generators.terrain.noise import cell_z_noise
 from app.application.worldData.generators.terrain.passes.bbox import grid_bbox_from_locations
+from app.application.worldData.generators.terrain.worldMapSettings import world_z_max, world_z_min
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -13,10 +14,9 @@ def run_surface_pass(
     world: World,
     locations: list[NamedLocation],
     pole_field: ClimatePoleField,
-    padding: int = 2,
 ) -> SurfaceHeightmap | None:
     """Pass 1: surface_z grid only (no MapCell subsurface)."""
-    bbox = grid_bbox_from_locations(world, locations, padding)
+    bbox = grid_bbox_from_locations(world, locations)
     if bbox is None:
         warn_once(
             world.world_uid,
@@ -25,8 +25,8 @@ def run_surface_pass(
         )
         return None
 
-    z_min = world.z_min if world.z_min is not None else -3
-    z_max = world.z_max if world.z_max is not None else 4
+    z_min = world_z_min(world)
+    z_max = world_z_max(world)
     seed  = world_seed(world)
 
     surface_z: dict[tuple[int, int], int] = {}

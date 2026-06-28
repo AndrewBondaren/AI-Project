@@ -10,10 +10,9 @@ def run_heightmap_pass(
     world: World,
     locations: list[NamedLocation],
     pole_field: ClimatePoleField,
-    padding: int = 2,
 ) -> list[MapCell]:
     """Climate compat: one surface cell per column from terrain Pass 1."""
-    heightmap = run_surface_pass(world, locations, pole_field, padding)
+    heightmap = run_surface_pass(world, locations, pole_field)
     if heightmap is None:
         return []
 
@@ -32,9 +31,9 @@ def run_heightmap_pass(
     return cells
 
 
-def grid_bbox_from_locations(world, locations, padding):
+def grid_bbox_from_locations(world, locations):
     """Re-export for legacy scripts importing from heightmapPass."""
     from app.application.worldData.generators.terrain.passes.bbox import (
         grid_bbox_from_locations as _grid_bbox,
     )
-    return _grid_bbox(world, locations, padding)
+    return _grid_bbox(world, locations)
