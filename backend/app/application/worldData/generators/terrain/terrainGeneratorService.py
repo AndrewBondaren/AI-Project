@@ -17,7 +17,7 @@ from app.db.models.world import World
 class TerrainGeneratorService:
     """
     Pure terrain skeleton generator — no climate fields on generate_surface.
-    Climate: separate admin pass via ClimateOrchestratorService.
+    Climate: separate pass via ClimateOrchestratorService (DAG / materialization queue).
     """
 
     def generate_surface(

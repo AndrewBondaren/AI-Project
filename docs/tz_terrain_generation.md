@@ -15,7 +15,20 @@ metadata:
 
 **Задача (утверждено 2026-06):** multi-pass **terrain skeleton** — surface + subsurface columns (`z`, `system_terrain`), без climate fields на `generate-surface`. См. § «Multi-pass terrain skeleton».
 
-**Климат** — отдельный модуль и **отдельный admin pass** [`POST …/generate-climate`](./tz_climate.md): `ClimateOrchestratorService` на существующем heightmap.
+**Климат** — отдельный модуль и **отдельный pass** в очереди генерации мира (`generate-climate`): `ClimateOrchestratorService` на cells в БД.
+
+### Роли (не путать с «admin»)
+
+| Роль | UI | Что делает с terrain |
+|---|---|---|
+| **Мастер мира** | JSON-редактор в **настройках мира** (`settings/world`) | import bundle, registries, anchors, pole — **объявляет** мир |
+| **Игрок** | выбор мира → персонаж → игра | загружает мир; **материализация** skeleton/climate — через **engine DAG**, если cells ещё нет |
+
+Отдельной роли «admin» в продукте **нет**.
+
+**Production:** материализация мира (S → O → C → CL) — только **engine DAG**; frontend и игрок **не** вызывают HTTP generate-*.
+
+**Debug:** `POST …/map/generate-*` в `map.py` — **постоянный** harness для точечных тестов (`debug_settlement.py`, curl, изолированный pass). Те же generator/orchestrator функции, что и ноды; маршруты **оставляем**, но это не product path.
 
 > **Код:** ✅ TR-1 impl (2026-06) — § Impl queue, § План реализации. Legacy `assemble_full` остаётся для climate-only regen paths.
 
@@ -26,7 +39,7 @@ metadata:
 
 **Почему отделено от городов:** поселение может быть построено или уничтожено; климат и elevation региона не должны пересчитываться от списка городов.
 
-**Why utility, not service:** нужен и в worldData (eager API), и в engine-нодах (lazy/repair) без DI-контейнера.
+**Why utility, not service:** нужен в engine-нодах (production) и в debug harness (`map.py`) без DI-контейнера.
 
 ---
 
@@ -46,13 +59,13 @@ metadata:
 
 | Версия | Охват | Когда |
 |---|---|---|
-| **v1 — anchor bbox** | bbox static anchors ± `padding` (как сейчас `grid_bbox_from_locations`) | vertical slice, admin после import |
+| **v1 — anchor bbox** | bbox static anchors ± `padding` | после import bundle мастером |
 | **v2 — declared world** | явные границы мира (`world_bounds` / master rect / full grid extent) — **вся** заготовка skeleton | после появления поля границ или lazy chunk map |
 
 **Инвариант v1:** города только расширяют bbox точкой anchor, не footprint.  
 **Инвариант v2:** skeleton покрывает **всю** объявленную заготовку — «склад» основных сущностей до gameplay.
 
-Lazy gameplay (`generate_z_slice`) в v2 может генерировать **тот же column API**, но порциями; eager admin — весь declared extent (или bbox в v1).
+Lazy gameplay (`generate_z_slice`) в v2 может генерировать **тот же column API**, но порциями; eager materialization — весь declared extent (или bbox в v1).
 
 ### Column semantics (surface + subsurface band)
 
@@ -274,33 +287,53 @@ z_bottom = max(world.z_min, z_top - N_eff)
 
 **Убрано из skeleton:** `liquid_body` через `z_to_terrain` — liquid только § Terrain layers п.3.
 
-### Ordered admin passes (утверждённый API)
+### Ordered world generation passes (очередь)
+
+**Очередь (строго):** `surface → ores → caves → climate` после того, как мир **объявлен** (import JSON мастером). Сборка — **только engine nodes (DAG)**; генераторы **не** вызывают соседние домены.
 
 ```mermaid
 flowchart LR
   IMP[import world bundle]
-  S["POST generate-surface\nsolid + magma band"]
-  O["POST generate-ores\nindependent"]
-  C["POST generate-caves\noptional global"]
-  CL["POST generate-climate\nfields + liquid layer"]
-  LZ["lazy caves/mines\n~20 cell radius"]
+  S["POST generate-surface"]
+  O["POST generate-ores STUB"]
+  C["POST generate-caves STUB"]
+  CL["POST generate-climate"]
 
-  IMP --> S
-  S --> O
-  O --> C
-  S --> CL
-  CL -.-> LZ
+  IMP --> S --> O --> C --> CL
 ```
 
-| Endpoint | Generator | Merge |
-|---|---|---|
-| `generate-surface` | skeleton: surface + **N_base band** + **magma band** (not world bottom) | upsert solid/magma |
-| `generate-ores` | **независимая** ore placement (не глубина skeleton) | ore markers only |
-| `generate-caves` | global carve (optional admin) | no ore overwrite |
-| `generate-climate` | orchestrator: temp/rainfall + **liquid layer** + permafrost overlay | climate + fluid semantics |
-| lazy mine/cave | local generator ~**20 cells** от входа | gameplay trigger; impl позже |
+| # | Endpoint | Generator (pure) | Читает | Пишет |
+|---|---|---|---|---|
+| 1 | `generate-surface` | terrain passes | `World`, locations; **input:** `ClimatePoleField` от ноды | skeleton |
+| 2 | `generate-ores` | `generate_ores` | `map_cells` | ore markers |
+| 3 | `generate-caves` | `generate_caves` | `map_cells` | carve |
+| 4 | `generate-climate` | climate passes | `map_cells` | temp, rainfall, liquid |
 
-> **Код:** `POST generate-surface`, `generate-ores`, `generate-caves`, `generate-climate`, `generate-z-slice` — ✅.
+#### Изоляция генераторов (утверждено)
+
+| Правило | Смысл |
+|---|---|
+| Генераторы не знают друг о друге | нет import/call между `terrain/`, `climate/` passes, `ores`, `caves` |
+| Сборка на нодах | pole → surface → persist → ores → caves → climate — deps DAG |
+| Shared input | `ClimatePoleField`, bbox — **данные** в аргументах, не скрытый вызов чужого generator |
+| Между pass | pass N+1 читает **DB**, не in-memory monolith |
+
+**Код (interim):** `TerrainGeneratorService` пока вызывает `run_pole_resolve_pass` внутри — **нарушение**; target: нода отдаёт `pole_field` аргументом.
+
+**Вне очереди materialization (другие вещи):**
+
+| API | Смысл |
+|---|---|
+| `POST …/generate-z-slice` | lazy fill **одной колонки** `(gx,gy,z…)` — API ✅, engine node ⬜ |
+| Lazy caves ~**20 cells** у входа | gameplay (**impl queue п.8 DEFERRED**) — **не** z-slice |
+
+| Endpoint | Merge |
+|---|---|
+| `generate-surface` | upsert solid/magma |
+| `generate-ores` / `generate-caves` | STUB — layer upsert |
+| `generate-climate` | climate + liquid overlay |
+
+> **Interim backend:** handlers `map/generate-*` — для отладки; **target orchestration:** ноды DAG.
 
 `INSERT OR IGNORE` **недостаточен** для multi-pass — нужен **selective upsert** / patch по layer kind (terrain vs ore vs cave).
 
@@ -321,7 +354,7 @@ avg_depth ≈ 1 + N_eff_mean             # surface + subsurface; N_eff ≥ N_bas
 | Слой | Где | Параллелизм |
 |---|---|---|
 | **Pure generator** | `TerrainGeneratorService` / column fill | stateless; chunk rect in → cells out |
-| **Orchestrator job** | `MapCellService` / admin route | partition, workers, batch persist |
+| **Orchestrator job** | `MapCellService` / engine node | partition, workers, batch persist |
 | **DB** | SQLite `map_cells` | **один writer**; batch `executemany` в транзакции |
 
 Generator **не** знает про threads/SQL — только `(world, locations, rect, surface_heightmap?)`.
@@ -343,7 +376,7 @@ Generator **не** знает про threads/SQL — только `(world, locat
 
 **Порог «всё в одном batch»:** если `columns × (1+N_base) < ~50_000` — можно один generate + один insert (малые миры / test).
 
-**Admin UX (позже):** job id + `{chunks_done, chunks_total, cells_written}`; опционально SSE progress.
+**Progress UX (позже):** job id + `{chunks_done, chunks_total, cells_written}`; опционально SSE.
 
 **Детерминизм:** RNG seed = `f(world_uid, gx, gy, pass_id)` — chunk order не влияет на содержимое ячеек.
 
@@ -358,9 +391,9 @@ Generator **не** знает про threads/SQL — только `(world, locat
 | 3 | `POST generate-climate` (orchestrator on existing cells) | ✅ |
 | 4 | Subsurface **N_base** + **A** + `N_eff`; magma band + **antipode** contract | ✅ core; magma optional |
 | 5 | Two-phase skeleton inside `generate-surface` | ✅ |
-| 6 | `generate-ores` (independent) + `generate-caves` stubs | ✅ stubs |
+| 6 | `generate-ores` (independent) + `generate-caves` stubs | ✅ **STUB** |
 | 7 | `generate-climate`: fields + **liquid layer** (not separate liquid endpoint) | ✅ |
-| 8 | Lazy caves/mines ~20 cell radius | ⬜ gameplay trigger |
+| 8 | Lazy caves/mines ~20 cell radius | ⬜ **DEFERRED** gameplay (≠ z-slice) |
 | 9 | Убрать `liquid_body` из skeleton `z_to_terrain` | ✅ |
 | 10 | Chunk orchestration MapCellService | ✅ |
 | 11 | `world_bounds` v2 | ✅ |
@@ -374,7 +407,7 @@ Generator **не** знает про threads/SQL — только `(world, locat
 
 ### Принципы исполнения
 
-1. **Generators first, DAG last** — admin API и `TerrainGeneratorService` до engine-нод.
+1. **Generators first, DAG last** — pure generators до полной цепочки нод.
 2. **`generate-surface` без climate fields** — `temperature_base` / `rainfall` только на `generate-climate`.
 3. **Two-phase skeleton обязателен** — Pass 1 `surface_z`, gap `N_eff`, Pass 2 column fill.
 4. **Multi-pass persist** — selective upsert по layer kind; не `INSERT OR IGNORE` для regen skeleton.
@@ -389,10 +422,10 @@ Generator **не** знает про threads/SQL — только `(world, locat
 | **2** | `upsert_terrain_skeleton`; `save_terrain_batch` 32×32 | п.10 | regen skeleton без затирания building cells |
 | **3** | `POST generate-climate`; liquid overlay | п.3, п.7, п.9 | liquid только после climate pass |
 | **4** | `POST generate-ores` / `generate-caves` stubs + merge | п.6 | S → O → C → CL; cave не затирает ore |
-| **5** | `generate_z_slice` + repo `get_z_slice` | п.8 | column API без full bbox eager |
+| **5** | `generate_z_slice` API + repo `get_z_slice` | *(не impl queue п.8)* | lazy column; engine node ⬜ |
 | **6** | `world_bounds` v2 extent | п.11 | skeleton на declared bounds |
-| **7** | Magma band + `antipode_xy` (M-1…M-5) | п.12, TR-M | optional `magma_band_thickness` |
-| **8** | DAG: `generate_climate`, `recalculate_climate`, `resolve_weather` | tz_climate § DAG | после Фаз 0–3 |
+| **7** | Magma band + `antipode_xy` (M-1…M-5) | п.12, TR-M | STUB; M-3 movement DEFERRED |
+| **8** | DAG: `generate_climate`, … | tz_climate § DAG | orchestration на нодах |
 
 ```mermaid
 flowchart TB
@@ -413,26 +446,25 @@ flowchart TB
   P1 --> P5
 ```
 
-### Breaking change (мастер / admin)
+### Материализация мира (очередь passes)
 
-После import:
+**Target:** игрок загрузил мир → engine DAG прогоняет **S → O → C → CL**, если skeleton/climate ещё нет.
+
+Pass-идентификаторы — те же шаги, что DAG; debug-дубликаты в `map.py` (см. § Роли):
 
 ```
-POST …/map/generate-surface     → terrain skeleton only
-POST …/map/generate-ores        → optional
-POST …/map/generate-caves       → optional
-POST …/map/generate-climate     → climate fields + liquid overlay
+POST …/map/generate-surface   ← debug harness only
+POST …/map/generate-ores      → STUB
+POST …/map/generate-caves     → STUB
+POST …/map/generate-climate   ← debug harness only
 ```
 
-Regen: `DELETE map` или selective upsert → surface → … → climate.
+Regen: clear map → снова **S → O → C → CL**.
 
 ### Definition of Done
 
-- [x] Admin flow S → O → C → CL работает
-- [x] Two-phase skeleton, `N_eff`, solid-only Pass 2
-- [x] Climate fields только на climate pass
-- [x] Chunked persist + layer upsert
-- [ ] Impl queue п.1–11 закрыты; п.12 — milestone magma
+- [x] Очередь **S → O → C → CL** (generators + interim handlers)
+- [x] Impl queue п.1–11; п.12 partial; п.8 DEFERRED
 - [x] TR-1 closed в `tz_generator_technical_debt.md`
 
 ---
@@ -441,18 +473,19 @@ Regen: `DELETE map` или selective upsert → surface → … → climate.
 
 Eager climate, recalculate и runtime weather — **три разных процесса** ([`tz_climate.md`](./tz_climate.md) § «Три процесса», черновик). Terrain **не пишет** `temperature_base` / `rainfall` на `generate-surface`.
 
-### Утверждённый admin flow
+### Утверждённая очередь materialization
 
 ```mermaid
 flowchart LR
-  S["POST generate-surface\nTerrainGeneratorService"]
-  O["POST generate-ores"]
-  C["POST generate-caves"]
-  CL["POST generate-climate\nClimateOrchestrator"]
+  S["POST generate-surface"]
+  O["POST generate-ores STUB"]
+  C["POST generate-caves STUB"]
+  CL["POST generate-climate"]
 
-  S --> O --> C
-  S --> CL
+  S --> O --> C --> CL
 ```
+
+Сборка — **engine DAG nodes**, не внутри generator facade.
 
 | Entry | Вызывает | Пишет |
 |---|---|---|
@@ -507,7 +540,7 @@ def generate_minimal(world, location, uid_map?) -> list[MapCell]  # len == 1
 | Pipeline | terrain two-phase skeleton | `ClimateOrchestrator.full_surface` | `ClimateGeneratorService` напрямую |
 | Climate fields | ❌ отдельный pass | ✅ в том же вызове | упрощённый walk-up |
 | Pole / tier elevation bias | ✅ input | ✅ | ❌ |
-| Caller | admin API | admin API (legacy) | `lazyTerrainNode` |
+| Caller | engine DAG (production) | `map.py` debug harness | `lazyTerrainNode` |
 
 **Ограничение:** minimal не отражает pole/tier v2 — для orphan repair достаточно; полный климат региона — только eager/recalc.
 
@@ -524,7 +557,7 @@ app/application/worldData/generators/
   coordinates/                         ← convert hub (grid ↔ meters)
   assemblers/settlementAssembler/      ← urban (не terrain)
 
-app/api/routes/map.py                  ← POST …/generate-surface (+ generate-climate TBD)
+app/api/routes/map.py                  ← debug harness: POST …/generate-* (не product path)
 ```
 
 **Tech debt / smells:** `tz_generator_technical_debt.md`  
@@ -555,43 +588,26 @@ app/api/routes/map.py                  ← POST …/generate-surface (+ generate
 
 ## Три кейса использования
 
-### 1. Eager init (admin, не gameplay)
+### 1. Материализация мира (generation pipeline)
 
-**Триггер:** `POST /worlds/{world_uid}/map/generate-surface` после import мира (мастер объявил registries + anchors).
+**Мастер** — JSON-редактор в **настройках мира** (`settings/world`): import bundle, registries, anchors. **Не** отдельный «admin»-интерфейс.
 
-**Утверждённый flow:**
+**Игрок** — выбирает мир → сессия. Если `map_cells` для skeleton ещё нет — **engine DAG** прогоняет очередь passes (target).
 
-```
-POST …/map/generate-surface
-  └─ TerrainGeneratorService.generate_surface
-       Pass 1: surface_z grid + gap analysis (N_eff)
-       Pass 2: column fill (chunked)
-  └─ MapCellService.save_terrain_batch (selective upsert, chunked)
-
-POST …/map/generate-ores      → ordered pass 2
-POST …/map/generate-caves     → ordered pass 3
-POST …/map/generate-climate   → ClimateOrchestrator on existing cells
-```
-
-**Код сейчас (interim):**
+**Target flow (ноды):**
 
 ```
-POST …/map/generate-surface
-  └─ TerrainGeneratorService → ClimateOrchestrator.full_surface
-  └─ MapCellService.save_generated (INSERT OR IGNORE)
+world_load / first_need
+  └─ pole_resolve_node
+  └─ generate_surface_node → persist
+  └─ generate_ores_node   → STUB
+  └─ generate_caves_node  → STUB
+  └─ generate_climate_node → persist
 ```
 
-**Roadmap после skeleton:**
+**Interim (код):** handlers `POST …/map/generate-*` — те же passes, вызываются вручную/dev; **player flow** пока в основном `lazy_terrain` (repair), полная очередь на load — ⬜.
 
-| Step | Содержание | Статус |
-|---|---|---|
-| 1 | Multi-pass terrain skeleton (§ Multi-pass) | ⬜ impl |
-| 2 | `generate-ores` / `generate-caves` | ⬜ |
-| 3 | `generate-climate` отдельный endpoint | ⬜ |
-| 4 | Liquid pass | ⬜ |
-| 5 | Структурные объекты (деревья, камни, …) | ⬜ отложено |
-
-`WorldBundleService.import_bundle()` **не** вызывает terrain — только импорт данных.
+**Pass implementation (generators + MapCellService):**
 
 ---
 
@@ -821,7 +837,7 @@ PK `(world_uid, x, y, z)` — точечные запросы; индекс по
 | 2026-06 | Magma/antipode — **edge case**, контракт зафиксирован, impl отложено (M-1…M-5) |
 | 2026-06 | Planet topology: round planet on voxel grid; magma ≠ world bottom |
 | 2026-06 | Terrain layers: N_base vs deep geology; liquid with climate; ores independent |
-| 2026-06 | **Утверждена** multi-pass terrain skeleton: two-phase surface, N_eff gap, ordered admin passes |
+| 2026-06 | **Утверждена** multi-pass terrain skeleton; ordered world generation passes |
 | 2026-06 | Climate split; Terrain ↔ Climate interim documented |
 | 2026-06 | NC-1 coordinate spaces rework |
 

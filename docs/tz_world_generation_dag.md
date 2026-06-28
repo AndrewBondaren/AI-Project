@@ -28,7 +28,7 @@ metadata:
 ```mermaid
 flowchart TB
   subgraph triggers [Triggers — кто решает когда]
-    M[Master import / admin API]
+    M[Master: settings/world JSON editor]
     L[Lazy gameplay]
     P[Player build actions]
   end
@@ -89,7 +89,8 @@ app/application/worldData/generators/
 
 | Path | Когда | Типичные ноды / entry | Persist |
 |---|---|---|---|
-| **Master / admin** | Import мира; `POST generate-surface` → ores → caves → `generate-climate` (утверждено terrain TZ); world editor | admin routes; **target nodes:** `generate_climate`, … | bulk upsert / chunked |
+| **Master** | JSON-редактор **настроек мира**; import bundle | world generation nodes (target) | bulk upsert / chunked |
+| **Player** | выбор мира → сессия | lazy + materialization DAG | upsert по мере входа |
 | **Lazy gameplay** | Первый вход в локацию без geometry | `check_terrain` → `lazy_terrain` → `lazy_settlement` | `map_cell_repo` insert/upsert |
 | **Player build** | Intent «построить», blueprint, repair | **planned:** `place_building`, `construct_building`, `excavate`, `connect_road` | patches после post_llm |
 
@@ -130,14 +131,19 @@ sequenceDiagram
   LS->>LS: map_cell_repo upsert
 ```
 
-### Interim (не DAG — до регистрации нод)
+### Debug API (`map.py`) — оставить, не product path
 
-| Entry | Вызывает | Заменяется нодой |
+Точечное тестирование passes без полного DAG: `debug_settlement.py`, curl, ручной regen. **Не** вызывается из frontend / player flow.
+
+| Endpoint | Generator / persist | Production caller (DAG) |
 |---|---|---|
-| `POST …/map/generate-surface` | ✅ terrain skeleton + chunk upsert | `POST …/generate-climate` separate |
-| `POST …/generate-climate` | ⬜ | `generate_climate` node |
-| `POST …/generate-ores` → `generate-caves` | ⬜ | ordered passes (TZ terrain) |
-| World bundle import | skeleton on locations only | `generate_settlement_skeleton` (optional) |
+| `POST …/map/generate-surface` | `TerrainGeneratorService` + `save_terrain_batch` | `generate_surface` node ⬜ |
+| `POST …/map/generate-ores` | `generate_ores` + `save_pass` | ores pass node ⬜ |
+| `POST …/map/generate-caves` | `generate_caves` + `save_pass` | caves pass node ⬜ |
+| `POST …/map/generate-climate` | `apply_climate_pass` + `save_pass` | `generate_climate` node ✅ |
+| `POST …/map/generate-z-slice` | `generate_z_slice` + `save_pass` | lazy / volume node ⬜ |
+
+CRUD (`GET/POST/DELETE …/map`) — import/export для мастера и debug; отдельно от очереди materialization.
 
 ### Запланировано (контракт нод)
 
@@ -260,7 +266,7 @@ Generator-side work **может** опережать ноды (как climate e
 ## Связанные документы
 
 - [`tz_climate.md`](./tz_climate.md) — три процесса, `ClimateRecalcRequest`, volume A/B/C
-- [`tz_terrain_generation.md`](./tz_terrain_generation.md) — multi-pass terrain skeleton ✅ утверждено; admin pass order
+- [`tz_terrain_generation.md`](./tz_terrain_generation.md) — multi-pass terrain skeleton ✅; world generation pass order
 - [`tz_assembler_hierarchy.md`](./tz_assembler_hierarchy.md) — settlement → structure layers
 - [`tz_building_generator.md`](./tz_building_generator.md) — templates, construction flags
 - [`tz_city_generation.md`](./tz_city_generation.md) — skeleton vs lazy phase 2
@@ -274,4 +280,4 @@ Generator-side work **может** опережать ноды (как climate e
 
 | Дата | Изменение |
 |---|---|
-| 2026-06 | v1 — generator library pattern; 4 domains; node map; player build model; interim admin paths (**черновик, не утверждён**) |
+| 2026-06 | v1 — generator library pattern; 4 domains; node map; player build model; debug `map.py` harness vs DAG production (**черновик, не утверждён**) |

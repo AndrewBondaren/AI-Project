@@ -1,3 +1,12 @@
+"""Map cell CRUD and generation pass hooks.
+
+Production materialization (world load, gameplay) must run through **engine DAG nodes**
+— same generator functions, no HTTP.
+
+``POST …/map/generate-*`` routes are a **permanent debug harness** for point testing
+(``debug_settlement.py``, manual curl, isolated pass runs). Keep them; do not wire
+frontend or player flows to these endpoints.
+"""
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
@@ -61,6 +70,7 @@ async def generate_surface(
     world_uid: str,
     container=Depends(get_container),
 ) -> JSONResponse:
+    """Debug only — production: engine DAG node (same generators)."""
     map_svc      = container.map_cell_service()
     world_svc    = container.world_service()
     location_svc = container.location_service()

@@ -56,12 +56,12 @@ app/application/engine/nodes/pojo/python/climate/   ← ⬜ последняя �
   recalculate_climate.py               ← partial recalc + routing
   resolve_weather.py                   ← runtime WeatherSnapshot
 
-  terrain/terrainGeneratorService.py   ← thin facade → orchestrator (admin API)
+  terrain/terrainGeneratorService.py   ← pure terrain passes (orchestration — DAG)
 
-app/api/routes/map.py                  ← POST …/generate-surface (interim, до DAG)
+app/api/routes/map.py                  ← debug harness (POST …/generate-*); production — DAG
 ```
 
-**Вызов:** production path — DAG-ноды → orchestrator / runtime assembler. Admin API и terrain facade — interim до подключения нод.
+**Вызов:** production — DAG-ноды → orchestrator / runtime assembler. `map.py` generate-* — только debug; те же функции, без HTTP в product flow.
 
 ---
 
@@ -158,7 +158,7 @@ Partial return: generator может пересчитать широко, но *
 | writes | bulk upsert climate fields + liquid overlay |
 | status | ✅ impl (`generateClimateNode`) |
 
-Admin API: `POST …/generate-climate` после `generate-surface`. Legacy `full_surface` — climate regen / tests only.
+Debug: `map/generate-*` после surface (см. `tz_terrain_generation.md` § Роли). Legacy `full_surface` — regen / tests only.
 
 ### Нода `resolve_weather` (спека, impl ⬜)
 
@@ -860,7 +860,7 @@ class VolumeClimateContext:
 - Volume climate: A tunnels · B hive multi-z skeleton · C co-located edge case (§ Surface vs volume — spec ✅, impl ⬜)
 - `random(±temperature_variance)` / deterministic per-cell noise
 - Neighbor climate blend
-- `POST …/map/generate-climate` — ✅ admin API pass
+- `POST …/map/generate-climate` — ✅ pass в очереди materialization (debug harness; production — `generate_climate` node)
 - Zone polygons / climate barriers
 - `location_weather` table + tick loop
 - Import validator (§ отказоустойчивость)

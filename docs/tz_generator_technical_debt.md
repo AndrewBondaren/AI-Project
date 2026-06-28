@@ -251,7 +251,8 @@ Perimeter не учитывает template района — v1 compromise.
 | ID | Severity | Где | Fix | P |
 |---|---|---|---|---|
 | FM-1 | medium | `TerrainGeneratorService` monolith | thin facade → `ClimateOrchestratorService` | resolved |
-| **TR-1** | **high** | Multi-pass terrain skeleton + admin pass split | ✅ impl 2026-06 — см. [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Impl queue |
+| **TR-1** | **high** | Multi-pass terrain skeleton + climate pass split | ✅ impl 2026-06 — см. [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Impl queue |
+| **TR-1b** | medium | Generator isolation: pole resolve **вне** `TerrainGeneratorService` | **open** — target: нода → `pole_field` аргументом; см. terrain TZ § Изоляция |
 | **TR-M** | low | Magma antipode teleport (edge case) | **partial** — skeleton band + `antipode_xy`; M-3 movement ⬜ |
 | FM-2 | medium | `streets.plan_city_street_grid` | split graph vs policy | P3 |
 | FM-3 | low | `pick_barrier_template_type` | registry-driven pick; см. § ниже | P2 |
@@ -398,7 +399,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | Дата | Изменение |
 |---|---|
 | 2026-06 | NC-1 Phase 1–5; `tz_terrain_generation.md` full rework (Phase 6) |
-| 2026-06 | **Terrain TZ утверждено:** multi-pass skeleton, N_eff, admin pass order; TR-1 open (код vs ТЗ) |
+| 2026-06 | **Terrain TZ утверждено:** multi-pass skeleton, N_eff, materialization pass order; TR-1 open (код vs ТЗ) |
 | 2026-06 | Climate polish sprint: CL-4, CL-2a/2b/2e, CL-10..12, DR-5 |
 | 2026-06 | Climate v2.1: pole/local tiers, `tierResolve.py`, CL-2/CL-13 resolved |
 | 2026-06 | Polish backlog rework; CL-2a..CL-2e, DR-5 added; FM-1 resolved |

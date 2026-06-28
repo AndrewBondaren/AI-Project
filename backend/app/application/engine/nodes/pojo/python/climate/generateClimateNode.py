@@ -25,7 +25,7 @@ class GenerateClimateEmptyMapError(PythonNodeError):
 @register_python(executor_cls=PythonNodeExecutor)
 @dataclass(frozen=True, kw_only=True)
 class GenerateClimateNode(PythonNode):
-    """Admin-style climate pass on existing map_cells (post_llm)."""
+    """Climate materialization pass on existing map_cells (post_llm)."""
 
     id:   str = "generate_climate"
     name: str = "Generate Climate"

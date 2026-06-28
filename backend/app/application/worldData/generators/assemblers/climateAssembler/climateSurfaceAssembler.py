@@ -128,7 +128,7 @@ class ClimateSurfaceAssembler:
         heightmap_cells: list[MapCell],
         padding: int = 2,
     ) -> list[MapCell]:
-        """Admin generate-climate: weather + liquid overlay on existing terrain cells."""
+        """Climate pass on existing terrain cells: weather + liquid overlay."""
         pole_field = run_pole_resolve_pass(world, locations, padding)
         anchor_field = run_anchor_collect_pass(
             world, locations, heightmap_cells, pole_field,

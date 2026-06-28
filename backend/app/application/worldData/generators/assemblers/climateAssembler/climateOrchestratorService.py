@@ -13,7 +13,7 @@ from app.db.models.world import World
 
 class ClimateOrchestratorService:
     """
-    Facade for DAG nodes and interim admin API — no engine imports.
+    Facade for engine DAG nodes; map.py debug routes call the same methods — not the production entry point.
 
     Three processes (tz_climate.md § v2.3):
       1. full_surface / heightmap_only / apply_weather_only — eager generate
