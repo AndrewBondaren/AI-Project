@@ -87,6 +87,31 @@ class N1SNormalizeStage:
         ctx.issues.extend(normalize_world_n1s(world))
 
 
+class HydrologyClimateNormalizeStage:
+    """Step 2b: hydrology + climate scalar normalize (JV-3)."""
+
+    def run(self, ctx: ValidationContext, registry: ValidatorRegistry) -> None:
+        del registry
+        if ctx.request.kind not in (ValidationKind.BUNDLE, ValidationKind.SECTION):
+            return
+        if ctx.has_errors:
+            return
+        bundle = ctx.normalized
+        if not isinstance(bundle, dict):
+            return
+        world = bundle.get("world")
+        if not isinstance(world, dict):
+            return
+        from app.application.worldData.jsonValidation.normalize.climateDefaults import (
+            normalize_world_climate_fields,
+        )
+        from app.application.worldData.jsonValidation.normalize.hydrologyDefaults import (
+            normalize_world_hydrology,
+        )
+        ctx.issues.extend(normalize_world_hydrology(world))
+        ctx.issues.extend(normalize_world_climate_fields(world))
+
+
 class RegistryIndexBuilderStage:
     """Step 3: Pass 1 WorldRegistryIndex (JV-2)."""
 

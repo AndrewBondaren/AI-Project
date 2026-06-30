@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 from app.db.models.world import World
@@ -57,8 +58,10 @@ def collect_world_row_issues_from_world(world: World) -> list[ValidationIssue]:
 
 
 def collect_world_row_issues(world_data: dict[str, Any]) -> list[ValidationIssue]:
+    known = {f.name for f in dataclasses.fields(World)}
+    filtered = {k: v for k, v in world_data.items() if k in known}
     try:
-        world = World(**world_data)
+        world = World(**filtered)
     except TypeError as exc:
         return [error(SCHEMA_ID, "world", "STRUCT", str(exc))]
     except Exception as exc:

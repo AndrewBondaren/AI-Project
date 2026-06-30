@@ -15,6 +15,9 @@ class ValidationKind(StrEnum):
     CRUD_PATCH = "crud_patch"
     SEED = "seed"
     CHARACTER = "character"
+    BUILDING_TEMPLATE = "building_template"
+    DISTRICT_TEMPLATE = "district_template"
+    BARRIER_TEMPLATE = "barrier_template"
 
 
 class SectionKey(StrEnum):

@@ -86,6 +86,12 @@ def collect_location_issues(
             SCHEMA_ID, field_name="system_location_type",
         ))
 
+        if loc_type == "building" and row.get("system_template_uid") is not None:
+            issues.extend(check_ref(
+                index, RefKind.BUILDING_TPL, row.get("system_template_uid"),
+                f"{base}.system_template_uid", SCHEMA_ID, field_name="system_template_uid",
+            ))
+
         subtype = row.get("system_location_subtype")
         if subtype is not None and subtype_index:
             issues.extend(check_ref(

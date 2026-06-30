@@ -97,6 +97,28 @@ def _map_keys(value: Any) -> set[str]:
     return {k for k in value if isinstance(k, str) and k}
 
 
+def _template_registry_keys(value: Any) -> set[str]:
+    """Keys from list or dict template registries (building/barrier)."""
+    out: set[str] = set()
+    if isinstance(value, list):
+        for row in value:
+            if not isinstance(row, dict):
+                continue
+            for field in ("system_template_uid", "system_name", "system_type"):
+                k = row.get(field)
+                if isinstance(k, str) and k:
+                    out.add(k)
+    elif isinstance(value, dict):
+        out |= _map_keys(value)
+        for row in value.values():
+            if isinstance(row, dict):
+                for field in ("system_template_uid", "system_name", "system_type"):
+                    k = row.get(field)
+                    if isinstance(k, str) and k:
+                        out.add(k)
+    return out
+
+
 def _location_type_keys(value: Any) -> set[str]:
     if isinstance(value, dict):
         return _map_keys(value)
@@ -166,7 +188,11 @@ def build_world_registry_index(world: dict[str, Any]) -> WorldRegistryIndex:
         index.register_many(ref_kind, _array_keys(world.get(field_name), key_field))
 
     for ref_kind, field_name in _MAP_REGISTRY_SPECS:
-        index.register_many(ref_kind, _map_keys(world.get(field_name)))
+        raw = world.get(field_name)
+        if ref_kind in (RefKind.BUILDING_TPL, RefKind.BARRIER_TPL):
+            index.register_many(ref_kind, _template_registry_keys(raw))
+        else:
+            index.register_many(ref_kind, _map_keys(raw))
 
     loc_types = world.get("location_type_registry")
     index.register_many(RefKind.LOC_TYPE, _location_type_keys(loc_types))

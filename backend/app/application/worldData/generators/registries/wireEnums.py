@@ -42,3 +42,66 @@ class SidewalkSide(StrEnum):
 class PortalType(StrEnum):
     COORDINATE = "coordinate"
     GRAPH = "graph"
+
+
+class GapPolicy(StrEnum):
+    CLIP = "clip"
+    FILL = "fill"
+    RANDOM = "random"
+
+
+class BuildingContext(StrEnum):
+    INDOOR = "indoor"
+    UNDERGROUND = "underground"
+    NAUTICAL = "nautical"
+
+
+class StaircaseType(StrEnum):
+    LADDER = "ladder"
+    SPIRAL_SMALL = "spiral_small"
+    SPIRAL_STANDARD = "spiral_standard"
+    STANDARD = "standard"
+    STRAIGHT = "straight"
+    U_SHAPE = "u_shape"
+
+
+class StreetLayout(StrEnum):
+    GRID = "grid"
+    ORGANIC = "organic"
+    RADIAL = "radial"
+    CUL_DE_SAC = "cul_de_sac"
+    COURTYARD = "courtyard"
+
+
+class DistrictDensity(StrEnum):
+    SPARSE = "sparse"
+    MEDIUM = "medium"
+    DENSE = "dense"
+
+
+class MeasurementSystem(StrEnum):
+    METRIC = "metric"
+    IMPERIAL = "imperial"
+
+
+class StatConflictMode(StrEnum):
+    SOFT = "soft"
+    MIGRATE = "migrate"
+
+
+class ClimatePoleMode(StrEnum):
+    MANUAL = "manual"
+    AUTORESOLVE = "autoresolve"
+
+
+class ClimatePolePreset(StrEnum):
+    ICE = "ice"
+    DESERT = "desert"
+    BINARY = "binary"
+
+
+class SeasonKey(StrEnum):
+    WINTER = "winter"
+    SPRING = "spring"
+    SUMMER = "summer"
+    AUTUMN = "autumn"

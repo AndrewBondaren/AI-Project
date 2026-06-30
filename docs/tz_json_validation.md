@@ -15,7 +15,7 @@ metadata:
 
 | Поле | Значение |
 |---|---|
-| Код `worldData/jsonValidation/` | ◐ Phase 2 — index, refs, locations, connections; JV-3 hydrology ⬜ |
+| Код `worldData/jsonValidation/` | ✅ Phase 4 — building/district/barrier templates (JV-4/JV-5) |
 | Transitional | ad-hoc validators в services + runtime hardcodes в generators |
 | Следующая версия реестра | **0.2** — после JV-1…JV-3 (Pydantic row models + bundleValidator) |
 
