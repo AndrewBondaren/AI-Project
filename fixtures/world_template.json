@@ -73,7 +73,14 @@
       "default_rivers": {
         "enabled": true,
         "autoresolve": true,
-        "bands": { "min": 1, "max": 5 }
+        "bands": { "min": 1, "max": 5 },
+        "type_classify": {
+          "mountain_min_source_z": null,
+          "path_mountain_fraction": 0.5,
+          "rapid_drop_threshold_m": 3,
+          "mountain_bed_steepness_factor": 1.5,
+          "foothill_gradient_threshold": null
+        }
       },
       "default_lakes": {
         "enabled": true,
@@ -127,6 +134,8 @@
       { "system_connection_type": "sea_route",       "display_name": "Морской путь" },
       { "system_connection_type": "river",           "display_name": "Река" },
       { "system_connection_type": "mountain_river",  "display_name": "Горная река" },
+      { "system_connection_type": "lake_shoreline",  "display_name": "Берег озера" },
+      { "system_connection_type": "coastline",       "display_name": "Береговая линия" },
       { "system_connection_type": "portal",          "display_name": "Портал" }
     ],
 
@@ -136,9 +145,9 @@
       "terrain_liquid_body": { "display_name": "Водоём",              "description": "Открытая вода: море, озеро, река." },
       "terrain_mountain":    { "display_name": "Горы",                "description": "Высокий рельеф, крутые склоны." },
       "terrain_shore":       { "display_name": "Берег",               "description": "Прибрежная полоса: shore + shallow deepening (U15)." },
-      "geo_lake_moon":       { "display_name": "Озеро Лунное",        "description": "Declared lake — master anchor." },
+      "geo_lake_moon":       { "display_name": "Озеро Лунное",        "description": "Declared lake — name + lake_shoreline ConnectionEdge chain (U20)." },
       "geo_peak_white":      { "display_name": "Гора Белая",          "description": "Declared peak — river source context." },
-      "geo_sea_north":       { "display_name": "Северное море",       "description": "Declared coastal sea — hydrology anchor." },
+      "geo_sea_north":       { "display_name": "Северное море",       "description": "Declared sea — name + coastline ConnectionEdge chain (U21)." },
       "geo_coast_fjord":     { "display_name": "Фьордовый берег",     "description": "Declared coast segment." },
       "geo_river_silver":    { "display_name": "Серебряная река",     "description": "Declared river name; geometry via ConnectionEdge." },
       "geo_island_mist":     { "display_name": "Остров Туманов",      "description": "Declared island." },

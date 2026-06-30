@@ -313,7 +313,7 @@ flowchart LR
 | 1 | `generate-surface` | terrain passes + **hydrology (Pass 1.5)** | `World`, locations; **input:** `ClimatePoleField` от ноды | skeleton; river edges → `ConnectionPersistService` |
 | 2 | `generate-ores` | `generate_ores` | `map_cells` | ore markers |
 | 3 | `generate-caves` | `generate_caves` | `map_cells` | carve |
-| 4 | `generate-climate` | climate passes | `map_cells`; **`liquid_candidate`** sidecar / metadata | temp, rainfall, liquid |
+| 4 | `generate-climate` | climate passes | `map_cells` + **hydrology metadata** (`liquid_candidate`, role) | temp, rainfall, liquid |
 
 #### Изоляция генераторов (утверждено)
 
@@ -521,7 +521,7 @@ flowchart TB
 | **D HY-1** | H-1, H-1b | `types`, stub, `load_hydrology_from_world` | unit: policy tabs U16; bands clamp 1–99; loader reads [`world_template.json`](../fixtures/world_template.json) |
 | **D HY-2** | H-2, H-2b | `SeaBasinGenerator`, `OceanBasinGenerator`, `CoastalLandformClassifier` | shore + deepening до 20 (sea); declared + autoresolve |
 | **D HY-3** | H-3 | `LakeBasinGenerator` + `DeepeningBandCarver` | shoreline profile U15; 1–5 bands |
-| **D HY-4** | H-4 | `RiverNetworkPlanner`, `RiverBedCarver`, edge emit | peak → sea; **U14** smooth ≤45°; `ConnectionPersistService`; declared river = `ConnectionEdge` polyline |
+| **D HY-4** | H-4 | classify + carver + `riverConnectionEmit` | U17/U18; persist in orchestration; declared river = ConnectionEdge polyline |
 | **D HY-5** | H-5 *(optional)* | Procedural lakes/rivers при autoresolve ON | deterministic на `world_seed`; skip если все `autoresolve.*: false` |
 | **D HY-6** | H-6 | `liquidOverlayPass` + sidecar `liquid_candidate` | **нет** global `z≤0`; ice/water по temp только на mask; closes **HY-1** |
 | **D HY-7a** | H-7 (pre-DAG) | Wire: `build_surface_heightmap` = P1 → `HydrologyGeneratorService.apply` → gap → P2; `MapCellService` передаёт `HydrologyResult` в climate pass | `POST …/map/generate-hydrology?scope=…` preview; full `POST generate-surface` на `world_template` — sea + lake + river bed + liquid после climate |

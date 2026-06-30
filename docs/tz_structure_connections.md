@@ -55,11 +55,15 @@ N+1: движок определяет встроенные типы со спе
 | `settlement_gate` | вход/выход из поселения; соединяет граф поселения с мировым | полное | `city` |
 | `air_route` | воздушный путь; ребро на z выше terrain | — (нет контакта) | `city`, `world` |
 | `sea_route` | морской путь; ребро по water-ячейкам | — (нет контакта) | `world` |
-| `river` | река; bed carve + русло; declare или autoresolve | partial (bed) | `world` |
-| `mountain_river` | горная река; исток на peak | partial (steep bed) | `world` |
+| `river` | равнинная река; bed + polyline; autoresolve → **`classify_river_segments`** → lowland `RiverSegment` | partial (bed) | `world` |
+| `mountain_river` | подтип: круче, пороги; segment from classifier (U17); graph via **`riverConnectionEmit`** (U18) | partial (steep bed) | `world` |
+| `lake_shoreline` | **declare контур озера** (U20): цепочка A→B→C→D (замкнутая); waypoints = `NamedLocation` или `(x,y,z)`; carve inward (U15) | partial (shore bands) | `world` |
+| `coastline` | **declare берег моря** (U21): polyline/polygon без radius; то же правило waypoints; deepening до 20 bands | partial (shore bands) | `world` |
 | `portal` | мгновенный переход; не ребро — связи хранятся на узле (см. 4.1) | — | — |
 
 **Реки — geometry vs имя:** polyline и bed — **`ConnectionEdge`**. **`NamedLocation` optional** — только если мастер дал имя; иначе `location_uid = null`. См. [`tz_locations.md`](./tz_locations.md), [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) U9/U11.
+
+**Озёра / море (U20/U21):** форма — **`ConnectionEdge`** `lake_shoreline` / `coastline`; имя — optional `NamedLocation`. Anchor-only без edges — invalid для declare (validator future).
 
 **Повороты реки (U14, [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md)):** строже дорог. Между **соседними** сегментами polyline угол **≤ 45°**; **> 45° запрещён** (import validator для declare; autoresolve — `smooth_river_polyline` перед persist). Не путать с `max_turn_angle` дорог (default до 90° per step в § split).
 

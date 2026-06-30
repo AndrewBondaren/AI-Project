@@ -264,6 +264,7 @@ Perimeter не учитывает template района — v1 compromise.
 | **HY-1** | **high** | Liquid = global `z≤0` overlay; нет carve рек/озёр/морских basin | Phase **D HY** (H-1…H-7a) — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Phase 9+; [`.cursor/plans/hydrology-pre-dag.md`](../.cursor/plans/hydrology-pre-dag.md) | open |
 | **HY-2** | medium | Cave STUB без подземной воды / ecosystem | U12: `CaveHydrologyService` в `generate-caves` (Phase B); `cave_liquid_candidate` ≠ surface mask | open |
 | **HY-3** | medium | Нет LLM naming для autoresolved geography | U13: `llm_name_procedural_locations` + persist; **после DAG**, gate `materialize_named_locations` | open |
+| **HY-4** | low | `type_classify` null в template без normalize | U22: import validator подставляет schema defaults и пишет explicit values; runtime fallback до validator | open |
 | **TR-1b** | medium | Generator isolation: pole resolve **вне** `TerrainGeneratorService` | **resolved** — `MapCellService` / `map.py`; `pole_field` аргумент |
 | **DBG-1** | medium | `debug_settlement.py` pipeline smoke in-process | **resolved** — HTTP path **2** + `debug_api_helpers.py` |
 | **TR-M** | low | Magma antipode teleport (edge case) | **partial** — skeleton band + `antipode_xy`; M-3 movement ⬜ |

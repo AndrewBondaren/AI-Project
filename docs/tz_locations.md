@@ -106,13 +106,14 @@ Generators **не** пишут в `named_locations` и **не** вызывают
 | Семейство | `NamedLocation` | Без location (autoresolve) |
 |---|---|---|
 | **География** | declare + имя | surface peak/lake/plain; **подземная** вода — cave systems (U12), не surface heightmap |
+| **Озёра / море (declare)** | имя + **`ConnectionEdge`** chain | **`lake_shoreline`** / **`coastline`** (U20/U21); waypoints = location или `(x,y,z)` |
 | **Реки** | optional имя | `ConnectionEdge`, `location_uid = null` |
 | **Поселения** | обычно есть | minimal repair — исключение |
 
 | Семейство | Примеры `display_name` | Роль | Geometry / persist |
 |---|---|---|---|
 | **Поселения** (иерархия § ниже) | «Королевский порт», «Деревня Заречье» | SceneInit, layout, economy | `map_cells` + footprint по `city_size` |
-| **География** (optional) | «Гора Белая», «Озеро Лунное» | declare / **LLM U13** | anchor ± footprint |
+| **География** (optional) | «Гора Белая», «Озеро Лунное» | declare / **LLM U13** | anchor + **shoreline edges** (U20/U21) |
 | **Линейные** (optional) | «Река Волга» | имя русла | bed → `ConnectionEdge`; имя не обязательно |
 | **Климат / админ** | `climate_pole`, zone override на territory | Pole / Voronoi / zone field | point anchor; см. [`tz_climate.md`](./tz_climate.md) |
 
