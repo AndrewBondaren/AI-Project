@@ -74,7 +74,7 @@ def materialize_band(
     if anchor_tier is None:
         return rng.choice(candidates)
 
-    anchor_rank = tier_rank(world.economic_tier_registry, anchor_tier)
+    anchor_rank = tier_rank(world.economic_tier_registry, anchor_tier, world_uid=world.world_uid)
     ordered = [
         t["system_tier"]
         for t in tiers_sorted(world.economic_tier_registry)
@@ -82,4 +82,9 @@ def materialize_band(
     ]
     if not ordered:
         return rng.choice(candidates)
-    return min(ordered, key=lambda t: abs(tier_rank(world.economic_tier_registry, t) - anchor_rank))
+    return min(
+        ordered,
+        key=lambda t: abs(
+            tier_rank(world.economic_tier_registry, t, world_uid=world.world_uid) - anchor_rank
+        ),
+    )

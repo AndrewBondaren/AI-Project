@@ -15,7 +15,8 @@ metadata:
 
 | Поле | Значение |
 |---|---|
-| Код `worldData/jsonValidation/` | ✅ Phase 6 — character package (JV-6) |
+| Код `worldData/jsonValidation/` | ✅ Phase 7 — runtime legacy warn-only (JV-7) |
+| T2 section import hooks | ✅ locations, races, perks, map |
 | Transitional | ad-hoc validators в services + runtime hardcodes в generators |
 | Следующая версия реестра | **0.2** — после JV-1…JV-3 (Pydantic row models + bundleValidator) |
 
@@ -1022,7 +1023,7 @@ Struct filter today ([`Player`](../backend/app/db/models/player.py)). Per-field 
 | **Семейство** | **F0** Transport |
 | **Validator** | — (step 0 transport, вне facade) |
 | **Entry** | любой `POST …/import` с `file` / `path` |
-| **Impl** | ✅ [`JsonResolver`](../backend/app/api/utils/json_resolver.py) |
+| **Impl** | ✅ [`JsonResolver`](../backend/app/api/utils/jsonResolver.py) |
 | **Проверяет** | UTF-8; валидный JSON (`dict` или `list`); file XOR path |
 | **Не проверяет** | семантику объектов внутри |
 | **JV** | остаётся transport-layer; не переносить в jsonValidation |
@@ -1247,9 +1248,9 @@ Struct filter today ([`Player`](../backend/app/db/models/player.py)). Per-field 
 
 | ID | Семейство | Impl | Validator | Примечание |
 |---|---|---|---|---|
-| SCH-RUNTIME-HYDROLOGY-DEFAULTS | F7 | ◐ `resolveRiverTypeClassify._SCHEMA_DEFAULTS` | — | **deprecated** → `HydrologyPolicyValidator` JV-3 |
-| SCH-RUNTIME-CLIMATE-FALLBACK | F7 | ◐ `precipitation.py`, `registry.py` | — | **deprecated** → `ClimatePolicyValidator` JV-3 |
-| SCH-RUNTIME-ECONOMIC-TIER | F7 | ◐ `tier_rank(unknown)` | ⬜ **SCH-ECONOMIC-TIER-REF** JV-8 | [`tz_economic_tier.md`](./tz_economic_tier.md) §6 |
+| SCH-RUNTIME-HYDROLOGY-DEFAULTS | F7 | ✅ warn + `TYPE_CLASSIFY_DEFAULTS` (JV-7) | — | **deprecated** → `HydrologyPolicyValidator` JV-3 |
+| SCH-RUNTIME-CLIMATE-FALLBACK | F7 | ✅ warn + import canonical liquid (JV-7) | — | **deprecated** → `ClimatePolicyValidator` JV-3 |
+| SCH-RUNTIME-ECONOMIC-TIER | F7 | ✅ `tier_rank(unknown)` warn (JV-7) | ⬜ **SCH-ECONOMIC-TIER-REF** JV-8 | [`tz_economic_tier.md`](./tz_economic_tier.md) §6 |
 
 ---
 
@@ -1411,7 +1412,7 @@ JSON → JsonValidationFacade            DB → generators / session / LLM
 
 | Слой | Где | Что делает |
 |---|---|---|
-| Transport | [`JsonResolver`](../backend/app/api/utils/json_resolver.py) | UTF-8, parse JSON, file XOR path |
+| Transport | [`JsonResolver`](../backend/app/api/utils/jsonResolver.py) | UTF-8, parse JSON, file XOR path |
 | Envelope | `WorldBundleService.import_bundle` | `"world"` + `world_uid` |
 | Struct | `World(**data)`, `Race(**row)`, `import_list` | dataclass / SQLite shape; Exception → `ImportError` |
 | Ad-hoc | `WorldService._validate`, `NamedLocationService` (climate_pole ≤1) | scalar rules |
@@ -1443,7 +1444,7 @@ backend/app/application/
 
 | Семейство | Пакет / impl | Trigger | SCH-* (JSON Schema Registry) | SchemaValidator / orchestrator step | JV |
 |---|---|---|---|---|---|
-| **F0 Transport** | `api/utils/json_resolver.py` | T1–T8 file/path | **SCH-JSON-ENVELOPE** | — (step 0, вне facade) | — |
+| **F0 Transport** | `api/utils/jsonResolver.py` | T1–T8 file/path | **SCH-JSON-ENVELOPE** | — (step 0, вне facade) | — |
 | **F1 World master** | `worldData/jsonValidation/` | T1, T2, T3–T5 | см. таблицу ниже | `JsonValidationFacade` + children | JV-0…8 |
 | **F2 Character** | `character/jsonValidation/` | T7 | **SCH-CHARACTER-ROW**, **SCH-CHARACTER-SHEET**, **SCH-CHARACTER-WORLD-BIND** | `CharacterValidationFacade` (target) | JV-6 |
 | **F3 Seed (N1-G)** | `worldData/jsonValidation/` branch SEED | T6 | **SCH-SEED-BUNDLE** (+ per-table row, без отд. ID v0.1) | `SeedTableValidator` | optional |
@@ -1696,7 +1697,7 @@ RefKind ↔ REF-W — таблица § REF-W выше.
 | Trigger | Куда hook | Примечание |
 |---|---|---|
 | T1 | `WorldBundleService.import_bundle` | validate-before-transaction |
-| T2 | section routes → facade → service persist | synthetic bundle |
+| T2 | section routes → facade → service persist | ✅ locations, races, perks, map |
 | T3–T4 | `WorldService.create/update` | `requires_force` — product rule в service, не validator |
 | T5 | entity CRUD routes | single-row validator |
 | T6 | `SeedService` | `ValidationKind.SEED`, без WorldRegistryIndex |

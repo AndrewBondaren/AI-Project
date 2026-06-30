@@ -58,12 +58,13 @@ def pick_barrier_template_type(
 ) -> str | None:
     """v1 эвристика — polish pass: `.cursor/plans/settlement-assembler.md` § pick_barrier_template_type."""
     registry = world.economic_tier_registry or []
+    uid = world.world_uid
     tier = skeleton.economic_tier or "standard"
-    rank = tier_rank(registry, tier) if registry else 2
+    rank = tier_rank(registry, tier, world_uid=uid) if registry else 2
 
-    if rank <= tier_rank(registry, "basic") if registry else False:
+    if rank <= tier_rank(registry, "basic", world_uid=uid) if registry else False:
         return "wooden_fence"
-    if rank >= tier_rank(registry, "quality") if registry else False:
+    if rank >= tier_rank(registry, "quality", world_uid=uid) if registry else False:
         return "city_wall"
     size = skeleton.system_city_size or "town"
     if size in ("city", "metropolis", "megalopolis"):

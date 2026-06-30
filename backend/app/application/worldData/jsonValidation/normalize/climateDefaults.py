@@ -9,6 +9,18 @@ from app.application.worldData.jsonValidation.validators._issues import error
 
 SCHEMA_ID = "SCH-WORLD-CLIMATE-POLICY"
 
+DEFAULT_PRECIPITATION_LIQUID = "water"
+
+# Last-resort when material_registry has no liquid row (legacy worlds only; JV-7 warn at runtime).
+LEGACY_STANDALONE_WATER_MATERIAL: dict[str, object] = {
+    "system_material": "water",
+    "material_category": "liquid",
+    "cool_into": "ice",
+    "cool_temp": 0,
+    "heat_into": "steam",
+    "heat_temp": 100,
+}
+
 
 def normalize_world_climate_fields(world: dict[str, Any]) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
@@ -20,7 +32,7 @@ def normalize_world_climate_fields(world: dict[str, Any]) -> list[ValidationIssu
     if world.get("climate_pole_preset") is None:
         world["climate_pole_preset"] = "binary"
     if world.get("precipitation_liquid") is None:
-        world["precipitation_liquid"] = "water"
+        world["precipitation_liquid"] = DEFAULT_PRECIPITATION_LIQUID
 
     offsets = world.get("season_temp_offsets")
     if offsets is None:

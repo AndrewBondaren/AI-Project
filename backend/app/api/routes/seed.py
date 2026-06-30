@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
-from app.api.utils.json_resolver import JsonResolver
-from app.api.utils.response_helpers import json_or_download
+from app.api.utils.jsonResolver import JsonResolver
+from app.api.utils.responseHelpers import json_or_download
 
 router = APIRouter()
 

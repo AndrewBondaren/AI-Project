@@ -11,8 +11,10 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
-from app.api.utils.json_resolver import JsonResolver
-from app.api.utils.response_helpers import json_or_download
+from app.api.utils.jsonResolver import JsonResolver
+from app.api.utils.responseHelpers import json_or_download
+from app.api.utils.sectionImportGate import gate_section_import
+from app.application.worldData.jsonValidation.types import SectionKey
 from app.application.worldData.generators.assemblers.climateAssembler import ClimateOrchestratorService
 from app.application.worldData.generators.terrain.cavesGenerator import generate_caves
 from app.application.worldData.generators.terrain.oresGenerator import generate_ores
@@ -53,6 +55,12 @@ async def import_map(
     data = await JsonResolver.resolve(file=file, path=path)
     if not isinstance(data, list):
         raise HTTPException(status_code=422, detail="Map cells JSON must be an array")
+    await gate_section_import(
+        container,
+        world_uid=world_uid,
+        section=SectionKey.MAP_CELLS,
+        payload=data,
+    )
     result = await container.map_cell_service().import_from_json(world_uid, data)
     status_code = 200 if result.failed == 0 else 207
     return JSONResponse(status_code=status_code, content=result.to_dict())

@@ -13,6 +13,9 @@ from app.application.worldData.jsonValidation.types import (
     ValidationResult,
 )
 
+# Seed tables required for race contract refs during section import.
+SECTIONS_REQUIRING_SEED: frozenset[SectionKey] = frozenset({SectionKey.RACES})
+
 
 async def validate_section_import(
     facade: JsonValidationFacade,

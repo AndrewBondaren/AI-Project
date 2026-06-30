@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
-from app.api.utils.json_resolver import JsonResolver
+from app.api.utils.jsonResolver import JsonResolver
 from app.application.worldData.generators.structure.structureGeneratorService import (
     StructureGeneratorService,
 )

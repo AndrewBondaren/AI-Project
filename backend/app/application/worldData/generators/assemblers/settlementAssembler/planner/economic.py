@@ -22,13 +22,14 @@ def check_district_economic_compat(
         return True
 
     registry = world.economic_tier_registry
+    uid = world.world_uid
     tier_range = template.get("economic_tier_range")
     if tier_range:
         min_t = tier_range.get("min")
         max_t = tier_range.get("max")
-        if min_t and not tier_at_least(registry, city_tier, min_t):
+        if min_t and not tier_at_least(registry, city_tier, min_t, world_uid=uid):
             return False
-        if max_t and not tier_at_most(registry, city_tier, max_t):
+        if max_t and not tier_at_most(registry, city_tier, max_t, world_uid=uid):
             return False
 
     band = template.get("economic_tier_band")
@@ -55,12 +56,13 @@ def building_tier_compatible(
         return True
 
     registry = world.economic_tier_registry
-    allowed = tiers_within_rank_delta(registry, city_tier, delta)
+    uid = world.world_uid
+    allowed = tiers_within_rank_delta(registry, city_tier, delta, world_uid=uid)
     if not allowed:
         return True
 
-    min_allowed = min(tier_rank(registry, t) for t in allowed)
-    max_allowed = max(tier_rank(registry, t) for t in allowed)
+    min_allowed = min(tier_rank(registry, t, world_uid=uid) for t in allowed)
+    max_allowed = max(tier_rank(registry, t, world_uid=uid) for t in allowed)
 
     tier_range = building_template.get("economic_tier_range") or {}
     min_t = tier_range.get("min")
@@ -68,8 +70,8 @@ def building_tier_compatible(
     if not min_t and not max_t:
         return True
 
-    if min_t and tier_rank(registry, min_t) > max_allowed:
+    if min_t and tier_rank(registry, min_t, world_uid=uid) > max_allowed:
         return False
-    if max_t and tier_rank(registry, max_t) < min_allowed:
+    if max_t and tier_rank(registry, max_t, world_uid=uid) < min_allowed:
         return False
     return True

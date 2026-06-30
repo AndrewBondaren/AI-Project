@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.application.worldData.generators.climate.loggingHelpers import warn_once
+
 
 def load_hydrology_from_world(world: Any) -> dict:
     """Return surface hydrology policy dict; empty if unset."""
@@ -22,6 +24,11 @@ def load_caves_hydrology_from_world(world: Any) -> dict:
 
 def is_hydrology_enabled(world: Any) -> bool:
     policy = load_hydrology_from_world(world)
-    # Opt-out: missing world.hydrology or absent "enabled" → hydrology ON (legacy bundles, partial import).
-    # Explicit `"enabled": false` skips HydrologyGeneratorService — tz_terrain_hydrology.md U16.
+    if "enabled" not in policy:
+        uid = getattr(world, "world_uid", "?")
+        warn_once(
+            uid,
+            "implicit_hydrology_enabled",
+            "hydrology | world=%s enabled key missing; defaulting to true (import normalize target)",
+        )
     return bool(policy.get("enabled", True))
