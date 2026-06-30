@@ -152,7 +152,8 @@
       "geo_river_silver":    { "display_name": "Серебряная река",     "description": "Declared river name; geometry via ConnectionEdge." },
       "geo_island_mist":     { "display_name": "Остров Туманов",      "description": "Declared island." },
       "geo_plain_golden":    { "display_name": "Золотая равнина",     "description": "Declared plain — flat bias test." },
-      "geo_mountain_iron":   { "display_name": "Железные горы",       "description": "Declared mountain massif." }
+      "geo_mountain_iron":   { "display_name": "Железные горы",       "description": "Declared mountain massif." },
+      "terrain_open_space":  { "display_name": "Открытое пространство", "description": "Aerial / open volume." }
     },
 
     "terrain_registry": [
@@ -186,6 +187,7 @@
       { "system_material": "stone",  "display_name": "Камень", "material_category": "solid",  "tags": ["mineral"],       "economic_tier": "standard", "hardness": 3, "density": 250, "flammable": false },
       { "system_material": "wood",   "display_name": "Дерево", "material_category": "solid",  "tags": ["organic"],       "economic_tier": "basic",    "hardness": 2, "density": 60,  "flammable": true  },
       { "system_material": "water",  "display_name": "Вода",   "material_category": "liquid", "tags": [],                "economic_tier": null,       "hardness": null, "density": 100, "freezable": true  },
+      { "system_material": "sand",   "display_name": "Песок",  "material_category": "solid",  "tags": ["mineral"],       "economic_tier": "basic",    "hardness": 1, "density": 160, "flammable": false },
       { "system_material": "ice",    "display_name": "Лёд",    "material_category": "solid",  "tags": [],                "economic_tier": null,       "hardness": 1, "density": 90,  "flammable": false }
     ]
   },

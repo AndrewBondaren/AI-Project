@@ -46,6 +46,7 @@ from app.application.worldData.settlementPersistService import SettlementPersist
 from app.application.worldData.stateService import StateService
 from app.application.worldData.seedService import SeedService
 from app.application.worldData.worldBundleService import WorldBundleService
+from app.application.worldData.jsonValidation import JsonValidationFacade
 from app.application.worldData.playerService import PlayerService
 from app.application.worldData.gameSessionService import GameSessionService
 
@@ -114,6 +115,7 @@ class Container:
         self._settlement_persist_service: SettlementPersistService | None = None
         self._state_service: StateService | None = None
         self._seed_service: SeedService | None = None
+        self._json_validation_facade: JsonValidationFacade | None = None
         self._world_bundle_service: WorldBundleService | None = None
 
         # CLIENTS
@@ -509,6 +511,11 @@ class Container:
             self._seed_service = SeedService(db=self._db)
         return self._seed_service
 
+    def json_validation_facade(self) -> JsonValidationFacade:
+        if self._json_validation_facade is None:
+            self._json_validation_facade = JsonValidationFacade()
+        return self._json_validation_facade
+
     def world_bundle_service(self) -> WorldBundleService:
         if self._world_bundle_service is None:
             self._world_bundle_service = WorldBundleService(
@@ -520,6 +527,7 @@ class Container:
                 map_cell_service=self.map_cell_service(),
                 state_service=self.state_service(),
                 connection_graph_service=self.connection_graph_service(),
+                json_validation=self.json_validation_facade(),
             )
         return self._world_bundle_service
 

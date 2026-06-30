@@ -5,6 +5,9 @@ from dataclasses import dataclass
 from fastapi import HTTPException
 
 from app.api.schemas.imports import ImportError, ImportResult
+from app.application.worldData.jsonValidation.validators.worldRow import (
+    collect_world_row_issues_from_world,
+)
 from app.db.models.world import World
 from app.db.repositories.iWorldRepository import IWorldRepository
 
@@ -128,27 +131,6 @@ class WorldService:
 
     @staticmethod
     def _validate(world: World) -> None:
-        v = world.map_cell_size_m
-        if not isinstance(v, int) or isinstance(v, bool):
-            raise HTTPException(status_code=422,
-                detail="map_cell_size_m must be an integer")
-        if v < 1000:
-            raise HTTPException(status_code=422,
-                detail="map_cell_size_m must be at least 1000")
-        if v % 1000 != 0:
-            raise HTTPException(status_code=422,
-                detail="map_cell_size_m must be a multiple of 1000")
-
-        if world.grid_bbox_padding < 0:
-            raise HTTPException(status_code=422,
-                detail="grid_bbox_padding must be >= 0")
-
-        chunk = world.terrain_chunk_columns
-        if not isinstance(chunk, int) or isinstance(chunk, bool) or chunk < 1:
-            raise HTTPException(status_code=422,
-                detail="terrain_chunk_columns must be an integer >= 1")
-
-        depth = world.map_subsurface_depth
-        if not isinstance(depth, int) or isinstance(depth, bool) or depth < 10:
-            raise HTTPException(status_code=422,
-                detail="map_subsurface_depth must be an integer >= 10")
+        issues = collect_world_row_issues_from_world(world)
+        if issues:
+            raise HTTPException(status_code=422, detail=issues[0].message)

@@ -7,6 +7,12 @@ from fastapi import HTTPException
 from app.api.schemas.imports import ImportResult
 from app.application.worldData.bundleRemapService import remap_bundle
 from app.application.worldData.connectionGraphService import ConnectionGraphService
+from app.application.worldData.jsonValidation import (
+    JsonValidationFacade,
+    ValidationKind,
+    ValidationRequest,
+    format_validation_issues,
+)
 from app.application.worldData.mapCellService import MapCellService
 from app.application.worldData.namedLocationService import NamedLocationService
 from app.application.worldData.raceService import RaceService
@@ -33,6 +39,7 @@ class WorldBundleService:
         map_cell_service: MapCellService,
         state_service: StateService,
         connection_graph_service: ConnectionGraphService,
+        json_validation: JsonValidationFacade | None = None,
     ) -> None:
         self._db              = db
         self._world           = world_service
@@ -42,6 +49,7 @@ class WorldBundleService:
         self._map_cells       = map_cell_service
         self._states          = state_service
         self._connections     = connection_graph_service
+        self._json_validation = json_validation or JsonValidationFacade()
 
     async def export(self, world_uid: str) -> dict:
         world     = await self._world.get_by_id(world_uid)
@@ -64,18 +72,33 @@ class WorldBundleService:
         }
 
     async def import_bundle(self, data: dict) -> tuple[dict[str, ImportResult], bool]:
-        if "world" not in data:
-            raise HTTPException(status_code=422, detail="Bundle must contain 'world' key")
+        world_data = data.get("world") if isinstance(data, dict) else None
+        world_uid: str | None = None
+        if isinstance(world_data, dict):
+            uid = world_data.get("world_uid")
+            if isinstance(uid, str) and uid:
+                world_uid = uid
 
-        world_data = data["world"]
-        world_uid  = world_data.get("world_uid")
-        if not world_uid:
-            raise HTTPException(status_code=422, detail="world.world_uid is required")
-
-        existing = await self._world.find_by_id(world_uid)
+        existing = await self._world.find_by_id(world_uid) if world_uid else None
         if existing is not None:
             version_n = await self._world.next_version_number(existing.name)
             data      = remap_bundle(data, version_n, self._world.strip_version_suffix)
+            world_uid = data["world"]["world_uid"]
+
+        validation = await self._json_validation.validate(
+            ValidationRequest(
+                kind=ValidationKind.BUNDLE,
+                payload=data,
+                world_uid=world_uid,
+            ),
+        )
+        if not validation.ok:
+            raise HTTPException(
+                status_code=422,
+                detail=format_validation_issues(validation),
+            )
+        if isinstance(validation.normalized, dict):
+            data = validation.normalized
             world_uid = data["world"]["world_uid"]
 
         results: dict[str, ImportResult] = {}
