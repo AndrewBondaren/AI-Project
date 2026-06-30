@@ -22,6 +22,7 @@ from app.application.worldData.jsonValidation.validators.namedLocationRow import
 from app.application.worldData.jsonValidation.validators.raceContract import RaceContractValidator
 from app.application.worldData.jsonValidation.validators.raceRow import RaceRowValidator
 from app.application.worldData.jsonValidation.validators.registryRefs import RegistryRefsValidator
+from app.application.worldData.jsonValidation.validators.seedTable import SeedTableValidator
 from app.application.worldData.jsonValidation.validators.worldRow import WorldRowValidator
 from app.application.worldData.jsonValidation.validators.worldTemplateRegistries import (
     WorldTemplateRegistriesValidator,
@@ -42,6 +43,7 @@ def build_default_registry() -> ValidatorRegistry:
     registry.register(DeclareTopologyValidator())
     registry.register(RaceRowValidator())
     registry.register(RaceContractValidator())
+    registry.register(SeedTableValidator())
     return registry
 
 

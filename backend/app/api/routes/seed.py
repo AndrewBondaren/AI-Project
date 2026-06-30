@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from app.api.deps import get_container
 from app.api.utils.jsonResolver import JsonResolver
 from app.api.utils.responseHelpers import json_or_download
+from app.api.utils.seedImportGate import gate_seed_import, gate_seed_upsert
 
 router = APIRouter()
 
@@ -19,6 +20,7 @@ async def import_seed(
     data = await JsonResolver.resolve(file=file, path=path)
     if not isinstance(data, dict):
         raise HTTPException(status_code=422, detail="Seed JSON must be an object keyed by table name")
+    await gate_seed_import(container, data)
     results = await container.seed_service().import_from_json(data)
     has_failures = any(r.failed > 0 for r in results.values())
     status_code = 207 if has_failures else 200
@@ -48,6 +50,7 @@ async def upsert_seed(
     data: dict[str, Any],
     container=Depends(get_container),
 ) -> dict:
+    await gate_seed_upsert(container, table, data)
     await container.seed_service().upsert_one(table, data)
     return {"ok": True}
 
