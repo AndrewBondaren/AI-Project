@@ -27,6 +27,12 @@ from app.db.repositories.iNamedLocationRepository import INamedLocationRepositor
 from app.db.repositories.sqlite.namedLocationRepository import SqliteNamedLocationRepository
 from app.db.repositories.iMapCellRepository import IMapCellRepository
 from app.db.repositories.sqlite.mapCellRepository import SqliteMapCellRepository
+from app.db.repositories.iConnectionNodeRepository import IConnectionNodeRepository
+from app.db.repositories.sqlite.connectionNodeRepository import SqliteConnectionNodeRepository
+from app.db.repositories.iConnectionEdgeRepository import IConnectionEdgeRepository
+from app.db.repositories.sqlite.connectionEdgeRepository import SqliteConnectionEdgeRepository
+from app.db.repositories.iConnectionEdgeCellRepository import IConnectionEdgeCellRepository
+from app.db.repositories.sqlite.connectionEdgeCellRepository import SqliteConnectionEdgeCellRepository
 from app.db.repositories.iStateRepository import IStateRepository
 from app.db.repositories.sqlite.stateRepository import SqliteStateRepository
 from app.application.worldData.worldService import WorldService
@@ -34,6 +40,8 @@ from app.application.worldData.raceService import RaceService
 from app.application.worldData.worldPerkService import WorldPerkService
 from app.application.worldData.namedLocationService import NamedLocationService
 from app.application.worldData.mapCellService import MapCellService
+from app.application.worldData.connectionPersistService import ConnectionPersistService
+from app.application.worldData.settlementPersistService import SettlementPersistService
 from app.application.worldData.stateService import StateService
 from app.application.worldData.seedService import SeedService
 from app.application.worldData.worldBundleService import WorldBundleService
@@ -87,6 +95,9 @@ class Container:
         self._perk_repository: IWorldPerkRepository | None = None
         self._location_repository: INamedLocationRepository | None = None
         self._map_cell_repository: IMapCellRepository | None = None
+        self._connection_node_repository: IConnectionNodeRepository | None = None
+        self._connection_edge_repository: IConnectionEdgeRepository | None = None
+        self._connection_edge_cell_repository: IConnectionEdgeCellRepository | None = None
         self._state_repository: IStateRepository | None = None
 
         # DOMAIN SERVICES
@@ -97,6 +108,8 @@ class Container:
         self._perk_service: WorldPerkService | None = None
         self._location_service: NamedLocationService | None = None
         self._map_cell_service: MapCellService | None = None
+        self._connection_persist_service: ConnectionPersistService | None = None
+        self._settlement_persist_service: SettlementPersistService | None = None
         self._state_service: StateService | None = None
         self._seed_service: SeedService | None = None
         self._world_bundle_service: WorldBundleService | None = None
@@ -348,13 +361,16 @@ class Container:
                 snapshot_store=snapshot_store,
                 response_resolver=self.response_resolver(),
                 repositories={
-                    "scene_repo":     self.scene_repository(),
-                    "location_repo":  self.location_repository(),
-                    "player_repo":    self.player_repository(),
-                    "npc_repo":       self.npc_repository(),
-                    "world_repo":     self.world_repository(),
-                    "state_repo":     self.state_repository(),
-                    "map_cell_repo":  self.map_cell_repository(),
+                    "scene_repo":                  self.scene_repository(),
+                    "location_repo":               self.location_repository(),
+                    "player_repo":                 self.player_repository(),
+                    "npc_repo":                    self.npc_repository(),
+                    "world_repo":                  self.world_repository(),
+                    "state_repo":                  self.state_repository(),
+                    "map_cell_repo":               self.map_cell_repository(),
+                    "map_cell_service":            self.map_cell_service(),
+                    "connection_persist_service":  self.connection_persist_service(),
+                    "settlement_persist_service":  self.settlement_persist_service(),
                 },
             )
         return self._llm_engine
@@ -409,6 +425,21 @@ class Container:
             self._map_cell_repository = SqliteMapCellRepository(db=self._db)
         return self._map_cell_repository
 
+    def connection_node_repository(self) -> IConnectionNodeRepository:
+        if self._connection_node_repository is None:
+            self._connection_node_repository = SqliteConnectionNodeRepository(db=self._db)
+        return self._connection_node_repository
+
+    def connection_edge_repository(self) -> IConnectionEdgeRepository:
+        if self._connection_edge_repository is None:
+            self._connection_edge_repository = SqliteConnectionEdgeRepository(db=self._db)
+        return self._connection_edge_repository
+
+    def connection_edge_cell_repository(self) -> IConnectionEdgeCellRepository:
+        if self._connection_edge_cell_repository is None:
+            self._connection_edge_cell_repository = SqliteConnectionEdgeCellRepository(db=self._db)
+        return self._connection_edge_cell_repository
+
     def state_repository(self) -> IStateRepository:
         if self._state_repository is None:
             self._state_repository = SqliteStateRepository(db=self._db)
@@ -438,6 +469,25 @@ class Container:
         if self._map_cell_service is None:
             self._map_cell_service = MapCellService(repo=self.map_cell_repository())
         return self._map_cell_service
+
+    def connection_persist_service(self) -> ConnectionPersistService:
+        if self._connection_persist_service is None:
+            self._connection_persist_service = ConnectionPersistService(
+                node_repo=self.connection_node_repository(),
+                edge_repo=self.connection_edge_repository(),
+                edge_cell_repo=self.connection_edge_cell_repository(),
+            )
+        return self._connection_persist_service
+
+    def settlement_persist_service(self) -> SettlementPersistService:
+        if self._settlement_persist_service is None:
+            self._settlement_persist_service = SettlementPersistService(
+                map_cell_service=self.map_cell_service(),
+                location_repo=self.location_repository(),
+                connection_persist=self.connection_persist_service(),
+                connection_edge_repo=self.connection_edge_repository(),
+            )
+        return self._settlement_persist_service
 
     def state_service(self) -> StateService:
         if self._state_service is None:

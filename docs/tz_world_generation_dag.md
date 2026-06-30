@@ -207,6 +207,27 @@ sequenceDiagram
 
 CRUD (`GET/POST/DELETE …/map`) — import/export для мастера и debug; отдельно от очереди materialization.
 
+#### Terrain — bootstrap & local modification ([`tz_terrain_generation.md`](./tz_terrain_generation.md) § Persist cycle)
+
+**Bootstrap** (materialization): S→O→C→CL на declared bbox / `full` init — широкий, но **не каждый ход**.
+
+**Runtime modification:** **только локальный patch** в `patch_bounds` — event-driven (катаклизм) или action-driven (бой, раскопки игрока/NPC, bed под дорогой). Whole-world `generate-surface` в gameplay **запрещён**.
+
+| id | phase | Generate | Persist | Trigger |
+|---|---|---|---|---|
+| `generate_surface` … `generate_climate` | post_llm | passes (см. TZ terrain) | `MapCellService.save_*` | world load / `full` init |
+| `recalculate_climate` | post_llm | `recalculate(request)` | partial upsert | **`output_bbox` обязателен** — regional event |
+| `generate_z_slice` | pre/post_llm | `generate_z_slice` | `save_pass(terrain)` | одна колонка (local) |
+| `lazy_terrain` | pre_llm | `generate_minimal` | 1 cell | orphan repair |
+| `modify_terrain` | post_llm | `TerrainPatchGeneratorService.apply_patch` ⬜ | `persist_terrain_patch` ⬜ | **cataclysm**, **combat**, road bed |
+| `excavate` | post_llm | patch `patch_kind=excavate` ⬜ | тот же persist | **player / NPC dig** |
+
+EventBus / `world_history` (`cataclysm`, `destruction`) → DAG нода собирает `TerrainPatchRequest` (center, radius, event_uid) → generate → persist. См. [project_data_storage_tz.md](./project_data_storage_tz.md).
+
+**Целевой контракт:** `MapCellService.persist_terrain_patch(cells, bounds, patch_kind)` + bootstrap scopes через `save_pass` / `save_terrain_batch`.
+
+**Инвариант:** generators pure; DAG orchestrates; **patch bounds required** — no silent full-world mutate.
+
 ### Запланировано (контракт нод)
 
 #### Climate ([`tz_climate.md`](./tz_climate.md) § три процесса)

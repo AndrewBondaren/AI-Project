@@ -20,11 +20,19 @@ def make_lifespan(db: Database):
     from app.db.models.world_perk import WorldPerk
     from app.db.models.namedLocation import NamedLocation
     from app.db.models.mapCell import MapCell
+    from app.db.models.connectionNode import ConnectionNode
+    from app.db.models.connectionEdge import ConnectionEdge
+    from app.db.models.connectionEdgeCell import ConnectionEdgeCell
     from app.db.models.state import State
     from app.db.models.sessionPending import SessionPending
     from app.db.repositories.sqlite.pendingRepository import SqlitePendingRepository
 
-    _models = [World, GameSession, Player, Npc, Turn, Message, NodeExecutionLog, Race, WorldPerk, NamedLocation, MapCell, State, SessionPending]
+    _models = [
+        World, GameSession, Player, Npc, Turn, Message, NodeExecutionLog,
+        Race, WorldPerk, NamedLocation, MapCell,
+        ConnectionNode, ConnectionEdge, ConnectionEdgeCell,
+        State, SessionPending,
+    ]
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -75,6 +83,7 @@ def create_app():
     from app.api.routes.characters import router as characters_router
     from app.api.routes.sessions import router as sessions_router
     from app.api.routes.map import router as map_router
+    from app.api.routes.connections import router as connections_router
     from app.api.routes.debug import router as debug_router
 
     app.include_router(chat_router, prefix="/api")
@@ -87,6 +96,7 @@ def create_app():
     app.include_router(characters_router, prefix="/api")
     app.include_router(sessions_router, prefix="/api")
     app.include_router(map_router, prefix="/api")
+    app.include_router(connections_router, prefix="/api")
     app.include_router(debug_router, prefix="/api")
 
     return app

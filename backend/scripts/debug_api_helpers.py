@@ -131,3 +131,41 @@ def top_surface_cells(cells: list[dict]) -> list[dict]:
         if key not in by_xy or c["z"] > by_xy[key]["z"]:
             by_xy[key] = c
     return list(by_xy.values())
+
+
+def api_generate_settlement(
+    client: httpx.Client,
+    world_uid: str,
+    location_uid: str,
+    *,
+    scope: str = "outdoor",
+    skip_if_initialized: bool = True,
+) -> dict:
+    r = client.post(
+        f"/worlds/{world_uid}/locations/{location_uid}/generate-settlement",
+        params={"scope": scope, "skip_if_initialized": skip_if_initialized},
+    )
+    _require_ok(r, f"POST generate-settlement {location_uid}")
+    return r.json()
+
+
+def api_get_location_children(
+    client: httpx.Client,
+    world_uid: str,
+    location_uid: str,
+) -> list[dict]:
+    r = client.get(f"/worlds/{world_uid}/locations/{location_uid}/children")
+    _require_ok(r, f"GET children {location_uid}")
+    data = r.json()
+    if not isinstance(data, list):
+        raise DebugApiError(f"GET children {location_uid}: expected list")
+    return data
+
+
+def api_get_connections(client: httpx.Client, world_uid: str) -> dict:
+    r = client.get(f"/worlds/{world_uid}/connections")
+    _require_ok(r, f"GET connections {world_uid}")
+    data = r.json()
+    if not isinstance(data, dict):
+        raise DebugApiError(f"GET connections {world_uid}: expected object")
+    return data

@@ -6,6 +6,8 @@
 
 Механика возведения объектов в мире: дороги, здания, мосты, укрепления и другие физические структуры.
 
+**Terrain под стройкой / раскопкой** — **локальный patch** в `patch_bounds`, не regen мира. Generate: `TerrainPatchGeneratorService` ([tz_terrain_generation.md](./tz_terrain_generation.md) § Локальная модификация); persist: `MapCellService.persist_terrain_patch`; orchestration: DAG `excavate` / `modify_terrain`.
+
 ## Ключевые концепции
 
 - **Мастерство строительства** — навык персонажа / фракции, влияющий на качество возводимого объекта. Чем выше мастерство, тем лучше финальные параметры: `road_tier_durability`, прочность здания, скорость строительства.

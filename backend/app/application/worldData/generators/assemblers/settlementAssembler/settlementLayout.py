@@ -24,3 +24,4 @@ class SettlementLayout:
     connection_edges:  list[ConnectionEdge] = field(default_factory=list)
     occupancy_cells:   list[MapCell]        = field(default_factory=list)
     barrier_cells:     list[MapCell]        = field(default_factory=list)
+    dominant_material: str | None           = None  # resolved post-assemble; authoritative for LLM

@@ -858,6 +858,118 @@ PK `(world_uid, x, y, z)` — точечные запросы; индекс по
 
 ---
 
+## Persist cycle & DAG modification (terrain)
+
+**Контракт:** `MapCellService` — persist-слой terrain (аналог `SettlementPersistService` для города).  
+`TerrainGeneratorService` / `ClimateOrchestrator` — **только generate**; DAG и debug API вызывают **одни и те же** persist-методы; DAG — **в обход HTTP**.
+
+> **Два режима.** (1) **Bootstrap / materialization** — S→O→C→CL на declared bbox / `full` init (широкий, но не «перегенерить весь мир каждый ход»). (2) **Runtime modification** — **строго локальный patch** в явных границах; см. § «Локальная модификация» ниже.
+
+#### Связь с доменными ТЗ
+
+| Тема | Где описано |
+|---|---|
+| Multi-pass skeleton S→O→C→CL | § Multi-pass terrain skeleton; [tz_world_generation_dag.md](./tz_world_generation_dag.md) § три входа |
+| Selective upsert по layer kind | § Multi-pass persist; `save_pass(layer)` |
+| Climate recalc (partial) | [tz_climate.md](./tz_climate.md) — `recalculate_climate`; **`output_bbox` обязателен** для gameplay |
+| Дорога меняет terrain cells | [tz_structure_connections.md](./tz_structure_connections.md) §3.5, `connection_edge_cells` — **коридор ребра**, не весь мир |
+| Excavation / construction | [tz_world_generation_dag.md](./tz_world_generation_dag.md) — `excavate`; [tz_construction.md](./tz_construction.md) |
+| Катаклизмы → мутация карты | [project_data_storage_tz.md](./project_data_storage_tz.md) — `world_history`, `system_event_type=cataclysm` |
+| Settlement vs terrain | § Terrain vs Settlement — urban не перезаписывает explicit cells |
+
+#### Scopes — bootstrap (широкий контекст)
+
+| Scope | Generate | Persist | DAG / debug | Примечание |
+|---|---|---|---|---|
+| `surface_skeleton` | `generate_surface` (+ pole caller) | `save_terrain_batch` | `generate_surface`; `POST generate-surface` | bbox / world_bounds при init |
+| `ores` | `generate_ores` | `save_pass(ore)` | `generate_ores` | pass по существующим cells |
+| `caves` | `generate_caves` | `save_pass(cave)` | `generate_caves` | pass; lazy gameplay — local radius |
+| `climate` | `apply_climate_pass` | `save_pass(climate)` | `generate_climate` ✅ | eager на materialization |
+| `z_slice` | `generate_z_slice(gx,gy,z…)` | `save_pass(terrain)` | `generate_z_slice` ⬜ | **одна колонка** — inherently local |
+| `minimal_repair` | `generate_minimal` | `save_generated` | `lazy_terrain` ✅ | **одна anchor cell** |
+
+Удобная обёртка `persist_materialization(world)` = S→O→C→CL — только **`full` init / world load**, не gameplay loop.
+
+#### Локальная модификация (runtime — event / action driven)
+
+**Инвариант:** gameplay **не** вызывает `generate-surface` на весь мир. Меняются только ячейки в **`patch_bounds`** (bbox, radius, corridor polyline, z-band).
+
+| Триггер | Пример | `patch_kind` | Типичные bounds | DAG node (target) |
+|---|---|---|---|---|
+| **Катаклизм** | метеорит, наводнение, вулкан | `cataclysm` | `center + radius_cells` из event payload | `modify_terrain` ← EventBus / `world_history` |
+| **Бой** | взрыв, обвал, magic crater | `combat` | bbox сцены / radius вокруг impact | `modify_terrain` ← combat post_llm |
+| **Раскопки** | игрок / NPC копает, туннель | `excavate` | column или small 3D box | `excavate` → `modify_terrain` |
+| **Стройка дороги** | bed под `ConnectionEdge` | `road_bed` | polyline + `width_cells` коридор | `connect_road` + local terrain patch |
+| **Климат (regional)** | pole shift, локальный эффект | `climate_recalc` | `ClimateRecalcRequest.output_bbox` | `recalculate_climate` |
+
+Запись в историю: patch persist сопровождается `world_history` / action ref ([project_data_storage_tz.md](./project_data_storage_tz.md)).
+
+**Контракт generate (target):**
+
+```python
+@dataclass
+class TerrainPatchRequest:
+    patch_kind:   str          # cataclysm | combat | excavate | road_bed | …
+    bounds:       SurfaceGridRect | MeterRect   # обязательно; whole-world запрещён в gameplay
+    event_uid:    str | None   # world_history / EventBus
+    actor_uid:    str | None   # player / NPC action
+    z_lo: int | None = None    # excavate / combat depth
+    z_hi: int | None = None
+
+class TerrainPatchGeneratorService:
+    def apply_patch(
+        self,
+        world: World,
+        existing: list[MapCell],   # только cells в bounds (loader)
+        request: TerrainPatchRequest,
+    ) -> list[MapCell]:
+        """Pure. Возвращает **только изменённые** cells ⊆ bounds."""
+```
+
+**Контракт persist:**
+
+```python
+# MapCellService
+async def persist_terrain_patch(
+    self,
+    cells: list[MapCell],
+    *,
+    bounds: SurfaceGridRect,     # guard: reject if len(cells) >> bounds area
+    patch_kind: str,
+) -> ImportResult:
+    """Upsert только patch cells; skip building_element; idempotent by (world_uid,x,y,z)."""
+```
+
+Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` — mirror DAG `modify_terrain` (TBD).
+
+#### Scopes — modification (локальный patch)
+
+| Scope | Generate | Persist | DAG |
+|---|---|---|---|
+| `terrain_patch` | `TerrainPatchGeneratorService.apply_patch` | `persist_terrain_patch` | `modify_terrain`, `excavate` |
+
+#### Idempotency
+
+- Bootstrap regen: selective upsert по layer kind — **не** blind `INSERT OR IGNORE` для multi-pass ([§ Multi-pass persist](#multi-pass-terrain-skeleton)).
+- `minimal_repair`: `INSERT OR IGNORE` (1 cell).
+- **`terrain_patch`:** upsert **только** cells из `apply_patch`; `building_element` — skip; повтор event с тем же `event_uid` — idempotent merge.
+
+#### Debug API (harness)
+
+`map.py` `POST …/generate-*` — path **2**; те же scopes, что DAG path **1**. См. [tz_world_generation_dag.md](./tz_world_generation_dag.md) § «Три входа».
+
+#### Checklist (terrain persist для DAG)
+
+- [x] `save_pass` / `save_terrain_batch` — partial impl
+- [ ] `TerrainPersistScope` enum + единый `persist(cells, scope)` facade
+- [ ] DAG nodes: `generate_surface`, `generate_ores`, `generate_caves`, `generate_z_slice` (wire к service)
+- [ ] `TerrainPatchGeneratorService` + `TerrainPatchRequest` (local bounds only)
+- [ ] `persist_terrain_patch` — guard по bounds
+- [ ] `modify_terrain` / `excavate` — cataclysm, combat, dig (event/action driven)
+- [ ] DAG wire — **мастер** (отдельная сессия)
+
+---
+
 ## Реализовано / не покрыто
 
 | Элемент | Статус |
@@ -910,7 +1022,7 @@ PK `(world_uid, x, y, z)` — точечные запросы; индекс по
 
 | Дата | Изменение |
 |---|---|
-| 2026-06 | § Phase 9+: DAG отложен (сессия с мастером); «Сейчас» = TR-1b + DBG-1 |
+| 2026-06 | § Persist cycle — **локальная** runtime modification (cataclysm, combat, excavate); bootstrap vs patch |
 | 2026-06 | § Phase 9+ — production DAG materialization (план после TR-1) |
 | 2026-06 | § Роли: production DAG vs debug harness vs script tests через HTTP |
 | 2026-06 | § План реализации (код → ТЗ) + TR-1 impl (Фазы 0–8) |

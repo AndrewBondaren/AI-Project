@@ -82,11 +82,12 @@ class SettlementGeneratorService:
         cells        = grid_cells + meter_cells
         logger.info(
             "SettlementGeneratorService | settlement=%s map_cells=%d "
-            "surface_grid=%d meter_geometry=%d",
+            "surface_grid=%d meter_geometry=%d dominant_material=%r",
             settlement.location_uid,
             len(cells),
             len(grid_cells),
             len(meter_cells),
+            layout.dominant_material,
         )
         return layout, cells
 

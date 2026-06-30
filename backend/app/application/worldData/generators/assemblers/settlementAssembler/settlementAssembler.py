@@ -16,6 +16,7 @@ SettlementAssembler — оркестратор генерации поселен
 """
 import logging
 import random
+from dataclasses import replace
 
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtAssembler import DistrictAssembler
@@ -35,6 +36,9 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.barriers import (
     plan_settlement_barriers,
+)
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.dominantMaterial import (
+    resolve_dominant_material,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.streets import plan_city_street_grid
 from app.application.worldData.generators.utils.tierResolver import TierResolver
@@ -96,30 +100,36 @@ class SettlementAssembler:
         barrier_cells = self._plan_barriers(world, settlement, skeleton)
         occupancy_cells = plan_footprint_occupancy_cells(world, settlement, skeleton.system_city_size)
 
-        logger.info(
-            "SettlementAssembler done | settlement=%s districts=%d"
-            " city_nodes=%d city_edges=%d barriers=%d occupancy=%d",
-            settlement.location_uid,
-            len(district_layouts),
-            len(city_nodes),
-            len(city_edges),
-            len(barrier_cells),
-            len(occupancy_cells),
-        )
-
-        return SettlementLayout(
+        layout = SettlementLayout(
             district_layouts=district_layouts,
             connection_nodes=city_nodes,
             connection_edges=city_edges,
             occupancy_cells=occupancy_cells,
             barrier_cells=barrier_cells,
         )
+        dominant_material = resolve_dominant_material(
+            world, layout, skeleton, settlement_uid=settlement.location_uid,
+        )
+
+        logger.info(
+            "SettlementAssembler done | settlement=%s districts=%d"
+            " city_nodes=%d city_edges=%d barriers=%d occupancy=%d dominant_material=%r",
+            settlement.location_uid,
+            len(district_layouts),
+            len(city_nodes),
+            len(city_edges),
+            len(barrier_cells),
+            len(occupancy_cells),
+            dominant_material,
+        )
+
+        return replace(layout, dominant_material=dominant_material)
 
     def _build_skeleton(self, world: World, settlement: NamedLocation) -> CitySkeleton:
         return CitySkeleton(
             economic_tier=        TierResolver.resolve(world=world, city=settlement),
             architectural_style=  getattr(settlement, "architectural_style",  None),
-            dominant_material=    getattr(settlement, "dominant_material",    None),
+            dominant_material=    None,  # resolved post-assemble from layout; import value ignored
             settlement_density=   getattr(settlement, "settlement_density",   None),
             system_city_size=     settlement.system_city_size,
             system_location_mood= settlement.system_location_mood,

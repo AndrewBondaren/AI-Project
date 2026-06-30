@@ -301,7 +301,7 @@ Passes (`surfacePass`, `columnFillPass`, …) — OK (40–96 строк). Fat: 
 | DR-6 | low | P2 | `terrain_set` inline ×6 | `terrain_registry_set(world)` | open |
 | DR-7 | low | P3 | lazy anchor cell builder duplicated | shared helper | open |
 | MAP-1 | low | P3 | `map.py` route boilerplate | deps / helper | open |
-| TR-2 | medium | P2 | Debug path S→CL: `run_pole_resolve_pass` в `save_terrain_batch` **и снова** в `apply_climate_pass`; idempotent, но лишняя работа + implicit «pole одинаков между HTTP-вызовами» | orchestrated batch endpoint или shared pole snapshot между pass'ами | open |
+| TR-2 | medium | P2 | Debug path S→CL: double `run_pole_resolve_pass` | **deferred** — snapshot-run (§ `tz_city_generation.md` §11.4); не orchestrated HTTP | deferred |
 
 ### Mixed responsibility
 
@@ -324,7 +324,7 @@ Passes (`surfacePass`, `columnFillPass`, …) — OK (40–96 строк). Fat: 
 
 ### Рекомендуемый порядок (без DAG)
 
-1. **TR-2** — убрать double pole-resolve на debug S→CL  
+1. ~~**TR-2**~~ — deferred → snapshot-run  
 2. **MR-7** — extract terrain batch orchestrator из `MapCellService`  
 3. **DR-6** — `terrain_registry_set`  
 4. **DBG-2** — split debug scripts  
@@ -393,7 +393,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | **CL-2b** | Admin не merge при active pole | **resolved** |
 | **CL-10, CL-11** | heightmap: pole_field.sample only; public helpers | **resolved** |
 | **CL-12, DR-5** | Shared helpers → `climate/math.py`, `locations.py`, `terrainZ.py` | **resolved** |
-| **TR-2** | Double pole-resolve debug S→CL | open |
+| **TR-2** | Double pole-resolve debug S→CL | **deferred** → snapshot |
 | **MR-7, TR-8** | MapCellService orchestration; non-surface pass extraction | open |
 | **DR-6, DBG-2** | `terrain_registry_set`; split `debug_settlement.py` | open |
 | ~~**TR-3**~~ | Generation defaults → `worldMapSettings.py` | **resolved** |
@@ -485,6 +485,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 
 | Дата | Изменение |
 |---|---|
+| 2026-06 | `tz_city_generation.md` sync TZ ↔ код (SettlementGeneratorService, фазы A–F, §10) |
 | 2026-06 | TR-3 resolved: `worldMapSettings` incl. `world_z_min/max` fallback −8000…8000 |
 | 2026-06 | TR-3 partial: `grid_bbox_padding`, `terrain_chunk_columns`, `map_subsurface_depth` on `World` + `worldMapSettings.py` |
 | 2026-06 | Post TR-1b/DBG-1 review: § TR registry (TR-2..TR-8, TR-H*, TR-G1), DR-6/7, MAP-1/2, MR-7, DBG-2, CL-16 |
