@@ -82,6 +82,11 @@ class World:
     building_template_registry:     dict = json_col(default_factory=dict)
     room_type_registry:             dict = json_col(default_factory=dict)
     barrier_template_registry:      dict = json_col(default_factory=dict)
+    connection_type_registry:       list = json_col(default_factory=list)
+
+    # generation policy (world template — tz_terrain_hydrology.md)
+    hydrology:                      dict = json_col(default_factory=dict)
+    caves:                          dict = json_col(default_factory=dict)
 
     # faction registries
     faction_relation_type_registry: dict = json_col(default_factory=dict)

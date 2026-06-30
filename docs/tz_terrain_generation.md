@@ -217,11 +217,13 @@ flowchart TB
 | **2 Solid skeleton** | `generate-surface` pass 2 | surface + player/climate band + rock **до** magma band | solid only | без liquid |
 | **3 Liquid** | **`generate-climate`** (вместе с climate pass) | Абстрактные **водоносные / fluid** слои (не «вода» буквально) | **Семантика от температуры:** ice / liquid / vapor / … через registry + `temperature_base` | не из `z_to_terrain`; overlay на существующие cells |
 | **4 Ores** | `generate-ores` | Независимая генерация | `system_material` / deposit markers | caves не перезаписывают |
-| **5 Caves** | lazy / `generate-caves` | Локально ~**20 cells** от входа | carve air/cave terrain | после ores; не в magma |
+| **5 Caves** | lazy / `generate-caves` | Локально ~**20 cells** от входа | carve air/cave terrain; **cave hydrology** (подземные озёра/реки, U12) | после ores; не в magma |
 
 **Magma band (контракт, edge case):** band **толщиной ≥1 z** ниже solid (`magma_band_thickness` / per-column top…bottom). Все cells = `system_terrain: magma`. Teleport: **`z_magma_bottom` → antipode `z_magma_bottom`**. Skeleton v1 может пропустить до M-2.
 
 **Liquid + climate (утверждено):** liquid layer **не** на `generate-surface`; накладывается на **`generate-climate`** (или sub-pass orchestrator), потому что тип fluid **зависит от effective temperature** и правил мира (`precipitation_liquid`, registry). Shallow liquid (море, реки) — те же правила, surface z + climate.
+
+> **Форма водоёмов (моря / озёра / реки как низины):** interim — только `z ≤ 0` overlay; **target** — отдельный домен [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) (`HydrologyGeneratorService`, carve **до** column fill).
 
 **Не сейчас:** полная sim магмы; soil transition node; regional shared strata (B).
 
@@ -283,7 +285,7 @@ z_bottom = max(world.z_min, z_top - N_eff)
 | **Liquid layer** | climate pass (same API) | fluid overlay; semantics from temp |
 | **Climate → terrain overlay** | climate pass | permafrost и верхние z |
 | **Ores** | `generate-ores` (independent) | deposit markers |
-| **Caves / mines** | lazy ~20 radius / `generate-caves` | carve |
+| **Caves / mines** | lazy ~20 radius / `generate-caves` | carve + **cave hydrology** (подземные озёра/реки, U12) |
 
 **Не сейчас:** нода **soil transition** — отдельная фича.
 
@@ -293,23 +295,25 @@ z_bottom = max(world.z_min, z_top - N_eff)
 
 **Очередь (строго):** `surface → ores → caves → climate` после того, как мир **объявлен** (import JSON мастером). Сборка — **только engine nodes (DAG)**; генераторы **не** вызывают соседние домены.
 
+**Внутри `generate-surface` (target, Phase 9+ D HY):** Pass 1 → **hydrology (Pass 1.5)** → gap analysis → Pass 2 column fill. См. [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md).
+
 ```mermaid
 flowchart LR
   IMP[import world bundle]
-  S["POST generate-surface"]
+  S["POST generate-surface\nP1 → HY → gap → P2"]
   O["POST generate-ores STUB"]
   C["POST generate-caves STUB"]
-  CL["POST generate-climate"]
+  CL["POST generate-climate\n+ liquid on hydrology mask"]
 
   IMP --> S --> O --> C --> CL
 ```
 
 | # | Endpoint | Generator (pure) | Читает | Пишет |
 |---|---|---|---|---|
-| 1 | `generate-surface` | terrain passes | `World`, locations; **input:** `ClimatePoleField` от ноды | skeleton |
+| 1 | `generate-surface` | terrain passes + **hydrology (Pass 1.5)** | `World`, locations; **input:** `ClimatePoleField` от ноды | skeleton; river edges → `ConnectionPersistService` |
 | 2 | `generate-ores` | `generate_ores` | `map_cells` | ore markers |
 | 3 | `generate-caves` | `generate_caves` | `map_cells` | carve |
-| 4 | `generate-climate` | climate passes | `map_cells` | temp, rainfall, liquid |
+| 4 | `generate-climate` | climate passes | `map_cells`; **`liquid_candidate`** sidecar / metadata | temp, rainfall, liquid |
 
 #### Изоляция генераторов (утверждено)
 
@@ -470,6 +474,7 @@ Regen: clear map → снова **S → O → C → CL**.
 - [x] Impl queue п.1–11; п.12 partial; п.8 DEFERRED
 - [x] TR-1 closed в `tz_generator_technical_debt.md`
 - [x] Phase 9+ «Сейчас» — TR-1b, DBG-1 (§ ниже)
+- [ ] Phase 9+ **D HY** — surface hydrology H-1…H-7a (§ ниже; **до DAG**)
 - [ ] Phase 9+ «DAG» — **отложено**, проектируем отдельно с мастером
 
 ---
@@ -477,18 +482,66 @@ Regen: clear map → снова **S → O → C → CL**.
 ## Phase 9+ — план (2026-06)
 
 > **Baseline:** generators + `map.py` debug harness ✅.  
-> **Решение:** **engine DAG и ноды не трогаем** до отдельной сессии проектирования с мастером. Сейчас — generators, persist, debug API, smoke-скрипты.
+> **Решение:** **engine DAG и ноды не трогаем** до отдельной сессии проектирования с мастером. Сейчас — generators, persist, debug API, smoke-скрипты.  
+> **Следующий блок до DAG:** **D HY** — surface hydrology ([`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md)); агент-план — [`.cursor/plans/hydrology-pre-dag.md`](../.cursor/plans/hydrology-pre-dag.md).
 
 ### Сейчас (без DAG)
 
 | Фаза | Содержание | Приёмка |
 |---|---|---|
-| **9 TR-1b** | Pole **вне** `TerrainGeneratorService`: `generate_surface(..., pole_field)`; `build_surface_heightmap` — то же. Caller: **`map.py` / `MapCellService`** (path 2), не нода | mock `ClimatePoleField` в unit; `run_pole_resolve_pass` только в orchestration layer (route/service) |
+| **9 TR-1b** | Pole **вне** `TerrainGeneratorService`: `generate_surface(..., pole_field)`; `build_surface_heightmap` — то же. Caller: **`map.py` / `MapCellService`** (path 2), не нода | mock `ClimatePoleField` in unit; `run_pole_resolve_pass` только в orchestration layer (route/service) |
 | **A DBG-1** | `debug_settlement` pipeline smoke → HTTP; `debug_api_helpers.py` | те же asserts; backend running; этalon `debug_structure` / `debug_ladder` **не менять** |
-| **B Ores/caves** *(опционально)* | Замена STUB в `oresGenerator` / `cavesGenerator` | debug `POST generate-ores/caves`; merge rules в repo |
+| **D HY** | **Surface hydrology** — pure generators + wire в `generate-surface` + debug route; **без DAG-нод** | см. § «D HY — surface hydrology» ниже |
+| **B Ores/caves** *(опционально)* | Замена STUB в `oresGenerator` / `cavesGenerator`; **cave hydrology U12** — вместе с caves, не в D HY | debug `POST generate-ores/caves`; merge rules в repo |
 | **C Regen doc** | § «Регенерация при map_cell_size_m» — явный manual path через debug API до DAG | ТЗ + `WorldService` warning; auto re-run — только после DAG |
 
-**Порядок:** `9 TR-1b` → `A DBG-1` параллельно после 9; B/C по приоритету продукта.
+**Порядок:** `9 TR-1b` ✅ → `A DBG-1` ✅ → **`D HY`** → `B` / `C` по приоритету. **DAG и `apply_hydrology` node — только после D HY + сессии с мастером.**
+
+### D HY — surface hydrology (до DAG)
+
+> **Scope:** H-1…H-7a из [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md). **Вне scope:** DAG node `apply_hydrology`, U13 LLM naming, cave hydrology U12 (→ Phase B).
+
+```mermaid
+flowchart TB
+  H1["D HY-1\nH-1 + H-1b\ntypes · stub · loader"]
+  H2["D HY-2\nH-2 + H-2b\nsea · ocean · landforms"]
+  H3["D HY-3\nH-3\nlakes"]
+  H4["D HY-4\nH-4\nrivers + ConnectionPersist"]
+  H5["D HY-5\nH-5 optional\nprocedural autoresolve"]
+  H6["D HY-6\nH-6\nliquidOverlayPass mask"]
+  H7["D HY-7a\nH-7 wire + debug\nbuild_surface_heightmap · POST generate-hydrology"]
+
+  H1 --> H2 --> H3 --> H4 --> H6 --> H7
+  H4 -.-> H5
+  H5 -.-> H6
+```
+
+| Подфаза | TZ | Deliverable | DoD / smoke |
+|---|---|---|---|
+| **D HY-1** | H-1, H-1b | `types`, stub, `load_hydrology_from_world` | unit: policy tabs U16; bands clamp 1–99; loader reads [`world_template.json`](../fixtures/world_template.json) |
+| **D HY-2** | H-2, H-2b | `SeaBasinGenerator`, `OceanBasinGenerator`, `CoastalLandformClassifier` | shore + deepening до 20 (sea); declared + autoresolve |
+| **D HY-3** | H-3 | `LakeBasinGenerator` + `DeepeningBandCarver` | shoreline profile U15; 1–5 bands |
+| **D HY-4** | H-4 | `RiverNetworkPlanner`, `RiverBedCarver`, edge emit | peak → sea; **U14** smooth ≤45°; `ConnectionPersistService`; declared river = `ConnectionEdge` polyline |
+| **D HY-5** | H-5 *(optional)* | Procedural lakes/rivers при autoresolve ON | deterministic на `world_seed`; skip если все `autoresolve.*: false` |
+| **D HY-6** | H-6 | `liquidOverlayPass` + sidecar `liquid_candidate` | **нет** global `z≤0`; ice/water по temp только на mask; closes **HY-1** |
+| **D HY-7a** | H-7 (pre-DAG) | Wire: `build_surface_heightmap` = P1 → `HydrologyGeneratorService.apply` → gap → P2; `MapCellService` передаёт `HydrologyResult` в climate pass | `POST …/map/generate-hydrology?scope=…` preview; full `POST generate-surface` на `world_template` — sea + lake + river bed + liquid после climate |
+
+**Инварианты D HY:**
+
+| Правило | Смысл |
+|---|---|
+| Pure generators | без repos/async; persist — `MapCellService` / `ConnectionPersistService` |
+| Не DAG | ноды `apply_hydrology`, `llm_name_*` — **после** D HY-7a + ревью [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) |
+| Не LLM | `materialize_named_locations: false` default; generators не пишут `NamedLocation` |
+| Debug path 2 | smoke через HTTP к running backend; этalon `debug_structure` / `debug_ladder` не ломать |
+| Реки = connections | bed в heightmap; graph — `ConnectionEdge` (`river`, `mountain_river`) |
+
+**Definition of Done (D HY):**
+
+- [ ] HY-1 closed в [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md)
+- [ ] D HY-1…D HY-7a по таблице выше
+- [ ] `generate-surface` debug: P1→HY→gap→P2→persist; `generate-climate`: liquid по mask
+- [ ] Smoke: import `world_template` → manual `generate-surface` + `generate-climate` — declared sea/lake/river visible
 
 ### Потом — DAG (отдельно с мастером, код не трогаем)
 
@@ -499,7 +552,7 @@ flowchart TB
   subgraph mat [Materialization DAG — target]
     CW[check_world_materialization]
     PR[resolve_pole_field node]
-    GS[generate_surface node]
+    GS["generate_surface node\nP1 → HY → gap → P2"]
     GO[generate_ores]
     GCv[generate_caves]
     GCl[generate_climate]
@@ -516,16 +569,19 @@ flowchart TB
 | Блок | Содержание |
 |---|---|
 | Gate | `check_world_materialization` |
-| Nodes | `generate_surface`, `generate_ores`, `generate_caves`, chain `generate_climate` |
+| Nodes | `generate_surface` (внутри HY — impl **D HY**), `generate_ores`, `generate_caves`, chain `generate_climate`; опционально `apply_hydrology` как отдельная нода — **только если** не встроено в `generate_surface` node |
 | Wiring | trigger первого входа игрока; deps; `supported_tasks` |
 | Regen | auto re-run materialization после `map_cell_size_m` |
+| Hydrology LLM (U13) | `collect_geography_naming_candidates` → `llm_name_procedural_locations` — **после DAG gate**, не в D HY |
 
 **Vertical slice (после DAG-сессии):** новый мир → первый chat turn → S→O→C→CL в БД без ручного curl.
 
-### Backlog (не блокирует «Сейчас»)
+### Backlog (не блокирует «Сейчас» / D HY)
 
 | ID | Задача |
 |---|---|
+| **HY-2 / U12** | Cave hydrology — с Phase B (caves STUB) |
+| **HY-3 / U13** | LLM naming autoresolved geography — DAG only |
 | impl queue **п.8** | Lazy caves/mines ~20 cells |
 | **TR-M / M-3** | Magma movement resolver |
 | **NC-1c** | Grid coords в `generate_minimal` |
@@ -540,7 +596,11 @@ flowchart TB
 - [x] TR-1b — pole не внутри `TerrainGeneratorService`
 - [x] DBG-1 — pipeline smoke через HTTP
 
-**DAG (после сессии с мастером):**
+**D HY (до DAG):**
+
+- [ ] D HY-1…D HY-7a — см. § «D HY — surface hydrology»
+
+**DAG (после D HY + сессии с мастером):**
 
 - [ ] Очередь S→O→C→CL на path **1**
 - [ ] `lazy_terrain` остаётся repair, не подменяет materialization
@@ -804,7 +864,7 @@ Wilderness `system_terrain` от z — **не urban**. Urban — settlement ил
          ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  WORLD_LOCAL_METERS                                          │
-│  NamedLocation.map_x/y — anchor поселения в метрах           │
+│  NamedLocation.map_x/y — anchor на карте (поселение, гора, озеро, …) │
 │  Settlement: districts, streets, gates, barriers, buildings  │
 │  ConnectionNode.x/y — метры                                  │
 └─────────────────────────────────────────────────────────────┘
@@ -823,11 +883,15 @@ Wilderness `system_terrain` от z — **не urban**. Urban — settlement ил
 
 ## Named locations — роль в terrain
 
+**`NamedLocation`** — optional overlay для имени и declare. География существует в `map_cells` / connections **без** location (`location_uid = null` на cells и edges — норма). См. [`tz_locations.md`](./tz_locations.md) § «Именованные объекты карты».
+
 | Поле | Terrain usage |
 |---|---|
+| `display_name` | LLM / glossary; «Гора Белая», «Степь Кyzyl» |
 | `map_x/y` | anchor → grid index для bbox; zone → Voronoi center |
 | `map_z` | `0` = surface (wilderness loop); `!= 0` → extra anchor cell |
-| `system_location_type` | zone types → climate Voronoi; cities → только bbox point |
+| `system_location_type` | `geographic.*` → hydrology/relief declare; zone types → climate Voronoi; settlements → bbox point |
+| `system_location_subtype` | `peak`, `plain`, `lake`, `sea`, … — routing в generator loaders |
 | `system_climate_zone` | на zone / в иерархии для `_resolve_climate` |
 | `parent_location_uid` | walk-up для climate на non-surface anchors |
 | `is_mobile` | true → static anchor не создаётся |
@@ -1023,6 +1087,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 | Дата | Изменение |
 |---|---|
 | 2026-06 | § Persist cycle — **локальная** runtime modification (cataclysm, combat, excavate); bootstrap vs patch |
+| 2026-06 | § Phase 9+ **D HY** — surface hydrology H-1…H-7a в план до DAG |
 | 2026-06 | § Phase 9+ — production DAG materialization (план после TR-1) |
 | 2026-06 | § Роли: production DAG vs debug harness vs script tests через HTTP |
 | 2026-06 | § План реализации (код → ТЗ) + TR-1 impl (Фазы 0–8) |
@@ -1040,6 +1105,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 ## Связанные документы
 
 - [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) — generators ↔ DAG (lazy terrain, generate_climate target)
+- [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) — моря / озёра / реки как carve heightmap (target)
 - [`tz_climate.md`](./tz_climate.md) — три процесса, orchestrator, recalc contracts
 - `tz_city_generation.md` — settlement, occupancy, urban
 - `tz_locations.md` — named_location fields

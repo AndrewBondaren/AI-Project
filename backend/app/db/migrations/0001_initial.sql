@@ -77,6 +77,11 @@ CREATE TABLE IF NOT EXISTS worlds (
     building_template_registry  TEXT,
     room_type_registry          TEXT,
     barrier_template_registry   TEXT,
+    connection_type_registry    TEXT,
+
+    -- generation policy (hydrology / caves — tz_terrain_hydrology.md)
+    hydrology                   TEXT,
+    caves                       TEXT,
 
     -- faction registries
     faction_relation_type_registry TEXT,

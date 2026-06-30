@@ -16,7 +16,17 @@ metadata:
 | **TerrainGeneratorService** | two-phase skeleton (`z`, `system_terrain` columns); **не** пишет climate fields |
 | **Weather** (runtime) | тип погоды от `temperature_base` + `rainfall` + `weather_type_registry` |
 
-**Статус:** v2.4 — eager surface ✅ (рабочая база в коде) · contracts recalc/runtime ✅ (types only) · volume climate spec 📋 · generator impl recalc/weather ⬜ · DAG nodes ⬜
+**Статус:** v2.5 — eager surface ✅ · **`season_changed` + CellWeatherPass semantics утверждены (2026-06)** · recalc/runtime impl ⬜ · DAG nodes ⬜
+
+## Утверждено (2026-06)
+
+| # | Решение |
+|---|---|
+| C1 | **`run_cell_weather_pass`** — Pass 3: `temperature_base` + `rainfall` на cells; **не** liquid, **не** season offset |
+| C2 | **`ClimateRecalcRequest`:** `run_cell_weather` → CellWeatherPass; **`run_liquid_overlay`** → liquidOverlayPass (split; см. CL-7) |
+| C3 | **`ClimateChangeEvent.kind = season_changed`** — calendar / world tick → `recalculate_climate` + `resolve_weather` |
+| C4 | Оттепель на горах → melt / v2 `flow_level` на **горных реках** ([`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md)); skeleton **не** regen |
+| C5 | `season_temp_offsets` — **runtime** (`effective_temperature`), eager map **не** переписывается при смене сезона |
 
 > **Черновики, не утверждены:** § «Три процесса» (v2.3), routing в DAG-нодах, § «Surface vs volume climate» (v2.4). Стык generators ↔ DAG — [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) (**черновик целиком**).
 
@@ -101,9 +111,17 @@ flowchart LR
 ```python
 @dataclass(frozen=True)
 class ClimateChangeEvent:
-    kind: Literal["anchor_changed", "zone_changed", "terrain_changed", "manual"]
+    kind: Literal[
+        "anchor_changed",
+        "zone_changed",
+        "terrain_changed",
+        "season_changed",   # смена сезона по calendar / world tick
+        "manual",
+    ]
     bbox: SurfaceGridRect | None = None
     location_uids: frozenset[str] = frozenset()
+    season: str | None = None          # новый system_season (если kind=season_changed)
+    previous_season: str | None = None # опционально, для melt/thaw direction
 ```
 
 **Generator input — что выполнить:**
@@ -111,12 +129,15 @@ class ClimateChangeEvent:
 ```python
 @dataclass(frozen=True)
 class ClimateRecalcRequest:
-    run_pole_resolve:    bool = True
-    run_anchor_collect:  bool = True
-    run_cell_weather:    bool = True
-    output_bbox:         SurfaceGridRect | None = None   # filter returned cells
-    include_non_surface: bool = False                   # static anchor cells (z≠0)
+    run_pole_resolve:     bool = True
+    run_anchor_collect:   bool = True
+    run_cell_weather:     bool = True    # CellWeatherPass: temperature_base, rainfall
+    run_liquid_overlay:   bool = True    # liquidOverlayPass — отдельный флаг (утверждено v2.5)
+    output_bbox:          SurfaceGridRect | None = None
+    include_non_surface:  bool = False
 ```
+
+> **Код vs ТЗ (CL-7):** в `ClimateSurfaceAssembler.recalculate` сейчас `run_cell_weather` **ошибочно** gate'ит только `liquidOverlayPass`; weather pass вызывается всегда. Target: honor оба флага; `types.py` sync ⬜.
 
 **Runtime output:**
 
@@ -142,6 +163,7 @@ class WeatherSnapshot:
 | `anchor_changed` | pole ✅, anchor ✅, weather ✅; `output_bbox` вокруг anchor |
 | `zone_changed` | pole ✅, anchor ✅, weather ✅; `include_non_surface=True` |
 | `terrain_changed` | pole ✅, anchor ✅ (re-detect), weather ✅; heightmap от caller |
+| **`season_changed`** | `run_pole_resolve=False`, `run_anchor_collect=False`, `run_cell_weather=True`, `run_liquid_overlay=True`; `output_bbox` = горные регионы + `river_cells` ([`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md)) |
 | `manual` | поля из `bbox` / `location_uids` явно |
 
 Pole resolve перед cell weather **обязателен** (tier 1 base). `run_pole_resolve=False` — только если передан cached `pole_field` (расширение v2.4).
@@ -208,6 +230,8 @@ Hardcoded dicts из terrain **удалены**. Дефолты — в `ClimateZ
 `season_temp_offsets` — runtime сдвиг от `temperature_base`, не переписывает eager map.
 
 **Три слоя температуры (A):**
+
+> **Смена сезона:** `ClimateChangeEvent(kind="season_changed")` — calendar / world tick → `recalculate_climate` + `resolve_weather`. Оттепель на горах → melt → v2 `flow_level` на горных реках ([`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md)); skeleton **не** regen.
 
 | Слой | Смысл |
 |---|---|
@@ -524,7 +548,24 @@ Cap **32** features. **Запрещено:** elevation→arctic, settlement foot
 | PoleResolvePass | `poleResolve.py` | `ClimatePoleField` |
 | HeightmapPass | heightmap + pole bias | `z`, `system_terrain` |
 | AnchorCollectPass | `anchorCollect.py` + detect/assign | `ClimateAnchorField` |
-| CellWeatherPass | `tierResolve` + `weather_at_elevation` | `temperature_base`, `rainfall`, `location_uid` |
+| **CellWeatherPass** | `cellWeatherPass.run_cell_weather_pass` | `temperature_base`, `rainfall`, `location_uid` |
+| **LiquidOverlayPass** | `liquidOverlayPass` | `liquid_body` where temp allows (target: hydrology mask) |
+
+### `run_cell_weather_pass` (утверждено)
+
+Pure pass — **не** путается с флагом `ClimateRecalcRequest.run_cell_weather`.
+
+**Вход:** `world`, `locations`, `pole_field`, `local_field` (anchor), `cells[]`.  
+**На каждую cell:**
+
+1. `resolve_surface_sample(gx, gy)` — pole + local tier → `system_climate_zone`, optional temp override.
+2. `weather_at_elevation(zone, z)` — lapse + peak clamp → `temperature_base`; `rainfall` via `effective_rainfall`.
+
+**Выход:** новые `MapCell` с climate fields; `system_terrain`, `z` **без изменений**.
+
+**Не делает:** `season_temp_offsets` (runtime), `liquid_body`, hydrology carve, regen heightmap.
+
+**Вызывается из:** `assemble_full`, `apply_climate_pass` (перед liquid), `apply_weather_only`, `recalculate` (when `run_cell_weather=True`).
 
 Entry points (`ClimateOrchestratorService`) — **процесс 1**:
 
@@ -551,7 +592,8 @@ def recalculate(
 |---|---|
 | `run_pole_resolve` | `PoleResolvePass` |
 | `run_anchor_collect` | re-detect + merge anchors на переданном heightmap |
-| `run_cell_weather` | `CellWeatherPass` |
+| `run_cell_weather` | **`run_cell_weather_pass`** — `temperature_base`, `rainfall` |
+| `run_liquid_overlay` | **`run_liquid_overlay_pass`** — `liquid_body` (утверждено v2.5; в коде ⬜) |
 | `output_bbox` | вернуть только ячейки в rect (None = все из weather pass) |
 | `include_non_surface` | добавить static anchor cells (`resolve_climate` path) |
 
@@ -571,7 +613,7 @@ def recalculate(
 | Runtime fallback + `warn_once` | ✅ намеренная отказоустойчивость |
 | Import validator (`climate_pole` max 1, refs) | ⬜ — после фиксации JSON-контрактов |
 | `climate_pole_mode` wiring | ✅ CL-4 |
-| `ClimateChangeEvent` / `ClimateRecalcRequest` | ✅ v2.3 contracts |
+| `ClimateChangeEvent` / `ClimateRecalcRequest` | ✅ v2.3 contracts · v2.5 `season_changed` + `run_liquid_overlay` **утверждено**, types.py sync ⬜ |
 | `recalculate` execution по request | ⬜ |
 | `weatherResolve.py` + runtime pick | ⬜ |
 | DAG nodes (`generate` / `recalculate` / `resolve_weather`) | ⬜ последняя очередь |
@@ -809,7 +851,8 @@ PK `(world_uid, x, y, z)` различает z в обоих кейсах. **О�
 2. **Иерархия локаций.** `system_climate_zone` + `resolve_climate` — override на settlement; для hive (B) — дополнительно **z-band profile** на district/level.
 3. **Indoor vs outdoor.** `is_outdoor: false` — без `location_weather`; volume outdoor (площадь в пещере, палуба) — microclimate по location, не pole tier с surface.
 4. **Rainfall.** Enclosed / deep: eager `rainfall` часто **0** или zone humidity; не surface liquid mult «сквозь землю».
-5. **Не смешивать coordinate spaces.** Interior 1m grid здания — **не** target для `CellWeatherPass`. Volume climate — **named_location** / tunnel segment ([`tz_terrain_generation.md`](./tz_terrain_generation.md) § coordinate spaces).
+5. **Cave water (U12).** Подземные озёра и реки — **`cave_liquid_candidate`**, не surface hydrology mask; liquid overlay через **volume / cave pass** ([`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) § cave systems). Своя экосистема (biota — future).
+6. **Не смешивать coordinate spaces.** Interior 1m grid здания — **не** target для `CellWeatherPass`. Volume climate — **named_location** / tunnel segment ([`tz_terrain_generation.md`](./tz_terrain_generation.md) § coordinate spaces).
 
 ### Целевой контракт (черновик — impl отложен)
 
@@ -819,6 +862,7 @@ class VolumeClimateContext:
     """Built by settlement/terrain node — not pole/tier grid pass."""
     volume_kind: Literal[
         "tunnel",
+        "cave_system",            # U12: underground lakes/rivers + ecosystem
         "settlement_z_band",      # B: one hive, underhive / surface / spire
         "co_located_settlement",  # C: edge case, distinct location_uid
         "enclosed_district",
@@ -872,9 +916,12 @@ class VolumeClimateContext:
 
 | Дата | Версия | Изменение |
 |---|---|---|
+| 2026-06 | v2.5.2 | U12 cave water: volume principle + `cave_system` in VolumeClimateContext draft |
 | 2026-06 | v2.4.1 | cross-link § «Три входа»; smoke tests path 2 vs path 3 |
 | 2026-06 | v2.4 | § volume climate: A tunnels, B hive multi-z skeleton, C co-located edge case |
 | 2026-06 | v2.3 | три процесса (eager/recalc/runtime); контракты ChangeEvent/RecalcRequest; спека DAG nodes |
+| 2026-06 | v2.5 | `season_changed`; CellWeatherPass semantics; `run_liquid_overlay`; hydrology cross-ref |
+| 2026-06 | v2.5.1 | Блок «Утверждено» C1–C5; CL-7 documented; eager pipeline + LiquidOverlayPass row |
 | 2026-06 | v2.2.3 | § отказоустойчивость: fallback как design, validator отложен до контрактов |
 | 2026-06 | v2.2.2 | logging audit: warn_once hub, pass INFO, fallback WARNINGs |
 | 2026-06 | v2.2.1 | CL-4 pole mode, CL-2b admin merge, CL-10..12 shared helpers |
@@ -887,6 +934,7 @@ class VolumeClimateContext:
 ## Связанные документы
 
 - [`tz_terrain_generation.md`](./tz_terrain_generation.md) — surface grid, tunnels (future), coordinate spaces
+- [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) — горные реки, seasonal flow vs bootstrap carve
 - [`tz_locations.md`](./tz_locations.md) — § «Вертикальное наложение локаций» (co-located settlements)
 - [`tz_city_generation.md`](./tz_city_generation.md) — settlement generation
 - [`tz_assembler_hierarchy.md`](./tz_assembler_hierarchy.md) — settlement z-топология (hive skeleton)

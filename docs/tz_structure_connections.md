@@ -34,6 +34,8 @@ N+1: движок определяет встроенные типы со спе
   { "system_connection_type": "settlement_gate", "display_name": "Ворота поселения" },
   { "system_connection_type": "air_route",       "display_name": "Воздушный путь"   },
   { "system_connection_type": "sea_route",       "display_name": "Морской путь"     },
+  { "system_connection_type": "river",           "display_name": "Река"             },
+  { "system_connection_type": "mountain_river",  "display_name": "Горная река"      },
   { "system_connection_type": "portal",          "display_name": "Портал"           }
 ]
 ```
@@ -53,7 +55,25 @@ N+1: движок определяет встроенные типы со спе
 | `settlement_gate` | вход/выход из поселения; соединяет граф поселения с мировым | полное | `city` |
 | `air_route` | воздушный путь; ребро на z выше terrain | — (нет контакта) | `city`, `world` |
 | `sea_route` | морской путь; ребро по water-ячейкам | — (нет контакта) | `world` |
+| `river` | река; bed carve + русло; declare или autoresolve | partial (bed) | `world` |
+| `mountain_river` | горная река; исток на peak | partial (steep bed) | `world` |
 | `portal` | мгновенный переход; не ребро — связи хранятся на узле (см. 4.1) | — | — |
+
+**Реки — geometry vs имя:** polyline и bed — **`ConnectionEdge`**. **`NamedLocation` optional** — только если мастер дал имя; иначе `location_uid = null`. См. [`tz_locations.md`](./tz_locations.md), [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) U9/U11.
+
+**Повороты реки (U14, [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md)):** строже дорог. Между **соседними** сегментами polyline угол **≤ 45°**; **> 45° запрещён** (import validator для declare; autoresolve — `smooth_river_polyline` перед persist). Не путать с `max_turn_angle` дорог (default до 90° per step в § split).
+
+#### Плавный поворот реки (river curve)
+
+Тот же принцип, что § «Плавный поворот» дорог, но **`max_turn_angle_deg = 45`** (жёстко для `river` / `mountain_river`):
+
+```
+max_turn_per_segment = 45°   -- U14; не настраивается выше
+n_segments           = max(2, ceil(total_turn / max_turn_per_segment))
+angle_per_step       = total_turn / n_segments          -- каждый ≤ 45°
+```
+
+Waypoint-узлы на изломах; `RiverBedCarver` и edge emit — по **smoothed** polyline. Водопады — перепад `surface_z` между соседними cells на плавной траектории, не острый 90° излом в plan view.
 
 Материал дороги — **свойство ребра**, не тип. Торговые пути строятся отдельной механикой поверх графа.
 

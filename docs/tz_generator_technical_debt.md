@@ -12,6 +12,7 @@
 | [tz_assembler_hierarchy.md](./tz_assembler_hierarchy.md) | Целевая архитектура assembler stack |
 | [tz_city_generation.md](./tz_city_generation.md) | Продуктовое ТЗ города |
 | [tz_terrain_generation.md](./tz_terrain_generation.md) | Продуктовое ТЗ terrain |
+| [tz_terrain_hydrology.md](./tz_terrain_hydrology.md) | Гидрология: моря, озёра, реки (target) |
 | [tz_climate.md](./tz_climate.md) | Продуктовое ТЗ climate (pole/local tiers) |
 | `.cursor/plans/settlement-assembler.md` | Phase-план settlement |
 | `.cursor/plans/coordinate-spaces.md` | Phase-план NC-1 |
@@ -260,6 +261,9 @@ Perimeter не учитывает template района — v1 compromise.
 |---|---|---|---|---|
 | FM-1 | medium | `TerrainGeneratorService` monolith | thin facade → `ClimateOrchestratorService` | resolved |
 | **TR-1** | **high** | Multi-pass terrain skeleton + climate pass split | ✅ impl 2026-06 — см. [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Impl queue |
+| **HY-1** | **high** | Liquid = global `z≤0` overlay; нет carve рек/озёр/морских basin | Phase **D HY** (H-1…H-7a) — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Phase 9+; [`.cursor/plans/hydrology-pre-dag.md`](../.cursor/plans/hydrology-pre-dag.md) | open |
+| **HY-2** | medium | Cave STUB без подземной воды / ecosystem | U12: `CaveHydrologyService` в `generate-caves` (Phase B); `cave_liquid_candidate` ≠ surface mask | open |
+| **HY-3** | medium | Нет LLM naming для autoresolved geography | U13: `llm_name_procedural_locations` + persist; **после DAG**, gate `materialize_named_locations` | open |
 | **TR-1b** | medium | Generator isolation: pole resolve **вне** `TerrainGeneratorService` | **resolved** — `MapCellService` / `map.py`; `pole_field` аргумент |
 | **DBG-1** | medium | `debug_settlement.py` pipeline smoke in-process | **resolved** — HTTP path **2** + `debug_api_helpers.py` |
 | **TR-M** | low | Magma antipode teleport (edge case) | **partial** — skeleton band + `antipode_xy`; M-3 movement ⬜ |
@@ -320,7 +324,7 @@ Passes (`surfacePass`, `columnFillPass`, …) — OK (40–96 строк). Fat: 
 | TR-7 | low | P3 | Два persist API: `save_generated` → INSERT OR IGNORE (lazy); `save_pass` → layer upsert | document semantics; converge when DAG stable | open |
 | TR-4 | medium | P3 | `save_z_slice` / `generate_z_slice`: полный heightmap + gap analysis для одной `(gx, gy)` | cache heightmap per world bbox или explicit lazy contract | open |
 | CL-16 | low | P3 | `cellWeatherPass`: `location_uid` берётся из `sample.zone_location_uid`, не из исходного cell | doc или preserve cell attribution | open |
-| CL-7 | low | P3 | `ClimateSurfaceAssembler.recalculate`: weather **всегда**; `run_cell_weather` gate'ит только liquid overlay — misleading flag | fix flag semantics + impl (см. CL §) | partial |
+| CL-7 | medium | P2 | `recalculate`: `run_cell_weather` gate'ит liquid, не weather; нет `run_liquid_overlay` | split flags per [`tz_climate.md`](./tz_climate.md) § C2 | partial |
 
 ### Рекомендуемый порядок (без DAG)
 
