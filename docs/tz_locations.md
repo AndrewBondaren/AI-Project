@@ -1086,6 +1086,8 @@ Indoor-локации (`is_outdoor: false`) не имеют weather-записи
 
 > **Вариант B (отложено):** вычисление погоды на пространственной группе локаций (chunk 3×3 ячеек по footprint). Позволяет микроклимат — долина vs холм в одном городе. Сложнее: требует spatial-группировки и раздельных `location_weather` на district-уровне. Апгрейд поверх варианта A без ломки схемы.
 
+**Climate LOD (утверждено):** medium/far — `location_weather` из **`SurfaceClimateField` field cache** ([`tz_climate.md`](./tz_climate.md)). **World snapshot** на каждый ход — отдельный модуль [`tz_world_snapshot.md`](./tz_world_snapshot.md), не climate-only слепок.
+
 ---
 
 ## Версионирование карты

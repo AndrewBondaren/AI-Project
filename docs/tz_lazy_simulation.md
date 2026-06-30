@@ -1,6 +1,8 @@
 # ТЗ: Lazy Simulation (LOD-симуляция мира)
 
-> **Статус:** концепция зафиксирована, детали реализации открыты.
+> **Статус:** концепция ✅ · **детали impl — Todo** (не блокирует D HY / climate / snapshot).
+
+> **Backlog impl:** § «Todo» ниже — решать при отдельной фазе lazy sim + world snapshot (WS-1), не параллельно с surface hydrology.
 
 ## Принцип
 
@@ -93,7 +95,7 @@ EventBus публикует event_type + affected_uid
 - Один NPC не может получить два LLM-вызова одновременно — очередь per NPC
 - Результат пишется в БД как обычный `post_llm`-патч
 
-**Открытый вопрос:** EventBus для фоновых триггеров — тот же персистентный EventBus что в мультиплеере, или отдельный.
+**Todo (LS-T1):** EventBus для фоновых триггеров — тот же персистентный EventBus что в мультиплеере, или отдельный.
 
 ---
 
@@ -106,6 +108,7 @@ EventBus публикует event_type + affected_uid
 **Что симулируется:**
 - Полный тик каждому NPC в сцене (`system_current_needs`, `increment_per_tick`)
 - `map_cells` загружены полностью (eager + буфер ±10z)
+- **Climate per-cell** — `temperature_base`, `rainfall` в bbox сцены; сезон / hydrology patch ([`tz_climate.md`](./tz_climate.md) § Climate LOD)
 - `cell_states` активны и обновляются (пожар распространяется, затопление растёт)
 - `location_weather.remaining_ticks` декрементируется, погода пересчитывается
 - `location_resources.regen_per_tick` применяется каждый тик
@@ -119,7 +122,7 @@ EventBus публикует event_type + affected_uid
 
 ### Зона 2 — Средняя дистанция (medium)
 
-**Граница:** settlement/district в котором находится игрок, плюс соседние settlements в радиусе N map_cells (N — открытый вопрос).
+**Граница:** settlement/district в котором находится игрок, плюс соседние settlements в радиусе N map_cells (**Todo LS-T2:** значение N).
 
 **Принцип:** NPC не симулируются по отдельности каждый тик. Их действия **агрегируются** — последовательность тиков сворачивается в один батч-результат.
 
@@ -129,6 +132,7 @@ EventBus публикует event_type + affected_uid
 - Торговые NPC агрегируют "пошёл на рынок, купил, вернулся" за один проход
 - `location_states` обновляются (осада продолжается, эпидемия распространяется) — через системные события, не покрытийно
 - `location_weather` тикует нормально (глобальный процесс, не per-NPC)
+- **`location_weather`** из snapshot settlement; per-cell climate только при upgrade rect в near
 - `location_resources` регенерируются батчем
 
 **Что НЕ симулируется:**
@@ -136,7 +140,7 @@ EventBus публикует event_type + affected_uid
 - Индивидуальные конфликты между NPC (только системные: восстание, бой фракций)
 - `cell_states` — не обновляются (пожар "заморожен" пока не стал событием системного уровня)
 
-**Частота:** раз в N тиков (батч). N — открытый вопрос.
+**Частота:** раз в N тиков (батч). **Todo LS-T3:** значение N.
 
 ---
 
@@ -158,6 +162,7 @@ EventBus публикует event_type + affected_uid
 - `essential` и `linked` NPC — исключение, симулируются полным тиком всегда
 - Внутренние конфликты локаций без системного значения
 - `map_cells` — не генерируются и не обновляются
+- **Climate:** погода settlement — sample field cache + `location_weather`; полное состояние — world snapshot ([`tz_world_snapshot.md`](./tz_world_snapshot.md))
 
 **Частота:** по событиям или очень редко (раз в M тиков). M >> N.
 
@@ -179,26 +184,50 @@ EventBus публикует event_type + affected_uid
   - Батч-пересчёт за всё elapsed_time
   - NPC "разворачиваются" из агрегата в индивидуальные состояния
   - map_cells lazy-генерируются если нужны
+  - climate: promote field cache → per-cell (C12, tz_climate.md)
 ```
 
 **Инвариант:** при возвращении игрока в локацию мир должен выглядеть **консистентно** с прошедшим временем — NPC состарились, ресурсы восстановились, событие "осада" изменило состояние города.
 
 ---
 
-## Открытые вопросы
+## Climate LOD (cross-ref)
 
-| Вопрос | Статус |
-|---|---|
-| Точные границы near/medium/far в единицах map_cells или named_location depth | открыт |
-| Батч-алгоритм агрегации NPC на medium — детерминированный или с rnd-компонентом | открыт |
-| "Разворачивание" NPC из far-агрегата — как восстановить индивидуальный стейт | открыт |
-| Системные события far-зоны — как инициируются (threshold на показателях?) | открыт |
-| cell_states на medium — полное замораживание или упрощённая симуляция | открыт |
-| Обработка конфликта: NPC из near взаимодействует с NPC из medium | открыт |
+Погода следует тем же зонам, что и симуляция NPC — [`tz_climate.md`](./tz_climate.md) § Climate LOD.
 
-## Связи
+| Зона | Climate resolve | Частота |
+|---|---|---|
+| **Near** | **Per-cell** — `temperature_base`, `rainfall` на `map_cells` в bbox сцены | сезон / вход в локацию / hydrology patch; daily — runtime `WeatherSnapshot`, без rewrite eager map |
+| **Medium** | **`location_weather`**; sample **`SurfaceClimateField`** (field cache) | `remaining_ticks` на settlement |
+| **Far** | Field cache + `location_weather`; cells не recalc каждый сезон | season + tick; фиксация — [`tz_world_snapshot.md`](./tz_world_snapshot.md) |
+
+**Upgrade:** far → near — lazy terrain + promote field cache → per-cell (C12).
+
+**Три разных «snapshot»:** world snapshot (модуль на ход) · field cache (climate derived) · `WeatherSnapshot` (runtime DTO) — [`tz_climate.md`](./tz_climate.md) § Терминология.
+
+---
+
+## Todo (impl backlog)
+
+Детали **не блокируют** текущий pipeline (terrain, hydrology, climate materialization). Решать в фазе lazy sim после [`tz_world_snapshot.md`](./tz_world_snapshot.md) WS-1 или параллельно gameplay tick.
+
+| ID | Вопрос | Статус |
+|---|---|---|
+| **LS-T1** | EventBus для essential NPC LLM — общий с multiplayer или отдельный | **Todo** |
+| **LS-T2** | Границы near/medium/far — map_cells, named_location depth, радиус N | **Todo** |
+| **LS-T3** | Частота medium batch — N тиков; far — M тиков (M >> N) | **Todo** |
+| **LS-T4** | Батч-агрегация NPC на medium — детерминированная vs rnd | **Todo** |
+| **LS-T5** | Unfold NPC из far-агрегата — восстановление индивидуального стейта | **Todo** |
+| **LS-T6** | Системные события far-зоны — пороги / инициаторы | **Todo** |
+| **LS-T7** | `cell_states` на medium — freeze vs упрощённая симуляция | **Todo** |
+| **LS-T8** | Конфликт near ↔ medium NPC (разные LOD одновременно) | **Todo** |
+| **LS-T9** | `ClimateLODPolicy` wiring — привязка к LS-T2 ([`tz_climate.md`](./tz_climate.md) CL-18) | **Todo** |
+
+---
 
 - [project_data_storage_tz.md](project_data_storage_tz.md) — `npc_needs_registry.increment_per_tick`, `system_current_needs`, `system_current_target`
 - [tz_locations.md](tz_locations.md) — `map_cells` lazy-инициализация, `location_states`, `location_weather`
+- [tz_world_snapshot.md](tz_world_snapshot.md) — единый snapshot на ход
+- [tz_climate.md](tz_climate.md) — Climate LOD, SurfaceClimateField, partial recalc
 - [tz_multiplayer.md](tz_multiplayer.md) — тиковая система, `action_available_at_tick`
 - [tz_structure_connections.md](tz_structure_connections.md) — `condition_degradation` дорог в far-зоне

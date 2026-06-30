@@ -40,6 +40,7 @@ from app.application.worldData.raceService import RaceService
 from app.application.worldData.worldPerkService import WorldPerkService
 from app.application.worldData.namedLocationService import NamedLocationService
 from app.application.worldData.mapCellService import MapCellService
+from app.application.worldData.connectionGraphService import ConnectionGraphService
 from app.application.worldData.connectionPersistService import ConnectionPersistService
 from app.application.worldData.settlementPersistService import SettlementPersistService
 from app.application.worldData.stateService import StateService
@@ -109,6 +110,7 @@ class Container:
         self._location_service: NamedLocationService | None = None
         self._map_cell_service: MapCellService | None = None
         self._connection_persist_service: ConnectionPersistService | None = None
+        self._connection_graph_service: ConnectionGraphService | None = None
         self._settlement_persist_service: SettlementPersistService | None = None
         self._state_service: StateService | None = None
         self._seed_service: SeedService | None = None
@@ -479,6 +481,14 @@ class Container:
             )
         return self._connection_persist_service
 
+    def connection_graph_service(self) -> ConnectionGraphService:
+        if self._connection_graph_service is None:
+            self._connection_graph_service = ConnectionGraphService(
+                node_repo=self.connection_node_repository(),
+                edge_repo=self.connection_edge_repository(),
+            )
+        return self._connection_graph_service
+
     def settlement_persist_service(self) -> SettlementPersistService:
         if self._settlement_persist_service is None:
             self._settlement_persist_service = SettlementPersistService(
@@ -509,6 +519,7 @@ class Container:
                 location_service=self.location_service(),
                 map_cell_service=self.map_cell_service(),
                 state_service=self.state_service(),
+                connection_graph_service=self.connection_graph_service(),
             )
         return self._world_bundle_service
 

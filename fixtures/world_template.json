@@ -1,7 +1,7 @@
 {
   "_template_meta": {
     "version": "2026-06",
-    "description": "Канонический шаблон мира — climate/terrain/hydrology/caves + матрица локаций для тестов (размеры settlement, климат, access, geographic declare, district/building/room). map_cells пуст — terrain через DAG. connection_nodes/edges — declare hydrology (U20–U27); import persist connections — ⬜ до D HY-4.",
+    "description": "Канонический шаблон мира — climate/terrain/hydrology/caves + матрица локаций для тестов (размеры settlement, климат, access, geographic declare, district/building/room). map_cells пуст — terrain через DAG. connection_nodes/edges — declare hydrology (U20–U27); bundle import connections — ✅ D HY-0b; hydrology-driven persist — ⬜ до D HY-4.",
     "docs": [
       "docs/tz_locations.md",
       "docs/tz_climate.md",

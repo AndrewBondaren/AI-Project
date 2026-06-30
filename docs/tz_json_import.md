@@ -380,6 +380,10 @@ def seed_service(self) -> SeedService: ...
 Раса использует паттерн prototype inheritance: `race_traits` — базовый уровень,
 гендерные поля (`male`, `female`, `asexual`, `both`) — override/расширение базы.
 
+> **Канон:** [`tz_races.md`](./tz_races.md) — gender blob, ref rules, merge semantics.  
+> **Validator:** [`tz_json_validation.md`](./tz_json_validation.md) — SCH-RACE-CONTRACT.  
+> Пример ниже (`lifespan_years`, `strength_bonus`) — **упрощённый merge-demo**, не appearance-контракт.
+
 ```
 race_traits   ← декларирует общие правила расы
 ├── male       ← переопределяет и дополняет race_traits

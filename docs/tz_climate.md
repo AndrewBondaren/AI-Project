@@ -16,7 +16,17 @@ metadata:
 | **TerrainGeneratorService** | two-phase skeleton (`z`, `system_terrain` columns); **не** пишет climate fields |
 | **Weather** (runtime) | тип погоды от `temperature_base` + `rainfall` + `weather_type_registry` |
 
-**Статус:** v2.5 — eager surface ✅ · **`season_changed` + CellWeatherPass semantics утверждены (2026-06)** · recalc/runtime impl ⬜ · DAG nodes ⬜
+**Статус:** v2.6.1 — eager surface ✅ · **Climate LOD + SurfaceClimateField утверждены (2026-06)** · recalc/runtime impl ⬜ · DAG nodes ⬜
+
+## Терминология snapshot (не путать)
+
+| Термин | Модуль | Что это |
+|---|---|---|
+| **World Snapshot** | [`WorldSnapshotService`](./tz_world_snapshot.md) | **Полное** сохранение мира **на каждый ход** — единый общий модуль; time travel, regen, база для far LOD |
+| **`SurfaceClimateField`** | climate generator | Derived **horizontal field** `(gx, gy)` — pole + tier blend; **не маска**, не world snapshot |
+| **`WeatherSnapshot`** | `ClimateRuntimeAssembler` | Runtime DTO (temp + `system_weather`) для сцены; ephemeral |
+
+Дальше в этом документе **«field cache»** / **`SurfaceClimateField`** — только climate derived layer. **«World snapshot»** — только [`tz_world_snapshot.md`](./tz_world_snapshot.md).
 
 ## Утверждено (2026-06)
 
@@ -27,14 +37,22 @@ metadata:
 | C3 | **`ClimateChangeEvent.kind = season_changed`** — calendar / world tick → `recalculate_climate` + `resolve_weather` |
 | C4 | Оттепель на горах → melt / v2 `flow_level` на **горных реках** ([`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md)); skeleton **не** regen |
 | C5 | `season_temp_offsets` — **runtime** (`effective_temperature`), eager map **не** переписывается при смене сезона |
+| C6 | **`SurfaceClimateField`** — горизонтальный **field cache** `(gx, gy)`: pole + tier blend (`resolve_surface_sample`); refresh при смене pole/anchor (+ influence pad), **не** каждый сезон; **≠** world snapshot |
+| C7 | **Per-cell resolve** — `weather_at_elevation(zone, z)` на колонку; пишет `temperature_base`, `rainfall` на `map_cells`; near / materialization bbox |
+| C8 | **Climate LOD** — near → per-cell; medium/far → sample field cache + `location_weather`; far читает **persisted world state** ([`tz_world_snapshot.md`](./tz_world_snapshot.md)) |
+| C9 | **Partial recalc** — terrain/hydrology dirty rect → **только resolve колонок**; field cache без изменений, если anchors не двигались |
+| C10 | **Weather vs liquid** — разные dirty regions; `run_cell_weather` и `run_liquid_overlay` независимы; после hydrology (U28) liquid pass **не** создаёт `liquid_body` в русле |
+| C11 | **`season_changed` + LOD** — near: optional cell recalc (горы + `river_cells` bbox); far: C5 runtime + `location_weather`, **без** full-world upsert cells |
+| C12 | **LOD upgrade** — игрок входит в far rect → lazy promote: field-cache-only → per-cell batch в entering bbox |
+| C13 | **Field cache persist** — v1 in-memory на batch materialization; v2 — часть world snapshot blob или sparse derived store (CL-17); **не** отдельный модуль snapshot |
 
-> **Черновики, не утверждены:** § «Три процесса» (v2.3), routing в DAG-нодах, § «Surface vs volume climate» (v2.4). Стык generators ↔ DAG — [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) (**черновик целиком**).
+> **Черновики, не утверждены:** routing в DAG-нодах (детали), § «Surface vs volume climate» (v2.4). § «Три процесса» — контракты утверждены (C1–C5, C6–C13); impl ⬜. Стык generators ↔ DAG — [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) (**черновик целиком**).
 
 **Принцип платформы:** не симуляция Земли. Высота **не** задаёт arctic. Полюса и мастерские якоря — источник «холодного/жаркого»; рельеф — только **локальные** центры Voronoi tier-2.
 
 **Три процесса:** eager generate, recalculate и runtime weather — **разные** pipeline; все три вызываются **только из DAG-нод** (ноды — последняя очередь). Generator — pure, без routing по «что изменилось».
 
-**Отказоустойчивость:** generate **не падает** на битых master-данных — предсказуемый runtime fallback + `warn_once`. Жёсткий validator на import — **отложен** до фиксации JSON-контрактов; **не заменяет** fallback (см. § ниже).
+**Отказоустойчивость:** generate **не падает** на битых master-данных. **Целевое (v3):** defaults материализованы в БД через [`tz_json_validation.md`](./tz_json_validation.md) normalize-on-import; generate читает `World`; legacy — только `warn_once`. **Transitional v1:** runtime fallback + hardcodes в generators — см. json validation TZ § Legacy.
 
 ---
 
@@ -75,9 +93,9 @@ app/api/routes/map.py                  ← debug harness (POST …/generate-*); 
 
 ---
 
-## Три процесса (v2.3 — черновик, не утверждён)
+## Три процесса (v2.3 — контракты утверждены, impl ⬜)
 
-Eager generate, recalculate и runtime weather — **не один pipeline с флагом**, а три отдельных контракта. Generator выполняет то, что явно запросили; **когда и зачем вызывать** — только в DAG-нодах.
+Eager generate, recalculate и runtime weather — **не один pipeline с флагом**, а три отдельных контракта. Generator выполняет то, что явно запросили; **когда и зачем вызывать** — только в DAG-нодах. **Climate LOD (C6–C13)** расширяет процесс 2 и 3 — см. § «Climate LOD».
 
 ```mermaid
 flowchart LR
@@ -163,7 +181,7 @@ class WeatherSnapshot:
 | `anchor_changed` | pole ✅, anchor ✅, weather ✅; `output_bbox` вокруг anchor |
 | `zone_changed` | pole ✅, anchor ✅, weather ✅; `include_non_surface=True` |
 | `terrain_changed` | pole ✅, anchor ✅ (re-detect), weather ✅; heightmap от caller |
-| **`season_changed`** | `run_pole_resolve=False`, `run_anchor_collect=False`, `run_cell_weather=True`, `run_liquid_overlay=True`; `output_bbox` = горные регионы + `river_cells` ([`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md)) |
+| **`season_changed`** | `run_pole_resolve=False`, `run_anchor_collect=False`; **near:** `run_cell_weather=True`, `run_liquid_overlay=True`, `output_bbox` = горные регионы + `river_cells`; **far:** оба `False` — только runtime C5 + `location_weather` ([`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md), § Climate LOD) |
 | `manual` | поля из `bbox` / `location_uids` явно |
 
 Pole resolve перед cell weather **обязателен** (tier 1 base). `run_pole_resolve=False` — только если передан cached `pole_field` (расширение v2.4).
@@ -317,7 +335,7 @@ Generate **не бросает исключение** на типичных ды
 
 ### Import validator (будущий, CL-5)
 
-> Один validator для JSON-import **и** UI редактора миров — после фиксации контрактов.
+> Полный контракт: [`tz_json_validation.md`](./tz_json_validation.md). Один validator для JSON-import **и** UI редактора миров — после фиксации контрактов.
 
 **Целевые проверки (черновик):**
 
@@ -599,6 +617,126 @@ def recalculate(
 
 **Статус impl:** контракт ✅ · execution по request ⬜ (stub → `apply_weather_only`).
 
+### Partial recalc — field cache vs column resolve (C6, C9)
+
+Два шага **не смешивать** (это **не** world snapshot — см. [`tz_world_snapshot.md`](./tz_world_snapshot.md)):
+
+| Шаг | Что пересчитывает | Когда | Пишет `map_cells` |
+|---|---|---|---|
+| **Field cache refresh** | `SurfaceClimateField` — pole + tier horizontal sample | pole/anchor/zone change (+ influence pad) | ❌ (v2: in world snapshot blob или derived store — CL-17) |
+| **Column resolve** | `weather_at_elevation` по `(gx, gy, z)` | hydrology/terrain dirty rect; near LOD; materialization | ✅ `temperature_base`, `rainfall` |
+| **Liquid overlay** | phase/state на cells с водой | отдельный dirty rect; `run_liquid_overlay` | ✅ overlay fields only |
+
+**Hydrology patch** ([`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md)): carve меняет `z` / roles → **column resolve** в dirty bbox; field cache **не** пересобирать, если anchors не двигались.
+
+**Invariant:** generator может считать шире dirty rect, но **возвращает** только cells в `output_bbox` (upsert merge).
+
+---
+
+## Climate LOD — field cache / per-cell / per-location (v2.6 — утверждено)
+
+> **Связь:** зоны near/medium/far — [`tz_lazy_simulation.md`](./tz_lazy_simulation.md). Погода вдали **не** требует per-cell `map_cells` каждый сезон или каждый день. **World snapshot** на каждый ход — [`tz_world_snapshot.md`](./tz_world_snapshot.md); far LOD **читает** сохранённое состояние, а не отдельный climate-only snapshot.
+
+### Три уровня resolve
+
+```mermaid
+flowchart TB
+  SF["① SurfaceClimateField\nfield cache gx,gy\npole + tier blend"]
+  subgraph near ["Near — per cell"]
+    MC["② map_cells\ntemperature_base, rainfall\nlapse по z"]
+  end
+  subgraph far ["Medium / Far"]
+    LW["③ location_weather\nsystem_weather + intensity\nsettlement+"]
+  end
+  WS["WorldSnapshotService\nполный мир на ход"]
+  SF --> MC
+  SF --> LW
+  MC --> WS
+  LW --> WS
+```
+
+| Уровень | Данные | Потребители |
+|---|---|---|
+| **① Field cache** | `system_climate_zone`, optional temp override, `typical_elevation_z`, zone moisture | resolve ② и ③; **derived**, не маска |
+| **② Per-cell** | `MapCell.temperature_base`, `rainfall` | terrain narration, hydrology, scene geometry |
+| **③ Per-location** | `location_weather` на settlement+ ([`tz_locations.md`](./tz_locations.md)) | gameplay вдали, LLM, NPC batch |
+
+### LOD по зонам симуляции
+
+| Зона | `map_cells` climate | Частота / механизм |
+|---|---|---|
+| **Near** (сцена) | **Per-cell resolve** | каждый сезон / при входе в локацию / hydrology patch в bbox; optional daily — **runtime only** (C5), без rewrite eager map |
+| **Medium** | cells есть, **не каждый тик** | `location_weather.remaining_ticks` — тик settlement; sample field cache → upsert `location_weather` |
+| **Far** | **`map_cells` не обновляются** каждый сезон | field cache + `location_weather`; состояние **фиксируется** world snapshot на ход (C8) |
+
+**Правило:** рядом с игроком — **perCell** имеет смысл; вдали — **resolve по слепку** + агрегат на settlement.
+
+### Частота: season vs day
+
+| Событие | Near | Medium / Far |
+|---|---|---|
+| **`season_changed`** | optional `recalculate` в bbox (горы, `river_cells`); melt → v2 `flow_level` | `resolve_effective_temperature` + refresh `location_weather` из field cache; **не** touch всех cells |
+| **Daily / tick в сцене** | `resolve_weather` → `WeatherSnapshot` | `location_weather` decrement; без per-cell pass |
+| **Player proximity upgrade** | promote rect: field cache → per-cell batch (C12) | — |
+| **Конец хода** | cells в bbox попадают в **world snapshot** | [`WorldSnapshotService.capture_turn`](./tz_world_snapshot.md) |
+
+### Контракт `SurfaceClimateField` (C6)
+
+```python
+@dataclass(frozen=True)
+class SurfaceClimateFieldCell:
+    system_climate_zone:       str
+    base_temperature_override: int | None
+    typical_elevation_z:       int
+    zone_moisture:             int          # profile.base_rainfall до liquid_mult
+
+@dataclass(frozen=True)
+class SurfaceClimateField:
+    """Horizontal field cache after pole + tier resolve; one sample per (gx, gy). Not a boolean mask."""
+    cells: dict[tuple[int, int], SurfaceClimateFieldCell]
+    pole_field: ClimatePoleField
+    local_field: ClimateAnchorField
+    bbox: SurfaceGridRect | None = None
+
+def build_surface_climate_field(
+    world, locations, pole_field, local_field, grid_rect,
+) -> SurfaceClimateField: ...
+
+def sample_field(field: SurfaceClimateField, gx: int, gy: int) -> SurfaceClimateFieldCell: ...
+
+def resolve_cell_weather(
+    world, field: SurfaceClimateField, cell: MapCell,
+) -> MapCell:
+    """Per-column: sample field + weather_at_elevation(zone, z) → temp, rainfall."""
+```
+
+**v1:** field живёт in-memory между passes одного batch (materialization).  
+**v2 (CL-17):** sparse persist для второго HTTP / gameplay без full pole recompute.
+
+**CellWeatherPass (target):** `build_surface_climate_field` → `resolve_cell_weather` per column; pole/tier math **не** дублировать в pass.
+
+### `ClimateLODPolicy` (orchestration, v2)
+
+```python
+@dataclass(frozen=True)
+class ClimateLODPolicy:
+    mode: Literal["per_cell", "field_cache_only"]
+    output_bbox: SurfaceGridRect | None
+    refresh_field_cache: bool = False   # pole/anchor change only
+```
+
+Выбор `mode` — **не** в generator: DAG / tick orchestrator по дистанции игрока ([`tz_lazy_simulation.md`](./tz_lazy_simulation.md)). Generator honor `ClimateRecalcRequest` + optional LOD policy extension (v2).
+
+### Liquid overlay после hydrology (C10, U28)
+
+| Cell state | Hydrology | Climate `liquidOverlayPass` |
+|---|---|---|
+| Open water (`liquid_candidate`) | mask + carve | temp OK → `liquid_body`; frozen → material phase |
+| River bed (U28) | уже **`liquid_body`** + `role: river_bed` | **состояние** (phase/material), **не** создание terrain |
+| Solid land | — | skip |
+
+Target D HY-6: **no** global `z ≤ 0` rule ([`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) § Climate).
+
 ### Статус реализации
 
 | Элемент | Статус |
@@ -613,8 +751,10 @@ def recalculate(
 | Runtime fallback + `warn_once` | ✅ намеренная отказоустойчивость |
 | Import validator (`climate_pole` max 1, refs) | ⬜ — после фиксации JSON-контрактов |
 | `climate_pole_mode` wiring | ✅ CL-4 |
-| `ClimateChangeEvent` / `ClimateRecalcRequest` | ✅ v2.3 contracts · v2.5 `season_changed` + `run_liquid_overlay` **утверждено**, types.py sync ⬜ |
-| `recalculate` execution по request | ⬜ |
+| `ClimateChangeEvent` / `ClimateRecalcRequest` | ✅ v2.3 contracts · v2.5–v2.6 LOD + snapshot **утверждено**, types.py sync ⬜ |
+| `SurfaceClimateField` + `resolve_cell_weather` | ⬜ spec C6–C7 |
+| `ClimateLODPolicy` + zone routing | ⬜ orchestrator / DAG |
+| `recalculate` execution по request + `output_bbox` | ⬜ (CL-7) |
 | `weatherResolve.py` + runtime pick | ⬜ |
 | DAG nodes (`generate` / `recalculate` / `resolve_weather`) | ⬜ последняя очередь |
 
@@ -768,7 +908,9 @@ HeightmapPass использует `typical_elevation_z` из pole/local sample 
 
 Снег/град при eager `liquid_mult = 0`: `rainfall` на map может быть 0, но match использует zone moisture semantics через переданный `rainfall` arg (eager field).
 
-**Не в процессе 3 (позже):** `location_weather` persist, tick/`remaining_ticks`, `intensity` formula, `penetrates_shelter`, walk-up `resolve_weather(location)`.
+**Не в процессе 3 (позже):** `location_weather` persist + tick/`remaining_ticks` на medium/far — **контракт** [`tz_locations.md`](./tz_locations.md); near использует per-cell + runtime. `intensity` formula, `penetrates_shelter` — позже.
+
+**Far-zone weather (C8):** `sample_field(field, settlement_gx, gy)` + `season_temp_offsets` → upsert `location_weather`; walk-up `resolve_weather(location)` для district outdoor.
 
 ---
 
@@ -906,7 +1048,9 @@ class VolumeClimateContext:
 - Neighbor climate blend
 - `POST …/map/generate-climate` — ✅ pass в очереди materialization (debug harness; production — `generate_climate` node)
 - Zone polygons / climate barriers
-- `location_weather` table + tick loop
+- `location_weather` table + tick loop (LOD medium/far — § Climate LOD)
+- `SurfaceClimateField` in world snapshot blob (CL-17)
+- [`tz_world_snapshot.md`](./tz_world_snapshot.md) — unified capture module
 - Import validator (§ отказоустойчивость)
 - **DAG nodes** — контракты ✅; реализация **последняя очередь**
 
@@ -916,6 +1060,8 @@ class VolumeClimateContext:
 
 | Дата | Версия | Изменение |
 |---|---|---|
+| 2026-06 | v2.6.1 | Disambiguation: World Snapshot vs SurfaceClimateField; cross-ref `tz_world_snapshot.md` |
+| 2026-06 | v2.6 | **Climate LOD** C6–C13: SurfaceClimateField, per-cell vs field cache, partial recalc, hydrology U28 liquid split, lazy sim cross-ref |
 | 2026-06 | v2.5.2 | U12 cave water: volume principle + `cave_system` in VolumeClimateContext draft |
 | 2026-06 | v2.4.1 | cross-link § «Три входа»; smoke tests path 2 vs path 3 |
 | 2026-06 | v2.4 | § volume climate: A tunnels, B hive multi-z skeleton, C co-located edge case |
@@ -934,7 +1080,9 @@ class VolumeClimateContext:
 ## Связанные документы
 
 - [`tz_terrain_generation.md`](./tz_terrain_generation.md) — surface grid, tunnels (future), coordinate spaces
-- [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) — горные реки, seasonal flow vs bootstrap carve
+- [`tz_world_snapshot.md`](./tz_world_snapshot.md) — единый модуль snapshot на ход
+- [`tz_lazy_simulation.md`](./tz_lazy_simulation.md) — LOD зоны; climate per-cell vs field cache
+- [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) — горные реки, seasonal flow vs bootstrap carve; partial bbox после hydrology
 - [`tz_locations.md`](./tz_locations.md) — § «Вертикальное наложение локаций» (co-located settlements)
 - [`tz_city_generation.md`](./tz_city_generation.md) — settlement generation
 - [`tz_assembler_hierarchy.md`](./tz_assembler_hierarchy.md) — settlement z-топология (hive skeleton)

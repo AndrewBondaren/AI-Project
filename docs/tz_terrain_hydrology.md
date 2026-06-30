@@ -36,7 +36,8 @@ metadata:
 | U21 | **Declare море — connections:** без radius; **polyline/polygon** = та же модель — цепочка **`ConnectionEdge`** `coastline`; waypoints — `NamedLocation` или мировые координаты |
 | U22 | **`type_classify` null:** runtime **fallback** на встроенные defaults схемы; **import validator (future):** проверить defaults, **записать явные значения** в bundle (normalize on import) — см. § Import validator |
 | U23 | **Smoke fixture:** [`fixtures/world_template.json`](../fixtures/world_template.json) — **declare** `connection_nodes/edges` для lake/sea/coast **до** D HY-3 (не только autoresolve) |
-| U24 | **River bed:** carve = **solid** + `role: river_bed`; **`liquid_candidate: false`** на hydrology pass; `liquid_body` — только climate (temp) или runtime season — **не** глобальная вода в русле при carve |
+| U24 | **River bed:** hydrology ставит **`system_terrain: liquid_body`** в channel; **`role: river_bed`** в metadata |
+| U28 | **Простая модель воды (2026-06):** hydrology → **`liquid_body`** в русле; **`generate-climate`** → **состояние** уже liquid cells (семантика состояния — [`tz_climate.md`](./tz_climate.md), **не** в этом ТЗ). Hydrology **не** выбирает лёд/вода/steam |
 | U25 | **Lake vs inland_sea (Q6):** declare по **subtype** (A): `lake` + `lake_shoreline`, `inland_sea` + `coastline` на `z_sea`; при **несовпадении** subtype и topology — **fallback (B):** autoresolve role + **`logger.warning`**, carve по topology (не по ошибочному subtype) |
 | U26 | **Coast segment (Q4):** `geographic.coast` — **waypoint** на цепочке `coastline` моря (`ConnectionNode.location_uid`); не отдельная геометрия |
 | U27 | **Реки (Q5):** **declare OR autoresolve** — оба пути; полный polyline мастера → import edges, classifier **skip** (U18); без edges при `default_rivers.autoresolve: true` → planner; autoresolve **не перезаписывает** declare |
@@ -279,7 +280,7 @@ flowchart TB
   CV --> CH --> CLS --> ECO
 ```
 
-**Инвариант:** surface river network **не обязан** продолжаться в caves. Связь surface ↔ cave — **optional** (sinkhole, underground spring, flooded tunnel) — declare master или autoresolve v2.
+**Инвариант:** surface river network **не обязан** продолжаться в caves. Связь surface ↔ cave — **optional v2** (sinkhole, spring); **не в scope** текущих работ — см. Q13.
 
 ### Cave ecosystem (граница доменов)
 
@@ -321,7 +322,7 @@ Climate **не** применяет surface `liquidOverlayPass` к cave water ce
 ### Connections (подземные реки)
 
 - Bed carve в cave floor cells.
-- Graph: `ConnectionEdge` с metadata **`hydrology_domain: cave`** (или `graph_level: cave` — TBD в connections TZ).
+- Graph: `ConnectionEdge` с metadata **`hydrology_domain: cave`** (или `graph_level: cave`) — **Todo / вне текущего scope**; cave connection graph **не трогаем** до Phase B caves + отдельное решение в connections TZ.
 - Types v1: reuse `river` + domain tag; v2 optional `underground_river` в registry.
 - Persist: тот же `ConnectionPersistService`; subgraph не смешивается с world highways без portal/sinkhole link.
 
@@ -352,18 +353,26 @@ generators/terrain/
     gapAnalysisPass.py          # existing
     columnFillPass.py           # existing
   hydrology/
-    types.py                    # HydrologyMask, RiverPolyline, LakeSpec, HydrologyResult, HydrologyCellRole, ShoreProfile, DeepeningBand
+    types.py                    # HydrologyMask, RiverPolyline, LakeSpec, HydrologyResult, HydrologyCellRole, ShoreProfile, DeepeningBand, RiverSegment
     seaLevelPolicy.py           # z_sea resolve
+    loadHydrologyFromWorld.py   # world.hydrology → policies
+    buildHydrologyMasterInput.py
+    resolveHydrologyBands.py
+    resolveRiverTypeClassify.py
+    loadConnectionGraph.py      # DB nodes/edges → resolved meters
+    polylineRasterize.py
+    basinKindResolver.py        # U25
+    applyHydrologyMetadata.py   # HydrologyCellIndex → MapCell.hydrology at fill
     seaBasinGenerator.py          # Coastal sea — «большое у берега»
     oceanBasinGenerator.py        # Open ocean mass (+ inland_sea mask)
     coastalLandformClassifier.py  # islands, peninsulas, coastline (read-only)
     lakeBasinGenerator.py       # Local lake carve (inland, not z_sea horizon)
     riverNetworkPlanner.py      # D8 descent; source on terrain
-    types.py                    # … RiverSegment, RapidWaypoint, RiverTypeClassifyPolicy
     riverTypeClassifier.py      # U17/U18: classify_river_segments — pure, no ConnectionEdge
     riverConnectionEmit.py      # U18: RiverSegment[] → ConnectionNode + ConnectionEdge (DTO only)
     riverBedCarver.py           # Channel + ShoreProfile; type-specific steepness
-    deepeningBandCarver.py        # Shared shore + deepening (river, lake, sea)
+    deepeningBandCarver.py      # Shared shore + deepening (river, lake, sea)
+    smoothRiverPolyline.py
     hydrologyGeneratorService.py  # Orchestrator (sync facade)
 ```
 
@@ -727,7 +736,7 @@ Loader: `resolve_hydrology_bands(category, world, local?)` → `world.hydrology.
 
 ### Import validator — `type_classify` (future, U22)
 
-> **Отложено** до общего JSON-import validator (тот же для UI редактора миров). См. [`tz_climate.md`](./tz_climate.md) § Import validator, [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) **HY-4**.
+> **Контракт:** [`tz_json_validation.md`](./tz_json_validation.md) § Normalize — schemaDefaults → explicit `worlds.hydrology`. Domain rules: ниже. Runtime hardcode `_SCHEMA_DEFAULTS` — transitional (§ Legacy json validation TZ).
 
 **Правило:** поле `null` в `hydrology.default_rivers.type_classify` → **runtime fallback** на встроенные defaults схемы (generator не падает). **Validator on import:** подставить явные значения и **записать** normalized JSON в bundle / world record.
 
@@ -905,7 +914,7 @@ def resolve_hydrology_bands(
 
 - **Было:** `z ≤ 0` AND temp OK → `liquid_body`
 - **Станет (U19):** `map_cell.hydrology.liquid_candidate == true` (persist при terrain batch) AND temp OK → `liquid_body`
-- **Исключение (U24):** `role: river_bed` — **`liquid_candidate: false`** после hydrology; climate может поставить `liquid_body` по temp / season, не по mask озёр/моря
+- **U28 (U24):** hydrology → `liquid_body` в русле; состояние — climate TZ
 
 **Persist mask (U19):** при `save_terrain_batch` после hydrology — на каждую затронутую cell:
 
@@ -959,6 +968,97 @@ run_surface_pass (P1)
 ```
 
 Settlement outdoor persist — **после** regional terrain exists (как сейчас lazy terrain).
+
+---
+
+## Контракты имплементации (2026-06)
+
+> Детальный backlog задач: [`.cursor/plans/hydrology-pre-dag.md`](../.cursor/plans/hydrology-pre-dag.md).
+
+### Координаты (C1)
+
+| Пространство | Единицы | Где |
+|---|---|---|
+| `ConnectionNode.x/y`, `NamedLocation.map_x/y` | **метры** | import bundle, graph |
+| `SurfaceHeightmap` keys `(gx, gy)` | **grid cells** | carve, gap, column fill |
+| `surface_z`, `z_sea`, node `z` | **метры** (1 z = 1 m) | heightmap |
+
+```python
+from app.application.worldData.generators.coordinates.convert import (
+    cell_size_m, meters_to_grid_x, meters_to_grid_y,
+)
+cell_m = cell_size_m(world)
+gx = meters_to_grid_x(node.x, cell_m)
+gy = meters_to_grid_y(node.y, cell_m)
+```
+
+Polyline declare → rasterize (**Bresenham**) по grid в bbox heightmap.
+
+### Persist `map_cells.hydrology` (C2, U19)
+
+Колонка **`hydrology`** (JSON, nullable) на **surface-top** cell колонки `(gx, gy)`.
+
+```json
+{
+  "liquid_candidate": true,
+  "role": "coastal_sea",
+  "deepening_index": null,
+  "connection_edge_uid": "ce-sea-west-mid"
+}
+```
+
+| `role` | `liquid_candidate` (after HY) | Climate v1 |
+|---|---|---|
+| `coastal_sea`, `open_ocean`, `inland_sea`, `lake` | `true` (open water band) | hydrology или climate → `liquid_body`; climate — **фаза** |
+| `shore` | `false` | solid shore terrain |
+| `river_bed` | optional metadata | hydrology уже **`liquid_body`**; climate — **состояние** (см. climate TZ) |
+
+Subsurface cells колонки **не** дублируют hydrology v1.
+
+### Partial climate recalc после hydrology (C14)
+
+Hydrology меняет `surface_z`, roles, `liquid_body` в dirty rect — **не** pole/anchor.
+
+| Шаг | Действие |
+|---|---|
+| Snapshot | **без изменений** (C9) |
+| Column resolve | `ClimateRecalcRequest`: `run_cell_weather=True`, `output_bbox` = hydrology dirty rect (+ pad) |
+| Liquid overlay | `run_liquid_overlay=True`, тот же или расширенный bbox; U28: river bed уже `liquid_body` — только phase/state |
+
+Cross-ref: [`tz_climate.md`](./tz_climate.md) § «Climate LOD», § «Partial recalc».
+
+### Climate и `liquid_body` (C3, U28)
+
+**Разделение:**
+
+| Pass | Ответственность |
+|---|---|
+| **Hydrology** | geometry (`surface_z`), **`system_terrain: liquid_body`** на воде/русле, `map_cells.hydrology` roles |
+| **Climate** | **`temperature_base`**, **`rainfall`**, **состояние `liquid_body`** — по контракту [`tz_climate.md`](./tz_climate.md) (`liquidOverlayPass`, material registry, …) |
+
+Hydrology **не** задаёт лёд/вода/steam — это не домен этого ТЗ.
+
+**v1 impl note:** текущий `liquidOverlayPass` ещё interim (`z<=0` + ставит `liquid_body`). Target D HY-6: для cells **уже** `liquid_body` от hydrology — climate pass **обновляет состояние**, не дублирует «создание» terrain. Детали состояния — править в **climate**, не дублировать здесь.
+
+**Не использовать** `z <= 0` как критерий воды после D HY.
+
+### Connections import (C5)
+
+Bundle keys **`connection_nodes`**, **`connection_edges`** — import/export в `WorldBundleService` (после `locations`). Hydrology **`buildHydrologyMasterInput`** читает graph из repos.
+
+**`location_uid` (C4):** v1 только на **`ConnectionNode`**. Имя озера/моря/реки — waypoint-node; edge-level `location_uid` в draft JSON deprecated.
+
+### Declare vs autoresolve (C6, U27)
+
+Per `HydrologyScope`: **declared edges/specs first** → carve; затем autoresolve если `default_<category>.autoresolve` и edge_uid не в declared set.
+
+### Procedural sea v1 (C7, C7b)
+
+Declare `coastline` carve **в bbox polyline** (с padding 1 cell). **Вне bbox** — autoresolve coastal/open ocean если `default_seas.autoresolve_*` ON (**2B**).
+
+### River bed и climate (U28)
+
+Hydrology: **`liquid_body`** в channel + `role: river_bed`. Climate: **состояние** liquid — см. [`tz_climate.md`](./tz_climate.md).
 
 ---
 
@@ -1029,12 +1129,12 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 | ~~Q6~~ | `inland_sea` vs large lake | **U25:** subtype declare (A) + topology fallback (B) + warning |
 | Q7 | Peninsula neighbor rule | 4-neighbor v1 |
 | Q8 | Mountain source detection | peak feature v1 |
-| Q9 | Melt flow storage | sidecar v1; `cell_states` v2 |
+| ~~Q9~~ | Melt flow storage | **U19/U24:** hydrology roles on `map_cells`; season `flow_level` — **v2** (climate events), не sidecar |
 | ~~Q10~~ | Declare vs autoresolve vs disable | **U10/U16:** global `enabled`; `default_<category>.enabled`; declare when bundle explicit |
 | ~~Q11~~ | River data model | **connections** like roads; `river` / `mountain_river` types |
 | ~~Q12~~ | Footprint format for sea/lake on map | **U20/U21:** declare = **`ConnectionEdge`** chain (`lake_shoreline` / `coastline`); waypoints = NamedLocation или `(x,y,z)`; **U15** bands inward from shoreline |
 | Q15 | `type_classify` null → explicit values | **U22:** runtime fallback на schema defaults; **import validator (future)** — normalize + write explicit values в bundle |
-| Q13 | Surface ↔ cave water link | optional sinkhole/spring v2; default isolated cave hydrology |
+| Q13 | Surface ↔ cave water link; cave connection graph | **вне scope сейчас**; isolated cave hydrology U12; link + graph — Phase B / v2 |
 | ~~Q14~~ | Имена для materialize | **U13:** LLM-нода DAG из контекста; не name pool / seed |
 
 ---
@@ -1059,7 +1159,8 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 - [x] U20/U21: declare lake/sea geometry via connection chains (lake_shoreline / coastline)
 - [x] U25: lake/inland_sea — subtype + topology fallback
 - [x] U26: coast = waypoint on sea coastline
-- [x] U27: rivers declare + autoresolve coexist
+- [x] U28: liquid_body in river bed on hydrology; climate phase only
+- [x] C14: partial climate recalc — column resolve in hydrology dirty bbox only
 - [x] Cave hydrology U12: underground lakes/rivers, separate ecosystem
 
 ### Impl
@@ -1089,8 +1190,13 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 
 | Дата | Изменение |
 |---|---|
+| 2026-06 | **C14:** partial climate recalc после hydrology dirty rect; cross-ref Climate LOD |
+| 2026-06 | Q13 / cave graph — вне текущего scope; Phase B |
+| 2026-06 | **U28:** liquid_body в русле на hydrology; climate — только фаза; C7b/C11/C12 |
+| 2026-06 | § Контракты имплементации C1–C7; agent plan D HY-0…7a |
 | 2026-06 | **U25–U27:** lake/inland_sea hybrid; coast waypoint; river declare + autoresolve |
-| 2026-06 | **U23/U24:** declare edges in world_template smoke; river bed solid until climate |
+| 2026-06 | **U28:** liquid_body в русле на hydrology; состояние — climate TZ |
+| 2026-06 | **U23/U24:** declare edges in world_template smoke |
 | 2026-06 | **U19–U22:** liquid_candidate on map_cells; lake/sea declare via connections; type_classify validator deferred |
 | 2026-06 | **U18:** RiverSegment + riverConnectionEmit; classifier pure; persist outside generators |
 | 2026-06 | **U17:** river vs mountain_river; classify by terrain; rapids |
@@ -1111,7 +1217,7 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 | Документ | Роль |
 |---|---|
 | [`tz_terrain_generation.md`](./tz_terrain_generation.md) | Multi-pass skeleton, gap analysis, layers |
-| [`tz_climate.md`](./tz_climate.md) | Liquid overlay, temperature phase |
+| [`tz_climate.md`](./tz_climate.md) | Liquid overlay, temperature phase, **Climate LOD**, partial recalc |
 | [`tz_structure_connections.md`](./tz_structure_connections.md) | `sea_route`, world routes |
 | [`tz_city_generation.md`](./tz_city_generation.md) | Port, `river_linear`, `adjacent_terrain` |
 | [`tz_locations.md`](./tz_locations.md) | `z=0` sea level, coordinates |

@@ -481,12 +481,17 @@ init_mode = "partial"   # full | partial
 | Building `NamedLocation` | ✅ | при layout, **если ещё не init** | ⬜ |
 | **Интерьеры** (фаза 3) | **⬜ STUB** | lazy отдельно | отдельный epic |
 
-### 11.4 Snapshot — blocked
+### 11.4 World Snapshot — unified module
 
-Runtime snapshot **нет** (schema: [project_data_storage_tz.md](./project_data_storage_tz.md) § `world_snapshots`).  
-Target: **полный snapshot мира на каждый ход** → regen, «локация изменилась», TR-2.
+Runtime **нет**; target — [`tz_world_snapshot.md`](./tz_world_snapshot.md).
 
-**Отложено до snapshot:** change detection (`partial`), regen matrix, time travel.
+| Принцип | Смысл |
+|---|---|
+| **Единый модуль** | `WorldSnapshotService` — capture / restore / branch; **не** per-domain ad-hoc snapshots |
+| **Каждый ход** | После commit — **полное** сохранение мира в `world_snapshots` ([`project_data_storage_tz.md`](./project_data_storage_tz.md)) |
+| **Потребители** | Regen diff, time travel, TR-2 debug replay, climate far LOD — читают **restore**, не свой формат |
+
+**Отложено до WS-1:** change detection (`partial` init), regen matrix, time travel UI, TR-2 unblocked.
 
 ### 11.5 DoD — persist cycle (без snapshot gate)
 

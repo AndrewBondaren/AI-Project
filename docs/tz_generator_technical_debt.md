@@ -468,12 +468,234 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | CL-14 | info | P3 | ~~Таблица tier-2 lists admin fallback; cell resolve admin off~~ | merge vs resolve в `tz_climate.md` | **resolved** |
 | CL-15 | medium | — | Rainfall = raw zone moisture; Earth freeze hardcoded | `precipitation_liquid` + `precipitation.py` + peak clamp | **resolved** |
 | CL-16 | low | P3 | `cellWeatherPass` `location_uid` from zone sample, not source cell | doc or preserve cell attribution | open |
+| CL-17 | medium | P2 | `SurfaceClimateField` — spec C6 ✅, impl ⬜; optional in **world snapshot** blob (CL-17) | `build_surface_climate_field`; ≠ unified snapshot module | open |
+| CL-18 | medium | P2 | Climate LOD — `ClimateLODPolicy`, zone routing near/medium/far | orchestrator / DAG tick; **Todo** с lazy sim LS-T2/T9 ([`tz_lazy_simulation.md`](./tz_lazy_simulation.md)) | open |
+| WS-1 | high | P1 | **World snapshot runtime** — schema ✅, `WorldSnapshotService` ⬜ | [`tz_world_snapshot.md`](./tz_world_snapshot.md) WS-0..WS-2 | open |
 
 ### Mixed responsibility (post CL-11)
 
 | ID | Severity | P | Проблема | Fix | Status |
 |---|---|---|---|---|---|
 | TR-8 | medium | P2 | `_non_surface_anchor_cells` still in assembler | `passes/nonSurfaceAnchorPass.py` | open |
+
+---
+
+## Hydrology / world bundle — smells registry (HY-S)
+
+**Scope:** Sprint 1 (D HY-0…HY-1) + `WorldBundleService` connection import.  
+**Refs:** [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md), [`.cursor/plans/hydrology-pre-dag.md`](../.cursor/plans/hydrology-pre-dag.md).
+
+### HY-GEO-1 — geographic notation (type vs subtype)
+
+**Severity:** high (был runtime bug) · **Status:** **partial** (filter fixed; enum split — HY-5)
+
+**Суть:** в ТЗ таблица пишет `geographic.lake` — это **нотация документа** (type + subtype), не значение одного поля. В БД / bundle:
+
+| Поле | Пример |
+|---|---|
+| `system_location_type` | `"geographic"` |
+| `system_location_subtype` | `"lake"` |
+
+Ошибочный фильтр `subtype.startswith("geographic.")` давал **пустой** `geographic_locations` на [`fixtures/world_template.json`](../fixtures/world_template.json).
+
+**Fix (2026-06):** `hydrologyLocations.py` — `system_location_type == GEOGRAPHIC_LOCATION_TYPE`; `GeographicSubtype` StrEnum для subtype.
+
+**Остаток:** split edges по `HydrologyConnectionType`, полный `HydrologyMasterInput` по ТЗ — HY-S-3.
+
+---
+
+### BUNDLE-1 — `_remap_bundle` growth in `WorldBundleService`
+
+**Severity:** medium · **P:** P2 (когда секций bundle > 8) · **Status:** **resolved** (variant A — `bundleRemapService.py`)
+
+**Симптом:** при duplicate-import (`world_uid` уже есть) `_remap_bundle` вручную знает PK и FK каждой секции: `locations`, `states`, `races`, `perks`, `map_cells`, `connection_nodes`, `connection_edges`. Каждая новая секция (cave graph, climate field cache export…) — ещё ~10 строк в одной функции (~72 строки сейчас).
+
+**Почему не god-class:** orchestration остаётся в `WorldBundleService`; проблема — **монолитный remap helper**, не доменная логика.
+
+#### Варианты — `BundleRemapService`
+
+| Вариант | Идея | Плюсы | Минусы |
+|---|---|---|---|
+| **A — Section registry** | `BundleSectionSpec(name, pk_field, fk_fields: list[tuple[field, uid_map_key]])` + один generic loop `deepcopy → remap PKs → rewrite world_uid` | Минимальный diff; добавление секции = одна строка в registry | FK-логика сложных секций (parent_location_uid, edge endpoints) всё равно нуждается в hooks |
+| **B — Strategy per section** | `RemapStrategy.remap_items(items, uid_map, new_world_uid) -> list[dict]`; `LocationRemapStrategy`, `ConnectionEdgeRemapStrategy`, … | Явные контракты; тестируемо по секции | Больше файлов; overkill пока секций мало |
+| **C — Defer** | Оставить `_remap_bundle` inline до N≥10 секций или второго duplicate-import bug | Нулевая стоимость сейчас | Долг растёт линейно |
+| **D — Graph remap** | Построить `EntityGraph(world → children)`; generic traverse по declared edges в spec | Единый алгоритм для любого bundle | Высокий upfront; нужен machine-readable FK map (schema или codegen) |
+
+**Рекомендация (draft):** **A** при следующей секции bundle (caves / snapshots); **B** только если hook'и registry > 3 на секцию. **C** допустим до HY-4 закрыт.
+
+**Размещение:** `application/worldData/bundleRemapService.py` (не generator); `WorldBundleService` вызывает `remap_bundle(data, version_n, strip_suffix)`.
+
+**Связь:** connections import special-case (HY-S-2) — отдельный smell; remap и import order ортогональны.
+
+---
+
+### HY-S-2 — connections import вне `sections` loop
+
+**Severity:** low · **P:** P2 · **Status:** open
+
+`ConnectionGraphService` не реализует `import_from_json(world_uid, data)` как races/locations → `WorldBundleService` держит два if-блока после цикла.
+
+| Вариант | Fix |
+|---|---|
+| A | `ConnectionGraphService.import_from_json(world_uid, {"nodes":…,"edges":…})` |
+| B | Единый `BundleSectionImporter` registry: `key → (optional preprocess, import_fn)` |
+
+---
+
+### HY-5 — wire enum (JSON ↔ StrEnum, без string literals в коде)
+
+**Severity:** medium · **P:** P1 · **Status:** **partial** — hydrology enums начаты; `jsonValidation` + shared registries ⬜
+
+**Scope:** только **master / world JSON** (`worldData`). `engine/`, `contracts/` — не трогаем.
+
+**Полный контракт:** [`tz_json_validation.md`](./tz_json_validation.md) — **§0 ENUM-E / N1-S / N1-W**; backlog HY-5 в generators — этот §.
+
+**Размещение:** `application/worldData/jsonValidation/` (не `validation/` — в системе валидаторов несколько семейств).
+
+**Симптом без этого:** magic strings в коде; doc пишет `geographic.lake`, JSON хранит два поля; опечатка → silent empty filter (HY-GEO-1).
+
+#### Контракт двух слоёв
+
+| Слой | Что хранится | Пример |
+|---|---|---|
+| **Wire** (bundle, SQLite TEXT, API JSON) | `str` | `"lake"`, `"lake_shoreline"` |
+| **Domain** (generators, orchestrators) | `StrEnum` member | `GeographicSubtype.LAKE` |
+| **Граница** | parse / serialize | `GeographicSubtype(wire)` → member; `member.value` → wire |
+
+```python
+# generators/registries/wire.py (target)
+def parse_enum(enum_cls: type[StrEnum], wire: str, *, field: str) -> StrEnum:
+    try:
+        return enum_cls(wire)
+    except ValueError as e:
+        raise WireEnumError(field, wire, enum_cls) from e
+
+# generator — NO "lake" literal
+if geographic_subtype(loc) is GeographicSubtype.LAKE:
+    ...
+
+# persist / export
+row["connection_type"] = HydrologyConnectionType.LAKE_SHORELINE.value
+```
+
+**Правило:** engine-known vocabulary в `generators/` — только через enum; grep `"lake_shoreline"` в generators → 0 (кроме enum definition).
+
+#### Три класса vocabulary (§0)
+
+| Класс | ID | Примеры | Контракт |
+|---|---|---|---|
+| **Engine-closed** | ENUM-E | `MaterialCategory`, `NodeCategory`, `GraphLevel` | StrEnum; unknown на import → reject |
+| **N1-S schema** | N1-S | `stat_schema[]`, `npc_fields[]` | `system_name`/`display_name`; type field → ENUM-E |
+| **N1-W vocabulary** | N1-W | `material_registry[]`, `climate_zone_registry[]` | мастер добавляет строки; refs → REF-W index |
+
+Hydrology declare (U20–U27): wire keys **ENUM-E E-10**; display в N1-W-06 — не смешивать.
+
+#### Варианты
+
+| Вариант | Суть | Когда |
+|---|---|---|
+| **A — StrEnum + parse at boundary** | manual `parse_enum()` в import + master input | **сейчас** |
+| **A+ — Pydantic BeforeValidator** | DTO import rows с typed fields | HY-4 validator |
+| **B — Policy dataclass** | `HydrologyWorldPolicy.model_validate(...)` | HY-4 blob |
+| **C — Codegen из schema** | fixture → Python + TS enums | editor v2 |
+
+**Рекомендация:** **A** немедленно; **A+** на bundle rows; **B** для `world.hydrology`.
+
+#### Производительность
+
+Parse на location/edge/policy — не на map cell. Bottleneck — LLM + grid; просадки нет.
+
+#### Migration checklist
+
+1. `generators/registries/locationTypes.py` — `LocationType.GEOGRAPHIC`
+2. `generators/registries/connectionTypes.py`
+3. `worldData/jsonValidation/models/` — bundle row DTOs
+4. `worldData/jsonValidation/bundleValidator.py` — hook в `WorldBundleService`
+5. Убрать `CLIMATE_POLE_TYPE = "climate_pole"` string const → enum
+
+#### Персонаж vs мир (TZ storage § character_sheet, players, npcs)
+
+По [`project_data_storage_tz.md`](./project_data_storage_tz.md): **character_sheet импорт/экспорт независим от мира**; `players` — глобальные; `npcs` — в world bundle; связка **только в runtime** (`game_sessions`: `world_uid` + `player_character_id`).
+
+| Сущность | JSON import | Enum / wire | jsonValidation пакет |
+|---|---|---|---|
+| World bundle | `POST /worlds/import` | `generators/registries/` (simulation-closed) | **`worldData/jsonValidation/`** |
+| Character sheet | `POST /characters/import` | platform + refs на ключи реестров мира | **`character/jsonValidation/`** (future) — **не** worldData |
+| NPC rows | часть world bundle | world `npc_fields` + engine node_category | world bundle validator + world context |
+
+**Правило:** ключи персонажа (`system_colour`, stats, perks) **validate vs `world.*_registry` при bind/migrate**, не смешивать с world bundle enum. `character.world_schema_version` ↔ `world.schema_version` — отдельный pipeline (TZ § Schema versioning).
+
+**Не класть** character enums в `generators/registries/` — там только world simulation wire.
+
+---
+
+### HY-S-4 — `HYDROLOGY_SCHEMA_DEFAULTS` centralization
+
+**Severity:** low · **P:** P2 · **Status:** open
+
+**Симптом:** defaults размазаны:
+
+| Место | Что |
+|---|---|
+| `resolveRiverTypeClassify._SCHEMA_DEFAULTS` | `mountain_min_source_z=40`, … |
+| `resolveHydrologyBands._BAND_MIN/_BAND_MAX` | `1`, `99` |
+| `is_hydrology_enabled` | `enabled` default `True` |
+| [`fixtures/world_template.json`](../fixtures/world_template.json) | `type_classify` null → runtime fallback |
+| [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) § U22 | таблица schema defaults (doc-only) |
+
+**Риск:** drift doc ↔ code ↔ fixture; HY-4 validator должен писать те же числа, что runtime.
+
+#### Варианты
+
+| Вариант | Идея |
+|---|---|
+| **A — `hydrologySchemaDefaults.py`** | Один модуль: `RIVER_TYPE_CLASSIFY_DEFAULTS`, `BAND_LIMITS`, `DEFAULT_ENABLED`; loaders import оттуда; TZ ссылается на module |
+| **B — `HydrologyWorldPolicy` dataclass** | Defaults as `field(default_factory=…)`; `resolve_*` принимают typed policy, не `dict` |
+| **C — Explicit constants in fixture only** | Validator on import заполняет null; runtime **без** fallback (fail loud) |
+| **D — A + B** | Module constants → construct default `HydrologyWorldPolicy`; parse merges overrides |
+
+**Рекомендация (draft):** **D** к моменту HY-4 validator; до него **A** (один файл, ~30 строк) — cheap win.
+
+**Связь:** HY-4 (type_classify normalize on import), CL-5 (climate import validator pattern).
+
+---
+
+### HY-S-3 — stub `HydrologyMasterInput` vs TZ target
+
+**Severity:** medium · **P:** P1 (Sprint 2 entry) · **Status:** open
+
+Stub несёт `connection_graph` + `geographic_locations`; ТЗ — `declared_lake_shorelines`, `declared_coastlines`, `declared_river_edges`, `world_policy: HydrologyWorldPolicy`, `local_profiles`.
+
+| Вариант | Fix |
+|---|---|
+| A | Incremental: Sprint 2 добавляет split edges + typed policy; stub fields deprecated |
+| B | Big-bang dataclass по ТЗ до generators |
+
+**Рекомендация:** **A** — split by `HydrologyConnectionType` в `buildHydrologyMasterInput` в HY-2/3.
+
+---
+
+### HY-S-5 — `LoadedConnectionGraph.edges: list[dict]`
+
+**Severity:** low · **P:** P2 · **Status:** open
+
+Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Неявный контракт polyline / width для rasterize.
+
+**Fix:** `ResolvedConnectionEdge` frozen dataclass; или reuse `ConnectionEdge` если generator layer may import DB models (climate pattern).
+
+---
+
+### Sprint 1 registry (summary)
+
+| ID | Severity | P | Проблема | Status |
+|---|---|---|---|---|
+| HY-GEO-1 | high | P1 | geographic filter doc↔DB notation | **partial** (filter ✅; full enum registry — HY-5) |
+| BUNDLE-1 | medium | P2 | `_remap_bundle` monolith | **resolved** — `bundleRemapService.py` registry |
+| HY-S-2 | low | P2 | connections import special-case | open |
+| HY-5 | medium | P1 | StrEnum / policy parse (Retrofit 2) | **partial** |
+| HY-S-4 | low | P2 | `HYDROLOGY_SCHEMA_DEFAULTS` scatter | open |
+| HY-S-3 | medium | P1 | MasterInput stub vs TZ | open |
+| HY-S-5 | low | P2 | edges as dict | open |
 
 ---
 
@@ -498,5 +720,8 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | 2026-06 | NC-1 Phase 1–5; `tz_terrain_generation.md` full rework (Phase 6) |
 | 2026-06 | **Terrain TZ утверждено:** multi-pass skeleton, N_eff, materialization pass order; TR-1 open (код vs ТЗ) |
 | 2026-06 | Climate polish sprint: CL-4, CL-2a/2b/2e, CL-10..12, DR-5 |
-| 2026-06 | Climate v2.1: pole/local tiers, `tierResolve.py`, CL-2/CL-13 resolved |
+| 2026-06 | `tz_world_snapshot.md` — unified WorldSnapshotService; climate terminology disambiguation v2.6.1 |
+| 2026-06 | Climate v2.6 TZ: LOD C6–C13; CL-17 SurfaceClimateField; CL-18 LOD policy |
 | 2026-06 | Polish backlog rework; CL-2a..CL-2e, DR-5 added; FM-1 resolved |
+| 2026-06 | **HY-S registry:** BUNDLE-1, HY-5, HY-S-4, HY-GEO-1 |
+| 2026-06 | **`docs/tz_json_validation.md` v0.1** — Field Contract Registry; ENUM-E / REF-W / N1-S / N1-W (§0) |
