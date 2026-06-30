@@ -19,6 +19,7 @@ metadata:
 | T2 section import hooks | ✅ locations, races, perks, map |
 | T3–T5 CRUD hooks | ✅ world, locations, races, perks |
 | T6 seed import | ✅ SeedTableValidator + import/upsert gate |
+| SCH-PERK-ROW | ✅ PerkRowValidator |
 | Transitional | ad-hoc validators в services + runtime hardcodes в generators |
 | Следующая версия реестра | **0.2** — после JV-1…JV-3 (Pydantic row models + bundleValidator) |
 
@@ -1141,7 +1142,7 @@ Struct filter today ([`Player`](../backend/app/db/models/player.py)). Per-field 
 | | |
 |---|---|
 | **Семейство** | **F1** World master |
-| **Validator** | `PerkRowValidator` ⬜ future (**SCH-PERK-ROW** §B) |
+| **Validator** | `PerkRowValidator` ✅ (**SCH-PERK-ROW** §B) |
 | **Impl** | ◐ `WorldPerkService.import_from_json` — struct only |
 | **JV** | ⬜ future |
 
@@ -1810,10 +1811,66 @@ backend/app/application/
 
 ---
 
+## Рефакторинг (post–v0.1)
+
+> Технический аудит smells после JV-0…JV-7, T2–T6, SCH-PERK-ROW. **Не блокирует** vertical slice; выполнять после стабилизации JV-1…JV-3 и закрытия открытых schema validators. Детальный roadmap: [`.cursor/plans/json-validation-roadmap.md`](../.cursor/plans/json-validation-roadmap.md).
+
+### Выявленные smells
+
+| # | Категория | Где | Суть |
+|---|---|---|---|
+| S1 | God object | `ValidationContext`, `ValidationRequest` | один DTO/context на bundle + CRUD + seed + character snapshots |
+| S2 | God object | `worldRegistryIndex.py` | Pass-1 «compiler» всех N1-W registries + special-case (muscle, terrain categories) |
+| S3 | God object | `orchestrator.py` (`PrepareContextStage`, `RunValidatorsStage`) | матрица `ValidationKind × SectionKey` растёт if-elif вместо конфигурации |
+| S4 | Несогласованная ответственность | три entry path | orchestrator (F1) vs facade template collectors (JV-4/5) vs `CharacterValidationFacade` (F2) |
+| S5 | Несогласованная ответственность | `WorldService._validate` | дубль `SCH-WORLD-ROW` после T1/T3–T5 facade gate |
+| S6 | Несогласованная ответственность | `api/utils/*Gate.py` ×3 | load world/seed → facade → 422 — copy-paste без shared loader |
+| S7 | Несогласованная ответственность | `ValidatorRegistry.for_sections(∅)` | `sections=frozenset()` = «всегда» (Envelope, DeclareTopology, SeedTable) — неочевидный контракт |
+| S8 | Over-validation | T5 CRUD entity | synthetic bundle всегда включает `world` → полный WORLD pipeline (hydrology, climate, declare) на каждый PATCH row |
+| S9 | Большие методы | `raceContract`, `buildingTemplate`, `connectionEdgeRow`, `namedLocationRow` | `collect_*_issues` 100–250 строк, смешение row / cross-row / domain geometry |
+| S10 | Один класс — одна функция | `*Validator` ×14 | класс — thin wrapper над `collect_*`; нужен только для Protocol + `factory.register` |
+| S11 | Хардкоды | `worldRow`, `connectionEdgeRow`, `declareTopology`, `seedTable`, `worldRegistryIndex` | scalar limits, river turn 45°, lake subtypes, `system_{table}`, registry field maps |
+| S12 | Dependency inversion | `hydrologyDefaults` / `climateDefaults` в `jsonValidation/` | generators импортируют canonical defaults из validation layer |
+| S13 | Мёртвый код | `api/utils/json_resolver.py`, `response_helpers.py` | дубликаты после rename в camelCase (`jsonResolver`, `responseHelpers`) |
+
+### Очередь рефакторинга
+
+| ID | P | Smell | Действие | Критерий готовности |
+|---|---|---|---|---|
+| **RF-0** | P0 | S5 | Убрать `WorldService._validate` / `collect_world_row_issues_from_world` с import path (T1 уже gate); оставить только safety net там, где facade ещё не wired | bundle import не вызывает service-level duplicate |
+| **RF-1** | P0 | S13 | Удалить snake_case дубликаты в `api/utils/` | один модуль на util, routes импортируют camelCase |
+| **RF-2** | P1 | S6 | `contextLoader.py` (world row + seed snapshot из repos) + единый `raise_validation_http_error` для gates | gates ≤ thin HTTP shell |
+| **RF-3** | P1 | S8 | Режим `CRUD_PATCH`: WORLD validators = scalar-only (`SCH-WORLD-ROW` + refs если patch затрагивает registry keys) или skip unchanged policy blocks | PATCH location не гоняет hydrology/climate если `world` не менялся |
+| **RF-4** | P1 | S7 | Явный `ValidatorScope.GLOBAL` / `cross_section` вместо `sections=∅` | registry filter читается без комментария |
+| **RF-5** | P2 | S4 (templates) | Template kinds (`BUILDING/DISTRICT/BARRIER`) — либо children в `ValidatorRegistry`, либо отдельный `TemplateValidationFacade` с тем же `ValidationResult` | один dispatch pattern на standalone JSON |
+| **RF-6** | P2 | S2 | Разбить `worldRegistryIndex`: specs (из Field Contract / codegen) + builder per registry family | новый N1-W registry = строка в spec table, не правка monolith |
+| **RF-7** | P2 | S9 | Split `collect_*_issues`: row scalar / Pass-2 refs / cross-row — отдельные функции в том же модуле | unit tests на каждый слой |
+| **RF-8** | P2 | S12 | Canonical defaults → `worldData/defaults/` или `generators/registries/defaults/`; validation и generators читают один источник | `jsonValidation` не импортируется generators для runtime |
+| **RF-9** | P3 | S10 | Registry of `(schema_id, sections, fn)` или `@register_validator` — без 14 одно-method классов | factory API стабилен, миграция механическая |
+| **RF-10** | P3 | S3 | `PrepareContextStage` / `RunValidatorsStage` → таблица конфигурации `(kind, section) → stages, validators` | новый trigger = строка конфига |
+| **RF-11** | P3 | S1 | Узкий context: `WorldValidationContext` / `CharacterValidationContext` / shared `RegistryIndexes` | `ValidationRequest` не раздувается editor-only полями |
+
+### Целевая архитектура (после RF-2…RF-10)
+
+```
+HTTP route
+  → gate (load context via contextLoader)
+  → JsonValidationFacade.validate(ValidationRequest)
+       → CHARACTER → CharacterValidationFacade
+       → TEMPLATE_*  → TemplateValidationFacade | registry branch
+       → else        → ValidationOrchestrator (config-driven stages)
+  → 422 ValidationResult | persist
+```
+
+**Anti-patterns при рефакторинге:** не переносить semantic checks обратно в services; не смешивать RF с JV-8 schema expansion в одном PR; не менять reject/normalize policy без обновления Field Contract Registry.
+
+---
+
 ## Changelog
 
 | Версия | Дата | Изменение |
 |---|---|---|
+| **0.1** | 2026-06 | **§ Рефакторинг (post–v0.1)** — smells S1–S13, очередь RF-0…RF-11 |
 | **0.1** | 2026-06 | **§ Runtime validation (read path)** — DB-first, T9, sibling checks F2/F4, anti-patterns |
 | **0.1** | 2026-06 | JSON Schema Registry §A/§B — cross-ref **Семейство** + **Validator** на каждую SCH-* |
 | **0.1** | 2026-06 | **§ Семейства × JSON Schema Registry** — F0–F7, LIST/ROW/CONTRACT, SCH→validator |

@@ -19,6 +19,7 @@ from app.application.worldData.jsonValidation.validators.declareTopology import 
 from app.application.worldData.jsonValidation.validators.envelope import EnvelopeValidator
 from app.application.worldData.jsonValidation.validators.hydrologyPolicy import HydrologyPolicyValidator
 from app.application.worldData.jsonValidation.validators.namedLocationRow import NamedLocationRowValidator
+from app.application.worldData.jsonValidation.validators.perkRow import PerkRowValidator
 from app.application.worldData.jsonValidation.validators.raceContract import RaceContractValidator
 from app.application.worldData.jsonValidation.validators.raceRow import RaceRowValidator
 from app.application.worldData.jsonValidation.validators.registryRefs import RegistryRefsValidator
@@ -43,6 +44,7 @@ def build_default_registry() -> ValidatorRegistry:
     registry.register(DeclareTopologyValidator())
     registry.register(RaceRowValidator())
     registry.register(RaceContractValidator())
+    registry.register(PerkRowValidator())
     registry.register(SeedTableValidator())
     return registry
 
