@@ -1,7 +1,7 @@
 {
   "_template_meta": {
     "version": "2026-06",
-    "description": "Канонический шаблон мира — climate/terrain/hydrology/caves + матрица локаций для тестов (размеры settlement, климат, access, geographic declare, district/building/room). map_cells пуст — terrain через DAG.",
+    "description": "Канонический шаблон мира — climate/terrain/hydrology/caves + матрица локаций для тестов (размеры settlement, климат, access, geographic declare, district/building/room). map_cells пуст — terrain через DAG. connection_nodes/edges — declare hydrology (U20–U27); import persist connections — ⬜ до D HY-4.",
     "docs": [
       "docs/tz_locations.md",
       "docs/tz_climate.md",
@@ -632,6 +632,227 @@
       "state_uid": "state-template-south",
       "created_at": "2026-06-26T00:00:00",
       "is_selectable": false
+    }
+  ],
+
+  "connection_nodes": [
+    {
+      "node_uid": "cn-lake-moon-a",
+      "world_uid": "world-template-001",
+      "location_uid": "loc-template-lake-declared",
+      "x": 15000, "y": 9000, "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-lake-moon-b",
+      "world_uid": "world-template-001",
+      "x": 16800, "y": 9600, "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-lake-moon-c",
+      "world_uid": "world-template-001",
+      "x": 16200, "y": 7800, "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-lake-moon-d",
+      "world_uid": "world-template-001",
+      "x": 13800, "y": 8400, "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+
+    {
+      "node_uid": "cn-sea-west",
+      "world_uid": "world-template-001",
+      "x": 21000, "y": 6000, "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-sea-mid",
+      "world_uid": "world-template-001",
+      "location_uid": "loc-template-sea-declared",
+      "x": 24000, "y": 6000, "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-coast-fjord",
+      "world_uid": "world-template-001",
+      "location_uid": "loc-template-coast-declared",
+      "x": 30000, "y": 6000, "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-sea-east",
+      "world_uid": "world-template-001",
+      "x": 36000, "y": 6000, "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+
+    {
+      "node_uid": "cn-river-silver-src",
+      "world_uid": "world-template-001",
+      "location_uid": "loc-template-peak-declared",
+      "x": 6000, "y": 18000, "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-river-silver-mid",
+      "world_uid": "world-template-001",
+      "location_uid": "loc-template-river-declared",
+      "x": 9000, "y": 18000, "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-river-silver-2",
+      "world_uid": "world-template-001",
+      "x": 12000, "y": 15000, "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-river-silver-3",
+      "world_uid": "world-template-001",
+      "x": 15000, "y": 12000, "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-river-silver-4",
+      "world_uid": "world-template-001",
+      "x": 18000, "y": 9000, "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-river-silver-mouth",
+      "world_uid": "world-template-001",
+      "x": 21000, "y": 6000, "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    }
+  ],
+
+  "connection_edges": [
+    {
+      "edge_uid": "ce-lake-moon-ab",
+      "world_uid": "world-template-001",
+      "from_node_uid": "cn-lake-moon-a",
+      "to_node_uid": "cn-lake-moon-b",
+      "connection_type": "lake_shoreline",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-lake-moon-bc",
+      "world_uid": "world-template-001",
+      "from_node_uid": "cn-lake-moon-b",
+      "to_node_uid": "cn-lake-moon-c",
+      "connection_type": "lake_shoreline",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-lake-moon-cd",
+      "world_uid": "world-template-001",
+      "from_node_uid": "cn-lake-moon-c",
+      "to_node_uid": "cn-lake-moon-d",
+      "connection_type": "lake_shoreline",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-lake-moon-da",
+      "world_uid": "world-template-001",
+      "from_node_uid": "cn-lake-moon-d",
+      "to_node_uid": "cn-lake-moon-a",
+      "connection_type": "lake_shoreline",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+
+    {
+      "edge_uid": "ce-sea-west-mid",
+      "world_uid": "world-template-001",
+      "from_node_uid": "cn-sea-west",
+      "to_node_uid": "cn-sea-mid",
+      "connection_type": "coastline",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-sea-mid-fjord",
+      "world_uid": "world-template-001",
+      "from_node_uid": "cn-sea-mid",
+      "to_node_uid": "cn-coast-fjord",
+      "connection_type": "coastline",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-sea-fjord-east",
+      "world_uid": "world-template-001",
+      "from_node_uid": "cn-coast-fjord",
+      "to_node_uid": "cn-sea-east",
+      "connection_type": "coastline",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+
+    {
+      "edge_uid": "ce-river-silver-1",
+      "world_uid": "world-template-001",
+      "from_node_uid": "cn-river-silver-src",
+      "to_node_uid": "cn-river-silver-mid",
+      "connection_type": "mountain_river",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-river-silver-2",
+      "world_uid": "world-template-001",
+      "from_node_uid": "cn-river-silver-mid",
+      "to_node_uid": "cn-river-silver-2",
+      "connection_type": "mountain_river",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-river-silver-3",
+      "world_uid": "world-template-001",
+      "from_node_uid": "cn-river-silver-2",
+      "to_node_uid": "cn-river-silver-3",
+      "connection_type": "mountain_river",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-river-silver-4",
+      "world_uid": "world-template-001",
+      "from_node_uid": "cn-river-silver-3",
+      "to_node_uid": "cn-river-silver-4",
+      "connection_type": "river",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-river-silver-5",
+      "world_uid": "world-template-001",
+      "from_node_uid": "cn-river-silver-4",
+      "to_node_uid": "cn-river-silver-mouth",
+      "connection_type": "river",
+      "graph_level": "world",
+      "width_cells": 1
     }
   ],
 

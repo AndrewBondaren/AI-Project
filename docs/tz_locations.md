@@ -106,8 +106,8 @@ Generators **не** пишут в `named_locations` и **не** вызывают
 | Семейство | `NamedLocation` | Без location (autoresolve) |
 |---|---|---|
 | **География** | declare + имя | surface peak/lake/plain; **подземная** вода — cave systems (U12), не surface heightmap |
-| **Озёра / море (declare)** | имя + **`ConnectionEdge`** chain | **`lake_shoreline`** / **`coastline`** (U20/U21); waypoints = location или `(x,y,z)` |
-| **Реки** | optional имя | `ConnectionEdge`, `location_uid = null` |
+| **Озёра / море (declare)** | имя + **`ConnectionEdge`** chain | **`lake_shoreline`** / **`coastline`** (U20/U21); coast = node on sea polyline (U26) |
+| **Реки** | optional имя | **`ConnectionEdge`** declare **или** autoresolve (U27); `location_uid` может быть `null` |
 | **Поселения** | обычно есть | minimal repair — исключение |
 
 | Семейство | Примеры `display_name` | Роль | Geometry / persist |

@@ -35,6 +35,11 @@ metadata:
 | U20 | **Declare озеро — connections:** контур = цепочка **`ConnectionEdge`** `lake_shoreline` (A→B→C→D…; замкнутый контур); узлы — **`NamedLocation`** (`location_uid`) **или** мировые `(x,y,z)` |
 | U21 | **Declare море — connections:** без radius; **polyline/polygon** = та же модель — цепочка **`ConnectionEdge`** `coastline`; waypoints — `NamedLocation` или мировые координаты |
 | U22 | **`type_classify` null:** runtime **fallback** на встроенные defaults схемы; **import validator (future):** проверить defaults, **записать явные значения** в bundle (normalize on import) — см. § Import validator |
+| U23 | **Smoke fixture:** [`fixtures/world_template.json`](../fixtures/world_template.json) — **declare** `connection_nodes/edges` для lake/sea/coast **до** D HY-3 (не только autoresolve) |
+| U24 | **River bed:** carve = **solid** + `role: river_bed`; **`liquid_candidate: false`** на hydrology pass; `liquid_body` — только climate (temp) или runtime season — **не** глобальная вода в русле при carve |
+| U25 | **Lake vs inland_sea (Q6):** declare по **subtype** (A): `lake` + `lake_shoreline`, `inland_sea` + `coastline` на `z_sea`; при **несовпадении** subtype и topology — **fallback (B):** autoresolve role + **`logger.warning`**, carve по topology (не по ошибочному subtype) |
+| U26 | **Coast segment (Q4):** `geographic.coast` — **waypoint** на цепочке `coastline` моря (`ConnectionNode.location_uid`); не отдельная геометрия |
+| U27 | **Реки (Q5):** **declare OR autoresolve** — оба пути; полный polyline мастера → import edges, classifier **skip** (U18); без edges при `default_rivers.autoresolve: true` → planner; autoresolve **не перезаписывает** declare |
 
 ## Назначение
 
@@ -775,7 +780,9 @@ ConnectionNode P ──coastline──────► Q ──► R             
 | **Мировые** | явные `x`, `y`, `z` на `ConnectionNode`; `location_uid = null` |
 
 **Озеро (U20):** declare **обязан** иметь `lake_shoreline` edges; optional `NamedLocation` (`geographic.lake`) для имени + link `location_uid` на edge/group.  
-**Море (U21):** declare **`coastline`** edges; optional `geographic.sea` / `coast` для имени. Polygon = замкнутая цепочка; polyline = открытый участок берега.
+**Море (U21):** declare **`coastline`** edges; optional `geographic.sea` / `coast` для имени. Polygon = замкнутая цепочка; polyline = открытый участок берега.  
+**Фьорд / coast (U26):** `geographic.coast` — узел **на** polyline моря, не второй контур.  
+**Lake vs inland_sea (U25):** subtype задаёт **intent** мастера; loader после построения mask проверяет topology — при mismatch **warning + carve по фактической topology** (local basin → `LakeBasinGenerator`; closed на `z_sea` в сушe → inland_sea path).
 
 **Draft bundle (озеро):**
 
@@ -796,11 +803,23 @@ ConnectionNode P ──coastline──────► Q ──► R             
 
 Persist edges — `ConnectionPersistService` (orchestration); carve — `LakeBasinGenerator` / `SeaBasinGenerator` по smoothed polyline.
 
+#### Topology fallback — lake vs inland_sea (U25)
+
+После rasterize контура (closed polygon):
+
+| Topology | Carve path | Если subtype мастера другой |
+|---|---|---|
+| Local basin, `surface_z` ниже соседей, **не** на `z_sea` | `LakeBasinGenerator`, role `lake` | `inland_sea` / `sea` → **warning**, carve как lake |
+| Closed contour на **`z_sea`**, land вокруг | inland_sea / `OceanBasinGenerator`, role `inland_sea` | `lake` → **warning**, carve как inland_sea |
+| Open `coastline`, контакт с open ocean | `SeaBasinGenerator`, role `coastal_sea` | — |
+
+Subtype в bundle **не reject** (до validator v2); orchestration **доверяет topology** для carve, subtype — для UI/LLM intent.
+
 ### Реки — connections + имя
 
 1. **Terrain:** `RiverBedCarver` (bed в heightmap).
 2. **Graph:** `ConnectionNode` + `ConnectionEdge`, persist `ConnectionPersistService`.
-3. **Declare:** `ConnectionEdge` list — classifier **skip** (U18). **Autoresolve:** planner → smooth → classify → carve → **emit** (DTO) → persist в orchestration.
+3. **Declare:** `ConnectionEdge` list — classifier **skip** (U18). **Autoresolve:** planner → smooth → classify → carve → **emit** (DTO) → persist в orchestration. **U27:** оба режима; declare **не заменяется** autoresolve для того же uid/edge set.
 4. **Types:** `river`, `mountain_river` в `connection_type_registry`.
 5. **Название (optional):** `NamedLocation` (`geographic.river`) **или** `ConnectionEdge.location_uid`; оба могут быть `null` — безымянная река.
 6. **Повороты (U14):** между соседними сегментами **≤ 45°**; см. connections TZ § river curve.
@@ -886,6 +905,7 @@ def resolve_hydrology_bands(
 
 - **Было:** `z ≤ 0` AND temp OK → `liquid_body`
 - **Станет (U19):** `map_cell.hydrology.liquid_candidate == true` (persist при terrain batch) AND temp OK → `liquid_body`
+- **Исключение (U24):** `role: river_bed` — **`liquid_candidate: false`** после hydrology; climate может поставить `liquid_body` по temp / season, не по mask озёр/моря
 
 **Persist mask (U19):** при `save_terrain_batch` после hydrology — на каждую затронутую cell:
 
@@ -1006,7 +1026,7 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 | ~~Q3~~ | `liquid_candidate` storage | **U19:** persist на **`map_cells` metadata** v1 |
 | Q4 | Underwater subsurface terrain | dry rock band v1; **cave water** — отдельный домен U12, не surface hydrology |
 | Q5 | Closed planet ocean wrap | defer |
-| Q6 | `inland_sea` vs large lake | declared `inland_sea` location vs `lake`; autoresolve distinguishes by mask |
+| ~~Q6~~ | `inland_sea` vs large lake | **U25:** subtype declare (A) + topology fallback (B) + warning |
 | Q7 | Peninsula neighbor rule | 4-neighbor v1 |
 | Q8 | Mountain source detection | peak feature v1 |
 | Q9 | Melt flow storage | sidecar v1; `cell_states` v2 |
@@ -1037,7 +1057,9 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 - [x] U15: shore + bands from world category settings; local override
 - [x] U19: liquid_candidate + hydrology roles on map_cells metadata
 - [x] U20/U21: declare lake/sea geometry via connection chains (lake_shoreline / coastline)
-- [x] U22: type_classify null → schema defaults; validator normalize (future)
+- [x] U25: lake/inland_sea — subtype + topology fallback
+- [x] U26: coast = waypoint on sea coastline
+- [x] U27: rivers declare + autoresolve coexist
 - [x] Cave hydrology U12: underground lakes/rivers, separate ecosystem
 
 ### Impl
@@ -1067,6 +1089,8 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 
 | Дата | Изменение |
 |---|---|
+| 2026-06 | **U25–U27:** lake/inland_sea hybrid; coast waypoint; river declare + autoresolve |
+| 2026-06 | **U23/U24:** declare edges in world_template smoke; river bed solid until climate |
 | 2026-06 | **U19–U22:** liquid_candidate on map_cells; lake/sea declare via connections; type_classify validator deferred |
 | 2026-06 | **U18:** RiverSegment + riverConnectionEmit; classifier pure; persist outside generators |
 | 2026-06 | **U17:** river vs mountain_river; classify by terrain; rapids |
