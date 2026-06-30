@@ -15,7 +15,7 @@ metadata:
 
 | Поле | Значение |
 |---|---|
-| Код `worldData/jsonValidation/` | ✅ Phase 5 + JV-1/2 gap closure (E-03…05, cross-row, T2 locations) |
+| Код `worldData/jsonValidation/` | ✅ Phase 6 — character package (JV-6) |
 | Transitional | ad-hoc validators в services + runtime hardcodes в generators |
 | Следующая версия реестра | **0.2** — после JV-1…JV-3 (Pydantic row models + bundleValidator) |
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+from app.application.character.jsonValidation.facade import CharacterValidationFacade
 from app.application.worldData.jsonValidation.factory import (
     build_default_orchestrator,
     build_default_registry,
@@ -39,9 +40,11 @@ class JsonValidationFacade:
         self,
         registry: ValidatorRegistry | None = None,
         orchestrator: ValidationOrchestrator | None = None,
+        character_validation: CharacterValidationFacade | None = None,
     ) -> None:
         self._registry = registry or build_default_registry()
         self._orchestrator = orchestrator or build_default_orchestrator()
+        self._character_validation = character_validation or CharacterValidationFacade()
 
     @property
     def registry(self) -> ValidatorRegistry:
@@ -53,7 +56,7 @@ class JsonValidationFacade:
 
     async def validate(self, request: ValidationRequest) -> ValidationResult:
         if request.kind == ValidationKind.CHARACTER:
-            return ValidationResult(ok=True)
+            return await self._character_validation.validate(request)
 
         collector = _TEMPLATE_COLLECTORS.get(request.kind)
         if collector is not None:

@@ -47,6 +47,10 @@ class ValidationRequest:
     section: SectionKey | None = None
     world_uid: str | None = None
     seed_snapshot: dict[str, list[dict]] | None = None
+    world_context: dict[str, Any] | None = None
+    races_snapshot: list[dict[str, Any]] | None = None
+    locations_snapshot: list[dict[str, Any]] | None = None
+    expected_world_schema_version: str | None = None
 
 
 @dataclass

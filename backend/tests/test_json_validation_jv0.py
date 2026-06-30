@@ -58,13 +58,19 @@ class TestJsonValidationFacade(unittest.TestCase):
         )))
         self.assertTrue(result.ok)
 
-    def test_character_delegates_stub_ok(self):
+    def test_character_delegates_to_character_facade(self):
         facade = JsonValidationFacade()
         result = _run(facade.validate(ValidationRequest(
             kind=ValidationKind.CHARACTER,
+            payload={"display_name": "Hero"},
+        )))
+        self.assertTrue(result.ok, result.issues)
+        bad = _run(facade.validate(ValidationRequest(
+            kind=ValidationKind.CHARACTER,
             payload={"name": "Hero"},
         )))
-        self.assertTrue(result.ok)
+        self.assertFalse(bad.ok)
+        self.assertTrue(any(i.code == "UNKNOWN_FIELD" for i in bad.issues))
 
     def test_registry_validator_failure(self):
         issue = ValidationIssue(
