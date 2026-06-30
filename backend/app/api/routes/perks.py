@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
+from app.api.utils.crudPatchGate import gate_entity_create, gate_entity_update
 from app.api.utils.jsonResolver import JsonResolver
 from app.api.utils.sectionImportGate import gate_section_import
 from app.application.worldData.jsonValidation.types import SectionKey
@@ -30,7 +31,8 @@ async def create_perk(
     data: dict[str, Any],
     container=Depends(get_container),
 ) -> dict:
-    perk = await container.perk_service().create(world_uid, data)
+    row = await gate_entity_create(container, world_uid, SectionKey.PERKS, data)
+    perk = await container.perk_service().create(world_uid, row)
     return asdict(perk)
 
 
@@ -41,6 +43,15 @@ async def update_perk(
     data: dict[str, Any],
     container=Depends(get_container),
 ) -> dict:
+    await gate_entity_update(
+        container,
+        world_uid,
+        SectionKey.PERKS,
+        perk_uid,
+        data,
+        load_existing=container.perk_service().get_by_id,
+        immutable=frozenset({"perk_uid", "world_uid"}),
+    )
     perk = await container.perk_service().update(world_uid, perk_uid, data)
     return asdict(perk)
 

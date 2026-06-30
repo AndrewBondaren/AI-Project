@@ -43,7 +43,6 @@ class WorldService:
 
     async def create(self, data: dict) -> World:
         world = World(**data)
-        self._validate(world)
         await self._repo.create(world)
         return world
 
@@ -58,8 +57,6 @@ class WorldService:
         for key, value in data.items():
             if hasattr(world, key) and key not in self._IMMUTABLE:
                 setattr(world, key, value)
-
-        self._validate(world)
 
         map_size_changed = old_map_cell_size != world.map_cell_size_m
 

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
+from app.api.utils.crudPatchGate import gate_world_create, gate_world_update
 from app.api.utils.jsonResolver import JsonResolver
 from app.api.utils.responseHelpers import json_or_download
 
@@ -35,7 +36,8 @@ async def get_world(world_uid: str, container=Depends(get_container)) -> dict:
 
 @router.post("/worlds", status_code=201)
 async def create_world(data: dict[str, Any], container=Depends(get_container)) -> dict:
-    world = await container.world_service().create(data)
+    normalized = await gate_world_create(container, data)
+    world = await container.world_service().create(normalized)
     return asdict(world)
 
 
@@ -45,6 +47,10 @@ async def update_world(
     data: dict[str, Any],
     container=Depends(get_container),
 ) -> JSONResponse:
+    patch = dict(data)
+    patch.pop("force", None)
+    await gate_world_update(container, world_uid, patch)
+
     result = await container.world_service().update(world_uid, data)
 
     if result.requires_force:

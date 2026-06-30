@@ -17,6 +17,7 @@ metadata:
 |---|---|
 | Код `worldData/jsonValidation/` | ✅ Phase 7 — runtime legacy warn-only (JV-7) |
 | T2 section import hooks | ✅ locations, races, perks, map |
+| T3–T5 CRUD hooks | ✅ world, locations, races, perks |
 | Transitional | ad-hoc validators в services + runtime hardcodes в generators |
 | Следующая версия реестра | **0.2** — после JV-1…JV-3 (Pydantic row models + bundleValidator) |
 
@@ -1698,8 +1699,9 @@ RefKind ↔ REF-W — таблица § REF-W выше.
 |---|---|---|
 | T1 | `WorldBundleService.import_bundle` | validate-before-transaction |
 | T2 | section routes → facade → service persist | ✅ locations, races, perks, map |
-| T3–T4 | `WorldService.create/update` | `requires_force` — product rule в service, не validator |
-| T5 | entity CRUD routes | single-row validator |
+| T3 | `WorldService.create/update` → facade `CRUD_PATCH` | ✅ |
+| T4 | merge world row + patch | ✅ |
+| T5 | entity CRUD routes → synthetic bundle | ✅ locations, races, perks |
 | T6 | `SeedService` | `ValidationKind.SEED`, без WorldRegistryIndex |
 | T7 | facade → `character/jsonValidation` | JV-6 |
 | T8 | route `validate` only | без persist |

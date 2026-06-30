@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
+from app.api.utils.crudPatchGate import gate_entity_create, gate_entity_update
 from app.api.utils.jsonResolver import JsonResolver
 from app.api.utils.sectionImportGate import gate_section_import
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
@@ -72,7 +73,8 @@ async def create_location(
     data: dict[str, Any],
     container=Depends(get_container),
 ) -> dict:
-    loc = await container.location_service().create(world_uid, data)
+    row = await gate_entity_create(container, world_uid, SectionKey.LOCATIONS, data)
+    loc = await container.location_service().create(world_uid, row)
     return asdict(loc)
 
 
@@ -83,6 +85,15 @@ async def update_location(
     data: dict[str, Any],
     container=Depends(get_container),
 ) -> dict:
+    await gate_entity_update(
+        container,
+        world_uid,
+        SectionKey.LOCATIONS,
+        location_uid,
+        data,
+        load_existing=container.location_service().get_by_id,
+        immutable=frozenset({"location_uid", "world_uid"}),
+    )
     loc = await container.location_service().update(world_uid, location_uid, data)
     return asdict(loc)
 

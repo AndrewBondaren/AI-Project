@@ -63,7 +63,19 @@ class PrepareContextStage:
             if req.world_uid:
                 ctx.world_uid = req.world_uid
         elif req.kind == ValidationKind.CRUD_PATCH:
-            pass
+            if not isinstance(ctx.normalized, dict):
+                return
+            ctx.bundle = ctx.normalized
+            ctx.active_sections = active_section_keys(ctx.normalized) | frozenset({SectionKey.WORLD})
+            if req.section is not None:
+                ctx.active_sections |= frozenset({req.section})
+            world = ctx.normalized.get("world")
+            if isinstance(world, dict):
+                uid = world.get("world_uid")
+                if isinstance(uid, str):
+                    ctx.world_uid = uid
+            if req.world_uid:
+                ctx.world_uid = req.world_uid
 
 
 class N1SNormalizeStage:
@@ -71,7 +83,11 @@ class N1SNormalizeStage:
 
     def run(self, ctx: ValidationContext, registry: ValidatorRegistry) -> None:
         del registry
-        if ctx.request.kind not in (ValidationKind.BUNDLE, ValidationKind.SECTION):
+        if ctx.request.kind not in (
+            ValidationKind.BUNDLE,
+            ValidationKind.SECTION,
+            ValidationKind.CRUD_PATCH,
+        ):
             return
         if ctx.has_errors:
             return
@@ -96,7 +112,11 @@ class HydrologyClimateNormalizeStage:
 
     def run(self, ctx: ValidationContext, registry: ValidatorRegistry) -> None:
         del registry
-        if ctx.request.kind not in (ValidationKind.BUNDLE, ValidationKind.SECTION):
+        if ctx.request.kind not in (
+            ValidationKind.BUNDLE,
+            ValidationKind.SECTION,
+            ValidationKind.CRUD_PATCH,
+        ):
             return
         if ctx.has_errors:
             return
@@ -160,6 +180,11 @@ class RunValidatorsStage:
         elif isinstance(ctx.normalized, dict) and ctx.request.kind == ValidationKind.BUNDLE:
             sections = ctx.active_sections
         elif isinstance(ctx.normalized, dict) and ctx.request.kind == ValidationKind.SECTION:
+            sections = ctx.active_sections
+            if ctx.request.section is not None:
+                sections = sections | frozenset({ctx.request.section})
+            sections = sections | frozenset({SectionKey.WORLD})
+        elif isinstance(ctx.normalized, dict) and ctx.request.kind == ValidationKind.CRUD_PATCH:
             sections = ctx.active_sections
             if ctx.request.section is not None:
                 sections = sections | frozenset({ctx.request.section})
