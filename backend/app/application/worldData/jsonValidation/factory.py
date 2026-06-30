@@ -1,4 +1,4 @@
-"""Default registry and orchestrator — JV-1 + JV-2 + JV-3 + JV-4."""
+"""Default registry and orchestrator — JV-1 + JV-2 + JV-3 + JV-4 + JV-5."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from app.application.worldData.jsonValidation.orchestrator import (
     PrepareContextStage,
     RegistryIndexBuilderStage,
     RunValidatorsStage,
+    SeedIndexBuilderStage,
     ValidationOrchestrator,
 )
 from app.application.worldData.jsonValidation.registry import ValidatorRegistry
@@ -18,6 +19,8 @@ from app.application.worldData.jsonValidation.validators.declareTopology import 
 from app.application.worldData.jsonValidation.validators.envelope import EnvelopeValidator
 from app.application.worldData.jsonValidation.validators.hydrologyPolicy import HydrologyPolicyValidator
 from app.application.worldData.jsonValidation.validators.namedLocationRow import NamedLocationRowValidator
+from app.application.worldData.jsonValidation.validators.raceContract import RaceContractValidator
+from app.application.worldData.jsonValidation.validators.raceRow import RaceRowValidator
 from app.application.worldData.jsonValidation.validators.registryRefs import RegistryRefsValidator
 from app.application.worldData.jsonValidation.validators.worldRow import WorldRowValidator
 from app.application.worldData.jsonValidation.validators.worldTemplateRegistries import (
@@ -37,6 +40,8 @@ def build_default_registry() -> ValidatorRegistry:
     registry.register(ConnectionNodeRowValidator())
     registry.register(ConnectionEdgeRowValidator())
     registry.register(DeclareTopologyValidator())
+    registry.register(RaceRowValidator())
+    registry.register(RaceContractValidator())
     return registry
 
 
@@ -46,5 +51,6 @@ def build_default_orchestrator() -> ValidationOrchestrator:
         N1SNormalizeStage(),
         HydrologyClimateNormalizeStage(),
         RegistryIndexBuilderStage(),
+        SeedIndexBuilderStage(),
         RunValidatorsStage(),
     ])

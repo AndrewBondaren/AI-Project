@@ -5,10 +5,12 @@ from __future__ import annotations
 import dataclasses
 from typing import Any
 
+from app.application.worldData.generators.registries.wireEnums import StatConflictMode
 from app.db.models.world import World
 
 from app.application.worldData.jsonValidation.types import SectionKey, ValidationIssue, ValidationContext
 from app.application.worldData.jsonValidation.validators._issues import error
+from app.application.worldData.jsonValidation.validators._rowHelpers import check_wire_enum
 
 SCHEMA_ID = "SCH-WORLD-ROW"
 
@@ -53,6 +55,11 @@ def collect_world_row_issues_from_world(world: World) -> list[ValidationIssue]:
             SCHEMA_ID, "world.map_subsurface_depth", "OUT_OF_RANGE",
             "map_subsurface_depth must be an integer >= 10",
         ))
+
+    issues.extend(check_wire_enum(
+        StatConflictMode, world.stat_conflict_mode,
+        "world.stat_conflict_mode", SCHEMA_ID, field_name="stat_conflict_mode",
+    ))
 
     return issues
 

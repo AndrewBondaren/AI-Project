@@ -84,6 +84,10 @@ class N1SNormalizeStage:
         from app.application.worldData.jsonValidation.normalize.n1sSchemas import (
             normalize_world_n1s,
         )
+        from app.application.worldData.jsonValidation.normalize.worldRegistries import (
+            normalize_world_registries,
+        )
+        ctx.issues.extend(normalize_world_registries(world))
         ctx.issues.extend(normalize_world_n1s(world))
 
 
@@ -129,6 +133,22 @@ class RegistryIndexBuilderStage:
             build_world_registry_index,
         )
         ctx.index = build_world_registry_index(world)
+
+
+class SeedIndexBuilderStage:
+    """Step 3b: N1-G seed index for race contract refs (JV-8)."""
+
+    def run(self, ctx: ValidationContext, registry: ValidatorRegistry) -> None:
+        del registry
+        from app.application.worldData.jsonValidation.index.seedRegistryIndex import (
+            SeedRegistryIndex,
+            build_seed_registry_index,
+        )
+        snapshot = ctx.request.seed_snapshot
+        if isinstance(snapshot, dict):
+            ctx.seed_index = build_seed_registry_index(snapshot)
+        else:
+            ctx.seed_index = SeedRegistryIndex()
 
 
 class RunValidatorsStage:

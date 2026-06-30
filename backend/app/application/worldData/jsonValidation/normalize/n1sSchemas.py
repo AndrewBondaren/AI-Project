@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.application.worldData.generators.registries.wireEnums import NodeCategory
 from app.application.worldData.jsonValidation.types import ValidationIssue
+from app.application.worldData.jsonValidation.validators._rowHelpers import check_wire_enum
 
 N1S_MAP_NORMALIZE_FIELDS = ("stat_schema", "skill_schema", "resist_schema")
+N1S_ARRAY_FIELDS = ("npc_fields", "player_fields", "action_registry")
+_N1S_NODE_CATEGORY_FIELDS = frozenset({"npc_fields", "player_fields"})
 
 
 def _dup_issue(path: str, code: str, message: str) -> ValidationIssue:
@@ -55,6 +59,8 @@ def normalize_n1s_field(
                 field_name, row, seen_names, seen_aliases, map_key=key,
             )
             issues.extend(row_issues)
+            if field_name in _N1S_NODE_CATEGORY_FIELDS:
+                issues.extend(_check_node_category(field_name, row, map_key=key))
             rows.append(row)
         return rows, issues
     return value, [
@@ -78,6 +84,8 @@ def _validate_array(
             ))
             continue
         issues.extend(_check_row_uniques(field_name, entry, seen_names, seen_aliases, index=i))
+        if field_name in _N1S_NODE_CATEGORY_FIELDS:
+            issues.extend(_check_node_category(field_name, entry, index=i))
     return value, issues
 
 
@@ -118,9 +126,27 @@ def _check_row_uniques(
     return issues
 
 
+def _check_node_category(
+    field_name: str,
+    row: dict[str, Any],
+    *,
+    index: int | None = None,
+    map_key: str | None = None,
+) -> list[ValidationIssue]:
+    if map_key is not None:
+        base = f"world.{field_name}.{map_key}.node_category"
+    elif index is not None:
+        base = f"world.{field_name}[{index}].node_category"
+    else:
+        base = f"world.{field_name}.node_category"
+    return check_wire_enum(
+        NodeCategory, row.get("node_category"), base, "N1-S-normalize", field_name="node_category",
+    )
+
+
 def normalize_world_n1s(world: dict[str, Any]) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
-    for field_name in N1S_MAP_NORMALIZE_FIELDS:
+    for field_name in (*N1S_MAP_NORMALIZE_FIELDS, *N1S_ARRAY_FIELDS):
         if field_name not in world:
             continue
         normalized, field_issues = normalize_n1s_field(field_name, world[field_name])

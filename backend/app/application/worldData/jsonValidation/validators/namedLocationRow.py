@@ -8,6 +8,11 @@ from app.application.worldData.generators.climate.climatePole import CLIMATE_POL
 from app.application.worldData.jsonValidation.index.refKind import RefKind
 from app.application.worldData.jsonValidation.types import SectionKey, ValidationContext, ValidationIssue
 from app.application.worldData.jsonValidation.validators._issues import error
+from app.application.worldData.jsonValidation.validators.locationCrossRow import (
+    collect_parent_type_issues,
+    collect_room_building_ancestor_issues,
+    parent_types_by_loc_type,
+)
 from app.application.worldData.jsonValidation.validators._rowHelpers import (
     check_fk,
     check_ref,
@@ -31,7 +36,9 @@ class NamedLocationRowValidator:
         locations = bundle.get("locations")
         if not isinstance(locations, list):
             return
-        ctx.issues.extend(collect_location_issues(locations, bundle, ctx.index))
+        ctx.issues.extend(collect_location_issues(
+            locations, bundle, ctx.index, world=bundle.get("world"),
+        ))
 
 
 def _bundle(ctx: ValidationContext) -> dict[str, Any] | None:
@@ -43,6 +50,8 @@ def collect_location_issues(
     locations: list[Any],
     bundle: dict[str, Any],
     index,
+    *,
+    world: dict[str, Any] | None = None,
 ) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     issues.extend(collect_duplicate_uids(locations, "location_uid", "locations", SCHEMA_ID))
@@ -58,6 +67,8 @@ def collect_location_issues(
     issues.extend(detect_parent_cycles(
         dict_rows, "location_uid", "parent_location_uid", "locations", SCHEMA_ID,
     ))
+    issues.extend(collect_parent_type_issues(locations, parent_types_by_loc_type(world)))
+    issues.extend(collect_room_building_ancestor_issues(locations))
 
     pole_count = 0
     subtype_index = index.keys(RefKind.LOC_SUBTYPE)
@@ -110,6 +121,10 @@ def collect_location_issues(
         issues.extend(check_ref(
             index, RefKind.CITY_SIZE, row.get("system_city_size"), f"{base}.system_city_size",
             SCHEMA_ID, field_name="system_city_size",
+        ))
+        issues.extend(check_ref(
+            index, RefKind.ECON_TIER, row.get("system_economic_tier"),
+            f"{base}.system_economic_tier", SCHEMA_ID, field_name="system_economic_tier",
         ))
         issues.extend(check_ref(
             index, RefKind.CLIMATE, row.get("system_climate_zone"), f"{base}.system_climate_zone",

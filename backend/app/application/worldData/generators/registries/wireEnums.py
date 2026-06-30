@@ -5,6 +5,31 @@ from __future__ import annotations
 from enum import StrEnum
 
 
+class MaterialCategory(StrEnum):
+    SOLID = "solid"
+    LIQUID = "liquid"
+    GAS = "gas"
+
+
+class CellStateCategory(StrEnum):
+    INTERACTIVE = "interactive"
+    ENVIRONMENTAL = "environmental"
+
+
+class BorderCategory(StrEnum):
+    LIQUID = "liquid"
+    NULL = "null"
+
+
+class NodeCategory(StrEnum):
+    FACTION_CONTEXT = "faction_context"
+    PROFESSION_DETAIL = "profession_detail"
+    SECRET = "secret"
+    PSYCHOLOGICAL_PROFILE = "psychological_profile"
+    SOCIAL_CONNECTIONS = "social_connections"
+    PERSONAL_HISTORY = "personal_history"
+
+
 class ConnectionNodeType(StrEnum):
     INTERSECTION = "intersection"
     SETTLEMENT_GATE = "settlement_gate"
@@ -105,3 +130,10 @@ class SeasonKey(StrEnum):
     SPRING = "spring"
     SUMMER = "summer"
     AUTUMN = "autumn"
+
+
+class SystemGender(StrEnum):
+    MALE = "male"
+    FEMALE = "female"
+    ASEXUAL = "asexual"
+    BOTH = "both"

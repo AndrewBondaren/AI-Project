@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from app.application.worldData.generators.registries.wireEnums import (
@@ -20,6 +21,9 @@ from app.application.worldData.jsonValidation.validators._rowHelpers import (
 )
 
 SCHEMA_ID = "SCH-CONNECTION-EDGE-ROW"
+
+_HYDROLOGY_POLYLINE_TYPES = frozenset({"river", "mountain_river"})
+_MAX_RIVER_TURN_DEG = 45.0
 
 
 class ConnectionEdgeRowValidator:
@@ -41,7 +45,10 @@ class ConnectionEdgeRowValidator:
             for row in edges
             if isinstance(row, dict) and isinstance(row.get("edge_uid"), str)
         }
-        ctx.issues.extend(collect_edge_issues(edges, node_uids, edge_uids, ctx.index))
+        ctx.issues.extend(collect_edge_issues(
+            edges, node_uids, edge_uids, ctx.index,
+            node_coords=_node_coords(bundle.get("connection_nodes")),
+        ))
 
 
 def _bundle(ctx: ValidationContext) -> dict[str, Any] | None:
@@ -60,11 +67,31 @@ def _node_uids(bundle: dict[str, Any]) -> set[str]:
     }
 
 
+def _node_coords(nodes: Any) -> dict[str, tuple[int, int]]:
+    if not isinstance(nodes, list):
+        return {}
+    out: dict[str, tuple[int, int]] = {}
+    for row in nodes:
+        if not isinstance(row, dict):
+            continue
+        uid = row.get("node_uid")
+        x, y = row.get("x"), row.get("y")
+        if (
+            isinstance(uid, str)
+            and isinstance(x, int) and not isinstance(x, bool)
+            and isinstance(y, int) and not isinstance(y, bool)
+        ):
+            out[uid] = (x, y)
+    return out
+
+
 def collect_edge_issues(
     edges: list[Any],
     node_uids: set[str],
     edge_uids: set[str],
     index,
+    *,
+    node_coords: dict[str, tuple[int, int]] | None = None,
 ) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
     issues.extend(collect_duplicate_uids(edges, "edge_uid", "connection_edges", SCHEMA_ID))
@@ -148,4 +175,57 @@ def collect_edge_issues(
                 "lanes_per_side must be an integer >= 1",
             ))
 
+    if node_coords:
+        issues.extend(collect_hydrology_turn_issues(edges, node_coords))
+
     return issues
+
+
+def collect_hydrology_turn_issues(
+    edges: list[Any],
+    node_coords: dict[str, tuple[int, int]],
+) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+    hydrology = [
+        row for row in edges
+        if isinstance(row, dict) and row.get("connection_type") in _HYDROLOGY_POLYLINE_TYPES
+    ]
+    for e1 in hydrology:
+        mid = e1.get("to_node_uid")
+        a = e1.get("from_node_uid")
+        if not isinstance(mid, str) or not isinstance(a, str):
+            continue
+        for e2 in hydrology:
+            if e2.get("from_node_uid") != mid:
+                continue
+            c = e2.get("to_node_uid")
+            if not isinstance(c, str):
+                continue
+            turn = _turn_angle_deg(node_coords, a, mid, c)
+            if turn is not None and turn > _MAX_RIVER_TURN_DEG:
+                issues.append(error(
+                    SCHEMA_ID, "connection_edges", "RIVER_TURN",
+                    f"hydrology turn at node {mid!r} is {turn:.1f}° (max {_MAX_RIVER_TURN_DEG}°)",
+                ))
+    return issues
+
+
+def _turn_angle_deg(
+    coords: dict[str, tuple[int, int]],
+    a: str,
+    b: str,
+    c: str,
+) -> float | None:
+    if a not in coords or b not in coords or c not in coords:
+        return None
+    ax, ay = coords[a]
+    bx, by = coords[b]
+    cx, cy = coords[c]
+    v1x, v1y = bx - ax, by - ay
+    v2x, v2y = cx - bx, cy - by
+    mag1 = math.hypot(v1x, v1y)
+    mag2 = math.hypot(v2x, v2y)
+    if mag1 == 0 or mag2 == 0:
+        return None
+    cos_a = max(-1.0, min(1.0, (v1x * v2x + v1y * v2y) / (mag1 * mag2)))
+    return math.degrees(math.acos(cos_a))

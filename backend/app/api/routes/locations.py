@@ -104,6 +104,22 @@ async def import_locations(
     data = await JsonResolver.resolve(file=file, path=path)
     if not isinstance(data, list):
         raise HTTPException(status_code=422, detail="Locations JSON must be an array")
+
+    from app.application.worldData.jsonValidation.sectionImport import validate_section_import
+    from app.application.worldData.jsonValidation import format_validation_issues
+    from app.application.worldData.jsonValidation.types import SectionKey
+
+    world = asdict(await container.world_service().get_by_id(world_uid))
+    validation = await validate_section_import(
+        container.json_validation_facade(),
+        world=world,
+        section=SectionKey.LOCATIONS,
+        payload=data,
+        world_uid=world_uid,
+    )
+    if not validation.ok:
+        raise HTTPException(status_code=422, detail=format_validation_issues(validation))
+
     result = await container.location_service().import_from_json(world_uid, data)
     status_code = 200 if result.failed == 0 else 207
     return JSONResponse(status_code=status_code, content=result.to_dict())

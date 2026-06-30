@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Literal
 
+from app.application.worldData.jsonValidation.index.seedRegistryIndex import SeedRegistryIndex
 from app.application.worldData.jsonValidation.index.worldRegistryIndex import WorldRegistryIndex
 
 
@@ -45,6 +46,7 @@ class ValidationRequest:
     payload: dict[str, Any] | list[Any]
     section: SectionKey | None = None
     world_uid: str | None = None
+    seed_snapshot: dict[str, list[dict]] | None = None
 
 
 @dataclass
@@ -71,6 +73,7 @@ class ValidationContext:
     active_sections: frozenset[SectionKey] = frozenset()
     normalized: dict[str, Any] | list[Any] | None = None
     index: WorldRegistryIndex | None = None
+    seed_index: SeedRegistryIndex | None = None
     issues: list[ValidationIssue] = field(default_factory=list)
 
     @property
