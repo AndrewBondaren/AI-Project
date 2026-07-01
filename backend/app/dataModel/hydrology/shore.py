@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.policy import StrictOnWire
+from app.dataModel.annotationPolicy import StrictOnWire
 
 
 class HydrologyShoreDefaults(BaseModel):

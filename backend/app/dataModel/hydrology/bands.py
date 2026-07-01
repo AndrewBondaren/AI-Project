@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.policy import StrictOnWire
+from app.dataModel.annotationPolicy import StrictOnWire
 
 BAND_MIN = 1
 BAND_MAX = 99

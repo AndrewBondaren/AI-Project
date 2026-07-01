@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.policy import OptionalOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import OptionalOnWire, StrictOnWire
 from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
 from app.dataModel.shared.ranges import EconomicTierRange, IntMinMax
 from app.dataModel.structure.building.buildingTemplateRoomSlot import BuildingTemplateRoomSlot

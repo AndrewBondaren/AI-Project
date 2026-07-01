@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.policy import OptionalOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import OptionalOnWire, StrictOnWire
 
 HARDNESS_MIN = 1
 HARDNESS_MAX = 5

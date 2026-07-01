@@ -1,4 +1,4 @@
-"""Per-field import policy for master-data POJOs."""
+"""Per-field import annotation policy for master-data POJOs."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from enum import StrEnum
 from typing import Annotated, Any, get_args, get_origin
 
 
-class FieldPolicy(StrEnum):
+class AnnotationPolicy(StrEnum):
     """How import/validate treats a field when JSON is incomplete or invalid."""
 
     STRICT_REQUIRED = "strict_required"
@@ -23,20 +23,20 @@ class FieldPolicy(StrEnum):
 
 
 # Wire import annotations (Field Contract Registry → POJO metadata).
-type OptionalOnWire[T] = Annotated[T, FieldPolicy.GRACE_NORMALIZE]
+type OptionalOnWire[T] = Annotated[T, AnnotationPolicy.GRACE_NORMALIZE]
 """Key may be absent on import; normalize fills canonical default."""
 
-type StrictOnWire[T] = Annotated[T, FieldPolicy.STRICT_REQUIRED]
+type StrictOnWire[T] = Annotated[T, AnnotationPolicy.STRICT_REQUIRED]
 """Key/value must pass strict validator; missing or invalid → reject."""
 
 
-def field_policy(annotation: Any) -> FieldPolicy | None:
-    """Extract FieldPolicy from OptionalOnWire / StrictOnWire annotation."""
+def field_policy(annotation: Any) -> AnnotationPolicy | None:
+    """Extract AnnotationPolicy from OptionalOnWire / StrictOnWire annotation."""
     if hasattr(annotation, "__value__"):
         annotation = annotation.__value__
 
     if get_origin(annotation) is Annotated:
         for meta in get_args(annotation)[1:]:
-            if isinstance(meta, FieldPolicy):
+            if isinstance(meta, AnnotationPolicy):
                 return meta
     return None

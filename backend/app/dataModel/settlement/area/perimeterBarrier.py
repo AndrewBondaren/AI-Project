@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.policy import OptionalOnWire
+from app.dataModel.annotationPolicy import OptionalOnWire
 
 
 class PerimeterBarrier(BaseModel):

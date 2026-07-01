@@ -2,7 +2,7 @@
 
 from app.dataModel.hydrology import WorldHydrology
 from app.dataModel.materials import MaterialRegistryEntry, WorldMaterialRegistry
-from app.dataModel.policy import FieldPolicy, OptionalOnWire, StrictOnWire, field_policy
+from app.dataModel.annotationPolicy import AnnotationPolicy, OptionalOnWire, StrictOnWire, field_policy
 from app.dataModel.roads import RoadSettingsEntry, WorldRoadSettings
 from app.dataModel.settlement import (
     CitySizeEntry,
@@ -34,7 +34,7 @@ __all__ = [
     "BuildingTemplateRegistryEntry",
     "CitySizeEntry",
     "DistrictTemplateEntry",
-    "FieldPolicy",
+    "AnnotationPolicy",
     "MaterialRegistryEntry",
     "OptionalOnWire",
     "RoadSettingsEntry",

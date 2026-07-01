@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.hydrology.bands import HydrologyBands
-from app.dataModel.policy import OptionalOnWire
+from app.dataModel.annotationPolicy import OptionalOnWire
 
 
 class HydrologyLandformsPolicy(BaseModel):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.policy import OptionalOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import OptionalOnWire, StrictOnWire
 from app.dataModel.settlement.district.districtConnection import DistrictConnection
 from app.dataModel.settlement.district.placementCondition import PlacementCondition
 from app.dataModel.settlement.district.requiredStructure import RequiredStructure

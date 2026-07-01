@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.policy import OptionalOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import OptionalOnWire, StrictOnWire
 
 CHUNK_COLUMNS_MIN = 1
 SUBSURFACE_DEPTH_MIN = 10

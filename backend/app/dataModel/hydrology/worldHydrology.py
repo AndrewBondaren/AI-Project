@@ -9,7 +9,7 @@ from app.dataModel.hydrology.landforms import HydrologyLandformsPolicy
 from app.dataModel.hydrology.rivers import HydrologyRiversPolicy
 from app.dataModel.hydrology.seas import HydrologySeasPolicy
 from app.dataModel.hydrology.shore import HydrologyShoreDefaults
-from app.dataModel.policy import OptionalOnWire
+from app.dataModel.annotationPolicy import OptionalOnWire
 
 
 class WorldHydrology(BaseModel):

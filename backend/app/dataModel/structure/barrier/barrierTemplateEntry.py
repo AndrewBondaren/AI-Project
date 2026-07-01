@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.policy import OptionalOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import OptionalOnWire, StrictOnWire
 from app.dataModel.shared.ranges import IntMinMax
 from app.dataModel.structure.materialPick import MaterialPick
 
