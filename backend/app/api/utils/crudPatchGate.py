@@ -26,22 +26,45 @@ def _raise_on_fail(validation) -> None:
         )
 
 
+def _normalized_world_row(
+    validation,
+    *,
+    fallback: dict[str, Any],
+) -> dict[str, Any]:
+    bundle = validation.normalized
+    if isinstance(bundle, dict) and isinstance(bundle.get("world"), dict):
+        return bundle["world"]
+    return fallback
+
+
+def _normalized_section_row(
+    validation,
+    section: SectionKey,
+    *,
+    fallback: dict[str, Any],
+) -> dict[str, Any]:
+    bundle = validation.normalized
+    if isinstance(bundle, dict):
+        rows = bundle.get(section.value)
+        if isinstance(rows, list) and rows and isinstance(rows[0], dict):
+            return rows[0]
+    return fallback
+
+
 async def gate_world_create(container, data: dict[str, Any]) -> dict[str, Any]:
     facade = container.json_validation_facade()
     validation = await validate_world_create(facade, data)
     _raise_on_fail(validation)
-    bundle = validation.normalized
-    if isinstance(bundle, dict) and isinstance(bundle.get("world"), dict):
-        return bundle["world"]
-    return data
+    return _normalized_world_row(validation, fallback=data)
 
 
 async def gate_world_update(
     container,
     world_uid: str,
     patch: dict[str, Any],
-) -> None:
+) -> dict[str, Any]:
     existing = asdict(await container.world_service().get_by_id(world_uid))
+    merged = merge_shallow_patch(existing, patch)
     facade = container.json_validation_facade()
     validation = await validate_world_update(
         facade,
@@ -50,6 +73,7 @@ async def gate_world_update(
         world_uid=world_uid,
     )
     _raise_on_fail(validation)
+    return _normalized_world_row(validation, fallback=merged)
 
 
 async def gate_entity_create(
@@ -73,12 +97,7 @@ async def gate_entity_create(
         seed_snapshot=seed_snapshot,
     )
     _raise_on_fail(validation)
-    bundle = validation.normalized
-    if isinstance(bundle, dict):
-        rows = bundle.get(section.value)
-        if isinstance(rows, list) and rows and isinstance(rows[0], dict):
-            return rows[0]
-    return row
+    return _normalized_section_row(validation, section, fallback=row)
 
 
 async def gate_entity_update(
@@ -90,7 +109,7 @@ async def gate_entity_update(
     *,
     load_existing,
     immutable: frozenset[str],
-) -> None:
+) -> dict[str, Any]:
     existing_row = asdict(await load_existing(world_uid, entity_uid))
     merged = merge_shallow_patch(existing_row, patch, immutable=immutable)
     world = asdict(await container.world_service().get_by_id(world_uid))
@@ -107,3 +126,4 @@ async def gate_entity_update(
         seed_snapshot=seed_snapshot,
     )
     _raise_on_fail(validation)
+    return _normalized_section_row(validation, section, fallback=merged)

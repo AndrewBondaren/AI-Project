@@ -43,7 +43,7 @@ async def update_perk(
     data: dict[str, Any],
     container=Depends(get_container),
 ) -> dict:
-    await gate_entity_update(
+    row = await gate_entity_update(
         container,
         world_uid,
         SectionKey.PERKS,
@@ -52,7 +52,7 @@ async def update_perk(
         load_existing=container.perk_service().get_by_id,
         immutable=frozenset({"perk_uid", "world_uid"}),
     )
-    perk = await container.perk_service().update(world_uid, perk_uid, data)
+    perk = await container.perk_service().update(world_uid, perk_uid, row)
     return asdict(perk)
 
 
@@ -75,7 +75,7 @@ async def import_perks(
     data = await JsonResolver.resolve(file=file, path=path)
     if not isinstance(data, list):
         raise HTTPException(status_code=422, detail="Perks JSON must be an array")
-    await gate_section_import(
+    data = await gate_section_import(
         container,
         world_uid=world_uid,
         section=SectionKey.PERKS,

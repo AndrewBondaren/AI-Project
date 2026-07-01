@@ -21,7 +21,7 @@ async def gate_section_import(
     world_uid: str,
     section: SectionKey,
     payload: list[Any] | dict[str, Any],
-) -> None:
+) -> list[Any] | dict[str, Any]:
     """Load world (+ seed when needed), run SECTION validation, raise 422 on failure."""
     world = asdict(await container.world_service().get_by_id(world_uid))
     seed_snapshot = None
@@ -40,3 +40,9 @@ async def gate_section_import(
             status_code=422,
             detail=format_validation_issues(validation),
         )
+    normalized = validation.normalized
+    if isinstance(normalized, dict):
+        section_payload = normalized.get(section.value)
+        if section_payload is not None:
+            return section_payload
+    return payload

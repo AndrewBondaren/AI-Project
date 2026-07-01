@@ -48,10 +48,13 @@ async def update_world(
     container=Depends(get_container),
 ) -> JSONResponse:
     patch = dict(data)
-    patch.pop("force", None)
-    await gate_world_update(container, world_uid, patch)
+    force = bool(patch.pop("force", False))
+    normalized = await gate_world_update(container, world_uid, patch)
 
-    result = await container.world_service().update(world_uid, data)
+    persist = dict(normalized)
+    if force:
+        persist["force"] = True
+    result = await container.world_service().update(world_uid, persist)
 
     if result.requires_force:
         return JSONResponse(status_code=200, content={

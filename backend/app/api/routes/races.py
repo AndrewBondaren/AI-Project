@@ -43,7 +43,7 @@ async def update_race(
     data: dict[str, Any],
     container=Depends(get_container),
 ) -> dict:
-    await gate_entity_update(
+    row = await gate_entity_update(
         container,
         world_uid,
         SectionKey.RACES,
@@ -52,7 +52,7 @@ async def update_race(
         load_existing=container.race_service().get_by_id,
         immutable=frozenset({"race_uid", "world_uid"}),
     )
-    race = await container.race_service().update(world_uid, race_uid, data)
+    race = await container.race_service().update(world_uid, race_uid, row)
     return asdict(race)
 
 
@@ -75,7 +75,7 @@ async def import_races(
     data = await JsonResolver.resolve(file=file, path=path)
     if not isinstance(data, list):
         raise HTTPException(status_code=422, detail="Races JSON must be an array")
-    await gate_section_import(
+    data = await gate_section_import(
         container,
         world_uid=world_uid,
         section=SectionKey.RACES,

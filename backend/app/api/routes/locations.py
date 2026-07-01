@@ -85,7 +85,7 @@ async def update_location(
     data: dict[str, Any],
     container=Depends(get_container),
 ) -> dict:
-    await gate_entity_update(
+    row = await gate_entity_update(
         container,
         world_uid,
         SectionKey.LOCATIONS,
@@ -94,7 +94,7 @@ async def update_location(
         load_existing=container.location_service().get_by_id,
         immutable=frozenset({"location_uid", "world_uid"}),
     )
-    loc = await container.location_service().update(world_uid, location_uid, data)
+    loc = await container.location_service().update(world_uid, location_uid, row)
     return asdict(loc)
 
 
@@ -118,7 +118,7 @@ async def import_locations(
     if not isinstance(data, list):
         raise HTTPException(status_code=422, detail="Locations JSON must be an array")
 
-    await gate_section_import(
+    data = await gate_section_import(
         container,
         world_uid=world_uid,
         section=SectionKey.LOCATIONS,
