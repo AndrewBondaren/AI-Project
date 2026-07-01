@@ -12,44 +12,37 @@ from random import Random
 
 from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
-from app.application.worldData.generators.structure.staircase.staircaseType import StaircaseType
-from app.dataModel.structure.enums.staircaseSize import all_staircase_size_presets
+from app.application.worldData.generators.structure.staircase.staircaseType import (
+    StaircaseType,
+    default_shaft_size_type,
+    requires_shaft,
+)
 from app.application.worldData.generators.structure.staircase.uShape.uShapeHelper import (
     u_shape_march_depth,
+)
+from app.dataModel.structure.enums.staircaseSize import (
+    default_shaft_footprint_min,
+    staircase_footprint_min,
 )
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.world import World
 
 logger = logging.getLogger(__name__)
 
-_PRESET_MAP: dict[str, tuple[int, int]] = {
-    key: (p.width_range[0], (p.depth_range or p.width_range)[0])
-    for key, p in all_staircase_size_presets().items()
-}
-
-_DEFAULT_SIZE: dict[str, str] = {
-    StaircaseType.U_SHAPE:  "sq_small",
-    StaircaseType.STRAIGHT: "standard",
-    "standard":             "standard",
-    StaircaseType.SPIRAL:   "spiral_3",
-}
-_NO_SHAFT_TYPES: frozenset[StaircaseType] = frozenset({
-    StaircaseType.VERTICAL_LADDER,
-    StaircaseType.EXTERNAL_VERTICAL_LADDER,
-})
-
 
 def _resolve_shaft_size(sc_entry: dict, staircase_type: str) -> tuple[int, int]:
     size = sc_entry.get("size") or {}
     size_type = size.get("size_type")
-    if size_type and size_type in _PRESET_MAP:
-        return _PRESET_MAP[size_type]
+    if size_type:
+        footprint = staircase_footprint_min(size_type)
+        if footprint is not None:
+            return footprint
     if "width_range" in size:
         w = size["width_range"][0]
         d = size.get("depth_range", size["width_range"])[0]
         return w, d
-    default_key = _DEFAULT_SIZE.get(staircase_type, "sq_small")
-    return _PRESET_MAP.get(default_key, (5, 5))
+    fallback_key = default_shaft_size_type(staircase_type)
+    return staircase_footprint_min(fallback_key) or default_shaft_footprint_min()
 
 
 def instantiate_shaft_rooms(
@@ -72,7 +65,7 @@ def instantiate_shaft_rooms(
         staircase_type = sc.get("staircase_type", "u_shape")
         stops = sc.get("stops", [])
 
-        if staircase_type in _NO_SHAFT_TYPES:
+        if not requires_shaft(staircase_type):
             continue
 
         if len(stops) < 2:
@@ -107,11 +100,13 @@ def instantiate_shaft_rooms(
                 seg_z_height = abs(lv_to.z - lv_fr.z)
                 max_z_height = max(max_z_height, seg_z_height)
 
-        if staircase_type == StaircaseType.U_SHAPE and u_shape_march_depth(depth) < 1:
-            logger.error(
-                "shaft factory | %r: shaft depth=%d gives march_depth=%d < 1 for u_shape",
-                staircase_id, depth, march_depth,
-            )
+        if staircase_type == StaircaseType.U_SHAPE:
+            march_depth = u_shape_march_depth(depth)
+            if march_depth < 1:
+                logger.error(
+                    "shaft factory | %r: shaft depth=%d gives march_depth=%d < 1 for u_shape",
+                    staircase_id, depth, march_depth,
+                )
 
         wall_mat, floor_mat = resolve_room_materials(
             world, None, None, rng, room_id=staircase_id,

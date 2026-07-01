@@ -1,10 +1,17 @@
-BLOCK_SIZE_BY_DENSITY: dict[str, int] = {
-    "dense":  50,
-    "medium": 80,
-    "sparse": 120,
-}
-DEFAULT_BLOCK_SIZE = 80
+"""Re-export district density / block size contract from dataModel."""
 
+from app.dataModel.settlement.enums.districtDensity import (
+    DEFAULT_BLOCK_SIZE_M,
+    DistrictDensity,
+    block_size_for_density,
+)
 
-def block_size_for_density(density: str | None) -> int:
-    return BLOCK_SIZE_BY_DENSITY.get(density or "medium", DEFAULT_BLOCK_SIZE)
+BLOCK_SIZE_BY_DENSITY = DistrictDensity.block_size_map()
+DEFAULT_BLOCK_SIZE = DEFAULT_BLOCK_SIZE_M
+
+__all__ = [
+    "BLOCK_SIZE_BY_DENSITY",
+    "DEFAULT_BLOCK_SIZE",
+    "DistrictDensity",
+    "block_size_for_density",
+]

@@ -25,11 +25,14 @@ from app.dataModel.annotationPolicy import AnnotationPolicy, OptionalOnWire, Str
 from app.dataModel.roads import RoadSettingsEntry, WorldRoadSettings
 from app.dataModel.settlement import (
     CitySizeEntry,
+    DEFAULT_BLOCK_SIZE_M,
+    DistrictDensity,
     DistrictTemplateEntry,
     SettlementSkeleton,
     WorldCitySizeRegistry,
     WorldDistrictTemplateRegistry,
     WorldLocationMoodRegistry,
+    block_size_for_density,
 )
 from app.dataModel.structure import (
     BarrierTemplateEntry,
@@ -42,6 +45,8 @@ from app.dataModel.structure import (
     USHAPE_SIZE_PRESETS,
     SpiralSize,
     StaircaseSizePreset,
+    StaircaseType,
+    StaircaseTypeSpec,
     StraightSize,
     UShapeSize,
     WorldBarrierTemplateRegistry,
@@ -66,6 +71,8 @@ __all__ = [
     "ClimateZoneProfile",
     "ClimateZoneProfileData",
     "ConnectionTypeEntry",
+    "DEFAULT_BLOCK_SIZE_M",
+    "DistrictDensity",
     "DistrictTemplateEntry",
     "EconomyTierEntry",
     "LocationTypeEntry",
@@ -82,6 +89,8 @@ __all__ = [
     "USHAPE_SIZE_PRESETS",
     "SpiralSize",
     "StaircaseSizePreset",
+    "StaircaseType",
+    "StaircaseTypeSpec",
     "StraightSize",
     "UShapeSize",
     "SeasonTempOffsets",
@@ -109,5 +118,6 @@ __all__ = [
     "WorldTerrainRegistry",
     "WorldTerrainScalars",
     "WorldWeatherTypeRegistry",
+    "block_size_for_density",
     "field_policy",
 ]

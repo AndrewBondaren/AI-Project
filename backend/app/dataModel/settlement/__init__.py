@@ -6,6 +6,11 @@ Subdomains: settlement (city registries + skeleton), district, area.
 """
 
 from app.dataModel.settlement.area import PerimeterBarrier
+from app.dataModel.settlement.enums import (
+    DEFAULT_BLOCK_SIZE_M,
+    DistrictDensity,
+    block_size_for_density,
+)
 from app.dataModel.settlement.district import (
     DistrictConnection,
     DistrictTemplateEntry,
@@ -23,7 +28,9 @@ from app.dataModel.settlement.settlement import (
 
 __all__ = [
     "CitySizeEntry",
+    "DEFAULT_BLOCK_SIZE_M",
     "DistrictConnection",
+    "DistrictDensity",
     "DistrictTemplateEntry",
     "LocationMoodEntry",
     "PerimeterBarrier",
@@ -33,4 +40,5 @@ __all__ = [
     "WorldCitySizeRegistry",
     "WorldDistrictTemplateRegistry",
     "WorldLocationMoodRegistry",
+    "block_size_for_density",
 ]

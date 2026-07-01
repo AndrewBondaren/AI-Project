@@ -135,3 +135,20 @@ USHAPE_SIZE_PRESETS: dict[UShapeSize, StaircaseSizePreset] = {
 SPIRAL_SIZE_PRESETS: dict[SpiralSize, StaircaseSizePreset] = {
     member: member.to_preset() for member in SpiralSize
 }
+
+
+def staircase_footprint_min(size_type: str) -> tuple[int, int] | None:
+    """Lower bound of shaft/room footprint for a `size.size_type` key."""
+    preset = all_staircase_size_presets().get(size_type)
+    if preset is None:
+        return None
+    depth = preset.depth_range or preset.width_range
+    return preset.width_range[0], depth[0]
+
+
+def default_shaft_footprint_min() -> tuple[int, int]:
+    """Fallback footprint when size_type is unknown — sq_small preset."""
+    from app.dataModel.structure.enums.staircaseType import default_shaft_size_type
+
+    footprint = staircase_footprint_min(default_shaft_size_type("u_shape"))
+    return footprint if footprint is not None else (5, 5)

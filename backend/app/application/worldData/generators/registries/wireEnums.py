@@ -98,12 +98,6 @@ class StreetLayout(StrEnum):
     COURTYARD = "courtyard"
 
 
-class DistrictDensity(StrEnum):
-    SPARSE = "sparse"
-    MEDIUM = "medium"
-    DENSE = "dense"
-
-
 class MeasurementSystem(StrEnum):
     METRIC = "metric"
     IMPERIAL = "imperial"
@@ -137,3 +131,6 @@ class SystemGender(StrEnum):
     FEMALE = "female"
     ASEXUAL = "asexual"
     BOTH = "both"
+
+
+from app.dataModel.settlement.enums.districtDensity import DistrictDensity  # noqa: E402 — wire re-export
