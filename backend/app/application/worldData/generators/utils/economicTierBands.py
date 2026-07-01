@@ -2,13 +2,14 @@ from random import Random
 
 from app.application.worldData.generators.masterData import economic_tier_rows
 from app.application.worldData.generators.utils.tierRegistry import tier_rank, tiers_sorted
+from app.dataModel.economy.enums.economicTierBand import (
+    BAND_COMMON,
+    BAND_MIDDLE,
+    BAND_POOR,
+    BAND_RICH,
+    BAND_WEALTHY,
+)
 from app.db.models.world import World
-
-BAND_POOR    = "poor"
-BAND_COMMON  = "common"
-BAND_MIDDLE  = "middle"
-BAND_WEALTHY = "wealthy"
-BAND_RICH    = "rich"
 
 
 def tier_band_map(world: World) -> dict[str, str]:

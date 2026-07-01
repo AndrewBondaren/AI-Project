@@ -12,7 +12,18 @@ from app.dataModel.climate import (
     WorldWeatherTypeRegistry,
 )
 from app.dataModel.connections import ConnectionTypeEntry, WorldConnectionTypeRegistry
-from app.dataModel.economy import EconomyTierEntry, WorldEconomyTierRegistry
+from app.dataModel.economy import (
+    BAND_COMMON,
+    BAND_MIDDLE,
+    BAND_POOR,
+    BAND_RICH,
+    BAND_WEALTHY,
+    DEFAULT_SIDEWALK_WIDTH_CELLS,
+    EconomicTierBand,
+    EconomyTierEntry,
+    WorldEconomyTierRegistry,
+    sidewalk_width_for_band,
+)
 from app.dataModel.hydrology import WorldHydrology
 from app.dataModel.locations import (
     LocationTypeEntry,
@@ -62,6 +73,11 @@ from app.dataModel.terrain import (
 )
 
 __all__ = [
+    "BAND_COMMON",
+    "BAND_MIDDLE",
+    "BAND_POOR",
+    "BAND_RICH",
+    "BAND_WEALTHY",
     "BarrierTemplateEntry",
     "BuildingTemplateOutline",
     "BuildingTemplateRegistryEntry",
@@ -72,9 +88,11 @@ __all__ = [
     "ClimateZoneProfileData",
     "ConnectionTypeEntry",
     "DEFAULT_BLOCK_SIZE_M",
+    "DEFAULT_SIDEWALK_WIDTH_CELLS",
     "DistrictDensity",
     "DistrictTemplateEntry",
     "EconomyTierEntry",
+    "EconomicTierBand",
     "LocationTypeEntry",
     "LocationTypeSubtypeEntry",
     "LoreRegistryEntry",
@@ -120,4 +138,5 @@ __all__ = [
     "WorldWeatherTypeRegistry",
     "block_size_for_density",
     "field_policy",
+    "sidewalk_width_for_band",
 ]
