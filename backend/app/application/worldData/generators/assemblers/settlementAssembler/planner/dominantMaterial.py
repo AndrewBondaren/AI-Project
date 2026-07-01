@@ -15,9 +15,10 @@ from app.application.worldData.generators.utils.materialResolver import resolve_
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
+from app.dataModel.materials import DEFAULT_DOMINANT_MATERIAL
+
 logger = logging.getLogger(__name__)
 
-_DEFAULT_DOMINANT_MATERIAL = "stone"
 _USE_TYPE = "wall"
 
 
@@ -82,7 +83,7 @@ def _default_from_economic_tier(
         _USE_TYPE,
         economic_tier,
         rng,
-        _DEFAULT_DOMINANT_MATERIAL,
+        DEFAULT_DOMINANT_MATERIAL,
     )
 
 
@@ -143,6 +144,6 @@ def resolve_dominant_material(
         "resolve_dominant_material: no layout materials and no economic_tier for settlement=%s,"
         " using fallback %r",
         settlement_uid,
-        _DEFAULT_DOMINANT_MATERIAL,
+        DEFAULT_DOMINANT_MATERIAL,
     )
-    return _DEFAULT_DOMINANT_MATERIAL
+    return DEFAULT_DOMINANT_MATERIAL

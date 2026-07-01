@@ -9,10 +9,12 @@ from app.application.worldData.generators.utils.tierRegistry import (
 from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.db.models.world import World
 
-logger = logging.getLogger(__name__)
+from app.dataModel.materials import (
+    DEFAULT_FLOOR_MATERIAL,
+    DEFAULT_WALL_MATERIAL,
+)
 
-_DEFAULT_WALL_MATERIAL  = "stone"
-_DEFAULT_FLOOR_MATERIAL = "wood"
+logger = logging.getLogger(__name__)
 
 
 def resolve_material(
@@ -84,6 +86,6 @@ def resolve_room_materials(
         rng=rng,
     )
 
-    wall  = resolve_material(world, "wall",  effective, rng, _DEFAULT_WALL_MATERIAL,  context=room_id)
-    floor = resolve_material(world, "floor", effective, rng, _DEFAULT_FLOOR_MATERIAL, context=room_id)
+    wall  = resolve_material(world, "wall",  effective, rng, DEFAULT_WALL_MATERIAL,  context=room_id)
+    floor = resolve_material(world, "floor", effective, rng, DEFAULT_FLOOR_MATERIAL, context=room_id)
     return wall, floor

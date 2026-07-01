@@ -20,3 +20,8 @@ class RoadSettingsEntry(BaseModel):
     auto_sidewalk: OptionalOnWire[bool] = False
     base_travel_modifier: OptionalOnWire[float] = Field(default=1.0, gt=0.0)
     condition_degradation: OptionalOnWire[float] = Field(default=0.2, ge=0.0)
+
+    @classmethod
+    def fallback(cls) -> RoadSettingsEntry:
+        """Field-level builtins for unknown/missing ``connection_type``."""
+        return cls(system_connection_type="__unknown__")

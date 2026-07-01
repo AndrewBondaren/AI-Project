@@ -12,12 +12,12 @@ from app.application.worldData.generators.masterData import (
     road_settings,
 )
 from app.application.worldData.generators.utils.tierRegistry import tier_entry
+from app.dataModel.roads.roadSettingsEntry import RoadSettingsEntry
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.world import World
 
-_DEFAULT_BASE_TRAVEL_MODIFIER = 1.0
-_DEFAULT_CONDITION_DEGRADATION = 0.2
 _ENGINE_TIERS = economic_tier_engine()
+_FALLBACK_ROAD = RoadSettingsEntry.fallback()
 
 
 def _material_entry(world: World, system_material: str | None):
@@ -62,29 +62,18 @@ def resolve_road_tier_durability(world: World, material_tier: str | None) -> flo
     return 1.0
 
 
-def _road_settings_entry(world: World, connection_type: str) -> dict | None:
-    for entry in road_settings(world).root:
-        if entry.system_connection_type == connection_type:
-            return entry.model_dump(by_alias=True)
-    return None
-
-
 def resolve_base_travel_modifier(world: World, connection_type: str) -> float:
-    entry = _road_settings_entry(world, connection_type)
+    entry = road_settings(world).entry_for(connection_type)
     if entry is not None:
-        val = entry.get("base_travel_modifier")
-        if val is not None:
-            return float(val)
-    return _DEFAULT_BASE_TRAVEL_MODIFIER
+        return float(entry.base_travel_modifier)
+    return float(_FALLBACK_ROAD.base_travel_modifier)
 
 
 def resolve_condition_degradation(world: World, connection_type: str) -> float:
-    entry = _road_settings_entry(world, connection_type)
+    entry = road_settings(world).entry_for(connection_type)
     if entry is not None:
-        val = entry.get("condition_degradation")
-        if val is not None:
-            return float(val)
-    return _DEFAULT_CONDITION_DEGRADATION
+        return float(entry.condition_degradation)
+    return float(_FALLBACK_ROAD.condition_degradation)
 
 
 def condition_factor(edge: ConnectionEdge, degradation: float) -> float:

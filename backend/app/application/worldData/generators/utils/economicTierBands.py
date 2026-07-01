@@ -1,63 +1,29 @@
+"""N system_tiers → abstract bands — resolve wrapper over dataModel contract."""
+
+from __future__ import annotations
+
 from random import Random
 
 from app.application.worldData.generators.masterData import economic_tier_rows
 from app.application.worldData.generators.utils.tierRegistry import tier_rank, tiers_sorted
-from app.dataModel.economy.enums.economicTierBand import (
-    BAND_COMMON,
-    BAND_MIDDLE,
-    BAND_POOR,
-    BAND_RICH,
-    BAND_WEALTHY,
-)
+from app.dataModel.economy.enums.economicTierBand import EconomicTierBand
 from app.db.models.world import World
 
 
 def tier_band_map(world: World) -> dict[str, str]:
-    """
-    Maps each system_tier → abstract band.
-
-    Sorted by base_value ASC:
-      index 0              → poor
-      1 .. median-1        → common
-      median ((n-1) // 2)  → middle
-      median+1 .. n-2      → wealthy
-      n-1                  → rich
-
-    N=1: single tier → middle.
-    N=2: index 0 → poor, index 1 → rich.
-    """
+    """Maps each system_tier → abstract band wire key (ASC base_value)."""
     tiers = tiers_sorted(economic_tier_rows(world))
-    n = len(tiers)
-    if n == 0:
-        return {}
-    if n == 1:
-        return {tiers[0]["system_tier"]: BAND_MIDDLE}
-
-    median = (n - 1) // 2
-    result: dict[str, str] = {}
-    for i, t in enumerate(tiers):
-        key = t["system_tier"]
-        if i == 0:
-            result[key] = BAND_POOR
-        elif i == n - 1:
-            result[key] = BAND_RICH
-        elif i == median:
-            result[key] = BAND_MIDDLE
-        elif i < median:
-            result[key] = BAND_COMMON
-        else:
-            result[key] = BAND_WEALTHY
-    return result
+    return EconomicTierBand.band_map_for_sorted_tiers(
+        [t["system_tier"] for t in tiers],
+    )
 
 
 def band_of(world: World, system_tier: str) -> str | None:
-    """Returns the abstract band for a given system_tier, or None if not in registry."""
     return tier_band_map(world).get(system_tier)
 
 
 def tiers_for_band(world: World, band: str) -> list[str]:
-    """Returns all system_tier values that belong to the given abstract band."""
-    return [k for k, v in tier_band_map(world).items() if v == band]
+    return EconomicTierBand.tiers_for_band_in_map(tier_band_map(world), band)
 
 
 def materialize_band(

@@ -31,7 +31,16 @@ from app.dataModel.locations import (
     WorldLocationTypeRegistry,
 )
 from app.dataModel.lore import LoreRegistryEntry, WorldLoreRegistry
-from app.dataModel.materials import MaterialRegistryEntry, WorldMaterialRegistry
+from app.dataModel.materials import (
+    CONSTRUCTION_MATERIAL_DEFAULTS,
+    DEFAULT_DOMINANT_MATERIAL,
+    DEFAULT_FLOOR_MATERIAL,
+    DEFAULT_ROAD_MATERIAL,
+    DEFAULT_WALL_MATERIAL,
+    ConstructionMaterialDefaults,
+    MaterialRegistryEntry,
+    WorldMaterialRegistry,
+)
 from app.dataModel.annotationPolicy import AnnotationPolicy, OptionalOnWire, StrictOnWire, field_policy
 from app.dataModel.roads import RoadSettingsEntry, WorldRoadSettings
 from app.dataModel.settlement import (
@@ -87,8 +96,14 @@ __all__ = [
     "ClimateZoneProfile",
     "ClimateZoneProfileData",
     "ConnectionTypeEntry",
-    "DEFAULT_BLOCK_SIZE_M",
+    "CONSTRUCTION_MATERIAL_DEFAULTS",
+    "DEFAULT_DOMINANT_MATERIAL",
+    "DEFAULT_FLOOR_MATERIAL",
+    "DEFAULT_ROAD_MATERIAL",
     "DEFAULT_SIDEWALK_WIDTH_CELLS",
+    "DEFAULT_WALL_MATERIAL",
+    "ConstructionMaterialDefaults",
+    "DEFAULT_BLOCK_SIZE_M",
     "DistrictDensity",
     "DistrictTemplateEntry",
     "EconomyTierEntry",

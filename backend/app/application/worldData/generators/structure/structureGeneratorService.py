@@ -16,7 +16,10 @@ from app.application.worldData.generators.structure.passages import build_passag
 from app.application.worldData.generators.structure.room.roomFactory import instantiate_level_rooms
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.staircase.shaftFactory import (
-    instantiate_shaft_rooms, _NO_SHAFT_TYPES,
+    instantiate_shaft_rooms,
+)
+from app.application.worldData.generators.structure.staircase.staircaseType import (
+    requires_shaft,
 )
 from app.application.worldData.generators.structure.staircase.shaftPlacer import make_shaft_placer
 from app.application.worldData.generators.structure.passages.wallOpening import place_wall_openings
@@ -421,7 +424,7 @@ class StructureGeneratorService:
         """Synthetic archway connections: shaft ↔ to_room for the current level."""
         synth = list(connections)
         for sc in template.get("staircases", []):
-            if sc.get("staircase_type", "u_shape") in _NO_SHAFT_TYPES:
+            if not requires_shaft(sc.get("staircase_type", "u_shape")):
                 continue
             sc_id      = sc.get("staircase_id", "staircase")
             stops      = sc.get("stops", [])
@@ -451,7 +454,7 @@ class StructureGeneratorService:
     ) -> None:
         """AdjacentShaftPlacer for fr_z shaft instances; propagates level_start to to_z levels."""
         for sc in template.get("staircases", []):
-            if sc.get("staircase_type", "u_shape") in _NO_SHAFT_TYPES:
+            if not requires_shaft(sc.get("staircase_type", "u_shape")):
                 continue
             sc_id  = sc.get("staircase_id", "staircase")
             stops  = sc.get("stops", [])
@@ -494,7 +497,7 @@ class StructureGeneratorService:
     ) -> None:
         """No-shaft staircases (trapdoor): align target level to the placed anchor room."""
         for sc in template.get("staircases", []):
-            if sc.get("staircase_type") not in _NO_SHAFT_TYPES:
+            if requires_shaft(sc.get("staircase_type") or ""):
                 continue
             sc_id = sc.get("staircase_id", "?")
             stops = sc.get("stops", [])

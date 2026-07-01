@@ -16,13 +16,12 @@ from app.application.worldData.generators.road.roadTravelResolver import effecti
 from app.application.worldData.generators.road.widthResolver import resolve_width
 from app.application.worldData.generators.utils.materialResolver import resolve_material
 from app.application.worldData.generators.utils.facing import Facing
+from app.dataModel.materials import DEFAULT_ROAD_MATERIAL
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.world import World
 
 logger = logging.getLogger(__name__)
-
-_DEFAULT_ROAD_MATERIAL = "dirt_road"
 
 
 def _city_has_sidewalk(skeleton: CitySkeleton) -> bool:
@@ -32,7 +31,7 @@ def _city_has_sidewalk(skeleton: CitySkeleton) -> bool:
 
 def _city_road_material(world: World, skeleton: CitySkeleton, rng: Random) -> str:
     return resolve_material(
-        world, "road", skeleton.economic_tier, rng, _DEFAULT_ROAD_MATERIAL,
+        world, "road", skeleton.economic_tier, rng, DEFAULT_ROAD_MATERIAL,
     )
 
 
