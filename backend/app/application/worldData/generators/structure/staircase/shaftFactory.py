@@ -13,11 +13,7 @@ from random import Random
 from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.staircase.staircaseType import StaircaseType
-from app.application.worldData.generators.structure.staircase.staircaseSize import (
-    STRAIGHT_SIZE_PRESETS,
-    USHAPE_SIZE_PRESETS,
-    SPIRAL_SIZE_PRESETS,
-)
+from app.dataModel.structure.enums.staircaseSize import all_staircase_size_presets
 from app.application.worldData.generators.structure.staircase.uShape.uShapeHelper import (
     u_shape_march_depth,
 )
@@ -27,12 +23,8 @@ from app.db.models.world import World
 logger = logging.getLogger(__name__)
 
 _PRESET_MAP: dict[str, tuple[int, int]] = {
-    **{e.value: (p.width_range[0], (p.depth_range or p.width_range)[0])
-       for e, p in USHAPE_SIZE_PRESETS.items()},
-    **{e.value: (p.width_range[0], (p.depth_range or p.width_range)[0])
-       for e, p in STRAIGHT_SIZE_PRESETS.items()},
-    **{e.value: (p.width_range[0], (p.depth_range or p.width_range)[0])
-       for e, p in SPIRAL_SIZE_PRESETS.items()},
+    key: (p.width_range[0], (p.depth_range or p.width_range)[0])
+    for key, p in all_staircase_size_presets().items()
 }
 
 _DEFAULT_SIZE: dict[str, str] = {

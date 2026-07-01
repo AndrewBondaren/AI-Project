@@ -12,6 +12,18 @@ from app.dataModel.structure.building import (
     BuildingTemplateRoomSlot,
     WorldBuildingTemplateRegistry,
 )
+from app.dataModel.structure.enums import (
+    RoomSize,
+    RoomSizePreset,
+    SPIRAL_SIZE_PRESETS,
+    STRAIGHT_SIZE_PRESETS,
+    USHAPE_SIZE_PRESETS,
+    SpiralSize,
+    StaircaseSizePreset,
+    StraightSize,
+    UShapeSize,
+    all_staircase_size_presets,
+)
 from app.dataModel.structure.materialPick import MaterialPick
 from app.dataModel.structure.room import RoomTypeEntry, WorldRoomTypeRegistry
 
@@ -21,6 +33,15 @@ __all__ = [
     "BuildingTemplateRegistryEntry",
     "BuildingTemplateRoomSlot",
     "MaterialPick",
+    "RoomSize",
+    "RoomSizePreset",
+    "SPIRAL_SIZE_PRESETS",
+    "STRAIGHT_SIZE_PRESETS",
+    "USHAPE_SIZE_PRESETS",
+    "SpiralSize",
+    "StaircaseSizePreset",
+    "StraightSize",
+    "UShapeSize",
     "RoomTypeEntry",
     "WorldBarrierTemplateRegistry",
     "WorldBuildingTemplateRegistry",

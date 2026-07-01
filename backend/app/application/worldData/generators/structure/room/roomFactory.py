@@ -10,13 +10,8 @@ from app.application.worldData.generators.structure.errors import UnsupportedSha
 from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.shapeResolver import SizeShapeResolver
-from app.application.worldData.generators.structure.staircase.staircaseSize import (
-    STRAIGHT_SIZE_PRESETS, StraightSize,
-    USHAPE_SIZE_PRESETS, UShapeSize,
-    SPIRAL_SIZE_PRESETS, SpiralSize,
-    StaircaseSizePreset,
-)
-from app.application.worldData.generators.structure.room.roomSize import ROOM_SIZE_PRESETS, RoomSize
+from app.dataModel.structure.enums.staircaseSize import StaircaseSizePreset, all_staircase_size_presets
+from app.dataModel.structure.enums.roomSize import RoomSize
 from app.application.worldData.generators.structure.shapeType import ShapeType, _V1_SHAPES
 from app.db.models.world import World
 
@@ -24,11 +19,7 @@ logger = logging.getLogger(__name__)
 
 _SHAPES_WITHOUT_DEPTH = {ShapeType.SQUARE, ShapeType.CIRCLE, ShapeType.SEMICIRCLE}
 
-_STAIRCASE_PRESETS: dict[str, StaircaseSizePreset] = {
-    **{e.value: p for e, p in STRAIGHT_SIZE_PRESETS.items()},
-    **{e.value: p for e, p in USHAPE_SIZE_PRESETS.items()},
-    **{e.value: p for e, p in SPIRAL_SIZE_PRESETS.items()},
-}
+_STAIRCASE_PRESETS: dict[str, StaircaseSizePreset] = all_staircase_size_presets()
 
 
 def _resolve_shape(room_def: dict, rng: Random) -> ShapeType:
@@ -62,7 +53,10 @@ def _resolve_size(
         dr = sc_preset.depth_range or sc_preset.width_range
         zr = [level_z_height, level_z_height]
     elif size_type:
-        preset = ROOM_SIZE_PRESETS[RoomSize(size_type)]
+        room_size = RoomSize.from_size_type(size_type)
+        if room_size is None:
+            raise ValueError(f"Unknown size_type: {size_type!r}")
+        preset = room_size.to_preset()
         wr = preset.width_range
         dr = preset.depth_range
         # template > preset; room z_range overrides both
