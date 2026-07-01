@@ -26,6 +26,7 @@ from app.application.worldData.generators.road.connectionPolicy import (
 )
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
+from app.db.models.world import World
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ class DistrictRoadGenerator:
         self,
         slot:      DistrictSlot,
         skeleton:  CitySkeleton,
-        world_uid: str,
+        world:     World,
         rng:       random.Random | None = None,
     ) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
         if rng is None:
@@ -54,8 +55,8 @@ class DistrictRoadGenerator:
 
         primary         = primary_connection(template)
         connection_type = primary.get("connection_type") or "road"
-        lanes_per_side  = resolve_lanes_per_side(template, connection_type)
-        has_sidewalk    = resolve_has_sidewalk(template, connection_type)
+        lanes_per_side  = resolve_lanes_per_side(template, connection_type, world=world)
+        has_sidewalk    = resolve_has_sidewalk(template, connection_type, world=world)
 
         fn = _LAYOUT_FN.get(street_layout)
         if fn is None:
@@ -67,4 +68,4 @@ class DistrictRoadGenerator:
             slot.origin_x, slot.origin_y, slot.width_m, slot.depth_m,
         )
 
-        return fn(slot, skeleton, world_uid, connection_type, lanes_per_side, has_sidewalk, rng)
+        return fn(slot, skeleton, world.world_uid, connection_type, lanes_per_side, has_sidewalk, rng)

@@ -5,82 +5,67 @@ effective_travel_modifier и road tier stats — tz_structure_connections.md §3
 
 from __future__ import annotations
 
+from app.application.worldData.generators.masterData import (
+    economic_tier_engine,
+    economic_tier_rows,
+    materials,
+    road_settings,
+)
 from app.application.worldData.generators.utils.tierRegistry import tier_entry
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.world import World
 
-# fallback если economic_tier_registry без road_tier_* (TZ §3.7)
-_DEFAULT_ROAD_TIER_BONUS: dict[str, float] = {
-    "poor":        1.20,
-    "basic":       1.10,
-    "standard":    1.00,
-    "premium":     0.95,
-    "quality":     0.95,
-    "exceptional": 0.90,
-}
-
-_DEFAULT_ROAD_TIER_DURABILITY: dict[str, float] = {
-    "poor":        0.6,
-    "basic":       0.8,
-    "standard":    1.0,
-    "premium":     1.3,
-    "quality":     1.3,
-    "exceptional": 1.6,
-}
-
 _DEFAULT_BASE_TRAVEL_MODIFIER = 1.0
 _DEFAULT_CONDITION_DEGRADATION = 0.2
+_ENGINE_TIERS = economic_tier_engine()
 
 
-def _material_entry(world: World, system_material: str | None) -> dict | None:
+def _material_entry(world: World, system_material: str | None):
     if not system_material:
         return None
-    for entry in world.material_registry or []:
-        if entry.get("system_material") == system_material:
-            return entry
-    return None
+    return materials(world).entry_for(system_material)
 
 
 def material_economic_tier(world: World, system_material: str | None) -> str | None:
     entry = _material_entry(world, system_material)
     if entry is None:
         return None
-    tier = entry.get("economic_tier")
+    tier = entry.economic_tier
     return str(tier) if tier else None
 
 
 def resolve_road_tier_bonus(world: World, material_tier: str | None) -> float:
     if not material_tier:
         return 1.0
-    entry = tier_entry(world.economic_tier_registry, material_tier)
+    entry = tier_entry(economic_tier_rows(world), material_tier)
     if entry is not None:
         val = entry.get("road_tier_bonus")
         if val is not None:
             return float(val)
-    return _DEFAULT_ROAD_TIER_BONUS.get(material_tier, 1.0)
+    engine = _ENGINE_TIERS.entry_for(material_tier)
+    if engine is not None:
+        return float(engine.road_tier_bonus)
+    return 1.0
 
 
 def resolve_road_tier_durability(world: World, material_tier: str | None) -> float:
     if not material_tier:
         return 1.0
-    entry = tier_entry(world.economic_tier_registry, material_tier)
+    entry = tier_entry(economic_tier_rows(world), material_tier)
     if entry is not None:
         val = entry.get("road_tier_durability")
         if val is not None:
             return float(val)
-    return _DEFAULT_ROAD_TIER_DURABILITY.get(material_tier, 1.0)
+    engine = _ENGINE_TIERS.entry_for(material_tier)
+    if engine is not None:
+        return float(engine.road_tier_durability)
+    return 1.0
 
 
 def _road_settings_entry(world: World, connection_type: str) -> dict | None:
-    settings = getattr(world, "road_settings", None) or []
-    if isinstance(settings, dict):
-        settings = settings.get("entries") or settings.get(connection_type)
-        if isinstance(settings, dict):
-            return settings
-        return None
-    for entry in settings:
-        if entry.get("system_connection_type") == connection_type:
-            return entry
+    for entry in road_settings(world).root:
+        if entry.system_connection_type == connection_type:
+            return entry.model_dump(by_alias=True)
     return None
 
 
@@ -134,6 +119,6 @@ def effective_degradation_rate(
     mat_tier = material_economic_tier(world, edge.material)
     durability = resolve_road_tier_durability(world, mat_tier)
     mat_entry = _material_entry(world, edge.material)
-    strength = float(mat_entry.get("structural_strength", 1.0)) if mat_entry else 1.0
+    strength = float(mat_entry.structural_strength) if mat_entry and mat_entry.structural_strength else 1.0
     denom = durability * max(strength, 0.01)
     return base_degradation / denom

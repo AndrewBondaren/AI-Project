@@ -318,7 +318,7 @@ def plan_city_street_grid(
                 width_cells=width,
                 material=road_material,
                 has_sidewalk=resolve_has_sidewalk(
-                    slot.district_template, entry.connection_type,
+                    slot.district_template, entry.connection_type, world=world,
                 ),
                 graph_level="city",
                 world_uid=world_uid,

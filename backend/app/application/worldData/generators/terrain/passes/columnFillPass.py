@@ -1,3 +1,4 @@
+from app.application.worldData.generators.masterData import terrain_system_keys
 from app.application.worldData.generators.terrain.passes.gapAnalysisPass import n_base
 from app.application.worldData.generators.terrain.worldMapSettings import world_z_min
 from app.application.worldData.generators.terrain.terrainZ import (
@@ -11,9 +12,7 @@ from app.db.models.world import World
 
 
 def _terrain_set(world: World) -> set[str]:
-    return {
-        t["system_terrain"] for t in (world.terrain_registry or []) if "system_terrain" in t
-    }
+    return terrain_system_keys(world)
 
 
 def _magma_thickness(world: World) -> int:

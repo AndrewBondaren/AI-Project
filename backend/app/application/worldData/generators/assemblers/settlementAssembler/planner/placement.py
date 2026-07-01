@@ -2,6 +2,7 @@ import logging
 import random
 
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.application.worldData.generators.masterData import economic_tier_rows
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.defaults import (
     CITY_SIZE_ORDER,
     CellZone,
@@ -98,7 +99,7 @@ def check_placement_conditions(
     if not conditions:
         return True
 
-    registry = world.economic_tier_registry
+    registry = economic_tier_rows(world)
     city_rank = _city_size_rank(skeleton.system_city_size)
 
     for cond in conditions:

@@ -192,11 +192,10 @@ class ClimateSurfaceAssembler:
     ) -> list[MapCell]:
         from app.application.worldData.generators.climate.locations import static_map_anchors
         from app.application.worldData.generators.climate.terrainZ import z_to_terrain
+        from app.application.worldData.generators.masterData import terrain_system_keys
 
         uid_map     = {loc.location_uid: loc for loc in locations}
-        terrain_set = {
-            t["system_terrain"] for t in (world.terrain_registry or []) if "system_terrain" in t
-        }
+        terrain_set = terrain_system_keys(world)
         extra: list[MapCell] = []
         for anchor in static_map_anchors(locations):
             if anchor.map_z == 0:

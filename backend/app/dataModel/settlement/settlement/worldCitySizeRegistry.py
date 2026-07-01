@@ -28,3 +28,11 @@ class WorldCitySizeRegistry(RootModel[list[CitySizeEntry]]):
             if entry.system_size == system_size:
                 return entry
         return None
+
+    @classmethod
+    def footprint_multiplier_defaults(cls) -> dict[str, float]:
+        return {
+            entry.system_size: float(entry.footprint_multiplier)
+            for entry in cls.canonical_defaults().root
+            if entry.footprint_multiplier is not None
+        }

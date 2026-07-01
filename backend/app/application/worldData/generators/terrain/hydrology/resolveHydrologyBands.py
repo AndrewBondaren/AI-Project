@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from app.application.worldData.generators.masterData import hydrology
 from app.application.worldData.generators.terrain.hydrology.types import HydrologyBands
 
 logger = logging.getLogger(__name__)
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 _BAND_MIN = 1
 _BAND_MAX = 99
 
-_CATEGORY_DEFAULT_KEY = {
+_CATEGORY_ATTR = {
     "rivers":    "default_rivers",
     "lakes":     "default_lakes",
     "seas":      "default_seas",
@@ -38,14 +39,14 @@ def resolve_hydrology_bands(
     *,
     world_uid: str | None = None,
 ) -> HydrologyBands:
-    policy = getattr(world, "hydrology", None) or {}
-    if not isinstance(policy, dict):
-        policy = {}
-
-    key = _CATEGORY_DEFAULT_KEY.get(category, f"default_{category}")
-    section = policy.get(key) or {}
-    bands = section.get("bands") or {}
-    result = clamp_bands(bands.get("min"), bands.get("max"))
+    policy = hydrology(world)
+    attr = _CATEGORY_ATTR.get(category, f"default_{category}")
+    section = getattr(policy, attr, None)
+    bands = section.bands if section is not None and section.bands is not None else None
+    result = clamp_bands(
+        bands.min if bands is not None else None,
+        bands.max if bands is not None else None,
+    )
 
     if local_profile and "bands" in local_profile:
         local = local_profile["bands"]

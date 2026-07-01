@@ -86,7 +86,7 @@ class DistrictAssembler:
             )
             area_layouts.append(layout)
 
-        nodes, edges = self._plan_streets(slot, city_skeleton, world.world_uid)
+        nodes, edges = self._plan_streets(slot, city_skeleton, world)
 
         logger.info(
             "DistrictAssembler done | template=%s district_nodes=%d district_edges=%d area_layouts=%d",
@@ -106,8 +106,8 @@ class DistrictAssembler:
         self,
         slot:          DistrictSlot,
         city_skeleton: CitySkeleton,
-        world_uid:     str,
+        world:         World,
     ) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
         generator = DistrictRoadGenerator()
         rng       = random.Random(f"{slot.origin_x}_{slot.origin_y}")
-        return generator.generate(slot, city_skeleton, world_uid, rng)
+        return generator.generate(slot, city_skeleton, world, rng)

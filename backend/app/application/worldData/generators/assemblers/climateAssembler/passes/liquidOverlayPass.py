@@ -1,5 +1,6 @@
 from app.application.worldData.generators.climate.precipitation import liquid_precipitation_mult
 from app.application.worldData.generators.climate.precipitation import resolve_world_precipitation_liquid
+from app.application.worldData.generators.masterData import terrain_system_keys
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
@@ -12,9 +13,7 @@ def run_liquid_overlay_pass(
     Apply liquid_body on surface-top cells at z <= 0 when temperature allows liquid phase.
     Runs after cell weather pass (generate-climate).
     """
-    terrain_set = {
-        t["system_terrain"] for t in (world.terrain_registry or []) if "system_terrain" in t
-    }
+    terrain_set = terrain_system_keys(world)
     if "liquid_body" not in terrain_set:
         return cells
 

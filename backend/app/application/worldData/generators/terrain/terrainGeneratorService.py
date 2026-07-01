@@ -77,10 +77,10 @@ class TerrainGeneratorService:
         uid_map: dict[str, NamedLocation] | None = None,
     ) -> list[MapCell]:
         from app.application.worldData.generators.climate import ClimateGeneratorService
+        from app.application.worldData.generators.masterData import terrain_system_keys
 
         climate     = ClimateGeneratorService()
-        terrain_reg = world.terrain_registry or []
-        terrain_set = {t["system_terrain"] for t in terrain_reg if "system_terrain" in t}
+        terrain_set = terrain_system_keys(world)
         loc_map     = uid_map or {location.location_uid: location}
 
         x = location.map_x if location.map_x is not None else 0

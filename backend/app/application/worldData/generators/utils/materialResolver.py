@@ -1,6 +1,7 @@
 import logging
 from random import Random
 
+from app.application.worldData.generators.masterData import economic_tier_rows, material_rows
 from app.application.worldData.generators.utils.tierRegistry import (
     median_system_tier,
     tiers_sorted,
@@ -26,9 +27,9 @@ def resolve_material(
     Выбирает материал из world.material_registry по use_type и economic_tier.
     Fallback: ближайший тир вниз → любой подходящий → default.
     """
-    registry = world.material_registry or []
-    tiers = tiers_sorted(world.economic_tier_registry)
-    tier = effective_tier or median_system_tier(world.economic_tier_registry) or ""
+    registry = material_rows(world)
+    tiers = tiers_sorted(economic_tier_rows(world))
+    tier = effective_tier or median_system_tier(economic_tier_rows(world)) or ""
 
     def candidates_for(t: str) -> list[str]:
         return [

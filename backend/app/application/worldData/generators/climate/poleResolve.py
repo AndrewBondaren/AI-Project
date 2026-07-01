@@ -45,9 +45,9 @@ def infer_pole_kind(location: NamedLocation) -> str:
     if subtype in {PoleKind.COLD, PoleKind.HOT, PoleKind.NEUTRAL}:
         return subtype
     zone = (location.system_climate_zone or "").lower()
-    if zone in {z.value for z in _COLD_ZONES}:
+    if zone in {z.system_climate for z in _COLD_ZONES}:
         return PoleKind.COLD
-    if zone in {z.value for z in _HOT_ZONES}:
+    if zone in {z.system_climate for z in _HOT_ZONES}:
         return PoleKind.HOT
     return PoleKind.NEUTRAL
 
@@ -124,7 +124,7 @@ def autoresolve_poles(
             gx=cx + (seed % 3) - 1,
             gy=cy + ((seed >> 4) % 3) - 1,
             pole_kind=kind,
-            system_climate_zone=zone,
+            system_climate_zone=zone.system_climate,
             base_temperature=derived_pole_temperature(kind, peak_min, peak_max),
             weight=1.0,
             location_uid=None,
@@ -141,7 +141,7 @@ def autoresolve_poles(
             gx=gx,
             gy=gy,
             pole_kind=kind,
-            system_climate_zone=zone,
+            system_climate_zone=zone.system_climate,
             base_temperature=derived_pole_temperature(kind, peak_min, peak_max),
             weight=1.0,
             location_uid=None,

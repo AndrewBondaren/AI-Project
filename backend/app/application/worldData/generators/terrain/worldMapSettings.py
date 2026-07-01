@@ -1,13 +1,16 @@
 """World map generation settings — single read path for terrain/climate bbox and persist tuning."""
 
+from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars
 from app.db.models.world import World
 
 DEFAULT_GRID_BBOX_PADDING = 2
-DEFAULT_TERRAIN_CHUNK_COLUMNS = 32
-DEFAULT_MAP_SUBSURFACE_DEPTH = 20
 MIN_MAP_SUBSURFACE_DEPTH = 10
-DEFAULT_Z_MIN = -8000
-DEFAULT_Z_MAX = 8000
+
+_terrain_defaults = WorldTerrainScalars.canonical_defaults()
+DEFAULT_TERRAIN_CHUNK_COLUMNS = _terrain_defaults.terrain_chunk_columns
+DEFAULT_MAP_SUBSURFACE_DEPTH = _terrain_defaults.map_subsurface_depth
+DEFAULT_Z_MIN = _terrain_defaults.z_min if _terrain_defaults.z_min is not None else -500
+DEFAULT_Z_MAX = _terrain_defaults.z_max if _terrain_defaults.z_max is not None else 8000
 
 
 def grid_bbox_padding(world: World) -> int:
@@ -46,4 +49,3 @@ def world_z_max(world: World) -> int:
     if world.z_max is not None:
         return world.z_max
     return DEFAULT_Z_MAX
-

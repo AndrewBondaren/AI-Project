@@ -6,6 +6,7 @@ import logging
 from random import Random
 
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.application.worldData.generators.masterData import economic_tier_rows
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.barrierDefaults import (
     lookup_barrier_template,
 )
@@ -57,7 +58,7 @@ def pick_barrier_template_type(
     rng:      Random,
 ) -> str | None:
     """v1 эвристика — polish pass: `.cursor/plans/settlement-assembler.md` § pick_barrier_template_type."""
-    registry = world.economic_tier_registry or []
+    registry = economic_tier_rows(world)
     uid = world.world_uid
     tier = skeleton.economic_tier or "standard"
     rank = tier_rank(registry, tier, world_uid=uid) if registry else 2

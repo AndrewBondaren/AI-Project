@@ -1,8 +1,6 @@
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.defaults import (
-    DEFAULT_DISTRICT_TEMPLATES,
-)
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.defaults import (
-    DEFAULT_FOOTPRINT_MULTIPLIER,
+    CellZone,
+    DISTRICT_TYPE_PREFERENCE,
 )
 from app.application.worldData.generators.coordinates import (
     cell_in_local_meter_rect,
@@ -22,6 +20,8 @@ from app.application.worldData.generators.coordinates.types import (
     MeterZ,
     SurfaceGridRect,
 )
+from app.dataModel.settlement.district.worldDistrictTemplateRegistry import WorldDistrictTemplateRegistry
+from app.dataModel.settlement.settlement.worldCitySizeRegistry import WorldCitySizeRegistry
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -55,7 +55,7 @@ def footprint_multiplier(world: World, system_city_size: str | None) -> float:
             if radius is not None:
                 side = max(1, int(radius) * 2 + 1)
                 return float(side)
-    return DEFAULT_FOOTPRINT_MULTIPLIER.get(system_city_size or "hamlet", 1.0)
+    return WorldCitySizeRegistry.footprint_multiplier_defaults().get(system_city_size or "hamlet", 1.0)
 
 
 def footprint_side_m(world: World, system_city_size: str | None) -> int:
@@ -185,4 +185,4 @@ def district_templates(world: World) -> list[dict]:
     registry = getattr(world, "district_template_registry", None)
     if registry:
         return list(registry)
-    return list(DEFAULT_DISTRICT_TEMPLATES)
+    return [e.model_dump(mode="json") for e in WorldDistrictTemplateRegistry.canonical_defaults().root]

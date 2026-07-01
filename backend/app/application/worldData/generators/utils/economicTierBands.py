@@ -1,5 +1,6 @@
 from random import Random
 
+from app.application.worldData.generators.masterData import economic_tier_rows
 from app.application.worldData.generators.utils.tierRegistry import tier_rank, tiers_sorted
 from app.db.models.world import World
 
@@ -24,7 +25,7 @@ def tier_band_map(world: World) -> dict[str, str]:
     N=1: single tier → middle.
     N=2: index 0 → poor, index 1 → rich.
     """
-    tiers = tiers_sorted(world.economic_tier_registry)
+    tiers = tiers_sorted(economic_tier_rows(world))
     n = len(tiers)
     if n == 0:
         return {}
@@ -74,10 +75,10 @@ def materialize_band(
     if anchor_tier is None:
         return rng.choice(candidates)
 
-    anchor_rank = tier_rank(world.economic_tier_registry, anchor_tier, world_uid=world.world_uid)
+    anchor_rank = tier_rank(economic_tier_rows(world), anchor_tier, world_uid=world.world_uid)
     ordered = [
         t["system_tier"]
-        for t in tiers_sorted(world.economic_tier_registry)
+        for t in tiers_sorted(economic_tier_rows(world))
         if t["system_tier"] in candidates
     ]
     if not ordered:
@@ -85,6 +86,6 @@ def materialize_band(
     return min(
         ordered,
         key=lambda t: abs(
-            tier_rank(world.economic_tier_registry, t, world_uid=world.world_uid) - anchor_rank
+            tier_rank(economic_tier_rows(world), t, world_uid=world.world_uid) - anchor_rank
         ),
     )

@@ -4,6 +4,7 @@
 """
 import random
 
+from app.application.worldData.generators.masterData import economic_tier_rows
 from app.application.worldData.generators.utils.economicTierBands import (
     BAND_COMMON,
     BAND_MIDDLE,
@@ -39,7 +40,7 @@ def resolve_sidewalk_width(
     if economic_tier is None:
         return _DEFAULT_WIDTH
 
-    registry = world.economic_tier_registry if world else None
+    registry = economic_tier_rows(world) if world else None
     entry = tier_entry(registry, economic_tier)
     if entry is not None:
         fixed = entry.get("sidewalk_width_cells")

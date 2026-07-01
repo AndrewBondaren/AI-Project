@@ -16,8 +16,10 @@ from app.application.worldData.generators.climate.zoneField import (
 )
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars
 
-DEFAULT_LAPSE_RATE = 0.65
+_lapse = WorldTerrainScalars.canonical_defaults().elevation_lapse_rate
+DEFAULT_LAPSE_RATE = _lapse if _lapse is not None else 0.65
 
 
 @dataclass(frozen=True)

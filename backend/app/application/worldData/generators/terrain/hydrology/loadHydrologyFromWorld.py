@@ -5,12 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 from app.application.worldData.generators.climate.loggingHelpers import warn_once
+from app.application.worldData.generators.masterData import hydrology, hydrology_dict
 
 
 def load_hydrology_from_world(world: Any) -> dict:
-    """Return surface hydrology policy dict; empty if unset."""
-    raw = getattr(world, "hydrology", None) or {}
-    return raw if isinstance(raw, dict) else {}
+    """Return surface hydrology policy dict; canonical_empty when unset."""
+    return hydrology_dict(world)
 
 
 def load_caves_hydrology_from_world(world: Any) -> dict:
@@ -23,12 +23,12 @@ def load_caves_hydrology_from_world(world: Any) -> dict:
 
 
 def is_hydrology_enabled(world: Any) -> bool:
-    policy = load_hydrology_from_world(world)
-    if "enabled" not in policy:
+    policy = hydrology(world)
+    if policy.enabled is None:
         uid = getattr(world, "world_uid", "?")
         warn_once(
             uid,
             "implicit_hydrology_enabled",
             "hydrology | world=%s enabled key missing; defaulting to true (import normalize target)",
         )
-    return bool(policy.get("enabled", True))
+    return bool(policy.enabled if policy.enabled is not None else True)

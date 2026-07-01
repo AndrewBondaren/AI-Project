@@ -166,8 +166,8 @@ def test_phase_e_building_cache() -> None:
         build_layout_cache,
         collect_building_template_names,
     )
-    from app.application.worldData.generators.assemblers.settlementAssembler.planner.defaults import (
-        DEFAULT_DISTRICT_TEMPLATES,
+    from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+        WorldDistrictTemplateRegistry,
     )
 
     world = World(
@@ -193,7 +193,9 @@ def test_phase_e_building_cache() -> None:
     )
     settlement.settlement_density = "medium"
 
-    civic = next(t for t in DEFAULT_DISTRICT_TEMPLATES if t["system_name"] == "civic_center")
+    civic = WorldDistrictTemplateRegistry.canonical_defaults().entry_for("civic_center")
+    assert civic is not None
+    civic = civic.model_dump(mode="json")
     slot_a = DistrictSlot(
         origin_x=0, origin_y=0, width_m=3000, depth_m=3000, ground_z=0,
         district_template=civic,
@@ -290,8 +292,8 @@ def test_phase_area_barriers() -> None:
 
 def test_phase_b_travel_and_sidewalk() -> None:
     """road_tier_bonus resolver + per-district has_sidewalk on city entry links."""
-    from app.application.worldData.generators.assemblers.settlementAssembler.planner.defaults import (
-        DEFAULT_DISTRICT_TEMPLATES,
+    from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+        WorldDistrictTemplateRegistry,
     )
     from app.application.worldData.generators.road.connectionPolicy import resolve_has_sidewalk
     from app.application.worldData.generators.road.roadTravelResolver import (
@@ -300,12 +302,12 @@ def test_phase_b_travel_and_sidewalk() -> None:
     )
     from app.db.models.connectionEdge import ConnectionEdge
 
-    industrial = next(
-        t for t in DEFAULT_DISTRICT_TEMPLATES if t["system_name"] == "industrial_quarter"
-    )
-    civic = next(
-        t for t in DEFAULT_DISTRICT_TEMPLATES if t["system_name"] == "civic_center"
-    )
+    registry = WorldDistrictTemplateRegistry.canonical_defaults()
+    industrial = registry.entry_for("industrial_quarter")
+    civic = registry.entry_for("civic_center")
+    assert industrial is not None and civic is not None
+    industrial = industrial.model_dump(mode="json")
+    civic = civic.model_dump(mode="json")
     assert resolve_has_sidewalk(industrial) is False
     assert resolve_has_sidewalk(civic) is True
 

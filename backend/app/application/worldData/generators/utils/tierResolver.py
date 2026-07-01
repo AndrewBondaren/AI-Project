@@ -1,6 +1,7 @@
 import logging
 from random import Random
 
+from app.application.worldData.generators.masterData import economic_tier_rows
 from app.application.worldData.generators.utils.economicTierBands import materialize_band
 from app.application.worldData.generators.utils.tierRegistry import median_system_tier
 from app.db.models.namedLocation import NamedLocation
@@ -144,7 +145,7 @@ class TierResolver:
                 )
 
         if world is not None:
-            median = median_system_tier(world.economic_tier_registry)
+            median = median_system_tier(economic_tier_rows(world))
             if median:
                 logger.warning(
                     "TierResolver: no economic tier in cascade; using median %r",

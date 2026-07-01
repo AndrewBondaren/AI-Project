@@ -6,9 +6,11 @@ from app.application.worldData.generators.climate.loggingHelpers import warn_onc
 from app.application.worldData.generators.climate.loggingHelpers import debug_once
 from app.application.worldData.generators.climate.math import smoothstep
 from app.application.worldData.generators.climate.poleResolve import peak_bounds
-from app.application.worldData.jsonValidation.normalize.climateDefaults import (
-    DEFAULT_PRECIPITATION_LIQUID,
-    LEGACY_STANDALONE_WATER_MATERIAL,
+from app.application.worldData.generators.masterData import (
+    default_precipitation_liquid,
+    legacy_standalone_water_material,
+    material_rows,
+    materials,
 )
 from app.db.models.world import World
 
@@ -18,22 +20,21 @@ LIQUID_BAND_OUTER = 0.1
 
 
 def _material_entry(world: World, system_material: str) -> dict | None:
-    for entry in world.material_registry or []:
-        if isinstance(entry, dict) and entry.get("system_material") == system_material:
-            return entry
-    return None
+    entry = materials(world).entry_for(system_material)
+    return entry.model_dump() if entry is not None else None
 
 
 def _precipitation_liquid_key(world: World) -> str:
     key = world.precipitation_liquid
+    default_key = default_precipitation_liquid()
     if key is None:
         warn_once(
             world.world_uid,
             "null_precipitation_liquid",
             "precipitation_liquid | world=%s field null; using %r (import normalize target)",
-            DEFAULT_PRECIPITATION_LIQUID,
+            default_key,
         )
-        return DEFAULT_PRECIPITATION_LIQUID
+        return default_key
     return key
 
 
@@ -43,11 +44,12 @@ def resolve_world_precipitation_liquid(world: World) -> dict:
     Explicit DB value required after import normalize; legacy gaps warn once.
     """
     key = _precipitation_liquid_key(world)
+    default_key = default_precipitation_liquid()
     entry = _material_entry(world, key)
     if entry is not None and entry.get("material_category") == "liquid":
         return entry
 
-    water = _material_entry(world, DEFAULT_PRECIPITATION_LIQUID)
+    water = _material_entry(world, default_key)
     if water is not None:
         if entry is not None:
             warn_once(
@@ -57,7 +59,7 @@ def resolve_world_precipitation_liquid(world: World) -> dict:
                 key,
                 entry.get("material_category"),
             )
-        elif key != DEFAULT_PRECIPITATION_LIQUID:
+        elif key != default_key:
             warn_once(
                 world.world_uid,
                 f"missing:{key}",
@@ -66,8 +68,8 @@ def resolve_world_precipitation_liquid(world: World) -> dict:
             )
         return water
 
-    for mat in world.material_registry or []:
-        if isinstance(mat, dict) and mat.get("material_category") == "liquid":
+    for mat in material_rows(world):
+        if mat.get("material_category") == "liquid":
             warn_once(
                 world.world_uid,
                 "first_liquid",
@@ -83,7 +85,11 @@ def resolve_world_precipitation_liquid(world: World) -> dict:
         "precipitation_liquid fallback | world=%s requested=%s; no liquid in material_registry; using legacy standalone water",
         key,
     )
-    return dict(LEGACY_STANDALONE_WATER_MATERIAL)
+    legacy_key = legacy_standalone_water_material()
+    legacy = _material_entry(world, legacy_key)
+    if legacy is not None:
+        return legacy
+    return {"system_material": legacy_key, "material_category": "liquid"}
 
 
 def _phase_bounds(entry: dict) -> tuple[int | None, int | None]:

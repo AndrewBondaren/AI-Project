@@ -1,4 +1,5 @@
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
+from app.application.worldData.generators.masterData import terrain_system_keys
 from app.application.worldData.generators.terrain.passes.surfacePass import run_surface_pass
 from app.application.worldData.generators.terrain.terrainZ import surface_terrain_at_z
 from app.db.models.mapCell import MapCell
@@ -16,9 +17,7 @@ def run_heightmap_pass(
     if heightmap is None:
         return []
 
-    terrain_set = {
-        t["system_terrain"] for t in (world.terrain_registry or []) if "system_terrain" in t
-    }
+    terrain_set = terrain_system_keys(world)
     cells: list[MapCell] = []
     for (gx, gy), z in heightmap.surface_z.items():
         cells.append(MapCell(

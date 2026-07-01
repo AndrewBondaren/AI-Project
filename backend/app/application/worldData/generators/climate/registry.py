@@ -4,39 +4,22 @@ from app.application.worldData.generators.climate.climateZone import (
     fallback_profile,
 )
 from app.application.worldData.generators.climate.loggingHelpers import warn_once
+from app.application.worldData.generators.masterData import climate_zones
 from app.db.models.world import World
 
 
-def _registry_entries(world: World) -> list[dict]:
-    raw = world.climate_zone_registry
-    if not raw:
-        return []
-    if isinstance(raw, list):
-        return [e for e in raw if isinstance(e, dict)]
-    if isinstance(raw, dict):
-        values = list(raw.values())
-        if values and all(isinstance(v, dict) for v in values):
-            return values
-        return [raw]
-    return []
+def _int_or(value: int | None, default: int) -> int:
+    return default if value is None else int(value)
 
 
-def _int(entry: dict, key: str, default: int) -> int:
-    value = entry.get(key)
-    if value is None:
-        return default
-    return int(value)
-
-
-def _entry_to_profile(entry: dict, fallback: ClimateZoneProfile) -> ClimateZoneProfile:
-    system = entry.get("system_climate") or fallback.system_climate
+def _entry_to_profile(entry, fallback: ClimateZoneProfile) -> ClimateZoneProfile:
     return ClimateZoneProfile(
-        system_climate=system,
-        base_temperature=_int(entry, "base_temperature", fallback.base_temperature),
-        typical_elevation_z=_int(entry, "typical_elevation_z", fallback.typical_elevation_z),
-        base_rainfall=_int(entry, "base_rainfall", fallback.base_rainfall),
-        temperature_variance=_int(entry, "temperature_variance", fallback.temperature_variance),
-        rainfall_variance=_int(entry, "rainfall_variance", fallback.rainfall_variance),
+        system_climate=entry.system_climate,
+        base_temperature=_int_or(entry.base_temperature, fallback.base_temperature),
+        typical_elevation_z=_int_or(entry.typical_elevation_z, fallback.typical_elevation_z),
+        base_rainfall=_int_or(entry.base_rainfall, fallback.base_rainfall),
+        temperature_variance=_int_or(entry.temperature_variance, fallback.temperature_variance),
+        rainfall_variance=_int_or(entry.rainfall_variance, fallback.rainfall_variance),
     )
 
 
@@ -48,10 +31,9 @@ def profile_for(world: World, system_climate: str) -> ClimateZoneProfile:
     enum_default = enum_default_profile(system_climate)
     base = enum_default or fallback_profile()
 
-    for entry in _registry_entries(world):
-        key = entry.get("system_climate")
-        if key == system_climate:
-            return _entry_to_profile(entry, base)
+    entry = climate_zones(world).entry_for(system_climate)
+    if entry is not None:
+        return _entry_to_profile(entry, base)
 
     if enum_default is None:
         warn_once(

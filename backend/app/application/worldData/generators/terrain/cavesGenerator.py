@@ -1,15 +1,14 @@
 """Stub cave carve — does not overwrite ore markers (Phase 4)."""
 
 from app.application.worldData.generators.climate.math import world_seed
+from app.application.worldData.generators.masterData import terrain_system_keys
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
 
 def generate_caves(world: World, cells: list[MapCell]) -> list[MapCell]:
     """Carve ~1% subsurface cells to open_space; skip cells with ore material."""
-    terrain_set = {
-        t["system_terrain"] for t in (world.terrain_registry or []) if "system_terrain" in t
-    }
+    terrain_set = terrain_system_keys(world)
     cave_type = "open_space" if "open_space" in terrain_set else None
     if cave_type is None:
         return []
