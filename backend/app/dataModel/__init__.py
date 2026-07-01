@@ -1,5 +1,15 @@
 """Master-data POJOs (SCH-*) — structure, defaults, field policy."""
 
+from app.dataModel.climate import (
+    ClimateZoneEntry,
+    SeasonTempOffsets,
+    WeatherTypeEntry,
+    WorldClimateScalars,
+    WorldClimateZoneRegistry,
+    WorldWeatherTypeRegistry,
+)
+from app.dataModel.connections import ConnectionTypeEntry, WorldConnectionTypeRegistry
+from app.dataModel.economy import EconomyTierEntry, WorldEconomyTierRegistry
 from app.dataModel.hydrology import WorldHydrology
 from app.dataModel.materials import MaterialRegistryEntry, WorldMaterialRegistry
 from app.dataModel.annotationPolicy import AnnotationPolicy, OptionalOnWire, StrictOnWire, field_policy
@@ -33,19 +43,28 @@ __all__ = [
     "BuildingTemplateOutline",
     "BuildingTemplateRegistryEntry",
     "CitySizeEntry",
+    "ClimateZoneEntry",
+    "ConnectionTypeEntry",
     "DistrictTemplateEntry",
+    "EconomyTierEntry",
     "AnnotationPolicy",
     "MaterialRegistryEntry",
     "OptionalOnWire",
     "RoadSettingsEntry",
+    "SeasonTempOffsets",
     "SettlementSkeleton",
     "StrictOnWire",
     "TerrainCategoryEntry",
     "TerrainRegistryEntry",
+    "WeatherTypeEntry",
     "WorldBarrierTemplateRegistry",
     "WorldBuildingTemplateRegistry",
     "WorldCitySizeRegistry",
+    "WorldClimateScalars",
+    "WorldClimateZoneRegistry",
+    "WorldConnectionTypeRegistry",
     "WorldDistrictTemplateRegistry",
+    "WorldEconomyTierRegistry",
     "WorldHydrology",
     "WorldLocationMoodRegistry",
     "WorldMaterialRegistry",
@@ -54,5 +73,6 @@ __all__ = [
     "WorldTerrainCategoryRegistry",
     "WorldTerrainRegistry",
     "WorldTerrainScalars",
+    "WorldWeatherTypeRegistry",
     "field_policy",
 ]
