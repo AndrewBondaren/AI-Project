@@ -7,11 +7,13 @@ from app.application.worldData.generators.climate.loggingHelpers import debug_on
 from app.application.worldData.generators.climate.math import smoothstep
 from app.application.worldData.generators.climate.poleResolve import peak_bounds
 from app.application.jsonValidation import (
+    climate_scalars,
     default_precipitation_liquid,
     legacy_standalone_water_material,
     materials,
 )
 from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
+from app.dataModel.materials.enums.materialCategory import MaterialCategory
 from app.db.models.world import World
 
 logger = logging.getLogger(__name__)
@@ -20,17 +22,7 @@ LIQUID_BAND_OUTER = 0.1
 
 
 def _precipitation_liquid_key(world: World) -> str:
-    key = world.precipitation_liquid
-    default_key = default_precipitation_liquid()
-    if key is None:
-        warn_once(
-            world.world_uid,
-            "null_precipitation_liquid",
-            "precipitation_liquid | world=%s field null; using %r (import normalize target)",
-            default_key,
-        )
-        return default_key
-    return key
+    return climate_scalars(world).precipitation_liquid
 
 
 def resolve_world_precipitation_liquid(world: World) -> MaterialRegistryEntry:
@@ -42,7 +34,7 @@ def resolve_world_precipitation_liquid(world: World) -> MaterialRegistryEntry:
     key = _precipitation_liquid_key(world)
     default_key = default_precipitation_liquid()
     entry = registry.entry_for(key)
-    if entry is not None and entry.material_category == "liquid":
+    if entry is not None and entry.material_category.is_liquid():
         return entry
 
     water = registry.entry_for(default_key)
@@ -53,7 +45,7 @@ def resolve_world_precipitation_liquid(world: World) -> MaterialRegistryEntry:
                 f"not_liquid:{key}",
                 "precipitation_liquid fallback | world=%s requested=%s is not liquid (category=%s); using water",
                 key,
-                entry.material_category,
+                entry.material_category.value,
             )
         elif key != default_key:
             warn_once(
@@ -65,7 +57,7 @@ def resolve_world_precipitation_liquid(world: World) -> MaterialRegistryEntry:
         return water
 
     for mat in registry.root:
-        if mat.material_category == "liquid":
+        if mat.material_category.is_liquid():
             warn_once(
                 world.world_uid,
                 "first_liquid",
@@ -88,7 +80,7 @@ def resolve_world_precipitation_liquid(world: World) -> MaterialRegistryEntry:
     return MaterialRegistryEntry(
         system_material=legacy_key,
         display_name=legacy_key,
-        material_category="liquid",
+        material_category=MaterialCategory.LIQUID,
     )
 
 

@@ -8,7 +8,7 @@ import logging
 from dataclasses import dataclass, field
 
 from app.application.worldData.generators.structure.cellBuilder import _interior
-from app.application.worldData.generators.utils.facing import Facing
+from app.dataModel.spatial.facing import Facing, parse_facing
 from app.application.worldData.generators.structure.structureElement import (
     StructureElement, _WALL_ELEMENTS, _PASSABLE_ELEMENTS,
 )
@@ -34,7 +34,7 @@ class VerticalLadderParams:
     is_movable:   bool
     has_trapdoor: bool                       # физический люк на z_top
     has_walls:       bool          = False   # стены вокруг столба лестницы
-    facing:          str | None    = None    # направление «наружу» (для has_walls)
+    facing:          Facing | None = None    # направление «наружу» (для has_walls)
     open_wall_shaft: str | None    = None    # материал окна в стенах шахты; None → глухие стены
     closed_exit:     bool          = False   # закрытая шахта: стены до верха to_level + потолок
 
@@ -78,7 +78,7 @@ def _shoot_beyond_building(
     fr_wall = fr_fp - fr_int
 
     if facing:
-        shoot_dirs = [_FACING_VEC[Facing(facing)]]
+        shoot_dirs = [_FACING_VEC[facing]]
     else:
         shoot_dirs = list(_FACING_VEC.values())
 
@@ -205,7 +205,7 @@ def _anchor_outside(
     to_fp   = to.get_footprint()
     fr_wall = fr_fp - fr_int
 
-    facing_vec = _FACING_VEC.get(Facing(facing)) if facing else None
+    facing_vec = _FACING_VEC.get(facing) if facing else None
 
     candidates: list[tuple[tuple[int, int], tuple[int, int]]] = []  # (wall_xy, outside_xy)
     for wx, wy in fr_wall:
@@ -264,10 +264,11 @@ def _compute_vertical_ladder_params(
     on_the_edge:     bool,
     passage_height:  int,
     has_walls:       bool       = False,
-    facing:          str | None = None,
+    facing:          Facing | str | None = None,
     open_wall_shaft: str | None = None,
     closed_exit:     bool       = False,
 ) -> VerticalLadderParams:
+    facing = parse_facing(facing)
     anchor = _compute_vertical_ladder_anchor(
         fr, to, cells, z_lo, z_top, near_wall, on_the_edge,
         passage_height=passage_height, facing=facing, is_movable=is_movable,

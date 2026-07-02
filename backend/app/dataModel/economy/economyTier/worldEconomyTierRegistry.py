@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from pydantic import RootModel
 
 from app.dataModel.economy.economyTier.economyTierEntry import EconomyTierEntry
@@ -27,6 +29,7 @@ _ROAD_DEFAULTS: dict[str, tuple[float, float]] = {
 
 
 class WorldEconomyTierRegistry(RootModel[list[EconomyTierEntry]]):
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-ECON-TIER"
     """Root POJO for `worlds.economic_tier_registry`. Wire shape: JSON array."""
 
     root: list[EconomyTierEntry]

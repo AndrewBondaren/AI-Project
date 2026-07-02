@@ -33,6 +33,7 @@ class ResolveContext:
     partial: bool = False
     path_prefix: tuple[str | int, ...] = ()
     errors: list[FieldPathError] = field(default_factory=list)
+    schema_id: str | None = None
 
     def child(self, segment: str | int) -> ResolveContext:
         return ResolveContext(
@@ -40,6 +41,7 @@ class ResolveContext:
             partial=self.partial,
             path_prefix=self.path_prefix + (segment,),
             errors=self.errors,
+            schema_id=self.schema_id,
         )
 
 
@@ -93,7 +95,7 @@ def _resolved_snapshot(model: BaseModel) -> Any:
 
 def _json_line(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
-    
+
 
 
 def _log_resolve_transform(
@@ -119,13 +121,28 @@ def _log_resolve_transform(
     )
 
 
+def _validation_issue(
+    ctx: ResolveContext | None,
+    path: tuple[str | int, ...],
+    message: str,
+    *,
+    code: str,
+) -> FieldPathError:
+    return FieldPathError(
+        path=path,
+        message=message,
+        schema_id=ctx.schema_id if ctx is not None else None,
+        code=code,
+    )
+
+
 def _record_strict_error(
     ctx: ResolveContext | None,
     path: tuple[str | int, ...],
     detail: str,
 ) -> None:
     if ctx is not None and ctx.mode == ResolveMode.IMPORT:
-        ctx.errors.append(FieldPathError(path=path, message=detail))
+        ctx.errors.append(_validation_issue(ctx, path, detail, code="STRICT_REQUIRED"))
         return
     raise StrictFieldError(path, detail)
 
@@ -288,9 +305,11 @@ def resolve_root_list(
 
     if not isinstance(raw, list):
         if ctx is not None and ctx.mode == ResolveMode.IMPORT:
-            ctx.errors.append(FieldPathError(
-                path=ctx.path_prefix,
-                message="expected list",
+            ctx.errors.append(_validation_issue(
+                ctx,
+                ctx.path_prefix,
+                "expected list",
+                code="EXPECTED_LIST",
             ))
             return empty_factory()
         logger.warning(
@@ -313,9 +332,11 @@ def resolve_root_list(
     for index, item in enumerate(raw):
         if not isinstance(item, dict):
             if ctx is not None and ctx.mode == ResolveMode.IMPORT:
-                ctx.errors.append(FieldPathError(
-                    path=ctx.path_prefix + (index,),
-                    message="expected object",
+                ctx.errors.append(_validation_issue(
+                    ctx,
+                    ctx.path_prefix + (index,),
+                    "expected object",
+                    code="EXPECTED_OBJECT",
                 ))
             else:
                 logger.warning(

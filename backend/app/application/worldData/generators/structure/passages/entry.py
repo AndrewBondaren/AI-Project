@@ -6,7 +6,7 @@ import logging
 from app.application.worldData.generators.utils.facing import Facing
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.doorPlacer import DoorPlacer
-from app.application.worldData.generators.structure.passages.passageType import PassageType
+from app.dataModel.structure.enums.passageType import PassageType
 from app.application.worldData.generators.structure.passages.shared import (
     _DIRECTION_FACING, _det_uuid, _exterior_cells_on_wall,
 )
@@ -58,6 +58,7 @@ def _build_entry_point(
 
     cx, cy = door_cells[len(door_cells) // 2]
     passage_uid = _det_uuid(building_uid, f"entry{suffix}", room.room_id)
+    passage_type = PassageType.from_wire(ep.get("passage_type"), default=PassageType.MAIN_ENTRANCE)
     return LocationPassage(
         passage_uid=passage_uid,
         world_uid=world_uid,
@@ -67,6 +68,6 @@ def _build_entry_point(
         to_level_uid=level.level_uid,
         to_x=cx,
         to_y=cy,
-        system_passage_type=ep.get("passage_type", PassageType.MAIN_ENTRANCE),
+        system_passage_type=passage_type,
         is_bidirectional=False,
     )

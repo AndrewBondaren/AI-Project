@@ -1,4 +1,4 @@
-from app.application.worldData.generators.utils.facing import Facing, parse_facing
+from app.dataModel.spatial.facing import Facing, parse_facing
 
 # Лестницы: march / entry только по 4 сторонам (без intercardinal).
 _OPPOSITE: dict[Facing, Facing] = {

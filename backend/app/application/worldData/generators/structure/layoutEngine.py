@@ -17,6 +17,7 @@ from collections import deque
 
 from app.application.worldData.generators.structure.errors import GenerationError
 from app.application.worldData.generators.utils.facing import Facing
+from app.dataModel.structure.enums.passageType import PassageType
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 
 logger = logging.getLogger(__name__)
@@ -118,7 +119,8 @@ def _build_graph(rooms: list[_RoomInstance], connections: list[dict]) -> dict[st
     graph: dict[str, set[str]] = {r.room_id: set() for r in rooms}
     for conn in connections:
         fr, tr = conn["from_room"], conn["to_room"]
-        if conn.get("passage_type") != "staircase" and fr in ids and tr in ids:
+        ptype = PassageType.from_wire(conn.get("passage_type"))
+        if ptype is not PassageType.STAIRCASE and fr in ids and tr in ids:
             graph[fr].add(tr)
             graph[tr].add(fr)
     return graph
@@ -131,7 +133,7 @@ def _find_start(rooms: list[_RoomInstance], connections: list[dict],
             return r
     ids = {r.room_id for r in rooms}
     for conn in connections:
-        if conn.get("passage_type") == "staircase":
+        if PassageType.from_wire(conn.get("passage_type")) is PassageType.STAIRCASE:
             for candidate_id in (conn.get("to_room"), conn.get("from_room")):
                 if candidate_id in ids:
                     r = _by_id(rooms, candidate_id)

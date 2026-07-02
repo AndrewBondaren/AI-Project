@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import OptionalOnWire, StrictOnWire
+from app.dataModel.constrainedField import constrained_field
 
 
 class IntMinMax(BaseModel):
@@ -19,8 +20,8 @@ class PctRange(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    min: StrictOnWire[float] = Field(ge=0.0, le=1.0)
-    max: StrictOnWire[float] = Field(ge=0.0, le=1.0)
+    min: StrictOnWire[float] = constrained_field(greater_equals=0.0, lesser_equals=1.0)
+    max: StrictOnWire[float] = constrained_field(greater_equals=0.0, lesser_equals=1.0)
 
 
 class EconomicTierRange(BaseModel):

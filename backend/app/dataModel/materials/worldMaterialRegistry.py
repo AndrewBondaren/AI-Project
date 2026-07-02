@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from pydantic import RootModel
 
 from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
+from app.dataModel.materials.enums.materialCategory import MaterialCategory
 
 # fixtures/world_template.json
 _CANONICAL_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
     MaterialRegistryEntry(
         system_material="earth",
         display_name="Земля",
-        material_category="solid",
+        material_category=MaterialCategory.SOLID,
         tags=["raw"],
         economic_tier="poor",
         hardness=1,
@@ -20,7 +23,7 @@ _CANONICAL_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
     MaterialRegistryEntry(
         system_material="stone",
         display_name="Камень",
-        material_category="solid",
+        material_category=MaterialCategory.SOLID,
         tags=["mineral"],
         economic_tier="standard",
         hardness=3,
@@ -29,7 +32,7 @@ _CANONICAL_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
     MaterialRegistryEntry(
         system_material="wood",
         display_name="Дерево",
-        material_category="solid",
+        material_category=MaterialCategory.SOLID,
         tags=["organic"],
         economic_tier="basic",
         hardness=2,
@@ -39,7 +42,7 @@ _CANONICAL_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
     MaterialRegistryEntry(
         system_material="water",
         display_name="Вода",
-        material_category="liquid",
+        material_category=MaterialCategory.LIQUID,
         density=100,
         freezable=True,
         corrodible=False,
@@ -47,7 +50,7 @@ _CANONICAL_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
     MaterialRegistryEntry(
         system_material="sand",
         display_name="Песок",
-        material_category="solid",
+        material_category=MaterialCategory.SOLID,
         tags=["mineral"],
         economic_tier="basic",
         hardness=1,
@@ -56,7 +59,7 @@ _CANONICAL_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
     MaterialRegistryEntry(
         system_material="ice",
         display_name="Лёд",
-        material_category="solid",
+        material_category=MaterialCategory.SOLID,
         hardness=1,
         density=90,
     ),
@@ -67,7 +70,7 @@ _ENGINE_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
     MaterialRegistryEntry(
         system_material="stone",
         display_name="Камень",
-        material_category="solid",
+        material_category=MaterialCategory.SOLID,
         tags=["construction", "mineral"],
         use_type=["wall", "floor", "column"],
         economic_tier="standard",
@@ -79,7 +82,7 @@ _ENGINE_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
     MaterialRegistryEntry(
         system_material="wood",
         display_name="Дерево",
-        material_category="solid",
+        material_category=MaterialCategory.SOLID,
         tags=["construction", "organic"],
         use_type=["wall", "floor", "door", "railing"],
         economic_tier="basic",
@@ -91,7 +94,7 @@ _ENGINE_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
     MaterialRegistryEntry(
         system_material="iron",
         display_name="Железо",
-        material_category="solid",
+        material_category=MaterialCategory.SOLID,
         tags=["metal", "mineral"],
         use_type=["wall", "door", "gate", "railing"],
         economic_tier="standard",
@@ -103,7 +106,7 @@ _ENGINE_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
     MaterialRegistryEntry(
         system_material="earth",
         display_name="Земля",
-        material_category="solid",
+        material_category=MaterialCategory.SOLID,
         tags=["raw", "mineral"],
         use_type=["floor"],
         economic_tier="poor",
@@ -115,7 +118,7 @@ _ENGINE_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
     MaterialRegistryEntry(
         system_material="crystal",
         display_name="Кристалл",
-        material_category="solid",
+        material_category=MaterialCategory.SOLID,
         tags=["mineral", "magic"],
         use_type=["wall", "floor"],
         economic_tier="premium",
@@ -128,7 +131,7 @@ _ENGINE_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
     MaterialRegistryEntry(
         system_material="water",
         display_name="Вода",
-        material_category="liquid",
+        material_category=MaterialCategory.LIQUID,
         density=100,
         freezable=True,
         corrodible=False,
@@ -136,7 +139,7 @@ _ENGINE_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
     MaterialRegistryEntry(
         system_material="lava",
         display_name="Лава",
-        material_category="liquid",
+        material_category=MaterialCategory.LIQUID,
         density=270,
         corrodible=False,
         temp_damage=True,
@@ -144,14 +147,14 @@ _ENGINE_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
     MaterialRegistryEntry(
         system_material="air",
         display_name="Воздух",
-        material_category="gas",
+        material_category=MaterialCategory.GAS,
         density=1,
         corrodible=False,
     ),
     MaterialRegistryEntry(
         system_material="smoke",
         display_name="Дым",
-        material_category="gas",
+        material_category=MaterialCategory.GAS,
         density=2,
         corrodible=False,
         vision_block=True,
@@ -159,7 +162,7 @@ _ENGINE_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
     MaterialRegistryEntry(
         system_material="toxic_gas",
         display_name="Токсичный газ",
-        material_category="gas",
+        material_category=MaterialCategory.GAS,
         density=3,
         flammable=True,
         corrodible=False,
@@ -170,6 +173,7 @@ _ENGINE_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
 
 
 class WorldMaterialRegistry(RootModel[list[MaterialRegistryEntry]]):
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-MATERIAL"
     """Root POJO for `worlds.material_registry`. Wire shape: JSON array."""
 
     root: list[MaterialRegistryEntry]
@@ -192,5 +196,5 @@ class WorldMaterialRegistry(RootModel[list[MaterialRegistryEntry]]):
 
     def liquid_keys(self) -> frozenset[str]:
         return frozenset(
-            e.system_material for e in self.root if e.material_category == "liquid"
+            e.system_material for e in self.root if e.material_category.is_liquid()
         )

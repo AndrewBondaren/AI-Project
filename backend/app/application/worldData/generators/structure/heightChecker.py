@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 
+from app.dataModel.structure.enums.buildingElement import StructureElement
 from app.application.worldData.generators.structure.structureElement import (
     _PASSABLE_ELEMENTS, _STAIR_ELEMENTS,
 )
@@ -31,7 +32,7 @@ class PassageHeightChecker:
         """Проверяет что в колонке (x,y) нет нестеновых элементов на h позиций от z_start."""
         for dz in range(h):
             cell = self.cells.get((x, y, z_start + dz))
-            if cell is not None and cell.system_building_element != "wall":
+            if cell is not None and cell.system_building_element != StructureElement.WALL:
                 return False
         return True
 

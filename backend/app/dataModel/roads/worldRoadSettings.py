@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from pydantic import RootModel
 
 from app.dataModel.roads.roadSettingsEntry import RoadSettingsEntry
@@ -63,6 +65,7 @@ _CANONICAL_ENTRIES: tuple[RoadSettingsEntry, ...] = (
 
 
 class WorldRoadSettings(RootModel[list[RoadSettingsEntry]]):
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-ROAD-SETTINGS"
     """Root POJO for `worlds.road_settings`. Wire shape: JSON array."""
 
     root: list[RoadSettingsEntry]

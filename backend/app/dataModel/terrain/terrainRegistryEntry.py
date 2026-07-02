@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import OptionalOnWire, StrictOnWire
+from app.dataModel.constrainedField import constrained_field
 
 
 class TerrainRegistryEntry(BaseModel):
@@ -20,4 +21,4 @@ class TerrainRegistryEntry(BaseModel):
     has_state: OptionalOnWire[bool] = False
     default_state: OptionalOnWire[str | None] = None
     default_material: OptionalOnWire[str | None] = None
-    gap_width: OptionalOnWire[int | None] = Field(default=None, ge=1)
+    gap_width: OptionalOnWire[int | None] = constrained_field(default=None, greater_equals=1)

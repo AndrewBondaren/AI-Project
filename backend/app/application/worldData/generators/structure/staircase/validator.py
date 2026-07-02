@@ -4,6 +4,8 @@ Base staircase validator — ABC + universal checks.
 import logging
 from abc import ABC, abstractmethod
 
+from app.dataModel.structure.enums.buildingElement import StructureElement
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,10 +24,10 @@ class StaircaseValidator(ABC):
         to_cell = cells.get((tx, ty, z_top))
         got = to_cell.system_building_element if to_cell else "пусто"
 
-        if got != "floor":
+        if got != StructureElement.FLOOR:
             logger.error(
-                "%s [to_anchor тип]: ячейка (%d,%d,z=%d) должна быть 'floor', получено %r.",
-                conn_label, tx, ty, z_top, got,
+                "%s [to_anchor тип]: ячейка (%d,%d,z=%d) должна быть %r, получено %r.",
+                conn_label, tx, ty, z_top, StructureElement.FLOOR.value, got,
             )
             external_floor = [
                 (ex, ey)
@@ -33,7 +35,7 @@ class StaircaseValidator(ABC):
                 for ex, ey in ((fx + 1, fy), (fx - 1, fy), (fx, fy + 1), (fx, fy - 1))
                 if (ex, ey) not in shaft_footprint
                 if (c := cells.get((ex, ey, z_top)))
-                and c.system_building_element == "floor"
+                and c.system_building_element == StructureElement.FLOOR
             ]
             if external_floor:
                 logger.error(

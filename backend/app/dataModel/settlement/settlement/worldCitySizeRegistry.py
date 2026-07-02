@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from pydantic import RootModel
 
 from app.dataModel.settlement.settlement.citySizeEntry import CitySizeEntry
@@ -17,6 +19,7 @@ _CANONICAL_ENTRIES: tuple[CitySizeEntry, ...] = (
 
 
 class WorldCitySizeRegistry(RootModel[list[CitySizeEntry]]):
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-CITY-SIZE"
     root: list[CitySizeEntry]
 
     @classmethod

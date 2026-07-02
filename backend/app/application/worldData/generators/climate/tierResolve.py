@@ -15,6 +15,7 @@ from app.dataModel.climate.climateAnchorInfluenceDefaults import (
     LOCAL_INFLUENCE_BLEND_OUTER,
     local_influence_fraction,
 )
+from app.application.jsonValidation import climate_scalars
 from app.db.models.world import World
 
 
@@ -70,7 +71,9 @@ def _influence_radius(
     gx: int,
     gy: int,
 ) -> float:
-    base_r = bbox_diagonal * local_influence_fraction(world.climate_local_influence_fraction)
+    base_r = bbox_diagonal * local_influence_fraction(
+        climate_scalars(world).climate_local_influence_fraction,
+    )
     if len(modifiers) <= 1:
         return base_r
 

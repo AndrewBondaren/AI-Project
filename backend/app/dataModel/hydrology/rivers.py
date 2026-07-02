@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.hydrology.category import HydrologyCategoryPolicy
 from app.dataModel.annotationPolicy import OptionalOnWire
+from app.dataModel.constrainedField import constrained_field
 
 
 class RiverTypeClassify(BaseModel):
@@ -14,10 +15,12 @@ class RiverTypeClassify(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     mountain_min_source_z: OptionalOnWire[int] = 40
-    path_mountain_fraction: OptionalOnWire[float] = Field(default=0.5, ge=0.0, le=1.0)
-    rapid_drop_threshold_m: OptionalOnWire[int] = Field(default=3, ge=0)
-    mountain_bed_steepness_factor: OptionalOnWire[float] = Field(default=1.5, gt=0.0)
-    foothill_gradient_threshold: OptionalOnWire[float] = Field(default=0.12, ge=0.0)
+    path_mountain_fraction: OptionalOnWire[float] = constrained_field(
+        default=0.5, greater_equals=0.0, lesser_equals=1.0,
+    )
+    rapid_drop_threshold_m: OptionalOnWire[int] = constrained_field(default=3, greater_equals=0)
+    mountain_bed_steepness_factor: OptionalOnWire[float] = constrained_field(default=1.5, greater=0.0)
+    foothill_gradient_threshold: OptionalOnWire[float] = constrained_field(default=0.12, greater_equals=0.0)
 
 
 class HydrologyRiversPolicy(HydrologyCategoryPolicy):

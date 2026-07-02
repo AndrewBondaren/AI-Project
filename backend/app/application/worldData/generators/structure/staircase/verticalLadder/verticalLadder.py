@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 
+from app.dataModel.spatial.facing import parse_facing
 from app.application.worldData.generators.structure.cellFactory import (
     _floor_cell, _ladder_cell, _trapdoor_cell,
 )
@@ -82,7 +83,7 @@ class VerticalLadderBuilder(StaircaseBuilder):
         near_wall    = entry.get("near_wall",    False)
         on_the_edge  = self._on_the_edge
         has_walls        = entry.get("has_walls",        False)
-        facing           = entry.get("facing",           None)
+        facing           = parse_facing(entry.get("facing", None))
         open_wall_shaft  = entry.get("open_wall_shaft",  None)
         closed_exit      = entry.get("closed_exit",      False)
 

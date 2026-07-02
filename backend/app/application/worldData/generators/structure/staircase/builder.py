@@ -14,7 +14,7 @@ from app.application.worldData.generators.structure.staircase.spiral    import S
 from app.application.worldData.generators.structure.staircase.verticalLadder  import VerticalLadderBuilder, ExternalVerticalLadderBuilder
 from app.application.worldData.generators.structure.staircase.base      import StaircaseBuilder
 from app.application.worldData.generators.structure.staircase.staircaseType import StaircaseType
-from app.application.worldData.generators.structure.passages.passageType import PassageType
+from app.dataModel.structure.enums.passageType import PassageType
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
 from app.db.models.mapCell import MapCell
@@ -51,7 +51,7 @@ def build_staircase(
     is_new_schema = shaft is not None or "staircase_id" in conn_or_entry
     if is_new_schema:
         # New schema: staircase_type and id come from sc_entry (staircases[] array)
-        stair_type = conn_or_entry.get("staircase_type", "u_shape")
+        stair_type_raw = conn_or_entry.get("staircase_type", "u_shape")
         sc_id      = conn_or_entry.get("staircase_id", "?")
         conn_label = f"{sc_id}  {fr.room_id}->{to.room_id}"
     else:
@@ -59,13 +59,14 @@ def build_staircase(
         conn_label        = f"{conn_or_entry['from_room']}->{conn_or_entry['to_room']}"
         going_underground = (fr.z_offset >= 0 and to.z_offset < 0)
         coming_up         = (fr.z_offset <  0 and to.z_offset >= 0)
-        stair_type = "trapdoor" if (going_underground or coming_up) else getattr(to, "staircase_type", None)
+        stair_type_raw = "trapdoor" if (going_underground or coming_up) else getattr(to, "staircase_type", None)
 
+    stair_type = StaircaseType.from_wire(stair_type_raw or "")
     logger.info("build_staircase: %s  stair_type=%r  z_height=%d",
-                conn_label, stair_type, abs(to_level.z - fr_level.z))
+                conn_label, stair_type_raw, abs(to_level.z - fr_level.z))
 
-    if stair_type not in _BUILDERS:
-        logger.error("staircase %s: unknown staircase_type=%r", conn_label, stair_type)
+    if stair_type is None or stair_type not in _BUILDERS:
+        logger.error("staircase %s: unknown staircase_type=%r", conn_label, stair_type_raw)
         return None, None
 
     builder = _BUILDERS[stair_type](

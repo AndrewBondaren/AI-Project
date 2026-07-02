@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import OptionalOnWire, StrictOnWire
+from app.dataModel.constrainedField import constrained_field
 
 
 class WeatherTypeEntry(BaseModel):
@@ -17,7 +18,7 @@ class WeatherTypeEntry(BaseModel):
     temp_max: OptionalOnWire[int | None] = None
     temp_min: OptionalOnWire[int | None] = None
     rainfall_min: OptionalOnWire[int | None] = None
-    priority: OptionalOnWire[int] = Field(default=99, ge=1)
-    travel_modifier: OptionalOnWire[float] = Field(default=1.0, gt=0.0)
+    priority: OptionalOnWire[int] = constrained_field(default=99, greater_equals=1)
+    travel_modifier: OptionalOnWire[float] = constrained_field(default=1.0, greater=0.0)
     need_modifiers: OptionalOnWire[dict[str, int]] = Field(default_factory=dict)
     glossary_ref: OptionalOnWire[str | None] = None

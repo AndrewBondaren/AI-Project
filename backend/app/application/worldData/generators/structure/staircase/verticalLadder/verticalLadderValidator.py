@@ -5,6 +5,7 @@ Vertical ladder validator.
 import logging
 
 from app.application.worldData.generators.structure.cellBuilder import _interior
+from app.dataModel.structure.enums.buildingElement import StructureElement
 from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
 from app.application.worldData.generators.structure.staircase.validator import StaircaseValidator
 from app.application.worldData.generators.structure.staircase.verticalLadder.verticalLadderHelper import (
@@ -57,10 +58,10 @@ class VerticalLadderValidator(StaircaseValidator):
         z_cell = z_top - 1
         cell   = cells.get((ax, ay, z_cell))
         got    = cell.system_building_element if cell else "пусто"
-        if got != "ladder":
+        if got != StructureElement.LADDER:
             logger.error(
-                "vertical_ladder %s [ячейка]: (%d,%d,z=%d) должна быть 'ladder', получено %r",
-                conn_label, ax, ay, z_cell, got,
+                "vertical_ladder %s [ячейка]: (%d,%d,z=%d) должна быть %r, получено %r",
+                conn_label, ax, ay, z_cell, StructureElement.LADDER.value, got,
             )
 
     def _check_top_cell(
@@ -76,10 +77,10 @@ class VerticalLadderValidator(StaircaseValidator):
             return  # открытый верх шахты — ячейки нет, floor там быть не должен
         above      = cells.get((ax, ay, z_top))
         above_elem = above.system_building_element if above else "пусто"
-        if above_elem != "trapdoor":
+        if above_elem != StructureElement.TRAPDOOR:
             logger.error(
-                "vertical_ladder %s [выход]: (%d,%d,z=%d) должна быть 'trapdoor', получено %r",
-                conn_label, ax, ay, z_top, above_elem,
+                "vertical_ladder %s [выход]: (%d,%d,z=%d) должна быть %r, получено %r",
+                conn_label, ax, ay, z_top, StructureElement.TRAPDOOR.value, above_elem,
             )
 
     def _check_to_footprint(

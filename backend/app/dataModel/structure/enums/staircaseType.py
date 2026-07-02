@@ -22,10 +22,18 @@ class StaircaseType(StrEnum):
     @classmethod
     def from_wire(cls, key: str) -> StaircaseType | None:
         norm = (key or "").strip().lower()
+        legacy = _LEGACY_WIRE_ALIASES.get(norm)
+        if legacy is not None:
+            return legacy
         for member in cls:
             if member.value == norm:
                 return member
         return None
+
+
+_LEGACY_WIRE_ALIASES: dict[str, StaircaseType] = {
+    "trapdoor": StaircaseType.VERTICAL_LADDER,
+}
 
 
 _SPECS: dict[StaircaseType, StaircaseTypeSpec] = {

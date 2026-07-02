@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
@@ -14,6 +16,8 @@ from app.dataModel.annotationPolicy import OptionalOnWire
 
 class WorldHydrology(BaseModel):
     """Root POJO for `worlds.hydrology`."""
+
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-HYDROLOGY"
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 

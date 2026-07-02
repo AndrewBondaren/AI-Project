@@ -5,10 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 
 
-class MaterialCategory(StrEnum):
-    SOLID = "solid"
-    LIQUID = "liquid"
-    GAS = "gas"
+from app.dataModel.materials.enums.materialCategory import MaterialCategory  # noqa: E402 — wire re-export
 
 
 class CellStateCategory(StrEnum):
@@ -81,13 +78,8 @@ class BuildingContext(StrEnum):
     NAUTICAL = "nautical"
 
 
-class StaircaseType(StrEnum):
-    LADDER = "ladder"
-    SPIRAL_SMALL = "spiral_small"
-    SPIRAL_STANDARD = "spiral_standard"
-    STANDARD = "standard"
-    STRAIGHT = "straight"
-    U_SHAPE = "u_shape"
+from app.dataModel.structure.enums.staircaseType import StaircaseType  # noqa: E402 — wire re-export
+from app.dataModel.structure.enums.passageType import PassageType  # noqa: E402 — wire re-export
 
 
 class StreetLayout(StrEnum):

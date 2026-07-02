@@ -8,6 +8,7 @@ from app.application.worldData.generators.structure.structureElement import (
 )
 from app.db.models.mapCell import MapCell
 
+#Grid renderer is a debug class. No need to use in production modelData.
 _SYMBOLS: dict[StructureElement, str] = {
     StructureElement.WALL:       "#",
     StructureElement.FLOOR:      ".",

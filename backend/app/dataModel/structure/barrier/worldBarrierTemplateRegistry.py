@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from pydantic import RootModel
 
 from app.dataModel.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
@@ -35,6 +37,7 @@ _CANONICAL_ENTRIES: tuple[BarrierTemplateEntry, ...] = (
 
 
 class WorldBarrierTemplateRegistry(RootModel[list[BarrierTemplateEntry]]):
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-BARRIER-TEMPLATE"
     root: list[BarrierTemplateEntry]
 
     @classmethod

@@ -9,6 +9,10 @@ from app.dataModel.climate.worldClimateScalars import (
     WorldClimateScalars,
     climate_scalar_wire_from_mapping,
 )
+from app.dataModel.terrain.worldTerrainScalars import (
+    WorldTerrainScalars,
+    terrain_scalar_wire_from_mapping,
+)
 from app.dataModel import (
     WorldClimateZoneRegistry,
     WorldEconomyTierRegistry,
@@ -17,6 +21,7 @@ from app.dataModel import (
     WorldRoadSettings,
     WorldTerrainRegistry,
 )
+from app.application.jsonValidation.worldSlices import climate_zone_wire_from_raw
 from app.dataModel.hydrology.rivers import RiverTypeClassify as PojoRiverTypeClassify
 from app.dataModel.settlement.district.worldDistrictTemplateRegistry import WorldDistrictTemplateRegistry
 from app.dataModel.settlement.settlement.worldCitySizeRegistry import WorldCitySizeRegistry
@@ -29,20 +34,6 @@ _ENGINE_MATERIALS = WorldMaterialRegistry.canonical_engine()
 
 def _uid(world: Any) -> str:
     return str(getattr(world, "world_uid", "?"))
-
-
-def _climate_zone_wire(world: Any) -> list[dict] | None:
-    raw = getattr(world, "climate_zone_registry", None)
-    if not raw:
-        return None
-    if isinstance(raw, list):
-        return [e for e in raw if isinstance(e, dict)]
-    if isinstance(raw, dict):
-        values = list(raw.values())
-        if values and all(isinstance(v, dict) for v in values):
-            return values
-        return [raw]
-    return None
 
 
 def economic_tiers(world: Any) -> WorldEconomyTierRegistry:
@@ -133,7 +124,7 @@ def road_settings_rows(world: Any) -> list[dict]:
 
 
 def climate_zones(world: Any) -> WorldClimateZoneRegistry:
-    wire = _climate_zone_wire(world)
+    wire = climate_zone_wire_from_raw(getattr(world, "climate_zone_registry", None))
     if wire is None:
         return WorldClimateZoneRegistry.canonical_defaults()
     return resolve_root_list(
@@ -150,6 +141,14 @@ def climate_scalars(world: Any) -> WorldClimateScalars:
         WorldClimateScalars,
         climate_scalar_wire_from_mapping(world),
         label=f"world={_uid(world)} climate_scalars",
+    )
+
+
+def terrain_scalars(world: Any) -> WorldTerrainScalars:
+    return resolve_model(
+        WorldTerrainScalars,
+        terrain_scalar_wire_from_mapping(world),
+        label=f"world={_uid(world)} terrain_scalars",
     )
 
 

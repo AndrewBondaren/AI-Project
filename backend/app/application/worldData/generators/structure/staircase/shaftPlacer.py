@@ -10,6 +10,7 @@ ShaftPlacer — стратегии размещения shaft в простра�
 import logging
 from abc import ABC, abstractmethod
 
+from app.dataModel.spatial.facing import Facing, parse_facing
 from app.application.worldData.generators.structure.layoutEngine import (
     _try_adjacent, _place_next_to_any, _DIRECTIONS,
 )
@@ -41,7 +42,7 @@ class AdjacentShaftPlacer(ShaftPlacer):
         fr_room: _RoomInstance,
         placed_rooms: list[_RoomInstance],
     ) -> bool:
-        facing = shaft.facing or "north"
+        facing = parse_facing(shaft.facing) or Facing.NORTH
         # Entry side = opposite(facing). We want fr_room on the entry side of shaft,
         # i.e. shaft is placed in the facing direction relative to fr_room.
         preferred = facing
@@ -87,22 +88,22 @@ class EdgeMountedShaftPlacer(ShaftPlacer):
         fr_room: _RoomInstance,
         placed_rooms: list[_RoomInstance],
     ) -> bool:
-        facing = shaft.facing or "north"
+        facing = parse_facing(shaft.facing) or Facing.NORTH
         all_placed = [r for r in placed_rooms if r.placed] + [fr_room]
 
-        if facing == "north":
+        if facing == Facing.NORTH:
             # Building north exterior = max(y + depth - 1)
             ext = max(r.origin_y + r.depth - 1 for r in all_placed)
             shaft.origin_y = ext                    # shaft south face (entry) at ext
             shaft.origin_x = (fr_room.origin_x
                                + (fr_room.width - shaft.width) // 2)
-        elif facing == "south":
+        elif facing == Facing.SOUTH:
             # Building south exterior = min(y)
             ext = min(r.origin_y for r in all_placed)
             shaft.origin_y = ext - shaft.depth + 1  # shaft north face (entry) at ext
             shaft.origin_x = (fr_room.origin_x
                                + (fr_room.width - shaft.width) // 2)
-        elif facing == "east":
+        elif facing == Facing.EAST:
             # Building east exterior = max(x + width - 1)
             ext = max(r.origin_x + r.width - 1 for r in all_placed)
             shaft.origin_x = ext                    # shaft west face (entry) at ext

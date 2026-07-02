@@ -5,6 +5,8 @@ U-shape staircase.
 from __future__ import annotations
 import logging
 
+from app.dataModel.spatial.facing import Facing, parse_facing
+from app.dataModel.structure.enums.buildingElement import StructureElement
 from app.application.worldData.generators.structure.cellBuilder import _interior
 from app.application.worldData.generators.structure.cellFactory import (
     _stair_cell, _stair_anchor_cell, _stair_floor_cell,
@@ -102,7 +104,7 @@ def _build_u_shape_first_march(
 
         if (px, py) in flat_set:
             existing = cells.get((px, py, z))
-            if existing is None or existing.system_building_element != "staircase":
+            if existing is None or existing.system_building_element != StructureElement.STAIRCASE:
                 cells[(px, py, z)] = _stair_floor_cell(px, py, z, world_uid, building_uid, mat, facing=cur_facing)
             floor_cells.append((px, py, z))
         else:
@@ -169,7 +171,7 @@ def _place_landing(
     march_facing: str | None,
     march_flat: int = 0,
     ax: int = 0, ay: int = 0, w: int = 0, d: int = 0,
-    facing: str = "north",
+    facing: Facing | str = Facing.NORTH,
     turn_vector: tuple[int, int] = (1, 0),
 ) -> list[tuple[int, int, int]]:
     """
@@ -220,7 +222,7 @@ def _place_landing(
     existing_last = cells.get((lsx, lsy, lsz))
     if existing_last is not None:
         elem = existing_last.system_building_element
-        if elem == "stair_anchor":
+        if elem == StructureElement.STAIR_ANCHOR:
             cells[(lsx, lsy, lsz)] = _stair_anchor_cell(
                 lsx, lsy, lsz, world_uid, building_uid, mat, facing=turn_facing
             )
@@ -240,7 +242,7 @@ def _place_landing(
         if fdy != 0: fdy //= abs(fdy)
         floor_facing = _V_TO_FACING.get((fdx, fdy))
         existing = cells.get((fx, fy, z))
-        if existing is None or existing.system_building_element != "staircase":
+        if existing is None or existing.system_building_element != StructureElement.STAIRCASE:
             cells[(fx, fy, z)] = _stair_floor_cell(
                 fx, fy, z, world_uid, building_uid, mat, facing=floor_facing
             )
@@ -421,13 +423,13 @@ class UShapeBuilder(StaircaseBuilder):
         if self.shaft is not None:
             # New schema: interior = shaft footprint interior; facing from shaft
             interior = list(_interior(self.shaft.get_footprint()))
-            facing = self.shaft.facing or "north"
+            facing = parse_facing(self.shaft.facing) or Facing.NORTH
         else:
             # Old schema: interior = overlap of fr and to footprints
             fr_int = _interior(self.fr.get_footprint())
             to_int = _interior(self.to.get_footprint())
             interior = list(fr_int & to_int) or list(to_int)
-            facing = self.to.facing or "north"
+            facing = parse_facing(self.to.facing) or Facing.NORTH
 
         xs = sorted(x for x, _ in interior)
         ys = sorted(y for _, y in interior)
@@ -447,7 +449,7 @@ class UShapeBuilder(StaircaseBuilder):
                 continue
             if (cx, cy) not in interior_xy:
                 continue
-            if cell.system_building_element == "stair_anchor":
+            if cell.system_building_element == StructureElement.STAIR_ANCHOR:
                 prev_anchor = (cx, cy)
                 break
         if prev_anchor is not None:

@@ -22,9 +22,10 @@ from app.db.models.world import World
 
 
 def peak_bounds(world: World) -> tuple[int, int]:
+    scalars = climate_scalars(world)
     return WorldClimateScalars.resolve_peak_bounds(
-        world.climate_temperature_peak_min,
-        world.climate_temperature_peak_max,
+        scalars.climate_temperature_peak_min,
+        scalars.climate_temperature_peak_max,
     )
 
 
@@ -83,7 +84,7 @@ def autoresolve_poles(
     bbox: GridBBox,
 ) -> list[ClimatePolePoint]:
     peak_min, peak_max = peak_bounds(world)
-    specs              = pole_specs_for_preset(world.climate_pole_preset)
+    specs              = pole_specs_for_preset(climate_scalars(world).climate_pole_preset)
     seed               = world_seed(world)
     cx                 = (bbox.x_min + bbox.x_max) // 2
     cy                 = (bbox.y_min + bbox.y_max) // 2

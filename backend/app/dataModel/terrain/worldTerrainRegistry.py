@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from pydantic import RootModel
 
 from app.dataModel.terrain.terrainRegistryEntry import TerrainRegistryEntry
@@ -112,6 +114,7 @@ _ENGINE_INTERIOR_ENTRIES: tuple[TerrainRegistryEntry, ...] = (
 
 
 class WorldTerrainRegistry(RootModel[list[TerrainRegistryEntry]]):
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-TERRAIN"
     """Root POJO for `worlds.terrain_registry`. Wire shape: JSON array."""
 
     root: list[TerrainRegistryEntry]

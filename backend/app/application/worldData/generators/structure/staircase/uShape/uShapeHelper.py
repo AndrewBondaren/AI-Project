@@ -6,9 +6,11 @@ import logging
 import random
 from dataclasses import dataclass
 
+from app.dataModel.spatial.facing import Facing, NS_FACINGS, parse_facing
+from app.dataModel.structure.enums.buildingElement import StructureElement
 from app.application.worldData.generators.structure.staircase.facingHelper import _V_INIT
 
-_NS = frozenset({"north", "south"})
+_NS = NS_FACINGS
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +22,7 @@ def u_shape_march_depth(shaft_depth: int) -> int:
 
 @dataclass
 class UShapeParams:
-    facing: str
+    facing: Facing
     ax: int
     ay: int
     width_int: int
@@ -41,11 +43,18 @@ class UShapeParams:
 def _is_anchor_free(pos: tuple[int, int], z_lo: int, cells: dict) -> bool:
     """Free = floor cell or absent. Occupied = anything else (wall, stair_anchor, etc.)."""
     cell = cells.get((pos[0], pos[1], z_lo))
-    return cell is None or cell.system_building_element == "floor"
+    return cell is None or cell.system_building_element == StructureElement.FLOOR
+
+
+def _as_facing(facing: Facing | str) -> Facing:
+    f = parse_facing(facing)
+    if f is None:
+        raise ValueError(f"invalid facing: {facing!r}")
+    return f
 
 
 def _compute_fr_anchor(
-    ax: int, ay: int, w: int, d: int, facing: str,
+    ax: int, ay: int, w: int, d: int, facing: Facing | str,
     prev_fr_anchor: tuple[int, int] | None = None,
     cells: dict | None = None,
     z_lo: int = 0,
@@ -56,13 +65,14 @@ def _compute_fr_anchor(
     Otherwise picks randomly, preferring a free corner (floor or absent).
     far_anchor = diagonally opposite corner in interior.
     """
-    if facing == "north":
+    facing = _as_facing(facing)
+    if facing == Facing.NORTH:
         choices = [((ax,       ay), (+1, 0)),
                    ((ax+w-1,   ay), (-1, 0))]
-    elif facing == "south":
+    elif facing == Facing.SOUTH:
         choices = [((ax,       ay+d-1), (+1, 0)),
                    ((ax+w-1,   ay+d-1), (-1, 0))]
-    elif facing == "east":
+    elif facing == Facing.EAST:
         choices = [((ax, ay),       (0, +1)),
                    ((ax, ay+d-1),   (0, -1))]
     else:  # west
@@ -93,12 +103,13 @@ def _compute_fr_anchor(
 
 
 def _compute_u_params(
-    ax: int, ay: int, w: int, d: int, facing: str, z_height: int,
+    ax: int, ay: int, w: int, d: int, facing: Facing | str, z_height: int,
     conn_label: str = "",
     prev_fr_anchor: tuple[int, int] | None = None,
     cells: dict | None = None,
     z_lo: int = 0,
 ) -> UShapeParams:
+    facing = _as_facing(facing)
     march_depth     = (d - 1) if facing in _NS else (w - 1)
     march_depth_mid = d       if facing in _NS else w
 
@@ -169,7 +180,7 @@ def _compute_u_params(
 
 
 def _compute_pseudo(
-    ax: int, ay: int, w: int, d: int, facing: str, march_count: int,
+    ax: int, ay: int, w: int, d: int, facing: Facing | str, march_count: int,
 ) -> set[tuple[int, int]]:
     """
     Pseudo-column: interior non-perimeter cells that become void after stair placement.
@@ -185,6 +196,7 @@ def _compute_pseudo(
     }
     if march_count > 1:
         return center
+    facing = _as_facing(facing)
     Vx0, Vy0 = _V_INIT[facing]
     if Vy0 > 0:       # facing north → anchor wall y=ay
         anchor_wall = {(ax + dx, ay) for dx in range(1, w - 1)}
@@ -216,14 +228,15 @@ def _center_first(row: list[tuple[int, int]]) -> list[tuple[int, int]]:
 
 
 def _far_end_cells(
-    ax: int, ay: int, w: int, d: int, facing: str,
+    ax: int, ay: int, w: int, d: int, facing: Facing | str,
 ) -> list[tuple[int, int]]:
     """Дальняя стена шахты (to_room side), от центра к краям."""
-    if facing == "north":
+    facing = _as_facing(facing)
+    if facing == Facing.NORTH:
         row = [(ax + x, ay + d - 1) for x in range(w)]
-    elif facing == "south":
+    elif facing == Facing.SOUTH:
         row = [(ax + x, ay) for x in range(w)]
-    elif facing == "east":
+    elif facing == Facing.EAST:
         row = [(ax + w - 1, ay + y) for y in range(d)]
     else:  # west
         row = [(ax, ay + y) for y in range(d)]
@@ -231,17 +244,18 @@ def _far_end_cells(
 
 
 def _anchor_side_cells(
-    ax: int, ay: int, w: int, d: int, facing: str,
+    ax: int, ay: int, w: int, d: int, facing: Facing | str,
 ) -> list[tuple[int, int]]:
     """
     Ближняя стена шахты (fr_room side), от центра к краям.
     Вход и выход U-образной лестницы находятся на этой стене в противоположных углах.
     """
-    if facing == "north":
+    facing = _as_facing(facing)
+    if facing == Facing.NORTH:
         row = [(ax + x, ay) for x in range(w)]
-    elif facing == "south":
+    elif facing == Facing.SOUTH:
         row = [(ax + x, ay + d - 1) for x in range(w)]
-    elif facing == "east":
+    elif facing == Facing.EAST:
         row = [(ax, ay + y) for y in range(d)]
     else:  # west
         row = [(ax + w - 1, ay + y) for y in range(d)]
@@ -249,7 +263,7 @@ def _anchor_side_cells(
 
 
 def _side_wall_cells(
-    ax: int, ay: int, w: int, d: int, facing: str,
+    ax: int, ay: int, w: int, d: int, facing: Facing | str,
     turn_vector: tuple[int, int],
 ) -> list[tuple[int, int]]:
     """
@@ -257,21 +271,22 @@ def _side_wall_cells(
     turn_vector сторона первой внутри каждого шага.
     N/S: d-2 ячеек на каждой боковой стене. E/W: w-2 ячеек.
     """
+    facing = _as_facing(facing)
     tvx, tvy = turn_vector
     result: list[tuple[int, int]] = []
 
-    if facing in ("north", "south"):
+    if facing in NS_FACINGS:
         tv_x  = ax + w - 1 if tvx > 0 else ax
         opp_x = ax         if tvx > 0 else ax + w - 1
         for step in range(d - 2):
-            y = (ay + d - 2 - step) if facing == "north" else (ay + 1 + step)
+            y = (ay + d - 2 - step) if facing == Facing.NORTH else (ay + 1 + step)
             result.append((tv_x,  y))
             result.append((opp_x, y))
     else:  # east / west
         tv_y  = ay + d - 1 if tvy > 0 else ay
         opp_y = ay         if tvy > 0 else ay + d - 1
         for step in range(w - 2):
-            x = (ax + w - 2 - step) if facing == "east" else (ax + 1 + step)
+            x = (ax + w - 2 - step) if facing == Facing.EAST else (ax + 1 + step)
             result.append((x, tv_y))
             result.append((x, opp_y))
     return result
@@ -360,7 +375,7 @@ def _path_intermediates(
 def flat_positions(
     flat: int,
     ax: int, ay: int, w: int, d: int,
-    facing: str,
+    facing: Facing | str,
     turn_vector: tuple[int, int],
     march_index: int,
     conn_label: str = "",
@@ -381,7 +396,8 @@ def flat_positions(
         logger.info("u_shape %s march=%d: flat=0, nothing to place", conn_label, march_index)
         return []
 
-    is_ns     = facing in ("north", "south")
+    facing = _as_facing(facing)
+    is_ns     = facing in NS_FACINGS
     far_sz    = w if is_ns else d
     lat       = (d - 2) if is_ns else (w - 2)
     ideal     = far_sz

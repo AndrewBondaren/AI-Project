@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from app.application.jsonValidation import climate_scalars
 from app.db.models.world import World
 
 
@@ -29,10 +30,11 @@ class ClimateRuntimeAssembler:
     ) -> int:
         if not season:
             return temperature_base
-        offsets = world.season_temp_offsets or {}
-        if not isinstance(offsets, dict):
+        offsets = climate_scalars(world).season_temp_offsets
+        if offsets is None:
             return temperature_base
-        return temperature_base + int(offsets.get(season, 0))
+        value = getattr(offsets, season, None)
+        return temperature_base + int(value if value is not None else 0)
 
     def resolve_weather(
         self,

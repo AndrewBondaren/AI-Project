@@ -1,4 +1,4 @@
-from app.application.jsonValidation import terrain_system_keys
+from app.application.jsonValidation import terrain_scalars, terrain_system_keys
 from app.application.worldData.generators.terrain.passes.gapAnalysisPass import n_base
 from app.application.worldData.generators.terrain.worldMapSettings import world_z_min
 from app.application.worldData.generators.terrain.terrainZ import (
@@ -16,7 +16,7 @@ def _terrain_set(world: World) -> set[str]:
 
 
 def _magma_thickness(world: World) -> int:
-    t = world.magma_band_thickness
+    t = terrain_scalars(world).magma_band_thickness
     if t is None or t <= 0:
         return 0
     return t
@@ -32,7 +32,7 @@ def run_column_fill(
     terrain_set = _terrain_set(world)
     z_min       = world_z_min(world)
     magma_thick = _magma_thickness(world)
-    use_magma   = magma_thick > 0 and bool(world.closed_planet_grid)
+    use_magma   = magma_thick > 0 and bool(terrain_scalars(world).closed_planet_grid)
 
     x_lo = rect.x_min if rect else heightmap.bbox.x_min
     x_hi = rect.x_max if rect else heightmap.bbox.x_max

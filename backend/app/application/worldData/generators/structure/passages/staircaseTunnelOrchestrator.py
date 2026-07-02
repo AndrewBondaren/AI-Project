@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import uuid
 
-from app.application.worldData.generators.structure.passages.passageType import PassageType
+from app.dataModel.structure.enums.passageType import PassageType
 from app.application.worldData.generators.structure.passages.wallBreachPlacer import WallBreachPlacer
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.staircase.surfaceCorridor import SurfaceCorridorBuilder

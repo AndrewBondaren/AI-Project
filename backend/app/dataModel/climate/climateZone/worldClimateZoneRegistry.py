@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from pydantic import RootModel
 
 from app.dataModel.climate.climateZone.climateZoneEntry import ClimateZoneEntry
@@ -10,6 +12,8 @@ from app.dataModel.climate.enums.climateZone import ClimateZone
 
 class WorldClimateZoneRegistry(RootModel[list[ClimateZoneEntry]]):
     """Root POJO for `worlds.climate_zone_registry`. Wire shape: JSON array."""
+
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-CLIMATE-ZONE"
 
     root: list[ClimateZoneEntry]
 

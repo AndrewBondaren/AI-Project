@@ -183,7 +183,7 @@ class UShapeValidator(StaircaseValidator):
                     conn_label, idx, sx, sy, sz, s_cell.system_facing,
                     sx + dx, sy + dy, sz + 1, nb_elem,
                 )
-            elif nb_elem == "stair_floor":
+            elif nb_elem == StructureElement.STAIR_FLOOR:
                 expected = stair_cells[idx + 1]
                 chain_start = (sx + dx, sy + dy, sz + 1)
                 # Dispatch: 1-клеточная цепочка → corners, длиннее → center.

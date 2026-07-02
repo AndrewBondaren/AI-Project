@@ -11,7 +11,7 @@ import uuid
 from app.application.worldData.generators.structure.cellBuilder import _interior, _wall_cell
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _open_cell
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
-from app.application.worldData.generators.structure.passages.passageType import PassageType
+from app.dataModel.structure.enums.passageType import PassageType
 from app.application.worldData.generators.structure.passages.wallBreachPlacer import WallBreachPlacer
 from app.application.worldData.generators.structure.passages.tunnelPathFinder import TunnelPathFinder
 from app.application.worldData.generators.structure.staircase.undergroundTunnel import _VEC_TO_FACING

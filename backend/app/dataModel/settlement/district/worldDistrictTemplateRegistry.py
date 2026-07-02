@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from pydantic import RootModel
 
 from app.dataModel.settlement.district.districtConnection import DistrictConnection
@@ -78,6 +80,7 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
 
 
 class WorldDistrictTemplateRegistry(RootModel[list[DistrictTemplateEntry]]):
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-DISTRICT-TEMPLATE"
     root: list[DistrictTemplateEntry]
 
     @classmethod

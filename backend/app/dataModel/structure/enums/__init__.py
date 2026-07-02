@@ -1,3 +1,14 @@
+from app.dataModel.structure.enums.buildingElement import (
+    DOOR_BUILDING_ELEMENTS,
+    PASSABLE_BUILDING_ELEMENTS,
+    STAIR_BUILDING_ELEMENTS,
+    STAIR_DIRECTIONAL_ELEMENTS,
+    StructureElement,
+    WALKABLE_BUILDING_ELEMENTS,
+    WALL_BUILDING_ELEMENTS,
+    WALL_OPENING_ELEMENTS,
+)
+from app.dataModel.structure.enums.passageType import PassageType
 from app.dataModel.structure.enums.roomSize import RoomSize, RoomSizePreset
 from app.dataModel.structure.enums.staircaseSize import (
     SPIRAL_SIZE_PRESETS,
@@ -20,10 +31,16 @@ from app.dataModel.structure.enums.staircaseType import (
 )
 
 __all__ = [
+    "DOOR_BUILDING_ELEMENTS",
+    "PASSABLE_BUILDING_ELEMENTS",
+    "PassageType",
     "RoomSize",
     "RoomSizePreset",
     "SPIRAL_SIZE_PRESETS",
+    "STAIR_BUILDING_ELEMENTS",
+    "STAIR_DIRECTIONAL_ELEMENTS",
     "STRAIGHT_SIZE_PRESETS",
+    "StructureElement",
     "USHAPE_SIZE_PRESETS",
     "SpiralSize",
     "StaircaseSizePreset",
@@ -37,4 +54,7 @@ __all__ = [
     "no_shaft_types",
     "requires_shaft",
     "staircase_footprint_min",
+    "WALKABLE_BUILDING_ELEMENTS",
+    "WALL_BUILDING_ELEMENTS",
+    "WALL_OPENING_ELEMENTS",
 ]

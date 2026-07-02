@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import StrictOnWire
+from app.dataModel.constrainedField import constrained_field
 
 BAND_MIN = 1
 BAND_MAX = 99
@@ -15,5 +16,9 @@ class HydrologyBands(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    min: StrictOnWire[int] = Field(default=1, ge=BAND_MIN, le=BAND_MAX)
-    max: StrictOnWire[int] = Field(default=5, ge=BAND_MIN, le=BAND_MAX)
+    min: StrictOnWire[int] = constrained_field(
+        default=1, greater_equals=BAND_MIN, lesser_equals=BAND_MAX,
+    )
+    max: StrictOnWire[int] = constrained_field(
+        default=5, greater_equals=BAND_MIN, lesser_equals=BAND_MAX,
+    )

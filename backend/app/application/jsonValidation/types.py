@@ -9,6 +9,8 @@ from dataclasses import dataclass
 class FieldPathError:
     path: tuple[str | int, ...]
     message: str
+    schema_id: str | None = None
+    code: str | None = None
 
 
 class ImportValidationError(Exception):
@@ -19,5 +21,30 @@ class ImportValidationError(Exception):
         )
 
 
+def _error_code(err: FieldPathError) -> str:
+    if err.code:
+        return err.code
+    msg = err.message.lower()
+    if "strict" in msg:
+        return "STRICT_REQUIRED"
+    if msg == "expected list":
+        return "EXPECTED_LIST"
+    if msg == "expected object":
+        return "EXPECTED_OBJECT"
+    if "ref-w" in msg.lower() or err.code == "REF_W_UNKNOWN":
+        return "REF_W_UNKNOWN"
+    return "VALIDATION_ERROR"
+
+
 def import_validation_http_detail(exc: ImportValidationError) -> list[dict[str, object]]:
-    return [{"loc": list(err.path), "msg": err.message} for err in exc.errors]
+    detail: list[dict[str, object]] = []
+    for err in exc.errors:
+        item: dict[str, object] = {
+            "loc": list(err.path),
+            "msg": err.message,
+            "code": _error_code(err),
+        }
+        if err.schema_id:
+            item["schema_id"] = err.schema_id
+        detail.append(item)
+    return detail

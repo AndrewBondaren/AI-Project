@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 
+from app.dataModel.structure.enums.buildingElement import StructureElement
 from app.application.worldData.generators.structure.cellBuilder import _wall_cell
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _open_cell
 from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
@@ -81,7 +82,7 @@ class UndergroundTunnelBuilder:
             (x, y)
             for (x, y, z), cell in self.cells.items()
             if z == self.z_lo
-            and cell.system_building_element == "wall"
+            and cell.system_building_element == StructureElement.WALL
             and (x, y) not in fr_fp
             and (x, y) not in anchor_shell
         }

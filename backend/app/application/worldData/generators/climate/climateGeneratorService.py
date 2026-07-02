@@ -4,7 +4,7 @@ from typing import Optional
 from app.application.worldData.generators.climate.anchorCollect import build_coarse_field
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
-from app.application.jsonValidation import climate_scalars
+from app.application.jsonValidation import climate_scalars, terrain_scalars
 from app.application.worldData.generators.climate.precipitation import (
     clamp_temperature_to_peak,
     effective_rainfall,
@@ -18,8 +18,8 @@ from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars
 
-_lapse = WorldTerrainScalars.canonical_defaults().elevation_lapse_rate
-DEFAULT_LAPSE_RATE = _lapse if _lapse is not None else 0.65
+
+DEFAULT_LAPSE_RATE = WorldTerrainScalars.resolved_elevation_lapse_rate(None)
 
 
 @dataclass(frozen=True)
@@ -150,7 +150,9 @@ class ClimateGeneratorService:
             if base_temperature_override is not None
             else profile.base_temperature
         )
-        lapse = world.elevation_lapse_rate if world.elevation_lapse_rate is not None else DEFAULT_LAPSE_RATE
+        lapse = WorldTerrainScalars.resolved_elevation_lapse_rate(
+            terrain_scalars(world).elevation_lapse_rate,
+        )
         temp  = round(base - lapse * (z / 100))
         temp  = clamp_temperature_to_peak(world, temp)
         rain  = effective_rainfall(profile.base_rainfall, temp, world)

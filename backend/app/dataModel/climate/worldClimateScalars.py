@@ -18,11 +18,12 @@ Startup sync: ``validate_world_row_climate_columns(World)`` — POJO fields ⊆ 
 from __future__ import annotations
 
 from dataclasses import fields as dataclass_fields
-from typing import Any
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import OptionalOnWire
+from app.dataModel.constrainedField import constrained_field
 
 # Sync with ClimatePoleMode / ClimatePolePreset / ClimateZone.TEMPERATE (no enum import — package cycle).
 DEFAULT_CLIMATE_ZONE = "temperate"
@@ -55,6 +56,8 @@ class SeasonTempOffsets(BaseModel):
 class WorldClimateScalars(BaseModel):
     """Scalar climate fields on `worlds` — tz_climate.md, tz_json_validation.md."""
 
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-CLIMATE"
+
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     default_climate_zone: OptionalOnWire[str] = DEFAULT_CLIMATE_ZONE
@@ -62,10 +65,10 @@ class WorldClimateScalars(BaseModel):
     climate_temperature_peak_max: OptionalOnWire[int | None] = None
     climate_pole_mode: OptionalOnWire[str] = DEFAULT_CLIMATE_POLE_MODE
     climate_pole_preset: OptionalOnWire[str] = DEFAULT_CLIMATE_POLE_PRESET
-    climate_local_influence_fraction: OptionalOnWire[float] = Field(
+    climate_local_influence_fraction: OptionalOnWire[float] = constrained_field(
         default=DEFAULT_LOCAL_INFLUENCE_FRACTION,
-        ge=0.0,
-        le=1.0,
+        greater_equals=0.0,
+        lesser_equals=1.0,
     )
     precipitation_liquid: OptionalOnWire[str] = DEFAULT_PRECIPITATION_LIQUID
     season_temp_offsets: OptionalOnWire[SeasonTempOffsets] = Field(default_factory=SeasonTempOffsets)

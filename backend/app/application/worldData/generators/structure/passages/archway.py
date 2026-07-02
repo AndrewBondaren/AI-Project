@@ -14,7 +14,7 @@ from app.application.worldData.generators.structure.passages.archwayValidator im
     validate_archway_frame,
     validate_archway_through,
 )
-from app.application.worldData.generators.structure.passages.passageType import PassageType
+from app.dataModel.structure.enums.passageType import PassageType
 from app.application.worldData.generators.structure.passages.shared import (
     _center_slice, _det_uuid, _shared_segment,
 )

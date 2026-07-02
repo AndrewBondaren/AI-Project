@@ -18,7 +18,7 @@ from app.application.worldData.generators.structure.passages.archwayValidator im
 )
 from app.application.worldData.generators.structure.passages.doorway import _build_doorway
 from app.application.worldData.generators.structure.passages.entry import _build_entry_point
-from app.application.worldData.generators.structure.passages.passageType import PassageType
+from app.dataModel.structure.enums.passageType import PassageType
 from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
 from app.application.worldData.generators.structure.staircase.builder import build_staircase
 from app.application.worldData.generators.structure.staircase.staircaseType import StaircaseType
@@ -72,7 +72,7 @@ def build_passages(
     staircase_conns: list[dict] = []
 
     for conn in connections:
-        ptype = conn.get("passage_type", PassageType.DOORWAY)
+        ptype = PassageType.from_wire(conn.get("passage_type"), default=PassageType.DOORWAY)
         if ptype == PassageType.STAIRCASE:
             staircase_conns.append(conn)
             continue

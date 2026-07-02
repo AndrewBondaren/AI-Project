@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from pydantic import RootModel
 
 from app.dataModel.connections.connectionType.connectionTypeEntry import ConnectionTypeEntry
@@ -45,6 +47,7 @@ _ENGINE_ENTRIES: tuple[ConnectionTypeEntry, ...] = (
 
 
 class WorldConnectionTypeRegistry(RootModel[list[ConnectionTypeEntry]]):
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-CONN"
     """Root POJO for `worlds.connection_type_registry`. Wire shape: JSON array."""
 
     root: list[ConnectionTypeEntry]
