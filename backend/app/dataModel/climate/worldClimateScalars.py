@@ -17,17 +17,17 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import OptionalOnWire
-from app.dataModel.climate.enums.climatePoleMode import DEFAULT_CLIMATE_POLE_MODE
-from app.dataModel.climate.enums.climatePolePreset import DEFAULT_CLIMATE_POLE_PRESET
-from app.dataModel.climate.enums.climateZone import ClimateZone
+
+# Sync with ClimatePoleMode / ClimatePolePreset / ClimateZone.TEMPERATE (no enum import — package cycle).
+DEFAULT_CLIMATE_ZONE = "temperate"
+DEFAULT_CLIMATE_POLE_MODE = "autoresolve"
+DEFAULT_CLIMATE_POLE_PRESET = "binary"
+DEFAULT_PRECIPITATION_LIQUID = "water"
+DEFAULT_LOCAL_INFLUENCE_FRACTION = 0.1
 
 # Fixture peak band — only in canonical_defaults / world_template (Field default None).
 CANONICAL_PEAK_TEMP_MIN = -40
 CANONICAL_PEAK_TEMP_MAX = 45
-
-DEFAULT_CLIMATE_ZONE = ClimateZone.TEMPERATE.system_climate
-DEFAULT_PRECIPITATION_LIQUID = "water"
-DEFAULT_LOCAL_INFLUENCE_FRACTION = 0.1
 
 
 class SeasonTempOffsets(BaseModel):

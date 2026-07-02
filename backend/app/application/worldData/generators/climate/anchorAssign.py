@@ -3,7 +3,7 @@ from app.application.worldData.generators.climate.climateGeneratorService import
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
 from app.application.worldData.generators.climate.anchorDetect import TerrainFeaturePoint
 from app.application.worldData.generators.climate.climateAnchor import AnchorSource
-from app.application.worldData.generators.climate.climateZone import ClimateZone
+from app.application.worldData.generators.masterData import climate_scalars
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -20,7 +20,7 @@ def auto_anchors_from_features(
     No Earth elevation→arctic mapping.
     """
     svc     = climate or ClimateGeneratorService()
-    default = world.default_climate_zone or ClimateZone.TEMPERATE
+    default = climate_scalars(world).default_climate_zone
     points: list[ClimateAnchorPoint] = []
 
     for feature in features:

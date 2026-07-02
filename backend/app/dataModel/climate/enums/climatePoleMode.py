@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-DEFAULT_CLIMATE_POLE_MODE = "autoresolve"
+from app.dataModel.climate.worldClimateScalars import DEFAULT_CLIMATE_POLE_MODE
 
 
 class ClimatePoleMode(Enum):

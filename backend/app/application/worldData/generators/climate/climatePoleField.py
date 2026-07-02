@@ -42,7 +42,7 @@ class ClimatePoleField:
 
     def sample(self, world: World, gx: int, gy: int) -> PoleClimateSample:
         scalars = climate_scalars(world)
-        default_zone = world.default_climate_zone or scalars.default_climate_zone
+        default_zone = scalars.default_climate_zone
         default_prof = profile_for(world, default_zone)
 
         if not self.poles:

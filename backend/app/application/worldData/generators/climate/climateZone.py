@@ -6,6 +6,7 @@ from app.dataModel.climate.enums.climateZone import (
     ClimateZoneProfile,
     ClimateZoneProfileData,
 )
+from app.dataModel.climate.worldClimateScalars import DEFAULT_CLIMATE_ZONE
 
 
 def _profile_from_entry(entry: ClimateZoneEntry, *, fallback: ClimateZoneProfile) -> ClimateZoneProfile:
@@ -33,7 +34,9 @@ def enum_default_profile(system_climate: str) -> ClimateZoneProfile | None:
 
 
 def fallback_profile() -> ClimateZoneProfile:
-    return ClimateZone.TEMPERATE.to_profile()
+    zone = ClimateZone.from_system_climate(DEFAULT_CLIMATE_ZONE)
+    assert zone is not None
+    return zone.to_profile()
 
 
 __all__ = [

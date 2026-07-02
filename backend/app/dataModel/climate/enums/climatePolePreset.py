@@ -6,8 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from app.dataModel.climate.enums.climateZone import ClimateZone
-
-DEFAULT_CLIMATE_POLE_PRESET = "binary"
+from app.dataModel.climate.worldClimateScalars import DEFAULT_CLIMATE_POLE_PRESET
 
 
 @dataclass(frozen=True)

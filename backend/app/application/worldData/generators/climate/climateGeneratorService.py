@@ -4,7 +4,7 @@ from typing import Optional
 from app.application.worldData.generators.climate.anchorCollect import build_coarse_field
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
-from app.application.worldData.generators.climate.climateZone import ClimateZone
+from app.application.worldData.generators.masterData import climate_scalars
 from app.application.worldData.generators.climate.precipitation import (
     clamp_temperature_to_peak,
     effective_rainfall,
@@ -64,7 +64,7 @@ class ClimateGeneratorService:
             if current.system_climate_zone:
                 return current.system_climate_zone
             current = uid_map.get(current.parent_location_uid)
-        return world.default_climate_zone or ClimateZone.TEMPERATE
+        return climate_scalars(world).default_climate_zone
 
     def sample_at_pole_field(
         self,
@@ -91,7 +91,7 @@ class ClimateGeneratorService:
     ) -> SurfaceClimateSample:
         nearest = field.nearest(gx, gy)
         if nearest is None:
-            climate = world.default_climate_zone or ClimateZone.TEMPERATE
+            climate = climate_scalars(world).default_climate_zone
             profile = profile_for(world, climate)
             return SurfaceClimateSample(
                 system_climate_zone=profile.system_climate,
@@ -163,7 +163,7 @@ class ClimateGeneratorService:
         world: World,
     ) -> str:
         if zone is None:
-            return world.default_climate_zone or ClimateZone.TEMPERATE
+            return climate_scalars(world).default_climate_zone
         if zone.system_climate_zone:
             return zone.system_climate_zone
         return self.resolve_climate(world, uid_map, zone)
