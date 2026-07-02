@@ -5,6 +5,7 @@
 уже в финальном состоянии. Каждая функция мутирует cells_dict на месте.
 """
 import logging
+from app.dataModel.structure.enums.buildingElement import StructureElement
 from app.db.models.mapCell import MapCell
 
 logger = logging.getLogger(__name__)
@@ -19,12 +20,12 @@ def _apply_railings(cells: dict[tuple, MapCell]) -> None:
     """
     count = 0
     for (x, y, z), cell in cells.items():
-        if cell.system_building_element != "floor":
+        if cell.system_building_element != StructureElement.FLOOR:
             continue
         sides = [
             face for dx, dy, face in _DIRS
             if cells.get((x + dx, y + dy, z)) is not None
-            and cells[(x + dx, y + dy, z)].system_building_element == "void"
+            and cells[(x + dx, y + dy, z)].system_building_element == StructureElement.VOID
         ]
         if not sides:
             continue

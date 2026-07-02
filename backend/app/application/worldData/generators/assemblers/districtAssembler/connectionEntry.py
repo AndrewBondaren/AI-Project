@@ -1,5 +1,8 @@
 from dataclasses import dataclass
 
+from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
+from app.dataModel.connections.enums.graphLevel import GraphLevel
+from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
 from app.application.worldData.generators.utils.facing import Facing
 from app.db.models.connectionNode import ConnectionNode
 
@@ -20,6 +23,6 @@ class ConnectionEntry:
     """
     node:            ConnectionNode
     connection_type: str         # ref → connection_type_registry
-    role:            str         # "through_road" | "entry_point"
+    role:            DistrictEntryRole
     facing:          Facing
     paired_exit_uid: str | None  # uid выходного узла; None для entry_point

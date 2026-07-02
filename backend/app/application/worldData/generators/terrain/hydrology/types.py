@@ -10,33 +10,11 @@ if TYPE_CHECKING:
     from app.db.models.namedLocation import NamedLocation
 
 
-# NamedLocation filter — DB stores type + subtype separately (not "geographic.lake" in one field).
-# Docs use combined notation `geographic.lake` = type + subtype; see tz_generator_technical_debt.md HY-GEO-1.
-GEOGRAPHIC_LOCATION_TYPE = "geographic"
-
-
-class GeographicSubtype(StrEnum):
-    """system_location_subtype when system_location_type == geographic."""
-
-    MOUNTAIN    = "mountain"
-    PEAK        = "peak"
-    PLAIN       = "plain"
-    LAKE        = "lake"
-    SEA         = "sea"
-    OCEAN       = "ocean"
-    INLAND_SEA  = "inland_sea"
-    ISLAND      = "island"
-    COAST       = "coast"
-    RIVER       = "river"
-
-
-class HydrologyConnectionType(StrEnum):
-    """ConnectionEdge.connection_type values consumed by hydrology declare path."""
-
-    LAKE_SHORELINE  = "lake_shoreline"
-    COASTLINE       = "coastline"
-    RIVER           = "river"
-    MOUNTAIN_RIVER  = "mountain_river"
+from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
+from app.dataModel.locations.enums.geographicSubtype import (
+    GEOGRAPHIC_LOCATION_TYPE,
+    GeographicSubtype,
+)
 
 
 class HydrologyScope(StrEnum):

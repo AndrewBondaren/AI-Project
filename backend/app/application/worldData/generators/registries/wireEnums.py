@@ -1,121 +1,53 @@
-"""ENUM-E wire values — docs/tz_json_validation.md JV-0/JV-2."""
+"""ENUM-E wire values — re-export barrel for jsonValidation; canonical source: ``dataModel``."""
 
 from __future__ import annotations
 
-from enum import StrEnum
+from app.dataModel.character.enums.systemGender import SystemGender
+from app.dataModel.climate.enums.climatePoleMode import ClimatePoleMode
+from app.dataModel.climate.enums.climatePolePreset import ClimatePolePreset
+from app.dataModel.climate.enums.seasonKey import SeasonKey
+from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
+from app.dataModel.connections.enums.graphLevel import GraphLevel
+from app.dataModel.connections.enums.portalType import PortalType
+from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
+from app.dataModel.locations.enums.borderCategory import BorderCategory
+from app.dataModel.locations.enums.geographicSubtype import GeographicSubtype
+from app.dataModel.materials.enums.materialCategory import MaterialCategory
+from app.dataModel.roads.enums.bridgeSubtype import BridgeSubtype
+from app.dataModel.roads.enums.gapPolicy import GapPolicy
+from app.dataModel.roads.enums.sidewalkSide import SidewalkSide
+from app.dataModel.roads.enums.streetLayout import StreetLayout
+from app.dataModel.settlement.enums.districtDensity import DistrictDensity
+from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
+from app.dataModel.shared.enums.measurementSystem import MeasurementSystem
+from app.dataModel.shared.enums.statConflictMode import StatConflictMode
+from app.dataModel.structure.enums.buildingContext import BuildingContext
+from app.dataModel.structure.enums.passageType import PassageType
+from app.dataModel.structure.enums.staircaseType import StaircaseType
+from app.dataModel.terrain.enums.cellStateCategory import CellStateCategory
 
-
-from app.dataModel.materials.enums.materialCategory import MaterialCategory  # noqa: E402 — wire re-export
-
-
-class CellStateCategory(StrEnum):
-    INTERACTIVE = "interactive"
-    ENVIRONMENTAL = "environmental"
-
-
-class BorderCategory(StrEnum):
-    LIQUID = "liquid"
-    NULL = "null"
-
-
-class NodeCategory(StrEnum):
-    FACTION_CONTEXT = "faction_context"
-    PROFESSION_DETAIL = "profession_detail"
-    SECRET = "secret"
-    PSYCHOLOGICAL_PROFILE = "psychological_profile"
-    SOCIAL_CONNECTIONS = "social_connections"
-    PERSONAL_HISTORY = "personal_history"
-
-
-class ConnectionNodeType(StrEnum):
-    INTERSECTION = "intersection"
-    SETTLEMENT_GATE = "settlement_gate"
-    PORTAL = "portal"
-    BUILDING_ENTRANCE = "building_entrance"
-    LOCATION_HUB = "location_hub"
-    WAYPOINT = "waypoint"
-
-
-class GraphLevel(StrEnum):
-    WORLD = "world"
-    CITY = "city"
-    DISTRICT = "district"
-    AREA = "area"
-
-
-class HydrologyConnectionType(StrEnum):
-    LAKE_SHORELINE = "lake_shoreline"
-    COASTLINE = "coastline"
-    RIVER = "river"
-    MOUNTAIN_RIVER = "mountain_river"
-
-
-class BridgeSubtype(StrEnum):
-    PEDESTRIAN = "pedestrian"
-    TRANSPORT = "transport"
-    VIADUCT = "viaduct"
-
-
-class SidewalkSide(StrEnum):
-    LEFT = "left"
-    RIGHT = "right"
-
-
-class PortalType(StrEnum):
-    COORDINATE = "coordinate"
-    GRAPH = "graph"
-
-
-class GapPolicy(StrEnum):
-    CLIP = "clip"
-    FILL = "fill"
-    RANDOM = "random"
-
-
-class BuildingContext(StrEnum):
-    INDOOR = "indoor"
-    UNDERGROUND = "underground"
-    NAUTICAL = "nautical"
-
-
-from app.dataModel.structure.enums.staircaseType import StaircaseType  # noqa: E402 — wire re-export
-from app.dataModel.structure.enums.passageType import PassageType  # noqa: E402 — wire re-export
-
-
-class StreetLayout(StrEnum):
-    GRID = "grid"
-    ORGANIC = "organic"
-    RADIAL = "radial"
-    CUL_DE_SAC = "cul_de_sac"
-    COURTYARD = "courtyard"
-
-
-class MeasurementSystem(StrEnum):
-    METRIC = "metric"
-    IMPERIAL = "imperial"
-
-
-class StatConflictMode(StrEnum):
-    SOFT = "soft"
-    MIGRATE = "migrate"
-
-
-from app.dataModel.climate.enums.climatePoleMode import ClimatePoleMode  # noqa: E402 — wire re-export
-from app.dataModel.climate.enums.climatePolePreset import ClimatePolePreset  # noqa: E402 — wire re-export
-
-
-class SeasonKey(StrEnum):
-    WINTER = "winter"
-    SPRING = "spring"
-    SUMMER = "summer"
-    AUTUMN = "autumn"
-
-
-class SystemGender(StrEnum):
-    MALE = "male"
-    FEMALE = "female"
-    ASEXUAL = "asexual"
-    BOTH = "both"
-
-
-from app.dataModel.settlement.enums.districtDensity import DistrictDensity  # noqa: E402 — wire re-export
+__all__ = [
+    "BorderCategory",
+    "BridgeSubtype",
+    "BuildingContext",
+    "CellStateCategory",
+    "ClimatePoleMode",
+    "ClimatePolePreset",
+    "ConnectionNodeType",
+    "DistrictDensity",
+    "DistrictEntryRole",
+    "GapPolicy",
+    "GeographicSubtype",
+    "GraphLevel",
+    "HydrologyConnectionType",
+    "MaterialCategory",
+    "MeasurementSystem",
+    "PassageType",
+    "PortalType",
+    "SeasonKey",
+    "SidewalkSide",
+    "StatConflictMode",
+    "StaircaseType",
+    "StreetLayout",
+    "SystemGender",
+]

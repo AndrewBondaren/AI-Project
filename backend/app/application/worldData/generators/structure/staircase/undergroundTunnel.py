@@ -94,7 +94,7 @@ class UndergroundTunnelBuilder:
             for (x, y, z), cell in self.cells.items()
             if z == self.z_lo
             and (x, y) in fr_fp
-            and cell.system_building_element != "wall"
+            and cell.system_building_element != StructureElement.WALL
         }
         target = fr_interior if fr_interior else fr_fp
 

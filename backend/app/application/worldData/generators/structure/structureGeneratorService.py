@@ -8,6 +8,7 @@ from random import Random
 
 logger = logging.getLogger(__name__)
 
+from app.dataModel.structure.enums.passageType import PassageType
 from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.generators.structure.cellBuilder import build_level_cells
 from app.application.worldData.generators.structure.errors import GenerationError, UnsupportedShapeError
@@ -438,7 +439,7 @@ class StructureGeneratorService:
                     synth.append({
                         "from_room":    shaft_list[i].room_id,
                         "to_room":      stop_id,
-                        "passage_type": "archway",
+                        "passage_type": PassageType.ARCHWAY,
                     })
         return synth
 

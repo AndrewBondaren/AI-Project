@@ -10,7 +10,7 @@ from collections import deque
 
 from app.application.worldData.generators.structure.cellBuilder import _wall_cell
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _open_cell
-from app.application.worldData.generators.structure.structureElement import StructureElement
+from app.dataModel.structure.enums.buildingElement import StructureElement
 from app.application.worldData.generators.utils.facing import Facing
 from app.application.worldData.generators.structure.passages.tunnelPathFinder import TunnelPathFinder
 from app.application.worldData.generators.structure.passages.wallBreachPlacer import WallBreachPlacer
@@ -128,7 +128,7 @@ def _are_connected(
     non_wall = {
         (x, y)
         for (x, y, z), cell in cells.items()
-        if z == z_floor and cell.system_building_element != "wall"
+        if z == z_floor and cell.system_building_element != StructureElement.WALL
     }
 
     start: tuple[int, int] | None = None
@@ -220,7 +220,7 @@ def _exterior_candidates(
             # through-cell = the cell on the interior side of the breach
             tx, ty = cx - dx, cy - dy
             cell = cells.get((tx, ty, z_floor))
-            if cell and cell.system_building_element == "wall":
+            if cell and cell.system_building_element == StructureElement.WALL:
                 continue
             # If the cell above the through-cell is an archway (open), the breach
             # position is already an archway threshold — skip, find a different candidate.

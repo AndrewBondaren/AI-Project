@@ -15,6 +15,7 @@ from app.dataModel.climate.enums.climatePolePreset import (
 )
 from app.dataModel.climate.enums.poleKind import CLIMATE_POLE_LOCATION_TYPE, PoleKind
 from app.dataModel.climate.enums.poleSource import PoleSource
+from app.dataModel.climate.enums.seasonKey import SeasonKey
 
 __all__ = [
     "CLIMATE_POLE_LOCATION_TYPE",
@@ -28,5 +29,6 @@ __all__ = [
     "DEFAULT_CLIMATE_POLE_PRESET",
     "PoleKind",
     "PoleSource",
+    "SeasonKey",
     "pole_specs_for_preset",
 ]

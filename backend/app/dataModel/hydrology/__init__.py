@@ -6,6 +6,7 @@ Not `worlds.caves.hydrology` (отдельный POJO позже).
 """
 
 from app.dataModel.hydrology.bands import BAND_MAX, BAND_MIN, HydrologyBands
+from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
 from app.dataModel.hydrology.category import HydrologyCategoryPolicy
 from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
 from app.dataModel.hydrology.landforms import HydrologyLandformsPolicy
@@ -18,6 +19,7 @@ __all__ = [
     "BAND_MIN",
     "BAND_MAX",
     "HydrologyBands",
+    "HydrologyConnectionType",
     "HydrologyShoreDefaults",
     "RiverTypeClassify",
     "HydrologyCategoryPolicy",

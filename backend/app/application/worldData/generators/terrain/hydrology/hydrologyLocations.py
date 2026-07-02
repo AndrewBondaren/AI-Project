@@ -1,6 +1,6 @@
 """Geographic NamedLocation filters — D HY-1d. See tz_terrain_hydrology.md § Loader."""
 
-from app.application.worldData.generators.terrain.hydrology.types import (
+from app.dataModel.locations.enums.geographicSubtype import (
     GEOGRAPHIC_LOCATION_TYPE,
     GeographicSubtype,
 )
@@ -17,10 +17,4 @@ def geographic_locations(locations: list[NamedLocation]) -> list[NamedLocation]:
 
 def geographic_subtype(loc: NamedLocation) -> GeographicSubtype | None:
     """Parse subtype; None if missing or unknown (forward-compat for new subtypes in bundle)."""
-    raw = loc.system_location_subtype
-    if not raw:
-        return None
-    try:
-        return GeographicSubtype(raw)
-    except ValueError:
-        return None
+    return GeographicSubtype.from_wire(loc.system_location_subtype)

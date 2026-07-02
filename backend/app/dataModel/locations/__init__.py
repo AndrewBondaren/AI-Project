@@ -9,8 +9,11 @@ from app.dataModel.locations.locationType import (
     LocationTypeSubtypeEntry,
     WorldLocationTypeRegistry,
 )
+from app.dataModel.locations.enums import GeographicSubtype, GEOGRAPHIC_LOCATION_TYPE
 
 __all__ = [
+    "GEOGRAPHIC_LOCATION_TYPE",
+    "GeographicSubtype",
     "LocationTypeEntry",
     "LocationTypeSubtypeEntry",
     "WorldLocationTypeRegistry",

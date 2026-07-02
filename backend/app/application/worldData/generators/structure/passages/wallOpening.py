@@ -22,8 +22,9 @@ from app.application.worldData.generators.structure.passages.wallOpeningResolver
     compute_exterior_wall_profiles,
 )
 from app.application.worldData.generators.structure.passages.wallZAdjuster import ZADJUSTER_BY_TYPE
-from app.application.worldData.generators.structure.structureElement import (
-    StructureElement, _DOOR_ELEMENTS,
+from app.dataModel.structure.enums.buildingElement import (
+    DOOR_BUILDING_ELEMENTS,
+    StructureElement,
 )
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.mapCell import MapCell
@@ -31,6 +32,8 @@ from app.db.models.world import World
 
 logger = logging.getLogger(__name__)
 
+# Engine default: opening element → material_registry use_type for glass resolve (OQ-3).
+# Candidate for dataModel when wall_openings / room_type rules expand (OQ-17+).
 _GLASS_USE_TYPE: dict[StructureElement, str | None] = {
     StructureElement.WINDOW:     "window_glass",
     StructureElement.PORTHOLE:   "porthole_glass",
@@ -62,7 +65,7 @@ def _exclude_doors(
     forbidden: set[tuple[int, int]] = set()
     for i, (x, y) in enumerate(cells):
         cell = cells_dict.get((x, y, z_base))
-        if cell and cell.system_building_element in _DOOR_ELEMENTS:
+        if cell and cell.system_building_element in DOOR_BUILDING_ELEMENTS:
             forbidden.add((x, y))
             if i > 0:
                 forbidden.add(cells[i - 1])
@@ -121,7 +124,7 @@ def place_wall_openings(
     occupied_xy = all_fp | {
         (x, y)
         for (x, y, z), cell in cells_dict.items()
-        if z == level.z and cell.system_building_element != StructureElement.WALL.value
+        if z == level.z and cell.system_building_element != StructureElement.WALL
     }
     profiles = compute_exterior_wall_profiles(rooms, occupied_xy, level.z)
     logger.info("wall_openings | z=%d  rooms=%d", level.z, len(rooms))
@@ -157,7 +160,7 @@ def place_wall_openings(
                 for (x, y) in _zone_positions(seg, shaft_facing=shaft_facing, direction=direction):
                     for abs_z in z_list:
                         existing = cells_dict.get((x, y, abs_z))
-                        if not existing or existing.system_building_element != StructureElement.WALL.value:
+                        if not existing or existing.system_building_element != StructureElement.WALL:
                             continue
                         cells_dict[(x, y, abs_z)] = _opening_cell(
                             x, y, abs_z, world.world_uid, building_uid,

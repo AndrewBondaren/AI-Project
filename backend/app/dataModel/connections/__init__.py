@@ -5,8 +5,12 @@ SCH-WORLD-CONN — `worlds.connection_type_registry` (N1-W-06).
 """
 
 from app.dataModel.connections.connectionType import ConnectionTypeEntry, WorldConnectionTypeRegistry
+from app.dataModel.connections.enums import ConnectionNodeType, GraphLevel, PortalType
 
 __all__ = [
+    "ConnectionNodeType",
     "ConnectionTypeEntry",
+    "GraphLevel",
+    "PortalType",
     "WorldConnectionTypeRegistry",
 ]

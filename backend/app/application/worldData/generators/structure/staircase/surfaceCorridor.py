@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import uuid
 
+from app.dataModel.structure.enums.buildingElement import StructureElement
 from app.application.worldData.generators.structure.cellBuilder import _interior, _wall_cell
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _open_cell
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
@@ -75,7 +76,7 @@ class SurfaceCorridorBuilder:
             for (x, y, z), cell in self.cells.items()
             if z == self.z_top
             and (x, y) in to_fp
-            and cell.system_building_element != "wall"
+            and cell.system_building_element != StructureElement.WALL
         }
         target = to_interior if to_interior else to_fp
 

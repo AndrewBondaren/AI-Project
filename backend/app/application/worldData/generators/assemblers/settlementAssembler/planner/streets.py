@@ -15,6 +15,9 @@ from app.application.worldData.generators.road.sidewalkWidthResolver import reso
 from app.application.worldData.generators.road.roadTravelResolver import effective_travel_modifier
 from app.application.worldData.generators.road.widthResolver import resolve_width
 from app.application.worldData.generators.utils.materialResolver import resolve_material
+from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
+from app.dataModel.connections.enums.graphLevel import GraphLevel
+from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
 from app.application.worldData.generators.utils.facing import Facing
 from app.dataModel.settlement.district.districtConnection import primary_or_default
 from app.dataModel.materials import DEFAULT_ROAD_MATERIAL
@@ -38,8 +41,8 @@ def _city_road_material(world: World, skeleton: CitySkeleton, rng: Random) -> st
 
 def _make_node(
     x: int, y: int, z: int,
-    node_type: str,
-    graph_level: str,
+    node_type: ConnectionNodeType | str,
+    graph_level: GraphLevel | str,
     world_uid: str,
     tag: str,
 ) -> ConnectionNode:
@@ -47,8 +50,8 @@ def _make_node(
     return ConnectionNode(
         node_uid=f"{tag}_{x}_{y}_{z}_{uuid.uuid4().hex[:8]}",
         x=x, y=y, z=z,
-        node_type=node_type,
-        graph_level=graph_level,
+        node_type=node_type.value if isinstance(node_type, ConnectionNodeType) else node_type,
+        graph_level=graph_level.value if isinstance(graph_level, GraphLevel) else graph_level,
         world_uid=world_uid,
     )
 
@@ -99,7 +102,7 @@ def plan_settlement_entries(
         key = (x, y, z)
         if key not in node_registry:
             node_registry[key] = _make_node(
-                x, y, z, "intersection", "district", world_uid, tag,
+                x, y, z, ConnectionNodeType.INTERSECTION, GraphLevel.DISTRICT, world_uid, tag,
             )
         return node_registry[key]
 
@@ -115,11 +118,11 @@ def plan_settlement_entries(
             west = get_node(ox, y, z, "through_w")
             east = get_node(ox + w, y, z, "through_e")
             entries.append(ConnectionEntry(
-                node=west, connection_type=conn_type, role="through_road",
+                node=west, connection_type=conn_type, role=DistrictEntryRole.THROUGH_ROAD,
                 facing=Facing.WEST, paired_exit_uid=east.node_uid,
             ))
             entries.append(ConnectionEntry(
-                node=east, connection_type=conn_type, role="through_road",
+                node=east, connection_type=conn_type, role=DistrictEntryRole.THROUGH_ROAD,
                 facing=Facing.EAST, paired_exit_uid=west.node_uid,
             ))
 
@@ -128,11 +131,11 @@ def plan_settlement_entries(
             south = get_node(x, oy, z, "through_s")
             north = get_node(x, oy + d, z, "through_n")
             entries.append(ConnectionEntry(
-                node=south, connection_type=conn_type, role="through_road",
+                node=south, connection_type=conn_type, role=DistrictEntryRole.THROUGH_ROAD,
                 facing=Facing.SOUTH, paired_exit_uid=north.node_uid,
             ))
             entries.append(ConnectionEntry(
-                node=north, connection_type=conn_type, role="through_road",
+                node=north, connection_type=conn_type, role=DistrictEntryRole.THROUGH_ROAD,
                 facing=Facing.NORTH, paired_exit_uid=south.node_uid,
             ))
 
@@ -140,15 +143,15 @@ def plan_settlement_entries(
         while x < ox + w:
             node = get_node(x, oy, z, "entry_s")
             entries.append(ConnectionEntry(
-                node=node, connection_type=conn_type, role="entry_point",
+                node=node, connection_type=conn_type, role=DistrictEntryRole.ENTRY_POINT,
                 facing=Facing.SOUTH, paired_exit_uid=None,
             ))
             x += block
 
         slot.entry_nodes = entries
 
-        through = sum(1 for e in entries if e.role == "through_road") // 2
-        entry_pts = sum(1 for e in entries if e.role == "entry_point")
+        through = sum(1 for e in entries if e.role == DistrictEntryRole.THROUGH_ROAD) // 2
+        entry_pts = sum(1 for e in entries if e.role == DistrictEntryRole.ENTRY_POINT)
         logger.info(
             "plan_settlement_entries slot | template=%s origin=(%d,%d) size=%dx%d"
             " connection_type=%s through_road_pairs=%d entry_points=%d",
@@ -221,7 +224,7 @@ def plan_city_street_grid(
             return by_xy[key]
         if (x, y, ground_z) in district_nodes:
             return register(district_nodes[(x, y, ground_z)])
-        node = _make_node(x, y, ground_z, "settlement_gate", "city", world_uid, label)
+        node = _make_node(x, y, ground_z, ConnectionNodeType.SETTLEMENT_GATE, GraphLevel.CITY, world_uid, label)
         return register(node)
 
     xs = footprint_gate_line_coords(origin_x, side_m, cell_m)
@@ -256,7 +259,7 @@ def plan_city_street_grid(
                 width_cells=width,
                 material=road_material,
                 has_sidewalk=has_sidewalk,
-                graph_level="city",
+                graph_level=GraphLevel.CITY.value,
                 world_uid=world_uid,
             ))
 
@@ -278,7 +281,7 @@ def plan_city_street_grid(
             return register(district_nodes[key])
         if (x, y) in by_xy:
             return by_xy[(x, y)]
-        node = _make_node(x, y, ground_z, "intersection", "city", world_uid, tag)
+        node = _make_node(x, y, ground_z, ConnectionNodeType.INTERSECTION, GraphLevel.CITY, world_uid, tag)
         return register(node)
 
     if grid_n > 1:
@@ -298,7 +301,7 @@ def plan_city_street_grid(
 
     for slot in district_slots:
         for entry in slot.entry_nodes:
-            if entry.role != "entry_point":
+            if entry.role != DistrictEntryRole.ENTRY_POINT:
                 continue
             entry_node = entry.node
             register(entry_node)
@@ -318,7 +321,7 @@ def plan_city_street_grid(
                 has_sidewalk=resolve_has_sidewalk(
                     slot.district_template, entry.connection_type, world=world,
                 ),
-                graph_level="city",
+                graph_level=GraphLevel.CITY.value,
                 world_uid=world_uid,
             ))
 

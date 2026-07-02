@@ -520,13 +520,13 @@ class UShapeBuilder(StaircaseBuilder):
         # The arch builder places floor at this position before the staircase runs.
         to_anchor_cell = self.cells.get((to_anchor_x, to_anchor_y, self.z_top))
         to_anchor_elem = to_anchor_cell.system_building_element if to_anchor_cell else "пусто"
-        if to_anchor_elem != "floor":
+        if to_anchor_elem != StructureElement.FLOOR:
             logger.error(
-                "u_shape %s: to_anchor (%d,%d,z=%d) должен быть floor, получено %r. "
+                "u_shape %s: to_anchor (%d,%d,z=%d) должен быть %r, получено %r. "
                 "last_stair=(%d,%d,z=%d), exit_v=(%d,%d), facing=%r. "
                 "Проверь что арка построена до лестницы и z_height совместим с размером шахты.",
                 self.conn_label, to_anchor_x, to_anchor_y, self.z_top,
-                to_anchor_elem, lx, ly, self.z_top - 1, Vx, Vy, facing,
+                StructureElement.FLOOR.value, to_anchor_elem, lx, ly, self.z_top - 1, Vx, Vy, facing,
             )
         to_anchor = (to_anchor_x, to_anchor_y)
 
