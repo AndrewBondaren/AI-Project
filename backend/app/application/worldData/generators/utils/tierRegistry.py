@@ -9,19 +9,20 @@
 from __future__ import annotations
 
 from app.application.worldData.generators.climate.loggingHelpers import warn_once
+from app.dataModel.economy.economyTier.economyTierEntry import EconomyTierEntry
 
-Registry = list[dict]
-
-
-def tiers_sorted(registry: Registry | None) -> list[dict]:
-    return sorted(registry or [], key=lambda t: t.get("base_value", 0))
+Registry = list[EconomyTierEntry]
 
 
-def tier_entry(registry: Registry | None, system_tier: str | None) -> dict | None:
+def tiers_sorted(registry: Registry | None) -> list[EconomyTierEntry]:
+    return sorted(registry or [], key=lambda tier: tier.base_value)
+
+
+def tier_entry(registry: Registry | None, system_tier: str | None) -> EconomyTierEntry | None:
     if not system_tier:
         return None
     for entry in registry or []:
-        if entry.get("system_tier") == system_tier:
+        if entry.system_tier == system_tier:
             return entry
     return None
 
@@ -35,9 +36,9 @@ def tier_rank(
     """Порядковый индекс по base_value ASC; null → 0; unknown → warn + 0 (JV-7)."""
     if not system_tier:
         return 0
-    for i, entry in enumerate(tiers_sorted(registry)):
-        if entry.get("system_tier") == system_tier:
-            return i
+    for index, entry in enumerate(tiers_sorted(registry)):
+        if entry.system_tier == system_tier:
+            return index
     if world_uid:
         warn_once(
             world_uid,
@@ -80,7 +81,7 @@ def median_system_tier(registry: Registry | None) -> str | None:
     tiers = tiers_sorted(registry)
     if not tiers:
         return None
-    return tiers[len(tiers) // 2].get("system_tier")
+    return tiers[len(tiers) // 2].system_tier
 
 
 def tiers_within_rank_delta(
@@ -95,7 +96,7 @@ def tiers_within_rank_delta(
         return []
     center_rank = tier_rank(registry, center, world_uid=world_uid)
     return [
-        entry["system_tier"]
-        for i, entry in enumerate(tiers_sorted(registry))
-        if abs(i - center_rank) <= delta
+        entry.system_tier
+        for index, entry in enumerate(tiers_sorted(registry))
+        if abs(index - center_rank) <= delta
     ]

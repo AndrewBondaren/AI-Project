@@ -2,7 +2,7 @@
 
 import logging
 
-from app.application.jsonValidation import terrain_rows
+from app.application.jsonValidation import terrain_system_keys
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
     settlement_grid_rect,
 )
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def _surface_terrain(world: World) -> str:
-    types = {t["system_terrain"] for t in terrain_rows(world) if "system_terrain" in t}
+    types = terrain_system_keys(world)
     if "urban" in types:
         return "urban"
     return "plains"

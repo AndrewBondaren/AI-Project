@@ -1,10 +1,13 @@
 """POJO resolve/normalize — single engine for import validator and runtime reads.
 
 Field policy: ``dataModel.annotationPolicy`` (StrictOnWire / IgnoreOnWire / default fallback).
+Contract: ``docs/tz_json_validation.md``.
 """
 
 from __future__ import annotations
 
+import copy
+import json
 import logging
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -76,6 +79,44 @@ def _validation_message(exc: ValidationError) -> str:
         loc = ".".join(str(part) for part in err["loc"])
         parts.append(f"{loc}: {err['msg']}")
     return "; ".join(parts)
+
+
+def _wire_snapshot(raw: Any) -> Any:
+    if isinstance(raw, dict):
+        return copy.deepcopy(raw)
+    return raw
+
+
+def _resolved_snapshot(model: BaseModel) -> Any:
+    return model.model_dump(mode="json")
+
+
+def _json_line(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+    
+
+
+def _log_resolve_transform(
+    label: str,
+    wire: Any,
+    result: BaseModel,
+    ctx: ResolveContext | None,
+) -> None:
+    """Log original wire JSON vs resolved POJO when they differ."""
+    before = _wire_snapshot(wire if isinstance(wire, dict) else {})
+    after = _resolved_snapshot(result)
+    before_json = _json_line(before)
+    after_json = _json_line(after)
+    if before_json == after_json:
+        return
+    mode = ctx.mode.value if ctx is not None else ResolveMode.RUNTIME.value
+    logger.info(
+        "json_validation | resolve | label=%s mode=%s | wire=%s | resolved=%s",
+        label,
+        mode,
+        before_json,
+        after_json,
+    )
 
 
 def _record_strict_error(
@@ -182,17 +223,23 @@ def resolve_model(
             payload[name] = value
 
     if ctx is not None and ctx.mode == ResolveMode.IMPORT and ctx.errors:
-        return model_cls.model_construct(**payload)
+        result = model_cls.model_construct(**payload)
+        _log_resolve_transform(label or model_cls.__name__, raw, result, ctx)
+        return result
 
     try:
-        return model_cls.model_validate(payload)
+        result = model_cls.model_validate(payload)
+        _log_resolve_transform(label or model_cls.__name__, raw, result, ctx)
+        return result
     except ValidationError as exc:
         logger.warning(
             "json_validation | %s model_validate failed (%s issues); retry field-wise",
             label or model_cls.__name__,
             exc.error_count(),
         )
-        return _resolve_fieldwise(model_cls, raw, label=label or model_cls.__name__, ctx=ctx)
+        result = _resolve_fieldwise(model_cls, raw, label=label or model_cls.__name__, ctx=ctx)
+        _log_resolve_transform(label or model_cls.__name__, raw, result, ctx)
+        return result
 
 
 def _resolve_fieldwise(

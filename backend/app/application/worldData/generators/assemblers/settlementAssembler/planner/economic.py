@@ -1,7 +1,7 @@
 """Economic tier compatibility for district / building template selection."""
 
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
-from app.application.jsonValidation import economic_tier_rows
+from app.application.jsonValidation import economic_tiers
 from app.application.worldData.generators.utils.economicTierBands import band_of
 from app.application.worldData.generators.utils.tierRegistry import (
     tier_at_least,
@@ -22,7 +22,7 @@ def check_district_economic_compat(
     if not city_tier:
         return True
 
-    registry = economic_tier_rows(world)
+    registry = economic_tiers(world).root
     uid = world.world_uid
     tier_range = template.get("economic_tier_range")
     if tier_range:
@@ -56,7 +56,7 @@ def building_tier_compatible(
     if not city_tier:
         return True
 
-    registry = economic_tier_rows(world)
+    registry = economic_tiers(world).root
     uid = world.world_uid
     allowed = tiers_within_rank_delta(registry, city_tier, delta, world_uid=uid)
     if not allowed:

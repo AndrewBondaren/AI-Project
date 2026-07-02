@@ -1,18 +1,14 @@
 """Stub ore placement — independent of skeleton depth (Phase 4)."""
 
 from app.application.worldData.generators.climate.math import world_seed
-from app.application.jsonValidation import material_rows
+from app.application.jsonValidation import materials
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
 
 def generate_ores(world: World, cells: list[MapCell]) -> list[MapCell]:
     """Mark ~3% of subsurface cells with system_material=iron when available."""
-    material_keys = {
-        m["system_material"]
-        for m in material_rows(world)
-        if m.get("system_material")
-    }
+    material_keys = {entry.system_material for entry in materials(world).root}
     ore_mat = "iron" if "iron" in material_keys else next(iter(material_keys), None)
     if ore_mat is None:
         return []

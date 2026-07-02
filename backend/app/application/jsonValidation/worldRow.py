@@ -5,8 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from app.application.jsonValidation.resolve import resolve_model, resolve_root_list
-from app.dataModel import (
+from app.dataModel.climate.worldClimateScalars import (
     WorldClimateScalars,
+    climate_scalar_wire_from_mapping,
+)
+from app.dataModel import (
     WorldClimateZoneRegistry,
     WorldEconomyTierRegistry,
     WorldHydrology,
@@ -38,21 +41,6 @@ def _climate_zone_wire(world: Any) -> list[dict] | None:
             return values
         return [raw]
     return None
-
-
-def _climate_scalar_payload(world: Any) -> dict[str, Any]:
-    return {
-        "default_climate_zone": getattr(world, "default_climate_zone", None),
-        "climate_temperature_peak_min": getattr(world, "climate_temperature_peak_min", None),
-        "climate_temperature_peak_max": getattr(world, "climate_temperature_peak_max", None),
-        "climate_pole_mode": getattr(world, "climate_pole_mode", None),
-        "climate_pole_preset": getattr(world, "climate_pole_preset", None),
-        "climate_local_influence_fraction": getattr(
-            world, "climate_local_influence_fraction", None,
-        ),
-        "precipitation_liquid": getattr(world, "precipitation_liquid", None),
-        "season_temp_offsets": getattr(world, "season_temp_offsets", None),
-    }
 
 
 def economic_tiers(world: Any) -> WorldEconomyTierRegistry:
@@ -158,7 +146,7 @@ def climate_zones(world: Any) -> WorldClimateZoneRegistry:
 def climate_scalars(world: Any) -> WorldClimateScalars:
     return resolve_model(
         WorldClimateScalars,
-        _climate_scalar_payload(world),
+        climate_scalar_wire_from_mapping(world),
         label=f"world={_uid(world)} climate_scalars",
     )
 
@@ -172,6 +160,26 @@ def legacy_standalone_water_material() -> str:
     if liquids:
         return sorted(liquids)[0]
     return "water"
+
+
+def barrier_templates(world: Any) -> WorldBarrierTemplateRegistry:
+    """Canonical defaults merged with world overrides by ``system_type``."""
+    by_type = {
+        entry.system_type: entry
+        for entry in WorldBarrierTemplateRegistry.canonical_defaults().root
+    }
+    raw = getattr(world, "barrier_template_registry", None)
+    if raw:
+        resolved = resolve_root_list(
+            WorldBarrierTemplateRegistry,
+            raw,
+            empty_factory=WorldBarrierTemplateRegistry.canonical_defaults,
+            label="barrier_template_registry",
+            world_uid=_uid(world),
+        )
+        for entry in resolved.root:
+            by_type[entry.system_type] = entry
+    return WorldBarrierTemplateRegistry(list(by_type.values()))
 
 
 def barrier_template_defaults() -> list[dict]:

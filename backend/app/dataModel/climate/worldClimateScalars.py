@@ -9,10 +9,16 @@ Two layers (not duplicate hardcodes in generators):
 Wire keys ``climate_pole_mode`` / ``climate_pole_preset`` must match
 ``ClimatePoleMode`` / ``ClimatePolePreset`` enums. ``default_climate_zone``
 must match ``ClimateZone.TEMPERATE``. Consumers: ``climate_scalars(world)``
-via ``jsonValidation.worldRow``, not raw literals in generators/DAG/db.
+via ``jsonValidation.worldRow``, not raw literals in generators/DAG/db. См. ``docs/tz_json_validation.md``.
+
+Wire projection: ``CLIMATE_SCALAR_WIRE_KEYS`` + ``climate_scalar_wire_from_mapping``.
+Startup sync: ``validate_world_row_climate_columns(World)`` — POJO fields ⊆ ``worlds`` columns.
 """
 
 from __future__ import annotations
+
+from dataclasses import fields as dataclass_fields
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -92,3 +98,24 @@ class WorldClimateScalars(BaseModel):
         if lo > hi:
             lo, hi = hi, lo
         return int(lo), int(hi)
+
+
+CLIMATE_SCALAR_WIRE_KEYS: frozenset[str] = frozenset(WorldClimateScalars.model_fields.keys())
+
+
+def climate_scalar_wire_from_mapping(source: Any) -> dict[str, Any]:
+    """Project ``worlds`` row or wire dict → wire slice for ``resolve_model``."""
+    if isinstance(source, dict):
+        return {key: source.get(key) for key in CLIMATE_SCALAR_WIRE_KEYS}
+    return {key: getattr(source, key, None) for key in CLIMATE_SCALAR_WIRE_KEYS}
+
+
+def validate_world_row_climate_columns(world_cls: type) -> None:
+    """Startup assert: every POJO scalar field has a matching ``World`` column."""
+    row_fields = {field.name for field in dataclass_fields(world_cls)}
+    missing = CLIMATE_SCALAR_WIRE_KEYS - row_fields
+    if missing:
+        raise RuntimeError(
+            f"{world_cls.__name__} missing climate scalar columns "
+            f"{sorted(missing)} — sync with WorldClimateScalars",
+        )

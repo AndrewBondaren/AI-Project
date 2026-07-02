@@ -1,12 +1,10 @@
 import logging
 from random import Random
 
-from app.application.jsonValidation import economic_tier_rows, material_rows
-from app.application.worldData.generators.utils.tierRegistry import (
-    median_system_tier,
-    tiers_sorted,
-)
+from app.application.jsonValidation import economic_tiers, materials
+from app.application.worldData.generators.utils.tierRegistry import median_system_tier, tiers_sorted
 from app.application.worldData.generators.utils.tierResolver import TierResolver
+from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
 from app.db.models.world import World
 
 from app.dataModel.materials import (
@@ -15,6 +13,20 @@ from app.dataModel.materials import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _construction_candidates(
+    registry: list[MaterialRegistryEntry],
+    use_type: str,
+    tier: str,
+) -> list[str]:
+    return [
+        entry.system_material
+        for entry in registry
+        if "construction" in entry.tags
+        and use_type in entry.use_type
+        and entry.economic_tier == tier
+    ]
 
 
 def resolve_material(
@@ -26,37 +38,31 @@ def resolve_material(
     context: str = "",
 ) -> str:
     """
-    Выбирает материал из world.material_registry по use_type и economic_tier.
+    Выбирает материал из material_registry по use_type и economic_tier.
     Fallback: ближайший тир вниз → любой подходящий → default.
     """
-    registry = material_rows(world)
-    tiers = tiers_sorted(economic_tier_rows(world))
-    tier = effective_tier or median_system_tier(economic_tier_rows(world)) or ""
+    registry = materials(world).root
+    tiers = tiers_sorted(economic_tiers(world).root)
+    tier = effective_tier or median_system_tier(tiers) or ""
 
-    def candidates_for(t: str) -> list[str]:
-        return [
-            m["system_material"] for m in registry
-            if "construction" in m.get("tags", [])
-            and use_type in m.get("use_type", [])
-            and m.get("economic_tier") == t
-        ]
-
-    found = candidates_for(tier)
+    found = _construction_candidates(registry, use_type, tier)
 
     if not found:
         current_val = next(
-            (t.get("base_value", 0) for t in tiers if t.get("system_tier") == tier), 0
+            (entry.base_value for entry in tiers if entry.system_tier == tier),
+            0,
         )
-        for t_entry in reversed([t for t in tiers if t.get("base_value", 0) < current_val]):
-            found = candidates_for(t_entry["system_tier"])
+        for tier_entry in reversed([entry for entry in tiers if entry.base_value < current_val]):
+            found = _construction_candidates(registry, use_type, tier_entry.system_tier)
             if found:
                 break
 
     if not found:
         found = [
-            m["system_material"] for m in registry
-            if "construction" in m.get("tags", [])
-            and use_type in m.get("use_type", [])
+            entry.system_material
+            for entry in registry
+            if "construction" in entry.tags
+            and use_type in entry.use_type
         ]
 
     if not found:

@@ -1,5 +1,7 @@
 """JSON import validation + normalize — single home for wire → dataModel.
 
+Contract: ``docs/tz_json_validation.md``.
+
 Layers:
   ``resolve``   — per-field policy engine (StrictOnWire / IgnoreOnWire / fallback)
   ``facade``    — import / CRUD normalize (strict → 422)
@@ -21,6 +23,7 @@ from app.application.jsonValidation.types import (
 from app.application.jsonValidation.wire import WireEnumError, parse_enum
 from app.application.jsonValidation.worldRow import (
     barrier_template_defaults,
+    barrier_templates,
     climate_scalars,
     climate_zones,
     default_precipitation_liquid,
@@ -47,6 +50,7 @@ __all__ = [
     "StrictFieldError",
     "WireEnumError",
     "barrier_template_defaults",
+    "barrier_templates",
     "climate_scalars",
     "climate_zones",
     "default_precipitation_liquid",

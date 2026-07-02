@@ -6,7 +6,7 @@ import logging
 from random import Random
 
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
-from app.application.jsonValidation import economic_tier_rows
+from app.application.jsonValidation import economic_tiers
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.barrierDefaults import (
     lookup_barrier_template,
 )
@@ -22,6 +22,7 @@ from app.application.worldData.generators.road.blockSize import block_size_for_d
 from app.application.worldData.generators.barrier.material import pick_barrier_material
 from app.application.worldData.generators.barrier.perimeter import perimeter_ring_bbox
 from app.application.worldData.generators.utils.tierRegistry import tier_rank
+from app.dataModel.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -58,7 +59,7 @@ def pick_barrier_template_type(
     rng:      Random,
 ) -> str | None:
     """v1 эвристика — polish pass: `.cursor/plans/settlement-assembler.md` § pick_barrier_template_type."""
-    registry = economic_tier_rows(world)
+    registry = economic_tiers(world).root
     uid = world.world_uid
     tier = skeleton.economic_tier or "standard"
     rank = tier_rank(registry, tier, world_uid=uid) if registry else 2
@@ -75,7 +76,7 @@ def pick_barrier_template_type(
 
 def _pick_template_material(
     world:    World,
-    template: dict,
+    template: BarrierTemplateEntry,
     skeleton: CitySkeleton,
     rng:      Random,
 ) -> str:

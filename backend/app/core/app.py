@@ -39,6 +39,8 @@ def make_lifespan(db: Database):
         await db.connect()
         await db.apply_migrations()
         await db.validate_schema(_models)
+        from app.dataModel.climate.worldClimateScalars import validate_world_row_climate_columns
+        validate_world_row_climate_columns(World)
         await SqlitePendingRepository(db).cleanup_stale()
         yield
         await db.disconnect()

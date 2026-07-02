@@ -40,3 +40,9 @@ class WorldBarrierTemplateRegistry(RootModel[list[BarrierTemplateEntry]]):
     @classmethod
     def canonical_defaults(cls) -> WorldBarrierTemplateRegistry:
         return cls(list(_CANONICAL_ENTRIES))
+
+    def entry_for(self, system_type: str) -> BarrierTemplateEntry | None:
+        for entry in self.root:
+            if entry.system_type == system_type:
+                return entry
+        return None

@@ -550,7 +550,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 
 **Полный контракт:** [`tz_json_validation.md`](./tz_json_validation.md) — **§0 ENUM-E / N1-S / N1-W**; backlog HY-5 в generators — этот §.
 
-**Размещение:** `application/worldData/jsonValidation/` (не `validation/` — в системе валидаторов несколько семейств).
+**Размещение:** `application/jsonValidation/` (не `worldData/` — sibling import layer). См. [`tz_json_validation.md`](./tz_json_validation.md).
 
 **Симптом без этого:** magic strings в коде; doc пишет `geographic.lake`, JSON хранит два поля; опечатка → silent empty filter (HY-GEO-1).
 

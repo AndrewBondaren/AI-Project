@@ -4,9 +4,7 @@
 """
 import random
 
-from app.application.jsonValidation import economic_tier_rows
 from app.application.worldData.generators.utils.economicTierBands import band_of
-from app.application.worldData.generators.utils.tierRegistry import tier_entry
 from app.dataModel.economy.enums.economicTierBand import (
     DEFAULT_SIDEWALK_WIDTH_CELLS,
     sidewalk_width_for_band,
@@ -21,21 +19,11 @@ def resolve_sidewalk_width(
 ) -> int:
     """
     Возвращает ширину тротуара в клетках.
-    Приоритет: economic_tier_registry.sidewalk_width_cells / sidewalk_width_range
-    → band_of(world, tier) + EconomicTierBand defaults → DEFAULT_SIDEWALK_WIDTH_CELLS.
+    Per-tier sidewalk_width_* on registry rows — future EconomyTierEntry fields;
+    сейчас: band_of(world, tier) + EconomicTierBand defaults → DEFAULT_SIDEWALK_WIDTH_CELLS.
     """
     if economic_tier is None:
         return DEFAULT_SIDEWALK_WIDTH_CELLS
-
-    registry = economic_tier_rows(world) if world else None
-    entry = tier_entry(registry, economic_tier)
-    if entry is not None:
-        fixed = entry.get("sidewalk_width_cells")
-        if fixed is not None:
-            return int(fixed)
-        width_range = entry.get("sidewalk_width_range")
-        if isinstance(width_range, (list, tuple)) and len(width_range) >= 2:
-            return rng.randint(int(width_range[0]), int(width_range[1]))
 
     if world is not None:
         band = band_of(world, economic_tier)

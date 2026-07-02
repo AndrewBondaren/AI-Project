@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from random import Random
 
-from app.application.jsonValidation import economic_tier_rows
+from app.application.jsonValidation import economic_tiers
 from app.application.worldData.generators.utils.tierRegistry import tier_rank, tiers_sorted
 from app.dataModel.economy.enums.economicTierBand import EconomicTierBand
 from app.db.models.world import World
@@ -12,9 +12,9 @@ from app.db.models.world import World
 
 def tier_band_map(world: World) -> dict[str, str]:
     """Maps each system_tier → abstract band wire key (ASC base_value)."""
-    tiers = tiers_sorted(economic_tier_rows(world))
+    tiers = tiers_sorted(economic_tiers(world).root)
     return EconomicTierBand.band_map_for_sorted_tiers(
-        [t["system_tier"] for t in tiers],
+        [tier.system_tier for tier in tiers],
     )
 
 
@@ -36,23 +36,24 @@ def materialize_band(
     Разворачивает economic_tier_band в один system_tier из registry мира.
     anchor_tier (обычно tier города) — предпочтение ближайшего тира в band.
     """
+    registry = economic_tiers(world).root
     candidates = tiers_for_band(world, band)
     if not candidates:
         return None
     if anchor_tier is None:
         return rng.choice(candidates)
 
-    anchor_rank = tier_rank(economic_tier_rows(world), anchor_tier, world_uid=world.world_uid)
+    anchor_rank = tier_rank(registry, anchor_tier, world_uid=world.world_uid)
     ordered = [
-        t["system_tier"]
-        for t in tiers_sorted(economic_tier_rows(world))
-        if t["system_tier"] in candidates
+        tier.system_tier
+        for tier in tiers_sorted(registry)
+        if tier.system_tier in candidates
     ]
     if not ordered:
         return rng.choice(candidates)
     return min(
         ordered,
-        key=lambda t: abs(
-            tier_rank(economic_tier_rows(world), t, world_uid=world.world_uid) - anchor_rank
+        key=lambda tier: abs(
+            tier_rank(registry, tier, world_uid=world.world_uid) - anchor_rank
         ),
     )

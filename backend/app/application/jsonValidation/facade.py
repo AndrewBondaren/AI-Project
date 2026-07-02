@@ -11,8 +11,12 @@ from app.application.jsonValidation.resolve import (
     resolve_root_list,
 )
 from app.application.jsonValidation.types import ImportValidationError
-from app.dataModel import (
+from app.dataModel.climate.worldClimateScalars import (
+    CLIMATE_SCALAR_WIRE_KEYS,
     WorldClimateScalars,
+    climate_scalar_wire_from_mapping,
+)
+from app.dataModel import (
     WorldClimateZoneRegistry,
     WorldEconomyTierRegistry,
     WorldHydrology,
@@ -20,26 +24,11 @@ from app.dataModel import (
     WorldTerrainRegistry,
 )
 
-_CLIMATE_SCALAR_KEYS = frozenset({
-    "default_climate_zone",
-    "climate_temperature_peak_min",
-    "climate_temperature_peak_max",
-    "climate_pole_mode",
-    "climate_pole_preset",
-    "climate_local_influence_fraction",
-    "precipitation_liquid",
-    "season_temp_offsets",
-})
-
 _LIST_REGISTRY_KEYS: tuple[tuple[str, type], ...] = (
     ("economic_tier_registry", WorldEconomyTierRegistry),
     ("material_registry", WorldMaterialRegistry),
     ("terrain_registry", WorldTerrainRegistry),
 )
-
-
-def _climate_scalar_payload(data: dict[str, Any]) -> dict[str, Any]:
-    return {key: data.get(key) for key in _CLIMATE_SCALAR_KEYS}
 
 
 def _climate_zone_wire(raw: Any) -> list[dict] | None:
@@ -56,12 +45,13 @@ def _climate_zone_wire(raw: Any) -> list[dict] | None:
 
 
 def _merge_climate_scalars(out: dict[str, Any], ctx: ResolveContext) -> None:
-    payload = _climate_scalar_payload(out)
-    if ctx.partial and not any(key in out for key in _CLIMATE_SCALAR_KEYS):
+    if ctx.partial and not any(key in out for key in CLIMATE_SCALAR_WIRE_KEYS):
         return
 
-    present_keys = {key for key in _CLIMATE_SCALAR_KEYS if key in out}
-    wire = payload if not ctx.partial else {key: payload[key] for key in present_keys}
+    present_keys = {key for key in CLIMATE_SCALAR_WIRE_KEYS if key in out}
+    wire = climate_scalar_wire_from_mapping(out)
+    if ctx.partial:
+        wire = {key: wire[key] for key in present_keys}
     resolved = resolve_model(
         WorldClimateScalars,
         wire,
@@ -69,7 +59,7 @@ def _merge_climate_scalars(out: dict[str, Any], ctx: ResolveContext) -> None:
         ctx=ctx,
     )
     dump = resolved.model_dump(mode="json")
-    keys_to_write = _CLIMATE_SCALAR_KEYS if not ctx.partial else present_keys
+    keys_to_write = CLIMATE_SCALAR_WIRE_KEYS if not ctx.partial else present_keys
     for key in keys_to_write:
         if key in dump:
             out[key] = dump[key]

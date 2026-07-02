@@ -9,19 +9,14 @@ from app.application.worldData.generators.climate.poleResolve import peak_bounds
 from app.application.jsonValidation import (
     default_precipitation_liquid,
     legacy_standalone_water_material,
-    material_rows,
     materials,
 )
+from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
 from app.db.models.world import World
 
 logger = logging.getLogger(__name__)
 
 LIQUID_BAND_OUTER = 0.1
-
-
-def _material_entry(world: World, system_material: str) -> dict | None:
-    entry = materials(world).entry_for(system_material)
-    return entry.model_dump() if entry is not None else None
 
 
 def _precipitation_liquid_key(world: World) -> str:
@@ -38,18 +33,19 @@ def _precipitation_liquid_key(world: World) -> str:
     return key
 
 
-def resolve_world_precipitation_liquid(world: World) -> dict:
+def resolve_world_precipitation_liquid(world: World) -> MaterialRegistryEntry:
     """
     World precipitation liquid from material_registry.
     Explicit DB value required after import normalize; legacy gaps warn once.
     """
+    registry = materials(world)
     key = _precipitation_liquid_key(world)
     default_key = default_precipitation_liquid()
-    entry = _material_entry(world, key)
-    if entry is not None and entry.get("material_category") == "liquid":
+    entry = registry.entry_for(key)
+    if entry is not None and entry.material_category == "liquid":
         return entry
 
-    water = _material_entry(world, default_key)
+    water = registry.entry_for(default_key)
     if water is not None:
         if entry is not None:
             warn_once(
@@ -57,7 +53,7 @@ def resolve_world_precipitation_liquid(world: World) -> dict:
                 f"not_liquid:{key}",
                 "precipitation_liquid fallback | world=%s requested=%s is not liquid (category=%s); using water",
                 key,
-                entry.get("material_category"),
+                entry.material_category,
             )
         elif key != default_key:
             warn_once(
@@ -68,14 +64,14 @@ def resolve_world_precipitation_liquid(world: World) -> dict:
             )
         return water
 
-    for mat in material_rows(world):
-        if mat.get("material_category") == "liquid":
+    for mat in registry.root:
+        if mat.material_category == "liquid":
             warn_once(
                 world.world_uid,
                 "first_liquid",
                 "precipitation_liquid fallback | world=%s requested=%s; water missing; using first liquid=%s",
                 key,
-                mat.get("system_material"),
+                mat.system_material,
             )
             return mat
 
@@ -86,25 +82,29 @@ def resolve_world_precipitation_liquid(world: World) -> dict:
         key,
     )
     legacy_key = legacy_standalone_water_material()
-    legacy = _material_entry(world, legacy_key)
+    legacy = registry.entry_for(legacy_key)
     if legacy is not None:
         return legacy
-    return {"system_material": legacy_key, "material_category": "liquid"}
+    return MaterialRegistryEntry(
+        system_material=legacy_key,
+        display_name=legacy_key,
+        material_category="liquid",
+    )
 
 
-def _phase_bounds(entry: dict) -> tuple[int | None, int | None]:
-    cool = entry.get("cool_temp")
-    heat = entry.get("heat_temp")
-    if cool is not None and not entry.get("cool_into"):
+def _phase_bounds(entry: MaterialRegistryEntry) -> tuple[int | None, int | None]:
+    cool = entry.cool_temp
+    heat = entry.heat_temp
+    if cool is not None and not entry.cool_into:
         cool = None
-    if heat is not None and not entry.get("heat_into"):
+    if heat is not None and not entry.heat_into:
         heat = None
     return cool, heat
 
 
 def liquid_precipitation_mult(
     temp: int,
-    liquid_entry: dict,
+    liquid_entry: MaterialRegistryEntry,
     world_uid: str | None = None,
 ) -> float:
     """
@@ -118,12 +118,11 @@ def liquid_precipitation_mult(
     if cool is not None and heat is not None:
         if heat <= cool:
             if world_uid:
-                material = liquid_entry.get("system_material", "?")
                 warn_once(
                     world_uid,
-                    f"invalid_phase_band:{material}",
+                    f"invalid_phase_band:{liquid_entry.system_material}",
                     "liquid_precipitation_mult | world=%s material=%s heat_temp=%s <= cool_temp=%s; using mult=1.0",
-                    material,
+                    liquid_entry.system_material,
                     heat,
                     cool,
                 )
@@ -186,7 +185,7 @@ def effective_rainfall(moisture: int, temp: int, world: World) -> int:
         "moisture=%d temp=%d cool_temp=%s heat_temp=%s mult=%.4f -> rainfall=%d",
         world.world_uid,
         requested_liquid,
-        liquid.get("system_material"),
+        liquid.system_material,
         moisture,
         temp,
         cool,
