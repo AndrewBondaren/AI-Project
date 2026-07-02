@@ -18,33 +18,29 @@ from app.application.worldData.generators.barrier.perimeter import (
     gate_on_facing_edge,
     perimeter_ring_bbox,
 )
+from app.dataModel.settlement.area.perimeterBarrier import (
+    DEFAULT_PARCEL_MARGIN_M,
+    perimeter_barrier_from_template,
+)
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 logger = logging.getLogger(__name__)
 
-_PARCEL_MARGIN_M = 1
-
-
-def _perimeter_barrier_spec(building_template: dict) -> dict:
-    return building_template.get("perimeter_barrier") or {}
-
 
 def should_build_area_barrier(
     building_template: dict,
     rng:               Random,
 ) -> bool:
-    spec = _perimeter_barrier_spec(building_template)
-    template_type = spec.get("template")
-    if not template_type:
+    spec = perimeter_barrier_from_template(building_template)
+    if not spec.template:
         return False
-    probability = float(spec.get("probability", 0.0))
-    if probability <= 0.0:
+    if spec.probability <= 0.0:
         return False
-    if probability >= 1.0:
+    if spec.probability >= 1.0:
         return True
-    return rng.random() < probability
+    return rng.random() < spec.probability
 
 
 def plan_area_barrier_cells(
@@ -66,8 +62,8 @@ def plan_area_barrier_cells(
     if not should_build_area_barrier(building_template, rng):
         return []
 
-    spec = _perimeter_barrier_spec(building_template)
-    template_type = spec.get("template")
+    spec = perimeter_barrier_from_template(building_template)
+    template_type = spec.template
     barrier_template = lookup_barrier_template(world, template_type) if template_type else None
     if barrier_template is None:
         logger.warning(
@@ -78,7 +74,7 @@ def plan_area_barrier_cells(
         return []
 
     bx0, by0, bx1, by1 = bbox_from_cells(slot.cells)
-    px0, py0, px1, py1 = expand_bbox(bx0, by0, bx1, by1, _PARCEL_MARGIN_M)
+    px0, py0, px1, py1 = expand_bbox(bx0, by0, bx1, by1, DEFAULT_PARCEL_MARGIN_M)
     ring = set(perimeter_ring_bbox(px0, py0, px1, py1, step=1))
     gate = gate_on_facing_edge(px0, py0, px1, py1, slot.facing)
     gate_coords = {gate}

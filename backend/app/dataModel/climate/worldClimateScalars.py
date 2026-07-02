@@ -1,10 +1,33 @@
-"""Climate policy scalars on `worlds` row (not registries)."""
+"""Climate policy scalars on `worlds` row (not registries).
+
+Two layers (not duplicate hardcodes in generators):
+
+- ``Field(default=…)`` — normalize-on-import when JSON key is missing.
+- ``canonical_defaults()`` — full ``fixtures/world_template.json`` climate block
+  (peak band -40/45, season offsets, explicit pole fields).
+
+Wire keys ``climate_pole_mode`` / ``climate_pole_preset`` must match
+``ClimatePoleMode`` / ``ClimatePolePreset`` enums. ``default_climate_zone``
+must match ``ClimateZone.TEMPERATE``. Consumers: ``climate_scalars(world)``
+in masterData, not raw literals in generators/DAG/db.
+"""
 
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import OptionalOnWire
+from app.dataModel.climate.enums.climatePoleMode import DEFAULT_CLIMATE_POLE_MODE
+from app.dataModel.climate.enums.climatePolePreset import DEFAULT_CLIMATE_POLE_PRESET
+from app.dataModel.climate.enums.climateZone import ClimateZone
+
+# Fixture peak band — only in canonical_defaults / world_template (Field default None).
+CANONICAL_PEAK_TEMP_MIN = -40
+CANONICAL_PEAK_TEMP_MAX = 45
+
+DEFAULT_CLIMATE_ZONE = ClimateZone.TEMPERATE.system_climate
+DEFAULT_PRECIPITATION_LIQUID = "water"
+DEFAULT_LOCAL_INFLUENCE_FRACTION = 0.1
 
 
 class SeasonTempOffsets(BaseModel):
@@ -17,31 +40,55 @@ class SeasonTempOffsets(BaseModel):
     summer: OptionalOnWire[int] = 0
     autumn: OptionalOnWire[int] = 0
 
+    @classmethod
+    def canonical_fixture(cls) -> SeasonTempOffsets:
+        """fixtures/world_template.json ``season_temp_offsets``."""
+        return cls(winter=-12, spring=0, summer=8, autumn=-4)
+
 
 class WorldClimateScalars(BaseModel):
     """Scalar climate fields on `worlds` — tz_climate.md, tz_json_validation.md."""
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    default_climate_zone: OptionalOnWire[str] = "temperate"
+    default_climate_zone: OptionalOnWire[str] = DEFAULT_CLIMATE_ZONE
     climate_temperature_peak_min: OptionalOnWire[int | None] = None
     climate_temperature_peak_max: OptionalOnWire[int | None] = None
-    climate_pole_mode: OptionalOnWire[str] = "autoresolve"
-    climate_pole_preset: OptionalOnWire[str] = "binary"
-    climate_local_influence_fraction: OptionalOnWire[float] = Field(default=0.1, ge=0.0, le=1.0)
-    precipitation_liquid: OptionalOnWire[str] = "water"
+    climate_pole_mode: OptionalOnWire[str] = DEFAULT_CLIMATE_POLE_MODE
+    climate_pole_preset: OptionalOnWire[str] = DEFAULT_CLIMATE_POLE_PRESET
+    climate_local_influence_fraction: OptionalOnWire[float] = Field(
+        default=DEFAULT_LOCAL_INFLUENCE_FRACTION,
+        ge=0.0,
+        le=1.0,
+    )
+    precipitation_liquid: OptionalOnWire[str] = DEFAULT_PRECIPITATION_LIQUID
     season_temp_offsets: OptionalOnWire[SeasonTempOffsets] = Field(default_factory=SeasonTempOffsets)
 
     @classmethod
     def canonical_defaults(cls) -> WorldClimateScalars:
         """fixtures/world_template.json climate block."""
         return cls(
-            default_climate_zone="temperate",
-            climate_temperature_peak_min=-40,
-            climate_temperature_peak_max=45,
-            climate_pole_mode="autoresolve",
-            climate_pole_preset="binary",
-            climate_local_influence_fraction=0.1,
-            precipitation_liquid="water",
-            season_temp_offsets=SeasonTempOffsets(winter=-12, spring=0, summer=8, autumn=-4),
+            default_climate_zone=DEFAULT_CLIMATE_ZONE,
+            climate_temperature_peak_min=CANONICAL_PEAK_TEMP_MIN,
+            climate_temperature_peak_max=CANONICAL_PEAK_TEMP_MAX,
+            climate_pole_mode=DEFAULT_CLIMATE_POLE_MODE,
+            climate_pole_preset=DEFAULT_CLIMATE_POLE_PRESET,
+            climate_local_influence_fraction=DEFAULT_LOCAL_INFLUENCE_FRACTION,
+            precipitation_liquid=DEFAULT_PRECIPITATION_LIQUID,
+            season_temp_offsets=SeasonTempOffsets.canonical_fixture(),
         )
+
+    @classmethod
+    def resolve_peak_bounds(
+        cls,
+        peak_min: int | None,
+        peak_max: int | None,
+    ) -> tuple[int, int]:
+        """Peak band from world row with canonical fallback."""
+        defaults = cls.canonical_defaults()
+        lo = peak_min if peak_min is not None else defaults.climate_temperature_peak_min
+        hi = peak_max if peak_max is not None else defaults.climate_temperature_peak_max
+        assert lo is not None and hi is not None
+        if lo > hi:
+            lo, hi = hi, lo
+        return int(lo), int(hi)

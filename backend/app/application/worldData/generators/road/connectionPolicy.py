@@ -7,14 +7,17 @@ from typing import Any
 from app.application.worldData.generators.masterData import road_settings
 from app.dataModel.roads.roadSettingsEntry import RoadSettingsEntry
 from app.dataModel.roads.worldRoadSettings import WorldRoadSettings
+from app.dataModel.settlement.district.districtConnection import (
+    DistrictConnection,
+    primary_or_default,
+)
 
-_DEFAULT_LANES_PER_SIDE = 1
-_DEFAULT_AUTO_SIDEWALK = False
+_FALLBACK_ROAD = RoadSettingsEntry.fallback()
 
 
-def primary_connection(template: dict) -> dict:
-    connections = template.get("connections") or []
-    return connections[0] if connections else {}
+def primary_connection(template: dict) -> DistrictConnection:
+    """Primary district template connection — dataModel ``DistrictConnection``."""
+    return primary_or_default(template)
 
 
 def _road_settings(world: Any | None) -> WorldRoadSettings:
@@ -35,17 +38,16 @@ def resolve_has_sidewalk(
 ) -> bool:
     """
     has_sidewalk для district/city edges.
-    Приоритет: connections[0].sidewalk → road_settings.auto_sidewalk → False.
+    Приоритет: connections[0].sidewalk → road_settings.auto_sidewalk → fallback.
     """
-    primary = primary_connection(template)
-    ct = connection_type or primary.get("connection_type") or "road"
-    sidewalk_decl = primary.get("sidewalk")
-    if sidewalk_decl is not None:
-        return bool(sidewalk_decl)
+    conn = primary_or_default(template)
+    ct = connection_type or conn.connection_type
+    if conn.sidewalk is not None:
+        return bool(conn.sidewalk)
     entry = _road_entry(world, ct)
     if entry is not None:
         return bool(entry.auto_sidewalk)
-    return _DEFAULT_AUTO_SIDEWALK
+    return bool(_FALLBACK_ROAD.auto_sidewalk)
 
 
 def resolve_lanes_per_side(
@@ -54,12 +56,11 @@ def resolve_lanes_per_side(
     *,
     world: Any | None = None,
 ) -> int:
-    primary = primary_connection(template)
-    ct = connection_type or primary.get("connection_type") or "road"
-    lanes_decl = primary.get("lanes_per_side")
-    if lanes_decl is not None:
-        return int(lanes_decl)
+    conn = primary_or_default(template)
+    ct = connection_type or conn.connection_type
+    if conn.lanes_per_side is not None:
+        return int(conn.lanes_per_side)
     entry = _road_entry(world, ct)
     if entry is not None and entry.default_lanes_per_side is not None:
         return int(entry.default_lanes_per_side)
-    return _DEFAULT_LANES_PER_SIDE
+    return int(_FALLBACK_ROAD.default_lanes_per_side)

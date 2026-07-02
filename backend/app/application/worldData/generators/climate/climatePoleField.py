@@ -1,14 +1,11 @@
 import math
 from dataclasses import dataclass
 
-from app.application.worldData.generators.climate.climatePole import (
-    POLE_BLEND_EPS,
-    POLE_BLEND_POWER,
-    ClimatePolePoint,
-)
-from app.application.worldData.generators.climate.climateZone import ClimateZone
+from app.application.worldData.generators.climate.climatePole import ClimatePolePoint
 from app.application.worldData.generators.climate.math import dist_euclidean, smoothstep
 from app.application.worldData.generators.climate.registry import profile_for
+from app.dataModel.climate.climatePoleBlendDefaults import CLIMATE_POLE_BLEND
+from app.application.worldData.generators.masterData import climate_scalars
 from app.db.models.world import World
 
 
@@ -44,7 +41,8 @@ class ClimatePoleField:
         return not self.poles
 
     def sample(self, world: World, gx: int, gy: int) -> PoleClimateSample:
-        default_zone = world.default_climate_zone or ClimateZone.TEMPERATE
+        scalars = climate_scalars(world)
+        default_zone = world.default_climate_zone or scalars.default_climate_zone
         default_prof = profile_for(world, default_zone)
 
         if not self.poles:
@@ -80,7 +78,7 @@ class ClimatePoleField:
             )
 
         dist  = dist_euclidean(gx, gy, pole.gx, pole.gy)
-        denom = max(1.0, bbox.diagonal() * 0.5)
+        denom = max(1.0, bbox.diagonal() * CLIMATE_POLE_BLEND.single_pole_fade_diagonal_factor)
         t     = smoothstep(dist / denom)
 
         temp = round(pole.base_temperature + (default_prof.base_temperature - pole.base_temperature) * t)
@@ -108,7 +106,9 @@ class ClimatePoleField:
         weights: list[float] = []
         for pole in self.poles:
             d = dist_euclidean(gx, gy, pole.gx, pole.gy)
-            weights.append(pole.weight / (d + POLE_BLEND_EPS) ** POLE_BLEND_POWER)
+            weights.append(
+                pole.weight / (d + CLIMATE_POLE_BLEND.eps) ** CLIMATE_POLE_BLEND.power,
+            )
 
         total = sum(weights)
         if total <= 0:

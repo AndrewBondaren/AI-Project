@@ -17,3 +17,8 @@ class EconomyTierEntry(BaseModel):
     base_value: StrictOnWire[int] = Field(ge=0)
     road_tier_bonus: OptionalOnWire[float] = Field(default=1.0, gt=0.0)
     road_tier_durability: OptionalOnWire[float] = Field(default=1.0, gt=0.0)
+
+    @classmethod
+    def fallback(cls) -> EconomyTierEntry:
+        """Field-level builtins for unknown/missing ``system_tier``."""
+        return cls(system_tier="__unknown__", display_tier="", base_value=0)

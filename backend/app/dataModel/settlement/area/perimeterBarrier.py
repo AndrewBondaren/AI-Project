@@ -14,3 +14,14 @@ class PerimeterBarrier(BaseModel):
 
     template: OptionalOnWire[str | None] = None
     probability: OptionalOnWire[float] = Field(default=0.0, ge=0.0, le=1.0)
+
+DEFAULT_PARCEL_MARGIN_M = 1
+
+
+def perimeter_barrier_from_template(template: dict) -> PerimeterBarrier:
+    raw = template.get("perimeter_barrier")
+    if raw is None:
+        return PerimeterBarrier()
+    if isinstance(raw, PerimeterBarrier):
+        return raw
+    return PerimeterBarrier.model_validate(raw)

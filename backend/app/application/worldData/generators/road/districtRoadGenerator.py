@@ -54,7 +54,7 @@ class DistrictRoadGenerator:
         street_layout = template.get("street_layout") or "grid"
 
         primary         = primary_connection(template)
-        connection_type = primary.get("connection_type") or "road"
+        connection_type = primary.connection_type
         lanes_per_side  = resolve_lanes_per_side(template, connection_type, world=world)
         has_sidewalk    = resolve_has_sidewalk(template, connection_type, world=world)
 

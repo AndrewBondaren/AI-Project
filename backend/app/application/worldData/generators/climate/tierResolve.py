@@ -11,22 +11,11 @@ from app.application.worldData.generators.climate.climateGeneratorService import
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
 from app.application.worldData.generators.climate.math import dist_euclidean, smoothstep
 from app.application.worldData.generators.climate.registry import profile_for
-from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
-from app.db.models.world import World
-
-_scalar_defaults = WorldClimateScalars.canonical_defaults()
-DEFAULT_LOCAL_INFLUENCE_FRACTION = (
-    _scalar_defaults.climate_local_influence_fraction
-    if _scalar_defaults.climate_local_influence_fraction is not None
-    else 0.1
+from app.dataModel.climate.climateAnchorInfluenceDefaults import (
+    LOCAL_INFLUENCE_BLEND_OUTER,
+    local_influence_fraction,
 )
-LOCAL_INFLUENCE_BLEND_OUTER     = 0.2   # outer 20% of radius — temp smoothstep only
-
-
-def _influence_fraction(world: World) -> float:
-    if world.climate_local_influence_fraction is not None:
-        return world.climate_local_influence_fraction
-    return DEFAULT_LOCAL_INFLUENCE_FRACTION
+from app.db.models.world import World
 
 
 def _modifiers(field: ClimateAnchorField) -> list[ClimateAnchorPoint]:
@@ -81,7 +70,7 @@ def _influence_radius(
     gx: int,
     gy: int,
 ) -> float:
-    base_r = bbox_diagonal * _influence_fraction(world)
+    base_r = bbox_diagonal * local_influence_fraction(world.climate_local_influence_fraction)
     if len(modifiers) <= 1:
         return base_r
 

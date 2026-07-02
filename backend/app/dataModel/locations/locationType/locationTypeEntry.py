@@ -14,6 +14,8 @@ class LocationTypeEntry(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True, populate_by_name=True)
 
     system_type: StrictOnWire[str]
+    # validation_alias — wire contract on POJO (not generator hardcode): canonical
+    # key display_type; display_name — legacy import alias (tz_locations.md § registry).
     display_type: StrictOnWire[str] = Field(
         validation_alias=AliasChoices("display_type", "display_name"),
     )

@@ -1,31 +1,25 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
-from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
+from app.dataModel.climate.climatePoleBlendDefaults import CLIMATE_POLE_BLEND, ClimatePoleBlendDefaults
+from app.dataModel.climate.climatePoleTemperature import (
+    POLE_TEMPERATURE_INSET_FRACTION,
+    derived_pole_temperature,
+)
+from app.dataModel.climate.enums.climatePoleMode import ClimatePoleMode as _ClimatePoleMode
+from app.dataModel.climate.enums.poleKind import CLIMATE_POLE_LOCATION_TYPE, PoleKind
+from app.dataModel.climate.enums.poleSource import PoleSource
 
-CLIMATE_POLE_TYPE = "climate_pole"
-
-_scalars = WorldClimateScalars.canonical_defaults()
-DEFAULT_PEAK_MIN = _scalars.climate_temperature_peak_min if _scalars.climate_temperature_peak_min is not None else -40
-DEFAULT_PEAK_MAX = _scalars.climate_temperature_peak_max if _scalars.climate_temperature_peak_max is not None else 45
-POLE_BLEND_EPS   = 1.0
-POLE_BLEND_POWER = 1.5
-
-
-class PoleKind(StrEnum):
-    COLD    = "cold"
-    HOT     = "hot"
-    NEUTRAL = "neutral"
-
-
-class PoleSource(StrEnum):
-    MANUAL      = "manual"
-    AUTORESOLVE = "autoresolve"
+CLIMATE_POLE_TYPE = CLIMATE_POLE_LOCATION_TYPE
+POLE_BLEND_EPS = CLIMATE_POLE_BLEND.eps
+POLE_BLEND_POWER = CLIMATE_POLE_BLEND.power
 
 
 class PoleMode(StrEnum):
-    MANUAL      = "manual"
-    AUTORESOLVE = "autoresolve"
+    """Re-export wire keys from dataModel ``ClimatePoleMode``."""
+
+    MANUAL = _ClimatePoleMode.MANUAL.wire_value
+    AUTORESOLVE = _ClimatePoleMode.AUTORESOLVE.wire_value
 
 
 @dataclass(frozen=True)

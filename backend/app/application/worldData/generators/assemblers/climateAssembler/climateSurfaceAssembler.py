@@ -2,6 +2,7 @@ import logging
 
 from dataclasses import dataclass
 
+from app.application.worldData.generators.masterData import climate_scalars
 from app.application.worldData.generators.assemblers.climateAssembler.types import ClimateRecalcRequest
 from app.application.worldData.generators.climate.climateAnchor import AnchorSource
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
@@ -69,13 +70,14 @@ class ClimateSurfaceAssembler:
         world: World,
         locations: list[NamedLocation],
     ) -> ClimateSurfaceResult:
+        scalars = climate_scalars(world)
         pole_field = run_pole_resolve_pass(world, locations)
         logger.info(
             "climate pass | world=%s pole_resolve | poles=%d preset=%s mode=%s",
             world.world_uid,
             len(pole_field.poles),
-            world.climate_pole_preset or "binary",
-            world.climate_pole_mode or "autoresolve",
+            scalars.climate_pole_preset,
+            scalars.climate_pole_mode,
         )
 
         heightmap = run_heightmap_pass(world, locations, pole_field)

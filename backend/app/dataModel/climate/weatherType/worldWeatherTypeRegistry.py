@@ -1,4 +1,10 @@
-"""Root POJO for `worlds.weather_type_registry`."""
+"""Root POJO for `worlds.weather_type_registry`.
+
+Builtin table — project_data_storage_tz.md, tz_climate.md § Pick.
+``clear`` (priority 99) — engine fallback when no rule matches; future
+``weatherResolve`` must take fallback from this registry (``entry_for("clear")``),
+not a literal ``"clear"`` in generators/DAG/db.
+"""
 
 from __future__ import annotations
 
@@ -52,7 +58,7 @@ _CANONICAL_ENTRIES: tuple[WeatherTypeEntry, ...] = (
     ),
     WeatherTypeEntry(
         system_weather="clear",
-        priority=99,
+        priority=99,  # fallback row — lowest check order; see module docstring
         travel_modifier=1.0,
         glossary_ref="weather_clear",
     ),

@@ -7,17 +7,18 @@ from __future__ import annotations
 
 from app.application.worldData.generators.masterData import (
     economic_tier_engine,
-    economic_tier_rows,
+    economic_tiers,
     materials,
     road_settings,
 )
-from app.application.worldData.generators.utils.tierRegistry import tier_entry
+from app.dataModel.economy.economyTier.economyTierEntry import EconomyTierEntry
 from app.dataModel.roads.roadSettingsEntry import RoadSettingsEntry
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.world import World
 
 _ENGINE_TIERS = economic_tier_engine()
 _FALLBACK_ROAD = RoadSettingsEntry.fallback()
+_FALLBACK_TIER = EconomyTierEntry.fallback()
 
 
 def _material_entry(world: World, system_material: str | None):
@@ -34,32 +35,26 @@ def material_economic_tier(world: World, system_material: str | None) -> str | N
     return str(tier) if tier else None
 
 
-def resolve_road_tier_bonus(world: World, material_tier: str | None) -> float:
-    if not material_tier:
-        return 1.0
-    entry = tier_entry(economic_tier_rows(world), material_tier)
+def _economy_tier_entry(world: World, material_tier: str) -> EconomyTierEntry:
+    entry = economic_tiers(world).entry_for(material_tier)
     if entry is not None:
-        val = entry.get("road_tier_bonus")
-        if val is not None:
-            return float(val)
+        return entry
     engine = _ENGINE_TIERS.entry_for(material_tier)
     if engine is not None:
-        return float(engine.road_tier_bonus)
-    return 1.0
+        return engine
+    return _FALLBACK_TIER
+
+
+def resolve_road_tier_bonus(world: World, material_tier: str | None) -> float:
+    if not material_tier:
+        return float(_FALLBACK_TIER.road_tier_bonus)
+    return float(_economy_tier_entry(world, material_tier).road_tier_bonus)
 
 
 def resolve_road_tier_durability(world: World, material_tier: str | None) -> float:
     if not material_tier:
-        return 1.0
-    entry = tier_entry(economic_tier_rows(world), material_tier)
-    if entry is not None:
-        val = entry.get("road_tier_durability")
-        if val is not None:
-            return float(val)
-    engine = _ENGINE_TIERS.entry_for(material_tier)
-    if engine is not None:
-        return float(engine.road_tier_durability)
-    return 1.0
+        return float(_FALLBACK_TIER.road_tier_durability)
+    return float(_economy_tier_entry(world, material_tier).road_tier_durability)
 
 
 def resolve_base_travel_modifier(world: World, connection_type: str) -> float:
@@ -87,7 +82,7 @@ def effective_travel_modifier(world: World, edge: ConnectionEdge) -> float:
     material=null → tier_bonus 1.0 (TZ §3.7).
     """
     if edge.material is None:
-        tier_bonus = 1.0
+        tier_bonus = float(_FALLBACK_TIER.road_tier_bonus)
     else:
         tier_bonus = resolve_road_tier_bonus(
             world, material_economic_tier(world, edge.material),

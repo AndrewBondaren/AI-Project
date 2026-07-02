@@ -108,15 +108,8 @@ class StatConflictMode(StrEnum):
     MIGRATE = "migrate"
 
 
-class ClimatePoleMode(StrEnum):
-    MANUAL = "manual"
-    AUTORESOLVE = "autoresolve"
-
-
-class ClimatePolePreset(StrEnum):
-    ICE = "ice"
-    DESERT = "desert"
-    BINARY = "binary"
+from app.dataModel.climate.enums.climatePoleMode import ClimatePoleMode  # noqa: E402 — wire re-export
+from app.dataModel.climate.enums.climatePolePreset import ClimatePolePreset  # noqa: E402 — wire re-export
 
 
 class SeasonKey(StrEnum):

@@ -24,4 +24,7 @@ class RoadSettingsEntry(BaseModel):
     @classmethod
     def fallback(cls) -> RoadSettingsEntry:
         """Field-level builtins for unknown/missing ``connection_type``."""
-        return cls(system_connection_type="__unknown__")
+        return cls(
+            system_connection_type="__unknown__",
+            default_lanes_per_side=1,
+        )
