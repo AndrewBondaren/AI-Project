@@ -1,6 +1,6 @@
 from app.application.worldData.generators.climate.precipitation import liquid_precipitation_mult
 from app.application.worldData.generators.climate.precipitation import resolve_world_precipitation_liquid
-from app.application.worldData.generators.masterData import terrain_system_keys
+from app.application.jsonValidation import terrain_system_keys
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 

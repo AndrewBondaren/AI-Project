@@ -1,5 +1,5 @@
 from app.application.worldData.generators.climate.loggingHelpers import warn_once
-from app.application.worldData.generators.masterData import climate_scalars
+from app.application.jsonValidation import climate_scalars
 from app.application.worldData.generators.climate.climatePole import (
     ClimatePolePoint,
     PoleKind,

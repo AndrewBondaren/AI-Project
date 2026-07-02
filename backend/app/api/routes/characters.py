@@ -21,29 +21,7 @@ async def import_character(
     container=Depends(get_container),
 ):
     data = await JsonResolver.resolve(file=file, path=path)
-
-    from app.application.character.jsonValidation.contextLoader import load_world_validation_context
-    from app.application.worldData.jsonValidation import format_validation_issues
-    from app.application.worldData.jsonValidation.types import ValidationKind, ValidationRequest
-
-    req = ValidationRequest(kind=ValidationKind.CHARACTER, payload=data)
-    if world_uid:
-        ctx = await load_world_validation_context(
-            world_service=container.world_service(),
-            race_service=container.race_service(),
-            location_service=container.location_service(),
-            seed_service=container.seed_service(),
-            world_uid=world_uid,
-        )
-        req = ValidationRequest(kind=ValidationKind.CHARACTER, payload=data, **ctx)
-
-    validation = await container.json_validation_facade().validate(req)
-    if not validation.ok:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=422, detail=format_validation_issues(validation))
-
-    payload = validation.normalized if isinstance(validation.normalized, dict) else data
-    return asdict(await container.player_service().create(payload))
+    return asdict(await container.player_service().create(data))
 
 
 @router.get("/characters")

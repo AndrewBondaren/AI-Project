@@ -9,7 +9,7 @@ Two layers (not duplicate hardcodes in generators):
 Wire keys ``climate_pole_mode`` / ``climate_pole_preset`` must match
 ``ClimatePoleMode`` / ``ClimatePolePreset`` enums. ``default_climate_zone``
 must match ``ClimateZone.TEMPERATE``. Consumers: ``climate_scalars(world)``
-in masterData, not raw literals in generators/DAG/db.
+via ``jsonValidation.worldRow``, not raw literals in generators/DAG/db.
 """
 
 from __future__ import annotations

@@ -2,7 +2,7 @@ import logging
 import random
 
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
-from app.application.worldData.generators.masterData import economic_tier_rows
+from app.application.jsonValidation import economic_tier_rows
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.defaults import (
     CITY_SIZE_ORDER,
     CellZone,

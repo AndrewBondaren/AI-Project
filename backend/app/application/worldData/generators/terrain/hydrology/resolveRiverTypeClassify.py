@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.application.worldData.generators.climate.loggingHelpers import warn_once
-from app.application.worldData.generators.masterData import hydrology, river_type_classify_defaults
+from app.application.jsonValidation import hydrology, river_type_classify_defaults
 from app.application.worldData.generators.terrain.hydrology.types import RiverTypeClassify
 
 

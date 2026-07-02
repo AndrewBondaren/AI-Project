@@ -4,7 +4,7 @@ from app.application.worldData.generators.climate.climateZone import (
     fallback_profile,
 )
 from app.application.worldData.generators.climate.loggingHelpers import warn_once
-from app.application.worldData.generators.masterData import climate_zones
+from app.application.jsonValidation import climate_zones
 from app.db.models.world import World
 
 

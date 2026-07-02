@@ -1,5 +1,5 @@
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
-from app.application.worldData.generators.masterData import terrain_system_keys
+from app.application.jsonValidation import terrain_system_keys
 from app.application.worldData.generators.terrain.passes.surfacePass import run_surface_pass
 from app.application.worldData.generators.terrain.terrainZ import surface_terrain_at_z
 from app.db.models.mapCell import MapCell

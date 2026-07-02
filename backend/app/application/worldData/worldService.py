@@ -5,9 +5,8 @@ from dataclasses import dataclass
 from fastapi import HTTPException
 
 from app.api.schemas.imports import ImportError, ImportResult
-from app.application.worldData.jsonValidation.validators.worldRow import (
-    collect_world_row_issues_from_world,
-)
+from app.application.jsonValidation.facade import normalize_world
+from app.application.jsonValidation.types import ImportValidationError, import_validation_http_detail
 from app.db.models.world import World
 from app.db.repositories.iWorldRepository import IWorldRepository
 
@@ -42,7 +41,9 @@ class WorldService:
         return await self._repo.get_by_id(world_uid)
 
     async def create(self, data: dict) -> World:
+        data = _normalize_world_data(data)
         world = World(**data)
+        self._validate(world)
         await self._repo.create(world)
         return world
 
@@ -50,6 +51,7 @@ class WorldService:
 
     async def update(self, world_uid: str, data: dict) -> WorldUpdateResult:
         force = bool(data.pop("force", False))
+        data = _normalize_world_data(data, partial=True)
         world = await self.get_by_id(world_uid)
         original = dataclasses.replace(world)  # snapshot before mutations
         old_map_cell_size = world.map_cell_size_m
@@ -57,6 +59,8 @@ class WorldService:
         for key, value in data.items():
             if hasattr(world, key) and key not in self._IMMUTABLE:
                 setattr(world, key, value)
+
+        self._validate(world)
 
         map_size_changed = old_map_cell_size != world.map_cell_size_m
 
@@ -86,16 +90,14 @@ class WorldService:
     # ------------------------------------------------------------------
 
     async def import_from_json(self, data: dict) -> ImportResult:
+        data = _normalize_world_data(data)
         try:
             world = World(**data)
             self._validate(world)
             await self._repo.upsert(world)
             return ImportResult(total=1, succeeded=1, failed=0)
-        except HTTPException as e:
-            return ImportResult(
-                total=1, succeeded=0, failed=1,
-                errors=[ImportError(index=0, message=e.detail)],
-            )
+        except HTTPException:
+            raise
         except Exception as e:
             return ImportResult(
                 total=1, succeeded=0, failed=1,
@@ -128,6 +130,34 @@ class WorldService:
 
     @staticmethod
     def _validate(world: World) -> None:
-        issues = collect_world_row_issues_from_world(world)
-        if issues:
-            raise HTTPException(status_code=422, detail=issues[0].message)
+        v = world.map_cell_size_m
+        if not isinstance(v, int) or isinstance(v, bool):
+            raise HTTPException(status_code=422,
+                detail="map_cell_size_m must be an integer")
+        if v < 1000:
+            raise HTTPException(status_code=422,
+                detail="map_cell_size_m must be at least 1000")
+        if v % 1000 != 0:
+            raise HTTPException(status_code=422,
+                detail="map_cell_size_m must be a multiple of 1000")
+
+        if world.grid_bbox_padding < 0:
+            raise HTTPException(status_code=422,
+                detail="grid_bbox_padding must be >= 0")
+
+        chunk = world.terrain_chunk_columns
+        if not isinstance(chunk, int) or isinstance(chunk, bool) or chunk < 1:
+            raise HTTPException(status_code=422,
+                detail="terrain_chunk_columns must be an integer >= 1")
+
+        depth = world.map_subsurface_depth
+        if not isinstance(depth, int) or isinstance(depth, bool) or depth < 10:
+            raise HTTPException(status_code=422,
+                detail="map_subsurface_depth must be an integer >= 10")
+
+
+def _normalize_world_data(data: dict, *, partial: bool = False) -> dict:
+    try:
+        return normalize_world(data, partial=partial)
+    except ImportValidationError as exc:
+        raise HTTPException(status_code=422, detail=import_validation_http_detail(exc)) from exc

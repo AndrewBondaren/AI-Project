@@ -5,7 +5,7 @@ from app.application.worldData.generators.climate.climatePole import ClimatePole
 from app.application.worldData.generators.climate.math import dist_euclidean, smoothstep
 from app.application.worldData.generators.climate.registry import profile_for
 from app.dataModel.climate.climatePoleBlendDefaults import CLIMATE_POLE_BLEND
-from app.application.worldData.generators.masterData import climate_scalars
+from app.application.jsonValidation import climate_scalars
 from app.db.models.world import World
 
 

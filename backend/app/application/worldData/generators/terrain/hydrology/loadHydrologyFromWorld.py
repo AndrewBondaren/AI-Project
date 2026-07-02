@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.application.worldData.generators.climate.loggingHelpers import warn_once
-from app.application.worldData.generators.masterData import hydrology, hydrology_dict
+from app.application.jsonValidation import hydrology, hydrology_dict
 
 
 def load_hydrology_from_world(world: Any) -> dict:

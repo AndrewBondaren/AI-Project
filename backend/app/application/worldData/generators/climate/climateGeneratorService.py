@@ -4,7 +4,7 @@ from typing import Optional
 from app.application.worldData.generators.climate.anchorCollect import build_coarse_field
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
-from app.application.worldData.generators.masterData import climate_scalars
+from app.application.jsonValidation import climate_scalars
 from app.application.worldData.generators.climate.precipitation import (
     clamp_temperature_to_peak,
     effective_rainfall,

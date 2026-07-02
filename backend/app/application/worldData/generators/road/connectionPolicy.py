@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.application.worldData.generators.masterData import road_settings
+from app.application.jsonValidation import road_settings
 from app.dataModel.roads.roadSettingsEntry import RoadSettingsEntry
 from app.dataModel.roads.worldRoadSettings import WorldRoadSettings
 from app.dataModel.settlement.district.districtConnection import (

@@ -1,4 +1,4 @@
-from app.application.worldData.generators.masterData import terrain_system_keys
+from app.application.jsonValidation import terrain_system_keys
 from app.application.worldData.generators.terrain.passes.gapAnalysisPass import n_base
 from app.application.worldData.generators.terrain.worldMapSettings import world_z_min
 from app.application.worldData.generators.terrain.terrainZ import (

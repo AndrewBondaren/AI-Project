@@ -5,10 +5,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
-from app.api.utils.crudPatchGate import gate_entity_create, gate_entity_update
 from app.api.utils.jsonResolver import JsonResolver
-from app.api.utils.sectionImportGate import gate_section_import
-from app.application.worldData.jsonValidation.types import SectionKey
 
 router = APIRouter()
 
@@ -31,8 +28,7 @@ async def create_perk(
     data: dict[str, Any],
     container=Depends(get_container),
 ) -> dict:
-    row = await gate_entity_create(container, world_uid, SectionKey.PERKS, data)
-    perk = await container.perk_service().create(world_uid, row)
+    perk = await container.perk_service().create(world_uid, data)
     return asdict(perk)
 
 
@@ -43,16 +39,7 @@ async def update_perk(
     data: dict[str, Any],
     container=Depends(get_container),
 ) -> dict:
-    row = await gate_entity_update(
-        container,
-        world_uid,
-        SectionKey.PERKS,
-        perk_uid,
-        data,
-        load_existing=container.perk_service().get_by_id,
-        immutable=frozenset({"perk_uid", "world_uid"}),
-    )
-    perk = await container.perk_service().update(world_uid, perk_uid, row)
+    perk = await container.perk_service().update(world_uid, perk_uid, data)
     return asdict(perk)
 
 
@@ -75,12 +62,6 @@ async def import_perks(
     data = await JsonResolver.resolve(file=file, path=path)
     if not isinstance(data, list):
         raise HTTPException(status_code=422, detail="Perks JSON must be an array")
-    data = await gate_section_import(
-        container,
-        world_uid=world_uid,
-        section=SectionKey.PERKS,
-        payload=data,
-    )
     result = await container.perk_service().import_from_json(world_uid, data)
     status_code = 200 if result.failed == 0 else 207
     return JSONResponse(status_code=status_code, content=result.to_dict())

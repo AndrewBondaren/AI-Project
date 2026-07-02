@@ -26,7 +26,7 @@ class JsonResolver:
             raw = await file.read()
             return json.loads(raw.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            raise HTTPException(status_code=422, detail=f"Invalid JSON file: {e}")
+            raise HTTPException(status_code=422, detail=f"JSON parse failed: {e}")
 
     @staticmethod
     def _from_path(path: str) -> dict | list:
@@ -38,4 +38,4 @@ class JsonResolver:
         try:
             return json.loads(p.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            raise HTTPException(status_code=422, detail=f"Invalid JSON file: {e}")
+            raise HTTPException(status_code=422, detail=f"JSON parse failed: {e}")

@@ -77,7 +77,7 @@ class TerrainGeneratorService:
         uid_map: dict[str, NamedLocation] | None = None,
     ) -> list[MapCell]:
         from app.application.worldData.generators.climate import ClimateGeneratorService
-        from app.application.worldData.generators.masterData import terrain_system_keys
+        from app.application.jsonValidation import terrain_system_keys
 
         climate     = ClimateGeneratorService()
         terrain_set = terrain_system_keys(world)

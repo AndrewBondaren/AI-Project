@@ -2,7 +2,7 @@ import logging
 
 from dataclasses import dataclass
 
-from app.application.worldData.generators.masterData import climate_scalars
+from app.application.jsonValidation import climate_scalars
 from app.application.worldData.generators.assemblers.climateAssembler.types import ClimateRecalcRequest
 from app.application.worldData.generators.climate.climateAnchor import AnchorSource
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
@@ -194,7 +194,7 @@ class ClimateSurfaceAssembler:
     ) -> list[MapCell]:
         from app.application.worldData.generators.climate.locations import static_map_anchors
         from app.application.worldData.generators.climate.terrainZ import z_to_terrain
-        from app.application.worldData.generators.masterData import terrain_system_keys
+        from app.application.jsonValidation import terrain_system_keys
 
         uid_map     = {loc.location_uid: loc for loc in locations}
         terrain_set = terrain_system_keys(world)

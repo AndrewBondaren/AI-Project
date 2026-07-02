@@ -3,7 +3,7 @@ from app.application.worldData.generators.climate.climateGeneratorService import
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
 from app.application.worldData.generators.climate.anchorDetect import TerrainFeaturePoint
 from app.application.worldData.generators.climate.climateAnchor import AnchorSource
-from app.application.worldData.generators.masterData import climate_scalars
+from app.application.jsonValidation import climate_scalars
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 

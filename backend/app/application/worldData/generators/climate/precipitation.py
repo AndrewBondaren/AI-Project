@@ -6,7 +6,7 @@ from app.application.worldData.generators.climate.loggingHelpers import warn_onc
 from app.application.worldData.generators.climate.loggingHelpers import debug_once
 from app.application.worldData.generators.climate.math import smoothstep
 from app.application.worldData.generators.climate.poleResolve import peak_bounds
-from app.application.worldData.generators.masterData import (
+from app.application.jsonValidation import (
     default_precipitation_liquid,
     legacy_standalone_water_material,
     material_rows,

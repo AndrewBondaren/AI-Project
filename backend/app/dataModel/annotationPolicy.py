@@ -10,28 +10,30 @@ class AnnotationPolicy(StrEnum):
     """How import/validate treats a field when JSON is incomplete or invalid."""
 
     STRICT_REQUIRED = "strict_required"
-    """Missing key → 422."""
+    """Strict validation — missing or invalid wire value → reject (import) / warn (runtime)."""
 
     GRACE_NORMALIZE = "grace_normalize"
-    """Missing/null/legacy → fill canonical default; persist explicit value."""
+    """Same as unannotated: missing/null/invalid → ``Field`` default fallback."""
 
     GRACE_WARN = "grace_warn"
-    """Accept with warning (runtime or import warn list)."""
+    """Invalid → warning + ``Field`` default fallback."""
 
     IGNORE = "ignore"
-    """Unknown sibling keys stripped; optional nested omitted without error."""
+    """Do not apply defaults — wire value only if present."""
 
-
-# Wire import annotations (Field Contract Registry → POJO metadata).
-type OptionalOnWire[T] = Annotated[T, AnnotationPolicy.GRACE_NORMALIZE]
-"""Key may be absent on import; normalize fills canonical default."""
 
 type StrictOnWire[T] = Annotated[T, AnnotationPolicy.STRICT_REQUIRED]
-"""Key/value must pass strict validator; missing or invalid → reject."""
+"""Strict validation on this field only."""
+
+type OptionalOnWire[T] = Annotated[T, AnnotationPolicy.GRACE_NORMALIZE]
+"""Missing/null/invalid → field default fallback (same as no annotation)."""
+
+type IgnoreOnWire[T] = Annotated[T, AnnotationPolicy.IGNORE]
+"""No default fill — pass through wire value when present."""
 
 
 def field_policy(annotation: Any) -> AnnotationPolicy | None:
-    """Extract AnnotationPolicy from OptionalOnWire / StrictOnWire annotation."""
+    """Extract AnnotationPolicy from StrictOnWire / OptionalOnWire / IgnoreOnWire."""
     if hasattr(annotation, "__value__"):
         annotation = annotation.__value__
 

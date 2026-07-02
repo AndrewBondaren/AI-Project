@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from random import Random
 
-from app.application.worldData.generators.masterData import economic_tier_rows
+from app.application.jsonValidation import economic_tier_rows
 from app.application.worldData.generators.utils.tierRegistry import tier_rank, tiers_sorted
 from app.dataModel.economy.enums.economicTierBand import EconomicTierBand
 from app.db.models.world import World

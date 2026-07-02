@@ -1,7 +1,7 @@
 """Economic tier compatibility for district / building template selection."""
 
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
-from app.application.worldData.generators.masterData import economic_tier_rows
+from app.application.jsonValidation import economic_tier_rows
 from app.application.worldData.generators.utils.economicTierBands import band_of
 from app.application.worldData.generators.utils.tierRegistry import (
     tier_at_least,

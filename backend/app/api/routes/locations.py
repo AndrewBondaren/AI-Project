@@ -5,13 +5,10 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
-from app.api.utils.crudPatchGate import gate_entity_create, gate_entity_update
 from app.api.utils.jsonResolver import JsonResolver
-from app.api.utils.sectionImportGate import gate_section_import
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
 )
-from app.application.worldData.jsonValidation.types import SectionKey
 from app.application.worldData.settlementPersistScope import (
     OUTDOOR_SCOPES,
     SettlementPersistScope,
@@ -73,8 +70,7 @@ async def create_location(
     data: dict[str, Any],
     container=Depends(get_container),
 ) -> dict:
-    row = await gate_entity_create(container, world_uid, SectionKey.LOCATIONS, data)
-    loc = await container.location_service().create(world_uid, row)
+    loc = await container.location_service().create(world_uid, data)
     return asdict(loc)
 
 
@@ -85,16 +81,7 @@ async def update_location(
     data: dict[str, Any],
     container=Depends(get_container),
 ) -> dict:
-    row = await gate_entity_update(
-        container,
-        world_uid,
-        SectionKey.LOCATIONS,
-        location_uid,
-        data,
-        load_existing=container.location_service().get_by_id,
-        immutable=frozenset({"location_uid", "world_uid"}),
-    )
-    loc = await container.location_service().update(world_uid, location_uid, row)
+    loc = await container.location_service().update(world_uid, location_uid, data)
     return asdict(loc)
 
 
@@ -117,13 +104,6 @@ async def import_locations(
     data = await JsonResolver.resolve(file=file, path=path)
     if not isinstance(data, list):
         raise HTTPException(status_code=422, detail="Locations JSON must be an array")
-
-    data = await gate_section_import(
-        container,
-        world_uid=world_uid,
-        section=SectionKey.LOCATIONS,
-        payload=data,
-    )
 
     result = await container.location_service().import_from_json(world_uid, data)
     status_code = 200 if result.failed == 0 else 207

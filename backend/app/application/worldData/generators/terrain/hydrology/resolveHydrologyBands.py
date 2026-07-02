@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app.application.worldData.generators.masterData import hydrology
+from app.application.jsonValidation import hydrology
 from app.application.worldData.generators.terrain.hydrology.types import HydrologyBands
 
 logger = logging.getLogger(__name__)

@@ -1,7 +1,7 @@
 """Stub ore placement — independent of skeleton depth (Phase 4)."""
 
 from app.application.worldData.generators.climate.math import world_seed
-from app.application.worldData.generators.masterData import material_rows
+from app.application.jsonValidation import material_rows
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 

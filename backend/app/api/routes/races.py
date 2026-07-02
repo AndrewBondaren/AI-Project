@@ -5,10 +5,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
-from app.api.utils.crudPatchGate import gate_entity_create, gate_entity_update
 from app.api.utils.jsonResolver import JsonResolver
-from app.api.utils.sectionImportGate import gate_section_import
-from app.application.worldData.jsonValidation.types import SectionKey
 
 router = APIRouter()
 
@@ -31,8 +28,7 @@ async def create_race(
     data: dict[str, Any],
     container=Depends(get_container),
 ) -> dict:
-    row = await gate_entity_create(container, world_uid, SectionKey.RACES, data)
-    race = await container.race_service().create(world_uid, row)
+    race = await container.race_service().create(world_uid, data)
     return asdict(race)
 
 
@@ -43,16 +39,7 @@ async def update_race(
     data: dict[str, Any],
     container=Depends(get_container),
 ) -> dict:
-    row = await gate_entity_update(
-        container,
-        world_uid,
-        SectionKey.RACES,
-        race_uid,
-        data,
-        load_existing=container.race_service().get_by_id,
-        immutable=frozenset({"race_uid", "world_uid"}),
-    )
-    race = await container.race_service().update(world_uid, race_uid, row)
+    race = await container.race_service().update(world_uid, race_uid, data)
     return asdict(race)
 
 
@@ -75,12 +62,6 @@ async def import_races(
     data = await JsonResolver.resolve(file=file, path=path)
     if not isinstance(data, list):
         raise HTTPException(status_code=422, detail="Races JSON must be an array")
-    data = await gate_section_import(
-        container,
-        world_uid=world_uid,
-        section=SectionKey.RACES,
-        payload=data,
-    )
     result = await container.race_service().import_from_json(world_uid, data)
     status_code = 200 if result.failed == 0 else 207
     return JSONResponse(status_code=status_code, content=result.to_dict())

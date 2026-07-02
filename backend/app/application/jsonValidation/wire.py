@@ -1,4 +1,4 @@
-"""Shared wire helpers — docs/tz_json_validation.md JV-0."""
+"""Wire ↔ domain boundary helpers — ENUM-E parse at jsonValidation layer."""
 
 from __future__ import annotations
 

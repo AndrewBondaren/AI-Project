@@ -41,7 +41,13 @@ from app.dataModel.materials import (
     MaterialRegistryEntry,
     WorldMaterialRegistry,
 )
-from app.dataModel.annotationPolicy import AnnotationPolicy, OptionalOnWire, StrictOnWire, field_policy
+from app.dataModel.annotationPolicy import (
+    AnnotationPolicy,
+    IgnoreOnWire,
+    OptionalOnWire,
+    StrictOnWire,
+    field_policy,
+)
 from app.dataModel.roads import RoadSettingsEntry, WorldRoadSettings
 from app.dataModel.settlement import (
     CitySizeEntry,
@@ -112,6 +118,7 @@ __all__ = [
     "LocationTypeSubtypeEntry",
     "LoreRegistryEntry",
     "AnnotationPolicy",
+    "IgnoreOnWire",
     "MaterialRegistryEntry",
     "OptionalOnWire",
     "RoadSettingsEntry",

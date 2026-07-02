@@ -1,22 +1,10 @@
-"""
-Parse `worlds.*` master-data through dataModel POJOs — generator contract layer.
-
-Generators import from here, not raw `world.*_registry` dicts or jsonValidation defaults.
-
-TODO: этому модулю не место в generators/ и не в dataModel.
-Перенести в jsonValidation (валидатор / normalize): validate → fill defaults из
-dataModel.canonical_* → отдать нормализованный master-data view генераторам.
-Удалить generators/masterData/ после миграции импортов.
-См. .cursor/plans/world-master-data-relocation.md
-"""
+"""``worlds`` row + bundle registries → typed dataModel POJOs."""
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
-from pydantic import ValidationError
-
+from app.application.jsonValidation.resolve import resolve_model, resolve_root_list
 from app.dataModel import (
     WorldClimateScalars,
     WorldClimateZoneRegistry,
@@ -29,36 +17,13 @@ from app.dataModel import (
 from app.dataModel.hydrology.rivers import RiverTypeClassify as PojoRiverTypeClassify
 from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import WorldBarrierTemplateRegistry
 
-logger = logging.getLogger(__name__)
-
 _DEFAULT_PRECIPITATION_LIQUID = WorldClimateScalars.canonical_defaults().precipitation_liquid
 _ENGINE_ECONOMIC_TIERS = WorldEconomyTierRegistry.canonical_engine()
 _ENGINE_MATERIALS = WorldMaterialRegistry.canonical_engine()
 
 
-def _world_uid(world: Any) -> str:
+def _uid(world: Any) -> str:
     return str(getattr(world, "world_uid", "?"))
-
-
-def _parse_list_registry(
-    model_cls: type,
-    raw: Any,
-    canonical_fn: Any,
-    world: Any,
-    label: str,
-) -> Any:
-    if not raw:
-        return canonical_fn()
-    try:
-        return model_cls.model_validate(raw)
-    except ValidationError as exc:
-        logger.warning(
-            "master_data | world=%s invalid %s (%s errors); using canonical defaults",
-            _world_uid(world),
-            label,
-            exc.error_count(),
-        )
-        return canonical_fn()
 
 
 def _climate_zone_wire(world: Any) -> list[dict] | None:
@@ -71,18 +36,32 @@ def _climate_zone_wire(world: Any) -> list[dict] | None:
         values = list(raw.values())
         if values and all(isinstance(v, dict) for v in values):
             return values
-        if isinstance(raw, dict):
-            return [raw]
+        return [raw]
     return None
 
 
+def _climate_scalar_payload(world: Any) -> dict[str, Any]:
+    return {
+        "default_climate_zone": getattr(world, "default_climate_zone", None),
+        "climate_temperature_peak_min": getattr(world, "climate_temperature_peak_min", None),
+        "climate_temperature_peak_max": getattr(world, "climate_temperature_peak_max", None),
+        "climate_pole_mode": getattr(world, "climate_pole_mode", None),
+        "climate_pole_preset": getattr(world, "climate_pole_preset", None),
+        "climate_local_influence_fraction": getattr(
+            world, "climate_local_influence_fraction", None,
+        ),
+        "precipitation_liquid": getattr(world, "precipitation_liquid", None),
+        "season_temp_offsets": getattr(world, "season_temp_offsets", None),
+    }
+
+
 def economic_tiers(world: Any) -> WorldEconomyTierRegistry:
-    return _parse_list_registry(
+    return resolve_root_list(
         WorldEconomyTierRegistry,
         getattr(world, "economic_tier_registry", None),
-        WorldEconomyTierRegistry.canonical_defaults,
-        world,
-        "economic_tier_registry",
+        empty_factory=WorldEconomyTierRegistry.canonical_defaults,
+        label="economic_tier_registry",
+        world_uid=_uid(world),
     )
 
 
@@ -95,12 +74,12 @@ def economic_tier_engine() -> WorldEconomyTierRegistry:
 
 
 def materials(world: Any) -> WorldMaterialRegistry:
-    return _parse_list_registry(
+    return resolve_root_list(
         WorldMaterialRegistry,
         getattr(world, "material_registry", None),
-        WorldMaterialRegistry.canonical_defaults,
-        world,
-        "material_registry",
+        empty_factory=WorldMaterialRegistry.canonical_defaults,
+        label="material_registry",
+        world_uid=_uid(world),
     )
 
 
@@ -113,12 +92,12 @@ def materials_engine() -> WorldMaterialRegistry:
 
 
 def terrain(world: Any) -> WorldTerrainRegistry:
-    return _parse_list_registry(
+    return resolve_root_list(
         WorldTerrainRegistry,
         getattr(world, "terrain_registry", None),
-        WorldTerrainRegistry.canonical_defaults,
-        world,
-        "terrain_registry",
+        empty_factory=WorldTerrainRegistry.canonical_defaults,
+        label="terrain_registry",
+        world_uid=_uid(world),
     )
 
 
@@ -134,15 +113,11 @@ def hydrology(world: Any) -> WorldHydrology:
     raw = getattr(world, "hydrology", None)
     if not raw:
         return WorldHydrology.canonical_empty()
-    try:
-        return WorldHydrology.model_validate(raw)
-    except ValidationError as exc:
-        logger.warning(
-            "master_data | world=%s invalid hydrology (%s errors); using canonical_empty",
-            _world_uid(world),
-            exc.error_count(),
-        )
-        return WorldHydrology.canonical_empty()
+    return resolve_model(
+        WorldHydrology,
+        raw,
+        label=f"world={_uid(world)} hydrology",
+    )
 
 
 def hydrology_dict(world: Any) -> dict:
@@ -154,12 +129,12 @@ def river_type_classify_defaults() -> PojoRiverTypeClassify:
 
 
 def road_settings(world: Any) -> WorldRoadSettings:
-    return _parse_list_registry(
+    return resolve_root_list(
         WorldRoadSettings,
         getattr(world, "road_settings", None),
-        WorldRoadSettings.canonical_defaults,
-        world,
-        "road_settings",
+        empty_factory=WorldRoadSettings.canonical_defaults,
+        label="road_settings",
+        world_uid=_uid(world),
     )
 
 
@@ -171,36 +146,21 @@ def climate_zones(world: Any) -> WorldClimateZoneRegistry:
     wire = _climate_zone_wire(world)
     if wire is None:
         return WorldClimateZoneRegistry.canonical_defaults()
-    return _parse_list_registry(
+    return resolve_root_list(
         WorldClimateZoneRegistry,
         wire,
-        WorldClimateZoneRegistry.canonical_defaults,
-        world,
-        "climate_zone_registry",
+        empty_factory=WorldClimateZoneRegistry.canonical_defaults,
+        label="climate_zone_registry",
+        world_uid=_uid(world),
     )
 
 
 def climate_scalars(world: Any) -> WorldClimateScalars:
-    payload = {
-        "default_climate_zone": getattr(world, "default_climate_zone", None),
-        "climate_temperature_peak_min": getattr(world, "climate_temperature_peak_min", None),
-        "climate_temperature_peak_max": getattr(world, "climate_temperature_peak_max", None),
-        "climate_pole_mode": getattr(world, "climate_pole_mode", None),
-        "climate_pole_preset": getattr(world, "climate_pole_preset", None),
-        "climate_local_influence_fraction": getattr(
-            world, "climate_local_influence_fraction", None,
-        ),
-        "precipitation_liquid": getattr(world, "precipitation_liquid", None),
-        "season_temp_offsets": getattr(world, "season_temp_offsets", None),
-    }
-    try:
-        return WorldClimateScalars.model_validate(payload)
-    except ValidationError:
-        logger.warning(
-            "master_data | world=%s invalid climate scalars; using canonical_defaults",
-            _world_uid(world),
-        )
-        return WorldClimateScalars.canonical_defaults()
+    return resolve_model(
+        WorldClimateScalars,
+        _climate_scalar_payload(world),
+        label=f"world={_uid(world)} climate_scalars",
+    )
 
 
 def default_precipitation_liquid() -> str:

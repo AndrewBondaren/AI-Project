@@ -5,7 +5,7 @@ effective_travel_modifier и road tier stats — tz_structure_connections.md §3
 
 from __future__ import annotations
 
-from app.application.worldData.generators.masterData import (
+from app.application.jsonValidation import (
     economic_tier_engine,
     economic_tiers,
     materials,

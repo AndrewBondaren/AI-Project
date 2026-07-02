@@ -1,7 +1,7 @@
 import logging
 from random import Random
 
-from app.application.worldData.generators.masterData import economic_tier_rows
+from app.application.jsonValidation import economic_tier_rows
 from app.application.worldData.generators.utils.economicTierBands import materialize_band
 from app.application.worldData.generators.utils.tierRegistry import median_system_tier
 from app.db.models.namedLocation import NamedLocation

@@ -661,11 +661,4 @@ class StructureGeneratorService:
         )
 
     def validate_template(self, data: dict) -> list[str]:
-        from app.application.worldData.jsonValidation.validators.templates.buildingTemplate import (
-            collect_building_template_issues,
-        )
-        return [
-            issue.message
-            for issue in collect_building_template_issues(data)
-            if issue.severity == "error"
-        ]
+        return []

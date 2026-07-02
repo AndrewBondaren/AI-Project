@@ -1,6 +1,6 @@
 """Default barrier templates when world has no barrier_template_registry."""
 
-from app.application.worldData.generators.masterData import barrier_template_defaults
+from app.application.jsonValidation import barrier_template_defaults
 
 DEFAULT_BARRIER_TEMPLATES: list[dict] = barrier_template_defaults()
 

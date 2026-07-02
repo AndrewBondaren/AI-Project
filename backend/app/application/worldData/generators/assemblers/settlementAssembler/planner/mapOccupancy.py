@@ -2,7 +2,7 @@
 
 import logging
 
-from app.application.worldData.generators.masterData import terrain_rows
+from app.application.jsonValidation import terrain_rows
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
     settlement_grid_rect,
 )
