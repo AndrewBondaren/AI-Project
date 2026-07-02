@@ -16,3 +16,4 @@ class PlacementCondition(BaseModel):
     size: OptionalOnWire[str | None] = None
     tier: OptionalOnWire[str | None] = None
     district_type: OptionalOnWire[str | None] = None
+    zone: OptionalOnWire[str | None] = None

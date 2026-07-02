@@ -1,3 +1,4 @@
+from app.application.jsonValidation import city_sizes, district_templates as district_templates_registry
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.defaults import (
     CellZone,
     DISTRICT_TYPE_PREFERENCE,
@@ -20,7 +21,7 @@ from app.application.worldData.generators.coordinates.types import (
     MeterZ,
     SurfaceGridRect,
 )
-from app.dataModel.settlement.district.worldDistrictTemplateRegistry import WorldDistrictTemplateRegistry
+from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.settlement.settlement.worldCitySizeRegistry import WorldCitySizeRegistry
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -45,16 +46,13 @@ __all__ = [
 
 
 def footprint_multiplier(world: World, system_city_size: str | None) -> float:
-    registry = world.city_size_registry or []
-    for entry in registry:
-        if entry.get("system_size") == system_city_size:
-            mult = entry.get("footprint_multiplier")
-            if mult is not None:
-                return float(mult)
-            radius = entry.get("radius")
-            if radius is not None:
-                side = max(1, int(radius) * 2 + 1)
-                return float(side)
+    entry = city_sizes(world).entry_for(system_city_size or "")
+    if entry is not None:
+        if entry.footprint_multiplier is not None:
+            return float(entry.footprint_multiplier)
+        if entry.map_cells_count is not None:
+            side = max(1, int(entry.map_cells_count) * 2 + 1)
+            return float(side)
     return WorldCitySizeRegistry.footprint_multiplier_defaults().get(system_city_size or "hamlet", 1.0)
 
 
@@ -181,8 +179,5 @@ def cell_in_footprint_meters(
     )
 
 
-def district_templates(world: World) -> list[dict]:
-    registry = getattr(world, "district_template_registry", None)
-    if registry:
-        return list(registry)
-    return [e.model_dump(mode="json") for e in WorldDistrictTemplateRegistry.canonical_defaults().root]
+def district_templates(world: World) -> list[DistrictTemplateEntry]:
+    return district_templates_registry(world).root

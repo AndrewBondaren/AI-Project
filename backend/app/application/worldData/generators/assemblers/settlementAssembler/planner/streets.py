@@ -16,6 +16,7 @@ from app.application.worldData.generators.road.roadTravelResolver import effecti
 from app.application.worldData.generators.road.widthResolver import resolve_width
 from app.application.worldData.generators.utils.materialResolver import resolve_material
 from app.application.worldData.generators.utils.facing import Facing
+from app.dataModel.settlement.district.districtConnection import primary_or_default
 from app.dataModel.materials import DEFAULT_ROAD_MATERIAL
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
@@ -70,9 +71,7 @@ def _lines_in_range(lines: list[int], lo: int, hi: int) -> list[int]:
 
 
 def _connection_type(slot: DistrictSlot) -> str:
-    connections = slot.district_template.get("connections") or []
-    primary = connections[0] if connections else {}
-    return primary.get("connection_type") or "road"
+    return primary_or_default(slot.district_template).connection_type
 
 
 def plan_settlement_entries(
@@ -153,7 +152,7 @@ def plan_settlement_entries(
         logger.info(
             "plan_settlement_entries slot | template=%s origin=(%d,%d) size=%dx%d"
             " connection_type=%s through_road_pairs=%d entry_points=%d",
-            slot.district_template.get("system_name", "?"),
+            slot.district_template.system_name,
             ox,
             oy,
             w,

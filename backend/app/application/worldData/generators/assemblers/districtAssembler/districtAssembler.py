@@ -15,6 +15,7 @@ from app.application.worldData.generators.road.districtRoadGenerator import Dist
 from app.application.worldData.generators.structure.structureGeneratorService import StructureLayout
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
+from app.dataModel.settlement.district.districtConnection import primary_or_default
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
@@ -32,12 +33,11 @@ class DistrictAssembler:
         layout_cache:   dict[str, StructureLayout] | None = None,
     ) -> DistrictLayout:
         template = slot.district_template
-        connections = template.get("connections") or []
-        primary = connections[0] if connections else {}
+        primary = primary_or_default(template)
         cache = layout_cache or {}
 
         rng = random.Random(
-            f"{world.world_uid}_{slot.origin_x}_{slot.origin_y}_{template.get('system_name', '')}",
+            f"{world.world_uid}_{slot.origin_x}_{slot.origin_y}_{template.system_name}",
         )
         placements = plan_area_placements(slot, cache, world, city_skeleton, rng)
 
@@ -45,16 +45,16 @@ class DistrictAssembler:
             "DistrictAssembler | template=%s district_type=%s origin=(%d,%d) size=%dx%d"
             " street_layout=%s algorithm=%s connection_type=%s sidewalk=%s"
             " area_slots=%d required_structures=%d",
-            template.get("system_name", "?"),
-            template.get("district_type", "?"),
+            template.system_name,
+            template.district_type,
             slot.origin_x,
             slot.origin_y,
             slot.width_m,
             slot.depth_m,
-            template.get("street_layout") or "grid",
+            template.street_layout or "grid",
             "DistrictRoadGenerator",
-            primary.get("connection_type") or "road",
-            primary.get("sidewalk"),
+            primary.connection_type,
+            primary.sidewalk,
             len(placements),
             len(slot.required_structures),
         )
@@ -62,10 +62,10 @@ class DistrictAssembler:
             for req in slot.required_structures:
                 logger.info(
                     "DistrictAssembler required_structure | template=%s building=%s count=%s position=%s",
-                    template.get("system_name", "?"),
-                    req.get("building_template"),
-                    req.get("count", 1),
-                    req.get("position", "any"),
+                    template.system_name,
+                    req.building_template,
+                    req.count,
+                    req.position,
                 )
 
         area_assembler = StructureAreaAssembler()
@@ -90,7 +90,7 @@ class DistrictAssembler:
 
         logger.info(
             "DistrictAssembler done | template=%s district_nodes=%d district_edges=%d area_layouts=%d",
-            template.get("system_name", "?"),
+            template.system_name,
             len(nodes),
             len(edges),
             len(area_layouts),

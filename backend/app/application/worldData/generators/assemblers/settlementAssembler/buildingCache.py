@@ -43,11 +43,11 @@ def collect_building_template_names(
 
     for slot in district_slots:
         for req in slot.required_structures:
-            name = req.get("building_template")
+            name = req.building_template
             if name:
                 names.add(name)
 
-        allowed = slot.district_template.get("allowed_structure_types")
+        allowed = slot.district_template.allowed_structure_types
         if not allowed:
             continue
         for bt in registry:

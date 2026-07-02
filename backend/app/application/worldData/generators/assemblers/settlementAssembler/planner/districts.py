@@ -84,12 +84,12 @@ def plan_district_slots(
                 continue
 
             width_m, depth_m = slot_dimensions(template, cell_m, rng)
-            dtype = template.get("district_type", "?")
+            dtype = template.district_type
             placed_types[dtype] = placed_types.get(dtype, 0) + 1
             slot_ground_z = resolve_ground_z(
                 settlement, origin_x, origin_y, width_m, depth_m, terrain_cells,
             )
-            required = list(template.get("required_structures") or [])
+            required = list(template.required_structures or [])
 
             slots.append(DistrictSlot(
                 origin_x=origin_x,
@@ -106,7 +106,7 @@ def plan_district_slots(
                 " origin=(%d,%d) size=%dx%d ground_z=%d required_structures=%d",
                 cell_x,
                 cell_y,
-                template.get("system_name", "?"),
+                template.system_name,
                 dtype,
                 origin_x,
                 origin_y,

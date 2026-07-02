@@ -19,8 +19,8 @@ from app.application.worldData.generators.road.layouts.courtyardLayout import ge
 from app.application.worldData.generators.road.layouts.gridLayout import generate_grid
 from app.application.worldData.generators.road.layouts.organicLayout import generate_organic
 from app.application.worldData.generators.road.layouts.radialLayout import generate_radial
+from app.dataModel.settlement.district.districtConnection import primary_or_default
 from app.application.worldData.generators.road.connectionPolicy import (
-    primary_connection,
     resolve_has_sidewalk,
     resolve_lanes_per_side,
 )
@@ -51,9 +51,9 @@ class DistrictRoadGenerator:
             rng = random.Random()
 
         template      = slot.district_template
-        street_layout = template.get("street_layout") or "grid"
+        street_layout = template.street_layout or "grid"
 
-        primary         = primary_connection(template)
+        primary         = primary_or_default(template)
         connection_type = primary.connection_type
         lanes_per_side  = resolve_lanes_per_side(template, connection_type, world=world)
         has_sidewalk    = resolve_has_sidewalk(template, connection_type, world=world)

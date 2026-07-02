@@ -1,8 +1,12 @@
+"""DistrictSlot — placed district template on settlement grid."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
 from app.application.worldData.generators.assemblers.districtAssembler.connectionEntry import ConnectionEntry
+from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.settlement.district.requiredStructure import RequiredStructure
 
 
 @dataclass
@@ -21,11 +25,11 @@ class DistrictSlot:
     DistrictAssembler прокладывает through_road-коридоры от этих точек,
     затем строит внутреннюю сетку вокруг них.
     """
-    origin_x:          int
-    origin_y:          int
-    width_m:           int
-    depth_m:           int
-    ground_z:          int
-    district_template: dict                      # выбранный шаблон; placement_conditions проверены
-    entry_nodes:       list[ConnectionEntry] = field(default_factory=list)
-    required_structures: list[dict] = field(default_factory=list)  # tz_city_generation §9.4
+    origin_x:            int
+    origin_y:            int
+    width_m:             int
+    depth_m:             int
+    ground_z:            int
+    district_template:   DistrictTemplateEntry
+    entry_nodes:         list[ConnectionEntry] = field(default_factory=list)
+    required_structures: list[RequiredStructure] = field(default_factory=list)

@@ -105,7 +105,7 @@ def plan_area_placements(
     """
     generate-first, place-second: bbox из cache, required_structures первыми.
     """
-    district_name = slot.district_template.get("system_name", "?")
+    district_name = slot.district_template.system_name
     placed_rects: list[tuple[int, int, int, int]] = []
     placements: list[AreaPlacement] = []
 
@@ -181,15 +181,15 @@ def plan_area_placements(
         return True
 
     for req in slot.required_structures:
-        name = req.get("building_template")
+        name = req.building_template
         if not name:
             continue
-        count = int(req.get("count", 1))
-        position = req.get("position", "any")
+        count = int(req.count or 1)
+        position = req.position or "any"
         for _ in range(count):
             try_place(name, position)
 
-    allowed = slot.district_template.get("allowed_structure_types")
+    allowed = slot.district_template.allowed_structure_types
     if allowed:
         candidates = [
             n for n, layout in layout_cache.items()

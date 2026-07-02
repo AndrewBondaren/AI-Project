@@ -15,7 +15,7 @@ from app.dataModel.settlement.district.districtConnection import (
 _FALLBACK_ROAD = RoadSettingsEntry.fallback()
 
 
-def primary_connection(template: dict) -> DistrictConnection:
+def primary_connection(template: Any) -> DistrictConnection:
     """Primary district template connection — dataModel ``DistrictConnection``."""
     return primary_or_default(template)
 
@@ -31,7 +31,7 @@ def _road_entry(world: Any | None, connection_type: str) -> RoadSettingsEntry | 
 
 
 def resolve_has_sidewalk(
-    template: dict,
+    template: Any,
     connection_type: str | None = None,
     *,
     world: Any | None = None,
@@ -51,7 +51,7 @@ def resolve_has_sidewalk(
 
 
 def resolve_lanes_per_side(
-    template: dict,
+    template: Any,
     connection_type: str | None = None,
     *,
     world: Any | None = None,

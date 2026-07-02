@@ -9,11 +9,12 @@ from app.application.worldData.generators.utils.tierRegistry import (
     tier_rank,
     tiers_within_rank_delta,
 )
+from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.db.models.world import World
 
 
 def check_district_economic_compat(
-    template: dict,
+    template: DistrictTemplateEntry | dict,
     skeleton: CitySkeleton,
     world:    World,
 ) -> bool:
@@ -24,6 +25,15 @@ def check_district_economic_compat(
 
     registry = economic_tiers(world).root
     uid = world.world_uid
+    if isinstance(template, DistrictTemplateEntry):
+        tier_range = template.economic_tier_range
+        if tier_range is not None:
+            if not tier_at_least(registry, city_tier, tier_range.min, world_uid=uid):
+                return False
+            if not tier_at_most(registry, city_tier, tier_range.max, world_uid=uid):
+                return False
+        return True
+
     tier_range = template.get("economic_tier_range")
     if tier_range:
         min_t = tier_range.get("min")

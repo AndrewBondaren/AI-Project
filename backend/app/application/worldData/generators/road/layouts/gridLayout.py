@@ -37,7 +37,7 @@ def generate_grid(
     W,  D  = slot.width_m,  slot.depth_m
     z      = slot.ground_z
 
-    density = slot.district_template.get("density") or skeleton.settlement_density
+    density = slot.district_template.density or skeleton.settlement_density
     block_size = block_size_for_density(density)
 
     # Количество линий по каждой оси (включая границы района)

@@ -15,6 +15,8 @@ from app.application.worldData.generators.utils.tierRegistry import (
     tier_at_least,
     tier_at_most,
 )
+from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.settlement.district.placementCondition import PlacementCondition
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -32,7 +34,7 @@ def _city_size_rank(size: str | None) -> int:
 
 
 def _check_adjacent_terrain(
-    condition:   dict,
+    condition:   PlacementCondition,
     origin_x:    int,
     origin_y:    int,
     width_m:     int,
@@ -41,8 +43,8 @@ def _check_adjacent_terrain(
 ) -> bool:
     if not terrain_cells:
         return False
-    required = set(condition.get("terrain_types") or [])
-    min_count = int(condition.get("min_count") or 1)
+    required = set(condition.terrain_types or [])
+    min_count = int(condition.min_count or 1)
     x0, x1 = origin_x - 1, origin_x + width_m
     y0, y1 = origin_y - 1, origin_y + depth_m
     count = 0
@@ -58,22 +60,22 @@ def _check_adjacent_terrain(
     return count >= min_count
 
 
-def template_specialization_key(template: dict) -> tuple[int, int, int, int]:
+def template_specialization_key(template: DistrictTemplateEntry) -> tuple[int, int, int, int]:
     """
     Специализированные шаблоны выше общих (tz_city_generation §9.6).
     Больше условий / ограничений → выше приоритет.
     """
-    conditions = template.get("placement_conditions") or []
+    conditions = template.placement_conditions or []
     return (
         len(conditions),
-        1 if template.get("max_per_city") is not None else 0,
-        1 if template.get("required_structures") else 0,
-        1 if template.get("economic_tier_range") or template.get("economic_tier_band") else 0,
+        1 if template.max_per_city is not None else 0,
+        1 if template.required_structures else 0,
+        1 if template.economic_tier_range is not None else 0,
     )
 
 
 def check_placement_conditions(
-    template:      dict,
+    template:      DistrictTemplateEntry,
     settlement:    NamedLocation,
     skeleton:      CitySkeleton,
     origin_x:      int,
@@ -87,15 +89,15 @@ def check_placement_conditions(
     cell_y:        int | None = None,
     grid_n:        int | None = None,
 ) -> bool:
-    max_per = template.get("max_per_city")
-    dtype = template.get("district_type")
+    max_per = template.max_per_city
+    dtype = template.district_type
     if max_per is not None and placed_types.get(dtype, 0) >= max_per:
         return False
 
     if not check_district_economic_compat(template, skeleton, world):
         return False
 
-    conditions = template.get("placement_conditions") or []
+    conditions = template.placement_conditions or []
     if not conditions:
         return True
 
@@ -103,21 +105,21 @@ def check_placement_conditions(
     city_rank = _city_size_rank(skeleton.system_city_size)
 
     for cond in conditions:
-        ctype = cond.get("type")
+        ctype = cond.type
         if ctype == "min_city_size":
-            if city_rank < _city_size_rank(cond.get("size")):
+            if city_rank < _city_size_rank(cond.size):
                 return False
         elif ctype == "economic_tier_min":
-            if not tier_at_least(registry, skeleton.economic_tier, cond.get("tier")):
+            if not tier_at_least(registry, skeleton.economic_tier, cond.tier):
                 return False
         elif ctype == "economic_tier_max":
-            if not tier_at_most(registry, skeleton.economic_tier, cond.get("tier")):
+            if not tier_at_most(registry, skeleton.economic_tier, cond.tier):
                 return False
         elif ctype == "requires_district_type":
-            if placed_types.get(cond.get("district_type"), 0) < 1:
+            if placed_types.get(cond.district_type, 0) < 1:
                 return False
         elif ctype == "excludes_district_type":
-            if placed_types.get(cond.get("district_type"), 0) > 0:
+            if placed_types.get(cond.district_type, 0) > 0:
                 return False
         elif ctype == "adjacent_terrain":
             if not _check_adjacent_terrain(cond, origin_x, origin_y, width_m, depth_m, terrain_cells):
@@ -125,7 +127,7 @@ def check_placement_conditions(
         elif ctype == "cell_zone":
             if cell_x is None or grid_n is None:
                 return False
-            required = cond.get("zone")
+            required = cond.zone
             if _cell_zone(cell_x, cell_y or 0, grid_n).value != required:
                 return False
         else:
@@ -144,7 +146,7 @@ def _cell_zone(cell_x: int, cell_y: int, grid_n: int) -> CellZone:
 
 
 def select_district_template(
-    candidates:    list[dict],
+    candidates:    list[DistrictTemplateEntry],
     settlement:    NamedLocation,
     skeleton:      CitySkeleton,
     world:         World,
@@ -158,7 +160,7 @@ def select_district_template(
     cell_y:        int,
     grid_n:        int,
     rng:           random.Random,
-) -> dict | None:
+) -> DistrictTemplateEntry | None:
     eligible = [
         t for t in candidates
         if check_placement_conditions(
@@ -175,20 +177,20 @@ def select_district_template(
         return None
 
     eligible.sort(
-        key=lambda t: (template_specialization_key(t), t.get("system_name", "")),
+        key=lambda template: (template_specialization_key(template), template.system_name),
         reverse=True,
     )
     best_key = template_specialization_key(eligible[0])
-    pool = [t for t in eligible if template_specialization_key(t) == best_key]
+    pool = [template for template in eligible if template_specialization_key(template) == best_key]
 
     zone = _cell_zone(cell_x, cell_y, grid_n)
     preferred = DISTRICT_TYPE_PREFERENCE[zone]
     algorithm = "fallback_random"
     matched_pref: str | None = None
 
-    chosen: dict | None = None
+    chosen: DistrictTemplateEntry | None = None
     for pref in preferred:
-        typed = [t for t in pool if t.get("district_type") == pref]
+        typed = [template for template in pool if template.district_type == pref]
         if typed:
             chosen = rng.choice(typed)
             algorithm = "specialization+position"
@@ -209,24 +211,29 @@ def select_district_template(
         len(eligible),
         algorithm,
         matched_pref or "-",
-        chosen.get("system_name", "?"),
-        chosen.get("district_type", "?"),
-        chosen.get("placement_conditions") or [],
-        chosen.get("street_layout") or "grid",
-        chosen.get("density") or "-",
-        chosen.get("connections") or [],
+        chosen.system_name,
+        chosen.district_type,
+        chosen.placement_conditions or [],
+        chosen.street_layout or "grid",
+        chosen.density or "-",
+        chosen.connections or [],
     )
     return chosen
 
 
 def slot_dimensions(
-    template: dict,
+    template: DistrictTemplateEntry,
     cell_m:   int,
     rng:      random.Random,
 ) -> tuple[int, int]:
-    size_pct = template.get("size_pct") or {}
-    w_range = size_pct.get("width") or [1.0, 1.0]
-    d_range = size_pct.get("depth") or [1.0, 1.0]
+    size_pct = template.size_pct
+    w_range = [1.0, 1.0]
+    d_range = [1.0, 1.0]
+    if size_pct is not None:
+        if size_pct.width is not None:
+            w_range = [size_pct.width.min, size_pct.width.max]
+        if size_pct.depth is not None:
+            d_range = [size_pct.depth.min, size_pct.depth.max]
     w_frac = rng.uniform(float(w_range[0]), float(w_range[1]))
     d_frac = rng.uniform(float(d_range[0]), float(d_range[1]))
     width_m = max(1, int(cell_m * w_frac))
@@ -234,7 +241,7 @@ def slot_dimensions(
     logger.info(
         "DistrictSlot dimensions | template=%s algorithm=size_pct"
         " cell_m=%d width_frac=%.2f depth_frac=%.2f → %dx%d",
-        template.get("system_name", "?"),
+        template.system_name,
         cell_m,
         w_frac,
         d_frac,

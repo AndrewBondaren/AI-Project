@@ -18,6 +18,8 @@ from app.dataModel import (
     WorldTerrainRegistry,
 )
 from app.dataModel.hydrology.rivers import RiverTypeClassify as PojoRiverTypeClassify
+from app.dataModel.settlement.district.worldDistrictTemplateRegistry import WorldDistrictTemplateRegistry
+from app.dataModel.settlement.settlement.worldCitySizeRegistry import WorldCitySizeRegistry
 from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import WorldBarrierTemplateRegistry
 
 _DEFAULT_PRECIPITATION_LIQUID = WorldClimateScalars.canonical_defaults().precipitation_liquid
@@ -160,6 +162,56 @@ def legacy_standalone_water_material() -> str:
     if liquids:
         return sorted(liquids)[0]
     return "water"
+
+
+def city_sizes(world: Any) -> WorldCitySizeRegistry:
+    return resolve_root_list(
+        WorldCitySizeRegistry,
+        getattr(world, "city_size_registry", None),
+        empty_factory=WorldCitySizeRegistry.canonical_defaults,
+        label="city_size_registry",
+        world_uid=_uid(world),
+    )
+
+
+def district_templates(world: Any) -> WorldDistrictTemplateRegistry:
+    """Canonical defaults merged with world overrides by ``system_name``."""
+    by_name = {
+        entry.system_name: entry
+        for entry in WorldDistrictTemplateRegistry.canonical_defaults().root
+    }
+    raw = getattr(world, "district_template_registry", None)
+    if raw:
+        resolved = resolve_root_list(
+            WorldDistrictTemplateRegistry,
+            raw,
+            empty_factory=WorldDistrictTemplateRegistry.canonical_defaults,
+            label="district_template_registry",
+            world_uid=_uid(world),
+        )
+        for entry in resolved.root:
+            by_name[entry.system_name] = entry
+    return WorldDistrictTemplateRegistry(list(by_name.values()))
+
+
+def building_layout_templates(world: Any) -> list[dict]:
+    """
+    Merged building layout bodies — engine builtins + world rows.
+    Layout JSON is not yet a single POJO row; registry merge stays wire-shaped.
+    """
+    from app.dataModel.structure.building.worldBuildingLayoutDefaults import canonical_defaults
+
+    by_name: dict[str, dict] = {
+        layout["system_name"]: dict(layout)
+        for layout in canonical_defaults()
+    }
+    for row in getattr(world, "building_template_registry", None) or []:
+        if not isinstance(row, dict):
+            continue
+        key = row.get("system_name") or row.get("system_template_uid")
+        if key:
+            by_name[str(key)] = row
+    return list(by_name.values())
 
 
 def barrier_templates(world: Any) -> WorldBarrierTemplateRegistry:
