@@ -1,6 +1,6 @@
 # JSON Validation — Technical Specification
 
-**Версия документа: 1.0** (2026-07)
+**Версия документа: 1.1** (2026-07)
 
 **Статус кода:** v1 vertical slice — POJO-first `application/jsonValidation/`.  
 **Не является:** откатом к `worldData/jsonValidation/` v0.1 (orchestrator + `normalize/*.py` + `validators/*.py`).
@@ -170,7 +170,11 @@ backend/app/application/worldData/  # WorldService, bundle — без domain val
 | SCH-WORLD-TERRAIN | `WorldTerrainRegistry` | `terrain_registry` | ✅ | ✅ |
 | SCH-WORLD-HYDROLOGY | `WorldHydrology` | `hydrology` | ✅ | ✅ |
 | SCH-WORLD-CLIMATE-ZONE | `WorldClimateZoneRegistry` | `climate_zone_registry` | ✅ | ✅ |
-| SCH-WORLD-ROAD-SETTINGS | `WorldRoadSettings` | ⬜ колонки | — | ✅ runtime |
+| SCH-WORLD-BARRIER-TEMPLATE | `WorldBarrierTemplateRegistry` | `barrier_template_registry` | ⬜ | ✅ runtime |
+| SCH-WORLD-CITY-SIZE | `WorldCitySizeRegistry` | `city_size_registry` | ⬜ | ✅ runtime |
+| SCH-WORLD-DISTRICT-TEMPLATE | `WorldDistrictTemplateRegistry` | `district_template_registry` | ⬜ | ✅ runtime |
+| SCH-WORLD-TERRAIN-SCALARS | `WorldTerrainScalars` | multi-column | ⬜ | ⬜ |
+| SCH-WORLD-ROAD-SETTINGS | `WorldRoadSettings` | `road_settings` | ⬜ | ✅ runtime |
 | SCH-WORLD-CONN | `WorldConnectionTypeRegistry` | `connection_type_registry` | ⬜ | ⬜ |
 | SCH-RACE-* | — | `races` table | ⬜ JV-8 | ⬜ |
 
@@ -281,7 +285,17 @@ JSON → facade → resolve → persist   DB → worldRow → resolve (RUNTIME) 
 Тонкие accessors: `climate_scalars(world)`, `materials(world)`, …  
 Все через `resolve` в режиме `RUNTIME`.
 
-**Generators:** POJO-backed поля — через `worldRow`, не `world.climate_pole_mode` напрямую (transitional допускается до рефактора).
+**Generators:** POJO-backed поля — через `worldRow`, не `world.climate_pole_mode` напрямую (transitional допускается до рефактора; см. § **Generators — миграция на worldRow (GV)**).
+
+### Resolve log (wire → resolved)
+
+При отличии wire от resolved POJO — `INFO` в `resolve.py`:
+
+```
+json_validation | resolve | label=… mode=import|runtime | wire={…} | resolved={…}
+```
+
+Только при `wire ≠ resolved`; field-level warnings (`missing; using field default`) остаются отдельно.
 
 ### world_seed — вне jsonValidation
 
@@ -315,6 +329,80 @@ JSON → facade → resolve → persist   DB → worldRow → resolve (RUNTIME) 
 
 ---
 
+## Generators — миграция на worldRow (GV)
+
+**Назначение:** зафиксировать перенос `application/worldData/generators/` с сырого `world.*` / `dict.get` на typed accessors `jsonValidation/worldRow` → `dataModel` POJO.
+
+**Не входит:** layout JSON зданий (`levels`, `rooms`, `connections`) — отдельный контракт structure; `world_seed()`; technical invariants (`map_cell_size_m`, …).
+
+**Правило:** generators читают master-data **только** через `worldRow`; `model_dump()` в generators — не целевой путь (допустим только в resolve-логах и import facade).
+
+### Статус по доменам
+
+| Домен | worldRow accessor | Generators | Статус |
+|-------|-------------------|------------|--------|
+| Economic tiers | `economic_tiers()` | tierRegistry, economicTierBands, tierResolver, materialResolver, settlement economic/barriers | ✅ |
+| Materials | `materials()` | materialResolver, precipitation, oresGenerator | ✅ |
+| Terrain registry | `terrain()` / `terrain_system_keys()` | mapOccupancy, columnFill, caves, climate passes | ✅ |
+| Climate zones | `climate_zones()` | `climate/registry.py` | ✅ |
+| Climate scalars | `climate_scalars()` | anchorAssign, climatePoleField (mode), climateGeneratorService (default zone), climateSurfaceAssembler | ◐ |
+| Hydrology | `hydrology()` | resolveHydrologyBands, resolveRiverTypeClassify, loadHydrologyFromWorld | ✅ POJO; ◐ `hydrology_dict` shim |
+| Road settings | `road_settings()` | connectionPolicy, roadTravelResolver | ✅ runtime |
+| Barrier templates | `barrier_templates()` | barrierDefaults, barriers, areaBarriers | ✅ |
+| City sizes | `city_sizes()` | `footprint.footprint_multiplier` | ✅ |
+| District templates | `district_templates()` | footprint → placement → DistrictSlot → roads | ✅ |
+| Building layouts | `building_layout_templates()` | buildingDefaults, buildingCache | ◐ merge в worldRow; тело — `list[dict]` |
+| Terrain scalars | ⬜ `terrain_scalars()` | worldMapSettings, columnFillPass, climateGeneratorService (lapse) | ⬜ POJO есть (`WorldTerrainScalars`) |
+| Connection types | ⬜ | — | ⬜ POJO есть, consumers нет |
+| Location types, lore, weather, room types, terrain categories, location mood | ⬜ | — | ⬜ |
+| Material category / use_type registries | ⬜ | enum-only в `materialCategory.py` | ⬜ |
+
+### Частично: POJO / accessor есть, generators ещё читают `world.*`
+
+| Поле / slice | Сейчас в generators | Целевое |
+|--------------|---------------------|---------|
+| `climate_temperature_peak_min/max` | `poleResolve.peak_bounds()` → `world.climate_*` | `climate_scalars(world)` + `resolve_peak_bounds` |
+| `climate_pole_preset` | `poleResolve.autoresolve_poles()` | `climate_scalars(world).climate_pole_preset` |
+| `precipitation_liquid` | `precipitation._precipitation_liquid_key()` | `climate_scalars(world).precipitation_liquid` |
+| `season_temp_offsets` | `climateRuntimeAssembler` | `climate_scalars(world).season_temp_offsets` |
+| `climate_local_influence_fraction` | `tierResolve` | `climate_scalars(world)` |
+| `elevation_lapse_rate` | `climateGeneratorService` | `terrain_scalars(world)` или climate slice policy |
+| `terrain_chunk_columns`, `map_subsurface_depth`, `z_min`, `z_max` | `terrain/worldMapSettings.py` | `terrain_scalars(world)` |
+| `magma_band_thickness`, `closed_planet_grid` | `columnFillPass` | `terrain_scalars(world)` |
+| `grid_bbox_padding` | `worldMapSettings` | technical / metadata accessor (не domain POJO) |
+| `default_passage_height` | structureGeneratorService, passages | ⬜ structure defaults POJO или worldRow |
+| `world_bounds` | `terrain/passes/bbox.py` | JSON blob accessor (отдельное решение) |
+
+### Намеренно wire-shaped (не world registry POJO)
+
+| Что | Где | Следующий шаг |
+|-----|-----|----------------|
+| Building layout bodies | `structure/`, assemblers, `building_layout_templates()` | JV-4 / typed layout POJO |
+| `economic_tier_band` на template dict | `tierResolver.band_from_template` | POJO шаблонов или bundle |
+| `building_tier_compatible(template: dict)` | economic.py, buildingCache | после layout POJO |
+
+### Facade import — пробелы (symmetry с runtime)
+
+`normalize_world` **не** нормализует (⬜): `barrier_template_registry`, `city_size_registry`, `district_template_registry`, `road_settings`, terrain scalars, building templates.  
+Runtime уже читает через `resolve` в `worldRow` для barrier / city / district.
+
+### Очередь GV (приоритет)
+
+| ID | Scope | P | Зависимость |
+|----|-------|---|-------------|
+| GV-1 | Дожать **climate scalars** — убрать прямой `world.climate_*` / `precipitation_liquid` / `season_temp_offsets` | P1 | — |
+| GV-2 | **`terrain_scalars(world)`** в worldRow + wire projection; worldMapSettings, columnFillPass, lapse | P1 | — |
+| GV-3 | Facade: barrier, city_size, district, road_settings, terrain scalars | P1 | JV-1b удобнее после GV-1/2 |
+| GV-4 | Убрать `hydrology_dict` shim; consumers только `hydrology()` POJO | P2 | — |
+| GV-5 | Подключить реестры с POJO без consumers (connection_type, location_type, …) по мере появления в generators | P2 | JV-2 REF-W |
+| GV-6 | Building layout typed POJO (не только `building_layout_templates` dict merge) | P2 | JV-4 |
+| GV-7 | Удалить transitional `*_rows()` shims после полного GV | P3 | GV-1…6 |
+
+**Порядок:** GV-1 → GV-2 → JV-1b (`worldSlices`) → GV-3 → остальное.  
+Архитектура (slice registry) не блокирует GV-1/2, но снижает дубли в facade/worldRow.
+
+---
+
 ## Связь с v0.1 (история)
 
 | v0.1 (`worldData/jsonValidation/`) | v1 (текущее) |
@@ -344,8 +432,9 @@ JSON → facade → resolve → persist   DB → worldRow → resolve (RUNTIME) 
 | JV-6 | character validation sibling package | P3 | ⬜ |
 | JV-7 | remove runtime SCH-RUNTIME-* hardcodes | P2 | ⬜ |
 | JV-8 | races import (SCH-RACE-*) | P3 | ⬜ |
+| GV-* | generators → worldRow (см. § Generators — миграция на worldRow) | P1–P3 | ◐ |
 
-**Порядок (архитектура перед фичами):** JV-1b → JV-2 → остальные POJO slices → JV-8.
+**Порядок (архитектура перед фичами):** GV-1 → GV-2 → JV-1b → JV-2 → GV-3… → JV-8.
 
 ---
 
@@ -369,3 +458,4 @@ JSON → facade → resolve → persist   DB → worldRow → resolve (RUNTIME) 
 | 0.1 | 2026-06 | Field Contract Registry, orchestrator, `worldData/jsonValidation/` |
 | — | 2026-07 | Удаление v0.1 code (`dc6b171`); пауза simple CRUD |
 | **1.0** | 2026-07 | POJO-first `application/jsonValidation/`: resolve, facade, worldRow; wire projection B; документ v1 |
+| **1.1** | 2026-07 | § Generators — миграция на worldRow (GV): статус, очередь GV-1…7; resolve log; SCH rows barrier/city/district/terrain scalars |
