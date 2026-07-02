@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.utils.facing import Facing
+from app.dataModel.spatial.facing import Facing
 
 
 def bbox_from_cells(cells: list[tuple[int, int]]) -> tuple[int, int, int, int]:

@@ -13,7 +13,7 @@ from app.application.worldData.generators.structure.staircase.uShape    import U
 from app.application.worldData.generators.structure.staircase.spiral    import SpiralBuilder
 from app.application.worldData.generators.structure.staircase.verticalLadder  import VerticalLadderBuilder, ExternalVerticalLadderBuilder
 from app.application.worldData.generators.structure.staircase.base      import StaircaseBuilder
-from app.application.worldData.generators.structure.staircase.staircaseType import StaircaseType
+from app.dataModel.structure.enums.staircaseType import StaircaseType
 from app.dataModel.structure.enums.passageType import PassageType
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage

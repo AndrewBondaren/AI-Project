@@ -21,7 +21,7 @@ from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 
 from app.application.worldData.generators.road.blockSize import block_size_for_density
-from app.application.worldData.generators.utils.facing import Facing, snap_bbox_edge_to_grid
+from app.dataModel.spatial.facing import Facing, snap_bbox_edge_to_grid
 _AUTO_SIDEWALK_TYPES = {"road", "highway"}
 
 

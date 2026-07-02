@@ -13,7 +13,7 @@ from app.dataModel.structure.enums.buildingElement import StructureElement
 from app.application.worldData.generators.structure.cellBuilder import _wall_cell
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _open_cell
 from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
-from app.application.worldData.generators.utils.facing import Facing
+from app.dataModel.spatial.facing import Facing
 from app.application.worldData.generators.structure.passages.wallBreachPlacer import WallBreachPlacer
 from app.application.worldData.generators.structure.passages.tunnelPathFinder import TunnelPathFinder
 

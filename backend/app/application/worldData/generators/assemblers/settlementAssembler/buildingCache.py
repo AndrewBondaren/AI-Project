@@ -23,7 +23,7 @@ from app.application.worldData.generators.assemblers.structureAssembler.assemble
     ASSEMBLER_REGISTRY,
 )
 from app.application.worldData.generators.structure.structureGeneratorService import StructureLayout
-from app.application.worldData.generators.utils.facing import Facing
+from app.dataModel.spatial.facing import Facing
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World

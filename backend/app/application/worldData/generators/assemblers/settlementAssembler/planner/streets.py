@@ -18,7 +18,7 @@ from app.application.worldData.generators.utils.materialResolver import resolve_
 from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
 from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
-from app.application.worldData.generators.utils.facing import Facing
+from app.dataModel.spatial.facing import Facing
 from app.dataModel.settlement.district.districtConnection import primary_or_default
 from app.dataModel.materials import DEFAULT_ROAD_MATERIAL
 from app.db.models.connectionEdge import ConnectionEdge

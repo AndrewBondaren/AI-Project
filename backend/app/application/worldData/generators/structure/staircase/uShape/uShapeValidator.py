@@ -3,8 +3,8 @@ U-shape staircase validator.
 """
 import logging
 
-from app.application.worldData.generators.utils.facing import Facing
-from app.application.worldData.generators.structure.structureElement import (
+from app.dataModel.spatial.facing import Facing
+from app.dataModel.structure.enums.buildingElement import (
     StructureElement, _STAIR_ELEMENTS, _STAIR_DIRECTIONAL,
 )
 from app.application.worldData.generators.structure.staircase.facingHelper import (

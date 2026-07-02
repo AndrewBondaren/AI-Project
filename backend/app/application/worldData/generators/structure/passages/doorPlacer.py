@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import logging
 
-from app.application.worldData.generators.utils.facing import Facing
+from app.dataModel.spatial.facing import Facing
 from app.application.worldData.generators.structure.cellFactory import _door_cell
 from app.application.worldData.generators.structure.passages.doorValidator import (
     _THROUGH,
     validate_door_cell,
 )
-from app.application.worldData.generators.structure.structureElement import StructureElement
+from app.dataModel.structure.enums.buildingElement import StructureElement
 
 logger = logging.getLogger(__name__)
 

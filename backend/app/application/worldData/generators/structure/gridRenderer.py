@@ -2,8 +2,8 @@
 ASCII-визуализация уровня здания.
 Используется в debug API и скриптах разработки.
 """
-from app.application.worldData.generators.utils.facing import Facing
-from app.application.worldData.generators.structure.structureElement import (
+from app.dataModel.spatial.facing import Facing
+from app.dataModel.structure.enums.buildingElement import (
     StructureElement, _STAIR_DIRECTIONAL,
 )
 from app.db.models.mapCell import MapCell

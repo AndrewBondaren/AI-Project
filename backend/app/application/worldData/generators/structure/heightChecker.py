@@ -5,9 +5,10 @@ from __future__ import annotations
 
 import logging
 
-from app.dataModel.structure.enums.buildingElement import StructureElement
-from app.application.worldData.generators.structure.structureElement import (
-    _PASSABLE_ELEMENTS, _STAIR_ELEMENTS,
+from app.dataModel.structure.enums.buildingElement import (
+    StructureElement,
+    _PASSABLE_ELEMENTS,
+    _STAIR_ELEMENTS,
 )
 
 logger = logging.getLogger(__name__)

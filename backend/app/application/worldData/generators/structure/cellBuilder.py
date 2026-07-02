@@ -21,7 +21,7 @@ z_height: pass 3 walls are repeated for every z in [z_base, z_base + z_height - 
 """
 from app.application.worldData.generators.structure.cellFactory import _floor_cell
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
-from app.application.worldData.generators.structure.structureElement import StructureElement
+from app.dataModel.structure.enums.buildingElement import StructureElement
 from app.db.models.mapCell import MapCell
 
 _NEIGHBOURS = ((1, 0), (-1, 0), (0, 1), (0, -1))

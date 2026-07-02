@@ -12,7 +12,7 @@ import logging
 import math
 from random import Random
 
-from app.application.worldData.generators.utils.facing import Facing
+from app.dataModel.spatial.facing import Facing
 from app.application.worldData.generators.structure.cellFactory import _opening_cell
 from app.application.worldData.generators.utils.materialResolver import resolve_material
 from app.application.worldData.generators.utils.tierResolver import TierResolver

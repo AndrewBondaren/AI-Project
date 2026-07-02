@@ -17,7 +17,7 @@ from __future__ import annotations
 import math
 from abc import ABC, abstractmethod
 
-from app.application.worldData.generators.structure.structureElement import StructureElement
+from app.dataModel.structure.enums.buildingElement import StructureElement
 
 
 class WindowHeightResolver(ABC):

@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 
 from app.application.worldData.generators.structure.cellBuilder import _interior
 from app.dataModel.spatial.facing import Facing, parse_facing
-from app.application.worldData.generators.structure.structureElement import (
+from app.dataModel.structure.enums.buildingElement import (
     StructureElement, _WALL_ELEMENTS, _PASSABLE_ELEMENTS,
 )
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance

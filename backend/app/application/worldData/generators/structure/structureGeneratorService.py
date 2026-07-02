@@ -19,7 +19,7 @@ from app.application.worldData.generators.structure.room.roomInstance import _Ro
 from app.application.worldData.generators.structure.staircase.shaftFactory import (
     instantiate_shaft_rooms,
 )
-from app.application.worldData.generators.structure.staircase.staircaseType import (
+from app.dataModel.structure.enums.staircaseType import (
     requires_shaft,
 )
 from app.application.worldData.generators.structure.staircase.shaftPlacer import make_shaft_placer

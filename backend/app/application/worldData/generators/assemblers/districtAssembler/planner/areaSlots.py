@@ -19,7 +19,7 @@ from app.application.worldData.generators.structure.structureGeneratorService im
     OccupiedFootprint,
     StructureLayout,
 )
-from app.application.worldData.generators.utils.facing import Facing
+from app.dataModel.spatial.facing import Facing
 from app.db.models.world import World
 
 logger = logging.getLogger(__name__)

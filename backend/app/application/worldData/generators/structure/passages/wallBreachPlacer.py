@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _open_cell
-from app.application.worldData.generators.utils.facing import Facing
+from app.dataModel.spatial.facing import Facing
 from app.application.worldData.generators.structure.passages.doorPlacer import DoorPlacer
 
 logger = logging.getLogger(__name__)

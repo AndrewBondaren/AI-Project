@@ -12,7 +12,7 @@ from random import Random
 
 from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
-from app.application.worldData.generators.structure.staircase.staircaseType import (
+from app.dataModel.structure.enums.staircaseType import (
     StaircaseType,
     default_shaft_size_type,
     requires_shaft,

@@ -21,7 +21,7 @@ from app.application.worldData.generators.structure.passages.entry import _build
 from app.dataModel.structure.enums.passageType import PassageType
 from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
 from app.application.worldData.generators.structure.staircase.builder import build_staircase
-from app.application.worldData.generators.structure.staircase.staircaseType import StaircaseType
+from app.dataModel.structure.enums.staircaseType import StaircaseType
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
 from app.db.models.mapCell import MapCell

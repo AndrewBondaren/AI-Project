@@ -45,7 +45,7 @@
 
 | Слой | ID | Суть | Пример |
 |------|-----|------|--------|
-| Engine-closed тип | `ENUM-E` | StrEnum в движке; unknown на import → reject | `material_category`, `node_category` |
+| Engine-closed тип | `ENUM-E` | StrEnum; unknown на import → reject | `material_category`, `graph_level`; `node_category` — engine post-JV (`NpcFieldCategory`) |
 | N1-S schema | `N1-S` | `system_name` / `display_name` в schema tables | `stat_schema`, `npc_fields` |
 | N1-W vocabulary | `N1-W` | мастер расширяет строки реестра | `material_registry[]`, `climate_zone_registry` |
 

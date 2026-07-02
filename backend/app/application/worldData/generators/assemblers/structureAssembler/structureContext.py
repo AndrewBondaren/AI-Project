@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from app.application.worldData.generators.utils.facing import Facing
+from app.dataModel.spatial.facing import Facing
 
 
 @dataclass

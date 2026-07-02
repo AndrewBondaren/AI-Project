@@ -1,4 +1,4 @@
-from app.application.worldData.generators.structure.structureElement import StructureElement
+from app.dataModel.structure.enums.buildingElement import StructureElement
 from app.db.models.mapCell import MapCell
 
 

@@ -3,7 +3,7 @@ Entry-point passage builder (main entrance / service entrance).
 """
 import logging
 
-from app.application.worldData.generators.utils.facing import Facing
+from app.dataModel.spatial.facing import Facing
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.doorPlacer import DoorPlacer
 from app.dataModel.structure.enums.passageType import PassageType

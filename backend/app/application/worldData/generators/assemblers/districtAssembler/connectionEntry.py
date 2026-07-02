@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
 from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
-from app.application.worldData.generators.utils.facing import Facing
+from app.dataModel.spatial.facing import Facing
 from app.db.models.connectionNode import ConnectionNode
 
 

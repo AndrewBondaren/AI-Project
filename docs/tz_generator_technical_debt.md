@@ -498,9 +498,9 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 
 Ошибочный фильтр `subtype.startswith("geographic.")` давал **пустой** `geographic_locations` на [`fixtures/world_template.json`](../fixtures/world_template.json).
 
-**Fix (2026-06):** `hydrologyLocations.py` — `system_location_type == GEOGRAPHIC_LOCATION_TYPE`; `GeographicSubtype` StrEnum для subtype.
+**Fix (2026-06):** `hydrologyLocations.py` — `system_location_type == GEOGRAPHIC_LOCATION_TYPE`; `GeographicSubtype` StrEnum + `from_wire` в `dataModel/locations/enums/`.
 
-**Остаток:** split edges по `HydrologyConnectionType`, полный `HydrologyMasterInput` по ТЗ — HY-S-3.
+**Остаток:** split edges по `HydrologyConnectionType`, полный `HydrologyMasterInput` по ТЗ — HY-S-3; сравнения по `GeographicSubtype.*` в hydrology pipeline — HY-5 P2.
 
 ---
 
@@ -544,15 +544,26 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 
 ### HY-5 — wire enum (JSON ↔ StrEnum, без string literals в коде)
 
-**Severity:** medium · **P:** P1 · **Status:** **partial** — hydrology enums начаты; `jsonValidation` + shared registries ⬜
+**Severity:** medium · **P:** P1 · **Status:** **partial** — structure/roads/climate slices в `dataModel`; shims + string literals в generators ⬜; `jsonValidation` ENUM gate (JV-0) ⬜
 
-**Scope:** только **master / world JSON** (`worldData`). `engine/`, `contracts/` — не трогаем.
+**Scope:** только **generators / worldData** с реальным потребителем. `engine/`, `contracts/` — **не трогаем** до JV-0: engine-closed enum (`node_category`, DAG vocabulary) — после валидации, не через bulk-перенос `wireEnums`.
 
 **Полный контракт:** [`tz_json_validation.md`](./tz_json_validation.md) — **§0 ENUM-E / N1-S / N1-W**; backlog HY-5 в generators — этот §.
 
-**Размещение:** `application/jsonValidation/` (не `worldData/` — sibling import layer). См. [`tz_json_validation.md`](./tz_json_validation.md).
+**Канон:** `backend/app/dataModel/**/enums/*.py` — StrEnum + `from_wire()` где нужен default/legacy.  
+**Barrel (только для jsonValidation):** `generators/registries/wireEnums.py` — re-export из `dataModel`; **generators не импортируют** (grep → 0).  
+**Импорт в generators:** прямой `from app.dataModel...`; shims удалять после переключения call sites.
 
 **Симптом без этого:** magic strings в коде; doc пишет `geographic.lake`, JSON хранит два поля; опечатка → silent empty filter (HY-GEO-1).
+
+#### Дисциплина scope (2026-07)
+
+| Правило | Суть |
+|---|---|
+| **Grep-first** | Переносим enum только если есть потребитель в `generators/` или jsonValidation slice |
+| **Не пакетом wireEnums** | Не дублировать весь barrel в `dataModel` «на будущее» |
+| **Engine later** | Если enum живёт в DAG / `npc_fields.node_category` — JV-0 + engine, не HY-5 generators |
+| **`NodeCategory`** | **Удалён** из dataModel (ошибочный домен `connections/`; свалка соц. полей NPC, путаница с engine node). Wire `node_category` — см. [`project_data_storage_tz.md`](./project_data_storage_tz.md); StrEnum позже как `NpcFieldCategory` в `character/` |
 
 #### Контракт двух слоёв
 
@@ -560,31 +571,83 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 |---|---|---|
 | **Wire** (bundle, SQLite TEXT, API JSON) | `str` | `"lake"`, `"lake_shoreline"` |
 | **Domain** (generators, orchestrators) | `StrEnum` member | `GeographicSubtype.LAKE` |
-| **Граница** | parse / serialize | `GeographicSubtype(wire)` → member; `member.value` → wire |
+| **Граница** | parse / serialize | `GeographicSubtype.from_wire(wire)` → member; `member.value` → wire |
 
 ```python
-# generators/registries/wire.py (target)
-def parse_enum(enum_cls: type[StrEnum], wire: str, *, field: str) -> StrEnum:
-    try:
-        return enum_cls(wire)
-    except ValueError as e:
-        raise WireEnumError(field, wire, enum_cls) from e
+# jsonValidation/wire.py (JV-0) или from_wire на границе layout/template row
+ptype = PassageType.from_wire(conn.get("passage_type"), default=PassageType.DOORWAY)
 
-# generator — NO "lake" literal
-if geographic_subtype(loc) is GeographicSubtype.LAKE:
+# generator — NO "doorway" literal (кроме enum definition / .value на persist)
+if ptype is PassageType.STAIRCASE:
     ...
-
-# persist / export
-row["connection_type"] = HydrologyConnectionType.LAKE_SHORELINE.value
 ```
 
-**Правило:** engine-known vocabulary в `generators/` — только через enum; grep `"lake_shoreline"` в generators → 0 (кроме enum definition).
+**Правило:** engine-known vocabulary в `generators/` — только через enum; grep wire-key в generators → 0 (кроме enum definition и `.value` на export).
+
+#### Сделано (2026-06 — 2026-07)
+
+| Домен | `dataModel` | Generators |
+|---|---|---|
+| **Structure** | `PassageType`, `StaircaseType`, `StructureElement`, `BuildingContext` | `from_wire` в passages, `layoutEngine`, `staircase/builder`; `PassageType` shim **удалён**; `StructureElement` — частично прямой import |
+| **Spatial** | `Facing` (`spatial/facing.py`) | shim `utils/facing.py`; часть файлов уже напрямую |
+| **Settlement / roads** | `DistrictEntryRole`, `DistrictDensity`, `StreetLayout`, `SidewalkSide`, `GapPolicy`, `BridgeSubtype` | `streets.py`, `gridLayout` — `ConnectionNodeType`, `GraphLevel`, `DistrictEntryRole`; `blockSize` — `DistrictDensity` |
+| **Connections graph** | `ConnectionNodeType`, `GraphLevel`, `PortalType` | `streets.py`, `connectionEntry`; `PortalType` — только barrel |
+| **Locations** | `GeographicSubtype`, `BorderCategory` | `hydrologyLocations` — `from_wire`; `BorderCategory` — только barrel |
+| **Hydrology** | `HydrologyConnectionType` | re-export в `hydrology/types.py` |
+| **Terrain** | `CellStateCategory` | только barrel |
+| **Climate** | `SeasonKey`, `ClimatePoleMode`, `PoleKind`, `PoleSource` | `poleResolve` — `ClimatePoleMode`, `PoleKind` |
+| **Materials** | `MaterialCategory` | `precipitation.py` |
+| **Character (wire)** | `SystemGender` → `dataModel/character/enums/` (не `shared/`) | только barrel; engine/NPC — после JV |
+| **Shared (world platform)** | `MeasurementSystem`, `StatConflictMode` | только barrel |
+
+**Исправления по ревью:** `NodeCategory` убран; `SystemGender` вынесен из `shared/` в `character/`; over-migration из `wireEnums` без generator consumers откатана по смыслу (barrel ok, код generators не трогать).
+
+#### Остаток — generators (приоритет)
+
+**P1 — shims (механика, enum уже в dataModel)** — ✅ **done (2026-07)**
+
+| Shim | Статус |
+|---|---|
+| `generators/utils/facing.py` | удалён → `dataModel.spatial.facing` |
+| `generators/structure/structureElement.py` | удалён → `dataModel.structure.enums.buildingElement` |
+| `generators/structure/staircase/staircaseType.py` | удалён → `dataModel.structure.enums.staircaseType` |
+| `generators/structure/staircase/staircaseSize.py` | удалён (call sites уже на dataModel) |
+| `generators/structure/room/roomSize.py` | удалён (call sites уже на dataModel) |
+
+**P1 — enum в dataModel, в коде ещё string literals**
+
+| Enum | Где literals | Действие |
+|---|---|---|
+| `StreetLayout` | `districtRoadGenerator._LAYOUT_FN`, default `"grid"` в assembler/placement | `StreetLayout.from_wire`; dict keyed by enum |
+| `GraphLevel` | `gridLayout` — `"district"`; `settlementLayoutExtract` — `"city"`/`"district"` | `GraphLevel.DISTRICT` / `.CITY` (как в `streets.py`) |
+| `StaircaseType` | default `"u_shape"` в `structureGeneratorService`, `shaftFactory`, `passages/builder` | parse до `requires_shaft()` / сравнений |
+| `Facing` | `"north"`/`"south"` defaults, dict в `shared.py`, `wallOpeningResolver`, `entry`, `builder` | `parse_facing` / `Facing` members |
+| `PassageType` | `staircaseTunnelOrchestrator` — `"archway"` в UUID | `PassageType.ARCHWAY.value` |
+
+**P2 — внутренний vocabulary (не wire ENUM-E, перенос опционален)**
+
+| Enum | Модуль | Вердикт |
+|---|---|---|
+| `HydrologyScope`, `HydrologyCellRole` | `terrain/hydrology/types.py` | pipeline hydrology; dataModel — когда стабилизируем HY-S-3 API |
+| `AnchorSource` | `climate/climateAnchor.py` | climate pipeline |
+| `CellZone` | `settlementAssembler/planner/defaults.py` | planner-internal (center/edge/inner) |
+| `CoordinateSpace` | `coordinates/space.py` | теги координатных систем |
+| `PoleMode` | `climate/climatePole.py` | дубль `ClimatePoleMode`; удалить re-export |
+
+**P3 — без dataModel enum пока**
+
+| Literal | Где | Примечание |
+|---|---|---|
+| `room_type == "corridor"` | `corridorConnector`, `corridorTrimmer` | внутренняя таксономия комнат; enum — только при контракте в ТЗ |
+| `_GLASS_USE_TYPE` strings | `wallOpening.py` | material use-type; OQ-3 / N1-W ref |
+
+**Не HY-5 (barrel only, ждут JV-0):** `BorderCategory`, `BuildingContext`, `CellStateCategory`, `PortalType`, `GapPolicy`, `BridgeSubtype`, `SidewalkSide`, `SeasonKey`, `MeasurementSystem`, `StatConflictMode`, `SystemGender`.
 
 #### Три класса vocabulary (§0)
 
 | Класс | ID | Примеры | Контракт |
 |---|---|---|---|
-| **Engine-closed** | ENUM-E | `MaterialCategory`, `NodeCategory`, `GraphLevel` | StrEnum; unknown на import → reject |
+| **Engine-closed** | ENUM-E | `MaterialCategory`, `GraphLevel`, `node_category` *(engine, post-JV)* | StrEnum; unknown на import → reject |
 | **N1-S schema** | N1-S | `stat_schema[]`, `npc_fields[]` | `system_name`/`display_name`; type field → ENUM-E |
 | **N1-W vocabulary** | N1-W | `material_registry[]`, `climate_zone_registry[]` | мастер добавляет строки; refs → REF-W index |
 
@@ -594,12 +657,12 @@ Hydrology declare (U20–U27): wire keys **ENUM-E E-10**; display в N1-W-06 —
 
 | Вариант | Суть | Когда |
 |---|---|---|
-| **A — StrEnum + parse at boundary** | manual `parse_enum()` в import + master input | **сейчас** |
-| **A+ — Pydantic BeforeValidator** | DTO import rows с typed fields | HY-4 validator |
+| **A — StrEnum + parse at boundary** | `from_wire()` в import + master input | **сейчас** (generators) |
+| **A+ — Pydantic BeforeValidator** | DTO import rows с typed fields | JV-0 / jsonValidation |
 | **B — Policy dataclass** | `HydrologyWorldPolicy.model_validate(...)` | HY-4 blob |
 | **C — Codegen из schema** | fixture → Python + TS enums | editor v2 |
 
-**Рекомендация:** **A** немедленно; **A+** на bundle rows; **B** для `world.hydrology`.
+**Рекомендация:** **A** в generators; **A+** на bundle rows; engine enum — **после A+**, не параллельно HY-5.
 
 #### Производительность
 
@@ -607,11 +670,25 @@ Parse на location/edge/policy — не на map cell. Bottleneck — LLM + gri
 
 #### Migration checklist
 
-1. `generators/registries/locationTypes.py` — `LocationType.GEOGRAPHIC`
-2. `generators/registries/connectionTypes.py`
-3. `worldData/jsonValidation/models/` — bundle row DTOs
-4. `worldData/jsonValidation/bundleValidator.py` — hook в `WorldBundleService`
-5. Убрать `CLIMATE_POLE_TYPE = "climate_pole"` string const → enum
+**Generators (HY-5):**
+
+1. ✅ `PassageType`, `StaircaseType`, `StructureElement` → `dataModel/structure/enums/`
+2. ✅ Roads/settlement graph enums → `dataModel`; `streets.py` slice
+3. ✅ `wireEnums.py` — pure re-export barrel
+4. ✅ Удалить shims: `facing`, `structureElement`, `staircaseType`, `staircaseSize`, `roomSize`
+5. ⬜ Roads literals: `StreetLayout`, `GraphLevel` в `districtRoadGenerator` / `gridLayout`
+6. ⬜ Structure literals: `StaircaseType` defaults, `Facing` defaults, `PassageType.ARCHWAY` в orchestrator
+
+**jsonValidation (JV-0, не generators):**
+
+7. ⬜ `jsonValidation/wire.py` — shared `parse_enum()` / `StrictOnWire[T]`
+8. ⬜ Bundle row DTOs — typed enum fields
+9. ⬜ `node_category` → `NpcFieldCategory` в `dataModel/character/` + engine hook (post-JV)
+
+**Прочее:**
+
+10. ⬜ `CLIMATE_POLE_TYPE` string const → только `PoleKind` / `ClimatePoleMode` (убрать `PoleMode` shim)
+11. ⬜ `generators/registries/locationTypes.py` — `LocationType.GEOGRAPHIC` (если появится второй consumer)
 
 #### Персонаж vs мир (TZ storage § character_sheet, players, npcs)
 
@@ -619,13 +696,13 @@ Parse на location/edge/policy — не на map cell. Bottleneck — LLM + gri
 
 | Сущность | JSON import | Enum / wire | jsonValidation пакет |
 |---|---|---|---|
-| World bundle | `POST /worlds/import` | `generators/registries/` (simulation-closed) | **`worldData/jsonValidation/`** |
-| Character sheet | `POST /characters/import` | platform + refs на ключи реестров мира | **`character/jsonValidation/`** (future) — **не** worldData |
-| NPC rows | часть world bundle | world `npc_fields` + engine node_category | world bundle validator + world context |
+| World bundle | `POST /worlds/import` | `dataModel/**/enums` (simulation-closed) | **`application/jsonValidation/`** |
+| Character sheet | `POST /characters/import` | platform + refs на ключи реестров мира | **`character/jsonValidation/`** (future) |
+| NPC rows | часть world bundle | `npc_fields.node_category` + engine DAG | world bundle validator + engine context (**post-JV**) |
 
 **Правило:** ключи персонажа (`system_colour`, stats, perks) **validate vs `world.*_registry` при bind/migrate**, не смешивать с world bundle enum. `character.world_schema_version` ↔ `world.schema_version` — отдельный pipeline (TZ § Schema versioning).
 
-**Не класть** character enums в `generators/registries/` — там только world simulation wire.
+**Не класть** simulation wire enums в `engine/`; **не класть** character enums в `generators/registries/` — barrel re-export для jsonValidation only.
 
 ---
 
@@ -689,10 +766,10 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 
 | ID | Severity | P | Проблема | Status |
 |---|---|---|---|---|
-| HY-GEO-1 | high | P1 | geographic filter doc↔DB notation | **partial** (filter ✅; full enum registry — HY-5) |
+| HY-GEO-1 | high | P1 | geographic filter doc↔DB notation | **partial** (filter ✅; `GeographicSubtype` in dataModel; hydrology member compares — HY-5) |
 | BUNDLE-1 | medium | P2 | `_remap_bundle` monolith | **resolved** — `bundleRemapService.py` registry |
 | HY-S-2 | low | P2 | connections import special-case | open |
-| HY-5 | medium | P1 | StrEnum / policy parse (Retrofit 2) | **partial** |
+| HY-5 | medium | P1 | StrEnum / policy parse (Retrofit 2) | **partial** — dataModel ✅; shims + literals ⬜; JV-0 ⬜ |
 | HY-S-4 | low | P2 | `HYDROLOGY_SCHEMA_DEFAULTS` scatter | open |
 | HY-S-3 | medium | P1 | MasterInput stub vs TZ | open |
 | HY-S-5 | low | P2 | edges as dict | open |
@@ -723,5 +800,6 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 | 2026-06 | `tz_world_snapshot.md` — unified WorldSnapshotService; climate terminology disambiguation v2.6.1 |
 | 2026-06 | Climate v2.6 TZ: LOD C6–C13; CL-17 SurfaceClimateField; CL-18 LOD policy |
 | 2026-06 | Polish backlog rework; CL-2a..CL-2e, DR-5 added; FM-1 resolved |
+| 2026-07 | **HY-5 progress:** structure/roads/climate enums → `dataModel`; `wireEnums` barrel; `NodeCategory` removed; `SystemGender` → `character/`; scope rules + backlog в § HY-5 |
 | 2026-06 | **HY-S registry:** BUNDLE-1, HY-5, HY-S-4, HY-GEO-1 |
 | 2026-06 | **`docs/tz_json_validation.md` v0.1** — Field Contract Registry; ENUM-E / REF-W / N1-S / N1-W (§0) |
