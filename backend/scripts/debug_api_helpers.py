@@ -2,6 +2,8 @@
 
 Requires running backend on ``http://localhost:8000`` — **start it yourself** (``npm run backend`` / ``python start.py``).
 Agents must **not** start the server; only run these helpers after the user has it up.
+
+Surface materialization stack (terrain + hydrology + climate): ``debug_surface_helpers.py``.
 """
 from __future__ import annotations
 

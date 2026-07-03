@@ -737,6 +737,35 @@ class ClimateLODPolicy:
 
 Target D HY-6: **no** global `z ≤ 0` rule ([`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) § Climate).
 
+### Smoke regression — `world_test_all` (2026-07)
+
+**Fixture / harness:** [`fixtures/world_test_all.json`](../fixtures/world_test_all.json) + `backend/scripts/debug_surface_helpers.py` → `world-test-all-001`.
+
+**Подтверждённые дефекты climate eager path (фикстура корректна):**
+
+| # | Комponent | Interim поведение | Target |
+|---|---|---|---|
+| **CL-R1** | `liquidOverlayPass` | Любая surface-top cell с `z ≤ 0` → `liquid_body` если `liquid_precipitation_mult > 0` | Только cells с `hydrology.liquid_candidate` (D HY-6); river bed — phase only (U28) |
+| **CL-R2** | `_non_surface_anchor_cells` | +2 MapCell в **meter** `(map_x, map_y, map_z)` для dungeon / underground | Grid-normalize или volume path; **не** участвовать в surface liquid mask ([`tz_terrain_generation.md`](./tz_terrain_generation.md) NC-1c) |
+| **CL-R3** | `liquid_precipitation_mult` + fixture `water` | Нет `cool_temp`/`heat_temp` → mult **1.0** всегда | Phase band из `material_registry`; frozen dungeon не получает liquid overlay |
+
+**Наблюдаемый результат прогона:**
+
+```
+map_cells total=5462  (5460 grid skeleton + 2 extra anchors)
+surface grid tops: 260 × tundra, z≈3…7, liquid_body=0
+liquid_body=2 @ (6000,24000,z=-1) dungeon  temp=-5
+              @ (42000,18000,z=-3) underground  temp=32
+```
+
+**Regression acceptance (после fix):**
+
+- Eager `generate-climate` на `world-test-all-001`: **0** `liquid_body` пока hydrology stub / без `liquid_candidate`.
+- После D HY-7a: `liquid_body` только на declare lake/sea/river cells surface grid; dungeon/underground **без** `liquid_body`.
+- `liquidOverlayPass` **не** создаёт terrain на `_non_surface_anchor_cells` (skip или pre-filter non-grid cells).
+
+**Cross-ref:** HY-1, [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) § Interim bug; TR-8 / CL-11 — extract `nonSurfaceAnchorPass`.
+
 ### Статус реализации
 
 | Элемент | Статус |
@@ -944,7 +973,7 @@ flowchart TB
 
 - `ClimateOrchestratorService.full_surface` — surface grid cells: `z`, `system_terrain`, `temperature_base`, `rainfall`.
 - Pole blend — только `(gx, gy)`; `typical_elevation_z` — bias heightmap, не «глубина = холод».
-- Static anchor `map_z != 0` (`_non_surface_anchor_cells`) — **точечный** legacy path: `resolve_climate` + `weather_at_elevation`; **не** volume resolver.
+- Static anchor `map_z != 0` (`_non_surface_anchor_cells`) — **точечный** legacy path: `resolve_climate` + `weather_at_elevation`; **не** volume resolver. **2026-07:** пишет `map_x/map_y` в meters в `map_cells` (NC-1c); при eager climate merge попадает под interim `liquidOverlayPass` — см. § Smoke regression CL-R1…CL-R3.
 
 ### Сценарии volume (будущие)
 
@@ -1060,6 +1089,7 @@ class VolumeClimateContext:
 
 | Дата | Версия | Изменение |
 |---|---|---|
+| 2026-07 | — | § Smoke regression `world_test_all`: CL-R1…CL-R3 (false liquid_body, NC-1c, water phase mult) |
 | 2026-06 | v2.6.1 | Disambiguation: World Snapshot vs SurfaceClimateField; cross-ref `tz_world_snapshot.md` |
 | 2026-06 | v2.6 | **Climate LOD** C6–C13: SurfaceClimateField, per-cell vs field cache, partial recalc, hydrology U28 liquid split, lazy sim cross-ref |
 | 2026-06 | v2.5.2 | U12 cave water: volume principle + `cave_system` in VolumeClimateContext draft |

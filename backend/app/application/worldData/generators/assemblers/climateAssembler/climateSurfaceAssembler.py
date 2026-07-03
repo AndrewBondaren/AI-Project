@@ -60,6 +60,9 @@ def _count_anchors(field: ClimateAnchorField) -> tuple[int, int, int]:
 class ClimateSurfaceAssembler:
     """
     Orchestrates surface climate passes. Entry at any pass level (for future DAG nodes).
+
+    Non-surface anchors (map_z != 0) are not merged into eager map_cells (NC-1c);
+    lazy repair — ``TerrainGeneratorService.generate_minimal``; volume climate TBD.
     """
 
     def __init__(self, climate: ClimateGeneratorService | None = None) -> None:
@@ -107,19 +110,17 @@ class ClimateSurfaceAssembler:
         surface = run_cell_weather_pass(
             world, locations, pole_field, anchor_field, heightmap, self._climate,
         )
-        extra   = self._non_surface_anchor_cells(world, locations)
         logger.info(
-            "climate pass | world=%s cell_weather | surface_cells=%d extra_non_surface=%d path=resolve_climate",
+            "climate pass | world=%s cell_weather | surface_cells=%d path=resolve_climate",
             world.world_uid,
             len(surface),
-            len(extra),
         )
 
         return ClimateSurfaceResult(
             pole_field=pole_field,
             heightmap_cells=heightmap,
             anchor_field=anchor_field,
-            surface_cells=surface + extra,
+            surface_cells=surface,
         )
 
     def apply_climate_pass(
@@ -136,13 +137,11 @@ class ClimateSurfaceAssembler:
         weathered = run_cell_weather_pass(
             world, locations, pole_field, anchor_field, heightmap_cells, self._climate,
         )
-        extra = self._non_surface_anchor_cells(world, locations)
-        combined = weathered + extra
-        overlaid = run_liquid_overlay_pass(world, combined)
+        overlaid = run_liquid_overlay_pass(world, weathered)
         logger.info(
             "climate pass | world=%s apply_climate | cells=%d liquid_overlay=%d",
             world.world_uid,
-            len(combined),
+            len(weathered),
             len(overlaid),
         )
         return overlaid
@@ -186,32 +185,3 @@ class ClimateSurfaceAssembler:
         if request.run_cell_weather:
             result = run_liquid_overlay_pass(world, result)
         return result
-
-    def _non_surface_anchor_cells(
-        self,
-        world: World,
-        locations: list[NamedLocation],
-    ) -> list[MapCell]:
-        from app.application.worldData.generators.climate.locations import static_map_anchors
-        from app.application.worldData.generators.climate.terrainZ import z_to_terrain
-        from app.application.jsonValidation import terrain_system_keys
-
-        uid_map     = {loc.location_uid: loc for loc in locations}
-        terrain_set = terrain_system_keys(world)
-        extra: list[MapCell] = []
-        for anchor in static_map_anchors(locations):
-            if anchor.map_z == 0:
-                continue
-            climate_zone = self._climate.resolve_climate(world, uid_map, anchor)
-            temp, rainfall = self._climate.weather_at_elevation(world, climate_zone, anchor.map_z)
-            extra.append(MapCell(
-                world_uid=world.world_uid,
-                x=anchor.map_x,
-                y=anchor.map_y,
-                z=anchor.map_z,
-                system_terrain=z_to_terrain(anchor.map_z, terrain_set),
-                temperature_base=temp,
-                rainfall=rainfall,
-                location_uid=anchor.location_uid,
-            ))
-        return extra

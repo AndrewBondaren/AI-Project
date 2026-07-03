@@ -878,6 +878,44 @@ Wilderness `system_terrain` от z — **не urban**. Urban — settlement ил
 | `plan_footprint_occupancy_cells` | grid index | surface | urban occupancy |
 | `SettlementAssembler` geometry | world local meters | meters | after translate |
 | `generate_minimal` | raw anchor (repair) | anchor map_z | NC-1c |
+| `_non_surface_anchor_cells` (climate eager) | **world meters** (`map_x`, `map_y`) ❌ | anchor `map_z` | **NC-1c bug** — см. § Smoke regression |
+
+---
+
+## Smoke regression — `world_test_all` (2026-07)
+
+**Fixture:** [`fixtures/world_test_all.json`](../fixtures/world_test_all.json) (`world-test-all-001`) — merge gameplay + template; `map_cells: []` at import; surface via `api_materialize_surface_stack`.
+
+**Прогон (2026-07):** import → `generate-surface` → `generate-hydrology` (stub) → `generate-climate`.
+
+| Метрика | Значение |
+|---|---|
+| Terrain skeleton cells | 5460 — `x/y` в **WORLD_SURFACE_GRID** (≈ −2…17 при `map_cell_size_m: 3000`) |
+| Extra anchor cells | **2** — `x/y` в **WORLD_LOCAL_METERS** (6000, 42000) |
+| Surface tops (grid) | 260 columns, z≈3…7, `tundra` |
+| False `liquid_body` | 2 — только extra anchors; overworld без воды |
+
+### NC-1c — подтверждённый дефект координат
+
+**Симптом:** в одной таблице `map_cells` coexisting grid index и meter anchors на том же PK `(world_uid, x, y, z)`.
+
+**Источник:** `ClimateSurfaceAssembler._non_surface_anchor_cells` пишет:
+
+```python
+x=anchor.map_x, y=anchor.map_y, z=anchor.map_z  # meters
+```
+
+Skeleton `run_column_fill` пишет `x=gx, y=gy` (grid index). Конверсия `meters_to_grid_x/y` **не** применяется.
+
+**Триггер в fixture:** единственные локации с `map_z != 0` — dungeon (`map_z: -1`) и underground city (`map_z: -3`). Остальные anchors `map_z: 0` → extra cell не создаётся.
+
+**Target fix (NC-1c):**
+
+- Либо **не persist** point-anchor в `map_cells` (weather-only / volume layer TBD),
+- Либо grid-normalize: `x=meters_to_grid_x(map_x)*cell_m` **или** хранить grid `(gx, gy)` с явным `coordinate_space` (NC-1a),
+- Либо отдельный контракт «repair cell» только для `generate_minimal` / lazy, без merge в eager surface batch.
+
+**Cross-ref:** interim `liquid_body` на этих ячейках — [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) § Interim bug; climate pass — [`tz_climate.md`](./tz_climate.md) § Smoke regression.
 
 ---
 
@@ -1054,7 +1092,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 | Terrain decoupled from cities | ✅ |
 | Coordinate convert hub | ✅ |
 | DAG: `generate_climate`, `recalculate_climate`, `resolve_weather` | ✅ |
-| NC-1c minimal grid coords | ⬜ |
+| NC-1c minimal grid coords | ⬜ **подтверждено** smoke `world_test_all` (2026-07) |
 | `world_map_version` после generate | ⬜ |
 
 ---
@@ -1098,6 +1136,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 | 2026-06 | Terrain layers: N_base vs deep geology; liquid with climate; ores independent |
 | 2026-06 | **Утверждена** multi-pass terrain skeleton; ordered world generation passes |
 | 2026-06 | Climate split; Terrain ↔ Climate interim documented |
+| 2026-07 | § Smoke regression `world_test_all`: NC-1c meter vs grid в `_non_surface_anchor_cells` |
 | 2026-06 | NC-1 coordinate spaces rework |
 
 ---

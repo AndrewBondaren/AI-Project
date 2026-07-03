@@ -932,6 +932,39 @@ Climate pass (`generate-climate`) читает metadata из БД — **не** i
 
 **Cross-ref:** [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Terrain layers п.3; [`tz_climate.md`](./tz_climate.md) § precipitation liquid.
 
+### Interim bug — smoke [`fixtures/world_test_all.json`](../fixtures/world_test_all.json) (2026-07)
+
+**Статус:** подтверждено прогоном `debug_surface_helpers.api_materialize_surface_stack` на `world-test-all-001`. Фикстура **корректна** — выявляет дефект генерации, не ошибку JSON мастера.
+
+| Наблюдение | Ожидание (target) | Факт (interim) |
+|---|---|---|
+| Declared lake/sea/coast (`connection_nodes/edges`, `loc-template-lake-declared`, …) | после **D HY-7a** — carve + `hydrology.liquid_candidate` на surface grid | hydrology endpoint **stub** → **0** воды от declare |
+| `liquid_body` на overworld (260 surface columns, z≈3…7) | 0 до hydrology persist | **0** ✅ |
+| `liquid_body` всего в `map_cells` | только hydrology mask + climate phase | **2** ❌ — ложные озёра |
+
+**Цепочка (не hydrology carve):**
+
+1. Climate `_non_surface_anchor_cells` — две локации с `map_z != 0`: `loc-template-settlement-dungeon` (`map_z: -1`), `loc-template-settlement-underground` (`map_z: -3`).
+2. Interim `liquidOverlayPass`: `z ≤ 0` AND `liquid_precipitation_mult > 0` → **`liquid_body`** без `hydrology.liquid_candidate`.
+3. У `water` в fixture нет `cool_temp`/`heat_temp` → mult **= 1.0** при любой температуре (в т.ч. −5 °C у dungeon).
+
+**Ложные ячейки (meter coords, вне surface grid — см. NC-1c в [`tz_terrain_generation.md`](./tz_terrain_generation.md)):**
+
+| x, y, z | `location_uid` | Почему не вода |
+|---|---|---|
+| 6000, 24000, −1 | `loc-template-settlement-dungeon` | underground POI, не lake/sea declare |
+| 42000, 18000, −3 | `loc-template-settlement-underground` | underground POI, не hydrology carve |
+
+**Закрытие (acceptance после D HY):**
+
+| Шаг | Критерий |
+|---|---|
+| **D HY-7a** | declared lake/sea/river из `world_test_all` дают `liquid_candidate` на **WORLD_SURFACE_GRID** cells |
+| **D HY-6** | `liquidOverlayPass` **не** ставит `liquid_body` по global `z≤0`; только mask + temp phase |
+| **Regression** | после full pipeline на `world-test-all-001`: **0** `liquid_body` на `(6000,24000)` / `(42000,18000)`; вода только у declare geography |
+
+**Cross-ref:** HY-1 в [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md); climate anchor path — [`tz_climate.md`](./tz_climate.md) § «Smoke regression».
+
 ---
 
 ## Связь с settlement и connections
@@ -1209,6 +1242,7 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 | 2026-06 | U11: NamedLocation optional — geometry without name; declare only when master adds location |
 | 2026-06 | U12: underground lakes/rivers in cave systems; separate volume ecosystem; not surface hydrology |
 | 2026-06 | U13: world template `materialize_named_locations`; LLM DAG node names features from context; python persist |
+| 2026-07 | § Interim bug — smoke `world_test_all`: 2 false `liquid_body`; declare hydrology 0 until D HY-7a |
 
 ---
 

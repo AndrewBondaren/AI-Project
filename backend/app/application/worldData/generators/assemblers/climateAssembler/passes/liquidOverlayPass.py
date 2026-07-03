@@ -5,13 +5,24 @@ from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
 
+def _is_liquid_candidate(cell: MapCell) -> bool:
+    """tz_terrain_hydrology.md U19 — mask from hydrology persist, not elevation."""
+    hydrology = cell.hydrology
+    if not isinstance(hydrology, dict):
+        return False
+    return bool(hydrology.get("liquid_candidate"))
+
+
 def run_liquid_overlay_pass(
     world: World,
     cells: list[MapCell],
 ) -> list[MapCell]:
     """
-    Apply liquid_body on surface-top cells at z <= 0 when temperature allows liquid phase.
-    Runs after cell weather pass (generate-climate).
+    Apply liquid_body on surface-top cells when hydrology marked liquid_candidate
+    and temperature allows liquid phase (tz_terrain_hydrology.md U7, D HY-6).
+
+    Does not use global z<=0. River beds already liquid_body from hydrology (U28)
+    are left unchanged here — phase/material is a separate concern.
     """
     terrain_set = terrain_system_keys(world)
     if "liquid_body" not in terrain_set:
@@ -29,12 +40,22 @@ def run_liquid_overlay_pass(
     result: list[MapCell] = []
     for cell in cells:
         top = surface_top.get((cell.x, cell.y))
-        if (
+        is_surface_top = (
             top is not None
             and cell.x == top.x
             and cell.y == top.y
             and cell.z == top.z
-            and cell.z <= 0
+        )
+        if not is_surface_top:
+            result.append(cell)
+            continue
+
+        if cell.system_terrain == "liquid_body":
+            result.append(cell)
+            continue
+
+        if (
+            _is_liquid_candidate(cell)
             and cell.temperature_base is not None
             and liquid_precipitation_mult(cell.temperature_base, liquid, world.world_uid) > 0
         ):
@@ -57,6 +78,7 @@ def run_liquid_overlay_pass(
                 system_facing=cell.system_facing,
                 display_facing=cell.display_facing,
                 glass_material=cell.glass_material,
+                hydrology=cell.hydrology,
             ))
         else:
             result.append(cell)

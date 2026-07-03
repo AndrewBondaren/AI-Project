@@ -1,0 +1,1817 @@
+{
+  "_fixture_meta": {
+    "version": "2026-07",
+    "description": "Объединение fixtures/world_test.json (gameplay: Эйдора, Ironhold, races, perks) и fixtures/world_template.json (climate, hydrology, geographic declare, connection graph). map_cells пуст — после import: debug_surface_helpers.api_materialize_surface_stack. character_test.json по-прежнему привязан к world-test-001; для этого мира — свой персонаж или remap.",
+    "sources": [
+      "world_test.json",
+      "world_template.json"
+    ],
+    "world_uid": "world-test-all-001"
+  },
+  "world": {
+    "world_uid": "world-test-all-001",
+    "name": "Эйдора (полный эталон)",
+    "created_at": "2026-05-23T00:00:00",
+    "narrative_language": "ru",
+    "measurement_system": "metric",
+    "stat_schema": {
+      "strength": {
+        "display_name": "Сила",
+        "min": 1,
+        "max": 20
+      },
+      "agility": {
+        "display_name": "Ловкость",
+        "min": 1,
+        "max": 20
+      },
+      "endurance": {
+        "display_name": "Выносливость",
+        "min": 1,
+        "max": 20
+      },
+      "intelligence": {
+        "display_name": "Интеллект",
+        "min": 1,
+        "max": 20
+      },
+      "perception": {
+        "display_name": "Восприятие",
+        "min": 1,
+        "max": 20
+      },
+      "charisma": {
+        "display_name": "Харизма",
+        "min": 1,
+        "max": 20
+      }
+    },
+    "hp_enabled": true,
+    "faint_threshold": 0.05,
+    "wounds_enabled": false,
+    "location_type_registry": {
+      "region": {
+        "display_name": "Регион"
+      },
+      "territory": {
+        "display_name": "Территория"
+      },
+      "settlement": {
+        "display_name": "Поселение"
+      },
+      "district": {
+        "display_name": "Район"
+      },
+      "building": {
+        "display_name": "Здание"
+      },
+      "room": {
+        "display_name": "Комната"
+      },
+      "geographic": {
+        "display_name": "География"
+      },
+      "climate_pole": {
+        "display_name": "Климатический полюс"
+      },
+      "continent": {
+        "display_name": "Континент"
+      },
+      "kingdom": {
+        "display_name": "Королевство"
+      },
+      "empire": {
+        "display_name": "Империя"
+      },
+      "duchy": {
+        "display_name": "Герцогство"
+      },
+      "city": {
+        "display_name": "Город"
+      },
+      "town": {
+        "display_name": "Посёлок"
+      },
+      "village": {
+        "display_name": "Деревня"
+      },
+      "square": {
+        "display_name": "Площадь"
+      },
+      "street": {
+        "display_name": "Улица"
+      },
+      "gate": {
+        "display_name": "Ворота"
+      },
+      "dungeon": {
+        "display_name": "Подземелье"
+      },
+      "cave": {
+        "display_name": "Пещера"
+      },
+      "camp": {
+        "display_name": "Лагерь"
+      }
+    },
+    "map_cell_size_m": 3000,
+    "default_passage_height": 2,
+    "lore_registry": {
+      "terrain_plains": {
+        "display_name": "Равнина",
+        "description": "Открытая ровная местность."
+      },
+      "terrain_tundra": {
+        "display_name": "Тундра",
+        "description": "Холодная открытая местность с вечной мерзлотой. Сложно проходимая."
+      },
+      "terrain_forest": {
+        "display_name": "Лес",
+        "description": "Густой лесной массив."
+      },
+      "terrain_liquid_body": {
+        "display_name": "Водоём",
+        "description": "Открытая вода: море, озеро, река."
+      },
+      "terrain_urban": {
+        "display_name": "Городская застройка",
+        "description": "Улицы и постройки поселения. Легко проходимо."
+      },
+      "terrain_road": {
+        "display_name": "Дорога",
+        "description": "Мощёная или грунтовая дорога. Ускоряет передвижение."
+      },
+      "terrain_crevice": {
+        "display_name": "Расщелина",
+        "description": "Вертикальный разлом в земле. Можно перепрыгнуть при достаточной прыгучести."
+      },
+      "terrain_floor": {
+        "display_name": "Пол",
+        "description": "Поверхность пола внутри здания."
+      },
+      "terrain_roof": {
+        "display_name": "Крыша",
+        "description": "Внешняя поверхность крыши здания."
+      },
+      "terrain_wall": {
+        "display_name": "Стена",
+        "description": "Несущая или разделительная стена. Непроходимо без разрушения."
+      },
+      "terrain_door": {
+        "display_name": "Дверь",
+        "description": "Проём с дверью. Можно открыть, закрыть, запереть, сломать."
+      },
+      "terrain_gate": {
+        "display_name": "Ворота",
+        "description": "Большие ворота в стене или заборе. Могут быть на замке."
+      },
+      "terrain_window": {
+        "display_name": "Окно",
+        "description": "Проём в стене со стеклом. Может быть разбито."
+      },
+      "terrain_open_space": {
+        "display_name": "Открытое пространство",
+        "description": "Aerial / open volume."
+      },
+      "terrain_rubble": {
+        "display_name": "Обломки",
+        "description": "Разрушенные конструкции и мусор. Проходимо с трудом."
+      },
+      "terrain_mountain": {
+        "display_name": "Горы",
+        "description": "Высокий рельеф, крутые склоны."
+      },
+      "terrain_shore": {
+        "display_name": "Берег",
+        "description": "Прибрежная полоса: shore + shallow deepening (U15)."
+      },
+      "geo_lake_moon": {
+        "display_name": "Озеро Лунное",
+        "description": "Declared lake — name + lake_shoreline ConnectionEdge chain (U20)."
+      },
+      "geo_peak_white": {
+        "display_name": "Гора Белая",
+        "description": "Declared peak — river source context."
+      },
+      "geo_sea_north": {
+        "display_name": "Северное море",
+        "description": "Declared sea — name + coastline ConnectionEdge chain (U21)."
+      },
+      "geo_coast_fjord": {
+        "display_name": "Фьордовый берег",
+        "description": "Declared coast segment."
+      },
+      "geo_river_silver": {
+        "display_name": "Серебряная река",
+        "description": "Declared river name; geometry via ConnectionEdge."
+      },
+      "geo_island_mist": {
+        "display_name": "Остров Туманов",
+        "description": "Declared island."
+      },
+      "geo_plain_golden": {
+        "display_name": "Золотая равнина",
+        "description": "Declared plain — flat bias test."
+      },
+      "geo_mountain_iron": {
+        "display_name": "Железные горы",
+        "description": "Declared mountain massif."
+      }
+    },
+    "terrain_registry": [
+      {
+        "system_terrain": "plains",
+        "glossary_ref": "terrain_plains",
+        "terrain_category": "solid",
+        "travel_modifier": 1.5,
+        "danger_level": "none",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "earth"
+      },
+      {
+        "system_terrain": "tundra",
+        "glossary_ref": "terrain_tundra",
+        "terrain_category": "solid",
+        "travel_modifier": 2.0,
+        "danger_level": "low",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "earth"
+      },
+      {
+        "system_terrain": "forest",
+        "glossary_ref": "terrain_forest",
+        "terrain_category": "solid",
+        "travel_modifier": 2.5,
+        "danger_level": "medium",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "wood"
+      },
+      {
+        "system_terrain": "liquid_body",
+        "glossary_ref": "terrain_liquid_body",
+        "terrain_category": "liquid",
+        "travel_modifier": null,
+        "danger_level": "high",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "water"
+      },
+      {
+        "system_terrain": "urban",
+        "glossary_ref": "terrain_urban",
+        "terrain_category": "solid",
+        "travel_modifier": 1.0,
+        "danger_level": "none",
+        "has_state": false,
+        "default_state": null,
+        "default_material": null
+      },
+      {
+        "system_terrain": "road",
+        "glossary_ref": "terrain_road",
+        "terrain_category": "solid",
+        "travel_modifier": 0.8,
+        "danger_level": "none",
+        "has_state": false,
+        "default_state": null,
+        "default_material": null
+      },
+      {
+        "system_terrain": "crevice",
+        "glossary_ref": "terrain_crevice",
+        "terrain_category": "crevice",
+        "travel_modifier": null,
+        "danger_level": "high",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "stone",
+        "gap_width": 2
+      },
+      {
+        "system_terrain": "floor",
+        "glossary_ref": "terrain_floor",
+        "terrain_category": "solid",
+        "travel_modifier": 1.0,
+        "danger_level": "none",
+        "has_state": false,
+        "default_state": null,
+        "default_material": null
+      },
+      {
+        "system_terrain": "roof",
+        "glossary_ref": "terrain_roof",
+        "terrain_category": "solid",
+        "travel_modifier": 1.0,
+        "danger_level": "none",
+        "has_state": false,
+        "default_state": null,
+        "default_material": null
+      },
+      {
+        "system_terrain": "wall",
+        "glossary_ref": "terrain_wall",
+        "terrain_category": "barrier",
+        "travel_modifier": null,
+        "danger_level": "none",
+        "has_state": false,
+        "default_state": null,
+        "default_material": null
+      },
+      {
+        "system_terrain": "door",
+        "glossary_ref": "terrain_door",
+        "terrain_category": "barrier",
+        "travel_modifier": null,
+        "danger_level": "none",
+        "has_state": true,
+        "default_state": "closed",
+        "default_material": null
+      },
+      {
+        "system_terrain": "gate",
+        "glossary_ref": "terrain_gate",
+        "terrain_category": "barrier",
+        "travel_modifier": null,
+        "danger_level": "none",
+        "has_state": true,
+        "default_state": "closed",
+        "default_material": null
+      },
+      {
+        "system_terrain": "window",
+        "glossary_ref": "terrain_window",
+        "terrain_category": "barrier",
+        "travel_modifier": null,
+        "danger_level": "none",
+        "has_state": true,
+        "default_state": "closed",
+        "default_material": null
+      },
+      {
+        "system_terrain": "open_space",
+        "glossary_ref": "terrain_open_space",
+        "terrain_category": "aerial",
+        "travel_modifier": null,
+        "danger_level": "none",
+        "has_state": false,
+        "default_state": null,
+        "default_material": null
+      },
+      {
+        "system_terrain": "rubble",
+        "glossary_ref": "terrain_rubble",
+        "terrain_category": "solid",
+        "travel_modifier": 2.0,
+        "danger_level": "low",
+        "has_state": false,
+        "default_state": null,
+        "default_material": null
+      },
+      {
+        "system_terrain": "mountain",
+        "glossary_ref": "terrain_mountain",
+        "terrain_category": "solid",
+        "travel_modifier": 3.0,
+        "danger_level": "medium",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "stone"
+      },
+      {
+        "system_terrain": "shore",
+        "glossary_ref": "terrain_shore",
+        "terrain_category": "solid",
+        "travel_modifier": 1.8,
+        "danger_level": "low",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "sand"
+      }
+    ],
+    "city_size_registry": [
+      {
+        "system_size": "hamlet",
+        "display_size": "Хутор",
+        "radius": 0
+      },
+      {
+        "system_size": "village",
+        "display_size": "Деревня",
+        "radius": 0
+      },
+      {
+        "system_size": "town",
+        "display_size": "Городок",
+        "radius": 1
+      },
+      {
+        "system_size": "city",
+        "display_size": "Город",
+        "radius": 1
+      },
+      {
+        "system_size": "metropolis",
+        "display_size": "Метрополис",
+        "radius": 2
+      },
+      {
+        "system_size": "megalopolis",
+        "display_size": "Мегалополис",
+        "radius": 3
+      }
+    ],
+    "economic_tier_registry": [
+      {
+        "system_tier": "poor",
+        "display_tier": "Хлам",
+        "base_value": 0
+      },
+      {
+        "system_tier": "basic",
+        "display_tier": "Базовый",
+        "base_value": 1
+      },
+      {
+        "system_tier": "standard",
+        "display_tier": "Стандартный",
+        "base_value": 10
+      },
+      {
+        "system_tier": "quality",
+        "display_tier": "Качественный",
+        "base_value": 100
+      },
+      {
+        "system_tier": "premium",
+        "display_tier": "Премиальный",
+        "base_value": 500
+      },
+      {
+        "system_tier": "exceptional",
+        "display_tier": "Исключительный",
+        "base_value": 2000
+      }
+    ],
+    "material_registry": [
+      {
+        "system_material": "stone",
+        "display_name": "Камень",
+        "glossary_ref": null,
+        "material_category": "solid",
+        "tags": [
+          "construction",
+          "mineral"
+        ],
+        "use_type": [
+          "wall",
+          "floor",
+          "column"
+        ],
+        "economic_tier": "standard",
+        "hardness": 3,
+        "density": 250,
+        "structural_strength": 0.8,
+        "flammable": false,
+        "freezable": false,
+        "corrodible": true,
+        "meltable": false,
+        "mineable": true,
+        "transparent": false,
+        "components": null
+      },
+      {
+        "system_material": "wood",
+        "display_name": "Дерево",
+        "glossary_ref": null,
+        "material_category": "solid",
+        "tags": [
+          "construction",
+          "organic"
+        ],
+        "use_type": [
+          "wall",
+          "floor",
+          "door",
+          "railing"
+        ],
+        "economic_tier": "basic",
+        "hardness": 2,
+        "density": 60,
+        "structural_strength": 0.3,
+        "flammable": true,
+        "freezable": false,
+        "corrodible": true,
+        "meltable": false,
+        "mineable": false,
+        "transparent": false,
+        "components": null
+      },
+      {
+        "system_material": "iron",
+        "display_name": "Железо",
+        "glossary_ref": null,
+        "material_category": "solid",
+        "tags": [
+          "metal",
+          "mineral"
+        ],
+        "use_type": [
+          "wall",
+          "door",
+          "gate",
+          "railing"
+        ],
+        "economic_tier": "standard",
+        "hardness": 4,
+        "density": 800,
+        "structural_strength": 0.9,
+        "flammable": false,
+        "freezable": false,
+        "corrodible": true,
+        "meltable": true,
+        "mineable": false,
+        "transparent": false,
+        "components": null
+      },
+      {
+        "system_material": "earth",
+        "display_name": "Земля",
+        "glossary_ref": null,
+        "material_category": "solid",
+        "tags": [
+          "raw",
+          "mineral"
+        ],
+        "use_type": [
+          "floor"
+        ],
+        "economic_tier": "poor",
+        "hardness": 1,
+        "density": 150,
+        "structural_strength": 0.2,
+        "flammable": false,
+        "freezable": false,
+        "corrodible": true,
+        "meltable": false,
+        "mineable": true,
+        "transparent": false,
+        "components": null
+      },
+      {
+        "system_material": "crystal",
+        "display_name": "Кристалл",
+        "glossary_ref": null,
+        "material_category": "solid",
+        "tags": [
+          "mineral",
+          "magic"
+        ],
+        "use_type": [
+          "wall",
+          "floor"
+        ],
+        "economic_tier": "premium",
+        "hardness": 3,
+        "density": 260,
+        "structural_strength": 0.4,
+        "flammable": false,
+        "freezable": false,
+        "corrodible": false,
+        "meltable": false,
+        "mineable": false,
+        "transparent": true,
+        "components": null
+      },
+      {
+        "system_material": "water",
+        "display_name": "Вода",
+        "glossary_ref": null,
+        "material_category": "liquid",
+        "tags": [],
+        "use_type": [],
+        "economic_tier": null,
+        "hardness": null,
+        "density": 100,
+        "structural_strength": null,
+        "flammable": false,
+        "freezable": true,
+        "corrodible": false,
+        "meltable": false,
+        "temp_damage": false,
+        "vision_block": false,
+        "components": null
+      },
+      {
+        "system_material": "lava",
+        "display_name": "Лава",
+        "glossary_ref": null,
+        "material_category": "liquid",
+        "tags": [],
+        "use_type": [],
+        "economic_tier": null,
+        "hardness": null,
+        "density": 270,
+        "structural_strength": null,
+        "flammable": false,
+        "freezable": false,
+        "corrodible": false,
+        "meltable": false,
+        "temp_damage": true,
+        "vision_block": false,
+        "components": null
+      },
+      {
+        "system_material": "air",
+        "display_name": "Воздух",
+        "glossary_ref": null,
+        "material_category": "gas",
+        "tags": [],
+        "use_type": [],
+        "economic_tier": null,
+        "hardness": null,
+        "density": 1,
+        "structural_strength": null,
+        "flammable": false,
+        "freezable": false,
+        "corrodible": false,
+        "meltable": false,
+        "temp_damage": false,
+        "vision_block": false,
+        "components": null
+      },
+      {
+        "system_material": "smoke",
+        "display_name": "Дым",
+        "glossary_ref": null,
+        "material_category": "gas",
+        "tags": [],
+        "use_type": [],
+        "economic_tier": null,
+        "hardness": null,
+        "density": 2,
+        "structural_strength": null,
+        "flammable": false,
+        "freezable": false,
+        "corrodible": false,
+        "meltable": false,
+        "temp_damage": false,
+        "vision_block": true,
+        "components": null
+      },
+      {
+        "system_material": "toxic_gas",
+        "display_name": "Токсичный газ",
+        "glossary_ref": null,
+        "material_category": "gas",
+        "tags": [],
+        "use_type": [],
+        "economic_tier": null,
+        "hardness": null,
+        "density": 3,
+        "structural_strength": null,
+        "flammable": true,
+        "freezable": false,
+        "corrodible": false,
+        "meltable": false,
+        "temp_damage": true,
+        "vision_block": true,
+        "components": null
+      },
+      {
+        "system_material": "sand",
+        "display_name": "Песок",
+        "material_category": "solid",
+        "tags": [
+          "mineral"
+        ],
+        "economic_tier": "basic",
+        "hardness": 1,
+        "density": 160,
+        "flammable": false
+      },
+      {
+        "system_material": "ice",
+        "display_name": "Лёд",
+        "material_category": "solid",
+        "tags": [],
+        "economic_tier": null,
+        "hardness": 1,
+        "density": 90,
+        "flammable": false
+      }
+    ],
+    "map_subsurface_depth": 20,
+    "grid_bbox_padding": 2,
+    "terrain_chunk_columns": 32,
+    "z_min": -500,
+    "z_max": 8000,
+    "elevation_lapse_rate": 0.65,
+    "g": 1.0,
+    "closed_planet_grid": false,
+    "default_climate_zone": "temperate",
+    "climate_temperature_peak_min": -40,
+    "climate_temperature_peak_max": 45,
+    "climate_pole_mode": "autoresolve",
+    "climate_pole_preset": "binary",
+    "climate_local_influence_fraction": 0.1,
+    "precipitation_liquid": "water",
+    "season_temp_offsets": {
+      "winter": -12,
+      "spring": 0,
+      "summer": 8,
+      "autumn": -4
+    },
+    "climate_zone_registry": [
+      {
+        "system_climate": "arctic",
+        "base_temperature": -25,
+        "typical_elevation_z": 4,
+        "base_rainfall": 20,
+        "temperature_variance": 8,
+        "rainfall_variance": 10
+      },
+      {
+        "system_climate": "cold",
+        "base_temperature": -5,
+        "typical_elevation_z": 8,
+        "base_rainfall": 35,
+        "temperature_variance": 10,
+        "rainfall_variance": 12
+      },
+      {
+        "system_climate": "temperate",
+        "base_temperature": 12,
+        "typical_elevation_z": 12,
+        "base_rainfall": 50,
+        "temperature_variance": 12,
+        "rainfall_variance": 15
+      },
+      {
+        "system_climate": "warm",
+        "base_temperature": 22,
+        "typical_elevation_z": 10,
+        "base_rainfall": 45,
+        "temperature_variance": 10,
+        "rainfall_variance": 12
+      },
+      {
+        "system_climate": "tropical",
+        "base_temperature": 28,
+        "typical_elevation_z": 6,
+        "base_rainfall": 80,
+        "temperature_variance": 6,
+        "rainfall_variance": 20
+      },
+      {
+        "system_climate": "desert",
+        "base_temperature": 32,
+        "typical_elevation_z": 14,
+        "base_rainfall": 8,
+        "temperature_variance": 14,
+        "rainfall_variance": 5
+      }
+    ],
+    "connection_type_registry": [
+      {
+        "system_connection_type": "trail",
+        "display_name": "Тропинка"
+      },
+      {
+        "system_connection_type": "dirt_road",
+        "display_name": "Грунтовая дорога"
+      },
+      {
+        "system_connection_type": "road",
+        "display_name": "Дорога"
+      },
+      {
+        "system_connection_type": "sidewalk",
+        "display_name": "Тротуар"
+      },
+      {
+        "system_connection_type": "highway",
+        "display_name": "Трасса"
+      },
+      {
+        "system_connection_type": "bridge",
+        "display_name": "Мост"
+      },
+      {
+        "system_connection_type": "settlement_gate",
+        "display_name": "Ворота поселения"
+      },
+      {
+        "system_connection_type": "air_route",
+        "display_name": "Воздушный путь"
+      },
+      {
+        "system_connection_type": "sea_route",
+        "display_name": "Морской путь"
+      },
+      {
+        "system_connection_type": "river",
+        "display_name": "Река"
+      },
+      {
+        "system_connection_type": "mountain_river",
+        "display_name": "Горная река"
+      },
+      {
+        "system_connection_type": "lake_shoreline",
+        "display_name": "Берег озера"
+      },
+      {
+        "system_connection_type": "coastline",
+        "display_name": "Береговая линия"
+      },
+      {
+        "system_connection_type": "portal",
+        "display_name": "Портал"
+      }
+    ],
+    "hydrology": {
+      "enabled": true,
+      "default_shore": {
+        "system_terrain": "shore",
+        "system_material": "sand"
+      },
+      "default_rivers": {
+        "enabled": true,
+        "autoresolve": true,
+        "bands": {
+          "min": 1,
+          "max": 5
+        },
+        "type_classify": {
+          "mountain_min_source_z": null,
+          "path_mountain_fraction": 0.5,
+          "rapid_drop_threshold_m": 3,
+          "mountain_bed_steepness_factor": 1.5,
+          "foothill_gradient_threshold": null
+        }
+      },
+      "default_lakes": {
+        "enabled": true,
+        "autoresolve": true,
+        "bands": {
+          "min": 1,
+          "max": 5
+        }
+      },
+      "default_seas": {
+        "enabled": true,
+        "autoresolve_coastal_sea": true,
+        "autoresolve_open_ocean": true,
+        "bands": {
+          "min": 1,
+          "max": 20
+        }
+      },
+      "default_landforms": {
+        "enabled": true,
+        "autoresolve": true
+      },
+      "materialize_named_locations": false
+    },
+    "caves": {
+      "hydrology": {
+        "enabled": true,
+        "autoresolve": {
+          "underground_lakes": true,
+          "underground_rivers": true
+        },
+        "materialize_named_locations": false
+      }
+    }
+  },
+  "states": [
+    {
+      "state_uid": "state-iron-crown",
+      "world_uid": "world-test-all-001",
+      "display_name": "Железная Корона",
+      "government_type": "kingdom",
+      "display_description": "Суровое северное королевство, управляемое военной знатью. Контролирует горные перевалы и торговые пути севера.",
+      "created_at": "2026-05-23T00:00:00"
+    },
+    {
+      "state_uid": "state-amber-league",
+      "world_uid": "world-test-all-001",
+      "display_name": "Янтарная Лига",
+      "government_type": "republic",
+      "display_description": "Торговая республика южного побережья. Богатство построено на морской торговле и контроле над портами.",
+      "created_at": "2026-05-23T00:00:00"
+    },
+    {
+      "state_uid": "state-template-north",
+      "world_uid": "world-test-all-001",
+      "display_name": "Северное королевство",
+      "government_type": "kingdom",
+      "display_description": "Пример государства для declared locations и climate context.",
+      "created_at": "2026-06-26T00:00:00"
+    },
+    {
+      "state_uid": "state-template-south",
+      "world_uid": "world-test-all-001",
+      "display_name": "Южная торговая лига",
+      "government_type": "republic",
+      "display_description": "Портовые города и пустынные караванные пути.",
+      "created_at": "2026-06-26T00:00:00"
+    }
+  ],
+  "races": [
+    {
+      "race_uid": "race-human",
+      "world_uid": "world-test-all-001",
+      "display_race": "Человек",
+      "created_at": "2026-05-23T00:00:00",
+      "race_traits": {
+        "adaptive": true,
+        "lifespan_years": 80
+      }
+    },
+    {
+      "race_uid": "race-elf",
+      "world_uid": "world-test-all-001",
+      "display_race": "Эльф",
+      "created_at": "2026-05-23T00:00:00",
+      "race_traits": {
+        "night_vision": true,
+        "lifespan_years": 500
+      }
+    },
+    {
+      "race_uid": "race-dwarf",
+      "world_uid": "world-test-all-001",
+      "display_race": "Дворф",
+      "created_at": "2026-05-23T00:00:00",
+      "race_traits": {
+        "stone_sense": true,
+        "lifespan_years": 200
+      }
+    }
+  ],
+  "perks": [
+    {
+      "perk_uid": "perk-iron-will",
+      "world_uid": "world-test-all-001",
+      "system_name": "iron_will",
+      "display_name": "Железная воля",
+      "system_description": "Resistance to fear and mind effects",
+      "display_description": "Устойчивость к страху и ментальным эффектам"
+    },
+    {
+      "perk_uid": "perk-tracker",
+      "world_uid": "world-test-all-001",
+      "system_name": "tracker",
+      "display_name": "Следопыт",
+      "system_description": "Enhanced tracking and navigation in wilderness",
+      "display_description": "Улучшенное отслеживание и навигация в дикой местности"
+    }
+  ],
+  "locations": [
+    {
+      "location_uid": "loc-continent-eidor",
+      "world_uid": "world-test-all-001",
+      "display_name": "Континент Эйдор",
+      "system_location_type": "continent",
+      "created_at": "2026-05-23T00:00:00",
+      "system_description": "main_continent",
+      "display_description": "Главный континент мира Эйдора",
+      "is_accessible": false,
+      "is_selectable": false
+    },
+    {
+      "location_uid": "loc-region-northern",
+      "world_uid": "world-test-all-001",
+      "display_name": "Северные земли",
+      "system_location_type": "region",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-continent-eidor",
+      "display_description": "Суровые северные территории",
+      "is_accessible": false,
+      "is_selectable": false
+    },
+    {
+      "location_uid": "loc-city-ironhold",
+      "world_uid": "world-test-all-001",
+      "display_name": "Айронхолд",
+      "system_location_type": "city",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-region-northern",
+      "display_description": "Укреплённый торговый город на севере",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true,
+      "guard_level": 3,
+      "system_city_size": "city",
+      "state_uid": "state-iron-crown",
+      "map_x": 2,
+      "map_y": 2,
+      "map_z": 0
+    },
+    {
+      "location_uid": "loc-tavern-broken-axe",
+      "world_uid": "world-test-all-001",
+      "display_name": "Таверна «Сломанный топор»",
+      "system_location_type": "building",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-city-ironhold",
+      "display_description": "Шумная таверна в центре Айронхолда. Старые дубовые балки, очаг и запах пива.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true
+    },
+    {
+      "location_uid": "loc-market-ironhold",
+      "world_uid": "world-test-all-001",
+      "display_name": "Рыночная площадь",
+      "system_location_type": "square",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-city-ironhold",
+      "display_description": "Главная торговая площадь Айронхолда. По утрам заполняется лавками и торговцами со всего севера.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true
+    },
+    {
+      "location_uid": "loc-blacksmith-ironhold",
+      "world_uid": "world-test-all-001",
+      "display_name": "Кузница «Молот и наковальня»",
+      "system_location_type": "building",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-city-ironhold",
+      "display_description": "Мастерская кузнеца Бронна. Угольный дым, звон металла и полки с инструментами.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": false
+    },
+    {
+      "location_uid": "loc-city-gate-ironhold",
+      "world_uid": "world-test-all-001",
+      "display_name": "Северные ворота",
+      "system_location_type": "gate",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-city-ironhold",
+      "display_description": "Массивные каменные ворота с постоянной стражей. Главный въезд в Айронхолд с севера.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true,
+      "guard_level": 5,
+      "is_forbidden": true
+    },
+    {
+      "location_uid": "loc-tavern-common-room",
+      "world_uid": "world-test-all-001",
+      "display_name": "Общий зал",
+      "system_location_type": "room",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-tavern-broken-axe",
+      "display_description": "Просторный зал с длинными столами и очагом посередине. Место сбора местных и путников.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true
+    },
+    {
+      "location_uid": "loc-tavern-room-1",
+      "world_uid": "world-test-all-001",
+      "display_name": "Комната № 1",
+      "system_location_type": "room",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-tavern-broken-axe",
+      "display_description": "Небольшая съёмная комната с кроватью, столом и запирающейся дверью.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": false
+    },
+    {
+      "location_uid": "loc-region-southern",
+      "world_uid": "world-test-all-001",
+      "display_name": "Южные земли",
+      "system_location_type": "region",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-continent-eidor",
+      "display_description": "Тёплые южные территории с плодородными равнинами и торговыми портами.",
+      "is_accessible": false,
+      "is_selectable": false
+    },
+    {
+      "location_uid": "loc-city-amberport",
+      "world_uid": "world-test-all-001",
+      "display_name": "Амберпорт",
+      "system_location_type": "city",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-region-southern",
+      "display_description": "Оживлённый портовый город на южном побережье. Перекрёсток торговых путей со всего континента.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true,
+      "system_city_size": "city",
+      "state_uid": "state-amber-league",
+      "map_x": 2,
+      "map_y": 6,
+      "map_z": 0
+    },
+    {
+      "location_uid": "loc-amberport-harbor",
+      "world_uid": "world-test-all-001",
+      "display_name": "Портовые доки",
+      "system_location_type": "district",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-city-amberport",
+      "display_description": "Шумный район доков. Запах соли и рыбы, скрип снастей, крики матросов.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true
+    },
+    {
+      "location_uid": "loc-amberport-tavern",
+      "world_uid": "world-test-all-001",
+      "display_name": "Таверна «Золотой якорь»",
+      "system_location_type": "building",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-city-amberport",
+      "display_description": "Любимое место моряков и купцов. Дешёвое вино, хорошая еда и новости со всего побережья.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true
+    },
+    {
+      "location_uid": "loc-amberport-market",
+      "world_uid": "world-test-all-001",
+      "display_name": "Торговая набережная",
+      "system_location_type": "square",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-city-amberport",
+      "display_description": "Длинная набережная с рядами лавок. Торгуют специями, тканями и морскими товарами.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true
+    },
+    {
+      "location_uid": "loc-amberport-tavern-hall",
+      "world_uid": "world-test-all-001",
+      "display_name": "Общий зал",
+      "system_location_type": "room",
+      "created_at": "2026-05-23T00:00:00",
+      "parent_location_uid": "loc-amberport-tavern",
+      "display_description": "Просторный зал с видом на гавань. По вечерам здесь играют карты и рассказывают небылицы о дальних морях.",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true
+    },
+    {
+      "location_uid": "loc-template-region",
+      "world_uid": "world-test-all-001",
+      "display_name": "Северный предел",
+      "system_location_type": "region",
+      "created_at": "2026-06-26T00:00:00",
+      "is_selectable": false,
+      "is_accessible": false
+    },
+    {
+      "location_uid": "loc-template-territory",
+      "world_uid": "world-test-all-001",
+      "display_name": "Граничные земли",
+      "system_location_type": "territory",
+      "system_location_subtype": "mountain",
+      "parent_location_uid": "loc-template-region",
+      "system_climate_zone": "cold",
+      "state_uid": "state-template-north",
+      "created_at": "2026-06-26T00:00:00",
+      "is_selectable": false,
+      "is_accessible": false
+    },
+    {
+      "location_uid": "loc-template-region-south",
+      "world_uid": "world-test-all-001",
+      "display_name": "Южные земли",
+      "system_location_type": "region",
+      "created_at": "2026-06-26T00:00:00",
+      "is_selectable": false,
+      "is_accessible": false
+    },
+    {
+      "location_uid": "loc-template-territory-coast",
+      "world_uid": "world-test-all-001",
+      "display_name": "Прибрежная полоса",
+      "system_location_type": "territory",
+      "system_location_subtype": "island",
+      "parent_location_uid": "loc-template-region-south",
+      "system_climate_zone": "warm",
+      "state_uid": "state-template-south",
+      "created_at": "2026-06-26T00:00:00",
+      "is_selectable": false,
+      "is_accessible": false
+    },
+    {
+      "location_uid": "loc-template-territory-desert",
+      "world_uid": "world-test-all-001",
+      "display_name": "Красные пески",
+      "system_location_type": "territory",
+      "system_location_subtype": "underground",
+      "parent_location_uid": "loc-template-region-south",
+      "system_climate_zone": "desert",
+      "state_uid": "state-template-south",
+      "created_at": "2026-06-26T00:00:00",
+      "is_selectable": false,
+      "is_accessible": false
+    },
+    {
+      "location_uid": "loc-template-settlement-town",
+      "world_uid": "world-test-all-001",
+      "display_name": "Каменный брод",
+      "system_location_type": "settlement",
+      "system_location_subtype": "city",
+      "parent_location_uid": "loc-template-territory",
+      "system_city_size": "town",
+      "system_climate_zone": "cold",
+      "system_economic_tier": "standard",
+      "state_uid": "state-template-north",
+      "map_x": 9000,
+      "map_y": 12000,
+      "map_z": 0,
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true,
+      "is_selectable": false,
+      "created_at": "2026-06-26T00:00:00"
+    },
+    {
+      "location_uid": "loc-template-settlement-hamlet",
+      "world_uid": "world-test-all-001",
+      "display_name": "Три сосны",
+      "system_location_type": "settlement",
+      "system_location_subtype": "village",
+      "parent_location_uid": "loc-template-territory",
+      "system_city_size": "hamlet",
+      "system_climate_zone": "cold",
+      "system_economic_tier": "poor",
+      "state_uid": "state-template-north",
+      "map_x": 18000,
+      "map_y": 15000,
+      "map_z": 0,
+      "is_discovered": false,
+      "is_accessible": true,
+      "is_public": true,
+      "is_selectable": false,
+      "created_at": "2026-06-26T00:00:00"
+    },
+    {
+      "location_uid": "loc-template-settlement-village",
+      "world_uid": "world-test-all-001",
+      "display_name": "Лесной приют",
+      "system_location_type": "settlement",
+      "system_location_subtype": "village",
+      "parent_location_uid": "loc-template-territory",
+      "system_city_size": "village",
+      "system_climate_zone": "cold",
+      "system_economic_tier": "basic",
+      "state_uid": "state-template-north",
+      "map_x": 12000,
+      "map_y": 21000,
+      "map_z": 0,
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true,
+      "is_selectable": true,
+      "created_at": "2026-06-26T00:00:00"
+    },
+    {
+      "location_uid": "loc-template-settlement-dungeon",
+      "world_uid": "world-test-all-001",
+      "display_name": "Пещера Забвения",
+      "system_location_type": "settlement",
+      "system_location_subtype": "dungeon",
+      "parent_location_uid": "loc-template-territory",
+      "system_climate_zone": "cold",
+      "state_uid": "state-template-north",
+      "map_x": 6000,
+      "map_y": 24000,
+      "map_z": -1,
+      "entry_difficulty": 60,
+      "guard_level": 0,
+      "is_discovered": true,
+      "is_accessible": false,
+      "is_public": false,
+      "is_forbidden": true,
+      "is_selectable": false,
+      "created_at": "2026-06-26T00:00:00"
+    },
+    {
+      "location_uid": "loc-template-settlement-port",
+      "world_uid": "world-test-all-001",
+      "display_name": "Янтарный порт",
+      "system_location_type": "settlement",
+      "system_location_subtype": "city",
+      "parent_location_uid": "loc-template-territory-coast",
+      "system_city_size": "city",
+      "system_climate_zone": "warm",
+      "system_economic_tier": "premium",
+      "state_uid": "state-template-south",
+      "map_x": 27000,
+      "map_y": 9000,
+      "map_z": 0,
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true,
+      "is_selectable": true,
+      "guard_level": 2,
+      "created_at": "2026-06-26T00:00:00"
+    },
+    {
+      "location_uid": "loc-template-settlement-metropolis",
+      "world_uid": "world-test-all-001",
+      "display_name": "Великий Перекрёсток",
+      "system_location_type": "settlement",
+      "system_location_subtype": "city",
+      "parent_location_uid": "loc-template-territory-coast",
+      "system_city_size": "metropolis",
+      "system_climate_zone": "tropical",
+      "system_economic_tier": "exceptional",
+      "state_uid": "state-template-south",
+      "map_x": 33000,
+      "map_y": 15000,
+      "map_z": 0,
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true,
+      "is_selectable": false,
+      "guard_level": 4,
+      "created_at": "2026-06-26T00:00:00"
+    },
+    {
+      "location_uid": "loc-template-district-harbor",
+      "world_uid": "world-test-all-001",
+      "display_name": "Портовый квартал",
+      "system_location_type": "district",
+      "parent_location_uid": "loc-template-settlement-metropolis",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true,
+      "is_outdoor": true,
+      "created_at": "2026-06-26T00:00:00"
+    },
+    {
+      "location_uid": "loc-template-building-warehouse",
+      "world_uid": "world-test-all-001",
+      "display_name": "Склад № 7",
+      "system_location_type": "building",
+      "system_location_subtype": "commercial",
+      "parent_location_uid": "loc-template-district-harbor",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": false,
+      "is_outdoor": false,
+      "entry_difficulty": 40,
+      "created_at": "2026-06-26T00:00:00"
+    },
+    {
+      "location_uid": "loc-template-building-tavern",
+      "world_uid": "world-test-all-001",
+      "display_name": "Таверна «Якорь»",
+      "system_location_type": "building",
+      "system_location_subtype": "commercial",
+      "parent_location_uid": "loc-template-settlement-metropolis",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true,
+      "is_outdoor": false,
+      "created_at": "2026-06-26T00:00:00"
+    },
+    {
+      "location_uid": "loc-template-room-tavern-hall",
+      "world_uid": "world-test-all-001",
+      "display_name": "Общий зал",
+      "system_location_type": "room",
+      "parent_location_uid": "loc-template-building-tavern",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true,
+      "is_outdoor": false,
+      "created_at": "2026-06-26T00:00:00"
+    },
+    {
+      "location_uid": "loc-template-building-garrison",
+      "world_uid": "world-test-all-001",
+      "display_name": "Гарнизон южных ворот",
+      "system_location_type": "building",
+      "system_location_subtype": "military",
+      "parent_location_uid": "loc-template-settlement-metropolis",
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true,
+      "is_outdoor": false,
+      "guard_level": 80,
+      "entry_difficulty": 70,
+      "is_forbidden": true,
+      "created_at": "2026-06-26T00:00:00"
+    },
+    {
+      "location_uid": "loc-template-settlement-oasis",
+      "world_uid": "world-test-all-001",
+      "display_name": "Оазис Шёпот",
+      "system_location_type": "settlement",
+      "system_location_subtype": "village",
+      "parent_location_uid": "loc-template-territory-desert",
+      "system_city_size": "village",
+      "system_climate_zone": "desert",
+      "system_economic_tier": "poor",
+      "state_uid": "state-template-south",
+      "map_x": 39000,
+      "map_y": 12000,
+      "map_z": 0,
+      "is_discovered": true,
+      "is_accessible": true,
+      "is_public": true,
+      "is_selectable": false,
+      "created_at": "2026-06-26T00:00:00"
+    },
+    {
+      "location_uid": "loc-template-settlement-underground",
+      "world_uid": "world-test-all-001",
+      "display_name": "Нижний рынок",
+      "system_location_type": "settlement",
+      "system_location_subtype": "underground_city",
+      "parent_location_uid": "loc-template-territory-desert",
+      "system_city_size": "city",
+      "system_climate_zone": "desert",
+      "system_economic_tier": "quality",
+      "state_uid": "state-template-south",
+      "map_x": 42000,
+      "map_y": 18000,
+      "map_z": -3,
+      "is_discovered": false,
+      "is_accessible": true,
+      "is_public": false,
+      "entry_difficulty": 50,
+      "created_at": "2026-06-26T00:00:00"
+    },
+    {
+      "location_uid": "loc-template-lake-declared",
+      "world_uid": "world-test-all-001",
+      "display_name": "Озеро Лунное",
+      "system_location_type": "geographic",
+      "system_location_subtype": "lake",
+      "parent_location_uid": "loc-template-territory",
+      "glossary_ref": "geo_lake_moon",
+      "map_x": 15000,
+      "map_y": 9000,
+      "map_z": 0,
+      "state_uid": "state-template-north",
+      "created_at": "2026-06-26T00:00:00",
+      "is_selectable": false
+    },
+    {
+      "location_uid": "loc-template-peak-declared",
+      "world_uid": "world-test-all-001",
+      "display_name": "Гора Белая",
+      "system_location_type": "geographic",
+      "system_location_subtype": "peak",
+      "parent_location_uid": "loc-template-territory",
+      "glossary_ref": "geo_peak_white",
+      "map_x": 6000,
+      "map_y": 18000,
+      "map_z": 0,
+      "state_uid": "state-template-north",
+      "created_at": "2026-06-26T00:00:00",
+      "is_selectable": false
+    },
+    {
+      "location_uid": "loc-template-mountain-declared",
+      "world_uid": "world-test-all-001",
+      "display_name": "Железные горы",
+      "system_location_type": "geographic",
+      "system_location_subtype": "mountain",
+      "parent_location_uid": "loc-template-territory",
+      "glossary_ref": "geo_mountain_iron",
+      "map_x": 21000,
+      "map_y": 18000,
+      "map_z": 0,
+      "state_uid": "state-template-north",
+      "created_at": "2026-06-26T00:00:00",
+      "is_selectable": false
+    },
+    {
+      "location_uid": "loc-template-sea-declared",
+      "world_uid": "world-test-all-001",
+      "display_name": "Северное море",
+      "system_location_type": "geographic",
+      "system_location_subtype": "sea",
+      "parent_location_uid": "loc-template-territory-coast",
+      "glossary_ref": "geo_sea_north",
+      "map_x": 24000,
+      "map_y": 6000,
+      "map_z": 0,
+      "state_uid": "state-template-south",
+      "created_at": "2026-06-26T00:00:00",
+      "is_selectable": false
+    },
+    {
+      "location_uid": "loc-template-coast-declared",
+      "world_uid": "world-test-all-001",
+      "display_name": "Фьордовый берег",
+      "system_location_type": "geographic",
+      "system_location_subtype": "coast",
+      "parent_location_uid": "loc-template-territory-coast",
+      "glossary_ref": "geo_coast_fjord",
+      "map_x": 30000,
+      "map_y": 6000,
+      "map_z": 0,
+      "state_uid": "state-template-south",
+      "created_at": "2026-06-26T00:00:00",
+      "is_selectable": false
+    },
+    {
+      "location_uid": "loc-template-river-declared",
+      "world_uid": "world-test-all-001",
+      "display_name": "Серебряная река",
+      "system_location_type": "geographic",
+      "system_location_subtype": "river",
+      "parent_location_uid": "loc-template-territory",
+      "glossary_ref": "geo_river_silver",
+      "map_x": 9000,
+      "map_y": 18000,
+      "map_z": 0,
+      "state_uid": "state-template-north",
+      "created_at": "2026-06-26T00:00:00",
+      "is_selectable": false
+    },
+    {
+      "location_uid": "loc-template-island-declared",
+      "world_uid": "world-test-all-001",
+      "display_name": "Остров Туманов",
+      "system_location_type": "geographic",
+      "system_location_subtype": "island",
+      "parent_location_uid": "loc-template-territory-coast",
+      "glossary_ref": "geo_island_mist",
+      "map_x": 36000,
+      "map_y": 6000,
+      "map_z": 0,
+      "state_uid": "state-template-south",
+      "created_at": "2026-06-26T00:00:00",
+      "is_selectable": false
+    },
+    {
+      "location_uid": "loc-template-plain-declared",
+      "world_uid": "world-test-all-001",
+      "display_name": "Золотая равнина",
+      "system_location_type": "geographic",
+      "system_location_subtype": "plain",
+      "parent_location_uid": "loc-template-territory-desert",
+      "glossary_ref": "geo_plain_golden",
+      "map_x": 45000,
+      "map_y": 15000,
+      "map_z": 0,
+      "state_uid": "state-template-south",
+      "created_at": "2026-06-26T00:00:00",
+      "is_selectable": false
+    }
+  ],
+  "connection_nodes": [
+    {
+      "node_uid": "cn-lake-moon-a",
+      "world_uid": "world-test-all-001",
+      "location_uid": "loc-template-lake-declared",
+      "x": 15000,
+      "y": 9000,
+      "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-lake-moon-b",
+      "world_uid": "world-test-all-001",
+      "x": 16800,
+      "y": 9600,
+      "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-lake-moon-c",
+      "world_uid": "world-test-all-001",
+      "x": 16200,
+      "y": 7800,
+      "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-lake-moon-d",
+      "world_uid": "world-test-all-001",
+      "x": 13800,
+      "y": 8400,
+      "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-sea-west",
+      "world_uid": "world-test-all-001",
+      "x": 21000,
+      "y": 6000,
+      "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-sea-mid",
+      "world_uid": "world-test-all-001",
+      "location_uid": "loc-template-sea-declared",
+      "x": 24000,
+      "y": 6000,
+      "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-coast-fjord",
+      "world_uid": "world-test-all-001",
+      "location_uid": "loc-template-coast-declared",
+      "x": 30000,
+      "y": 6000,
+      "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-sea-east",
+      "world_uid": "world-test-all-001",
+      "x": 36000,
+      "y": 6000,
+      "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-river-silver-src",
+      "world_uid": "world-test-all-001",
+      "location_uid": "loc-template-peak-declared",
+      "x": 6000,
+      "y": 18000,
+      "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-river-silver-mid",
+      "world_uid": "world-test-all-001",
+      "location_uid": "loc-template-river-declared",
+      "x": 9000,
+      "y": 18000,
+      "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-river-silver-2",
+      "world_uid": "world-test-all-001",
+      "x": 12000,
+      "y": 15000,
+      "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-river-silver-3",
+      "world_uid": "world-test-all-001",
+      "x": 15000,
+      "y": 12000,
+      "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-river-silver-4",
+      "world_uid": "world-test-all-001",
+      "x": 18000,
+      "y": 9000,
+      "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    },
+    {
+      "node_uid": "cn-river-silver-mouth",
+      "world_uid": "world-test-all-001",
+      "x": 21000,
+      "y": 6000,
+      "z": 0,
+      "node_type": "waypoint",
+      "graph_level": "world"
+    }
+  ],
+  "connection_edges": [
+    {
+      "edge_uid": "ce-lake-moon-ab",
+      "world_uid": "world-test-all-001",
+      "from_node_uid": "cn-lake-moon-a",
+      "to_node_uid": "cn-lake-moon-b",
+      "connection_type": "lake_shoreline",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-lake-moon-bc",
+      "world_uid": "world-test-all-001",
+      "from_node_uid": "cn-lake-moon-b",
+      "to_node_uid": "cn-lake-moon-c",
+      "connection_type": "lake_shoreline",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-lake-moon-cd",
+      "world_uid": "world-test-all-001",
+      "from_node_uid": "cn-lake-moon-c",
+      "to_node_uid": "cn-lake-moon-d",
+      "connection_type": "lake_shoreline",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-lake-moon-da",
+      "world_uid": "world-test-all-001",
+      "from_node_uid": "cn-lake-moon-d",
+      "to_node_uid": "cn-lake-moon-a",
+      "connection_type": "lake_shoreline",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-sea-west-mid",
+      "world_uid": "world-test-all-001",
+      "from_node_uid": "cn-sea-west",
+      "to_node_uid": "cn-sea-mid",
+      "connection_type": "coastline",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-sea-mid-fjord",
+      "world_uid": "world-test-all-001",
+      "from_node_uid": "cn-sea-mid",
+      "to_node_uid": "cn-coast-fjord",
+      "connection_type": "coastline",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-sea-fjord-east",
+      "world_uid": "world-test-all-001",
+      "from_node_uid": "cn-coast-fjord",
+      "to_node_uid": "cn-sea-east",
+      "connection_type": "coastline",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-river-silver-1",
+      "world_uid": "world-test-all-001",
+      "from_node_uid": "cn-river-silver-src",
+      "to_node_uid": "cn-river-silver-mid",
+      "connection_type": "mountain_river",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-river-silver-2",
+      "world_uid": "world-test-all-001",
+      "from_node_uid": "cn-river-silver-mid",
+      "to_node_uid": "cn-river-silver-2",
+      "connection_type": "mountain_river",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-river-silver-3",
+      "world_uid": "world-test-all-001",
+      "from_node_uid": "cn-river-silver-2",
+      "to_node_uid": "cn-river-silver-3",
+      "connection_type": "mountain_river",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-river-silver-4",
+      "world_uid": "world-test-all-001",
+      "from_node_uid": "cn-river-silver-3",
+      "to_node_uid": "cn-river-silver-4",
+      "connection_type": "river",
+      "graph_level": "world",
+      "width_cells": 1
+    },
+    {
+      "edge_uid": "ce-river-silver-5",
+      "world_uid": "world-test-all-001",
+      "from_node_uid": "cn-river-silver-4",
+      "to_node_uid": "cn-river-silver-mouth",
+      "connection_type": "river",
+      "graph_level": "world",
+      "width_cells": 1
+    }
+  ],
+  "map_cells": []
+}
