@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import OptionalOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
 
 
@@ -33,5 +33,5 @@ class EconomicTierRange(BaseModel):
 class SizePct(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    width: OptionalOnWire[PctRange | None] = None
-    depth: OptionalOnWire[PctRange | None] = None
+    width: DefaultOnWire[PctRange | None] = None
+    depth: DefaultOnWire[PctRange | None] = None

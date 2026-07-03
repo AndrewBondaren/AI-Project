@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.hydrology.bands import HydrologyBands
-from app.dataModel.annotationPolicy import OptionalOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire
 
 
 class HydrologySeasPolicy(BaseModel):
@@ -13,7 +13,7 @@ class HydrologySeasPolicy(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    enabled: OptionalOnWire[bool] = True
-    autoresolve_coastal_sea: OptionalOnWire[bool] = True
-    autoresolve_open_ocean: OptionalOnWire[bool] = True
-    bands: OptionalOnWire[HydrologyBands] = Field(default_factory=lambda: HydrologyBands(min=1, max=20))
+    enabled: DefaultOnWire[bool] = True
+    autoresolve_coastal_sea: DefaultOnWire[bool] = True
+    autoresolve_open_ocean: DefaultOnWire[bool] = True
+    bands: DefaultOnWire[HydrologyBands] = Field(default_factory=lambda: HydrologyBands(min=1, max=20))

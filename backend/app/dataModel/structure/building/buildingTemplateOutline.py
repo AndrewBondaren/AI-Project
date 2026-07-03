@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.annotationPolicy import OptionalOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
 from app.dataModel.shared.ranges import EconomicTierRange, IntMinMax
 from app.dataModel.structure.building.buildingTemplateRoomSlot import BuildingTemplateRoomSlot
@@ -22,15 +22,15 @@ class BuildingTemplateOutline(BaseModel):
     system_name: StrictOnWire[str]
     structure_type: StrictOnWire[str]
     display_name: StrictOnWire[str]
-    glossary_ref: OptionalOnWire[str | None] = None
-    description: OptionalOnWire[str | None] = None
-    version: OptionalOnWire[str] = "1.0"
-    levels: OptionalOnWire[IntMinMax | None] = None
-    footprint: OptionalOnWire[dict[str, IntMinMax] | None] = None
-    wall_material: OptionalOnWire[MaterialPick | None] = None
-    floor_material: OptionalOnWire[MaterialPick | None] = None
-    default_is_public: OptionalOnWire[bool] = False
-    default_is_forbidden: OptionalOnWire[bool] = False
-    rooms: OptionalOnWire[list[BuildingTemplateRoomSlot]] = Field(default_factory=list)
-    perimeter_barrier: OptionalOnWire[PerimeterBarrier] = Field(default_factory=PerimeterBarrier)
-    economic_tier_range: OptionalOnWire[EconomicTierRange | None] = None
+    glossary_ref: DefaultOnWire[str | None] = None
+    description: DefaultOnWire[str | None] = None
+    version: DefaultOnWire[str] = "1.0"
+    levels: DefaultOnWire[IntMinMax | None] = None
+    footprint: DefaultOnWire[dict[str, IntMinMax] | None] = None
+    wall_material: DefaultOnWire[MaterialPick | None] = None
+    floor_material: DefaultOnWire[MaterialPick | None] = None
+    default_is_public: DefaultOnWire[bool] = False
+    default_is_forbidden: DefaultOnWire[bool] = False
+    rooms: DefaultOnWire[list[BuildingTemplateRoomSlot]] = Field(default_factory=list)
+    perimeter_barrier: DefaultOnWire[PerimeterBarrier] = Field(default_factory=PerimeterBarrier)
+    economic_tier_range: DefaultOnWire[EconomicTierRange | None] = None

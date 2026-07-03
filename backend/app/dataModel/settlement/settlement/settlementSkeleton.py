@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import OptionalOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire
 
 
 class SettlementSkeleton(BaseModel):
@@ -15,9 +15,9 @@ class SettlementSkeleton(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    economic_tier: OptionalOnWire[str | None] = None
-    architectural_style: OptionalOnWire[str | None] = None
-    dominant_material: OptionalOnWire[str | None] = None
-    settlement_density: OptionalOnWire[str | None] = None
-    system_city_size: OptionalOnWire[str | None] = None
-    system_location_mood: OptionalOnWire[str | None] = None
+    economic_tier: DefaultOnWire[str | None] = None
+    architectural_style: DefaultOnWire[str | None] = None
+    dominant_material: DefaultOnWire[str | None] = None
+    settlement_density: DefaultOnWire[str | None] = None
+    system_city_size: DefaultOnWire[str | None] = None
+    system_location_mood: DefaultOnWire[str | None] = None

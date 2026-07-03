@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import OptionalOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire
 from app.dataModel.constrainedField import constrained_field
 
 
@@ -13,8 +13,8 @@ class PerimeterBarrier(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    template: OptionalOnWire[str | None] = None
-    probability: OptionalOnWire[float] = constrained_field(
+    template: DefaultOnWire[str | None] = None
+    probability: DefaultOnWire[float] = constrained_field(
         default=0.0, greater_equals=0.0, lesser_equals=1.0,
     )
 

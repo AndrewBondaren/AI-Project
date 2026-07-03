@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import OptionalOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 
 # Builtin district street default — all canonical templates use ``road``.
 DEFAULT_CONNECTION_TYPE = "road"
@@ -16,9 +16,9 @@ class DistrictConnection(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True, populate_by_name=True)
 
     connection_type: StrictOnWire[str]
-    role: OptionalOnWire[str | None] = None
-    sidewalk: OptionalOnWire[bool | None] = None
-    lanes_per_side: OptionalOnWire[int | None] = None
+    role: DefaultOnWire[str | None] = None
+    sidewalk: DefaultOnWire[bool | None] = None
+    lanes_per_side: DefaultOnWire[int | None] = None
 
     @classmethod
     def street_default(cls) -> DistrictConnection:

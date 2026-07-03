@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
-from app.dataModel.annotationPolicy import OptionalOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 
 
 class LoreRegistryEntry(BaseModel):
@@ -15,7 +15,7 @@ class LoreRegistryEntry(BaseModel):
     display_name: StrictOnWire[str] = Field(
         validation_alias=AliasChoices("display_name", "title"),
     )
-    description: OptionalOnWire[str | None] = Field(
+    description: DefaultOnWire[str | None] = Field(
         default=None,
         validation_alias=AliasChoices("description", "content"),
     )

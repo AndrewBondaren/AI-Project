@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import OptionalOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 
 
 class TerrainCategoryEntry(BaseModel):
@@ -13,8 +13,8 @@ class TerrainCategoryEntry(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     system_category: StrictOnWire[str]
-    display_category: OptionalOnWire[str | None] = None
-    passable: OptionalOnWire[bool] = True
-    jumpable: OptionalOnWire[bool] = False
-    climbable: OptionalOnWire[bool] = False
-    breakable: OptionalOnWire[bool] = False
+    display_category: DefaultOnWire[str | None] = None
+    passable: DefaultOnWire[bool] = True
+    jumpable: DefaultOnWire[bool] = False
+    climbable: DefaultOnWire[bool] = False
+    breakable: DefaultOnWire[bool] = False

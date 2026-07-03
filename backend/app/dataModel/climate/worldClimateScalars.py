@@ -22,7 +22,7 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.annotationPolicy import OptionalOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire
 from app.dataModel.constrainedField import constrained_field
 
 # Sync with ClimatePoleMode / ClimatePolePreset / ClimateZone.TEMPERATE (no enum import — package cycle).
@@ -42,10 +42,10 @@ class SeasonTempOffsets(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    winter: OptionalOnWire[int] = 0
-    spring: OptionalOnWire[int] = 0
-    summer: OptionalOnWire[int] = 0
-    autumn: OptionalOnWire[int] = 0
+    winter: DefaultOnWire[int] = 0
+    spring: DefaultOnWire[int] = 0
+    summer: DefaultOnWire[int] = 0
+    autumn: DefaultOnWire[int] = 0
 
     @classmethod
     def canonical_fixture(cls) -> SeasonTempOffsets:
@@ -60,18 +60,18 @@ class WorldClimateScalars(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    default_climate_zone: OptionalOnWire[str] = DEFAULT_CLIMATE_ZONE
-    climate_temperature_peak_min: OptionalOnWire[int | None] = None
-    climate_temperature_peak_max: OptionalOnWire[int | None] = None
-    climate_pole_mode: OptionalOnWire[str] = DEFAULT_CLIMATE_POLE_MODE
-    climate_pole_preset: OptionalOnWire[str] = DEFAULT_CLIMATE_POLE_PRESET
-    climate_local_influence_fraction: OptionalOnWire[float] = constrained_field(
+    default_climate_zone: DefaultOnWire[str] = DEFAULT_CLIMATE_ZONE
+    climate_temperature_peak_min: DefaultOnWire[int | None] = None
+    climate_temperature_peak_max: DefaultOnWire[int | None] = None
+    climate_pole_mode: DefaultOnWire[str] = DEFAULT_CLIMATE_POLE_MODE
+    climate_pole_preset: DefaultOnWire[str] = DEFAULT_CLIMATE_POLE_PRESET
+    climate_local_influence_fraction: DefaultOnWire[float] = constrained_field(
         default=DEFAULT_LOCAL_INFLUENCE_FRACTION,
         greater_equals=0.0,
         lesser_equals=1.0,
     )
-    precipitation_liquid: OptionalOnWire[str] = DEFAULT_PRECIPITATION_LIQUID
-    season_temp_offsets: OptionalOnWire[SeasonTempOffsets] = Field(default_factory=SeasonTempOffsets)
+    precipitation_liquid: DefaultOnWire[str] = DEFAULT_PRECIPITATION_LIQUID
+    season_temp_offsets: DefaultOnWire[SeasonTempOffsets] = Field(default_factory=SeasonTempOffsets)
 
     @classmethod
     def canonical_defaults(cls) -> WorldClimateScalars:

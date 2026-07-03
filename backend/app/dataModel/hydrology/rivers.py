@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.hydrology.category import HydrologyCategoryPolicy
-from app.dataModel.annotationPolicy import OptionalOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire
 from app.dataModel.constrainedField import constrained_field
 
 
@@ -14,16 +14,16 @@ class RiverTypeClassify(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    mountain_min_source_z: OptionalOnWire[int] = 40
-    path_mountain_fraction: OptionalOnWire[float] = constrained_field(
+    mountain_min_source_z: DefaultOnWire[int] = 40
+    path_mountain_fraction: DefaultOnWire[float] = constrained_field(
         default=0.5, greater_equals=0.0, lesser_equals=1.0,
     )
-    rapid_drop_threshold_m: OptionalOnWire[int] = constrained_field(default=3, greater_equals=0)
-    mountain_bed_steepness_factor: OptionalOnWire[float] = constrained_field(default=1.5, greater=0.0)
-    foothill_gradient_threshold: OptionalOnWire[float] = constrained_field(default=0.12, greater_equals=0.0)
+    rapid_drop_threshold_m: DefaultOnWire[int] = constrained_field(default=3, greater_equals=0)
+    mountain_bed_steepness_factor: DefaultOnWire[float] = constrained_field(default=1.5, greater=0.0)
+    foothill_gradient_threshold: DefaultOnWire[float] = constrained_field(default=0.12, greater_equals=0.0)
 
 
 class HydrologyRiversPolicy(HydrologyCategoryPolicy):
     """default_rivers + type_classify."""
 
-    type_classify: OptionalOnWire[RiverTypeClassify] = Field(default_factory=RiverTypeClassify)
+    type_classify: DefaultOnWire[RiverTypeClassify] = Field(default_factory=RiverTypeClassify)

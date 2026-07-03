@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import OptionalOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
 
 
@@ -16,8 +16,8 @@ class EconomyTierEntry(BaseModel):
     system_tier: StrictOnWire[str]
     display_tier: StrictOnWire[str]
     base_value: StrictOnWire[int] = constrained_field(greater_equals=0)
-    road_tier_bonus: OptionalOnWire[float] = constrained_field(default=1.0, greater=0.0)
-    road_tier_durability: OptionalOnWire[float] = constrained_field(default=1.0, greater=0.0)
+    road_tier_bonus: DefaultOnWire[float] = constrained_field(default=1.0, greater=0.0)
+    road_tier_durability: DefaultOnWire[float] = constrained_field(default=1.0, greater=0.0)
 
     @classmethod
     def fallback(cls) -> EconomyTierEntry:

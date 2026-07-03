@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import OptionalOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 
 
 class RoomTypeEntry(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     system_room: StrictOnWire[str]
-    glossary_ref: OptionalOnWire[str | None] = None
+    glossary_ref: DefaultOnWire[str | None] = None

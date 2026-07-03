@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
-from app.dataModel.annotationPolicy import OptionalOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.locations.locationType.locationTypeSubtypeEntry import LocationTypeSubtypeEntry
 
 
@@ -19,6 +19,6 @@ class LocationTypeEntry(BaseModel):
     display_type: StrictOnWire[str] = Field(
         validation_alias=AliasChoices("display_type", "display_name"),
     )
-    parent_types: OptionalOnWire[list[str | None]] = Field(default_factory=list)
-    is_outdoor: OptionalOnWire[bool | None] = None
-    subtypes: OptionalOnWire[list[LocationTypeSubtypeEntry]] = Field(default_factory=list)
+    parent_types: DefaultOnWire[list[str | None]] = Field(default_factory=list)
+    is_outdoor: DefaultOnWire[bool | None] = None
+    subtypes: DefaultOnWire[list[LocationTypeSubtypeEntry]] = Field(default_factory=list)

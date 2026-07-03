@@ -42,11 +42,16 @@ from app.dataModel.materials import (
     WorldMaterialRegistry,
 )
 from app.dataModel.annotationPolicy import (
-    AnnotationPolicy,
+    WireFieldPolicy,
+    EnumWire,
     IgnoreOnWire,
-    OptionalOnWire,
+    DefaultEnumOnWire,
+    DefaultOnWire,
+    StrictEnumOnWire,
     StrictOnWire,
     field_policy,
+    unwrap_wire_type,
+    wire_enum_class,
 )
 from app.dataModel.roads import RoadSettingsEntry, WorldRoadSettings
 from app.dataModel.settlement import (
@@ -117,10 +122,12 @@ __all__ = [
     "LocationTypeEntry",
     "LocationTypeSubtypeEntry",
     "LoreRegistryEntry",
-    "AnnotationPolicy",
+    "WireFieldPolicy",
+    "EnumWire",
     "IgnoreOnWire",
     "MaterialRegistryEntry",
-    "OptionalOnWire",
+    "DefaultEnumOnWire",
+    "DefaultOnWire",
     "RoadSettingsEntry",
     "RoomSize",
     "RoomSizePreset",
@@ -135,6 +142,7 @@ __all__ = [
     "UShapeSize",
     "SeasonTempOffsets",
     "SettlementSkeleton",
+    "StrictEnumOnWire",
     "StrictOnWire",
     "TerrainCategoryEntry",
     "TerrainRegistryEntry",
@@ -160,5 +168,7 @@ __all__ = [
     "WorldWeatherTypeRegistry",
     "block_size_for_density",
     "field_policy",
+    "unwrap_wire_type",
+    "wire_enum_class",
     "sidewalk_width_for_band",
 ]

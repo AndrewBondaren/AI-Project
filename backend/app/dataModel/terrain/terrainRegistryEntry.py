@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import OptionalOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
 
 
@@ -14,11 +14,11 @@ class TerrainRegistryEntry(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     system_terrain: StrictOnWire[str]
-    glossary_ref: OptionalOnWire[str | None] = None
+    glossary_ref: DefaultOnWire[str | None] = None
     terrain_category: StrictOnWire[str]
-    travel_modifier: OptionalOnWire[float | None] = None
-    danger_level: OptionalOnWire[str] = "none"
-    has_state: OptionalOnWire[bool] = False
-    default_state: OptionalOnWire[str | None] = None
-    default_material: OptionalOnWire[str | None] = None
-    gap_width: OptionalOnWire[int | None] = constrained_field(default=None, greater_equals=1)
+    travel_modifier: DefaultOnWire[float | None] = None
+    danger_level: DefaultOnWire[str] = "none"
+    has_state: DefaultOnWire[bool] = False
+    default_state: DefaultOnWire[str | None] = None
+    default_material: DefaultOnWire[str | None] = None
+    gap_width: DefaultOnWire[int | None] = constrained_field(default=None, greater_equals=1)

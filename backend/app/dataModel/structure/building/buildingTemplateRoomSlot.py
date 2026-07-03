@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import OptionalOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.shared.ranges import IntMinMax
 
 
@@ -12,5 +12,5 @@ class BuildingTemplateRoomSlot(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     system_room: StrictOnWire[str]
-    required: OptionalOnWire[bool] = True
-    count: OptionalOnWire[IntMinMax | None] = None
+    required: DefaultOnWire[bool] = True
+    count: DefaultOnWire[IntMinMax | None] = None

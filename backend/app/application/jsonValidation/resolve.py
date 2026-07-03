@@ -1,6 +1,6 @@
 """POJO resolve/normalize — single engine for import validator and runtime reads.
 
-Field policy: ``dataModel.annotationPolicy`` (StrictOnWire / IgnoreOnWire / default fallback).
+Field policy: ``WireFieldPolicy`` — ``StrictOnWire`` / ``IgnoreOnWire`` / ``DefaultOnWire``.
 Contract: ``docs/tz_json_validation.md``.
 """
 
@@ -17,11 +17,10 @@ from pydantic import BaseModel, RootModel, TypeAdapter, ValidationError
 from pydantic_core import PydanticUndefined
 
 from app.dataModel.annotationPolicy import (
-    AnnotationPolicy,
-    IgnoreOnWire,
-    OptionalOnWire,
-    StrictOnWire,
+    WireFieldPolicy,
     field_policy,
+    unwrap_wire_type,
+    wire_enum_class,
 )
 from app.application.jsonValidation.types import FieldPathError
 from app.application.jsonValidation.wire import WireEnumError, parse_enum
@@ -62,26 +61,7 @@ class StrictFieldError(ValueError):
 
 
 def _unwrap_annotation(annotation: Any) -> Any:
-    wire_aliases = (StrictOnWire, OptionalOnWire, IgnoreOnWire)
-    while True:
-        if get_origin(annotation) is Annotated:
-            args = get_args(annotation)
-            if not args:
-                break
-            annotation = args[0]
-            continue
-        origin = get_origin(annotation)
-        if origin in wire_aliases or (
-            origin is not None
-            and getattr(origin, "__name__", "") in ("StrictOnWire", "OptionalOnWire", "IgnoreOnWire")
-        ):
-            args = get_args(annotation)
-            if not args:
-                break
-            annotation = args[0]
-            continue
-        break
-    return annotation
+    return unwrap_wire_type(annotation)
 
 
 def _field_default(field_info: Any) -> Any:
@@ -158,11 +138,6 @@ def _validation_issue(
     )
 
 
-def _is_str_enum_type(annotation: Any) -> bool:
-    inner = _unwrap_annotation(annotation)
-    return isinstance(inner, type) and issubclass(inner, StrEnum)
-
-
 def _wire_str(raw_value: Any) -> str:
     return raw_value if isinstance(raw_value, str) else str(raw_value)
 
@@ -220,7 +195,7 @@ def _resolve_field(
     if ctx is not None and ctx.partial and not present:
         return PydanticUndefined
 
-    if policy == AnnotationPolicy.IGNORE:
+    if policy == WireFieldPolicy.IGNORE_ON_WIRE:
         if not present:
             return PydanticUndefined
         if isinstance(raw_value, dict) and _is_base_model_type(field_info.annotation):
@@ -228,7 +203,7 @@ def _resolve_field(
             return resolve_model(inner, raw_value, label=f"{label}.{field_name}", ctx=child)
         return raw_value
 
-    if policy == AnnotationPolicy.STRICT_REQUIRED:
+    if policy == WireFieldPolicy.STRICT_ON_WIRE:
         if not present or raw_value is None:
             if field_info.is_required():
                 _record_strict_error(ctx, field_path, "strict field is required")
@@ -237,10 +212,11 @@ def _resolve_field(
         if isinstance(raw_value, dict) and _is_base_model_type(field_info.annotation):
             child = ctx.child(field_name) if ctx is not None else None
             return resolve_model(inner, raw_value, label=f"{label}.{field_name}", ctx=child)
-        if _is_str_enum_type(inner):
+        enum_cls = wire_enum_class(field_info.annotation)
+        if enum_cls is not None:
             try:
                 return _resolve_str_enum(
-                    inner,
+                    enum_cls,
                     raw_value,
                     field_name=field_name,
                     field_path=field_path,
@@ -260,10 +236,11 @@ def _resolve_field(
         if isinstance(raw_value, dict) and _is_base_model_type(field_info.annotation):
             child = ctx.child(field_name) if ctx is not None else None
             return resolve_model(inner, raw_value, label=f"{label}.{field_name}", ctx=child)
-        if _is_str_enum_type(inner):
+        enum_cls = wire_enum_class(field_info.annotation)
+        if enum_cls is not None:
             try:
                 return _resolve_str_enum(
-                    inner,
+                    enum_cls,
                     raw_value,
                     field_name=field_name,
                     field_path=field_path,

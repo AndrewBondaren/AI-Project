@@ -143,9 +143,14 @@ backend/app/application/worldData/  # WorldService, bundle — без domain val
 
 | Annotation | Import (facade) | Runtime (worldRow) |
 |------------|-----------------|---------------------|
-| `StrictOnWire` | **422**, запись не идёт | warning, поле/строка пропускается |
-| `OptionalOnWire` / без аннотации | `Field(default)` + **log** | то же |
-| `IgnoreOnWire` | wire as-is, без автозаполнения | то же |
+| `StrictOnWire[T]` / `StrictEnumOnWire[E]` | **422**, запись не идёт | warning, поле/строка пропускается |
+| `DefaultOnWire[T]` / `DefaultEnumOnWire[E]` | `Field(default)` + **log** | то же |
+| `IgnoreOnWire[T]` | wire as-is, без автозаполнения | то же |
+
+**Policy enum:** `WireFieldPolicy` — `strict_on_wire` | `ignore_on_wire` | `default` (`annotationPolicy.py`).  
+Три alias-типа на поле: `StrictOnWire`, `DefaultOnWire`, `IgnoreOnWire`. Без alias → resolve трактует как `default`.
+
+**ENUM-E:** `StrictEnumOnWire[E]` / `DefaultEnumOnWire[E]` + маркер `EnumWire` → `parse_enum()`.
 
 **Ядерный fallback запрещён:** одна ошибка в registry **не** заменяет весь POJO на `canonical_defaults()`.
 
@@ -451,9 +456,12 @@ JSON → facade / bundle normalize       DB → worldRow → resolve (RUNTIME)
 - N1-W registry keys (`system_material`, …) — REF-W (JV-2), не `parse_enum`.
 - Preset keys в fixtures (`temperate`, `water`) — N1-W, не ENUM-E.
 
-### Интеграция `parse_enum` (вариант A — рекомендуемый)
+### Интеграция `parse_enum` (вариант A)
 
-В `resolve._resolve_field`: если unwrapped annotation — `StrEnum`, на IMPORT:
+Поле ENUM-E на POJO — **только** `StrictEnumOnWire[E]` / `OptionalEnumOnWire[E]` (`EnumWire` marker в `annotationPolicy.py`).  
+`resolve` вызывает `wire_enum_class(annotation)` → `parse_enum(E, wire)`; `StrictOnWire[SomeEnum]` без маркера — **не** ENUM gate.
+
+В `resolve._resolve_field` на IMPORT:
 
 1. `parse_enum(enum_cls, wire, field=field_name)`  
 2. `WireEnumError` → `FieldPathError` с `code="UNKNOWN_ENUM"`, `schema_id`, `loc`  
@@ -575,4 +583,4 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 | **1.1.2** | 2026-07 | GV-2: `terrain_scalars(world)` + wire projection; worldMapSettings, columnFillPass, climateGeneratorService (lapse) |
 | **1.1.3** | 2026-07 | JV-1b: `worldSlices.py` (`WORLD_SLICES`), `SCHEMA_ID` на POJO, `schema_id`+`code` в 422; facade через slice registry |
 | **1.1.4** | 2026-07 | JV-2 MVP: `jsonValidation/index/` — `WorldRegistryIndex`, REF-W на import (`precipitation_liquid`, climate zone, hydrology shore, material tier) |
-| **1.2.1** | 2026-07 | JV-0a: `resolve._resolve_str_enum` + unwrap `StrictOnWire[T]`; 422 `UNKNOWN_ENUM` (`material_category` smoke) |
+| **1.2.3** | 2026-07 | `WireFieldPolicy` enum (strict / ignore / **default**); `OptionalOnWire` → `DefaultOnWire` |

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from app.dataModel.annotationPolicy import OptionalOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 
 
 class LocationMoodEntry(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     system_mood: StrictOnWire[str]
-    display_mood: OptionalOnWire[str | None] = None
+    display_mood: DefaultOnWire[str | None] = None

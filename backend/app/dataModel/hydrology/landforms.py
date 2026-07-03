@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.hydrology.bands import HydrologyBands
-from app.dataModel.annotationPolicy import OptionalOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire
 
 
 class HydrologyLandformsPolicy(BaseModel):
@@ -13,6 +13,6 @@ class HydrologyLandformsPolicy(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    enabled: OptionalOnWire[bool] = True
-    autoresolve: OptionalOnWire[bool] = True
-    bands: OptionalOnWire[HydrologyBands | None] = None
+    enabled: DefaultOnWire[bool] = True
+    autoresolve: DefaultOnWire[bool] = True
+    bands: DefaultOnWire[HydrologyBands | None] = None

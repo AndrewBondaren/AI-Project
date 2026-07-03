@@ -3,7 +3,7 @@
 Contract: ``docs/tz_json_validation.md``.
 
 Layers:
-  ``resolve``   — per-field policy engine (StrictOnWire / IgnoreOnWire / fallback)
+  ``resolve``   — per-field ``WireFieldPolicy`` (Strict / Default / Ignore)
   ``facade``    — import / CRUD normalize (strict → 422)
   ``worldRow``  — ``worlds`` DB row → typed POJOs (runtime reads)
   ``index``     — REF-W cross-refs after normalize (import only)
