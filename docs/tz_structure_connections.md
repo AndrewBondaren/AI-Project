@@ -93,7 +93,7 @@ Waypoint-узлы на изломах; `RiverBedCarver` и edge emit — по **
 | `x` | int | Мировые координаты (метры) |
 | `y` | int | Мировые координаты (метры) |
 | `z` | int | Мировые координаты (метры) |
-| `node_type` | string | `"intersection"`, `"settlement_gate"`, `"portal"`, `"building_entrance"`, `"location_hub"`, `"waypoint"` |
+| `node_type` | string | Роль узла в connection graph: `"intersection"`, `"settlement_gate"`, `"portal"`, `"building_entrance"`, `"location_hub"`, `"waypoint"`. **Todo:** wire rename → `connection_node_type` ([`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) CONN-1); enum `ConnectionNodeType` |
 | `location_uid` | string? | Ссылка на `NamedLocation` (площадь, город, портал и др.); `null` если просто пересечение |
 | `graph_level` | string | `"world"`, `"city"`, `"district"`, `"area"` |
 

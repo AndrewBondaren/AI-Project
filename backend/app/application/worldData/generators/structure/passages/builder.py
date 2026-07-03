@@ -21,7 +21,7 @@ from app.application.worldData.generators.structure.passages.entry import _build
 from app.dataModel.structure.enums.passageType import PassageType
 from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
 from app.application.worldData.generators.structure.staircase.builder import build_staircase
-from app.dataModel.structure.enums.staircaseType import StaircaseType
+from app.dataModel.spatial.facing import Facing, NS_FACINGS, parse_facing_or_default
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
 from app.db.models.mapCell import MapCell
@@ -122,7 +122,7 @@ def build_passages(
 
         for sc in template["staircases"]:
             sc_id   = sc.get("staircase_id", "staircase")
-            sc_type = sc.get("staircase_type", "u_shape")
+            sc_type = StaircaseType.parse_template(sc.get("staircase_type"))
             stops   = sc.get("stops", [])
             shaft_list = shaft_by_id.get(sc_id, [])
 
@@ -149,9 +149,9 @@ def build_passages(
                 # Interior width of shaft along the entry wall (perpendicular to facing).
                 _shaft_ref = shaft_fr or shaft_to
                 if _shaft_ref is not None:
-                    _facing = _shaft_ref.facing or "north"
+                    _facing = parse_facing_or_default(_shaft_ref.facing, default=Facing.NORTH)
                     _arch_width = (
-                        (_shaft_ref.width - 2) if _facing in ("north", "south")
+                        (_shaft_ref.width - 2) if _facing in NS_FACINGS
                         else (_shaft_ref.depth - 2)
                     )
                 else:

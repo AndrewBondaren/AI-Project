@@ -63,6 +63,27 @@ def parse_facing(value: str | Facing | None) -> Facing | None:
     return Facing(key)
 
 
+def parse_facing_or_default(value: str | Facing | None, *, default: Facing) -> Facing:
+    """Parse wire facing; ``None`` / invalid → ``default``."""
+    if value is None:
+        return default
+    if isinstance(value, Facing):
+        return value
+    try:
+        return parse_facing(value) or default
+    except ValueError:
+        return default
+
+
+# Step from interior cell toward outside (cardinal walls, §3.10 window placement).
+CARDINAL_WALL_OUTWARD_DELTA: dict[Facing, tuple[int, int]] = {
+    Facing.NORTH: (0, +1),
+    Facing.SOUTH: (0, -1),
+    Facing.EAST: (+1, 0),
+    Facing.WEST: (-1, 0),
+}
+
+
 def opposite(facing: Facing) -> Facing:
     return OPPOSITE[facing]
 

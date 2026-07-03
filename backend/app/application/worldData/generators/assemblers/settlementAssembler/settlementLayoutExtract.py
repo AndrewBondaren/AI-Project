@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
     needs_settlement_geometry,
 )
@@ -20,17 +21,17 @@ from app.db.models.world import World
 
 def collect_connection_graph(
     layout: SettlementLayout,
-    graph_levels: frozenset[str],
+    graph_levels: frozenset[GraphLevel],
 ) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
     nodes: list[ConnectionNode] = []
     edges: list[ConnectionEdge] = []
 
-    if "city" in graph_levels:
+    if GraphLevel.CITY in graph_levels:
         nodes.extend(layout.connection_nodes)
         edges.extend(layout.connection_edges)
 
     for district in layout.district_layouts:
-        if "district" in graph_levels:
+        if GraphLevel.DISTRICT in graph_levels:
             nodes.extend(district.connection_nodes)
             edges.extend(district.connection_edges)
 

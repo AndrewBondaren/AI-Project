@@ -15,6 +15,7 @@ from app.application.worldData.generators.utils.tierRegistry import (
     tier_at_least,
     tier_at_most,
 )
+from app.dataModel.roads.enums.streetLayout import StreetLayout
 from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.settlement.district.placementCondition import PlacementCondition
 from app.db.models.mapCell import MapCell
@@ -214,7 +215,7 @@ def select_district_template(
         chosen.system_name,
         chosen.district_type,
         chosen.placement_conditions or [],
-        chosen.street_layout or "grid",
+        chosen.street_layout or StreetLayout.GRID.value,
         chosen.density or "-",
         chosen.connections or [],
     )

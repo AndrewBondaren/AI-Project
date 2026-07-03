@@ -51,7 +51,7 @@ def build_staircase(
     is_new_schema = shaft is not None or "staircase_id" in conn_or_entry
     if is_new_schema:
         # New schema: staircase_type and id come from sc_entry (staircases[] array)
-        stair_type_raw = conn_or_entry.get("staircase_type", "u_shape")
+        stair_type_raw = conn_or_entry.get("staircase_type")
         sc_id      = conn_or_entry.get("staircase_id", "?")
         conn_label = f"{sc_id}  {fr.room_id}->{to.room_id}"
     else:
@@ -61,7 +61,7 @@ def build_staircase(
         coming_up         = (fr.z_offset <  0 and to.z_offset >= 0)
         stair_type_raw = "trapdoor" if (going_underground or coming_up) else getattr(to, "staircase_type", None)
 
-    stair_type = StaircaseType.from_wire(stair_type_raw or "")
+    stair_type = StaircaseType.parse_template(stair_type_raw)
     logger.info("build_staircase: %s  stair_type=%r  z_height=%d",
                 conn_label, stair_type_raw, abs(to_level.z - fr_level.z))
 

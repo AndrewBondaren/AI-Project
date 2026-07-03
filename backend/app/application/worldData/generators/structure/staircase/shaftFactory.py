@@ -30,7 +30,7 @@ from app.db.models.world import World
 logger = logging.getLogger(__name__)
 
 
-def _resolve_shaft_size(sc_entry: dict, staircase_type: str) -> tuple[int, int]:
+def _resolve_shaft_size(sc_entry: dict, staircase_type: StaircaseType) -> tuple[int, int]:
     size = sc_entry.get("size") or {}
     size_type = size.get("size_type")
     if size_type:
@@ -62,7 +62,7 @@ def instantiate_shaft_rooms(
 
     for sc in template.get("staircases", []):
         staircase_id = sc.get("staircase_id", "staircase")
-        staircase_type = sc.get("staircase_type", "u_shape")
+        staircase_type = StaircaseType.parse_template(sc.get("staircase_type"))
         stops = sc.get("stops", [])
 
         if not requires_shaft(staircase_type):
@@ -132,7 +132,7 @@ def instantiate_shaft_rooms(
                 required=True,
                 wall_material=wall_mat,
                 floor_material=floor_mat,
-                staircase_type=staircase_type,
+                staircase_type=staircase_type.value,
                 facing=sc.get("facing"),
                 is_shaft=True,
                 staircase_id=staircase_id,

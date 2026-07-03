@@ -11,6 +11,8 @@ Coordinate convention:
 
 import math
 
+from app.dataModel.spatial.facing import Facing, parse_facing_or_default
+
 
 def footprint_rectangle(x0: int, y0: int, width: int, depth: int) -> set[tuple[int, int]]:
     return {(x, y) for x in range(x0, x0 + width) for y in range(y0, y0 + depth)}
@@ -97,23 +99,23 @@ def footprint_t_shape(
     For now: beam occupies the full bounding box minus the stem already inside it.
     T-shape: beam (width × depth) + stem extending beyond one wall.
 
-    stem_wall: "north" | "south" | "east" | "west"
-    Stem extends OUTWARD from the beam — stem_depth = depth (symmetric).
+    stem_wall: wire cardinal facing; stem extends outward from the beam.
     """
     beam = footprint_rectangle(x0, y0, width, depth)
 
     stem_cx = x0 + width // 2
     stem_cy = y0 + depth // 2
+    wall = parse_facing_or_default(stem_wall, default=Facing.SOUTH)
 
-    if stem_wall == "south":
+    if wall == Facing.SOUTH:
         sx = stem_cx - stem_width // 2
         sy = y0 - depth
         stem = footprint_rectangle(sx, sy, stem_width, depth)
-    elif stem_wall == "north":
+    elif wall == Facing.NORTH:
         sx = stem_cx - stem_width // 2
         sy = y0 + depth
         stem = footprint_rectangle(sx, sy, stem_width, depth)
-    elif stem_wall == "west":
+    elif wall == Facing.WEST:
         sx = x0 - depth
         sy = stem_cy - stem_width // 2
         stem = footprint_rectangle(sx, sy, depth, stem_width)
@@ -163,6 +165,6 @@ def room_footprint(
         return footprint_t_shape(
             x0, y0, width, depth,
             stem_width=p.get("stem_width", max(2, width // 3)),
-            stem_wall=p.get("stem_wall", "south"),
+            stem_wall=p.get("stem_wall", Facing.SOUTH.value),
         )
     raise ValueError(f"Unknown shape_type: {shape_type!r}")

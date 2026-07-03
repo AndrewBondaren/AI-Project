@@ -7,21 +7,20 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+from app.dataModel.spatial.facing import (
+    CARDINAL_FACINGS,
+    CARDINAL_WALL_OUTWARD_DELTA,
+    Facing,
+    is_meridional_edge,
+)
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
-
-_DIR_DELTA: dict[str, tuple[int, int]] = {
-    "north": (0, +1),
-    "south": (0, -1),
-    "east":  (+1, 0),
-    "west":  (-1, 0),
-}
 
 
 @dataclass
 class ExteriorWallProfile:
     z_height: int
     z_base: int
-    # direction → available cells after adaptive corner cut (§3.10 Правило 2, steps 1-2)
+    # wire facing → available cells after adaptive corner cut (§3.10 Правило 2, steps 1-2)
     walls: dict[str, list[tuple[int, int]]] = field(default_factory=dict)
 
     @property
@@ -31,13 +30,13 @@ class ExteriorWallProfile:
 
 def _exterior_cells(
     room: _RoomInstance,
-    direction: str,
+    facing: Facing,
     all_fp: set[tuple[int, int]],
 ) -> list[tuple[int, int]]:
-    dx, dy = _DIR_DELTA[direction]
+    dx, dy = CARDINAL_WALL_OUTWARD_DELTA[facing]
     fp = room.get_footprint()
     cells = [(x, y) for (x, y) in fp if (x + dx, y + dy) not in all_fp]
-    if direction in ("north", "south"):
+    if is_meridional_edge(facing):
         cells.sort(key=lambda c: c[0])
     else:
         cells.sort(key=lambda c: c[1])
@@ -66,11 +65,11 @@ def compute_exterior_wall_profiles(
         if not room.placed:
             continue
         walls: dict[str, list[tuple[int, int]]] = {}
-        for direction in ("north", "south", "east", "west"):
-            raw = _exterior_cells(room, direction, all_fp)
+        for facing in CARDINAL_FACINGS:
+            raw = _exterior_cells(room, facing, all_fp)
             cells = _corner_cut(raw, 1) if room.is_shaft else _adaptive_corner_cut(raw)
             if cells:
-                walls[direction] = cells
+                walls[facing.value] = cells
         profiles[room.uid_key] = ExteriorWallProfile(
             z_height=room.z_height,
             z_base=z_base,

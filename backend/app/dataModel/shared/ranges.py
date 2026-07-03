@@ -17,7 +17,6 @@ class IntMinMax(BaseModel):
 
 class PctRange(BaseModel):
     """Fraction range 0..1 — district size_pct width/depth."""
-
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     min: StrictOnWire[float] = constrained_field(greater_equals=0.0, lesser_equals=1.0)

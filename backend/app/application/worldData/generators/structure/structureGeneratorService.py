@@ -425,7 +425,7 @@ class StructureGeneratorService:
         """Synthetic archway connections: shaft ↔ to_room for the current level."""
         synth = list(connections)
         for sc in template.get("staircases", []):
-            if not requires_shaft(sc.get("staircase_type", "u_shape")):
+            if not requires_shaft(sc.get("staircase_type")):
                 continue
             sc_id      = sc.get("staircase_id", "staircase")
             stops      = sc.get("stops", [])
@@ -455,7 +455,7 @@ class StructureGeneratorService:
     ) -> None:
         """AdjacentShaftPlacer for fr_z shaft instances; propagates level_start to to_z levels."""
         for sc in template.get("staircases", []):
-            if not requires_shaft(sc.get("staircase_type", "u_shape")):
+            if not requires_shaft(sc.get("staircase_type")):
                 continue
             sc_id  = sc.get("staircase_id", "staircase")
             stops  = sc.get("stops", [])
@@ -498,7 +498,7 @@ class StructureGeneratorService:
     ) -> None:
         """No-shaft staircases (trapdoor): align target level to the placed anchor room."""
         for sc in template.get("staircases", []):
-            if requires_shaft(sc.get("staircase_type") or ""):
+            if requires_shaft(sc.get("staircase_type")):
                 continue
             sc_id = sc.get("staircase_id", "?")
             stops = sc.get("stops", [])

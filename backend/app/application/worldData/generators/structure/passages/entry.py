@@ -8,7 +8,7 @@ from app.application.worldData.generators.structure.room.roomInstance import _Ro
 from app.application.worldData.generators.structure.passages.doorPlacer import DoorPlacer
 from app.dataModel.structure.enums.passageType import PassageType
 from app.application.worldData.generators.structure.passages.shared import (
-    _DIRECTION_FACING, _det_uuid, _exterior_cells_on_wall,
+    _det_uuid, _exterior_cells_on_wall,
 )
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
@@ -28,12 +28,12 @@ def _build_entry_point(
     passage_height: int,
     suffix: str = "",
 ) -> LocationPassage | None:
-    direction = ep.get("wall", "south")
-    ext_cells = _exterior_cells_on_wall(room, direction, all_union)
+    facing = parse_facing_or_default(ep.get("wall"), default=Facing.SOUTH)
+    ext_cells = _exterior_cells_on_wall(room, facing, all_union)
     if not ext_cells:
         logger.warning(
             "entry_point on room %r: no exterior wall on %r side",
-            room.room_id, direction,
+            room.room_id, facing.value,
         )
         return None
 
@@ -42,7 +42,6 @@ def _build_entry_point(
     z = level.z
 
     height  = max(ep.get("height", passage_height), passage_height)
-    facing  = _DIRECTION_FACING.get(direction, Facing.NORTH)
     label   = f"entry:{room.room_id}"
     placer  = DoorPlacer(cells, world_uid, building_uid)
     valid   = placer.filter_passable_from_center(ext_cells, z, facing, allow_exterior=True)

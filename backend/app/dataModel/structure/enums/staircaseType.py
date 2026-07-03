@@ -30,6 +30,20 @@ class StaircaseType(StrEnum):
                 return member
         return None
 
+    @classmethod
+    def generator_default(cls) -> StaircaseType:
+        """Builtin default when template omits ``staircase_type``."""
+        return cls.U_SHAPE
+
+    @classmethod
+    def parse_template(cls, key: str | StaircaseType | None) -> StaircaseType | None:
+        """Parse wire; omitted/empty → ``generator_default()``; unknown → ``None``."""
+        if isinstance(key, cls):
+            return key
+        if key is None or not str(key).strip():
+            return cls.generator_default()
+        return cls.from_wire(str(key))
+
 
 _LEGACY_WIRE_ALIASES: dict[str, StaircaseType] = {
     "trapdoor": StaircaseType.VERTICAL_LADDER,
@@ -58,18 +72,22 @@ _STAIRCASE_TYPE_SIZE_ALIASES: dict[str, str] = {
 _FALLBACK_SHAFT_SIZE_TYPE = "sq_small"
 
 
-def requires_shaft(staircase_type: str) -> bool:
-    member = StaircaseType.from_wire(staircase_type)
+def requires_shaft(staircase_type: str | StaircaseType | None) -> bool:
+    if isinstance(staircase_type, StaircaseType):
+        return _SPECS[staircase_type].requires_shaft
+    member = StaircaseType.parse_template(staircase_type)
     if member is None:
         return True
     return _SPECS[member].requires_shaft
 
 
-def default_shaft_size_type(staircase_type: str) -> str:
+def default_shaft_size_type(staircase_type: str | StaircaseType | None) -> str:
+    if isinstance(staircase_type, StaircaseType):
+        return _SPECS[staircase_type].default_shaft_size_type
     alias = _STAIRCASE_TYPE_SIZE_ALIASES.get((staircase_type or "").strip().lower())
     if alias is not None:
         return alias
-    member = StaircaseType.from_wire(staircase_type)
+    member = StaircaseType.parse_template(staircase_type)
     if member is not None:
         return _SPECS[member].default_shaft_size_type
     return _FALLBACK_SHAFT_SIZE_TYPE

@@ -11,7 +11,7 @@ from app.application.worldData.generators.utils.materialResolver import resolve_
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.shapeResolver import SizeShapeResolver
 from app.dataModel.structure.enums.staircaseSize import StaircaseSizePreset, all_staircase_size_presets
-from app.dataModel.structure.enums.roomSize import RoomSize
+from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing
 from app.application.worldData.generators.structure.shapeType import ShapeType, _V1_SHAPES
 from app.db.models.world import World
 
@@ -103,7 +103,7 @@ def _resolve_shape_params(room_def: dict, rng: Random) -> dict:
         swr = raw.get("stem_width_range", [2, 3])
         wall = raw.get("stem_wall", "any")
         if wall == "any":
-            wall = rng.choice(["north", "south", "east", "west"])
+            wall = rng.choice(list(CARDINAL_FACINGS)).value
         params = {
             "stem_width": rng.randint(swr[0], swr[1]),
             "stem_wall": wall,

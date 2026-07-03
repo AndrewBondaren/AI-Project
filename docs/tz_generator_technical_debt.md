@@ -616,13 +616,13 @@ if ptype is PassageType.STAIRCASE:
 
 **P1 — enum в dataModel, в коде ещё string literals**
 
-| Enum | Где literals | Действие |
+| Enum | Где literals | Статус |
 |---|---|---|
-| `StreetLayout` | `districtRoadGenerator._LAYOUT_FN`, default `"grid"` в assembler/placement | `StreetLayout.from_wire`; dict keyed by enum |
-| `GraphLevel` | `gridLayout` — `"district"`; `settlementLayoutExtract` — `"city"`/`"district"` | `GraphLevel.DISTRICT` / `.CITY` (как в `streets.py`) |
-| `StaircaseType` | default `"u_shape"` в `structureGeneratorService`, `shaftFactory`, `passages/builder` | parse до `requires_shaft()` / сравнений |
-| `Facing` | `"north"`/`"south"` defaults, dict в `shared.py`, `wallOpeningResolver`, `entry`, `builder` | `parse_facing` / `Facing` members |
-| `PassageType` | `staircaseTunnelOrchestrator` — `"archway"` в UUID | `PassageType.ARCHWAY.value` |
+| `StreetLayout` | `districtRoadGenerator`, assembler/placement logs | ✅ `StreetLayout.for_generator` + enum map |
+| `GraphLevel` | `gridLayout`, `settlementLayoutExtract`, persist | ✅ `GraphLevel.*.value` / frozenset members |
+| `StaircaseType` | defaults в structure | ✅ `parse_template` / `generator_default` в POJO |
+| `Facing` | defaults / direction dicts в passages, shapes | ✅ `parse_facing_or_default`, `CARDINAL_*` |
+| `PassageType` | orchestrator UUID | ✅ `PassageType.ARCHWAY.value` |
 
 **P2 — внутренний vocabulary (не wire ENUM-E, перенос опционален)**
 
@@ -676,8 +676,8 @@ Parse на location/edge/policy — не на map cell. Bottleneck — LLM + gri
 2. ✅ Roads/settlement graph enums → `dataModel`; `streets.py` slice
 3. ✅ `wireEnums.py` — pure re-export barrel
 4. ✅ Удалить shims: `facing`, `structureElement`, `staircaseType`, `staircaseSize`, `roomSize`
-5. ⬜ Roads literals: `StreetLayout`, `GraphLevel` в `districtRoadGenerator` / `gridLayout`
-6. ⬜ Structure literals: `StaircaseType` defaults, `Facing` defaults, `PassageType.ARCHWAY` в orchestrator
+5. ✅ Roads literals: `StreetLayout`, `GraphLevel` в `districtRoadGenerator` / `gridLayout` / `settlementLayoutExtract`
+6. ✅ Structure literals: `StaircaseType`, `Facing`, `PassageType.ARCHWAY`
 
 **jsonValidation (JV-0, не generators):**
 
@@ -762,6 +762,35 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 
 ---
 
+### CONN-1 — rename `connection_nodes.node_type` → `connection_node_type`
+
+**Severity:** low (naming) · **P:** P2 · **Status:** **open** (todo; не HY-5 literals)
+
+**Суть:** wire-ключ `node_type` на `ConnectionNode` путают с engine DAG node и с `npc_fields.node_category`.  
+Переименование в **`connection_node_type`** согласовано; вариант `connection_type` **отклонён** — коллизия с `connection_edges.connection_type` (`road`, `lake_shoreline`, …).
+
+| Слой | Сейчас | Цель |
+|---|---|---|
+| SQL / bundle JSON | `node_type` | `connection_node_type` |
+| Python dataclass | `ConnectionNode.node_type` | `connection_node_type` |
+| ENUM-E | `ConnectionNodeType` (имя enum ок) | без переименования класса |
+| Engine DAG | — | **не трогать** |
+
+**Scope rename (один PR + recreate БД):**
+
+1. `db/migrations/0001_initial.sql` — колонка `connection_node_type`
+2. `db/models/connectionNode.py`
+3. `fixtures/world_template.json` — все `connection_nodes[]`
+4. Generators: `streets.py`, `gridLayout.py`, hydrology loaders, persist/import paths
+5. `docs/tz_structure_connections.md`, `docs/tz_terrain_hydrology.md` — wire-таблицы
+6. `jsonValidation` — bundle row DTO для `connection_nodes` (**после** JV slice на connections)
+
+**Не в scope:** alias `node_type` на import (мастер пересобирает bundle); engine; `ConnectionNodeType` StrEnum rename.
+
+**План агента:** [`.cursor/plans/connection-node-type-rename.md`](../.cursor/plans/connection-node-type-rename.md)
+
+---
+
 ### Sprint 1 registry (summary)
 
 | ID | Severity | P | Проблема | Status |
@@ -773,6 +802,7 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 | HY-S-4 | low | P2 | `HYDROLOGY_SCHEMA_DEFAULTS` scatter | open |
 | HY-S-3 | medium | P1 | MasterInput stub vs TZ | open |
 | HY-S-5 | low | P2 | edges as dict | open |
+| CONN-1 | low | P2 | `node_type` → `connection_node_type` wire rename | open |
 
 ---
 
@@ -800,6 +830,7 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 | 2026-06 | `tz_world_snapshot.md` — unified WorldSnapshotService; climate terminology disambiguation v2.6.1 |
 | 2026-06 | Climate v2.6 TZ: LOD C6–C13; CL-17 SurfaceClimateField; CL-18 LOD policy |
 | 2026-06 | Polish backlog rework; CL-2a..CL-2e, DR-5 added; FM-1 resolved |
-| 2026-07 | **HY-5 progress:** structure/roads/climate enums → `dataModel`; `wireEnums` barrel; `NodeCategory` removed; `SystemGender` → `character/`; scope rules + backlog в § HY-5 |
+| 2026-07 | **CONN-1 todo:** wire rename `node_type` → `connection_node_type` на `connection_nodes` (см. § CONN-1) |
+| 2026-07 | **HY-5 progress:** structure/roads/climate enums → `dataModel`; shims removed; P1-A roads literals |
 | 2026-06 | **HY-S registry:** BUNDLE-1, HY-5, HY-S-4, HY-GEO-1 |
 | 2026-06 | **`docs/tz_json_validation.md` v0.1** — Field Contract Registry; ENUM-E / REF-W / N1-S / N1-W (§0) |

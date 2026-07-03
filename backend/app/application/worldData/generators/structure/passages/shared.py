@@ -3,7 +3,7 @@ Shared helpers for passage builders.
 """
 import uuid
 
-from app.dataModel.spatial.facing import Facing
+from app.dataModel.spatial.facing import Facing, parse_facing_or_default
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 
 _WALL_DIRS: dict[Facing, tuple[int, int]] = {
@@ -45,20 +45,14 @@ def _doorway_facing(shared: list[tuple[int, int]]) -> Facing:
     return Facing.NORTH if len(ys) == 1 else Facing.EAST
 
 
-_DIRECTION_FACING: dict[str, Facing] = {
-    "north": Facing.NORTH,
-    "south": Facing.SOUTH,
-    "east":  Facing.EAST,
-    "west":  Facing.WEST,
-}
-
 
 def _exterior_cells_on_wall(
     room: _RoomInstance,
-    direction: str,
+    direction: str | Facing,
     all_union: set[tuple[int, int]],
 ) -> list[tuple[int, int]]:
-    dx, dy = _WALL_DIRS[direction]
+    facing = parse_facing_or_default(direction, default=Facing.SOUTH)
+    dx, dy = _WALL_DIRS[facing]
     fp = room.get_footprint()
     result: set[tuple[int, int]] = set()
     for (x, y) in fp:

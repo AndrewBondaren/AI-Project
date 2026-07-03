@@ -92,7 +92,7 @@ class StaircaseTunnelOrchestrator:
             "tunnel_orchestrator %r: archway at (%d,%d) z=%d..%d (anchor=%s, room=%r)",
             sc_id, wx, wy, z_lo, z_hi - 1, anchor, room.room_id,
         )
-        passage_uid = _det_uuid(self.building_uid, "archway", sc_id, room.room_id)
+        passage_uid = _det_uuid(self.building_uid, PassageType.ARCHWAY.value, sc_id, room.room_id)
         return LocationPassage(
             passage_uid=passage_uid,
             world_uid=self.world_uid,

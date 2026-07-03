@@ -20,6 +20,7 @@ from app.application.worldData.generators.road.layouts.gridLayout import generat
 from app.application.worldData.generators.road.layouts.organicLayout import generate_organic
 from app.application.worldData.generators.road.layouts.radialLayout import generate_radial
 from app.dataModel.settlement.district.districtConnection import primary_or_default
+from app.dataModel.roads.enums.streetLayout import StreetLayout
 from app.application.worldData.generators.road.connectionPolicy import (
     resolve_has_sidewalk,
     resolve_lanes_per_side,
@@ -31,11 +32,11 @@ from app.db.models.world import World
 logger = logging.getLogger(__name__)
 
 _LAYOUT_FN = {
-    "grid":       generate_grid,
-    "organic":    generate_organic,
-    "radial":     generate_radial,
-    "cul_de_sac": generate_cul_de_sac,
-    "courtyard":  generate_courtyard,
+    StreetLayout.GRID:       generate_grid,
+    StreetLayout.ORGANIC:    generate_organic,
+    StreetLayout.RADIAL:     generate_radial,
+    StreetLayout.CUL_DE_SAC: generate_cul_de_sac,
+    StreetLayout.COURTYARD:  generate_courtyard,
 }
 
 class DistrictRoadGenerator:
@@ -51,7 +52,7 @@ class DistrictRoadGenerator:
             rng = random.Random()
 
         template      = slot.district_template
-        street_layout = template.street_layout or "grid"
+        street_layout = StreetLayout.for_generator(template.street_layout)
 
         primary         = primary_or_default(template)
         connection_type = primary.connection_type
@@ -60,11 +61,11 @@ class DistrictRoadGenerator:
 
         fn = _LAYOUT_FN.get(street_layout)
         if fn is None:
-            raise ValueError(f"Неизвестный street_layout: {street_layout!r}")
+            raise ValueError(f"Неизвестный street_layout: {street_layout.value!r}")
 
         logger.info(
             "DistrictRoadGenerator | layout=%s type=%s lanes=%s sidewalk=%s origin=(%d,%d) size=%dx%d",
-            street_layout, connection_type, lanes_per_side, has_sidewalk,
+            street_layout.value, connection_type, lanes_per_side, has_sidewalk,
             slot.origin_x, slot.origin_y, slot.width_m, slot.depth_m,
         )
 

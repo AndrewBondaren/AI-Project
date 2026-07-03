@@ -7,6 +7,7 @@ from app.application.worldData.generators.structure.structureGeneratorService im
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+from app.dataModel.spatial.facing import Facing
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class VastHullContext:
     hull_type:      str              # "ship" | "spaceship" | "airship" | "submarine"
-    orientation:    str = "north"    # направление носа ("north"|"east"|"south"|"west")
+    orientation:    str = Facing.NORTH.value    # направление носа (cardinal wire)
     hull_material:  str | None = None        # None → резолвится из шаблона
     deck_count:     int = 1                  # количество палуб/этажей
 

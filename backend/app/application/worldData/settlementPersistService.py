@@ -19,6 +19,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import (
     SettlementLayout,
 )
+from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.application.worldData.mapCellService import MapCellService
 from app.application.worldData.settlementPersistScope import (
     OUTDOOR_SCOPES,
@@ -133,7 +134,7 @@ class SettlementPersistService:
                 if layout is None:
                     result.scopes_skipped.append(scope.value)
                     continue
-                nodes, edges = collect_connection_graph(layout, frozenset({"city"}))
+                nodes, edges = collect_connection_graph(layout, frozenset({GraphLevel.CITY}))
                 cells = collect_edge_cells(layout)
                 conn_result = await self._connection_persist.persist_graph(nodes, edges, cells)
                 result.scopes_applied.append(scope.value)
@@ -142,7 +143,7 @@ class SettlementPersistService:
                 if layout is None:
                     result.scopes_skipped.append(scope.value)
                     continue
-                nodes, edges = collect_connection_graph(layout, frozenset({"district"}))
+                nodes, edges = collect_connection_graph(layout, frozenset({GraphLevel.DISTRICT}))
                 part = await self._connection_persist.persist_graph(nodes, edges, [])
                 if conn_result is None:
                     conn_result = part

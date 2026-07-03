@@ -15,6 +15,7 @@ from app.application.worldData.generators.road.districtRoadGenerator import Dist
 from app.application.worldData.generators.structure.structureGeneratorService import StructureLayout
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
+from app.dataModel.roads.enums.streetLayout import StreetLayout
 from app.dataModel.settlement.district.districtConnection import primary_or_default
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
@@ -51,7 +52,7 @@ class DistrictAssembler:
             slot.origin_y,
             slot.width_m,
             slot.depth_m,
-            template.street_layout or "grid",
+            template.street_layout or StreetLayout.GRID.value,
             "DistrictRoadGenerator",
             primary.connection_type,
             primary.sidewalk,
