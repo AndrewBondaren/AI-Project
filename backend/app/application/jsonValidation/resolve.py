@@ -16,8 +16,15 @@ from typing import Annotated, Any, get_args, get_origin
 from pydantic import BaseModel, RootModel, TypeAdapter, ValidationError
 from pydantic_core import PydanticUndefined
 
-from app.dataModel.annotationPolicy import AnnotationPolicy, field_policy
+from app.dataModel.annotationPolicy import (
+    AnnotationPolicy,
+    IgnoreOnWire,
+    OptionalOnWire,
+    StrictOnWire,
+    field_policy,
+)
 from app.application.jsonValidation.types import FieldPathError
+from app.application.jsonValidation.wire import WireEnumError, parse_enum
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +62,25 @@ class StrictFieldError(ValueError):
 
 
 def _unwrap_annotation(annotation: Any) -> Any:
-    if get_origin(annotation) is Annotated:
-        args = get_args(annotation)
-        if args:
-            return args[0]
+    wire_aliases = (StrictOnWire, OptionalOnWire, IgnoreOnWire)
+    while True:
+        if get_origin(annotation) is Annotated:
+            args = get_args(annotation)
+            if not args:
+                break
+            annotation = args[0]
+            continue
+        origin = get_origin(annotation)
+        if origin in wire_aliases or (
+            origin is not None
+            and getattr(origin, "__name__", "") in ("StrictOnWire", "OptionalOnWire", "IgnoreOnWire")
+        ):
+            args = get_args(annotation)
+            if not args:
+                break
+            annotation = args[0]
+            continue
+        break
     return annotation
 
 
@@ -136,6 +158,41 @@ def _validation_issue(
     )
 
 
+def _is_str_enum_type(annotation: Any) -> bool:
+    inner = _unwrap_annotation(annotation)
+    return isinstance(inner, type) and issubclass(inner, StrEnum)
+
+
+def _wire_str(raw_value: Any) -> str:
+    return raw_value if isinstance(raw_value, str) else str(raw_value)
+
+
+def _resolve_str_enum(
+    enum_cls: type[StrEnum],
+    raw_value: Any,
+    *,
+    field_name: str,
+    field_path: tuple[str | int, ...],
+    ctx: ResolveContext | None,
+) -> Any:
+    """Parse ENUM-E wire on import (UNKNOWN_ENUM 422) or runtime (caller handles fallback)."""
+    if isinstance(raw_value, enum_cls):
+        return raw_value
+
+    try:
+        return parse_enum(enum_cls, _wire_str(raw_value), field=field_name)
+    except WireEnumError as exc:
+        if ctx is not None and ctx.mode == ResolveMode.IMPORT:
+            ctx.errors.append(_validation_issue(
+                ctx,
+                field_path,
+                str(exc),
+                code="UNKNOWN_ENUM",
+            ))
+            return PydanticUndefined
+        raise StrictFieldError(field_path, str(exc)) from exc
+
+
 def _record_strict_error(
     ctx: ResolveContext | None,
     path: tuple[str | int, ...],
@@ -180,6 +237,18 @@ def _resolve_field(
         if isinstance(raw_value, dict) and _is_base_model_type(field_info.annotation):
             child = ctx.child(field_name) if ctx is not None else None
             return resolve_model(inner, raw_value, label=f"{label}.{field_name}", ctx=child)
+        if _is_str_enum_type(inner):
+            try:
+                return _resolve_str_enum(
+                    inner,
+                    raw_value,
+                    field_name=field_name,
+                    field_path=field_path,
+                    ctx=ctx,
+                )
+            except StrictFieldError as exc:
+                _record_strict_error(ctx, exc.path, exc.detail)
+                return PydanticUndefined
         try:
             TypeAdapter(inner).validate_python(raw_value)
         except ValidationError as exc:
@@ -191,14 +260,30 @@ def _resolve_field(
         if isinstance(raw_value, dict) and _is_base_model_type(field_info.annotation):
             child = ctx.child(field_name) if ctx is not None else None
             return resolve_model(inner, raw_value, label=f"{label}.{field_name}", ctx=child)
-        try:
-            return TypeAdapter(inner).validate_python(raw_value)
-        except ValidationError:
-            logger.warning(
-                "json_validation | %s.%s invalid; using field default",
-                label,
-                field_name,
-            )
+        if _is_str_enum_type(inner):
+            try:
+                return _resolve_str_enum(
+                    inner,
+                    raw_value,
+                    field_name=field_name,
+                    field_path=field_path,
+                    ctx=ctx,
+                )
+            except StrictFieldError:
+                logger.warning(
+                    "json_validation | %s.%s invalid enum; using field default",
+                    label,
+                    field_name,
+                )
+        else:
+            try:
+                return TypeAdapter(inner).validate_python(raw_value)
+            except ValidationError:
+                logger.warning(
+                    "json_validation | %s.%s invalid; using field default",
+                    label,
+                    field_name,
+                )
 
     default = _field_default(field_info)
     if default is PydanticUndefined:

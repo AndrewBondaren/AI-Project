@@ -1,5 +1,6 @@
 """Static map anchor locations (CL-12)."""
 
+from app.dataModel.climate.enums.poleKind import CLIMATE_POLE_LOCATION_TYPE
 from app.db.models.namedLocation import NamedLocation
 
 
@@ -12,9 +13,7 @@ def static_map_anchors(locations: list[NamedLocation]) -> list[NamedLocation]:
 
 
 def static_climate_poles(locations: list[NamedLocation]) -> list[NamedLocation]:
-    from app.application.worldData.generators.climate.climatePole import CLIMATE_POLE_TYPE
-
     return [
         loc for loc in static_map_anchors(locations)
-        if loc.system_location_type == CLIMATE_POLE_TYPE
+        if loc.system_location_type == CLIMATE_POLE_LOCATION_TYPE
     ]

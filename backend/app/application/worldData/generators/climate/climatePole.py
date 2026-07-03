@@ -5,10 +5,9 @@ from app.dataModel.climate.climatePoleTemperature import (
     POLE_TEMPERATURE_INSET_FRACTION,
     derived_pole_temperature,
 )
-from app.dataModel.climate.enums.poleKind import CLIMATE_POLE_LOCATION_TYPE, PoleKind
+from app.dataModel.climate.enums.poleKind import PoleKind
 from app.dataModel.climate.enums.poleSource import PoleSource
 
-CLIMATE_POLE_TYPE = CLIMATE_POLE_LOCATION_TYPE
 POLE_BLEND_EPS = CLIMATE_POLE_BLEND.eps
 POLE_BLEND_POWER = CLIMATE_POLE_BLEND.power
 

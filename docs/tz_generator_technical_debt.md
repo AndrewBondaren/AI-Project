@@ -679,15 +679,15 @@ Parse на location/edge/policy — не на map cell. Bottleneck — LLM + gri
 5. ✅ Roads literals: `StreetLayout`, `GraphLevel` в `districtRoadGenerator` / `gridLayout` / `settlementLayoutExtract`
 6. ✅ Structure literals: `StaircaseType`, `Facing`, `PassageType.ARCHWAY`
 
-**jsonValidation (JV-0, не generators):**
+**jsonValidation (JV-0, не generators)** — детали: [`tz_json_validation.md`](./tz_json_validation.md) § JV-0:
 
-7. ⬜ `jsonValidation/wire.py` — shared `parse_enum()` / `StrictOnWire[T]`
-8. ⬜ Bundle row DTOs — typed enum fields
-9. ⬜ `node_category` → `NpcFieldCategory` в `dataModel/character/` + engine hook (post-JV)
+7. ✅ **JV-0a** — `resolve` hook → `wire.parse_enum`; 422 `UNKNOWN_ENUM` (`StrictOnWire[T]` unwrap)
+8. ⬜ **JV-0b** — bundle DTO `connection_nodes` / edges + hook в `WorldBundleService`
+9. ⬜ `node_category` → `NpcFieldCategory` в `dataModel/character/` + engine hook (**post-JV-0**)
 
 **Прочее:**
 
-10. ⬜ `CLIMATE_POLE_TYPE` alias → прямой `PoleKind` / `CLIMATE_POLE_LOCATION_TYPE` в consumers (`PoleMode` shim ✅)
+10. ✅ `CLIMATE_POLE_TYPE` alias убран; `locations.py` → `CLIMATE_POLE_LOCATION_TYPE` из dataModel
 11. ⬜ `generators/registries/locationTypes.py` — `LocationType.GEOGRAPHIC` (если появится второй consumer)
 
 #### Персонаж vs мир (TZ storage § character_sheet, players, npcs)

@@ -25,6 +25,8 @@ def _error_code(err: FieldPathError) -> str:
     if err.code:
         return err.code
     msg = err.message.lower()
+    if "unknown wire value" in msg:
+        return "UNKNOWN_ENUM"
     if "strict" in msg:
         return "STRICT_REQUIRED"
     if msg == "expected list":
