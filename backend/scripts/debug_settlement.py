@@ -1052,7 +1052,7 @@ def test_climate_pole_tier() -> None:
 
 def test_climate_pole_mode_manual() -> None:
     """CL-4: climate_pole_mode=manual without pole → empty field, no autoresolve."""
-    from app.application.worldData.generators.climate.climatePole import PoleMode
+    from app.dataModel.climate.enums.climatePoleMode import ClimatePoleMode
     from app.application.worldData.generators.climate.climatePoleField import GridBBox
     from app.application.worldData.generators.climate.poleResolve import resolve_pole_field
 
@@ -1061,7 +1061,7 @@ def test_climate_pole_mode_manual() -> None:
         name="Test",
         created_at="2026-01-01T00:00:00",
         map_cell_size_m=3000,
-        climate_pole_mode=PoleMode.MANUAL,
+        climate_pole_mode=ClimatePoleMode.MANUAL.wire_value,
         climate_pole_preset="ice",
     )
     region = NamedLocation(
@@ -1084,7 +1084,7 @@ def test_climate_pole_mode_manual() -> None:
         name="Test",
         created_at="2026-01-01T00:00:00",
         map_cell_size_m=3000,
-        climate_pole_mode=PoleMode.AUTORESOLVE,
+        climate_pole_mode=ClimatePoleMode.AUTORESOLVE.wire_value,
         climate_pole_preset="ice",
     )
     field_auto = resolve_pole_field(world_auto, [region], 3000, bbox)
@@ -1300,7 +1300,7 @@ def test_climate_logging_warnings() -> None:
     from io import StringIO
 
     from app.application.worldData.generators.climate import ClimateGeneratorService
-    from app.application.worldData.generators.climate.climatePole import PoleMode
+    from app.dataModel.climate.enums.climatePoleMode import ClimatePoleMode
     from app.application.worldData.generators.climate.loggingHelpers import _debugged, _warned
     from app.application.worldData.generators.climate.poleResolve import resolve_pole_field
     from app.application.worldData.generators.climate.registry import profile_for
@@ -1320,7 +1320,7 @@ def test_climate_logging_warnings() -> None:
             world_uid="world-log-manual",
             name="Test",
             created_at="2026-01-01T00:00:00",
-            climate_pole_mode=PoleMode.MANUAL,
+            climate_pole_mode=ClimatePoleMode.MANUAL.wire_value,
         ),
         [],
         3000,

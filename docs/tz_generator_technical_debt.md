@@ -632,7 +632,7 @@ if ptype is PassageType.STAIRCASE:
 | `AnchorSource` | `climate/climateAnchor.py` | climate pipeline |
 | `CellZone` | `settlementAssembler/planner/defaults.py` | planner-internal (center/edge/inner) |
 | `CoordinateSpace` | `coordinates/space.py` | теги координатных систем |
-| `PoleMode` | `climate/climatePole.py` | дубль `ClimatePoleMode`; удалить re-export |
+| `PoleMode` | `climate/climatePole.py` | ✅ удалён; `ClimatePoleMode` из dataModel |
 
 **P3 — без dataModel enum пока**
 
@@ -687,7 +687,7 @@ Parse на location/edge/policy — не на map cell. Bottleneck — LLM + gri
 
 **Прочее:**
 
-10. ⬜ `CLIMATE_POLE_TYPE` string const → только `PoleKind` / `ClimatePoleMode` (убрать `PoleMode` shim)
+10. ⬜ `CLIMATE_POLE_TYPE` alias → прямой `PoleKind` / `CLIMATE_POLE_LOCATION_TYPE` в consumers (`PoleMode` shim ✅)
 11. ⬜ `generators/registries/locationTypes.py` — `LocationType.GEOGRAPHIC` (если появится второй consumer)
 
 #### Персонаж vs мир (TZ storage § character_sheet, players, npcs)
