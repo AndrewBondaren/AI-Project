@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.application.jsonValidation.resolve import resolve_model, resolve_root_list
+from app.application.jsonValidation.resolve import resolve_model, resolve_root_dict, resolve_root_list
 from app.dataModel.climate.worldClimateScalars import (
     WorldClimateScalars,
     climate_scalar_wire_from_mapping,
@@ -17,15 +17,28 @@ from app.dataModel import (
     WorldClimateZoneRegistry,
     WorldEconomyTierRegistry,
     WorldHydrology,
+    WorldLocationMoodRegistry,
+    WorldLocationTypeRegistry,
+    WorldLoreRegistry,
     WorldMaterialRegistry,
     WorldRoadSettings,
+    WorldRoomTypeRegistry,
+    WorldTerrainCategoryRegistry,
     WorldTerrainRegistry,
+    WorldWeatherTypeRegistry,
 )
-from app.application.jsonValidation.worldSlices import climate_zone_wire_from_raw
+from app.application.jsonValidation.worldSlices import (
+    climate_zone_wire_from_raw,
+    location_type_wire_from_raw,
+)
+from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
+    WorldConnectionTypeRegistry,
+)
 from app.dataModel.hydrology.rivers import RiverTypeClassify as PojoRiverTypeClassify
 from app.dataModel.settlement.district.worldDistrictTemplateRegistry import WorldDistrictTemplateRegistry
 from app.dataModel.settlement.settlement.worldCitySizeRegistry import WorldCitySizeRegistry
 from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import WorldBarrierTemplateRegistry
+from app.dataModel.structure.building.worldBuildingTemplateRegistry import WorldBuildingTemplateRegistry
 
 _DEFAULT_PRECIPITATION_LIQUID = WorldClimateScalars.canonical_defaults().precipitation_liquid
 _ENGINE_ECONOMIC_TIERS = WorldEconomyTierRegistry.canonical_engine()
@@ -236,3 +249,86 @@ def barrier_templates(world: Any) -> WorldBarrierTemplateRegistry:
 def barrier_template_defaults() -> list[dict]:
     reg = WorldBarrierTemplateRegistry.canonical_defaults()
     return [e.model_dump(mode="json") for e in reg.root]
+
+
+def connection_types(world: Any) -> WorldConnectionTypeRegistry:
+    return resolve_root_list(
+        WorldConnectionTypeRegistry,
+        getattr(world, "connection_type_registry", None),
+        empty_factory=WorldConnectionTypeRegistry.canonical_defaults,
+        label="connection_type_registry",
+        world_uid=_uid(world),
+    )
+
+
+def location_types(world: Any) -> WorldLocationTypeRegistry:
+    wire = location_type_wire_from_raw(getattr(world, "location_type_registry", None))
+    if wire is None:
+        return WorldLocationTypeRegistry.canonical_defaults()
+    return resolve_root_list(
+        WorldLocationTypeRegistry,
+        wire,
+        empty_factory=WorldLocationTypeRegistry.canonical_defaults,
+        label="location_type_registry",
+        world_uid=_uid(world),
+    )
+
+
+def lore(world: Any) -> WorldLoreRegistry:
+    return resolve_root_dict(
+        WorldLoreRegistry,
+        getattr(world, "lore_registry", None),
+        empty_factory=WorldLoreRegistry.canonical_defaults,
+        label="lore_registry",
+        world_uid=_uid(world),
+    )
+
+
+def weather_types(world: Any) -> WorldWeatherTypeRegistry:
+    return resolve_root_list(
+        WorldWeatherTypeRegistry,
+        getattr(world, "weather_type_registry", None),
+        empty_factory=WorldWeatherTypeRegistry.canonical_defaults,
+        label="weather_type_registry",
+        world_uid=_uid(world),
+    )
+
+
+def terrain_categories(world: Any) -> WorldTerrainCategoryRegistry:
+    return resolve_root_list(
+        WorldTerrainCategoryRegistry,
+        getattr(world, "terrain_category_registry", None),
+        empty_factory=WorldTerrainCategoryRegistry.canonical_defaults,
+        label="terrain_category_registry",
+        world_uid=_uid(world),
+    )
+
+
+def room_types(world: Any) -> WorldRoomTypeRegistry:
+    return resolve_root_list(
+        WorldRoomTypeRegistry,
+        getattr(world, "room_type_registry", None),
+        empty_factory=WorldRoomTypeRegistry.canonical_defaults,
+        label="room_type_registry",
+        world_uid=_uid(world),
+    )
+
+
+def location_moods(world: Any) -> WorldLocationMoodRegistry:
+    return resolve_root_list(
+        WorldLocationMoodRegistry,
+        getattr(world, "location_mood_registry", None),
+        empty_factory=WorldLocationMoodRegistry.canonical_defaults,
+        label="location_mood_registry",
+        world_uid=_uid(world),
+    )
+
+
+def building_template_registry(world: Any) -> WorldBuildingTemplateRegistry:
+    return resolve_root_list(
+        WorldBuildingTemplateRegistry,
+        getattr(world, "building_template_registry", None),
+        empty_factory=WorldBuildingTemplateRegistry.canonical_defaults,
+        label="building_template_registry",
+        world_uid=_uid(world),
+    )

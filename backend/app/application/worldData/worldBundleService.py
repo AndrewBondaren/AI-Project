@@ -5,6 +5,7 @@ from dataclasses import asdict
 from fastapi import HTTPException
 
 from app.api.schemas.imports import ImportResult
+from app.application.jsonValidation.bundle import normalize_bundle_connections
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError, import_validation_http_detail
 from app.application.worldData.bundleRemapService import remap_bundle
@@ -82,6 +83,7 @@ class WorldBundleService:
 
         try:
             data = {**data, "world": normalize_world(data["world"])}
+            data = normalize_bundle_connections(data)
         except ImportValidationError as exc:
             raise HTTPException(
                 status_code=422,

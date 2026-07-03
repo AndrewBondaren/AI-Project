@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from pydantic import RootModel
 
 from app.dataModel.lore.loreRegistry.loreRegistryEntry import LoreRegistryEntry
@@ -68,6 +70,8 @@ _CANONICAL_ENTRIES: dict[str, LoreRegistryEntry] = {
 
 class WorldLoreRegistry(RootModel[dict[str, LoreRegistryEntry]]):
     """Root POJO for `worlds.lore_registry`. Key = lore id (`glossary_ref` / `lore_ref`)."""
+
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-LORE"
 
     root: dict[str, LoreRegistryEntry]
 

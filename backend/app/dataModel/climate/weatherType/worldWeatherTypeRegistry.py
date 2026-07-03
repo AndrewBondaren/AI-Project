@@ -8,6 +8,8 @@ not a literal ``"clear"`` in generators/DAG/db.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from pydantic import RootModel
 
 from app.dataModel.climate.weatherType.weatherTypeEntry import WeatherTypeEntry
@@ -67,6 +69,8 @@ _CANONICAL_ENTRIES: tuple[WeatherTypeEntry, ...] = (
 
 class WorldWeatherTypeRegistry(RootModel[list[WeatherTypeEntry]]):
     """Root POJO for `worlds.weather_type_registry`. Wire shape: JSON array."""
+
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-WEATHER-TYPE"
 
     root: list[WeatherTypeEntry]
 

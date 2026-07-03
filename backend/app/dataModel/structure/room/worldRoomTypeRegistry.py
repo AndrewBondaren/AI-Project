@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from pydantic import RootModel
 
 from app.dataModel.structure.room.roomTypeEntry import RoomTypeEntry
@@ -18,6 +20,8 @@ _CANONICAL_ENTRIES: tuple[RoomTypeEntry, ...] = (
 
 
 class WorldRoomTypeRegistry(RootModel[list[RoomTypeEntry]]):
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-ROOM-TYPE"
+
     root: list[RoomTypeEntry]
 
     @classmethod

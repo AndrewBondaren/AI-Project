@@ -682,7 +682,7 @@ Parse на location/edge/policy — не на map cell. Bottleneck — LLM + gri
 **jsonValidation (JV-0, не generators)** — детали: [`tz_json_validation.md`](./tz_json_validation.md) § JV-0:
 
 7. ✅ **JV-0a** — `resolve` hook → `wire.parse_enum`; 422 `UNKNOWN_ENUM` (`StrictOnWire[T]` unwrap)
-8. ⬜ **JV-0b** — bundle DTO `connection_nodes` / edges + hook в `WorldBundleService`
+8. ✅ **JV-0b** — bundle DTO `connection_nodes` / edges + `WorldBundleService` hook
 9. ⬜ `node_category` → `NpcFieldCategory` в `dataModel/character/` + engine hook (**post-JV-0**)
 
 **Прочее:**

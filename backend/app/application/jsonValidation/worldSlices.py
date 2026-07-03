@@ -9,6 +9,7 @@ from typing import Any, Literal
 from app.application.jsonValidation.resolve import (
     ResolveContext,
     resolve_model,
+    resolve_root_dict,
     resolve_root_list,
 )
 from app.dataModel.climate.worldClimateScalars import (
@@ -25,8 +26,11 @@ from app.dataModel import (
     WorldClimateZoneRegistry,
     WorldEconomyTierRegistry,
     WorldHydrology,
+    WorldLocationTypeRegistry,
+    WorldLoreRegistry,
     WorldMaterialRegistry,
     WorldTerrainRegistry,
+    WorldWeatherTypeRegistry,
 )
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
@@ -36,11 +40,17 @@ from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
     WorldDistrictTemplateRegistry,
 )
 from app.dataModel.settlement.settlement.worldCitySizeRegistry import WorldCitySizeRegistry
+from app.dataModel.settlement.settlement.worldLocationMoodRegistry import WorldLocationMoodRegistry
 from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
     WorldBarrierTemplateRegistry,
 )
+from app.dataModel.structure.building.worldBuildingTemplateRegistry import (
+    WorldBuildingTemplateRegistry,
+)
+from app.dataModel.structure.room.worldRoomTypeRegistry import WorldRoomTypeRegistry
+from app.dataModel.terrain.worldTerrainCategoryRegistry import WorldTerrainCategoryRegistry
 
-WireKind = Literal["multi_column", "registry_list", "json_blob"]
+WireKind = Literal["multi_column", "registry_list", "registry_dict", "json_blob"]
 
 
 def climate_zone_wire_from_raw(raw: Any) -> list[dict] | None:
@@ -55,6 +65,27 @@ def climate_zone_wire_from_raw(raw: Any) -> list[dict] | None:
             return values
         return [raw]
     return None
+
+
+def registry_map_to_list(raw: Any, *, id_field: str) -> list[dict] | None:
+    """Normalize legacy registry wire map ``{id: row}`` → list with ``id_field`` injected."""
+    if not raw:
+        return None
+    if isinstance(raw, list):
+        return [entry for entry in raw if isinstance(entry, dict)]
+    if isinstance(raw, dict):
+        rows: list[dict] = []
+        for key, value in raw.items():
+            if isinstance(value, dict):
+                row = dict(value)
+                row.setdefault(id_field, key)
+                rows.append(row)
+        return rows
+    return None
+
+
+def location_type_wire_from_raw(raw: Any) -> list[dict] | None:
+    return registry_map_to_list(raw, id_field="system_type")
 
 
 @dataclass(frozen=True)
@@ -90,6 +121,22 @@ def _registry_slice(
     )
 
 
+def _registry_dict_slice(
+    *,
+    pojo_cls: type,
+    world_key: str,
+    facade: bool,
+) -> WorldSlice:
+    return WorldSlice(
+        schema_id=pojo_cls.SCHEMA_ID,
+        pojo_cls=pojo_cls,
+        wire_kind="registry_dict",
+        world_keys=(world_key,),
+        empty_factory=pojo_cls.canonical_defaults,
+        facade=facade,
+    )
+
+
 WORLD_SLICES: tuple[WorldSlice, ...] = (
     WorldSlice(
         schema_id=WorldClimateScalars.SCHEMA_ID,
@@ -105,7 +152,7 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
         wire_kind="multi_column",
         world_keys=tuple(TERRAIN_SCALAR_WIRE_KEYS),
         wire_from_mapping=terrain_scalar_wire_from_mapping,
-        facade=False,
+        facade=True,
     ),
     _registry_slice(
         pojo_cls=WorldEconomyTierRegistry,
@@ -138,28 +185,64 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
     _registry_slice(
         pojo_cls=WorldBarrierTemplateRegistry,
         world_key="barrier_template_registry",
-        facade=False,
+        facade=True,
     ),
     _registry_slice(
         pojo_cls=WorldCitySizeRegistry,
         world_key="city_size_registry",
-        facade=False,
+        facade=True,
     ),
     _registry_slice(
         pojo_cls=WorldDistrictTemplateRegistry,
         world_key="district_template_registry",
-        facade=False,
+        facade=True,
     ),
     _registry_slice(
         pojo_cls=WorldRoadSettings,
         world_key="road_settings",
-        facade=False,
+        facade=True,
         dump_by_alias=True,
     ),
     _registry_slice(
         pojo_cls=WorldConnectionTypeRegistry,
         world_key="connection_type_registry",
-        facade=False,
+        facade=True,
+    ),
+    _registry_slice(
+        pojo_cls=WorldLocationTypeRegistry,
+        world_key="location_type_registry",
+        facade=True,
+        wire_adapter=location_type_wire_from_raw,
+    ),
+    _registry_dict_slice(
+        pojo_cls=WorldLoreRegistry,
+        world_key="lore_registry",
+        facade=True,
+    ),
+    _registry_slice(
+        pojo_cls=WorldWeatherTypeRegistry,
+        world_key="weather_type_registry",
+        facade=True,
+    ),
+    _registry_slice(
+        pojo_cls=WorldTerrainCategoryRegistry,
+        world_key="terrain_category_registry",
+        facade=True,
+    ),
+    _registry_slice(
+        pojo_cls=WorldRoomTypeRegistry,
+        world_key="room_type_registry",
+        facade=True,
+    ),
+    _registry_slice(
+        pojo_cls=WorldLocationMoodRegistry,
+        world_key="location_mood_registry",
+        facade=True,
+    ),
+    _registry_slice(
+        pojo_cls=WorldBuildingTemplateRegistry,
+        world_key="building_template_registry",
+        facade=True,
     ),
 )
 
@@ -244,6 +327,27 @@ def _merge_registry_list(
     out[key] = [entry.model_dump(**dump_kw) for entry in resolved.root]
 
 
+def _merge_registry_dict(
+    out: dict[str, Any],
+    world_slice: WorldSlice,
+    ctx: ResolveContext,
+) -> None:
+    key = world_slice.world_keys[0]
+    if key not in out:
+        return
+
+    assert world_slice.empty_factory is not None
+    raw = out.get(key)
+    resolved = resolve_root_dict(
+        world_slice.pojo_cls,
+        raw,
+        empty_factory=world_slice.empty_factory,
+        label=key,
+        ctx=ctx.child(key),
+    )
+    out[key] = resolved.model_dump(mode="json")
+
+
 def _merge_json_blob(
     out: dict[str, Any],
     world_slice: WorldSlice,
@@ -279,6 +383,8 @@ def merge_world_slice(
         _merge_multi_column(out, world_slice, slice_ctx)
     elif world_slice.wire_kind == "registry_list":
         _merge_registry_list(out, world_slice, slice_ctx)
+    elif world_slice.wire_kind == "registry_dict":
+        _merge_registry_dict(out, world_slice, slice_ctx)
     elif world_slice.wire_kind == "json_blob":
         _merge_json_blob(out, world_slice, slice_ctx)
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from pydantic import RootModel
 
 from app.dataModel.locations.locationType.locationTypeEntry import LocationTypeEntry
@@ -106,6 +108,8 @@ _ENGINE_ENTRIES: tuple[LocationTypeEntry, ...] = (
 
 class WorldLocationTypeRegistry(RootModel[list[LocationTypeEntry]]):
     """Root POJO for `worlds.location_type_registry`. Wire shape: JSON array (map normalized on import)."""
+
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-LOC-TYPE"
 
     root: list[LocationTypeEntry]
 

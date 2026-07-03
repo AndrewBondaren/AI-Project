@@ -274,6 +274,36 @@ def _resolve_field(
     return default
 
 
+def _wire_lookup_keys(field_name: str, field_info: Any) -> tuple[str, ...]:
+    """Python field name plus Pydantic validation / serialization aliases."""
+    keys: list[str] = [field_name]
+    alias = getattr(field_info, "alias", None)
+    if isinstance(alias, str) and alias not in keys:
+        keys.append(alias)
+    validation_alias = getattr(field_info, "validation_alias", None)
+    if isinstance(validation_alias, str):
+        if validation_alias not in keys:
+            keys.append(validation_alias)
+    elif validation_alias is not None:
+        choices = getattr(validation_alias, "choices", None)
+        if choices:
+            for choice in choices:
+                if isinstance(choice, str) and choice not in keys:
+                    keys.append(choice)
+    return tuple(keys)
+
+
+def _read_wire_field(
+    raw: dict[str, Any],
+    field_name: str,
+    field_info: Any,
+) -> tuple[Any, bool]:
+    for key in _wire_lookup_keys(field_name, field_info):
+        if key in raw:
+            return raw[key], True
+    return None, False
+
+
 def resolve_model(
     model_cls: type[BaseModel],
     raw: Any,
@@ -287,10 +317,10 @@ def resolve_model(
 
     payload: dict[str, Any] = {}
     for name, field_info in model_cls.model_fields.items():
-        present = name in raw
+        raw_value, present = _read_wire_field(raw, name, field_info)
         value = _resolve_field(
             field_info,
-            raw.get(name),
+            raw_value,
             field_name=name,
             label=label or model_cls.__name__,
             present=present,
@@ -299,6 +329,10 @@ def resolve_model(
         if value is not PydanticUndefined:
             if value is None and not present:
                 continue
+            if value is None and present:
+                default = _field_default(field_info)
+                if default is None:
+                    continue
             payload[name] = value
 
     if ctx is not None and ctx.mode == ResolveMode.IMPORT and ctx.errors:
@@ -331,12 +365,13 @@ def _resolve_fieldwise(
     payload: dict[str, Any] = {}
     for name, field_info in model_cls.model_fields.items():
         try:
+            raw_value, present = _read_wire_field(raw, name, field_info)
             value = _resolve_field(
                 field_info,
-                raw.get(name),
+                raw_value,
                 field_name=name,
                 label=label,
-                present=name in raw,
+                present=present,
                 ctx=ctx,
             )
             if value is not PydanticUndefined:
@@ -416,6 +451,80 @@ def resolve_root_list(
         )
         if ctx is not None and ctx.mode == ResolveMode.IMPORT and len(ctx.errors) > before_errors:
             entries.pop()
+
+    if not entries:
+        return empty_factory()
+
+    return registry_cls(entries)
+
+
+def resolve_root_dict(
+    registry_cls: type[RootModel],
+    raw: Any,
+    *,
+    empty_factory: Any,
+    label: str,
+    world_uid: str | None = None,
+    ctx: ResolveContext | None = None,
+) -> RootModel:
+    """Parse ``RootModel[dict[str, Entry]]`` — per-key resolve, no nuclear registry fallback."""
+    if not raw:
+        return empty_factory()
+
+    if not isinstance(raw, dict):
+        if ctx is not None and ctx.mode == ResolveMode.IMPORT:
+            ctx.errors.append(_validation_issue(
+                ctx,
+                ctx.path_prefix,
+                "expected object",
+                code="EXPECTED_OBJECT",
+            ))
+            return empty_factory()
+        logger.warning(
+            "json_validation | world=%s %s expected object; using empty defaults",
+            world_uid or "?",
+            label,
+        )
+        return empty_factory()
+
+    root_field = registry_cls.model_fields.get("root")
+    if root_field is None:
+        return empty_factory()
+
+    entry_cls = _unwrap_annotation(root_field.annotation)
+    if get_origin(entry_cls) is dict:
+        args = get_args(entry_cls)
+        entry_cls = args[1] if len(args) > 1 else entry_cls
+
+    entries: dict[str, Any] = {}
+    for map_key, item in raw.items():
+        if not isinstance(item, dict):
+            if ctx is not None and ctx.mode == ResolveMode.IMPORT:
+                ctx.errors.append(_validation_issue(
+                    ctx,
+                    ctx.path_prefix + (map_key,),
+                    "expected object",
+                    code="EXPECTED_OBJECT",
+                ))
+            else:
+                logger.warning(
+                    "json_validation | world=%s %s[%s] not an object; skipped",
+                    world_uid or "?",
+                    label,
+                    map_key,
+                )
+            continue
+
+        row_ctx = ctx.child(map_key) if ctx is not None else None
+        before_errors = len(ctx.errors) if ctx is not None else 0
+        entries[map_key] = resolve_model(
+            entry_cls,
+            item,
+            label=f"{label}[{map_key}]",
+            ctx=row_ctx,
+        )
+        if ctx is not None and ctx.mode == ResolveMode.IMPORT and len(ctx.errors) > before_errors:
+            entries.pop(map_key, None)
 
     if not entries:
         return empty_factory()

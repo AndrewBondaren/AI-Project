@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from pydantic import RootModel
 
 from app.dataModel.settlement.settlement.locationMoodEntry import LocationMoodEntry
@@ -17,6 +19,8 @@ _CANONICAL_ENTRIES: tuple[LocationMoodEntry, ...] = (
 
 
 class WorldLocationMoodRegistry(RootModel[list[LocationMoodEntry]]):
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-LOC-MOOD"
+
     root: list[LocationMoodEntry]
 
     @classmethod

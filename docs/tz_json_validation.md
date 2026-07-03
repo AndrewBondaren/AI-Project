@@ -10,8 +10,8 @@
 | Код | `backend/app/application/jsonValidation/` |
 | Покрытие import | `world` slice: climate scalars, tiers, materials, terrain, hydrology, climate_zones |
 | Покрытие runtime | `worldRow` — те же POJO через `resolve` (warn-only) |
-| Bundle sections | `world` ✅; `connection_*` — JV-0b ⬜; races, perks, locations — ⬜ |
-| JV-0 ENUM gate | JV-0a ✅ `resolve` + `UNKNOWN_ENUM`; JV-0b bundle DTO — ⬜ |
+| Bundle sections | `world` ✅; `connection_*` — JV-0b ✅; races, perks, locations — ⬜ |
+| JV-0 ENUM gate | JV-0a ✅; JV-0b ✅ bundle connections |
 | REF-W index | ✅ (MVP) |
 | `SCHEMA_ID` в 422 | ✅ |
 | `worldSlices.py` реестр | ✅ |
@@ -113,7 +113,7 @@ backend/app/application/jsonValidation/
 ├── facade.py       # normalize_world() — import/CRUD
 ├── worldRow.py     # runtime accessors → POJO
 ├── wire.py         # ENUM-E parse (parse_enum, WireEnumError)
-├── bundle/         # JV-0b: import-row DTOs (connection_nodes, …) ⬜
+├── bundle/         # JV-0b ✅ import-row DTOs (connection_nodes, …)
 ├── types.py        # FieldPathError, ImportValidationError
 └── index/          # REF-W после normalize (MVP)
 
@@ -178,12 +178,12 @@ backend/app/application/worldData/  # WorldService, bundle — без domain val
 | SCH-WORLD-TERRAIN | `WorldTerrainRegistry` | `terrain_registry` | ✅ | ✅ |
 | SCH-WORLD-HYDROLOGY | `WorldHydrology` | `hydrology` | ✅ | ✅ |
 | SCH-WORLD-CLIMATE-ZONE | `WorldClimateZoneRegistry` | `climate_zone_registry` | ✅ | ✅ |
-| SCH-WORLD-BARRIER-TEMPLATE | `WorldBarrierTemplateRegistry` | `barrier_template_registry` | ⬜ | ✅ runtime |
-| SCH-WORLD-CITY-SIZE | `WorldCitySizeRegistry` | `city_size_registry` | ⬜ | ✅ runtime |
-| SCH-WORLD-DISTRICT-TEMPLATE | `WorldDistrictTemplateRegistry` | `district_template_registry` | ⬜ | ✅ runtime |
-| SCH-WORLD-TERRAIN-SCALARS | `WorldTerrainScalars` | multi-column | ✅ wire | ✅ `terrain_scalars()` |
-| SCH-WORLD-ROAD-SETTINGS | `WorldRoadSettings` | `road_settings` | ⬜ | ✅ runtime |
-| SCH-WORLD-CONN | `WorldConnectionTypeRegistry` | `connection_type_registry` | ⬜ | ⬜ |
+| SCH-WORLD-BARRIER-TEMPLATE | `WorldBarrierTemplateRegistry` | `barrier_template_registry` | ✅ | ✅ runtime |
+| SCH-WORLD-CITY-SIZE | `WorldCitySizeRegistry` | `city_size_registry` | ✅ | ✅ runtime |
+| SCH-WORLD-DISTRICT-TEMPLATE | `WorldDistrictTemplateRegistry` | `district_template_registry` | ✅ | ✅ runtime |
+| SCH-WORLD-TERRAIN-SCALARS | `WorldTerrainScalars` | multi-column | ✅ | ✅ `terrain_scalars()` |
+| SCH-WORLD-ROAD-SETTINGS | `WorldRoadSettings` | `road_settings` | ✅ | ✅ runtime |
+| SCH-WORLD-CONN | `WorldConnectionTypeRegistry` | `connection_type_registry` | ✅ | ⬜ |
 | SCH-RACE-* | — | `races` table | ⬜ JV-8 | ⬜ |
 
 Поля без POJO — пока struct/ad-hoc в `WorldService._validate` (technical invariants).
@@ -388,8 +388,8 @@ json_validation | resolve | label=… mode=import|runtime | wire={…} | resolve
 
 ### Facade import — пробелы (symmetry с runtime)
 
-`normalize_world` **не** нормализует (⬜): `barrier_template_registry`, `city_size_registry`, `district_template_registry`, `road_settings`, terrain scalars, building templates.  
-Runtime уже читает через `resolve` в `worldRow` для barrier / city / district.
+`normalize_world` **не** нормализует (⬜): N1-S technical columns (`stat_schema`, `map_cell_size_m`, …); bundle sections (`races`, `locations`, …).  
+~~barrier / city_size / district / road_settings / terrain scalars / connection_type_registry / location_type / lore / weather / terrain_category / room_type / location_mood / building_template_registry~~ — ✅ GV-3 registry facades.
 
 ### Очередь GV (приоритет)
 
@@ -397,7 +397,7 @@ Runtime уже читает через `resolve` в `worldRow` для barrier / 
 |----|-------|---|-------------|
 | GV-1 | Дожать **climate scalars** — убрать прямой `world.climate_*` / `precipitation_liquid` / `season_temp_offsets` | P1 | — | ✅ |
 | GV-2 | **`terrain_scalars(world)`** в worldRow + wire projection; worldMapSettings, columnFillPass, lapse | P1 | — | ✅ |
-| GV-3 | Facade: barrier, city_size, district, road_settings, terrain scalars | P1 | JV-1b удобнее после GV-1/2 |
+| GV-3 | Facade: все world registry slices (barrier … building_template_registry) | P1 | ✅ |
 | GV-4 | Убрать `hydrology_dict` shim; consumers только `hydrology()` POJO | P2 | — |
 | GV-5 | Подключить реестры с POJO без consumers (connection_type, location_type, …) по мере появления в generators | P2 | JV-2 REF-W |
 | GV-6 | Building layout typed POJO (не только `building_layout_templates` dict merge) | P2 | JV-4 |
@@ -510,7 +510,7 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 | Slice | Scope | PR | Критерий готовности |
 |-------|--------|-----|---------------------|
 | **JV-0a** | `resolve` + `parse_enum` hook | 1 | ✅ invalid `material_category` → 422 `UNKNOWN_ENUM` |
-| **JV-0b** | `ConnectionNodeImportRow` (+ edge row) + `WorldBundleService` hook | 1 | invalid `node_type` в bundle → 422, rollback транзакции |
+| **JV-0b** | `ConnectionNodeImportRow` (+ edge row) + `WorldBundleService` hook | 1 | ✅ |
 | **JV-0c** | Аудит world POJO: `StrictOnWire[Enum]` где enum уже в `dataModel` | по мере slice | `climate_pole_mode`, district `street_layout` — вместе с JV-4 / GV-3 |
 
 **Порядок:** JV-0a → JV-0b → JV-0c (не блокирует GV-3 / JV-4, но enum-поля шаблонов лягут туда же).
@@ -541,7 +541,7 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 |----|-------|---|--------|
 | JV-0 | ENUM-E import gate (§ JV-0) | P1 | ◐ JV-0a ✅ |
 | JV-0a | `resolve` hook + `UNKNOWN_ENUM` 422 | P1 | ✅ |
-| JV-0b | bundle DTO `connection_nodes` / edges + `WorldBundleService` | P1 | ⬜ |
+| JV-0b | bundle DTO `connection_nodes` / edges + `WorldBundleService` | P1 | ✅ |
 | JV-0c | world POJO `StrictOnWire[Enum]` audit (с JV-4/GV-3) | P2 | ⬜ |
 | JV-1 | POJO resolve + facade world slice | P1 | ✅ v1 |
 | JV-1b | `worldSlices.py` + `SCHEMA_ID` в 422 | P1 | ✅ |
@@ -583,4 +583,5 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 | **1.1.2** | 2026-07 | GV-2: `terrain_scalars(world)` + wire projection; worldMapSettings, columnFillPass, climateGeneratorService (lapse) |
 | **1.1.3** | 2026-07 | JV-1b: `worldSlices.py` (`WORLD_SLICES`), `SCHEMA_ID` на POJO, `schema_id`+`code` в 422; facade через slice registry |
 | **1.1.4** | 2026-07 | JV-2 MVP: `jsonValidation/index/` — `WorldRegistryIndex`, REF-W на import (`precipitation_liquid`, climate zone, hydrology shore, material tier) |
-| **1.2.3** | 2026-07 | `WireFieldPolicy` enum (strict / ignore / **default**); `OptionalOnWire` → `DefaultOnWire` |
+| **1.2.7** | 2026-07 | GV-3: все оставшиеся world registry slices (`location_type`, `lore`, `weather`, `terrain_category`, `room_type`, `location_mood`, `building_template_registry`); `registry_dict` wire kind; `worldRow` accessors; explicit JSON `null` на optional constrained fields |
+| **1.2.6** | 2026-07 | `connection_type_registry` — `facade=True` (import normalize symmetry) |
