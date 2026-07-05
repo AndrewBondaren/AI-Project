@@ -123,5 +123,32 @@ class TestHydrologyStub(unittest.TestCase):
         self.assertFalse(is_hydrology_enabled(_world(hydrology={"enabled": False})))
 
 
+class TestMapCellHydrology(unittest.TestCase):
+
+    def test_lake_role_sets_liquid_candidate(self):
+        from app.dataModel.hydrology import HydrologyCellRole, MapCellHydrology
+        from app.dataModel.hydrology.mapCellHydrology import (
+            cell_hydrology_liquid_candidate,
+            dump_cell_hydrology,
+            parse_cell_hydrology,
+        )
+
+        pojo = MapCellHydrology(role=HydrologyCellRole.LAKE)
+        self.assertTrue(pojo.is_liquid_candidate())
+        wire = dump_cell_hydrology(pojo)
+        self.assertIsNotNone(wire)
+        self.assertTrue(cell_hydrology_liquid_candidate(wire))
+        roundtrip = parse_cell_hydrology(wire)
+        self.assertIsNotNone(roundtrip)
+        assert roundtrip is not None
+        self.assertEqual(roundtrip.role, HydrologyCellRole.LAKE)
+
+    def test_shore_role_clears_liquid_candidate(self):
+        from app.dataModel.hydrology import MapCellHydrology, HydrologyCellRole
+
+        pojo = MapCellHydrology(role=HydrologyCellRole.SHORE, liquid_candidate=True)
+        self.assertFalse(pojo.is_liquid_candidate())
+
+
 if __name__ == "__main__":
     unittest.main()

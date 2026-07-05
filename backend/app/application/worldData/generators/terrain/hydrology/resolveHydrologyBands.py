@@ -7,6 +7,9 @@ from typing import Any
 
 from app.application.jsonValidation import hydrology
 from app.application.worldData.generators.terrain.hydrology.types import HydrologyBands
+from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
+from app.dataModel.hydrology.rivers import HydrologyRiversPolicy
+from app.dataModel.hydrology.seas import HydrologySeasPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +23,34 @@ _CATEGORY_ATTR = {
     "shore":     "default_shore",
     "landforms": "default_landforms",
 }
+
+_CATEGORY_POJO: dict[str, type] = {
+    "rivers": HydrologyRiversPolicy,
+    "lakes":  HydrologyLakesPolicy,
+    "seas":   HydrologySeasPolicy,
+}
+
+
+def _bands_from_section(section: Any, category: str) -> tuple[int | None, int | None]:
+    pojo_cls = _CATEGORY_POJO.get(category)
+    if pojo_cls is not None:
+        if section is None:
+            section = pojo_cls()
+        elif isinstance(section, dict):
+            section = pojo_cls.model_validate(section)
+        bands = section.bands
+        return bands.min, bands.max
+    if isinstance(section, dict):
+        bands = section.get("bands") or {}
+        if isinstance(bands, dict):
+            return bands.get("min"), bands.get("max")
+        return None, None
+    bands = getattr(section, "bands", None) if section is not None else None
+    if bands is None:
+        return None, None
+    if isinstance(bands, dict):
+        return bands.get("min"), bands.get("max")
+    return getattr(bands, "min", None), getattr(bands, "max", None)
 
 
 def clamp_bands(raw_min: int | None, raw_max: int | None) -> HydrologyBands:
@@ -42,11 +73,8 @@ def resolve_hydrology_bands(
     policy = hydrology(world)
     attr = _CATEGORY_ATTR.get(category, f"default_{category}")
     section = getattr(policy, attr, None)
-    bands = section.bands if section is not None and section.bands is not None else None
-    result = clamp_bands(
-        bands.min if bands is not None else None,
-        bands.max if bands is not None else None,
-    )
+    raw_min, raw_max = _bands_from_section(section, category)
+    result = clamp_bands(raw_min, raw_max)
 
     if local_profile and "bands" in local_profile:
         local = local_profile["bands"]

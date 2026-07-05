@@ -7,10 +7,13 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from app.application.worldData.generators.climate.climatePoleField import GridBBox
     from app.db.models.namedLocation import NamedLocation
 
 
+from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
+from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.locations.enums.geographicSubtype import (
     GEOGRAPHIC_LOCATION_TYPE,
     GeographicSubtype,
@@ -31,15 +34,6 @@ HYDROLOGY_BOOTSTRAP_SCOPES = frozenset({
     HydrologyScope.LAKES,
     HydrologyScope.RIVERS,
 })
-
-
-class HydrologyCellRole(StrEnum):
-    COASTAL_SEA  = "coastal_sea"
-    OPEN_OCEAN   = "open_ocean"
-    INLAND_SEA   = "inland_sea"
-    LAKE         = "lake"
-    RIVER_BED    = "river_bed"
-    SHORE        = "shore"
 
 
 @dataclass(frozen=True)
@@ -77,26 +71,51 @@ class LoadedConnectionGraph:
 
 
 @dataclass(frozen=True)
+class LakeSpec:
+    shoreline_segments: list[tuple[tuple[int, int], tuple[int, int]]]
+    location_uid: str | None = None
+    open_water_role: HydrologyCellRole = HydrologyCellRole.LAKE
+
+
+@dataclass(frozen=True)
 class HydrologyMasterInput:
     world_uid:         str
     hydrology_enabled: bool
     scopes:            frozenset[HydrologyScope]
     connection_graph:  LoadedConnectionGraph
     geographic_locations: list[NamedLocation] = field(default_factory=list)
+    declared_coastline_segments: list[tuple[tuple[int, int], tuple[int, int]]] = field(
+        default_factory=list,
+    )
+    declared_lake_specs: list[LakeSpec] = field(default_factory=list)
 
 
 @dataclass
 class HydrologyCellIndex:
-    """In-memory cell roles/metadata before column-fill persist."""
+    """In-memory surface-top hydrology before column-fill persist."""
 
-    roles: dict[tuple[int, int], HydrologyCellRole] = field(default_factory=dict)
-    metadata: dict[tuple[int, int], dict[str, Any]] = field(default_factory=dict)
+    by_cell: dict[tuple[int, int], MapCellHydrology] = field(default_factory=dict)
+
+    @property
+    def roles(self) -> dict[tuple[int, int], HydrologyCellRole]:
+        return {
+            xy: entry.role
+            for xy, entry in self.by_cell.items()
+            if entry.role is not None
+        }
 
 
 @dataclass
 class HydrologyResult:
+    heightmap:      Any = None  # SurfaceHeightmap after carve; same ref as input
     cell_index:     HydrologyCellIndex = field(default_factory=HydrologyCellIndex)
     river_segments: list[Any] = field(default_factory=list)
+    dirty_bbox:     GridBBox | None = None
+    landforms:      Any = None
+
+    @property
+    def cells_modified(self) -> int:
+        return len(self.cell_index.by_cell)
 
 
 def resolve_scopes(requested: frozenset[HydrologyScope] | None) -> frozenset[HydrologyScope]:

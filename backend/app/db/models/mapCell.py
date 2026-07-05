@@ -28,4 +28,4 @@ class MapCell:
     system_facing:              str | None = None   # cardinal direction this cell faces/moves toward (north/south/east/west)
     display_facing:             str | None = None   # localised label for system_facing ("север", "к выходу", …)
     glass_material:             str | None = None   # filling material for openings (glass, stained_glass, iron_mesh, …); None = open slit
-    hydrology:                  dict | None = json_nullable_col(default=None)  # roles, liquid_candidate — tz_terrain_hydrology.md C2
+    hydrology:                  dict | None = json_nullable_col(default=None)  # MapCellHydrology wire — dataModel/hydrology/mapCellHydrology.py

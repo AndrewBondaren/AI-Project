@@ -24,7 +24,14 @@ from app.dataModel.economy import (
     WorldEconomyTierRegistry,
     sidewalk_width_for_band,
 )
-from app.dataModel.hydrology import WorldHydrology
+from app.dataModel.hydrology import (
+    HydrologyCellRole,
+    MapCellHydrology,
+    WorldHydrology,
+    cell_hydrology_liquid_candidate,
+    dump_cell_hydrology,
+    parse_cell_hydrology,
+)
 from app.dataModel.locations import (
     LocationTypeEntry,
     LocationTypeSubtypeEntry,
@@ -156,6 +163,11 @@ __all__ = [
     "WorldDistrictTemplateRegistry",
     "WorldEconomyTierRegistry",
     "WorldHydrology",
+    "HydrologyCellRole",
+    "MapCellHydrology",
+    "cell_hydrology_liquid_candidate",
+    "dump_cell_hydrology",
+    "parse_cell_hydrology",
     "WorldLocationMoodRegistry",
     "WorldLocationTypeRegistry",
     "WorldLoreRegistry",

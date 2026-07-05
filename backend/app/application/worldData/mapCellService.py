@@ -6,8 +6,18 @@ from app.application.import_helpers import import_list
 from app.application.worldData.generators.assemblers.climateAssembler.passes.poleResolvePass import (
     run_pole_resolve_pass,
 )
+from app.application.worldData.generators.terrain.hydrology.hydrologyGeneratorService import (
+    HydrologyGeneratorService,
+)
+from app.application.worldData.generators.terrain.hydrology.loadHydrologyFromWorld import (
+    is_hydrology_enabled,
+)
+from app.application.worldData.generators.terrain.passes.gapAnalysisPass import run_gap_analysis
+from app.application.worldData.generators.terrain.passes.surfacePass import run_surface_pass
 from app.application.worldData.generators.terrain.terrainGeneratorService import TerrainGeneratorService
 from app.application.worldData.generators.terrain.worldMapSettings import n_base, terrain_chunk_columns
+from app.db.models.connectionEdge import ConnectionEdge
+from app.db.models.connectionNode import ConnectionNode
 from app.db.models.mapCell import MapCell
 from app.db.repositories.iMapCellRepository import IMapCellRepository
 
@@ -64,13 +74,29 @@ class MapCellService:
         generator: TerrainGeneratorService,
         world,
         locations: list,
+        *,
+        nodes: list[ConnectionNode] | None = None,
+        edges: list[ConnectionEdge] | None = None,
+        hydrology_generator: HydrologyGeneratorService | None = None,
     ) -> ImportResult:
         pole_field = run_pole_resolve_pass(world, locations)
-        heightmap, n_eff = generator.build_surface_heightmap(
-            world, locations, pole_field,
-        )
+        heightmap = run_surface_pass(world, locations, pole_field)
         if heightmap is None:
             return ImportResult(total=0, succeeded=0, failed=0)
+
+        hydrology_by_cell = {}
+        if is_hydrology_enabled(world):
+            hydro = hydrology_generator or HydrologyGeneratorService()
+            hydro_result = hydro.apply(
+                world,
+                locations,
+                heightmap,
+                nodes=nodes or [],
+                edges=edges or [],
+            )
+            hydrology_by_cell = hydro_result.cell_index.by_cell
+
+        n_eff = run_gap_analysis(world, heightmap)
 
         total = 0
         succeeded = 0
@@ -86,18 +112,20 @@ class MapCellService:
         for rect in chunks:
             chunk_cells = generator.generate_surface_chunk(
                 world, locations, heightmap, n_eff, rect,
+                hydrology_by_cell=hydrology_by_cell or None,
             )
             total += len(chunk_cells)
             result = await self.save_pass(chunk_cells, "terrain")
             succeeded += result.succeeded
 
         logger.info(
-            "save_terrain_batch | world=%s cells=%d upserted=%d n_eff_gt_base=%d chunks=%d",
+            "save_terrain_batch | world=%s cells=%d upserted=%d n_eff_gt_base=%d chunks=%d hydrology=%d",
             world_uid,
             total,
             succeeded,
             n_eff_gt,
             sum(1 for _ in chunks),
+            len(hydrology_by_cell),
         )
         return ImportResult(total=total, succeeded=succeeded, failed=0)
 

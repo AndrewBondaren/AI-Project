@@ -1,5 +1,9 @@
 from app.application.jsonValidation import terrain_scalars, terrain_system_keys
 from app.application.worldData.generators.terrain.passes.gapAnalysisPass import n_base
+from app.application.worldData.generators.terrain.hydrology.shoreProfile import (
+    apply_shore_surface,
+    shore_terrain_material,
+)
 from app.application.worldData.generators.terrain.worldMapSettings import world_z_min
 from app.application.worldData.generators.terrain.terrainZ import (
     magma_terrain,
@@ -7,6 +11,8 @@ from app.application.worldData.generators.terrain.terrainZ import (
     surface_terrain_at_z,
 )
 from app.application.worldData.generators.terrain.types import ColumnRect, SurfaceHeightmap
+from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
+from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology, dump_cell_hydrology
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
@@ -27,12 +33,14 @@ def run_column_fill(
     heightmap: SurfaceHeightmap,
     n_eff: dict[tuple[int, int], int],
     rect: ColumnRect | None = None,
+    hydrology_by_cell: dict[tuple[int, int], MapCellHydrology] | None = None,
 ) -> list[MapCell]:
     """Pass 2: fill solid columns (optional rect slice for chunking)."""
     terrain_set = _terrain_set(world)
     z_min       = world_z_min(world)
     magma_thick = _magma_thickness(world)
     use_magma   = magma_thick > 0 and bool(terrain_scalars(world).closed_planet_grid)
+    shore_terrain, shore_material = shore_terrain_material(world)
 
     x_lo = rect.x_min if rect else heightmap.bbox.x_min
     x_hi = rect.x_max if rect else heightmap.bbox.x_max
@@ -56,12 +64,28 @@ def run_column_fill(
                     if z == z_top
                     else subsurface_terrain_at_z(terrain_set)
                 )
+                hydrology_entry = hydrology_by_cell.get(key) if hydrology_by_cell else None
+                hydrology_wire = None
+                material = None
+                if z == z_top and hydrology_entry is not None:
+                    hydrology_wire = dump_cell_hydrology(hydrology_entry)
+                    terrain = apply_shore_surface(
+                        hydrology_entry.role,
+                        z,
+                        terrain_set,
+                        terrain,
+                        shore_terrain=shore_terrain,
+                    )
+                    if hydrology_entry.role == HydrologyCellRole.SHORE:
+                        material = shore_material
                 cells.append(MapCell(
                     world_uid=world.world_uid,
                     x=gx,
                     y=gy,
                     z=z,
                     system_terrain=terrain,
+                    system_material=material,
+                    hydrology=hydrology_wire,
                 ))
 
             if use_magma:

@@ -25,6 +25,9 @@ from app.application.worldData.generators.terrain.hydrology.types import (
     HydrologyScope,
     resolve_scopes,
 )
+from app.application.worldData.generators.terrain.passes.columnFillPass import run_column_fill
+from app.application.worldData.generators.terrain.passes.gapAnalysisPass import run_gap_analysis
+from app.application.worldData.generators.terrain.passes.surfacePass import run_surface_pass
 from app.application.worldData.generators.terrain.oresGenerator import generate_ores
 from app.application.worldData.generators.terrain.terrainGeneratorService import TerrainGeneratorService
 
@@ -104,12 +107,16 @@ async def generate_surface(
     map_svc      = container.map_cell_service()
     world_svc    = container.world_service()
     location_svc = container.location_service()
+    conn_svc     = container.connection_graph_service()
 
     world     = await world_svc.get_by_id(world_uid)
     locations = await location_svc.get_all(world_uid)
+    nodes     = await conn_svc.get_nodes(world_uid)
+    edges     = await conn_svc.get_edges(world_uid)
 
     result = await map_svc.save_terrain_batch(
         world_uid, _terrain_generator, world, locations,
+        nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
     )
 
     status_code = 200 if result.failed == 0 else 207
@@ -136,22 +143,13 @@ async def generate_hydrology(
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
 
-    cells = await map_svc.get_all(world_uid)
-    if not cells:
-        raise HTTPException(
-            status_code=422,
-            detail="No map cells — run generate-surface first",
-        )
-
     locations = await location_svc.get_all(world_uid)
     nodes     = await conn_svc.get_nodes(world_uid)
     edges     = await conn_svc.get_edges(world_uid)
 
     scope_set = resolve_scopes(_parse_hydrology_scope(scope))
     pole_field = run_pole_resolve_pass(world, locations)
-    heightmap, _n_eff = _terrain_generator.build_surface_heightmap(
-        world, locations, pole_field,
-    )
+    heightmap = run_surface_pass(world, locations, pole_field)
     if heightmap is None:
         raise HTTPException(
             status_code=422,
@@ -167,13 +165,24 @@ async def generate_hydrology(
         scopes=scope_set,
     )
 
-    return JSONResponse(content={
+    n_eff = run_gap_analysis(world, heightmap)
+    cells = run_column_fill(
+        world,
+        heightmap,
+        n_eff,
+        hydrology_by_cell=result.cell_index.by_cell or None,
+    )
+    save_result = await map_svc.save_pass(cells, "terrain")
+
+    status_code = 200 if save_result.failed == 0 else 207
+    return JSONResponse(status_code=status_code, content={
         "scope": scope,
         "scopes_active": sorted(s.value for s in scope_set),
-        "stub": True,
-        "cells_modified": 0,
+        "cells_modified": result.cells_modified,
         "river_segments": len(result.river_segments),
         "cell_roles": len(result.cell_index.roles),
+        "terrain_upserted": save_result.succeeded,
+        "total": save_result.total,
     })
 
 

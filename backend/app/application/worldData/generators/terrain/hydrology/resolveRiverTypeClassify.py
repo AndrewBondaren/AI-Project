@@ -55,6 +55,17 @@ def resolve_river_type_classify(world: Any) -> RiverTypeClassify:
     world_uid = getattr(world, "world_uid", "?")
     policy = hydrology(world)
     rivers = policy.default_rivers
+    if isinstance(rivers, dict):
+        tc_raw = rivers.get("type_classify") or {}
+        defaults_dump = river_type_classify_defaults().model_dump()
+        merged = {**defaults_dump, **tc_raw}
+        for key, val in list(merged.items()):
+            if val is None and key in defaults_dump:
+                merged[key] = defaults_dump[key]
+        from app.dataModel.hydrology.rivers import RiverTypeClassify as RiverTypeClassifyPojo
+
+        pojo = RiverTypeClassifyPojo.model_validate(merged)
+        return _pojo_to_runtime(pojo)
     if rivers is None or rivers.type_classify is None:
         warn_once(
             world_uid,

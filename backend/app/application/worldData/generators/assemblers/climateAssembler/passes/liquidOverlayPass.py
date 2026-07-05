@@ -1,16 +1,9 @@
 from app.application.worldData.generators.climate.precipitation import liquid_precipitation_mult
 from app.application.worldData.generators.climate.precipitation import resolve_world_precipitation_liquid
 from app.application.jsonValidation import terrain_system_keys
+from app.dataModel.hydrology.mapCellHydrology import cell_hydrology_liquid_candidate
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
-
-
-def _is_liquid_candidate(cell: MapCell) -> bool:
-    """tz_terrain_hydrology.md U19 — mask from hydrology persist, not elevation."""
-    hydrology = cell.hydrology
-    if not isinstance(hydrology, dict):
-        return False
-    return bool(hydrology.get("liquid_candidate"))
 
 
 def run_liquid_overlay_pass(
@@ -55,7 +48,7 @@ def run_liquid_overlay_pass(
             continue
 
         if (
-            _is_liquid_candidate(cell)
+            cell_hydrology_liquid_candidate(cell.hydrology)
             and cell.temperature_base is not None
             and liquid_precipitation_mult(cell.temperature_base, liquid, world.world_uid) > 0
         ):

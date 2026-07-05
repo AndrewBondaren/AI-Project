@@ -1,11 +1,24 @@
-"""Hydrology generator orchestrator stub — D HY-1e."""
+"""Hydrology generator orchestrator — D HY-2."""
 
 from __future__ import annotations
 
 import logging
 
+from app.application.worldData.generators.climate.climatePoleField import GridBBox
 from app.application.worldData.generators.terrain.hydrology.buildHydrologyMasterInput import (
     build_hydrology_master_input,
+)
+from app.application.worldData.generators.terrain.hydrology.coastalLandformClassifier import (
+    classify_coastal_landforms,
+)
+from app.application.worldData.generators.terrain.hydrology.lakeBasinGenerator import (
+    generate_lakes,
+)
+from app.application.worldData.generators.terrain.hydrology.oceanBasinGenerator import (
+    generate_open_ocean,
+)
+from app.application.worldData.generators.terrain.hydrology.seaBasinGenerator import (
+    generate_coastal_sea,
 )
 from app.application.worldData.generators.terrain.hydrology.types import (
     HydrologyMasterInput,
@@ -22,8 +35,21 @@ from app.db.models.world import World
 logger = logging.getLogger(__name__)
 
 
+def _merge_bbox(a: GridBBox | None, b: GridBBox | None) -> GridBBox | None:
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return GridBBox(
+        min(a.x_min, b.x_min),
+        max(a.x_max, b.x_max),
+        min(a.y_min, b.y_min),
+        max(a.y_max, b.y_max),
+    )
+
+
 class HydrologyGeneratorService:
-    """Pure generator — mutates heightmap in later phases; stub returns empty result."""
+    """Pure generator — mutates heightmap surface_z + cell_index roles."""
 
     def apply(
         self,
@@ -44,14 +70,52 @@ class HydrologyGeneratorService:
 
         if not inp.hydrology_enabled:
             logger.debug("HydrologyGeneratorService | skip disabled world=%s", world.world_uid)
-            return HydrologyResult()
+            return HydrologyResult(heightmap=heightmap)
 
         active = resolve_scopes(inp.scopes)
+        result = HydrologyResult(heightmap=heightmap)
+        dirty: GridBBox | None = None
+
+        if HydrologyScope.COASTAL_SEA in active:
+            coastal, bbox = generate_coastal_sea(world, heightmap, inp)
+            result.cell_index.by_cell.update(coastal)
+            dirty = _merge_bbox(dirty, bbox)
+            logger.info(
+                "HydrologyGeneratorService | coastal_sea world=%s cells=%d segments=%d",
+                world.world_uid,
+                len(coastal),
+                len(inp.declared_coastline_segments),
+            )
+
+        if HydrologyScope.OPEN_OCEAN in active:
+            ocean, bbox = generate_open_ocean(heightmap, result.cell_index.by_cell)
+            result.cell_index.by_cell.update(ocean)
+            dirty = _merge_bbox(dirty, bbox)
+            logger.info(
+                "HydrologyGeneratorService | open_ocean world=%s cells=%d",
+                world.world_uid,
+                len(ocean),
+            )
+
+        if HydrologyScope.LAKES in active:
+            lakes, bbox = generate_lakes(world, heightmap, inp)
+            result.cell_index.by_cell.update(lakes)
+            dirty = _merge_bbox(dirty, bbox)
+            logger.info(
+                "HydrologyGeneratorService | lakes world=%s cells=%d specs=%d",
+                world.world_uid,
+                len(lakes),
+                len(inp.declared_lake_specs),
+            )
+
+        if HydrologyScope.LANDFORMS in active:
+            result.landforms = classify_coastal_landforms(inp)
+
+        result.dirty_bbox = dirty
         logger.info(
-            "HydrologyGeneratorService | stub world=%s scopes=%s nodes=%d edges=%d",
+            "HydrologyGeneratorService | world=%s scopes=%s modified=%d",
             world.world_uid,
             sorted(s.value for s in active),
-            len(inp.connection_graph.nodes),
-            len(inp.connection_graph.edges),
+            result.cells_modified,
         )
-        return HydrologyResult()
+        return result
