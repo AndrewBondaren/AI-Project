@@ -105,7 +105,7 @@ def build() -> dict:
             "version": "2026-07",
             "description": (
                 "Объединение fixtures/world_test.json (gameplay: Эйдора, Ironhold, races, perks) "
-                "и fixtures/world_template.json (climate, hydrology, geographic declare, connection graph). "
+                "и fixtures/world_template.json (climate, hydrology.declared_*, geographic declare). "
                 "map_cells пуст — после import: debug_surface_helpers.api_materialize_surface_stack. "
                 "character_test.json по-прежнему привязан к world-test-001; для этого мира — свой персонаж или remap."
             ),
@@ -119,8 +119,6 @@ def build() -> dict:
         "perks": _remap_section(test.get("perks", []), WORLD_UID),
         "locations": _remap_section(test.get("locations", []), WORLD_UID)
         + _remap_section(template.get("locations", []), WORLD_UID),
-        "connection_nodes": _remap_section(template.get("connection_nodes", []), WORLD_UID),
-        "connection_edges": _remap_section(template.get("connection_edges", []), WORLD_UID),
         "map_cells": [],
     }
 
@@ -133,8 +131,6 @@ def main() -> None:
     print(f"Wrote {OUT.relative_to(REPO)}")
     print(f"  world_uid={WORLD_UID}")
     print(f"  locations={len(data['locations'])}")
-    print(f"  connection_nodes={len(data['connection_nodes'])}")
-    print(f"  connection_edges={len(data['connection_edges'])}")
 
 
 if __name__ == "__main__":

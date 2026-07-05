@@ -4,9 +4,7 @@ import unittest
 from types import SimpleNamespace
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.terrain.hydrology.hydrologyGeneratorService import (
-    HydrologyGeneratorService,
-)
+from app.application.worldData.generators.terrain.hydrology.riverBedCarver import generate_rivers
 from app.application.worldData.generators.terrain.hydrology.proceduralRiverAutoresolve import (
     autoresolve_river_segments,
 )
@@ -91,25 +89,31 @@ class TestRiverAutoresolve(unittest.TestCase):
         self.assertGreater(len(segments), 0)
         self.assertFalse(segments[0].declared)
 
-    def test_service_carves_autoresolve_with_ocean_scope(self):
+    def test_generate_rivers_autoresolve_with_occupied_ocean(self):
         surface_z = {(gx, gy): 10 for gx in range(8) for gy in range(8)}
         for gy in range(1, 8):
             surface_z[(4, gy)] = 10 + gy * 6
         hm = _heightmap(surface_z)
-        result = HydrologyGeneratorService().apply(
-            _world(),
-            [],
-            hm,
-            master=HydrologyMasterInput(
-                world_uid="test-world",
-                hydrology_enabled=True,
-                scopes=frozenset({HydrologyScope.COASTAL_SEA, HydrologyScope.OPEN_OCEAN, HydrologyScope.RIVERS}),
-                connection_graph=LoadedConnectionGraph(nodes=[], edges=[]),
-            ),
+        occupied = {
+            (gx, 0): MapCellHydrology(role=HydrologyCellRole.OPEN_OCEAN)
+            for gx in range(8)
+        }
+        master = HydrologyMasterInput(
+            world_uid="test-world",
+            hydrology_enabled=True,
+            scopes=frozenset({HydrologyScope.RIVERS}),
+            connection_graph=LoadedConnectionGraph(nodes=[], edges=[]),
         )
-        roles = {entry.role for entry in result.cell_index.by_cell.values()}
+        merged, segments, _bbox = generate_rivers(
+            _world(),
+            hm,
+            master,
+            occupied=occupied,
+            locations=[],
+        )
+        roles = {entry.role for entry in merged.values()}
         self.assertIn(HydrologyCellRole.RIVER_BED, roles)
-        self.assertGreater(len(result.river_segments), 0)
+        self.assertGreater(len(segments), 0)
 
 
 if __name__ == "__main__":

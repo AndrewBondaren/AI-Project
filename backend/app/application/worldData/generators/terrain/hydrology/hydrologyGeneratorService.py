@@ -146,6 +146,7 @@ class HydrologyGeneratorService:
                 heightmap,
                 inp,
                 occupied=result.cell_index.by_cell,
+                locations=locations,
             )
             result.cell_index.by_cell.update(rivers)
             result.river_segments = river_segments

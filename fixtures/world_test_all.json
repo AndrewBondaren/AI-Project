@@ -1,7 +1,7 @@
 {
   "_fixture_meta": {
     "version": "2026-07",
-    "description": "Объединение fixtures/world_test.json (gameplay: Эйдора, Ironhold, races, perks) и fixtures/world_template.json (climate, hydrology, geographic declare, connection graph). map_cells пуст — после import: debug_surface_helpers.api_materialize_surface_stack. character_test.json по-прежнему привязан к world-test-001; для этого мира — свой персонаж или remap.",
+    "description": "Объединение fixtures/world_test.json (gameplay: Эйдора, Ironhold, races, perks) и fixtures/world_template.json (climate, hydrology.declared_*, geographic declare). map_cells пуст — после import: debug_surface_helpers.api_materialize_surface_stack. character_test.json по-прежнему привязан к world-test-001; для этого мира — свой персонаж или remap.",
     "sources": [
       "world_test.json",
       "world_template.json"
@@ -187,23 +187,39 @@
       },
       "geo_lake_moon": {
         "display_name": "Озеро Лунное",
-        "description": "Declared lake — name + lake_shoreline ConnectionEdge chain (U20)."
+        "description": "Declared lake — name + hydrology.declared_lakes shoreline (U20)."
       },
       "geo_peak_white": {
         "display_name": "Гора Белая",
-        "description": "Declared peak — river source context."
+        "description": "Declared peak — via_locations anchor for river declare."
       },
       "geo_sea_north": {
         "display_name": "Северное море",
-        "description": "Declared sea — name + coastline ConnectionEdge chain (U21)."
+        "description": "Declared sea — name + hydrology.declared_coastlines path (U21)."
       },
       "geo_coast_fjord": {
         "display_name": "Фьордовый берег",
-        "description": "Declared coast segment."
+        "description": "Declared coast segment on sea path."
       },
       "geo_river_silver": {
         "display_name": "Серебряная река",
-        "description": "Declared river name; geometry via ConnectionEdge."
+        "description": "Declared river — declare_mode segments (manual polyline)."
+      },
+      "geo_river_basin_north": {
+        "display_name": "Северный речной бассейн",
+        "description": "River system container — system_role system, no geometry."
+      },
+      "geo_river_volga": {
+        "display_name": "Волга (эталон declare)",
+        "description": "Declared river — declare_mode via_locations."
+      },
+      "geo_river_endpoints_demo": {
+        "display_name": "Железный ручей",
+        "description": "Declared river — declare_mode endpoints (source → mouth autoresolve on generate)."
+      },
+      "geo_river_tributary_demo": {
+        "display_name": "Приток к порту",
+        "description": "Declared river — system_role tributary, parent stem."
       },
       "geo_island_mist": {
         "display_name": "Остров Туманов",
@@ -703,6 +719,227 @@
         "flammable": false
       }
     ],
+    "hydrology": {
+      "enabled": true,
+      "default_shore": {
+        "system_terrain": "shore",
+        "system_material": "sand"
+      },
+      "default_rivers": {
+        "enabled": true,
+        "autoresolve": true,
+        "bands": {
+          "min": 1,
+          "max": 5
+        },
+        "type_classify": {
+          "mountain_min_source_z": null,
+          "path_mountain_fraction": 0.5,
+          "rapid_drop_threshold_m": 3,
+          "mountain_bed_steepness_factor": 1.5,
+          "foothill_gradient_threshold": null
+        }
+      },
+      "default_lakes": {
+        "enabled": true,
+        "autoresolve": true,
+        "bands": {
+          "min": 1,
+          "max": 5
+        }
+      },
+      "default_seas": {
+        "enabled": true,
+        "autoresolve_coastal_sea": true,
+        "autoresolve_open_ocean": true,
+        "bands": {
+          "min": 1,
+          "max": 20
+        }
+      },
+      "default_landforms": {
+        "enabled": true,
+        "autoresolve": true
+      },
+      "materialize_named_locations": false,
+      "declared_lakes": [
+        {
+          "location_uid": "loc-template-lake-declared",
+          "shoreline": [
+            {
+              "x": 15000,
+              "y": 9000,
+              "z": 0
+            },
+            {
+              "x": 16800,
+              "y": 9600,
+              "z": 0
+            },
+            {
+              "x": 16200,
+              "y": 7800,
+              "z": 0
+            },
+            {
+              "x": 13800,
+              "y": 8400,
+              "z": 0
+            }
+          ]
+        }
+      ],
+      "declared_coastlines": [
+        {
+          "location_uid": "loc-template-sea-declared",
+          "path": [
+            {
+              "x": 21000,
+              "y": 6000,
+              "z": 0
+            },
+            {
+              "x": 24000,
+              "y": 6000,
+              "z": 0
+            },
+            {
+              "x": 30000,
+              "y": 6000,
+              "z": 0
+            },
+            {
+              "x": 36000,
+              "y": 6000,
+              "z": 0
+            }
+          ]
+        }
+      ],
+      "declared_rivers": [
+        {
+          "location_uid": "loc-template-river-basin-north",
+          "system_role": "system"
+        },
+        {
+          "location_uid": "loc-template-river-volga",
+          "system_role": "stem",
+          "parent_location_uid": "loc-template-river-basin-north",
+          "declare_mode": "via_locations",
+          "route_location_uids": [
+            "loc-template-peak-declared",
+            "loc-template-settlement-port",
+            "loc-template-sea-declared"
+          ]
+        },
+        {
+          "location_uid": "loc-template-river-endpoints-demo",
+          "system_role": "stem",
+          "parent_location_uid": "loc-template-river-basin-north",
+          "declare_mode": "endpoints",
+          "source": {
+            "x": 21000,
+            "y": 18000,
+            "z": 120
+          },
+          "mouth": {
+            "location_uid": "loc-template-lake-declared"
+          }
+        },
+        {
+          "location_uid": "loc-template-river-tributary-demo",
+          "system_role": "tributary",
+          "parent_location_uid": "loc-template-river-volga",
+          "declare_mode": "endpoints",
+          "source": {
+            "x": 18000,
+            "y": 15000,
+            "z": 80
+          },
+          "mouth": {
+            "location_uid": "loc-template-settlement-port"
+          }
+        },
+        {
+          "location_uid": "loc-template-river-declared",
+          "system_role": "stem",
+          "parent_location_uid": "loc-template-river-basin-north",
+          "declare_mode": "segments",
+          "segments": [
+            {
+              "from": {
+                "x": 6000,
+                "y": 18000,
+                "z": 0
+              },
+              "to": {
+                "x": 9000,
+                "y": 18000,
+                "z": 0
+              },
+              "connection_type": "mountain_river",
+              "width_cells": 1
+            },
+            {
+              "from": {
+                "x": 9000,
+                "y": 18000,
+                "z": 0
+              },
+              "to": {
+                "x": 12000,
+                "y": 15000,
+                "z": 0
+              },
+              "connection_type": "mountain_river",
+              "width_cells": 1
+            },
+            {
+              "from": {
+                "x": 12000,
+                "y": 15000,
+                "z": 0
+              },
+              "to": {
+                "x": 15000,
+                "y": 12000,
+                "z": 0
+              },
+              "connection_type": "mountain_river",
+              "width_cells": 1
+            },
+            {
+              "from": {
+                "x": 15000,
+                "y": 12000,
+                "z": 0
+              },
+              "to": {
+                "x": 18000,
+                "y": 9000,
+                "z": 0
+              },
+              "connection_type": "river",
+              "width_cells": 1
+            },
+            {
+              "from": {
+                "x": 18000,
+                "y": 9000,
+                "z": 0
+              },
+              "to": {
+                "x": 21000,
+                "y": 6000,
+                "z": 0
+              },
+              "connection_type": "river",
+              "width_cells": 1
+            }
+          ]
+        }
+      ]
+    },
     "map_subsurface_depth": 20,
     "grid_bbox_padding": 2,
     "terrain_chunk_columns": 32,
@@ -832,50 +1069,6 @@
         "display_name": "Портал"
       }
     ],
-    "hydrology": {
-      "enabled": true,
-      "default_shore": {
-        "system_terrain": "shore",
-        "system_material": "sand"
-      },
-      "default_rivers": {
-        "enabled": true,
-        "autoresolve": true,
-        "bands": {
-          "min": 1,
-          "max": 5
-        },
-        "type_classify": {
-          "mountain_min_source_z": null,
-          "path_mountain_fraction": 0.5,
-          "rapid_drop_threshold_m": 3,
-          "mountain_bed_steepness_factor": 1.5,
-          "foothill_gradient_threshold": null
-        }
-      },
-      "default_lakes": {
-        "enabled": true,
-        "autoresolve": true,
-        "bands": {
-          "min": 1,
-          "max": 5
-        }
-      },
-      "default_seas": {
-        "enabled": true,
-        "autoresolve_coastal_sea": true,
-        "autoresolve_open_ocean": true,
-        "bands": {
-          "min": 1,
-          "max": 20
-        }
-      },
-      "default_landforms": {
-        "enabled": true,
-        "autoresolve": true
-      },
-      "materialize_named_locations": false
-    },
     "caves": {
       "hydrology": {
         "enabled": true,
@@ -906,19 +1099,17 @@
     },
     {
       "state_uid": "state-template-north",
-      "world_uid": "world-test-all-001",
       "display_name": "Северное королевство",
       "government_type": "kingdom",
       "display_description": "Пример государства для declared locations и climate context.",
-      "created_at": "2026-06-26T00:00:00"
+      "world_uid": "world-test-all-001"
     },
     {
       "state_uid": "state-template-south",
-      "world_uid": "world-test-all-001",
       "display_name": "Южная торговая лига",
       "government_type": "republic",
       "display_description": "Портовые города и пустынные караванные пути.",
-      "created_at": "2026-06-26T00:00:00"
+      "world_uid": "world-test-all-001"
     }
   ],
   "races": [
@@ -1164,64 +1355,58 @@
     },
     {
       "location_uid": "loc-template-region",
-      "world_uid": "world-test-all-001",
       "display_name": "Северный предел",
       "system_location_type": "region",
-      "created_at": "2026-06-26T00:00:00",
       "is_selectable": false,
-      "is_accessible": false
+      "is_accessible": false,
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-territory",
-      "world_uid": "world-test-all-001",
       "display_name": "Граничные земли",
       "system_location_type": "territory",
       "system_location_subtype": "mountain",
       "parent_location_uid": "loc-template-region",
       "system_climate_zone": "cold",
       "state_uid": "state-template-north",
-      "created_at": "2026-06-26T00:00:00",
       "is_selectable": false,
-      "is_accessible": false
+      "is_accessible": false,
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-region-south",
-      "world_uid": "world-test-all-001",
       "display_name": "Южные земли",
       "system_location_type": "region",
-      "created_at": "2026-06-26T00:00:00",
       "is_selectable": false,
-      "is_accessible": false
+      "is_accessible": false,
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-territory-coast",
-      "world_uid": "world-test-all-001",
       "display_name": "Прибрежная полоса",
       "system_location_type": "territory",
       "system_location_subtype": "island",
       "parent_location_uid": "loc-template-region-south",
       "system_climate_zone": "warm",
       "state_uid": "state-template-south",
-      "created_at": "2026-06-26T00:00:00",
       "is_selectable": false,
-      "is_accessible": false
+      "is_accessible": false,
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-territory-desert",
-      "world_uid": "world-test-all-001",
       "display_name": "Красные пески",
       "system_location_type": "territory",
       "system_location_subtype": "underground",
       "parent_location_uid": "loc-template-region-south",
       "system_climate_zone": "desert",
       "state_uid": "state-template-south",
-      "created_at": "2026-06-26T00:00:00",
       "is_selectable": false,
-      "is_accessible": false
+      "is_accessible": false,
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-settlement-town",
-      "world_uid": "world-test-all-001",
       "display_name": "Каменный брод",
       "system_location_type": "settlement",
       "system_location_subtype": "city",
@@ -1237,11 +1422,10 @@
       "is_accessible": true,
       "is_public": true,
       "is_selectable": false,
-      "created_at": "2026-06-26T00:00:00"
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-settlement-hamlet",
-      "world_uid": "world-test-all-001",
       "display_name": "Три сосны",
       "system_location_type": "settlement",
       "system_location_subtype": "village",
@@ -1257,11 +1441,10 @@
       "is_accessible": true,
       "is_public": true,
       "is_selectable": false,
-      "created_at": "2026-06-26T00:00:00"
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-settlement-village",
-      "world_uid": "world-test-all-001",
       "display_name": "Лесной приют",
       "system_location_type": "settlement",
       "system_location_subtype": "village",
@@ -1277,11 +1460,10 @@
       "is_accessible": true,
       "is_public": true,
       "is_selectable": true,
-      "created_at": "2026-06-26T00:00:00"
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-settlement-dungeon",
-      "world_uid": "world-test-all-001",
       "display_name": "Пещера Забвения",
       "system_location_type": "settlement",
       "system_location_subtype": "dungeon",
@@ -1298,11 +1480,10 @@
       "is_public": false,
       "is_forbidden": true,
       "is_selectable": false,
-      "created_at": "2026-06-26T00:00:00"
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-settlement-port",
-      "world_uid": "world-test-all-001",
       "display_name": "Янтарный порт",
       "system_location_type": "settlement",
       "system_location_subtype": "city",
@@ -1319,11 +1500,10 @@
       "is_public": true,
       "is_selectable": true,
       "guard_level": 2,
-      "created_at": "2026-06-26T00:00:00"
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-settlement-metropolis",
-      "world_uid": "world-test-all-001",
       "display_name": "Великий Перекрёсток",
       "system_location_type": "settlement",
       "system_location_subtype": "city",
@@ -1340,11 +1520,10 @@
       "is_public": true,
       "is_selectable": false,
       "guard_level": 4,
-      "created_at": "2026-06-26T00:00:00"
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-district-harbor",
-      "world_uid": "world-test-all-001",
       "display_name": "Портовый квартал",
       "system_location_type": "district",
       "parent_location_uid": "loc-template-settlement-metropolis",
@@ -1352,11 +1531,10 @@
       "is_accessible": true,
       "is_public": true,
       "is_outdoor": true,
-      "created_at": "2026-06-26T00:00:00"
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-building-warehouse",
-      "world_uid": "world-test-all-001",
       "display_name": "Склад № 7",
       "system_location_type": "building",
       "system_location_subtype": "commercial",
@@ -1366,11 +1544,10 @@
       "is_public": false,
       "is_outdoor": false,
       "entry_difficulty": 40,
-      "created_at": "2026-06-26T00:00:00"
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-building-tavern",
-      "world_uid": "world-test-all-001",
       "display_name": "Таверна «Якорь»",
       "system_location_type": "building",
       "system_location_subtype": "commercial",
@@ -1379,11 +1556,10 @@
       "is_accessible": true,
       "is_public": true,
       "is_outdoor": false,
-      "created_at": "2026-06-26T00:00:00"
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-room-tavern-hall",
-      "world_uid": "world-test-all-001",
       "display_name": "Общий зал",
       "system_location_type": "room",
       "parent_location_uid": "loc-template-building-tavern",
@@ -1391,11 +1567,10 @@
       "is_accessible": true,
       "is_public": true,
       "is_outdoor": false,
-      "created_at": "2026-06-26T00:00:00"
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-building-garrison",
-      "world_uid": "world-test-all-001",
       "display_name": "Гарнизон южных ворот",
       "system_location_type": "building",
       "system_location_subtype": "military",
@@ -1407,11 +1582,10 @@
       "guard_level": 80,
       "entry_difficulty": 70,
       "is_forbidden": true,
-      "created_at": "2026-06-26T00:00:00"
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-settlement-oasis",
-      "world_uid": "world-test-all-001",
       "display_name": "Оазис Шёпот",
       "system_location_type": "settlement",
       "system_location_subtype": "village",
@@ -1427,11 +1601,10 @@
       "is_accessible": true,
       "is_public": true,
       "is_selectable": false,
-      "created_at": "2026-06-26T00:00:00"
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-settlement-underground",
-      "world_uid": "world-test-all-001",
       "display_name": "Нижний рынок",
       "system_location_type": "settlement",
       "system_location_subtype": "underground_city",
@@ -1447,11 +1620,10 @@
       "is_accessible": true,
       "is_public": false,
       "entry_difficulty": 50,
-      "created_at": "2026-06-26T00:00:00"
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-lake-declared",
-      "world_uid": "world-test-all-001",
       "display_name": "Озеро Лунное",
       "system_location_type": "geographic",
       "system_location_subtype": "lake",
@@ -1461,12 +1633,11 @@
       "map_y": 9000,
       "map_z": 0,
       "state_uid": "state-template-north",
-      "created_at": "2026-06-26T00:00:00",
-      "is_selectable": false
+      "is_selectable": false,
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-peak-declared",
-      "world_uid": "world-test-all-001",
       "display_name": "Гора Белая",
       "system_location_type": "geographic",
       "system_location_subtype": "peak",
@@ -1476,12 +1647,11 @@
       "map_y": 18000,
       "map_z": 0,
       "state_uid": "state-template-north",
-      "created_at": "2026-06-26T00:00:00",
-      "is_selectable": false
+      "is_selectable": false,
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-mountain-declared",
-      "world_uid": "world-test-all-001",
       "display_name": "Железные горы",
       "system_location_type": "geographic",
       "system_location_subtype": "mountain",
@@ -1491,12 +1661,11 @@
       "map_y": 18000,
       "map_z": 0,
       "state_uid": "state-template-north",
-      "created_at": "2026-06-26T00:00:00",
-      "is_selectable": false
+      "is_selectable": false,
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-sea-declared",
-      "world_uid": "world-test-all-001",
       "display_name": "Северное море",
       "system_location_type": "geographic",
       "system_location_subtype": "sea",
@@ -1506,12 +1675,11 @@
       "map_y": 6000,
       "map_z": 0,
       "state_uid": "state-template-south",
-      "created_at": "2026-06-26T00:00:00",
-      "is_selectable": false
+      "is_selectable": false,
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-coast-declared",
-      "world_uid": "world-test-all-001",
       "display_name": "Фьордовый берег",
       "system_location_type": "geographic",
       "system_location_subtype": "coast",
@@ -1521,27 +1689,81 @@
       "map_y": 6000,
       "map_z": 0,
       "state_uid": "state-template-south",
-      "created_at": "2026-06-26T00:00:00",
-      "is_selectable": false
+      "is_selectable": false,
+      "world_uid": "world-test-all-001"
     },
     {
-      "location_uid": "loc-template-river-declared",
-      "world_uid": "world-test-all-001",
-      "display_name": "Серебряная река",
+      "location_uid": "loc-template-river-basin-north",
+      "display_name": "Северный речной бассейн",
       "system_location_type": "geographic",
       "system_location_subtype": "river",
       "parent_location_uid": "loc-template-territory",
+      "glossary_ref": "geo_river_basin_north",
+      "map_x": 15000,
+      "map_y": 15000,
+      "map_z": 0,
+      "state_uid": "state-template-north",
+      "is_selectable": false,
+      "world_uid": "world-test-all-001"
+    },
+    {
+      "location_uid": "loc-template-river-volga",
+      "display_name": "Волга (эталон declare)",
+      "system_location_type": "geographic",
+      "system_location_subtype": "river",
+      "parent_location_uid": "loc-template-river-basin-north",
+      "glossary_ref": "geo_river_volga",
+      "map_x": 15000,
+      "map_y": 12000,
+      "map_z": 0,
+      "state_uid": "state-template-north",
+      "is_selectable": false,
+      "world_uid": "world-test-all-001"
+    },
+    {
+      "location_uid": "loc-template-river-endpoints-demo",
+      "display_name": "Железный ручей",
+      "system_location_type": "geographic",
+      "system_location_subtype": "river",
+      "parent_location_uid": "loc-template-river-basin-north",
+      "glossary_ref": "geo_river_endpoints_demo",
+      "map_x": 21000,
+      "map_y": 18000,
+      "map_z": 0,
+      "state_uid": "state-template-north",
+      "is_selectable": false,
+      "world_uid": "world-test-all-001"
+    },
+    {
+      "location_uid": "loc-template-river-tributary-demo",
+      "display_name": "Приток к порту",
+      "system_location_type": "geographic",
+      "system_location_subtype": "river",
+      "parent_location_uid": "loc-template-river-volga",
+      "glossary_ref": "geo_river_tributary_demo",
+      "map_x": 18000,
+      "map_y": 15000,
+      "map_z": 0,
+      "state_uid": "state-template-north",
+      "is_selectable": false,
+      "world_uid": "world-test-all-001"
+    },
+    {
+      "location_uid": "loc-template-river-declared",
+      "display_name": "Серебряная река",
+      "system_location_type": "geographic",
+      "system_location_subtype": "river",
+      "parent_location_uid": "loc-template-river-basin-north",
       "glossary_ref": "geo_river_silver",
       "map_x": 9000,
       "map_y": 18000,
       "map_z": 0,
       "state_uid": "state-template-north",
-      "created_at": "2026-06-26T00:00:00",
-      "is_selectable": false
+      "is_selectable": false,
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-island-declared",
-      "world_uid": "world-test-all-001",
       "display_name": "Остров Туманов",
       "system_location_type": "geographic",
       "system_location_subtype": "island",
@@ -1551,12 +1773,11 @@
       "map_y": 6000,
       "map_z": 0,
       "state_uid": "state-template-south",
-      "created_at": "2026-06-26T00:00:00",
-      "is_selectable": false
+      "is_selectable": false,
+      "world_uid": "world-test-all-001"
     },
     {
       "location_uid": "loc-template-plain-declared",
-      "world_uid": "world-test-all-001",
       "display_name": "Золотая равнина",
       "system_location_type": "geographic",
       "system_location_subtype": "plain",
@@ -1566,251 +1787,8 @@
       "map_y": 15000,
       "map_z": 0,
       "state_uid": "state-template-south",
-      "created_at": "2026-06-26T00:00:00",
-      "is_selectable": false
-    }
-  ],
-  "connection_nodes": [
-    {
-      "node_uid": "cn-lake-moon-a",
-      "world_uid": "world-test-all-001",
-      "location_uid": "loc-template-lake-declared",
-      "x": 15000,
-      "y": 9000,
-      "z": 0,
-      "node_type": "waypoint",
-      "graph_level": "world"
-    },
-    {
-      "node_uid": "cn-lake-moon-b",
-      "world_uid": "world-test-all-001",
-      "x": 16800,
-      "y": 9600,
-      "z": 0,
-      "node_type": "waypoint",
-      "graph_level": "world"
-    },
-    {
-      "node_uid": "cn-lake-moon-c",
-      "world_uid": "world-test-all-001",
-      "x": 16200,
-      "y": 7800,
-      "z": 0,
-      "node_type": "waypoint",
-      "graph_level": "world"
-    },
-    {
-      "node_uid": "cn-lake-moon-d",
-      "world_uid": "world-test-all-001",
-      "x": 13800,
-      "y": 8400,
-      "z": 0,
-      "node_type": "waypoint",
-      "graph_level": "world"
-    },
-    {
-      "node_uid": "cn-sea-west",
-      "world_uid": "world-test-all-001",
-      "x": 21000,
-      "y": 6000,
-      "z": 0,
-      "node_type": "waypoint",
-      "graph_level": "world"
-    },
-    {
-      "node_uid": "cn-sea-mid",
-      "world_uid": "world-test-all-001",
-      "location_uid": "loc-template-sea-declared",
-      "x": 24000,
-      "y": 6000,
-      "z": 0,
-      "node_type": "waypoint",
-      "graph_level": "world"
-    },
-    {
-      "node_uid": "cn-coast-fjord",
-      "world_uid": "world-test-all-001",
-      "location_uid": "loc-template-coast-declared",
-      "x": 30000,
-      "y": 6000,
-      "z": 0,
-      "node_type": "waypoint",
-      "graph_level": "world"
-    },
-    {
-      "node_uid": "cn-sea-east",
-      "world_uid": "world-test-all-001",
-      "x": 36000,
-      "y": 6000,
-      "z": 0,
-      "node_type": "waypoint",
-      "graph_level": "world"
-    },
-    {
-      "node_uid": "cn-river-silver-src",
-      "world_uid": "world-test-all-001",
-      "location_uid": "loc-template-peak-declared",
-      "x": 6000,
-      "y": 18000,
-      "z": 0,
-      "node_type": "waypoint",
-      "graph_level": "world"
-    },
-    {
-      "node_uid": "cn-river-silver-mid",
-      "world_uid": "world-test-all-001",
-      "location_uid": "loc-template-river-declared",
-      "x": 9000,
-      "y": 18000,
-      "z": 0,
-      "node_type": "waypoint",
-      "graph_level": "world"
-    },
-    {
-      "node_uid": "cn-river-silver-2",
-      "world_uid": "world-test-all-001",
-      "x": 12000,
-      "y": 15000,
-      "z": 0,
-      "node_type": "waypoint",
-      "graph_level": "world"
-    },
-    {
-      "node_uid": "cn-river-silver-3",
-      "world_uid": "world-test-all-001",
-      "x": 15000,
-      "y": 12000,
-      "z": 0,
-      "node_type": "waypoint",
-      "graph_level": "world"
-    },
-    {
-      "node_uid": "cn-river-silver-4",
-      "world_uid": "world-test-all-001",
-      "x": 18000,
-      "y": 9000,
-      "z": 0,
-      "node_type": "waypoint",
-      "graph_level": "world"
-    },
-    {
-      "node_uid": "cn-river-silver-mouth",
-      "world_uid": "world-test-all-001",
-      "x": 21000,
-      "y": 6000,
-      "z": 0,
-      "node_type": "waypoint",
-      "graph_level": "world"
-    }
-  ],
-  "connection_edges": [
-    {
-      "edge_uid": "ce-lake-moon-ab",
-      "world_uid": "world-test-all-001",
-      "from_node_uid": "cn-lake-moon-a",
-      "to_node_uid": "cn-lake-moon-b",
-      "connection_type": "lake_shoreline",
-      "graph_level": "world",
-      "width_cells": 1
-    },
-    {
-      "edge_uid": "ce-lake-moon-bc",
-      "world_uid": "world-test-all-001",
-      "from_node_uid": "cn-lake-moon-b",
-      "to_node_uid": "cn-lake-moon-c",
-      "connection_type": "lake_shoreline",
-      "graph_level": "world",
-      "width_cells": 1
-    },
-    {
-      "edge_uid": "ce-lake-moon-cd",
-      "world_uid": "world-test-all-001",
-      "from_node_uid": "cn-lake-moon-c",
-      "to_node_uid": "cn-lake-moon-d",
-      "connection_type": "lake_shoreline",
-      "graph_level": "world",
-      "width_cells": 1
-    },
-    {
-      "edge_uid": "ce-lake-moon-da",
-      "world_uid": "world-test-all-001",
-      "from_node_uid": "cn-lake-moon-d",
-      "to_node_uid": "cn-lake-moon-a",
-      "connection_type": "lake_shoreline",
-      "graph_level": "world",
-      "width_cells": 1
-    },
-    {
-      "edge_uid": "ce-sea-west-mid",
-      "world_uid": "world-test-all-001",
-      "from_node_uid": "cn-sea-west",
-      "to_node_uid": "cn-sea-mid",
-      "connection_type": "coastline",
-      "graph_level": "world",
-      "width_cells": 1
-    },
-    {
-      "edge_uid": "ce-sea-mid-fjord",
-      "world_uid": "world-test-all-001",
-      "from_node_uid": "cn-sea-mid",
-      "to_node_uid": "cn-coast-fjord",
-      "connection_type": "coastline",
-      "graph_level": "world",
-      "width_cells": 1
-    },
-    {
-      "edge_uid": "ce-sea-fjord-east",
-      "world_uid": "world-test-all-001",
-      "from_node_uid": "cn-coast-fjord",
-      "to_node_uid": "cn-sea-east",
-      "connection_type": "coastline",
-      "graph_level": "world",
-      "width_cells": 1
-    },
-    {
-      "edge_uid": "ce-river-silver-1",
-      "world_uid": "world-test-all-001",
-      "from_node_uid": "cn-river-silver-src",
-      "to_node_uid": "cn-river-silver-mid",
-      "connection_type": "mountain_river",
-      "graph_level": "world",
-      "width_cells": 1
-    },
-    {
-      "edge_uid": "ce-river-silver-2",
-      "world_uid": "world-test-all-001",
-      "from_node_uid": "cn-river-silver-mid",
-      "to_node_uid": "cn-river-silver-2",
-      "connection_type": "mountain_river",
-      "graph_level": "world",
-      "width_cells": 1
-    },
-    {
-      "edge_uid": "ce-river-silver-3",
-      "world_uid": "world-test-all-001",
-      "from_node_uid": "cn-river-silver-2",
-      "to_node_uid": "cn-river-silver-3",
-      "connection_type": "mountain_river",
-      "graph_level": "world",
-      "width_cells": 1
-    },
-    {
-      "edge_uid": "ce-river-silver-4",
-      "world_uid": "world-test-all-001",
-      "from_node_uid": "cn-river-silver-3",
-      "to_node_uid": "cn-river-silver-4",
-      "connection_type": "river",
-      "graph_level": "world",
-      "width_cells": 1
-    },
-    {
-      "edge_uid": "ce-river-silver-5",
-      "world_uid": "world-test-all-001",
-      "from_node_uid": "cn-river-silver-4",
-      "to_node_uid": "cn-river-silver-mouth",
-      "connection_type": "river",
-      "graph_level": "world",
-      "width_cells": 1
+      "is_selectable": false,
+      "world_uid": "world-test-all-001"
     }
   ],
   "map_cells": []

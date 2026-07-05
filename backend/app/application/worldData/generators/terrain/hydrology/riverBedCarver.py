@@ -55,6 +55,7 @@ def generate_rivers(
     heightmap: SurfaceHeightmap,
     master: HydrologyMasterInput,
     occupied: dict[tuple[int, int], MapCellHydrology] | None = None,
+    locations: list[Any] | None = None,
 ) -> tuple[dict[tuple[int, int], MapCellHydrology], list[RiverSegment], GridBBox | None]:
     type_classify = resolve_river_type_classify(world)
     river_segments = segments_from_declared(master.declared_river_edges)
@@ -62,6 +63,21 @@ def generate_rivers(
     xs: list[int] = []
     ys: list[int] = []
     occupied_cells = dict(occupied or {})
+
+    if master.declared_river_intents and locations is not None:
+        from app.application.worldData.generators.terrain.hydrology.resolveDeclaredRiverPath import (
+            resolve_declared_river_intents,
+        )
+
+        for segment in resolve_declared_river_intents(
+            world,
+            heightmap,
+            master.declared_river_intents,
+            locations,
+            occupied_cells,
+            type_classify,
+        ):
+            river_segments.append(segment)
 
     for segment in river_segments:
         depth = _channel_depth_step(segment.connection_type, type_classify)

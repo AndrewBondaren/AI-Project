@@ -25,8 +25,6 @@ from app.application.worldData.generators.terrain.hydrology.seaLevelPolicy impor
 from app.application.worldData.generators.terrain.hydrology.types import HydrologyBands, HydrologyScope
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
-from app.db.models.connectionEdge import ConnectionEdge
-from app.db.models.connectionNode import ConnectionNode
 
 
 def _world(**kwargs):
@@ -101,46 +99,27 @@ class TestDeepeningBands(unittest.TestCase):
 
 class TestHydrologyOceanScope(unittest.TestCase):
 
-    def _graph_nodes_edges(self):
-        nodes = [
-            ConnectionNode(
-                node_uid="cn-a",
-                world_uid="test-world",
-                x=6000, y=6000, z=0,
-                node_type="waypoint",
-                graph_level="world",
-            ),
-            ConnectionNode(
-                node_uid="cn-b",
-                world_uid="test-world",
-                x=24000, y=6000, z=0,
-                node_type="waypoint",
-                graph_level="world",
-            ),
-        ]
-        edges = [
-            ConnectionEdge(
-                edge_uid="ce-coast",
-                from_node_uid="cn-a",
-                to_node_uid="cn-b",
-                connection_type="coastline",
-                graph_level="world",
-                world_uid="test-world",
-            ),
-        ]
-        return nodes, edges
+    def _world_with_declared_coastline(self):
+        return _world(hydrology={
+            "enabled": True,
+            "default_seas": {"bands": {"min": 1, "max": 3}},
+            "declared_coastlines": [{
+                "location_uid": "loc-sea",
+                "path": [
+                    {"x": 6000, "y": 6000, "z": 0},
+                    {"x": 24000, "y": 6000, "z": 0},
+                ],
+            }],
+        })
 
     def test_apply_ocean_scope_modifies_heightmap(self):
-        w = _world()
+        w = self._world_with_declared_coastline()
         hm = _flat_heightmap(0, 12, 0, 6)
-        nodes, edges = self._graph_nodes_edges()
         svc = HydrologyGeneratorService()
         result = svc.apply(
             w,
             [],
             hm,
-            nodes=nodes,
-            edges=edges,
             scopes=frozenset({HydrologyScope.COASTAL_SEA, HydrologyScope.OPEN_OCEAN}),
         )
         self.assertGreater(result.cells_modified, 0)
@@ -151,9 +130,8 @@ class TestHydrologyOceanScope(unittest.TestCase):
         )
 
     def test_master_input_extracts_coastline_segments(self):
-        w = _world()
-        nodes, edges = self._graph_nodes_edges()
-        inp = build_hydrology_master_input(w, [], nodes, edges)
+        w = self._world_with_declared_coastline()
+        inp = build_hydrology_master_input(w, [], [], [])
         self.assertEqual(len(inp.declared_coastline_segments), 1)
         self.assertEqual(inp.declared_coastline_segments[0], ((2, 2), (8, 2)))
 

@@ -109,6 +109,7 @@ class HydrologyMasterInput:
     )
     declared_lake_specs: list[LakeSpec] = field(default_factory=list)
     declared_river_edges: list[DeclaredRiverEdge] = field(default_factory=list)
+    declared_river_intents: list[Any] = field(default_factory=list)  # DeclaredRiver POJO, modes 1/2
 
 
 @dataclass

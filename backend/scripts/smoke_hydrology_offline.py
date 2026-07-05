@@ -22,8 +22,6 @@ from app.application.worldData.generators.terrain.passes.surfacePass import run_
 from app.application.worldData.generators.terrain.hydrology.buildHydrologyMasterInput import (
     build_hydrology_master_input,
 )
-from app.db.models.connectionEdge import ConnectionEdge
-from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -78,14 +76,6 @@ def main() -> None:
         "SELECT * FROM named_locations WHERE world_uid = ?", (WORLD_UID,),
     ).fetchall()
     locations = [NamedLocation(**dict(r)) for r in loc_rows]
-    node_rows = conn.execute(
-        "SELECT * FROM connection_nodes WHERE world_uid = ?", (WORLD_UID,),
-    ).fetchall()
-    nodes = [ConnectionNode(**dict(r)) for r in node_rows]
-    edge_rows = conn.execute(
-        "SELECT * FROM connection_edges WHERE world_uid = ?", (WORLD_UID,),
-    ).fetchall()
-    edges = [ConnectionEdge(**dict(r)) for r in edge_rows]
     conn.close()
 
     pole = run_pole_resolve_pass(world, locations)
@@ -93,7 +83,7 @@ def main() -> None:
     if heightmap is None:
         raise SystemExit("empty heightmap")
 
-    master = build_hydrology_master_input(world, locations, nodes, edges)
+    master = build_hydrology_master_input(world, locations)
     hydro = HydrologyGeneratorService().apply(world, locations, heightmap, master=master)
     n_eff = run_gap_analysis(world, heightmap)
     cells = run_column_fill(

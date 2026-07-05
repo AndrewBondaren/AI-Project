@@ -2,6 +2,7 @@ from fastapi import HTTPException
 
 from app.api.schemas.imports import ImportResult
 from app.application.import_helpers import import_list, with_default_created_at
+from app.dataModel.locations.namedLocation import BundleNamedLocation
 from app.db.models.namedLocation import NamedLocation
 from app.db.repositories.iNamedLocationRepository import INamedLocationRepository
 
@@ -30,8 +31,13 @@ class NamedLocationService:
 
     _IMMUTABLE = frozenset({"location_uid", "world_uid"})
 
+    @staticmethod
+    def _from_wire(row: dict, *, world_uid: str) -> NamedLocation:
+        wire = BundleNamedLocation.model_validate(with_default_created_at(row))
+        return NamedLocation(**{**wire.to_db_fields(), "world_uid": world_uid})
+
     async def create(self, world_uid: str, data: dict) -> NamedLocation:
-        loc = NamedLocation(**{**with_default_created_at(data), "world_uid": world_uid})
+        loc = self._from_wire(data, world_uid=world_uid)
         await self._repo.create(loc)
         return loc
 
@@ -53,5 +59,5 @@ class NamedLocationService:
 
     async def import_from_json(self, world_uid: str, data: list[dict]) -> ImportResult:
         def prepare(row: dict) -> NamedLocation:
-            return NamedLocation(**{**with_default_created_at(row), "world_uid": world_uid})
+            return self._from_wire(row, world_uid=world_uid)
         return await import_list(data, prepare, self._repo.upsert, id_key="location_uid")

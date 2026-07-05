@@ -7,6 +7,9 @@ from typing import ClassVar
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
+from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
+from app.dataModel.hydrology.declaredLake import DeclaredLake
+from app.dataModel.hydrology.declaredRiver import DeclaredRiver
 from app.dataModel.hydrology.landforms import HydrologyLandformsPolicy
 from app.dataModel.hydrology.rivers import HydrologyRiversPolicy
 from app.dataModel.hydrology.seas import HydrologySeasPolicy
@@ -30,6 +33,9 @@ class WorldHydrology(BaseModel):
         default_factory=HydrologyLandformsPolicy,
     )
     materialize_named_locations: DefaultOnWire[bool] = False
+    declared_lakes: DefaultOnWire[list[DeclaredLake]] = Field(default_factory=list)
+    declared_coastlines: DefaultOnWire[list[DeclaredCoastline]] = Field(default_factory=list)
+    declared_rivers: DefaultOnWire[list[DeclaredRiver]] = Field(default_factory=list)
 
     @classmethod
     def canonical_empty(cls) -> WorldHydrology:

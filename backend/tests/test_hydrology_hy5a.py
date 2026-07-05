@@ -27,8 +27,6 @@ from app.application.worldData.generators.terrain.hydrology.types import (
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
-from app.db.models.connectionEdge import ConnectionEdge
-from app.db.models.connectionNode import ConnectionNode
 
 
 def _world(**kwargs):
@@ -61,34 +59,26 @@ def _flat_heightmap(gx_lo: int, gx_hi: int, gy_lo: int, gy_hi: int, z: int = 5) 
     )
 
 
-def _coast_graph():
-    nodes = [
-        ConnectionNode(
-            node_uid="cn-a",
-            world_uid="test-world",
-            x=6000, y=6000, z=0,
-            node_type="waypoint",
-            graph_level="world",
-        ),
-        ConnectionNode(
-            node_uid="cn-b",
-            world_uid="test-world",
-            x=24000, y=6000, z=0,
-            node_type="waypoint",
-            graph_level="world",
-        ),
-    ]
-    edges = [
-        ConnectionEdge(
-            edge_uid="ce-coast",
-            from_node_uid="cn-a",
-            to_node_uid="cn-b",
-            connection_type="coastline",
-            graph_level="world",
-            world_uid="test-world",
-        ),
-    ]
-    return nodes, edges
+def _world_with_coastline(**kwargs):
+    base = {
+        "enabled": True,
+        "default_seas": {
+            "bands": {"min": 1, "max": 2},
+            "autoresolve_coastal_sea": True,
+            "autoresolve_open_ocean": True,
+        },
+        "declared_coastlines": [{
+            "location_uid": "loc-sea",
+            "path": [
+                {"x": 6000, "y": 6000, "z": 0},
+                {"x": 24000, "y": 6000, "z": 0},
+            ],
+        }],
+    }
+    if "hydrology" in kwargs:
+        merged = {**base, **kwargs.pop("hydrology")}
+        return _world(hydrology=merged, **kwargs)
+    return _world(hydrology=base, **kwargs)
 
 
 class TestSeasAutoresolvePolicy(unittest.TestCase):
@@ -211,16 +201,13 @@ class TestBoundaryAutoresolve(unittest.TestCase):
 class TestHydrologyServiceAutoresolve(unittest.TestCase):
 
     def test_apply_adds_open_ocean_outside_declare_strip(self):
-        w = _world()
+        w = _world_with_coastline()
         hm = _flat_heightmap(0, 12, 0, 6)
-        nodes, edges = _coast_graph()
         svc = HydrologyGeneratorService()
         result = svc.apply(
             w,
             [],
             hm,
-            nodes=nodes,
-            edges=edges,
             scopes=frozenset({HydrologyScope.COASTAL_SEA, HydrologyScope.OPEN_OCEAN}),
         )
         roles = result.cell_index.by_cell
@@ -240,14 +227,11 @@ class TestHydrologyServiceAutoresolve(unittest.TestCase):
             },
         )
         hm = _flat_heightmap(0, 12, 0, 6)
-        nodes, edges = _coast_graph()
         svc = HydrologyGeneratorService()
         result = svc.apply(
             w,
             [],
             hm,
-            nodes=nodes,
-            edges=edges,
             scopes=frozenset({HydrologyScope.COASTAL_SEA, HydrologyScope.OPEN_OCEAN}),
         )
         roles = result.cell_index.by_cell

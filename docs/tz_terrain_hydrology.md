@@ -32,15 +32,15 @@ metadata:
 | U17 | **`river` vs `mountain_river`:** разные **`system_connection_type`**; горная — **подтип** (круче, **пороги**); autoresolve **классифицирует по terrain** heightmap, не только по тегу истока |
 | U18 | **River pipeline layers:** `classify_river_segments` → `list[RiverSegment]` (pure); **`riverConnectionEmit`** → `ConnectionEdge`; persist — **вне** generators (`MapCellService` / orchestration) |
 | U19 | **`liquid_candidate` persist (v1):** mask и роли hydrology — **metadata на `map_cells`** при `save_terrain_batch`; climate и downstream читают из БД; нужно для «где реки/озёра/море» без sidecar между HTTP-вызовами |
-| U20 | **Declare озеро — connections:** контур = цепочка **`ConnectionEdge`** `lake_shoreline` (A→B→C→D…; замкнутый контур); узлы — **`NamedLocation`** (`location_uid`) **или** мировые `(x,y,z)` |
-| U21 | **Declare море — connections:** без radius; **polyline/polygon** = та же модель — цепочка **`ConnectionEdge`** `coastline`; waypoints — `NamedLocation` или мировые координаты |
+| U20 | **Declare озеро:** `world.hydrology.declared_lakes[]` — `location_uid` + `shoreline[]` waypoints (метры, замкнутый контур) |
+| U21 | **Declare море/берег:** `world.hydrology.declared_coastlines[]` — `location_uid` + `path[]`; роль из `geographic` subtype |
 | U22 | **`type_classify` null:** runtime **fallback** на встроенные defaults схемы; **import validator (future):** проверить defaults, **записать явные значения** в bundle (normalize on import) — см. § Import validator |
-| U23 | **Smoke fixture:** [`fixtures/world_template.json`](../fixtures/world_template.json) — **declare** `connection_nodes/edges` для lake/sea/coast **до** D HY-3 (не только autoresolve) |
+| U23 | **Smoke fixture:** [`fixtures/world_template.json`](../fixtures/world_template.json) — declare в `world.hydrology.declared_*` (hard cut от connection graph для hydrology) |
 | U24 | **River bed:** hydrology ставит **`system_terrain: liquid_body`** в channel; **`role: river_bed`** в metadata |
 | U28 | **Простая модель воды (2026-06):** hydrology → **`liquid_body`** в русле; **`generate-climate`** → **состояние** уже liquid cells (семантика состояния — [`tz_climate.md`](./tz_climate.md), **не** в этом ТЗ). Hydrology **не** выбирает лёд/вода/steam |
 | U25 | **Lake vs inland_sea (Q6):** declare по **subtype** (A): `lake` + `lake_shoreline`, `inland_sea` + `coastline` на `z_sea`; при **несовпадении** subtype и topology — **fallback (B):** autoresolve role + **`logger.warning`**, carve по topology (не по ошибочному subtype) |
 | U26 | **Coast segment (Q4):** `geographic.coast` — **waypoint** на цепочке `coastline` моря (`ConnectionNode.location_uid`); не отдельная геометрия |
-| U27 | **Реки (Q5):** **declare OR autoresolve** — оба пути; полный polyline мастера → import edges, classifier **skip** (U18); без edges при `default_rivers.autoresolve: true` → planner; autoresolve **не перезаписывает** declare |
+| U27 | **Реки (Q5):** `declared_rivers[]` — режимы `endpoints` / `via_locations` / `segments` + `system_role`; segments на import; endpoints/via на generate (A3); classify 1/2 по terrain (B2); global autoresolve не перезаписывает declare |
 
 ## Назначение
 

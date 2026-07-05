@@ -167,6 +167,69 @@ def plan_descent_path(
     return []
 
 
+def _target_distance(cell: tuple[int, int], target: tuple[int, int]) -> int:
+    return abs(cell[0] - target[0]) + abs(cell[1] - target[1])
+
+
+def plan_path_to_target(
+    heightmap: SurfaceHeightmap,
+    source: tuple[int, int],
+    target: tuple[int, int],
+    occupied: dict[tuple[int, int], MapCellHydrology],
+) -> list[tuple[int, int]]:
+    """D8 descent biased toward a fixed mouth cell (declare endpoints/via)."""
+    if source not in heightmap.surface_z or target not in heightmap.surface_z:
+        return []
+    if source == target:
+        return [source]
+
+    path: list[tuple[int, int]] = [source]
+    visited = {source}
+    current = source
+
+    while len(path) < MAX_PATH_CELLS:
+        if current == target:
+            return path if len(path) >= 2 else []
+        if _mouth_cell(current, occupied) and current == target:
+            return path if len(path) >= 2 else []
+
+        current_z = heightmap.surface_z[current]
+        candidates: list[tuple[tuple[float, int, float, int, int], tuple[int, int]]] = []
+        for n in _neighbors8(*current):
+            if n in visited or n not in heightmap.surface_z:
+                continue
+            if _blocked_cell(n, occupied) and n != target and not _mouth_cell(n, occupied):
+                continue
+            if not step_turn_ok(path, n):
+                continue
+            nz = heightmap.surface_z[n]
+            target_dist = _target_distance(n, target)
+            axis_penalty = 0 if n[0] == current[0] or n[1] == current[1] else 1
+            if n == target:
+                rank = (-2.0, target_dist, axis_penalty, 0.0, n[0], n[1])
+            elif _mouth_cell(n, occupied) and n == target:
+                rank = (-1.0, target_dist, axis_penalty, 0.0, n[0], n[1])
+            elif nz < current_z:
+                rank = (0.0, target_dist, axis_penalty, -float(current_z - nz), n[0], n[1])
+            elif nz == current_z:
+                rank = (1.0, target_dist, axis_penalty, 0.0, n[0], n[1])
+            else:
+                continue
+            candidates.append((rank, n))
+
+        if not candidates:
+            break
+        candidates.sort(key=lambda item: item[0])
+        next_cell = candidates[0][1]
+        path.append(next_cell)
+        visited.add(next_cell)
+        current = next_cell
+
+    if path[-1] == target and len(path) >= 2:
+        return path
+    return []
+
+
 def plan_river_network(
     world: Any,
     heightmap: SurfaceHeightmap,
