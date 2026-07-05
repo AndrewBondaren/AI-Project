@@ -11,12 +11,19 @@ from app.application.worldData.generators.terrain.hydrology.buildHydrologyMaster
 from app.application.worldData.generators.terrain.hydrology.coastalLandformClassifier import (
     classify_coastal_landforms,
 )
+from app.application.worldData.generators.terrain.hydrology.hydrologyAutoresolvePolicy import (
+    seas_autoresolve_policy,
+)
+from app.application.worldData.generators.terrain.hydrology.proceduralSeaAutoresolve import (
+    autoresolve_sea_basins,
+)
 from app.application.worldData.generators.terrain.hydrology.lakeBasinGenerator import (
     generate_lakes,
 )
 from app.application.worldData.generators.terrain.hydrology.oceanBasinGenerator import (
     generate_open_ocean,
 )
+from app.application.worldData.generators.terrain.hydrology.riverBedCarver import generate_rivers
 from app.application.worldData.generators.terrain.hydrology.seaBasinGenerator import (
     generate_coastal_sea,
 )
@@ -87,6 +94,26 @@ class HydrologyGeneratorService:
                 len(inp.declared_coastline_segments),
             )
 
+            seas_policy = seas_autoresolve_policy(world)
+            if seas_policy.seas_enabled and (
+                seas_policy.autoresolve_coastal_sea or seas_policy.autoresolve_open_ocean
+            ):
+                auto, auto_bbox = autoresolve_sea_basins(
+                    world,
+                    heightmap,
+                    inp,
+                    result.cell_index.by_cell,
+                    autoresolve_coastal=seas_policy.autoresolve_coastal_sea,
+                    autoresolve_open_ocean=seas_policy.autoresolve_open_ocean,
+                )
+                result.cell_index.by_cell.update(auto)
+                dirty = _merge_bbox(dirty, auto_bbox)
+                logger.info(
+                    "HydrologyGeneratorService | autoresolve_sea world=%s cells=%d",
+                    world.world_uid,
+                    len(auto),
+                )
+
         if HydrologyScope.OPEN_OCEAN in active:
             ocean, bbox = generate_open_ocean(heightmap, result.cell_index.by_cell)
             result.cell_index.by_cell.update(ocean)
@@ -98,7 +125,12 @@ class HydrologyGeneratorService:
             )
 
         if HydrologyScope.LAKES in active:
-            lakes, bbox = generate_lakes(world, heightmap, inp)
+            lakes, bbox = generate_lakes(
+                world,
+                heightmap,
+                inp,
+                occupied=result.cell_index.by_cell,
+            )
             result.cell_index.by_cell.update(lakes)
             dirty = _merge_bbox(dirty, bbox)
             logger.info(
@@ -106,6 +138,23 @@ class HydrologyGeneratorService:
                 world.world_uid,
                 len(lakes),
                 len(inp.declared_lake_specs),
+            )
+
+        if HydrologyScope.RIVERS in active:
+            rivers, river_segments, bbox = generate_rivers(
+                world,
+                heightmap,
+                inp,
+                occupied=result.cell_index.by_cell,
+            )
+            result.cell_index.by_cell.update(rivers)
+            result.river_segments = river_segments
+            dirty = _merge_bbox(dirty, bbox)
+            logger.info(
+                "HydrologyGeneratorService | rivers world=%s cells=%d edges=%d",
+                world.world_uid,
+                len(rivers),
+                len(inp.declared_river_edges),
             )
 
         if HydrologyScope.LANDFORMS in active:

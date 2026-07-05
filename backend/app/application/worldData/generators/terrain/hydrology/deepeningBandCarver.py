@@ -166,6 +166,156 @@ def flood_water_side(
     return dist
 
 
+def _ocean_axis(
+    bbox: GridBBox,
+    land_centroid: tuple[float, float],
+) -> tuple[str, int]:
+    """Primary ocean direction: ('y', -1) = north edge, ('y', 1) = south, etc."""
+    cx = (bbox.x_min + bbox.x_max) / 2
+    cy = (bbox.y_min + bbox.y_max) / 2
+    dx = cx - land_centroid[0]
+    dy = cy - land_centroid[1]
+    if abs(dy) >= abs(dx):
+        if dy < 0:
+            return ("y", -1)
+        if dy > 0:
+            return ("y", 1)
+        return ("y", -1)
+    if dx < 0:
+        return ("x", -1)
+    if dx > 0:
+        return ("x", 1)
+    return ("y", -1)
+
+
+def _on_ocean_half_plane(
+    cell: tuple[int, int],
+    axis: str,
+    direction: int,
+    land_centroid: tuple[float, float],
+) -> bool:
+    if axis == "y":
+        if direction < 0:
+            return cell[1] < land_centroid[1]
+        return cell[1] > land_centroid[1]
+    if direction < 0:
+        return cell[0] < land_centroid[0]
+    return cell[0] > land_centroid[0]
+
+
+def _bbox_ocean_edge_seeds(
+    heightmap: SurfaceHeightmap,
+    axis: str,
+    direction: int,
+) -> set[tuple[int, int]]:
+    bbox = heightmap.bbox
+    seeds: set[tuple[int, int]] = set()
+    if axis == "y":
+        edge_gy = bbox.y_min if direction < 0 else bbox.y_max
+        for gx in range(bbox.x_min, bbox.x_max + 1):
+            cell = (gx, edge_gy)
+            if cell in heightmap.surface_z:
+                seeds.add(cell)
+        return seeds
+    edge_gx = bbox.x_min if direction < 0 else bbox.x_max
+    for gy in range(bbox.y_min, bbox.y_max + 1):
+        cell = (edge_gx, gy)
+        if cell in heightmap.surface_z:
+            seeds.add(cell)
+    return seeds
+
+
+def flood_from_bbox_ocean_edge(
+    heightmap: SurfaceHeightmap,
+) -> dict[tuple[int, int], int]:
+    """
+    Procedural v1: flood from map bbox ocean edge into land half-plane — D HY-5a no-declare.
+    """
+    if not heightmap.surface_z:
+        return {}
+    land_centroid = compute_land_centroid(heightmap)
+    axis, direction = _ocean_axis(heightmap.bbox, land_centroid)
+    seeds = _bbox_ocean_edge_seeds(heightmap, axis, direction)
+    if not seeds:
+        return {}
+
+    dist: dict[tuple[int, int], int] = {}
+    queue: deque[tuple[tuple[int, int], int]] = deque((seed, 1) for seed in seeds)
+    while queue:
+        cell, d = queue.popleft()
+        if cell in dist or cell not in heightmap.surface_z:
+            continue
+        if not _on_ocean_half_plane(cell, axis, direction, land_centroid):
+            continue
+        dist[cell] = d
+        for n in _neighbors4(*cell):
+            if n in dist or n not in heightmap.surface_z:
+                continue
+            queue.append((n, d + 1))
+    return dist
+
+
+def land_shore_from_water_dist(
+    heightmap: SurfaceHeightmap,
+    water_dist: dict[tuple[int, int], int],
+    land_centroid: tuple[float, float],
+) -> set[tuple[int, int]]:
+    land: set[tuple[int, int]] = set()
+    for cell in water_dist:
+        for n in _neighbors4(*cell):
+            if n in water_dist or n not in heightmap.surface_z:
+                continue
+            if _dist2(n, land_centroid) < _dist2(cell, land_centroid):
+                land.add(n)
+    return land
+
+
+def flood_water_side_unbounded(
+    heightmap: SurfaceHeightmap,
+    coastline_cells: set[tuple[int, int]],
+    segments: list[tuple[tuple[int, int], tuple[int, int]]],
+) -> dict[tuple[int, int], int]:
+    """BFS distance on water side without declare gx-strip limit — D HY-5a."""
+    land_centroid = compute_land_centroid(heightmap)
+    land_shore = _land_shore_cells(coastline_cells, heightmap, land_centroid)
+    seeds = water_side_seeds(coastline_cells, segments, heightmap, land_centroid)
+    dist: dict[tuple[int, int], int] = {}
+    queue: deque[tuple[tuple[int, int], int]] = deque((seed, 1) for seed in seeds)
+
+    while queue:
+        cell, d = queue.popleft()
+        if cell in dist or cell not in heightmap.surface_z:
+            continue
+        if cell in coastline_cells or cell in land_shore:
+            continue
+        dist[cell] = d
+        for n in _neighbors4(*cell):
+            if n in dist or n not in heightmap.surface_z:
+                continue
+            if n in coastline_cells or n in land_shore:
+                continue
+            queue.append((n, d + 1))
+    return dist
+
+
+def declare_coastline_bbox_padded(
+    segments: list[tuple[tuple[int, int], tuple[int, int]]],
+    *,
+    pad: int = 1,
+) -> GridBBox | None:
+    coastline_cells = rasterize_segments(segments)
+    if not coastline_cells:
+        return None
+    xs = [cell[0] for cell in coastline_cells]
+    ys = [cell[1] for cell in coastline_cells]
+    return GridBBox(
+        min(xs) - pad,
+        max(xs) + pad,
+        min(ys) - pad,
+        max(ys) + pad,
+    )
+
+
 def _shelf_depth(bands: HydrologyBands, water_dist: dict[tuple[int, int], int]) -> int:
     if not water_dist:
         return bands.max

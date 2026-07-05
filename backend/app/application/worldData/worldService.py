@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from fastapi import HTTPException
 
 from app.api.schemas.imports import ImportError, ImportResult
+from app.application.import_helpers import with_default_created_at
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError, import_validation_http_detail
 from app.db.models.world import World
@@ -41,7 +42,7 @@ class WorldService:
         return await self._repo.get_by_id(world_uid)
 
     async def create(self, data: dict) -> World:
-        data = _normalize_world_data(data)
+        data = _normalize_world_data(with_default_created_at(data))
         world = World(**data)
         self._validate(world)
         await self._repo.create(world)
@@ -90,7 +91,7 @@ class WorldService:
     # ------------------------------------------------------------------
 
     async def import_from_json(self, data: dict) -> ImportResult:
-        data = _normalize_world_data(data)
+        data = _normalize_world_data(with_default_created_at(data))
         try:
             world = World(**data)
             self._validate(world)

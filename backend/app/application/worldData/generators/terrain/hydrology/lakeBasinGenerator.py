@@ -9,6 +9,9 @@ from app.application.worldData.generators.climate.climatePoleField import GridBB
 from app.application.worldData.generators.terrain.hydrology.deepeningBandCarver import _neighbors4
 from app.application.worldData.generators.terrain.hydrology.polygonInterior import interior_cells
 from app.application.worldData.generators.terrain.hydrology.polylineRasterize import rasterize_segments
+from app.application.worldData.generators.terrain.hydrology.hydrologyAutoresolvePolicy import (
+    lakes_autoresolve_policy,
+)
 from app.application.worldData.generators.terrain.hydrology.resolveHydrologyBands import (
     resolve_hydrology_bands,
 )
@@ -127,22 +130,32 @@ def _interior_distances(
     return dist
 
 
-def carve_lake_basin(
+def _shoreline_ring(
+    interior: set[tuple[int, int]],
     heightmap: SurfaceHeightmap,
-    spec: LakeSpec,
-    bands,
-) -> dict[tuple[int, int], MapCellHydrology]:
-    segments = spec.shoreline_segments
-    shoreline = rasterize_segments(segments)
-    if not shoreline:
-        return {}
+) -> set[tuple[int, int]]:
+    ring: set[tuple[int, int]] = set()
+    for cell in interior:
+        for n in _neighbors4(*cell):
+            if n not in interior and n in heightmap.surface_z:
+                ring.add(cell)
+                break
+    return ring
 
-    interior = _resolve_interior(heightmap, segments, shoreline)
-    if not interior and shoreline:
-        # Degenerate declare contour collapsed to grid lines (fixture moon lake).
-        interior = set(shoreline)
+
+def carve_lake_interior(
+    heightmap: SurfaceHeightmap,
+    interior: set[tuple[int, int]],
+    bands,
+    *,
+    open_role: HydrologyCellRole = HydrologyCellRole.LAKE,
+) -> dict[tuple[int, int], MapCellHydrology]:
     if not interior:
         return {}
+
+    shoreline = _shoreline_ring(interior, heightmap)
+    if not shoreline:
+        shoreline = set(interior)
 
     land_shore = _land_shore_outside(shoreline, interior, heightmap)
     interior_dist = _interior_distances(interior, shoreline)
@@ -163,7 +176,6 @@ def carve_lake_basin(
             deepening_index=0,
         )
 
-    open_role = spec.open_water_role
     for cell, distance in interior_dist.items():
         if distance <= shelf_depth:
             heightmap.surface_z[cell] = max(floor_z, rim_z - distance)
@@ -176,6 +188,31 @@ def carve_lake_basin(
             by_cell[cell] = MapCellHydrology(role=open_role)
 
     return by_cell
+
+
+def carve_lake_basin(
+    heightmap: SurfaceHeightmap,
+    spec: LakeSpec,
+    bands,
+) -> dict[tuple[int, int], MapCellHydrology]:
+    segments = spec.shoreline_segments
+    shoreline = rasterize_segments(segments)
+    if not shoreline:
+        return {}
+
+    interior = _resolve_interior(heightmap, segments, shoreline)
+    if not interior and shoreline:
+        # Degenerate declare contour collapsed to grid lines (fixture moon lake).
+        interior = set(shoreline)
+    if not interior:
+        return {}
+
+    return carve_lake_interior(
+        heightmap,
+        interior,
+        bands,
+        open_role=spec.open_water_role,
+    )
 
 
 def _merge_bbox(
@@ -201,15 +238,31 @@ def generate_lakes(
     world: Any,
     heightmap: SurfaceHeightmap,
     master: HydrologyMasterInput,
+    occupied: dict[tuple[int, int], MapCellHydrology] | None = None,
 ) -> tuple[dict[tuple[int, int], MapCellHydrology], GridBBox | None]:
-    if not master.declared_lake_specs:
-        return {}, None
-
     bands = resolve_hydrology_bands("lakes", world, world_uid=master.world_uid)
     merged: dict[tuple[int, int], MapCellHydrology] = {}
     dirty: GridBBox | None = None
+    occupied_cells = occupied or {}
+
     for spec in master.declared_lake_specs:
         carved = carve_lake_basin(heightmap, spec, bands)
         merged.update(carved)
         dirty = _merge_bbox(carved, dirty)
+
+    lakes_policy = lakes_autoresolve_policy(world)
+    if lakes_policy.lakes_enabled and lakes_policy.autoresolve:
+        from app.application.worldData.generators.terrain.hydrology.proceduralLakeAutoresolve import (
+            autoresolve_lakes,
+        )
+
+        auto, auto_bbox = autoresolve_lakes(
+            world,
+            heightmap,
+            master,
+            {**occupied_cells, **merged},
+        )
+        merged.update(auto)
+        dirty = _merge_bbox(auto, dirty)
+
     return merged, dirty

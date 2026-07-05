@@ -9,6 +9,7 @@ from app.application.jsonValidation.bundle import normalize_bundle_connections
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError, import_validation_http_detail
 from app.application.worldData.bundleRemapService import remap_bundle
+from app.application.worldData.deriveWorldUid import derive_world_uid
 from app.application.worldData.connectionGraphService import ConnectionGraphService
 from app.application.worldData.mapCellService import MapCellService
 from app.application.worldData.namedLocationService import NamedLocationService
@@ -70,25 +71,24 @@ class WorldBundleService:
         if "world" not in data:
             raise HTTPException(status_code=422, detail="Bundle must contain 'world' key")
 
-        world_data = data["world"]
-        world_uid  = world_data.get("world_uid")
-        if not world_uid:
-            raise HTTPException(status_code=422, detail="world.world_uid is required")
-
-        existing = await self._world.find_by_id(world_uid)
-        if existing is not None:
-            version_n = await self._world.next_version_number(existing.name)
-            data      = remap_bundle(data, version_n, self._world.strip_version_suffix)
-            world_uid = data["world"]["world_uid"]
-
         try:
-            data = {**data, "world": normalize_world(data["world"])}
+            world_data = normalize_world(dict(data["world"]))
+            if not world_data.get("world_uid"):
+                world_data["world_uid"] = derive_world_uid(world_data)
+            data = {**data, "world": world_data}
             data = normalize_bundle_connections(data)
         except ImportValidationError as exc:
             raise HTTPException(
                 status_code=422,
                 detail=import_validation_http_detail(exc),
             ) from exc
+
+        world_uid = data["world"]["world_uid"]
+        existing = await self._world.find_by_id(world_uid)
+        if existing is not None:
+            version_n = await self._world.next_version_number(existing.name)
+            data      = remap_bundle(data, version_n, self._world.strip_version_suffix)
+            world_uid = data["world"]["world_uid"]
 
         results: dict[str, ImportResult] = {}
         rolled_back = False

@@ -104,6 +104,11 @@ def main() -> None:
     lake_liquid = sum(1 for c in lake_band if c.get("system_terrain") == "liquid_body")
     print(f"lake band gx4-6 gy1-4: roles={dict(lake_roles)} liquid_body={lake_liquid}")
 
+    river_band = [c for c in tops if 2 <= c["x"] <= 8 and 2 <= c["y"] <= 6]
+    river_roles = Counter((c.get("hydrology") or {}).get("role") for c in river_band)
+    river_liquid = sum(1 for c in river_band if c.get("system_terrain") == "liquid_body")
+    print(f"river band gx2-8 gy2-6: roles={dict(river_roles)} liquid_body={river_liquid}")
+
 
 if __name__ == "__main__":
     main()

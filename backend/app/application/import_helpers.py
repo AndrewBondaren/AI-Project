@@ -1,8 +1,16 @@
+from datetime import datetime
 from typing import Awaitable, Callable, TypeVar
 
 from app.api.schemas.imports import ImportError, ImportResult
 
 T = TypeVar("T")
+
+
+def with_default_created_at(row: dict) -> dict:
+    """DB audit field — optional on wire; default to server local time if omitted."""
+    if row.get("created_at"):
+        return row
+    return {**row, "created_at": datetime.now().isoformat(timespec="seconds")}
 
 
 async def import_list(

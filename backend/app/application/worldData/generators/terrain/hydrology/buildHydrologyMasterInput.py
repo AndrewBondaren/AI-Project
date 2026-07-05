@@ -15,6 +15,7 @@ from app.application.worldData.generators.terrain.hydrology.loadHydrologyFromWor
     is_hydrology_enabled,
 )
 from app.application.worldData.generators.terrain.hydrology.lakeSpecs import extract_lake_specs
+from app.application.worldData.generators.terrain.hydrology.riverSpecs import extract_declared_river_edges
 from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
 from app.application.worldData.generators.terrain.hydrology.types import (
     HYDROLOGY_BOOTSTRAP_SCOPES,
@@ -42,6 +43,7 @@ def build_hydrology_master_input(
         HydrologyConnectionType.COASTLINE,
     )
     lake_specs = extract_lake_specs(graph, locations, world_uid=world.world_uid)
+    river_edges = extract_declared_river_edges(graph)
     return HydrologyMasterInput(
         world_uid=world.world_uid,
         hydrology_enabled=is_hydrology_enabled(world),
@@ -50,4 +52,5 @@ def build_hydrology_master_input(
         geographic_locations=geographic_locations(locations),
         declared_coastline_segments=coastline_segments,
         declared_lake_specs=lake_specs,
+        declared_river_edges=river_edges,
     )

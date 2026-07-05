@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 
 from app.api.schemas.imports import ImportResult
-from app.application.import_helpers import import_list
+from app.application.import_helpers import import_list, with_default_created_at
 from app.db.models.namedLocation import NamedLocation
 from app.db.repositories.iNamedLocationRepository import INamedLocationRepository
 
@@ -31,7 +31,7 @@ class NamedLocationService:
     _IMMUTABLE = frozenset({"location_uid", "world_uid"})
 
     async def create(self, world_uid: str, data: dict) -> NamedLocation:
-        loc = NamedLocation(**{**data, "world_uid": world_uid})
+        loc = NamedLocation(**{**with_default_created_at(data), "world_uid": world_uid})
         await self._repo.create(loc)
         return loc
 
@@ -53,5 +53,5 @@ class NamedLocationService:
 
     async def import_from_json(self, world_uid: str, data: list[dict]) -> ImportResult:
         def prepare(row: dict) -> NamedLocation:
-            return NamedLocation(**{**row, "world_uid": world_uid})
+            return NamedLocation(**{**with_default_created_at(row), "world_uid": world_uid})
         return await import_list(data, prepare, self._repo.upsert, id_key="location_uid")

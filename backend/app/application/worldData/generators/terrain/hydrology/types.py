@@ -78,6 +78,26 @@ class LakeSpec:
 
 
 @dataclass(frozen=True)
+class DeclaredRiverEdge:
+    edge_uid: str
+    segment: tuple[tuple[int, int], tuple[int, int]]
+    connection_type: str
+    width_cells: int = 1
+    location_uid: str | None = None
+
+
+@dataclass(frozen=True)
+class RiverSegment:
+    """Classified river piece — declare or autoresolve (U17/U18)."""
+
+    polyline_cells: list[tuple[int, int]]
+    connection_type: str
+    edge_uid: str | None = None
+    location_uid: str | None = None
+    declared: bool = False
+
+
+@dataclass(frozen=True)
 class HydrologyMasterInput:
     world_uid:         str
     hydrology_enabled: bool
@@ -88,6 +108,7 @@ class HydrologyMasterInput:
         default_factory=list,
     )
     declared_lake_specs: list[LakeSpec] = field(default_factory=list)
+    declared_river_edges: list[DeclaredRiverEdge] = field(default_factory=list)
 
 
 @dataclass

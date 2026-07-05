@@ -98,7 +98,21 @@
       { "system_material": "air",       "display_name": "Воздух",        "glossary_ref": null, "material_category": "gas",    "tags": [],                           "use_type": [],                                   "economic_tier": null,       "hardness": null, "density": 1,   "structural_strength": null, "flammable": false, "freezable": false, "corrodible": false, "meltable": false, "temp_damage": false, "vision_block": false, "components": null },
       { "system_material": "smoke",     "display_name": "Дым",           "glossary_ref": null, "material_category": "gas",    "tags": [],                           "use_type": [],                                   "economic_tier": null,       "hardness": null, "density": 2,   "structural_strength": null, "flammable": false, "freezable": false, "corrodible": false, "meltable": false, "temp_damage": false, "vision_block": true,  "components": null },
       { "system_material": "toxic_gas", "display_name": "Токсичный газ", "glossary_ref": null, "material_category": "gas",    "tags": [],                           "use_type": [],                                   "economic_tier": null,       "hardness": null, "density": 3,   "structural_strength": null, "flammable": true,  "freezable": false, "corrodible": false, "meltable": false, "temp_damage": true,  "vision_block": true,  "components": null }
-    ]
+    ],
+    "hydrology": {
+      "enabled": true,
+      "default_shore": { "system_terrain": "plains", "system_material": "earth" },
+      "default_seas": {
+        "enabled": true,
+        "autoresolve_coastal_sea": true,
+        "autoresolve_open_ocean": true,
+        "bands": { "min": 1, "max": 20 }
+      },
+      "default_lakes": { "enabled": true, "autoresolve": true, "bands": { "min": 1, "max": 5 } },
+      "default_rivers": { "enabled": true, "autoresolve": true, "bands": { "min": 1, "max": 5 } },
+      "default_landforms": { "enabled": true, "autoresolve": true },
+      "materialize_named_locations": false
+    }
   },
   "states": [
     {

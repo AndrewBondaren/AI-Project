@@ -78,6 +78,11 @@ def run_column_fill(
                     )
                     if hydrology_entry.role == HydrologyCellRole.SHORE:
                         material = shore_material
+                    elif (
+                        hydrology_entry.role == HydrologyCellRole.RIVER_BED
+                        and "liquid_body" in terrain_set
+                    ):
+                        terrain = "liquid_body"
                 cells.append(MapCell(
                     world_uid=world.world_uid,
                     x=gx,
