@@ -17,7 +17,10 @@ from app.application.worldData.generators.terrain.hydrology.lakeSpecs import _gr
 from app.application.worldData.generators.terrain.hydrology.types import (
     DeclaredRiverEdge,
     LakeSpec,
+    RiverSystemIndex,
 )
+from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
+from app.dataModel.hydrology.declaredLake import DeclaredLake
 from app.dataModel.hydrology.declaredRiver import DeclaredRiver
 from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
 from app.dataModel.hydrology.enums.riverDeclareMode import RiverDeclareMode
@@ -33,6 +36,44 @@ class LoadedDeclaredHydrology:
     lake_specs: list[LakeSpec]
     river_edges: list[DeclaredRiverEdge]
     river_intents: list[DeclaredRiver]
+    river_system_index: RiverSystemIndex
+
+
+def _coerce_pojo(model_cls: type, value: object):
+    if isinstance(value, model_cls):
+        return value
+    return model_cls.model_validate(value)
+
+
+def _coerce_declared_coastlines(entries: list) -> list[DeclaredCoastline]:
+    return [_coerce_pojo(DeclaredCoastline, entry) for entry in entries]
+
+
+def _coerce_declared_lakes(entries: list) -> list[DeclaredLake]:
+    return [_coerce_pojo(DeclaredLake, entry) for entry in entries]
+
+
+def _coerce_declared_rivers(entries: list) -> list[DeclaredRiver]:
+    return [_coerce_pojo(DeclaredRiver, entry) for entry in entries]
+
+
+def build_river_system_index(rivers: list[DeclaredRiver]) -> RiverSystemIndex:
+    by_uid = {river.location_uid: river for river in rivers}
+    children: dict[str, list[str]] = {uid: [] for uid in by_uid}
+    for river in rivers:
+        parent_uid = river.parent_location_uid
+        if parent_uid:
+            children.setdefault(parent_uid, []).append(river.location_uid)
+    topology_by_system_uid = {
+        river.location_uid: river.river_system_topology.value
+        for river in rivers
+        if river.system_role == RiverSystemRole.SYSTEM and river.river_system_topology is not None
+    }
+    return RiverSystemIndex(
+        by_location_uid=by_uid,
+        topology_by_system_uid=topology_by_system_uid,
+        children=children,
+    )
 
 
 def _waypoint_grid(
@@ -87,13 +128,16 @@ def load_declared_hydrology(
     pojo = read_hydrology(world)
     cell_m = cell_size_m(world)
     loc_map = {loc.location_uid: loc for loc in locations}
+    coastlines = _coerce_declared_coastlines(list(pojo.declared_coastlines))
+    lakes = _coerce_declared_lakes(list(pojo.declared_lakes))
+    rivers = _coerce_declared_rivers(list(pojo.declared_rivers))
 
     coastline_segments: list[tuple[tuple[int, int], tuple[int, int]]] = []
-    for entry in pojo.declared_coastlines:
+    for entry in coastlines:
         coastline_segments.extend(_path_to_segments(list(entry.path), cell_m))
 
     lake_specs: list[LakeSpec] = []
-    for entry in pojo.declared_lakes:
+    for entry in lakes:
         segments = _path_to_segments(list(entry.shoreline), cell_m, closed=True)
         if not segments:
             continue
@@ -112,7 +156,7 @@ def load_declared_hydrology(
 
     river_edges: list[DeclaredRiverEdge] = []
     river_intents: list[DeclaredRiver] = []
-    for river in pojo.declared_rivers:
+    for river in rivers:
         if river.system_role == RiverSystemRole.SYSTEM:
             continue
         if river.declare_mode == RiverDeclareMode.SEGMENTS:
@@ -125,4 +169,5 @@ def load_declared_hydrology(
         lake_specs=lake_specs,
         river_edges=river_edges,
         river_intents=river_intents,
+        river_system_index=build_river_system_index(rivers),
     )

@@ -105,7 +105,7 @@ class SettlementPersistService:
                 if not cells:
                     result.scopes_skipped.append(scope.value)
                     continue
-                r = await self._map_cells.save_generated(cells)
+                r = await self._map_cells.save_settlement_surface(cells)
                 map_total += r.total
                 map_succeeded += r.succeeded
                 result.scopes_applied.append(scope.value)
@@ -115,7 +115,7 @@ class SettlementPersistService:
                     result.scopes_skipped.append(scope.value)
                     continue
                 cells = collect_surface_grid_cells(layout)
-                r = await self._map_cells.save_generated(cells)
+                r = await self._map_cells.save_settlement_surface(cells)
                 map_total += r.total
                 map_succeeded += r.succeeded
                 result.scopes_applied.append(scope.value)

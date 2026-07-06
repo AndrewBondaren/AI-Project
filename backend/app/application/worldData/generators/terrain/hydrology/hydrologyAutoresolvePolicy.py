@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.application.jsonValidation import hydrology
+from app.application.jsonValidation.resolve import resolve_model
 from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
 from app.dataModel.hydrology.seas import HydrologySeasPolicy
 
@@ -51,7 +52,7 @@ def _seas_section(world: Any) -> HydrologySeasPolicy:
     if seas is None:
         return HydrologySeasPolicy()
     if isinstance(seas, dict):
-        return HydrologySeasPolicy.model_validate(seas)
+        return resolve_model(HydrologySeasPolicy, seas, label="default_seas")
     return seas
 
 
@@ -61,7 +62,7 @@ def _lakes_section(world: Any) -> HydrologyLakesPolicy:
     if lakes is None:
         return HydrologyLakesPolicy()
     if isinstance(lakes, dict):
-        return HydrologyLakesPolicy.model_validate(lakes)
+        return resolve_model(HydrologyLakesPolicy, lakes, label="default_lakes")
     return lakes
 
 
@@ -80,7 +81,7 @@ def _rivers_section(world: Any):
     if rivers is None:
         return HydrologyRiversPolicy()
     if isinstance(rivers, dict):
-        return HydrologyRiversPolicy.model_validate(rivers)
+        return resolve_model(HydrologyRiversPolicy, rivers, label="default_rivers")
     return rivers
 
 

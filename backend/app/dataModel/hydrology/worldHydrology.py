@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
 from app.dataModel.hydrology.declaredCoastline import DeclaredCoastline
 from app.dataModel.hydrology.declaredLake import DeclaredLake
-from app.dataModel.hydrology.declaredRiver import DeclaredRiver
+from app.dataModel.hydrology.declaredRiver import DeclaredRiver, validate_declared_rivers_topology
 from app.dataModel.hydrology.landforms import HydrologyLandformsPolicy
 from app.dataModel.hydrology.rivers import HydrologyRiversPolicy
 from app.dataModel.hydrology.seas import HydrologySeasPolicy
@@ -36,6 +36,11 @@ class WorldHydrology(BaseModel):
     declared_lakes: DefaultOnWire[list[DeclaredLake]] = Field(default_factory=list)
     declared_coastlines: DefaultOnWire[list[DeclaredCoastline]] = Field(default_factory=list)
     declared_rivers: DefaultOnWire[list[DeclaredRiver]] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _validate_river_systems(self) -> WorldHydrology:
+        validate_declared_rivers_topology(self.declared_rivers)
+        return self
 
     @classmethod
     def canonical_empty(cls) -> WorldHydrology:

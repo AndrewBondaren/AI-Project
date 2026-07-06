@@ -20,6 +20,13 @@ logger = logging.getLogger(__name__)
 _SETTLEMENT_TYPES = frozenset({"city", "town", "village", "camp", "hamlet"})
 
 
+def _is_settlement_location(settlement: NamedLocation) -> bool:
+    if settlement.system_location_type == "settlement":
+        return True
+    kind = settlement.system_location_subtype or settlement.system_city_size
+    return kind in _SETTLEMENT_TYPES
+
+
 def rebind_layout_to_building(
     layout:   StructureLayout,
     building: NamedLocation,
@@ -49,7 +56,7 @@ def needs_settlement_geometry(
 
     Проверяет только WORLD_LOCAL_METERS: system_building_element в meter rect footprint.
     """
-    if settlement.system_location_type not in _SETTLEMENT_TYPES:
+    if not _is_settlement_location(settlement):
         return False
     rect = settlement_meter_rect(world, settlement)
     for cell in existing_cells:

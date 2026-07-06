@@ -16,7 +16,6 @@ from app.application.worldData.settlementPersistScope import (
 
 router = APIRouter()
 
-_SETTLEMENT_TYPES = frozenset({"city", "town", "village", "camp", "hamlet"})
 _generator = SettlementGeneratorService()
 
 _SCOPE_ALIASES: dict[str, frozenset[SettlementPersistScope]] = {
@@ -52,6 +51,25 @@ async def get_location(
 ) -> dict:
     loc = await container.location_service().get_by_id(world_uid, location_uid)
     return asdict(loc)
+
+
+@router.get("/worlds/{world_uid}/locations/{location_uid}/render-grid")
+async def render_location_grid(
+    world_uid: str,
+    location_uid: str,
+    z: int | None = Query(default=None),
+    container=Depends(get_container),
+) -> JSONResponse:
+    """Debug only — ASCII grid for map_cells bound to one location."""
+    from app.application.worldData.render.mapGridRenderService import MapGridRenderService
+
+    loc = await container.location_service().get_by_id(world_uid, location_uid)
+    if loc is None:
+        raise HTTPException(status_code=404, detail=f"Location '{location_uid}' not found")
+
+    svc = MapGridRenderService(container.map_cell_service())
+    payload = await svc.render_location_grid(world_uid, location_uid, z=z)
+    return JSONResponse(content=payload)
 
 
 @router.get("/worlds/{world_uid}/locations/{location_uid}/children")
@@ -128,7 +146,7 @@ async def generate_settlement(
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
 
     settlement = await container.location_service().get_by_id(world_uid, location_uid)
-    if settlement.system_location_type not in _SETTLEMENT_TYPES:
+    if settlement.system_location_type != "settlement":
         raise HTTPException(
             status_code=422,
             detail=f"Location '{location_uid}' is not a settlement type",

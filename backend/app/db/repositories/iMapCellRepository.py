@@ -15,6 +15,11 @@ class IMapCellRepository(ABC):
     async def upsert(self, cell: MapCell) -> None: ...
 
     @abstractmethod
+    async def upsert_settlement_surface(self, cells: list[MapCell]) -> int:
+        """Merge settlement footprint onto existing surface cells (location_uid + urban terrain)."""
+        ...
+
+    @abstractmethod
     async def insert_bulk_ignore(self, cells: list[MapCell]) -> int:
         """Insert cells in a single transaction; silently skips positions that already exist.
         Returns the number of rows actually inserted."""

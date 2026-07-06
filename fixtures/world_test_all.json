@@ -733,11 +733,9 @@
           "max": 5
         },
         "type_classify": {
-          "mountain_min_source_z": null,
           "path_mountain_fraction": 0.5,
           "rapid_drop_threshold_m": 3,
-          "mountain_bed_steepness_factor": 1.5,
-          "foothill_gradient_threshold": null
+          "mountain_bed_steepness_factor": 1.5
         }
       },
       "default_lakes": {
@@ -819,7 +817,8 @@
       "declared_rivers": [
         {
           "location_uid": "loc-template-river-basin-north",
-          "system_role": "system"
+          "system_role": "system",
+          "river_system_topology": "basin"
         },
         {
           "location_uid": "loc-template-river-volga",
@@ -863,7 +862,6 @@
         {
           "location_uid": "loc-template-river-declared",
           "system_role": "stem",
-          "parent_location_uid": "loc-template-river-basin-north",
           "declare_mode": "segments",
           "segments": [
             {
@@ -937,6 +935,22 @@
               "width_cells": 1
             }
           ]
+        },
+        {
+          "location_uid": "loc-template-river-confluence-trib",
+          "system_role": "tributary",
+          "parent_location_uid": "loc-template-river-declared",
+          "declare_mode": "endpoints",
+          "source": {
+            "x": 7500,
+            "y": 16500,
+            "z": 0
+          },
+          "mouth": {
+            "x": 9000,
+            "y": 18000,
+            "z": 0
+          }
         }
       ]
     },
@@ -1753,10 +1767,24 @@
       "display_name": "Серебряная река",
       "system_location_type": "geographic",
       "system_location_subtype": "river",
-      "parent_location_uid": "loc-template-river-basin-north",
+      "parent_location_uid": "loc-template-territory",
       "glossary_ref": "geo_river_silver",
       "map_x": 9000,
       "map_y": 18000,
+      "map_z": 0,
+      "state_uid": "state-template-north",
+      "is_selectable": false,
+      "world_uid": "world-test-all-001"
+    },
+    {
+      "location_uid": "loc-template-river-confluence-trib",
+      "display_name": "Приток Серебряной",
+      "system_location_type": "geographic",
+      "system_location_subtype": "river",
+      "parent_location_uid": "loc-template-river-declared",
+      "glossary_ref": "geo_river_confluence_trib",
+      "map_x": 7500,
+      "map_y": 16500,
       "map_z": 0,
       "state_uid": "state-template-north",
       "is_selectable": false,

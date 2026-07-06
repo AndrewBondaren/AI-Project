@@ -98,6 +98,38 @@ async def clear_map(
     await container.map_cell_service().clear(world_uid)
 
 
+@router.get("/worlds/{world_uid}/map/render-world-grid")
+async def render_world_grid(
+    world_uid: str,
+    gx0: int | None = Query(default=None),
+    gy0: int | None = Query(default=None),
+    gx1: int | None = Query(default=None),
+    gy1: int | None = Query(default=None),
+    container=Depends(get_container),
+) -> JSONResponse:
+    """Debug only — ASCII top-surface grid for WORLD_SURFACE_GRID cells."""
+    from app.application.worldData.render.mapGridRenderService import MapGridRenderService
+
+    location_svc = container.location_service()
+    locations = await location_svc.get_all(world_uid)
+    svc = MapGridRenderService(container.map_cell_service())
+    bbox = (gx0, gy0, gx1, gy1)
+    if any(v is not None for v in bbox) and not all(v is not None for v in bbox):
+        raise HTTPException(
+            status_code=422,
+            detail="Provide all bbox query params (gx0, gy0, gx1, gy1) or omit all",
+        )
+    payload = await svc.render_world_grid(
+        world_uid,
+        locations=locations,
+        gx0=gx0,
+        gy0=gy0,
+        gx1=gx1,
+        gy1=gy1,
+    )
+    return JSONResponse(content=payload)
+
+
 @router.post("/worlds/{world_uid}/map/generate-surface")
 async def generate_surface(
     world_uid: str,

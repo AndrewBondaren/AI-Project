@@ -98,6 +98,15 @@ class RiverSegment:
 
 
 @dataclass(frozen=True)
+class RiverSystemIndex:
+    """Declared river topology — basin system groups + confluence stems."""
+
+    by_location_uid: dict[str, Any]
+    topology_by_system_uid: dict[str, str]
+    children: dict[str, list[str]]
+
+
+@dataclass(frozen=True)
 class HydrologyMasterInput:
     world_uid:         str
     hydrology_enabled: bool
@@ -110,6 +119,7 @@ class HydrologyMasterInput:
     declared_lake_specs: list[LakeSpec] = field(default_factory=list)
     declared_river_edges: list[DeclaredRiverEdge] = field(default_factory=list)
     declared_river_intents: list[Any] = field(default_factory=list)  # DeclaredRiver POJO, modes 1/2
+    river_system_index: RiverSystemIndex | None = None
 
 
 @dataclass

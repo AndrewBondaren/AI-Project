@@ -23,6 +23,14 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
     async def upsert(self, cell: MapCell) -> None:
         await super().upsert(cell)
 
+    async def upsert_settlement_surface(self, cells: list[MapCell]) -> int:
+        return await self._upsert_partial(
+            cells,
+            "location_uid = excluded.location_uid, "
+            "system_terrain = excluded.system_terrain",
+            "map_cells.system_building_element IS NULL",
+        )
+
     async def insert_bulk_ignore(self, cells: list[MapCell]) -> int:
         if not cells:
             return 0

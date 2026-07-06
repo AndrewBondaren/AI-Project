@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.hydrology.enums.riverDeclareMode import RiverDeclareMode
 from app.dataModel.hydrology.enums.riverSystemRole import RiverSystemRole
+from app.dataModel.hydrology.enums.riverSystemTopology import RiverSystemTopology
 from app.dataModel.hydrology.hydrologyWaypoint import HydrologyWaypoint
 
 MAX_RIVER_TURN_DEG = 45.0
@@ -52,6 +53,7 @@ class DeclaredRiver(BaseModel):
 
     location_uid: StrictOnWire[str]
     system_role: DefaultOnWire[RiverSystemRole] = RiverSystemRole.STEM
+    river_system_topology: DefaultOnWire[RiverSystemTopology | None] = None
     parent_location_uid: DefaultOnWire[str | None] = None
     declare_mode: DefaultOnWire[RiverDeclareMode | None] = None
     source: DefaultOnWire[HydrologyWaypoint | None] = None
@@ -72,6 +74,8 @@ class DeclaredRiver(BaseModel):
         mode = self.declare_mode
 
         if role == RiverSystemRole.SYSTEM:
+            if self.river_system_topology != RiverSystemTopology.BASIN:
+                raise ValueError("system_role=system requires river_system_topology=basin")
             if mode is not None:
                 raise ValueError("system_role=system must not set declare_mode")
             if any(
@@ -84,6 +88,9 @@ class DeclaredRiver(BaseModel):
             ):
                 raise ValueError("system_role=system must not carry geometry")
             return self
+
+        if self.river_system_topology is not None:
+            raise ValueError("river_system_topology is only allowed on system_role=system")
 
         if role == RiverSystemRole.TRIBUTARY and not self.parent_location_uid:
             raise ValueError("system_role=tributary requires parent_location_uid")
@@ -131,3 +138,42 @@ def _validate_segment_turns(segments: list[DeclaredRiverSegment]) -> None:
             raise ValueError(
                 f"river segment turn {turn:.1f}° exceeds {MAX_RIVER_TURN_DEG}° at waypoint index {i}",
             )
+
+
+def validate_declared_rivers_topology(rivers: list[DeclaredRiver]) -> None:
+    """Cross-entry rules: basin groups (system parent) + confluence stems (no system parent)."""
+    if not rivers:
+        return
+
+    by_uid = {river.location_uid: river for river in rivers}
+    if len(by_uid) != len(rivers):
+        raise ValueError("declared_rivers location_uid must be unique")
+
+    for river in rivers:
+        if river.system_role == RiverSystemRole.SYSTEM:
+            if river.river_system_topology != RiverSystemTopology.BASIN:
+                raise ValueError("system_role=system requires river_system_topology=basin")
+            continue
+        if river.river_system_topology is not None:
+            raise ValueError("river_system_topology is only allowed on system_role=system")
+
+    for river in rivers:
+        if river.system_role == RiverSystemRole.SYSTEM:
+            continue
+        parent_uid = river.parent_location_uid
+        if river.system_role == RiverSystemRole.STEM:
+            if not parent_uid:
+                continue
+            parent = by_uid.get(parent_uid)
+            if parent is None or parent.system_role != RiverSystemRole.SYSTEM:
+                raise ValueError(
+                    f"stem {river.location_uid} parent must be system (basin) or omitted (confluence)",
+                )
+        elif river.system_role == RiverSystemRole.TRIBUTARY:
+            if not parent_uid:
+                raise ValueError(f"tributary {river.location_uid} requires parent_location_uid")
+            parent = by_uid.get(parent_uid)
+            if parent is None or parent.system_role != RiverSystemRole.STEM:
+                raise ValueError(
+                    f"tributary {river.location_uid} must parent to stem",
+                )

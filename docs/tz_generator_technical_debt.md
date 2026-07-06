@@ -737,18 +737,11 @@ Parse на location/edge/policy — не на map cell. Bottleneck — LLM + gri
 
 ---
 
-### HY-S-3 — stub `HydrologyMasterInput` vs TZ target
+### HY-S-3 — `HydrologyMasterInput` vs TZ target
 
-**Severity:** medium · **P:** P1 (Sprint 2 entry) · **Status:** open
+**Severity:** low · **P:** P1 · **Status:** **resolved (2026-07, U23)**
 
-Stub несёт `connection_graph` + `geographic_locations`; ТЗ — `declared_lake_shorelines`, `declared_coastlines`, `declared_river_edges`, `world_policy: HydrologyWorldPolicy`, `local_profiles`.
-
-| Вариант | Fix |
-|---|---|
-| A | Incremental: Sprint 2 добавляет split edges + typed policy; stub fields deprecated |
-| B | Big-bang dataclass по ТЗ до generators |
-
-**Рекомендация:** **A** — split by `HydrologyConnectionType` в `buildHydrologyMasterInput` в HY-2/3.
+Declare geometry: `declared_coastline_segments`, `declared_lake_specs`, `declared_river_edges`, `declared_river_intents` из `loadDeclaredHydrology` — см. `types.py` / `buildHydrologyMasterInput.py`. `connection_graph` в master input — placeholder для roads; hydrology declare **не** из graph.
 
 ---
 

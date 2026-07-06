@@ -35,3 +35,6 @@ build/
 # Database
 db/
 *.db
+
+# Local debug artifacts (smoke renders, scratch)
+.local/

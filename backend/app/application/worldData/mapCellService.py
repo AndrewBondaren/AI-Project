@@ -55,6 +55,11 @@ class MapCellService:
         inserted = await self._repo.insert_bulk_ignore(cells)
         return ImportResult(total=len(cells), succeeded=inserted, failed=0)
 
+    async def save_settlement_surface(self, cells: list[MapCell]) -> ImportResult:
+        """Outdoor settlement footprint — merge onto world surface grid."""
+        merged = await self._repo.upsert_settlement_surface(cells)
+        return ImportResult(total=len(cells), succeeded=merged, failed=0)
+
     async def save_pass(self, cells: list[MapCell], layer: LayerKind) -> ImportResult:
         if layer == "terrain":
             n = await self._repo.upsert_terrain_skeleton(cells)

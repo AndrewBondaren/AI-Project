@@ -44,4 +44,5 @@ def build_hydrology_master_input(
         declared_lake_specs=declared.lake_specs,
         declared_river_edges=declared.river_edges,
         declared_river_intents=declared.river_intents,
+        river_system_index=declared.river_system_index,
     )

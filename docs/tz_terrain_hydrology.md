@@ -21,7 +21,7 @@ metadata:
 | U6 | **Русло** — bootstrap carve; **поток / оттепель** — runtime (`season_changed`), без regen heightmap |
 | U7 | `liquid_body` — climate overlay на `liquid_candidate` из hydrology, **не** глобальный `z≤0` |
 | U8 | **Declare (optional):** водоёмы / рельеф — **`NamedLocation`** только если мастер объявляет; иначе autoresolve без location |
-| U9 | **Реки** — **connections** (bed + graph); **`NamedLocation` optional** — только для имени (`location_uid` на edge может быть `null`) |
+| U9 | **Реки:** declare — `declared_rivers[]` (U27); bed carve + **routing graph** — `ConnectionEdge` после emit (U18). **`NamedLocation` optional** — только для имени |
 | U10 | **Default: autoresolve** если в template не объявлено; **отключение** — `hydrology.enabled` или `default_<category>.enabled: false` |
 | U11 | **`NamedLocation`** — optional: geometry **не требует** location; master declare — всегда вручную |
 | U12 | **Подземные реки и озёра** — в **cave systems** (`generate-caves`), **не** surface hydrology; **своя экосистема** (volume climate, без surface rain/pole) |
@@ -38,7 +38,7 @@ metadata:
 | U23 | **Smoke fixture:** [`fixtures/world_template.json`](../fixtures/world_template.json) — declare в `world.hydrology.declared_*` (hard cut от connection graph для hydrology) |
 | U24 | **River bed:** hydrology ставит **`system_terrain: liquid_body`** в channel; **`role: river_bed`** в metadata |
 | U28 | **Простая модель воды (2026-06):** hydrology → **`liquid_body`** в русле; **`generate-climate`** → **состояние** уже liquid cells (семантика состояния — [`tz_climate.md`](./tz_climate.md), **не** в этом ТЗ). Hydrology **не** выбирает лёд/вода/steam |
-| U25 | **Lake vs inland_sea (Q6):** declare по **subtype** (A): `lake` + `lake_shoreline`, `inland_sea` + `coastline` на `z_sea`; при **несовпадении** subtype и topology — **fallback (B):** autoresolve role + **`logger.warning`**, carve по topology (не по ошибочному subtype) |
+| U25 | **Lake vs inland_sea (Q6):** declare по **subtype** (A): `geographic.lake` + `declared_lakes`, `geographic.inland_sea` + замкнутый контур на `z_sea`; при **несовпадении** subtype и topology — **fallback (B):** warning + carve по topology (не по ошибочному subtype) |
 | U26 | **Coast segment (Q4):** `geographic.coast` — **waypoint** на цепочке `coastline` моря (`ConnectionNode.location_uid`); не отдельная геометрия |
 | U27 | **Реки (Q5):** `declared_rivers[]` — режимы `endpoints` / `via_locations` / `segments` + `system_role`; segments на import; endpoints/via на generate (A3); classify 1/2 по terrain (B2); global autoresolve не перезаписывает declare |
 
@@ -359,7 +359,7 @@ generators/terrain/
     buildHydrologyMasterInput.py
     resolveHydrologyBands.py
     resolveRiverTypeClassify.py
-    loadConnectionGraph.py      # DB nodes/edges → resolved meters
+    loadConnectionGraph.py      # DB nodes/edges → roads/settlement (not hydrology declare — U23)
     polylineRasterize.py
     basinKindResolver.py        # U25
     applyHydrologyMetadata.py   # HydrologyCellIndex → MapCell.hydrology at fill
@@ -409,12 +409,12 @@ class HydrologyGeneratorService:
 
 **Смысл:** «большое у берега» — прибрежная полоса воды вдоль **границы суша–вода**.
 
-**Вход:** `SurfaceHeightmap`, `world`, optional master **`declared_coastline_edges`** (`connection_type: coastline`, U21).  
+**Вход:** `SurfaceHeightmap`, `world`, optional master **`declared_coastline_segments`** из `world.hydrology.declared_coastlines[]` (U21).  
 **Выход:** `coastal_sea_mask`, mutated `surface_z`, **shore/deepening bands (U15, max 20)** → `liquid_candidate`.
 
 | Режим | Поведение |
 |---|---|
-| **Master (U21)** | Declare **`ConnectionEdge`** chain `coastline` (polyline/polygon; waypoints = `NamedLocation` или `(x,y,z)`) → shore line + deepening bands **1–20** → `z_sea` open water |
+| **Master (U21)** | Declare `declared_coastlines[].path[]` (waypoints в метрах) → rasterize → shore line + deepening bands **1–20** → `z_sea` open water |
 | **Procedural v1** | Flood from land boundary: shore cell на контакте, deepening внутрь до 20 cells, затем coastal sea |
 
 **Role tag:** все ячейки этого pass → `HydrologyCellRole.coastal_sea`.
@@ -453,7 +453,7 @@ class CoastalLandforms:
 ### `LakeBasinGenerator`
 
 **Вход:** `SurfaceHeightmap`, `list[LakeSpec]`.  
-**LakeSpec:** из master **`declared_lake_shoreline_edges`** (U20: `connection_type: lake_shoreline`, A→B→C→D…) **или** auto-detect basins (`detect_terrain_features` kind=`basin`). Поля spec: `{ shoreline_edges, target_depth_m, shore_profile?, deepening_cells?, location_uid? }`.
+**LakeSpec:** из `loadDeclaredHydrology` → **`declared_lake_specs`** (U20: `declared_lakes[].shoreline[]` waypoints в метрах) **или** auto-detect basins (`detect_terrain_features` kind=`basin`). Поля spec: `{ shoreline_segments, location_uid?, open_water_role? }`.
 
 **Алгоритм v1 (U15):**
 
@@ -768,49 +768,50 @@ Validator **не заменяет** runtime fallback — оба слоя (как
 | `geographic.ocean` | Open ocean mass | `OceanBasinGenerator` |
 | `geographic.inland_sea` | Замкнутое море на `z_sea` | `SeaBasinGenerator` + role `inland_sea` |
 | `geographic.island` / `coast` | Narrative override landform classifier | `CoastalLandformClassifier` |
-| `geographic.river` | **Имя** русла (geometry — connection) | link → `ConnectionEdge` |
+| `geographic.river` | **Имя** русла | geometry — `declared_rivers[]` (U27); routing — `ConnectionEdge` после carve/**emit** (U9/U18) |
 
-**Declare geometry (U20/U21):** имя — **`NamedLocation`**; **форма** — **`connection_nodes` + `connection_edges`** в import bundle (как реки, U9). Anchor-only location без edges — **invalid** для declare lake/sea (validator future); autoresolve без edges — OK.
+**Declare geometry (U20/U21/U27, U23):** имя — **`NamedLocation`**; **форма** — **`world.hydrology.declared_*`** в import bundle. Anchor-only location без `declared_*` entry — **invalid** для declare lake/sea/river (validator future); autoresolve без declare — OK.
 
-**Loader:** filter `locations` where `system_location_type == "geographic"` → split by subtype; **отдельно** собрать edges `lake_shoreline` / `coastline` / `river` / `mountain_river` → `HydrologyMasterInput`.
+**Loader:** `loadDeclaredHydrology(world, locations)` → grid segments / `LakeSpec` / `DeclaredRiverEdge` / deferred `DeclaredRiver` intents; `build_hydrology_master_input` **не** читает hydrology declare из `connection_edges` (hard cut U23). Geographic locations — filter `system_location_type == "geographic"` для subtype routing (U25) и `via_locations` anchors.
 
-#### Declare: озеро и море через connections (U20/U21)
+#### Declare: озеро и море (U20/U21)
 
-Контур задаётся **цепочкой рёбер**, не radius и не один anchor:
+Контур задаётся **waypoints в метрах** в `world.hydrology`, не radius и не один anchor:
 
 ```
-ConnectionNode A ──lake_shoreline──► B ──► C ──► D ──► A   (озеро, замкнутый контур)
-ConnectionNode P ──coastline──────► Q ──► R                 (море, polyline или polygon)
+declared_lakes[].shoreline[]     → A → B → C → D → A   (озеро, замкнутый контур)
+declared_coastlines[].path[]     → P → Q → R             (море, polyline или polygon)
 ```
 
-| Узел | Координаты |
+| Waypoint | Координаты |
 |---|---|
-| **`location_uid`** | `(x,y,z)` из `NamedLocation.map_*` (любая geographic location или settlement anchor) |
-| **Мировые** | явные `x`, `y`, `z` на `ConnectionNode`; `location_uid = null` |
+| **Метры** | явные `x`, `y`, `z` в `HydrologyWaypoint` |
+| **Привязка** | `location_uid` на declare entry + `NamedLocation.map_*` для якоря имени |
 
-**Озеро (U20):** declare **обязан** иметь `lake_shoreline` edges; optional `NamedLocation` (`geographic.lake`) для имени + link `location_uid` на edge/group.  
-**Море (U21):** declare **`coastline`** edges; optional `geographic.sea` / `coast` для имени. Polygon = замкнутая цепочка; polyline = открытый участок берега.  
-**Фьорд / coast (U26):** `geographic.coast` — узел **на** polyline моря, не второй контур.  
-**Lake vs inland_sea (U25):** subtype задаёт **intent** мастера; loader после построения mask проверяет topology — при mismatch **warning + carve по фактической topology** (local basin → `LakeBasinGenerator`; closed на `z_sea` в сушe → inland_sea path).
+**Озеро (U20):** `declared_lakes[]` с `location_uid` + `shoreline[]`; optional `NamedLocation` (`geographic.lake`) для имени.  
+**Море (U21):** `declared_coastlines[]` с `location_uid` + `path[]`; optional `geographic.sea` / `coast` для имени. Polygon = замкнутая цепочка; polyline = открытый участок берега.  
+**Фьорд / coast (U26):** `geographic.coast` — точка **на** polyline моря (`path[]` или anchor локации), не второй контур.  
+**Lake vs inland_sea (U25):** subtype задаёт **intent** мастера; loader после построения mask проверяет topology — при mismatch **warning + carve по фактической topology**.
 
-**Draft bundle (озеро):**
+**Эталон bundle (озеро):**
 
 ```json
-"connection_nodes": [
-  { "node_uid": "ln-moon-a", "location_uid": "loc-template-lake-moon", "node_type": "waypoint", "graph_level": "world" },
-  { "node_uid": "ln-moon-b", "x": 16000, "y": 9500, "z": 0, "node_type": "waypoint", "graph_level": "world" },
-  { "node_uid": "ln-moon-c", "x": 15500, "y": 8200, "z": 0, "node_type": "waypoint", "graph_level": "world" },
-  { "node_uid": "ln-moon-d", "x": 14200, "y": 8800, "z": 0, "node_type": "waypoint", "graph_level": "world" }
-],
-"connection_edges": [
-  { "edge_uid": "le-moon-ab", "from_node_uid": "ln-moon-a", "to_node_uid": "ln-moon-b", "connection_type": "lake_shoreline", "graph_level": "world" },
-  { "edge_uid": "le-moon-bc", "from_node_uid": "ln-moon-b", "to_node_uid": "ln-moon-c", "connection_type": "lake_shoreline", "graph_level": "world" },
-  { "edge_uid": "le-moon-cd", "from_node_uid": "ln-moon-c", "to_node_uid": "ln-moon-d", "connection_type": "lake_shoreline", "graph_level": "world" },
-  { "edge_uid": "le-moon-da", "from_node_uid": "ln-moon-d", "to_node_uid": "ln-moon-a", "connection_type": "lake_shoreline", "graph_level": "world", "location_uid": "loc-template-lake-moon" }
-]
+"hydrology": {
+  "declared_lakes": [{
+    "location_uid": "loc-template-lake-declared",
+    "shoreline": [
+      {"x": 15000, "y": 9000, "z": 0},
+      {"x": 16800, "y": 9600, "z": 0},
+      {"x": 16200, "y": 7800, "z": 0},
+      {"x": 13800, "y": 8400, "z": 0}
+    ]
+  }]
+}
 ```
 
-Persist edges — `ConnectionPersistService` (orchestration); carve — `LakeBasinGenerator` / `SeaBasinGenerator` по smoothed polyline.
+Carve — `LakeBasinGenerator` / `SeaBasinGenerator` по rasterized polyline. Persist routing graph для declare shoreline **не** требуется (U23).
+
+> **Historical (deprecated U23):** declare lake/sea через `connection_edges` (`lake_shoreline` / `coastline`) — снято; см. changelog 2026-07.
 
 #### Topology fallback — lake vs inland_sea (U25)
 
@@ -824,14 +825,40 @@ Persist edges — `ConnectionPersistService` (orchestration); carve — `LakeBas
 
 Subtype в bundle **не reject** (до validator v2); orchestration **доверяет topology** для carve, subtype — для UI/LLM intent.
 
-### Реки — connections + имя
+### Реки — declare POJO + routing graph (U9, U27)
 
-1. **Terrain:** `RiverBedCarver` (bed в heightmap).
-2. **Graph:** `ConnectionNode` + `ConnectionEdge`, persist `ConnectionPersistService`.
-3. **Declare:** `ConnectionEdge` list — classifier **skip** (U18). **Autoresolve:** planner → smooth → classify → carve → **emit** (DTO) → persist в orchestration. **U27:** оба режима; declare **не заменяется** autoresolve для того же uid/edge set.
-4. **Types:** `river`, `mountain_river` в `connection_type_registry`.
-5. **Название (optional):** `NamedLocation` (`geographic.river`) **или** `ConnectionEdge.location_uid`; оба могут быть `null` — безымянная река.
+1. **Declare geometry:** `world.hydrology.declared_rivers[]` — см. режимы ниже (U27, модель **A3**).
+2. **Terrain:** `RiverBedCarver` (bed в heightmap).
+3. **Routing graph:** autoresolve → `riverConnectionEmit` → `ConnectionPersistService` (U18). Declare `segments` — тип на leg в POJO; **emit не обязателен** (geometry уже в template).
+4. **Types:** `river`, `mountain_river` в `connection_type_registry` — для travel/routing, не для declare wire.
+5. **Название (optional):** `NamedLocation` (`geographic.river`) по `location_uid` на declare entry.
 6. **Повороты (U14):** между соседними сегментами **≤ 45°**; см. connections TZ § river curve.
+
+#### `declared_rivers[]` — режимы геометрии (U27)
+
+| `declare_mode` | Мастер задаёт | Момент фиксации | Классификация `river` / `mountain_river` |
+|---|---|---|---|
+| **`segments`** | `segments[]` — legs с `from`/`to` + `connection_type` | **import** (JV + `loadDeclaredHydrology`) | мастер на каждом leg (U18 skip) |
+| **`endpoints`** | `source` + `mouth` (`location_uid` или coords) | **generate** (`resolveDeclaredRiverPath`) | terrain classifier (B2) |
+| **`via_locations`** | `route_location_uids[]` ≥ 2 | **generate** | terrain classifier (B2) |
+
+| `system_role` | Геометрия |
+|---|---|
+| **`system`** | контейнер бассейна; **`river_system_topology: "basin"`** обязателен; **без** `declare_mode` и без geometry |
+| **`stem`** / **`tributary`** | один из `declare_mode`; tributary — `parent_location_uid` обязателен; **`river_system_topology` запрещён** |
+
+#### Топология речных систем A / B (U27)
+
+| Топология | Wire | Структура declare |
+|---|---|---|
+| **A — `confluence`** (default) | Нет `system_role=system` в группе | `stem` без `parent_location_uid` — корень; `tributary` → `parent_location_uid` = **stem** |
+| **B — `basin`** | Запись `system_role=system` + **`river_system_topology: "basin"`** | `system` — абстракция бассейна, **без geometry**; `stem` → parent = system; `tributary` → parent = stem |
+
+**Default:** если в `declared_rivers[]` **нет** `system` — confluence (A). В одном мире допустимы **смешанные** группы: несколько basin-`system` + отдельные confluence-stem.
+
+**Runtime:** `loadDeclaredHydrology` строит `RiverSystemIndex` (`by_location_uid`, `topology_by_system_uid`, `children`) в `HydrologyMasterInput`; carve v1 **не** зависит от топологии.
+
+**Autoresolve:** planner → smooth → classify → carve → **emit** (DTO) → persist. **U27:** declare **не заменяется** autoresolve для того же `location_uid` / edge set.
 
 См. § «Связь с settlement и connections» ниже.
 
@@ -875,17 +902,21 @@ class HydrologyNamedLocationPolicy:
 
 @dataclass
 class HydrologyMasterInput:
-    world_policy:         HydrologyWorldPolicy = field(default_factory=HydrologyWorldPolicy)
-    named_locations:      HydrologyNamedLocationPolicy = field(default_factory=HydrologyNamedLocationPolicy)
-    declared_geographic:       list[NamedLocation] = field(default_factory=list)
-    declared_lake_shorelines:  list[ConnectionEdge] = field(default_factory=list)   # U20 lake_shoreline
-    declared_coastlines:       list[ConnectionEdge] = field(default_factory=list)   # U21 coastline
-    declared_river_edges:      list[ConnectionEdge] = field(default_factory=list)
-    declared_river_names:      list[NamedLocation] = field(default_factory=list)
-    local_profiles:            dict[str, HydrologyLocalProfile] = field(default_factory=dict)  # uid → override
+    world_uid:              str
+    hydrology_enabled:      bool
+    scopes:                 frozenset[HydrologyScope]
+    connection_graph:       LoadedConnectionGraph   # roads/settlement; hydrology declare — не отсюда (U23)
+    geographic_locations:   list[NamedLocation]
+    declared_coastline_segments: list[tuple[tuple[int,int], tuple[int,int]]]  # U21
+    declared_lake_specs:         list[LakeSpec]                               # U20
+    declared_river_edges:          list[DeclaredRiverEdge]                    # U27 segments @ import
+    declared_river_intents:        list[DeclaredRiver]                        # U27 endpoints/via @ generate
+    river_system_index:            RiverSystemIndex | None                    # U27 topology A/B
 ```
 
-**Deprecated:** flat `autoresolve.*`, nested `defaults.shore`, keys `rivers`/`lakes`/`seas`/`landforms` without `default_` prefix.
+Policy POJO (`WorldHydrology` в `dataModel/hydrology/worldHydrology.py`): `enabled`, `default_*`, `materialize_named_locations`, **`declared_lakes`**, **`declared_coastlines`**, **`declared_rivers`**.
+
+**Deprecated wire:** flat `autoresolve.*`, nested `defaults.shore`, declare через `connection_edges` (`lake_shoreline` / `coastline` / river declare edges) — U23.
 
 **Resolve bands:**
 
@@ -938,7 +969,7 @@ Climate pass (`generate-climate`) читает metadata из БД — **не** i
 
 | Наблюдение | Ожидание (target) | Факт (interim) |
 |---|---|---|
-| Declared lake/sea/coast (`connection_nodes/edges`, `loc-template-lake-declared`, …) | после **D HY-7a** — carve + `hydrology.liquid_candidate` на surface grid | hydrology endpoint **stub** → **0** воды от declare |
+| Declared lake/sea/coast (`world.hydrology.declared_*`, `loc-template-lake-declared`, …) | после **D HY-7a** — carve + `hydrology.liquid_candidate` на surface grid | partial wire; smoke acceptance HY-7a open |
 | `liquid_body` на overworld (260 surface columns, z≈3…7) | 0 до hydrology persist | **0** ✅ |
 | `liquid_body` всего в `map_cells` | только hydrology mask + climate phase | **2** ❌ — ложные озёра |
 
@@ -988,7 +1019,7 @@ MapCellService / debug orchestration
   → save_terrain_batch (bed geometry)
 ```
 
-Declared river в template = declared `ConnectionEdge` в bundle **до** autoresolve planner.
+Declared river в template = `declared_rivers[]` в `world.hydrology` (U27); routing `ConnectionEdge` — только после **emit** autoresolve (U18).
 
 **Порядок bootstrap мира (DAG target, утверждено):**
 
@@ -1077,9 +1108,11 @@ Hydrology **не** задаёт лёд/вода/steam — это не домен
 
 ### Connections import (C5)
 
-Bundle keys **`connection_nodes`**, **`connection_edges`** — import/export в `WorldBundleService` (после `locations`). Hydrology **`buildHydrologyMasterInput`** читает graph из repos.
+Bundle keys **`connection_nodes`**, **`connection_edges`** — import/export в `WorldBundleService` (после `locations`) для **дорог, settlement gates, sea_route**, и **emit** autoresolved river edges (U18).
 
-**`location_uid` (C4):** v1 только на **`ConnectionNode`**. Имя озера/моря/реки — waypoint-node; edge-level `location_uid` в draft JSON deprecated.
+**Hydrology declare geometry (U23):** только `world.hydrology.declared_*` → `loadDeclaredHydrology` → `build_hydrology_master_input`. Connection graph repos **не** источник declare lake/sea/river.
+
+**`location_uid` на routing graph (C4):** v1 на **`ConnectionNode`** для дорог/портов; declare hydrology — `location_uid` на POJO entry (`declared_lakes[]`, …).
 
 ### Declare vs autoresolve (C6, U27)
 
@@ -1165,7 +1198,7 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 | ~~Q9~~ | Melt flow storage | **U19/U24:** hydrology roles on `map_cells`; season `flow_level` — **v2** (climate events), не sidecar |
 | ~~Q10~~ | Declare vs autoresolve vs disable | **U10/U16:** global `enabled`; `default_<category>.enabled`; declare when bundle explicit |
 | ~~Q11~~ | River data model | **connections** like roads; `river` / `mountain_river` types |
-| ~~Q12~~ | Footprint format for sea/lake on map | **U20/U21:** declare = **`ConnectionEdge`** chain (`lake_shoreline` / `coastline`); waypoints = NamedLocation или `(x,y,z)`; **U15** bands inward from shoreline |
+| ~~Q12~~ | Footprint format for sea/lake on map | **U20/U21 (U23):** declare = `world.hydrology.declared_lakes` / `declared_coastlines` waypoints (метры); **U15** bands inward from shoreline |
 | Q15 | `type_classify` null → explicit values | **U22:** runtime fallback на schema defaults; **import validator (future)** — normalize + write explicit values в bundle |
 | Q13 | Surface ↔ cave water link; cave connection graph | **вне scope сейчас**; isolated cave hydrology U12; link + graph — Phase B / v2 |
 | ~~Q14~~ | Имена для materialize | **U13:** LLM-нода DAG из контекста; не name pool / seed |
@@ -1189,7 +1222,8 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 - [x] U17: `river` vs `mountain_river`; autoresolve by terrain; rapids; split segments
 - [x] U15: shore + bands from world category settings; local override
 - [x] U19: liquid_candidate + hydrology roles on map_cells metadata
-- [x] U20/U21: declare lake/sea geometry via connection chains (lake_shoreline / coastline)
+- [x] U20/U21: declare lake/sea geometry via `world.hydrology.declared_*` (U23 hard cut)
+- [x] U27: river declare modes `segments` / `endpoints` / `via_locations` + `system_role`
 - [x] U25: lake/inland_sea — subtype + topology fallback
 - [x] U26: coast = waypoint on sea coastline
 - [x] U28: liquid_body in river bed on hydrology; climate phase only
@@ -1223,6 +1257,8 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 
 | Дата | Изменение |
 |---|---|
+| 2026-07 | **U27 topology:** `river_system_topology` on `system_role=system` (basin); default confluence без system nodes; `RiverSystemIndex` в loader |
+| 2026-07 | **U23 TZ sync:** declare geometry — канон `world.hydrology.declared_*`; connection-edge declare deprecated; loader/code hard cut |
 | 2026-06 | **C14:** partial climate recalc после hydrology dirty rect; cross-ref Climate LOD |
 | 2026-06 | Q13 / cave graph — вне текущего scope; Phase B |
 | 2026-06 | **U28:** liquid_body в русле на hydrology; climate — только фаза; C7b/C11/C12 |

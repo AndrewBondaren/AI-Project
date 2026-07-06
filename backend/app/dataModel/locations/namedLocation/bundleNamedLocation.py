@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire, IgnoreOnWire, StrictOnWire
 
 
 class BundleNamedLocation(BaseModel):

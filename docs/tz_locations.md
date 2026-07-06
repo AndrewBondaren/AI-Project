@@ -106,22 +106,22 @@ Generators **не** пишут в `named_locations` и **не** вызывают
 | Семейство | `NamedLocation` | Без location (autoresolve) |
 |---|---|---|
 | **География** | declare + имя | surface peak/lake/plain; **подземная** вода — cave systems (U12), не surface heightmap |
-| **Озёра / море (declare)** | имя + **`ConnectionEdge`** chain | **`lake_shoreline`** / **`coastline`** (U20/U21); coast = node on sea polyline (U26) |
-| **Реки** | optional имя | **`ConnectionEdge`** declare **или** autoresolve (U27); `location_uid` может быть `null` |
+| **Озёра / море (declare)** | имя + **`world.hydrology.declared_*`** | `declared_lakes` / `declared_coastlines` (U20/U21, U23); coast = точка на sea path (U26) |
+| **Реки** | optional имя | **`declared_rivers[]`** (`segments` / `endpoints` / `via_locations`, U27); routing graph — emit autoresolve |
 | **Поселения** | обычно есть | minimal repair — исключение |
 
 | Семейство | Примеры `display_name` | Роль | Geometry / persist |
 |---|---|---|---|
 | **Поселения** (иерархия § ниже) | «Королевский порт», «Деревня Заречье» | SceneInit, layout, economy | `map_cells` + footprint по `city_size` |
-| **География** (optional) | «Гора Белая», «Озеро Лунное» | declare / **LLM U13** | anchor + **shoreline edges** (U20/U21) |
-| **Линейные** (optional) | «Река Волга» | имя русла | bed → `ConnectionEdge`; имя не обязательно |
+| **География** (optional) | «Гора Белая», «Озеро Лунное» | declare / **LLM U13** | anchor + **`world.hydrology.declared_*`** (U20/U21/U27) |
+| **Линейные** (optional) | «Река Волга» | имя русла | declare `declared_rivers[]` → bed carve; routing — `ConnectionEdge` emit (U18) |
 | **Климат / админ** | `climate_pole`, zone override на territory | Pole / Voronoi / zone field | point anchor; см. [`tz_climate.md`](./tz_climate.md) |
 
 **Правило declare · autoresolve · opt-out:** нет `NamedLocation` → autoresolve geometry **без имени**. Opt-out — явный флаг в template ([`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) U10).
 
 **Горы и равнины:** procedural без location — норма. `NamedLocation` — если мастер задаёт имя и/или anchor.
 
-**Реки:** русло — **`ConnectionEdge`**. **Имя optional** (`location_uid` может быть `null`).
+**Реки:** declare — `world.hydrology.declared_rivers[]`; routing polyline — **`ConnectionEdge`** после carve/emit (U9/U18). **Имя optional** (`location_uid` на declare entry).
 
 **Уровень 2 — `named_locations`** — агрегат ячеек с именем:
 ```sql
