@@ -71,6 +71,7 @@ class WorldClimateScalars(BaseModel):
         lesser_equals=1.0,
     )
     precipitation_liquid: DefaultOnWire[str] = DEFAULT_PRECIPITATION_LIQUID
+    climate_parallel_workers: DefaultOnWire[int | None] = None
     season_temp_offsets: DefaultOnWire[SeasonTempOffsets] = Field(default_factory=SeasonTempOffsets)
 
     @classmethod

@@ -100,11 +100,13 @@ class World:
     climate_pole_preset:            str | None = None   # ice | desert | binary | …
     climate_local_influence_fraction: float | None = None  # × bbox diagonal for local override
     precipitation_liquid:           str | None = None   # ref → material_registry; fallback water
+    climate_parallel_workers:       int | None = None   # cap CL-PAR pool; NULL = free_cores only
     z_max:                          int | None = None
     z_min:                          int | None = None
     map_subsurface_depth:           int = 20            # N_base skeleton band; min 10
     grid_bbox_padding:              int = 2             # anchor bbox ± cells (v1 extent)
     terrain_chunk_columns:          int = 32            # column-fill persist chunk side
+    terrain_parallel_workers:       int | None = None   # cap TR-PAR pool; NULL = free_cores only
     world_bounds:                   dict | None = json_nullable_col(default=None)
     magma_band_thickness:           int | None = None   # 0/null = skip magma band
     closed_planet_grid:             bool = bool_col(default=False)

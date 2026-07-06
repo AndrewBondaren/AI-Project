@@ -6,29 +6,28 @@ from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
 
-def run_liquid_overlay_pass(
-    world: World,
-    cells: list[MapCell],
-) -> list[MapCell]:
-    """
-    Apply liquid_body on surface-top cells when hydrology marked liquid_candidate
-    and temperature allows liquid phase (tz_terrain_hydrology.md U7, D HY-6).
-
-    Does not use global z<=0. River beds already liquid_body from hydrology (U28)
-    are left unchanged here — phase/material is a separate concern.
-    """
-    terrain_set = terrain_system_keys(world)
-    if "liquid_body" not in terrain_set:
-        return cells
-
-    liquid = resolve_world_precipitation_liquid(world)
-
+def build_surface_top_index(cells: list[MapCell]) -> dict[tuple[int, int], MapCell]:
+    """Max-z cell per (x, y) column."""
     surface_top: dict[tuple[int, int], MapCell] = {}
     for cell in cells:
         key = (cell.x, cell.y)
         prev = surface_top.get(key)
         if prev is None or cell.z > prev.z:
             surface_top[key] = cell
+    return surface_top
+
+
+def run_liquid_overlay_batch(
+    world: World,
+    cells: list[MapCell],
+    surface_top: dict[tuple[int, int], MapCell],
+) -> list[MapCell]:
+    """Liquid overlay for a cell batch; *surface_top* built from full weathered set."""
+    terrain_set = terrain_system_keys(world)
+    if "liquid_body" not in terrain_set:
+        return cells
+
+    liquid = resolve_world_precipitation_liquid(world)
 
     result: list[MapCell] = []
     for cell in cells:
@@ -76,3 +75,17 @@ def run_liquid_overlay_pass(
         else:
             result.append(cell)
     return result
+
+
+def run_liquid_overlay_pass(
+    world: World,
+    cells: list[MapCell],
+) -> list[MapCell]:
+    """
+    Apply liquid_body on surface-top cells when hydrology marked liquid_candidate
+    and temperature allows liquid phase (tz_terrain_hydrology.md U7, D HY-6).
+
+    Does not use global z<=0. River beds already liquid_body from hydrology (U28)
+    are left unchanged here — phase/material is a separate concern.
+    """
+    return run_liquid_overlay_batch(world, cells, build_surface_top_index(cells))

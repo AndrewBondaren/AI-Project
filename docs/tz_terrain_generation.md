@@ -375,23 +375,36 @@ Generator **не** знает про threads/SQL — только `(world, locat
 |---|---|---|
 | `chunk_columns` | **32×32** или **64×64** | 64×64 × depth 25 ≈ 100k cells/chunk |
 | Halo | **±1 cell** при gap analysis на границе chunk | соседи для `N_eff` на edge |
-| Persist | **1 transaction / chunk** | `insert_bulk` или upsert terrain layer |
+| Persist | **1 transaction / N chunks** | `executemany` + selective upsert; см. § **TR-PERF** (impl ⬜) |
 | Порядок chunks | row-major, deterministic | воспроизводимость |
 | **Parallel v1 (текущий код)** | **нет** — sequential chunks | проще отладка; см. § «Многопоточность (TR-PAR)» |
-| **Parallel v2 (target)** | thread pool **generate**; **insert serial** | SQLite single-writer |
+| **Parallel v2 (target)** | `ChunkComputePool` generate + serial `save_pass` | ✅ impl — `TerrainBatchOrchestrator`, `ClimateBatchOrchestrator` |
 
 ### Многопоточность (TR-PAR)
 
-> **Статус:** v1 ✅ в коде (только sequential); v2 ⬜ **утверждено в ТЗ**, impl — backlog perf.
+> **Статус:** v2 ✅ chunk pool + serial persist (`ChunkComputePool`, `TerrainBatchOrchestrator`, `ClimateBatchOrchestrator`); facade `WorldSurfaceMaterializationOrchestrator`. **DAG wiring** — контракт ниже (impl ⬜).
 
-#### Текущее поведение (v1)
+#### Реализация (v2, код)
 
-`MapCellService.save_terrain_batch` / `_materialize_fine_tile`:
+| Компонент | Путь | Роль |
+|---|---|---|
+| `MaterializationContext` | `application/worldData/materializationContext.py` | `free_cores` от caller; **TR-PERF-2:** `chunks_per_commit` (default 8); **TR-PERF-3:** `insert_only` |
+| `ParallelPolicy` | `application/worldData/parallelPolicy.py` | `resolve_terrain_workers` / `resolve_climate_workers` |
+| `ChunkComputePool` | `application/worldData/chunkComputePool.py` | Thread-pool generate (ProcessPool — backlog) |
+| `TerrainBatchOrchestrator` | `terrainBatchOrchestrator.py` | coarse+hydro → fine chunks parallel, persist serial |
+| `ClimateBatchOrchestrator` | `climateBatchOrchestrator.py` | anchor serial → weather/overlay parallel, persist serial |
+| `WorldSurfaceMaterializationOrchestrator` | `worldSurfaceMaterializationOrchestrator.py` | S→CL, один `ctx` на stack |
+
+**Debug HTTP (interim caller):** `map.py` — `resolve_materialization_context`; если query `free_cores` не передан → stub **`5`** (не probe). Production caller — **DAG** (probe, см. ниже).
+
+#### Текущее поведение (до v2 / устаревшее описание v1)
+
+`TerrainBatchOrchestrator._materialize_fine_tile` (legacy sequential reference):
 
 1. macro-тайлы — **последовательно** (bootstrap: priority list; `mode=full`: весь bbox);
 2. внутри тайла — `iter_meter_chunks` row-major, **32×32** fine-колонок (`terrain_chunk_columns`);
-3. на каждый chunk: синхронный `generate_surface_chunk` → `await upsert_terrain_skeleton`;
-4. **нет** `threading`, `ProcessPoolExecutor`, `asyncio.gather` на chunks.
+3. **v2:** `ChunkComputePool` → `generate_surface_chunk` parallel; `save_pass(terrain)` **strictly serial**;
+4. **v1 (до TR-PAR):** синхронный chunk loop без pool.
 
 `TerrainGeneratorService` — **pure sync**, без async и без знания о потоках.
 
@@ -428,22 +441,73 @@ flowchart LR
 |---|---|---|
 | Pass 1 coarse + hydrology planning | **serial** | один `surface_z` / `coarse_hydro` на весь planning scope |
 | Gap analysis (`N_eff`) | **serial per tile** | нужен полный `surface_z` тайла (или halo ±1 на границе chunk — допустимо) |
-| Pass 2 column fill | **parallel** по `ColumnRect` | `ProcessPoolExecutor` предпочтительнее GIL; worker получает **immutable** snapshot heightmap + `n_eff` slice |
-| Persist terrain | **strictly serial** | один writer; batch `executemany` в транзакции на chunk |
-| Climate / ores / caves passes | **serial** на существующих cells | отдельные ordered passes |
+| Pass 2 column fill | **parallel** по `ColumnRect` | `ChunkComputePool` + `ThreadPoolExecutor` (ProcessPool — backlog при GIL) |
+| Persist terrain | **strictly serial** | один writer; `save_pass(terrain)` под lock / single consumer |
+| Climate cell weather + liquid overlay | **parallel batches** | `ClimateBatchOrchestrator`; persist climate serial |
+| Climate pole + anchor | **serial** | global fields / surface index |
 
 **Worker contract:** `(world_uid, rect, heightmap_blob, n_eff_rect, hydrology_rect) → list[MapCell]` — без repos, без RNG от порядка chunk (seed = `f(world_uid, gx, gy, pass_id)`).
 
-**Orchestrator contract (`MapCellService`):**
+**Orchestrator contract (batch facades, не generators):**
 
-- **перед** запуском pool: caller передаёт **`free_cores`** — число ядер, доступных под generate (probe: `cpu_count() − reserve`, reserve ≥ 1 для FastAPI/asyncio);
-- из `free_cores` + опционального cap мира (`terrain_parallel_workers`) + debug override (`parallel_workers`) → **`parallel_workers` eff** в `TerrainGeneratorService.generate_surface_chunks(...)`;
-- partition rects → submit to pool (`parallel_workers` eff);
-- `asyncio.Queue` или bounded channel: готовые chunks → **один** coroutine пишет в DB;
-- backpressure: не более `N` in-flight generated chunks в RAM (`N` ≈ 2× worker count);
-- progress: `{chunks_done, chunks_total, cells_written}` (SSE / job id — см. ниже).
+- caller передаёт **`MaterializationContext(free_cores=…)`** — число ядер под **generate** (не persist);
+- `ParallelPolicy.resolve_*_workers(ctx, world)` → eff из `min(free_cores, parallel_workers_override?, world.terrain_parallel_workers?, world.climate_parallel_workers?)`, clamp ≥ 1;
+- `ChunkComputePool(workers)` — partition rects / cell batches → parallel sync compute;
+- persist — **один** serial path: `await map_cell_service.save_pass(...)` (bounded in-flight chunks ≈ `2 × workers`);
+- progress (debug): `{chunks_done, chunks_total}` в HTTP response; SSE / `job_id` — backlog.
 
-**Инвариант:** `TerrainGeneratorService` **не** сам определяет число ядер — только принимает `parallel_workers` от orchestrator.
+**Инвариант:** `TerrainGeneratorService` / climate passes **не** probe CPU — только orchestrator + `ParallelPolicy`.
+
+#### DAG — передача `free_cores` (утверждено, impl ⬜)
+
+> См. также [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) § «MaterializationContext».
+
+**Кто probe:** **один раз** на входе materialization subgraph (gate-нода или wrapper до `generate_surface`), **не** каждая pass-нода и **не** generators.
+
+```mermaid
+flowchart TB
+  subgraph dagEntry [DAG materialization entry]
+    GATE["check_world_materialization\nили materialization_gate"]
+    PROBE["free_cores = max(1, cpu_count - reserve)"]
+    CTX["MaterializationContext(free_cores)"]
+    GATE --> PROBE --> CTX
+  end
+  subgraph stack [post_llm ordered passes]
+    GS["generate_surface node\nTerrainBatchOrchestrator + ctx"]
+    GCl["generate_climate node\nClimateBatchOrchestrator + ctx"]
+    CTX --> GS --> GCl
+  end
+  subgraph alt [альтернатива одной нодой]
+    MS["materialize_surface_stack node\nWorldSurfaceMaterializationOrchestrator + ctx"]
+    CTX --> MS
+  end
+```
+
+| Правило | Смысл |
+|---|---|
+| **Один `ctx` на run** | Весь S→CL (или S→O→C→CL) в одном materialization run делит **тот же** `MaterializationContext` |
+| **Где хранить между нодами** | `ExecutionState` / `context["materialization_ctx"]`, выставляет gate; downstream ноды **читают**, не пересчитывают `cpu_count` |
+| **`reserve`** | ≥ 1 для FastAPI/asyncio event loop; точное значение — настройка engine (не world row) |
+| **World caps** | `terrain_parallel_workers`, `climate_parallel_workers` на `worlds` — верхняя граница поверх `free_cores` |
+| **Debug override** | Query `parallel_workers` на HTTP — **только debug**; DAG **не** использует query override |
+| **Не путать с DAG levels** | `asyncio.gather` на **разных нодах** DAG (chat orchestration) ≠ TR-PAR chunk pool внутри `generate_surface` |
+
+**Target wiring нод (после gate G5 — только с мастером):**
+
+| Node id | Вызывает (target) | `ctx` |
+|---|---|---|
+| `generate_surface` | `TerrainBatchOrchestrator.save_terrain_batch(..., ctx)` | из gate / parent |
+| `generate_climate` | `ClimateBatchOrchestrator.apply_climate_batch(..., ctx)` | **тот же** объект, что surface |
+| `materialize_surface` (optional) | `WorldSurfaceMaterializationOrchestrator.materialize_surface_stack(..., ctx)` | gate создаёт; одна нода на весь S→CL |
+
+**Текущий код DAG (interim):** `GenerateClimateNode` ещё вызывает `ClimateOrchestratorService.apply_climate_pass` без `ctx` — **миграция** на `ClimateBatchOrchestrator` + shared `MaterializationContext` в backlog DAG.
+
+**Debug vs DAG:**
+
+| Caller | `free_cores` |
+|---|---|
+| `POST …/map/generate-*`, `materialize-stack` | stub `5` если query не передан; иначе query |
+| Engine DAG (production) | `max(1, os.cpu_count() - reserve)` на gate |
 
 #### Bootstrap и macro-тайлы
 
@@ -459,17 +523,18 @@ flowchart LR
 
 - Coarse hydrology `apply` до fine materialize (единый `coarse_hydro` index).
 - Declared meter river carve с глобальным merge в один проход (или partition по basin с merge barrier).
-- `generate-climate` liquid overlay — читает все cells мира в scope; v2 climate parallel — отдельное ТЗ (`tz_climate.md`).
-- DAG `asyncio.gather` на нодах — **оркестрация чата**, не substitute для TR-PAR terrain chunks.
+- `generate-climate` liquid overlay — parallel batches в `ClimateBatchOrchestrator` (pole/anchor serial); см. [`tz_climate.md`](./tz_climate.md) § CL-PAR.
+- DAG `asyncio.gather` на **разных нодах** — оркестрация чата, не substitute для TR-PAR chunk pool **внутри** `generate_surface`.
 
 #### Impl queue
 
 | ID | Задача | Статус |
 |---|---|---|
-| **TR-PAR-1** | Chunk pool: `generate_surface_chunks` + serial persist queue | ⬜ |
-| **TR-PAR-2** | Progress job + `{chunks_done, chunks_total}` (SSE optional) | ⬜ |
-| **TR-PAR-3** | `free_cores` probe + `terrain_parallel_workers` cap + API override → `parallel_workers` | ⬜ |
+| **TR-PAR-1** | Chunk pool: `ChunkComputePool` + serial persist in `TerrainBatchOrchestrator` | ✅ |
+| **TR-PAR-2** | Progress `{chunks_done, chunks_total}` in debug API response | ✅ |
+| **TR-PAR-3** | `MaterializationContext.free_cores` + `terrain_parallel_workers` cap + API override | ✅ |
 | **TR-PAR-4** | Stress test: bootstrap 1 tile, `cell_m=3000`, workers=4 vs serial | ⬜ |
+| **TR-PAR-DAG-1** | Gate probe `free_cores` → `context["materialization_ctx"]`; ноды `generate_surface` / `generate_climate` → batch orchestrators + shared `ctx` | ⬜ **gate** — только с мастером |
 
 **Приёмка v2:** тот же `world_uid` + seed → **идентичный** набор `(x,y,z, system_terrain, hydrology)` после serial v1 и parallel v2 (order-independent compare).
 
@@ -479,7 +544,182 @@ flowchart LR
 
 **Детерминизм:** RNG seed = `f(world_uid, gx, gy, pass_id)` — chunk order не влияет на содержимое ячеек.
 
-**Lazy / v2 declared world:** тот же chunk API; eager прогоняет все chunks bbox/world_bounds, lazy — один chunk вокруг `location_uid`.
+**Lazy / v2 declared world:** тот же chunk API; eager прогоняет все chunks bbox/world_bounds, lazy — scene volume / column (§ **TR-LAZY-LOAD**).
+
+### Persist performance (TR-PERF)
+
+> **Статус:** ⬜ impl. **Scope:** bootstrap / `materialize-stack` / `save_terrain_batch` — **не** gameplay patch, **не** parallel persist.
+
+**Проблема (код сейчас):** `SqliteMapCellRepository._upsert_partial` — цикл `execute` **на каждую ячейку** + `commit` после каждого чанка (~21k rows × ~8k commits на тайл 3000×3000 м).
+
+**Цель:** init мира — быстрый bulk-write при сохранении инвариантов TR-PAR (один writer, serial persist, детерминизм содержимого ячеек).
+
+#### TR-PERF-1 — `executemany` в транзакции
+
+| Слой | Контракт |
+|---|---|
+| `SqliteMapCellRepository._upsert_partial` | один SQL-шаблон; `conn.executemany(sql, rows)`; **не** N×`execute` |
+| `insert_bulk_ignore` | то же — `executemany` для lazy/minimal batch |
+| Commit | только при выходе из транзакции (см. TR-PERF-2), если не вложенный `Database.transaction()` |
+
+**Sub-batch (опционально):** при `len(cells) > 50_000` — несколько `executemany` по 2–5k строк **внутри одной** транзакции (лимит RAM / WAL).
+
+**Selective upsert** — без изменений: `ON CONFLICT … DO UPDATE SET system_terrain = … WHERE system_building_element IS NULL`.
+
+#### TR-PERF-2 — реже коммитить (multi-chunk transaction)
+
+| Параметр | Default | Где |
+|---|---|---|
+| `chunks_per_commit` | **8** | `MaterializationContext` или константа orchestrator |
+| Область транзакции | до **N** последовательных terrain-chunks (row-major) | `TerrainBatchOrchestrator._materialize_fine_tile` persist loop |
+| Commit | 1× на N chunks (~8 × ~21k ≈ **168k rows** при `chunk_columns=32`) | `MapCellService.bulk_persist_session()` → `_in_transaction` |
+
+```mermaid
+flowchart TB
+  subgraph gen["ChunkComputePool parallel"]
+    C1[chunk 1]
+    C2[chunk 2]
+    Cn[chunk N]
+  end
+  subgraph persist["serial writer"]
+    TX["BEGIN … executemany×N … COMMIT"]
+  end
+  C1 --> Q[queue]
+  C2 --> Q
+  Cn --> Q
+  Q --> TX
+```
+
+**Не делать:** одна транзакция на весь тайл 3000×3000 (≈189M rows) — риск WAL/RAM/rollback.
+
+**Режим regen** (поверх существующих cells): тот же `executemany` + upsert; `chunks_per_commit` можно уменьшить (4) для короче lock.
+
+#### TR-PERF-3 — init fast path (опционально, после PERF-1/2)
+
+| Условие | SQL | Когда |
+|---|---|---|
+| `map_cells` для `world_uid` **пуст** (post-clear import) | plain `INSERT` / `executemany` без `ON CONFLICT` | первый `materialize-stack` |
+| cells уже есть | `upsert_terrain_skeleton` (selective) | regen, climate overlay, patch |
+
+Флаг: `MaterializationContext.insert_only: bool` — caller выставляет только при гарантии пустой таблицы (initialize script после clear).
+
+#### TR-PERF-4 — PRAGMA bulk session (backlog)
+
+На время `materialize_surface_stack` (один job): `synchronous=NORMAL`, увеличенный `cache_size`, `temp_store=MEMORY`. **Не** `synchronous=OFF` в product без явного master opt-in.
+
+#### Приёмка TR-PERF
+
+| ID | Критерий |
+|---|---|
+| PERF-1 | `_upsert_partial` / `insert_bulk_ignore` используют `executemany` |
+| PERF-2 | init tile: commits ≤ `ceil(chunks_total / chunks_per_commit)` |
+| PERF-3 | Тот же world+seed → идентичный cell set до/после (как TR-PAR v2) |
+| PERF-4 | Smoke: 1 bootstrap tile, `map_cell_size_m=1000`, persist быстрее serial execute (benchmark в TR-PAR-4) |
+
+| ID | Задача | Статус |
+|---|---|---|
+| **TR-PERF-1** | `executemany` в `_upsert_partial` + `insert_bulk_ignore` | ⬜ |
+| **TR-PERF-2** | `bulk_persist_session` + `chunks_per_commit` в materialization | ⬜ |
+| **TR-PERF-3** | `insert_only` fast path для пустого `world_uid` | ⬜ backlog |
+| **TR-PERF-4** | PRAGMA bulk session на `materialize-stack` | ⬜ backlog |
+
+---
+
+### Gameplay load (TR-LAZY-LOAD)
+
+> **Статус:** ⬜ impl. **Scope:** DAG `check_terrain` / `eager_terrain` / `lazy_terrain` + `MapCellService` read path. HTTP `POST generate-z-slice` уже есть — gameplay должен использовать тот же контракт через service/repo.
+
+**Проблема (код сейчас):**
+
+| Узел | Сейчас | Почему плохо |
+|---|---|---|
+| `check_terrain` | `has_cells_for_location(location_uid)` | после `materialize-stack` wilderness cells **без** `location_uid` → ложный `has_terrain=False` |
+| `eager_terrain` | `get_by_location(location_uid)` | грузит только tagged cells, не соседний рельеф |
+| `lazy_terrain` | `generate_minimal` (1 anchor) | repair OK; не подгружает колонку / scene volume |
+
+#### Scene volume — что грузить в gameplay
+
+**Единица запроса:** 3D bbox в **meter grid** `(world_uid, x±R, y±R, z_lo…z_hi)`, не весь `location_uid`, не весь мир.
+
+| Параметр | Default | Источник |
+|---|---|---|
+| `scene_xy_radius` | **5** | `AppSettings` / константа `SCENE_LOAD_XY_RADIUS` |
+| `scene_z_below` | `N_base(world)` | `worldMapSettings.n_base` — subsurface под ногами |
+| `scene_z_above` | **0** | от `map_z` вверх до surface (обычно 0) |
+
+Центр: `(check_terrain.map_x, map_y, map_z)` из сцены.
+
+```python
+# MapCellService — target API
+async def get_scene_volume(
+    world_uid: str,
+    x: int, y: int, z: int,
+    *,
+    xy_radius: int = SCENE_LOAD_XY_RADIUS,
+    z_below: int | None = None,
+    z_above: int = 0,
+) -> list[MapCell]:
+    z_lo = z - (z_below if z_below is not None else n_base(...))
+    z_hi = z + z_above
+    return await repo.get_z_slice(world_uid, x - R, x + R, y - R, y + R, z_lo, z_hi)
+```
+
+**Repo:** `get_z_slice` — PK `(world_uid,x,y,z)`; для bbox запрос достаточен. Индекс `idx_map_cells_location_z` — для settlement-by-location, **не** для wilderness scene load.
+
+#### Проверка «terrain есть»
+
+```python
+async def has_column_cells(world_uid: str, x: int, y: int) -> bool:
+    """Есть ли хотя бы одна cell в колонке (x,y) — materialized skeleton."""
+```
+
+`check_terrain.has_terrain` = `has_column_cells(world, map_x, map_y)` **OR** `has_cells_for_location` (indoor / settlement tagged).
+
+#### Target flow — eager (cells уже в БД)
+
+```
+check_terrain → has_terrain=True
+eager_terrain → MapCellService.get_scene_volume(world_uid, map_x, map_y, map_z)
+terrain_context → cells в shared_context
+```
+
+#### Target flow — lazy (колонка пуста, wilderness)
+
+```
+check_terrain → has_terrain=False
+lazy_terrain:
+  1. column = get_z_slice(… одна колонка x,y, z_min…z_max)
+  2. if пусто → TerrainGeneratorService.generate_z_slice(…) 
+     → MapCellService.save_pass(terrain)  # executemany, 1 commit
+  3. else → get_scene_volume(…)  # идемпотентно
+  4. if всё ещё пусто → fallback generate_minimal (orphan repair)
+```
+
+**`generate_minimal`** остаётся для **orphan location** (нет geometry вообще), не заменяет z_slice для materialized мира.
+
+#### Persist в lazy path
+
+| Scope | Метод | Batch |
+|---|---|---|
+| `z_slice` | `save_pass(terrain)` | `executemany`, **1 commit** на колонку (~21 cell) |
+| `minimal_repair` | `insert_bulk_ignore` | `executemany`, 1 commit |
+
+#### Приёмка TR-LAZY-LOAD
+
+| ID | Критерий |
+|---|---|
+| LAZY-1 | После `materialize-stack` — `get_scene_volume` через service/debug возвращает > 1 cell |
+| LAZY-2 | Пустая колонка — `save_z_slice` / service persist + reload volume |
+| LAZY-3 | Orphan — `generate_minimal` (1 cell), без регрессии |
+| LAZY-DAG | Ноды terrain chain — **после gate**; приёмка та же, через gameplay DAG |
+
+| ID | Задача | Статус |
+|---|---|---|
+| **TR-LAZY-LOAD-1** | `has_column_cells` + `get_scene_volume` в repo/service | ⬜ |
+| **TR-LAZY-LOAD-2** | Debug HTTP / smoke: load + z_slice без нод | ⬜ |
+| **TR-LAZY-LOAD-DAG** | `check_terrain` / `eager_terrain` / `lazy_terrain` → service API | ⬜ **gate** — только с мастером, после G1–G5 ([`tz_world_generation_dag.md`](./tz_world_generation_dag.md) § Gate) |
+
+**DAG-ноды:** агент **не трогает** `application/engine/nodes/`. Контракт service/repo + debug HTTP — **до** gate; wiring в gameplay — **только совместно с мастером** после полного тестирования генераторов (TR-PERF, TR-LAZY-LOAD-1/2, D HY smoke, TR-PAR-4).
 
 ### Impl queue (код vs утверждённое ТЗ)
 
@@ -497,14 +737,16 @@ flowchart LR
 | 10 | Chunk orchestration MapCellService | ✅ |
 | 11 | `world_bounds` v2 | ✅ |
 | 12 | **Edge case M-1…M-5:** magma band + antipode teleport + movement | ✅ skeleton + `antipode_xy`; M-3 movement ⬜ |
-| 13 | **TR-PAR** — parallel chunk generate + serial persist (§ «Многопоточность») | ⬜ |
+| 13 | **TR-PAR** — parallel chunk generate + serial persist (§ «Многопоточность»); DAG `free_cores` — TR-PAR-DAG-1 | ✅ HTTP; ⬜ DAG (**gate**) |
+| 14 | **TR-PERF** — `executemany` + multi-chunk commit на init (§ TR-PERF) | ⬜ |
+| 15 | **TR-LAZY-LOAD** — scene volume load + z_slice lazy path (§ TR-LAZY-LOAD) | ⬜ |
 
 ---
 
 ## План реализации (код → ТЗ)
 
 > **Статус:** ✅ **Фазы 0–8** (generators + debug API) — 2026-06.  
-> **Дальше без DAG:** § Phase 9+ блок «Сейчас». **Engine DAG / ноды — отдельная сессия с мастером**, код не трогаем до согласования.
+> **Дальше без DAG:** § Phase 9+ блок «Сейчас». **Engine DAG / ноды** — см. [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) § **Gate: DAG** (только с мастером, после полного теста генераторов).
 
 ### Принципы исполнения
 
@@ -569,14 +811,14 @@ Regen: clear map → снова **S → O → C → CL**.
 - [x] TR-1 closed в `tz_generator_technical_debt.md`
 - [x] Phase 9+ «Сейчас» — TR-1b, DBG-1 (§ ниже)
 - [ ] Phase 9+ **D HY** — surface hydrology H-1…H-7a (§ ниже; **до DAG**)
-- [ ] Phase 9+ «DAG» — **отложено**, проектируем отдельно с мастером
+- [ ] Phase 9+ «DAG» — **gate**; снятие только мастером после полного теста генераторов
 
 ---
 
 ## Phase 9+ — план (2026-06)
 
 > **Baseline:** generators + `map.py` debug harness ✅.  
-> **Решение:** **engine DAG и ноды не трогаем** до отдельной сессии проектирования с мастером. Сейчас — generators, persist, debug API, smoke-скрипты.  
+> **Решение:** **engine DAG и ноды не трогаем** до gate (§ Gate в `tz_world_generation_dag.md`): полное тестирование генераторов + **явное** снятие gate **мастером**. Сейчас — generators, persist, debug API, smoke-скрипты.  
 > **Следующий блок до DAG:** **D HY** — surface hydrology ([`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md)); агент-план — [`.cursor/plans/hydrology-pre-dag.md`](../.cursor/plans/hydrology-pre-dag.md).
 
 ### Сейчас (без DAG)
@@ -586,10 +828,12 @@ Regen: clear map → снова **S → O → C → CL**.
 | **9 TR-1b** | Pole **вне** `TerrainGeneratorService`: `generate_surface(..., pole_field)`; `build_surface_heightmap` — то же. Caller: **`map.py` / `MapCellService`** (path 2), не нода | mock `ClimatePoleField` in unit; `run_pole_resolve_pass` только в orchestration layer (route/service) |
 | **A DBG-1** | `debug_settlement` pipeline smoke → HTTP; `debug_api_helpers.py` | те же asserts; backend running; этalon `debug_structure` / `debug_ladder` **не менять** |
 | **D HY** | **Surface hydrology** — pure generators + wire в `generate-surface` + debug route; **без DAG-нод** | см. § «D HY — surface hydrology» ниже |
+| **E TR-PERF** | Bulk persist init: `executemany` + `chunks_per_commit` (§ TR-PERF) | benchmark 1 tile; commits ↓; cell set идентичен |
+| **F TR-LAZY-LOAD** | Scene volume + z_slice: **service/repo + debug HTTP** (§ TR-LAZY-LOAD-1/2) | LAZY-1…3 без нод |
 | **B Ores/caves** *(опционально)* | Замена STUB в `oresGenerator` / `cavesGenerator`; **cave hydrology U12** — вместе с caves, не в D HY | debug `POST generate-ores/caves`; merge rules в repo |
 | **C Regen doc** | § «Регенерация при map_cell_size_m» — явный manual path через debug API до DAG | ТЗ + `WorldService` warning; auto re-run — только после DAG |
 
-**Порядок:** `9 TR-1b` ✅ → `A DBG-1` ✅ → **`D HY`** → `B` / `C` по приоритету. **DAG и `apply_hydrology` node — только после D HY + сессии с мастером.**
+**Порядок:** `9 TR-1b` ✅ → `A DBG-1` ✅ → **`E TR-PERF`** → **`F TR-LAZY-LOAD`** (service only) → **`D HY`** → smoke G1–G4 → **gate снят мастером** → DAG wiring. **Агент не правит ноды** до явного снятия gate.
 
 ### D HY — surface hydrology (до DAG)
 
@@ -637,9 +881,9 @@ flowchart TB
 - [ ] `generate-surface` debug: P1→HY→gap→P2→persist; `generate-climate`: liquid по mask
 - [ ] Smoke: import `world_template` → manual `generate-surface` + `generate-climate` — declared sea/lake/river visible
 
-### Потом — DAG (отдельно с мастером, код не трогаем)
+### Потом — DAG (только с мастером, после gate)
 
-> Спека и impl **только после совместного ревью** [`tz_world_generation_dag.md`](./tz_world_generation_dag.md). Ниже — **target**, не backlog для агента.
+> Спека и impl **только после** § Gate в [`tz_world_generation_dag.md`](./tz_world_generation_dag.md): полное тестирование генераторов (G1–G4) + **явное** снятие gate мастером. Ниже — **target**, не backlog для агента.
 
 ```mermaid
 flowchart TB
@@ -681,7 +925,7 @@ flowchart TB
 | **NC-1c** | Grid coords в `generate_minimal` |
 | **`world_map_version`** | После materialization |
 | **`generate_z_slice` node** | Lazy column в gameplay |
-| **TR-PAR** | Parallel chunk generate (ProcessPool) + serial SQLite persist — § «Многопоточность» |
+| **TR-PAR** | Parallel chunk generate + serial persist — § «Многопоточность»; DAG wiring TR-PAR-DAG-1 |
 
 ### Definition of Done
 
@@ -846,20 +1090,23 @@ world_load / first_need
 
 ### 2. Lazy init (gameplay) — частично
 
-**Задумка:** z-срез при первом входе игрока в регион без cells.
+**Задумка:** при входе в регион — загрузить **scene volume** вокруг `(map_x, map_y, map_z)`; если колонка не materialized — `generate_z_slice` + persist.
 
-**Сейчас:** `generate_z_slice` **не реализован**. В gameplay:
+**Сейчас (код):**
 
-- `lazy_terrain` → `generate_minimal` (repair anchor)
-- `lazy_settlement` → полная геометрия поселения (`SettlementGeneratorService`)
+- `check_terrain` → `has_cells_for_location` (не видит wilderness skeleton)
+- `eager_terrain` → `get_by_location` (не scene volume)
+- `lazy_terrain` → `generate_minimal` (только orphan repair)
+- HTTP `POST …/generate-z-slice` + `TerrainBatchOrchestrator.save_z_slice` — ✅ есть, gameplay **не** wired
 
-**Целевой flow (отложен):**
+**Целевой flow:** § **TR-LAZY-LOAD** — сначала service/debug; ноды — после gate.
 
 ```
-MovementNode / AreaLoadNode
-  └─ map_cell_repo.get_z_slice(…) → пусто?
-  └─ TerrainGeneratorService.generate_z_slice(…)   ← API TBD
-  └─ map_cell_repo.upsert_bulk(cells)
+check_terrain → has_column_cells OR has_cells_for_location
+eager_terrain → get_scene_volume(…)
+lazy_terrain  → generate_z_slice if column empty → get_scene_volume
+             → generate_minimal fallback (orphan)
+lazy_settlement → без изменений (SettlementGeneratorService)
 ```
 
 ---
@@ -1081,8 +1328,8 @@ PK `(world_uid, x, y, z)` — точечные запросы; индекс по
 | `ores` | `generate_ores` | `save_pass(ore)` | `generate_ores` | pass по существующим cells |
 | `caves` | `generate_caves` | `save_pass(cave)` | `generate_caves` | pass; lazy gameplay — local radius |
 | `climate` | `apply_climate_pass` | `save_pass(climate)` | `generate_climate` ✅ | eager на materialization |
-| `z_slice` | `generate_z_slice(gx,gy,z…)` | `save_pass(terrain)` | `generate_z_slice` ⬜ | **одна колонка** — inherently local |
-| `minimal_repair` | `generate_minimal` | `save_generated` | `lazy_terrain` ✅ | **одна anchor cell** |
+| `z_slice` | `generate_z_slice(gx,gy,z…)` | `save_pass(terrain)` | `generate_z_slice` ✅ HTTP; gameplay ⬜ TR-LAZY-LOAD | **одна колонка** — lazy wilderness |
+| `minimal_repair` | `generate_minimal` | `insert_bulk_ignore` (`executemany`) | `lazy_terrain` ✅ | **одна anchor cell** — orphan only |
 
 Удобная обёртка `persist_materialization(world)` = S→O→C→CL — только **`full` init / world load**, не gameplay loop.
 
@@ -1157,12 +1404,15 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 #### Checklist (terrain persist для DAG)
 
 - [x] `save_pass` / `save_terrain_batch` — partial impl
+- [ ] **TR-PERF** — `executemany` + multi-chunk transaction (§ TR-PERF)
+- [ ] **TR-LAZY-LOAD** — `get_scene_volume`, `has_column_cells`, debug smoke (§ TR-LAZY-LOAD-1/2)
+- [ ] **TR-LAZY-LOAD-DAG** — gameplay ноды — **gate**, только с мастером
 - [ ] `TerrainPersistScope` enum + единый `persist(cells, scope)` facade
 - [ ] DAG nodes: `generate_surface`, `generate_ores`, `generate_caves`, `generate_z_slice` (wire к service)
 - [ ] `TerrainPatchGeneratorService` + `TerrainPatchRequest` (local bounds only)
 - [ ] `persist_terrain_patch` — guard по bounds
 - [ ] `modify_terrain` / `excavate` — cataclysm, combat, dig (event/action driven)
-- [ ] DAG wire — **мастер** (отдельная сессия)
+- [ ] DAG wire — **gate G5**, только с мастером после G1–G4
 
 ---
 
@@ -1174,7 +1424,10 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 | Two-phase skeleton + N_eff gap | ✅ |
 | `generate-surface` terrain-only | ✅ |
 | `POST generate-climate` / ores / caves | ✅ |
-| Chunked persist + selective upsert | ✅ |
+| Chunked persist + selective upsert | ✅ partial — per-row `execute`; TR-PERF ⬜ |
+| TR-PERF bulk init (`executemany`, multi-chunk commit) | ⬜ § TR-PERF |
+| TR-LAZY-LOAD service + debug (без нод) | ⬜ § TR-LAZY-LOAD-1/2 |
+| TR-LAZY-LOAD-DAG (gameplay ноды) | ⬜ gate — только с мастером |
 | Liquid pass on `generate-climate` | ✅ |
 | `generate_z_slice` API | ✅ `POST …/generate-z-slice` |
 | `world_bounds` v2 | ✅ `world.world_bounds` |
@@ -1230,7 +1483,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 | 2026-06 | Terrain layers: N_base vs deep geology; liquid with climate; ores independent |
 | 2026-06 | **Утверждена** multi-pass terrain skeleton; ordered world generation passes |
 | 2026-06 | Climate split; Terrain ↔ Climate interim documented |
-| 2026-07 | § «Многопоточность (TR-PAR)» — v1 sequential / v2 ProcessPool + serial persist; impl queue п.13 |
+| 2026-07 | § «Многопоточность (TR-PAR)» — v2 impl; § DAG `free_cores` / `MaterializationContext` (TR-PAR-DAG-1) |
 | 2026-07 | § Smoke regression `world_test_all`: NC-1c meter vs grid в `_non_surface_anchor_cells` |
 | 2026-06 | NC-1 coordinate spaces rework |
 

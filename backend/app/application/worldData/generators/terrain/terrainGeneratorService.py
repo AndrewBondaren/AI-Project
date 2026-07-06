@@ -17,7 +17,7 @@ class TerrainGeneratorService:
     Pure terrain skeleton generator — no climate fields on generate_surface.
     Climate: separate pass via ClimateOrchestratorService (DAG / materialization queue).
 
-    Pole field is **caller-provided** (MapCellService / map.py debug harness) — TR-1b.
+    Pole field is **caller-provided** (``TerrainBatchOrchestrator`` / map.py debug harness) — TR-1b.
     """
 
     def generate_surface(

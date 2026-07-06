@@ -40,6 +40,11 @@ from app.application.worldData.raceService import RaceService
 from app.application.worldData.worldPerkService import WorldPerkService
 from app.application.worldData.namedLocationService import NamedLocationService
 from app.application.worldData.mapCellService import MapCellService
+from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.application.worldData.climateBatchOrchestrator import ClimateBatchOrchestrator
+from app.application.worldData.worldSurfaceMaterializationOrchestrator import (
+    WorldSurfaceMaterializationOrchestrator,
+)
 from app.application.worldData.connectionGraphService import ConnectionGraphService
 from app.application.worldData.connectionPersistService import ConnectionPersistService
 from app.application.worldData.settlementPersistService import SettlementPersistService
@@ -109,6 +114,9 @@ class Container:
         self._perk_service: WorldPerkService | None = None
         self._location_service: NamedLocationService | None = None
         self._map_cell_service: MapCellService | None = None
+        self._terrain_batch_orchestrator: TerrainBatchOrchestrator | None = None
+        self._climate_batch_orchestrator: ClimateBatchOrchestrator | None = None
+        self._surface_materialization_orchestrator: WorldSurfaceMaterializationOrchestrator | None = None
         self._connection_persist_service: ConnectionPersistService | None = None
         self._connection_graph_service: ConnectionGraphService | None = None
         self._settlement_persist_service: SettlementPersistService | None = None
@@ -471,6 +479,28 @@ class Container:
         if self._map_cell_service is None:
             self._map_cell_service = MapCellService(repo=self.map_cell_repository())
         return self._map_cell_service
+
+    def terrain_batch_orchestrator(self) -> TerrainBatchOrchestrator:
+        if self._terrain_batch_orchestrator is None:
+            self._terrain_batch_orchestrator = TerrainBatchOrchestrator(
+                map_cell_service=self.map_cell_service(),
+            )
+        return self._terrain_batch_orchestrator
+
+    def climate_batch_orchestrator(self) -> ClimateBatchOrchestrator:
+        if self._climate_batch_orchestrator is None:
+            self._climate_batch_orchestrator = ClimateBatchOrchestrator(
+                map_cell_service=self.map_cell_service(),
+            )
+        return self._climate_batch_orchestrator
+
+    def surface_materialization_orchestrator(self) -> WorldSurfaceMaterializationOrchestrator:
+        if self._surface_materialization_orchestrator is None:
+            self._surface_materialization_orchestrator = WorldSurfaceMaterializationOrchestrator(
+                terrain=self.terrain_batch_orchestrator(),
+                climate=self.climate_batch_orchestrator(),
+            )
+        return self._surface_materialization_orchestrator
 
     def connection_persist_service(self) -> ConnectionPersistService:
         if self._connection_persist_service is None:

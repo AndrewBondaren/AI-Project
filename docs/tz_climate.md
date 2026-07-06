@@ -188,17 +188,41 @@ Pole resolve перед cell weather **обязателен** (tier 1 base). `ru
 
 Partial return: generator может пересчитать широко, но **вернуть** только ячейки в `output_bbox` (upsert merge).
 
-### Нода `generate_climate` (спека, impl ⬜)
+### Многопоточность (CL-PAR)
+
+> Симметрия с [`tz_terrain_generation.md`](./tz_terrain_generation.md) § TR-PAR. **Orchestrator impl ✅; DAG shared `ctx` ⬜.**
+
+| Компонент | Параллелизм |
+|---|---|
+| `run_pole_resolve_pass` | **serial** |
+| `run_anchor_collect_pass` | **serial** (global surface index) |
+| `run_cell_weather_pass` | **parallel** batches (`ChunkComputePool`) |
+| `run_liquid_overlay_pass` | `surface_top` index **serial**; overlay per batch **parallel** |
+| `save_pass(climate)` | **strictly serial** |
+
+**Caller contract:** тот же `MaterializationContext(free_cores)` что и `generate_surface`; `ParallelPolicy.resolve_climate_workers` + optional `world.climate_parallel_workers`.
+
+**DAG:** `generate_climate` node читает `context["materialization_ctx"]` — **не** probe CPU самостоятельно. См. [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) § MaterializationContext.
+
+| ID | Задача | Статус |
+|---|---|---|
+| CL-PAR-1 | `ClimateBatchOrchestrator` + pool | ✅ |
+| CL-PAR-DAG-1 | `GenerateClimateNode` → `apply_climate_batch(..., ctx)` | ⬜ |
+
+### Нода `generate_climate` (спека)
 
 | Поле | Значение |
 |---|---|
 | id | `generate_climate` |
 | phase | `post_llm` |
-| calls | `orchestrator.apply_climate_pass` on DB cells |
+| deps | `generate_surface` (или shared gate materialization) |
+| reads | `context["materialization_ctx"]` — **shared** с surface |
+| calls (target) | `ClimateBatchOrchestrator.apply_climate_batch(..., ctx)` |
+| calls (interim) | `ClimateOrchestratorService.apply_climate_pass` — без parallel `ctx` |
 | writes | bulk upsert climate fields + liquid overlay |
-| status | ✅ impl (`generateClimateNode`) |
+| status | ⬜ migrate to batch orchestrator + shared `ctx` (CL-PAR-DAG-1) |
 
-Debug: `map/generate-*` после surface (см. `tz_terrain_generation.md` § Роли). Legacy `full_surface` — regen / tests only.
+Debug: `POST …/map/generate-climate` + `materialize-stack` — `ClimateBatchOrchestrator` + query `free_cores` / stub `5`. Legacy `full_surface` — regen / tests only.
 
 ### Нода `resolve_weather` (спека, impl ⬜)
 
@@ -1089,7 +1113,8 @@ class VolumeClimateContext:
 
 | Дата | Версия | Изменение |
 |---|---|---|
-| 2026-07 | — | § Smoke regression `world_test_all`: CL-R1…CL-R3 (false liquid_body, NC-1c, water phase mult) |
+| 2026-07 | § CL-PAR — `ClimateBatchOrchestrator`; DAG `MaterializationContext` (CL-PAR-DAG-1) |
+| 2026-07 | § Smoke regression `world_test_all`: CL-R1…CL-R3 (false liquid_body, NC-1c, water phase mult) |
 | 2026-06 | v2.6.1 | Disambiguation: World Snapshot vs SurfaceClimateField; cross-ref `tz_world_snapshot.md` |
 | 2026-06 | v2.6 | **Climate LOD** C6–C13: SurfaceClimateField, per-cell vs field cache, partial recalc, hydrology U28 liquid split, lazy sim cross-ref |
 | 2026-06 | v2.5.2 | U12 cave water: volume principle + `cave_system` in VolumeClimateContext draft |

@@ -221,7 +221,7 @@ Perimeter не учитывает template района — v1 compromise.
 | MR-4 | low | `streets.py` | graph + policy | policy → `road/` | open |
 | MR-5 | info | `settlementAssembler/planner/` defaults | smoke defaults cross-import | `generators/defaults/` | open |
 | MR-6 | medium | `footprint.py` | sizing + gates + facade + deprecated + `district_templates` | split `footprintSizing.py` + thin facade | open |
-| MR-7 | medium | `mapCellService.py` | CRUD/import + `save_terrain_batch` (pole, chunking, gap stats, persist) | `TerrainBatchOrchestrator` или DAG node; service → repo only | open |
+| MR-7 | medium | `mapCellService.py` | CRUD/import + `save_terrain_batch` (pole, chunking, gap stats, persist) | `TerrainBatchOrchestrator` или DAG node; service → repo only | **resolved** |
 
 ---
 
@@ -312,7 +312,7 @@ Passes (`surfacePass`, `columnFillPass`, …) — OK (40–96 строк). Fat: 
 
 | ID | Severity | P | Проблема | Fix | Status |
 |---|---|---|---|---|---|
-| MR-7 | medium | P2 | `MapCellService.save_terrain_batch` / `save_z_slice`: persist layer знает pole, chunking, gap logging | extract `TerrainBatchOrchestrator` (симметрия с `ClimateOrchestratorService`) | open |
+| MR-7 | medium | P2 | `MapCellService.save_terrain_batch` / `save_z_slice`: persist layer знает pole, chunking, gap logging | extract `TerrainBatchOrchestrator` (симметрия с `ClimateOrchestratorService`) | **resolved** |
 | TR-5 | low | P3 | `TerrainGeneratorService.generate_minimal` — terrain facade + inline climate (lazy gameplay) | lazy node: stub + climate pass или shared DR-7 helper; document until DAG | open |
 | TR-8 | medium | P2 | `ClimateSurfaceAssembler._non_surface_anchor_cells` — orchestrator синтезирует MapCell (imports вынесены — CL-11 ✅, pass extraction — нет) | `passes/nonSurfaceAnchorPass.py` | open |
 | MAP-2 | low | P3 | `map.py` — HTTP + pipeline wiring + module singleton generators | container / deps | open |

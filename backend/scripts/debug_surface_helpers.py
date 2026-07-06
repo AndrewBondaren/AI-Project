@@ -127,6 +127,32 @@ def api_generate_climate(client: httpx.Client, world_uid: str) -> dict:
     )
 
 
+def api_materialize_stack(
+    client: httpx.Client,
+    world_uid: str,
+    *,
+    mode: SurfaceInitMode = "bootstrap",
+    max_tiles: int = 16,
+    free_cores: int | None = None,
+    parallel_workers: int | None = None,
+    include_climate: bool = True,
+) -> dict:
+    """S→CL via ``POST materialize-stack`` (shared ``MaterializationContext``)."""
+    params: dict[str, str | int | bool] = {"mode": mode, "include_climate": include_climate}
+    if max_tiles > 0:
+        params["max_tiles"] = max_tiles
+    if free_cores is not None:
+        params["free_cores"] = free_cores
+    if parallel_workers is not None:
+        params["parallel_workers"] = parallel_workers
+    return _post_json(
+        client,
+        f"/worlds/{world_uid}/map/materialize-stack",
+        f"POST materialize-stack {world_uid} mode={mode}",
+        params=params,
+    )
+
+
 def api_materialize_surface_stack(
     client: httpx.Client,
     world_uid: str,
@@ -139,22 +165,28 @@ def api_materialize_surface_stack(
     """
     World init stack: surface (bootstrap fine tiles + coarse hydro) → climate.
 
-    Hydrology is merged in ``generate-surface``; set ``skip_hydrology=False`` only to
-    re-run the legacy coarse hydrology pass on existing cells.
+    Default: ``api_materialize_stack`` (single HTTP, shared parallel context).
+    Set ``skip_hydrology=False`` to re-run legacy separate hydrology pass.
     """
-    surface = api_generate_surface(client, world_uid, mode=mode, max_tiles=max_tiles)
-
-    hydrology: dict | None = None
     if not skip_hydrology:
+        surface = api_generate_surface(client, world_uid, mode=mode, max_tiles=max_tiles)
         hydrology = api_generate_hydrology(client, world_uid, scope=hydrology_scope)
+        climate = api_generate_climate(client, world_uid)
+        return SurfaceStackResult(
+            world_uid=world_uid,
+            surface=surface,
+            hydrology=hydrology,
+            climate=climate,
+        )
 
-    climate = api_generate_climate(client, world_uid)
-
+    stack = api_materialize_stack(
+        client, world_uid, mode=mode, max_tiles=max_tiles, include_climate=True,
+    )
     return SurfaceStackResult(
         world_uid=world_uid,
-        surface=surface,
-        hydrology=hydrology,
-        climate=climate,
+        surface=stack.get("terrain", {}),
+        hydrology=None,
+        climate=stack.get("climate"),
     )
 
 
@@ -169,5 +201,6 @@ __all__ = [
     "api_generate_hydrology",
     "api_generate_surface",
     "api_list_bootstrap_tiles",
+    "api_materialize_stack",
     "api_materialize_surface_stack",
 ]

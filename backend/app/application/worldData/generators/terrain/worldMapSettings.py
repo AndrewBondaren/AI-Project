@@ -12,6 +12,7 @@ DEFAULT_TERRAIN_CHUNK_COLUMNS = _terrain_defaults.terrain_chunk_columns or 32
 DEFAULT_MAP_SUBSURFACE_DEPTH = _terrain_defaults.map_subsurface_depth or 20
 DEFAULT_Z_MIN = WorldTerrainScalars.resolved_z_min(None)
 DEFAULT_Z_MAX = WorldTerrainScalars.resolved_z_max(None)
+SERIAL_TERRAIN_CELL_THRESHOLD = 50_000
 
 
 def grid_bbox_padding(world: World) -> int:
@@ -46,3 +47,10 @@ def world_z_min(world: World) -> int:
 def world_z_max(world: World) -> int:
     """Vertical upper bound for surface heightmap clamp."""
     return WorldTerrainScalars.resolved_z_max(terrain_scalars(world).z_max)
+
+
+def force_serial_terrain_generate(world: World, surface_column_count: int) -> bool:
+    """TZ TR-PAR: skip pool overhead on small tile/column counts."""
+    if surface_column_count <= 0:
+        return True
+    return surface_column_count * (1 + n_base(world)) < SERIAL_TERRAIN_CELL_THRESHOLD

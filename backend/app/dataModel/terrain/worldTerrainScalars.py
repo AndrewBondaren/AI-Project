@@ -29,6 +29,7 @@ class WorldTerrainScalars(BaseModel):
     terrain_chunk_columns: DefaultOnWire[int] = constrained_field(
         default=32, greater_equals=CHUNK_COLUMNS_MIN,
     )
+    terrain_parallel_workers: DefaultOnWire[int | None] = None
     map_subsurface_depth: DefaultOnWire[int] = constrained_field(
         default=20, greater_equals=SUBSURFACE_DEPTH_MIN,
     )
