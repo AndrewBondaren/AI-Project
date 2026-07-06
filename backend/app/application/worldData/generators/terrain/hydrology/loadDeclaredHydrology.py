@@ -7,8 +7,6 @@ from dataclasses import dataclass
 from app.application.jsonValidation.worldRow import hydrology as read_hydrology
 from app.application.worldData.generators.coordinates.convert import (
     cell_size_m,
-    meters_to_grid_x,
-    meters_to_grid_y,
 )
 from app.application.worldData.generators.terrain.hydrology.basinKindResolver import (
     resolve_lake_basin_role,
@@ -76,14 +74,9 @@ def build_river_system_index(rivers: list[DeclaredRiver]) -> RiverSystemIndex:
     )
 
 
-def _waypoint_grid(
-    wp: HydrologyWaypoint,
-    cell_m: int,
-) -> tuple[int, int]:
-    return (
-        int(meters_to_grid_x(wp.x, cell_m)),
-        int(meters_to_grid_y(wp.y, cell_m)),
-    )
+def _waypoint_meter(wp: HydrologyWaypoint) -> tuple[int, int]:
+    """World fine grid — meter coords (1 m cell), not macro tile index."""
+    return int(wp.x), int(wp.y)
 
 
 def _path_to_segments(
@@ -94,7 +87,7 @@ def _path_to_segments(
 ) -> list[tuple[tuple[int, int], tuple[int, int]]]:
     if len(points) < 2:
         return []
-    grid_pts = [_waypoint_grid(p, cell_m) for p in points]
+    grid_pts = [_waypoint_meter(p) for p in points]
     segments: list[tuple[tuple[int, int], tuple[int, int]]] = []
     for i in range(len(grid_pts) - 1):
         segments.append((grid_pts[i], grid_pts[i + 1]))
@@ -108,8 +101,8 @@ def _segments_from_declared_river(river: DeclaredRiver, cell_m: int) -> list[Dec
         return []
     edges: list[DeclaredRiverEdge] = []
     for index, seg in enumerate(river.segments):
-        a = _waypoint_grid(seg.from_wp, cell_m)
-        b = _waypoint_grid(seg.to_wp, cell_m)
+        a = _waypoint_meter(seg.from_wp)
+        b = _waypoint_meter(seg.to_wp)
         edges.append(DeclaredRiverEdge(
             edge_uid=f"dr-{river.location_uid}-{index}",
             segment=(a, b),

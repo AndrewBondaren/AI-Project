@@ -1,5 +1,6 @@
 import logging
 from dataclasses import asdict
+from typing import Literal
 
 from app.api.schemas.imports import ImportResult
 from app.application.import_helpers import import_list
@@ -9,13 +10,9 @@ from app.application.worldData.generators.assemblers.climateAssembler.passes.pol
 from app.application.worldData.generators.terrain.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
-from app.application.worldData.generators.terrain.hydrology.loadHydrologyFromWorld import (
-    is_hydrology_enabled,
-)
 from app.application.worldData.generators.terrain.passes.gapAnalysisPass import run_gap_analysis
-from app.application.worldData.generators.terrain.passes.surfacePass import run_surface_pass
 from app.application.worldData.generators.terrain.terrainGeneratorService import TerrainGeneratorService
-from app.application.worldData.generators.terrain.worldMapSettings import n_base, terrain_chunk_columns
+from app.application.worldData.generators.terrain.worldMapSettings import terrain_chunk_columns
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.mapCell import MapCell
@@ -24,6 +21,7 @@ from app.db.repositories.iMapCellRepository import IMapCellRepository
 logger = logging.getLogger(__name__)
 
 LayerKind = str  # "terrain" | "climate" | "ore" | "cave"
+SurfaceMode = Literal["bootstrap", "full"]
 
 
 class MapCellService:
@@ -73,6 +71,97 @@ class MapCellService:
             raise ValueError(f"unknown layer kind: {layer}")
         return ImportResult(total=len(cells), succeeded=n, failed=0)
 
+    def plan_bootstrap_tiles(
+        self,
+        world,
+        locations: list,
+        *,
+        nodes: list[ConnectionNode] | None = None,
+        edges: list[ConnectionEdge] | None = None,
+        hydrology_generator: HydrologyGeneratorService | None = None,
+        max_tiles: int | None = 16,
+    ) -> list[tuple[int, int]]:
+        from app.application.worldData.generators.coordinates import cell_size_m
+        from app.application.worldData.generators.terrain.passes.bootstrapMacroTiles import (
+            bootstrap_macro_tiles,
+        )
+        from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
+            prepare_surface_terrain_context,
+        )
+
+        ctx = prepare_surface_terrain_context(
+            world,
+            locations,
+            nodes=nodes,
+            edges=edges,
+            hydrology_generator=hydrology_generator,
+        )
+        if ctx is None:
+            return []
+        return bootstrap_macro_tiles(
+            world,
+            locations,
+            ctx.coarse_hydro,
+            ctx.sparse_meter_hydro,
+            max_tiles=max_tiles,
+        )
+
+    async def _materialize_fine_tile(
+        self,
+        generator: TerrainGeneratorService,
+        world,
+        locations: list,
+        ctx,
+        tile_gx: int,
+        tile_gy: int,
+    ) -> ImportResult:
+        from app.application.worldData.generators.coordinates import cell_size_m
+        from app.application.worldData.generators.coordinates.worldTile import (
+            iter_meter_chunks,
+            meter_bbox_for_tile,
+        )
+        from app.application.worldData.generators.terrain.hydrology.meterHydrologyIndex import (
+            merge_meter_hydro_for_tile,
+        )
+        from app.application.worldData.generators.terrain.passes.surfacePass import build_fine_surface_tile
+        from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+
+        cell_m = cell_size_m(world)
+        fine_z = build_fine_surface_tile(
+            world, ctx.pole_field, tile_gx, tile_gy, ctx.coarse_surface_z,
+        )
+        for (xm, ym), z in ctx.meter_z_overrides.items():
+            if xm // cell_m == tile_gx and ym // cell_m == tile_gy:
+                fine_z[(xm, ym)] = z
+
+        meter_bbox = meter_bbox_for_tile(tile_gx, tile_gy, cell_m)
+        heightmap = SurfaceHeightmap(
+            world_uid=world.world_uid,
+            bbox=meter_bbox,
+            surface_z=fine_z,
+        )
+        tile_hydro = merge_meter_hydro_for_tile(
+            tile_gx, tile_gy, cell_m, ctx.coarse_hydro, ctx.sparse_meter_hydro,
+        )
+        n_eff = run_gap_analysis(world, heightmap)
+        chunk_size = terrain_chunk_columns(world)
+
+        total = 0
+        succeeded = 0
+        for rect in iter_meter_chunks(meter_bbox, chunk_size):
+            chunk_cells = generator.generate_surface_chunk(
+                world,
+                locations,
+                heightmap,
+                n_eff,
+                rect,
+                hydrology_by_cell=tile_hydro or None,
+            )
+            total += len(chunk_cells)
+            result = await self.save_pass(chunk_cells, "terrain")
+            succeeded += result.succeeded
+        return ImportResult(total=total, succeeded=succeeded, failed=0)
+
     async def save_terrain_batch(
         self,
         world_uid: str,
@@ -83,56 +172,104 @@ class MapCellService:
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
         hydrology_generator: HydrologyGeneratorService | None = None,
+        surface_mode: SurfaceMode = "bootstrap",
+        max_tiles: int | None = 16,
     ) -> ImportResult:
-        pole_field = run_pole_resolve_pass(world, locations)
-        heightmap = run_surface_pass(world, locations, pole_field)
-        if heightmap is None:
+        from app.application.worldData.generators.coordinates import cell_size_m, iter_macro_tiles
+        from app.application.worldData.generators.terrain.passes.bbox import grid_bbox_from_locations
+        from app.application.worldData.generators.terrain.passes.bootstrapMacroTiles import (
+            bootstrap_macro_tiles,
+        )
+        from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
+            prepare_surface_terrain_context,
+        )
+
+        macro_bbox = grid_bbox_from_locations(world, locations)
+        if macro_bbox is None:
             return ImportResult(total=0, succeeded=0, failed=0)
 
-        hydrology_by_cell = {}
-        if is_hydrology_enabled(world):
-            hydro = hydrology_generator or HydrologyGeneratorService()
-            hydro_result = hydro.apply(
+        ctx = prepare_surface_terrain_context(
+            world,
+            locations,
+            nodes=nodes,
+            edges=edges,
+            hydrology_generator=hydrology_generator,
+        )
+        if ctx is None:
+            return ImportResult(total=0, succeeded=0, failed=0)
+
+        cell_m = cell_size_m(world)
+        if surface_mode == "full":
+            tiles = list(iter_macro_tiles(macro_bbox))
+        else:
+            tiles = bootstrap_macro_tiles(
                 world,
                 locations,
-                heightmap,
-                nodes=nodes or [],
-                edges=edges or [],
+                ctx.coarse_hydro,
+                ctx.sparse_meter_hydro,
+                max_tiles=max_tiles,
             )
-            hydrology_by_cell = hydro_result.cell_index.by_cell
-
-        n_eff = run_gap_analysis(world, heightmap)
 
         total = 0
         succeeded = 0
-        n_eff_gt = 0
-
-        base = n_base(world)
-        for v in n_eff.values():
-            if v > base:
-                n_eff_gt += 1
-
-        chunk_size = terrain_chunk_columns(world)
-        chunks = list(TerrainGeneratorService.iter_column_chunks(heightmap, chunk_size))
-        for rect in chunks:
-            chunk_cells = generator.generate_surface_chunk(
-                world, locations, heightmap, n_eff, rect,
-                hydrology_by_cell=hydrology_by_cell or None,
+        for tile_gx, tile_gy in tiles:
+            tile_result = await self._materialize_fine_tile(
+                generator, world, locations, ctx, tile_gx, tile_gy,
             )
-            total += len(chunk_cells)
-            result = await self.save_pass(chunk_cells, "terrain")
-            succeeded += result.succeeded
+            total += tile_result.total
+            succeeded += tile_result.succeeded
 
         logger.info(
-            "save_terrain_batch | world=%s cells=%d upserted=%d n_eff_gt_base=%d chunks=%d hydrology=%d",
+            "save_terrain_batch | world=%s mode=%s fine tiles=%d cells=%d upserted=%d cell_m=%d",
             world_uid,
+            surface_mode,
+            len(tiles),
             total,
             succeeded,
-            n_eff_gt,
-            sum(1 for _ in chunks),
-            len(hydrology_by_cell),
+            cell_m,
         )
         return ImportResult(total=total, succeeded=succeeded, failed=0)
+
+    async def materialize_macro_tile(
+        self,
+        world_uid: str,
+        generator: TerrainGeneratorService,
+        world,
+        locations: list,
+        tile_gx: int,
+        tile_gy: int,
+        *,
+        nodes: list[ConnectionNode] | None = None,
+        edges: list[ConnectionEdge] | None = None,
+        hydrology_generator: HydrologyGeneratorService | None = None,
+    ) -> ImportResult:
+        """Fine grid for one macro tile (map_cell_size_m² × subsurface columns)."""
+        from app.application.worldData.generators.terrain.passes.bbox import grid_bbox_from_locations
+        from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
+            prepare_surface_terrain_context,
+        )
+
+        if grid_bbox_from_locations(world, locations) is None:
+            return ImportResult(total=0, succeeded=0, failed=0)
+
+        ctx = prepare_surface_terrain_context(
+            world,
+            locations,
+            nodes=nodes,
+            edges=edges,
+            hydrology_generator=hydrology_generator,
+        )
+        if ctx is None:
+            return ImportResult(total=0, succeeded=0, failed=0)
+
+        result = await self._materialize_fine_tile(
+            generator, world, locations, ctx, tile_gx, tile_gy,
+        )
+        logger.info(
+            "materialize_macro_tile | world=%s tile=(%d,%d) cells=%d upserted=%d",
+            world_uid, tile_gx, tile_gy, result.total, result.succeeded,
+        )
+        return result
 
     async def save_z_slice(
         self,

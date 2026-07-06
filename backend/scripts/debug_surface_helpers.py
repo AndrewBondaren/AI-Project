@@ -21,6 +21,7 @@ import httpx
 
 from debug_api_helpers import BASE_URL, DebugApiError, _require_ok, api_client
 
+SurfaceInitMode = Literal["bootstrap", "full"]
 HydrologyScopeQuery = Literal["full", "ocean", "lakes", "rivers", "landforms"]
 
 
@@ -30,6 +31,21 @@ class SurfaceStackResult:
     surface: dict
     hydrology: dict | None
     climate: dict
+
+
+def _get_json(
+    client: httpx.Client,
+    path: str,
+    context: str,
+    *,
+    params: dict | None = None,
+) -> dict:
+    r = client.get(path, params=params)
+    _require_ok(r, context)
+    data = r.json()
+    if not isinstance(data, dict):
+        raise DebugApiError(f"{context}: expected JSON object, got {type(data)}")
+    return data
 
 
 def _post_json(
@@ -47,12 +63,39 @@ def _post_json(
     return data
 
 
-def api_generate_surface(client: httpx.Client, world_uid: str) -> dict:
-    """Run terrain skeleton batch (pole → surface → gap → column fill)."""
+def api_generate_surface(
+    client: httpx.Client,
+    world_uid: str,
+    *,
+    mode: SurfaceInitMode = "bootstrap",
+    max_tiles: int = 16,
+) -> dict:
+    """Run terrain surface batch (coarse plan + fine tiles)."""
+    params: dict[str, str | int] = {"mode": mode}
+    if max_tiles > 0:
+        params["max_tiles"] = max_tiles
     return _post_json(
         client,
         f"/worlds/{world_uid}/map/generate-surface",
-        f"POST generate-surface {world_uid}",
+        f"POST generate-surface {world_uid} mode={mode}",
+        params=params,
+    )
+
+
+def api_list_bootstrap_tiles(
+    client: httpx.Client,
+    world_uid: str,
+    *,
+    max_tiles: int = 16,
+) -> dict:
+    params: dict[str, int] = {}
+    if max_tiles > 0:
+        params["max_tiles"] = max_tiles
+    return _get_json(
+        client,
+        f"/worlds/{world_uid}/map/bootstrap-tiles",
+        f"GET bootstrap-tiles {world_uid}",
+        params=params or None,
     )
 
 
@@ -88,16 +131,18 @@ def api_materialize_surface_stack(
     client: httpx.Client,
     world_uid: str,
     *,
+    mode: SurfaceInitMode = "bootstrap",
+    max_tiles: int = 16,
     hydrology_scope: HydrologyScopeQuery = "full",
-    skip_hydrology: bool = False,
+    skip_hydrology: bool = True,
 ) -> SurfaceStackResult:
     """
-    Full surface materialization: surface → hydrology → climate.
+    World init stack: surface (bootstrap fine tiles + coarse hydro) → climate.
 
-    Use after world + locations exist in DB. Does not clear map — call
-    ``debug_api_helpers.api_clear_map`` first for regen.
+    Hydrology is merged in ``generate-surface``; set ``skip_hydrology=False`` only to
+    re-run the legacy coarse hydrology pass on existing cells.
     """
-    surface = api_generate_surface(client, world_uid)
+    surface = api_generate_surface(client, world_uid, mode=mode, max_tiles=max_tiles)
 
     hydrology: dict | None = None
     if not skip_hydrology:
@@ -117,10 +162,12 @@ __all__ = [
     "BASE_URL",
     "DebugApiError",
     "HydrologyScopeQuery",
+    "SurfaceInitMode",
     "SurfaceStackResult",
     "api_client",
     "api_generate_climate",
     "api_generate_hydrology",
     "api_generate_surface",
+    "api_list_bootstrap_tiles",
     "api_materialize_surface_stack",
 ]

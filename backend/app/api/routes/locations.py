@@ -67,7 +67,10 @@ async def render_location_grid(
     if loc is None:
         raise HTTPException(status_code=404, detail=f"Location '{location_uid}' not found")
 
-    svc = MapGridRenderService(container.map_cell_service())
+    svc = MapGridRenderService(
+        container.map_cell_service(),
+        world_service=container.world_service(),
+    )
     payload = await svc.render_location_grid(world_uid, location_uid, z=z)
     return JSONResponse(content=payload)
 

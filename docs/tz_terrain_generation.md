@@ -377,10 +377,103 @@ Generator **не** знает про threads/SQL — только `(world, locat
 | Halo | **±1 cell** при gap analysis на границе chunk | соседи для `N_eff` на edge |
 | Persist | **1 transaction / chunk** | `insert_bulk` или upsert terrain layer |
 | Порядок chunks | row-major, deterministic | воспроизводимость |
-| Parallel v1 | **нет** — sequential chunks | проще отладка |
-| Parallel v2 | thread pool **generate**; **insert serial** на asyncio loop | SQLite single-writer |
+| **Parallel v1 (текущий код)** | **нет** — sequential chunks | проще отладка; см. § «Многопоточность (TR-PAR)» |
+| **Parallel v2 (target)** | thread pool **generate**; **insert serial** | SQLite single-writer |
 
-**Порог «всё в одном batch»:** если `columns × (1+N_base) < ~50_000` — можно один generate + один insert (малые миры / test).
+### Многопоточность (TR-PAR)
+
+> **Статус:** v1 ✅ в коде (только sequential); v2 ⬜ **утверждено в ТЗ**, impl — backlog perf.
+
+#### Текущее поведение (v1)
+
+`MapCellService.save_terrain_batch` / `_materialize_fine_tile`:
+
+1. macro-тайлы — **последовательно** (bootstrap: priority list; `mode=full`: весь bbox);
+2. внутри тайла — `iter_meter_chunks` row-major, **32×32** fine-колонок (`terrain_chunk_columns`);
+3. на каждый chunk: синхронный `generate_surface_chunk` → `await upsert_terrain_skeleton`;
+4. **нет** `threading`, `ProcessPoolExecutor`, `asyncio.gather` на chunks.
+
+`TerrainGeneratorService` — **pure sync**, без async и без знания о потоках.
+
+#### Почему не параллелим persist
+
+| Ограничение | Следствие |
+|---|---|
+| SQLite **single-writer** | параллельные `upsert` из нескольких потоков → lock contention / `database is locked` |
+| Детерминизм smoke/regression | row-major + serial insert = воспроизводимый порядок строк |
+| Отладка harness | один chunk за раз — проще bisect при битых cells |
+
+**Инвариант v1:** не более **одного** активного terrain-writer на `world_uid`.
+
+#### Target v2 — разделение generate / persist
+
+```mermaid
+flowchart LR
+  subgraph workers["Thread pool (CPU)"]
+    G1["generate_surface_chunk(rect₁)"]
+    G2["generate_surface_chunk(rect₂)"]
+    Gn["generate_surface_chunk(rectₙ)"]
+  end
+  subgraph main["asyncio event loop"]
+    Q["chunk queue"]
+    W["serial upsert_terrain_skeleton"]
+  end
+  G1 --> Q
+  G2 --> Q
+  Gn --> Q
+  Q --> W
+```
+
+| Слой | Параллелизм v2 | Заметка |
+|---|---|---|
+| Pass 1 coarse + hydrology planning | **serial** | один `surface_z` / `coarse_hydro` на весь planning scope |
+| Gap analysis (`N_eff`) | **serial per tile** | нужен полный `surface_z` тайла (или halo ±1 на границе chunk — допустимо) |
+| Pass 2 column fill | **parallel** по `ColumnRect` | `ProcessPoolExecutor` предпочтительнее GIL; worker получает **immutable** snapshot heightmap + `n_eff` slice |
+| Persist terrain | **strictly serial** | один writer; batch `executemany` в транзакции на chunk |
+| Climate / ores / caves passes | **serial** на существующих cells | отдельные ordered passes |
+
+**Worker contract:** `(world_uid, rect, heightmap_blob, n_eff_rect, hydrology_rect) → list[MapCell]` — без repos, без RNG от порядка chunk (seed = `f(world_uid, gx, gy, pass_id)`).
+
+**Orchestrator contract (`MapCellService`):**
+
+- **перед** запуском pool: caller передаёт **`free_cores`** — число ядер, доступных под generate (probe: `cpu_count() − reserve`, reserve ≥ 1 для FastAPI/asyncio);
+- из `free_cores` + опционального cap мира (`terrain_parallel_workers`) + debug override (`parallel_workers`) → **`parallel_workers` eff** в `TerrainGeneratorService.generate_surface_chunks(...)`;
+- partition rects → submit to pool (`parallel_workers` eff);
+- `asyncio.Queue` или bounded channel: готовые chunks → **один** coroutine пишет в DB;
+- backpressure: не более `N` in-flight generated chunks в RAM (`N` ≈ 2× worker count);
+- progress: `{chunks_done, chunks_total, cells_written}` (SSE / job id — см. ниже).
+
+**Инвариант:** `TerrainGeneratorService` **не** сам определяет число ядер — только принимает `parallel_workers` от orchestrator.
+
+#### Bootstrap и macro-тайлы
+
+| Уровень | v1 | v2 (рекомендация) |
+|---|---|---|
+| Несколько bootstrap-тайлов | serial | **optional** parallel tiles — только если RAM позволяет (один fine-тайл `cell_m=3000` ≈ сотни MB heightmap + сотни M cells) |
+| Chunks внутри одного тайла | serial | **parallel generate**, serial persist |
+| `materialize-tile?gx=&gy=` | один тайл, serial | тот же chunk pool |
+
+**Практика для `map_cell_size_m=3000`:** параллелить **chunks внутри тайла**, не весь bbox; bootstrap `max_tiles` ограничивает число тайлов.
+
+#### Что не параллелить
+
+- Coarse hydrology `apply` до fine materialize (единый `coarse_hydro` index).
+- Declared meter river carve с глобальным merge в один проход (или partition по basin с merge barrier).
+- `generate-climate` liquid overlay — читает все cells мира в scope; v2 climate parallel — отдельное ТЗ (`tz_climate.md`).
+- DAG `asyncio.gather` на нодах — **оркестрация чата**, не substitute для TR-PAR terrain chunks.
+
+#### Impl queue
+
+| ID | Задача | Статус |
+|---|---|---|
+| **TR-PAR-1** | Chunk pool: `generate_surface_chunks` + serial persist queue | ⬜ |
+| **TR-PAR-2** | Progress job + `{chunks_done, chunks_total}` (SSE optional) | ⬜ |
+| **TR-PAR-3** | `free_cores` probe + `terrain_parallel_workers` cap + API override → `parallel_workers` | ⬜ |
+| **TR-PAR-4** | Stress test: bootstrap 1 tile, `cell_m=3000`, workers=4 vs serial | ⬜ |
+
+**Приёмка v2:** тот же `world_uid` + seed → **идентичный** набор `(x,y,z, system_terrain, hydrology)` после serial v1 и parallel v2 (order-independent compare).
+
+**Порог «всё в одном batch»:** если `columns × (1+N_base) < ~50_000` — можно один generate + один insert (малые миры / test); parallel v2 **не обязателен**.
 
 **Progress UX (позже):** job id + `{chunks_done, chunks_total, cells_written}`; опционально SSE.
 
@@ -404,6 +497,7 @@ Generator **не** знает про threads/SQL — только `(world, locat
 | 10 | Chunk orchestration MapCellService | ✅ |
 | 11 | `world_bounds` v2 | ✅ |
 | 12 | **Edge case M-1…M-5:** magma band + antipode teleport + movement | ✅ skeleton + `antipode_xy`; M-3 movement ⬜ |
+| 13 | **TR-PAR** — parallel chunk generate + serial persist (§ «Многопоточность») | ⬜ |
 
 ---
 
@@ -587,7 +681,7 @@ flowchart TB
 | **NC-1c** | Grid coords в `generate_minimal` |
 | **`world_map_version`** | После materialization |
 | **`generate_z_slice` node** | Lazy column в gameplay |
-| Parallel chunks v2 | Perf |
+| **TR-PAR** | Parallel chunk generate (ProcessPool) + serial SQLite persist — § «Многопоточность» |
 
 ### Definition of Done
 
@@ -1136,6 +1230,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 | 2026-06 | Terrain layers: N_base vs deep geology; liquid with climate; ores independent |
 | 2026-06 | **Утверждена** multi-pass terrain skeleton; ordered world generation passes |
 | 2026-06 | Climate split; Terrain ↔ Climate interim documented |
+| 2026-07 | § «Многопоточность (TR-PAR)» — v1 sequential / v2 ProcessPool + serial persist; impl queue п.13 |
 | 2026-07 | § Smoke regression `world_test_all`: NC-1c meter vs grid в `_non_surface_anchor_cells` |
 | 2026-06 | NC-1 coordinate spaces rework |
 

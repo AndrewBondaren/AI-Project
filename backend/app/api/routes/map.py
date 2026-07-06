@@ -105,14 +105,18 @@ async def render_world_grid(
     gy0: int | None = Query(default=None),
     gx1: int | None = Query(default=None),
     gy1: int | None = Query(default=None),
+    mark_locations: bool = Query(default=True),
     container=Depends(get_container),
 ) -> JSONResponse:
-    """Debug only — ASCII top-surface grid for WORLD_SURFACE_GRID cells."""
+    """Debug only — ASCII top-surface world map (@ = cell has location_uid)."""
     from app.application.worldData.render.mapGridRenderService import MapGridRenderService
 
     location_svc = container.location_service()
     locations = await location_svc.get_all(world_uid)
-    svc = MapGridRenderService(container.map_cell_service())
+    svc = MapGridRenderService(
+        container.map_cell_service(),
+        world_service=container.world_service(),
+    )
     bbox = (gx0, gy0, gx1, gy1)
     if any(v is not None for v in bbox) and not all(v is not None for v in bbox):
         raise HTTPException(
@@ -126,16 +130,114 @@ async def render_world_grid(
         gy0=gy0,
         gx1=gx1,
         gy1=gy1,
+        mark_locations=mark_locations,
     )
     return JSONResponse(content=payload)
+
+
+@router.get("/worlds/{world_uid}/map/render-world-tile-grids")
+async def render_world_tile_grids(
+    world_uid: str,
+    container=Depends(get_container),
+) -> JSONResponse:
+    """Debug only — per macro tile fine grid (map_cell_size_m² cells)."""
+    from app.application.worldData.render.mapGridRenderService import MapGridRenderService
+
+    svc = MapGridRenderService(
+        container.map_cell_service(),
+        world_service=container.world_service(),
+    )
+    payload = await svc.render_world_tile_grids(world_uid)
+    return JSONResponse(content=payload)
+
+
+@router.get("/worlds/{world_uid}/map/render-location-grids")
+async def render_all_location_grids(
+    world_uid: str,
+    container=Depends(get_container),
+) -> JSONResponse:
+    """Debug only — ASCII per location_uid that has map_cells, all z levels."""
+    from app.application.worldData.render.mapGridRenderService import MapGridRenderService
+
+    svc = MapGridRenderService(
+        container.map_cell_service(),
+        world_service=container.world_service(),
+    )
+    payload = await svc.render_all_location_grids(world_uid)
+    return JSONResponse(content=payload)
+
+
+@router.post("/worlds/{world_uid}/map/materialize-tile")
+async def materialize_tile(
+    world_uid: str,
+    gx: int = Query(...),
+    gy: int = Query(...),
+    container=Depends(get_container),
+) -> JSONResponse:
+    """Debug — fine grid for one macro tile (map_cell_size_m² surface cells + subsurface)."""
+    map_svc = container.map_cell_service()
+    world_svc = container.world_service()
+    location_svc = container.location_service()
+    conn_svc = container.connection_graph_service()
+
+    world = await world_svc.get_by_id(world_uid)
+    locations = await location_svc.get_all(world_uid)
+    nodes = await conn_svc.get_nodes(world_uid)
+    edges = await conn_svc.get_edges(world_uid)
+
+    result = await map_svc.materialize_macro_tile(
+        world_uid, _terrain_generator, world, locations, gx, gy,
+        nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
+    )
+    status_code = 200 if result.failed == 0 else 207
+    return JSONResponse(status_code=status_code, content=result.to_dict())
+
+
+@router.get("/worlds/{world_uid}/map/bootstrap-tiles")
+async def list_bootstrap_tiles(
+    world_uid: str,
+    max_tiles: int = Query(default=16, ge=0),
+    container=Depends(get_container),
+) -> JSONResponse:
+    """Debug — macro tiles selected for bootstrap surface init (no persist)."""
+    map_svc = container.map_cell_service()
+    world_svc = container.world_service()
+    location_svc = container.location_service()
+    conn_svc = container.connection_graph_service()
+
+    world = await world_svc.get_by_id(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+
+    locations = await location_svc.get_all(world_uid)
+    nodes = await conn_svc.get_nodes(world_uid)
+    edges = await conn_svc.get_edges(world_uid)
+
+    cap = max_tiles if max_tiles > 0 else None
+    tiles = map_svc.plan_bootstrap_tiles(
+        world, locations, nodes=nodes, edges=edges,
+        hydrology_generator=_hydrology_generator, max_tiles=cap,
+    )
+    return JSONResponse(content={
+        "world_uid": world_uid,
+        "max_tiles": cap,
+        "tile_count": len(tiles),
+        "tiles": [{"gx": gx, "gy": gy} for gx, gy in tiles],
+    })
 
 
 @router.post("/worlds/{world_uid}/map/generate-surface")
 async def generate_surface(
     world_uid: str,
+    mode: str = Query(default="bootstrap", pattern="^(bootstrap|full)$"),
+    max_tiles: int = Query(default=16, ge=0),
     container=Depends(get_container),
 ) -> JSONResponse:
-    """Debug only — production: engine DAG node (same generators)."""
+    """Debug only — production: engine DAG node (same generators).
+
+    ``mode=bootstrap`` (default): full fine grid for priority macro tiles only.
+    ``mode=full``: entire location bbox — can be billions of cells at map_cell_size_m=3000.
+    """
     map_svc      = container.map_cell_service()
     world_svc    = container.world_service()
     location_svc = container.location_service()
@@ -146,13 +248,31 @@ async def generate_surface(
     nodes     = await conn_svc.get_nodes(world_uid)
     edges     = await conn_svc.get_edges(world_uid)
 
+    cap = max_tiles if max_tiles > 0 else None
+    tiles_preview: list[tuple[int, int]] = []
+    if mode == "bootstrap":
+        tiles_preview = map_svc.plan_bootstrap_tiles(
+            world, locations, nodes=nodes, edges=edges,
+            hydrology_generator=_hydrology_generator, max_tiles=cap,
+        )
+
     result = await map_svc.save_terrain_batch(
         world_uid, _terrain_generator, world, locations,
         nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
+        surface_mode=mode,  # type: ignore[arg-type]
+        max_tiles=cap,
     )
 
     status_code = 200 if result.failed == 0 else 207
-    return JSONResponse(status_code=status_code, content=result.to_dict())
+    payload = {
+        **result.to_dict(),
+        "mode": mode,
+        "max_tiles": cap,
+    }
+    if mode == "bootstrap":
+        payload["tile_count"] = len(tiles_preview)
+        payload["tiles"] = [{"gx": gx, "gy": gy} for gx, gy in tiles_preview]
+    return JSONResponse(status_code=status_code, content=payload)
 
 
 @router.post("/worlds/{world_uid}/map/generate-hydrology")

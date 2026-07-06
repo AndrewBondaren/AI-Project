@@ -4,14 +4,9 @@ from __future__ import annotations
 
 from app.application.worldData.generators.coordinates.convert import (
     cell_size_m,
-    meters_to_grid_x,
-    meters_to_grid_y,
 )
 from app.application.worldData.generators.terrain.hydrology.classifyRiverSegments import (
     classify_autoresolve_polyline,
-)
-from app.application.worldData.generators.terrain.hydrology.riverNetworkPlanner import (
-    plan_path_to_target,
 )
 from app.application.worldData.generators.terrain.hydrology.types import (
     RiverSegment,
@@ -50,44 +45,32 @@ def _nearest_water_cell(
     return None
 
 
-def _waypoint_to_grid(
-    wp: HydrologyWaypoint,
-    cell_m: int,
-) -> tuple[int, int]:
-    return (
-        int(meters_to_grid_x(wp.x, cell_m)),
-        int(meters_to_grid_y(wp.y, cell_m)),
-    )
+def _waypoint_meter(wp: HydrologyWaypoint) -> tuple[int, int]:
+    return int(wp.x), int(wp.y)
 
 
-def _location_anchor_grid(
+def _location_anchor_meter(
     location_uid: str,
     loc_map: dict[str, NamedLocation],
-    cell_m: int,
 ) -> tuple[int, int] | None:
     loc = loc_map.get(location_uid)
     if loc is None or loc.map_x is None or loc.map_y is None:
         return None
-    return (
-        int(meters_to_grid_x(int(loc.map_x), cell_m)),
-        int(meters_to_grid_y(int(loc.map_y), cell_m)),
-    )
+    return int(loc.map_x), int(loc.map_y)
 
 
-def _resolve_mouth_grid(
+def _resolve_mouth_meter(
     mouth: HydrologyMouth,
     loc_map: dict[str, NamedLocation],
-    cell_m: int,
     occupied: dict[tuple[int, int], MapCellHydrology],
 ) -> tuple[int, int] | None:
     if mouth.location_uid:
-        anchor = _location_anchor_grid(mouth.location_uid, loc_map, cell_m)
+        anchor = _location_anchor_meter(mouth.location_uid, loc_map)
         if anchor is None:
             return None
         return _nearest_water_cell(*anchor, occupied) or anchor
     if mouth.x is not None and mouth.y is not None:
-        gx = int(meters_to_grid_x(int(mouth.x), cell_m))
-        gy = int(meters_to_grid_y(int(mouth.y), cell_m))
+        gx, gy = int(mouth.x), int(mouth.y)
         return _nearest_water_cell(gx, gy, occupied) or (gx, gy)
     return None
 
@@ -102,8 +85,8 @@ def _anchors_for_river(
     if mode == RiverDeclareMode.ENDPOINTS:
         if river.source is None or river.mouth is None:
             return []
-        source = _waypoint_to_grid(river.source, cell_m)
-        mouth = _resolve_mouth_grid(river.mouth, loc_map, cell_m, occupied)
+        source = _waypoint_meter(river.source)
+        mouth = _resolve_mouth_meter(river.mouth, loc_map, occupied)
         if mouth is None:
             return []
         return [source, mouth]
@@ -111,12 +94,12 @@ def _anchors_for_river(
     if mode == RiverDeclareMode.VIA_LOCATIONS:
         anchors: list[tuple[int, int]] = []
         for uid in river.route_location_uids:
-            pt = _location_anchor_grid(uid, loc_map, cell_m)
+            pt = _location_anchor_meter(uid, loc_map)
             if pt is not None:
                 anchors.append(pt)
         if len(anchors) >= 2 and river.route_location_uids:
             last_uid = river.route_location_uids[-1]
-            last = _location_anchor_grid(last_uid, loc_map, cell_m)
+            last = _location_anchor_meter(last_uid, loc_map)
             if last is not None:
                 water = _nearest_water_cell(*last, occupied)
                 if water is not None:
@@ -133,14 +116,18 @@ def _polyline_for_river(
     cell_m: int,
     occupied: dict[tuple[int, int], MapCellHydrology],
 ) -> list[tuple[int, int]]:
+    from app.application.worldData.generators.terrain.hydrology.polylineRasterize import (
+        bresenham_line,
+    )
+
     anchors = _anchors_for_river(river, loc_map, cell_m, occupied)
     if len(anchors) < 2:
         return []
 
     polyline: list[tuple[int, int]] = []
     for start, end in zip(anchors, anchors[1:]):
-        leg = plan_path_to_target(heightmap, start, end, occupied)
-        if len(leg) < 2:
+        leg = bresenham_line(start[0], start[1], end[0], end[1])
+        if not leg:
             continue
         if polyline and polyline[-1] == leg[0]:
             polyline.extend(leg[1:])

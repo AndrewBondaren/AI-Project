@@ -15,6 +15,22 @@ from app.application.worldData.generators.coordinates.rect import (
     settlement_grid_rect,
     settlement_meter_rect,
 )
+from app.application.worldData.generators.coordinates.worldTile import (
+    expand_coarse_hydro_to_tile,
+    iter_macro_tiles,
+    iter_meter_chunks,
+    is_macro_grid_coord,
+    local_index_x,
+    local_index_y,
+    macro_bbox_to_meter_bbox,
+    macro_tile_of,
+    meter_bbox_for_tile,
+    tile_index_x,
+    tile_index_y,
+    tile_origin_x,
+    tile_origin_y,
+    world_meter_xy,
+)
 from app.application.worldData.generators.coordinates.space import CoordinateSpace
 from app.application.worldData.generators.coordinates.types import (
     GridX,
@@ -31,6 +47,20 @@ from app.application.worldData.generators.coordinates.types import (
 
 __all__ = [
     "CoordinateSpace",
+    "expand_coarse_hydro_to_tile",
+    "iter_macro_tiles",
+    "iter_meter_chunks",
+    "is_macro_grid_coord",
+    "local_index_x",
+    "local_index_y",
+    "macro_bbox_to_meter_bbox",
+    "macro_tile_of",
+    "meter_bbox_for_tile",
+    "tile_index_x",
+    "tile_index_y",
+    "tile_origin_x",
+    "tile_origin_y",
+    "world_meter_xy",
     "GridX",
     "GridY",
     "LocalMeterCoord",

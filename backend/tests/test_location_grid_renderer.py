@@ -53,6 +53,25 @@ class TestLocationGridRenderer(unittest.TestCase):
         levels = LocationGridRenderer(cells, "loc-a").render_all_levels()
         self.assertEqual(set(levels.keys()), {0, 1})
 
+    def test_outdoor_includes_fine_meter_cells(self):
+        cells = [
+            MapCell(
+                world_uid="w",
+                location_uid="loc-port",
+                x=27000, y=9000, z=0,
+                system_terrain="urban",
+            ),
+            MapCell(
+                world_uid="w",
+                location_uid="loc-port",
+                x=27001, y=9000, z=0,
+                system_terrain="urban",
+            ),
+        ]
+        out = LocationGridRenderer(cells, "loc-port", cell_size_m=3000).render_level(0)
+        self.assertIn("location=loc-port", out)
+        self.assertIn("u", out)
+
 
 if __name__ == "__main__":
     unittest.main()
