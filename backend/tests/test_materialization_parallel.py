@@ -13,6 +13,7 @@ from app.application.worldData.generators.assemblers.climateAssembler.passes.cel
 )
 from app.application.worldData.materializationContext import (
     MaterializationContext,
+    resolve_insert_only,
     resolve_materialization_context,
 )
 from app.application.worldData.parallelPolicy import (
@@ -70,6 +71,21 @@ class TestParallelPolicy(unittest.TestCase):
         world = _world()
         ctx = resolve_materialization_context(world)
         self.assertEqual(ctx.chunks_per_commit, 8)
+
+    def test_insert_only_auto_detect_empty(self):
+        ctx = MaterializationContext(free_cores=5)
+        resolved = resolve_insert_only(ctx, world_has_cells=False)
+        self.assertTrue(resolved.insert_only)
+
+    def test_insert_only_auto_detect_nonempty(self):
+        ctx = MaterializationContext(free_cores=5)
+        resolved = resolve_insert_only(ctx, world_has_cells=True)
+        self.assertFalse(resolved.insert_only)
+
+    def test_insert_only_explicit_override(self):
+        ctx = MaterializationContext(free_cores=5, insert_only=True)
+        resolved = resolve_insert_only(ctx, world_has_cells=True)
+        self.assertTrue(resolved.insert_only)
 
 
 class TestChunkComputePool(unittest.IsolatedAsyncioTestCase):

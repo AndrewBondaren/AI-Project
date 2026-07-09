@@ -32,8 +32,8 @@ dist/
 build/
 .env
 
-# Database
-db/
+# Database (local sqlite data dir at repo root only — not backend/app/db/)
+/db/
 *.db
 
 # Local debug artifacts (smoke renders, scratch)

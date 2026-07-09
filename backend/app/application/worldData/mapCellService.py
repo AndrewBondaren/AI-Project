@@ -27,6 +27,18 @@ class MapCellService:
         async with self._repo.persist_session():
             yield
 
+    @asynccontextmanager
+    async def bulk_write_session(self, *, enabled: bool = True):
+        """TR-PERF-4: PRAGMA tuning for bootstrap bulk persist."""
+        if not enabled:
+            yield
+            return
+        async with self._repo.bulk_write_session():
+            yield
+
+    async def has_world_cells(self, world_uid: str) -> bool:
+        return await self._repo.has_world_cells(world_uid)
+
     async def get_all(self, world_uid: str) -> list[MapCell]:
         return await self._repo.get_by_world(world_uid)
 
@@ -73,7 +85,10 @@ class MapCellService:
         )
 
     async def save_generated(self, cells: list[MapCell]) -> ImportResult:
-        """Legacy: INSERT OR IGNORE — used by lazy nodes."""
+        """Legacy: INSERT OR IGNORE — scope ``minimal_repair`` (lazy nodes).
+
+        Insert matrix: ``docs/tz_terrain_generation.md`` § TR-PERF-DEBT-4.
+        """
         inserted = await self._repo.insert_bulk_ignore(cells)
         return ImportResult(total=len(cells), succeeded=inserted, failed=0)
 
@@ -82,9 +97,23 @@ class MapCellService:
         merged = await self._repo.upsert_settlement_surface(cells)
         return ImportResult(total=len(cells), succeeded=merged, failed=0)
 
-    async def save_pass(self, cells: list[MapCell], layer: LayerKind) -> ImportResult:
+    async def save_pass(
+        self,
+        cells: list[MapCell],
+        layer: LayerKind,
+        *,
+        insert_only: bool = False,
+    ) -> ImportResult:
+        """Layer upsert; terrain ``insert_only`` → plain INSERT (TR-PERF-3).
+
+        Backlog: replace flag with ``TerrainPersistScope`` — § TR-PERF-DEBT-3.
+        Insert matrix: § TR-PERF-DEBT-4.
+        """
         if layer == "terrain":
-            n = await self._repo.upsert_terrain_skeleton(cells)
+            if insert_only:
+                n = await self._repo.insert_terrain_bulk(cells)
+            else:
+                n = await self._repo.upsert_terrain_skeleton(cells)
         elif layer == "climate":
             n = await self._repo.upsert_climate_fields(cells)
         elif layer == "ore":

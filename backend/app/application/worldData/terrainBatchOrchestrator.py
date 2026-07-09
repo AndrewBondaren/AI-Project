@@ -232,6 +232,8 @@ class TerrainBatchOrchestrator:
         workers: int,
         chunks_total: int,
         batch: list[tuple[int, ColumnRect, list[MapCell]]],
+        *,
+        insert_only: bool = False,
     ) -> tuple[int, int]:
         """TR-PERF-2: one transaction for up to chunks_per_commit terrain chunks."""
         if not batch:
@@ -242,7 +244,9 @@ class TerrainBatchOrchestrator:
             for chunk_idx, rect, chunk_cells in batch:
                 total += len(chunk_cells)
                 t_persist = time.perf_counter()
-                result = await self._map_cells.save_pass(chunk_cells, "terrain")
+                result = await self._map_cells.save_pass(
+                    chunk_cells, "terrain", insert_only=insert_only,
+                )
                 log_terrain_chunk_persist(
                     world_uid, chunk_idx, chunks_total,
                     workers=workers, rect=rect, cell_count=len(chunk_cells),
@@ -333,6 +337,7 @@ class TerrainBatchOrchestrator:
         succeeded = 0
         chunks_done = 0
         chunks_per_commit = max(1, mat_ctx.chunks_per_commit)
+        insert_only = bool(mat_ctx.insert_only)
         persist_buffer: list[tuple[int, ColumnRect, list[MapCell]]] = []
 
         async def flush_persist_buffer() -> None:
@@ -342,7 +347,7 @@ class TerrainBatchOrchestrator:
             batch = persist_buffer
             persist_buffer = []
             batch_total, batch_ok = await self._persist_chunk_batch(
-                world_uid, workers, chunks_total, batch,
+                world_uid, workers, chunks_total, batch, insert_only=insert_only,
             )
             total += batch_total
             succeeded += batch_ok

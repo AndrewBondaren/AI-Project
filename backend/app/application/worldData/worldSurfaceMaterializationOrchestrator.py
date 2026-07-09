@@ -15,11 +15,13 @@ from app.application.worldData.generators.terrain.hydrology.hydrologyGeneratorSe
 from app.application.worldData.materializationContext import (
     MaterializationContext,
     MaterializationJobReport,
+    resolve_insert_only,
 )
 from app.application.worldData.parallelPolicy import (
     resolve_climate_workers,
     resolve_terrain_workers,
 )
+from app.application.worldData.mapCellService import MapCellService
 from app.application.worldData.terrainBatchOrchestrator import SurfaceMode, TerrainBatchOrchestrator
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
@@ -30,15 +32,20 @@ logger = logging.getLogger(__name__)
 
 
 class WorldSurfaceMaterializationOrchestrator:
-    """S→CL stack with shared ``MaterializationContext``."""
+    """S→CL stack with shared ``MaterializationContext``.
+
+    Backlog: duplicate ``MapCellService`` dep — ``docs/tz_terrain_generation.md`` § TR-PERF-DEBT-6.
+    """
 
     def __init__(
         self,
         terrain: TerrainBatchOrchestrator,
         climate: ClimateBatchOrchestrator,
+        map_cell_service: MapCellService,
     ) -> None:
         self._terrain = terrain
         self._climate = climate
+        self._map_cells = map_cell_service
 
     async def materialize_surface_stack(
         self,
@@ -57,31 +64,38 @@ class WorldSurfaceMaterializationOrchestrator:
         terrain_workers = resolve_terrain_workers(ctx, world)
         climate_workers = resolve_climate_workers(ctx, world)
 
-        terrain_res, chunks_done, chunks_total = await self._terrain.save_terrain_batch(
-            world_uid,
-            world,
-            locations,
-            ctx,
-            nodes=nodes,
-            edges=edges,
-            hydrology_generator=hydrology_generator,
-            surface_mode=surface_mode,
-            max_tiles=max_tiles,
-        )
+        world_has_cells = await self._map_cells.has_world_cells(world_uid)
+        ctx = resolve_insert_only(ctx, world_has_cells=world_has_cells)
 
-        climate_res = None
-        if include_climate and terrain_res.succeeded > 0:
-            climate_res, _, _ = await self._climate.apply_climate_batch(
-                world_uid, world, locations, ctx,
+        async with self._map_cells.bulk_write_session(enabled=ctx.bulk_write_pragmas):
+            terrain_res, chunks_done, chunks_total = await self._terrain.save_terrain_batch(
+                world_uid,
+                world,
+                locations,
+                ctx,
+                nodes=nodes,
+                edges=edges,
+                hydrology_generator=hydrology_generator,
+                surface_mode=surface_mode,
+                max_tiles=max_tiles,
             )
 
+            climate_res = None
+            if include_climate and terrain_res.succeeded > 0:
+                climate_res, _, _ = await self._climate.apply_climate_batch(
+                    world_uid, world, locations, ctx,
+                )
+
         logger.info(
-            "materialize_surface_stack | world=%s terrain=%d climate=%s chunks=%d/%d",
+            "materialize_surface_stack | world=%s terrain=%d climate=%s chunks=%d/%d "
+            "insert_only=%s bulk_pragmas=%s",
             world_uid,
             terrain_res.succeeded,
             climate_res.succeeded if climate_res else None,
             chunks_done,
             chunks_total,
+            ctx.insert_only,
+            ctx.bulk_write_pragmas,
         )
         return MaterializationJobReport(
             terrain=terrain_res,

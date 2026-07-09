@@ -401,6 +401,8 @@ async def materialize_stack(
     free_cores: int | None = Query(default=None, ge=1),
     parallel_workers: int | None = Query(default=None, ge=1),
     chunks_per_commit: int | None = Query(default=None, ge=1),
+    insert_only: bool | None = Query(default=None),
+    bulk_pragmas: bool = Query(default=True),
     include_climate: bool = Query(default=True),
     container=Depends(get_container),
 ) -> JSONResponse:
@@ -418,6 +420,8 @@ async def materialize_stack(
     mat_ctx = resolve_materialization_context(
         world, free_cores=free_cores, parallel_workers_override=parallel_workers,
         chunks_per_commit=chunks_per_commit,
+        insert_only=insert_only,
+        bulk_write_pragmas=bulk_pragmas,
     )
 
     report = await stack.materialize_surface_stack(

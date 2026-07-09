@@ -8,7 +8,7 @@ See ``docs/tz_terrain_generation.md`` § TR-PAR, ``architecture-first.mdc``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from app.api.schemas.imports import ImportResult
 from app.db.models.world import World
@@ -20,12 +20,17 @@ DEFAULT_CHUNKS_PER_COMMIT = 8
 
 @dataclass(frozen=True)
 class MaterializationContext:
-    """Immutable input from caller — orchestrators derive worker counts via ParallelPolicy."""
+    """Immutable input from caller — orchestrators derive worker counts via ParallelPolicy.
+
+    Backlog: split caller vs persist policy — ``docs/tz_terrain_generation.md`` § TR-PERF-DEBT-1.
+    """
 
     free_cores: int
     parallel_workers_override: int | None = None
     job_id: str | None = None
     chunks_per_commit: int = DEFAULT_CHUNKS_PER_COMMIT
+    insert_only: bool | None = None  # None → auto; guard gap § TR-PERF-DEBT-3
+    bulk_write_pragmas: bool = True
 
 
 @dataclass(frozen=True)
@@ -59,6 +64,8 @@ def resolve_materialization_context(
     parallel_workers_override: int | None = None,
     job_id: str | None = None,
     chunks_per_commit: int | None = None,
+    insert_only: bool | None = None,
+    bulk_write_pragmas: bool = True,
 ) -> MaterializationContext:
     """Build context for debug routes; DAG supplies probed ``free_cores`` later."""
     _ = world  # reserved for per-world caller policy extensions
@@ -69,4 +76,17 @@ def resolve_materialization_context(
         parallel_workers_override=parallel_workers_override,
         job_id=job_id,
         chunks_per_commit=max(1, cpc),
+        insert_only=insert_only,
+        bulk_write_pragmas=bulk_write_pragmas,
     )
+
+
+def resolve_insert_only(
+    ctx: MaterializationContext,
+    *,
+    world_has_cells: bool,
+) -> MaterializationContext:
+    """TR-PERF-3: auto-detect insert fast path when caller did not set ``insert_only``."""
+    if ctx.insert_only is not None:
+        return ctx
+    return replace(ctx, insert_only=not world_has_cells)

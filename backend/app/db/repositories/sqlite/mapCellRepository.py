@@ -19,6 +19,15 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
         async with self._db.transaction():
             yield
 
+    @asynccontextmanager
+    async def bulk_write_session(self):
+        """TR-PERF-4: PRAGMA tuning via repo → Database.
+
+        Backlog: move off repo interface — ``docs/tz_terrain_generation.md`` § TR-PERF-DEBT-5.
+        """
+        async with self._db.bulk_write_session():
+            yield
+
     async def get_by_world(self, world_uid: str) -> list[MapCell]:
         return await self.fetch_all("world_uid = ?", [world_uid])
 
@@ -41,6 +50,10 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
         )
 
     async def insert_bulk_ignore(self, cells: list[MapCell]) -> int:
+        """INSERT OR IGNORE — scope ``minimal_repair`` (lazy anchor).
+
+        Insert matrix: ``docs/tz_terrain_generation.md`` § TR-PERF-DEBT-4 / Insert path matrix.
+        """
         if not cells:
             return 0
         cols, _ = to_row(cells[0])
@@ -71,7 +84,27 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
             await self._db.conn.commit()
         return count
 
+    async def insert_terrain_bulk(self, cells: list[MapCell]) -> int:
+        """Plain INSERT — scope ``surface_skeleton`` bootstrap (empty world).
+
+        No ``ON CONFLICT``; no ``building_element`` guard. Backlog: § TR-PERF-DEBT-3.
+        Insert matrix: § TR-PERF-DEBT-4.
+        """
+        if not cells:
+            return 0
+        cols, _ = to_row(cells[0])
+        placeholders = ", ".join("?" * len(cols))
+        sql = f"INSERT INTO map_cells ({', '.join(cols)}) VALUES ({placeholders})"
+        count = await executemany_cells(self._db.conn, sql, cells)
+        if not _in_transaction.get():
+            await self._db.conn.commit()
+        return count
+
     async def upsert_terrain_skeleton(self, cells: list[MapCell]) -> int:
+        """Selective upsert — regen / partial tile; skips ``system_building_element``.
+
+        Insert matrix: ``docs/tz_terrain_generation.md`` § TR-PERF-DEBT-4.
+        """
         return await self._upsert_partial(
             cells,
             "system_terrain = excluded.system_terrain",
@@ -126,6 +159,12 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
 
     async def get_by_location(self, location_uid: str) -> list[MapCell]:
         return await self.fetch_all("location_uid = ?", [location_uid])
+
+    async def has_world_cells(self, world_uid: str) -> bool:
+        sql = "SELECT 1 FROM map_cells WHERE world_uid = ? LIMIT 1"
+        async with self._db.conn.execute(sql, [world_uid]) as cur:
+            row = await cur.fetchone()
+        return row is not None
 
     async def has_column_cells(self, world_uid: str, x: int, y: int) -> bool:
         sql = (

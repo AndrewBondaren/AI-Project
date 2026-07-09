@@ -97,6 +97,28 @@ class Database:
         finally:
             _in_transaction.reset(token)
 
+    @asynccontextmanager
+    async def bulk_write_session(self):
+        """TR-PERF-4: tuned PRAGMAs for bootstrap bulk persist; restored on exit.
+
+        Backlog (shared connection): ``docs/tz_terrain_generation.md`` § TR-PERF-DEBT-2.
+        """
+        saved: dict[str, str] = {}
+        pragma_names = ("synchronous", "temp_store", "cache_size")
+        for name in pragma_names:
+            async with self._conn.execute(f"PRAGMA {name}") as cur:
+                row = await cur.fetchone()
+                saved[name] = str(row[0])
+        await self._conn.execute("PRAGMA synchronous=NORMAL")
+        await self._conn.execute("PRAGMA temp_store=MEMORY")
+        await self._conn.execute("PRAGMA cache_size=-64000")
+        try:
+            yield
+        finally:
+            await self._conn.execute(f"PRAGMA synchronous={saved['synchronous']}")
+            await self._conn.execute(f"PRAGMA temp_store={saved['temp_store']}")
+            await self._conn.execute(f"PRAGMA cache_size={saved['cache_size']}")
+
     @property
     def conn(self) -> aiosqlite.Connection:
         if self._conn is None:

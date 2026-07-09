@@ -548,7 +548,7 @@ flowchart TB
 
 ### Persist performance (TR-PERF)
 
-> **Статус:** ⬜ impl. **Scope:** bootstrap / `materialize-stack` / `save_terrain_batch` — **не** gameplay patch, **не** parallel persist.
+> **Статус:** ✅ TR-PERF-1…4 impl. **Scope:** bootstrap / `materialize-stack` / `save_terrain_batch` — **не** gameplay patch, **не** parallel persist.
 
 **Проблема (код сейчас):** `SqliteMapCellRepository._upsert_partial` — цикл `execute` **на каждую ячейку** + `commit` после каждого чанка (~21k rows × ~8k commits на тайл 3000×3000 м).
 
@@ -601,11 +601,11 @@ flowchart TB
 | `map_cells` для `world_uid` **пуст** (post-clear import) | plain `INSERT` / `executemany` без `ON CONFLICT` | первый `materialize-stack` |
 | cells уже есть | `upsert_terrain_skeleton` (selective) | regen, climate overlay, patch |
 
-Флаг: `MaterializationContext.insert_only: bool` — caller выставляет только при гарантии пустой таблицы (initialize script после clear).
+Флаг: `MaterializationContext.insert_only` — `null` → auto по `has_world_cells`; `true`/`false` — явный override caller.
 
-#### TR-PERF-4 — PRAGMA bulk session (backlog)
+#### TR-PERF-4 — PRAGMA bulk session
 
-На время `materialize_surface_stack` (один job): `synchronous=NORMAL`, увеличенный `cache_size`, `temp_store=MEMORY`. **Не** `synchronous=OFF` в product без явного master opt-in.
+На время `materialize_surface_stack` (один job): `synchronous=NORMAL`, `cache_size=-64000`, `temp_store=MEMORY`. Восстановление PRAGMA на выходе. Query `bulk_pragmas=false` отключает. **Не** `synchronous=OFF`.
 
 #### Приёмка TR-PERF
 
@@ -620,8 +620,58 @@ flowchart TB
 |---|---|---|
 | **TR-PERF-1** | `executemany` в `_upsert_partial` + `insert_bulk_ignore` | ✅ |
 | **TR-PERF-2** | `bulk_persist_session` + `chunks_per_commit` в materialization | ✅ |
-| **TR-PERF-3** | `insert_only` fast path для пустого `world_uid` | ⬜ backlog |
-| **TR-PERF-4** | PRAGMA bulk session на `materialize-stack` | ⬜ backlog |
+| **TR-PERF-3** | `insert_only` fast path для пустого `world_uid` | ✅ |
+| **TR-PERF-4** | PRAGMA bulk session на `materialize-stack` | ✅ |
+
+#### TR-PERF backlog (architecture debt)
+
+> Impl TR-PERF-1…4 ✅; ниже — **не блокирует** debug bootstrap. См. также registry [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) (TR-6, TR-7).
+
+| ID | Severity | Проблема | Target fix | Код (ссылка) |
+|---|---|---|---|---|
+| **TR-PERF-DEBT-1** | medium | `MaterializationContext` смешивает caller input (cores), persist tuning (`chunks_per_commit`, PRAGMA), resolved state (`insert_only`) | Split: `MaterializationCallerInput` + `ResolvedMaterializationJob` или вынести persist в `PersistPolicy` / `TerrainPersistScope` | `materializationContext.py` |
+| **TR-PERF-DEBT-2** | high (prod) | `Database.bulk_write_session` меняет PRAGMA на **единственном** shared connection — concurrent `materialize-stack` / CRUD могут перетирать настройки друг друга | Mutex на bulk session, отдельное connection для bootstrap job, или dedicated worker | `database.py` |
+| **TR-PERF-DEBT-3** | medium | `insert_terrain_bulk` — blind `INSERT` без guard `system_building_element IS NULL`; explicit `insert_only=true` на непустом мире → PK error или перезапись | `TerrainPersistScope.BOOTSTRAP_EMPTY` + validate caller; отдельный `save_terrain_bootstrap()` вместо флага на `save_pass` | `mapCellService.save_pass`, `insert_terrain_bulk` |
+| **TR-PERF-DEBT-4** | medium | Три insert-пути terrain (см. § **Insert path matrix** ниже) — исторически разные scope, сейчас дублируют executemany SQL | Единый `bulk_insert_cells(mode)` + scope enum; см. TR-7 | `mapCellRepository`, `mapCellService` |
+| **TR-PERF-DEBT-5** | low | `bulk_write_session` на `IMapCellRepository` — infra SQLite, не домен map_cells | PRAGMA только через `Database` / `PersistInfrastructure` port | `iMapCellRepository.py` |
+| **TR-PERF-DEBT-6** | low | `WorldSurfaceMaterializationOrchestrator` получает `MapCellService` повторно (уже внутри `TerrainBatchOrchestrator`) | Resolve `insert_only` + PRAGMA wrap в одном месте без дублирования deps | `worldSurfaceMaterializationOrchestrator.py` |
+
+##### Insert path matrix (почему три пути)
+
+Три метода — **не случайное дублирование**, а три разных **persist scope** из § Persist cycle:
+
+| Repo method | SQL | Service entry | Scope (ТЗ) | Семантика при конфликте PK |
+|---|---|---|---|---|
+| `insert_bulk_ignore` | `INSERT OR IGNORE` | `save_generated` | `minimal_repair` — lazy anchor, 1 cell | **Тихий skip** — idempotent repair, ячейка уже есть |
+| `insert_terrain_bulk` | plain `INSERT` | `save_pass(terrain, insert_only=True)` | `surface_skeleton` bootstrap на **пустом** `world_uid` | **Ошибка** (PK violation) — caller обязан гарантировать пустоту |
+| `upsert_terrain_skeleton` | `INSERT … ON CONFLICT DO UPDATE` + `WHERE building IS NULL` | `save_pass(terrain)` | regen / partial tile / climate overlay base | **Selective merge** — не трогает building cells |
+
+**Почему не один метод:** `OR IGNORE` скрывает баги bootstrap (думали вставили 21k, вставили 0). Plain `INSERT` быстрее upsert на пустой таблице (TR-PERF-3). Selective upsert нужен при regen поверх settlement/structure.
+
+**Почему smell остаётся:** все три строят SQL из `to_row` + `executemany` вручную; отличается только шаблон SQL. TR-PERF-DEBT-4 — конвергенция в один helper с `BulkInsertMode` enum, не слияние семантики в один SQL.
+
+**DAG bypass:** `lazy_terrain` / `lazy_settlement` вызывают `map_cell_repo.insert_bulk_ignore` **напрямую**, минуя `MapCellService` — четвёртый вход в тот же путь (gate; агент не трогает ноды).
+
+##### TR-PERF-DEBT-2 — PRAGMA на shared connection (подробно)
+
+`Database` — singleton, одно `aiosqlite` соединение на процесс. `bulk_write_session` на время job выполняет:
+
+```
+PRAGMA synchronous=NORMAL
+PRAGMA temp_store=MEMORY
+PRAGMA cache_size=-64000
+```
+
+и восстанавливает прежние значения в `finally`.
+
+**Риск:** FastAPI обрабатывает запросы конкурентно на одном event loop. Два overlapping `materialize-stack` (или materialize + обычный import):
+
+1. Job A сохраняет PRAGMA, ставит NORMAL.
+2. Job B сохраняет PRAGMA (уже NORMAL), ставит NORMAL.
+3. Job A завершается, **восстанавливает** старые PRAGMA.
+4. Job B ещё пишет bulk, но PRAGMA уже сброшены Job A → непредсказуемая durability / perf.
+
+Для **single-user debug** риск низкий. Для **multi-request production** — нужен TR-PERF-DEBT-2 до снятия gate.
 
 ---
 
@@ -1404,7 +1454,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 #### Checklist (terrain persist для DAG)
 
 - [x] `save_pass` / `save_terrain_batch` — partial impl
-- [ ] **TR-PERF** — `executemany` + multi-chunk transaction (§ TR-PERF)
+- [ ] **TR-PERF** — `executemany` + multi-chunk transaction + insert_only + bulk PRAGMA (§ TR-PERF) ✅
 - [ ] **TR-LAZY-LOAD** — `get_scene_volume`, `has_column_cells`, debug smoke (§ TR-LAZY-LOAD-1/2)
 - [ ] **TR-LAZY-LOAD-DAG** — gameplay ноды — **gate**, только с мастером
 - [ ] `TerrainPersistScope` enum + единый `persist(cells, scope)` facade
@@ -1424,8 +1474,8 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 | Two-phase skeleton + N_eff gap | ✅ |
 | `generate-surface` terrain-only | ✅ |
 | `POST generate-climate` / ores / caves | ✅ |
-| Chunked persist + selective upsert | ✅ partial — per-row `execute`; TR-PERF ⬜ |
-| TR-PERF bulk init (`executemany`, multi-chunk commit) | ✅ § TR-PERF |
+| Chunked persist + selective upsert | ✅ TR-PERF-1…4 |
+| TR-PERF bulk init (`executemany`, multi-chunk commit, insert_only, PRAGMA) | ✅ § TR-PERF |
 | TR-LAZY-LOAD service + debug (без нод) | ✅ § TR-LAZY-LOAD-1/2 |
 | TR-LAZY-LOAD-DAG (gameplay ноды) | ⬜ gate — только с мастером |
 | Liquid pass on `generate-climate` | ✅ |

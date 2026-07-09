@@ -81,6 +81,31 @@ class MapCellPersistPerfTest(IsolatedAsyncioTestCase):
         loaded = await self._repo.get_z_slice("w-perf-test", 0, 49, 0, 0, 0, 0)
         self.assertEqual(len(loaded), 50)
 
+    async def test_insert_terrain_bulk_empty_world(self) -> None:
+        cells = self._cells(20, terrain="forest")
+        self.assertFalse(await self._repo.has_world_cells("w-perf-test"))
+        n = await self._repo.insert_terrain_bulk(cells)
+        self.assertEqual(n, 20)
+        self.assertTrue(await self._repo.has_world_cells("w-perf-test"))
+        loaded = await self._repo.get_z_slice("w-perf-test", 0, 19, 0, 0, 0, 0)
+        self.assertEqual(len(loaded), 20)
+        self.assertTrue(all(c.system_terrain == "forest" for c in loaded))
+
+    async def test_save_pass_insert_only(self) -> None:
+        cells = self._cells(5, terrain="tundra")
+        result = await self._svc.save_pass(cells, "terrain", insert_only=True)
+        self.assertEqual(result.succeeded, 5)
+
+    async def test_bulk_write_session_restores_pragma(self) -> None:
+        async with self._db.conn.execute("PRAGMA synchronous") as cur:
+            before = int((await cur.fetchone())[0])
+        async with self._db.bulk_write_session():
+            async with self._db.conn.execute("PRAGMA synchronous") as cur:
+                during = int((await cur.fetchone())[0])
+            self.assertEqual(during, 1)  # NORMAL
+        async with self._db.conn.execute("PRAGMA synchronous") as cur:
+            after = int((await cur.fetchone())[0])
+        self.assertEqual(after, before)
 
     async def test_has_column_cells(self) -> None:
         self.assertFalse(await self._svc.has_column_cells("w-perf-test", 5, 5))

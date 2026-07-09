@@ -322,7 +322,7 @@ Passes (`surfacePass`, `columnFillPass`, …) — OK (40–96 строк). Fat: 
 | ID | Severity | P | Проблема | Fix | Status |
 |---|---|---|---|---|---|
 | TR-6 | medium | P2 | `save_pass(layer: str)` — `"terrain"`/`"climate"`/`"ore"`/`"cave"`; какие поля перезаписывает — только в repo, не в типе | enum + documented upsert field matrix (`tz_terrain_generation.md` или repo docstring) | open |
-| TR-7 | low | P3 | Два persist API: `save_generated` → INSERT OR IGNORE (lazy); `save_pass` → layer upsert | document semantics; converge when DAG stable | open |
+| TR-7 | low | P3 | Три insert-пути terrain (`insert_bulk_ignore`, `insert_terrain_bulk`, `upsert_terrain_skeleton`) + DAG bypass repo | `BulkInsertMode` + scope enum; см. [`tz_terrain_generation.md`](./tz_terrain_generation.md) § TR-PERF-DEBT-4 | open (was: dual API) |
 | TR-4 | medium | P3 | `save_z_slice` / `generate_z_slice`: полный heightmap + gap analysis для одной `(gx, gy)` | cache heightmap per world bbox или explicit lazy contract | open |
 | CL-16 | low | P3 | `cellWeatherPass`: `location_uid` берётся из `sample.zone_location_uid`, не из исходного cell | doc или preserve cell attribution | open |
 | CL-7 | medium | P2 | `recalculate`: `run_cell_weather` gate'ит liquid, не weather; нет `run_liquid_overlay` | split flags per [`tz_climate.md`](./tz_climate.md) § C2 | partial |

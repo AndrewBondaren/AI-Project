@@ -499,6 +499,7 @@ class Container:
             self._surface_materialization_orchestrator = WorldSurfaceMaterializationOrchestrator(
                 terrain=self.terrain_batch_orchestrator(),
                 climate=self.climate_batch_orchestrator(),
+                map_cell_service=self.map_cell_service(),
             )
         return self._surface_materialization_orchestrator
 

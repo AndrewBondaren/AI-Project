@@ -12,8 +12,17 @@ class IMapCellRepository(ABC):
         """Batch writes without per-call commit; one COMMIT on exit (TR-PERF-2)."""
         yield
 
+    @asynccontextmanager
+    async def bulk_write_session(self) -> AsyncIterator[None]:
+        """TR-PERF-4: PRAGMA tuning for bootstrap bulk persist (no-op in stubs)."""
+        yield
+
     @abstractmethod
     async def get_by_world(self, world_uid: str) -> list[MapCell]: ...
+
+    @abstractmethod
+    async def has_world_cells(self, world_uid: str) -> bool:
+        """True if any map_cells row exists for world_uid."""
 
     @abstractmethod
     async def get_location_uids_with_cells(self, world_uid: str) -> set[str]: ...
@@ -31,6 +40,10 @@ class IMapCellRepository(ABC):
         """Insert cells in a single transaction; silently skips positions that already exist.
         Returns the number of rows actually inserted."""
         ...
+
+    @abstractmethod
+    async def insert_terrain_bulk(self, cells: list[MapCell]) -> int:
+        """Plain INSERT for empty-world bootstrap (TR-PERF-3); caller guarantees no PK clash."""
 
     @abstractmethod
     async def upsert_terrain_skeleton(self, cells: list[MapCell]) -> int:
