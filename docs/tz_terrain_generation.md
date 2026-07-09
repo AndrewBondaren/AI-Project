@@ -413,6 +413,7 @@ Generator **не** знает про threads/SQL — только `(world, locat
 | Ограничение | Следствие |
 |---|---|
 | SQLite **single-writer** | параллельные `upsert` из нескольких потоков → lock contention / `database is locked` |
+| SQLite **PRAGMA bulk session** | TR-PERF-4 PRAGMA только на `_bootstrap_conn`; OLTP на `_conn`; `asyncio.Lock` — § **TR-PAR-5** |
 | Детерминизм smoke/regression | row-major + serial insert = воспроизводимый порядок строк |
 | Отладка harness | один chunk за раз — проще bisect при битых cells |
 
@@ -534,7 +535,73 @@ flowchart TB
 | **TR-PAR-2** | Progress `{chunks_done, chunks_total}` in debug API response | ✅ |
 | **TR-PAR-3** | `MaterializationContext.free_cores` + `terrain_parallel_workers` cap + API override | ✅ |
 | **TR-PAR-4** | Stress test: bootstrap 1 tile, `cell_m=3000`, workers=4 vs serial | ⬜ |
+| **TR-PAR-5** | Bootstrap DB connection: `_bootstrap_conn` + lock; PRAGMA на bootstrap conn | ✅ |
+| **TR-PAR-6** | `BootstrapMapCellWriter` — explicit bulk persist port; убрать ContextVar routing | ✅ |
 | **TR-PAR-DAG-1** | Gate probe `free_cores` → `context["materialization_ctx"]`; ноды `generate_surface` / `generate_climate` → batch orchestrators + shared `ctx` | ⬜ **gate** — только с мастером |
+
+#### TR-PAR-5 — Bootstrap DB connection
+
+> **Проблема:** TR-PERF-4 менял PRAGMA на единственном shared connection (§ TR-PERF-DEBT-2). **v1 (interim):** ContextVar routing на `db.conn` — superseded **TR-PAR-6**.
+
+**Постоянная часть (impl):** [`Database`](backend/app/db/database.py) — два connection к одному файлу:
+
+| Connection | PRAGMA | Назначение |
+|---|---|---|
+| `_conn` (main) | WAL + `foreign_keys` | OLTP: chat, CRUD, gameplay reads |
+| `_bootstrap_conn` | + `synchronous=NORMAL`, `temp_store=MEMORY`, `cache_size=-64000` (один раз в `connect`) | bulk materialize через **TR-PAR-6** writer |
+
+**Контракт v2 (TR-PAR-6):** `bulk_write_lock()` — только `asyncio.Lock`; repos получают `bootstrap_conn` **явно** через `BootstrapMapCellWriter`, не через `db.conn` magic.
+
+**Приёмка PAR-5:** dual conn + lock + WAL visibility (см. `test_database_bootstrap_conn.py`).
+
+#### TR-PAR-6 — BootstrapMapCellWriter
+
+> **Проблема:** TR-PAR-5 v1 routing через `ContextVar` — неявный контракт (ambient conn). **Решение:** typed writer port.
+
+**Файл:** [`bootstrapMapCellWriter.py`](backend/app/application/worldData/bootstrapMapCellWriter.py)
+
+| Метод | Контракт |
+|---|---|
+| `session(*, enabled=True)` | `Database.bulk_write_lock()`; yield `self` |
+| `write_terrain(cells, *, insert_only)` | INSERT или upsert на `bootstrap_conn` |
+| `write_terrain_chunk_batch(chunks, *, insert_only)` | TR-PERF-2: одна txn на batch чанков |
+| `write_climate(cells)` | `upsert_climate_fields` на `bootstrap_conn` |
+
+**Границы:**
+
+| Путь | Persist |
+|---|---|
+| `materialize-stack` | `BootstrapMapCellWriter` |
+| OLTP (`save_z_slice`, lazy, settlement, debug) | `MapCellService` → `main_conn` |
+
+```mermaid
+flowchart LR
+  ORCH[WorldSurfaceMaterializationOrchestrator]
+  WRITER[BootstrapMapCellWriter]
+  TERR[TerrainBatchOrchestrator]
+  REPO[SqliteMapCellRepository]
+  DB[Database bootstrap_conn]
+
+  ORCH -->|"session + writer"| WRITER
+  ORCH --> TERR
+  TERR -->|"bootstrap_writer"| WRITER
+  WRITER --> REPO
+  REPO -->|"conn=bootstrap"| DB
+```
+
+**Инварианты:** `insert_only` resolve до session; writer не трогает `main_conn`; один active lock.
+
+**Приёмка:**
+
+| ID | Критерий |
+|---|---|
+| PAR-6-1 | materialize не использует ContextVar / ambient `db.conn` routing |
+| PAR-6-2 | `write_terrain` на bootstrap conn; main conn PRAGMA стабилен |
+| PAR-6-3 | WAL: bootstrap writes видны с `main_conn` |
+
+**Связь:** закрывает TR-PAR-DEBT-1; частично TR-PERF-DEBT-3/6.
+
+--- 
 
 **Приёмка v2:** тот же `world_uid` + seed → **идентичный** набор `(x,y,z, system_terrain, hydrology)` после serial v1 и parallel v2 (order-independent compare).
 
@@ -630,11 +697,12 @@ flowchart TB
 | ID | Severity | Проблема | Target fix | Код (ссылка) |
 |---|---|---|---|---|
 | **TR-PERF-DEBT-1** | medium | `MaterializationContext` смешивает caller input (cores), persist tuning (`chunks_per_commit`, PRAGMA), resolved state (`insert_only`) | Split: `MaterializationCallerInput` + `ResolvedMaterializationJob` или вынести persist в `PersistPolicy` / `TerrainPersistScope` | `materializationContext.py` |
-| **TR-PERF-DEBT-2** | high (prod) | `Database.bulk_write_session` меняет PRAGMA на **единственном** shared connection — concurrent `materialize-stack` / CRUD могут перетирать настройки друг друга | Mutex на bulk session, отдельное connection для bootstrap job, или dedicated worker | `database.py` |
+| **TR-PERF-DEBT-2** | high (prod) | `Database.bulk_write_session` менял PRAGMA на shared connection | **TR-PAR-5** ✅ | `database.py` |
 | **TR-PERF-DEBT-3** | medium | `insert_terrain_bulk` — blind `INSERT` без guard `system_building_element IS NULL`; explicit `insert_only=true` на непустом мире → PK error или перезапись | `TerrainPersistScope.BOOTSTRAP_EMPTY` + validate caller; отдельный `save_terrain_bootstrap()` вместо флага на `save_pass` | `mapCellService.save_pass`, `insert_terrain_bulk` |
 | **TR-PERF-DEBT-4** | medium | Три insert-пути terrain (см. § **Insert path matrix** ниже) — исторически разные scope, сейчас дублируют executemany SQL | Единый `bulk_insert_cells(mode)` + scope enum; см. TR-7 | `mapCellRepository`, `mapCellService` |
-| **TR-PERF-DEBT-5** | low | `bulk_write_session` на `IMapCellRepository` — infra SQLite, не домен map_cells | PRAGMA только через `Database` / `PersistInfrastructure` port | `iMapCellRepository.py` |
-| **TR-PERF-DEBT-6** | low | `WorldSurfaceMaterializationOrchestrator` получает `MapCellService` повторно (уже внутри `TerrainBatchOrchestrator`) | Resolve `insert_only` + PRAGMA wrap в одном месте без дублирования deps | `worldSurfaceMaterializationOrchestrator.py` |
+| **TR-PERF-DEBT-5** | low | `bulk_write_session` на `IMapCellRepository` — infra SQLite, не домен map_cells | **TR-PAR-5** ✅ — только `Database` | `iMapCellRepository.py` |
+| **TR-PERF-DEBT-6** | low | `WorldSurfaceMaterializationOrchestrator` получает `MapCellService` повторно (уже внутри `TerrainBatchOrchestrator`) | **TR-PAR-6** partial — writer для persist; `MapCellService` только probes | `worldSurfaceMaterializationOrchestrator.py` |
+| **TR-PAR-DEBT-1** | medium | ContextVar ambient conn routing на `db.conn` (TR-PAR-5 v1) | **TR-PAR-6** ✅ — `BootstrapMapCellWriter` + explicit `conn` | `database.py`, repos |
 
 ##### Insert path matrix (почему три пути)
 
@@ -652,9 +720,11 @@ flowchart TB
 
 **DAG bypass:** `lazy_terrain` / `lazy_settlement` вызывают `map_cell_repo.insert_bulk_ignore` **напрямую**, минуя `MapCellService` — четвёртый вход в тот же путь (gate; агент не трогает ноды).
 
-##### TR-PERF-DEBT-2 — PRAGMA на shared connection (подробно)
+##### TR-PERF-DEBT-2 — PRAGMA на shared connection (история)
 
-`Database` — singleton, одно `aiosqlite` соединение на процесс. `bulk_write_session` на время job выполняет:
+> **Target fix:** § **TR-PAR-5**. Ниже — описание проблемы до impl.
+
+`Database` — singleton, одно `aiosqlite` соединение на процесс. `bulk_write_session` на время job выполнял:
 
 ```
 PRAGMA synchronous=NORMAL
@@ -671,7 +741,7 @@ PRAGMA cache_size=-64000
 3. Job A завершается, **восстанавливает** старые PRAGMA.
 4. Job B ещё пишет bulk, но PRAGMA уже сброшены Job A → непредсказуемая durability / perf.
 
-Для **single-user debug** риск низкий. Для **multi-request production** — нужен TR-PERF-DEBT-2 до снятия gate.
+Для **single-user debug** риск низкий. Закрывается **TR-PAR-5** (bootstrap connection + lock).
 
 ---
 

@@ -27,15 +27,6 @@ class MapCellService:
         async with self._repo.persist_session():
             yield
 
-    @asynccontextmanager
-    async def bulk_write_session(self, *, enabled: bool = True):
-        """TR-PERF-4: PRAGMA tuning for bootstrap bulk persist."""
-        if not enabled:
-            yield
-            return
-        async with self._repo.bulk_write_session():
-            yield
-
     async def has_world_cells(self, world_uid: str) -> bool:
         return await self._repo.has_world_cells(world_uid)
 

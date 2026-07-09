@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from app.api.schemas.imports import ImportResult
 from app.application.worldData.chunkComputePool import ChunkComputePool
@@ -42,6 +42,9 @@ from app.db.models.connectionNode import ConnectionNode
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+
+if TYPE_CHECKING:
+    from app.application.worldData.bootstrapMapCellWriter import BootstrapMapCellWriter
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +108,7 @@ class TerrainBatchOrchestrator:
         hydrology_generator: HydrologyGeneratorService | None = None,
         surface_mode: SurfaceMode = "bootstrap",
         max_tiles: int | None = 16,
+        bootstrap_writer: BootstrapMapCellWriter | None = None,
     ) -> tuple[ImportResult, int, int]:
         from app.application.worldData.generators.coordinates import cell_size_m, iter_macro_tiles
         from app.application.worldData.generators.terrain.passes.bbox import grid_bbox_from_locations
@@ -148,6 +152,7 @@ class TerrainBatchOrchestrator:
         for tile_gx, tile_gy in tiles:
             tile_result, tile_chunks_done, tile_chunks_total = await self._materialize_fine_tile(
                 world, locations, surface_ctx, tile_gx, tile_gy, ctx,
+                bootstrap_writer=bootstrap_writer,
             )
             total += tile_result.total
             succeeded += tile_result.succeeded
@@ -234,10 +239,28 @@ class TerrainBatchOrchestrator:
         batch: list[tuple[int, ColumnRect, list[MapCell]]],
         *,
         insert_only: bool = False,
+        bootstrap_writer: BootstrapMapCellWriter | None = None,
     ) -> tuple[int, int]:
         """TR-PERF-2: one transaction for up to chunks_per_commit terrain chunks."""
         if not batch:
             return 0, 0
+        if bootstrap_writer is not None:
+            chunk_lists = [chunk_cells for _, _, chunk_cells in batch]
+            total = sum(len(cells) for cells in chunk_lists)
+            t_persist = time.perf_counter()
+            succeeded = await bootstrap_writer.write_terrain_chunk_batch(
+                chunk_lists, insert_only=insert_only,
+            )
+            elapsed_ms = (time.perf_counter() - t_persist) * 1000.0
+            for chunk_idx, rect, chunk_cells in batch:
+                log_terrain_chunk_persist(
+                    world_uid, chunk_idx, chunks_total,
+                    workers=workers, rect=rect, cell_count=len(chunk_cells),
+                    upserted=len(chunk_cells),
+                    elapsed_ms=elapsed_ms / len(batch),
+                )
+            return total, succeeded
+
         total = 0
         succeeded = 0
         async with self._map_cells.bulk_persist_session():
@@ -264,6 +287,8 @@ class TerrainBatchOrchestrator:
         tile_gx: int,
         tile_gy: int,
         mat_ctx: MaterializationContext,
+        *,
+        bootstrap_writer: BootstrapMapCellWriter | None = None,
     ) -> tuple[ImportResult, int, int]:
         from app.application.worldData.generators.coordinates import cell_size_m
         from app.application.worldData.generators.coordinates.worldTile import (
@@ -347,7 +372,9 @@ class TerrainBatchOrchestrator:
             batch = persist_buffer
             persist_buffer = []
             batch_total, batch_ok = await self._persist_chunk_batch(
-                world_uid, workers, chunks_total, batch, insert_only=insert_only,
+                world_uid, workers, chunks_total, batch,
+                insert_only=insert_only,
+                bootstrap_writer=bootstrap_writer,
             )
             total += batch_total
             succeeded += batch_ok

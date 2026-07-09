@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
@@ -11,12 +12,16 @@ log = logging.getLogger(__name__)
 
 _MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
+BULK_CACHE_SIZE = -64000  # 64 MB page cache on bootstrap connection
+
 
 class Database:
 
     def __init__(self, path: str):
         self.path = path
         self._conn: aiosqlite.Connection | None = None
+        self._bootstrap_conn: aiosqlite.Connection | None = None
+        self._bulk_lock = asyncio.Lock()
 
     async def connect(self) -> None:
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
@@ -25,7 +30,18 @@ class Database:
         await self._conn.execute("PRAGMA journal_mode=WAL")
         await self._conn.execute("PRAGMA foreign_keys=ON")
 
+        self._bootstrap_conn = await aiosqlite.connect(self.path)
+        self._bootstrap_conn.row_factory = aiosqlite.Row
+        await self._bootstrap_conn.execute("PRAGMA journal_mode=WAL")
+        await self._bootstrap_conn.execute("PRAGMA foreign_keys=ON")
+        await self._bootstrap_conn.execute("PRAGMA synchronous=NORMAL")
+        await self._bootstrap_conn.execute("PRAGMA temp_store=MEMORY")
+        await self._bootstrap_conn.execute(f"PRAGMA cache_size={BULK_CACHE_SIZE}")
+
     async def disconnect(self) -> None:
+        if self._bootstrap_conn:
+            await self._bootstrap_conn.close()
+            self._bootstrap_conn = None
         if self._conn:
             await self._conn.close()
             self._conn = None
@@ -86,44 +102,51 @@ class Database:
 
     @asynccontextmanager
     async def transaction(self):
+        async with self.transaction_on(self.main_conn):
+            yield self.main_conn
+
+    @asynccontextmanager
+    async def transaction_on(self, conn: aiosqlite.Connection):
+        """BEGIN/COMMIT/ROLLBACK on the given connection (TR-PAR-6 writer txn)."""
         token = _in_transaction.set(True)
-        await self._conn.execute("BEGIN")
+        await conn.execute("BEGIN")
         try:
-            yield self._conn
-            await self._conn.execute("COMMIT")
+            yield conn
+            await conn.execute("COMMIT")
         except Exception:
-            await self._conn.execute("ROLLBACK")
+            await conn.execute("ROLLBACK")
             raise
         finally:
             _in_transaction.reset(token)
 
     @asynccontextmanager
-    async def bulk_write_session(self):
-        """TR-PERF-4: tuned PRAGMAs for bootstrap bulk persist; restored on exit.
+    async def bulk_write_lock(self):
+        """TR-PAR-5/6: serialize bootstrap bulk writers (lock only, no conn routing).
 
-        Backlog (shared connection): ``docs/tz_terrain_generation.md`` § TR-PERF-DEBT-2.
+        See ``docs/tz_terrain_generation.md`` § TR-PAR-6.
         """
-        saved: dict[str, str] = {}
-        pragma_names = ("synchronous", "temp_store", "cache_size")
-        for name in pragma_names:
-            async with self._conn.execute(f"PRAGMA {name}") as cur:
-                row = await cur.fetchone()
-                saved[name] = str(row[0])
-        await self._conn.execute("PRAGMA synchronous=NORMAL")
-        await self._conn.execute("PRAGMA temp_store=MEMORY")
-        await self._conn.execute("PRAGMA cache_size=-64000")
-        try:
+        if self._bootstrap_conn is None:
+            raise RuntimeError("Database.connect() не был вызван")
+        async with self._bulk_lock:
             yield
-        finally:
-            await self._conn.execute(f"PRAGMA synchronous={saved['synchronous']}")
-            await self._conn.execute(f"PRAGMA temp_store={saved['temp_store']}")
-            await self._conn.execute(f"PRAGMA cache_size={saved['cache_size']}")
 
     @property
     def conn(self) -> aiosqlite.Connection:
+        """OLTP connection — always main (TR-PAR-6: no ContextVar routing)."""
+        return self.main_conn
+
+    @property
+    def main_conn(self) -> aiosqlite.Connection:
         if self._conn is None:
             raise RuntimeError("Database.connect() не был вызван")
         return self._conn
+
+    @property
+    def bootstrap_conn(self) -> aiosqlite.Connection:
+        """Bootstrap bulk connection — bulk PRAGMA set once in connect()."""
+        if self._bootstrap_conn is None:
+            raise RuntimeError("Database.connect() не был вызван")
+        return self._bootstrap_conn
 
 
 def _parse_version(filename: str) -> int | None:

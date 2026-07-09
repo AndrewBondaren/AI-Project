@@ -40,6 +40,7 @@ from app.application.worldData.raceService import RaceService
 from app.application.worldData.worldPerkService import WorldPerkService
 from app.application.worldData.namedLocationService import NamedLocationService
 from app.application.worldData.mapCellService import MapCellService
+from app.application.worldData.bootstrapMapCellWriter import BootstrapMapCellWriter
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.application.worldData.climateBatchOrchestrator import ClimateBatchOrchestrator
 from app.application.worldData.worldSurfaceMaterializationOrchestrator import (
@@ -114,6 +115,7 @@ class Container:
         self._perk_service: WorldPerkService | None = None
         self._location_service: NamedLocationService | None = None
         self._map_cell_service: MapCellService | None = None
+        self._bootstrap_map_cell_writer: BootstrapMapCellWriter | None = None
         self._terrain_batch_orchestrator: TerrainBatchOrchestrator | None = None
         self._climate_batch_orchestrator: ClimateBatchOrchestrator | None = None
         self._surface_materialization_orchestrator: WorldSurfaceMaterializationOrchestrator | None = None
@@ -480,6 +482,14 @@ class Container:
             self._map_cell_service = MapCellService(repo=self.map_cell_repository())
         return self._map_cell_service
 
+    def bootstrap_map_cell_writer(self) -> BootstrapMapCellWriter:
+        if self._bootstrap_map_cell_writer is None:
+            self._bootstrap_map_cell_writer = BootstrapMapCellWriter(
+                db=self._db,
+                repo=self.map_cell_repository(),
+            )
+        return self._bootstrap_map_cell_writer
+
     def terrain_batch_orchestrator(self) -> TerrainBatchOrchestrator:
         if self._terrain_batch_orchestrator is None:
             self._terrain_batch_orchestrator = TerrainBatchOrchestrator(
@@ -499,6 +509,7 @@ class Container:
             self._surface_materialization_orchestrator = WorldSurfaceMaterializationOrchestrator(
                 terrain=self.terrain_batch_orchestrator(),
                 climate=self.climate_batch_orchestrator(),
+                bootstrap_writer=self.bootstrap_map_cell_writer(),
                 map_cell_service=self.map_cell_service(),
             )
         return self._surface_materialization_orchestrator

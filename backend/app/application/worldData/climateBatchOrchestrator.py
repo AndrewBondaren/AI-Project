@@ -9,6 +9,7 @@ See ``docs/tz_climate.md`` § CL-PAR (impl).
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from app.api.schemas.imports import ImportResult
 from app.application.worldData.chunkComputePool import ChunkComputePool, split_contiguous_batches
@@ -33,6 +34,9 @@ from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
+if TYPE_CHECKING:
+    from app.application.worldData.bootstrapMapCellWriter import BootstrapMapCellWriter
+
 logger = logging.getLogger(__name__)
 
 
@@ -54,6 +58,8 @@ class ClimateBatchOrchestrator:
         locations: list[NamedLocation],
         ctx: MaterializationContext,
         cells: list[MapCell] | None = None,
+        *,
+        bootstrap_writer: BootstrapMapCellWriter | None = None,
     ) -> tuple[ImportResult, int, int]:
         """
         Climate on existing terrain cells.
@@ -102,7 +108,11 @@ class ClimateBatchOrchestrator:
             for part in overlaid_parts:
                 overlaid.extend(part)
 
-        result = await self._map_cells.save_pass(overlaid, "climate")
+        if bootstrap_writer is not None:
+            n = await bootstrap_writer.write_climate(overlaid)
+            result = ImportResult(total=len(overlaid), succeeded=n, failed=0)
+        else:
+            result = await self._map_cells.save_pass(overlaid, "climate")
         logger.info(
             "apply_climate_batch | world=%s cells=%d workers=%d batches=%d upserted=%d",
             world_uid, len(overlaid), workers, batches_total, result.succeeded,

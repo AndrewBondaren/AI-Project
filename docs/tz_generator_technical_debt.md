@@ -323,6 +323,14 @@ Passes (`surfacePass`, `columnFillPass`, …) — OK (40–96 строк). Fat: 
 |---|---|---|---|---|---|
 | TR-6 | medium | P2 | `save_pass(layer: str)` — `"terrain"`/`"climate"`/`"ore"`/`"cave"`; какие поля перезаписывает — только в repo, не в типе | enum + documented upsert field matrix (`tz_terrain_generation.md` или repo docstring) | open |
 | TR-7 | low | P3 | Три insert-пути terrain (`insert_bulk_ignore`, `insert_terrain_bulk`, `upsert_terrain_skeleton`) + DAG bypass repo | `BulkInsertMode` + scope enum; см. [`tz_terrain_generation.md`](./tz_terrain_generation.md) § TR-PERF-DEBT-4 | open (was: dual API) |
+
+### TR-PAR bootstrap DB (resolved)
+
+| ID | Severity | P | Проблема | Fix | Status |
+|---|---|---|---|---|---|
+| TR-PAR-5 | high | P2 | PRAGMA bulk session на shared connection — concurrent jobs перетирали PRAGMA | `_bootstrap_conn` + `asyncio.Lock`; dual conn foundation | **resolved** — см. [`tz_terrain_generation.md`](./tz_terrain_generation.md) § TR-PAR-5 |
+| TR-PAR-DEBT-1 | medium | P2 | ContextVar ambient conn routing на `db.conn` (TR-PAR-5 v1 interim) | **TR-PAR-6** `BootstrapMapCellWriter` + explicit `conn` on repo bulk methods | **resolved** — см. § TR-PAR-6 |
+| TR-PAR-6 | medium | P2 | Implicit bulk persist contract (repos via magic `db.conn`) | `BootstrapMapCellWriter` port; orchestrator `writer.session()` | **resolved** — [`bootstrapMapCellWriter.py`](../backend/app/application/worldData/bootstrapMapCellWriter.py) |
 | TR-4 | medium | P3 | `save_z_slice` / `generate_z_slice`: полный heightmap + gap analysis для одной `(gx, gy)` | cache heightmap per world bbox или explicit lazy contract | open |
 | CL-16 | low | P3 | `cellWeatherPass`: `location_uid` берётся из `sample.zone_location_uid`, не из исходного cell | doc или preserve cell attribution | open |
 | CL-7 | medium | P2 | `recalculate`: `run_cell_weather` gate'ит liquid, не weather; нет `run_liquid_overlay` | split flags per [`tz_climate.md`](./tz_climate.md) § C2 | partial |
