@@ -15,6 +15,7 @@ from app.db.models.world import World
 
 # Until DAG passes probe: debug HTTP uses this when query param omitted.
 DEBUG_FREE_CORES_STUB = 5
+DEFAULT_CHUNKS_PER_COMMIT = 8
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,7 @@ class MaterializationContext:
     free_cores: int
     parallel_workers_override: int | None = None
     job_id: str | None = None
+    chunks_per_commit: int = DEFAULT_CHUNKS_PER_COMMIT
 
 
 @dataclass(frozen=True)
@@ -56,12 +58,15 @@ def resolve_materialization_context(
     free_cores: int | None = None,
     parallel_workers_override: int | None = None,
     job_id: str | None = None,
+    chunks_per_commit: int | None = None,
 ) -> MaterializationContext:
     """Build context for debug routes; DAG supplies probed ``free_cores`` later."""
     _ = world  # reserved for per-world caller policy extensions
     cores = free_cores if free_cores is not None else DEBUG_FREE_CORES_STUB
+    cpc = chunks_per_commit if chunks_per_commit is not None else DEFAULT_CHUNKS_PER_COMMIT
     return MaterializationContext(
         free_cores=max(1, cores),
         parallel_workers_override=parallel_workers_override,
         job_id=job_id,
+        chunks_per_commit=max(1, cpc),
     )

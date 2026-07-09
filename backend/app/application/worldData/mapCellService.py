@@ -1,9 +1,13 @@
 import logging
+from contextlib import asynccontextmanager
 from dataclasses import asdict
 
 from app.api.schemas.imports import ImportResult
 from app.application.import_helpers import import_list
+from app.application.worldData.generators.terrain.worldMapSettings import n_base, world_z_min
+from app.application.worldData.sceneLoad import SCENE_LOAD_XY_RADIUS
 from app.db.models.mapCell import MapCell
+from app.db.models.world import World
 from app.db.repositories.iMapCellRepository import IMapCellRepository
 
 logger = logging.getLogger(__name__)
@@ -16,6 +20,12 @@ class MapCellService:
 
     def __init__(self, repo: IMapCellRepository) -> None:
         self._repo = repo
+
+    @asynccontextmanager
+    async def bulk_persist_session(self):
+        """TR-PERF-2: defer commit across multiple save_pass calls."""
+        async with self._repo.persist_session():
+            yield
 
     async def get_all(self, world_uid: str) -> list[MapCell]:
         return await self._repo.get_by_world(world_uid)
@@ -35,6 +45,32 @@ class MapCellService:
     async def get_location_uids_with_cells(self, world_uid: str) -> frozenset[str]:
         uids = await self._repo.get_location_uids_with_cells(world_uid)
         return frozenset(uids)
+
+    async def has_column_cells(self, world_uid: str, x: int, y: int) -> bool:
+        return await self._repo.has_column_cells(world_uid, x, y)
+
+    async def get_scene_volume(
+        self,
+        world: World,
+        x: int,
+        y: int,
+        z: int,
+        *,
+        xy_radius: int = SCENE_LOAD_XY_RADIUS,
+        z_below: int | None = None,
+        z_above: int = 0,
+    ) -> list[MapCell]:
+        """TR-LAZY-LOAD: 3D bbox around scene anchor for gameplay/debug."""
+        depth = z_below if z_below is not None else n_base(world)
+        z_lo = max(world_z_min(world), z - depth)
+        z_hi = z + z_above
+        r = max(0, xy_radius)
+        return await self.get_z_slice(
+            world.world_uid,
+            x - r, x + r,
+            y - r, y + r,
+            z_lo, z_hi,
+        )
 
     async def save_generated(self, cells: list[MapCell]) -> ImportResult:
         """Legacy: INSERT OR IGNORE — used by lazy nodes."""

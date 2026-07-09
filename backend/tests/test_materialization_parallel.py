@@ -66,6 +66,11 @@ class TestParallelPolicy(unittest.TestCase):
         ctx = resolve_materialization_context(world)
         self.assertEqual(ctx.free_cores, 5)
 
+    def test_chunks_per_commit_default(self):
+        world = _world()
+        ctx = resolve_materialization_context(world)
+        self.assertEqual(ctx.chunks_per_commit, 8)
+
 
 class TestChunkComputePool(unittest.IsolatedAsyncioTestCase):
 

@@ -28,8 +28,11 @@ from app.application.worldData.generators.terrain.passes.columnFillPass import r
 from app.application.worldData.generators.terrain.passes.gapAnalysisPass import run_gap_analysis
 from app.application.worldData.generators.terrain.passes.surfacePass import run_surface_pass
 from app.application.worldData.generators.terrain.oresGenerator import generate_ores
+from dataclasses import asdict
+
 from app.application.worldData.materializationContext import resolve_materialization_context
 from app.application.worldData.parallelPolicy import resolve_terrain_workers
+from app.application.worldData.sceneLoad import SCENE_LOAD_XY_RADIUS
 
 router = APIRouter()
 _hydrology_generator = HydrologyGeneratorService()
@@ -397,6 +400,7 @@ async def materialize_stack(
     max_tiles: int = Query(default=16, ge=0),
     free_cores: int | None = Query(default=None, ge=1),
     parallel_workers: int | None = Query(default=None, ge=1),
+    chunks_per_commit: int | None = Query(default=None, ge=1),
     include_climate: bool = Query(default=True),
     container=Depends(get_container),
 ) -> JSONResponse:
@@ -413,6 +417,7 @@ async def materialize_stack(
     cap = max_tiles if max_tiles > 0 else None
     mat_ctx = resolve_materialization_context(
         world, free_cores=free_cores, parallel_workers_override=parallel_workers,
+        chunks_per_commit=chunks_per_commit,
     )
 
     report = await stack.materialize_surface_stack(
@@ -488,3 +493,46 @@ async def generate_z_slice_route(
 
     status_code = 200 if result.failed == 0 else 207
     return JSONResponse(status_code=status_code, content=result.to_dict())
+
+
+@router.get("/worlds/{world_uid}/map/has-column")
+async def has_column_cells_route(
+    world_uid: str,
+    x: int,
+    y: int,
+    container=Depends(get_container),
+) -> JSONResponse:
+    """Debug — TR-LAZY-LOAD: any cells at fine column (x, y)?"""
+    map_svc = container.map_cell_service()
+    found = await map_svc.has_column_cells(world_uid, x, y)
+    return JSONResponse(content={"world_uid": world_uid, "x": x, "y": y, "has_column": found})
+
+
+@router.get("/worlds/{world_uid}/map/scene-volume")
+async def scene_volume_route(
+    world_uid: str,
+    x: int,
+    y: int,
+    z: int,
+    xy_radius: int = Query(default=SCENE_LOAD_XY_RADIUS, ge=0),
+    z_below: int | None = Query(default=None, ge=0),
+    z_above: int = Query(default=0, ge=0),
+    container=Depends(get_container),
+) -> JSONResponse:
+    """Debug — TR-LAZY-LOAD: 3D bbox around scene anchor (no DAG)."""
+    map_svc = container.map_cell_service()
+    world_svc = container.world_service()
+    world = await world_svc.get_by_id(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+
+    cells = await map_svc.get_scene_volume(
+        world, x, y, z, xy_radius=xy_radius, z_below=z_below, z_above=z_above,
+    )
+    return JSONResponse(content={
+        "world_uid": world_uid,
+        "anchor": {"x": x, "y": y, "z": z},
+        "xy_radius": xy_radius,
+        "cell_count": len(cells),
+        "cells": [asdict(c) for c in cells],
+    })

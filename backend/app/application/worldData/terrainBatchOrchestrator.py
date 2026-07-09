@@ -226,6 +226,32 @@ class TerrainBatchOrchestrator:
         )
         return await self._map_cells.save_pass(cells, "terrain")
 
+    async def _persist_chunk_batch(
+        self,
+        world_uid: str,
+        workers: int,
+        chunks_total: int,
+        batch: list[tuple[int, ColumnRect, list[MapCell]]],
+    ) -> tuple[int, int]:
+        """TR-PERF-2: one transaction for up to chunks_per_commit terrain chunks."""
+        if not batch:
+            return 0, 0
+        total = 0
+        succeeded = 0
+        async with self._map_cells.bulk_persist_session():
+            for chunk_idx, rect, chunk_cells in batch:
+                total += len(chunk_cells)
+                t_persist = time.perf_counter()
+                result = await self._map_cells.save_pass(chunk_cells, "terrain")
+                log_terrain_chunk_persist(
+                    world_uid, chunk_idx, chunks_total,
+                    workers=workers, rect=rect, cell_count=len(chunk_cells),
+                    upserted=result.succeeded,
+                    elapsed_ms=(time.perf_counter() - t_persist) * 1000.0,
+                )
+                succeeded += result.succeeded
+        return total, succeeded
+
     async def _materialize_fine_tile(
         self,
         world: World,
@@ -306,21 +332,29 @@ class TerrainBatchOrchestrator:
         total = 0
         succeeded = 0
         chunks_done = 0
+        chunks_per_commit = max(1, mat_ctx.chunks_per_commit)
+        persist_buffer: list[tuple[int, ColumnRect, list[MapCell]]] = []
+
+        async def flush_persist_buffer() -> None:
+            nonlocal total, succeeded, chunks_done, persist_buffer
+            if not persist_buffer:
+                return
+            batch = persist_buffer
+            persist_buffer = []
+            batch_total, batch_ok = await self._persist_chunk_batch(
+                world_uid, workers, chunks_total, batch,
+            )
+            total += batch_total
+            succeeded += batch_ok
+            chunks_done += len(batch)
 
         if workers == 1 or chunks_total <= 1:
             for chunk_idx, rect in enumerate(rects):
                 chunk_cells = compute_chunk_logged(chunk_idx, rect)
-                total += len(chunk_cells)
-                t_persist = time.perf_counter()
-                result = await self._map_cells.save_pass(chunk_cells, "terrain")
-                log_terrain_chunk_persist(
-                    world_uid, chunk_idx, chunks_total,
-                    workers=workers, rect=rect, cell_count=len(chunk_cells),
-                    upserted=result.succeeded,
-                    elapsed_ms=(time.perf_counter() - t_persist) * 1000.0,
-                )
-                succeeded += result.succeeded
-                chunks_done += 1
+                persist_buffer.append((chunk_idx, rect, chunk_cells))
+                if len(persist_buffer) >= chunks_per_commit:
+                    await flush_persist_buffer()
+            await flush_persist_buffer()
         else:
             pool = ChunkComputePool(workers)
             persist_lock = asyncio.Lock()
@@ -331,21 +365,15 @@ class TerrainBatchOrchestrator:
                 return compute_chunk_logged(chunk_idx, rect)
 
             async def on_chunk(pair: tuple[int, ColumnRect], chunk_cells: list[MapCell]) -> None:
-                nonlocal total, succeeded, chunks_done
+                nonlocal persist_buffer
                 chunk_idx, rect = pair
                 async with persist_lock:
-                    total += len(chunk_cells)
-                    t_persist = time.perf_counter()
-                    result = await self._map_cells.save_pass(chunk_cells, "terrain")
-                    log_terrain_chunk_persist(
-                        world_uid, chunk_idx, chunks_total,
-                        workers=workers, rect=rect, cell_count=len(chunk_cells),
-                        upserted=result.succeeded,
-                        elapsed_ms=(time.perf_counter() - t_persist) * 1000.0,
-                    )
-                    succeeded += result.succeeded
-                    chunks_done += 1
+                    persist_buffer.append((chunk_idx, rect, chunk_cells))
+                    if len(persist_buffer) >= chunks_per_commit:
+                        await flush_persist_buffer()
 
             await pool.map_sync_with_callback(indexed_rects, compute_indexed, on_chunk)
+            async with persist_lock:
+                await flush_persist_buffer()
 
         return ImportResult(total=total, succeeded=succeeded, failed=0), chunks_done, chunks_total

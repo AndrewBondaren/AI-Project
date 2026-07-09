@@ -1,9 +1,16 @@
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from app.db.models.mapCell import MapCell
 
 
 class IMapCellRepository(ABC):
+
+    @asynccontextmanager
+    async def persist_session(self) -> AsyncIterator[None]:
+        """Batch writes without per-call commit; one COMMIT on exit (TR-PERF-2)."""
+        yield
 
     @abstractmethod
     async def get_by_world(self, world_uid: str) -> list[MapCell]: ...
@@ -59,6 +66,10 @@ class IMapCellRepository(ABC):
 
     @abstractmethod
     async def get_by_location(self, location_uid: str) -> list[MapCell]: ...
+
+    @abstractmethod
+    async def has_column_cells(self, world_uid: str, x: int, y: int) -> bool:
+        """True if any z-level exists at fine grid column (x, y)."""
 
     @abstractmethod
     async def has_cells_for_location(self, location_uid: str) -> bool: ...

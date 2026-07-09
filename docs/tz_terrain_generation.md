@@ -618,8 +618,8 @@ flowchart TB
 
 | ID | Задача | Статус |
 |---|---|---|
-| **TR-PERF-1** | `executemany` в `_upsert_partial` + `insert_bulk_ignore` | ⬜ |
-| **TR-PERF-2** | `bulk_persist_session` + `chunks_per_commit` в materialization | ⬜ |
+| **TR-PERF-1** | `executemany` в `_upsert_partial` + `insert_bulk_ignore` | ✅ |
+| **TR-PERF-2** | `bulk_persist_session` + `chunks_per_commit` в materialization | ✅ |
 | **TR-PERF-3** | `insert_only` fast path для пустого `world_uid` | ⬜ backlog |
 | **TR-PERF-4** | PRAGMA bulk session на `materialize-stack` | ⬜ backlog |
 
@@ -715,8 +715,8 @@ lazy_terrain:
 
 | ID | Задача | Статус |
 |---|---|---|
-| **TR-LAZY-LOAD-1** | `has_column_cells` + `get_scene_volume` в repo/service | ⬜ |
-| **TR-LAZY-LOAD-2** | Debug HTTP / smoke: load + z_slice без нод | ⬜ |
+| **TR-LAZY-LOAD-1** | `has_column_cells` + `get_scene_volume` в repo/service | ✅ |
+| **TR-LAZY-LOAD-2** | Debug HTTP `GET has-column` / `scene-volume` + unit tests | ✅ |
 | **TR-LAZY-LOAD-DAG** | `check_terrain` / `eager_terrain` / `lazy_terrain` → service API | ⬜ **gate** — только с мастером, после G1–G5 ([`tz_world_generation_dag.md`](./tz_world_generation_dag.md) § Gate) |
 
 **DAG-ноды:** агент **не трогает** `application/engine/nodes/`. Контракт service/repo + debug HTTP — **до** gate; wiring в gameplay — **только совместно с мастером** после полного тестирования генераторов (TR-PERF, TR-LAZY-LOAD-1/2, D HY smoke, TR-PAR-4).
@@ -738,8 +738,8 @@ lazy_terrain:
 | 11 | `world_bounds` v2 | ✅ |
 | 12 | **Edge case M-1…M-5:** magma band + antipode teleport + movement | ✅ skeleton + `antipode_xy`; M-3 movement ⬜ |
 | 13 | **TR-PAR** — parallel chunk generate + serial persist (§ «Многопоточность»); DAG `free_cores` — TR-PAR-DAG-1 | ✅ HTTP; ⬜ DAG (**gate**) |
-| 14 | **TR-PERF** — `executemany` + multi-chunk commit на init (§ TR-PERF) | ⬜ |
-| 15 | **TR-LAZY-LOAD** — scene volume load + z_slice lazy path (§ TR-LAZY-LOAD) | ⬜ |
+| 14 | **TR-PERF** — `executemany` + multi-chunk commit на init (§ TR-PERF) | ✅ |
+| 15 | **TR-LAZY-LOAD** — scene volume load + z_slice lazy path (§ TR-LAZY-LOAD) | ✅ service; ⬜ DAG |
 
 ---
 
@@ -1425,8 +1425,8 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 | `generate-surface` terrain-only | ✅ |
 | `POST generate-climate` / ores / caves | ✅ |
 | Chunked persist + selective upsert | ✅ partial — per-row `execute`; TR-PERF ⬜ |
-| TR-PERF bulk init (`executemany`, multi-chunk commit) | ⬜ § TR-PERF |
-| TR-LAZY-LOAD service + debug (без нод) | ⬜ § TR-LAZY-LOAD-1/2 |
+| TR-PERF bulk init (`executemany`, multi-chunk commit) | ✅ § TR-PERF |
+| TR-LAZY-LOAD service + debug (без нод) | ✅ § TR-LAZY-LOAD-1/2 |
 | TR-LAZY-LOAD-DAG (gameplay ноды) | ⬜ gate — только с мастером |
 | Liquid pass on `generate-climate` | ✅ |
 | `generate_z_slice` API | ✅ `POST …/generate-z-slice` |
