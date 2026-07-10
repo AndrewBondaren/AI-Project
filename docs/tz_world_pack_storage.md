@@ -981,7 +981,7 @@ sequenceDiagram
 | **P2** | **MERGE-5** | PLAYER_PATH corridor | ⚠️ | heading corridor ✅; DAG movement intent — backlog |
 | **P2** | **MERGE-6** | L0 per-z fallback | ⚠️ | subsurface band ✅; full column — backlog |
 | **P2** | **MERGE-7** | patch `layer_kind` + field overlay | ✅ | FIX-10; write model gap → WP-FIX-DEBT-1 |
-| **P3** | **MERGE-8** | Read perf | ⚠️ | batch patch bbox ✅; LRU decode — backlog |
+| **P3** | **MERGE-8** | Read perf | ✅ | batch patch bbox; `PackL2DecodeCache` + `PackReadPolicy` | |
 | **P3** | **MERGE-9** | Потребители только facade | ⚠️ | debug read ✅; legacy write routes (`generate-surface`) — отдельно |
 
 **Порядок работ (оставшееся):** REVIEW-1 (pack I/O root) → MERGE-8 LRU → smoke WP-A* → bake tile/full → DAG intent wire → REVIEW-2…7.

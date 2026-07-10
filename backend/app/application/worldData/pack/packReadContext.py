@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.dataModel.worldPack.packReadPolicy import PackReadPolicy
+from app.application.worldData.pack.packL2DecodeCache import PackL2DecodeCache
 from app.application.worldData.pack.packPresence import has_pack as resolve_has_pack
 from app.application.worldData.pack.worldPackPaths import WorldPackPaths
 from app.application.worldData.pack.worldPackReader import WorldPackReader
@@ -12,12 +14,19 @@ from app.db.models.world import World
 class PackReadContext:
     """Per-world_uid pack paths, reader cache, coarse climate decode."""
 
-    def __init__(self, world_uid: str, *, db_path: str) -> None:
+    def __init__(
+        self,
+        world_uid: str,
+        *,
+        db_path: str,
+        read_policy: PackReadPolicy | None = None,
+    ) -> None:
         self.world_uid = world_uid
         self._db_path = db_path
         self._default_paths = WorldPackPaths.from_db_parent(db_path, world_uid)
         self._readers: dict[str, WorldPackReader] = {}
         self._climate_cache: dict[str, ClimateFieldWire | None] = {}
+        self._l2_cache = PackL2DecodeCache(read_policy)
 
     def paths_for(self, world: World) -> WorldPackPaths:
         return WorldPackPaths.for_world(world, self._db_path)
@@ -27,9 +36,13 @@ class PackReadContext:
         key = str(paths.root)
         reader = self._readers.get(key)
         if reader is None:
-            reader = WorldPackReader(paths)
+            reader = WorldPackReader(paths, l2_cache=self._l2_cache)
             self._readers[key] = reader
         return reader
+
+    @property
+    def l2_decode_cache(self) -> PackL2DecodeCache:
+        return self._l2_cache
 
     def has_pack(self) -> bool:
         return resolve_has_pack(None, self._default_paths, db_path=self._db_path)

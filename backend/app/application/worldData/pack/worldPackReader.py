@@ -9,6 +9,7 @@ from app.application.worldData.pack.packBlobWire import (
     parse_l0_tile_payload,
     parse_l2_chunk_payload,
 )
+from app.application.worldData.pack.packL2DecodeCache import PackL2DecodeCache
 from app.application.worldData.pack.packManifestStore import PackManifestStore
 from app.application.worldData.pack.tileCodec import (
     PAYLOAD_KIND_CLIMATE,
@@ -30,10 +31,12 @@ class WorldPackReader:
         *,
         codec: TileCodec | None = None,
         store: PackManifestStore | None = None,
+        l2_cache: PackL2DecodeCache | None = None,
     ) -> None:
         self._paths = paths
         self._codec = codec or TileCodec()
         self._store = store or PackManifestStore()
+        self._l2_cache = l2_cache
         self._manifest: WorldPackManifest | None = None
 
     def load_manifest(self) -> WorldPackManifest:
@@ -64,18 +67,20 @@ class WorldPackReader:
         return parse_l0_tile_payload(payload)
 
     def read_l2_chunk(self, gx: int, gy: int, cx: int, cy: int) -> L2ChunkWire:
-        path = self._paths.l2_chunk_path(gx, gy, cx, cy)
-        kind, payload = self._decode_file(path)
-        if kind != PAYLOAD_KIND_L2:
-            raise ValueError(f"expected L2 blob at {path}")
-        return parse_l2_chunk_payload(payload)
+        if self._l2_cache is None:
+            return self._load_l2_chunk(gx, gy, cx, cy)
+        return self._l2_cache.get_wilderness_chunk(
+            (gx, gy, cx, cy),
+            lambda: self._load_l2_chunk(gx, gy, cx, cy),
+        )
 
     def read_location_l2(self, location_uid: str) -> L2ChunkWire:
-        path = self._paths.location_l2_path(location_uid)
-        kind, payload = self._decode_file(path)
-        if kind != PAYLOAD_KIND_L2:
-            raise ValueError(f"expected L2 blob at {path}")
-        return parse_l2_chunk_payload(payload)
+        if self._l2_cache is None:
+            return self._load_location_l2(location_uid)
+        return self._l2_cache.get_location_l2(
+            location_uid,
+            lambda: self._load_location_l2(location_uid),
+        )
 
     def read_climate_coarse(self) -> ClimateFieldWire:
         path = self._paths.climate_coarse_path()
@@ -86,6 +91,20 @@ class WorldPackReader:
 
     def chunk_exists(self, gx: int, gy: int, cx: int, cy: int) -> bool:
         return self._paths.l2_chunk_path(gx, gy, cx, cy).is_file()
+
+    def _load_l2_chunk(self, gx: int, gy: int, cx: int, cy: int) -> L2ChunkWire:
+        path = self._paths.l2_chunk_path(gx, gy, cx, cy)
+        kind, payload = self._decode_file(path)
+        if kind != PAYLOAD_KIND_L2:
+            raise ValueError(f"expected L2 blob at {path}")
+        return parse_l2_chunk_payload(payload)
+
+    def _load_location_l2(self, location_uid: str) -> L2ChunkWire:
+        path = self._paths.location_l2_path(location_uid)
+        kind, payload = self._decode_file(path)
+        if kind != PAYLOAD_KIND_L2:
+            raise ValueError(f"expected L2 blob at {path}")
+        return parse_l2_chunk_payload(payload)
 
     def _decode_file(self, path: Path) -> tuple[int, dict]:
         if not path.is_file():

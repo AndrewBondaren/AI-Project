@@ -10,7 +10,7 @@ from app.dataModel.worldPack.mergeMapCells import (
     MergedCellView,
     merge_layers,
 )
-from app.dataModel.worldPack.pathHeadingPolicy import PathHeadingPolicy
+from app.dataModel.worldPack.packReadPolicy import PackReadPolicy
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume, inside_location_volume
 from app.dataModel.worldPack.territoryVolumePolicy import TerritoryVolumePolicy
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
@@ -51,6 +51,7 @@ __all__ = [
     "MapLayerKind",
     "MergedCellView",
     "PathHeadingPolicy",
+    "PackReadPolicy",
     "TerritoryVolume",
     "TerritoryVolumePolicy",
     "TileManifestEntry",
