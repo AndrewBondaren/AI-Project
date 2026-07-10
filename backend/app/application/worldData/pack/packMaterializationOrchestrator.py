@@ -1,4 +1,4 @@
-"""Pack-backed materialization facade — L0 light + L2 scene refine."""
+"""Pack-backed materialization facade — world map light + fine-terrain scene refine."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ from app.application.worldData.materializationContext import (
 from app.application.worldData.pack.chunkRefineQueue import ChunkRefineQueue
 from app.application.worldData.pack.chunkRefineWorker import ChunkRefineWorker
 from app.application.worldData.pack.entryAnchorTracker import EntryAnchorTracker
-from app.application.worldData.pack.l0BakeOrchestrator import L0BakeOrchestrator
-from app.application.worldData.pack.l2RefineOrchestrator import L2RefineOrchestrator
+from app.application.worldData.pack.worldMapBakeOrchestrator import WorldMapBakeOrchestrator
+from app.application.worldData.pack.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
 from app.application.worldData.pack.packBakeFinalize import finalize_pack_on_world
 from app.application.worldData.pack.pathHeading import resolve_path_heading
 from app.application.worldData.pack.worldPackWriter import WorldPackWriter
@@ -34,6 +34,7 @@ from app.db.models.world import World
 from app.application.worldData.pack.packBakeLog import (
     log_pack_bake_done,
     log_pack_bake_start,
+    log_pack_drain_persisted_done,
     log_pack_drain_persisted_start,
     log_pack_jobs_persisted,
     log_pack_queue_enqueue,
@@ -45,18 +46,18 @@ class PackMaterializationOrchestrator:
         self,
         terrain: TerrainBatchOrchestrator,
         *,
-        l0: L0BakeOrchestrator | None = None,
-        l2: L2RefineOrchestrator | None = None,
+        world_map: WorldMapBakeOrchestrator | None = None,
+        fine_terrain: FineTerrainRefineOrchestrator | None = None,
         job_repo: IChunkRefineJobRepository | None = None,
         world_service: WorldService | None = None,
         bake_defaults: PackBakeDefaults | None = None,
     ) -> None:
         self._terrain = terrain
-        self._l0 = l0 or L0BakeOrchestrator()
-        self._l2 = l2 or L2RefineOrchestrator(terrain)
+        self._world_map = world_map or WorldMapBakeOrchestrator()
+        self._fine_terrain = fine_terrain or FineTerrainRefineOrchestrator(terrain)
         self._anchors = EntryAnchorTracker()
         self._queue = ChunkRefineQueue(max_workers=1)
-        self._worker = ChunkRefineWorker(self._l2, job_repo=job_repo)
+        self._worker = ChunkRefineWorker(self._fine_terrain, job_repo=job_repo)
         self._jobs = job_repo
         self._world_service = world_service
         self._defaults = bake_defaults or PackBakeDefaults.canonical_defaults()
@@ -98,25 +99,27 @@ class PackMaterializationOrchestrator:
             tiles_planned=len(tiles),
             refine_scene=refine_scene,
             locations=len(locations),
+            terrain_workers=resolve_terrain_workers(mat_ctx, world),
         )
         surface_ctx = prepare_surface_terrain_context(
             world, locations, nodes=nodes, edges=edges,
             hydrology_generator=hydrology_generator,
         )
         if surface_ctx is not None and self._jobs is not None:
-            log_pack_drain_persisted_start(
+            drain_t0 = log_pack_drain_persisted_start(
                 world_uid,
                 max_jobs=max(self._defaults.background_drain_per_request, 1),
             )
-            await self._worker.drain_persisted(
+            drained = await self._worker.drain_persisted(
                 world_uid, world, locations, writer, mat_ctx, surface_ctx,
                 max_jobs=max(self._defaults.background_drain_per_request, 1),
             )
-        l0_cells = self._l0.bake_tiles(
+            log_pack_drain_persisted_done(world_uid, processed=drained, started_at=drain_t0)
+        world_map_cells = self._world_map.bake_tiles(
             world, locations, writer, tiles,
             nodes=nodes, edges=edges, hydrology_generator=hydrology_generator,
         )
-        terrain_result = PersistResult.from_counts(l0_cells, l0_cells)
+        terrain_result = PersistResult.from_counts(world_map_cells, world_map_cells)
         chunks_done = 0
         chunks_total = 0
 
@@ -131,30 +134,30 @@ class PackMaterializationOrchestrator:
                         break
             ax = ax if ax is not None else 0
             ay = ay if ay is not None else 0
-            tile_gx, tile_gy = self._l2.tile_for_anchor(world, ax, ay)
+            tile_gx, tile_gy = self._fine_terrain.tile_for_anchor(world, ax, ay)
             self._anchors.set_anchor("session_start", ax, ay, tile_gx=tile_gx, tile_gy=tile_gy)
             heading = resolve_path_heading(
                 intent_dx=heading_dx,
                 intent_dy=heading_dy,
                 positions=self._anchors.position_history(),
             )
-            terrain_result, chunks_done, chunks_total = await self._l2.refine_scene_volume(
+            terrain_result, chunks_done, chunks_total = await self._fine_terrain.refine_scene_volume(
                 world, locations, writer, ax, ay, mat_ctx,
                 surface_ctx=surface_ctx, tile_gx=tile_gx, tile_gy=tile_gy,
                 xy_radius=SceneVolumePolicy.canonical_defaults().scene_xy_radius,
             )
-            path_chunks = await self._l2.refine_path_corridor(
+            path_chunks = await self._fine_terrain.refine_path_corridor(
                 world, locations, writer, ax, ay, mat_ctx, surface_ctx,
                 tile_gx, tile_gy,
                 heading=heading,
                 depth_tiles=app_settings.path_ahead_depth,
             )
             chunks_done += path_chunks
-            await self._l2.schedule_tile_background(
+            await self._fine_terrain.schedule_tile_background(
                 world, self._queue, ax, ay, tile_gx, tile_gy,
             )
             if heading is not None:
-                await self._l2.schedule_path_ahead_tiles(
+                await self._fine_terrain.schedule_path_ahead_tiles(
                     world, self._queue, ax, ay, tile_gx, tile_gy, heading,
                     depth_tiles=app_settings.path_ahead_depth,
                 )
@@ -176,7 +179,7 @@ class PackMaterializationOrchestrator:
         workers = resolve_terrain_workers(mat_ctx, world)
         log_pack_bake_done(
             world_uid,
-            l0_cells=l0_cells,
+            world_map_cells=world_map_cells,
             chunks_done=chunks_done,
             chunks_total=chunks_total,
             queue_depth=len(self._queue),

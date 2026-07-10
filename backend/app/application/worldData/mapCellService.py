@@ -70,7 +70,7 @@ Pack-backed reads delegate to ``MapCellReadService`` (gameplay / debug / loading
     async def get_tile_cells_for_read(self, world: World, gx: int, gy: int) -> list[MapCell]:
         read = self._read(world.world_uid)
         if read is not None and read.has_pack_for(world):
-            return read.pack.debug.get_l0_tile_sample_cells(world, gx, gy)
+            return read.pack.debug.get_world_map_tile_sample_cells(world, gx, gy)
         cell_m = world.map_cell_size_m
         x0, y0 = gx * cell_m, gy * cell_m
         x1, y1 = x0 + cell_m - 1, y0 + cell_m - 1
@@ -86,7 +86,7 @@ Pack-backed reads delegate to ``MapCellReadService`` (gameplay / debug / loading
             return {
                 "cells": [asdict(c) for c in cells],
                 "read_path": "facade",
-                "read_mode": "l0_surface_merged_patches",
+                "read_mode": "world_map_surface_merged_patches",
             }
         return {
             "cells": [asdict(c) for c in cells],
@@ -94,11 +94,11 @@ Pack-backed reads delegate to ``MapCellReadService`` (gameplay / debug / loading
             "read_mode": "patches_only",
         }
 
-    def l0_tile_coords(self, world: World) -> list[tuple[int, int]]:
+    def world_map_tile_coords(self, world: World) -> list[tuple[int, int]]:
         read = self._read(world.world_uid)
         if read is None or not read.has_pack_for(world):
             return []
-        return read.pack.debug.l0_tile_coords(world)
+        return read.pack.debug.world_map_tile_coords(world)
 
     async def get_all(self, world_uid: str) -> list[MapCell]:
         return await self._repo.get_by_world(world_uid)

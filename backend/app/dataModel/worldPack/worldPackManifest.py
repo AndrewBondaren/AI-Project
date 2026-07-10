@@ -36,7 +36,7 @@ class TileManifestEntry(BaseModel):
     chunks: list[ChunkRef] = Field(default_factory=list)
 
 
-class LocationL2Entry(BaseModel):
+class LocationTerrainEntry(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     location_uid: str
@@ -64,11 +64,11 @@ class WorldPackManifest(BaseModel):
     world_map_cells_per_tile: int = 32
     cell_size_m: int = 1
     map_subsurface_depth: int = 0
-    locations_l2: list[LocationL2Entry] = Field(default_factory=list)
+    location_terrain_entries: list[LocationTerrainEntry] = Field(default_factory=list)
     tiles: list[TileManifestEntry] = Field(default_factory=list)
-    l0_cells: int = 0
-    l2_tiles_total: int = 0
-    l2_chunks_baked: int = 0
+    world_map_cells: int = 0
+    wilderness_tiles_total: int = 0
+    wilderness_chunks_baked: int = 0
 
     def tile_entry(self, gx: int, gy: int) -> TileManifestEntry | None:
         for tile in self.tiles:
@@ -85,8 +85,8 @@ class WorldPackManifest(BaseModel):
                 return chunk
         return None
 
-    def location_entry(self, location_uid: str) -> LocationL2Entry | None:
-        for loc in self.locations_l2:
+    def location_entry(self, location_uid: str) -> LocationTerrainEntry | None:
+        for loc in self.location_terrain_entries:
             if loc.location_uid == location_uid:
                 return loc
         return None

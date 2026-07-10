@@ -39,10 +39,10 @@ LIMITS = {
 }
 
 MANUAL = {
-    "WP-A4": "L2 refine golden hash — run twice, compare chunk content_hash in manifest",
+    "WP-A4": "fine-terrain refine golden hash — run twice, compare chunk content_hash in manifest",
     "WP-A5": "background refine: worker<=1, no burst 8 tiles — watch loading-progress SSE/logs",
     "WP-A8": "kill mid-chunk — verify saved chunks + stable hash on redo",
-    "WP-A14": "stale L0 regen from location boundary — manual regen pass",
+    "WP-A14": "stale world map regen from location boundary — manual regen pass",
 }
 
 
@@ -85,7 +85,7 @@ def run_offline(result: SmokeResult) -> None:
         "tests.test_merge_fieldwise",
         "tests.test_merge_map_cells",
         "tests.test_merge9_debug_read",
-        "tests.test_pack_l2_decode_cache",
+        "tests.test_pack_fine_terrain_decode_cache",
         "tests.test_wp_acceptance",
         "tests.test_location_territory_volumes",
         "tests.test_pack_root_resolution",
@@ -172,8 +172,8 @@ def run_http(
             elif elapsed > LIMITS["A1_bake_s"]:
                 result.fail("WP-A1", f"bake {elapsed:.1f}s > {LIMITS['A1_bake_s']}s")
             else:
-                l0 = int((bake.get("loading_progress") or {}).get("world_map", {}).get("l0_tiles_ready") or 0)
-                result.ok("WP-A1", f"light bake {elapsed:.1f}s, l0_tiles_ready={l0}")
+                world_map = int((bake.get("loading_progress") or {}).get("world_map", {}).get("world_map_tiles_ready") or 0)
+                result.ok("WP-A1", f"light bake {elapsed:.1f}s, world_map_tiles_ready={world_map}")
         else:
             result.skip("WP-A1", "--skip-bake")
 
@@ -195,7 +195,7 @@ def run_http(
         _require_ok(r, f"GET locations {world_uid}")
         locs = r.json()
         if isinstance(locs, list) and locs and terrains:
-            result.ok("WP-A3", f"{len(locs)} locations, L0 terrains={sorted(terrains)[:5]}, hydro_cells={hydro}")
+            result.ok("WP-A3", f"{len(locs)} locations, world_map terrains={sorted(terrains)[:5]}, hydro_cells={hydro}")
         else:
             result.fail("WP-A3", f"locations={len(locs) if isinstance(locs, list) else '?'}, terrains={terrains}")
 
@@ -203,11 +203,11 @@ def run_http(
         _require_ok(r, "GET loading-progress")
         progress = r.json()
         wm = progress.get("world_map") or {}
-        loc_ready = wm.get("locations_l2_ready") or []
+        loc_ready = wm.get("location_terrain_ready") or []
         if isinstance(loc_ready, list):
-            result.ok("WP-A11", f"locations_l2_ready={len(loc_ready)}, phase={wm.get('phase')}")
+            result.ok("WP-A11", f"location_terrain_ready={len(loc_ready)}, phase={wm.get('phase')}")
         else:
-            result.fail("WP-A11", "loading-progress missing world_map.locations_l2_ready")
+            result.fail("WP-A11", "loading-progress missing world_map.location_terrain_ready")
 
         ax, ay, az = _spawn_anchor(fixture)
         t0 = time.perf_counter()
@@ -250,7 +250,7 @@ def run_http(
         if has_climate:
             result.ok("WP-A12", "scene cells include climate fields")
         else:
-            result.skip("WP-A12", "no climate on scene cells yet (L0-only fallback OK for v1)")
+            result.skip("WP-A12", "no climate on scene cells yet (world-map-only fallback OK for v1)")
 
         building = [c for c in scene.get("cells") or [] if c.get("system_building_element")]
         if building:

@@ -1,12 +1,12 @@
-"""Debug L0 / merged bbox read — MERGE-9 / REVIEW-5."""
+"""Debug world map / merged bbox read — MERGE-9 / REVIEW-5."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 from app.application.worldData.pack.mapCellFromMerged import merged_view_to_map_cell
-from app.application.worldData.pack.packL0Reader import PackL0Reader
-from app.application.worldData.pack.packMapHelpers import l0_sample_index, tile_index, world_tile_size_m
+from app.application.worldData.pack.worldMapPackReader import WorldMapPackReader
+from app.application.worldData.pack.packMapHelpers import world_map_sample_index, tile_index, world_tile_size_m
 from app.application.worldData.pack.packReadContext import PackReadContext
 from app.application.worldData.pack.patchCellContribution import map_cell_to_patch_contribution
 from app.application.worldData.patchStoreService import PatchStoreService
@@ -20,25 +20,25 @@ if TYPE_CHECKING:
 
 
 class PackDebugReadFacade:
-    """L0 coarse export and merged bbox probes — not gameplay scene merge."""
+    """World map coarse export and merged bbox probes — not gameplay scene merge."""
 
     def __init__(
         self,
         context: PackReadContext,
         patches: PatchStoreService,
-        l0: PackL0Reader,
+        world_map: WorldMapPackReader,
         *,
         gameplay: MapCellQueryFacade | None = None,
     ) -> None:
         self._ctx = context
         self._patches = patches
-        self._l0 = l0
+        self._world_map = world_map
         self._gameplay = gameplay
 
     def bind_gameplay(self, gameplay: MapCellQueryFacade) -> None:
         self._gameplay = gameplay
 
-    def l0_tile_coords(self, world: World) -> list[tuple[int, int]]:
+    def world_map_tile_coords(self, world: World) -> list[tuple[int, int]]:
         if not self._ctx.has_pack_for(world):
             return []
         return [
@@ -47,7 +47,7 @@ class PackDebugReadFacade:
             if t.world_map_path
         ]
 
-    def get_l0_surface_map_cells(self, world: World) -> list[MapCell]:
+    def get_world_map_surface_cells(self, world: World) -> list[MapCell]:
         if not self._ctx.has_pack_for(world):
             return []
         manifest = self._ctx.reader_for(world).manifest
@@ -56,24 +56,24 @@ class PackDebugReadFacade:
         for entry in manifest.tiles:
             if not entry.world_map_path:
                 continue
-            out.extend(self._l0.surface_cells_for_tile(world, entry.gx, entry.gy, tile_size))
+            out.extend(self._world_map.surface_cells_for_tile(world, entry.gx, entry.gy, tile_size))
         return out
 
-    def get_l0_tile_sample_cells(self, world: World, gx: int, gy: int) -> list[MapCell]:
+    def get_world_map_tile_sample_cells(self, world: World, gx: int, gy: int) -> list[MapCell]:
         if not self._ctx.has_pack_for(world):
             return []
-        return self._l0.surface_cells_for_tile(world, gx, gy, world_tile_size_m(world))
+        return self._world_map.surface_cells_for_tile(world, gx, gy, world_tile_size_m(world))
 
     async def get_debug_export_cells(self, world: World) -> list[MapCell]:
-        """L0 coarse surface + patches per ``(x,y,z)`` — ``read_mode=l0_surface_merged_patches``."""
+        """World map coarse surface + patches per ``(x,y,z)`` — ``read_mode=world_map_surface_merged_patches``."""
         if not self._ctx.has_pack_for(world):
             return []
         layers_by_key: dict[tuple[int, int, int], list[LayerSlice]] = {}
-        for cell in self.get_l0_surface_map_cells(world):
+        for cell in self.get_world_map_surface_cells(world):
             contrib = map_cell_to_patch_contribution(cell)
             key = (cell.x, cell.y, cell.z)
             layers_by_key.setdefault(key, []).append(
-                LayerSlice(kind=MapLayerKind.L0, cell=contrib),
+                LayerSlice(kind=MapLayerKind.WORLD_MAP, cell=contrib),
             )
         for patch in await self._patches.get_all_patches(world.world_uid):
             key = (patch.x, patch.y, patch.z)
@@ -82,7 +82,7 @@ class PackDebugReadFacade:
             )
         out: list[MapCell] = []
         for (x, y, z), layers in layers_by_key.items():
-            merged = self._l0.apply_climate(world, merge_layers(x, y, z, layers))
+            merged = self._world_map.apply_climate(world, merge_layers(x, y, z, layers))
             if merged.has_any_data():
                 out.append(merged_view_to_map_cell(world.world_uid, merged))
         return out
@@ -125,13 +125,13 @@ class PackDebugReadFacade:
         gy, ly = tile_index(y, tile_size)
         reader = self._ctx.reader_for(world)
         try:
-            side, _ = reader.read_l0_tile(gx, gy)
+            side, _ = reader.read_world_map_tile(gx, gy)
         except FileNotFoundError:
             side = reader.manifest.world_map_cells_per_tile
-        sample = self._l0.sample_l0(
+        sample = self._world_map.sample_world_map(
             world, gx, gy,
-            l0_sample_index(lx, tile_size, side),
-            l0_sample_index(ly, tile_size, side),
+            world_map_sample_index(lx, tile_size, side),
+            world_map_sample_index(ly, tile_size, side),
         )
         if sample is None:
             return False

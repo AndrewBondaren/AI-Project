@@ -11,10 +11,10 @@ LoadingPhase = Literal["idle", "blocking", "background"]
 @dataclass
 class WorldMapLoading:
     phase: LoadingPhase = "idle"
-    l0_tiles_ready: int = 0
-    l0_tiles_total: int = 0
+    world_map_tiles_ready: int = 0
+    world_map_tiles_total: int = 0
     locations_ready: list[str] = field(default_factory=list)
-    locations_l2_ready: list[str] = field(default_factory=list)
+    location_terrain_ready: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -39,10 +39,10 @@ class LoadingProgressSnapshot:
             "world_uid": self.world_uid,
             "worldMapLoading": {
                 "phase": self.world_map.phase,
-                "l0_tiles_ready": self.world_map.l0_tiles_ready,
-                "l0_tiles_total": self.world_map.l0_tiles_total,
+                "world_map_tiles_ready": self.world_map.world_map_tiles_ready,
+                "world_map_tiles_total": self.world_map.world_map_tiles_total,
                 "locations_ready": list(self.world_map.locations_ready),
-                "locations_l2_ready": list(self.world_map.locations_l2_ready),
+                "location_terrain_ready": list(self.world_map.location_terrain_ready),
             },
             "localGridLoading": {
                 "phase": self.local_grid.phase,

@@ -19,18 +19,18 @@ class PackLoadingProgressFacade:
         if not self._ctx.has_pack_for(world):
             return LoadingProgressSnapshot(world_uid=world.world_uid)
         manifest = self._ctx.reader_for(world).manifest
-        l0_ready = sum(1 for t in manifest.tiles if t.world_map_path)
-        l0_total = len(manifest.tiles) if manifest.tiles else l0_ready
-        loc_l2 = [loc.location_uid for loc in manifest.locations_l2 if loc.terrain_path]
-        chunks_ready = manifest.l2_chunks_baked
+        world_map_ready = sum(1 for t in manifest.tiles if t.world_map_path)
+        world_map_total = len(manifest.tiles) if manifest.tiles else world_map_ready
+        loc_terrain = [loc.location_uid for loc in manifest.location_terrain_entries if loc.terrain_path]
+        chunks_ready = manifest.wilderness_chunks_baked
         chunks_total = sum(len(t.chunks) for t in manifest.tiles) if manifest.tiles else chunks_ready
         return LoadingProgressSnapshot(
             world_uid=world.world_uid,
             world_map=WorldMapLoading(
-                phase="background" if l0_ready < l0_total else "idle",
-                l0_tiles_ready=l0_ready,
-                l0_tiles_total=l0_total,
-                locations_l2_ready=loc_l2,
+                phase="background" if world_map_ready < world_map_total else "idle",
+                world_map_tiles_ready=world_map_ready,
+                world_map_tiles_total=world_map_total,
+                location_terrain_ready=loc_terrain,
             ),
             local_grid=LocalGridLoading(
                 phase="background" if chunks_ready < chunks_total else "idle",

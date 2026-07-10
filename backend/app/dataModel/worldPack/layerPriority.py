@@ -13,7 +13,7 @@ class MapLayerKind(IntEnum):
     PLAYER_PATH = 2
     LOCATION = 3
     WILDERNESS = 4
-    L0 = 5
+    WORLD_MAP = 5
 
 
 LAYER_PRIORITY_ORDER: tuple[MapLayerKind, ...] = (
@@ -22,5 +22,5 @@ LAYER_PRIORITY_ORDER: tuple[MapLayerKind, ...] = (
     MapLayerKind.PLAYER_PATH,
     MapLayerKind.LOCATION,
     MapLayerKind.WILDERNESS,
-    MapLayerKind.L0,
+    MapLayerKind.WORLD_MAP,
 )

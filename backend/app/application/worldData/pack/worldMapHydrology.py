@@ -1,15 +1,15 @@
-"""Map L0 hydrology role from coarse hydrology cells."""
+"""World map hydrology role from coarse hydrology cells."""
 
 from __future__ import annotations
 
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
-from app.dataModel.worldPack.hydrologyMaskWire import L0HydrologyRole
+from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
 
 
-def l0_hydro_role_from_cell(cell_hydro: object | None) -> L0HydrologyRole:
+def world_map_hydro_role_from_cell(cell_hydro: object | None) -> WorldMapHydrologyRole:
     if cell_hydro is None:
-        return L0HydrologyRole.NONE
+        return WorldMapHydrologyRole.NONE
     role: HydrologyCellRole | None = None
     if isinstance(cell_hydro, MapCellHydrology):
         role = cell_hydro.role
@@ -22,15 +22,15 @@ def l0_hydro_role_from_cell(cell_hydro: object | None) -> L0HydrologyRole:
         elif raw is not None:
             role = HydrologyCellRole.from_wire(str(getattr(raw, "value", raw)))
     if role is None:
-        return L0HydrologyRole.NONE
+        return WorldMapHydrologyRole.NONE
     match role:
         case HydrologyCellRole.RIVER_BED:
-            return L0HydrologyRole.RIVER
+            return WorldMapHydrologyRole.RIVER
         case HydrologyCellRole.SHORE:
-            return L0HydrologyRole.SHORE
+            return WorldMapHydrologyRole.SHORE
         case HydrologyCellRole.LAKE | HydrologyCellRole.INLAND_SEA:
-            return L0HydrologyRole.LAKE
+            return WorldMapHydrologyRole.LAKE
         case HydrologyCellRole.COASTAL_SEA | HydrologyCellRole.OPEN_OCEAN:
-            return L0HydrologyRole.SEA
+            return WorldMapHydrologyRole.SEA
         case _:
-            return L0HydrologyRole.NONE
+            return WorldMapHydrologyRole.NONE

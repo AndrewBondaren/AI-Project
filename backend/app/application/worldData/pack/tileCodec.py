@@ -10,8 +10,8 @@ import zstandard
 
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 
-PAYLOAD_KIND_L0 = 0
-PAYLOAD_KIND_L2 = 1
+PAYLOAD_KIND_WORLD_MAP = 0
+PAYLOAD_KIND_FINE_TERRAIN = 1
 PAYLOAD_KIND_CLIMATE = 2
 
 

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from app.application.worldData.pack import WorldPackPaths, WorldPackWriter
 from app.application.worldData.pack.packReadServices import build_pack_read_services
 from app.application.worldData.patchStoreService import PatchStoreService
-from app.dataModel.worldPack import L2ChunkWire, L2ColumnWire, L2ZRun, WorldMapCellWire
+from app.dataModel.worldPack import FineTerrainChunkWire, FineTerrainColumnWire, FineTerrainZRun, WorldMapCellWire
 
 
 def _world(**kwargs):
@@ -24,22 +24,22 @@ class TestPackFineTerrainReadFacade(unittest.IsolatedAsyncioTestCase):
         self.db_path = str(Path(self._tmpdir.name) / "game.db")
         self.paths = WorldPackPaths.from_db_parent(self.db_path, "w-fine-read")
         writer = WorldPackWriter(self.paths)
-        chunk = L2ChunkWire(
+        chunk = FineTerrainChunkWire(
             cx=0,
             cy=0,
             chunk_columns=32,
             columns=[
-                L2ColumnWire(
+                FineTerrainColumnWire(
                     lx=1,
                     ly=2,
-                    runs=[L2ZRun(z0=-1, z1=0, system_terrain="forest", system_material="earth")],
+                    runs=[FineTerrainZRun(z0=-1, z1=0, system_terrain="forest", system_material="earth")],
                 ),
             ],
         )
-        writer.write_l0_world_map(
+        writer.write_world_map_tile(
             12, 12, [WorldMapCellWire(tx=0, ty=0, surface_z=10)], cells_per_side=32,
         )
-        self.chunk_hash = writer.write_l2_wilderness_chunk(12, 12, chunk, refine_role="scene")
+        self.chunk_hash = writer.write_wilderness_chunk(12, 12, chunk, refine_role="scene")
         writer.save_manifest()
         self.services = build_pack_read_services(
             "w-fine-read", PatchStoreService(), db_path=self.db_path,

@@ -1,4 +1,4 @@
-"""Pack L2 refine parallel policy — pool path vs serial fallback."""
+"""Pack fine-terrain refine parallel policy — pool path vs serial fallback."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.application.worldData.pack.l2RefineOrchestrator import L2RefineOrchestrator
+from app.application.worldData.pack.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.materializationContext import MaterializationContext
 from app.db.models.mapCell import MapCell
@@ -25,7 +25,7 @@ def _plains_cell() -> MapCell:
     return MapCell(world_uid="w-par", x=0, y=0, z=0, system_terrain="plains")
 
 
-class TestPackL2Parallel(unittest.IsolatedAsyncioTestCase):
+class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
 
     def _setup(self) -> tuple[MagicMock, MagicMock, list[ColumnRect], MaterializationContext]:
         terrain = MagicMock()
@@ -33,7 +33,7 @@ class TestPackL2Parallel(unittest.IsolatedAsyncioTestCase):
         terrain.generate_chunk_cells_sync.return_value = [_plains_cell()]
 
         writer = MagicMock()
-        writer.write_l2_wilderness_chunk.return_value = "hash"
+        writer.write_wilderness_chunk.return_value = "hash"
         writer.manifest = MagicMock()
 
         rects = [
@@ -47,7 +47,7 @@ class TestPackL2Parallel(unittest.IsolatedAsyncioTestCase):
 
     async def test_refine_rects_uses_chunk_compute_pool_when_workers_gt_one(self) -> None:
         terrain, writer, rects, mat_ctx = self._setup()
-        l2 = L2RefineOrchestrator(terrain)
+        l2 = FineTerrainRefineOrchestrator(terrain)
 
         async def fake_pool(items, compute, on_result):
             for item in items:
@@ -58,7 +58,7 @@ class TestPackL2Parallel(unittest.IsolatedAsyncioTestCase):
         pool_instance.map_sync_with_callback = AsyncMock(side_effect=fake_pool)
 
         with patch(
-            "app.application.worldData.pack.l2RefineOrchestrator.ChunkComputePool",
+            "app.application.worldData.pack.fineTerrainRefineOrchestrator.ChunkComputePool",
             return_value=pool_instance,
         ) as pool_cls:
             result, written, total = await l2._refine_rects(
@@ -75,7 +75,10 @@ class TestPackL2Parallel(unittest.IsolatedAsyncioTestCase):
                 phase="scene",
             )
 
-        pool_cls.assert_called_once_with(4)
+        pool_cls.assert_called_once_with(
+            4, thread_name_prefix="pack-compute", log_diagnostics=True,
+        )
+        pool_instance.shutdown.assert_called_once()
         pool_instance.map_sync_with_callback.assert_awaited_once()
         self.assertEqual(total, 4)
         self.assertEqual(written, 4)
@@ -84,10 +87,10 @@ class TestPackL2Parallel(unittest.IsolatedAsyncioTestCase):
 
     async def test_refine_rects_serial_when_single_chunk(self) -> None:
         terrain, writer, rects, mat_ctx = self._setup()
-        l2 = L2RefineOrchestrator(terrain)
+        l2 = FineTerrainRefineOrchestrator(terrain)
 
         with patch(
-            "app.application.worldData.pack.l2RefineOrchestrator.ChunkComputePool",
+            "app.application.worldData.pack.fineTerrainRefineOrchestrator.ChunkComputePool",
         ) as pool_cls:
             result, written, total = await l2._refine_rects(
                 _world(),

@@ -26,7 +26,7 @@ class TestMapCellQueryFacade(unittest.IsolatedAsyncioTestCase):
         self.db_path = str(Path(self._tmpdir.name) / "game.db")
         self.paths = WorldPackPaths.from_db_parent(self.db_path, "w1")
         writer = WorldPackWriter(self.paths)
-        writer.write_l0_world_map(
+        writer.write_world_map_tile(
             0, 0,
             [WorldMapCellWire(tx=0, ty=0, surface_z=50, system_terrain="plains")],
             cells_per_side=32,
@@ -42,22 +42,22 @@ class TestMapCellQueryFacade(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self) -> None:
         self._tmpdir.cleanup()
 
-    async def test_l0_fallback_scene_volume(self):
+    async def test_world_map_fallback_scene_volume(self):
         world = _world()
         views = await self.facade.get_scene_volume(world, 0, 0, 50, xy_radius=0)
         self.assertGreaterEqual(len(views), 1)
-        self.assertEqual(views[0].source_layer, MapLayerKind.L0)
+        self.assertEqual(views[0].source_layer, MapLayerKind.WORLD_MAP)
         self.assertEqual(views[0].system_terrain, "plains")
 
-    async def test_sample_l0_via_debug(self):
+    async def test_sample_world_map_via_debug(self):
         world = _world()
-        cells = self.debug.get_l0_tile_sample_cells(world, 0, 0)
+        cells = self.debug.get_world_map_tile_sample_cells(world, 0, 0)
         self.assertGreaterEqual(len(cells), 1)
         self.assertEqual(cells[0].system_terrain, "plains")
 
     def test_loading_progress(self):
         snap = self.loading.get_loading_progress(_world())
-        self.assertEqual(snap.world_map.l0_tiles_ready, 1)
+        self.assertEqual(snap.world_map.world_map_tiles_ready, 1)
 
 
 if __name__ == "__main__":

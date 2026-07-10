@@ -14,7 +14,7 @@ from app.dataModel.worldPack import (
     merge_layers,
     resolve_world_map_cells_per_tile,
 )
-from app.dataModel.worldPack.hydrologyMaskWire import L0HydrologyRole
+from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
 
 
 class TestWorldMapCellsPerTile(unittest.TestCase):
@@ -45,7 +45,7 @@ class TestWorldPackWire(unittest.TestCase):
                     "chunks": [{"cx": 0, "cy": 0}],
                 },
             ],
-            locations_l2=[
+            location_terrain_entries=[
                 {
                     "location_uid": "loc-1",
                     "territory_volume": {"x0": 0, "y0": 0, "z0": -2, "x1": 10, "y1": 10, "z1": 0},
@@ -60,7 +60,7 @@ class TestWorldPackWire(unittest.TestCase):
 
     def test_world_map_cell_wire(self):
         cell = WorldMapCellWire(tx=1, ty=2, surface_z=100, hydrology_role="river", hydrology_width=3)
-        self.assertEqual(cell.hydrology_role, L0HydrologyRole.RIVER)
+        self.assertEqual(cell.hydrology_role, WorldMapHydrologyRole.RIVER)
         self.assertEqual(cell.hydrology.width, 3)
 
 

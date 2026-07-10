@@ -12,8 +12,8 @@ class PackReadPolicy(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    l2_chunk_lru_capacity: int = Field(default=64, ge=1)
-    location_l2_lru_capacity: int = Field(default=16, ge=1)
+    wilderness_chunk_lru_capacity: int = Field(default=64, ge=1)
+    location_terrain_lru_capacity: int = Field(default=16, ge=1)
 
     @classmethod
     def canonical_defaults(cls) -> PackReadPolicy:

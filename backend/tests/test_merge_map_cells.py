@@ -39,15 +39,15 @@ class TestMergeMapCells(unittest.TestCase):
         self.assertEqual(merged_surface.system_terrain, "urban")
         self.assertEqual(merged_under.source_layer, MapLayerKind.WILDERNESS)
 
-    def test_l0_fallback_when_no_fine(self):
+    def test_world_map_fallback_when_no_fine(self):
         layers = [
             LayerSlice(
-                kind=MapLayerKind.L0,
+                kind=MapLayerKind.WORLD_MAP,
                 cell=CellContribution(x=0, y=0, z=0, system_terrain="plains"),
             ),
         ]
         merged = merge_layers(0, 0, 0, layers)
-        self.assertEqual(merged.source_layer, MapLayerKind.L0)
+        self.assertEqual(merged.source_layer, MapLayerKind.WORLD_MAP)
 
     def test_empty_when_no_layer_has_cell(self):
         merged = merge_layers(9, 9, 0, [])

@@ -7,6 +7,8 @@ from collections.abc import Awaitable, Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from typing import TypeVar
 
+from app.application.worldData.pack.packBakeLog import log_pack_compute_pool
+
 T = TypeVar("T")
 R = TypeVar("R")
 
@@ -25,16 +27,37 @@ class ChunkComputePool:
     """
     Thread-pool for CPU-bound sync work from async orchestrators.
 
-  ProcessPool can replace executor backend without changing orchestrator API.
+    ProcessPool can replace executor backend without changing orchestrator API.
     """
 
-    def __init__(self, workers: int, *, max_in_flight: int | None = None) -> None:
+    def __init__(
+        self,
+        workers: int,
+        *,
+        max_in_flight: int | None = None,
+        thread_name_prefix: str = "chunk-compute",
+        log_diagnostics: bool = False,
+    ) -> None:
         self._workers = max(1, workers)
         self._max_in_flight = max_in_flight or (2 * self._workers)
+        self._executor: ThreadPoolExecutor | None = None
+        self._thread_name_prefix = thread_name_prefix
+        if self._workers > 1:
+            self._executor = ThreadPoolExecutor(
+                max_workers=self._workers,
+                thread_name_prefix=self._thread_name_prefix,
+            )
+            if log_diagnostics:
+                log_pack_compute_pool(workers=self._workers, max_in_flight=self._max_in_flight)
 
     @property
     def workers(self) -> int:
         return self._workers
+
+    def shutdown(self, *, wait: bool = True) -> None:
+        if self._executor is not None:
+            self._executor.shutdown(wait=wait)
+            self._executor = None
 
     async def map_sync(
         self,
@@ -49,10 +72,11 @@ class ChunkComputePool:
 
         loop = asyncio.get_running_loop()
         sem = asyncio.Semaphore(self._max_in_flight)
+        executor = self._executor
 
         async def run_one(item: T) -> R:
             async with sem:
-                return await loop.run_in_executor(None, compute, item)
+                return await loop.run_in_executor(executor, compute, item)
 
         return list(await asyncio.gather(*[run_one(item) for item in items]))
 
@@ -77,10 +101,11 @@ class ChunkComputePool:
         sem = asyncio.Semaphore(self._max_in_flight)
         callback_lock = asyncio.Lock()
         ordered: list[R | None] = [None] * len(items)
+        executor = self._executor
 
         async def run_indexed(idx: int, item: T) -> None:
             async with sem:
-                result = await loop.run_in_executor(None, compute, item)
+                result = await loop.run_in_executor(executor, compute, item)
             async with callback_lock:
                 await on_result(item, result)
                 ordered[idx] = result

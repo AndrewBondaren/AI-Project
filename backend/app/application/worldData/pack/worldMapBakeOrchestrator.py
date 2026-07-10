@@ -1,4 +1,4 @@
-"""L0 light bake per macro-tile — WP-15."""
+"""World map light bake per macro-tile — WP-15."""
 
 from __future__ import annotations
 
@@ -11,11 +11,11 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
     prepare_surface_terrain_context,
 )
 from app.application.worldData.generators.terrain.terrainZ import surface_terrain_at_z
-from app.application.worldData.pack.l0HydrologyMap import l0_hydro_role_from_cell
+from app.application.worldData.pack.worldMapHydrology import world_map_hydro_role_from_cell
 from app.application.worldData.pack.packBakeLog import (
-    log_pack_l0_bake_done,
-    log_pack_l0_bake_start,
-    log_pack_l0_tile_done,
+    log_pack_world_map_bake_done,
+    log_pack_world_map_bake_start,
+    log_pack_world_map_tile_done,
     log_pack_surface_context,
 )
 from app.application.worldData.pack.worldPackWriter import WorldPackWriter
@@ -25,7 +25,7 @@ from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
-class L0BakeOrchestrator:
+class WorldMapBakeOrchestrator:
     def bake_tile(
         self,
         world: World,
@@ -56,10 +56,10 @@ class L0BakeOrchestrator:
                         ty=ty,
                         surface_z=surface_z,
                         system_terrain=system_terrain,
-                        hydrology_role=l0_hydro_role_from_cell(hydro_cell),
+                        hydrology_role=world_map_hydro_role_from_cell(hydro_cell),
                     ),
                 )
-        content_hash = writer.write_l0_world_map(gx, gy, cells, cells_per_side=side)
+        content_hash = writer.write_world_map_tile(gx, gy, cells, cells_per_side=side)
         return len(cells), content_hash
 
     def bake_tiles(
@@ -79,13 +79,13 @@ class L0BakeOrchestrator:
         tile_m = cell_size_m(world)
         side = resolve_world_map_cells_per_tile(tile_m, world.world_map_cells_per_tile)
         writer.sync_world_metadata(world, cells_per_side=side)
-        l0_t0 = log_pack_l0_bake_start(world_uid, tiles=len(tiles), cells_per_side=side)
+        world_map_t0 = log_pack_world_map_bake_start(world_uid, tiles=len(tiles), cells_per_side=side)
         total = 0
         for idx, (gx, gy) in enumerate(tiles, start=1):
             tile_t0 = time.perf_counter()
             cells, content_hash = self.bake_tile(world, surface_ctx, gx, gy, writer, cells_per_side=side)
             total += cells
-            log_pack_l0_tile_done(
+            log_pack_world_map_tile_done(
                 world_uid,
                 gx,
                 gy,
@@ -98,5 +98,5 @@ class L0BakeOrchestrator:
         writer.manifest.bake_mode = "light"
         writer.recalc_manifest_counters()
         writer.save_manifest()
-        log_pack_l0_bake_done(world_uid, total_cells=total, tiles=len(tiles), started_at=l0_t0)
+        log_pack_world_map_bake_done(world_uid, total_cells=total, tiles=len(tiles), started_at=world_map_t0)
         return total

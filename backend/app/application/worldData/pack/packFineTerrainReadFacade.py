@@ -90,7 +90,7 @@ class PackFineTerrainReadFacade:
         if not blob_on_disk:
             payload["column_count"] = 0
             return payload
-        chunk = reader.read_l2_chunk(gx, gy, cx, cy)
+        chunk = reader.read_wilderness_chunk(gx, gy, cx, cy)
         payload["chunk_columns"] = chunk.chunk_columns
         payload["column_count"] = len(chunk.columns)
         limit = max(0, sample_columns)
@@ -132,7 +132,7 @@ class PackFineTerrainReadFacade:
                 "location_uid": location_uid,
                 "listed_in_manifest": False,
             }
-        blob_on_disk = bool(entry.terrain_path) and reader.paths.location_l2_path(location_uid).is_file()
+        blob_on_disk = bool(entry.terrain_path) and reader.paths.location_terrain_path(location_uid).is_file()
         payload: dict[str, Any] = {
             "ok": True,
             "read_mode": "location_terrain",
@@ -150,7 +150,7 @@ class PackFineTerrainReadFacade:
         if not blob_on_disk:
             payload["column_count"] = 0
             return payload
-        chunk = reader.read_location_l2(location_uid)
+        chunk = reader.read_location_terrain(location_uid)
         payload["chunk_columns"] = chunk.chunk_columns
         payload["column_count"] = len(chunk.columns)
         limit = max(0, sample_columns)

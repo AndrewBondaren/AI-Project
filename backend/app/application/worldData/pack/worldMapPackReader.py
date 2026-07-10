@@ -1,14 +1,14 @@
-"""L0 sample / surface read helpers — shared by gameplay merge and debug export."""
+"""World map sample / surface read helpers — shared by gameplay merge and debug export."""
 
 from __future__ import annotations
 
 from app.application.jsonValidation import terrain_system_keys
 from app.application.worldData.generators.terrain.terrainZ import subsurface_terrain_at_z
 from app.application.worldData.generators.terrain.worldMapSettings import n_base, world_z_min
-from app.application.worldData.pack.packMapHelpers import l0_sample_index, world_tile_size_m
+from app.application.worldData.pack.packMapHelpers import world_map_sample_index, world_tile_size_m
 from app.application.worldData.pack.packReadContext import PackReadContext
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
-from app.dataModel.worldPack.hydrologyMaskWire import L0HydrologyRole
+from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
 from app.dataModel.worldPack.layerPriority import MapLayerKind
 from app.dataModel.worldPack.mergeMapCells import (
     CellContribution,
@@ -22,7 +22,7 @@ from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
 
-class PackL0Reader:
+class WorldMapPackReader:
     def __init__(self, context: PackReadContext) -> None:
         self._ctx = context
 
@@ -42,15 +42,15 @@ class PackL0Reader:
             return view
         return view.model_copy(update=updates)
 
-    def sample_l0(self, world: World, gx: int, gy: int, tx: int, ty: int) -> WorldMapCellWire | None:
+    def sample_world_map(self, world: World, gx: int, gy: int, tx: int, ty: int) -> WorldMapCellWire | None:
         reader = self._ctx.reader_for(world)
         try:
-            _side, cells = reader.read_l0_tile(gx, gy)
+            _side, cells = reader.read_world_map_tile(gx, gy)
         except FileNotFoundError:
             return None
         return next((c for c in cells if c.tx == tx and c.ty == ty), None)
 
-    def l0_contribution(
+    def world_map_contribution(
         self,
         world: World,
         gx: int,
@@ -63,12 +63,12 @@ class PackL0Reader:
     ) -> CellContribution | None:
         reader = self._ctx.reader_for(world)
         try:
-            side, cells = reader.read_l0_tile(gx, gy)
+            side, cells = reader.read_world_map_tile(gx, gy)
         except FileNotFoundError:
             return None
         tile_size = world_tile_size_m(world)
-        tx = l0_sample_index(lx, tile_size, side)
-        ty = l0_sample_index(ly, tile_size, side)
+        tx = world_map_sample_index(lx, tile_size, side)
+        ty = world_map_sample_index(ly, tile_size, side)
         cell = next((c for c in cells if c.tx == tx and c.ty == ty), None)
         if cell is None:
             return None
@@ -77,7 +77,7 @@ class PackL0Reader:
         depth = n_base(world)
         if z == surface_z:
             hydro = None
-            if cell.hydrology_role != L0HydrologyRole.NONE:
+            if cell.hydrology_role != WorldMapHydrologyRole.NONE:
                 role = cell.hydrology_role.to_fine_role()
                 hydro = {
                     "role": role.value if role else None,
@@ -87,7 +87,7 @@ class PackL0Reader:
                 x=x,
                 y=y,
                 z=z,
-                system_terrain=self._resolve_l0_terrain(world, cell),
+                system_terrain=self._resolve_world_map_terrain(world, cell),
                 hydrology=hydro,
             )
         if surface_z - depth <= z < surface_z:
@@ -108,7 +108,7 @@ class PackL0Reader:
     ) -> list[MapCell]:
         reader = self._ctx.reader_for(world)
         try:
-            side, cells = reader.read_l0_tile(gx, gy)
+            side, cells = reader.read_world_map_tile(gx, gy)
         except FileNotFoundError:
             return []
         if side <= 0:
@@ -121,12 +121,12 @@ class PackL0Reader:
             x = gx * tile_size + lx
             y = gy * tile_size + ly
             z = wire.surface_z
-            l0 = self.l0_contribution(world, gx, gy, lx, ly, x, y, z)
-            if l0 is None:
+            world_map = self.world_map_contribution(world, gx, gy, lx, ly, x, y, z)
+            if world_map is None:
                 continue
             merged = self.apply_climate(
                 world,
-                merge_layers(x, y, z, [LayerSlice(kind=MapLayerKind.L0, cell=l0)]),
+                merge_layers(x, y, z, [LayerSlice(kind=MapLayerKind.WORLD_MAP, cell=world_map)]),
             )
             if merged.has_any_data():
                 out.append(merged_view_to_map_cell(world.world_uid, merged))
@@ -142,7 +142,7 @@ class PackL0Reader:
             return next(iter(sorted(keys)))
         return registry.root[0].system_terrain
 
-    def _resolve_l0_terrain(self, world: World, cell: WorldMapCellWire) -> str:
+    def _resolve_world_map_terrain(self, world: World, cell: WorldMapCellWire) -> str:
         if cell.system_terrain:
             return cell.system_terrain
         return self._default_surface_terrain(world)

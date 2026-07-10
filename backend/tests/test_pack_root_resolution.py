@@ -35,7 +35,7 @@ class TestPackRootResolution(unittest.IsolatedAsyncioTestCase):
         pack_root.mkdir(parents=True, exist_ok=True)
         paths = WorldPackPaths.from_pack_root(pack_root, "w1")
         writer = WorldPackWriter(paths)
-        writer.write_l0_world_map(
+        writer.write_world_map_tile(
             0, 0,
             [WorldMapCellWire(tx=0, ty=0, surface_z=10, system_terrain="plains")],
             cells_per_side=32,
@@ -53,7 +53,7 @@ class TestPackRootResolution(unittest.IsolatedAsyncioTestCase):
         services = build_pack_read_services("w1", PatchStoreService(), db_path=self.db_path)
         read = MapCellReadService(services)
         self.assertTrue(read.has_pack_for(world))
-        cells = services.debug.get_l0_tile_sample_cells(world, 0, 0)
+        cells = services.debug.get_world_map_tile_sample_cells(world, 0, 0)
         self.assertGreaterEqual(len(cells), 1)
         self.assertEqual(cells[0].z, 10)
 

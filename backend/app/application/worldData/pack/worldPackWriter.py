@@ -9,20 +9,20 @@ from pathlib import Path
 
 from app.application.worldData.pack.packBlobWire import (
     climate_field_payload,
-    l0_tile_payload,
-    l2_chunk_payload,
+    world_map_tile_payload,
+    fine_terrain_chunk_payload,
 )
 from app.application.worldData.pack.packManifestStore import PackManifestStore
 from app.application.worldData.pack.packBakeLog import log_pack_manifest_saved, log_pack_write_blob
 from app.application.worldData.pack.tileCodec import (
     PAYLOAD_KIND_CLIMATE,
-    PAYLOAD_KIND_L0,
-    PAYLOAD_KIND_L2,
+    PAYLOAD_KIND_WORLD_MAP,
+    PAYLOAD_KIND_FINE_TERRAIN,
     TileCodec,
 )
 from app.application.worldData.pack.worldPackPaths import WorldPackPaths
 from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire
-from app.dataModel.worldPack.l2ChunkWire import L2ChunkWire
+from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
 from app.dataModel.worldPack.worldPackManifest import (
@@ -84,7 +84,7 @@ class WorldPackWriter:
         self._manifest.tiles.append(entry)
         return entry
 
-    def write_l0_world_map(
+    def write_world_map_tile(
         self,
         gx: int,
         gy: int,
@@ -92,12 +92,12 @@ class WorldPackWriter:
         *,
         cells_per_side: int,
     ) -> str:
-        payload = l0_tile_payload(cells_per_side, cells)
-        blob = self._codec.encode(PAYLOAD_KIND_L0, payload)
-        path = self._paths.l0_tile_path(gx, gy)
+        payload = world_map_tile_payload(cells_per_side, cells)
+        blob = self._codec.encode(PAYLOAD_KIND_WORLD_MAP, payload)
+        path = self._paths.world_map_tile_path(gx, gy)
         content_hash = self._atomic_write(path, blob)
         log_pack_write_blob(
-            "l0",
+            "world_map",
             world_uid=self._paths.world_uid,
             path=path.relative_to(self._paths.root).as_posix(),
             nbytes=len(blob),
@@ -113,19 +113,19 @@ class WorldPackWriter:
         self._manifest.world_map_cells_per_tile = cells_per_side
         return content_hash
 
-    def write_l2_wilderness_chunk(
+    def write_wilderness_chunk(
         self,
         gx: int,
         gy: int,
-        chunk: L2ChunkWire,
+        chunk: FineTerrainChunkWire,
         *,
         refine_role: ChunkRefineRole = "background",
     ) -> str:
-        blob = self._codec.encode(PAYLOAD_KIND_L2, l2_chunk_payload(chunk))
-        path = self._paths.l2_chunk_path(gx, gy, chunk.cx, chunk.cy)
+        blob = self._codec.encode(PAYLOAD_KIND_FINE_TERRAIN, fine_terrain_chunk_payload(chunk))
+        path = self._paths.wilderness_chunk_path(gx, gy, chunk.cx, chunk.cy)
         content_hash = self._atomic_write(path, blob)
         log_pack_write_blob(
-            "l2_wilderness",
+            "wilderness_chunk",
             world_uid=self._paths.world_uid,
             path=path.relative_to(self._paths.root).as_posix(),
             nbytes=len(blob),
@@ -140,38 +140,38 @@ class WorldPackWriter:
         )
         return content_hash
 
-    def write_location_l2(
+    def write_location_terrain(
         self,
         location_uid: str,
-        columns: L2ChunkWire,
+        columns: FineTerrainChunkWire,
         *,
         territory_volume,
     ) -> str:
-        from app.dataModel.worldPack.worldPackManifest import LocationL2Entry
+        from app.dataModel.worldPack.worldPackManifest import LocationTerrainEntry
 
-        blob = self._codec.encode(PAYLOAD_KIND_L2, l2_chunk_payload(columns))
-        path = self._paths.location_l2_path(location_uid)
+        blob = self._codec.encode(PAYLOAD_KIND_FINE_TERRAIN, fine_terrain_chunk_payload(columns))
+        path = self._paths.location_terrain_path(location_uid)
         content_hash = self._atomic_write(path, blob)
         rel = path.relative_to(self._paths.root).as_posix()
         log_pack_write_blob(
-            "l2_location",
+            "location_terrain",
             world_uid=self._paths.world_uid,
             path=rel,
             nbytes=len(blob),
             content_hash=content_hash,
             extra=f"location={location_uid}",
         )
-        entry = LocationL2Entry(
+        entry = LocationTerrainEntry(
             location_uid=location_uid,
             territory_volume=territory_volume,
             terrain_path=rel,
             terrain_hash=content_hash,
             bytes=len(blob),
         )
-        self._manifest.locations_l2 = [
-            loc for loc in self._manifest.locations_l2 if loc.location_uid != location_uid
+        self._manifest.location_terrain_entries = [
+            loc for loc in self._manifest.location_terrain_entries if loc.location_uid != location_uid
         ]
-        self._manifest.locations_l2.append(entry)
+        self._manifest.location_terrain_entries.append(entry)
         return content_hash
 
     def write_climate_coarse(self, field: ClimateFieldWire) -> str:
@@ -206,12 +206,12 @@ class WorldPackWriter:
 
     def recalc_manifest_counters(self) -> None:
         side = self._manifest.world_map_cells_per_tile
-        l0_cells = 0
+        world_map_cells = 0
         for tile in self._manifest.tiles:
             if tile.world_map_path:
-                l0_cells += side * side
-        self._manifest.l0_cells = l0_cells
-        self._manifest.l2_chunks_baked = sum(len(t.chunks) for t in self._manifest.tiles)
+                world_map_cells += side * side
+        self._manifest.world_map_cells = world_map_cells
+        self._manifest.wilderness_chunks_baked = sum(len(t.chunks) for t in self._manifest.tiles)
 
     def save_manifest(self) -> None:
         self.recalc_manifest_counters()
@@ -223,8 +223,8 @@ class WorldPackWriter:
         log_pack_manifest_saved(
             self._paths.world_uid,
             content_hash=self._manifest.content_hash,
-            l0_tiles=sum(1 for t in self._manifest.tiles if t.world_map_path),
-            l2_chunks=self._manifest.l2_chunks_baked,
+            world_map_tiles=sum(1 for t in self._manifest.tiles if t.world_map_path),
+            wilderness_chunks=self._manifest.wilderness_chunks_baked,
         )
 
     def pack_storage_path(self) -> str:

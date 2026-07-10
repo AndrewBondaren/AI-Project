@@ -2,11 +2,11 @@
 
 from app.application.worldData.pack.packBlobWire import (
     climate_field_payload,
-    l0_tile_payload,
-    l2_chunk_payload,
+    world_map_tile_payload,
+    fine_terrain_chunk_payload,
     parse_climate_field_payload,
-    parse_l0_tile_payload,
-    parse_l2_chunk_payload,
+    parse_world_map_tile_payload,
+    parse_fine_terrain_chunk_payload,
 )
 from app.application.worldData.pack.packManifestStore import PackManifestStore
 from app.application.worldData.pack.tileCodec import TileCodec
@@ -21,9 +21,9 @@ __all__ = [
     "WorldPackReader",
     "WorldPackWriter",
     "climate_field_payload",
-    "l0_tile_payload",
-    "l2_chunk_payload",
+    "world_map_tile_payload",
+    "fine_terrain_chunk_payload",
     "parse_climate_field_payload",
-    "parse_l0_tile_payload",
-    "parse_l2_chunk_payload",
+    "parse_world_map_tile_payload",
+    "parse_fine_terrain_chunk_payload",
 ]

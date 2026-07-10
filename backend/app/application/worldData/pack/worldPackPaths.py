@@ -58,13 +58,13 @@ class WorldPackPaths:
     def locations_index_path(self) -> Path:
         return self.root / "locations_index.json"
 
-    def l0_tile_path(self, gx: int, gy: int) -> Path:
+    def world_map_tile_path(self, gx: int, gy: int) -> Path:
         return self.tiles_dir / f"r.{gx}.{gy}.world_map.zst"
 
-    def l2_chunk_path(self, gx: int, gy: int, cx: int, cy: int) -> Path:
+    def wilderness_chunk_path(self, gx: int, gy: int, cx: int, cy: int) -> Path:
         return self.tiles_dir / f"r.{gx}.{gy}.c.{cx}.{cy}.zst"
 
-    def location_l2_path(self, location_uid: str) -> Path:
+    def location_terrain_path(self, location_uid: str) -> Path:
         return self.locations_dir / f"l.{location_uid}.terrain.zst"
 
     def ensure_dirs(self) -> None:

@@ -495,7 +495,7 @@ async def bake_world_pack(
     parallel_workers: int | None = Query(default=None, ge=1),
     container=Depends(get_container),
 ) -> JSONResponse:
-    """Debug — bake World Pack (L0 light + optional scene L2 chunks)."""
+    """Debug — bake World Pack (world_map light + optional scene fine-terrain chunks)."""
     stack = container.surface_materialization_orchestrator()
     world_svc = container.world_service()
     location_svc = container.location_service()

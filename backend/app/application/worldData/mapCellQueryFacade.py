@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from app.application.worldData.generators.terrain.worldMapSettings import n_base, terrain_chunk_columns, world_z_min
-from app.application.worldData.pack.packL0Reader import PackL0Reader
+from app.application.worldData.pack.worldMapPackReader import WorldMapPackReader
 from app.application.worldData.pack.packMapHelpers import tile_index, world_tile_size_m
 from app.application.worldData.pack.packReadContext import PackReadContext
 from app.application.worldData.pack.mapCellFromMerged import merged_view_to_map_cell
@@ -27,11 +27,11 @@ class MapCellQueryFacade:
         self,
         context: PackReadContext,
         patch_store: PatchStoreService,
-        l0_reader: PackL0Reader,
+        world_map_reader: WorldMapPackReader,
     ) -> None:
         self._ctx = context
         self._patches = patch_store
-        self._l0 = l0_reader
+        self._world_map = world_map_reader
 
     def has_pack(self) -> bool:
         return self._ctx.has_pack()
@@ -68,39 +68,39 @@ class MapCellQueryFacade:
         reader = self._ctx.reader_for(world)
         if reader.chunk_exists(gx, gy, cx, cy):
             try:
-                chunk = reader.read_l2_chunk(gx, gy, cx, cy)
+                chunk = reader.read_wilderness_chunk(gx, gy, cx, cy)
                 kind = self._chunk_layer_kind(chunk_role)
-                contrib = self._l2_contribution(chunk, col_lx, col_ly, x, y, z)
+                contrib = self._fine_terrain_contribution(chunk, col_lx, col_ly, x, y, z)
                 if contrib is not None:
                     layers.append(LayerSlice(kind=kind, cell=contrib))
             except FileNotFoundError:
                 logger.debug(
-                    "missing wilderness L2 chunk world=%s tile=%d,%d chunk=%d,%d",
+                    "missing wilderness chunk world=%s tile=%d,%d chunk=%d,%d",
                     world.world_uid, gx, gy, cx, cy,
                 )
 
         if manifest is not None:
-            for loc in manifest.locations_l2:
+            for loc in manifest.location_terrain_entries:
                 if not loc.territory_volume.contains(x, y, z) or not loc.terrain_path:
                     continue
                 try:
-                    loc_chunk = reader.read_location_l2(loc.location_uid)
+                    loc_chunk = reader.read_location_terrain(loc.location_uid)
                     lx_loc = x - loc.territory_volume.x0
                     ly_loc = y - loc.territory_volume.y0
-                    contrib = self._l2_contribution(loc_chunk, lx_loc, ly_loc, x, y, z)
+                    contrib = self._fine_terrain_contribution(loc_chunk, lx_loc, ly_loc, x, y, z)
                     if contrib is not None:
                         layers.append(LayerSlice(kind=MapLayerKind.LOCATION, cell=contrib))
                         break
                 except FileNotFoundError:
-                    logger.debug("missing location L2 world=%s loc=%s", world.world_uid, loc.location_uid)
+                    logger.debug("missing location terrain world=%s loc=%s", world.world_uid, loc.location_uid)
                     continue
 
-        l0 = self._l0.l0_contribution(world, gx, gy, lx, ly, x, y, z)
-        if l0 is not None:
-            layers.append(LayerSlice(kind=MapLayerKind.L0, cell=l0))
+        world_map = self._world_map.world_map_contribution(world, gx, gy, lx, ly, x, y, z)
+        if world_map is not None:
+            layers.append(LayerSlice(kind=MapLayerKind.WORLD_MAP, cell=world_map))
 
         merged = merge_layers(x, y, z, layers)
-        return self._l0.apply_climate(world, merged)
+        return self._world_map.apply_climate(world, merged)
 
     async def get_scene_volume(
         self,
@@ -158,7 +158,7 @@ class MapCellQueryFacade:
         ref = manifest.chunk_ref(gx, gy, cx, cy)
         return ref.refine_role if ref is not None else None
 
-    def _l2_contribution(
+    def _fine_terrain_contribution(
         self,
         chunk,
         col_lx: int,

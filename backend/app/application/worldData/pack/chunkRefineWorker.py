@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from app.application.worldData.materializationContext import MaterializationContext
 from app.application.worldData.pack.chunkRefineQueue import ChunkRefineQueue
-from app.application.worldData.pack.l2RefineOrchestrator import L2RefineOrchestrator
+from app.application.worldData.pack.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
 from app.application.worldData.pack.packBakeLog import (
     log_pack_drain_queue_done,
     log_pack_drain_queue_start,
@@ -20,11 +20,11 @@ from app.db.repositories.sqlite.chunkRefineJobRepository import new_chunk_refine
 class ChunkRefineWorker:
     def __init__(
         self,
-        l2: L2RefineOrchestrator,
+        fine_terrain: FineTerrainRefineOrchestrator,
         *,
         job_repo: IChunkRefineJobRepository | None = None,
     ) -> None:
-        self._l2 = l2
+        self._fine_terrain = fine_terrain
         self._jobs = job_repo
 
     async def persist_enqueue(
@@ -66,7 +66,7 @@ class ChunkRefineWorker:
             if nxt is None:
                 break
             gx, gy, cx, cy = nxt
-            cells = await self._l2.refine_queued_chunk(
+            cells = await self._fine_terrain.refine_queued_chunk(
                 world, locations, writer, mat_ctx, surface_ctx,
                 gx, gy, cx, cy,
             )
@@ -101,7 +101,7 @@ class ChunkRefineWorker:
             job = await self._jobs.pop_next_pending(world_uid)
             if job is None:
                 break
-            cells = await self._l2.refine_queued_chunk(
+            cells = await self._fine_terrain.refine_queued_chunk(
                 world, locations, writer, mat_ctx, surface_ctx,
                 job.gx, job.gy, job.cx, job.cy,
             )

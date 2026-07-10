@@ -1,4 +1,4 @@
-"""L2 fine chunk column-run wire inside zstd blobs."""
+"""Fine terrain chunk column-run wire inside zstd blobs."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import ClassVar
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 
-class L2ZRun(BaseModel):
+class FineTerrainZRun(BaseModel):
     """Contiguous z band with constant terrain/material registry keys."""
 
     model_config = ConfigDict(extra="ignore", frozen=True)
@@ -40,27 +40,27 @@ class L2ZRun(BaseModel):
         return [(0, 0, z) for z in range(z_lo, z_hi + 1)]
 
 
-class L2ColumnWire(BaseModel):
+class FineTerrainColumnWire(BaseModel):
     """One fine column (lx, ly) with z-runs."""
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     lx: int
     ly: int
-    runs: list[L2ZRun]
+    runs: list[FineTerrainZRun]
 
 
-class L2ChunkWire(BaseModel):
+class FineTerrainChunkWire(BaseModel):
     """Fine chunk payload — default 32×32 m columns."""
 
-    SCHEMA_ID: ClassVar[str] = "SCH-L2-CHUNK-WIRE"
+    SCHEMA_ID: ClassVar[str] = "SCH-FINE-TERRAIN-CHUNK-WIRE"
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     cx: int
     cy: int
     chunk_columns: int
-    columns: list[L2ColumnWire]
+    columns: list[FineTerrainColumnWire]
 
     @field_validator("chunk_columns")
     @classmethod

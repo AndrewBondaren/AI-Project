@@ -437,7 +437,7 @@ wilderness_chunk.cells = refine_chunk(L0, rect)
 
 **zstd:** каждый файл сжимается **на write** (`TileCodec`); отдельный batch-compress не нужен.
 
-**`worldMapLoading`:** `locations_l2_ready` — локации с `l.{uid}.terrain.zst`.
+**`worldMapLoading`:** `location_terrain_ready` — локации с `l.{uid}.terrain.zst`.
 
 **Крупный город:** bbox > лимита → sub-chunks `l.{uid}.c.{i}.zst` (backlog); v1 — один файл.
 
@@ -849,6 +849,39 @@ effective_climate(x,y) =
 
 ---
 
+## Именование (LOD ↔ код)
+
+В **продуктовом ТЗ** уровни **L0 / L1 / L2** — термины LOD bake. В **коде и wire** используются читаемые идентификаторы; **не** именовать API, классы и поля manifest буквами `L0` / `L2`.
+
+| TZ LOD | Назначение | Код / wire | Файлы pack (примеры) |
+|---|---|---|---|
+| **L0** | Light world map per macro-tile | `world_map`, `WorldMapCellWire`, `world_map_path`, `world_map_hash`, `world_map_cells` | `r.{gx}.{gy}.world_map.zst`, `WorldMapBakeOrchestrator`, `WorldMapPackReader` |
+| **L1** | Location skeleton (pins, anchors) | SQLite `named_locations`; mirror `locations_index.json` | не blob в pack |
+| **L2 wilderness** | Fine terrain chunk в tile | `wilderness_chunk`, `FineTerrainChunkWire`, `wilderness_refine_status`, `wilderness_chunks_baked` | `r.{gx}.{gy}.c.{cx}.{cy}.zst`, `FineTerrainRefineOrchestrator` |
+| **L2 location** | Fine terrain территории локации | `location_terrain`, `LocationTerrainEntry`, `location_terrain_entries[]`, `terrain_path`, `terrain_hash` | `locations/l.{uid}.terrain.zst` |
+| **Merge fallback** | Coarse cell при отсутствии fine | `MapLayerKind.WORLD_MAP` | `merge_layers` / `MapCellQueryFacade` |
+
+**Payload kinds (`tileCodec`):** `PAYLOAD_KIND_WORLD_MAP` (0), `PAYLOAD_KIND_FINE_TERRAIN` (1).
+
+**Debug read API:** `GET …/map/pack/fine-terrain-read` — probe merged fine terrain; **не** `l2-probe`.
+
+**Прогресс загрузки:** `world_map_tiles_ready` / `world_map_tiles_total`, `location_terrain_ready`, `wilderness_chunks_baked`.
+
+**Логи (`packBakeLog`, JSON):** в `msg` и поле `activity` — **не** `L0`/`L2`/`l0`/`l2`. Соответствие LOD → log:
+
+| TZ LOD | `activity` (примеры) | `blob_kind` / префикс `msg` |
+|---|---|---|
+| L0 | `world_map_bake_start`, `world_map_tile_write`, `pack_write_world_map` | `world_map` |
+| L2 wilderness | `wilderness_chunk_generate`, `wilderness_chunk_persist_pack`, `pack_write_wilderness_chunk` | `wilderness_chunk` |
+| L2 location | `location_terrain_persist_pack`, `pack_write_location_terrain` | `location_terrain` |
+| Orchestration | `fine_terrain_phase_start`, `fine_terrain_plan_parallel`, `drain_persisted_job` | — |
+
+Структурированные поля на каждой строке: `worker_thread`, `worker_tid`, `cpu_core`, `pool_workers` (см. `config.toml` `[logger_levels]` → `app.application.worldData.pack`).
+
+**Legacy wire (до rebake):** старые ключи `l0_path`, `l2_status`, `locations_l2[]` — **не** читать; manifest пересоздаётся при следующем bake.
+
+---
+
 ## Wire format (Pack v1)
 
 ```
@@ -877,9 +910,9 @@ effective_climate(x,y) =
 | `map_cell_size_m` | из `worlds` |
 | `world_map_cells_per_tile` | resolved при bake, см. § L0 |
 | `cell_size_m`, `map_subsurface_depth` | из `WorldTerrainScalars` / `worlds` |
-| `locations_l2[]` | per-location L2 terrain — см. § `LocationL2Entry` |
+| `location_terrain_entries[]` | per-location L2 terrain — см. § `LocationTerrainEntry` |
 | `tiles[]` | per macro-tile — см. § `TileManifestEntry` |
-| `l0_cells`, `l2_tiles_total`, `l2_chunks_baked` | progress |
+| `world_map_cells`, `wilderness_tiles_total`, `wilderness_chunks_baked` | progress |
 
 #### `TileManifestEntry` (`tiles[]`)
 
@@ -894,7 +927,7 @@ effective_climate(x,y) =
 | `climate_tier` | str | `A` coarse на tile; `B` когда fine climate готов |
 | `chunks[]` | `ChunkRef[]` | wilderness L2 chunks `tiles/r.{gx}.{gy}.c.{cx}.{cy}.zst` |
 
-#### `LocationL2Entry` (`locations_l2[]`)
+#### `LocationTerrainEntry` (`location_terrain_entries[]`)
 
 Fine terrain **одной** `named_location` (file-per-location, WP-19).
 
@@ -914,9 +947,9 @@ Fine terrain **одной** `named_location` (file-per-location, WP-19).
 | `refine_role` | enum? | `scene` \| `background` \| `path` |
 | `content_hash`, `bytes` | | hash и размер wilderness chunk blob |
 
-### L2 terrain column (внутри zstd)
+### Fine terrain column (внутри zstd)
 
-`(lx, ly)` + z-runs + **`system_terrain`** / **`system_material`** (registry keys, строки). Legacy wire с `terrain_id: u8` — мигрируется при read (`L2ZRun._migrate_legacy_wire`). См. `dataModel/worldPack/l2ChunkWire.py`.
+`(lx, ly)` + z-runs + **`system_terrain`** / **`system_material`** (registry keys, строки). Legacy wire с `terrain_id: u8` — мигрируется при read (`FineTerrainZRun._migrate_legacy_wire`). См. `dataModel/worldPack/fineTerrainChunkWire.py`.
 
 ---
 
@@ -1014,7 +1047,7 @@ sequenceDiagram
 | **P2** | **MERGE-5** | PLAYER_PATH corridor | ⚠️ | heading corridor ✅; DAG movement intent — backlog |
 | **P2** | **MERGE-6** | L0 per-z fallback | ⚠️ | subsurface band ✅; full column — backlog |
 | **P2** | **MERGE-7** | patch `layer_kind` + field overlay | ✅ | FIX-10; write model gap → WP-FIX-DEBT-1 |
-| **P3** | **MERGE-8** | Read perf | ✅ | batch patch bbox; `PackL2DecodeCache` + `PackReadPolicy` | |
+| **P3** | **MERGE-8** | Read perf | ✅ | batch patch bbox; `FineTerrainDecodeCache` + `PackReadPolicy` | |
 | **P3** | **MERGE-9** | Потребители только facade | ⚠️ | debug read ✅; legacy write routes (`generate-surface`) — отдельно |
 
 **Порядок работ (оставшееся):** REVIEW-1 (pack I/O root) → MERGE-8 LRU → smoke WP-A* → bake tile/full → DAG intent wire → REVIEW-2…7.
@@ -1031,13 +1064,13 @@ sequenceDiagram
 
 | ID | Тема | Статус | Где |
 |---|---|---|---|
-| FIX-01/02 | L2 wire: `system_terrain` / `system_material` (не u8-hash) | ✅ | `l2ChunkWire`, `mapCellToL2Wire`, facade |
-| FIX-03/11 | Location L2 read/write + territory origin | ✅ | `l2RefineOrchestrator`, facade |
+| FIX-01/02 | L2 wire: `system_terrain` / `system_material` (не u8-hash) | ✅ | `l2ChunkWire`, `mapCellToFineTerrainWire`, facade |
+| FIX-03/11 | Location L2 read/write + territory origin | ✅ | `fineTerrainRefineOrchestrator`, facade |
 | FIX-04 | tile-local cx/cy в background queue | ✅ | `schedule_tile_background` |
 | FIX-05/06 | Chunk refine worker + `chunk_refine_jobs` | ✅ | `ChunkRefineWorker`, sqlite repo |
 | FIX-07 | PLAYER_SCENE (`refine_role=scene`) | ✅ | manifest + facade |
 | FIX-08 | Climate post-merge | ✅ | `_apply_climate` |
-| FIX-09 | L0 surface z-gate | ✅ | `_l0_contribution` |
+| FIX-09 | L0 surface z-gate | ✅ | `_world_map_contribution` |
 | FIX-10 | `MapCellPatchLayerKind` + field-wise merge | ✅ | POJO + `merge_layers` |
 | FIX-12…18 | POJO defaults, manifest/world sync | ✅ | `PackBakeDefaults`, `finalize_pack_on_world` |
 | FIX-19 | `world_pack_root` config | ✅ | `AppSettings` |
@@ -1077,7 +1110,7 @@ sequenceDiagram
 | Приоритет | ID | Проблема | Целевое решение | Связь |
 |---|---|---|---|---|
 | **P0** | **REVIEW-1** | `has_pack_for(world)` смотрит `terrain_pack_path`, `WorldPackReader`/`Writer` открывают только `WorldPackPaths.from_db_parent` | ✅ `resolve_pack_root` + `WorldPackPaths.for_world`; facade reader cache | DEBT-4 |
-| **P1** | **REVIEW-2** | `get_all_for_read` = concat L0 + patches без merge/dedupe | ✅ `get_debug_export_cells`; `read_mode=l0_surface_merged_patches` | MERGE-9 |
+| **P1** | **REVIEW-2** | `get_all_for_read` = concat L0 + patches без merge/dedupe | ✅ `get_debug_export_cells`; `read_mode=world_map_surface_merged_patches` | MERGE-9 |
 | **P1** | **REVIEW-3** | `_settlement_like` — hardcoded `{"settlement","city","district"}` | ✅ `locationFootprintPolicy` + registry | DEBT-6 |
 | **P2** | **REVIEW-4** | `TerritoryVolumePolicy.pin_half_extent_xy` дублирует `SCENE_LOAD_XY_RADIUS` | ✅ `SceneVolumePolicy` + `TerritoryVolumePolicy.pin_half_extent_xy()` | WP-13 |
 | **P2** | **REVIEW-5** | `MapCellQueryFacade` — gameplay read + debug L0 export + loading progress | ✅ `PackDebugReadFacade` + `PackLoadingProgressFacade` + `PackReadContext` | MERGE-8/9 |
@@ -1107,7 +1140,7 @@ sequenceDiagram
 |---|---|---|
 | `locations_total` | int | `named_locations` активных в мире |
 | `locations_ready` | int | L0 pin + L1 skeleton |
-| `locations_l2_ready` | int | `locations/l.*.terrain.zst` готов (WP-19) |
+| `location_terrain_ready` | int | `locations/l.*.terrain.zst` готов (WP-19) |
 | `wilderness_tiles_total` | int | macro-tiles в bounds без локаций |
 | `wilderness_tiles_l0_ready` | int | wilderness tiles с `world_map.zst` (фон) |
 | `phase` | enum | `locations` \| `wilderness` \| `idle` |
@@ -1401,8 +1434,8 @@ flowchart TB
 |---|---|---|
 | HTTP `request_end` | **34.9 s** | ≤ 2 min — **PASS** |
 | `pack bake done elapsed_ms` | **33.8 s** | — |
-| L0 tiles | 16 | cap=16 |
-| L2 chunks (blocking) | 1 (scene, 1883 cells) | — |
+| world_map tiles | 16 | cap=16 |
+| wilderness_chunks (blocking scene) | 1 (1883 cells) | — |
 | Background queue | **8836** jobs → SQLite | см. backlog ниже |
 
 **Разбивка по фазам** (wall-clock по timestamp логов, UTC):
@@ -1411,16 +1444,16 @@ flowchart TB
 |---|---|---|
 | Планирование тайлов + hydrology (до `pack bake start`) | ~1.1 s | bootstrap tile set |
 | `drain_persisted` (resume) | **~12.5 s** | 1 persisted job с прошлого bake |
-| Background L2 chunk (generate+persist) | ~0.17 s | role=background, 1883 cells |
+| Background wilderness_chunk (generate+persist) | ~0.17 s | role=background, 1883 cells |
 | Surface context + hydrology | ~1.1 s | `pack surface context elapsed_ms=1083.9` |
-| L0 bake (16 tiles, 16384 cells) | **~0.1 s** | `pack l0 bake done elapsed_ms=100.3` |
-| L2 scene phase — подготовка | **~12.4 s** | от `pack l2 phase start` до `chunk generate start` |
-| L2 scene chunk (generate+persist) | ~0.16 s | `pack l2 chunk done elapsed_ms=161.7` |
+| world_map bake (16 tiles, 16384 cells) | **~0.1 s** | `pack world_map bake done elapsed_ms=100.3` |
+| fine_terrain scene phase — подготовка | **~12.4 s** | от `pack fine_terrain phase start` до `wilderness_chunk generate start` |
+| scene wilderness_chunk (generate+persist) | ~0.16 s | `pack wilderness_chunk done elapsed_ms=161.7` |
 | Queue persist (`tile_background`) | **~5.5 s** | `pack jobs persisted count=8836` |
 
 **Выводы:**
 
-1. **Сам terrain (L0 + blocking L2 chunk) — &lt; 0.5 s**; light bake укладывается в WP-A1 с большим запасом.
+1. **Сам terrain (world_map + blocking wilderness_chunk) — &lt; 0.5 s**; light bake укладывается в WP-A1 с большим запасом.
 2. **Основное время** — не генерация cells, а orchestration overhead: resume persisted job (~12.5 s), подготовка scene phase (~12.4 s), bulk INSERT 8836 refine jobs (~5.5 s).
 3. **Backlog (perf):** `schedule_tile_background` для macro-tile `(12,12)` планирует **весь** tile (~94×94 chunks → 8836 jobs), а не corridor/scene volume. Для light bake это избыточно; фоновый worker (WP-A5, ≤1) отработает позже, но **blocking persist очереди** удлиняет HTTP bake.
 4. **Повторный smoke** на чистой БД (без `drain_persisted`) ожидаемо короче на ~12.5 s.
@@ -1457,4 +1490,5 @@ flowchart TB
 | 2026-07-10 | **WP-MERGE v2:** статус слоёв; MERGE-1/4/7 ✅; WP-FIX-DEBT-1…9 |
 | 2026-07-10 | **WP-FIX-REVIEW:** REVIEW-5/6 — `PackDebugReadFacade`, `PackLoadingProgressFacade`, `MapCellReadService` |
 | 2026-07-10 | § **WP-A1 — фактический smoke:** light bake `world_terrain_test` **34.9 s** HTTP; разбивка фаз + backlog queue=8836 |
-| 2026-07-10 | Wire rename: `manifest.tiles[]` — `world_map_path`, `world_map_hash`, `wilderness_refine_status`; `locations_l2[]` — `terrain_hash` |
+| 2026-07-10 | Wire rename: `manifest.tiles[]` — `world_map_path`, `world_map_hash`, `wilderness_refine_status`; `location_terrain_entries[]` — `terrain_hash` |
+| 2026-07-10 | § **Именование (LOD ↔ код):** bulk rename backend + **log activity** (`world_map`, `wilderness_chunk`, `location_terrain`); `MapLayerKind.WORLD_MAP`; `fine-terrain-read` debug API |

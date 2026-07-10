@@ -43,7 +43,7 @@ class MapGridRenderService:
         }
         if self._map_cells.uses_pack_read(world):
             payload["read_path"] = "facade"
-            payload["read_mode"] = "l0_surface_merged_patches"
+            payload["read_mode"] = "world_map_surface_merged_patches"
         return payload
 
     async def render_world_tile_grids(self, world: World) -> dict[str, object]:
@@ -54,7 +54,7 @@ class MapGridRenderService:
         tiles: dict[str, dict[str, object]] = {}
         by_tile: dict[tuple[int, int], list] = {}
         if self._map_cells.uses_pack_read(world):
-            for gx, gy in self._map_cells.l0_tile_coords(world):
+            for gx, gy in self._map_cells.world_map_tile_coords(world):
                 tile_cells = await self._map_cells.get_tile_cells_for_read(world, gx, gy)
                 if tile_cells:
                     by_tile[(gx, gy)] = tile_cells
@@ -89,7 +89,7 @@ class MapGridRenderService:
         }
         if self._map_cells.uses_pack_read(world):
             payload["read_path"] = "facade"
-            payload["read_mode"] = "l0_surface_merged_patches"
+            payload["read_mode"] = "world_map_surface_merged_patches"
         return payload
 
     async def render_all_location_grids(self, world: World) -> dict[str, object]:
@@ -130,7 +130,7 @@ class MapGridRenderService:
         }
         if self._map_cells.uses_pack_read(world):
             payload["read_path"] = "facade"
-            payload["read_mode"] = "l0_surface_merged_patches"
+            payload["read_mode"] = "world_map_surface_merged_patches"
         return payload
 
     async def render_location_grid(

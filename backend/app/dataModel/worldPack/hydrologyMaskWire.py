@@ -1,4 +1,4 @@
-"""L0 light-grid hydrology wire — compact role for world_map.zst."""
+"""World map light-grid hydrology wire — compact role for world_map.zst."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 
 
-class L0HydrologyRole(IntEnum):
-    """u4 enum on L0 world map cells."""
+class WorldMapHydrologyRole(IntEnum):
+    """u4 enum on world map light cells."""
 
     NONE = 0
     SEA = 1
@@ -20,7 +20,7 @@ class L0HydrologyRole(IntEnum):
     SHORE = 4
 
     @classmethod
-    def from_wire(cls, value: int | str | L0HydrologyRole | None) -> L0HydrologyRole:
+    def from_wire(cls, value: int | str | WorldMapHydrologyRole | None) -> WorldMapHydrologyRole:
         if value is None:
             return cls.NONE
         if isinstance(value, cls):
@@ -39,26 +39,26 @@ class L0HydrologyRole(IntEnum):
 
     def to_fine_role(self) -> HydrologyCellRole | None:
         match self:
-            case L0HydrologyRole.SEA:
+            case WorldMapHydrologyRole.SEA:
                 return HydrologyCellRole.COASTAL_SEA
-            case L0HydrologyRole.RIVER:
+            case WorldMapHydrologyRole.RIVER:
                 return HydrologyCellRole.RIVER_BED
-            case L0HydrologyRole.LAKE:
+            case WorldMapHydrologyRole.LAKE:
                 return HydrologyCellRole.LAKE
-            case L0HydrologyRole.SHORE:
+            case WorldMapHydrologyRole.SHORE:
                 return HydrologyCellRole.SHORE
             case _:
                 return None
 
 
 class HydrologyMaskWire(BaseModel):
-    """L0 hydrology fields on a light cell."""
+    """World map hydrology fields on a light cell."""
 
     SCHEMA_ID: ClassVar[str] = "SCH-HYDROLOGY-MASK-WIRE"
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    role: L0HydrologyRole = L0HydrologyRole.NONE
+    role: WorldMapHydrologyRole = WorldMapHydrologyRole.NONE
     width: int | None = None
 
     @field_validator("width", mode="before")

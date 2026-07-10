@@ -1,6 +1,6 @@
 """World initialization smoke — import fixture, materialize terrain.
 
-Default (pack): ``POST …/map/pack/bake`` — L0 light World Pack, no wilderness INSERT.
+Default (pack): ``POST …/map/pack/bake`` — world_map light World Pack, no wilderness INSERT.
 Legacy (freeze): ``POST …/map/materialize-stack`` — fine grid into map_cell_patches path.
 
 Requires running backend (``npm run dev`` or ``npm run backend``).

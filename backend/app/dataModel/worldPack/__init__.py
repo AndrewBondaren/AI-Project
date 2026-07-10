@@ -1,8 +1,8 @@
 """World Pack wire POJOs — docs/tz_world_pack_storage.md."""
 
 from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire, ClimateSampleWire
-from app.dataModel.worldPack.hydrologyMaskWire import HydrologyMaskWire, L0HydrologyRole
-from app.dataModel.worldPack.l2ChunkWire import L2ChunkWire, L2ColumnWire, L2ZRun
+from app.dataModel.worldPack.hydrologyMaskWire import HydrologyMaskWire, WorldMapHydrologyRole
+from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire, FineTerrainZRun
 from app.dataModel.worldPack.layerPriority import LAYER_PRIORITY_ORDER, MapLayerKind
 from app.dataModel.worldPack.mergeMapCells import (
     CellContribution,
@@ -25,7 +25,7 @@ from app.dataModel.worldPack.worldMapCellsPerTile import (
 from app.dataModel.worldPack.worldPackManifest import (
     PACK_WIRE_VERSION,
     ChunkRef,
-    LocationL2Entry,
+    LocationTerrainEntry,
     TileManifestEntry,
     WorldPackManifest,
 )
@@ -41,13 +41,13 @@ __all__ = [
     "ClimateFieldWire",
     "ClimateSampleWire",
     "HydrologyMaskWire",
-    "L0HydrologyRole",
-    "L2ChunkWire",
-    "L2ColumnWire",
-    "L2ZRun",
+    "WorldMapHydrologyRole",
+    "FineTerrainChunkWire",
+    "FineTerrainColumnWire",
+    "FineTerrainZRun",
     "LAYER_PRIORITY_ORDER",
     "LayerSlice",
-    "LocationL2Entry",
+    "LocationTerrainEntry",
     "MapLayerKind",
     "MergedCellView",
     "PathHeadingPolicy",

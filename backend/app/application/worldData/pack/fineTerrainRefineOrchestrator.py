@@ -1,4 +1,4 @@
-"""L2 chunk refine to pack — scene-volume blocking WP-13."""
+"""Wilderness chunk refine to pack — scene-volume blocking WP-13."""
 
 from __future__ import annotations
 
@@ -18,16 +18,16 @@ from app.application.worldData.materializationContext import MaterializationCont
 from app.application.worldData.parallelPolicy import resolve_terrain_workers
 from app.application.worldData.pack.chunkRefineQueue import ChunkRefineQueue
 from app.application.worldData.pack.locationTerritoryVolumes import territory_volumes_by_location
-from app.application.worldData.pack.mapCellToL2Wire import cells_to_l2_chunk
+from app.application.worldData.pack.mapCellToFineTerrainWire import cells_to_fine_terrain_chunk
 from app.application.worldData.pack.packMapHelpers import tile_index, world_tile_size_m
 from app.application.worldData.pack.packBakeLog import (
-    log_pack_l2_chunk_done,
-    log_pack_l2_chunk_persist,
-    log_pack_l2_chunk_start,
-    log_pack_l2_location_persist,
-    log_pack_l2_phase_done,
-    log_pack_l2_phase_start,
-    log_pack_l2_workers,
+    log_pack_wilderness_chunk_done,
+    log_pack_wilderness_chunk_persist,
+    log_pack_wilderness_chunk_start,
+    log_pack_location_terrain_persist,
+    log_pack_fine_terrain_phase_done,
+    log_pack_fine_terrain_phase_start,
+    log_pack_fine_terrain_workers,
     log_pack_queue_scheduled,
 )
 from app.application.worldData.pack.pathHeading import (
@@ -94,7 +94,7 @@ def _location_for_cell(
     return None
 
 
-class L2RefineOrchestrator:
+class FineTerrainRefineOrchestrator:
     def __init__(self, terrain: TerrainBatchOrchestrator) -> None:
         self._terrain = terrain
 
@@ -122,7 +122,7 @@ class L2RefineOrchestrator:
             rect for rect in rects
             if _distance_sq(*_chunk_center(rect), anchor_x, anchor_y) <= (xy_radius + chunk_size) ** 2
         ]
-        phase_t0 = log_pack_l2_phase_start(
+        phase_t0 = log_pack_fine_terrain_phase_start(
             world.world_uid,
             "scene",
             anchor_x=anchor_x,
@@ -137,7 +137,7 @@ class L2RefineOrchestrator:
             refine_role="scene",
             phase="scene",
         )
-        log_pack_l2_phase_done(
+        log_pack_fine_terrain_phase_done(
             world.world_uid,
             "scene",
             chunks_written=result[1],
@@ -296,7 +296,7 @@ class L2RefineOrchestrator:
         if force_serial_terrain_generate(world, surface_columns):
             workers = 1
         chunks_total = len(rects)
-        log_pack_l2_workers(
+        log_pack_fine_terrain_workers(
             world.world_uid,
             phase=phase_name,
             workers=workers,
@@ -312,7 +312,7 @@ class L2RefineOrchestrator:
 
         def compute_indexed(pair: tuple[int, ColumnRect]) -> tuple[int, ColumnRect, list[MapCell], float]:
             chunk_idx, rect = pair
-            chunk_t0 = log_pack_l2_chunk_start(
+            chunk_t0 = log_pack_wilderness_chunk_start(
                 world_uid,
                 phase=phase_name,
                 tile_gx=tile_gx,
@@ -321,6 +321,7 @@ class L2RefineOrchestrator:
                 chunks_total=chunks_total,
                 rect=rect,
                 refine_role=refine_role,
+                pool_workers=workers,
             )
             cells = self._terrain.generate_chunk_cells_sync(
                 world, locations, surface_ctx, tile_gx, tile_gy, rect,
@@ -341,7 +342,7 @@ class L2RefineOrchestrator:
             for location_uid, additions in loc_additions.items():
                 location_cells.setdefault(location_uid, []).extend(additions)
             cx, cy = _tile_local_chunk_indices(rect, meter_bbox, chunk_size)
-            log_pack_l2_chunk_persist(
+            log_pack_wilderness_chunk_persist(
                 world_uid,
                 phase=phase_name,
                 tile_gx=tile_gx,
@@ -351,18 +352,19 @@ class L2RefineOrchestrator:
                 refine_role=refine_role,
                 wilderness_cells=len(wilderness),
                 location_uids=sorted(loc_hits),
+                pool_workers=workers,
             )
             if wilderness:
-                chunk = cells_to_l2_chunk(
+                chunk = cells_to_fine_terrain_chunk(
                     cx, cy, chunk_size, rect.x_min, rect.y_min, wilderness,
                 )
-                writer.write_l2_wilderness_chunk(
+                writer.write_wilderness_chunk(
                     tile_gx, tile_gy, chunk,
                     refine_role=refine_role,  # type: ignore[arg-type]
                 )
                 total_cells += len(wilderness)
                 written += 1
-            log_pack_l2_chunk_done(
+            log_pack_wilderness_chunk_done(
                 world_uid,
                 phase=phase_name,
                 tile_gx=tile_gx,
@@ -375,6 +377,7 @@ class L2RefineOrchestrator:
                 wilderness_cells=len(wilderness),
                 location_uids=sorted(loc_hits),
                 started_at=chunk_t0,
+                pool_workers=workers,
             )
 
         if workers == 1 or chunks_total <= 1:
@@ -382,26 +385,33 @@ class L2RefineOrchestrator:
                 chunk_idx, rect, cells, chunk_t0 = compute_indexed(pair)
                 await persist_chunk(chunk_idx, rect, cells, chunk_t0)
         else:
-            pool = ChunkComputePool(workers)
+            pool = ChunkComputePool(
+                workers,
+                thread_name_prefix="pack-compute",
+                log_diagnostics=True,
+            )
+            try:
+                async def on_chunk(_pair: tuple[int, ColumnRect], result: tuple[int, ColumnRect, list[MapCell], float]) -> None:
+                    chunk_idx, rect, cells, chunk_t0 = result
+                    async with write_lock:
+                        await persist_chunk(chunk_idx, rect, cells, chunk_t0)
 
-            async def on_chunk(_pair: tuple[int, ColumnRect], result: tuple[int, ColumnRect, list[MapCell], float]) -> None:
-                chunk_idx, rect, cells, chunk_t0 = result
-                async with write_lock:
-                    await persist_chunk(chunk_idx, rect, cells, chunk_t0)
-
-            await pool.map_sync_with_callback(indexed_rects, compute_indexed, on_chunk)
+                await pool.map_sync_with_callback(indexed_rects, compute_indexed, on_chunk)
+            finally:
+                pool.shutdown()
 
         for location_uid, loc_cells in location_cells.items():
             volume = next((vol for uid, vol in location_pairs if uid == location_uid), None)
             if volume is None or not loc_cells:
                 continue
-            log_pack_l2_location_persist(
+            log_pack_location_terrain_persist(
                 world_uid,
                 location_uid=location_uid,
                 cells=len(loc_cells),
+                pool_workers=workers,
             )
-            chunk = cells_to_l2_chunk(0, 0, chunk_size, volume.x0, volume.y0, loc_cells)
-            writer.write_location_l2(location_uid, chunk, territory_volume=volume)
+            chunk = cells_to_fine_terrain_chunk(0, 0, chunk_size, volume.x0, volume.y0, loc_cells)
+            writer.write_location_terrain(location_uid, chunk, territory_volume=volume)
             total_cells += len(loc_cells)
         writer.recalc_manifest_counters()
         writer.save_manifest()
@@ -442,7 +452,7 @@ class L2RefineOrchestrator:
         if not corridor:
             return 0
         loc_volumes = [vol for _, vol in territory_volumes_by_location(world, locations)]
-        phase_t0 = log_pack_l2_phase_start(
+        phase_t0 = log_pack_fine_terrain_phase_start(
             world.world_uid,
             "path",
             anchor_x=anchor_x,
@@ -458,7 +468,7 @@ class L2RefineOrchestrator:
             refine_role="path",
             phase="path",
         )
-        log_pack_l2_phase_done(
+        log_pack_fine_terrain_phase_done(
             world.world_uid,
             "path",
             chunks_written=written,

@@ -26,7 +26,7 @@ class TestMerge9DebugRead(unittest.IsolatedAsyncioTestCase):
         self.db_path = str(Path(self._tmpdir.name) / "game.db")
         self.paths = WorldPackPaths.from_db_parent(self.db_path, "w1")
         writer = WorldPackWriter(self.paths)
-        writer.write_l0_world_map(
+        writer.write_world_map_tile(
             0, 0,
             [WorldMapCellWire(tx=0, ty=0, surface_z=50, system_terrain="plains")],
             cells_per_side=32,
@@ -41,8 +41,8 @@ class TestMerge9DebugRead(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self) -> None:
         self._tmpdir.cleanup()
 
-    def test_facade_l0_surface_cells(self):
-        cells = self.services.debug.get_l0_surface_map_cells(self.world)
+    def test_facade_world_map_surface_cells(self):
+        cells = self.services.debug.get_world_map_surface_cells(self.world)
         self.assertGreaterEqual(len(cells), 1)
         self.assertEqual(cells[0].system_terrain, "plains")
 
@@ -58,9 +58,9 @@ class TestMerge9DebugRead(unittest.IsolatedAsyncioTestCase):
 
         from app.db.models.mapCell import MapCell
 
-        l0_cells = self.services.debug.get_l0_surface_map_cells(self.world)
-        self.assertGreaterEqual(len(l0_cells), 1)
-        anchor = l0_cells[0]
+        world_map_cells = self.services.debug.get_world_map_surface_cells(self.world)
+        self.assertGreaterEqual(len(world_map_cells), 1)
+        anchor = world_map_cells[0]
         patch_cell = MapCell(
             world_uid="w1",
             x=anchor.x,
@@ -78,10 +78,10 @@ class TestMerge9DebugRead(unittest.IsolatedAsyncioTestCase):
         by_key = {(c.x, c.y, c.z): c for c in merged}
         cell = by_key[(anchor.x, anchor.y, anchor.z)]
         self.assertEqual(cell.system_terrain, "mountain")
-        self.assertEqual(len(merged), len(l0_cells))
+        self.assertEqual(len(merged), len(world_map_cells))
 
     async def test_column_has_merged_data(self):
-        cells = self.services.debug.get_l0_surface_map_cells(self.world)
+        cells = self.services.debug.get_world_map_surface_cells(self.world)
         self.assertGreaterEqual(len(cells), 1)
         has = await self.services.debug.column_has_merged_data(self.world, cells[0].x, cells[0].y)
         self.assertTrue(has)
