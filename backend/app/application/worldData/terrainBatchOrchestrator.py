@@ -6,9 +6,7 @@ Symmetry with ``ClimateBatchOrchestrator``: generators stay pure; persist via
 See ``docs/tz_terrain_generation.md`` § multi-pass skeleton, MR-7, TR-PAR.
 """
 
-from __future__ import annotations
-
-import asyncio
+from dataclasses import dataclass
 import logging
 import time
 from typing import TYPE_CHECKING, Literal
@@ -49,6 +47,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 SurfaceMode = Literal["bootstrap", "full"]
+
+
+@dataclass(frozen=True)
+class TileSurfaceState:
+    heightmap: object
+    n_eff: object
+    hydrology: dict | None
 
 
 class TerrainBatchOrchestrator:
@@ -409,3 +414,62 @@ class TerrainBatchOrchestrator:
                 await flush_persist_buffer()
 
         return ImportResult(total=total, succeeded=succeeded, failed=0), chunks_done, chunks_total
+
+    def build_tile_surface_state(
+        self,
+        world: World,
+        locations: list[NamedLocation],
+        ctx,
+        tile_gx: int,
+        tile_gy: int,
+    ) -> TileSurfaceState:
+        from app.application.worldData.generators.coordinates import cell_size_m
+        from app.application.worldData.generators.coordinates.worldTile import meter_bbox_for_tile
+        from app.application.worldData.generators.terrain.hydrology.meterHydrologyIndex import (
+            merge_meter_hydro_for_tile,
+        )
+        from app.application.worldData.generators.terrain.passes.surfacePass import build_fine_surface_tile
+        from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+
+        cell_m = cell_size_m(world)
+        fine_z = build_fine_surface_tile(
+            world, ctx.pole_field, tile_gx, tile_gy, ctx.coarse_surface_z,
+        )
+        for (xm, ym), z in ctx.meter_z_overrides.items():
+            if xm // cell_m == tile_gx and ym // cell_m == tile_gy:
+                fine_z[(xm, ym)] = z
+
+        meter_bbox = meter_bbox_for_tile(tile_gx, tile_gy, cell_m)
+        heightmap = SurfaceHeightmap(
+            world_uid=world.world_uid,
+            bbox=meter_bbox,
+            surface_z=fine_z,
+        )
+        tile_hydro = merge_meter_hydro_for_tile(
+            tile_gx, tile_gy, cell_m, ctx.coarse_hydro, ctx.sparse_meter_hydro,
+        )
+        n_eff = run_gap_analysis(world, heightmap)
+        return TileSurfaceState(heightmap=heightmap, n_eff=n_eff, hydrology=tile_hydro or None)
+
+    async def generate_chunk_cells(
+        self,
+        world: World,
+        locations: list[NamedLocation],
+        ctx,
+        tile_gx: int,
+        tile_gy: int,
+        rect: ColumnRect,
+        *,
+        surface_state: TileSurfaceState | None = None,
+    ) -> list[MapCell]:
+        state = surface_state or self.build_tile_surface_state(
+            world, locations, ctx, tile_gx, tile_gy,
+        )
+        return self._generator.generate_surface_chunk(
+            world,
+            locations,
+            state.heightmap,
+            state.n_eff,
+            rect,
+            hydrology_by_cell=state.hydrology,
+        )

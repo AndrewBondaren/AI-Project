@@ -32,7 +32,8 @@ from dataclasses import asdict
 
 from app.application.worldData.materializationContext import resolve_materialization_context
 from app.application.worldData.parallelPolicy import resolve_terrain_workers
-from app.application.worldData.sceneLoad import SCENE_LOAD_XY_RADIUS
+from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
+from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 
 router = APIRouter()
 _hydrology_generator = HydrologyGeneratorService()
@@ -56,12 +57,30 @@ def _parse_hydrology_scope(scope: str) -> frozenset[HydrologyScope] | None:
     return parsed
 
 
+@router.get("/worlds/{world_uid}/map/loading-progress")
+async def get_loading_progress(
+    world_uid: str,
+    container=Depends(get_container),
+) -> dict:
+    facade = container.map_cell_read_service(world_uid)
+    world_svc = container.world_service()
+    world = await world_svc.get_by_id(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+    return facade.pack.loading.get_loading_progress(world).to_dict()
+
+
 @router.get("/worlds/{world_uid}/map")
 async def list_map_cells(
     world_uid: str,
     container=Depends(get_container),
 ) -> list[dict]:
-    return await container.map_cell_service().export(world_uid)
+    world_svc = container.world_service()
+    world = await world_svc.get_by_id(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+    cells = await container.map_cell_service().get_all_for_read(world)
+    return [asdict(c) for c in cells]
 
 
 @router.get("/worlds/{world_uid}/map/export")
@@ -70,7 +89,11 @@ async def export_map(
     download: bool = False,
     container=Depends(get_container),
 ) -> JSONResponse:
-    data = await container.map_cell_service().export(world_uid)
+    world_svc = container.world_service()
+    world = await world_svc.get_by_id(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+    data = await container.map_cell_service().export_for_debug(world)
     return json_or_download(data, download, f"map_{world_uid}.json")
 
 
@@ -111,12 +134,14 @@ async def render_world_grid(
     """Debug only — ASCII top-surface world map (@ = cell has location_uid)."""
     from app.application.worldData.render.mapGridRenderService import MapGridRenderService
 
+    world_svc = container.world_service()
+    world = await world_svc.get_by_id(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+
     location_svc = container.location_service()
     locations = await location_svc.get_all(world_uid)
-    svc = MapGridRenderService(
-        container.map_cell_service(),
-        world_service=container.world_service(),
-    )
+    svc = MapGridRenderService(container.map_cell_service())
     bbox = (gx0, gy0, gx1, gy1)
     if any(v is not None for v in bbox) and not all(v is not None for v in bbox):
         raise HTTPException(
@@ -124,7 +149,7 @@ async def render_world_grid(
             detail="Provide all bbox query params (gx0, gy0, gx1, gy1) or omit all",
         )
     payload = await svc.render_world_grid(
-        world_uid,
+        world,
         locations=locations,
         gx0=gx0,
         gy0=gy0,
@@ -143,11 +168,13 @@ async def render_world_tile_grids(
     """Debug only — per macro tile fine grid (map_cell_size_m² cells)."""
     from app.application.worldData.render.mapGridRenderService import MapGridRenderService
 
-    svc = MapGridRenderService(
-        container.map_cell_service(),
-        world_service=container.world_service(),
-    )
-    payload = await svc.render_world_tile_grids(world_uid)
+    world_svc = container.world_service()
+    world = await world_svc.get_by_id(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+
+    svc = MapGridRenderService(container.map_cell_service())
+    payload = await svc.render_world_tile_grids(world)
     return JSONResponse(content=payload)
 
 
@@ -159,11 +186,13 @@ async def render_all_location_grids(
     """Debug only — ASCII per location_uid that has map_cells, all z levels."""
     from app.application.worldData.render.mapGridRenderService import MapGridRenderService
 
-    svc = MapGridRenderService(
-        container.map_cell_service(),
-        world_service=container.world_service(),
-    )
-    payload = await svc.render_all_location_grids(world_uid)
+    world_svc = container.world_service()
+    world = await world_svc.get_by_id(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+
+    svc = MapGridRenderService(container.map_cell_service())
+    payload = await svc.render_all_location_grids(world)
     return JSONResponse(content=payload)
 
 
@@ -207,7 +236,7 @@ async def materialize_tile(
 @router.get("/worlds/{world_uid}/map/bootstrap-tiles")
 async def list_bootstrap_tiles(
     world_uid: str,
-    max_tiles: int = Query(default=16, ge=0),
+    max_tiles: int = Query(default=PackBakeDefaults.canonical_defaults().max_tiles_light, ge=0),
     container=Depends(get_container),
 ) -> JSONResponse:
     """Debug — macro tiles selected for bootstrap surface init (no persist)."""
@@ -241,7 +270,7 @@ async def list_bootstrap_tiles(
 async def generate_surface(
     world_uid: str,
     mode: str = Query(default="bootstrap", pattern="^(bootstrap|full)$"),
-    max_tiles: int = Query(default=16, ge=0),
+    max_tiles: int = Query(default=PackBakeDefaults.canonical_defaults().max_tiles_light, ge=0),
     free_cores: int | None = Query(default=None, ge=1),
     parallel_workers: int | None = Query(default=None, ge=1),
     container=Depends(get_container),
@@ -313,6 +342,10 @@ async def generate_hydrology(
     world     = await world_svc.get_by_id(world_uid)
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+    try:
+        map_svc.reject_legacy_generate_on_pack(world)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     locations = await location_svc.get_all(world_uid)
     nodes     = await conn_svc.get_nodes(world_uid)
@@ -370,8 +403,11 @@ async def generate_climate(
     climate_orch = container.climate_batch_orchestrator()
 
     world     = await world_svc.get_by_id(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+
     locations = await location_svc.get_all(world_uid)
-    cells     = await map_svc.get_all(world_uid)
+    cells     = await map_svc.get_all_for_read(world)
     if not cells:
         raise HTTPException(
             status_code=422,
@@ -393,11 +429,62 @@ async def generate_climate(
     })
 
 
+@router.post("/worlds/{world_uid}/map/pack/bake")
+async def bake_world_pack(
+    world_uid: str,
+    mode: str = Query(default="light", pattern="^(light|tile|full)$"),
+    max_tiles: int = Query(default=PackBakeDefaults.canonical_defaults().max_tiles_light, ge=0),
+    anchor_x: int | None = Query(default=None),
+    anchor_y: int | None = Query(default=None),
+    heading_dx: int | None = Query(default=None),
+    heading_dy: int | None = Query(default=None),
+    free_cores: int | None = Query(default=None, ge=1),
+    parallel_workers: int | None = Query(default=None, ge=1),
+    container=Depends(get_container),
+) -> JSONResponse:
+    """Debug — bake World Pack (L0 light + optional scene L2 chunks)."""
+    stack = container.surface_materialization_orchestrator()
+    world_svc = container.world_service()
+    location_svc = container.location_service()
+    conn_svc = container.connection_graph_service()
+
+    world = await world_svc.get_by_id(world_uid)
+    locations = await location_svc.get_all(world_uid)
+    nodes = await conn_svc.get_nodes(world_uid)
+    edges = await conn_svc.get_edges(world_uid)
+    cap = max_tiles if max_tiles > 0 else None
+    mat_ctx = resolve_materialization_context(
+        world, free_cores=free_cores, parallel_workers_override=parallel_workers,
+    )
+    writer = container.world_pack_writer_for(world)
+
+    if mode == "light":
+        report = await stack.materialize_pack_light(
+            world_uid, world, locations, mat_ctx, writer,
+            max_tiles=cap,
+            nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
+            anchor_x=anchor_x, anchor_y=anchor_y,
+            heading_dx=heading_dx, heading_dy=heading_dy,
+            pack_orchestrator=container.pack_materialization_orchestrator(),
+        )
+    else:
+        raise HTTPException(status_code=422, detail=f"pack bake mode '{mode}' not implemented yet")
+
+    progress = container.map_cell_read_service(world_uid).pack.loading.get_loading_progress(world)
+    status_code = 200 if report.terrain.failed == 0 else 207
+    return JSONResponse(status_code=status_code, content={
+        **report.to_dict(),
+        "pack_mode": mode,
+        "loading_progress": progress.to_dict(),
+    })
+
+
 @router.post("/worlds/{world_uid}/map/materialize-stack")
 async def materialize_stack(
     world_uid: str,
     mode: str = Query(default="bootstrap", pattern="^(bootstrap|full)$"),
-    max_tiles: int = Query(default=16, ge=0),
+    target: str = Query(default="legacy", pattern="^(legacy|pack)$"),
+    max_tiles: int = Query(default=PackBakeDefaults.canonical_defaults().max_tiles_light, ge=0),
     free_cores: int | None = Query(default=None, ge=1),
     parallel_workers: int | None = Query(default=None, ge=1),
     chunks_per_commit: int | None = Query(default=None, ge=1),
@@ -424,6 +511,27 @@ async def materialize_stack(
         bulk_write_pragmas=bulk_pragmas,
     )
 
+    if target == "pack":
+        writer = container.world_pack_writer_for(world)
+        report = await stack.materialize_pack_light(
+            world_uid, world, locations, mat_ctx, writer,
+            max_tiles=cap,
+            nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
+            pack_orchestrator=container.pack_materialization_orchestrator(),
+        )
+        progress = container.map_cell_read_service(world_uid).pack.loading.get_loading_progress(world)
+        status_code = 200 if report.terrain.failed == 0 else 207
+        return JSONResponse(
+            status_code=status_code,
+            headers={"Deprecation": "true", "Link": '</worlds/{}/map/pack/bake>; rel="successor-version"'.format(world_uid)},
+            content={
+                **report.to_dict(),
+                "target": "pack",
+                "loading_progress": progress.to_dict(),
+                "deprecated": "Use POST /worlds/{uid}/map/pack/bake instead",
+            },
+        )
+
     report = await stack.materialize_surface_stack(
         world_uid, world, locations, mat_ctx,
         surface_mode=mode,  # type: ignore[arg-type]
@@ -444,7 +552,10 @@ async def generate_ores_route(
     world_svc = container.world_service()
 
     world = await world_svc.get_by_id(world_uid)
-    cells = await map_svc.get_all(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+
+    cells = await map_svc.get_all_for_read(world)
     if not cells:
         raise HTTPException(status_code=422, detail="No map cells — run generate-surface first")
 
@@ -464,7 +575,10 @@ async def generate_caves_route(
     world_svc = container.world_service()
 
     world = await world_svc.get_by_id(world_uid)
-    cells = await map_svc.get_all(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+
+    cells = await map_svc.get_all_for_read(world)
     if not cells:
         raise HTTPException(status_code=422, detail="No map cells — run generate-surface first")
 
@@ -508,7 +622,11 @@ async def has_column_cells_route(
 ) -> JSONResponse:
     """Debug — TR-LAZY-LOAD: any cells at fine column (x, y)?"""
     map_svc = container.map_cell_service()
-    found = await map_svc.has_column_cells(world_uid, x, y)
+    world_svc = container.world_service()
+    world = await world_svc.get_by_id(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+    found = await map_svc.has_column_cells(world_uid, x, y, world=world)
     return JSONResponse(content={"world_uid": world_uid, "x": x, "y": y, "has_column": found})
 
 
@@ -518,7 +636,7 @@ async def scene_volume_route(
     x: int,
     y: int,
     z: int,
-    xy_radius: int = Query(default=SCENE_LOAD_XY_RADIUS, ge=0),
+    xy_radius: int = Query(default=SceneVolumePolicy.canonical_defaults().scene_xy_radius, ge=0),
     z_below: int | None = Query(default=None, ge=0),
     z_above: int = Query(default=0, ge=0),
     container=Depends(get_container),

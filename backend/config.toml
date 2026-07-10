@@ -28,5 +28,8 @@ level = "debug"
 [database]
 path = "../db/game.db"
 
+[world_loading]
+path_ahead_depth = 2
+
 [logger_levels]
 aiosqlite = "WARNING"

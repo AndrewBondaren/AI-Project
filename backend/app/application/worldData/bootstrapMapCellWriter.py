@@ -6,13 +6,16 @@ OLTP (gameplay, lazy, debug slices) uses ``MapCellService`` on ``main_conn``.
 See ``docs/tz_terrain_generation.md`` § TR-PAR-6.
 """
 
-from __future__ import annotations
+import logging
+import warnings
 
 from contextlib import asynccontextmanager
 
 from app.db.database import Database
 from app.db.models.mapCell import MapCell
 from app.db.repositories.iMapCellRepository import IMapCellRepository
+
+logger = logging.getLogger(__name__)
 
 
 class BootstrapMapCellWriter:
@@ -36,6 +39,12 @@ class BootstrapMapCellWriter:
         return self._db.bootstrap_conn
 
     async def write_terrain(self, cells: list[MapCell], *, insert_only: bool) -> int:
+        warnings.warn(
+            "BootstrapMapCellWriter.write_terrain is deprecated — use WorldPackWriter (TR-PACK)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        logger.warning("legacy terrain bootstrap write (%d cells) — prefer pack bake", len(cells))
         if insert_only:
             return await self._repo.insert_terrain_bulk(cells, conn=self._conn)
         return await self._repo.upsert_terrain_skeleton(cells, conn=self._conn)

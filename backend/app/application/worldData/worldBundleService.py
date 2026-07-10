@@ -17,6 +17,11 @@ from app.application.worldData.raceService import RaceService
 from app.application.worldData.stateService import StateService
 from app.application.worldData.worldPerkService import WorldPerkService
 from app.application.worldData.worldService import WorldService
+from app.application.worldData.pack.importLevels import (
+    ImportLevel,
+    filter_bundle_for_export,
+    validate_bundle_for_import,
+)
 from app.db.database import Database
 from app.utils.graph import topo_sort
 
@@ -47,31 +52,31 @@ class WorldBundleService:
         self._states          = state_service
         self._connections     = connection_graph_service
 
-    async def export(self, world_uid: str) -> dict:
+    async def export(self, world_uid: str, *, level: ImportLevel = "skeleton") -> dict:
         world     = await self._world.get_by_id(world_uid)
         races     = await self._races.get_all(world_uid)
         perks     = await self._perks.get_all(world_uid)
         locations = await self._locations.get_all(world_uid)
-        map_cells = await self._map_cells.get_all(world_uid)
         states    = await self._states.get_all(world_uid)
         nodes     = await self._connections.export_nodes(world_uid)
         edges     = await self._connections.export_edges(world_uid)
-        return {
+        bundle = {
             "world":             asdict(world),
             "races":             [asdict(r) for r in races],
             "perks":             [asdict(p) for p in perks],
             "locations":         [asdict(l) for l in locations],
-            "map_cells":         [asdict(c) for c in map_cells],
             "states":            [asdict(s) for s in states],
             "connection_nodes":  nodes,
             "connection_edges":  edges,
         }
+        return filter_bundle_for_export(bundle, level)
 
-    async def import_bundle(self, data: dict) -> tuple[dict[str, ImportResult], bool]:
+    async def import_bundle(self, data: dict, *, level: ImportLevel = "skeleton") -> tuple[dict[str, ImportResult], bool]:
         if "world" not in data:
             raise HTTPException(status_code=422, detail="Bundle must contain 'world' key")
 
         try:
+            validate_bundle_for_import(data, level)
             world_data = normalize_world(dict(data["world"]))
             if not world_data.get("world_uid"):
                 world_data["world_uid"] = derive_world_uid(world_data)
@@ -82,6 +87,14 @@ class WorldBundleService:
                 status_code=422,
                 detail=import_validation_http_detail(exc),
             ) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        if "map_cells" in data:
+            raise HTTPException(
+                status_code=422,
+                detail="Bundle section 'map_cells' rejected — use World Pack (pack/import or bake)",
+            )
 
         world_uid = data["world"]["world_uid"]
         existing = await self._world.find_by_id(world_uid)
@@ -103,7 +116,6 @@ class WorldBundleService:
                     "perks":     self._perks,
                     "states":    self._states,
                     "locations": self._locations,
-                    "map_cells": self._map_cells,
                 }
                 for key, svc in sections.items():
                     if key in data:

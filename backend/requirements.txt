@@ -30,6 +30,9 @@ loguru>=0.7.2
 # === optional (если будешь расширять memory / cache слой) ===
 orjson>=3.10.0
 
+# === World Pack compression ===
+zstandard>=0.22.0
+
 # если хочешь стабильный streaming LLM
 sse-starlette>=2.1.0
 

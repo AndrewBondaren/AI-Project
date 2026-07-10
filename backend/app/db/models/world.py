@@ -124,3 +124,8 @@ class World:
     stat_migrations:            dict = json_col(default_factory=dict)
     registry_migrations:        dict = json_col(default_factory=dict)
     trait_change_log_threshold: float = 0.2
+
+    terrain_pack_path:          str | None = None
+    terrain_pack_hash:          str | None = None
+    terrain_pack_version:       str | None = None
+    world_map_cells_per_tile:   int | None = None

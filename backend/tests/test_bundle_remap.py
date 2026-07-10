@@ -27,11 +27,6 @@ def _minimal_bundle() -> dict:
             "world_uid": "w-old",
             "location_uid": "draft-only",
         }],
-        "map_cells": [{
-            "world_uid": "w-old",
-            "x": 0, "y": 0, "z": 0,
-            "location_uid": "loc-1",
-        }],
     }
 
 
@@ -56,10 +51,6 @@ class TestBundleRemap(unittest.TestCase):
         edge = out["connection_edges"][0]
         self.assertEqual(edge["from_node_uid"], node["node_uid"])
         self.assertNotIn("location_uid", edge)
-
-        cell = out["map_cells"][0]
-        self.assertEqual(cell["world_uid"], new_w)
-        self.assertEqual(cell["location_uid"], loc["location_uid"])
 
         # Source unchanged
         self.assertEqual(src["world"]["world_uid"], "w-old")

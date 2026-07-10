@@ -5,13 +5,14 @@ from app.db.mapper import bool_col, json_nullable_col
 
 @dataclass
 class MapCell:
-    __table__ = "map_cells"
+    __table__ = "map_cell_patches"
     __pk__    = "world_uid"  # composite PK (world_uid, x, y, z) — используется только upsert
 
     world_uid:                  str
     x:                          int
     y:                          int
     z:                          int
+    layer_kind:                 str = "structure"
 
     system_terrain:             str | None = None   # тип рельефа из terrain_registry (plains, tundra, forest, liquid_body, urban, road, floor, wall, ...)
     system_building_element:   str | None = None   # строительный элемент (wall, floor, door, window, ...)

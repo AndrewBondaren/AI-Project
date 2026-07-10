@@ -33,6 +33,9 @@ class AppSettings:
     distance_unit:              DistanceUnit = DistanceUnit.METERS
     cell_size:                  int          = 10  # метров в одной ячейке карты
 
+    # --- World loading (terrain pack prefetch) ---
+    path_ahead_depth:           int        = 2  # macro-tiles ahead on movement heading; config [world_loading]
+
     # --- Anthropic ---
     anthropic_thinking_budget:  int        = 10000
 
@@ -41,6 +44,7 @@ class AppSettings:
 
     # --- Database ---
     db_path:                    str        = field(default_factory=lambda: DefaultConfig.DB_PATH)
+    world_pack_root:            str | None = None
 
     # --- Logger overrides ---
     logger_levels:              dict       = field(default_factory=lambda: dict(DefaultConfig.LOGGER_LEVELS))

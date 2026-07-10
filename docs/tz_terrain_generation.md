@@ -614,6 +614,20 @@ flowchart LR
 
 **Lazy / v2 declared world:** тот же chunk API; eager прогоняет все chunks bbox/world_bounds, lazy — scene volume / column (§ **TR-LAZY-LOAD**).
 
+### World Pack storage (TR-PACK) — target persist
+
+> **Статус:** ⬜ impl. **Продуктовое ТЗ:** [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) (WP-13: L2 **от точки входа**, chunk partial, blocking = scene volume). **TR-PERF** (ниже) — interim на `map_cells`; **заменяется** TR-PACK для wilderness skeleton.
+
+**Цель:** cold load ≤ 5 min; fast bake (глобальная карта + скелеты локаций) ≤ 10 min.
+
+| Было | Станет |
+|---|---|
+| wilderness terrain → `map_cells` INSERT | **L0/L2** → World Pack (zstd tiles) |
+| gameplay patches → `map_cells` | **`map_cell_patches`** SQLite |
+| eager full bbox fine grid на bake | **LOD:** L0 world map + L1 location skeletons; **L2 fine tile** при приближении |
+
+**LOD bake:** § Идея 1 (light world map per tile) + § Идея 2 (L2 refine from L0); `world_map_cells_per_tile ∝ 1/map_cell_size_m`. См. [`tz_world_pack_storage.md`](./tz_world_pack_storage.md).
+
 ### Persist performance (TR-PERF)
 
 > **Статус:** ✅ TR-PERF-1…4 impl. **Scope:** bootstrap / `materialize-stack` / `save_terrain_batch` — **не** gameplay patch, **не** parallel persist.
@@ -764,7 +778,7 @@ PRAGMA cache_size=-64000
 
 | Параметр | Default | Источник |
 |---|---|---|
-| `scene_xy_radius` | **5** | `AppSettings` / константа `SCENE_LOAD_XY_RADIUS` |
+| `scene_xy_radius` | **5** | `SceneVolumePolicy` (`dataModel/terrain/sceneVolumePolicy.py`) |
 | `scene_z_below` | `N_base(world)` | `worldMapSettings.n_base` — subsurface под ногами |
 | `scene_z_above` | **0** | от `map_z` вверх до surface (обычно 0) |
 
@@ -776,7 +790,7 @@ async def get_scene_volume(
     world_uid: str,
     x: int, y: int, z: int,
     *,
-    xy_radius: int = SCENE_LOAD_XY_RADIUS,
+    xy_radius: int = SceneVolumePolicy.canonical_defaults().scene_xy_radius,
     z_below: int | None = None,
     z_above: int = 0,
 ) -> list[MapCell]:

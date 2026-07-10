@@ -1,0 +1,174 @@
+"""Pack-backed materialization facade — L0 light + L2 scene refine."""
+
+from __future__ import annotations
+
+import logging
+
+from app.application.worldData.persistResult import PersistResult
+from app.application.worldData.generators.terrain.hydrology.hydrologyGeneratorService import (
+    HydrologyGeneratorService,
+)
+from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
+    prepare_surface_terrain_context,
+)
+from app.application.worldData.materializationContext import (
+    MaterializationContext,
+    MaterializationJobReport,
+)
+from app.application.worldData.pack.chunkRefineQueue import ChunkRefineQueue
+from app.application.worldData.pack.chunkRefineWorker import ChunkRefineWorker
+from app.application.worldData.pack.entryAnchorTracker import EntryAnchorTracker
+from app.application.worldData.pack.l0BakeOrchestrator import L0BakeOrchestrator
+from app.application.worldData.pack.l2RefineOrchestrator import L2RefineOrchestrator
+from app.application.worldData.pack.packBakeFinalize import finalize_pack_on_world
+from app.application.worldData.pack.pathHeading import resolve_path_heading
+from app.application.worldData.pack.worldPackWriter import WorldPackWriter
+from app.application.worldData.parallelPolicy import resolve_terrain_workers
+from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
+from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.application.worldData.worldService import WorldService
+from app.core.appSettings import app_settings
+from app.db.models.connectionEdge import ConnectionEdge
+from app.db.models.connectionNode import ConnectionNode
+from app.db.models.namedLocation import NamedLocation
+from app.db.models.world import World
+from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
+
+from app.db.repositories.iChunkRefineJobRepository import IChunkRefineJobRepository
+
+logger = logging.getLogger(__name__)
+
+
+class PackMaterializationOrchestrator:
+    def __init__(
+        self,
+        terrain: TerrainBatchOrchestrator,
+        *,
+        l0: L0BakeOrchestrator | None = None,
+        l2: L2RefineOrchestrator | None = None,
+        job_repo: IChunkRefineJobRepository | None = None,
+        world_service: WorldService | None = None,
+        bake_defaults: PackBakeDefaults | None = None,
+    ) -> None:
+        self._terrain = terrain
+        self._l0 = l0 or L0BakeOrchestrator()
+        self._l2 = l2 or L2RefineOrchestrator(terrain)
+        self._anchors = EntryAnchorTracker()
+        self._queue = ChunkRefineQueue(max_workers=1)
+        self._worker = ChunkRefineWorker(self._l2, job_repo=job_repo)
+        self._jobs = job_repo
+        self._world_service = world_service
+        self._defaults = bake_defaults or PackBakeDefaults.canonical_defaults()
+
+    @property
+    def refine_queue(self) -> ChunkRefineQueue:
+        return self._queue
+
+    @property
+    def anchor_tracker(self) -> EntryAnchorTracker:
+        return self._anchors
+
+    async def materialize_light_pack(
+        self,
+        world_uid: str,
+        world: World,
+        locations: list[NamedLocation],
+        writer: WorldPackWriter,
+        mat_ctx: MaterializationContext,
+        *,
+        max_tiles: int | None = None,
+        nodes: list[ConnectionNode] | None = None,
+        edges: list[ConnectionEdge] | None = None,
+        hydrology_generator: HydrologyGeneratorService | None = None,
+        anchor_x: int | None = None,
+        anchor_y: int | None = None,
+        heading_dx: int | None = None,
+        heading_dy: int | None = None,
+        refine_scene: bool = True,
+    ) -> MaterializationJobReport:
+        tile_cap = max_tiles if max_tiles is not None else self._defaults.max_tiles_light
+        surface_ctx = prepare_surface_terrain_context(
+            world, locations, nodes=nodes, edges=edges,
+            hydrology_generator=hydrology_generator,
+        )
+        if surface_ctx is not None and self._jobs is not None:
+            await self._worker.drain_persisted(
+                world_uid, world, locations, writer, mat_ctx, surface_ctx,
+                max_jobs=max(self._defaults.background_drain_per_request, 1),
+            )
+        tiles = self._terrain.plan_bootstrap_tiles(
+            world, locations, nodes=nodes, edges=edges,
+            hydrology_generator=hydrology_generator, max_tiles=tile_cap,
+        )
+        l0_cells = self._l0.bake_tiles(
+            world, locations, writer, tiles,
+            nodes=nodes, edges=edges, hydrology_generator=hydrology_generator,
+        )
+        terrain_result = PersistResult.from_counts(l0_cells, l0_cells)
+        chunks_done = 0
+        chunks_total = 0
+
+        if refine_scene and tiles and surface_ctx is not None:
+            ax = anchor_x
+            ay = anchor_y
+            if ax is None or ay is None:
+                for loc in locations:
+                    if loc.map_x is not None and loc.map_y is not None:
+                        ax = loc.map_x
+                        ay = loc.map_y
+                        break
+            ax = ax if ax is not None else 0
+            ay = ay if ay is not None else 0
+            tile_gx, tile_gy = self._l2.tile_for_anchor(world, ax, ay)
+            self._anchors.set_anchor("session_start", ax, ay, tile_gx=tile_gx, tile_gy=tile_gy)
+            heading = resolve_path_heading(
+                intent_dx=heading_dx,
+                intent_dy=heading_dy,
+                positions=self._anchors.position_history(),
+            )
+            terrain_result, chunks_done, chunks_total = await self._l2.refine_scene_volume(
+                world, locations, writer, ax, ay, mat_ctx,
+                surface_ctx=surface_ctx, tile_gx=tile_gx, tile_gy=tile_gy,
+                xy_radius=SceneVolumePolicy.canonical_defaults().scene_xy_radius,
+            )
+            path_chunks = await self._l2.refine_path_corridor(
+                world, locations, writer, ax, ay, mat_ctx, surface_ctx,
+                tile_gx, tile_gy,
+                heading=heading,
+                depth_tiles=app_settings.path_ahead_depth,
+            )
+            chunks_done += path_chunks
+            await self._l2.schedule_tile_background(
+                world, self._queue, ax, ay, tile_gx, tile_gy,
+            )
+            if heading is not None:
+                await self._l2.schedule_path_ahead_tiles(
+                    world, self._queue, ax, ay, tile_gx, tile_gy, heading,
+                    depth_tiles=app_settings.path_ahead_depth,
+                )
+            for gx, gy, cx, cy, priority in self._queue.pending_items():
+                await self._worker.persist_enqueue(
+                    world_uid, gx, gy, cx, cy, priority=priority,
+                )
+            if self._defaults.background_drain_per_request > 0:
+                await self._worker.drain_queue(
+                    world_uid, world, locations, writer, mat_ctx, surface_ctx,
+                    self._queue, max_jobs=self._defaults.background_drain_per_request,
+                )
+
+        if self._world_service is not None:
+            await finalize_pack_on_world(self._world_service, world, writer)
+
+        workers = resolve_terrain_workers(mat_ctx, world)
+        logger.info(
+            "materialize_light_pack | world=%s l0_cells=%s chunks=%d/%d queue=%d",
+            world_uid, l0_cells, chunks_done, chunks_total, len(self._queue),
+        )
+        return MaterializationJobReport(
+            terrain=terrain_result,
+            climate=None,
+            chunks_done=chunks_done,
+            chunks_total=chunks_total,
+            terrain_workers=workers,
+            climate_workers=0,
+        )

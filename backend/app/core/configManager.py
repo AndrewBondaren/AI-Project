@@ -93,6 +93,9 @@ class ConfigManager:
         database = data.get("database", {})
         _copy(result, database, "path", "db_path")
 
+        world_loading = data.get("world_loading", {})
+        _copy(result, world_loading, "path_ahead_depth")
+
         if "logger_levels" in data:
             result["logger_levels"] = dict(data["logger_levels"])
 
@@ -131,6 +134,9 @@ class ConfigManager:
             },
             "database": {
                 "path": s.db_path,
+            },
+            "world_loading": {
+                "path_ahead_depth": s.path_ahead_depth,
             },
             "logger_levels": dict(s.logger_levels),
         }

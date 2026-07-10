@@ -11,20 +11,16 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
     SettlementLayout,
 )
 from app.application.worldData.generators.structure.structureGeneratorService import StructureLayout
+from app.dataModel.locations.locationFootprintPolicy import named_location_uses_settlement_meter_footprint
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 logger = logging.getLogger(__name__)
 
-_SETTLEMENT_TYPES = frozenset({"city", "town", "village", "camp", "hamlet"})
-
 
 def _is_settlement_location(settlement: NamedLocation) -> bool:
-    if settlement.system_location_type == "settlement":
-        return True
-    kind = settlement.system_location_subtype or settlement.system_city_size
-    return kind in _SETTLEMENT_TYPES
+    return named_location_uses_settlement_meter_footprint(settlement)
 
 
 def rebind_layout_to_building(

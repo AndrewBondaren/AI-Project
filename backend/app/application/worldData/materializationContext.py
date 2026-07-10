@@ -10,12 +10,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from app.api.schemas.imports import ImportResult
+from app.application.worldData.persistResult import PersistResult
 from app.db.models.world import World
 
 # Until DAG passes probe: debug HTTP uses this when query param omitted.
 DEBUG_FREE_CORES_STUB = 5
 DEFAULT_CHUNKS_PER_COMMIT = 8
+
+
+def persist_result_from_import(result) -> PersistResult:
+    """Bridge legacy terrain/climate batch counters until those paths migrate."""
+    return PersistResult(
+        total=result.total,
+        succeeded=result.succeeded,
+        failed=result.failed,
+    )
 
 
 @dataclass(frozen=True)
@@ -37,8 +46,8 @@ class MaterializationContext:
 class MaterializationJobReport:
     """Aggregated result for surface stack (S→CL)."""
 
-    terrain: ImportResult
-    climate: ImportResult | None
+    terrain: PersistResult
+    climate: PersistResult | None
     chunks_total: int
     chunks_done: int
     terrain_workers: int

@@ -6,28 +6,17 @@ from app.application.worldData.mapCellService import MapCellService
 from app.application.worldData.render.locationGridRenderer import LocationGridRenderer
 from app.application.worldData.render.worldGridRenderer import WorldGridRenderer
 from app.application.worldData.render.worldTileGridRenderer import WorldTileGridRenderer
-from app.application.worldData.worldService import WorldService
 from app.db.models.namedLocation import NamedLocation
+from app.db.models.world import World
 
 
 class MapGridRenderService:
-    def __init__(
-        self,
-        map_cell_service: MapCellService,
-        world_service: WorldService | None = None,
-    ) -> None:
+    def __init__(self, map_cell_service: MapCellService) -> None:
         self._map_cells = map_cell_service
-        self._worlds = world_service
-
-    async def _cell_size_m(self, world_uid: str) -> int | None:
-        if self._worlds is None:
-            return None
-        world = await self._worlds.find_by_id(world_uid)
-        return world.map_cell_size_m if world is not None else None
 
     async def render_world_grid(
         self,
-        world_uid: str,
+        world: World,
         *,
         locations: list[NamedLocation] | None = None,
         gx0: int | None = None,
@@ -36,37 +25,46 @@ class MapGridRenderService:
         gy1: int | None = None,
         mark_locations: bool = True,
     ) -> dict[str, str]:
-        cells = await self._map_cells.get_all(world_uid)
-        cell_size_m_val = await self._cell_size_m(world_uid)
+        cells = await self._map_cells.get_all_for_read(world)
         renderer = WorldGridRenderer(
             cells,
             locations=locations,
-            cell_size_m=cell_size_m_val,
+            cell_size_m=world.map_cell_size_m,
         )
         if gx0 is not None and gy0 is not None and gx1 is not None and gy1 is not None:
             ascii_grid = renderer.render_bbox(gx0, gy0, gx1, gy1, mark_location=mark_locations)
         else:
             ascii_grid = renderer.render(mark_location=mark_locations)
-        return {
+        payload = {
             "ascii": ascii_grid,
             "legend": WorldGridRenderer.render_legend(mark_location=mark_locations),
             "mark_locations": mark_locations,
-            "cell_size_m": cell_size_m_val,
+            "cell_size_m": world.map_cell_size_m,
         }
+        if self._map_cells.uses_pack_read(world):
+            payload["read_path"] = "facade"
+            payload["read_mode"] = "l0_surface_merged_patches"
+        return payload
 
-    async def render_world_tile_grids(self, world_uid: str) -> dict[str, object]:
-        cells = await self._map_cells.get_all(world_uid)
-        cell_size_m_val = await self._cell_size_m(world_uid)
+    async def render_world_tile_grids(self, world: World) -> dict[str, object]:
+        cell_size_m_val = world.map_cell_size_m
+        cells = await self._map_cells.get_all_for_read(world)
         if not cell_size_m_val:
-            return {"world_uid": world_uid, "tiles": {}}
+            return {"world_uid": world.world_uid, "tiles": {}}
         tiles: dict[str, dict[str, object]] = {}
         by_tile: dict[tuple[int, int], list] = {}
-        for cell in cells:
-            if cell.system_building_element:
-                continue
-            gx = cell.x // cell_size_m_val
-            gy = cell.y // cell_size_m_val
-            by_tile.setdefault((gx, gy), []).append(cell)
+        if self._map_cells.uses_pack_read(world):
+            for gx, gy in self._map_cells.l0_tile_coords(world):
+                tile_cells = await self._map_cells.get_tile_cells_for_read(world, gx, gy)
+                if tile_cells:
+                    by_tile[(gx, gy)] = tile_cells
+        else:
+            for cell in cells:
+                if cell.system_building_element:
+                    continue
+                gx = cell.x // cell_size_m_val
+                gy = cell.y // cell_size_m_val
+                by_tile.setdefault((gx, gy), []).append(cell)
         for (gx, gy), tile_cells in sorted(by_tile.items()):
             renderer = WorldTileGridRenderer(
                 tile_cells,
@@ -83,16 +81,20 @@ class MapGridRenderService:
                 "levels": {str(z): txt for z, txt in sorted(levels.items())},
                 "legend": WorldTileGridRenderer.render_legend(),
             }
-        return {
-            "world_uid": world_uid,
+        payload = {
+            "world_uid": world.world_uid,
             "cell_size_m": cell_size_m_val,
             "tile_keys": list(tiles.keys()),
             "tiles": tiles,
         }
+        if self._map_cells.uses_pack_read(world):
+            payload["read_path"] = "facade"
+            payload["read_mode"] = "l0_surface_merged_patches"
+        return payload
 
-    async def render_all_location_grids(self, world_uid: str) -> dict[str, object]:
-        cells = await self._map_cells.get_all(world_uid)
-        cell_size_m_val = await self._cell_size_m(world_uid)
+    async def render_all_location_grids(self, world: World) -> dict[str, object]:
+        cells = await self._map_cells.get_all_for_read(world)
+        cell_size_m_val = world.map_cell_size_m
         location_uids = sorted({
             cell.location_uid
             for cell in cells
@@ -119,23 +121,27 @@ class MapGridRenderService:
                 "levels": levels,
                 "legend": LocationGridRenderer.render_legend(indoor=indoor),
             }
-        return {
-            "world_uid": world_uid,
+        payload = {
+            "world_uid": world.world_uid,
             "cell_size_m": cell_size_m_val,
             "location_uids": location_uids,
             "locations": locations,
             "outdoor_legend": outdoor_legend,
         }
+        if self._map_cells.uses_pack_read(world):
+            payload["read_path"] = "facade"
+            payload["read_mode"] = "l0_surface_merged_patches"
+        return payload
 
     async def render_location_grid(
         self,
-        world_uid: str,
+        world: World,
         location_uid: str,
         *,
         z: int | None = None,
     ) -> dict[str, str | dict[int, str]]:
-        cells = await self._map_cells.get_all(world_uid)
-        cell_size_m_val = await self._cell_size_m(world_uid)
+        cells = await self._map_cells.get_all_for_read(world)
+        cell_size_m_val = world.map_cell_size_m
         renderer = LocationGridRenderer(
             cells,
             location_uid,

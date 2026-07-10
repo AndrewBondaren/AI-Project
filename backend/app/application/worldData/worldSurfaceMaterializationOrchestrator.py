@@ -13,9 +13,11 @@ from app.application.worldData.climateBatchOrchestrator import ClimateBatchOrche
 from app.application.worldData.generators.terrain.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
+from app.application.worldData.pack.packMaterializationOrchestrator import PackMaterializationOrchestrator
 from app.application.worldData.materializationContext import (
     MaterializationContext,
     MaterializationJobReport,
+    persist_result_from_import,
     resolve_insert_only,
 )
 from app.application.worldData.parallelPolicy import (
@@ -105,10 +107,39 @@ class WorldSurfaceMaterializationOrchestrator:
             ctx.bulk_write_pragmas,
         )
         return MaterializationJobReport(
-            terrain=terrain_res,
-            climate=climate_res,
+            terrain=persist_result_from_import(terrain_res),
+            climate=persist_result_from_import(climate_res) if climate_res else None,
             chunks_total=chunks_total,
             chunks_done=chunks_done,
             terrain_workers=terrain_workers,
             climate_workers=climate_workers,
+        )
+
+    async def materialize_pack_light(
+        self,
+        world_uid: str,
+        world: World,
+        locations: list[NamedLocation],
+        ctx: MaterializationContext,
+        pack_writer,
+        *,
+        max_tiles: int | None = None,
+        nodes: list[ConnectionNode] | None = None,
+        edges: list[ConnectionEdge] | None = None,
+        hydrology_generator: HydrologyGeneratorService | None = None,
+        anchor_x: int | None = None,
+        anchor_y: int | None = None,
+        heading_dx: int | None = None,
+        heading_dy: int | None = None,
+        pack_orchestrator: PackMaterializationOrchestrator | None = None,
+    ) -> MaterializationJobReport:
+        if pack_orchestrator is None:
+            raise ValueError("pack_orchestrator is required — wire from Container.pack_materialization_orchestrator()")
+        return await pack_orchestrator.materialize_light_pack(
+            world_uid, world, locations, pack_writer, ctx,
+            max_tiles=max_tiles,
+            nodes=nodes, edges=edges,
+            hydrology_generator=hydrology_generator,
+            anchor_x=anchor_x, anchor_y=anchor_y,
+            heading_dx=heading_dx, heading_dy=heading_dy,
         )

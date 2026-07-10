@@ -54,6 +54,17 @@ from app.application.worldData.seedService import SeedService
 from app.application.worldData.worldBundleService import WorldBundleService
 from app.application.worldData.playerService import PlayerService
 from app.application.worldData.gameSessionService import GameSessionService
+from app.application.worldData.pack.worldPackPaths import WorldPackPaths
+from app.application.worldData.pack.worldPackReader import WorldPackReader
+from app.application.worldData.pack.worldPackWriter import WorldPackWriter
+from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
+from app.application.worldData.mapCellReadService import MapCellReadService
+from app.application.worldData.pack.packReadServices import PackReadServices, build_pack_read_services
+from app.application.worldData.patchStoreService import PatchStoreService
+from app.application.worldData.pack.packMaterializationOrchestrator import PackMaterializationOrchestrator
+from app.db.models.world import World
+from app.db.repositories.iChunkRefineJobRepository import IChunkRefineJobRepository
+from app.db.repositories.sqlite.chunkRefineJobRepository import SqliteChunkRefineJobRepository
 
 from app.application.engine.dag.dagExecutor import DAGExecutor
 from app.application.engine.llmExecutionEngine import LLMExecutionEngine
@@ -125,6 +136,10 @@ class Container:
         self._state_service: StateService | None = None
         self._seed_service: SeedService | None = None
         self._world_bundle_service: WorldBundleService | None = None
+        self._patch_store_service: PatchStoreService | None = None
+        self._pack_read_services: dict[str, PackReadServices] = {}
+        self._chunk_refine_job_repository = None
+        self._pack_materialization_orchestrator = None
 
         # CLIENTS
         self._qwen_client = None
@@ -437,6 +452,20 @@ class Container:
             self._map_cell_repository = SqliteMapCellRepository(db=self._db)
         return self._map_cell_repository
 
+    def chunk_refine_job_repository(self) -> IChunkRefineJobRepository:
+        if self._chunk_refine_job_repository is None:
+            self._chunk_refine_job_repository = SqliteChunkRefineJobRepository(db=self._db)
+        return self._chunk_refine_job_repository
+
+    def pack_materialization_orchestrator(self) -> PackMaterializationOrchestrator:
+        if self._pack_materialization_orchestrator is None:
+            self._pack_materialization_orchestrator = PackMaterializationOrchestrator(
+                self.terrain_batch_orchestrator(),
+                job_repo=self.chunk_refine_job_repository(),
+                world_service=self.world_service(),
+            )
+        return self._pack_materialization_orchestrator
+
     def connection_node_repository(self) -> IConnectionNodeRepository:
         if self._connection_node_repository is None:
             self._connection_node_repository = SqliteConnectionNodeRepository(db=self._db)
@@ -477,10 +506,50 @@ class Container:
             self._location_service = NamedLocationService(repo=self.location_repository())
         return self._location_service
 
+    def patch_store_service(self) -> PatchStoreService:
+        if self._patch_store_service is None:
+            self._patch_store_service = PatchStoreService(self.map_cell_repository())
+        return self._patch_store_service
+
+    def pack_read_services(self, world_uid: str) -> PackReadServices:
+        services = self._pack_read_services.get(world_uid)
+        if services is None:
+            services = build_pack_read_services(
+                world_uid,
+                self.patch_store_service(),
+                db_path=app_settings.db_path,
+            )
+            self._pack_read_services[world_uid] = services
+        return services
+
+    def map_cell_read_service(self, world_uid: str) -> MapCellReadService:
+        return MapCellReadService(self.pack_read_services(world_uid))
+
+    def map_cell_query_facade(self, world_uid: str) -> MapCellQueryFacade:
+        return self.pack_read_services(world_uid).gameplay
+
+    def pack_debug_read_facade(self, world_uid: str):
+        return self.pack_read_services(world_uid).debug
+
+    def pack_loading_progress_facade(self, world_uid: str):
+        return self.pack_read_services(world_uid).loading
+
     def map_cell_service(self) -> MapCellService:
         if self._map_cell_service is None:
-            self._map_cell_service = MapCellService(repo=self.map_cell_repository())
+            self._map_cell_service = MapCellService(
+                repo=self.map_cell_repository(),
+                read_service_factory=self.map_cell_read_service,
+            )
         return self._map_cell_service
+
+    def world_pack_paths_for(self, world: World) -> WorldPackPaths:
+        return WorldPackPaths.for_world(world, app_settings.db_path)
+
+    def world_pack_writer_for(self, world: World) -> WorldPackWriter:
+        return WorldPackWriter(self.world_pack_paths_for(world))
+
+    def world_pack_reader_for(self, world: World) -> WorldPackReader:
+        return WorldPackReader(self.world_pack_paths_for(world))
 
     def bootstrap_map_cell_writer(self) -> BootstrapMapCellWriter:
         if self._bootstrap_map_cell_writer is None:
@@ -489,6 +558,15 @@ class Container:
                 repo=self.map_cell_repository(),
             )
         return self._bootstrap_map_cell_writer
+
+    def world_pack_paths(self, world_uid: str) -> WorldPackPaths:
+        return WorldPackPaths.from_db_parent(app_settings.db_path, world_uid)
+
+    def world_pack_writer(self, world_uid: str) -> WorldPackWriter:
+        return WorldPackWriter(self.world_pack_paths(world_uid))
+
+    def world_pack_reader(self, world_uid: str) -> WorldPackReader:
+        return WorldPackReader(self.world_pack_paths(world_uid))
 
     def terrain_batch_orchestrator(self) -> TerrainBatchOrchestrator:
         if self._terrain_batch_orchestrator is None:

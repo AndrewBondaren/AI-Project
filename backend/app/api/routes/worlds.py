@@ -1,7 +1,7 @@
 from dataclasses import asdict
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
@@ -21,9 +21,10 @@ async def list_worlds(container=Depends(get_container)) -> list[dict]:
 async def export_world(
     world_uid: str,
     download: bool = False,
+    level: str = Query(default="skeleton", pattern="^(registry|skeleton)$"),
     container=Depends(get_container),
 ) -> JSONResponse:
-    bundle = await container.world_bundle_service().export(world_uid)
+    bundle = await container.world_bundle_service().export(world_uid, level=level)  # type: ignore[arg-type]
     return json_or_download(bundle, download, f"world_{world_uid}.json")
 
 
@@ -68,12 +69,15 @@ async def delete_world(world_uid: str, container=Depends(get_container)) -> None
 async def import_world(
     file: UploadFile | None = File(default=None),
     path: str | None = Form(default=None),
+    level: str = Query(default="skeleton", pattern="^(registry|skeleton)$"),
     container=Depends(get_container),
 ) -> JSONResponse:
     data = await JsonResolver.resolve(file=file, path=path)
     if not isinstance(data, dict):
         raise HTTPException(status_code=422, detail="World bundle JSON must be an object")
-    results, rolled_back = await container.world_bundle_service().import_bundle(data)
+    results, rolled_back = await container.world_bundle_service().import_bundle(
+        data, level=level,  # type: ignore[arg-type]
+    )
     content = {k: v.to_dict() for k, v in results.items()}
     if rolled_back:
         failed_sections = [k for k, v in results.items() if v.failed > 0]
@@ -83,3 +87,40 @@ async def import_world(
     else:
         status_code = 200
     return JSONResponse(status_code=status_code, content=content)
+
+
+@router.post("/worlds/{world_uid}/pack/import")
+async def import_world_pack(
+    world_uid: str,
+    file: UploadFile | None = File(default=None),
+    path: str | None = Form(default=None),
+    container=Depends(get_container),
+) -> JSONResponse:
+    import tempfile
+    from pathlib import Path
+
+    from app.application.worldData.pack.packImportService import PackImportService
+
+    world = await container.world_service().get_by_id(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+
+    if file is not None:
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
+            tmp.write(await file.read())
+            zip_path = Path(tmp.name)
+    elif path:
+        zip_path = Path(path)
+    else:
+        raise HTTPException(status_code=422, detail="Provide file or path")
+
+    paths = container.world_pack_paths_for(world)
+    try:
+        result = PackImportService().import_zip(paths, zip_path)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    finally:
+        if file is not None:
+            zip_path.unlink(missing_ok=True)
+
+    return JSONResponse(status_code=200, content=result)

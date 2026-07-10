@@ -13,13 +13,14 @@ from app.db.models.mapCell import MapCell
 from app.db.repositories.sqlite.mapCellRepository import SqliteMapCellRepository
 
 
-def _map_cells_ddl() -> str:
+def _map_cell_patches_ddl() -> str:
     return """
-    CREATE TABLE IF NOT EXISTS map_cells (
+    CREATE TABLE IF NOT EXISTS map_cell_patches (
         world_uid TEXT NOT NULL,
         x INTEGER NOT NULL,
         y INTEGER NOT NULL,
         z INTEGER NOT NULL,
+        layer_kind TEXT NOT NULL DEFAULT 'structure',
         system_terrain TEXT,
         system_building_element TEXT,
         system_material TEXT,
@@ -47,7 +48,7 @@ class BootstrapMapCellWriterTest(IsolatedAsyncioTestCase):
         self._tmp.close()
         self._db = Database(self._tmp.name)
         await self._db.connect()
-        await self._db.main_conn.executescript(_map_cells_ddl())
+        await self._db.main_conn.executescript(_map_cell_patches_ddl())
         await self._db.main_conn.commit()
         self._repo = SqliteMapCellRepository(self._db)
         self._writer = BootstrapMapCellWriter(self._db, self._repo)
@@ -99,7 +100,7 @@ class BootstrapMapCellWriterTest(IsolatedAsyncioTestCase):
             n = await self._writer.write_climate(climate_cells)
         self.assertEqual(n, 1)
         async with self._db.main_conn.execute(
-            "SELECT temperature_base, rainfall FROM map_cells WHERE world_uid = ? AND x = 0",
+            "SELECT temperature_base, rainfall FROM map_cell_patches WHERE world_uid = ? AND x = 0",
             ["w-writer"],
         ) as cur:
             row = await cur.fetchone()

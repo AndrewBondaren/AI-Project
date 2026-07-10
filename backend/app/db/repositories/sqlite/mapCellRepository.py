@@ -33,7 +33,7 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
         return await self.fetch_all("world_uid = ?", [world_uid])
 
     async def get_location_uids_with_cells(self, world_uid: str) -> set[str]:
-        sql = ("SELECT DISTINCT location_uid FROM map_cells "
+        sql = ("SELECT DISTINCT location_uid FROM map_cell_patches "
                "WHERE world_uid = ? AND location_uid IS NOT NULL")
         conn = self._db.main_conn
         async with conn.execute(sql, [world_uid]) as cur:
@@ -48,7 +48,7 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
             cells,
             "location_uid = excluded.location_uid, "
             "system_terrain = excluded.system_terrain",
-            "map_cells.system_building_element IS NULL",
+            "map_cell_patches.system_building_element IS NULL",
         )
 
     async def insert_bulk_ignore(
@@ -66,7 +66,7 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
         db_conn = self._resolve_conn(conn)
         cols, _ = to_row(cells[0])
         placeholders = ", ".join("?" * len(cols))
-        sql = f"INSERT OR IGNORE INTO map_cells ({', '.join(cols)}) VALUES ({placeholders})"
+        sql = f"INSERT OR IGNORE INTO map_cell_patches ({', '.join(cols)}) VALUES ({placeholders})"
         count = await executemany_cells(db_conn, sql, cells)
         if not _in_transaction.get():
             await db_conn.commit()
@@ -86,7 +86,7 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
         cols, _ = to_row(cells[0])
         placeholders = ", ".join("?" * len(cols))
         sql = (
-            f"INSERT INTO map_cells ({', '.join(cols)}) VALUES ({placeholders}) "
+            f"INSERT INTO map_cell_patches ({', '.join(cols)}) VALUES ({placeholders}) "
             f"ON CONFLICT(world_uid, x, y, z) DO UPDATE SET {update_clause} "
             f"WHERE {where_clause}"
         )
@@ -111,7 +111,7 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
         db_conn = self._resolve_conn(conn)
         cols, _ = to_row(cells[0])
         placeholders = ", ".join("?" * len(cols))
-        sql = f"INSERT INTO map_cells ({', '.join(cols)}) VALUES ({placeholders})"
+        sql = f"INSERT INTO map_cell_patches ({', '.join(cols)}) VALUES ({placeholders})"
         count = await executemany_cells(db_conn, sql, cells)
         if not _in_transaction.get():
             await db_conn.commit()
@@ -130,7 +130,7 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
         return await self._upsert_partial(
             cells,
             "system_terrain = excluded.system_terrain",
-            "map_cells.system_building_element IS NULL",
+            "map_cell_patches.system_building_element IS NULL",
             conn=conn,
         )
 
@@ -146,7 +146,7 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
             "rainfall = excluded.rainfall, "
             "location_uid = excluded.location_uid, "
             "system_terrain = excluded.system_terrain",
-            "map_cells.system_building_element IS NULL",
+            "map_cell_patches.system_building_element IS NULL",
             conn=conn,
         )
 
@@ -154,15 +154,15 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
         return await self._upsert_partial(
             cells,
             "system_material = excluded.system_material",
-            "map_cells.system_building_element IS NULL",
+            "map_cell_patches.system_building_element IS NULL",
         )
 
     async def upsert_cave_carve(self, cells: list[MapCell]) -> int:
         return await self._upsert_partial(
             cells,
             "system_terrain = excluded.system_terrain",
-            "map_cells.system_building_element IS NULL "
-            "AND map_cells.system_material IS NULL",
+            "map_cell_patches.system_building_element IS NULL "
+            "AND map_cell_patches.system_material IS NULL",
         )
 
     async def get_z_slice(
@@ -176,7 +176,7 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
         z_max: int,
     ) -> list[MapCell]:
         sql = (
-            "SELECT * FROM map_cells WHERE world_uid = ? "
+            "SELECT * FROM map_cell_patches WHERE world_uid = ? "
             "AND x BETWEEN ? AND ? AND y BETWEEN ? AND ? "
             "AND z BETWEEN ? AND ?"
         )
@@ -190,28 +190,28 @@ class SqliteMapCellRepository(BaseRepository[MapCell], IMapCellRepository):
         return await self.fetch_all("location_uid = ?", [location_uid])
 
     async def has_world_cells(self, world_uid: str) -> bool:
-        sql = "SELECT 1 FROM map_cells WHERE world_uid = ? LIMIT 1"
+        sql = "SELECT 1 FROM map_cell_patches WHERE world_uid = ? LIMIT 1"
         async with self._db.main_conn.execute(sql, [world_uid]) as cur:
             row = await cur.fetchone()
         return row is not None
 
     async def has_column_cells(self, world_uid: str, x: int, y: int) -> bool:
         sql = (
-            "SELECT 1 FROM map_cells WHERE world_uid = ? AND x = ? AND y = ? LIMIT 1"
+            "SELECT 1 FROM map_cell_patches WHERE world_uid = ? AND x = ? AND y = ? LIMIT 1"
         )
         async with self._db.main_conn.execute(sql, [world_uid, x, y]) as cur:
             row = await cur.fetchone()
         return row is not None
 
     async def has_cells_for_location(self, location_uid: str) -> bool:
-        sql = "SELECT 1 FROM map_cells WHERE location_uid = ? LIMIT 1"
+        sql = "SELECT 1 FROM map_cell_patches WHERE location_uid = ? LIMIT 1"
         async with self._db.main_conn.execute(sql, [location_uid]) as cur:
             row = await cur.fetchone()
         return row is not None
 
     async def delete_by_world(self, world_uid: str) -> None:
         await self._db.main_conn.execute(
-            "DELETE FROM map_cells WHERE world_uid = ?", [world_uid]
+            "DELETE FROM map_cell_patches WHERE world_uid = ?", [world_uid]
         )
         if not _in_transaction.get():
             await self._db.main_conn.commit()

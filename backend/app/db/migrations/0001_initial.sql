@@ -120,6 +120,12 @@ CREATE TABLE IF NOT EXISTS worlds (
     registry_migrations         TEXT,
     trait_change_log_threshold  REAL NOT NULL DEFAULT 0.2,
 
+    -- world pack (TR-PACK)
+    terrain_pack_path           TEXT,
+    terrain_pack_hash           TEXT,
+    terrain_pack_version        TEXT,
+    world_map_cells_per_tile    INTEGER,
+
     created_at                  TEXT NOT NULL
 );
 
@@ -666,13 +672,14 @@ CREATE TABLE IF NOT EXISTS named_locations (
 );
 
 -- ============================================================
--- map_cells
+-- map_cell_patches (gameplay deltas over World Pack)
 -- ============================================================
-CREATE TABLE IF NOT EXISTS map_cells (
+CREATE TABLE IF NOT EXISTS map_cell_patches (
     world_uid                TEXT NOT NULL,
     x                       INTEGER NOT NULL,
     y                       INTEGER NOT NULL,
     z                       INTEGER NOT NULL,
+    layer_kind              TEXT NOT NULL DEFAULT 'structure',
     system_terrain                TEXT,
     system_building_element       TEXT,
     system_material               TEXT,
@@ -694,7 +701,25 @@ CREATE TABLE IF NOT EXISTS map_cells (
 );
 
 -- ============================================================
--- cell_states (состояния ячеек map_cells)
+-- chunk_refine_jobs (L2 background refine queue state)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS chunk_refine_jobs (
+    job_uid                 TEXT PRIMARY KEY,
+    world_uid               TEXT NOT NULL,
+    gx                      INTEGER NOT NULL,
+    gy                      INTEGER NOT NULL,
+    cx                      INTEGER NOT NULL,
+    cy                      INTEGER NOT NULL,
+    status                  TEXT NOT NULL DEFAULT 'pending',
+    priority                REAL NOT NULL DEFAULT 0,
+    content_hash            TEXT,
+    created_at              TEXT NOT NULL,
+    updated_at              TEXT NOT NULL,
+    FOREIGN KEY (world_uid) REFERENCES worlds(world_uid)
+);
+
+-- ============================================================
+-- cell_states (состояния ячеек map_cell_patches)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS cell_states (
     id            TEXT PRIMARY KEY,
@@ -1187,14 +1212,15 @@ CREATE INDEX IF NOT EXISTS idx_named_locations_parent   ON named_locations (pare
 CREATE INDEX IF NOT EXISTS idx_named_locations_type     ON named_locations (world_uid, system_location_type);
 CREATE INDEX IF NOT EXISTS idx_named_locations_public   ON named_locations (world_uid, is_public);
 
-CREATE INDEX IF NOT EXISTS idx_map_cells_location_z     ON map_cells (world_uid, location_uid, z);
+CREATE INDEX IF NOT EXISTS idx_map_cell_patches_location_z ON map_cell_patches (world_uid, location_uid, z);
 
 CREATE INDEX IF NOT EXISTS idx_location_levels_location ON location_levels (location_uid);
 CREATE INDEX IF NOT EXISTS idx_location_passages_from   ON location_passages (from_level_uid);
 CREATE INDEX IF NOT EXISTS idx_location_passages_to     ON location_passages (to_level_uid);
 
-CREATE INDEX IF NOT EXISTS idx_map_cells_location       ON map_cells (world_uid, location_uid, z);
-CREATE INDEX IF NOT EXISTS idx_map_cells_xy             ON map_cells (world_uid, x, y);
+CREATE INDEX IF NOT EXISTS idx_map_cell_patches_location ON map_cell_patches (world_uid, location_uid, z);
+CREATE INDEX IF NOT EXISTS idx_map_cell_patches_xy       ON map_cell_patches (world_uid, x, y);
+CREATE INDEX IF NOT EXISTS idx_chunk_refine_jobs_world   ON chunk_refine_jobs (world_uid, status);
 
 CREATE INDEX IF NOT EXISTS idx_cell_states_cell         ON cell_states (world_uid, x, y, z);
 CREATE INDEX IF NOT EXISTS idx_cell_states_active       ON cell_states (world_uid, x, y, z) WHERE ended_at IS NULL;
