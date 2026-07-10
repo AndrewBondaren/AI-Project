@@ -152,9 +152,9 @@ class WorldService:
                 detail="terrain_chunk_columns must be an integer >= 1")
 
         depth = world.map_subsurface_depth
-        if not isinstance(depth, int) or isinstance(depth, bool) or depth < 10:
+        if not isinstance(depth, int) or isinstance(depth, bool) or depth < 0:
             raise HTTPException(status_code=422,
-                detail="map_subsurface_depth must be an integer >= 10")
+                detail="map_subsurface_depth must be an integer >= 0")
 
 
 def _normalize_world_data(data: dict, *, partial: bool = False) -> dict:

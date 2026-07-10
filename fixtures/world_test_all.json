@@ -954,7 +954,7 @@
         }
       ]
     },
-    "map_subsurface_depth": 20,
+    "map_subsurface_depth": 0,
     "grid_bbox_padding": 2,
     "terrain_chunk_columns": 32,
     "z_min": -500,

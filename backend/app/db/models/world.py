@@ -103,7 +103,7 @@ class World:
     climate_parallel_workers:       int | None = None   # cap CL-PAR pool; NULL = free_cores only
     z_max:                          int | None = None
     z_min:                          int | None = None
-    map_subsurface_depth:           int = 20            # N_base skeleton band; min 10
+    map_subsurface_depth:           int = 0             # N_base under flat ground; 0 = surface-only
     grid_bbox_padding:              int = 2             # anchor bbox ± cells (v1 extent)
     terrain_chunk_columns:          int = 32            # column-fill persist chunk side
     terrain_parallel_workers:       int | None = None   # cap TR-PAR pool; NULL = free_cores only

@@ -16,7 +16,7 @@ from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
 
 CHUNK_COLUMNS_MIN = 1
-SUBSURFACE_DEPTH_MIN = 10
+SUBSURFACE_DEPTH_MIN = 0
 
 
 class WorldTerrainScalars(BaseModel):
@@ -31,7 +31,7 @@ class WorldTerrainScalars(BaseModel):
     )
     terrain_parallel_workers: DefaultOnWire[int | None] = None
     map_subsurface_depth: DefaultOnWire[int] = constrained_field(
-        default=20, greater_equals=SUBSURFACE_DEPTH_MIN,
+        default=0, greater_equals=SUBSURFACE_DEPTH_MIN,
     )
     z_min: DefaultOnWire[int | None] = None
     z_max: DefaultOnWire[int | None] = None

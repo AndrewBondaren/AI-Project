@@ -44,7 +44,7 @@
     "wounds_enabled": false,
     "map_cell_size_m": 3000,
     "default_passage_height": 2,
-    "map_subsurface_depth": 20,
+    "map_subsurface_depth": 0,
     "grid_bbox_padding": 2,
     "terrain_chunk_columns": 32,
     "z_min": -500,

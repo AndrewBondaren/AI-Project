@@ -11,7 +11,10 @@ def run_gap_analysis(
     world: World,
     heightmap: SurfaceHeightmap,
 ) -> dict[tuple[int, int], int]:
-    """Compute N_eff per column: max(N_base, Δ_cliff)."""
+    """Compute N_eff per column: max(N_base, Δ_cliff).
+
+    N_base=0 → flat columns get one surface cell; cliffs extend downward by Δ_cliff.
+    """
     base   = n_base(world)
     n_eff: dict[tuple[int, int], int] = {}
 

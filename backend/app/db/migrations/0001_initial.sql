@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS worlds (
     climate_parallel_workers    INTEGER,
     z_max                       INTEGER,
     z_min                       INTEGER,
-    map_subsurface_depth        INTEGER NOT NULL DEFAULT 20,
+    map_subsurface_depth        INTEGER NOT NULL DEFAULT 0,
     grid_bbox_padding           INTEGER NOT NULL DEFAULT 2,
     terrain_chunk_columns       INTEGER NOT NULL DEFAULT 32,
     terrain_parallel_workers    INTEGER,

@@ -5,11 +5,15 @@ from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars
 from app.db.models.world import World
 
 DEFAULT_GRID_BBOX_PADDING = 2
-MIN_MAP_SUBSURFACE_DEPTH = 10
+MIN_MAP_SUBSURFACE_DEPTH = 0
 
 _terrain_defaults = WorldTerrainScalars.canonical_defaults()
 DEFAULT_TERRAIN_CHUNK_COLUMNS = _terrain_defaults.terrain_chunk_columns or 32
-DEFAULT_MAP_SUBSURFACE_DEPTH = _terrain_defaults.map_subsurface_depth or 20
+DEFAULT_MAP_SUBSURFACE_DEPTH = (
+    _terrain_defaults.map_subsurface_depth
+    if _terrain_defaults.map_subsurface_depth is not None
+    else 0
+)
 DEFAULT_Z_MIN = WorldTerrainScalars.resolved_z_min(None)
 DEFAULT_Z_MAX = WorldTerrainScalars.resolved_z_max(None)
 SERIAL_TERRAIN_CELL_THRESHOLD = 50_000
@@ -32,7 +36,7 @@ def terrain_chunk_columns(world: World) -> int:
 
 
 def n_base(world: World) -> int:
-    """Minimum subsurface band depth N_base before cliff compensation."""
+    """Skeleton subsurface band under flat ground (0 = surface-only; cliffs use N_eff)."""
     depth = terrain_scalars(world).map_subsurface_depth
     if depth is None:
         depth = DEFAULT_MAP_SUBSURFACE_DEPTH

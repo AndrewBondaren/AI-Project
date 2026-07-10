@@ -75,11 +75,12 @@ PK `(world_uid, x, y, z)` — **вертикальная колонка** на `
 
 ```
 surface_z = f(climate elevation bias, noise, world z clamp)   ← exposed top cell
-player/climate band: z = surface_z−1 … surface_z−N_base
+skeleton column: z = surface_z only on flat ground; cliffs extend down by Δ_cliff (gap compensation)
+player/climate band (lazy scene load): отдельный контракт — см. § TR-LAZY-LOAD / `scene_z_below`; **не** дублирует skeleton N_base
 magma band (skeleton): локальная глубина до magma horizon — **не** `z_min`; см. § Planet topology
 ```
 
-**`N_base` (~20)** — **минимум** для игрока (поверхность + shallow underground) и **climate/volume** (permafrost overlay, shallow temperature field). **Не** полная глубина геологии.
+**`N_base` (default 0)** — глубина **skeleton band** при `generate-surface`: на ровной местности одна ячейка на колонку; на обрывах `N_eff = max(N_base, Δ_cliff)`. Shallow underground для игрока/climate — **lazy load**, не полный pre-gen subsurface.
 
 **Руды, пещеры, шахты** — **не** заполняются этим band целиком:
 
@@ -254,7 +255,7 @@ flowchart TB
 **Правило компенсации (утверждено):**
 
 ```
-N_base = world.map_subsurface_depth ?? 20
+N_base = world.map_subsurface_depth ?? 0   # flat ground: one surface cell per column
 
 # на каждой (gx, gy) после pass 1:
 Δ_cliff = max(0, surface_z(gx,gy) - min(surface_z соседей))   # 4- или 8-neighborhood
