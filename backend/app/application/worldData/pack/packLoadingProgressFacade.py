@@ -19,7 +19,7 @@ class PackLoadingProgressFacade:
         if not self._ctx.has_pack_for(world):
             return LoadingProgressSnapshot(world_uid=world.world_uid)
         manifest = self._ctx.reader_for(world).manifest
-        l0_ready = sum(1 for t in manifest.tiles if t.l0_path)
+        l0_ready = sum(1 for t in manifest.tiles if t.world_map_path)
         l0_total = len(manifest.tiles) if manifest.tiles else l0_ready
         loc_l2 = [loc.location_uid for loc in manifest.locations_l2 if loc.terrain_path]
         chunks_ready = manifest.l2_chunks_baked

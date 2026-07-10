@@ -14,8 +14,8 @@ class ChunkRefineJob:
     gy:             int
     cx:             int
     cy:             int
+    created_at:     str
+    updated_at:     str
     status:         str = "pending"
     priority:       float = 0.0
     content_hash:   str | None = None
-    created_at:     str
-    updated_at:     str

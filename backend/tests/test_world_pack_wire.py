@@ -36,7 +36,15 @@ class TestWorldPackWire(unittest.TestCase):
         manifest = WorldPackManifest(
             world_uid="w-test",
             world_map_cells_per_tile=32,
-            tiles=[{"gx": 0, "gy": 0, "l2_status": "partial", "chunks": [{"cx": 0, "cy": 0}]}],
+            tiles=[
+                {
+                    "gx": 0,
+                    "gy": 0,
+                    "world_map_path": "tiles/r.0.0.world_map.zst",
+                    "wilderness_refine_status": "partial",
+                    "chunks": [{"cx": 0, "cy": 0}],
+                },
+            ],
             locations_l2=[
                 {
                     "location_uid": "loc-1",

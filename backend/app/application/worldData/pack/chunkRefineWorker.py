@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
-import logging
-
 from app.application.worldData.materializationContext import MaterializationContext
 from app.application.worldData.pack.chunkRefineQueue import ChunkRefineQueue
 from app.application.worldData.pack.l2RefineOrchestrator import L2RefineOrchestrator
+from app.application.worldData.pack.packBakeLog import (
+    log_pack_drain_queue_done,
+    log_pack_drain_queue_start,
+    log_pack_worker_chunk,
+)
 from app.application.worldData.pack.worldPackWriter import WorldPackWriter
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.db.repositories.iChunkRefineJobRepository import IChunkRefineJobRepository
 from app.db.repositories.sqlite.chunkRefineJobRepository import new_chunk_refine_job
-
-logger = logging.getLogger(__name__)
 
 
 class ChunkRefineWorker:
@@ -56,6 +57,7 @@ class ChunkRefineWorker:
         *,
         max_jobs: int = 0,
     ) -> int:
+        drain_t0 = log_pack_drain_queue_start(world_uid, max_jobs=max_jobs, pending=len(queue))
         processed = 0
         while True:
             if max_jobs > 0 and processed >= max_jobs:
@@ -69,10 +71,16 @@ class ChunkRefineWorker:
                 gx, gy, cx, cy,
             )
             processed += 1
-            logger.info(
-                "chunk_refine_worker | world=%s tile=%d,%d chunk=%d,%d cells=%d",
-                world_uid, gx, gy, cx, cy, cells,
+            log_pack_worker_chunk(
+                world_uid,
+                activity="drain_queue_chunk",
+                tile_gx=gx,
+                tile_gy=gy,
+                chunk_cx=cx,
+                chunk_cy=cy,
+                cells=cells,
             )
+        log_pack_drain_queue_done(world_uid, processed=processed, started_at=drain_t0)
         return processed
 
     async def drain_persisted(
@@ -99,8 +107,14 @@ class ChunkRefineWorker:
             )
             await self._jobs.mark_complete(job.job_uid)
             processed += 1
-            logger.info(
-                "chunk_refine_persisted | job=%s world=%s cells=%d",
-                job.job_uid, world_uid, cells,
+            log_pack_worker_chunk(
+                world_uid,
+                activity="drain_persisted_job",
+                tile_gx=job.gx,
+                tile_gy=job.gy,
+                chunk_cx=job.cx,
+                chunk_cy=job.cy,
+                cells=cells,
+                job=job.job_uid,
             )
         return processed

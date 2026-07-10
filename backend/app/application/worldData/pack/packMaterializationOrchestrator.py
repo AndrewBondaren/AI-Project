@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-
 from app.application.worldData.persistResult import PersistResult
 from app.application.worldData.generators.terrain.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
@@ -25,6 +23,7 @@ from app.application.worldData.pack.pathHeading import resolve_path_heading
 from app.application.worldData.pack.worldPackWriter import WorldPackWriter
 from app.application.worldData.parallelPolicy import resolve_terrain_workers
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
+from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.application.worldData.worldService import WorldService
 from app.core.appSettings import app_settings
@@ -32,11 +31,13 @@ from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
-from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
-
-from app.db.repositories.iChunkRefineJobRepository import IChunkRefineJobRepository
-
-logger = logging.getLogger(__name__)
+from app.application.worldData.pack.packBakeLog import (
+    log_pack_bake_done,
+    log_pack_bake_start,
+    log_pack_drain_persisted_start,
+    log_pack_jobs_persisted,
+    log_pack_queue_enqueue,
+)
 
 
 class PackMaterializationOrchestrator:
@@ -87,19 +88,30 @@ class PackMaterializationOrchestrator:
         refine_scene: bool = True,
     ) -> MaterializationJobReport:
         tile_cap = max_tiles if max_tiles is not None else self._defaults.max_tiles_light
+        tiles = self._terrain.plan_bootstrap_tiles(
+            world, locations, nodes=nodes, edges=edges,
+            hydrology_generator=hydrology_generator, max_tiles=tile_cap,
+        )
+        bake_t0 = log_pack_bake_start(
+            world_uid,
+            tile_cap=tile_cap,
+            tiles_planned=len(tiles),
+            refine_scene=refine_scene,
+            locations=len(locations),
+        )
         surface_ctx = prepare_surface_terrain_context(
             world, locations, nodes=nodes, edges=edges,
             hydrology_generator=hydrology_generator,
         )
         if surface_ctx is not None and self._jobs is not None:
+            log_pack_drain_persisted_start(
+                world_uid,
+                max_jobs=max(self._defaults.background_drain_per_request, 1),
+            )
             await self._worker.drain_persisted(
                 world_uid, world, locations, writer, mat_ctx, surface_ctx,
                 max_jobs=max(self._defaults.background_drain_per_request, 1),
             )
-        tiles = self._terrain.plan_bootstrap_tiles(
-            world, locations, nodes=nodes, edges=edges,
-            hydrology_generator=hydrology_generator, max_tiles=tile_cap,
-        )
         l0_cells = self._l0.bake_tiles(
             world, locations, writer, tiles,
             nodes=nodes, edges=edges, hydrology_generator=hydrology_generator,
@@ -147,9 +159,11 @@ class PackMaterializationOrchestrator:
                     depth_tiles=app_settings.path_ahead_depth,
                 )
             for gx, gy, cx, cy, priority in self._queue.pending_items():
+                log_pack_queue_enqueue(world_uid, gx, gy, cx, cy, priority=priority)
                 await self._worker.persist_enqueue(
                     world_uid, gx, gy, cx, cy, priority=priority,
                 )
+            log_pack_jobs_persisted(world_uid, count=len(self._queue))
             if self._defaults.background_drain_per_request > 0:
                 await self._worker.drain_queue(
                     world_uid, world, locations, writer, mat_ctx, surface_ctx,
@@ -160,9 +174,13 @@ class PackMaterializationOrchestrator:
             await finalize_pack_on_world(self._world_service, world, writer)
 
         workers = resolve_terrain_workers(mat_ctx, world)
-        logger.info(
-            "materialize_light_pack | world=%s l0_cells=%s chunks=%d/%d queue=%d",
-            world_uid, l0_cells, chunks_done, chunks_total, len(self._queue),
+        log_pack_bake_done(
+            world_uid,
+            l0_cells=l0_cells,
+            chunks_done=chunks_done,
+            chunks_total=chunks_total,
+            queue_depth=len(self._queue),
+            started_at=bake_t0,
         )
         return MaterializationJobReport(
             terrain=terrain_result,

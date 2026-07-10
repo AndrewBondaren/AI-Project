@@ -663,7 +663,7 @@ flowchart TB
 | 1 | `refine_chunk(L0, rect)` → cells |
 | 2 | encode → `r.{gx}.{gy}.c.{cx}.{cy}.zst.tmp` |
 | 3 | fsync; rename |
-| 4 | append `manifest.tiles[].chunks[]`; если все chunks tile — `l2_status=complete` |
+| 4 | append `manifest.tiles[].chunks[]`; если все chunks tile — `wilderness_refine_status=complete` |
 | 5 | delete `chunk_refine_jobs` row |
 
 **Crash mid-chunk:** purge `.tmp`; chunk не в manifest → **redo chunk** (WP-7, тот же hash). **Не** терять уже записанные соседние chunks.
@@ -745,7 +745,7 @@ flowchart LR
 | API | Назначение |
 |---|---|
 | `get_chunk_materialize_state(gx,gy,cx,cy)` | `absent` \| `queued` \| `active` \| `ready` |
-| `get_tile_l2_status(gx,gy)` | `absent` \| `partial` \| `complete` + `chunks_done/total` |
+| `get_tile_wilderness_refine_status(gx,gy)` | `absent` \| `partial` \| `complete` + `chunks_done/total` |
 | `get_entry_anchor(gx,gy)` | последний anchor tile |
 | `tile_refine_status` | aggregate jobs + corridor + partial progress |
 
@@ -877,9 +877,42 @@ effective_climate(x,y) =
 | `map_cell_size_m` | из `worlds` |
 | `world_map_cells_per_tile` | resolved при bake, см. § L0 |
 | `cell_size_m`, `map_subsurface_depth` | из `WorldTerrainScalars` / `worlds` |
-| `locations_l2[]` | `{location_uid, territory_volume, terrain?, climate_tier, z_band, bytes}` |
-| `tiles[]` | `{gx, gy, l2_status, chunks[], climate_tier, ...}` |
+| `locations_l2[]` | per-location L2 terrain — см. § `LocationL2Entry` |
+| `tiles[]` | per macro-tile — см. § `TileManifestEntry` |
 | `l0_cells`, `l2_tiles_total`, `l2_chunks_baked` | progress |
+
+#### `TileManifestEntry` (`tiles[]`)
+
+Один macro-tile `(gx, gy)`. Поля именуются по **LOD-слою**, не generic `storage_path` / `content_hash`.
+
+| Поле | Тип | Смысл |
+|---|---|---|
+| `gx`, `gy` | int | координаты macro-tile |
+| `world_map_path` | str? | относительный путь к L0 `tiles/r.{gx}.{gy}.world_map.zst` |
+| `world_map_hash` | str? | SHA-256 zstd-blob L0 world map |
+| `wilderness_refine_status` | enum | `absent` \| `partial` \| `complete` — **wilderness L2 chunks** на tile (не location terrain) |
+| `climate_tier` | str | `A` coarse на tile; `B` когда fine climate готов |
+| `chunks[]` | `ChunkRef[]` | wilderness L2 chunks `tiles/r.{gx}.{gy}.c.{cx}.{cy}.zst` |
+
+#### `LocationL2Entry` (`locations_l2[]`)
+
+Fine terrain **одной** `named_location` (file-per-location, WP-19).
+
+| Поле | Тип | Смысл |
+|---|---|---|
+| `location_uid` | str | uid локации |
+| `territory_volume` | AABB | 3D bbox в meter grid (WP-21) |
+| `terrain_path` | str? | `locations/l.{uid}.terrain.zst` |
+| `terrain_hash` | str? | SHA-256 location terrain blob |
+| `climate_tier`, `z_band`, `bytes` | | climate LOD / z-band / размер blob |
+
+#### `ChunkRef` (`tiles[].chunks[]`)
+
+| Поле | Тип | Смысл |
+|---|---|---|
+| `cx`, `cy` | int | fine chunk внутри macro-tile |
+| `refine_role` | enum? | `scene` \| `background` \| `path` |
+| `content_hash`, `bytes` | | hash и размер wilderness chunk blob |
 
 ### L2 terrain column (внутри zstd)
 
@@ -945,7 +978,7 @@ sequenceDiagram
 | `ensure_scene_volume` | **blocking** только chunks scene volume вокруг anchor |
 | `set_entry_anchor` | spawn / tile_cross / location_entry |
 | `schedule_chunk_refine` | фон: кольца от anchor + path corridor |
-| `get_tile_l2_status` | `absent` \| `partial` \| `complete` |
+| `get_tile_wilderness_refine_status` | `absent` \| `partial` \| `complete` |
 | `tile_refine_status` | jobs + corridor + partial progress |
 
 ### Merge backlog (WP-MERGE)
@@ -1090,7 +1123,7 @@ sequenceDiagram
 | `gx`, `gy` | int | macro-tile |
 | `chunks_total` | int | fine chunks в tile |
 | `chunks_ready` | int | chunks в pack |
-| `l2_status` | enum | `absent` \| `partial` \| `complete` |
+| `wilderness_refine_status` | enum | `absent` \| `partial` \| `complete` — wilderness L2 chunks на tile |
 | `climate_tier` | enum | `coarse_only` (tier A) \| `fine_ready` (tier B on disk) |
 | `entry_anchor` | `{x,y}?` | последняя точка входа |
 
@@ -1360,6 +1393,40 @@ flowchart TB
 | WP-A13 | overlap: 3D territory mask; merge WP-20; multi-location per tile по z |
 | WP-A14 | stale L0: wilderness regen от границы location наружу; patch/location preserved |
 
+### WP-A1 — фактический smoke (2026-07-10)
+
+**Контекст:** `initialize_world.py --fixture world_terrain_test.json` → `POST /map/pack/bake?mode=light&max_tiles=16` для `world-terrain-test-001`. Логи: `backend/logs/app.log`, `request_id=8682e4c8` (терминал `npm run dev`).
+
+| Метрика | Значение | WP-A1 |
+|---|---|---|
+| HTTP `request_end` | **34.9 s** | ≤ 2 min — **PASS** |
+| `pack bake done elapsed_ms` | **33.8 s** | — |
+| L0 tiles | 16 | cap=16 |
+| L2 chunks (blocking) | 1 (scene, 1883 cells) | — |
+| Background queue | **8836** jobs → SQLite | см. backlog ниже |
+
+**Разбивка по фазам** (wall-clock по timestamp логов, UTC):
+
+| Фаза | Длительность | Примечание |
+|---|---|---|
+| Планирование тайлов + hydrology (до `pack bake start`) | ~1.1 s | bootstrap tile set |
+| `drain_persisted` (resume) | **~12.5 s** | 1 persisted job с прошлого bake |
+| Background L2 chunk (generate+persist) | ~0.17 s | role=background, 1883 cells |
+| Surface context + hydrology | ~1.1 s | `pack surface context elapsed_ms=1083.9` |
+| L0 bake (16 tiles, 16384 cells) | **~0.1 s** | `pack l0 bake done elapsed_ms=100.3` |
+| L2 scene phase — подготовка | **~12.4 s** | от `pack l2 phase start` до `chunk generate start` |
+| L2 scene chunk (generate+persist) | ~0.16 s | `pack l2 chunk done elapsed_ms=161.7` |
+| Queue persist (`tile_background`) | **~5.5 s** | `pack jobs persisted count=8836` |
+
+**Выводы:**
+
+1. **Сам terrain (L0 + blocking L2 chunk) — &lt; 0.5 s**; light bake укладывается в WP-A1 с большим запасом.
+2. **Основное время** — не генерация cells, а orchestration overhead: resume persisted job (~12.5 s), подготовка scene phase (~12.4 s), bulk INSERT 8836 refine jobs (~5.5 s).
+3. **Backlog (perf):** `schedule_tile_background` для macro-tile `(12,12)` планирует **весь** tile (~94×94 chunks → 8836 jobs), а не corridor/scene volume. Для light bake это избыточно; фоновый worker (WP-A5, ≤1) отработает позже, но **blocking persist очереди** удлиняет HTTP bake.
+4. **Повторный smoke** на чистой БД (без `drain_persisted`) ожидаемо короче на ~12.5 s.
+
+**Артефакты:** `db/worlds/world-terrain-test-001/pack/manifest.json`, 16× `tiles/r.*.*.world_map.zst`, 1× `tiles/r.12.12.c.0.0.zst`.
+
 ---
 
 ## Связанные документы
@@ -1389,3 +1456,5 @@ flowchart TB
 | 2026-07-10 | **WP-FIX:** FIX-01…30 ✅, FIX-32/33 ✅; merge v2 field-wise; L1–L7 ✅ |
 | 2026-07-10 | **WP-MERGE v2:** статус слоёв; MERGE-1/4/7 ✅; WP-FIX-DEBT-1…9 |
 | 2026-07-10 | **WP-FIX-REVIEW:** REVIEW-5/6 — `PackDebugReadFacade`, `PackLoadingProgressFacade`, `MapCellReadService` |
+| 2026-07-10 | § **WP-A1 — фактический smoke:** light bake `world_terrain_test` **34.9 s** HTTP; разбивка фаз + backlog queue=8836 |
+| 2026-07-10 | Wire rename: `manifest.tiles[]` — `world_map_path`, `world_map_hash`, `wilderness_refine_status`; `locations_l2[]` — `terrain_hash` |

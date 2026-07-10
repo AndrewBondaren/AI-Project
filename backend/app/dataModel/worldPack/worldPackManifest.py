@@ -10,7 +10,7 @@ from app.dataModel.worldPack.territoryVolume import TerritoryVolume
 
 PACK_WIRE_VERSION = "1.0.0"
 BakeMode = Literal["light", "full"]
-L2TileStatus = Literal["absent", "partial", "complete"]
+WildernessRefineStatus = Literal["absent", "partial", "complete"]
 ChunkRefineRole = Literal["scene", "background", "path"]
 
 
@@ -29,9 +29,9 @@ class TileManifestEntry(BaseModel):
 
     gx: int
     gy: int
-    l0_path: str | None = None
-    l0_hash: str | None = None
-    l2_status: L2TileStatus = "absent"
+    world_map_path: str | None = None
+    world_map_hash: str | None = None
+    wilderness_refine_status: WildernessRefineStatus = "absent"
     climate_tier: str = "A"
     chunks: list[ChunkRef] = Field(default_factory=list)
 
@@ -42,10 +42,10 @@ class LocationL2Entry(BaseModel):
     location_uid: str
     territory_volume: TerritoryVolume
     terrain_path: str | None = None
+    terrain_hash: str | None = None
     climate_tier: str = "A"
     z_band: str | None = None
     bytes: int | None = None
-    content_hash: str | None = None
 
 
 class WorldPackManifest(BaseModel):

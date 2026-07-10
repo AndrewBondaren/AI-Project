@@ -30,7 +30,7 @@ class TestWorldPackWriterReader(unittest.TestCase):
         tile = manifest.tile_entry(0, 0)
         self.assertIsNotNone(tile)
         assert tile is not None
-        self.assertEqual(tile.l0_hash, h1)
+        self.assertEqual(tile.world_map_hash, h1)
 
     def test_l2_chunk_manifest_commit(self):
         chunk = L2ChunkWire(

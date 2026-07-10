@@ -70,6 +70,59 @@ async def get_loading_progress(
     return facade.pack.loading.get_loading_progress(world).to_dict()
 
 
+@router.get("/worlds/{world_uid}/map/pack/fine-terrain-read")
+async def pack_fine_terrain_read(
+    world_uid: str,
+    gx: int | None = Query(default=None),
+    gy: int | None = Query(default=None),
+    cx: int | None = Query(default=None),
+    cy: int | None = Query(default=None),
+    location_uid: str | None = Query(default=None),
+    x: int | None = Query(default=None),
+    y: int | None = Query(default=None),
+    z: int | None = Query(default=None),
+    sample_columns: int = Query(default=3, ge=0, le=32),
+    container=Depends(get_container),
+) -> JSONResponse:
+    """Debug — inspect fine terrain read from pack (manifest + blob + merge).
+
+    Modes (mutually exclusive):
+    - ``location_uid`` — location terrain ``locations/l.{uid}.terrain.zst``
+    - ``gx,gy,cx,cy`` — wilderness chunk ``tiles/r.{gx}.{gy}.c.{cx}.{cy}.zst``
+    - ``gx,gy`` — tile manifest entry + chunk index
+    - ``x,y,z`` — gameplay merge at world meter cell (layer priority WP-20)
+    """
+    world_svc = container.world_service()
+    world = await world_svc.get_by_id(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+
+    read = container.map_cell_read_service(world_uid)
+    fine = read.pack.fine_terrain_read
+
+    if location_uid:
+        payload = fine.read_location_terrain(world, location_uid, sample_columns=sample_columns)
+    elif gx is not None and gy is not None and cx is not None and cy is not None:
+        payload = fine.read_wilderness_chunk(
+            world, gx, gy, cx, cy, sample_columns=sample_columns,
+        )
+    elif gx is not None and gy is not None:
+        payload = fine.read_tile(world, gx, gy)
+    elif x is not None and y is not None and z is not None:
+        payload = await fine.read_merged_cell(world, x, y, z)
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Specify one read mode: location_uid; or gx,gy,cx,cy; or gx,gy; or x,y,z"
+            ),
+        )
+
+    if not payload.get("ok", True):
+        raise HTTPException(status_code=404, detail=payload.get("error", "read failed"))
+    return JSONResponse(content=payload)
+
+
 @router.get("/worlds/{world_uid}/map")
 async def list_map_cells(
     world_uid: str,

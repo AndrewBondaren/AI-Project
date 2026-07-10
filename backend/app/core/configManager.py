@@ -97,7 +97,7 @@ class ConfigManager:
         _copy(result, world_loading, "path_ahead_depth")
 
         if "logger_levels" in data:
-            result["logger_levels"] = dict(data["logger_levels"])
+            result["logger_levels"] = _flatten_logger_levels(dict(data["logger_levels"]))
 
         return result
 
@@ -145,3 +145,19 @@ class ConfigManager:
 def _copy(dst: dict, src: dict, src_key: str, dst_key: str | None = None) -> None:
     if src_key in src:
         dst[dst_key or src_key] = src[src_key]
+
+
+def _flatten_logger_levels(
+    levels: dict,
+    *,
+    prefix: str = "",
+) -> dict[str, str]:
+    """TOML may nest dotted keys — normalize to logger name -> level string."""
+    flat: dict[str, str] = {}
+    for key, value in levels.items():
+        name = f"{prefix}.{key}" if prefix else str(key)
+        if isinstance(value, dict):
+            flat.update(_flatten_logger_levels(value, prefix=name))
+        else:
+            flat[name] = str(value)
+    return flat

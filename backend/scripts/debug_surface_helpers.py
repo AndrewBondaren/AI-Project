@@ -136,9 +136,14 @@ def api_materialize_stack(
     free_cores: int | None = None,
     parallel_workers: int | None = None,
     include_climate: bool = True,
+    target: Literal["legacy", "pack"] = "legacy",
 ) -> dict:
     """S→CL via ``POST materialize-stack`` (shared ``MaterializationContext``)."""
-    params: dict[str, str | int | bool] = {"mode": mode, "include_climate": include_climate}
+    params: dict[str, str | int | bool] = {
+        "mode": mode,
+        "include_climate": include_climate,
+        "target": target,
+    }
     if max_tiles > 0:
         params["max_tiles"] = max_tiles
     if free_cores is not None:
@@ -148,8 +153,47 @@ def api_materialize_stack(
     return _post_json(
         client,
         f"/worlds/{world_uid}/map/materialize-stack",
-        f"POST materialize-stack {world_uid} mode={mode}",
+        f"POST materialize-stack {world_uid} mode={mode} target={target}",
         params=params,
+    )
+
+
+def api_pack_bake(
+    client: httpx.Client,
+    world_uid: str,
+    *,
+    mode: Literal["light", "tile", "full"] = "light",
+    max_tiles: int = 16,
+    anchor_x: int | None = None,
+    anchor_y: int | None = None,
+    heading_dx: int | None = None,
+    heading_dy: int | None = None,
+) -> dict:
+    """World Pack light bake — ``POST …/map/pack/bake`` (target path after WP cutover)."""
+    params: dict[str, str | int] = {"mode": mode}
+    if max_tiles > 0:
+        params["max_tiles"] = max_tiles
+    if anchor_x is not None:
+        params["anchor_x"] = anchor_x
+    if anchor_y is not None:
+        params["anchor_y"] = anchor_y
+    if heading_dx is not None:
+        params["heading_dx"] = heading_dx
+    if heading_dy is not None:
+        params["heading_dy"] = heading_dy
+    return _post_json(
+        client,
+        f"/worlds/{world_uid}/map/pack/bake",
+        f"POST pack/bake {world_uid} mode={mode}",
+        params=params,
+    )
+
+
+def api_loading_progress(client: httpx.Client, world_uid: str) -> dict:
+    return _get_json(
+        client,
+        f"/worlds/{world_uid}/map/loading-progress",
+        f"GET loading-progress {world_uid}",
     )
 
 
@@ -201,6 +245,8 @@ __all__ = [
     "api_generate_hydrology",
     "api_generate_surface",
     "api_list_bootstrap_tiles",
+    "api_loading_progress",
     "api_materialize_stack",
     "api_materialize_surface_stack",
+    "api_pack_bake",
 ]

@@ -10,7 +10,7 @@
       "rivers": 12,
       "mountains": ["loc-terrain-mountain-north", "loc-terrain-mountain-central", "loc-terrain-peak-frost", "loc-terrain-peak-granite"]
     },
-    "smoke": "python backend/scripts/initialize_world.py --fixture fixtures/world_terrain_test.json"
+    "smoke": "python backend/scripts/initialize_world.py --fixture fixtures/world_terrain_test.json; python backend/scripts/smoke_world_pack.py --skip-import"
   },
   "world": {
     "world_uid": "world-terrain-test-001",

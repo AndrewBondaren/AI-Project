@@ -13,6 +13,7 @@ from app.application.worldData.pack.packBlobWire import (
     l2_chunk_payload,
 )
 from app.application.worldData.pack.packManifestStore import PackManifestStore
+from app.application.worldData.pack.packBakeLog import log_pack_manifest_saved, log_pack_write_blob
 from app.application.worldData.pack.tileCodec import (
     PAYLOAD_KIND_CLIMATE,
     PAYLOAD_KIND_L0,
@@ -95,10 +96,18 @@ class WorldPackWriter:
         blob = self._codec.encode(PAYLOAD_KIND_L0, payload)
         path = self._paths.l0_tile_path(gx, gy)
         content_hash = self._atomic_write(path, blob)
+        log_pack_write_blob(
+            "l0",
+            world_uid=self._paths.world_uid,
+            path=path.relative_to(self._paths.root).as_posix(),
+            nbytes=len(blob),
+            content_hash=content_hash,
+            extra=f"gx={gx} gy={gy} cells={len(cells)}",
+        )
         tile = self._upsert_tile(gx, gy)
         rel = path.relative_to(self._paths.root).as_posix()
         updated = tile.model_copy(
-            update={"l0_path": rel, "l0_hash": content_hash},
+            update={"world_map_path": rel, "world_map_hash": content_hash},
         )
         self._replace_tile(updated)
         self._manifest.world_map_cells_per_tile = cells_per_side
@@ -115,6 +124,14 @@ class WorldPackWriter:
         blob = self._codec.encode(PAYLOAD_KIND_L2, l2_chunk_payload(chunk))
         path = self._paths.l2_chunk_path(gx, gy, chunk.cx, chunk.cy)
         content_hash = self._atomic_write(path, blob)
+        log_pack_write_blob(
+            "l2_wilderness",
+            world_uid=self._paths.world_uid,
+            path=path.relative_to(self._paths.root).as_posix(),
+            nbytes=len(blob),
+            content_hash=content_hash,
+            extra=f"tile=({gx},{gy}) chunk=({chunk.cx},{chunk.cy}) role={refine_role}",
+        )
         self.commit_chunk(
             gx, gy, chunk.cx, chunk.cy,
             content_hash=content_hash,
@@ -136,11 +153,19 @@ class WorldPackWriter:
         path = self._paths.location_l2_path(location_uid)
         content_hash = self._atomic_write(path, blob)
         rel = path.relative_to(self._paths.root).as_posix()
+        log_pack_write_blob(
+            "l2_location",
+            world_uid=self._paths.world_uid,
+            path=rel,
+            nbytes=len(blob),
+            content_hash=content_hash,
+            extra=f"location={location_uid}",
+        )
         entry = LocationL2Entry(
             location_uid=location_uid,
             territory_volume=territory_volume,
             terrain_path=rel,
-            content_hash=content_hash,
+            terrain_hash=content_hash,
             bytes=len(blob),
         )
         self._manifest.locations_l2 = [
@@ -176,14 +201,14 @@ class WorldPackWriter:
                 bytes=nbytes,
             ),
         )
-        updated = tile.model_copy(update={"chunks": chunks, "l2_status": "partial"})
+        updated = tile.model_copy(update={"chunks": chunks, "wilderness_refine_status": "partial"})
         self._replace_tile(updated)
 
     def recalc_manifest_counters(self) -> None:
         side = self._manifest.world_map_cells_per_tile
         l0_cells = 0
         for tile in self._manifest.tiles:
-            if tile.l0_path:
+            if tile.world_map_path:
                 l0_cells += side * side
         self._manifest.l0_cells = l0_cells
         self._manifest.l2_chunks_baked = sum(len(t.chunks) for t in self._manifest.tiles)
@@ -195,6 +220,12 @@ class WorldPackWriter:
         canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         self._manifest.content_hash = hashlib.sha256(canonical.encode()).hexdigest()
         self._store.save(self._paths.manifest_path(), self._manifest)
+        log_pack_manifest_saved(
+            self._paths.world_uid,
+            content_hash=self._manifest.content_hash,
+            l0_tiles=sum(1 for t in self._manifest.tiles if t.world_map_path),
+            l2_chunks=self._manifest.l2_chunks_baked,
+        )
 
     def pack_storage_path(self) -> str:
         return f"worlds/{self._paths.world_uid}/pack"

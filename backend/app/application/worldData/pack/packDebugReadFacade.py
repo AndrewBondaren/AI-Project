@@ -44,7 +44,7 @@ class PackDebugReadFacade:
         return [
             (t.gx, t.gy)
             for t in self._ctx.reader_for(world).manifest.tiles
-            if t.l0_path
+            if t.world_map_path
         ]
 
     def get_l0_surface_map_cells(self, world: World) -> list[MapCell]:
@@ -54,7 +54,7 @@ class PackDebugReadFacade:
         tile_size = world_tile_size_m(world)
         out: list[MapCell] = []
         for entry in manifest.tiles:
-            if not entry.l0_path:
+            if not entry.world_map_path:
                 continue
             out.extend(self._l0.surface_cells_for_tile(world, entry.gx, entry.gy, tile_size))
         return out

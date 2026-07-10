@@ -81,7 +81,7 @@ class MapCellQueryFacade:
 
         if manifest is not None:
             for loc in manifest.locations_l2:
-                if not loc.territory_volume.contains(x, y, z) or not loc.territory_path:
+                if not loc.territory_volume.contains(x, y, z) or not loc.terrain_path:
                     continue
                 try:
                     loc_chunk = reader.read_location_l2(loc.location_uid)

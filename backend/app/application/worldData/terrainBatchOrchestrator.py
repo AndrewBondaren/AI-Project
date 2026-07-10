@@ -462,6 +462,21 @@ class TerrainBatchOrchestrator:
         *,
         surface_state: TileSurfaceState | None = None,
     ) -> list[MapCell]:
+        return self.generate_chunk_cells_sync(
+            world, locations, ctx, tile_gx, tile_gy, rect, surface_state=surface_state,
+        )
+
+    def generate_chunk_cells_sync(
+        self,
+        world: World,
+        locations: list[NamedLocation],
+        ctx,
+        tile_gx: int,
+        tile_gy: int,
+        rect: ColumnRect,
+        *,
+        surface_state: TileSurfaceState | None = None,
+    ) -> list[MapCell]:
         state = surface_state or self.build_tile_surface_state(
             world, locations, ctx, tile_gx, tile_gy,
         )

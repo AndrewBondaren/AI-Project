@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.pack.packDebugReadFacade import PackDebugReadFacade
 from app.application.worldData.pack.packL0Reader import PackL0Reader
+from app.application.worldData.pack.packFineTerrainReadFacade import PackFineTerrainReadFacade
 from app.application.worldData.pack.packLoadingProgressFacade import PackLoadingProgressFacade
 from app.application.worldData.pack.packReadContext import PackReadContext
 from app.application.worldData.patchStoreService import PatchStoreService
@@ -18,6 +19,7 @@ class PackReadServices:
     gameplay: MapCellQueryFacade
     debug: PackDebugReadFacade
     loading: PackLoadingProgressFacade
+    fine_terrain_read: PackFineTerrainReadFacade
 
 
 def build_pack_read_services(
@@ -32,4 +34,11 @@ def build_pack_read_services(
     gameplay = MapCellQueryFacade(context, patches, l0)
     debug.bind_gameplay(gameplay)
     loading = PackLoadingProgressFacade(context)
-    return PackReadServices(context=context, gameplay=gameplay, debug=debug, loading=loading)
+    fine_terrain_read = PackFineTerrainReadFacade(context, gameplay)
+    return PackReadServices(
+        context=context,
+        gameplay=gameplay,
+        debug=debug,
+        loading=loading,
+        fine_terrain_read=fine_terrain_read,
+    )
