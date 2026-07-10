@@ -626,7 +626,7 @@ flowchart LR
 | gameplay patches → `map_cells` | **`map_cell_patches`** SQLite |
 | eager full bbox fine grid на bake | **LOD:** L0 world map + L1 location skeletons; **L2 fine tile** при приближении |
 
-**LOD bake:** § Идея 1 (light world map per tile) + § Идея 2 (L2 refine from L0); `world_map_cells_per_tile ∝ 1/map_cell_size_m`. См. [`tz_world_pack_storage.md`](./tz_world_pack_storage.md).
+**LOD bake:** § Идея 1 (light world map per tile) + § Идея 2 (L2 refine from L0); `world_map_cells_per_tile ∝ 1/map_cell_size_m`. См. [`tz_world_pack_storage.md`](./tz_world_pack_storage.md). Доп. оптимизация orchestration/L2 prep — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § **WP-PERF**.
 
 ### Persist performance (TR-PERF)
 

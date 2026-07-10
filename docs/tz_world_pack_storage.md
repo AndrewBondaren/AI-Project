@@ -1455,10 +1455,118 @@ flowchart TB
 
 1. **Сам terrain (world_map + blocking wilderness_chunk) — &lt; 0.5 s**; light bake укладывается в WP-A1 с большим запасом.
 2. **Основное время** — не генерация cells, а orchestration overhead: resume persisted job (~12.5 s), подготовка scene phase (~12.4 s), bulk INSERT 8836 refine jobs (~5.5 s).
-3. **Backlog (perf):** `schedule_tile_background` для macro-tile `(12,12)` планирует **весь** tile (~94×94 chunks → 8836 jobs), а не corridor/scene volume. Для light bake это избыточно; фоновый worker (WP-A5, ≤1) отработает позже, но **blocking persist очереди** удлиняет HTTP bake.
+3. **Backlog (perf):** `schedule_tile_background` для macro-tile `(12,12)` планирует **весь** tile (~94×94 chunks → 8836 jobs), а не corridor/scene volume. Для light bake это избыточно; фоновый worker (WP-A5, ≤1) отработает позже, но **blocking persist очереди** удлиняет HTTP bake. Детальный backlog — § **Дополнительная оптимизация (WP-PERF)**.
 4. **Повторный smoke** на чистой БД (без `drain_persisted`) ожидаемо короче на ~12.5 s.
 
 **Артефакты:** `db/worlds/world-terrain-test-001/pack/manifest.json`, 16× `tiles/r.*.*.world_map.zst`, 1× `tiles/r.12.12.c.0.0.zst`.
+
+---
+
+## Дополнительная оптимизация (WP-PERF)
+
+> **Статус:** ⬜ backlog. **Не блокирует** WP-A1 (light bake ≤ 2 min уже PASS).  
+> **Цель:** сократить orchestration overhead light bake с **~35 s → ~5–10 s** на чистой БД и удержать WP-A9 (spawn ≤ 30 s) с запасом.  
+> **Источник:** § **WP-A1 — фактический smoke**; профиль 2026-07-10.
+
+### Принцип
+
+| Правило | Смысл |
+|---|---|
+| **WP-PERF-0** | Pack + LOD + entry-first — **основная** оптимизация; WP-PERF — доработка **внутри** целевой архитектуры |
+| **WP-PERF-1** | Не ускорять INSERT wilderness в SQLite — legacy freeze (WP-26) |
+| **WP-PERF-2** | Узкое место после cutover — **orchestration**, не column fill (generate &lt; 0.5 s при smoke) |
+| **WP-PERF-3** | Инварианты не трогать: один wilderness writer, determinism chunk hash, patch &gt; pack |
+
+**Не в scope WP-PERF:** parallel persist, blocking full tile на gameplay, продление TR-PERF как основного пути.
+
+### Профиль узких мест (baseline smoke)
+
+| Фаза | ~время | Корневая причина |
+|---|---|---|
+| `drain_persisted` | 12.5 s | resume 1 job с прошлого bake; `max_jobs=max(drain, 1)` даже при `background_drain_per_request=0` |
+| fine_terrain scene prep | 12.4 s | `build_tile_surface_state`: full tile upsample 3000×3000 + `run_gap_analysis` на 9M columns **до** первого scene chunk |
+| `persist_enqueue` queue | 5.5 s | `schedule_tile_background` — **весь** macro-tile (~8836 jobs), blocking INSERT в `chunk_refine_jobs` |
+| world_map + wilderness_chunk generate | &lt; 0.5 s | уже достаточно быстро |
+
+### Backlog по приоритету
+
+#### P0 — orchestration hot path (light bake HTTP)
+
+| ID | Задача | Target fix | Ожидаемый выигрыш |
+|---|---|---|---|
+| **WP-PERF-10** | На `mode=light` **не** enqueue весь tile в `chunk_refine_jobs` | `schedule_tile_background` только rings/corridor (WP-13); full tile — offline `tile`/`full` или lazy worker без blocking persist | **−5…6 s** HTTP |
+| **WP-PERF-11** | `persist_enqueue` batch | `executemany` / bulk upsert jobs; или manifest-only queue без SQLite до фонового worker | **−3…5 s** при большой очереди |
+| **WP-PERF-12** | `drain_persisted` policy | `max_jobs=0` когда `background_drain_per_request=0`; rebake → purge stale jobs или async drain **после** HTTP | **−12 s** на повторном bake |
+| **WP-PERF-13** | Один `surface_ctx` на run | `prepare_surface_terrain_context` вызывается в `PackMaterializationOrchestrator` и повторно в `WorldMapBakeOrchestrator.bake_tiles` — передавать cached ctx | **−1 s** |
+
+#### P1 — L2 prep (scene / WP-A9)
+
+| ID | Задача | Target fix | Ожидаемый выигрыш |
+|---|---|---|---|
+| **WP-PERF-20** | Partial `TileSurfaceState` | gap analysis + fine upsample **по chunk rect + halo ±1**, не на весь macro-tile | **−10…12 s** scene phase |
+| **WP-PERF-21** | Кэш `TileSurfaceState` per `(gx, gy)` | один build на tile per bake run; scene + background chunks reuse | меньше повторов WP-PERF-20 |
+| **WP-PERF-22** | L0-constrained refine (Идея 2) | `refine_chunk(L0_tile, rect)` вместо полного `build_fine_surface_tile` с нуля | стабильность + меньше CPU на L2 |
+
+#### P2 — CPU generate (offline / фон)
+
+| ID | Задача | Target fix | Статус |
+|---|---|---|---|
+| **WP-PERF-30** | ProcessPool backend | `ChunkComputePool` — optional `ProcessPoolExecutor` (GIL bypass) | ⬜ backlog |
+| **WP-PERF-31** | Dedicated L0 hydro-raster | light bake: rasterize на `world_map` grid без полного `HydrologyGeneratorService.apply` | ⬜ опционально |
+| **WP-PERF-32** | Climate tier A на bake | один `climate_coarse.zst` из `surface_ctx.pole_field`; tier B — только фон | ⬜ см. WP-A12 |
+
+#### P3 — Pack I/O и wire
+
+| ID | Задача | Target fix | Статус |
+|---|---|---|---|
+| **WP-PERF-40** | Binary wire (FIX-31) | column runs binary вместо JSON payload в zstd | ⬜ P4 |
+| **WP-PERF-41** | `zstd_level` policy | dev/smoke: 1–2; release pack: 3–5 (`PackBakeDefaults`) | ⬜ |
+| **WP-PERF-42** | Decode cache hot path | `FineTerrainDecodeCache` на `get_scene_volume` bbox | ⚠️ partial |
+
+#### P4 — продуктовые рычаги (без смены архитектуры)
+
+| ID | Рычаг | Когда |
+|---|---|---|
+| **WP-PERF-50** | `refine_scene=false` на bake | master-only world map (только L0) |
+| **WP-PERF-51** | P0 tiles only (spawn + locations) | меньше L0 tiles на первом bake |
+| **WP-PERF-52** | attach `fixtures/packs/{uid}/` | cold start без bake |
+| **WP-PERF-53** | `path_ahead_depth` | меньше фоновой очереди на слабых машинах |
+
+### Порядок имплементации
+
+```mermaid
+flowchart LR
+  P0["P0: WP-PERF-10…13\norchestration"]
+  P1["P1: WP-PERF-20…22\nL2 prep"]
+  P2["P2: climate A + ProcessPool"]
+  P3["P3: binary wire"]
+
+  P0 --> P1 --> P2 --> P3
+```
+
+**Не начинать P3** до замера после P0+P1 на том же smoke (`world_terrain_test`, `max_tiles=16`).
+
+### Приёмка WP-PERF
+
+| ID | Критерий |
+|---|---|
+| PERF-A1 | light bake HTTP на **чистой** БД: `pack bake done` ≤ **10 s** p95 (`world_terrain_test`, `max_tiles=16`) |
+| PERF-A2 | повторный light bake без stale jobs: нет фазы `drain_persisted` &gt; 1 s |
+| PERF-A3 | `pack jobs persisted count` на light bake ≤ **scene + path corridor** (не ~8836 на один tile) |
+| PERF-A4 | scene phase prep (`fine_terrain phase start` → `wilderness_chunk generate start`) ≤ **2 s** p95 |
+| PERF-A5 | generate+persist 1 scene chunk — без регрессии (&lt; 1 s); chunk hash stable (WP-A4) |
+| PERF-A6 | WP-A9 не регрессирует после P0+P1 |
+
+### Связь с другими разделами
+
+| Раздел | Связь |
+|---|---|
+| § WP-A1 smoke | baseline метрики и разбивка фаз |
+| § WP-13, WP-17 | entry-first и path corridor — контракт для WP-PERF-10 |
+| § Идея 2 | WP-PERF-22 — refine from L0 |
+| § WP-A12 | WP-PERF-32 — climate tier A bake |
+| FIX-31 | WP-PERF-40 — binary wire |
+| WP-26 | legacy TR-PERF / `map_cells` — **вне** WP-PERF |
 
 ---
 
@@ -1492,3 +1600,4 @@ flowchart TB
 | 2026-07-10 | § **WP-A1 — фактический smoke:** light bake `world_terrain_test` **34.9 s** HTTP; разбивка фаз + backlog queue=8836 |
 | 2026-07-10 | Wire rename: `manifest.tiles[]` — `world_map_path`, `world_map_hash`, `wilderness_refine_status`; `location_terrain_entries[]` — `terrain_hash` |
 | 2026-07-10 | § **Именование (LOD ↔ код):** bulk rename backend + **log activity** (`world_map`, `wilderness_chunk`, `location_terrain`); `MapLayerKind.WORLD_MAP`; `fine-terrain-read` debug API |
+| 2026-07-10 | § **Дополнительная оптимизация (WP-PERF):** backlog P0…P4, baseline smoke, приёмка PERF-A1…A6 |
