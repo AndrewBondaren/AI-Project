@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from app.application.jsonValidation import hydrology
-from app.application.worldData.generators.terrain.hydrology.types import HydrologyBands
+from app.application.worldData.generators.hydrology.types import HydrologyBands
 from app.dataModel.hydrology.lakes import HydrologyLakesPolicy
 from app.dataModel.hydrology.rivers import HydrologyRiversPolicy
 from app.dataModel.hydrology.seas import HydrologySeasPolicy

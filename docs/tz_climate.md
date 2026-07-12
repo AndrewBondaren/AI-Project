@@ -25,6 +25,7 @@ metadata:
 | **World Snapshot** | [`WorldSnapshotService`](./tz_world_snapshot.md) | **Полное** сохранение мира **на каждый ход** — единый общий модуль; time travel, regen, база для far LOD |
 | **`SurfaceClimateField`** | climate generator | Derived **horizontal field** `(gx, gy)` — pole + tier blend; **не маска**, не world snapshot |
 | **`WeatherSnapshot`** | `ClimateRuntimeAssembler` | Runtime DTO (temp + `system_weather`) для сцены; ephemeral |
+| **`climate_status`** | World Pack manifest / blob | Bake LOD: `coarse` \| `fine` — **не** pole/local tier (CL-2); см. § World Pack climate |
 
 Дальше в этом документе **«field cache»** / **`SurfaceClimateField`** — только climate derived layer. **«World snapshot»** — только [`tz_world_snapshot.md`](./tz_world_snapshot.md).
 
@@ -1109,10 +1110,76 @@ class VolumeClimateContext:
 
 ---
 
+## World Pack climate (cutover) — статус и debt
+
+Хранение/read climate на pack-мире — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) (WP-18, WP-PERF-32, MERGE-2). Здесь — **климатический контракт** и долг после ревью cutover (2026-07-12), до/после smoke.
+
+### Терминология (не путать с pole/local tier)
+
+| Термин | Значения | Смысл |
+|---|---|---|
+| **`climate_status`** (manifest tile / blob) | `coarse` \| `fine` | **Bake LOD готовности** climate в pack — не climate zone, не pole/local tier (CL-2) |
+| Progress `localGridLoading.climate_status` | `coarse_only` \| `fine_ready` | Агрегат UX: только `climate_coarse.zst` vs есть per-tile fine blob |
+| **Устарело:** `climate_tier` / `A` / `B` | — | Переименовано; legacy wire ещё мапится при read |
+
+| Blob | Путь | Координаты sample |
+|---|---|---|
+| **coarse** | `climate_coarse.zst` | macro grid; `sample_step_m=1`; light bake |
+| **fine** | `r.{gx}.{gy}.climate.zst` | meters + stride; после scene / фон (целевое) |
+
+Read merge: **fine → coarse** field-wise; `climate_delta` (patch) выше обоих.  
+`POST …/map/generate-climate` на pack-мире → **422** (base climate только через `pack/bake`).
+
+### Impl cutover
+
+| # | Критерий | Статус |
+|---|---|---|
+| 1 | coarse bake на light pack | ✅ |
+| 2 | apply: meters→macro для coarse (`sample_macro`) | ✅ |
+| 3 | prefer fine over coarse (`sample_meters`) | ✅ |
+| 4 | reject legacy `generate-climate` | ✅ |
+| 5 | fine denser content (per light-cell sample) | ✅ |
+| 6 | fine через `ClimateFinePending` + worker drain (не inline mid-pipeline) | ✅ |
+
+### Архитектурный debt (CL-PACK) — статус после фикса 2026-07-12
+
+| ID | Статус | Примечание |
+|---|---|---|
+| **CL-PACK-1** | ✅ | `ClimatePackBakeOrchestrator` |
+| **CL-PACK-2** | ✅ | coarse в light bake; fine enqueue + `drain_climate_fine` |
+| **CL-PACK-3** | ✅ | `locationsIndexBake.build_locations_index_payload` |
+| **CL-PACK-4** | accepted | L0 `climate_zone_id` — optional UI tint; не debt |
+| **CL-PACK-5** | ✅ | `climatePackApply.apply_climate_to_view` |
+| **CL-PACK-6** | ✅ | `sample_macro` / `sample_meters` + ValueError на mismatch |
+| **CL-PACK-7** | ✅ | `coarse_surface_z` только macro keys |
+| **CL-PACK-8** | ✅ | denser `build_climate_tile_wire` |
+| **CL-PACK-9** | ✅ | `bake_tiles(surface_ctx=…)` |
+| **CL-PACK-10** | ✅ | `climate` = blobs; `climate_coarse_samples` / `climate_fine_tiles` |
+| **CL-PACK-11** | ✅ | `PackReadContext.invalidate_climate*` |
+
+### Smoke acceptance (pack climate)
+
+```powershell
+cd backend
+$env:DEBUG_API_TIMEOUT="600"
+python scripts/initialize_world.py --fixture ../fixtures/world_terrain_test.json --skip-import --skip-clear
+```
+
+| Check | Ожидание |
+|---|---|
+| `pack/climate_coarse.zst` | есть; metrics `has_climate_coarse=True` |
+| Scene cells | `temperature_base` / `rainfall` заполнены (WP-A12) |
+| `generate-climate` | 422 на pack-мире |
+| Fine denser | spawn tile: `climate_status=fine_ready` после drain; denser samples |
+
+---
+
 ## Changelog
 
 | Дата | Версия | Изменение |
 |---|---|---|
+| 2026-07-12 | § World Pack climate | CL-PACK-1…11 fix; CL-PACK-4 accepted as L0 tint; denser fine + ClimatePackBakeOrchestrator |
+| 2026-07-12 | § World Pack climate | cutover status; `climate_status` coarse/fine; debt CL-PACK-1…11 (ревью до smoke) |
 | 2026-07 | § CL-PAR — `ClimateBatchOrchestrator`; DAG `MaterializationContext` (CL-PAR-DAG-1) |
 | 2026-07 | § Smoke regression `world_test_all`: CL-R1…CL-R3 (false liquid_body, NC-1c, water phase mult) |
 | 2026-06 | v2.6.1 | Disambiguation: World Snapshot vs SurfaceClimateField; cross-ref `tz_world_snapshot.md` |
@@ -1146,3 +1213,4 @@ class VolumeClimateContext:
 - [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) — generators ↔ engine DAG (library pattern, node map)
 - [`tz_engine_flow.md`](./tz_engine_flow.md) — engine phases (pass loop, patches)
 - [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) — CL-* registry
+- [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) — pack climate blobs, merge fine→coarse, WP-18 / WP-PERF-32

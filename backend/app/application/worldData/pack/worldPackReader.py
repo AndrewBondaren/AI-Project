@@ -89,6 +89,16 @@ class WorldPackReader:
             raise ValueError(f"expected climate blob at {path}")
         return parse_climate_field_payload(payload)
 
+    def read_climate_tile(self, gx: int, gy: int) -> ClimateFieldWire:
+        path = self._paths.climate_tile_path(gx, gy)
+        kind, payload = self._decode_file(path)
+        if kind != PAYLOAD_KIND_CLIMATE:
+            raise ValueError(f"expected climate blob at {path}")
+        return parse_climate_field_payload(payload)
+
+    def climate_tile_exists(self, gx: int, gy: int) -> bool:
+        return self._paths.climate_tile_path(gx, gy).is_file()
+
     def chunk_exists(self, gx: int, gy: int, cx: int, cy: int) -> bool:
         return self._paths.wilderness_chunk_path(gx, gy, cx, cy).is_file()
 

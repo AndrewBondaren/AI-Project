@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.terrain.hydrology.types import LoadedConnectionGraph
+from app.application.worldData.generators.hydrology.types import LoadedConnectionGraph
 from app.dataModel.hydrology.enums.hydrologyConnectionType import HydrologyConnectionType
 
 

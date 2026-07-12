@@ -7,17 +7,17 @@ from typing import Any
 
 from app.application.worldData.generators.climate.anchorDetect import detect_terrain_features
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.terrain.hydrology.deepeningBandCarver import _neighbors4
-from app.application.worldData.generators.terrain.hydrology.heightmapSurfaceCells import (
+from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import _neighbors4
+from app.application.worldData.generators.hydrology.shore.heightmapSurfaceCells import (
     heightmap_top_surface_cells,
 )
-from app.application.worldData.generators.terrain.hydrology.lakeBasinGenerator import (
+from app.application.worldData.generators.hydrology.basins.lakeBasinGenerator import (
     carve_lake_interior,
 )
-from app.application.worldData.generators.terrain.hydrology.resolveHydrologyBands import (
+from app.application.worldData.generators.hydrology.load.resolveHydrologyBands import (
     resolve_hydrology_bands,
 )
-from app.application.worldData.generators.terrain.hydrology.types import HydrologyMasterInput
+from app.application.worldData.generators.hydrology.types import HydrologyMasterInput
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology

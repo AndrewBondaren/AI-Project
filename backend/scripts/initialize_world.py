@@ -16,15 +16,19 @@ import argparse
 import json
 import sys
 import tempfile
+import time
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 REPO = Path(__file__).resolve().parents[2]
 if str(REPO / "backend") not in sys.path:
     sys.path.insert(0, str(REPO / "backend"))
 
 from app.application.worldData.pack.importLevels import filter_bundle_for_export
-from debug_api_helpers import BASE_URL, DebugApiError, _require_ok, api_clear_map, api_client
+from debug_api_helpers import DebugApiError, _require_ok, api_clear_map, api_client
 from debug_surface_helpers import (
+    SurfaceStackResult,
     api_list_bootstrap_tiles,
     api_loading_progress,
     api_materialize_surface_stack,
@@ -54,6 +58,73 @@ def _import_fixture(client, path: str) -> dict:
 def _fixture_world_uid(fixture: Path) -> str:
     data = json.loads(fixture.read_text(encoding="utf-8"))
     return data.get("world", data)["world_uid"]
+
+
+def _loading_world_map(progress: dict) -> dict[str, Any]:
+    wm = progress.get("worldMapLoading") or progress.get("world_map") or {}
+    return wm if isinstance(wm, dict) else {}
+
+
+def _build_pack_bake_metrics(
+    bake: dict,
+    *,
+    started_at: datetime,
+    finished_at: datetime,
+    http_elapsed_s: float,
+) -> dict[str, Any]:
+    terrain = bake.get("terrain") or {}
+    climate = bake.get("climate") or {}
+    progress = bake.get("loading_progress") or {}
+    wm = _loading_world_map(progress)
+    server_s = bake.get("elapsed_s")
+    return {
+        "started_at": started_at.isoformat(timespec="seconds"),
+        "finished_at": finished_at.isoformat(timespec="seconds"),
+        "http_elapsed_s": round(http_elapsed_s, 2),
+        "server_bake_elapsed_s": round(server_s, 2) if server_s is not None else None,
+        "pack_mode": bake.get("pack_mode"),
+        "world_map_tiles_ready": wm.get("world_map_tiles_ready"),
+        "world_map_tiles_total": wm.get("world_map_tiles_total"),
+        "world_map_cells": bake.get("world_map_cells"),
+        "terrain_succeeded": terrain.get("succeeded"),
+        "terrain_failed": terrain.get("failed"),
+        "climate_succeeded": climate.get("succeeded"),
+        "climate_coarse_samples": bake.get("climate_coarse_samples"),
+        "climate_fine_tiles": bake.get("climate_fine_tiles"),
+        "has_climate_coarse": progress.get("has_climate_coarse"),
+        "climate_status": (progress.get("localGridLoading") or {}).get("climate_status"),
+        "chunks_blocking_done": bake.get("chunks_done"),
+        "chunks_blocking_total": bake.get("chunks_total"),
+        "refine_queue_depth": bake.get("refine_queue_depth"),
+        "terrain_workers": bake.get("terrain_workers"),
+    }
+
+
+def _build_legacy_stack_metrics(
+    stack: SurfaceStackResult,
+    *,
+    started_at: datetime,
+    finished_at: datetime,
+    http_elapsed_s: float,
+) -> dict[str, Any]:
+    surface = stack.surface or {}
+    climate = stack.climate or {}
+    return {
+        "started_at": started_at.isoformat(timespec="seconds"),
+        "finished_at": finished_at.isoformat(timespec="seconds"),
+        "http_elapsed_s": round(http_elapsed_s, 2),
+        "terrain_succeeded": surface.get("succeeded"),
+        "terrain_failed": surface.get("failed"),
+        "climate_succeeded": climate.get("succeeded") if climate else None,
+        "climate_failed": climate.get("failed") if climate else None,
+    }
+
+
+def _print_metrics(title: str, metrics: dict[str, Any]) -> None:
+    print(f"\n=== {title} ===")
+    width = max(len(str(k)) for k in metrics)
+    for key, value in metrics.items():
+        print(f"{key:<{width}}  {value}")
 
 
 def main() -> None:
@@ -115,24 +186,45 @@ def main() -> None:
             print(f"  Gx{tile['gx']}_Gy{tile['gy']}")
 
         if args.target == "pack":
+            started_at = datetime.now().astimezone()
+            t0 = time.perf_counter()
             bake = api_pack_bake(client, world_uid, mode="light", max_tiles=args.max_tiles)
-            terrain = bake.get("terrain") or {}
-            print("pack bake:", {
-                "terrain_succeeded": terrain.get("succeeded"),
-                "terrain_failed": terrain.get("failed"),
-                "pack_mode": bake.get("pack_mode"),
-            })
-            progress = bake.get("loading_progress") or api_loading_progress(client, world_uid)
-            print("loading:", progress)
+            http_elapsed_s = time.perf_counter() - t0
+            finished_at = datetime.now().astimezone()
+
+            if not bake.get("loading_progress"):
+                bake = {**bake, "loading_progress": api_loading_progress(client, world_uid)}
+
+            _print_metrics(
+                "pack bake metrics",
+                _build_pack_bake_metrics(
+                    bake,
+                    started_at=started_at,
+                    finished_at=finished_at,
+                    http_elapsed_s=http_elapsed_s,
+                ),
+            )
         else:
+            started_at = datetime.now().astimezone()
+            t0 = time.perf_counter()
             stack = api_materialize_surface_stack(
                 client,
                 world_uid,
                 mode=mode,  # type: ignore[arg-type]
                 max_tiles=args.max_tiles,
             )
-            print("surface:", stack.surface)
-            print("climate:", stack.climate)
+            http_elapsed_s = time.perf_counter() - t0
+            finished_at = datetime.now().astimezone()
+
+            _print_metrics(
+                "materialize stack metrics",
+                _build_legacy_stack_metrics(
+                    stack,
+                    started_at=started_at,
+                    finished_at=finished_at,
+                    http_elapsed_s=http_elapsed_s,
+                ),
+            )
 
 
 if __name__ == "__main__":

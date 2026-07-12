@@ -8,6 +8,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from app.dataModel.worldBundle.bundleSections import BundleSection
+
 
 @dataclass(frozen=True)
 class UidCollectSpec:
@@ -19,13 +21,13 @@ class UidCollectSpec:
 
 
 UID_COLLECT_REGISTRY: tuple[UidCollectSpec, ...] = (
-    UidCollectSpec("locations", "location_uid"),
-    UidCollectSpec("states", "state_uid"),
-    UidCollectSpec("races", "race_uid"),
-    UidCollectSpec("perks", "perk_uid"),
-    UidCollectSpec("connection_nodes", "node_uid"),
+    UidCollectSpec(BundleSection.LOCATIONS, "location_uid"),
+    UidCollectSpec(BundleSection.STATES, "state_uid"),
+    UidCollectSpec(BundleSection.RACES, "race_uid"),
+    UidCollectSpec(BundleSection.PERKS, "perk_uid"),
+    UidCollectSpec(BundleSection.CONNECTION_NODES, "node_uid"),
     UidCollectSpec(
-        "connection_edges", "edge_uid", ("from_node_uid", "to_node_uid"),
+        BundleSection.CONNECTION_EDGES, "edge_uid", ("from_node_uid", "to_node_uid"),
     ),
 )
 
@@ -78,12 +80,12 @@ def _apply_map_cell(
 
 
 APPLY_ITEM_REGISTRY: dict[str, ApplyItemFn] = {
-    "locations":         _apply_location,
-    "states":            lambda i, m, w: _apply_pk_world(i, m, w, "state_uid"),
-    "races":             lambda i, m, w: _apply_pk_world(i, m, w, "race_uid"),
-    "perks":             lambda i, m, w: _apply_pk_world(i, m, w, "perk_uid"),
-    "connection_nodes":  _apply_connection_node,
-    "connection_edges":  _apply_connection_edge,
+    BundleSection.LOCATIONS: _apply_location,
+    BundleSection.STATES: lambda i, m, w: _apply_pk_world(i, m, w, "state_uid"),
+    BundleSection.RACES: lambda i, m, w: _apply_pk_world(i, m, w, "race_uid"),
+    BundleSection.PERKS: lambda i, m, w: _apply_pk_world(i, m, w, "perk_uid"),
+    BundleSection.CONNECTION_NODES: _apply_connection_node,
+    BundleSection.CONNECTION_EDGES: _apply_connection_edge,
 }
 
 
@@ -95,10 +97,10 @@ def remap_bundle(
     """Return a deep copy of the bundle with all UIDs replaced and name versioned."""
     uid_map = _build_uid_map(data)
     result = copy.deepcopy(data)
-    original_world_uid = data["world"]["world_uid"]
+    original_world_uid = data[BundleSection.WORLD]["world_uid"]
     new_world_uid = uid_map[original_world_uid]
 
-    world = result["world"]
+    world = result[BundleSection.WORLD]
     world["world_uid"] = new_world_uid
     world["name"] = f"{strip_suffix(world.get('name', ''))} v{version_n}"
 
@@ -107,7 +109,7 @@ def remap_bundle(
         for item in result.get(spec.section_key, []):
             apply_fn(item, uid_map, new_world_uid)
 
-    for cell in result.get("map_cells", []):
+    for cell in result.get(BundleSection.MAP_CELLS, []):
         _apply_map_cell(cell, uid_map, new_world_uid)
 
     return result
@@ -121,7 +123,7 @@ def _build_uid_map(data: dict[str, Any]) -> dict[str, str]:
             uid_map[old] = str(uuid.uuid4())
         return uid_map[old]
 
-    register(data["world"]["world_uid"])
+    register(data[BundleSection.WORLD]["world_uid"])
     for spec in UID_COLLECT_REGISTRY:
         for item in data.get(spec.section_key, []):
             register(item[spec.pk_field])

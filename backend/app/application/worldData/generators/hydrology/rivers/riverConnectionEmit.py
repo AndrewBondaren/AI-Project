@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.terrain.hydrology.types import RiverSegment
+from app.application.worldData.generators.hydrology.types import RiverSegment
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 

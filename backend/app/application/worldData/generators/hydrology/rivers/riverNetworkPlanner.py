@@ -6,11 +6,11 @@ from typing import Any
 
 from app.application.worldData.generators.climate.anchorDetect import detect_terrain_features
 from app.application.worldData.generators.climate.math import world_seed
-from app.application.worldData.generators.terrain.hydrology.heightmapSurfaceCells import (
+from app.application.worldData.generators.hydrology.shore.heightmapSurfaceCells import (
     heightmap_top_surface_cells,
 )
-from app.application.worldData.generators.terrain.hydrology.smoothRiverPolyline import step_turn_ok
-from app.application.worldData.generators.terrain.hydrology.types import RiverTypeClassify
+from app.application.worldData.generators.hydrology.geom.smoothRiverPolyline import step_turn_ok
+from app.application.worldData.generators.hydrology.types import RiverTypeClassify
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology

@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Literal
+from typing import Any, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.dataModel.worldPack.climateFieldWire import (
+    ClimateBakeStatus,
+    normalize_climate_bake_status,
+)
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
 
 PACK_WIRE_VERSION = "1.0.0"
@@ -32,8 +36,22 @@ class TileManifestEntry(BaseModel):
     world_map_path: str | None = None
     world_map_hash: str | None = None
     wilderness_refine_status: WildernessRefineStatus = "absent"
-    climate_tier: str = "A"
+    climate_status: ClimateBakeStatus = "coarse"
     chunks: list[ChunkRef] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _legacy_climate_tier(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        if "climate_status" not in data and "climate_tier" in data:
+            data = {**data, "climate_status": data["climate_tier"]}
+        return data
+
+    @field_validator("climate_status", mode="before")
+    @classmethod
+    def _climate_status(cls, value: Any) -> ClimateBakeStatus:
+        return normalize_climate_bake_status(value)
 
 
 class LocationTerrainEntry(BaseModel):
@@ -43,9 +61,23 @@ class LocationTerrainEntry(BaseModel):
     territory_volume: TerritoryVolume
     terrain_path: str | None = None
     terrain_hash: str | None = None
-    climate_tier: str = "A"
+    climate_status: ClimateBakeStatus = "coarse"
     z_band: str | None = None
     bytes: int | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _legacy_climate_tier(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        if "climate_status" not in data and "climate_tier" in data:
+            data = {**data, "climate_status": data["climate_tier"]}
+        return data
+
+    @field_validator("climate_status", mode="before")
+    @classmethod
+    def _climate_status(cls, value: Any) -> ClimateBakeStatus:
+        return normalize_climate_bake_status(value)
 
 
 class WorldPackManifest(BaseModel):

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.terrain.hydrology.polylineRasterize import bresenham_line
-from app.application.worldData.generators.terrain.hydrology.smoothRiverPolyline import smooth_polyline_cells
-from app.application.worldData.generators.terrain.hydrology.types import (
+from app.application.worldData.generators.hydrology.geom.polylineRasterize import bresenham_line
+from app.application.worldData.generators.hydrology.geom.smoothRiverPolyline import smooth_polyline_cells
+from app.application.worldData.generators.hydrology.types import (
     DeclaredRiverEdge,
     RiverSegment,
     RiverTypeClassify,

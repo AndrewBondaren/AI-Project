@@ -5,10 +5,10 @@ from __future__ import annotations
 from app.application.worldData.generators.coordinates.convert import (
     cell_size_m,
 )
-from app.application.worldData.generators.terrain.hydrology.classifyRiverSegments import (
+from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments import (
     classify_autoresolve_polyline,
 )
-from app.application.worldData.generators.terrain.hydrology.types import (
+from app.application.worldData.generators.hydrology.types import (
     RiverSegment,
     RiverTypeClassify,
 )
@@ -116,7 +116,7 @@ def _polyline_for_river(
     cell_m: int,
     occupied: dict[tuple[int, int], MapCellHydrology],
 ) -> list[tuple[int, int]]:
-    from app.application.worldData.generators.terrain.hydrology.polylineRasterize import (
+    from app.application.worldData.generators.hydrology.geom.polylineRasterize import (
         bresenham_line,
     )
 

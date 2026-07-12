@@ -5,16 +5,16 @@ from __future__ import annotations
 from typing import Any
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.terrain.hydrology.classifyRiverSegments import (
+from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments import (
     segments_from_declared,
 )
-from app.application.worldData.generators.terrain.hydrology.hydrologyAutoresolvePolicy import (
+from app.application.worldData.generators.hydrology.load.hydrologyAutoresolvePolicy import (
     rivers_autoresolve_policy,
 )
-from app.application.worldData.generators.terrain.hydrology.resolveRiverTypeClassify import (
+from app.application.worldData.generators.hydrology.load.resolveRiverTypeClassify import (
     resolve_river_type_classify,
 )
-from app.application.worldData.generators.terrain.hydrology.types import (
+from app.application.worldData.generators.hydrology.types import (
     HydrologyMasterInput,
     RiverSegment,
 )
@@ -65,7 +65,7 @@ def generate_rivers(
     occupied_cells = dict(occupied or {})
 
     if master.declared_river_intents and locations is not None:
-        from app.application.worldData.generators.terrain.hydrology.resolveDeclaredRiverPath import (
+        from app.application.worldData.generators.hydrology.rivers.resolveDeclaredRiverPath import (
             resolve_declared_river_intents,
         )
 
@@ -89,7 +89,7 @@ def generate_rivers(
 
     rivers_policy = rivers_autoresolve_policy(world)
     if rivers_policy.rivers_enabled and rivers_policy.autoresolve:
-        from app.application.worldData.generators.terrain.hydrology.proceduralRiverAutoresolve import (
+        from app.application.worldData.generators.hydrology.autoresolve.proceduralRiverAutoresolve import (
             autoresolve_river_segments,
         )
 

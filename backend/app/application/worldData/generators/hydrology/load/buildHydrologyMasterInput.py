@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.terrain.hydrology.hydrologyLocations import (
+from app.application.worldData.generators.hydrology.load.hydrologyLocations import (
     geographic_locations,
 )
-from app.application.worldData.generators.terrain.hydrology.loadDeclaredHydrology import (
+from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology import (
     load_declared_hydrology,
 )
-from app.application.worldData.generators.terrain.hydrology.loadHydrologyFromWorld import (
+from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
     is_hydrology_enabled,
 )
-from app.application.worldData.generators.terrain.hydrology.types import (
+from app.application.worldData.generators.hydrology.types import (
     HYDROLOGY_BOOTSTRAP_SCOPES,
     HydrologyMasterInput,
     HydrologyScope,

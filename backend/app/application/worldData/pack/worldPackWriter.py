@@ -24,6 +24,7 @@ from app.application.worldData.pack.worldPackPaths import WorldPackPaths
 from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
+from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
 from app.dataModel.worldPack.worldPackManifest import (
     ChunkRef,
@@ -177,7 +178,43 @@ class WorldPackWriter:
     def write_climate_coarse(self, field: ClimateFieldWire) -> str:
         blob = self._codec.encode(PAYLOAD_KIND_CLIMATE, climate_field_payload(field))
         path = self._paths.climate_coarse_path()
-        return self._atomic_write(path, blob)
+        content_hash = self._atomic_write(path, blob)
+        log_pack_write_blob(
+            "climate_coarse",
+            world_uid=self._paths.world_uid,
+            path=path.relative_to(self._paths.root).as_posix(),
+            nbytes=len(blob),
+            content_hash=content_hash,
+            extra=f"climate_status={field.climate_status} samples={len(field.samples)}",
+        )
+        return content_hash
+
+    def write_climate_tile(self, gx: int, gy: int, field: ClimateFieldWire) -> str:
+        blob = self._codec.encode(PAYLOAD_KIND_CLIMATE, climate_field_payload(field))
+        path = self._paths.climate_tile_path(gx, gy)
+        content_hash = self._atomic_write(path, blob)
+        log_pack_write_blob(
+            "climate_tile",
+            world_uid=self._paths.world_uid,
+            path=path.relative_to(self._paths.root).as_posix(),
+            nbytes=len(blob),
+            content_hash=content_hash,
+            extra=f"tile=({gx},{gy}) climate_status={field.climate_status}",
+        )
+        tile = self._upsert_tile(gx, gy)
+        updated = tile.model_copy(update={"climate_status": "fine"})
+        self._replace_tile(updated)
+        return content_hash
+
+    def write_locations_index(self, index: LocationsIndexWire) -> Path:
+        """Write locations_index.json — POJO is wire source of truth."""
+        path = self._paths.locations_index_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            index.model_dump_json(indent=2),
+            encoding="utf-8",
+        )
+        return path
 
     def commit_chunk(
         self,

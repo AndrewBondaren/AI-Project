@@ -826,7 +826,7 @@ effective_climate(x,y) =
 
 **Очередь B:** тот же `ChunkRefineWorker` или sibling job **после** terrain chunks текущего tile; приоритет **ниже** P0 scene terrain, **выше** wilderness prefetch. Tile без terrain chunks — **не** считать B.
 
-**`localGridLoading` дополнение:** `climate_tier`: `coarse_only` \| `fine_ready` per `(gx,gy)`.
+**`localGridLoading` дополнение:** `climate_status`: `coarse_only` \| `fine_ready` (агрегат готовности pack climate).
 
 **Offline `tile`/`full` bake:** B materialize сразу вместе с terrain (не gameplay path).
 
@@ -856,7 +856,7 @@ effective_climate(x,y) =
 | TZ LOD | Назначение | Код / wire | Файлы pack (примеры) |
 |---|---|---|---|
 | **L0** | Light world map per macro-tile | `world_map`, `WorldMapCellWire`, `world_map_path`, `world_map_hash`, `world_map_cells` | `r.{gx}.{gy}.world_map.zst`, `WorldMapBakeOrchestrator`, `WorldMapPackReader` |
-| **L1** | Location skeleton (pins, anchors) | SQLite `named_locations`; mirror `locations_index.json` | не blob в pack |
+| **L1** | Location skeleton (pins, anchors) | SQLite `named_locations`; mirror `locations_index.json` (`LocationsIndexWire` / `LocationsIndexPin` в `dataModel/worldPack`) | не blob в pack |
 | **L2 wilderness** | Fine terrain chunk в tile | `wilderness_chunk`, `FineTerrainChunkWire`, `wilderness_refine_status`, `wilderness_chunks_baked` | `r.{gx}.{gy}.c.{cx}.{cy}.zst`, `FineTerrainRefineOrchestrator` |
 | **L2 location** | Fine terrain территории локации | `location_terrain`, `LocationTerrainEntry`, `location_terrain_entries[]`, `terrain_path`, `terrain_hash` | `locations/l.{uid}.terrain.zst` |
 | **Merge fallback** | Coarse cell при отсутствии fine | `MapLayerKind.WORLD_MAP` | `merge_layers` / `MapCellQueryFacade` |
@@ -924,7 +924,7 @@ effective_climate(x,y) =
 | `world_map_path` | str? | относительный путь к L0 `tiles/r.{gx}.{gy}.world_map.zst` |
 | `world_map_hash` | str? | SHA-256 zstd-blob L0 world map |
 | `wilderness_refine_status` | enum | `absent` \| `partial` \| `complete` — **wilderness L2 chunks** на tile (не location terrain) |
-| `climate_tier` | str | `A` coarse на tile; `B` когда fine climate готов |
+| `climate_status` | str | `coarse` на tile; `fine` когда denser climate blob готов |
 | `chunks[]` | `ChunkRef[]` | wilderness L2 chunks `tiles/r.{gx}.{gy}.c.{cx}.{cy}.zst` |
 
 #### `LocationTerrainEntry` (`location_terrain_entries[]`)
@@ -937,7 +937,7 @@ Fine terrain **одной** `named_location` (file-per-location, WP-19).
 | `territory_volume` | AABB | 3D bbox в meter grid (WP-21) |
 | `terrain_path` | str? | `locations/l.{uid}.terrain.zst` |
 | `terrain_hash` | str? | SHA-256 location terrain blob |
-| `climate_tier`, `z_band`, `bytes` | | climate LOD / z-band / размер blob |
+| `climate_status`, `z_band`, `bytes` | | climate LOD / z-band / размер blob |
 
 #### `ChunkRef` (`tiles[].chunks[]`)
 
@@ -1018,7 +1018,9 @@ sequenceDiagram
 
 **Контракт (v2, 2026-07-10):** `dataModel/worldPack/mergeMapCells.py` — **`merge_layers` field-wise overlay** по `LAYER_PRIORITY_ORDER` (высший приоритет перекрывает **отдельные поля**, не всю ячейку) + `MapCellQueryFacade` — единая точка read при наличии pack.
 
-**Climate tier A:** `climate_coarse.sample(x,y)` подмешивается в facade **после** merge (post-step), если поля не заданы patch/L2; patch `climate_delta` — через слой PATCH.
+**Climate coarse:** `climate_coarse.sample_macro(macro_gx, macro_gy)` — coords = **macro grid**. Fine (`r.{gx}.{gy}.climate.zst`) — `sample_meters` with `sample_step_m`. Patch `climate_delta` — через слой PATCH (wins over fine/coarse). См. [`tz_climate.md`](./tz_climate.md) § World Pack climate.
+
+**`POST generate-climate` на pack-мире:** reject (422) — base climate только через `pack/bake`.
 
 #### Статус impl (v2, 2026-07-10)
 
@@ -1030,7 +1032,7 @@ sequenceDiagram
 | **3 location** | ⚠️ | `locations/l.*.terrain.zst`; local origin ✅; settlement footprint v1 ✅; multi-z overlap — backlog |
 | **4 wilderness** | ✅ | `tiles/...c.*.zst`; registry keys в wire |
 | **5 L0** | ⚠️ | surface @ `z==surface_z`; subsurface band `n_base`; не full column |
-| **climate** (WP-5) | ⚠️ | post-merge `climate_coarse`; bake blob — backlog |
+| **climate** (WP-5) | ✅ | post-merge fine→coarse; light bake пишет `climate_coarse.zst`; fine denser via pending drain |
 | **registry resolve** | ✅ | L2/L0 `system_terrain` строки; не `terrain_{u8}` |
 | **продуктовая склейка** | ⚠️ | facade + debug routes (MERGE-9 ✅); location footprint assembler (DEBT-6 ✅) |
 
@@ -1041,7 +1043,7 @@ sequenceDiagram
 | Приоритет | ID | Задача | Статус | Примечание |
 |---|---|---|---|---|
 | **P0** | **MERGE-1** | PLAYER_SCENE в manifest/read | ✅ | `ChunkRef.refine_role` |
-| **P0** | **MERGE-2** | Climate в read path | ⚠️ | post-merge coarse; tier A bake — backlog |
+| **P0** | **MERGE-2** | Climate в read path | ✅ | coarse bake + sample_macro; fine prefer via sample_meters |
 | **P1** | **MERGE-3** | Location L2 coords | ⚠️ | footprint v1 ✅; multi-z overlap / layout bbox — backlog |
 | **P1** | **MERGE-4** | terrain/material → registry keys | ✅ | FIX-01/02 |
 | **P2** | **MERGE-5** | PLAYER_PATH corridor | ⚠️ | heading corridor ✅; DAG movement intent — backlog |
@@ -1157,7 +1159,7 @@ sequenceDiagram
 | `chunks_total` | int | fine chunks в tile |
 | `chunks_ready` | int | chunks в pack |
 | `wilderness_refine_status` | enum | `absent` \| `partial` \| `complete` — wilderness L2 chunks на tile |
-| `climate_tier` | enum | `coarse_only` (tier A) \| `fine_ready` (tier B on disk) |
+| `climate_status` | enum | `coarse_only` (coarse blob) \| `fine_ready` (fine tile on disk) |
 | `entry_anchor` | `{x,y}?` | последняя точка входа |
 
 **Агрегат сессии:** `tiles_partial`, `tiles_complete`, `active_chunk_job`.
@@ -1210,7 +1212,7 @@ sequenceDiagram
 | Компонент | Поведение |
 |---|---|
 | `POST /worlds/import` | [`WorldBundleService.import_bundle`](../backend/app/application/worldData/worldBundleService.py) — транзакция, rollback при ошибке |
-| Секции bundle | `world` **обязателен**; опционально: `races`, `perks`, `states`, `locations`, `map_cells`, `connection_nodes`, `connection_edges` |
+| Секции bundle | ключи — [`BundleSection`](../backend/app/dataModel/worldBundle/bundleSections.py); `world` **обязателен**; skeleton: races/perks/states/locations/connections; `map_cells` reject |
 | Дубликат `world_uid` | auto-remap → `имя vN` |
 | `GET /worlds/{uid}/export` | **всё**, включая `map_cells` если есть |
 | По-секционно | `POST …/locations/import`, `races/import`, … — уже **частичный** импорт |
@@ -1513,7 +1515,7 @@ flowchart TB
 |---|---|---|---|
 | **WP-PERF-30** | ProcessPool backend | `ChunkComputePool` — optional `ProcessPoolExecutor` (GIL bypass) | ⬜ backlog |
 | **WP-PERF-31** | Dedicated L0 hydro-raster | light bake: rasterize на `world_map` grid без полного `HydrologyGeneratorService.apply` | ⬜ опционально |
-| **WP-PERF-32** | Climate tier A на bake | один `climate_coarse.zst` из `surface_ctx.pole_field`; tier B — только фон | ⬜ см. WP-A12 |
+| **WP-PERF-32** | Climate tier A на bake | один `climate_coarse.zst` из `surface_ctx.pole_field`; tier B — spawn tile после scene | ✅ |
 
 #### P3 — Pack I/O и wire
 
@@ -1601,3 +1603,5 @@ flowchart LR
 | 2026-07-10 | Wire rename: `manifest.tiles[]` — `world_map_path`, `world_map_hash`, `wilderness_refine_status`; `location_terrain_entries[]` — `terrain_hash` |
 | 2026-07-10 | § **Именование (LOD ↔ код):** bulk rename backend + **log activity** (`world_map`, `wilderness_chunk`, `location_terrain`); `MapLayerKind.WORLD_MAP`; `fine-terrain-read` debug API |
 | 2026-07-10 | § **Дополнительная оптимизация (WP-PERF):** backlog P0…P4, baseline smoke, приёмка PERF-A1…A6 |
+| 2026-07-12 | **CL-PACK fix:** `ClimatePackBakeOrchestrator`; denser fine; `climate_status` coarse/fine; CL-PACK-1…11 ✅ (CL-PACK-4 accepted L0 tint) |
+| 2026-07-12 | **Climate pack cutover:** coarse `climate_coarse.zst` на light bake; fine spawn tile; meter→macro `apply_climate`; `generate-climate` reject on pack; WP-A12 / MERGE-2 / WP-PERF-32 ✅ |

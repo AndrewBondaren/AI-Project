@@ -13,13 +13,13 @@ sys.path.insert(0, str(REPO / "backend"))
 from app.application.worldData.generators.assemblers.climateAssembler.passes.poleResolvePass import (
     run_pole_resolve_pass,
 )
-from app.application.worldData.generators.terrain.hydrology.hydrologyGeneratorService import (
+from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
 from app.application.worldData.generators.terrain.passes.columnFillPass import run_column_fill
 from app.application.worldData.generators.terrain.passes.gapAnalysisPass import run_gap_analysis
 from app.application.worldData.generators.terrain.passes.surfacePass import run_surface_pass
-from app.application.worldData.generators.terrain.hydrology.buildHydrologyMasterInput import (
+from app.application.worldData.generators.hydrology.load.buildHydrologyMasterInput import (
     build_hydrology_master_input,
 )
 from app.db.models.namedLocation import NamedLocation

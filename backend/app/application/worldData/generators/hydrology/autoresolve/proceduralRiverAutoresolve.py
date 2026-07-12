@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.application.worldData.generators.terrain.hydrology.classifyRiverSegments import (
+from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments import (
     classify_autoresolve_polyline,
 )
-from app.application.worldData.generators.terrain.hydrology.resolveRiverTypeClassify import (
+from app.application.worldData.generators.hydrology.load.resolveRiverTypeClassify import (
     resolve_river_type_classify,
 )
-from app.application.worldData.generators.terrain.hydrology.riverNetworkPlanner import (
+from app.application.worldData.generators.hydrology.rivers.riverNetworkPlanner import (
     plan_river_network,
 )
-from app.application.worldData.generators.terrain.hydrology.types import HydrologyMasterInput, RiverSegment
+from app.application.worldData.generators.hydrology.types import HydrologyMasterInput, RiverSegment
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 

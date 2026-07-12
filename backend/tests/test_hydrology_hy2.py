@@ -4,25 +4,25 @@ import unittest
 from types import SimpleNamespace
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.terrain.hydrology.buildHydrologyMasterInput import (
+from app.application.worldData.generators.hydrology.load.buildHydrologyMasterInput import (
     build_hydrology_master_input,
 )
-from app.application.worldData.generators.terrain.hydrology.deepeningBandCarver import (
+from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import (
     carve_deepening_bands,
     flood_water_side,
 )
-from app.application.worldData.generators.terrain.hydrology.hydrologyGeneratorService import (
+from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
-from app.application.worldData.generators.terrain.hydrology.polylineRasterize import (
+from app.application.worldData.generators.hydrology.geom.polylineRasterize import (
     bresenham_line,
     rasterize_segments,
 )
-from app.application.worldData.generators.terrain.hydrology.seaLevelPolicy import (
+from app.application.worldData.generators.hydrology.basins.seaLevelPolicy import (
     is_land,
     resolve_z_sea,
 )
-from app.application.worldData.generators.terrain.hydrology.types import HydrologyBands, HydrologyScope
+from app.application.worldData.generators.hydrology.types import HydrologyBands, HydrologyScope
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 

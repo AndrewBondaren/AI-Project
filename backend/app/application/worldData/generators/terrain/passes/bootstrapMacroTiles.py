@@ -5,10 +5,10 @@ from __future__ import annotations
 from app.application.worldData.generators.climate.locations import static_map_anchors
 from app.application.worldData.generators.coordinates import cell_size_m
 from app.application.worldData.generators.coordinates.worldTile import macro_tile_of
-from app.application.worldData.generators.terrain.hydrology.loadDeclaredHydrology import (
+from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology import (
     load_declared_hydrology,
 )
-from app.application.worldData.generators.terrain.hydrology.loadHydrologyFromWorld import (
+from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
     is_hydrology_enabled,
 )
 from app.db.models.namedLocation import NamedLocation

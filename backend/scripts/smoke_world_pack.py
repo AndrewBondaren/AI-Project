@@ -89,6 +89,7 @@ def run_offline(result: SmokeResult) -> None:
         "tests.test_wp_acceptance",
         "tests.test_location_territory_volumes",
         "tests.test_pack_root_resolution",
+        "tests.test_pack_climate_apply",
         "tests.test_pojo_policies",
     ]
     proc = _run_cmd(
@@ -250,7 +251,7 @@ def run_http(
         if has_climate:
             result.ok("WP-A12", "scene cells include climate fields")
         else:
-            result.skip("WP-A12", "no climate on scene cells yet (world-map-only fallback OK for v1)")
+            result.fail("WP-A12", "scene cells missing temperature_base/rainfall — climate_coarse bake required")
 
         building = [c for c in scene.get("cells") or [] if c.get("system_building_element")]
         if building:

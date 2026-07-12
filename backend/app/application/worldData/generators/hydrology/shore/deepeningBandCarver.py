@@ -6,9 +6,9 @@ from collections import deque
 from dataclasses import dataclass
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.terrain.hydrology.polylineRasterize import rasterize_segments
-from app.application.worldData.generators.terrain.hydrology.seaLevelPolicy import resolve_z_sea
-from app.application.worldData.generators.terrain.hydrology.types import HydrologyBands
+from app.application.worldData.generators.hydrology.geom.polylineRasterize import rasterize_segments
+from app.application.worldData.generators.hydrology.basins.seaLevelPolicy import resolve_z_sea
+from app.application.worldData.generators.hydrology.types import HydrologyBands
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology

@@ -4,7 +4,7 @@ import unittest
 from types import SimpleNamespace
 
 from app.application.jsonValidation.facade import normalize_world
-from app.application.worldData.generators.terrain.hydrology.loadDeclaredHydrology import (
+from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology import (
     load_declared_hydrology,
 )
 from app.dataModel.hydrology.enums.riverDeclareMode import RiverDeclareMode

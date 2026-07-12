@@ -4,22 +4,22 @@ import unittest
 from types import SimpleNamespace
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.terrain.hydrology.deepeningBandCarver import (
+from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import (
     declare_coastline_bbox_padded,
     flood_water_side,
     flood_water_side_unbounded,
 )
-from app.application.worldData.generators.terrain.hydrology.hydrologyAutoresolvePolicy import (
+from app.application.worldData.generators.hydrology.load.hydrologyAutoresolvePolicy import (
     seas_autoresolve_policy,
 )
-from app.application.worldData.generators.terrain.hydrology.hydrologyGeneratorService import (
+from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
-from app.application.worldData.generators.terrain.hydrology.polylineRasterize import rasterize_segments
-from app.application.worldData.generators.terrain.hydrology.proceduralSeaAutoresolve import (
+from app.application.worldData.generators.hydrology.geom.polylineRasterize import rasterize_segments
+from app.application.worldData.generators.hydrology.autoresolve.proceduralSeaAutoresolve import (
     autoresolve_sea_basins,
 )
-from app.application.worldData.generators.terrain.hydrology.types import (
+from app.application.worldData.generators.hydrology.types import (
     HydrologyMasterInput,
     HydrologyScope,
     LoadedConnectionGraph,
@@ -174,7 +174,7 @@ class TestBoundaryAutoresolve(unittest.TestCase):
 
     def test_flood_from_bbox_north_ocean(self):
         hm = _flat_heightmap(0, 10, 0, 6)
-        from app.application.worldData.generators.terrain.hydrology.deepeningBandCarver import (
+        from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import (
             flood_from_bbox_ocean_edge,
         )
         dist = flood_from_bbox_ocean_edge(hm)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 
 from app.application.jsonValidation import terrain_system_keys
-from app.application.worldData.generators.coordinates import cell_size_m
+from app.application.worldData.generators.coordinates import cell_size_m, meters_to_grid_x, meters_to_grid_y
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
     prepare_surface_terrain_context,
@@ -19,10 +19,21 @@ from app.application.worldData.pack.packBakeLog import (
     log_pack_surface_context,
 )
 from app.application.worldData.pack.worldPackWriter import WorldPackWriter
+from app.dataModel.climate.enums.climateZone import ClimateZone
 from app.dataModel.worldPack.worldMapCellsPerTile import resolve_world_map_cells_per_tile
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+
+
+def _climate_zone_id(zone_key: str) -> int | None:
+    zone = ClimateZone.from_system_climate(zone_key)
+    if zone is None:
+        return None
+    for idx, member in enumerate(ClimateZone):
+        if member is zone:
+            return idx
+    return None
 
 
 class WorldMapBakeOrchestrator:
@@ -47,9 +58,12 @@ class WorldMapBakeOrchestrator:
             for tx in range(side):
                 xm = gx * tile_m + tx * tile_m // side
                 ym = gy * tile_m + ty * tile_m // side
-                surface_z = int(surface_ctx.coarse_surface_z.get((xm, ym), 0))
-                hydro_cell = surface_ctx.coarse_hydro.get((xm, ym))
+                surface_z = int(surface_ctx.coarse_surface_z.get((gx, gy), 0))
+                hydro_cell = surface_ctx.coarse_hydro.get((gx, gy))
                 system_terrain = surface_terrain_at_z(surface_z, terrain_set)
+                mgx = int(meters_to_grid_x(xm, tile_m))
+                mgy = int(meters_to_grid_y(ym, tile_m))
+                pole = surface_ctx.pole_field.sample(world, mgx, mgy)
                 cells.append(
                     WorldMapCellWire(
                         tx=tx,
@@ -57,6 +71,7 @@ class WorldMapBakeOrchestrator:
                         surface_z=surface_z,
                         system_terrain=system_terrain,
                         hydrology_role=world_map_hydro_role_from_cell(hydro_cell),
+                        climate_zone_id=_climate_zone_id(pole.system_climate_zone),
                     ),
                 )
         content_hash = writer.write_world_map_tile(gx, gy, cells, cells_per_side=side)
@@ -68,12 +83,15 @@ class WorldMapBakeOrchestrator:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         tiles: list[tuple[int, int]],
+        *,
+        surface_ctx: SurfaceTerrainContext | None = None,
         **prepare_kwargs,
     ) -> int:
         world_uid = world.world_uid
-        ctx_t0 = time.perf_counter()
-        surface_ctx = prepare_surface_terrain_context(world, locations, **prepare_kwargs)
-        log_pack_surface_context(world_uid, ok=surface_ctx is not None, started_at=ctx_t0)
+        if surface_ctx is None:
+            ctx_t0 = time.perf_counter()
+            surface_ctx = prepare_surface_terrain_context(world, locations, **prepare_kwargs)
+            log_pack_surface_context(world_uid, ok=surface_ctx is not None, started_at=ctx_t0)
         if surface_ctx is None:
             return 0
         tile_m = cell_size_m(world)

@@ -26,6 +26,7 @@ class LocalGridLoading:
     chunks_total: int = 0
     tile_gx: int | None = None
     tile_gy: int | None = None
+    climate_status: Literal["coarse_only", "fine_ready"] | None = None
 
 
 @dataclass
@@ -33,10 +34,12 @@ class LoadingProgressSnapshot:
     world_uid: str
     world_map: WorldMapLoading = field(default_factory=WorldMapLoading)
     local_grid: LocalGridLoading = field(default_factory=LocalGridLoading)
+    has_climate_coarse: bool = False
 
     def to_dict(self) -> dict:
         return {
             "world_uid": self.world_uid,
+            "has_climate_coarse": self.has_climate_coarse,
             "worldMapLoading": {
                 "phase": self.world_map.phase,
                 "world_map_tiles_ready": self.world_map.world_map_tiles_ready,
@@ -52,5 +55,6 @@ class LoadingProgressSnapshot:
                 "chunks_total": self.local_grid.chunks_total,
                 "tile_gx": self.local_grid.tile_gx,
                 "tile_gy": self.local_grid.tile_gy,
+                "climate_status": self.local_grid.climate_status,
             },
         }

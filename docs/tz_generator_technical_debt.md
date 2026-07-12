@@ -636,7 +636,7 @@ if ptype is PassageType.STAIRCASE:
 
 | Enum | Модуль | Вердикт |
 |---|---|---|
-| `HydrologyScope`, `HydrologyCellRole` | `terrain/hydrology/types.py` | pipeline hydrology; dataModel — когда стабилизируем HY-S-3 API |
+| `HydrologyScope`, `HydrologyCellRole` | `generators/hydrology/types.py` | pipeline hydrology; dataModel — когда стабилизируем HY-S-3 API |
 | `AnchorSource` | `climate/climateAnchor.py` | climate pipeline |
 | `CellZone` | `settlementAssembler/planner/defaults.py` | planner-internal (center/edge/inner) |
 | `CoordinateSpace` | `coordinates/space.py` | теги координатных систем |

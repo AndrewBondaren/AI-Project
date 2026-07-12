@@ -6,7 +6,7 @@ from typing import Any
 
 from app.application.worldData.generators.climate.loggingHelpers import warn_once
 from app.application.jsonValidation import hydrology, river_type_classify_defaults
-from app.application.worldData.generators.terrain.hydrology.types import RiverTypeClassify
+from app.application.worldData.generators.hydrology.types import RiverTypeClassify
 
 
 def _type_classify_from_defaults() -> RiverTypeClassify:

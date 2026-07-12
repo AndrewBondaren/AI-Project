@@ -5,29 +5,29 @@ from __future__ import annotations
 import logging
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.terrain.hydrology.buildHydrologyMasterInput import (
+from app.application.worldData.generators.hydrology.load.buildHydrologyMasterInput import (
     build_hydrology_master_input,
 )
-from app.application.worldData.generators.terrain.hydrology.coastalLandformClassifier import (
+from app.application.worldData.generators.hydrology.basins.coastalLandformClassifier import (
     classify_coastal_landforms,
 )
-from app.application.worldData.generators.terrain.hydrology.hydrologyAutoresolvePolicy import (
+from app.application.worldData.generators.hydrology.load.hydrologyAutoresolvePolicy import (
     seas_autoresolve_policy,
 )
-from app.application.worldData.generators.terrain.hydrology.proceduralSeaAutoresolve import (
+from app.application.worldData.generators.hydrology.autoresolve.proceduralSeaAutoresolve import (
     autoresolve_sea_basins,
 )
-from app.application.worldData.generators.terrain.hydrology.lakeBasinGenerator import (
+from app.application.worldData.generators.hydrology.basins.lakeBasinGenerator import (
     generate_lakes,
 )
-from app.application.worldData.generators.terrain.hydrology.oceanBasinGenerator import (
+from app.application.worldData.generators.hydrology.basins.oceanBasinGenerator import (
     generate_open_ocean,
 )
-from app.application.worldData.generators.terrain.hydrology.riverBedCarver import generate_rivers
-from app.application.worldData.generators.terrain.hydrology.seaBasinGenerator import (
+from app.application.worldData.generators.hydrology.rivers.riverBedCarver import generate_rivers
+from app.application.worldData.generators.hydrology.basins.seaBasinGenerator import (
     generate_coastal_sea,
 )
-from app.application.worldData.generators.terrain.hydrology.types import (
+from app.application.worldData.generators.hydrology.types import (
     HydrologyMasterInput,
     HydrologyResult,
     HydrologyScope,

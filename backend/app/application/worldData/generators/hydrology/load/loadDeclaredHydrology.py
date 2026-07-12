@@ -8,11 +8,11 @@ from app.application.jsonValidation.worldRow import hydrology as read_hydrology
 from app.application.worldData.generators.coordinates.convert import (
     cell_size_m,
 )
-from app.application.worldData.generators.terrain.hydrology.basinKindResolver import (
+from app.application.worldData.generators.hydrology.basins.basinKindResolver import (
     resolve_lake_basin_role,
 )
-from app.application.worldData.generators.terrain.hydrology.lakeSpecs import _group_segments
-from app.application.worldData.generators.terrain.hydrology.types import (
+from app.application.worldData.generators.hydrology.basins.lakeSpecs import _group_segments
+from app.application.worldData.generators.hydrology.types import (
     DeclaredRiverEdge,
     LakeSpec,
     RiverSystemIndex,

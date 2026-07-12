@@ -557,6 +557,48 @@ def log_pack_finalize(world_uid: str, *, pack_path: str, content_hash: str | Non
     )
 
 
+def log_pack_climate_coarse_done(
+    world_uid: str,
+    *,
+    samples: int,
+    content_hash: str | None,
+    started_at: float,
+) -> None:
+    elapsed_s = time.perf_counter() - started_at
+    _info(
+        "pack climate_coarse bake done | world=%s samples=%d hash=%s elapsed_s=%.2f",
+        world_uid,
+        samples,
+        (content_hash or "")[:12] or "-",
+        elapsed_s,
+        activity="climate_coarse_bake",
+        world_uid=world_uid,
+        climate_samples=samples,
+        elapsed_s=round(elapsed_s, 2),
+    )
+
+
+def log_pack_climate_tile_done(
+    world_uid: str,
+    *,
+    tile_gx: int,
+    tile_gy: int,
+    samples: int,
+) -> None:
+    _info(
+        "pack climate_tile bake done | world=%s tile=(%d,%d) samples=%d",
+        world_uid,
+        tile_gx,
+        tile_gy,
+        samples,
+        activity="climate_tile_bake",
+        world_uid=world_uid,
+        tile_gx=tile_gx,
+        tile_gy=tile_gy,
+        climate_samples=samples,
+    )
+
+
 def log_pack_bake_done(
     world_uid: str,
     *,
@@ -566,15 +608,16 @@ def log_pack_bake_done(
     queue_depth: int,
     started_at: float,
 ) -> None:
-    elapsed_ms = (time.perf_counter() - started_at) * 1000.0
+    elapsed_s = time.perf_counter() - started_at
     _info(
-        "pack bake done | world=%s world_map_cells=%d chunks=%d/%d queue=%d elapsed_ms=%.1f",
+        "pack bake done | world=%s world_map_cells=%d chunks=%d/%d queue=%d elapsed_s=%.2f",
         world_uid,
         world_map_cells,
         chunks_done,
         chunks_total,
         queue_depth,
-        elapsed_ms,
+        elapsed_s,
         activity="bake_orchestrate_done",
         world_uid=world_uid,
+        elapsed_s=round(elapsed_s, 2),
     )

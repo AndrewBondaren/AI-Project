@@ -1,6 +1,6 @@
 from app.application.jsonValidation import terrain_scalars, terrain_system_keys
 from app.application.worldData.generators.terrain.passes.gapAnalysisPass import n_base
-from app.application.worldData.generators.terrain.hydrology.shoreProfile import (
+from app.application.worldData.generators.hydrology.shore.shoreProfile import (
     apply_shore_surface,
     shore_terrain_material,
 )

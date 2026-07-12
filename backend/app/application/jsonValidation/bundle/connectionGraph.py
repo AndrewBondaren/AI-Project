@@ -14,6 +14,7 @@ from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import
 )
 from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
 from app.dataModel.connections.enums.graphLevel import GraphLevel
+from app.dataModel.worldBundle.bundleSections import BundleSection
 
 
 class ConnectionNodeImportRow(BaseModel):
@@ -140,7 +141,7 @@ def normalize_connection_nodes(
         rows,
         entry_cls=ConnectionNodeImportRow,
         schema_id=ConnectionNodeImportRow.SCHEMA_ID,
-        section="connection_nodes",
+        section=BundleSection.CONNECTION_NODES,
         ctx=ctx,
     )
 
@@ -156,7 +157,7 @@ def normalize_connection_edges(
         return []
     if not isinstance(rows, list):
         ctx.errors.append(FieldPathError(
-            path=("connection_edges",),
+            path=(BundleSection.CONNECTION_EDGES,),
             message="expected list",
             schema_id=ConnectionEdgeImportRow.SCHEMA_ID,
             code="EXPECTED_LIST",
@@ -167,7 +168,7 @@ def normalize_connection_edges(
     for index, item in enumerate(rows):
         if not isinstance(item, dict):
             ctx.errors.append(FieldPathError(
-                path=("connection_edges", index),
+                path=(BundleSection.CONNECTION_EDGES, index),
                 message="expected object",
                 schema_id=ConnectionEdgeImportRow.SCHEMA_ID,
                 code="EXPECTED_OBJECT",
@@ -177,14 +178,14 @@ def normalize_connection_edges(
         row_ctx = ResolveContext(
             mode=ctx.mode,
             partial=ctx.partial,
-            path_prefix=("connection_edges", index),
+            path_prefix=(BundleSection.CONNECTION_EDGES, index),
             errors=ctx.errors,
             schema_id=ConnectionEdgeImportRow.SCHEMA_ID,
         )
         resolved = resolve_model(
             ConnectionEdgeImportRow,
             item,
-            label=f"connection_edges[{index}]",
+            label=f"{BundleSection.CONNECTION_EDGES}[{index}]",
             ctx=row_ctx,
         )
         if len(ctx.errors) > before_errors:
@@ -192,7 +193,7 @@ def normalize_connection_edges(
         conn_type = resolved.connection_type
         if conn_type not in allowed:
             ctx.errors.append(FieldPathError(
-                path=("connection_edges", index, "connection_type"),
+                path=(BundleSection.CONNECTION_EDGES, index, "connection_type"),
                 message=f"unknown REF-W-CONN target: {conn_type!r}",
                 schema_id=ConnectionEdgeImportRow.SCHEMA_ID,
                 code="REF_W_UNKNOWN",
@@ -207,16 +208,16 @@ def normalize_bundle_connections(data: dict[str, Any]) -> dict[str, Any]:
     out = dict(data)
     errors: list[FieldPathError] = []
     ctx = ResolveContext(mode=ResolveMode.IMPORT, errors=errors)
-    world_wire = out.get("world") if isinstance(out.get("world"), dict) else {}
+    world_wire = out.get(BundleSection.WORLD) if isinstance(out.get(BundleSection.WORLD), dict) else {}
 
-    if "connection_nodes" in out:
-        out["connection_nodes"] = normalize_connection_nodes(
-            out["connection_nodes"],
+    if BundleSection.CONNECTION_NODES in out:
+        out[BundleSection.CONNECTION_NODES] = normalize_connection_nodes(
+            out[BundleSection.CONNECTION_NODES],
             ctx=ctx,
         )
-    if "connection_edges" in out:
-        out["connection_edges"] = normalize_connection_edges(
-            out["connection_edges"],
+    if BundleSection.CONNECTION_EDGES in out:
+        out[BundleSection.CONNECTION_EDGES] = normalize_connection_edges(
+            out[BundleSection.CONNECTION_EDGES],
             world_wire=world_wire,
             ctx=ctx,
         )

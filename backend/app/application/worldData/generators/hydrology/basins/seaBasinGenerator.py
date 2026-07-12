@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.terrain.hydrology.deepeningBandCarver import carve_deepening_bands
-from app.application.worldData.generators.terrain.hydrology.resolveHydrologyBands import resolve_hydrology_bands
-from app.application.worldData.generators.terrain.hydrology.seaLevelPolicy import resolve_z_sea
-from app.application.worldData.generators.terrain.hydrology.types import HydrologyMasterInput
+from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import carve_deepening_bands
+from app.application.worldData.generators.hydrology.load.resolveHydrologyBands import resolve_hydrology_bands
+from app.application.worldData.generators.hydrology.basins.seaLevelPolicy import resolve_z_sea
+from app.application.worldData.generators.hydrology.types import HydrologyMasterInput
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 

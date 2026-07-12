@@ -26,6 +26,7 @@ class PackReadContext:
         self._default_paths = WorldPackPaths.from_db_parent(db_path, world_uid)
         self._readers: dict[str, WorldPackReader] = {}
         self._climate_cache: dict[str, ClimateFieldWire | None] = {}
+        self._climate_tile_cache: dict[tuple[str, int, int], ClimateFieldWire | None] = {}
         self._fine_terrain_cache = FineTerrainDecodeCache(read_policy)
 
     def paths_for(self, world: World) -> WorldPackPaths:
@@ -58,3 +59,28 @@ class PackReadContext:
             except FileNotFoundError:
                 self._climate_cache[key] = None
         return self._climate_cache[key]
+
+    def climate_tile_field(self, world: World, gx: int, gy: int) -> ClimateFieldWire | None:
+        root = str(self.paths_for(world).root)
+        key = (root, gx, gy)
+        if key not in self._climate_tile_cache:
+            reader = self.reader_for(world)
+            if not reader.climate_tile_exists(gx, gy):
+                self._climate_tile_cache[key] = None
+            else:
+                try:
+                    self._climate_tile_cache[key] = reader.read_climate_tile(gx, gy)
+                except (FileNotFoundError, ValueError):
+                    self._climate_tile_cache[key] = None
+        return self._climate_tile_cache[key]
+
+    def invalidate_climate(self, world: World) -> None:
+        key = str(self.paths_for(world).root)
+        self._climate_cache.pop(key, None)
+        stale = [k for k in self._climate_tile_cache if k[0] == key]
+        for k in stale:
+            del self._climate_tile_cache[k]
+
+    def invalidate_climate_tile(self, world: World, gx: int, gy: int) -> None:
+        key = (str(self.paths_for(world).root), gx, gy)
+        self._climate_tile_cache.pop(key, None)

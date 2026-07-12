@@ -4,13 +4,13 @@ import unittest
 from types import SimpleNamespace
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.terrain.hydrology.lakeBasinGenerator import carve_lake_basin
-from app.application.worldData.generators.terrain.hydrology.polygonInterior import (
+from app.application.worldData.generators.hydrology.basins.lakeBasinGenerator import carve_lake_basin
+from app.application.worldData.generators.hydrology.geom.polygonInterior import (
     interior_cells,
     point_in_polygon,
 )
-from app.application.worldData.generators.terrain.hydrology.polylineRasterize import rasterize_segments
-from app.application.worldData.generators.terrain.hydrology.types import HydrologyBands, LakeSpec
+from app.application.worldData.generators.hydrology.geom.polylineRasterize import rasterize_segments
+from app.application.worldData.generators.hydrology.types import HydrologyBands, LakeSpec
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 

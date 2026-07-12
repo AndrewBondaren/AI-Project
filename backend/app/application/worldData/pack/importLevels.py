@@ -1,28 +1,25 @@
-"""World bundle import/export levels — WP-24."""
+"""World bundle import/export levels — WP-24 thin layer over dataModel."""
 
 from __future__ import annotations
 
-from typing import Literal
+from app.dataModel.worldBundle.bundleSections import BundleSection, ImportLevel
 
-ImportLevel = Literal["registry", "skeleton"]
+__all__ = [
+    "ImportLevel",
+    "BundleSection",
+    "SKELETON_SECTIONS",
+    "REGISTRY_SECTIONS",
+    "sections_for_level",
+    "filter_bundle_for_export",
+    "validate_bundle_for_import",
+]
 
-SKELETON_SECTIONS: frozenset[str] = frozenset({
-    "world",
-    "races",
-    "perks",
-    "states",
-    "locations",
-    "connection_nodes",
-    "connection_edges",
-})
-
-REGISTRY_SECTIONS: frozenset[str] = frozenset({"world"})
+SKELETON_SECTIONS: frozenset[str] = BundleSection.SKELETON
+REGISTRY_SECTIONS: frozenset[str] = BundleSection.REGISTRY
 
 
 def sections_for_level(level: ImportLevel) -> frozenset[str]:
-    if level == "registry":
-        return REGISTRY_SECTIONS
-    return SKELETON_SECTIONS
+    return BundleSection.for_level(level)
 
 
 def filter_bundle_for_export(bundle: dict, level: ImportLevel) -> dict:

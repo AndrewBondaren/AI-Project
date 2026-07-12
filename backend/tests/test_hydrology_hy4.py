@@ -3,13 +3,13 @@
 import unittest
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.terrain.hydrology.classifyRiverSegments import (
+from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments import (
     segments_from_declared,
 )
-from app.application.worldData.generators.terrain.hydrology.riverBedCarver import (
+from app.application.worldData.generators.hydrology.rivers.riverBedCarver import (
     carve_river_segment,
 )
-from app.application.worldData.generators.terrain.hydrology.types import (
+from app.application.worldData.generators.hydrology.types import (
     DeclaredRiverEdge,
     RiverSegment,
 )

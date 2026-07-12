@@ -6,16 +6,16 @@ from collections import deque
 from typing import Any
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.terrain.hydrology.deepeningBandCarver import _neighbors4
-from app.application.worldData.generators.terrain.hydrology.polygonInterior import interior_cells
-from app.application.worldData.generators.terrain.hydrology.polylineRasterize import rasterize_segments
-from app.application.worldData.generators.terrain.hydrology.hydrologyAutoresolvePolicy import (
+from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import _neighbors4
+from app.application.worldData.generators.hydrology.geom.polygonInterior import interior_cells
+from app.application.worldData.generators.hydrology.geom.polylineRasterize import rasterize_segments
+from app.application.worldData.generators.hydrology.load.hydrologyAutoresolvePolicy import (
     lakes_autoresolve_policy,
 )
-from app.application.worldData.generators.terrain.hydrology.resolveHydrologyBands import (
+from app.application.worldData.generators.hydrology.load.resolveHydrologyBands import (
     resolve_hydrology_bands,
 )
-from app.application.worldData.generators.terrain.hydrology.types import (
+from app.application.worldData.generators.hydrology.types import (
     HydrologyMasterInput,
     LakeSpec,
 )
@@ -51,7 +51,7 @@ def _interior_seed(
     segments: list[tuple[tuple[int, int], tuple[int, int]]],
     shoreline: set[tuple[int, int]],
 ) -> tuple[int, int] | None:
-    from app.application.worldData.generators.terrain.hydrology.polygonInterior import (
+    from app.application.worldData.generators.hydrology.geom.polygonInterior import (
         point_in_polygon,
         polygon_vertices,
     )
@@ -89,7 +89,7 @@ def _resolve_interior(
     if seed is None:
         return set()
     filled: set[tuple[int, int]] = {seed}
-    from app.application.worldData.generators.terrain.hydrology.polygonInterior import (
+    from app.application.worldData.generators.hydrology.geom.polygonInterior import (
         point_in_polygon,
         polygon_vertices,
     )
@@ -252,7 +252,7 @@ def generate_lakes(
 
     lakes_policy = lakes_autoresolve_policy(world)
     if lakes_policy.lakes_enabled and lakes_policy.autoresolve:
-        from app.application.worldData.generators.terrain.hydrology.proceduralLakeAutoresolve import (
+        from app.application.worldData.generators.hydrology.autoresolve.proceduralLakeAutoresolve import (
             autoresolve_lakes,
         )
 

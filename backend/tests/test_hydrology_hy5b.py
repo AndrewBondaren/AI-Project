@@ -4,17 +4,17 @@ import unittest
 from types import SimpleNamespace
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.terrain.hydrology.hydrologyAutoresolvePolicy import (
+from app.application.worldData.generators.hydrology.load.hydrologyAutoresolvePolicy import (
     lakes_autoresolve_policy,
 )
-from app.application.worldData.generators.terrain.hydrology.hydrologyGeneratorService import (
+from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
-from app.application.worldData.generators.terrain.hydrology.proceduralLakeAutoresolve import (
+from app.application.worldData.generators.hydrology.autoresolve.proceduralLakeAutoresolve import (
     autoresolve_lakes,
     flood_basin_interior,
 )
-from app.application.worldData.generators.terrain.hydrology.types import (
+from app.application.worldData.generators.hydrology.types import (
     HydrologyMasterInput,
     HydrologyScope,
     LoadedConnectionGraph,

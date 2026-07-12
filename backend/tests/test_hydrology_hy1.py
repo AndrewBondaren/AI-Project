@@ -3,24 +3,24 @@
 import unittest
 from types import SimpleNamespace
 
-from app.application.worldData.generators.terrain.hydrology.loadHydrologyFromWorld import (
+from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
     is_hydrology_enabled,
 )
-from app.application.worldData.generators.terrain.hydrology.resolveHydrologyBands import (
+from app.application.worldData.generators.hydrology.load.resolveHydrologyBands import (
     clamp_bands,
     resolve_hydrology_bands,
 )
-from app.application.worldData.generators.terrain.hydrology.resolveRiverTypeClassify import (
+from app.application.worldData.generators.hydrology.load.resolveRiverTypeClassify import (
     resolve_river_type_classify,
 )
-from app.application.worldData.generators.terrain.hydrology.buildHydrologyMasterInput import (
+from app.application.worldData.generators.hydrology.load.buildHydrologyMasterInput import (
     build_hydrology_master_input,
 )
-from app.application.worldData.generators.terrain.hydrology.hydrologyLocations import (
+from app.application.worldData.generators.hydrology.load.hydrologyLocations import (
     geographic_locations,
     is_geographic_location,
 )
-from app.application.worldData.generators.terrain.hydrology.hydrologyGeneratorService import (
+from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
 from app.db.models.namedLocation import NamedLocation

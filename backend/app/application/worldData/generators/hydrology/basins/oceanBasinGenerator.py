@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.terrain.hydrology.seaLevelPolicy import resolve_z_sea
+from app.application.worldData.generators.hydrology.basins.seaLevelPolicy import resolve_z_sea
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology

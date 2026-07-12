@@ -55,6 +55,9 @@ class WorldPackPaths:
     def climate_coarse_path(self) -> Path:
         return self.root / "climate_coarse.zst"
 
+    def climate_tile_path(self, gx: int, gy: int) -> Path:
+        return self.tiles_dir / f"r.{gx}.{gy}.climate.zst"
+
     def locations_index_path(self) -> Path:
         return self.root / "locations_index.json"
 

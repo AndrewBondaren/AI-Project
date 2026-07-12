@@ -346,35 +346,58 @@ generators/terrain/caves/
 
 ## Расположение кода (target)
 
+Hydrology — **peer** `generators/climate/`, не подпапка terrain (layout 2026-07-12).
+
 ```
-generators/terrain/
-  passes/
-    surfacePass.py              # existing
-    gapAnalysisPass.py          # existing
-    columnFillPass.py           # existing
-  hydrology/
-    types.py                    # HydrologyMask, RiverPolyline, LakeSpec, HydrologyResult, HydrologyCellRole, ShoreProfile, DeepeningBand, RiverSegment
-    seaLevelPolicy.py           # z_sea resolve
-    loadHydrologyFromWorld.py   # world.hydrology → policies
+generators/hydrology/
+  __init__.py
+  hydrologyGeneratorService.py   # sync facade
+  types.py                       # HydrologyResult, scopes, master input DTOs
+  load/
+    loadHydrologyFromWorld.py    # world.hydrology → policies
+    loadDeclaredHydrology.py
+    loadConnectionGraph.py       # DB nodes/edges → roads/settlement (U23)
     buildHydrologyMasterInput.py
+    hydrologyLocations.py
+    declaredEdges.py
     resolveHydrologyBands.py
     resolveRiverTypeClassify.py
-    loadConnectionGraph.py      # DB nodes/edges → roads/settlement (not hydrology declare — U23)
+    hydrologyAutoresolvePolicy.py
+  basins/
+    seaLevelPolicy.py            # z_sea resolve
+    seaBasinGenerator.py         # Coastal sea
+    oceanBasinGenerator.py       # Open ocean (+ inland_sea)
+    lakeBasinGenerator.py
+    lakeSpecs.py
+    basinKindResolver.py         # U25
+    coastalLandformClassifier.py # islands, peninsulas (read-only)
+  rivers/
+    riverNetworkPlanner.py       # D8 descent
+    riverBedCarver.py
+    riverSpecs.py
+    classifyRiverSegments.py     # U17/U18 pure classify
+    resolveDeclaredRiverPath.py
+    riverConnectionEmit.py       # U18 DTO emit
+  shore/
+    shoreProfile.py
+    deepeningBandCarver.py
+    meterHydrologyIndex.py
+    heightmapSurfaceCells.py
+  geom/
     polylineRasterize.py
-    basinKindResolver.py        # U25
-    applyHydrologyMetadata.py   # HydrologyCellIndex → MapCell.hydrology at fill
-    seaBasinGenerator.py          # Coastal sea — «большое у берега»
-    oceanBasinGenerator.py        # Open ocean mass (+ inland_sea mask)
-    coastalLandformClassifier.py  # islands, peninsulas, coastline (read-only)
-    lakeBasinGenerator.py       # Local lake carve (inland, not z_sea horizon)
-    riverNetworkPlanner.py      # D8 descent; source on terrain
-    riverTypeClassifier.py      # U17/U18: classify_river_segments — pure, no ConnectionEdge
-    riverConnectionEmit.py      # U18: RiverSegment[] → ConnectionNode + ConnectionEdge (DTO only)
-    riverBedCarver.py           # Channel + ShoreProfile; type-specific steepness
-    deepeningBandCarver.py      # Shared shore + deepening (river, lake, sea)
+    polygonInterior.py
     smoothRiverPolyline.py
-    hydrologyGeneratorService.py  # Orchestrator (sync facade)
+  autoresolve/
+    proceduralSeaAutoresolve.py
+    proceduralLakeAutoresolve.py
+    proceduralRiverAutoresolve.py
+
+generators/terrain/passes/       # surface still owns heightmap passes
+  surfacePass.py
+  …
 ```
+
+`dataModel/hydrology/` — POJO / enums / policies (без изменений layout).
 
 **Facade (контракт):**
 
@@ -1257,6 +1280,7 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-12 | **Layout:** `generators/hydrology/{load,basins,rivers,shore,geom,autoresolve}` — peer climate; убран flat `terrain/hydrology/` |
 | 2026-07 | **U27 topology:** `river_system_topology` on `system_role=system` (basin); default confluence без system nodes; `RiverSystemIndex` в loader |
 | 2026-07 | **U23 TZ sync:** declare geometry — канон `world.hydrology.declared_*`; connection-edge declare deprecated; loader/code hard cut |
 | 2026-06 | **C14:** partial climate recalc после hydrology dirty rect; cross-ref Climate LOD |

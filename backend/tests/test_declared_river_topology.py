@@ -7,10 +7,10 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from app.application.jsonValidation.facade import normalize_world
-from app.application.worldData.generators.terrain.hydrology.buildHydrologyMasterInput import (
+from app.application.worldData.generators.hydrology.load.buildHydrologyMasterInput import (
     build_hydrology_master_input,
 )
-from app.application.worldData.generators.terrain.hydrology.loadDeclaredHydrology import (
+from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology import (
     build_river_system_index,
     load_declared_hydrology,
 )

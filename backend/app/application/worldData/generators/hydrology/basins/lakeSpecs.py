@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.terrain.hydrology.basinKindResolver import (
+from app.application.worldData.generators.hydrology.basins.basinKindResolver import (
     resolve_lake_basin_role,
 )
-from app.application.worldData.generators.terrain.hydrology.declaredEdges import (
+from app.application.worldData.generators.hydrology.load.declaredEdges import (
     extract_declared_segments,
 )
-from app.application.worldData.generators.terrain.hydrology.types import (
+from app.application.worldData.generators.hydrology.types import (
     LakeSpec,
     LoadedConnectionGraph,
 )

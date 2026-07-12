@@ -7,19 +7,19 @@ from app.application.worldData.generators.coordinates.worldTile import (
     expand_coarse_hydro_to_tile,
     meter_bbox_for_tile,
 )
-from app.application.worldData.generators.terrain.hydrology.classifyRiverSegments import (
+from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments import (
     segments_from_declared,
 )
-from app.application.worldData.generators.terrain.hydrology.loadDeclaredHydrology import (
+from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology import (
     load_declared_hydrology,
 )
-from app.application.worldData.generators.terrain.hydrology.resolveDeclaredRiverPath import (
+from app.application.worldData.generators.hydrology.rivers.resolveDeclaredRiverPath import (
     resolve_declared_river_intents,
 )
-from app.application.worldData.generators.terrain.hydrology.resolveRiverTypeClassify import (
+from app.application.worldData.generators.hydrology.load.resolveRiverTypeClassify import (
     resolve_river_type_classify,
 )
-from app.application.worldData.generators.terrain.hydrology.riverBedCarver import (
+from app.application.worldData.generators.hydrology.rivers.riverBedCarver import (
     _channel_depth_step,
     carve_river_segment,
 )

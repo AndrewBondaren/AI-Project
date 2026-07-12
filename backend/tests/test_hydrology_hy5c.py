@@ -4,17 +4,17 @@ import unittest
 from types import SimpleNamespace
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.terrain.hydrology.riverBedCarver import generate_rivers
-from app.application.worldData.generators.terrain.hydrology.proceduralRiverAutoresolve import (
+from app.application.worldData.generators.hydrology.rivers.riverBedCarver import generate_rivers
+from app.application.worldData.generators.hydrology.autoresolve.proceduralRiverAutoresolve import (
     autoresolve_river_segments,
 )
-from app.application.worldData.generators.terrain.hydrology.riverNetworkPlanner import (
+from app.application.worldData.generators.hydrology.rivers.riverNetworkPlanner import (
     plan_descent_path,
 )
-from app.application.worldData.generators.terrain.hydrology.smoothRiverPolyline import (
+from app.application.worldData.generators.hydrology.geom.smoothRiverPolyline import (
     turn_angle_deg,
 )
-from app.application.worldData.generators.terrain.hydrology.types import (
+from app.application.worldData.generators.hydrology.types import (
     HydrologyMasterInput,
     HydrologyScope,
     LoadedConnectionGraph,

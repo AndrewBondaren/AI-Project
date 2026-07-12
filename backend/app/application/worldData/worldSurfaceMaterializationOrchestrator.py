@@ -10,7 +10,7 @@ import logging
 
 from app.application.worldData.bootstrapMapCellWriter import BootstrapMapCellWriter
 from app.application.worldData.climateBatchOrchestrator import ClimateBatchOrchestrator
-from app.application.worldData.generators.terrain.hydrology.hydrologyGeneratorService import (
+from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
 from app.application.worldData.pack.packMaterializationOrchestrator import PackMaterializationOrchestrator

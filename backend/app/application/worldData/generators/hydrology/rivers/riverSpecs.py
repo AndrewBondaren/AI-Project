@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.terrain.hydrology.types import (
+from app.application.worldData.generators.hydrology.types import (
     DeclaredRiverEdge,
     LoadedConnectionGraph,
 )

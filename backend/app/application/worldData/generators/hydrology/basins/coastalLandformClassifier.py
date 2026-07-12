@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.application.worldData.generators.terrain.hydrology.polylineRasterize import rasterize_segments
-from app.application.worldData.generators.terrain.hydrology.types import HydrologyMasterInput
+from app.application.worldData.generators.hydrology.geom.polylineRasterize import rasterize_segments
+from app.application.worldData.generators.hydrology.types import HydrologyMasterInput
 
 
 @dataclass(frozen=True)

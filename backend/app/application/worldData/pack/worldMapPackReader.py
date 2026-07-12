@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from app.application.jsonValidation import terrain_system_keys
 from app.application.worldData.generators.terrain.terrainZ import subsurface_terrain_at_z
-from app.application.worldData.generators.terrain.worldMapSettings import n_base, world_z_min
+from app.application.worldData.generators.terrain.worldMapSettings import n_base
+from app.application.worldData.pack.climatePackApply import apply_climate_to_view
 from app.application.worldData.pack.packMapHelpers import world_map_sample_index, world_tile_size_m
 from app.application.worldData.pack.packReadContext import PackReadContext
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
@@ -27,20 +28,7 @@ class WorldMapPackReader:
         self._ctx = context
 
     def apply_climate(self, world: World, view: MergedCellView) -> MergedCellView:
-        field = self._ctx.climate_field(world)
-        if field is None:
-            return view
-        sample = field.sample_at(view.x, view.y)
-        if sample is None:
-            return view
-        updates: dict = {}
-        if view.temperature_base is None and sample.temperature_base is not None:
-            updates["temperature_base"] = sample.temperature_base
-        if view.rainfall is None and sample.rainfall is not None:
-            updates["rainfall"] = sample.rainfall
-        if not updates:
-            return view
-        return view.model_copy(update=updates)
+        return apply_climate_to_view(self._ctx, world, view)
 
     def sample_world_map(self, world: World, gx: int, gy: int, tx: int, ty: int) -> WorldMapCellWire | None:
         reader = self._ctx.reader_for(world)

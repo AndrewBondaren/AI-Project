@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
-from app.application.worldData.generators.terrain.hydrology.deepeningBandCarver import (
+from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import (
     _shelf_depth,
     compute_land_centroid,
     declare_coastline_bbox_padded,
@@ -13,10 +13,10 @@ from app.application.worldData.generators.terrain.hydrology.deepeningBandCarver 
     flood_water_side_unbounded,
     land_shore_from_water_dist,
 )
-from app.application.worldData.generators.terrain.hydrology.polylineRasterize import rasterize_segments
-from app.application.worldData.generators.terrain.hydrology.resolveHydrologyBands import resolve_hydrology_bands
-from app.application.worldData.generators.terrain.hydrology.seaLevelPolicy import resolve_z_sea
-from app.application.worldData.generators.terrain.hydrology.types import HydrologyBands, HydrologyMasterInput
+from app.application.worldData.generators.hydrology.geom.polylineRasterize import rasterize_segments
+from app.application.worldData.generators.hydrology.load.resolveHydrologyBands import resolve_hydrology_bands
+from app.application.worldData.generators.hydrology.basins.seaLevelPolicy import resolve_z_sea
+from app.application.worldData.generators.hydrology.types import HydrologyBands, HydrologyMasterInput
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology

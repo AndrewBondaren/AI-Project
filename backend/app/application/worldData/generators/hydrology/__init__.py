@@ -1,1 +1,1 @@
-"""Surface hydrology generators — D HY. See docs/tz_terrain_hydrology.md."""
+"""Surface hydrology generators — peer of climate. See docs/tz_terrain_hydrology.md."""

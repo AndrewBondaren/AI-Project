@@ -9,7 +9,7 @@ from app.application.worldData.generators.coordinates.convert import (
     meters_to_grid_x,
     meters_to_grid_y,
 )
-from app.application.worldData.generators.terrain.hydrology.types import (
+from app.application.worldData.generators.hydrology.types import (
     LoadedConnectionGraph,
     ResolvedConnectionNode,
 )

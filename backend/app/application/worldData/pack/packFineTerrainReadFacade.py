@@ -40,7 +40,7 @@ class PackFineTerrainReadFacade:
             "world_map_path": tile.world_map_path,
             "world_map_hash": tile.world_map_hash,
             "wilderness_refine_status": tile.wilderness_refine_status,
-            "climate_tier": tile.climate_tier,
+            "climate_status": tile.climate_status,
             "chunks": [
                 {
                     "cx": c.cx,
@@ -141,7 +141,7 @@ class PackFineTerrainReadFacade:
             "listed_in_manifest": True,
             "terrain_path": entry.terrain_path,
             "terrain_hash": entry.terrain_hash,
-            "climate_tier": entry.climate_tier,
+            "climate_status": entry.climate_status,
             "z_band": entry.z_band,
             "bytes": entry.bytes,
             "blob_on_disk": blob_on_disk,

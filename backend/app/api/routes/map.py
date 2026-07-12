@@ -17,10 +17,10 @@ from app.application.worldData.generators.assemblers.climateAssembler.passes.pol
     run_pole_resolve_pass,
 )
 from app.application.worldData.generators.terrain.cavesGenerator import generate_caves
-from app.application.worldData.generators.terrain.hydrology.hydrologyGeneratorService import (
+from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
-from app.application.worldData.generators.terrain.hydrology.types import (
+from app.application.worldData.generators.hydrology.types import (
     HydrologyScope,
     resolve_scopes,
 )
@@ -458,6 +458,14 @@ async def generate_climate(
     world     = await world_svc.get_by_id(world_uid)
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+
+    try:
+        map_svc.reject_legacy_generate_on_pack(world)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{exc} Use POST /worlds/{{uid}}/map/pack/bake for coarse climate_coarse.",
+        ) from exc
 
     locations = await location_svc.get_all(world_uid)
     cells     = await map_svc.get_all_for_read(world)

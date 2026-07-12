@@ -1,9 +1,11 @@
-"""Background chunk refine worker — WP-11/12."""
+"""Background chunk refine worker — WP-11/12 + climate fine drain (CL-PACK-2)."""
 
 from __future__ import annotations
 
 from app.application.worldData.materializationContext import MaterializationContext
 from app.application.worldData.pack.chunkRefineQueue import ChunkRefineQueue
+from app.application.worldData.pack.climateFinePending import ClimateFinePending
+from app.application.worldData.pack.climatePackBakeOrchestrator import ClimatePackBakeOrchestrator
 from app.application.worldData.pack.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
 from app.application.worldData.pack.packBakeLog import (
     log_pack_drain_queue_done,
@@ -23,9 +25,13 @@ class ChunkRefineWorker:
         fine_terrain: FineTerrainRefineOrchestrator,
         *,
         job_repo: IChunkRefineJobRepository | None = None,
+        climate_bake: ClimatePackBakeOrchestrator | None = None,
+        climate_fine: ClimateFinePending | None = None,
     ) -> None:
         self._fine_terrain = fine_terrain
         self._jobs = job_repo
+        self._climate = climate_bake
+        self._climate_fine = climate_fine
 
     async def persist_enqueue(
         self,
@@ -45,6 +51,29 @@ class ChunkRefineWorker:
             new_chunk_refine_job(world_uid, gx, gy, cx, cy, priority=priority),
         )
 
+    def drain_climate_fine(
+        self,
+        world: World,
+        surface_ctx,
+        writer: WorldPackWriter,
+        *,
+        max_tiles: int = 0,
+    ) -> int:
+        """Bake pending fine climate tiles. max_tiles<=0 means all pending."""
+        if self._climate is None or self._climate_fine is None or surface_ctx is None:
+            return 0
+        baked = 0
+        while True:
+            if max_tiles > 0 and baked >= max_tiles:
+                break
+            nxt = self._climate_fine.pop_next()
+            if nxt is None:
+                break
+            gx, gy = nxt
+            self._climate.bake_fine_tile(world, surface_ctx, writer, gx, gy)
+            baked += 1
+        return baked
+
     async def drain_queue(
         self,
         world_uid: str,
@@ -56,7 +85,7 @@ class ChunkRefineWorker:
         queue: ChunkRefineQueue,
         *,
         max_jobs: int = 0,
-    ) -> int:
+    ) -> tuple[int, int]:
         drain_t0 = log_pack_drain_queue_start(world_uid, max_jobs=max_jobs, pending=len(queue))
         processed = 0
         while True:
@@ -80,8 +109,9 @@ class ChunkRefineWorker:
                 chunk_cy=cy,
                 cells=cells,
             )
+        fine_tiles = self.drain_climate_fine(world, surface_ctx, writer)
         log_pack_drain_queue_done(world_uid, processed=processed, started_at=drain_t0)
-        return processed
+        return processed, fine_tiles
 
     async def drain_persisted(
         self,
@@ -95,7 +125,8 @@ class ChunkRefineWorker:
         max_jobs: int = 1,
     ) -> int:
         if self._jobs is None or max_jobs <= 0:
-            return 0
+            fine = self.drain_climate_fine(world, surface_ctx, writer)
+            return fine
         processed = 0
         while processed < max_jobs:
             job = await self._jobs.pop_next_pending(world_uid)
@@ -117,4 +148,5 @@ class ChunkRefineWorker:
                 cells=cells,
                 job=job.job_uid,
             )
+        processed += self.drain_climate_fine(world, surface_ctx, writer)
         return processed

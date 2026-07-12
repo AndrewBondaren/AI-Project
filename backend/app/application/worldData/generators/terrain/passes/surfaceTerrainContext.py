@@ -8,13 +8,13 @@ from app.application.worldData.generators.assemblers.climateAssembler.passes.pol
     run_pole_resolve_pass,
 )
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
-from app.application.worldData.generators.terrain.hydrology.hydrologyGeneratorService import (
+from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
-from app.application.worldData.generators.terrain.hydrology.loadHydrologyFromWorld import (
+from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
     is_hydrology_enabled,
 )
-from app.application.worldData.generators.terrain.hydrology.meterHydrologyIndex import (
+from app.application.worldData.generators.hydrology.shore.meterHydrologyIndex import (
     apply_declared_meter_river_carves,
 )
 from app.application.worldData.generators.terrain.passes.surfacePass import run_surface_pass_coarse
@@ -33,6 +33,7 @@ class SurfaceTerrainContext:
     coarse_hydro: dict[tuple[int, int], object]
     sparse_meter_hydro: dict[tuple[int, int], MapCellHydrology]
     meter_z_overrides: dict[tuple[int, int], int]
+    # Macro-grid keys only: (gx, gy) → surface z. Meter overrides live in meter_z_overrides.
     coarse_surface_z: dict[tuple[int, int], int]
 
 

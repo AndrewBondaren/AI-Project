@@ -16,7 +16,7 @@ from app.application.worldData.chunkComputePool import ChunkComputePool
 from app.application.worldData.generators.assemblers.climateAssembler.passes.poleResolvePass import (
     run_pole_resolve_pass,
 )
-from app.application.worldData.generators.terrain.hydrology.hydrologyGeneratorService import (
+from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
 from app.application.worldData.generators.terrain.passes.gapAnalysisPass import run_gap_analysis
@@ -300,7 +300,7 @@ class TerrainBatchOrchestrator:
             iter_meter_chunks,
             meter_bbox_for_tile,
         )
-        from app.application.worldData.generators.terrain.hydrology.meterHydrologyIndex import (
+        from app.application.worldData.generators.hydrology.shore.meterHydrologyIndex import (
             merge_meter_hydro_for_tile,
         )
         from app.application.worldData.generators.terrain.passes.surfacePass import build_fine_surface_tile
@@ -425,7 +425,7 @@ class TerrainBatchOrchestrator:
     ) -> TileSurfaceState:
         from app.application.worldData.generators.coordinates import cell_size_m
         from app.application.worldData.generators.coordinates.worldTile import meter_bbox_for_tile
-        from app.application.worldData.generators.terrain.hydrology.meterHydrologyIndex import (
+        from app.application.worldData.generators.hydrology.shore.meterHydrologyIndex import (
             merge_meter_hydro_for_tile,
         )
         from app.application.worldData.generators.terrain.passes.surfacePass import build_fine_surface_tile

@@ -52,6 +52,11 @@ class MaterializationJobReport:
     chunks_done: int
     terrain_workers: int
     climate_workers: int
+    elapsed_s: float | None = None
+    world_map_cells: int | None = None
+    refine_queue_depth: int | None = None
+    climate_coarse_samples: int | None = None
+    climate_fine_tiles: int | None = None
 
     def to_dict(self) -> dict:
         payload = {
@@ -63,6 +68,16 @@ class MaterializationJobReport:
         }
         if self.climate is not None:
             payload["climate"] = self.climate.to_dict()
+        if self.elapsed_s is not None:
+            payload["elapsed_s"] = round(self.elapsed_s, 2)
+        if self.world_map_cells is not None:
+            payload["world_map_cells"] = self.world_map_cells
+        if self.refine_queue_depth is not None:
+            payload["refine_queue_depth"] = self.refine_queue_depth
+        if self.climate_coarse_samples is not None:
+            payload["climate_coarse_samples"] = self.climate_coarse_samples
+        if self.climate_fine_tiles is not None:
+            payload["climate_fine_tiles"] = self.climate_fine_tiles
         return payload
 
 
