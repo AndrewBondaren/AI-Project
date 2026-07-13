@@ -170,10 +170,18 @@ class PackMaterializationOrchestrator:
                 heading_dx=heading_dx,
                 heading_dy=heading_dy,
             )
+            scheduled = await self._entry.schedule_chunk_refine(
+                world_uid, world, locations, writer, mat_ctx, surface_ctx,
+                anchor_x=ax,
+                anchor_y=ay,
+                tile_gx=entry.tile_gx,
+                tile_gy=entry.tile_gy,
+                heading=entry.heading,
+            )
             terrain_result = entry.terrain
             chunks_done = entry.chunks_done
             chunks_total = entry.chunks_total
-            climate_fine_tiles = entry.climate_fine_tiles
+            climate_fine_tiles = scheduled.climate_fine_tiles
             if climate_result is not None and climate_fine_tiles:
                 climate_result = PersistResult.from_counts(
                     climate_result.total + climate_fine_tiles,

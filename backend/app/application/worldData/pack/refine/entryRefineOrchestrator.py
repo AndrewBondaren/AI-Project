@@ -1,4 +1,4 @@
-"""WP-13 entry refine session — anchors, queue, scene+path+bg (not L0 bake)."""
+"""WP-13 entry refine session — anchors, blocking scene/path, background schedule."""
 
 from __future__ import annotations
 
@@ -38,20 +38,28 @@ from app.db.repositories.iChunkRefineJobRepository import IChunkRefineJobReposit
 
 @dataclass(frozen=True)
 class RefineFromEntryResult:
-    """Entry refine: scene + path corridor + optional background rings."""
+    """Blocking entry refine: scene volume + path corridor (no background enqueue)."""
 
     terrain: PersistResult
     chunks_done: int
     chunks_total: int
-    climate_fine_tiles: int
     tile_gx: int
     tile_gy: int
-    queue_depth: int
     anchor: EntryAnchor
+    heading: PathHeading | None
+
+
+@dataclass(frozen=True)
+class ScheduleChunkRefineResult:
+    """Background rings + path-ahead jobs (WP-13 / WP-PERF-10)."""
+
+    enqueued: int
+    queue_depth: int
+    climate_fine_tiles: int
 
 
 class EntryRefineOrchestrator:
-    """Gameplay/debug entry session: set anchor → refine scene/path → schedule rings."""
+    """Gameplay/debug entry session: set anchor → blocking refine → optional schedule."""
 
     def __init__(
         self,
@@ -112,6 +120,21 @@ class EntryRefineOrchestrator:
             tile_gx=gx, tile_gy=gy, location_uid=location_uid,
         )
 
+    def _resolve_heading(
+        self,
+        *,
+        heading: PathHeading | None,
+        heading_dx: int | None,
+        heading_dy: int | None,
+    ) -> PathHeading | None:
+        if heading is not None:
+            return heading
+        return resolve_path_heading(
+            intent_dx=heading_dx,
+            intent_dy=heading_dy,
+            positions=self._anchors.position_history(),
+        )
+
     async def drain_persisted(
         self,
         world_uid: str,
@@ -147,9 +170,8 @@ class EntryRefineOrchestrator:
         heading: PathHeading | None = None,
         heading_dx: int | None = None,
         heading_dy: int | None = None,
-        schedule_bg: bool = True,
     ) -> RefineFromEntryResult:
-        """Set anchor, blocking scene + path, optional bg rings/jobs."""
+        """Blocking only: set anchor, scene volume, path corridor (WP-13 P0)."""
         policy = SceneVolumePolicy.canonical_defaults()
         anchor = self.set_entry_anchor(
             world, kind, anchor_x, anchor_y, location_uid=location_uid,
@@ -158,13 +180,9 @@ class EntryRefineOrchestrator:
             raise RuntimeError("set_entry_anchor must resolve tile_gx/tile_gy")
         tile_gx, tile_gy = anchor.tile_gx, anchor.tile_gy
 
-        resolved_heading = heading
-        if resolved_heading is None:
-            resolved_heading = resolve_path_heading(
-                intent_dx=heading_dx,
-                intent_dy=heading_dy,
-                positions=self._anchors.position_history(),
-            )
+        resolved_heading = self._resolve_heading(
+            heading=heading, heading_dx=heading_dx, heading_dy=heading_dy,
+        )
 
         terrain_result, chunks_done, chunks_total = await self._fine_terrain.refine_scene_volume(
             world, locations, writer, anchor_x, anchor_y, mat_ctx,
@@ -181,27 +199,76 @@ class EntryRefineOrchestrator:
         )
         chunks_done += path_chunks
 
-        if schedule_bg:
-            skip = self._fine_terrain.scene_chunk_indices(
-                world, tile_gx, tile_gy, anchor_x, anchor_y,
-                xy_radius=policy.scene_xy_radius,
+        return RefineFromEntryResult(
+            terrain=terrain_result,
+            chunks_done=chunks_done,
+            chunks_total=chunks_total,
+            tile_gx=tile_gx,
+            tile_gy=tile_gy,
+            anchor=anchor,
+            heading=resolved_heading,
+        )
+
+    async def schedule_chunk_refine(
+        self,
+        world_uid: str,
+        world: World,
+        locations: list[NamedLocation],
+        writer: WorldPackWriter,
+        mat_ctx: MaterializationContext,
+        surface_ctx: SurfaceTerrainContext,
+        *,
+        anchor_x: int,
+        anchor_y: int,
+        tile_gx: int | None = None,
+        tile_gy: int | None = None,
+        heading: PathHeading | None = None,
+        heading_dx: int | None = None,
+        heading_dy: int | None = None,
+    ) -> ScheduleChunkRefineResult:
+        """Background only: rings from anchor + path-ahead neighbors, then persist jobs."""
+        policy = SceneVolumePolicy.canonical_defaults()
+        gx, gy = tile_gx, tile_gy
+        if gx is None or gy is None:
+            current = self._anchors.current
+            if (
+                current is not None
+                and current.tile_gx is not None
+                and current.tile_gy is not None
+                and current.entry_x == anchor_x
+                and current.entry_y == anchor_y
+            ):
+                gx, gy = current.tile_gx, current.tile_gy
+            else:
+                gx, gy = self._fine_terrain.tile_for_anchor(world, anchor_x, anchor_y)
+
+        resolved_heading = self._resolve_heading(
+            heading=heading, heading_dx=heading_dx, heading_dy=heading_dy,
+        )
+
+        before = len(self._queue)
+        skip = self._fine_terrain.scene_chunk_indices(
+            world, gx, gy, anchor_x, anchor_y,
+            xy_radius=policy.scene_xy_radius,
+        )
+        await self._fine_terrain.schedule_tile_background(
+            world, self._queue, anchor_x, anchor_y, gx, gy,
+            skip_scene_rects=skip,
+        )
+        if resolved_heading is not None:
+            await self._fine_terrain.schedule_path_ahead_tiles(
+                world, self._queue, anchor_x, anchor_y, gx, gy,
+                resolved_heading,
+                depth_tiles=app_settings.path_ahead_depth,
             )
-            await self._fine_terrain.schedule_tile_background(
-                world, self._queue, anchor_x, anchor_y, tile_gx, tile_gy,
-                skip_scene_rects=skip,
+        enqueued = len(self._queue) - before
+
+        for q_gx, q_gy, cx, cy, priority in self._queue.pending_items():
+            log_pack_queue_enqueue(world_uid, q_gx, q_gy, cx, cy, priority=priority)
+            await self._worker.persist_enqueue(
+                world_uid, q_gx, q_gy, cx, cy, priority=priority,
             )
-            if resolved_heading is not None:
-                await self._fine_terrain.schedule_path_ahead_tiles(
-                    world, self._queue, anchor_x, anchor_y, tile_gx, tile_gy,
-                    resolved_heading,
-                    depth_tiles=app_settings.path_ahead_depth,
-                )
-            for gx, gy, cx, cy, priority in self._queue.pending_items():
-                log_pack_queue_enqueue(world_uid, gx, gy, cx, cy, priority=priority)
-                await self._worker.persist_enqueue(
-                    world_uid, gx, gy, cx, cy, priority=priority,
-                )
-            log_pack_jobs_persisted(world_uid, count=len(self._queue))
+        log_pack_jobs_persisted(world_uid, count=len(self._queue))
 
         climate_fine_tiles = 0
         if self._defaults.background_drain_per_request > 0:
@@ -215,13 +282,8 @@ class EntryRefineOrchestrator:
                 world, surface_ctx, writer,
             )
 
-        return RefineFromEntryResult(
-            terrain=terrain_result,
-            chunks_done=chunks_done,
-            chunks_total=chunks_total,
-            climate_fine_tiles=climate_fine_tiles,
-            tile_gx=tile_gx,
-            tile_gy=tile_gy,
+        return ScheduleChunkRefineResult(
+            enqueued=enqueued,
             queue_depth=len(self._queue),
-            anchor=anchor,
+            climate_fine_tiles=climate_fine_tiles,
         )

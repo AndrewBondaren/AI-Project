@@ -738,12 +738,15 @@ async def refine_from_entry_route(
     location_uid: str | None = Query(default=None),
     heading_dx: int | None = Query(default=None),
     heading_dy: int | None = Query(default=None),
-    schedule_bg: bool = Query(default=True),
+    schedule_bg: bool = Query(
+        default=True,
+        description="If true, also call schedule_chunk_refine after blocking refine",
+    ),
     free_cores: int | None = Query(default=None, ge=1),
     parallel_workers: int | None = Query(default=None, ge=1),
     container=Depends(get_container),
 ) -> JSONResponse:
-    """Debug — WP-13 entry refine: scene + path corridor + optional bg rings (no DAG)."""
+    """Debug — WP-13 blocking entry refine; optional schedule_chunk_refine (no DAG)."""
     world_svc = container.world_service()
     location_svc = container.location_service()
     conn_svc = container.connection_graph_service()
@@ -776,8 +779,17 @@ async def refine_from_entry_route(
         location_uid=location_uid,
         heading_dx=heading_dx,
         heading_dy=heading_dy,
-        schedule_bg=schedule_bg,
     )
+    scheduled = None
+    if schedule_bg:
+        scheduled = await entry_orch.schedule_chunk_refine(
+            world_uid, world, locations, writer, mat_ctx, surface_ctx,
+            anchor_x=x,
+            anchor_y=y,
+            tile_gx=entry.tile_gx,
+            tile_gy=entry.tile_gy,
+            heading=entry.heading,
+        )
     await finalize_pack_on_world(world_svc, world, writer)
     return JSONResponse(content={
         "world_uid": world_uid,
@@ -792,9 +804,68 @@ async def refine_from_entry_route(
         "terrain": entry.terrain.to_dict(),
         "chunks_done": entry.chunks_done,
         "chunks_total": entry.chunks_total,
-        "climate_fine_tiles": entry.climate_fine_tiles,
-        "refine_queue_depth": entry.queue_depth,
+        "climate_fine_tiles": scheduled.climate_fine_tiles if scheduled else 0,
+        "refine_queue_depth": (
+            scheduled.queue_depth if scheduled else len(entry_orch.refine_queue)
+        ),
+        "scheduled_enqueued": scheduled.enqueued if scheduled else 0,
         "schedule_bg": schedule_bg,
+        "background_expand_radius_m": (
+            SceneVolumePolicy.canonical_defaults().background_expand_radius_m
+        ),
+    })
+
+
+@router.post("/worlds/{world_uid}/map/schedule-chunk-refine")
+async def schedule_chunk_refine_route(
+    world_uid: str,
+    x: int,
+    y: int,
+    tile_gx: int | None = Query(default=None),
+    tile_gy: int | None = Query(default=None),
+    heading_dx: int | None = Query(default=None),
+    heading_dy: int | None = Query(default=None),
+    free_cores: int | None = Query(default=None, ge=1),
+    parallel_workers: int | None = Query(default=None, ge=1),
+    container=Depends(get_container),
+) -> JSONResponse:
+    """Debug — WP-13 background rings + path-ahead only (no blocking scene)."""
+    world_svc = container.world_service()
+    location_svc = container.location_service()
+    conn_svc = container.connection_graph_service()
+    world = await world_svc.get_by_id(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+    locations = await location_svc.get_all(world_uid)
+    nodes = await conn_svc.get_nodes(world_uid)
+    edges = await conn_svc.get_edges(world_uid)
+    surface_ctx = prepare_surface_terrain_context(
+        world, locations, nodes=nodes, edges=edges,
+        hydrology_generator=_hydrology_generator,
+    )
+    if surface_ctx is None:
+        raise HTTPException(status_code=422, detail="surface terrain context unavailable")
+    mat_ctx = resolve_materialization_context(
+        world, free_cores=free_cores, parallel_workers_override=parallel_workers,
+    )
+    writer = container.world_pack_writer_for(world)
+    entry_orch = container.entry_refine_orchestrator()
+    scheduled = await entry_orch.schedule_chunk_refine(
+        world_uid, world, locations, writer, mat_ctx, surface_ctx,
+        anchor_x=x,
+        anchor_y=y,
+        tile_gx=tile_gx,
+        tile_gy=tile_gy,
+        heading_dx=heading_dx,
+        heading_dy=heading_dy,
+    )
+    await finalize_pack_on_world(world_svc, world, writer)
+    return JSONResponse(content={
+        "world_uid": world_uid,
+        "anchor": {"x": x, "y": y, "tile_gx": tile_gx, "tile_gy": tile_gy},
+        "enqueued": scheduled.enqueued,
+        "refine_queue_depth": scheduled.queue_depth,
+        "climate_fine_tiles": scheduled.climate_fine_tiles,
         "background_expand_radius_m": (
             SceneVolumePolicy.canonical_defaults().background_expand_radius_m
         ),

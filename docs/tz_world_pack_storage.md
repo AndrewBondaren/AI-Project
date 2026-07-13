@@ -507,7 +507,7 @@ flowchart TB
 
 **Чтение до готовности chunk:** `MapCellQueryFacade` → merge(**L2 chunk if present**, else **L0 upsample** sample, patches). Gameplay **не блокируется** на весь tile.
 
-**Cross-ref:** scene volume defaults — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § TR-LAZY-LOAD; POJO [`SceneVolumePolicy`](../backend/app/dataModel/terrain/sceneVolumePolicy.py) (`scene_xy_radius`, `scene_z_above`, `background_expand_radius_m` for WP-PERF-10 rings). Read: `get_scene_volume`. Entry refine (scene + path + optional bg): `refine_from_entry`.
+**Cross-ref:** scene volume defaults — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § TR-LAZY-LOAD; POJO [`SceneVolumePolicy`](../backend/app/dataModel/terrain/sceneVolumePolicy.py) (`scene_xy_radius`, `scene_z_above`, `background_expand_radius_m` for WP-PERF-10 rings). Read: `get_scene_volume`. Blocking entry: `refine_from_entry`. Background rings/path-ahead: `schedule_chunk_refine`.
 
 **Антипаттерн (hard reject):** blocking `refine(entire_tile)`; materialize 9M columns до scene volume; **любой** gameplay wait **> 30 s** на старте сессии.
 
@@ -993,35 +993,49 @@ map_cell_patches (
 
 ---
 
-## Read path
+## Read path / Entry load
+
+**Не смешивать:** Query facade только **читает** (merge). Generate/entry — отдельно (`refine_from_entry` / `schedule_chunk_refine`).
 
 ```mermaid
 sequenceDiagram
+  participant Session as SessionOrDAG
+  participant Entry as EntryRefineOrchestrator
+  participant Pack as WorldPackWriter
   participant Q as MapCellQueryFacade
-  participant L0 as WorldMapReader
   participant L2 as TileReader
+  participant L0 as WorldMapReader
   participant P as PatchStore
 
-  Note over Q: far / map UI
-  Q->>L0: sample gx gy
-  Note over Q: scene at spawn / entry
-  Q->>L2: refine_from_entry
-  L2-->>Q: L2 chunks + L0 fallback
-  Note over L2: bg rings from entry anchor
+  Note over Session,Pack: Write path entry load
+  Session->>Entry: refine_from_entry blocking
+  Entry->>Pack: write scene and path chunks
+  Session->>Entry: schedule_chunk_refine
+  Entry->>Pack: enqueue bg rings and path ahead
+
+  Note over Session,P: Read path scene for LLM or UI
+  Session->>Q: get_scene_volume
+  Q->>L2: L2 chunks if present
+  alt missing L2
+    Q->>L0: L0 upsample fallback
+  end
   Q->>P: patches bbox
-  Q->>Q: merge
+  Q->>Q: merge_layers
+  Q-->>Session: cells
 ```
 
-| API | LOD |
+**Far / map UI:** без entry refine — `get_world_map_bbox` → L0 sample (отдельный read, не на диаграмме выше).
+
+| API | LOD / роль |
 |---|---|
-| `get_world_map_bbox` | L0 |
-| `get_location_context` | L1 |
-| `get_scene_volume` | L2 chunks + L0 fallback + merge patches (**read**, не generate) |
-| `refine_from_entry` | entry refine: blocking scene + path corridor; optional bg rings/jobs (WP-13) |
-| `set_entry_anchor` | spawn / tile_cross / location_entry |
-| `schedule_chunk_refine` | фон: кольца от anchor + path corridor |
-| `get_tile_wilderness_refine_status` | `absent` \| `partial` \| `complete` |
-| `tile_refine_status` | jobs + corridor + partial progress |
+| `get_world_map_bbox` | L0 **read** |
+| `get_location_context` | L1 **read** |
+| `get_scene_volume` | L2 + L0 fallback + patches — **read only**, не generate |
+| `refine_from_entry` | **write** blocking: scene + path corridor (WP-13 P0) |
+| `set_entry_anchor` | spawn / tile_cross / location_entry (session state) |
+| `schedule_chunk_refine` | **write** фон: кольца от anchor + path-ahead (predicted border entry) |
+| `get_tile_wilderness_refine_status` | `absent` \| `partial` \| `complete` (**read** status) |
+| `tile_refine_status` | jobs + corridor + partial progress (**read** status) |
 
 ### Merge backlog (WP-MERGE)
 
