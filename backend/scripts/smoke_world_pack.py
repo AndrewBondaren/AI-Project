@@ -40,10 +40,12 @@ LIMITS = {
 
 MANUAL = {
     "WP-A4": "fine-terrain refine golden hash — run twice, compare chunk content_hash in manifest",
-    "WP-A5": "background refine: worker<=1, no burst 8 tiles — watch loading-progress SSE/logs",
     "WP-A8": "kill mid-chunk — verify saved chunks + stable hash on redo",
     "WP-A14": "stale world map regen from location boundary — manual regen pass",
 }
+
+# WP-PERF-10: light bake must not enqueue whole macro-tile (~8k jobs).
+A5_MAX_REFINE_QUEUE = 200
 
 
 class SmokeResult:
@@ -180,8 +182,22 @@ def run_http(
                     "WP-A1",
                     f"light bake {elapsed:.1f}s, tiles_ready={tiles_ready}, tiles_pct={tiles_pct}",
                 )
+            queue_depth = bake.get("refine_queue_depth")
+            if isinstance(queue_depth, int) and queue_depth <= A5_MAX_REFINE_QUEUE:
+                result.ok(
+                    "WP-A5",
+                    f"refine_queue_depth={queue_depth} <= {A5_MAX_REFINE_QUEUE} (rings, not whole tile)",
+                )
+            elif isinstance(queue_depth, int):
+                result.fail(
+                    "WP-A5",
+                    f"refine_queue_depth={queue_depth} > {A5_MAX_REFINE_QUEUE} — WP-PERF-10 full-tile enqueue?",
+                )
+            else:
+                result.fail("WP-A5", "bake response missing refine_queue_depth")
         else:
             result.skip("WP-A1", "--skip-bake")
+            result.skip("WP-A5", "--skip-bake")
 
         t0 = time.perf_counter()
         r = client.get(f"/worlds/{world_uid}/map")
@@ -237,6 +253,25 @@ def run_http(
             result.fail("WP-A9", f"{scene_s:.1f}s > {LIMITS['A9_scene_volume_s']}s, cells={count}")
         else:
             result.ok("WP-A9", f"scene-volume {count} cells in {scene_s:.2f}s at ({ax},{ay},{az})")
+
+        t0 = time.perf_counter()
+        r = client.post(
+            f"/worlds/{world_uid}/map/refine-from-entry",
+            params={"x": ax, "y": ay, "kind": "session_start", "schedule_bg": "true"},
+        )
+        _require_ok(r, f"POST refine-from-entry ({ax},{ay})")
+        entry = r.json()
+        entry_s = time.perf_counter() - t0
+        entry_q = entry.get("refine_queue_depth")
+        if entry_s > LIMITS["A9_scene_volume_s"]:
+            result.fail("WP-A9b", f"refine-from-entry {entry_s:.1f}s > {LIMITS['A9_scene_volume_s']}s")
+        elif isinstance(entry_q, int) and entry_q <= A5_MAX_REFINE_QUEUE:
+            result.ok(
+                "WP-A9b",
+                f"refine-from-entry {entry_s:.2f}s queue={entry_q} chunks_done={entry.get('chunks_done')}",
+            )
+        else:
+            result.fail("WP-A9b", f"refine-from-entry queue={entry_q} (expected int <= {A5_MAX_REFINE_QUEUE})")
 
         alt_x, alt_y = ax + 3000, ay + 3000
         t0 = time.perf_counter()

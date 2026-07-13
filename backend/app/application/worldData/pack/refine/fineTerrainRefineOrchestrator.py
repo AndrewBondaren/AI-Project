@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import math
 
 from app.application.worldData.persistResult import PersistResult
 from app.application.worldData.chunkComputePool import ChunkComputePool
@@ -17,6 +16,11 @@ from app.application.worldData.generators.terrain.worldMapSettings import (
 from app.application.worldData.materializationContext import MaterializationContext
 from app.application.worldData.parallelPolicy import resolve_terrain_workers
 from app.application.worldData.pack.refine.chunkRefineQueue import ChunkRefineQueue
+from app.application.worldData.pack.refine.entryRingGeom import (
+    chunk_within_ring,
+    scene_chunk_indices as geom_scene_chunk_indices,
+    tile_local_chunk_indices,
+)
 from app.application.worldData.pack.read.locationTerritoryVolumes import territory_volumes_by_location
 from app.application.worldData.pack.read.mapCellToFineTerrainWire import cells_to_fine_terrain_chunk
 from app.application.worldData.pack.read.packMapHelpers import tile_index, world_tile_size_m
@@ -42,25 +46,6 @@ from app.dataModel.worldPack.territoryVolume import TerritoryVolume, inside_loca
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
-
-
-def _chunk_center(rect: ColumnRect) -> tuple[float, float]:
-    return (rect.x_min + rect.x_max) / 2.0, (rect.y_min + rect.y_max) / 2.0
-
-
-def _distance_sq(ax: float, ay: float, bx: float, by: float) -> float:
-    return (ax - bx) ** 2 + (ay - by) ** 2
-
-
-def _tile_local_chunk_indices(
-    rect: ColumnRect,
-    meter_bbox: ColumnRect,
-    chunk_size: int,
-) -> tuple[int, int]:
-    return (
-        (rect.x_min - meter_bbox.x_min) // chunk_size,
-        (rect.y_min - meter_bbox.y_min) // chunk_size,
-    )
 
 
 def _partition_chunk_cells(
@@ -120,7 +105,7 @@ class FineTerrainRefineOrchestrator:
         rects = list(iter_meter_chunks(meter_bbox, chunk_size))
         scene_rects = [
             rect for rect in rects
-            if _distance_sq(*_chunk_center(rect), anchor_x, anchor_y) <= (xy_radius + chunk_size) ** 2
+            if chunk_within_ring(rect, float(anchor_x), float(anchor_y), float(xy_radius), chunk_size)
         ]
         phase_t0 = log_pack_fine_terrain_phase_start(
             world.world_uid,
@@ -194,15 +179,12 @@ class FineTerrainRefineOrchestrator:
             if max_radius_m is not None
             else float(policy.background_expand_radius_m)
         )
-        # Include chunk half-diagonal so edge chunks near the ring still enqueue.
-        max_dist = radius + chunk_size
         count = 0
         for rect in iter_meter_chunks(meter_bbox, chunk_size):
-            cx, cy = _tile_local_chunk_indices(rect, meter_bbox, chunk_size)
+            cx, cy = tile_local_chunk_indices(rect, meter_bbox, chunk_size)
             if (cx, cy) in skip:
                 continue
-            dist = math.sqrt(_distance_sq(*_chunk_center(rect), float(anchor_x), float(anchor_y)))
-            if dist > max_dist:
+            if not chunk_within_ring(rect, float(anchor_x), float(anchor_y), radius, chunk_size):
                 continue
             if queue.enqueue_chunk(
                 tile_gx, tile_gy, cx, cy,
@@ -239,14 +221,9 @@ class FineTerrainRefineOrchestrator:
             if xy_radius is not None
             else SceneVolumePolicy.canonical_defaults().scene_xy_radius
         )
-        cell_m = cell_size_m(world)
-        chunk_size = terrain_chunk_columns(world)
-        meter_bbox = meter_bbox_for_tile(tile_gx, tile_gy, cell_m)
-        out: set[tuple[int, int]] = set()
-        for rect in iter_meter_chunks(meter_bbox, chunk_size):
-            if _distance_sq(*_chunk_center(rect), anchor_x, anchor_y) <= (radius + chunk_size) ** 2:
-                out.add(_tile_local_chunk_indices(rect, meter_bbox, chunk_size))
-        return out
+        return geom_scene_chunk_indices(
+            world, tile_gx, tile_gy, anchor_x, anchor_y, xy_radius=radius,
+        )
 
     async def schedule_path_ahead_tiles(
         self,
@@ -260,8 +237,11 @@ class FineTerrainRefineOrchestrator:
         *,
         depth_tiles: int,
     ) -> int:
-        """Enqueue background chunks on macro-tiles ahead along heading (WP-17)."""
-        tile_size = world_tile_size_m(world)
+        """Enqueue background chunks on macro-tiles ahead along heading (WP-17).
+
+        Neighbor tiles use the same ``background_expand_radius_m`` as the current tile
+        (via ``schedule_tile_background``) — WP-13 / WP-PERF-10.
+        """
         count = 0
         for ngx, ngy in macro_tiles_ahead(tile_gx, tile_gy, heading, depth_tiles):
             count += await self.schedule_tile_background(
@@ -383,7 +363,7 @@ class FineTerrainRefineOrchestrator:
             )
             for location_uid, additions in loc_additions.items():
                 location_cells.setdefault(location_uid, []).extend(additions)
-            cx, cy = _tile_local_chunk_indices(rect, meter_bbox, chunk_size)
+            cx, cy = tile_local_chunk_indices(rect, meter_bbox, chunk_size)
             log_pack_wilderness_chunk_persist(
                 world_uid,
                 phase=phase_name,

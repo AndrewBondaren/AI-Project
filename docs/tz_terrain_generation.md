@@ -790,6 +790,7 @@ PRAGMA cache_size=-64000
 | `scene_xy_radius` | **20** | `SceneVolumePolicy` (`dataModel/terrain/sceneVolumePolicy.py`) |
 | `scene_z_below` | `N_base(world)` | `worldMapSettings.n_base` — subsurface под ногами |
 | `scene_z_above` | **6** | от `map_z` вверх (`SceneVolumePolicy.scene_z_above`) |
+| `background_expand_radius_m` | **60** | WP-13 / WP-PERF-10: фон enqueue rings, не весь tile |
 
 Центр blocking: `(check_terrain.map_x, map_y, map_z)` из сцены / entry point.
 

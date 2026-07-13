@@ -507,7 +507,7 @@ flowchart TB
 
 **Чтение до готовности chunk:** `MapCellQueryFacade` → merge(**L2 chunk if present**, else **L0 upsample** sample, patches). Gameplay **не блокируется** на весь tile.
 
-**Cross-ref:** scene volume defaults — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § TR-LAZY-LOAD (`scene_xy_radius`, `get_scene_volume`).
+**Cross-ref:** scene volume defaults — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § TR-LAZY-LOAD; POJO [`SceneVolumePolicy`](../backend/app/dataModel/terrain/sceneVolumePolicy.py) (`scene_xy_radius`, `scene_z_above`, `background_expand_radius_m` for WP-PERF-10 rings). Read: `get_scene_volume`. Entry refine (scene + path + optional bg): `refine_from_entry`.
 
 **Антипаттерн (hard reject):** blocking `refine(entire_tile)`; materialize 9M columns до scene volume; **любой** gameplay wait **> 30 s** на старте сессии.
 
@@ -1005,9 +1005,9 @@ sequenceDiagram
   Note over Q: far / map UI
   Q->>L0: sample gx gy
   Note over Q: scene at spawn / entry
-  Q->>L2: ensure_scene_volume blocking
+  Q->>L2: refine_from_entry
   L2-->>Q: L2 chunks + L0 fallback
-  Note over L2: bg chunks from entry anchor
+  Note over L2: bg rings from entry anchor
   Q->>P: patches bbox
   Q->>Q: merge
 ```
@@ -1016,8 +1016,8 @@ sequenceDiagram
 |---|---|
 | `get_world_map_bbox` | L0 |
 | `get_location_context` | L1 |
-| `get_scene_volume` | L2 chunks + L0 fallback + merge patches |
-| `ensure_scene_volume` | **blocking** только chunks scene volume вокруг anchor |
+| `get_scene_volume` | L2 chunks + L0 fallback + merge patches (**read**, не generate) |
+| `refine_from_entry` | entry refine: blocking scene + path corridor; optional bg rings/jobs (WP-13) |
 | `set_entry_anchor` | spawn / tile_cross / location_entry |
 | `schedule_chunk_refine` | фон: кольца от anchor + path corridor |
 | `get_tile_wilderness_refine_status` | `absent` \| `partial` \| `complete` |

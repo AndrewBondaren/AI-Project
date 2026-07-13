@@ -9,6 +9,18 @@ from app.dataModel.worldPack.pathHeadingPolicy import PathHeadingPolicy
 
 AnchorKind = Literal["session_start", "tile_cross", "location_entry"]
 
+ANCHOR_KINDS: tuple[AnchorKind, ...] = ("session_start", "tile_cross", "location_entry")
+
+
+def parse_anchor_kind(value: str) -> AnchorKind:
+    """Wire/query string → typed anchor kind (raises ValueError if unknown)."""
+    for kind in ANCHOR_KINDS:
+        if value == kind:
+            return kind
+    raise ValueError(
+        f"Unknown anchor kind {value!r}; expected one of {list(ANCHOR_KINDS)}"
+    )
+
 
 @dataclass
 class EntryAnchor:

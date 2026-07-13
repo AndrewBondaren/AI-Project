@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 
 from app.application.worldData.persistResult import PersistResult
 from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
@@ -19,12 +20,16 @@ from app.application.worldData.pack.refine.chunkRefineQueue import ChunkRefineQu
 from app.application.worldData.pack.refine.chunkRefineWorker import ChunkRefineWorker
 from app.application.worldData.pack.climate.climateFinePending import ClimateFinePending
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import ClimatePackBakeOrchestrator
-from app.application.worldData.pack.refine.entryAnchorTracker import EntryAnchorTracker
+from app.application.worldData.pack.refine.entryAnchorTracker import (
+    AnchorKind,
+    EntryAnchor,
+    EntryAnchorTracker,
+)
 from app.application.worldData.pack.bake.worldMapBakeOrchestrator import WorldMapBakeOrchestrator
 from app.application.worldData.pack.refine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
 from app.application.worldData.pack.bake.locationsIndexBake import build_locations_index
 from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_on_world
-from app.application.worldData.pack.refine.pathHeading import resolve_path_heading
+from app.application.worldData.pack.refine.pathHeading import PathHeading, resolve_path_heading
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.parallelPolicy import resolve_terrain_workers
@@ -46,6 +51,20 @@ from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_jobs_persisted,
     log_pack_queue_enqueue,
 )
+
+
+@dataclass(frozen=True)
+class RefineFromEntryResult:
+    """WP-13 entry refine: scene + path corridor + optional background rings."""
+
+    terrain: PersistResult
+    chunks_done: int
+    chunks_total: int
+    climate_fine_tiles: int
+    tile_gx: int
+    tile_gy: int
+    queue_depth: int
+    anchor: EntryAnchor
 
 
 class PackMaterializationOrchestrator:
@@ -85,6 +104,120 @@ class PackMaterializationOrchestrator:
     @property
     def anchor_tracker(self) -> EntryAnchorTracker:
         return self._anchors
+
+    def set_entry_anchor(
+        self,
+        world: World,
+        kind: AnchorKind,
+        entry_x: int,
+        entry_y: int,
+        *,
+        tile_gx: int | None = None,
+        tile_gy: int | None = None,
+        location_uid: str | None = None,
+    ) -> EntryAnchor:
+        """WP-13 — record spawn / tile_cross / location_entry (no refine)."""
+        gx, gy = tile_gx, tile_gy
+        if gx is None or gy is None:
+            gx, gy = self._fine_terrain.tile_for_anchor(world, entry_x, entry_y)
+        return self._anchors.set_anchor(
+            kind, entry_x, entry_y,
+            tile_gx=gx, tile_gy=gy, location_uid=location_uid,
+        )
+
+    async def refine_from_entry(
+        self,
+        world_uid: str,
+        world: World,
+        locations: list[NamedLocation],
+        writer: WorldPackWriter,
+        mat_ctx: MaterializationContext,
+        surface_ctx,
+        *,
+        kind: AnchorKind,
+        anchor_x: int,
+        anchor_y: int,
+        location_uid: str | None = None,
+        heading: PathHeading | None = None,
+        heading_dx: int | None = None,
+        heading_dy: int | None = None,
+        schedule_bg: bool = True,
+    ) -> RefineFromEntryResult:
+        """WP-13 entry refine: set anchor, blocking scene + path, optional bg rings/jobs."""
+        policy = SceneVolumePolicy.canonical_defaults()
+        anchor = self.set_entry_anchor(
+            world, kind, anchor_x, anchor_y, location_uid=location_uid,
+        )
+        assert anchor.tile_gx is not None and anchor.tile_gy is not None
+        tile_gx, tile_gy = anchor.tile_gx, anchor.tile_gy
+
+        resolved_heading = heading
+        if resolved_heading is None:
+            resolved_heading = resolve_path_heading(
+                intent_dx=heading_dx,
+                intent_dy=heading_dy,
+                positions=self._anchors.position_history(),
+            )
+
+        terrain_result, chunks_done, chunks_total = await self._fine_terrain.refine_scene_volume(
+            world, locations, writer, anchor_x, anchor_y, mat_ctx,
+            surface_ctx=surface_ctx, tile_gx=tile_gx, tile_gy=tile_gy,
+            xy_radius=policy.scene_xy_radius,
+        )
+        self._climate_fine.enqueue(tile_gx, tile_gy)
+
+        path_chunks = await self._fine_terrain.refine_path_corridor(
+            world, locations, writer, anchor_x, anchor_y, mat_ctx, surface_ctx,
+            tile_gx, tile_gy,
+            heading=resolved_heading,
+            depth_tiles=app_settings.path_ahead_depth,
+        )
+        chunks_done += path_chunks
+
+        if schedule_bg:
+            skip = self._fine_terrain.scene_chunk_indices(
+                world, tile_gx, tile_gy, anchor_x, anchor_y,
+                xy_radius=policy.scene_xy_radius,
+            )
+            await self._fine_terrain.schedule_tile_background(
+                world, self._queue, anchor_x, anchor_y, tile_gx, tile_gy,
+                skip_scene_rects=skip,
+            )
+            if resolved_heading is not None:
+                await self._fine_terrain.schedule_path_ahead_tiles(
+                    world, self._queue, anchor_x, anchor_y, tile_gx, tile_gy,
+                    resolved_heading,
+                    depth_tiles=app_settings.path_ahead_depth,
+                )
+            for gx, gy, cx, cy, priority in self._queue.pending_items():
+                log_pack_queue_enqueue(world_uid, gx, gy, cx, cy, priority=priority)
+                await self._worker.persist_enqueue(
+                    world_uid, gx, gy, cx, cy, priority=priority,
+                )
+            log_pack_jobs_persisted(world_uid, count=len(self._queue))
+
+        climate_fine_tiles = 0
+        if self._defaults.background_drain_per_request > 0:
+            _drained_chunks, fine_tiles = await self._worker.drain_queue(
+                world_uid, world, locations, writer, mat_ctx, surface_ctx,
+                self._queue, max_jobs=self._defaults.background_drain_per_request,
+            )
+            climate_fine_tiles += fine_tiles
+        else:
+            climate_fine_tiles += self._worker.drain_climate_fine(
+                world, surface_ctx, writer,
+            )
+
+        return RefineFromEntryResult(
+            terrain=terrain_result,
+            chunks_done=chunks_done,
+            chunks_total=chunks_total,
+            climate_fine_tiles=climate_fine_tiles,
+            tile_gx=tile_gx,
+            tile_gy=tile_gy,
+            queue_depth=len(self._queue),
+            anchor=anchor,
+        )
 
     async def materialize_light_pack(
         self,
@@ -161,51 +294,18 @@ class PackMaterializationOrchestrator:
                         break
             ax = ax if ax is not None else 0
             ay = ay if ay is not None else 0
-            tile_gx, tile_gy = self._fine_terrain.tile_for_anchor(world, ax, ay)
-            self._anchors.set_anchor("session_start", ax, ay, tile_gx=tile_gx, tile_gy=tile_gy)
-            heading = resolve_path_heading(
-                intent_dx=heading_dx,
-                intent_dy=heading_dy,
-                positions=self._anchors.position_history(),
+            entry = await self.refine_from_entry(
+                world_uid, world, locations, writer, mat_ctx, surface_ctx,
+                kind="session_start",
+                anchor_x=ax,
+                anchor_y=ay,
+                heading_dx=heading_dx,
+                heading_dy=heading_dy,
             )
-            terrain_result, chunks_done, chunks_total = await self._fine_terrain.refine_scene_volume(
-                world, locations, writer, ax, ay, mat_ctx,
-                surface_ctx=surface_ctx, tile_gx=tile_gx, tile_gy=tile_gy,
-                xy_radius=SceneVolumePolicy.canonical_defaults().scene_xy_radius,
-            )
-            self._climate_fine.enqueue(tile_gx, tile_gy)
-            path_chunks = await self._fine_terrain.refine_path_corridor(
-                world, locations, writer, ax, ay, mat_ctx, surface_ctx,
-                tile_gx, tile_gy,
-                heading=heading,
-                depth_tiles=app_settings.path_ahead_depth,
-            )
-            chunks_done += path_chunks
-            await self._fine_terrain.schedule_tile_background(
-                world, self._queue, ax, ay, tile_gx, tile_gy,
-            )
-            if heading is not None:
-                await self._fine_terrain.schedule_path_ahead_tiles(
-                    world, self._queue, ax, ay, tile_gx, tile_gy, heading,
-                    depth_tiles=app_settings.path_ahead_depth,
-                )
-            for gx, gy, cx, cy, priority in self._queue.pending_items():
-                log_pack_queue_enqueue(world_uid, gx, gy, cx, cy, priority=priority)
-                await self._worker.persist_enqueue(
-                    world_uid, gx, gy, cx, cy, priority=priority,
-                )
-            log_pack_jobs_persisted(world_uid, count=len(self._queue))
-            if self._defaults.background_drain_per_request > 0:
-                _drained_chunks, fine_tiles = await self._worker.drain_queue(
-                    world_uid, world, locations, writer, mat_ctx, surface_ctx,
-                    self._queue, max_jobs=self._defaults.background_drain_per_request,
-                )
-                climate_fine_tiles += fine_tiles
-            else:
-                # Terrain drain skipped — still bake enqueued fine climate (spawn tile).
-                climate_fine_tiles += self._worker.drain_climate_fine(
-                    world, surface_ctx, writer,
-                )
+            terrain_result = entry.terrain
+            chunks_done = entry.chunks_done
+            chunks_total = entry.chunks_total
+            climate_fine_tiles = entry.climate_fine_tiles
             if climate_result is not None and climate_fine_tiles:
                 climate_result = PersistResult.from_counts(
                     climate_result.total + climate_fine_tiles,
