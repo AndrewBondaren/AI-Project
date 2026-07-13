@@ -6,7 +6,7 @@ import hashlib
 import zipfile
 from pathlib import Path
 
-from app.application.worldData.pack.worldPackPaths import WorldPackPaths
+from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
 
 
 class PackImportService:

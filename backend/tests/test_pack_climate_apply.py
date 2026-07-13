@@ -8,9 +8,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from app.application.worldData.pack.climatePackApply import apply_climate_to_view
-from app.application.worldData.pack.worldPackPaths import WorldPackPaths
-from app.application.worldData.pack.worldPackWriter import WorldPackWriter
+from app.application.worldData.pack.climate.climatePackApply import apply_climate_to_view
+from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
+from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire, ClimateSampleWire
 from app.dataModel.worldPack.mergeMapCells import MergedCellView
 
@@ -140,7 +140,7 @@ class TestClimateCoarseRoundtrip(unittest.TestCase):
                 ],
             )
             writer.write_climate_coarse(field)
-            from app.application.worldData.pack.worldPackReader import WorldPackReader
+            from app.application.worldData.pack.io.worldPackReader import WorldPackReader
 
             restored = WorldPackReader(paths).read_climate_coarse()
             self.assertEqual(restored.width, 2)

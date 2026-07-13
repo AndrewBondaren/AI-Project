@@ -101,7 +101,7 @@
 **Модель (v1):**
 
 ```
-WORLD_SURFACE_GRID     gx, gy     tile index; step = map_cell_size_m (dynamic, ≥2000, ×1000)
+WORLD_SURFACE_GRID     gx, gy     tile index; step = map_cell_size_m (dynamic, ≥1000, ×1000)
 WORLD_LOCAL_METERS     x, y, z    settlement outdoor, nodes, barriers, buildings after translate
 LOCATION_LOCAL_METERS  x, y, z    interior — v2, отложено
 ```

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.pack.patchCellContribution import map_cell_to_patch_contribution
+from app.application.worldData.pack.read.patchCellContribution import map_cell_to_patch_contribution
 from app.dataModel.worldPack.mergeMapCells import CellContribution
 from app.db.models.mapCell import MapCell
 from app.db.repositories.iMapCellRepository import IMapCellRepository

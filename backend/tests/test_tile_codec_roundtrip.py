@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.application.worldData.pack.tileCodec import (
+from app.application.worldData.pack.io.tileCodec import (
     PAYLOAD_KIND_WORLD_MAP,
     PAYLOAD_KIND_FINE_TERRAIN,
     TileCodec,

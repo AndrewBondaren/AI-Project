@@ -7,7 +7,7 @@ from app.application.worldData.generators.coordinates import (
     meters_to_grid_x,
     meters_to_grid_y,
 )
-from app.application.worldData.pack.packReadContext import PackReadContext
+from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.dataModel.worldPack.mergeMapCells import MergedCellView
 from app.db.models.world import World
 

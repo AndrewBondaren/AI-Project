@@ -6,7 +6,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.application.worldData.pack.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
+from app.application.worldData.pack.refine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.materializationContext import MaterializationContext
 from app.db.models.mapCell import MapCell
@@ -58,7 +58,7 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
         pool_instance.map_sync_with_callback = AsyncMock(side_effect=fake_pool)
 
         with patch(
-            "app.application.worldData.pack.fineTerrainRefineOrchestrator.ChunkComputePool",
+            "app.application.worldData.pack.refine.fineTerrainRefineOrchestrator.ChunkComputePool",
             return_value=pool_instance,
         ) as pool_cls:
             result, written, total = await l2._refine_rects(
@@ -90,7 +90,7 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
         l2 = FineTerrainRefineOrchestrator(terrain)
 
         with patch(
-            "app.application.worldData.pack.fineTerrainRefineOrchestrator.ChunkComputePool",
+            "app.application.worldData.pack.refine.fineTerrainRefineOrchestrator.ChunkComputePool",
         ) as pool_cls:
             result, written, total = await l2._refine_rects(
                 _world(),

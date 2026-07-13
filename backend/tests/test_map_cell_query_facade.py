@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.pack import WorldPackPaths, WorldPackWriter
-from app.application.worldData.pack.packReadServices import build_pack_read_services
+from app.application.worldData.pack.read.packReadServices import build_pack_read_services
 from app.application.worldData.patchStoreService import PatchStoreService
 from app.dataModel.worldPack import WorldMapCellWire
 from app.dataModel.worldPack.layerPriority import MapLayerKind
@@ -57,7 +57,9 @@ class TestMapCellQueryFacade(unittest.IsolatedAsyncioTestCase):
 
     def test_loading_progress(self):
         snap = self.loading.get_loading_progress(_world())
-        self.assertEqual(snap.world_map.world_map_tiles_ready, 1)
+        self.assertEqual(snap.world_map.tiles_ready, 1)
+        self.assertEqual(snap.world_map.tiles_pct, 100.0)
+        self.assertEqual(snap.world_map.locations_pct, 100.0)
 
 
 if __name__ == "__main__":

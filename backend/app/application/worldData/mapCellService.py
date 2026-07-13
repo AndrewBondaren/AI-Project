@@ -8,7 +8,7 @@ from app.api.schemas.imports import ImportResult
 from app.application.import_helpers import import_list
 from app.application.worldData.generators.terrain.worldMapSettings import n_base, world_z_min
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
-from app.application.worldData.pack.patchCellContribution import patch_kind_for_save_pass
+from app.application.worldData.pack.read.patchCellContribution import patch_kind_for_save_pass
 from app.dataModel.worldPack.mapCellPatchLayerKind import MapCellPatchLayerKind
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World

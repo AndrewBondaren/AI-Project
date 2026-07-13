@@ -73,7 +73,7 @@ class WorldGridRenderer:
         *,
         cell_size_m: int | None = None,
     ) -> None:
-        self._cell_m = cell_size_m or 3000
+        self._cell_m = cell_size_m or 1000
         self._tops = _macro_top_surface_cells(cells, self._cell_m)
         self._locations = locations or []
 

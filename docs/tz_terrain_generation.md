@@ -769,12 +769,21 @@ PRAGMA cache_size=-64000
 | Узел | Сейчас | Почему плохо |
 |---|---|---|
 | `check_terrain` | `has_cells_for_location(location_uid)` | после `materialize-stack` wilderness cells **без** `location_uid` → ложный `has_terrain=False` |
-| `eager_terrain` | `get_by_location(location_uid)` | грузит только tagged cells, не соседний рельеф |
+| `eager_terrain` | `get_by_location(location_uid)` | для **blocking** сцены — не scene volume / не «со стороны игрока»; для **фона** соседних локаций — OK (оставить) |
 | `lazy_terrain` | `generate_minimal` (1 anchor) | repair OK; не подгружает колонку / scene volume |
 
 #### Scene volume — что грузить в gameplay
 
-**Единица запроса:** 3D bbox в **meter grid** `(world_uid, x±R, y±R, z_lo…z_hi)`, не весь `location_uid`, не весь мир.
+**Единица blocking-запроса:** 3D bbox в **meter grid** `(world_uid, x±R, y±R, z_lo…z_hi)` — **со стороны игрока** (entry / ноги), не весь мир.
+
+**Два режима загрузки локации (утверждено):**
+
+| Режим | Единица | Когда |
+|---|---|---|
+| **Blocking** | `get_scene_volume` / refine от стороны входа | активная сцена игрока — ≤ **10 s** |
+| **Фон** | `get_by_location(location_uid)` (вся локация / location terrain blob) | prefetch **соседних** локаций; не блокирует ход |
+
+`get_by_location` **оставить** для фона. Blocking path **не** ждёт полный `location_uid`.
 
 | Параметр | Default | Источник |
 |---|---|---|
@@ -782,7 +791,7 @@ PRAGMA cache_size=-64000
 | `scene_z_below` | `N_base(world)` | `worldMapSettings.n_base` — subsurface под ногами |
 | `scene_z_above` | **0** | от `map_z` вверх до surface (обычно 0) |
 
-Центр: `(check_terrain.map_x, map_y, map_z)` из сцены.
+Центр blocking: `(check_terrain.map_x, map_y, map_z)` из сцены / entry point.
 
 ```python
 # MapCellService — target API
@@ -1238,7 +1247,8 @@ world_load / first_need
 
 ```
 check_terrain → has_column_cells OR has_cells_for_location
-eager_terrain → get_scene_volume(…)
+eager_terrain → get_scene_volume(…)          # blocking: со стороны игрока
+             → optional bg: get_by_location  # соседние локации целиком
 lazy_terrain  → generate_z_slice if column empty → get_scene_volume
              → generate_minimal fallback (orphan)
 lazy_settlement → без изменений (SettlementGeneratorService)

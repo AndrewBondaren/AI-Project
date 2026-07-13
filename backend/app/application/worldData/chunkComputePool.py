@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from typing import TypeVar
 
-from app.application.worldData.pack.packBakeLog import log_pack_compute_pool
+from app.application.worldData.pack.bake.packBakeLog import log_pack_compute_pool
 
 T = TypeVar("T")
 R = TypeVar("R")

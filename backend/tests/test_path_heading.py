@@ -3,7 +3,7 @@
 import unittest
 from types import SimpleNamespace
 
-from app.application.worldData.pack.pathHeading import (
+from app.application.worldData.pack.refine.pathHeading import (
     filter_corridor_rects,
     heading_from_positions,
     macro_tiles_ahead,

@@ -2,7 +2,7 @@
 
 import unittest
 
-from app.application.worldData.pack.patchCellContribution import map_cell_to_patch_contribution
+from app.application.worldData.pack.read.patchCellContribution import map_cell_to_patch_contribution
 from app.dataModel.worldPack import CellContribution, LayerSlice, MapLayerKind, merge_layers
 from app.dataModel.worldPack.mapCellPatchLayerKind import MapCellPatchLayerKind
 from app.db.models.mapCell import MapCell

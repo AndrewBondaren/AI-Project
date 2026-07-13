@@ -621,3 +621,56 @@ def log_pack_bake_done(
         world_uid=world_uid,
         elapsed_s=round(elapsed_s, 2),
     )
+
+
+def log_pack_loading_progress(
+    world_uid: str,
+    *,
+    phase: str,
+    tiles_pct: float,
+    locations_pct: float,
+    wilderness_pct: float,
+    tiles_ready: int = 0,
+    tiles_total: int = 0,
+    locations_ready: int = 0,
+    locations_total: int = 0,
+    wilderness_ready: int = 0,
+    wilderness_total: int = 0,
+    refine_pct: float | None = None,
+) -> None:
+    """WP-15 — tiles / locations / wilderness percent snapshot (INFO)."""
+    refine_part = ""
+    fields: dict[str, Any] = {
+        "world_uid": world_uid,
+        "phase": phase,
+        "tiles_pct": tiles_pct,
+        "locations_pct": locations_pct,
+        "wilderness_pct": wilderness_pct,
+        "tiles_ready": tiles_ready,
+        "tiles_total": tiles_total,
+        "locations_ready": locations_ready,
+        "locations_total": locations_total,
+        "wilderness_ready": wilderness_ready,
+        "wilderness_total": wilderness_total,
+    }
+    if refine_pct is not None:
+        refine_part = f" refine={refine_pct:.1f}%"
+        fields["refine_pct"] = refine_pct
+    _info(
+        "pack loading progress | world=%s phase=%s tiles=%.1f%% locations=%.1f%% wilderness=%.1f%%%s"
+        " (%d/%d tiles, %d/%d locs, %d/%d wild)",
+        world_uid,
+        phase,
+        tiles_pct,
+        locations_pct,
+        wilderness_pct,
+        refine_part,
+        tiles_ready,
+        tiles_total,
+        locations_ready,
+        locations_total,
+        wilderness_ready,
+        wilderness_total,
+        activity="loading_progress",
+        **fields,
+    )

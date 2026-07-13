@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.application.worldData.pack.worldPackPaths import WorldPackPaths, resolve_pack_root
+from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths, resolve_pack_root
 from app.db.models.world import World
 
 

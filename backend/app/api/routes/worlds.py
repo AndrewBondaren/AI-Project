@@ -99,7 +99,7 @@ async def import_world_pack(
     import tempfile
     from pathlib import Path
 
-    from app.application.worldData.pack.packImportService import PackImportService
+    from app.application.worldData.pack.import_.packImportService import PackImportService
 
     world = await container.world_service().get_by_id(world_uid)
     if world is None:

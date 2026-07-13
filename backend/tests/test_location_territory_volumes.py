@@ -3,7 +3,7 @@
 import unittest
 from types import SimpleNamespace
 
-from app.application.worldData.pack.locationTerritoryVolumes import (
+from app.application.worldData.pack.read.locationTerritoryVolumes import (
     settlement_footprint_side_m,
     territory_volume_for_location,
 )

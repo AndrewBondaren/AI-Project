@@ -112,7 +112,7 @@ class World:
     closed_planet_grid:             bool = bool_col(default=False)
     elevation_lapse_rate:           float | None = None
     g:                              float = 1.0
-    map_cell_size_m:                int = 3000  # world surface cell size in meters, multiples of 1000
+    map_cell_size_m:                int = 1000  # world surface cell size in meters, multiples of 1000
     default_passage_height:         int = 2
 
     # custom field declarations

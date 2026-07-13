@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.pack.packReadServices import PackReadServices
+from app.application.worldData.pack.read.packReadServices import PackReadServices
 from app.db.models.world import World
 
 

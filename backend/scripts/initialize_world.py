@@ -25,7 +25,7 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO / "backend") not in sys.path:
     sys.path.insert(0, str(REPO / "backend"))
 
-from app.application.worldData.pack.importLevels import filter_bundle_for_export
+from app.application.worldData.pack.import_.importLevels import filter_bundle_for_export
 from debug_api_helpers import DebugApiError, _require_ok, api_clear_map, api_client
 from debug_surface_helpers import (
     SurfaceStackResult,
@@ -83,8 +83,11 @@ def _build_pack_bake_metrics(
         "http_elapsed_s": round(http_elapsed_s, 2),
         "server_bake_elapsed_s": round(server_s, 2) if server_s is not None else None,
         "pack_mode": bake.get("pack_mode"),
-        "world_map_tiles_ready": wm.get("world_map_tiles_ready"),
-        "world_map_tiles_total": wm.get("world_map_tiles_total"),
+        "tiles_pct": wm.get("tiles_pct"),
+        "locations_pct": wm.get("locations_pct"),
+        "wilderness_pct": wm.get("wilderness_pct"),
+        "tiles_ready": wm.get("tiles_ready"),
+        "tiles_total": wm.get("tiles_total"),
         "world_map_cells": bake.get("world_map_cells"),
         "terrain_succeeded": terrain.get("succeeded"),
         "terrain_failed": terrain.get("failed"),

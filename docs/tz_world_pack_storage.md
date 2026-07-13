@@ -217,7 +217,7 @@ flowchart TB
 | **WP-12** | Восстановление refine: **chunk manifest + atomic chunk commit**; прерванный chunk — redo; tile `partial` \| `complete` |
 | **WP-13** | L2 gameplay: **от точки входа**; blocking **только** scene volume; **никогда** blocking целого tile |
 | **WP-14** | **Time-to-play:** spawn → playable ≤ **30 s** (p95); переход tile ≤ **10 s** blocking — hard product gate |
-| **WP-15** | Прогресс: `worldMapLoading` + `localGridLoading`; UI push **каждые 10 s** (TODO frontend) |
+| **WP-15** | Прогресс: `tiles_pct` / `locations_pct` / `wilderness_pct` (0…100); UI push **каждые 10 s** (TODO frontend) |
 | **WP-16** | **Heading:** movement **intent** (DAG) → fallback вектор последних позиций; без обоих — expand от anchor без prefetch вперёд |
 | **WP-17** | `path_ahead_depth` — user setting в `config.toml` (`[world_loading]`), default **2** |
 | **WP-18** | Climate L2: **сначала A** (coarse sample, fast); **B** (per-tile fine) — в фоне, когда есть время |
@@ -236,7 +236,7 @@ flowchart TB
 
 | Параметр | Значение |
 |---|---|
-| Unit | **1 macro-tile** (`map_cell_size_m`, default 3000 m) |
+| Unit | **1 macro-tile** (`map_cell_size_m`, default 1000 m) |
 | Разрешение внутри tile | **`world_map_cells_per_tile`** — **зависит от `map_cell_size_m`** (см. ниже); не фиксированные 32×32 |
 | Физический шаг light cell | `light_cell_m ≈ map_cell_size_m / world_map_cells_per_tile` |
 | Файл pack | `tiles/r.{gx}.{gy}.world_map.zst` + глобальный `climate_coarse.zst` |
@@ -437,7 +437,7 @@ wilderness_chunk.cells = refine_chunk(L0, rect)
 
 **zstd:** каждый файл сжимается **на write** (`TileCodec`); отдельный batch-compress не нужен.
 
-**`worldMapLoading`:** `location_terrain_ready` — локации с `l.{uid}.terrain.zst`.
+**`worldMapLoading`:** `locations_pct` — доля локаций с `l.{uid}.terrain.zst` от pins в `locations_index`.
 
 **Крупный город:** bbox > лимита → sub-chunks `l.{uid}.c.{i}.zst` (backlog); v1 — один файл.
 
@@ -487,8 +487,17 @@ flowchart TB
 |---|---|---|
 | **Старт сессии** | `spawn_location` персонажа (`map_x`, `map_y`) | `scene_xy_radius` вокруг spawn — **секунды**, не минуты |
 | **Переход macro-tile** | координата **пересечения** границы (где игрок вошёл в tile) | scene volume вокруг **ног** |
-| **Вход в локацию** | `location_entry_points` (ближайший discovered entry) или anchor локации | scene volume вокруг entry |
+| **Вход в локацию** | `location_entry_points` (ближайший discovered entry) или сторона входа со стороны игрока | scene volume от **стороны игрока** / entry — **не** blocking весь `location_uid` |
 | **Движение внутри tile** | anchor **не сбрасывается**; фон достраивает chunks по distance от **текущей** позиции + старый anchor |
+
+**Загрузка локации (два режима, утверждено):**
+
+| Режим | API / единица | Когда |
+|---|---|---|
+| **Blocking (игрок)** | scene volume от **стороны входа** / ног (`get_scene_volume`, refine rings от entry) | вход в локацию, spawn, tile cross — ≤ **10 s** |
+| **Фон (соседи)** | `get_by_location(location_uid)` / целиком `locations/l.{uid}.terrain.zst` | prefetch **соседних** локаций; **не** блокирует ход |
+
+Антипаттерн только для **blocking** path: eager весь город / весь `location_uid` до первого ответа LLM. Фоновая догрузка соседних локаций целиком — **разрешена**.
 
 **Порядок chunks внутри tile:**
 
@@ -865,7 +874,7 @@ effective_climate(x,y) =
 
 **Debug read API:** `GET …/map/pack/fine-terrain-read` — probe merged fine terrain; **не** `l2-probe`.
 
-**Прогресс загрузки:** `world_map_tiles_ready` / `world_map_tiles_total`, `location_terrain_ready`, `wilderness_chunks_baked`.
+**Прогресс загрузки:** `tiles_pct`, `locations_pct`, `wilderness_pct` (WP-15); диагностика — ready/total + `wilderness_chunks_baked`.
 
 **Логи (`packBakeLog`, JSON):** в `msg` и поле `activity` — **не** `L0`/`L2`/`l0`/`l2`. Соответствие LOD → log:
 
@@ -1134,44 +1143,41 @@ sequenceDiagram
 
 ### Прогресс загрузки (WP-15, утверждено)
 
-Два **внутренних** счётчика (backend); позже — push на frontend. Пока загрузка активна (blocking или фон) — **каждые 10 s** отдавать снимок на UI (**TODO:** frontend SSE/ poll contract).
+Три **процентных** оси загрузки (backend → UI). Push на frontend — **TODO** SSE/poll (**каждые 10 s** пока `phase != idle`).
 
-#### `worldMapLoading` — локации на world map
+#### `worldMapLoading` — проценты 0…100
+
+| Поле | Тип | Смысл | Формула |
+|---|---|---|---|
+| `tiles_pct` | float | L0 world map tiles | `100 * tiles_ready / tiles_total` |
+| `locations_pct` | float | location fine terrain (WP-19) | `100 * locations_ready / locations_total` |
+| `wilderness_pct` | float | wilderness L2 refine по tiles | `100 * (complete + 0.5·partial) / tiles_total` |
+| `phase` | enum | `tiles` \| `locations` \| `wilderness` \| `idle` | первая незакрытая ось |
+
+**Знаменатели:** `tiles_total` = `manifest.tiles`; `locations_total` = pins в `locations_index.json` (0 → `locations_pct=100`); wilderness — те же macro-tiles, статус `wilderness_refine_status`.
+
+**Диагностика (optional в snapshot):** `*_ready` / `*_total` int рядом с pct.
+
+**UI:** три независимых бара (tiles → locations → wilderness); не смешивать в один 0…1.
+
+#### `localGridLoading` — L2 / climate (деталь вокруг игрока)
 
 | Поле | Тип | Смысл |
 |---|---|---|
-| `locations_total` | int | `named_locations` активных в мире |
-| `locations_ready` | int | L0 pin + L1 skeleton |
-| `location_terrain_ready` | int | `locations/l.*.terrain.zst` готов (WP-19) |
-| `wilderness_tiles_total` | int | macro-tiles в bounds без локаций |
-| `wilderness_tiles_l0_ready` | int | wilderness tiles с `world_map.zst` (фон) |
-| `phase` | enum | `locations` \| `wilderness` \| `idle` |
-
-**Формула прогресса (0..1):** `(locations_ready + wilderness_tiles_l0_ready) / (locations_total + wilderness_tiles_total)` — или отдельные поля для UI.
-
-#### `localGridLoading` — L2 per macro-tile
-
-Массив / map по `(gx, gy)`:
-
-| Поле | Тип | Смысл |
-|---|---|---|
-| `gx`, `gy` | int | macro-tile |
-| `chunks_total` | int | fine chunks в tile |
-| `chunks_ready` | int | chunks в pack |
-| `wilderness_refine_status` | enum | `absent` \| `partial` \| `complete` — wilderness L2 chunks на tile |
-| `climate_status` | enum | `coarse_only` (coarse blob) \| `fine_ready` (fine tile on disk) |
+| `refine_pct` | float | chunks ready / expected на активном tile (0…100) |
+| `chunks_ready` / `chunks_total` | int | диагностика |
+| `climate_status` | enum | `coarse_only` \| `fine_ready` |
 | `entry_anchor` | `{x,y}?` | последняя точка входа |
-
-**Агрегат сессии:** `tiles_partial`, `tiles_complete`, `active_chunk_job`.
+| `tile_gx`, `tile_gy` | int? | активный macro-tile |
 
 #### Backend API (target)
 
 | API | Назначение |
 |---|---|
-| `get_loading_progress(world_uid)` | `{ worldMapLoading, localGridLoading, updated_at }` |
+| `get_loading_progress(world_uid)` | `{ worldMapLoading, localGridLoading, … }` |
 | `subscribe_loading_progress` | **TODO:** SSE / push **каждые 10 s** пока `phase != idle` |
 
-**Приёмка WP-A11:** после spawn `worldMapLoading.locations_ready` включает spawn location; wilderness растёт в фоне без блокировки хода.
+**Приёмка WP-A11:** после spawn `locations_pct` отражает готовность location terrain; `tiles_pct` / `wilderness_pct` растут в фоне без блокировки хода.
 
 ---
 
@@ -1423,7 +1429,7 @@ flowchart TB
 | WP-A8 | crash mid-chunk: готовые chunks сохранены; redo → stable hash |
 | WP-A9 | **WP-14:** spawn → `get_scene_volume` playable ≤ **30 s** p95 (цель 15 s); игрок может отправить ход |
 | WP-A10 | переход macro-tile: blocking ≤ **10 s**; дальше — L0 fallback + фон |
-| WP-A11 | `worldMapLoading`: spawn location ready; wilderness L0 — фон после входа |
+| WP-A11 | `worldMapLoading`: `locations_pct` / `tiles_pct` / `wilderness_pct`; wilderness — фон после входа |
 | WP-A12 | climate tier A на scene сразу; tier B в фоне |
 | WP-A13 | overlap: 3D territory mask; merge WP-20; multi-location per tile по z |
 | WP-A14 | stale L0: wilderness regen от границы location наружу; patch/location preserved |

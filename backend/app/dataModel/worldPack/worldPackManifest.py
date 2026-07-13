@@ -92,7 +92,7 @@ class WorldPackManifest(BaseModel):
     payload_format: str = "json"
     registry_hash: str | None = None
     bake_mode: BakeMode = "light"
-    map_cell_size_m: int = 3000
+    map_cell_size_m: int = 1000
     world_map_cells_per_tile: int = 32
     cell_size_m: int = 1
     map_subsurface_depth: int = 0

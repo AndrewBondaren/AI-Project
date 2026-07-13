@@ -173,8 +173,13 @@ def run_http(
             elif elapsed > LIMITS["A1_bake_s"]:
                 result.fail("WP-A1", f"bake {elapsed:.1f}s > {LIMITS['A1_bake_s']}s")
             else:
-                world_map = int((bake.get("loading_progress") or {}).get("world_map", {}).get("world_map_tiles_ready") or 0)
-                result.ok("WP-A1", f"light bake {elapsed:.1f}s, world_map_tiles_ready={world_map}")
+                wm = (bake.get("loading_progress") or {}).get("worldMapLoading") or {}
+                tiles_ready = int(wm.get("tiles_ready") or 0)
+                tiles_pct = wm.get("tiles_pct")
+                result.ok(
+                    "WP-A1",
+                    f"light bake {elapsed:.1f}s, tiles_ready={tiles_ready}, tiles_pct={tiles_pct}",
+                )
         else:
             result.skip("WP-A1", "--skip-bake")
 
@@ -203,12 +208,18 @@ def run_http(
         r = client.get(f"/worlds/{world_uid}/map/loading-progress")
         _require_ok(r, "GET loading-progress")
         progress = r.json()
-        wm = progress.get("world_map") or {}
-        loc_ready = wm.get("location_terrain_ready") or []
-        if isinstance(loc_ready, list):
-            result.ok("WP-A11", f"location_terrain_ready={len(loc_ready)}, phase={wm.get('phase')}")
+        wm = progress.get("worldMapLoading") or progress.get("world_map") or {}
+        tiles_pct = wm.get("tiles_pct")
+        locations_pct = wm.get("locations_pct")
+        wilderness_pct = wm.get("wilderness_pct")
+        if all(isinstance(v, (int, float)) for v in (tiles_pct, locations_pct, wilderness_pct)):
+            result.ok(
+                "WP-A11",
+                f"tiles={tiles_pct}% locations={locations_pct}% "
+                f"wilderness={wilderness_pct}% phase={wm.get('phase')}",
+            )
         else:
-            result.fail("WP-A11", "loading-progress missing world_map.location_terrain_ready")
+            result.fail("WP-A11", "loading-progress missing tiles/locations/wilderness_pct")
 
         ax, ay, az = _spawn_anchor(fixture)
         t0 = time.perf_counter()

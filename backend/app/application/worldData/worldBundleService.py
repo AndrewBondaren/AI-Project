@@ -17,7 +17,7 @@ from app.application.worldData.raceService import RaceService
 from app.application.worldData.stateService import StateService
 from app.application.worldData.worldPerkService import WorldPerkService
 from app.application.worldData.worldService import WorldService
-from app.application.worldData.pack.importLevels import (
+from app.application.worldData.pack.import_.importLevels import (
     ImportLevel,
     filter_bundle_for_export,
     validate_bundle_for_import,

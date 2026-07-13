@@ -13,7 +13,7 @@ from app.application.worldData.climateBatchOrchestrator import ClimateBatchOrche
 from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
-from app.application.worldData.pack.packMaterializationOrchestrator import PackMaterializationOrchestrator
+from app.application.worldData.pack.bake.packMaterializationOrchestrator import PackMaterializationOrchestrator
 from app.application.worldData.materializationContext import (
     MaterializationContext,
     MaterializationJobReport,
