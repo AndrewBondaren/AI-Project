@@ -62,6 +62,9 @@ from app.application.worldData.mapCellReadService import MapCellReadService
 from app.application.worldData.pack.read.packReadServices import PackReadServices, build_pack_read_services
 from app.application.worldData.patchStoreService import PatchStoreService
 from app.application.worldData.pack.bake.packMaterializationOrchestrator import PackMaterializationOrchestrator
+from app.application.worldData.pack.refine.entryRefineOrchestrator import EntryRefineOrchestrator
+from app.application.worldData.pack.refine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
+from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.db.models.world import World
 from app.db.repositories.iChunkRefineJobRepository import IChunkRefineJobRepository
 from app.db.repositories.sqlite.chunkRefineJobRepository import SqliteChunkRefineJobRepository
@@ -140,6 +143,7 @@ class Container:
         self._pack_read_services: dict[str, PackReadServices] = {}
         self._chunk_refine_job_repository = None
         self._pack_materialization_orchestrator = None
+        self._entry_refine_orchestrator = None
 
         # CLIENTS
         self._qwen_client = None
@@ -457,10 +461,23 @@ class Container:
             self._chunk_refine_job_repository = SqliteChunkRefineJobRepository(db=self._db)
         return self._chunk_refine_job_repository
 
+    def entry_refine_orchestrator(self) -> EntryRefineOrchestrator:
+        if self._entry_refine_orchestrator is None:
+            terrain = self.terrain_batch_orchestrator()
+            self._entry_refine_orchestrator = EntryRefineOrchestrator(
+                FineTerrainRefineOrchestrator(terrain),
+                job_repo=self.chunk_refine_job_repository(),
+                bake_defaults=PackBakeDefaults.canonical_defaults(),
+            )
+        return self._entry_refine_orchestrator
+
     def pack_materialization_orchestrator(self) -> PackMaterializationOrchestrator:
         if self._pack_materialization_orchestrator is None:
+            entry = self.entry_refine_orchestrator()
             self._pack_materialization_orchestrator = PackMaterializationOrchestrator(
                 self.terrain_batch_orchestrator(),
+                entry=entry,
+                climate_bake=entry.climate_bake,
                 job_repo=self.chunk_refine_job_repository(),
                 world_service=self.world_service(),
             )

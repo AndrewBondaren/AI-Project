@@ -763,12 +763,12 @@ async def refine_from_entry_route(
         world, free_cores=free_cores, parallel_workers_override=parallel_workers,
     )
     writer = container.world_pack_writer_for(world)
-    orch = container.pack_materialization_orchestrator()
+    entry_orch = container.entry_refine_orchestrator()
     try:
         anchor_kind = parse_anchor_kind(kind)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    entry = await orch.refine_from_entry(
+    entry = await entry_orch.refine_from_entry(
         world_uid, world, locations, writer, mat_ctx, surface_ctx,
         kind=anchor_kind,
         anchor_x=x,

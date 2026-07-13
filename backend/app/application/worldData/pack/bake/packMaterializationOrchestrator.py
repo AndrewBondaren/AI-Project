@@ -1,9 +1,8 @@
-"""Pack-backed materialization facade — world map light + fine-terrain scene refine."""
+"""Pack-backed materialization facade — world map light bake (+ entry refine via session)."""
 
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
 
 from app.application.worldData.persistResult import PersistResult
 from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
@@ -16,28 +15,18 @@ from app.application.worldData.materializationContext import (
     MaterializationContext,
     MaterializationJobReport,
 )
-from app.application.worldData.pack.refine.chunkRefineQueue import ChunkRefineQueue
-from app.application.worldData.pack.refine.chunkRefineWorker import ChunkRefineWorker
-from app.application.worldData.pack.climate.climateFinePending import ClimateFinePending
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import ClimatePackBakeOrchestrator
-from app.application.worldData.pack.refine.entryAnchorTracker import (
-    AnchorKind,
-    EntryAnchor,
-    EntryAnchorTracker,
-)
 from app.application.worldData.pack.bake.worldMapBakeOrchestrator import WorldMapBakeOrchestrator
+from app.application.worldData.pack.refine.entryRefineOrchestrator import EntryRefineOrchestrator
 from app.application.worldData.pack.refine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
 from app.application.worldData.pack.bake.locationsIndexBake import build_locations_index
 from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_on_world
-from app.application.worldData.pack.refine.pathHeading import PathHeading, resolve_path_heading
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.parallelPolicy import resolve_terrain_workers
-from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.application.worldData.worldService import WorldService
-from app.core.appSettings import app_settings
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
@@ -46,34 +35,19 @@ from app.db.repositories.iChunkRefineJobRepository import IChunkRefineJobReposit
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_bake_done,
     log_pack_bake_start,
-    log_pack_drain_persisted_done,
-    log_pack_drain_persisted_start,
-    log_pack_jobs_persisted,
-    log_pack_queue_enqueue,
 )
 
 
-@dataclass(frozen=True)
-class RefineFromEntryResult:
-    """WP-13 entry refine: scene + path corridor + optional background rings."""
-
-    terrain: PersistResult
-    chunks_done: int
-    chunks_total: int
-    climate_fine_tiles: int
-    tile_gx: int
-    tile_gy: int
-    queue_depth: int
-    anchor: EntryAnchor
-
-
 class PackMaterializationOrchestrator:
+    """L0 world_map / climate coarse bake. Entry refine lives on ``EntryRefineOrchestrator``."""
+
     def __init__(
         self,
         terrain: TerrainBatchOrchestrator,
         *,
         world_map: WorldMapBakeOrchestrator | None = None,
         fine_terrain: FineTerrainRefineOrchestrator | None = None,
+        entry: EntryRefineOrchestrator | None = None,
         job_repo: IChunkRefineJobRepository | None = None,
         world_service: WorldService | None = None,
         bake_defaults: PackBakeDefaults | None = None,
@@ -82,142 +56,25 @@ class PackMaterializationOrchestrator:
     ) -> None:
         self._terrain = terrain
         self._world_map = world_map or WorldMapBakeOrchestrator()
-        self._fine_terrain = fine_terrain or FineTerrainRefineOrchestrator(terrain)
-        self._anchors = EntryAnchorTracker()
-        self._queue = ChunkRefineQueue(max_workers=1)
-        self._climate_fine = ClimateFinePending()
-        self._climate = climate_bake or ClimatePackBakeOrchestrator(read_context=read_context)
-        self._worker = ChunkRefineWorker(
-            self._fine_terrain,
-            job_repo=job_repo,
-            climate_bake=self._climate,
-            climate_fine=self._climate_fine,
-        )
-        self._jobs = job_repo
-        self._world_service = world_service
         self._defaults = bake_defaults or PackBakeDefaults.canonical_defaults()
-
-    @property
-    def refine_queue(self) -> ChunkRefineQueue:
-        return self._queue
-
-    @property
-    def anchor_tracker(self) -> EntryAnchorTracker:
-        return self._anchors
-
-    def set_entry_anchor(
-        self,
-        world: World,
-        kind: AnchorKind,
-        entry_x: int,
-        entry_y: int,
-        *,
-        tile_gx: int | None = None,
-        tile_gy: int | None = None,
-        location_uid: str | None = None,
-    ) -> EntryAnchor:
-        """WP-13 — record spawn / tile_cross / location_entry (no refine)."""
-        gx, gy = tile_gx, tile_gy
-        if gx is None or gy is None:
-            gx, gy = self._fine_terrain.tile_for_anchor(world, entry_x, entry_y)
-        return self._anchors.set_anchor(
-            kind, entry_x, entry_y,
-            tile_gx=gx, tile_gy=gy, location_uid=location_uid,
-        )
-
-    async def refine_from_entry(
-        self,
-        world_uid: str,
-        world: World,
-        locations: list[NamedLocation],
-        writer: WorldPackWriter,
-        mat_ctx: MaterializationContext,
-        surface_ctx,
-        *,
-        kind: AnchorKind,
-        anchor_x: int,
-        anchor_y: int,
-        location_uid: str | None = None,
-        heading: PathHeading | None = None,
-        heading_dx: int | None = None,
-        heading_dy: int | None = None,
-        schedule_bg: bool = True,
-    ) -> RefineFromEntryResult:
-        """WP-13 entry refine: set anchor, blocking scene + path, optional bg rings/jobs."""
-        policy = SceneVolumePolicy.canonical_defaults()
-        anchor = self.set_entry_anchor(
-            world, kind, anchor_x, anchor_y, location_uid=location_uid,
-        )
-        assert anchor.tile_gx is not None and anchor.tile_gy is not None
-        tile_gx, tile_gy = anchor.tile_gx, anchor.tile_gy
-
-        resolved_heading = heading
-        if resolved_heading is None:
-            resolved_heading = resolve_path_heading(
-                intent_dx=heading_dx,
-                intent_dy=heading_dy,
-                positions=self._anchors.position_history(),
-            )
-
-        terrain_result, chunks_done, chunks_total = await self._fine_terrain.refine_scene_volume(
-            world, locations, writer, anchor_x, anchor_y, mat_ctx,
-            surface_ctx=surface_ctx, tile_gx=tile_gx, tile_gy=tile_gy,
-            xy_radius=policy.scene_xy_radius,
-        )
-        self._climate_fine.enqueue(tile_gx, tile_gy)
-
-        path_chunks = await self._fine_terrain.refine_path_corridor(
-            world, locations, writer, anchor_x, anchor_y, mat_ctx, surface_ctx,
-            tile_gx, tile_gy,
-            heading=resolved_heading,
-            depth_tiles=app_settings.path_ahead_depth,
-        )
-        chunks_done += path_chunks
-
-        if schedule_bg:
-            skip = self._fine_terrain.scene_chunk_indices(
-                world, tile_gx, tile_gy, anchor_x, anchor_y,
-                xy_radius=policy.scene_xy_radius,
-            )
-            await self._fine_terrain.schedule_tile_background(
-                world, self._queue, anchor_x, anchor_y, tile_gx, tile_gy,
-                skip_scene_rects=skip,
-            )
-            if resolved_heading is not None:
-                await self._fine_terrain.schedule_path_ahead_tiles(
-                    world, self._queue, anchor_x, anchor_y, tile_gx, tile_gy,
-                    resolved_heading,
-                    depth_tiles=app_settings.path_ahead_depth,
-                )
-            for gx, gy, cx, cy, priority in self._queue.pending_items():
-                log_pack_queue_enqueue(world_uid, gx, gy, cx, cy, priority=priority)
-                await self._worker.persist_enqueue(
-                    world_uid, gx, gy, cx, cy, priority=priority,
-                )
-            log_pack_jobs_persisted(world_uid, count=len(self._queue))
-
-        climate_fine_tiles = 0
-        if self._defaults.background_drain_per_request > 0:
-            _drained_chunks, fine_tiles = await self._worker.drain_queue(
-                world_uid, world, locations, writer, mat_ctx, surface_ctx,
-                self._queue, max_jobs=self._defaults.background_drain_per_request,
-            )
-            climate_fine_tiles += fine_tiles
+        self._world_service = world_service
+        if entry is not None:
+            self._entry = entry
+            self._climate = climate_bake or entry.climate_bake
         else:
-            climate_fine_tiles += self._worker.drain_climate_fine(
-                world, surface_ctx, writer,
+            self._climate = climate_bake or ClimatePackBakeOrchestrator(read_context=read_context)
+            fine = fine_terrain or FineTerrainRefineOrchestrator(terrain)
+            self._entry = EntryRefineOrchestrator(
+                fine,
+                job_repo=job_repo,
+                bake_defaults=self._defaults,
+                climate_bake=self._climate,
+                read_context=read_context,
             )
 
-        return RefineFromEntryResult(
-            terrain=terrain_result,
-            chunks_done=chunks_done,
-            chunks_total=chunks_total,
-            climate_fine_tiles=climate_fine_tiles,
-            tile_gx=tile_gx,
-            tile_gy=tile_gy,
-            queue_depth=len(self._queue),
-            anchor=anchor,
-        )
+    @property
+    def entry(self) -> EntryRefineOrchestrator:
+        return self._entry
 
     async def materialize_light_pack(
         self,
@@ -254,16 +111,11 @@ class PackMaterializationOrchestrator:
             world, locations, nodes=nodes, edges=edges,
             hydrology_generator=hydrology_generator,
         )
-        if surface_ctx is not None and self._jobs is not None:
-            drain_t0 = log_pack_drain_persisted_start(
-                world_uid,
-                max_jobs=max(self._defaults.background_drain_per_request, 1),
-            )
-            drained = await self._worker.drain_persisted(
+        if surface_ctx is not None and self._entry.has_job_repo:
+            await self._entry.drain_persisted(
                 world_uid, world, locations, writer, mat_ctx, surface_ctx,
                 max_jobs=max(self._defaults.background_drain_per_request, 1),
             )
-            log_pack_drain_persisted_done(world_uid, processed=drained, started_at=drain_t0)
 
         climate_result: PersistResult | None = None
         climate_coarse_samples = 0
@@ -294,7 +146,7 @@ class PackMaterializationOrchestrator:
                         break
             ax = ax if ax is not None else 0
             ay = ay if ay is not None else 0
-            entry = await self.refine_from_entry(
+            entry = await self._entry.refine_from_entry(
                 world_uid, world, locations, writer, mat_ctx, surface_ctx,
                 kind="session_start",
                 anchor_x=ax,
@@ -319,12 +171,13 @@ class PackMaterializationOrchestrator:
 
         workers = resolve_terrain_workers(mat_ctx, world)
         elapsed_s = time.perf_counter() - bake_t0
+        queue_depth = len(self._entry.refine_queue)
         log_pack_bake_done(
             world_uid,
             world_map_cells=world_map_cells,
             chunks_done=chunks_done,
             chunks_total=chunks_total,
-            queue_depth=len(self._queue),
+            queue_depth=queue_depth,
             started_at=bake_t0,
         )
         return MaterializationJobReport(
@@ -336,7 +189,7 @@ class PackMaterializationOrchestrator:
             climate_workers=0,
             elapsed_s=elapsed_s,
             world_map_cells=world_map_cells,
-            refine_queue_depth=len(self._queue),
+            refine_queue_depth=queue_depth,
             climate_coarse_samples=climate_coarse_samples or None,
             climate_fine_tiles=climate_fine_tiles or None,
         )
