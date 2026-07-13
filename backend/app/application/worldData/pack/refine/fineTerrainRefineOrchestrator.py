@@ -39,6 +39,9 @@ from app.application.worldData.pack.refine.pathHeading import (
     filter_corridor_rects,
     macro_tiles_ahead,
 )
+from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
+    SurfaceTerrainContext,
+)
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.worldPack.pathHeadingPolicy import PathHeadingPolicy
@@ -92,7 +95,7 @@ class FineTerrainRefineOrchestrator:
         anchor_y: int,
         mat_ctx: MaterializationContext,
         *,
-        surface_ctx,
+        surface_ctx: SurfaceTerrainContext,
         tile_gx: int,
         tile_gy: int,
         xy_radius: int,
@@ -137,7 +140,7 @@ class FineTerrainRefineOrchestrator:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx,
+        surface_ctx: SurfaceTerrainContext,
         tile_gx: int,
         tile_gy: int,
         rect: ColumnRect,
@@ -262,7 +265,7 @@ class FineTerrainRefineOrchestrator:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx,
+        surface_ctx: SurfaceTerrainContext,
         tile_gx: int,
         tile_gy: int,
         cx: int,
@@ -291,7 +294,7 @@ class FineTerrainRefineOrchestrator:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx,
+        surface_ctx: SurfaceTerrainContext,
         tile_gx: int,
         tile_gy: int,
         rects: list[ColumnRect],
@@ -447,7 +450,7 @@ class FineTerrainRefineOrchestrator:
         anchor_x: int,
         anchor_y: int,
         mat_ctx: MaterializationContext,
-        surface_ctx,
+        surface_ctx: SurfaceTerrainContext,
         tile_gx: int,
         tile_gy: int,
         *,

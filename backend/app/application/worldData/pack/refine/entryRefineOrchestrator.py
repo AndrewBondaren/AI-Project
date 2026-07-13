@@ -6,6 +6,9 @@ from dataclasses import dataclass
 
 from app.application.worldData.persistResult import PersistResult
 from app.application.worldData.materializationContext import MaterializationContext
+from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
+    SurfaceTerrainContext,
+)
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_drain_persisted_done,
     log_pack_drain_persisted_start,
@@ -116,7 +119,7 @@ class EntryRefineOrchestrator:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx,
+        surface_ctx: SurfaceTerrainContext,
         *,
         max_jobs: int,
     ) -> int:
@@ -135,7 +138,7 @@ class EntryRefineOrchestrator:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx,
+        surface_ctx: SurfaceTerrainContext,
         *,
         kind: AnchorKind,
         anchor_x: int,

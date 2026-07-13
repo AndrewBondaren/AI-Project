@@ -27,6 +27,7 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 from debug_api_helpers import BASE_URL, DebugApiError, _require_ok, api_clear_map, api_client
+from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 
 DEFAULT_FIXTURE = REPO / "fixtures" / "world_terrain_test.json"
 DEFAULT_WORLD = "world-terrain-test-001"
@@ -45,7 +46,7 @@ MANUAL = {
 }
 
 # WP-PERF-10: light bake must not enqueue whole macro-tile (~8k jobs).
-A5_MAX_REFINE_QUEUE = 200
+A5_MAX_REFINE_QUEUE = PackBakeDefaults.canonical_defaults().smoke_max_refine_queue_depth
 
 
 class SmokeResult:

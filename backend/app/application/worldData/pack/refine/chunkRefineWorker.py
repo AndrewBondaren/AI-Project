@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from app.application.worldData.materializationContext import MaterializationContext
+from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
+    SurfaceTerrainContext,
+)
 from app.application.worldData.pack.refine.chunkRefineQueue import ChunkRefineQueue
 from app.application.worldData.pack.climate.climateFinePending import ClimateFinePending
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import ClimatePackBakeOrchestrator
@@ -54,7 +57,7 @@ class ChunkRefineWorker:
     def drain_climate_fine(
         self,
         world: World,
-        surface_ctx,
+        surface_ctx: SurfaceTerrainContext | None,
         writer: WorldPackWriter,
         *,
         max_tiles: int = 0,
@@ -81,7 +84,7 @@ class ChunkRefineWorker:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx,
+        surface_ctx: SurfaceTerrainContext,
         queue: ChunkRefineQueue,
         *,
         max_jobs: int = 0,
@@ -120,7 +123,7 @@ class ChunkRefineWorker:
         locations: list[NamedLocation],
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
-        surface_ctx,
+        surface_ctx: SurfaceTerrainContext,
         *,
         max_jobs: int = 1,
     ) -> int:

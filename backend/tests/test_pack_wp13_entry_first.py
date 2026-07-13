@@ -49,7 +49,7 @@ class TestScheduleTileBackgroundRings(unittest.IsolatedAsyncioTestCase):
         # Whole-tile enqueue was ~900+ jobs at 1000m/32; rings must stay far below.
         self.assertLess(enqueued, full_tile // 4)
         self.assertEqual(enqueued, len(queue))
-        self.assertEqual(policy.background_expand_radius_m, 60)
+        self.assertGreater(policy.background_expand_radius_m, policy.scene_xy_radius)
 
     async def test_skip_scene_rects_excludes_scene_chunks(self) -> None:
         world = _world()

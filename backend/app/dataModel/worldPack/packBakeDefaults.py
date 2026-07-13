@@ -18,6 +18,8 @@ class PackBakeDefaults(BaseModel):
     background_drain_per_request: int = 0
     # WP-11 single-writer: at most one active background chunk job.
     refine_queue_max_workers: int = Field(default=1, ge=1)
+    # WP-PERF-10 / WP-A5: light/entry refine queue depth must stay well below whole-tile enqueue.
+    smoke_max_refine_queue_depth: int = Field(default=200, ge=0)
 
     @classmethod
     def canonical_defaults(cls) -> PackBakeDefaults:
