@@ -111,7 +111,7 @@ class MapCellQueryFacade:
         *,
         xy_radius: int = SceneVolumePolicy.canonical_defaults().scene_xy_radius,
         z_below: int | None = None,
-        z_above: int = 0,
+        z_above: int = SceneVolumePolicy.canonical_defaults().scene_z_above,
     ) -> list[MergedCellView]:
         depth = z_below if z_below is not None else n_base(world)
         z_lo = max(world_z_min(world), z - depth)

@@ -787,9 +787,9 @@ PRAGMA cache_size=-64000
 
 | Параметр | Default | Источник |
 |---|---|---|
-| `scene_xy_radius` | **5** | `SceneVolumePolicy` (`dataModel/terrain/sceneVolumePolicy.py`) |
+| `scene_xy_radius` | **20** | `SceneVolumePolicy` (`dataModel/terrain/sceneVolumePolicy.py`) |
 | `scene_z_below` | `N_base(world)` | `worldMapSettings.n_base` — subsurface под ногами |
-| `scene_z_above` | **0** | от `map_z` вверх до surface (обычно 0) |
+| `scene_z_above` | **6** | от `map_z` вверх (`SceneVolumePolicy.scene_z_above`) |
 
 Центр blocking: `(check_terrain.map_x, map_y, map_z)` из сцены / entry point.
 
@@ -801,7 +801,7 @@ async def get_scene_volume(
     *,
     xy_radius: int = SceneVolumePolicy.canonical_defaults().scene_xy_radius,
     z_below: int | None = None,
-    z_above: int = 0,
+    z_above: int = SceneVolumePolicy.canonical_defaults().scene_z_above,
 ) -> list[MapCell]:
     z_lo = z - (z_below if z_below is not None else n_base(...))
     z_hi = z + z_above

@@ -699,7 +699,7 @@ async def scene_volume_route(
     z: int,
     xy_radius: int = Query(default=SceneVolumePolicy.canonical_defaults().scene_xy_radius, ge=0),
     z_below: int | None = Query(default=None, ge=0),
-    z_above: int = Query(default=0, ge=0),
+    z_above: int = Query(default=SceneVolumePolicy.canonical_defaults().scene_z_above, ge=0),
     container=Depends(get_container),
 ) -> JSONResponse:
     """Debug — TR-LAZY-LOAD: 3D bbox around scene anchor (no DAG)."""

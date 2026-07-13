@@ -13,9 +13,10 @@ from app.dataModel.worldPack.territoryVolumePolicy import TerritoryVolumePolicy
 
 class TestPojoPolicies(unittest.TestCase):
 
-    def test_scene_volume_policy_default_radius(self):
+    def test_scene_volume_policy_defaults(self):
         policy = SceneVolumePolicy.canonical_defaults()
-        self.assertEqual(policy.scene_xy_radius, 5)
+        self.assertEqual(policy.scene_xy_radius, 20)
+        self.assertEqual(policy.scene_z_above, 6)
 
     def test_territory_pin_half_links_scene_volume(self):
         self.assertEqual(

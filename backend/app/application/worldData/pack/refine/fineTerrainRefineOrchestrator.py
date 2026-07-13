@@ -179,15 +179,30 @@ class FineTerrainRefineOrchestrator:
         tile_gy: int,
         *,
         skip_scene_rects: set[tuple[int, int]] | None = None,
+        max_radius_m: float | None = None,
     ) -> int:
+        """Enqueue background chunks near anchor — WP-13 rings, not whole tile (WP-PERF-10)."""
+        from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
+
         cell_m = cell_size_m(world)
         chunk_size = terrain_chunk_columns(world)
         meter_bbox = meter_bbox_for_tile(tile_gx, tile_gy, cell_m)
         skip = skip_scene_rects or set()
+        policy = SceneVolumePolicy.canonical_defaults()
+        radius = (
+            float(max_radius_m)
+            if max_radius_m is not None
+            else float(policy.background_expand_radius_m)
+        )
+        # Include chunk half-diagonal so edge chunks near the ring still enqueue.
+        max_dist = radius + chunk_size
         count = 0
         for rect in iter_meter_chunks(meter_bbox, chunk_size):
             cx, cy = _tile_local_chunk_indices(rect, meter_bbox, chunk_size)
             if (cx, cy) in skip:
+                continue
+            dist = math.sqrt(_distance_sq(*_chunk_center(rect), float(anchor_x), float(anchor_y)))
+            if dist > max_dist:
                 continue
             if queue.enqueue_chunk(
                 tile_gx, tile_gy, cx, cy,
@@ -200,11 +215,38 @@ class FineTerrainRefineOrchestrator:
         if count:
             log_pack_queue_scheduled(
                 world.world_uid,
-                f"tile_background gx={tile_gx} gy={tile_gy}",
+                f"tile_background gx={tile_gx} gy={tile_gy} r<={radius:.0f}m",
                 enqueued=count,
                 queue_depth=len(queue),
             )
         return count
+
+    def scene_chunk_indices(
+        self,
+        world: World,
+        tile_gx: int,
+        tile_gy: int,
+        anchor_x: int,
+        anchor_y: int,
+        *,
+        xy_radius: int | None = None,
+    ) -> set[tuple[int, int]]:
+        """Chunk (cx,cy) indices covered by scene volume around anchor."""
+        from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
+
+        radius = (
+            xy_radius
+            if xy_radius is not None
+            else SceneVolumePolicy.canonical_defaults().scene_xy_radius
+        )
+        cell_m = cell_size_m(world)
+        chunk_size = terrain_chunk_columns(world)
+        meter_bbox = meter_bbox_for_tile(tile_gx, tile_gy, cell_m)
+        out: set[tuple[int, int]] = set()
+        for rect in iter_meter_chunks(meter_bbox, chunk_size):
+            if _distance_sq(*_chunk_center(rect), anchor_x, anchor_y) <= (radius + chunk_size) ** 2:
+                out.add(_tile_local_chunk_indices(rect, meter_bbox, chunk_size))
+        return out
 
     async def schedule_path_ahead_tiles(
         self,

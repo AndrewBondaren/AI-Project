@@ -158,7 +158,7 @@ Pack-backed reads delegate to ``MapCellReadService`` (gameplay / debug / loading
         *,
         xy_radius: int = SceneVolumePolicy.canonical_defaults().scene_xy_radius,
         z_below: int | None = None,
-        z_above: int = 0,
+        z_above: int = SceneVolumePolicy.canonical_defaults().scene_z_above,
     ) -> list[MapCell]:
         """TR-LAZY-LOAD: 3D bbox around scene anchor for gameplay/debug."""
         read = self._read(world.world_uid)
