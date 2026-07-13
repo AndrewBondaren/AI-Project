@@ -623,6 +623,28 @@ def log_pack_bake_done(
     )
 
 
+def log_pack_entry_anchor_fallback(
+    world_uid: str,
+    *,
+    reason: str,
+    anchor_x: int,
+    anchor_y: int,
+) -> None:
+    """Light bake fell back to a default entry coordinate (usually 0,0)."""
+    _info(
+        "pack entry anchor fallback | world=%s anchor=(%d,%d) reason=%s",
+        world_uid,
+        anchor_x,
+        anchor_y,
+        reason,
+        activity="entry_anchor_fallback",
+        world_uid=world_uid,
+        anchor_x=anchor_x,
+        anchor_y=anchor_y,
+        reason=reason,
+    )
+
+
 def log_pack_loading_progress(
     world_uid: str,
     *,

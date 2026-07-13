@@ -38,6 +38,7 @@ from app.application.worldData.pack.refine.pathHeading import (
     PathHeading,
     filter_corridor_rects,
     macro_tiles_ahead,
+    predicted_border_entry,
 )
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
@@ -240,16 +241,24 @@ class FineTerrainRefineOrchestrator:
         *,
         depth_tiles: int,
     ) -> int:
-        """Enqueue background chunks on macro-tiles ahead along heading (WP-17).
+        """Enqueue background rings on macro-tiles ahead (WP-17).
 
-        Neighbor tiles use the same ``background_expand_radius_m`` as the current tile
-        (via ``schedule_tile_background``) — WP-13 / WP-PERF-10.
+        Each neighbor tile uses **predicted border entry** as ring anchor (WP-13),
+        not the current spawn/session anchor.
         """
+        tile_size = world_tile_size_m(world)
         count = 0
+        prev_gx, prev_gy = tile_gx, tile_gy
         for ngx, ngy in macro_tiles_ahead(tile_gx, tile_gy, heading, depth_tiles):
-            count += await self.schedule_tile_background(
-                world, queue, anchor_x, anchor_y, ngx, ngy,
+            entry_x, entry_y = predicted_border_entry(
+                prev_gx, prev_gy, ngx, ngy,
+                float(anchor_x), float(anchor_y),
+                tile_size,
             )
+            count += await self.schedule_tile_background(
+                world, queue, entry_x, entry_y, ngx, ngy,
+            )
+            prev_gx, prev_gy = ngx, ngy
         if count:
             log_pack_queue_scheduled(
                 world.world_uid,

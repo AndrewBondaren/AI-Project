@@ -7,6 +7,7 @@ from app.application.worldData.pack.refine.pathHeading import (
     filter_corridor_rects,
     heading_from_positions,
     macro_tiles_ahead,
+    predicted_border_entry,
     quantize_heading,
     resolve_path_heading,
 )
@@ -35,6 +36,21 @@ class TestPathHeading(unittest.TestCase):
         heading = quantize_heading(0, 10)
         assert heading is not None
         self.assertEqual(macro_tiles_ahead(2, 3, heading, 2), [(2, 4), (2, 5)])
+
+    def test_predicted_border_entry_east(self):
+        # from tile (0,0) → (1,0), path at y=400 inside 1000m tiles
+        ex, ey = predicted_border_entry(0, 0, 1, 0, 500.0, 400.0, 1000)
+        self.assertEqual(ex, 1000)  # west edge of tile (1,0)
+        self.assertEqual(ey, 400)
+
+    def test_predicted_border_entry_north_clamps_x(self):
+        ex, ey = predicted_border_entry(0, 0, 0, 1, 250.0, 10.0, 1000)
+        self.assertEqual(ex, 250)
+        self.assertEqual(ey, 1000)
+
+    def test_predicted_border_entry_diagonal_corner(self):
+        ex, ey = predicted_border_entry(0, 0, 1, 1, 100.0, 200.0, 1000)
+        self.assertEqual((ex, ey), (1000, 1000))
 
     def test_filter_corridor_east(self):
         heading = quantize_heading(10, 0)

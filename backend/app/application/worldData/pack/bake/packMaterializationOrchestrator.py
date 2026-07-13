@@ -35,6 +35,7 @@ from app.db.repositories.iChunkRefineJobRepository import IChunkRefineJobReposit
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_bake_done,
     log_pack_bake_start,
+    log_pack_entry_anchor_fallback,
 )
 
 
@@ -144,8 +145,23 @@ class PackMaterializationOrchestrator:
                         ax = loc.map_x
                         ay = loc.map_y
                         break
-            ax = ax if ax is not None else 0
-            ay = ay if ay is not None else 0
+            if ax is None or ay is None:
+                missing: list[str] = []
+                if ax is None:
+                    missing.append("anchor_x")
+                if ay is None:
+                    missing.append("anchor_y")
+                ax = 0 if ax is None else ax
+                ay = 0 if ay is None else ay
+                log_pack_entry_anchor_fallback(
+                    world_uid,
+                    reason=(
+                        f"{','.join(missing)} unresolved: no explicit bake anchor "
+                        "and no location with map_x/map_y; using default"
+                    ),
+                    anchor_x=ax,
+                    anchor_y=ay,
+                )
             entry = await self._entry.refine_from_entry(
                 world_uid, world, locations, writer, mat_ctx, surface_ctx,
                 kind="session_start",

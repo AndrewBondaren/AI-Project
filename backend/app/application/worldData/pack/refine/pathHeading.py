@@ -91,6 +91,56 @@ def macro_tiles_ahead(
     ]
 
 
+def _clamp_int(value: float, lo: int, hi: int) -> int:
+    return int(max(lo, min(value, hi)))
+
+
+def predicted_border_entry(
+    from_gx: int,
+    from_gy: int,
+    to_gx: int,
+    to_gy: int,
+    path_x: float,
+    path_y: float,
+    tile_size_m: int,
+) -> tuple[int, int]:
+    """Predicted entry into ``to`` tile at shared border with ``from`` (WP-13).
+
+    Lateral axis keeps the path cross-track clamped into the destination tile bbox;
+    along-track axis snaps to the shared edge inside ``to``.
+    """
+    if tile_size_m <= 0:
+        raise ValueError("tile_size_m must be positive")
+    dgx = to_gx - from_gx
+    dgy = to_gy - from_gy
+    x0 = to_gx * tile_size_m
+    y0 = to_gy * tile_size_m
+    x1 = x0 + tile_size_m - 1
+    y1 = y0 + tile_size_m - 1
+
+    if dgx > 0:
+        entry_x = x0
+    elif dgx < 0:
+        entry_x = x1
+    else:
+        entry_x = _clamp_int(path_x, x0, x1)
+
+    if dgy > 0:
+        entry_y = y0
+    elif dgy < 0:
+        entry_y = y1
+    else:
+        entry_y = _clamp_int(path_y, y0, y1)
+
+    if dgx != 0 and dgy == 0:
+        entry_y = _clamp_int(path_y, y0, y1)
+    elif dgy != 0 and dgx == 0:
+        entry_x = _clamp_int(path_x, x0, x1)
+    # diagonal: both axes already snapped to the inward corner facing ``from``
+
+    return entry_x, entry_y
+
+
 def chunk_center(rect: _RectLike) -> tuple[float, float]:
     return (rect.x_min + rect.x_max) / 2.0, (rect.y_min + rect.y_max) / 2.0
 
