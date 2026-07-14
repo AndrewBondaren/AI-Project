@@ -1,4 +1,8 @@
-"""Global world surface ASCII grid — debug / smoke (legacy MapCell path)."""
+"""Global world surface ASCII grid — debug / smoke (legacy MapCell path).
+
+Not L0 pack mask SoT — pack worlds use ``WorldMapPackRenderer`` /
+``PackMapGridRender`` light-grid mosaic instead.
+"""
 
 from __future__ import annotations
 

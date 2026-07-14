@@ -19,15 +19,33 @@ from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
 
 class TestWorldMapCellsPerTile(unittest.TestCase):
 
-    def test_wp10_examples(self):
+    def test_wp10_v2_constant_side(self):
         self.assertEqual(resolve_world_map_cells_per_tile(3000), 32)
-        self.assertEqual(resolve_world_map_cells_per_tile(1000), 48)
-        self.assertEqual(resolve_world_map_cells_per_tile(6000), 16)
-        self.assertEqual(resolve_world_map_cells_per_tile(4000), 24)
+        self.assertEqual(resolve_world_map_cells_per_tile(1000), 32)
+        self.assertEqual(resolve_world_map_cells_per_tile(6000), 32)
+        self.assertEqual(resolve_world_map_cells_per_tile(4000), 32)
 
-    def test_override_clamped(self):
-        self.assertEqual(resolve_world_map_cells_per_tile(3000, override=4), 8)
-        self.assertEqual(resolve_world_map_cells_per_tile(3000, override=99), 48)
+    def test_override_unclamped_except_min_one(self):
+        self.assertEqual(resolve_world_map_cells_per_tile(3000, override=4), 4)
+        self.assertEqual(resolve_world_map_cells_per_tile(3000, override=99), 99)
+        self.assertEqual(resolve_world_map_cells_per_tile(3000, override=0), 1)
+
+
+class TestWorldMapHydrologyRoleMerge(unittest.TestCase):
+
+    def test_merge_priority(self):
+        self.assertEqual(
+            WorldMapHydrologyRole.merge(
+                WorldMapHydrologyRole.RIVER, WorldMapHydrologyRole.SEA,
+            ),
+            WorldMapHydrologyRole.SEA,
+        )
+        self.assertEqual(
+            WorldMapHydrologyRole.merge(
+                WorldMapHydrologyRole.SHORE, WorldMapHydrologyRole.RIVER,
+            ),
+            WorldMapHydrologyRole.RIVER,
+        )
 
 
 class TestWorldPackWire(unittest.TestCase):

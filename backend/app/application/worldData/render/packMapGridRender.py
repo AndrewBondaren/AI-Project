@@ -41,23 +41,25 @@ class PackMapGridRender:
         gy1: int | None = None,
         mark_locations: bool = True,
     ) -> WorldGridPayload:
+        """Pack world ASCII — L0 light-mask mosaic (SoT), not macro aggregate."""
         renderer = self._world_renderer(world)
         if renderer is None:
-            # Caller gates on uses_pack_read; empty source still returns pack payload.
             ascii_grid = ""
-        elif gx0 is not None and gy0 is not None and gx1 is not None and gy1 is not None:
-            ascii_grid = renderer.render_macro_bbox(
-                gx0, gy0, gx1, gy1, mark_location=mark_locations,
-            )
         else:
-            ascii_grid = renderer.render_macro(mark_location=mark_locations)
+            ascii_grid = renderer.render_light_mask_mosaic(
+                gx0=gx0,
+                gy0=gy0,
+                gx1=gx1,
+                gy1=gy1,
+                mark_location=mark_locations,
+            )
         return WorldGridPayload(
             ascii=ascii_grid,
             legend=WorldMapPackRenderer.render_legend(mark_location=mark_locations),
             mark_locations=mark_locations,
             cell_size_m=world.map_cell_size_m,
             read_path="pack",
-            read_mode="world_map_light",
+            read_mode="world_map_light_mask",
         )
 
     def render_world_tile_grids(self, world: World) -> WorldTileGridsPayload:
@@ -81,7 +83,7 @@ class PackMapGridRender:
             cell_size_m=world.map_cell_size_m,
             tiles=tiles,
             read_path="pack",
-            read_mode="world_map_light",
+            read_mode="world_map_light_mask",
         )
 
     def render_all_location_grids(self, world: World) -> LocationGridsPayload:

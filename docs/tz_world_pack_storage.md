@@ -212,7 +212,7 @@ flowchart TB
 |---|---|
 | **WP-8** | L2 tile = `refine(L0_tile, world_seed, declared_hydro)` — реки/озёра/рельеф **согласованы** с world map |
 | **WP-9** | Локации на world map: L1 anchors + optional coarse footprint; L0 хранит **pins**, не дублирует `NamedLocation` целиком |
-| **WP-10** | `world_map_cells_per_tile = f(map_cell_size_m)` — больше tile → меньше subdivisions; manifest фиксирует resolved value |
+| **WP-10** | `world_map_cells_per_tile = 32` (константа маски); `light_m = map_cell_size_m / 32` — масштаб light-cell плывёт с размером tile; manifest фиксирует `side` |
 | **WP-11** | L2 соседей — фон **по одному tile**; очередь **path-first** (heading + tile cross), не burst кольцом |
 | **WP-12** | Восстановление refine: **chunk manifest + atomic chunk commit**; прерванный chunk — redo; tile `partial` \| `complete` |
 | **WP-13** | L2 gameplay: **от точки входа**; blocking **только** scene volume; **никогда** blocking целого tile |
@@ -237,45 +237,38 @@ flowchart TB
 | Параметр | Значение |
 |---|---|
 | Unit | **1 macro-tile** (`map_cell_size_m`, default 1000 m) |
-| Разрешение внутри tile | **`world_map_cells_per_tile`** — **зависит от `map_cell_size_m`** (см. ниже); не фиксированные 32×32 |
-| Физический шаг light cell | `light_cell_m ≈ map_cell_size_m / world_map_cells_per_tile` |
+| Разрешение внутри tile | **`world_map_cells_per_tile = 32`** (константа маски L0) |
+| Физический шаг light cell | `light_m = map_cell_size_m // 32` — **масштаб** маски плывёт с размером tile |
 | Файл pack | `tiles/r.{gx}.{gy}.world_map.zst` + глобальный `climate_coarse.zst` |
 
-#### Масштаб light grid от `map_cell_size_m` (утверждено)
+#### Масштаб light grid (утверждено 2026-07-15)
 
-**Правило:** чем **больше** macro-tile (`map_cell_size_m`), тем **меньше** subdivisions на tile — грубее world map, меньше данных на bake.
-
-Опорная точка: **`map_cell_size_m = 3000` → `world_map_cells_per_tile = 32`**.
+**Инвариант WP-10:** форма маски L0 **всегда** `32×32` light-cells на macro-tile. Размер tile мира динамический → меняется только **метры на light-cell**, не число ячеек.
 
 ```
-world_map_cells_per_tile = clamp(
-  round(WORLD_MAP_CELLS_REF * WORLD_MAP_CELL_M_REF / map_cell_size_m),
-  WORLD_MAP_CELLS_MIN,
-  WORLD_MAP_CELLS_MAX,
-)
+side     = 32                                 # WORLD_MAP_CELLS_PER_TILE (константа)
+light_m  = map_cell_size_m // side            # физический шаг light-cell
 ```
 
-| Константа | Default | POJO / код |
+| Константа / поле | Default | POJO / код |
 |---|---|---|
-| `WORLD_MAP_CELL_M_REF` | 3000 | эталон `map_cell_size_m` |
-| `WORLD_MAP_CELLS_REF` | 32 | cells per side при эталоне |
-| `WORLD_MAP_CELLS_MIN` | 8 | не грубее (огромные tiles) |
-| `WORLD_MAP_CELLS_MAX` | 48 | не мельче (маленькие tiles) |
+| `WORLD_MAP_CELLS_PER_TILE` / `side` | **32** | `WorldMapCellsPerTilePolicy` — единственный SoT |
+| `light_m` | `map_cell_size_m // 32` | вычисляется при bake; не хранить параллельный литерал |
+| Master override `worlds.world_map_cells_per_tile` | optional | редкий тумблер; default = 32 |
 
-**Примеры (per side):**
+**Примеры:**
 
-| `map_cell_size_m` | `world_map_cells_per_tile` | ~`light_cell_m` | Light cells / tile |
+| `map_cell_size_m` | `side` | `light_m` | Light cells / tile |
 |---:|---:|---:|---:|
-| 1000 | 48 (cap) | ~21 m | 2304 |
-| 2000 | 48 (cap) | ~42 m | 2304 |
-| **3000** | **32** | **~94 m** | **1024** |
-| 4000 | 24 | ~167 m | 576 |
-| 5000 | 19 | ~263 m | 361 |
-| 6000 | 16 | ~375 m | 256 |
+| 1000 | 32 | 31 m | 1024 |
+| 3000 | 32 | 93 m | 1024 |
+| 6000 | 32 | 187 m | 1024 |
 
-**Инвариант WP-10:** `world_map_cells_per_tile` **выводится** из `map_cell_size_m` при bake; значение пишется в `manifest.json` (не пересчитывать молча при load). Master override — optional nullable `world_map_cells_per_tile` на `worlds` (если задан — используется вместо формулы; иначе `None` → resolve).
+**Manifest:** при bake писать `world_map_cells_per_tile = 32` (или override); при load **не** пересчитывать из старой ∝-формулы.
 
-**Зачем:** один и тот же UI world map при 3 km и 5 km tiles не раздувает light bake; большие миры — сознательно более схематичная карта.
+**Зачем:** стабильный бюджет blob/UI (`1024` cells/tile); динамический `map_cell_size_m` без формулы `3000↔32` / clamp 8…48.
+
+**Не забыть (consumers):** grid / ASCII builders и pack render, которые сейчас схлопывают macro `(gx,gy)` в **один символ**, должны читать **маску** `32×32` (zoom light-grid и/или агрегат с явной семантикой) — см. plan `.cursor/plans/light-bake-mask.md`.
 
 #### Приоритет light bake (утверждено, WP-15)
 
@@ -291,7 +284,7 @@ world_map_cells_per_tile = clamp(
 
 **Cross-ref:** L2 gameplay — § WP-13 (spawn entry-first); L0 wilderness — не блокирует WP-14.
 
-**L2 не зависит:** fine grid всегда `map_cell_size_m × map_cell_size_m` meter cells; меняется только **плотность L0**, не детализация gameplay.
+**L2 не зависит:** fine grid всегда `map_cell_size_m × map_cell_size_m` meter cells; L0 всегда `32×32`, меняется только `light_m`, не детализация gameplay.
 
 **Данные на light cell `(tx, ty)` внутри tile:**
 
@@ -317,6 +310,8 @@ world_map_cells_per_tile = clamp(
 - Море/озеро = connected component на light grid.
 - Полный carve **не** делается — только маска и coarse `surface_z` для визуализации и constraints.
 
+**Compose / укладка маски L0 (утверждено):** единый light-grid canvas + contributors (relief, landcover, hydro, settlement, climate) — [`tz_map_light_bake.md`](./tz_map_light_bake.md). Write-path wire только из compose; macro-only sample на весь tile — запрещён.
+
 **Bake pipeline L0:**
 
 ```
@@ -327,7 +322,9 @@ pole + world_seed
   → write world_map.zst per tile
 ```
 
-**Объём (пример `map_cell_size_m=3000`, bbox 19×19):** 361 × 32² ≈ **371k** light cells → **< 1 MB** zstd. При 5000 m/tile: 361 × 19² ≈ **130k** — ещё меньше.
+(Детальные контракты compose — [`tz_map_light_bake.md`](./tz_map_light_bake.md).)
+
+**Объём (bbox 19×19 tiles):** 361 × 32² ≈ **371k** light cells → **< 1 MB** zstd — **не зависит** от `map_cell_size_m` (всегда `side=32`).
 
 ### L1 — LocationSkeletons (скелеты локаций, без fine cells)
 
@@ -1479,7 +1476,9 @@ flowchart TB
 
 ### WP-A1 — фактический smoke (2026-07-10)
 
-**Контекст:** `initialize_world.py --fixture world_terrain_test.json` → `POST /map/pack/bake?mode=light&max_tiles=16` для `world-terrain-test-001`. Логи: `backend/logs/app.log`, `request_id=8682e4c8` (терминал `npm run dev`).
+**Контекст:** `initialize_world.py --fixture world_terrain_test.json` → `POST /map/pack/bake?mode=light&max_tiles=16` для `world-terrain-test-001`.
+
+**Логи bake (per-world):** `backend/logs/generation/{world_uid}/bake-light-latest.log` (+ stamped `bake-light-{UTC}.log`). Общий runtime: `backend/logs/app.log` / терминал `npm run dev`. Sink: `app.core.generationLogging`.
 
 | Метрика | Значение | WP-A1 |
 |---|---|---|
@@ -1625,6 +1624,7 @@ flowchart LR
 
 | Документ | Связь |
 |---|---|
+| [`tz_map_light_bake.md`](./tz_map_light_bake.md) | L0 LightGridCompose — контракты укладки маски world map |
 | [`tz_terrain_generation.md`](./tz_terrain_generation.md) | multi-pass skeleton, TR-LAZY-LOAD, hydrology pass order |
 | [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) | Pass 1.5, liquid_candidate |
 | [`tz_climate.md`](./tz_climate.md) | SurfaceClimateField, Climate LOD |
@@ -1640,6 +1640,7 @@ flowchart LR
 |---|---|
 | 2026-07 | § Идея 1 (light world map) + § Идея 2 (refine from L0) утверждены |
 | 2026-07 | WP-10: `world_map_cells_per_tile` ∝ 1/`map_cell_size_m` |
+| 2026-07-15 | **WP-10 v2:** `side = 32` константа; `light_m = map_cell_size_m // 32`; убрана ∝-формула / clamp 8…48 |
 | 2026-07 | World Pack + Patch Store; LOD L0/L1/L2 |
 | 2026-07 | WP-26: legacy freeze — map_cells/materialize-stack/TR-PERF вне scope Pack migration |
 | 2026-07 | WP-MERGE: статус merge v1 + приоритет доработок MERGE-1…9 |
@@ -1654,3 +1655,4 @@ flowchart LR
 | 2026-07-10 | § **Дополнительная оптимизация (WP-PERF):** backlog P0…P4, baseline smoke, приёмка PERF-A1…A6 |
 | 2026-07-12 | **CL-PACK fix:** `ClimatePackBakeOrchestrator`; denser fine; `climate_status` coarse/fine; CL-PACK-1…11 ✅ (CL-PACK-4 accepted L0 tint) |
 | 2026-07-12 | **Climate pack cutover:** coarse `climate_coarse.zst` на light bake; fine spawn tile; meter→macro `apply_climate`; `generate-climate` reject on pack; WP-A12 / MERGE-2 / WP-PERF-32 ✅ |
+| 2026-07-14 | L0 compose архитектура вынесена в [`tz_map_light_bake.md`](./tz_map_light_bake.md); cross-ref из § L0 |

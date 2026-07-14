@@ -20,10 +20,7 @@ from app.dataModel.worldPack.territoryVolume import TerritoryVolume, inside_loca
 from app.dataModel.worldPack.territoryVolumePolicy import TerritoryVolumePolicy
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
 from app.dataModel.worldPack.worldMapCellsPerTile import (
-    WORLD_MAP_CELL_M_REF,
-    WORLD_MAP_CELLS_MAX,
-    WORLD_MAP_CELLS_MIN,
-    WORLD_MAP_CELLS_REF,
+    WORLD_MAP_CELLS_PER_TILE,
     WorldMapCellsPerTilePolicy,
     resolve_world_map_cells_per_tile,
 )
@@ -37,10 +34,7 @@ from app.dataModel.worldPack.worldPackManifest import (
 
 __all__ = [
     "PACK_WIRE_VERSION",
-    "WORLD_MAP_CELL_M_REF",
-    "WORLD_MAP_CELLS_MAX",
-    "WORLD_MAP_CELLS_MIN",
-    "WORLD_MAP_CELLS_REF",
+    "WORLD_MAP_CELLS_PER_TILE",
     "CellContribution",
     "ChunkRef",
     "ClimateBakeStatus",

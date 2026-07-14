@@ -1,0 +1,45 @@
+"""Relief contributor — per-(tx,ty) surface_z (tz_map_light_bake)."""
+
+from __future__ import annotations
+
+from app.application.worldData.generators.climate.math import world_seed
+from app.application.worldData.generators.coordinates import meters_to_grid_x, meters_to_grid_y
+from app.application.worldData.generators.terrain.noise import cell_z_noise
+from app.application.worldData.generators.terrain.worldMapSettings import world_z_max, world_z_min
+from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
+from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
+from app.application.worldData.pack.bake.lightGrid.coords import light_cell_center_m
+
+
+class ReliefContributor:
+    name = "relief"
+
+    def apply(self, compose: LightGridCompose, ctx: LightGridBakeContext) -> None:
+        world = ctx.world
+        pole = ctx.pole_field
+        if pole is None and ctx.surface_planning is not None:
+            pole = ctx.surface_planning.pole_field
+        if pole is None:
+            return
+
+        scale = compose.scale
+        tile_m = scale.tile_m
+        z_min = world_z_min(world)
+        z_max = world_z_max(world)
+        seed = world_seed(world)
+        planning_z = (
+            ctx.surface_planning.coarse_surface_z if ctx.surface_planning is not None else {}
+        )
+
+        for gx, gy in ctx.tiles:
+            compose.ensure_tile(gx, gy)
+            for ty in range(scale.side):
+                for tx in range(scale.side):
+                    xm, ym = light_cell_center_m(gx, gy, tx, ty, scale)
+                    mgx = int(meters_to_grid_x(xm, tile_m))
+                    mgy = int(meters_to_grid_y(ym, tile_m))
+                    sample = pole.sample(world, mgx, mgy)
+                    base = planning_z.get((mgx, mgy), sample.typical_elevation_z)
+                    z = cell_z_noise(seed, xm, ym, int(base), amplitude=1)
+                    z = max(z_min, min(z_max, z))
+                    compose.ensure(gx, gy, tx, ty).surface_z = z

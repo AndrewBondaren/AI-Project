@@ -50,6 +50,25 @@ class WorldMapHydrologyRole(IntEnum):
             case _:
                 return None
 
+    def merge_rank(self) -> int:
+        """SEA ≥ LAKE ≥ RIVER ≥ SHORE ≥ NONE (tz_map_light_bake)."""
+        match self:
+            case WorldMapHydrologyRole.SEA:
+                return 4
+            case WorldMapHydrologyRole.LAKE:
+                return 3
+            case WorldMapHydrologyRole.RIVER:
+                return 2
+            case WorldMapHydrologyRole.SHORE:
+                return 1
+            case _:
+                return 0
+
+    @classmethod
+    def merge(cls, a: WorldMapHydrologyRole, b: WorldMapHydrologyRole) -> WorldMapHydrologyRole:
+        """Keep the higher-priority role when two writers hit the same light cell."""
+        return a if a.merge_rank() >= b.merge_rank() else b
+
 
 class HydrologyMaskWire(BaseModel):
     """World map hydrology fields on a light cell."""

@@ -18,6 +18,11 @@ def tile_index(coord: int, tile_size: int) -> tuple[int, int]:
 
 
 def world_map_sample_index(local: int, tile_size: int, cells_per_side: int) -> int:
+    """Map meter-local offset inside a macro-tile to light ``tx``/``ty``.
+
+    Used for pin placement and coarse sampling — **not** a substitute for the
+    full L0 light mask (side×side wire cells).
+    """
     if tile_size <= 0 or cells_per_side <= 0:
         return 0
     return min(cells_per_side - 1, max(0, local * cells_per_side // tile_size))

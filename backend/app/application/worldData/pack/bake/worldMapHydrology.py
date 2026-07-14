@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
+
+logger = logging.getLogger(__name__)
 
 
 def world_map_hydro_role_from_cell(cell_hydro: object | None) -> WorldMapHydrologyRole:
@@ -21,7 +25,17 @@ def world_map_hydro_role_from_cell(cell_hydro: object | None) -> WorldMapHydrolo
             role = raw
         elif raw is not None:
             role = HydrologyCellRole.from_wire(str(getattr(raw, "value", raw)))
+        else:
+            logger.debug(
+                "world_map hydro: unsupported cell type=%s → NONE",
+                type(cell_hydro).__name__,
+            )
+            return WorldMapHydrologyRole.NONE
     if role is None:
+        logger.debug(
+            "world_map hydro: could not parse role from %s → NONE",
+            type(cell_hydro).__name__,
+        )
         return WorldMapHydrologyRole.NONE
     match role:
         case HydrologyCellRole.RIVER_BED:
@@ -33,4 +47,8 @@ def world_map_hydro_role_from_cell(cell_hydro: object | None) -> WorldMapHydrolo
         case HydrologyCellRole.COASTAL_SEA | HydrologyCellRole.OPEN_OCEAN:
             return WorldMapHydrologyRole.SEA
         case _:
+            logger.debug(
+                "world_map hydro: fine role=%s has no compact wire mapping → NONE",
+                role.value,
+            )
             return WorldMapHydrologyRole.NONE

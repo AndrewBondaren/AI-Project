@@ -70,7 +70,7 @@ class WorldMapPackRenderer:
         self._pin_macros = {_pin_macro(p, self._tile_m) for p in self._pins}
 
     def _rep_cell(self, tile: PackTileLightView) -> WorldMapCellWire | None:
-        """Representative light cell for macro overview: center → any hydro → first."""
+        """Overview aggregate only — NOT L0 mask SoT (use render_tile_light_grid)."""
         if not tile.cells:
             return None
         mid = max(0, tile.side // 2)
@@ -97,9 +97,13 @@ class WorldMapPackRenderer:
         *,
         mark_location: bool = False,
     ) -> str:
+        """Coarse overview: one symbol per macro-tile (center/rep light cell).
+
+        Not the L0 mask SoT — prefer ``render_tile_light_grid`` / ``render_light_mask_mosaic``.
+        """
         lines: list[str] = [
             format_grid_header(gx0, gx1, gy0, gy1, cell_size_m=self._tile_m),
-            "pack L0: one symbol per macro-tile (center light cell)",
+            "pack L0 MACRO AGGREGATE (not mask SoT) — one symbol per macro-tile",
         ]
         for gy in range(gy1, gy0 - 1, -1):
             row_chars: list[str] = []
@@ -117,6 +121,7 @@ class WorldMapPackRenderer:
         return "\n".join(lines)
 
     def render_macro(self, *, mark_location: bool = False) -> str:
+        """Coarse overview aggregate — not L0 mask SoT."""
         if not self._by_xy:
             return ""
         xs = [gx for gx, _ in self._by_xy]
@@ -132,6 +137,7 @@ class WorldMapPackRenderer:
         *,
         mark_location: bool = False,
     ) -> str:
+        """L0 light-mask SoT for one macro-tile (side×side wire cells)."""
         tile = self._by_xy.get((gx, gy))
         if tile is None or tile.side <= 0:
             return ""
@@ -163,6 +169,33 @@ class WorldMapPackRenderer:
             )
             lines.append(f"{ty:4d} |{row}|")
         return "\n".join(lines)
+
+    def render_light_mask_mosaic(
+        self,
+        *,
+        gx0: int | None = None,
+        gy0: int | None = None,
+        gx1: int | None = None,
+        gy1: int | None = None,
+        mark_location: bool = False,
+    ) -> str:
+        """Concatenate per-tile light grids — primary pack smoke for L0 mask."""
+        if not self._by_xy:
+            return ""
+        if gx0 is None or gy0 is None or gx1 is None or gy1 is None:
+            keys = sorted(self._by_xy)
+        else:
+            keys = [
+                (gx, gy)
+                for gy in range(gy0, gy1 + 1)
+                for gx in range(gx0, gx1 + 1)
+                if (gx, gy) in self._by_xy
+            ]
+        parts = [
+            self.render_tile_light_grid(gx, gy, mark_location=mark_location)
+            for gx, gy in keys
+        ]
+        return "\n\n".join(p for p in parts if p)
 
     def render_all_tile_light_grids(
         self,

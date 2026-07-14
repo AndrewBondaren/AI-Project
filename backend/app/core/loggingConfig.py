@@ -17,7 +17,9 @@ _RECORD_BUILTINS = frozenset({
 })
 
 
-class _JsonFormatter(logging.Formatter):
+class JsonLogFormatter(logging.Formatter):
+    """One JSON object per line — shared by app.log and generation sinks."""
+
     def format(self, record: logging.LogRecord) -> str:
         obj = {
             "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
@@ -34,6 +36,10 @@ class _JsonFormatter(logging.Formatter):
         return json.dumps(obj, ensure_ascii=False)
 
 
+# Back-compat alias
+_JsonFormatter = JsonLogFormatter
+
+
 def setup_logging(
     log_file: str = "logs/app.log",
     level: int = logging.INFO,
@@ -41,7 +47,7 @@ def setup_logging(
 ) -> None:
     Path(log_file).parent.mkdir(parents=True, exist_ok=True)
 
-    formatter = _JsonFormatter()
+    formatter = JsonLogFormatter()
 
     console = logging.StreamHandler(sys.stdout)
     console.setFormatter(formatter)

@@ -37,6 +37,7 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
 from app.application.worldData.materializationContext import resolve_materialization_context
 from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_on_world
 from app.application.worldData.parallelPolicy import resolve_terrain_workers
+from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 
@@ -768,26 +769,27 @@ async def refine_from_entry_route(
         anchor_kind = parse_anchor_kind(kind)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    entry = await entry_orch.refine_from_entry(
-        world_uid, world, locations, writer, mat_ctx, surface_ctx,
-        kind=anchor_kind,
-        anchor_x=x,
-        anchor_y=y,
-        location_uid=location_uid,
-        heading_dx=heading_dx,
-        heading_dy=heading_dy,
-    )
-    scheduled = None
-    if schedule_bg:
-        scheduled = await entry_orch.schedule_chunk_refine(
+    with generation_world_log(world_uid, mode="entry"):
+        entry = await entry_orch.refine_from_entry(
             world_uid, world, locations, writer, mat_ctx, surface_ctx,
+            kind=anchor_kind,
             anchor_x=x,
             anchor_y=y,
-            tile_gx=entry.tile_gx,
-            tile_gy=entry.tile_gy,
-            heading=entry.heading,
+            location_uid=location_uid,
+            heading_dx=heading_dx,
+            heading_dy=heading_dy,
         )
-    await finalize_pack_on_world(world_svc, world, writer)
+        scheduled = None
+        if schedule_bg:
+            scheduled = await entry_orch.schedule_chunk_refine(
+                world_uid, world, locations, writer, mat_ctx, surface_ctx,
+                anchor_x=x,
+                anchor_y=y,
+                tile_gx=entry.tile_gx,
+                tile_gy=entry.tile_gy,
+                heading=entry.heading,
+            )
+        await finalize_pack_on_world(world_svc, world, writer)
     return JSONResponse(content={
         "world_uid": world_uid,
         "kind": entry.anchor.kind,

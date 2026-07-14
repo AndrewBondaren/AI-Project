@@ -48,11 +48,15 @@ class TestWorldMapPackRenderer(unittest.TestCase):
         renderer = WorldMapPackRenderer([tile], tile_size_m=3000, pins=pins)
         macro = renderer.render_macro(mark_location=True)
         self.assertIn("@", macro)
+        self.assertIn("MACRO AGGREGATE", macro)
         light = renderer.render_tile_light_grid(0, 0, mark_location=True)
         self.assertIn("~", light)
         self.assertIn("f", light)
         self.assertIn("@", light)
         self.assertIn("pack L0 light grid 2×2", light)
+        mosaic = renderer.render_light_mask_mosaic(mark_location=True)
+        self.assertIn("pack L0 light grid 2×2", mosaic)
+        self.assertIn("~", mosaic)
 
     def test_legend(self):
         legend = WorldMapPackRenderer.render_legend(mark_location=True)

@@ -24,6 +24,7 @@ from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_o
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.parallelPolicy import resolve_terrain_workers
+from app.core.generationLogging import generation_world_log
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.application.worldData.worldService import WorldService
@@ -95,6 +96,42 @@ class PackMaterializationOrchestrator:
         heading_dy: int | None = None,
         refine_scene: bool = True,
     ) -> MaterializationJobReport:
+        with generation_world_log(world_uid, mode="light"):
+            return await self._materialize_light_pack_body(
+                world_uid,
+                world,
+                locations,
+                writer,
+                mat_ctx,
+                max_tiles=max_tiles,
+                nodes=nodes,
+                edges=edges,
+                hydrology_generator=hydrology_generator,
+                anchor_x=anchor_x,
+                anchor_y=anchor_y,
+                heading_dx=heading_dx,
+                heading_dy=heading_dy,
+                refine_scene=refine_scene,
+            )
+
+    async def _materialize_light_pack_body(
+        self,
+        world_uid: str,
+        world: World,
+        locations: list[NamedLocation],
+        writer: WorldPackWriter,
+        mat_ctx: MaterializationContext,
+        *,
+        max_tiles: int | None = None,
+        nodes: list[ConnectionNode] | None = None,
+        edges: list[ConnectionEdge] | None = None,
+        hydrology_generator: HydrologyGeneratorService | None = None,
+        anchor_x: int | None = None,
+        anchor_y: int | None = None,
+        heading_dx: int | None = None,
+        heading_dy: int | None = None,
+        refine_scene: bool = True,
+    ) -> MaterializationJobReport:
         tile_cap = max_tiles if max_tiles is not None else self._defaults.max_tiles_light
         tiles = self._terrain.plan_bootstrap_tiles(
             world, locations, nodes=nodes, edges=edges,
@@ -125,11 +162,14 @@ class PackMaterializationOrchestrator:
             climate_result, climate_coarse_samples = self._climate.bake_coarse(
                 world, surface_ctx, writer,
             )
-            writer.write_locations_index(build_locations_index(locations))
+
+        locations_index = build_locations_index(locations)
+        writer.write_locations_index(locations_index)
 
         world_map_cells = self._world_map.bake_tiles(
             world, locations, writer, tiles,
             surface_ctx=surface_ctx,
+            locations_index=locations_index,
             nodes=nodes, edges=edges, hydrology_generator=hydrology_generator,
         )
         terrain_result = PersistResult.from_counts(world_map_cells, world_map_cells)
