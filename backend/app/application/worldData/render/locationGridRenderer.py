@@ -1,10 +1,11 @@
-"""Per-location map_cells ASCII grid — debug / smoke."""
+"""Per-location map_cells ASCII grid — debug / smoke (legacy MapCell path)."""
 
 from __future__ import annotations
 
 from app.application.worldData.generators.structure.gridRenderer import render_all_levels, render_level
 from app.application.worldData.render.gridAxes import format_grid_header
-from app.application.worldData.render.worldGridRenderer import WorldGridRenderer, cell_symbol
+from app.application.worldData.render.mapSymbols import render_map_legend
+from app.application.worldData.render.worldGridRenderer import cell_symbol
 from app.db.models.mapCell import MapCell
 
 
@@ -37,7 +38,7 @@ class LocationGridRenderer:
     def render_legend(*, indoor: bool = False) -> str:
         if indoor:
             return LocationGridRenderer._STRUCTURE_LEGEND
-        return WorldGridRenderer.render_legend()
+        return render_map_legend()
 
     def render_level(self, z: int) -> str:
         indoor = self._indoor_cells()
@@ -71,13 +72,3 @@ class LocationGridRenderer:
             z: self.render_level(z)
             for z in sorted({c.z for c in self._outdoor_surface_cells()})
         }
-
-    # Back-compat aliases
-    def build_level(self, z: int) -> str:
-        return self.render_level(z)
-
-    def build_all_levels(self) -> dict[int, str]:
-        return self.render_all_levels()
-
-
-LocationGridBuilder = LocationGridRenderer

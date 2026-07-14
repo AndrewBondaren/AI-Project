@@ -509,6 +509,35 @@ flowchart TB
 
 **Cross-ref:** scene volume defaults — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § TR-LAZY-LOAD; POJO [`SceneVolumePolicy`](../backend/app/dataModel/terrain/sceneVolumePolicy.py) (`scene_xy_radius`, `scene_z_above`, `background_expand_radius_m` for WP-PERF-10 rings). Read: `get_scene_volume`. Blocking entry: `refine_from_entry`. Background rings/path-ahead: `schedule_chunk_refine`.
 
+#### WP-13 — статус impl и открытый backlog
+
+**Сделано (service / debug, без DAG):**
+
+| Кусок | Код |
+|---|---|
+| Blocking scene + path | `EntryRefineOrchestrator.refine_from_entry` |
+| Фон rings + path-ahead (predicted border entry) | `schedule_chunk_refine` → `schedule_tile_background` / `schedule_path_ahead_tiles` |
+| Виды якоря (лейблы) | `AnchorKind`: `session_start` \| `tile_cross` \| `location_entry` |
+| Light bake spawn | `kind=session_start` + schedule |
+| Debug HTTP | `POST …/refine-from-entry`, `POST …/schedule-chunk-refine` |
+| WP-PERF-10 rings (не full-tile enqueue) | ✅ `background_expand_radius_m` |
+| Read ≠ write | § Read path / Entry load — два потока |
+
+**Открыто (зафиксировано; не смешивать с «контракт утверждён»):**
+
+| ID | Задача | Контракт / заметка | Caller |
+|---|---|---|---|
+| **WP-13-OPEN-1** | **Wiring `tile_cross`** | Фактический cross границы macro-tile → `refine_from_entry(kind=tile_cross)` с координатой **пересечения** (не predicted); затем `schedule_chunk_refine` | Session/movement service → entry orchestrator; **DAG — gate** |
+| **WP-13-OPEN-2** | **Wiring `location_entry`** | Выбор anchor из `location_entry_points` (ближайший discovered) или сторона подхода; blocking scene от entry — **не** весь `location_uid` | Service resolve entry → `refine_from_entry(kind=location_entry)`; **DAG — gate** |
+| **WP-13-OPEN-3** | **Пересортировка очереди при движении** | Внутри tile якорь не сбрасывается; head очереди — distance от **текущей** `(map_x, map_y)` + старый entry | `ChunkRefineQueue` re-prioritize / session tick |
+| **WP-13-OPEN-4** | **Prefetch соседней локации** | Фон: `get_by_location` / `l.{uid}.terrain.zst` целиком — **не** blocking path | Отдельный bg job (не внутри `refine_from_entry`) |
+| **WP-13-OPEN-5** | **Тонкий debug HTTP** | Routes сейчас сами `prepare_surface_terrain_context` + `finalize_pack` | Тонкая делегация в service/facade |
+| **WP-13-OPEN-6** | **Session scope entry state** | `EntryRefineOrchestrator` (anchors/queue) — singleton на process в Container | Явный per-session / per-world scope при multi-player / DAG |
+| **WP-13-OPEN-7** | **DAG terrain chain** | `check_terrain` / `eager_terrain` / `lazy_terrain` → `get_scene_volume` + entry refine; blocking не `get_by_location` | Только с мастером после gate — [`tz_world_generation_dag.md`](./tz_world_generation_dag.md), [`tz_terrain_generation.md`](./tz_terrain_generation.md) § TR-LAZY-LOAD-DAG |
+| **WP-13-OPEN-8** | **WP-PERF backlog** | PERF-11…13 (persist/drain/surface_ctx), PERF-20…22 (partial L2), см. § WP-PERF | Отдельный трек производительности |
+
+**Порядок (рекомендация):** OPEN-1/2 (helper `on_tile_cross` / `on_location_entry` на service, debug smoke) → OPEN-3 → OPEN-4 → OPEN-5/6 → OPEN-7 (gate) ; OPEN-8 параллельно по профилю.
+
 **Антипаттерн (hard reject):** blocking `refine(entire_tile)`; materialize 9M columns до scene volume; **любой** gameplay wait **> 30 s** на старте сессии.
 
 **Refine pipeline L2 (target):**
@@ -1149,8 +1178,8 @@ sequenceDiagram
 | Heading на light bake без intent | path corridor **молча** не строится (WP-16) | smoke с `heading_dx/dy` или DAG wire |
 | `depth_tiles × cell_m` в corridor | macro-tiles vs метры при смене `map_cell_size_m` | docstring + POJO единицы |
 | Settlement rect half-open → territory inclusive | граница ±1 m vs generator occupancy | задокументировать в territory POJO |
-| `PackMaterializationOrchestrator` session state на singleton | одна очередь/anchors на инстанс | явный session scope при DAG wiring |
-
+| Entry refine session на Container singleton | одна очередь/anchors на process (`EntryRefineOrchestrator`) | WP-13-OPEN-6 — session scope при DAG / multi-session |
+| `tile_cross` / `location_entry` kind без caller | debug/light bake зовут только `session_start` | WP-13-OPEN-1/2 |
 **Порядок работ:** REVIEW-1 → smoke WP-A* → REVIEW-2/3 → MERGE-8 LRU → REVIEW-4…7 → DAG movement intent (MERGE-5).
 
 ---
@@ -1516,7 +1545,7 @@ flowchart TB
 
 | ID | Задача | Target fix | Ожидаемый выигрыш |
 |---|---|---|---|
-| **WP-PERF-10** | На `mode=light` **не** enqueue весь tile в `chunk_refine_jobs` | `schedule_tile_background` только rings/corridor (WP-13); full tile — offline `tile`/`full` или lazy worker без blocking persist | **−5…6 s** HTTP |
+| **WP-PERF-10** | На `mode=light` **не** enqueue весь tile в `chunk_refine_jobs` | `schedule_tile_background` / `schedule_chunk_refine` только rings/corridor (WP-13); full tile — offline `tile`/`full` | ✅ rings; см. WP-13-OPEN-8 для остального PERF |
 | **WP-PERF-11** | `persist_enqueue` batch | `executemany` / bulk upsert jobs; или manifest-only queue без SQLite до фонового worker | **−3…5 s** при большой очереди |
 | **WP-PERF-12** | `drain_persisted` policy | `max_jobs=0` когда `background_drain_per_request=0`; rebake → purge stale jobs или async drain **после** HTTP | **−12 s** на повторном bake |
 | **WP-PERF-13** | Один `surface_ctx` на run | `prepare_surface_terrain_context` вызывается в `PackMaterializationOrchestrator` и повторно в `WorldMapBakeOrchestrator.bake_tiles` — передавать cached ctx | **−1 s** |

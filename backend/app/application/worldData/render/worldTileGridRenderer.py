@@ -89,18 +89,6 @@ class WorldTileGridRenderer:
             lines.append(f"{ly:4d} |{row}|")
         return "\n".join(lines)
 
-    def render_z_column(self, lx: int, ly: int) -> str:
-        col = sorted(
-            (c for c in self._cells if self._local_xy(c) == (lx, ly)),
-            key=lambda c: c.z,
-        )
-        if not col:
-            return ""
-        lines = [f"column local ({lx},{ly}) tile Gx={self._tile_gx} Gy={self._tile_gy}"]
-        for cell in col:
-            lines.append(f"  z={cell.z:4d}  {cell_symbol(cell)}  {cell.system_terrain or '?'}")
-        return "\n".join(lines)
-
     def render_all_levels(self) -> dict[int, str]:
         z_levels = sorted({c.z for c in self._cells})
         out: dict[int, str] = {}

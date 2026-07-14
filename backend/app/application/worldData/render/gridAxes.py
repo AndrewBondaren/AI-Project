@@ -2,35 +2,6 @@
 
 from __future__ import annotations
 
-from app.db.models.mapCell import MapCell
-
-
-def is_macro_grid_coord(x: int, y: int, cell_m: int) -> bool:
-    """Legacy occupancy: x/y stored as macro tile index."""
-    if abs(x) >= cell_m or abs(y) >= cell_m:
-        return False
-    if abs(x) > 512 or abs(y) > 512:
-        return False
-    return True
-
-
-def is_terrain_skeleton_cell(cell: MapCell, cell_m: int) -> bool:
-    """Fine meter terrain column — not building shell or legacy macro occupancy."""
-    if cell.system_building_element:
-        return False
-    if is_macro_grid_coord(cell.x, cell.y, cell_m):
-        return False
-    return True
-
-
-# Back-compat alias (coarse-only callers)
-def is_surface_grid_cell(cell: MapCell) -> bool:
-    if cell.system_building_element:
-        return False
-    if abs(cell.x) > 512 or abs(cell.y) > 512:
-        return True
-    return False
-
 
 def format_grid_header(
     gx0: int,

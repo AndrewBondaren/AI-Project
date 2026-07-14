@@ -1,30 +1,16 @@
-"""Global world surface ASCII grid — debug / smoke."""
+"""Global world surface ASCII grid — debug / smoke (legacy MapCell path)."""
 
 from __future__ import annotations
 
 import json
 
 from app.application.worldData.render.gridAxes import format_grid_header
+from app.application.worldData.render.mapSymbols import (
+    LOCATION_PIN_SYMBOL,
+    render_map_legend,
+    symbol_for_role_or_terrain,
+)
 from app.db.models.mapCell import MapCell
-from app.db.models.namedLocation import NamedLocation
-
-_ROLE_SYMBOLS: dict[str, str] = {
-    "coastal_sea": "~",
-    "open_ocean": "≈",
-    "lake": "o",
-    "river_bed": "r",
-    "shore": "s",
-}
-
-_TERRAIN_SYMBOLS: dict[str, str] = {
-    "liquid_body": "~",
-    "plains": ".",
-    "forest": "f",
-    "shore": "s",
-    "urban": "u",
-}
-
-_LOCATION_BOUND_SYMBOL = "@"
 
 
 def _macro_top_surface_cells(
@@ -46,21 +32,22 @@ def _macro_top_surface_cells(
 
 def cell_symbol(cell: MapCell, *, mark_location: bool = False) -> str:
     if mark_location and cell.location_uid:
-        return _LOCATION_BOUND_SYMBOL
+        return LOCATION_PIN_SYMBOL
     hydrology = cell.hydrology
     if isinstance(hydrology, str):
         try:
             hydrology = json.loads(hydrology)
         except json.JSONDecodeError:
             hydrology = None
+    role: str | None = None
     if isinstance(hydrology, dict):
-        role = hydrology.get("role")
-        if role:
-            return _ROLE_SYMBOLS.get(str(role), str(role)[0])
-    terrain = cell.system_terrain
-    if terrain:
-        return _TERRAIN_SYMBOLS.get(str(terrain), str(terrain)[0])
-    return "?"
+        raw = hydrology.get("role")
+        if raw:
+            role = str(raw)
+    return symbol_for_role_or_terrain(
+        hydrology_role=role,
+        system_terrain=cell.system_terrain,
+    )
 
 
 class WorldGridRenderer:
@@ -69,26 +56,18 @@ class WorldGridRenderer:
     def __init__(
         self,
         cells: list[MapCell],
-        locations: list[NamedLocation] | None = None,
         *,
         cell_size_m: int | None = None,
     ) -> None:
         self._cell_m = cell_size_m or 1000
         self._tops = _macro_top_surface_cells(cells, self._cell_m)
-        self._locations = locations or []
 
     @staticmethod
     def render_legend(*, mark_location: bool = False) -> str:
-        role_part = " ".join(f"{sym}={name}" for name, sym in _ROLE_SYMBOLS.items())
-        terrain_part = " ".join(f"{sym}={name}" for name, sym in _TERRAIN_SYMBOLS.items())
-        lines = [
-            f"hydrology: {role_part}",
-            f"terrain: {terrain_part}",
-        ]
-        if mark_location:
-            lines.append(f"binding: {_LOCATION_BOUND_SYMBOL}=map_cell.location_uid set")
-        lines.append("?=unknown")
-        return "\n".join(lines)
+        return render_map_legend(
+            mark_location=mark_location,
+            pin_label="map_cell.location_uid set",
+        )
 
     def render_bbox(
         self,
@@ -118,12 +97,3 @@ class WorldGridRenderer:
         xs = [x for x, _ in self._tops]
         ys = [y for _, y in self._tops]
         return self.render_bbox(min(xs), min(ys), max(xs), max(ys), mark_location=mark_location)
-
-    def build_bbox(self, gx0: int, gy0: int, gx1: int, gy1: int) -> str:
-        return self.render_bbox(gx0, gy0, gx1, gy1)
-
-    def build(self) -> str:
-        return self.render()
-
-
-WorldGridBuilder = WorldGridRenderer

@@ -1,8 +1,12 @@
+"""map_cell_patches CRUD and layer upsert — pack reads via MapCellReadService."""
+
+from __future__ import annotations
+
 import logging
 from contextlib import asynccontextmanager
 from dataclasses import asdict, replace
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from app.api.schemas.imports import ImportResult
 from app.application.import_helpers import import_list
@@ -13,6 +17,9 @@ from app.dataModel.worldPack.mapCellPatchLayerKind import MapCellPatchLayerKind
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 from app.db.repositories.iMapCellRepository import IMapCellRepository
+
+if TYPE_CHECKING:
+    from app.application.worldData.pack.read.packReadServices import PackReadServices
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +67,13 @@ Pack-backed reads delegate to ``MapCellReadService`` (gameplay / debug / loading
     def uses_pack_read(self, world: World) -> bool:
         read = self._read(world.world_uid)
         return read is not None and read.has_pack_for(world)
+
+    def pack_read_services(self, world: World) -> PackReadServices | None:
+        """Pack facades when this world has a pack on disk; else ``None``."""
+        read = self._read(world.world_uid)
+        if read is None or not read.has_pack_for(world):
+            return None
+        return read.pack
 
     async def get_all_for_read(self, world: World) -> list[MapCell]:
         read = self._read(world.world_uid)

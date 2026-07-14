@@ -189,7 +189,7 @@ async def render_world_grid(
     mark_locations: bool = Query(default=True),
     container=Depends(get_container),
 ) -> JSONResponse:
-    """Debug only — ASCII top-surface world map (@ = cell has location_uid)."""
+    """Debug only — ASCII world map (pack: L0 light tiles; legacy: map_cells)."""
     from app.application.worldData.render.mapGridRenderService import MapGridRenderService
 
     world_svc = container.world_service()
@@ -197,8 +197,6 @@ async def render_world_grid(
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
 
-    location_svc = container.location_service()
-    locations = await location_svc.get_all(world_uid)
     svc = MapGridRenderService(container.map_cell_service())
     bbox = (gx0, gy0, gx1, gy1)
     if any(v is not None for v in bbox) and not all(v is not None for v in bbox):
@@ -208,7 +206,6 @@ async def render_world_grid(
         )
     payload = await svc.render_world_grid(
         world,
-        locations=locations,
         gx0=gx0,
         gy0=gy0,
         gx1=gx1,
@@ -223,7 +220,7 @@ async def render_world_tile_grids(
     world_uid: str,
     container=Depends(get_container),
 ) -> JSONResponse:
-    """Debug only — per macro tile fine grid (map_cell_size_m² cells)."""
+    """Debug only — per macro tile (pack: L0 light grid; legacy: fine meters)."""
     from app.application.worldData.render.mapGridRenderService import MapGridRenderService
 
     world_svc = container.world_service()
@@ -241,7 +238,7 @@ async def render_all_location_grids(
     world_uid: str,
     container=Depends(get_container),
 ) -> JSONResponse:
-    """Debug only — ASCII per location_uid that has map_cells, all z levels."""
+    """Debug only — ASCII per location with location_terrain (pack) or map_cells (legacy)."""
     from app.application.worldData.render.mapGridRenderService import MapGridRenderService
 
     world_svc = container.world_service()

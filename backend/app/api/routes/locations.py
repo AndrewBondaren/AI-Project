@@ -60,7 +60,7 @@ async def render_location_grid(
     z: int | None = Query(default=None),
     container=Depends(get_container),
 ) -> JSONResponse:
-    """Debug only — ASCII grid for map_cells bound to one location."""
+    """Debug only — ASCII grid for one location (pack: location_terrain; legacy: map_cells)."""
     from app.application.worldData.render.mapGridRenderService import MapGridRenderService
 
     loc = await container.location_service().get_by_id(world_uid, location_uid)
