@@ -69,6 +69,9 @@ class WorldMapPackRenderer:
         self._pins = list(pins.locations) if pins is not None else []
         self._pin_macros = {_pin_macro(p, self._tile_m) for p in self._pins}
 
+    def tile_count(self) -> int:
+        return len(self._by_xy)
+
     def _rep_cell(self, tile: PackTileLightView) -> WorldMapCellWire | None:
         """Overview aggregate only — NOT L0 mask SoT (use render_tile_light_grid)."""
         if not tile.cells:

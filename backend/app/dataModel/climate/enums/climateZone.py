@@ -149,6 +149,41 @@ class ClimateZone(Enum):
     def to_profile(self, *, wire: bool = False) -> ClimateZoneProfile:
         return ClimateZoneProfile.from_data(self.system_climate, self.value.select(wire=wire))
 
+    def world_map_wire_id(self) -> int:
+        """Stable L0 ``climate_zone_id`` — append-only table, not ``enumerate`` order."""
+        return _WORLD_MAP_CLIMATE_ZONE_WIRE_ID[self.system_climate]
+
+    @classmethod
+    def from_world_map_wire_id(cls, wire_id: int) -> ClimateZone | None:
+        key = _WORLD_MAP_CLIMATE_ZONE_BY_WIRE_ID.get(int(wire_id))
+        if key is None:
+            return None
+        return cls.from_system_climate(key)
+
+
+# Append-only: new zones get the next free id; never renumber existing keys.
+_WORLD_MAP_CLIMATE_ZONE_WIRE_ID: dict[str, int] = {
+    "arctic": 0,
+    "tundra": 1,
+    "subarctic": 2,
+    "subpolar": 3,
+    "cold": 4,
+    "cold_temperate": 5,
+    "temperate": 6,
+    "continental": 7,
+    "arid": 8,
+    "mediterranean": 9,
+    "subtropical": 10,
+    "coastal": 11,
+    "maritime": 12,
+    "tropical": 13,
+    "desert": 14,
+    "volcanic": 15,
+    "warm": 16,
+}
+_WORLD_MAP_CLIMATE_ZONE_BY_WIRE_ID: dict[int, str] = {
+    v: k for k, v in _WORLD_MAP_CLIMATE_ZONE_WIRE_ID.items()
+}
 
 _ENGINE_MEMBERS: tuple[ClimateZone, ...] = (
     ClimateZone.ARCTIC,

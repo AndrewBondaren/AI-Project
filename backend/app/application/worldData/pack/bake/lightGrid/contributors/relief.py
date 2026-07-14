@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+from collections import Counter
+
 from app.application.worldData.generators.climate.math import world_seed
 from app.application.worldData.generators.coordinates import meters_to_grid_x, meters_to_grid_y
 from app.application.worldData.generators.terrain.noise import cell_z_noise
@@ -9,6 +12,8 @@ from app.application.worldData.generators.terrain.worldMapSettings import world_
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.coords import light_cell_center_m
+
+logger = logging.getLogger(__name__)
 
 
 class ReliefContributor:
@@ -20,6 +25,11 @@ class ReliefContributor:
         if pole is None and ctx.surface_planning is not None:
             pole = ctx.surface_planning.pole_field
         if pole is None:
+            logger.debug(
+                "light_contributor_relief | world=%s skipped=no_pole tiles=%d",
+                world.world_uid,
+                len(ctx.tiles),
+            )
             return
 
         scale = compose.scale
@@ -30,6 +40,8 @@ class ReliefContributor:
         planning_z = (
             ctx.surface_planning.coarse_surface_z if ctx.surface_planning is not None else {}
         )
+        z_hist: Counter[int] = Counter()
+        cells = 0
 
         for gx, gy in ctx.tiles:
             compose.ensure_tile(gx, gy)
@@ -43,3 +55,14 @@ class ReliefContributor:
                     z = cell_z_noise(seed, xm, ym, int(base), amplitude=1)
                     z = max(z_min, min(z_max, z))
                     compose.ensure(gx, gy, tx, ty).surface_z = z
+                    z_hist[z] += 1
+                    cells += 1
+
+        logger.debug(
+            "light_contributor_relief | world=%s cells=%d tiles=%d planning_z_keys=%d z_hist=%s",
+            world.world_uid,
+            cells,
+            len(ctx.tiles),
+            len(planning_z),
+            dict(z_hist),
+        )

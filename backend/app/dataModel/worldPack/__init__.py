@@ -23,7 +23,9 @@ from app.dataModel.worldPack.worldMapCellsPerTile import (
     WORLD_MAP_CELLS_PER_TILE,
     WorldMapCellsPerTilePolicy,
     resolve_world_map_cells_per_tile,
+    resolve_world_map_side,
 )
+from app.dataModel.worldPack.lightSettlementFootprint import LightSettlementFootprintPolicy
 from app.dataModel.worldPack.worldPackManifest import (
     PACK_WIRE_VERSION,
     ChunkRef,
@@ -59,8 +61,10 @@ __all__ = [
     "TileManifestEntry",
     "WorldMapCellWire",
     "WorldMapCellsPerTilePolicy",
+    "LightSettlementFootprintPolicy",
     "WorldPackManifest",
     "inside_location_volume",
     "merge_layers",
     "resolve_world_map_cells_per_tile",
+    "resolve_world_map_side",
 ]

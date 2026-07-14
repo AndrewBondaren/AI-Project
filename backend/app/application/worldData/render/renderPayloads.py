@@ -18,6 +18,8 @@ from typing import Literal
 ReadPath = Literal["pack", "legacy"]
 ReadMode = Literal[
     "world_map_light",
+    "world_map_light_mask",
+    "world_map_light_macro_aggregate",
     "location_terrain",
     "location_terrain_missing",
     "map_cells",

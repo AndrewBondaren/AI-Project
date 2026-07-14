@@ -41,7 +41,7 @@ class TestMapGridRenderServicePackGate(unittest.IsolatedAsyncioTestCase):
     async def test_world_grid_pack_skips_map_cell_export(self) -> None:
         payload = await self.svc.render_world_grid(self.world)
         self.assertEqual(payload["read_path"], "pack")
-        self.assertEqual(payload["read_mode"], "world_map_light")
+        self.assertEqual(payload["read_mode"], "world_map_light_mask")
         self.map_cells.get_all_for_read.assert_not_called()
 
     async def test_missing_location_terrain_skips_map_cell_export(self) -> None:

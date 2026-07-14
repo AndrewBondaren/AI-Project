@@ -10,6 +10,9 @@ from app.application.worldData.generators.coordinates import cell_size_m
 from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
     is_hydrology_enabled,
 )
+from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
+    HydrologyGeneratorService,
+)
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
     prepare_surface_terrain_context,
@@ -30,6 +33,8 @@ from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
 from app.dataModel.worldPack.worldMapCellsPerTile import resolve_world_map_cells_per_tile
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.db.models.connectionEdge import ConnectionEdge
+from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -72,12 +77,22 @@ class WorldMapBakeOrchestrator:
         *,
         surface_ctx: SurfaceTerrainContext | None = None,
         locations_index: LocationsIndexWire | None = None,
-        **prepare_kwargs,
+        nodes: list[ConnectionNode] | None = None,
+        edges: list[ConnectionEdge] | None = None,
+        hydrology_generator: HydrologyGeneratorService | None = None,
     ) -> int:
         world_uid = world.world_uid
         ctx_t0 = time.perf_counter()
+        graph_nodes = list(nodes or [])
+        graph_edges = list(edges or [])
         if surface_ctx is None:
-            surface_ctx = prepare_surface_terrain_context(world, locations, **prepare_kwargs)
+            surface_ctx = prepare_surface_terrain_context(
+                world,
+                locations,
+                nodes=graph_nodes,
+                edges=graph_edges,
+                hydrology_generator=hydrology_generator,
+            )
         if surface_ctx is None:
             log_pack_surface_context(world_uid, ok=False, started_at=ctx_t0)
             return 0
@@ -98,8 +113,6 @@ class WorldMapBakeOrchestrator:
         side = resolve_world_map_cells_per_tile(tile_m, world.world_map_cells_per_tile)
         scale = LightGridScale.from_tile(tile_m, side)
         index = locations_index or build_locations_index(locations)
-        nodes = prepare_kwargs.get("nodes") or []
-        edges = prepare_kwargs.get("edges") or []
 
         bake_ctx = LightGridBakeContext(
             world=world,
@@ -107,8 +120,8 @@ class WorldMapBakeOrchestrator:
             locations_index=index,
             tiles=list(tiles),
             scale=scale,
-            nodes=list(nodes),
-            edges=list(edges),
+            nodes=graph_nodes,
+            edges=graph_edges,
             surface_planning=surface_ctx,
             pole_field=surface_ctx.pole_field,
             terrain_system_keys=terrain_system_keys(world),

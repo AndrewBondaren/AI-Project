@@ -20,6 +20,8 @@ class PackBakeDefaults(BaseModel):
     refine_queue_max_workers: int = Field(default=1, ge=1)
     # WP-PERF-10 / WP-A5: light/entry refine queue depth must stay well below whole-tile enqueue.
     smoke_max_refine_queue_depth: int = Field(default=200, ge=0)
+    # Pack ASCII: mosaic only when tile count ≤ this (else macro aggregate).
+    light_mosaic_max_tiles: int = Field(default=16, ge=1)
 
     @classmethod
     def canonical_defaults(cls) -> PackBakeDefaults:

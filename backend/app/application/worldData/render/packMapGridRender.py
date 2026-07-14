@@ -14,12 +14,19 @@ from app.application.worldData.render.renderPayloads import (
     WorldTileGridsPayload,
 )
 from app.application.worldData.render.worldMapPackRenderer import WorldMapPackRenderer
+from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.db.models.world import World
 
 
 class PackMapGridRender:
-    def __init__(self, render_read: PackRenderReadFacade) -> None:
+    def __init__(
+        self,
+        render_read: PackRenderReadFacade,
+        *,
+        bake_defaults: PackBakeDefaults | None = None,
+    ) -> None:
         self._read = render_read
+        self._defaults = bake_defaults or PackBakeDefaults.canonical_defaults()
 
     def _world_renderer(self, world: World) -> WorldMapPackRenderer | None:
         source = self._read.try_world_map_source(world)
@@ -31,6 +38,29 @@ class PackMapGridRender:
             pins=source.pins,
         )
 
+    @staticmethod
+    def _bbox_specified(
+        gx0: int | None,
+        gy0: int | None,
+        gx1: int | None,
+        gy1: int | None,
+    ) -> bool:
+        return gx0 is not None and gy0 is not None and gx1 is not None and gy1 is not None
+
+    def _use_light_mosaic(
+        self,
+        renderer: WorldMapPackRenderer,
+        *,
+        gx0: int | None,
+        gy0: int | None,
+        gx1: int | None,
+        gy1: int | None,
+    ) -> bool:
+        """Mosaic when bbox is set or tile count ≤ light_mosaic_max_tiles."""
+        if self._bbox_specified(gx0, gy0, gx1, gy1):
+            return True
+        return renderer.tile_count() <= self._defaults.light_mosaic_max_tiles
+
     def render_world_grid(
         self,
         world: World,
@@ -41,11 +71,22 @@ class PackMapGridRender:
         gy1: int | None = None,
         mark_locations: bool = True,
     ) -> WorldGridPayload:
-        """Pack world ASCII — L0 light-mask mosaic (SoT), not macro aggregate."""
+        """Pack world ASCII — L0 mosaic when small/bbox; else macro aggregate."""
         renderer = self._world_renderer(world)
         if renderer is None:
-            ascii_grid = ""
-        else:
+            return WorldGridPayload(
+                ascii="",
+                legend=WorldMapPackRenderer.render_legend(mark_location=mark_locations),
+                mark_locations=mark_locations,
+                cell_size_m=world.map_cell_size_m,
+                read_path="pack",
+                read_mode="world_map_light_mask",
+            )
+
+        use_mosaic = self._use_light_mosaic(
+            renderer, gx0=gx0, gy0=gy0, gx1=gx1, gy1=gy1,
+        )
+        if use_mosaic:
             ascii_grid = renderer.render_light_mask_mosaic(
                 gx0=gx0,
                 gy0=gy0,
@@ -53,16 +94,22 @@ class PackMapGridRender:
                 gy1=gy1,
                 mark_location=mark_locations,
             )
+            read_mode = "world_map_light_mask"
+        else:
+            ascii_grid = renderer.render_macro(mark_location=mark_locations)
+            read_mode = "world_map_light_macro_aggregate"
+
         return WorldGridPayload(
             ascii=ascii_grid,
             legend=WorldMapPackRenderer.render_legend(mark_location=mark_locations),
             mark_locations=mark_locations,
             cell_size_m=world.map_cell_size_m,
             read_path="pack",
-            read_mode="world_map_light_mask",
+            read_mode=read_mode,
         )
 
     def render_world_tile_grids(self, world: World) -> WorldTileGridsPayload:
+        """Canonical per-tile L0 mask smoke — always mosaic cells, never aggregate."""
         renderer = self._world_renderer(world)
         tiles: dict[str, WorldTileEntryPayload] = {}
         if renderer is not None:

@@ -37,6 +37,12 @@ def compose_light_grid(
     compose = LightGridCompose(ctx.scale)
     pipeline = contributors or DEFAULT_CONTRIBUTORS
     t0 = time.perf_counter()
+    if ctx.surface_planning is None:
+        logger.warning(
+            "light_compose_no_surface_planning | world=%s — relief/landcover/climate "
+            "and coarse SEA/LAKE fill will be skipped or limited",
+            ctx.world.world_uid,
+        )
     logger.info(
         "light_compose_start | world=%s tiles=%d side=%d light_m=%d",
         ctx.world.world_uid,
