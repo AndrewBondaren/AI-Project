@@ -1,6 +1,7 @@
-"""World initialization smoke — import fixture, materialize terrain.
+"""World initialization smoke — import fixture, materialize terrain, dump ASCII maps.
 
-Default (pack): ``POST …/map/pack/bake`` — world_map light World Pack, no wilderness INSERT.
+Default (pack): ``POST …/map/pack/bake`` — world_map light World Pack, then auto-render
+L0 (world + tile light grids) and L2 location_terrain when blobs exist.
 Legacy (freeze): ``POST …/map/materialize-stack`` — fine grid into map_cell_patches path.
 
 Requires running backend (``npm run dev`` or ``npm run backend``).
@@ -8,6 +9,7 @@ Requires running backend (``npm run dev`` or ``npm run backend``).
 Examples:
   python scripts/initialize_world.py --fixture ../fixtures/world_terrain_test.json
   python scripts/initialize_world.py --target legacy --fixture ../fixtures/world_test_all.json
+  python scripts/initialize_world.py --no-render
   python scripts/smoke_world_pack.py --fixture ../fixtures/world_terrain_test.json
 """
 from __future__ import annotations
@@ -34,6 +36,7 @@ from debug_surface_helpers import (
     api_materialize_surface_stack,
     api_pack_bake,
 )
+from render_maps import _print_summary, dump_map_renders
 
 
 def _import_fixture(client, path: str) -> dict:
@@ -152,6 +155,24 @@ def main() -> None:
     )
     parser.add_argument("--skip-import", action="store_true")
     parser.add_argument("--skip-clear", action="store_true")
+    parser.add_argument(
+        "--render",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="After bake/stack: dump L0 + L2 ASCII via render API (default: on)",
+    )
+    parser.add_argument(
+        "--render-out",
+        type=Path,
+        default=None,
+        help="Render output root (default: .local/map-render/{world_uid})",
+    )
+    parser.add_argument(
+        "--mark-locations",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Render: @ pins on world map (default: on)",
+    )
     args = parser.parse_args()
 
     fixture = args.fixture.resolve()
@@ -228,6 +249,16 @@ def main() -> None:
                     http_elapsed_s=http_elapsed_s,
                 ),
             )
+
+        if args.render:
+            print("\n=== map render (L0 light + L2 location_terrain) ===")
+            summary = dump_map_renders(
+                client,
+                world_uid,
+                out_root=args.render_out,
+                mark_locations=args.mark_locations,
+            )
+            _print_summary(summary)
 
 
 if __name__ == "__main__":
