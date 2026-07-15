@@ -21,10 +21,12 @@ from app.application.worldData.pack.io.tileCodec import (
     TileCodec,
 )
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
+from app.application.worldData.pack.read.parentLightCache import ParentLightCache
 from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
+from app.dataModel.worldPack.parentLightTile import ParentLightTile
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
 from app.dataModel.worldPack.worldPackManifest import (
     ChunkRef,
@@ -44,12 +46,14 @@ class WorldPackWriter:
         codec: TileCodec | None = None,
         store: PackManifestStore | None = None,
         bake_defaults: PackBakeDefaults | None = None,
+        parent_light_cache: ParentLightCache | None = None,
     ) -> None:
         self._paths = paths
         defaults = bake_defaults or PackBakeDefaults.canonical_defaults()
         self._codec = codec or TileCodec(level=defaults.zstd_level)
         self._store = store or PackManifestStore()
         self._bake_defaults = defaults
+        self._parent_light_cache = parent_light_cache or ParentLightCache()
         if manifest is not None:
             self._manifest = manifest
         elif self._store.exists(paths.manifest_path()):
@@ -61,6 +65,14 @@ class WorldPackWriter:
     @property
     def manifest(self) -> WorldPackManifest:
         return self._manifest
+
+    @property
+    def paths(self) -> WorldPackPaths:
+        return self._paths
+
+    @property
+    def parent_light_cache(self) -> ParentLightCache:
+        return self._parent_light_cache
 
     def sync_world_metadata(self, world: World, *, cells_per_side: int) -> None:
         self._manifest.map_cell_size_m = world.map_cell_size_m
@@ -112,6 +124,22 @@ class WorldPackWriter:
         )
         self._replace_tile(updated)
         self._manifest.world_map_cells_per_tile = cells_per_side
+        if self._manifest.map_cell_size_m is None or int(self._manifest.map_cell_size_m) < 1:
+            raise ValueError(
+                "manifest.map_cell_size_m required before write_world_map_tile "
+                "(cannot cache parent light with tile_m fallback)",
+            )
+        tile_m = int(self._manifest.map_cell_size_m)
+        self._parent_light_cache.put(
+            ParentLightTile.from_cells(
+                world_uid=self._paths.world_uid,
+                gx=gx,
+                gy=gy,
+                side=cells_per_side,
+                tile_m=tile_m,
+                cells=cells,
+            ),
+        )
         return content_hash
 
     def write_wilderness_chunk(

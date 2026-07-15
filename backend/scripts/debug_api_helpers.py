@@ -3,7 +3,8 @@
 Requires running backend on ``http://localhost:8000`` — **start it yourself** (``npm run backend`` / ``python start.py``).
 Agents must **not** start the server; only run these helpers after the user has it up.
 
-Surface materialization stack (terrain + hydrology + climate): ``debug_surface_helpers.py``.
+Surface / pack bake HTTP helpers: ``debug_surface_helpers.api_pack_bake`` /
+``debug_api_helpers.api_pack_bake``. Legacy generate-surface routes are removed.
 """
 from __future__ import annotations
 
@@ -89,14 +90,30 @@ def api_clear_map(client: httpx.Client, world_uid: str) -> None:
         _require_ok(r, f"DELETE map {world_uid}")
 
 
-def api_generate_surface(client: httpx.Client, world_uid: str) -> None:
-    r = client.post(f"/worlds/{world_uid}/map/generate-surface")
-    _require_ok(r, f"POST generate-surface {world_uid}")
+def api_pack_bake(
+    client: httpx.Client,
+    world_uid: str,
+    *,
+    mode: str = "light",
+    max_tiles: int | None = None,
+) -> dict:
+    """Canonical debug bake — ``POST …/map/pack/bake``."""
+    from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 
-
-def api_generate_climate(client: httpx.Client, world_uid: str) -> None:
-    r = client.post(f"/worlds/{world_uid}/map/generate-climate")
-    _require_ok(r, f"POST generate-climate {world_uid}")
+    cap = (
+        max_tiles
+        if max_tiles is not None
+        else PackBakeDefaults.canonical_defaults().max_tiles_light
+    )
+    params: dict[str, str | int] = {"mode": mode}
+    if cap > 0:
+        params["max_tiles"] = cap
+    r = client.post(f"/worlds/{world_uid}/map/pack/bake", params=params)
+    _require_ok(r, f"POST pack/bake {world_uid}")
+    data = r.json()
+    if not isinstance(data, dict):
+        raise DebugApiError(f"pack/bake {world_uid}: expected object, got {type(data)}")
+    return data
 
 
 def api_get_map(client: httpx.Client, world_uid: str) -> list[dict]:

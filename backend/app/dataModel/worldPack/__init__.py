@@ -26,6 +26,8 @@ from app.dataModel.worldPack.worldMapCellsPerTile import (
     resolve_world_map_side,
 )
 from app.dataModel.worldPack.lightSettlementFootprint import LightSettlementFootprintPolicy
+from app.dataModel.worldPack.parentLightTile import ParentLightTile
+from app.dataModel.worldPack.parentLightRefinePolicy import ParentLightRefinePolicy
 from app.dataModel.worldPack.worldPackManifest import (
     PACK_WIRE_VERSION,
     ChunkRef,
@@ -62,6 +64,8 @@ __all__ = [
     "WorldMapCellWire",
     "WorldMapCellsPerTilePolicy",
     "LightSettlementFootprintPolicy",
+    "ParentLightTile",
+    "ParentLightRefinePolicy",
     "WorldPackManifest",
     "inside_location_volume",
     "merge_layers",

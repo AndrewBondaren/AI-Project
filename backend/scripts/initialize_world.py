@@ -1,14 +1,10 @@
-"""World initialization smoke — import fixture, materialize terrain, dump ASCII maps.
+"""World initialization smoke — import fixture, pack bake, dump ASCII maps.
 
-Default (pack): ``POST …/map/pack/bake`` — world_map light World Pack, then auto-render
-L0 (world + tile light grids) and L2 location_terrain when blobs exist.
-Legacy (freeze): ``POST …/map/materialize-stack`` — fine grid into map_cell_patches path.
-
-Requires running backend (``npm run dev`` or ``npm run backend``).
+Uses ``POST …/map/pack/bake`` (L0 light World Pack + entry refine).
+Requires running backend (``npm run backend``) — agents must not start it.
 
 Examples:
   python scripts/initialize_world.py --fixture ../fixtures/world_terrain_test.json
-  python scripts/initialize_world.py --target legacy --fixture ../fixtures/world_test_all.json
   python scripts/initialize_world.py --no-render
   python scripts/smoke_world_pack.py --fixture ../fixtures/world_terrain_test.json
 """
@@ -30,10 +26,8 @@ if str(REPO / "backend") not in sys.path:
 from app.application.worldData.pack.import_.importLevels import filter_bundle_for_export
 from debug_api_helpers import DebugApiError, _require_ok, api_clear_map, api_client
 from debug_surface_helpers import (
-    SurfaceStackResult,
     api_list_bootstrap_tiles,
     api_loading_progress,
-    api_materialize_surface_stack,
     api_pack_bake,
 )
 from render_maps import _print_summary, dump_map_renders
@@ -106,26 +100,6 @@ def _build_pack_bake_metrics(
     }
 
 
-def _build_legacy_stack_metrics(
-    stack: SurfaceStackResult,
-    *,
-    started_at: datetime,
-    finished_at: datetime,
-    http_elapsed_s: float,
-) -> dict[str, Any]:
-    surface = stack.surface or {}
-    climate = stack.climate or {}
-    return {
-        "started_at": started_at.isoformat(timespec="seconds"),
-        "finished_at": finished_at.isoformat(timespec="seconds"),
-        "http_elapsed_s": round(http_elapsed_s, 2),
-        "terrain_succeeded": surface.get("succeeded"),
-        "terrain_failed": surface.get("failed"),
-        "climate_succeeded": climate.get("succeeded") if climate else None,
-        "climate_failed": climate.get("failed") if climate else None,
-    }
-
-
 def _print_metrics(title: str, metrics: dict[str, Any]) -> None:
     print(f"\n=== {title} ===")
     width = max(len(str(k)) for k in metrics)
@@ -137,21 +111,21 @@ def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
 
-    parser = argparse.ArgumentParser(description="Bootstrap world init for testing")
-    parser.add_argument("--fixture", type=Path, default=REPO / "fixtures" / "world_terrain_test.json")
+    parser = argparse.ArgumentParser(
+        description="Bootstrap world via World Pack light bake (pack/bake)",
+    )
+    parser.add_argument(
+        "--fixture",
+        type=Path,
+        default=REPO / "fixtures" / "world_terrain_test.json",
+    )
     parser.add_argument("--world-uid", default=None, help="defaults to fixture world_uid")
     parser.add_argument("--max-tiles", type=int, default=16, help="0 = no cap on bootstrap tiles")
     parser.add_argument(
-        "--target",
-        choices=("pack", "legacy"),
-        default="pack",
-        help="pack = World Pack light bake (default); legacy = materialize-stack INSERT path",
-    )
-    parser.add_argument(
         "--mode",
-        choices=("bootstrap", "full", "light"),
-        default=None,
-        help="legacy: bootstrap|full; pack: light (default per target)",
+        choices=("light",),
+        default="light",
+        help="pack bake mode (only light is implemented on the server)",
     )
     parser.add_argument("--skip-import", action="store_true")
     parser.add_argument("--skip-clear", action="store_true")
@@ -159,7 +133,7 @@ def main() -> None:
         "--render",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="After bake/stack: dump L0 + L2 ASCII via render API (default: on)",
+        help="After bake: dump L0 + L2 ASCII via render API (default: on)",
     )
     parser.add_argument(
         "--render-out",
@@ -173,6 +147,18 @@ def main() -> None:
         default=True,
         help="Render: @ pins on world map (default: on)",
     )
+    parser.add_argument(
+        "--anchor-x",
+        type=int,
+        default=None,
+        help="Optional entry refine anchor (meters)",
+    )
+    parser.add_argument(
+        "--anchor-y",
+        type=int,
+        default=None,
+        help="Optional entry refine anchor (meters)",
+    )
     args = parser.parse_args()
 
     fixture = args.fixture.resolve()
@@ -180,15 +166,6 @@ def main() -> None:
         raise SystemExit(f"fixture not found: {fixture}")
 
     world_uid = args.world_uid or _fixture_world_uid(fixture)
-
-    if args.target == "pack":
-        mode = args.mode or "light"
-        if mode != "light":
-            raise SystemExit("pack target supports only --mode light (use --target legacy for bootstrap/full)")
-    else:
-        mode = args.mode or "bootstrap"
-        if mode == "light":
-            raise SystemExit("legacy target does not support --mode light (use --target pack)")
 
     with api_client() as client:
         if not args.skip_import:
@@ -198,8 +175,10 @@ def main() -> None:
         if not args.skip_clear:
             api_clear_map(client, world_uid)
             print(f"cleared map patches: {world_uid}")
-            if args.target == "pack":
-                print("note: pack dir on disk is not deleted — rebake overwrites tiles; wipe manually for clean slate")
+            print(
+                "note: pack dir on disk is not deleted — rebake overwrites tiles; "
+                "wipe pack folder manually for a clean slate",
+            )
 
         preview = api_list_bootstrap_tiles(client, world_uid, max_tiles=args.max_tiles)
         print(
@@ -209,46 +188,31 @@ def main() -> None:
         for tile in preview.get("tiles") or []:
             print(f"  Gx{tile['gx']}_Gy{tile['gy']}")
 
-        if args.target == "pack":
-            started_at = datetime.now().astimezone()
-            t0 = time.perf_counter()
-            bake = api_pack_bake(client, world_uid, mode="light", max_tiles=args.max_tiles)
-            http_elapsed_s = time.perf_counter() - t0
-            finished_at = datetime.now().astimezone()
+        started_at = datetime.now().astimezone()
+        t0 = time.perf_counter()
+        bake = api_pack_bake(
+            client,
+            world_uid,
+            mode=args.mode,
+            max_tiles=args.max_tiles,
+            anchor_x=args.anchor_x,
+            anchor_y=args.anchor_y,
+        )
+        http_elapsed_s = time.perf_counter() - t0
+        finished_at = datetime.now().astimezone()
 
-            if not bake.get("loading_progress"):
-                bake = {**bake, "loading_progress": api_loading_progress(client, world_uid)}
+        if not bake.get("loading_progress"):
+            bake = {**bake, "loading_progress": api_loading_progress(client, world_uid)}
 
-            _print_metrics(
-                "pack bake metrics",
-                _build_pack_bake_metrics(
-                    bake,
-                    started_at=started_at,
-                    finished_at=finished_at,
-                    http_elapsed_s=http_elapsed_s,
-                ),
-            )
-        else:
-            started_at = datetime.now().astimezone()
-            t0 = time.perf_counter()
-            stack = api_materialize_surface_stack(
-                client,
-                world_uid,
-                mode=mode,  # type: ignore[arg-type]
-                max_tiles=args.max_tiles,
-            )
-            http_elapsed_s = time.perf_counter() - t0
-            finished_at = datetime.now().astimezone()
-
-            _print_metrics(
-                "materialize stack metrics",
-                _build_legacy_stack_metrics(
-                    stack,
-                    started_at=started_at,
-                    finished_at=finished_at,
-                    http_elapsed_s=http_elapsed_s,
-                ),
-            )
+        _print_metrics(
+            "pack bake metrics",
+            _build_pack_bake_metrics(
+                bake,
+                started_at=started_at,
+                finished_at=finished_at,
+                http_elapsed_s=http_elapsed_s,
+            ),
+        )
 
         if args.render:
             print("\n=== map render (L0 light + L2 location_terrain) ===")

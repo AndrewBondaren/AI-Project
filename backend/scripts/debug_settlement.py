@@ -668,8 +668,7 @@ def test_terrain_decoupled_from_settlements() -> None:
         api_add_location,
         api_clear_map,
         api_client,
-        api_generate_climate,
-        api_generate_surface,
+        api_pack_bake,
         api_get_map,
         api_reset_world,
         surface_grid_cell,
@@ -715,12 +714,10 @@ def test_terrain_decoupled_from_settlements() -> None:
 
     with api_client() as client:
         api_reset_world(client, world, [region, city_a])
-        api_generate_surface(client, world.world_uid)
+        api_pack_bake(client, world.world_uid)
         skeleton = api_get_map(client, world.world_uid)
         assert urban_surface_cells(skeleton) == set()
         assert all(c.get("temperature_base") is None for c in skeleton)
-
-        api_generate_climate(client, world.world_uid)
         cells_one_city = api_get_map(client, world.world_uid)
         cell_0_0_one = surface_grid_cell(cells_one_city, 0, 0)
         assert cell_0_0_one["system_terrain"] == "plains"
@@ -741,8 +738,7 @@ def test_terrain_decoupled_from_settlements() -> None:
         )
         api_add_location(client, city_b)
         api_clear_map(client, world.world_uid)
-        api_generate_surface(client, world.world_uid)
-        api_generate_climate(client, world.world_uid)
+        api_pack_bake(client, world.world_uid)
         cells_two_cities = api_get_map(client, world.world_uid)
         cell_0_0_two = surface_grid_cell(cells_two_cities, 0, 0)
         assert cell_0_0_two["temperature_base"] == cell_0_0_one["temperature_base"]
@@ -832,8 +828,7 @@ def test_climate_manual_anchor_voronoi() -> None:
     """Manual climate_anchor wins over admin region in Voronoi."""
     from debug_api_helpers import (
         api_client,
-        api_generate_climate,
-        api_generate_surface,
+        api_pack_bake,
         api_get_map,
         api_reset_world,
         surface_grid_cell,
@@ -872,8 +867,7 @@ def test_climate_manual_anchor_voronoi() -> None:
 
     with api_client() as client:
         api_reset_world(client, world, [region, peak])
-        api_generate_surface(client, world.world_uid)
-        api_generate_climate(client, world.world_uid)
+        api_pack_bake(client, world.world_uid)
         cells = api_get_map(client, world.world_uid)
         cell_at_peak = surface_grid_cell(cells, 3, 0)
         assert cell_at_peak.get("location_uid") == peak.location_uid
@@ -886,8 +880,7 @@ def test_climate_orchestrator_passes() -> None:
     """Surface pass has no climate fields; generate-climate fills them."""
     from debug_api_helpers import (
         api_client,
-        api_generate_climate,
-        api_generate_surface,
+        api_pack_bake,
         api_get_map,
         api_reset_world,
         top_surface_cells,
@@ -914,11 +907,9 @@ def test_climate_orchestrator_passes() -> None:
 
     with api_client() as client:
         api_reset_world(client, world, [region])
-        api_generate_surface(client, world.world_uid)
+        api_pack_bake(client, world.world_uid)
         skeleton = top_surface_cells(api_get_map(client, world.world_uid))
         assert all(c.get("temperature_base") is None for c in skeleton)
-
-        api_generate_climate(client, world.world_uid)
         weathered = top_surface_cells(api_get_map(client, world.world_uid))
         assert all(c.get("temperature_base") is not None for c in weathered)
 
@@ -1157,8 +1148,7 @@ def test_climate_tier_resolve() -> None:
     """CL-2: pole base + local override in world-relative radius; admin ignored."""
     from debug_api_helpers import (
         api_client,
-        api_generate_climate,
-        api_generate_surface,
+        api_pack_bake,
         api_get_map,
         api_reset_world,
         surface_grid_cell,
@@ -1199,8 +1189,7 @@ def test_climate_tier_resolve() -> None:
 
     with api_client() as client:
         api_reset_world(client, world, [region, peak])
-        api_generate_surface(client, world.world_uid)
-        api_generate_climate(client, world.world_uid)
+        api_pack_bake(client, world.world_uid)
         cells = api_get_map(client, world.world_uid)
         cell_peak = surface_grid_cell(cells, 3, 0)
         cell_far  = surface_grid_cell(cells, -2, 0)

@@ -180,6 +180,52 @@ L2_tile = refine(
 
 **Связь идей:** Идея 1 — **чертёж**; Идея 2 — **исполнительная документация** в meter scale. World map и gameplay **согласованы** (WP-8).
 
+#### Parent light SoT (утверждено 2026-07-15)
+
+Единственный источник parent light для refine — **baked pack blob** `tiles/r.{gx}.{gy}.world_map.zst` (`WorldMapCellWire` после L0 compose).
+
+| Правило | Контракт |
+|---|---|
+| **SoT** | Disk wire после successful write — не live `LightGridCompose`, не пересборка маски из `SurfaceTerrainContext` |
+| **Load** | `load_parent_light(gx, gy)` → wire / typed `ParentLightTile` (+ `side`, `light_m`) |
+| **Cache** | Process-local `{(world_uid, gx, gy) → ParentLightTile}` после successful `write_world_map_tile` **или** первого decode; **miss → disk**. Cache = latency, **не** второй SoT |
+| **Cache scope** | Один pack session / process bake→refine; **не** глобальный singleton без `world_uid`; cold / другой process / restart → только disk |
+| **Same bake** | Write → disk + `cache.put`; refine в том же process бьёт в cache |
+
+```text
+write_world_map_tile → disk + cache.put
+load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
+```
+
+**Антипаттерн (запрещено):** передать в refine сырой `LightGridCompose` в обход writer; строить L2 constraints заново из coarse planning, игнорируя baked mask.
+
+#### Parent light refine contracts (утверждено 2026-07-15)
+
+Числовые defaults и knobs — **будущий** POJO `dataModel/worldPack/` (напр. `ParentLightRefinePolicy` + `canonical_defaults()`); application только читает POJO. Не дублировать литералы в generators/orchestrator ([`dataModel-no-hardcode`](../.cursor/rules/dataModel-no-hardcode.mdc)).
+
+**Upsample (`surface_z`):**
+
+| Правило | Контракт |
+|---|---|
+| **Input** | L0 `surface_z` per light cell `(tx, ty)` из `ParentLightTile` |
+| **Output** | Fine `SurfaceHeightmap` (meter grid) |
+| **Base** | Resample light→meter (nearest или bilinear — knobs на POJO; default **bilinear**) |
+| **Detail** | Детерминированный band-limited noise от `world_seed` + light cell; **не** новый macro-рельеф |
+| **Z-band** | Итоговый fine `z` остаётся в **± `z_band`** от resampled L0 формы; default **`z_band = 1`** (целое world-z) |
+| **Запрещено** | `build_fine_surface_tile` только из одного coarse macro-z как SoT формы tile |
+
+**Hydro corridor:**
+
+| Правило | Контракт |
+|---|---|
+| **Mode** | **Hard corridor** — fine river/sea/lake/shore **только** внутри light cells с соответствующим L0 `hydrology_role` (и dilate по `hydrology_width` → meters через `light_m`) |
+| **Role bridge** | L0 → fine только через `WorldMapHydrologyRole.to_fine_role()` (SoT enum) |
+| **Outside mask** | Не писать river/sea bed вне corridor; Pass 1.5 уточняет bed **внутри**, не смещает русло на карте |
+| **Declared** | Master declared уже отражён в L0; L2 не «перерисовывает» declared вне mask |
+| **Пустая L0 hydro** | Broken contract (см. MLB / Идея 1) — refine не invents world-map rivers |
+
+**Cache / I/O knobs (не алгоритм):** capacity / TTL при необходимости — `PackReadPolicy` или поле рядом с refine в `PackBakeDefaults`; не смешивать с upsample/hydro Field в одном «god» defaults без разделения ответственности.
+
 **Антипаттерн (запрещено):** независимый `run_surface_pass` на fine grid без L0 → река на карте и в сцене в разных местах.
 
 ---
@@ -541,20 +587,22 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-  L0in[L0 world_map tile NxN]
+  Disk[world_map.zst]
+  Load[load_parent_light\ncache or disk]
   UP[Upsample + detail noise\ndeterministic sub-seed]
   HY[Hydrology Pass 1.5\nconstrained to L0 hydro mask]
   GA[Gap analysis]
   P2[Column fill]
   PACK[terrain.zst]
 
-  L0in --> UP --> HY --> GA --> P2 --> PACK
+  Disk --> Load --> UP --> HY --> GA --> P2 --> PACK
 ```
 
 | Шаг | Контракт |
 |---|---|
-| **Upsample** | L0 `surface_z` → fine `SurfaceHeightmap` (interpolation + band-limited noise); **не** менять хребты/долины на macro-масштабе |
-| **Hydro constrain** | реки/море L2 **обязаны** попадать в corridor L0 `hydrology_role`; ширина refine, топология — из L0 |
+| **Load parent** | `load_parent_light(gx,gy)` = process cache **или** decode `world_map.zst`; ключ cache `(world_uid,gx,gy)`; вход UP/HY **только** из wire (см. § Parent light SoT) |
+| **Upsample** | L0 `surface_z` → fine heightmap: resample + band-limited noise; fine z в **±1** world-z от L0 формы (POJO `z_band`); **не** менять хребты/долины на macro-масштабе — § Parent light refine contracts |
+| **Hydro constrain** | **Hard corridor:** реки/море L2 только в L0 `hydrology_role` (+ width→meters); bridge `to_fine_role()`; вне маски — нет bed |
 | **Declared override** | master declared river/coast **сильнее** autoresolve; L0 уже отражает declare |
 | **Gap + fill** | как [`tz_terrain_generation.md`](./tz_terrain_generation.md) |
 | **Climate** | field per tile; liquid overlay на read |
@@ -1555,7 +1603,7 @@ flowchart TB
 |---|---|---|---|
 | **WP-PERF-20** | Partial `TileSurfaceState` | gap analysis + fine upsample **по chunk rect + halo ±1**, не на весь macro-tile | **−10…12 s** scene phase |
 | **WP-PERF-21** | Кэш `TileSurfaceState` per `(gx, gy)` | один build на tile per bake run; scene + background chunks reuse | меньше повторов WP-PERF-20 |
-| **WP-PERF-22** | L0-constrained refine (Идея 2) | `refine_chunk(L0_tile, rect)` вместо полного `build_fine_surface_tile` с нуля | стабильность + меньше CPU на L2 |
+| **WP-PERF-22** | L0-constrained refine (Идея 2) | `refine_chunk(load_parent_light(L0), rect)`: upsample L0 `surface_z` + hydro corridor; SoT = disk wire + process cache (не `build_fine_surface_tile` from coarse alone) | стабильность + меньше CPU на L2; ✅ код (ParentLightTile / cache / upsample / hard corridor) |
 
 #### P2 — CPU generate (offline / фон)
 
@@ -1656,3 +1704,6 @@ flowchart LR
 | 2026-07-12 | **CL-PACK fix:** `ClimatePackBakeOrchestrator`; denser fine; `climate_status` coarse/fine; CL-PACK-1…11 ✅ (CL-PACK-4 accepted L0 tint) |
 | 2026-07-12 | **Climate pack cutover:** coarse `climate_coarse.zst` на light bake; fine spawn tile; meter→macro `apply_climate`; `generate-climate` reject on pack; WP-A12 / MERGE-2 / WP-PERF-32 ✅ |
 | 2026-07-14 | L0 compose архитектура вынесена в [`tz_map_light_bake.md`](./tz_map_light_bake.md); cross-ref из § L0 |
+| 2026-07-15 | **Parent light SoT:** disk `world_map.zst` + process-local cache после write/read; live compose не SoT; WP-PERF-22 target уточнён |
+| 2026-07-15 | **Parent light refine contracts:** upsample z_band=±1, hard hydro corridor, cache key `(world_uid,gx,gy)`; SoT knobs → future `ParentLightRefinePolicy` |
+| 2026-07-15 | **WP-PERF-22 ✅:** `ParentLightTile` / cache / upsample / hard corridor wired in pack refine |

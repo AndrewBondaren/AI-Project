@@ -1,119 +1,31 @@
-"""World surface materialization facade — terrain (incl. hydrology) then climate.
+"""World pack materialization facade — thin entry for debug HTTP / scripts.
 
-Single entry for debug stack and future DAG materialization nodes.
-See ``docs/tz_terrain_generation.md`` § materialization queue.
+Legacy map_cells ``materialize_surface_stack`` removed; use ``materialize_pack_light``.
 """
 
 from __future__ import annotations
 
-import logging
-
-from app.application.worldData.bootstrapMapCellWriter import BootstrapMapCellWriter
-from app.application.worldData.climateBatchOrchestrator import ClimateBatchOrchestrator
 from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
-from app.application.worldData.pack.bake.packMaterializationOrchestrator import PackMaterializationOrchestrator
+from app.application.worldData.pack.bake.packMaterializationOrchestrator import (
+    PackMaterializationOrchestrator,
+)
 from app.application.worldData.materializationContext import (
     MaterializationContext,
     MaterializationJobReport,
-    persist_result_from_import,
-    resolve_insert_only,
 )
-from app.application.worldData.parallelPolicy import (
-    resolve_climate_workers,
-    resolve_terrain_workers,
-)
-from app.application.worldData.mapCellService import MapCellService
-from app.application.worldData.terrainBatchOrchestrator import SurfaceMode, TerrainBatchOrchestrator
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
-logger = logging.getLogger(__name__)
-
 
 class WorldSurfaceMaterializationOrchestrator:
-    """S→CL stack with shared ``MaterializationContext``.
+    """Pack-only surface materialization entry (L0 light + entry refine)."""
 
-    Bulk persist: ``BootstrapMapCellWriter.session`` — § TR-PAR-6.
-    ``MapCellService`` — probes only (``has_world_cells``).
-    """
-
-    def __init__(
-        self,
-        terrain: TerrainBatchOrchestrator,
-        climate: ClimateBatchOrchestrator,
-        bootstrap_writer: BootstrapMapCellWriter,
-        map_cell_service: MapCellService,
-    ) -> None:
-        self._terrain = terrain
-        self._climate = climate
-        self._writer = bootstrap_writer
-        self._map_cells = map_cell_service
-
-    async def materialize_surface_stack(
-        self,
-        world_uid: str,
-        world: World,
-        locations: list[NamedLocation],
-        ctx: MaterializationContext,
-        *,
-        surface_mode: SurfaceMode = "bootstrap",
-        max_tiles: int | None = 16,
-        include_climate: bool = True,
-        nodes: list[ConnectionNode] | None = None,
-        edges: list[ConnectionEdge] | None = None,
-        hydrology_generator: HydrologyGeneratorService | None = None,
-    ) -> MaterializationJobReport:
-        terrain_workers = resolve_terrain_workers(ctx, world)
-        climate_workers = resolve_climate_workers(ctx, world)
-
-        world_has_cells = await self._map_cells.has_world_cells(world_uid)
-        ctx = resolve_insert_only(ctx, world_has_cells=world_has_cells)
-
-        bootstrap_writer = self._writer if ctx.bulk_write_pragmas else None
-        async with self._writer.session(enabled=ctx.bulk_write_pragmas):
-            terrain_res, chunks_done, chunks_total = await self._terrain.save_terrain_batch(
-                world_uid,
-                world,
-                locations,
-                ctx,
-                nodes=nodes,
-                edges=edges,
-                hydrology_generator=hydrology_generator,
-                surface_mode=surface_mode,
-                max_tiles=max_tiles,
-                bootstrap_writer=bootstrap_writer,
-            )
-
-            climate_res = None
-            if include_climate and terrain_res.succeeded > 0:
-                climate_res, _, _ = await self._climate.apply_climate_batch(
-                    world_uid, world, locations, ctx,
-                    bootstrap_writer=bootstrap_writer,
-                )
-
-        logger.info(
-            "materialize_surface_stack | world=%s terrain=%d climate=%s chunks=%d/%d "
-            "insert_only=%s bulk_pragmas=%s",
-            world_uid,
-            terrain_res.succeeded,
-            climate_res.succeeded if climate_res else None,
-            chunks_done,
-            chunks_total,
-            ctx.insert_only,
-            ctx.bulk_write_pragmas,
-        )
-        return MaterializationJobReport(
-            terrain=persist_result_from_import(terrain_res),
-            climate=persist_result_from_import(climate_res) if climate_res else None,
-            chunks_total=chunks_total,
-            chunks_done=chunks_done,
-            terrain_workers=terrain_workers,
-            climate_workers=climate_workers,
-        )
+    def __init__(self, pack: PackMaterializationOrchestrator) -> None:
+        self._pack = pack
 
     async def materialize_pack_light(
         self,
@@ -133,9 +45,8 @@ class WorldSurfaceMaterializationOrchestrator:
         heading_dy: int | None = None,
         pack_orchestrator: PackMaterializationOrchestrator | None = None,
     ) -> MaterializationJobReport:
-        if pack_orchestrator is None:
-            raise ValueError("pack_orchestrator is required — wire from Container.pack_materialization_orchestrator()")
-        return await pack_orchestrator.materialize_light_pack(
+        orch = pack_orchestrator if pack_orchestrator is not None else self._pack
+        return await orch.materialize_light_pack(
             world_uid, world, locations, pack_writer, ctx,
             max_tiles=max_tiles,
             nodes=nodes, edges=edges,

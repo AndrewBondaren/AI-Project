@@ -57,6 +57,7 @@ from app.application.worldData.gameSessionService import GameSessionService
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
+from app.application.worldData.pack.read.parentLightCache import ParentLightCache
 from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.mapCellReadService import MapCellReadService
 from app.application.worldData.pack.read.packReadServices import PackReadServices, build_pack_read_services
@@ -144,6 +145,7 @@ class Container:
         self._chunk_refine_job_repository = None
         self._pack_materialization_orchestrator = None
         self._entry_refine_orchestrator = None
+        self._parent_light_caches: dict[str, ParentLightCache] = {}
 
         # CLIENTS
         self._qwen_client = None
@@ -563,7 +565,19 @@ class Container:
         return WorldPackPaths.for_world(world, app_settings.db_path)
 
     def world_pack_writer_for(self, world: World) -> WorldPackWriter:
-        return WorldPackWriter(self.world_pack_paths_for(world))
+        """Writer with process-scoped parent-light cache (shared across HTTP calls)."""
+        return WorldPackWriter(
+            self.world_pack_paths_for(world),
+            parent_light_cache=self.parent_light_cache_for(world.world_uid),
+        )
+
+    def parent_light_cache_for(self, world_uid: str) -> ParentLightCache:
+        """Process-local cache keyed by world — latency only; disk remains SoT."""
+        cache = self._parent_light_caches.get(world_uid)
+        if cache is None:
+            cache = ParentLightCache()
+            self._parent_light_caches[world_uid] = cache
+        return cache
 
     def world_pack_reader_for(self, world: World) -> WorldPackReader:
         return WorldPackReader(self.world_pack_paths_for(world))
@@ -580,7 +594,10 @@ class Container:
         return WorldPackPaths.from_db_parent(app_settings.db_path, world_uid)
 
     def world_pack_writer(self, world_uid: str) -> WorldPackWriter:
-        return WorldPackWriter(self.world_pack_paths(world_uid))
+        return WorldPackWriter(
+            self.world_pack_paths(world_uid),
+            parent_light_cache=self.parent_light_cache_for(world_uid),
+        )
 
     def world_pack_reader(self, world_uid: str) -> WorldPackReader:
         return WorldPackReader(self.world_pack_paths(world_uid))
@@ -602,10 +619,7 @@ class Container:
     def surface_materialization_orchestrator(self) -> WorldSurfaceMaterializationOrchestrator:
         if self._surface_materialization_orchestrator is None:
             self._surface_materialization_orchestrator = WorldSurfaceMaterializationOrchestrator(
-                terrain=self.terrain_batch_orchestrator(),
-                climate=self.climate_batch_orchestrator(),
-                bootstrap_writer=self.bootstrap_map_cell_writer(),
-                map_cell_service=self.map_cell_service(),
+                pack=self.pack_materialization_orchestrator(),
             )
         return self._surface_materialization_orchestrator
 

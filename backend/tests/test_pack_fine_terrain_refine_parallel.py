@@ -60,7 +60,10 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
         with patch(
             "app.application.worldData.pack.refine.fineTerrainRefineOrchestrator.ChunkComputePool",
             return_value=pool_instance,
-        ) as pool_cls:
+        ) as pool_cls, patch(
+            "app.application.worldData.pack.refine.fineTerrainRefineOrchestrator.require_parent_light",
+            return_value=MagicMock(gx=0, gy=0),
+        ):
             result, written, total = await l2._refine_rects(
                 _world(),
                 [],
@@ -91,7 +94,10 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
 
         with patch(
             "app.application.worldData.pack.refine.fineTerrainRefineOrchestrator.ChunkComputePool",
-        ) as pool_cls:
+        ) as pool_cls, patch(
+            "app.application.worldData.pack.refine.fineTerrainRefineOrchestrator.require_parent_light",
+            return_value=MagicMock(gx=0, gy=0),
+        ):
             result, written, total = await l2._refine_rects(
                 _world(),
                 [],

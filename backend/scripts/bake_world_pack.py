@@ -44,7 +44,6 @@ async def _run(world_uid: str, mode: str, max_tiles: int) -> int:
         world_uid, world, locations, mat_ctx, writer,
         max_tiles=max_tiles,
         nodes=nodes, edges=edges,
-        pack_orchestrator=container.pack_materialization_orchestrator(),
     )
     print(report.to_dict())
     return 0 if report.terrain.failed == 0 else 1

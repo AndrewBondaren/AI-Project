@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from app.application.worldData.persistResult import PersistResult
 from app.application.worldData.chunkComputePool import ChunkComputePool
@@ -43,13 +44,17 @@ from app.application.worldData.pack.refine.pathHeading import (
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
 )
+from app.application.worldData.pack.io.worldPackReader import WorldPackReader
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
+from app.application.worldData.pack.read.parentLightLoad import require_parent_light
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.worldPack.pathHeadingPolicy import PathHeadingPolicy
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume, inside_location_volume
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+
+logger = logging.getLogger(__name__)
 
 
 def _partition_chunk_cells(
@@ -320,8 +325,16 @@ class FineTerrainRefineOrchestrator:
         cell_m = cell_size_m(world)
         meter_bbox = meter_bbox_for_tile(tile_gx, tile_gy, cell_m)
         location_pairs = territory_volumes_by_location(world, locations)
+        parent = require_parent_light(
+            world.world_uid,
+            tile_gx,
+            tile_gy,
+            reader=WorldPackReader(writer.paths),
+            cache=writer.parent_light_cache,
+            tile_m=cell_m,
+        )
         surface_state = self._terrain.build_tile_surface_state(
-            world, locations, surface_ctx, tile_gx, tile_gy,
+            world, locations, surface_ctx, tile_gx, tile_gy, parent_light=parent,
         )
         surface_columns = (meter_bbox.x_max - meter_bbox.x_min + 1) * (
             meter_bbox.y_max - meter_bbox.y_min + 1

@@ -1,66 +1,37 @@
-"""Map cell CRUD and generation pass hooks.
+"""Map debug HTTP — World Pack bake / refine / read / render.
 
-Production materialization (world load, gameplay) must run through **engine DAG nodes**
-— same generator functions, no HTTP.
+Production materialization runs through **engine DAG nodes** (not these routes).
 
-``POST …/map/generate-*`` routes are a **permanent debug harness** for point testing
-(``debug_settlement.py``, manual curl, isolated pass runs). Keep them; do not wire
-frontend or player flows to these endpoints.
+Canonical debug harness:
+- ``POST …/map/pack/bake`` — L0 light compose + entry refine (WP-PERF-22)
+- ``POST …/map/refine-from-entry`` / ``schedule-chunk-refine``
+- ``GET …/map/render-*``, ``pack/fine-terrain-read``, ``loading-progress``, ``bootstrap-tiles``
+
+Legacy map_cells write routes (generate-surface / materialize-stack / …) are removed.
 """
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
+from dataclasses import asdict
 
 from app.api.deps import get_container
 from app.api.utils.jsonResolver import JsonResolver
 from app.api.utils.responseHelpers import json_or_download
-from app.application.worldData.generators.assemblers.climateAssembler.passes.poleResolvePass import (
-    run_pole_resolve_pass,
-)
-from app.application.worldData.generators.terrain.cavesGenerator import generate_caves
 from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
     HydrologyGeneratorService,
 )
-from app.application.worldData.generators.hydrology.types import (
-    HydrologyScope,
-    resolve_scopes,
-)
-from app.application.worldData.generators.terrain.passes.columnFillPass import run_column_fill
-from app.application.worldData.generators.terrain.passes.gapAnalysisPass import run_gap_analysis
-from app.application.worldData.generators.terrain.passes.surfacePass import run_surface_pass
-from app.application.worldData.generators.terrain.oresGenerator import generate_ores
-from dataclasses import asdict
-
-from app.application.worldData.pack.refine.entryAnchorTracker import ANCHOR_KINDS, parse_anchor_kind
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    prepare_surface_terrain_context,
+    require_surface_terrain_context,
 )
+from app.application.worldData.pack.refine.entryAnchorTracker import ANCHOR_KINDS, parse_anchor_kind
 from app.application.worldData.materializationContext import resolve_materialization_context
 from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_on_world
-from app.application.worldData.parallelPolicy import resolve_terrain_workers
+from app.application.worldData.pack.read.parentLightLoad import MissingParentLightError
 from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 
 router = APIRouter()
 _hydrology_generator = HydrologyGeneratorService()
-
-_HYDROLOGY_SCOPE_QUERY: dict[str, frozenset[HydrologyScope]] = {
-    "ocean":     frozenset({HydrologyScope.COASTAL_SEA, HydrologyScope.OPEN_OCEAN}),
-    "lakes":     frozenset({HydrologyScope.LAKES}),
-    "rivers":    frozenset({HydrologyScope.RIVERS}),
-    "landforms": frozenset({HydrologyScope.LANDFORMS}),
-}
-
-
-def _parse_hydrology_scope(scope: str) -> frozenset[HydrologyScope] | None:
-    key = scope.lower().strip()
-    if key == "full":
-        return None
-    parsed = _HYDROLOGY_SCOPE_QUERY.get(key)
-    if parsed is None:
-        allowed = ", ".join(["full", *_HYDROLOGY_SCOPE_QUERY])
-        raise HTTPException(status_code=422, detail=f"Unknown hydrology scope '{scope}'. Use: {allowed}")
-    return parsed
 
 
 @router.get("/worlds/{world_uid}/map/loading-progress")
@@ -252,42 +223,6 @@ async def render_all_location_grids(
     return JSONResponse(content=payload)
 
 
-@router.post("/worlds/{world_uid}/map/materialize-tile")
-async def materialize_tile(
-    world_uid: str,
-    gx: int = Query(...),
-    gy: int = Query(...),
-    free_cores: int | None = Query(default=None, ge=1),
-    parallel_workers: int | None = Query(default=None, ge=1),
-    container=Depends(get_container),
-) -> JSONResponse:
-    """Debug — fine grid for one macro tile (map_cell_size_m² surface cells + subsurface)."""
-    terrain_orch = container.terrain_batch_orchestrator()
-    world_svc = container.world_service()
-    location_svc = container.location_service()
-    conn_svc = container.connection_graph_service()
-
-    world = await world_svc.get_by_id(world_uid)
-    locations = await location_svc.get_all(world_uid)
-    nodes = await conn_svc.get_nodes(world_uid)
-    edges = await conn_svc.get_edges(world_uid)
-    mat_ctx = resolve_materialization_context(
-        world, free_cores=free_cores, parallel_workers_override=parallel_workers,
-    )
-
-    result, chunks_done, chunks_total = await terrain_orch.materialize_macro_tile(
-        world_uid, world, locations, gx, gy, mat_ctx,
-        nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
-    )
-    status_code = 200 if result.failed == 0 else 207
-    payload = {
-        **result.to_dict(),
-        "chunks_done": chunks_done,
-        "chunks_total": chunks_total,
-        "terrain_workers": resolve_terrain_workers(mat_ctx, world),
-    }
-    return JSONResponse(status_code=status_code, content=payload)
-
 
 @router.get("/worlds/{world_uid}/map/bootstrap-tiles")
 async def list_bootstrap_tiles(
@@ -319,177 +254,6 @@ async def list_bootstrap_tiles(
         "max_tiles": cap,
         "tile_count": len(tiles),
         "tiles": [{"gx": gx, "gy": gy} for gx, gy in tiles],
-    })
-
-
-@router.post("/worlds/{world_uid}/map/generate-surface")
-async def generate_surface(
-    world_uid: str,
-    mode: str = Query(default="bootstrap", pattern="^(bootstrap|full)$"),
-    max_tiles: int = Query(default=PackBakeDefaults.canonical_defaults().max_tiles_light, ge=0),
-    free_cores: int | None = Query(default=None, ge=1),
-    parallel_workers: int | None = Query(default=None, ge=1),
-    container=Depends(get_container),
-) -> JSONResponse:
-    """Debug only — production: engine DAG node (same generators).
-
-    ``mode=bootstrap`` (default): full fine grid for priority macro tiles only.
-    ``mode=full``: entire location bbox — can be billions of cells at map_cell_size_m=3000.
-    """
-    terrain_orch = container.terrain_batch_orchestrator()
-    world_svc    = container.world_service()
-    location_svc = container.location_service()
-    conn_svc     = container.connection_graph_service()
-
-    world     = await world_svc.get_by_id(world_uid)
-    locations = await location_svc.get_all(world_uid)
-    nodes     = await conn_svc.get_nodes(world_uid)
-    edges     = await conn_svc.get_edges(world_uid)
-
-    cap = max_tiles if max_tiles > 0 else None
-    mat_ctx = resolve_materialization_context(
-        world, free_cores=free_cores, parallel_workers_override=parallel_workers,
-    )
-    tiles_preview: list[tuple[int, int]] = []
-    if mode == "bootstrap":
-        tiles_preview = terrain_orch.plan_bootstrap_tiles(
-            world, locations, nodes=nodes, edges=edges,
-            hydrology_generator=_hydrology_generator, max_tiles=cap,
-        )
-
-    result, chunks_done, chunks_total = await terrain_orch.save_terrain_batch(
-        world_uid, world, locations, mat_ctx,
-        nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
-        surface_mode=mode,  # type: ignore[arg-type]
-        max_tiles=cap,
-    )
-
-    status_code = 200 if result.failed == 0 else 207
-    payload = {
-        **result.to_dict(),
-        "mode": mode,
-        "max_tiles": cap,
-        "chunks_done": chunks_done,
-        "chunks_total": chunks_total,
-        "terrain_workers": resolve_terrain_workers(mat_ctx, world),
-    }
-    if mode == "bootstrap":
-        payload["tile_count"] = len(tiles_preview)
-        payload["tiles"] = [{"gx": gx, "gy": gy} for gx, gy in tiles_preview]
-    return JSONResponse(status_code=status_code, content=payload)
-
-
-@router.post("/worlds/{world_uid}/map/generate-hydrology")
-async def generate_hydrology(
-    world_uid: str,
-    scope: str = Query(default="full"),
-    container=Depends(get_container),
-) -> JSONResponse:
-    """
-    Debug only — hydrology pass between surface and climate (D HY-7a target).
-
-    Preview / stub until heightmap carve + persist wired in terrain batch orchestrator.
-    """
-    map_svc       = container.map_cell_service()
-    world_svc     = container.world_service()
-    location_svc  = container.location_service()
-    conn_svc      = container.connection_graph_service()
-
-    world     = await world_svc.get_by_id(world_uid)
-    if world is None:
-        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
-    try:
-        map_svc.reject_legacy_generate_on_pack(world)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    locations = await location_svc.get_all(world_uid)
-    nodes     = await conn_svc.get_nodes(world_uid)
-    edges     = await conn_svc.get_edges(world_uid)
-
-    scope_set = resolve_scopes(_parse_hydrology_scope(scope))
-    pole_field = run_pole_resolve_pass(world, locations)
-    heightmap = run_surface_pass(world, locations, pole_field)
-    if heightmap is None:
-        raise HTTPException(
-            status_code=422,
-            detail="Empty heightmap — add static location anchors or bounds",
-        )
-
-    result = _hydrology_generator.apply(
-        world,
-        locations,
-        heightmap,
-        nodes=nodes,
-        edges=edges,
-        scopes=scope_set,
-    )
-
-    n_eff = run_gap_analysis(world, heightmap)
-    cells = run_column_fill(
-        world,
-        heightmap,
-        n_eff,
-        hydrology_by_cell=result.cell_index.by_cell or None,
-    )
-    save_result = await map_svc.save_pass(cells, "terrain")
-
-    status_code = 200 if save_result.failed == 0 else 207
-    return JSONResponse(status_code=status_code, content={
-        "scope": scope,
-        "scopes_active": sorted(s.value for s in scope_set),
-        "cells_modified": result.cells_modified,
-        "river_segments": len(result.river_segments),
-        "cell_roles": len(result.cell_index.roles),
-        "terrain_upserted": save_result.succeeded,
-        "total": save_result.total,
-    })
-
-
-@router.post("/worlds/{world_uid}/map/generate-climate")
-async def generate_climate(
-    world_uid: str,
-    free_cores: int | None = Query(default=None, ge=1),
-    parallel_workers: int | None = Query(default=None, ge=1),
-    container=Depends(get_container),
-) -> JSONResponse:
-    map_svc      = container.map_cell_service()
-    world_svc    = container.world_service()
-    location_svc = container.location_service()
-    climate_orch = container.climate_batch_orchestrator()
-
-    world     = await world_svc.get_by_id(world_uid)
-    if world is None:
-        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
-
-    try:
-        map_svc.reject_legacy_generate_on_pack(world)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail=f"{exc} Use POST /worlds/{{uid}}/map/pack/bake for coarse climate_coarse.",
-        ) from exc
-
-    locations = await location_svc.get_all(world_uid)
-    cells     = await map_svc.get_all_for_read(world)
-    if not cells:
-        raise HTTPException(
-            status_code=422,
-            detail="No map cells — run generate-surface first",
-        )
-
-    mat_ctx = resolve_materialization_context(
-        world, free_cores=free_cores, parallel_workers_override=parallel_workers,
-    )
-    result, batches_done, batches_total = await climate_orch.apply_climate_batch(
-        world_uid, world, locations, mat_ctx, cells=cells,
-    )
-
-    status_code = 200 if result.failed == 0 else 207
-    return JSONResponse(status_code=status_code, content={
-        **result.to_dict(),
-        "batches_done": batches_done,
-        "batches_total": batches_total,
     })
 
 
@@ -529,7 +293,6 @@ async def bake_world_pack(
             nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
             anchor_x=anchor_x, anchor_y=anchor_y,
             heading_dx=heading_dx, heading_dy=heading_dy,
-            pack_orchestrator=container.pack_materialization_orchestrator(),
         )
     else:
         raise HTTPException(status_code=422, detail=f"pack bake mode '{mode}' not implemented yet")
@@ -541,140 +304,6 @@ async def bake_world_pack(
         "pack_mode": mode,
         "loading_progress": progress.to_dict(),
     })
-
-
-@router.post("/worlds/{world_uid}/map/materialize-stack")
-async def materialize_stack(
-    world_uid: str,
-    mode: str = Query(default="bootstrap", pattern="^(bootstrap|full)$"),
-    target: str = Query(default="legacy", pattern="^(legacy|pack)$"),
-    max_tiles: int = Query(default=PackBakeDefaults.canonical_defaults().max_tiles_light, ge=0),
-    free_cores: int | None = Query(default=None, ge=1),
-    parallel_workers: int | None = Query(default=None, ge=1),
-    chunks_per_commit: int | None = Query(default=None, ge=1),
-    insert_only: bool | None = Query(default=None),
-    bulk_pragmas: bool = Query(default=True),
-    include_climate: bool = Query(default=True),
-    container=Depends(get_container),
-) -> JSONResponse:
-    """Debug — S→CL surface stack (terrain + hydrology + climate)."""
-    stack = container.surface_materialization_orchestrator()
-    world_svc = container.world_service()
-    location_svc = container.location_service()
-    conn_svc = container.connection_graph_service()
-
-    world = await world_svc.get_by_id(world_uid)
-    locations = await location_svc.get_all(world_uid)
-    nodes = await conn_svc.get_nodes(world_uid)
-    edges = await conn_svc.get_edges(world_uid)
-    cap = max_tiles if max_tiles > 0 else None
-    mat_ctx = resolve_materialization_context(
-        world, free_cores=free_cores, parallel_workers_override=parallel_workers,
-        chunks_per_commit=chunks_per_commit,
-        insert_only=insert_only,
-        bulk_write_pragmas=bulk_pragmas,
-    )
-
-    if target == "pack":
-        writer = container.world_pack_writer_for(world)
-        report = await stack.materialize_pack_light(
-            world_uid, world, locations, mat_ctx, writer,
-            max_tiles=cap,
-            nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
-            pack_orchestrator=container.pack_materialization_orchestrator(),
-        )
-        progress = container.map_cell_read_service(world_uid).pack.loading.get_loading_progress(world)
-        status_code = 200 if report.terrain.failed == 0 else 207
-        return JSONResponse(
-            status_code=status_code,
-            headers={"Deprecation": "true", "Link": '</worlds/{}/map/pack/bake>; rel="successor-version"'.format(world_uid)},
-            content={
-                **report.to_dict(),
-                "target": "pack",
-                "loading_progress": progress.to_dict(),
-                "deprecated": "Use POST /worlds/{uid}/map/pack/bake instead",
-            },
-        )
-
-    report = await stack.materialize_surface_stack(
-        world_uid, world, locations, mat_ctx,
-        surface_mode=mode,  # type: ignore[arg-type]
-        max_tiles=cap,
-        include_climate=include_climate,
-        nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
-    )
-    status_code = 200 if report.terrain.failed == 0 else 207
-    return JSONResponse(status_code=status_code, content=report.to_dict())
-
-
-@router.post("/worlds/{world_uid}/map/generate-ores")
-async def generate_ores_route(
-    world_uid: str,
-    container=Depends(get_container),
-) -> JSONResponse:
-    map_svc   = container.map_cell_service()
-    world_svc = container.world_service()
-
-    world = await world_svc.get_by_id(world_uid)
-    if world is None:
-        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
-
-    cells = await map_svc.get_all_for_read(world)
-    if not cells:
-        raise HTTPException(status_code=422, detail="No map cells — run generate-surface first")
-
-    ore_cells = generate_ores(world, cells)
-    result    = await map_svc.save_pass(ore_cells, "ore")
-
-    status_code = 200 if result.failed == 0 else 207
-    return JSONResponse(status_code=status_code, content=result.to_dict())
-
-
-@router.post("/worlds/{world_uid}/map/generate-caves")
-async def generate_caves_route(
-    world_uid: str,
-    container=Depends(get_container),
-) -> JSONResponse:
-    map_svc   = container.map_cell_service()
-    world_svc = container.world_service()
-
-    world = await world_svc.get_by_id(world_uid)
-    if world is None:
-        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
-
-    cells = await map_svc.get_all_for_read(world)
-    if not cells:
-        raise HTTPException(status_code=422, detail="No map cells — run generate-surface first")
-
-    cave_cells = generate_caves(world, cells)
-    result     = await map_svc.save_pass(cave_cells, "cave")
-
-    status_code = 200 if result.failed == 0 else 207
-    return JSONResponse(status_code=status_code, content=result.to_dict())
-
-
-@router.post("/worlds/{world_uid}/map/generate-z-slice")
-async def generate_z_slice_route(
-    world_uid: str,
-    gx: int,
-    gy: int,
-    z_lo: int,
-    z_hi: int,
-    container=Depends(get_container),
-) -> JSONResponse:
-    terrain_orch = container.terrain_batch_orchestrator()
-    world_svc    = container.world_service()
-    location_svc = container.location_service()
-
-    world     = await world_svc.get_by_id(world_uid)
-    locations = await location_svc.get_all(world_uid)
-
-    result = await terrain_orch.save_z_slice(
-        world, locations, gx, gy, z_lo, z_hi,
-    )
-
-    status_code = 200 if result.failed == 0 else 207
-    return JSONResponse(status_code=status_code, content=result.to_dict())
 
 
 @router.get("/worlds/{world_uid}/map/has-column")
@@ -754,12 +383,13 @@ async def refine_from_entry_route(
     locations = await location_svc.get_all(world_uid)
     nodes = await conn_svc.get_nodes(world_uid)
     edges = await conn_svc.get_edges(world_uid)
-    surface_ctx = prepare_surface_terrain_context(
-        world, locations, nodes=nodes, edges=edges,
-        hydrology_generator=_hydrology_generator,
-    )
-    if surface_ctx is None:
-        raise HTTPException(status_code=422, detail="surface terrain context unavailable")
+    try:
+        surface_ctx = require_surface_terrain_context(
+            world, locations, nodes=nodes, edges=edges,
+            hydrology_generator=_hydrology_generator,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     mat_ctx = resolve_materialization_context(
         world, free_cores=free_cores, parallel_workers_override=parallel_workers,
     )
@@ -769,27 +399,30 @@ async def refine_from_entry_route(
         anchor_kind = parse_anchor_kind(kind)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    with generation_world_log(world_uid, mode="entry"):
-        entry = await entry_orch.refine_from_entry(
-            world_uid, world, locations, writer, mat_ctx, surface_ctx,
-            kind=anchor_kind,
-            anchor_x=x,
-            anchor_y=y,
-            location_uid=location_uid,
-            heading_dx=heading_dx,
-            heading_dy=heading_dy,
-        )
-        scheduled = None
-        if schedule_bg:
-            scheduled = await entry_orch.schedule_chunk_refine(
+    try:
+        with generation_world_log(world_uid, mode="entry"):
+            entry = await entry_orch.refine_from_entry(
                 world_uid, world, locations, writer, mat_ctx, surface_ctx,
+                kind=anchor_kind,
                 anchor_x=x,
                 anchor_y=y,
-                tile_gx=entry.tile_gx,
-                tile_gy=entry.tile_gy,
-                heading=entry.heading,
+                location_uid=location_uid,
+                heading_dx=heading_dx,
+                heading_dy=heading_dy,
             )
-        await finalize_pack_on_world(world_svc, world, writer)
+            scheduled = None
+            if schedule_bg:
+                scheduled = await entry_orch.schedule_chunk_refine(
+                    world_uid, world, locations, writer, mat_ctx, surface_ctx,
+                    anchor_x=x,
+                    anchor_y=y,
+                    tile_gx=entry.tile_gx,
+                    tile_gy=entry.tile_gy,
+                    heading=entry.heading,
+                )
+            await finalize_pack_on_world(world_svc, world, writer)
+    except MissingParentLightError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return JSONResponse(content={
         "world_uid": world_uid,
         "kind": entry.anchor.kind,
@@ -838,27 +471,31 @@ async def schedule_chunk_refine_route(
     locations = await location_svc.get_all(world_uid)
     nodes = await conn_svc.get_nodes(world_uid)
     edges = await conn_svc.get_edges(world_uid)
-    surface_ctx = prepare_surface_terrain_context(
-        world, locations, nodes=nodes, edges=edges,
-        hydrology_generator=_hydrology_generator,
-    )
-    if surface_ctx is None:
-        raise HTTPException(status_code=422, detail="surface terrain context unavailable")
+    try:
+        surface_ctx = require_surface_terrain_context(
+            world, locations, nodes=nodes, edges=edges,
+            hydrology_generator=_hydrology_generator,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     mat_ctx = resolve_materialization_context(
         world, free_cores=free_cores, parallel_workers_override=parallel_workers,
     )
     writer = container.world_pack_writer_for(world)
     entry_orch = container.entry_refine_orchestrator()
-    scheduled = await entry_orch.schedule_chunk_refine(
-        world_uid, world, locations, writer, mat_ctx, surface_ctx,
-        anchor_x=x,
-        anchor_y=y,
-        tile_gx=tile_gx,
-        tile_gy=tile_gy,
-        heading_dx=heading_dx,
-        heading_dy=heading_dy,
-    )
-    await finalize_pack_on_world(world_svc, world, writer)
+    try:
+        scheduled = await entry_orch.schedule_chunk_refine(
+            world_uid, world, locations, writer, mat_ctx, surface_ctx,
+            anchor_x=x,
+            anchor_y=y,
+            tile_gx=tile_gx,
+            tile_gy=tile_gy,
+            heading_dx=heading_dx,
+            heading_dy=heading_dy,
+        )
+        await finalize_pack_on_world(world_svc, world, writer)
+    except MissingParentLightError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return JSONResponse(content={
         "world_uid": world_uid,
         "anchor": {"x": x, "y": y, "tile_gx": tile_gx, "tile_gy": tile_gy},

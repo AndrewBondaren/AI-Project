@@ -37,6 +37,27 @@ class SurfaceTerrainContext:
     coarse_surface_z: dict[tuple[int, int], int]
 
 
+def require_surface_terrain_context(
+    world: World,
+    locations: list[NamedLocation],
+    *,
+    nodes: list[ConnectionNode] | None = None,
+    edges: list[ConnectionEdge] | None = None,
+    hydrology_generator: HydrologyGeneratorService | None = None,
+) -> SurfaceTerrainContext:
+    """Fail-closed planning for pack bake / refine HTTP and orchestrators."""
+    ctx = prepare_surface_terrain_context(
+        world,
+        locations,
+        nodes=nodes,
+        edges=edges,
+        hydrology_generator=hydrology_generator,
+    )
+    if ctx is None:
+        raise ValueError("surface terrain context unavailable")
+    return ctx
+
+
 def prepare_surface_terrain_context(
     world: World,
     locations: list[NamedLocation],

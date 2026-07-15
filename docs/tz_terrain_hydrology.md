@@ -988,7 +988,7 @@ Climate pass (`generate-climate`) читает metadata из БД — **не** i
 
 ### Interim bug — smoke [`fixtures/world_test_all.json`](../fixtures/world_test_all.json) (2026-07)
 
-**Статус:** подтверждено прогоном `debug_surface_helpers.api_materialize_surface_stack` на `world-test-all-001`. Фикстура **корректна** — выявляет дефект генерации, не ошибку JSON мастера.
+**Статус:** подтверждено прогоном `initialize_world.py` / `api_pack_bake` на `world-test-all-001` (ранее — `api_materialize_surface_stack`). Фикстура **корректна** — выявляет дефект генерации, не ошибку JSON мастера.
 
 | Наблюдение | Ожидание (target) | Факт (interim) |
 |---|---|---|

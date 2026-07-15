@@ -1371,7 +1371,7 @@ Wilderness `system_terrain` от z — **не urban**. Urban — settlement ил
 
 ## Smoke regression — `world_test_all` (2026-07)
 
-**Fixture:** [`fixtures/world_test_all.json`](../fixtures/world_test_all.json) (`world-test-all-001`) — merge gameplay + template; `map_cells: []` at import; surface via `api_materialize_surface_stack`.
+**Fixture:** [`fixtures/world_test_all.json`](../fixtures/world_test_all.json) (`world-test-all-001`) — merge gameplay + template; `map_cells: []` at import; surface via `initialize_world.py` → `POST …/map/pack/bake`.
 
 **Прогон (2026-07):** import → `generate-surface` → `generate-hydrology` (stub) → `generate-climate`.
 

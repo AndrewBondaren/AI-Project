@@ -298,8 +298,23 @@ SurfaceTerrainContext → fine / L2 materialize, meter hydro side-products
 
 ## Связь с L2
 
-L0 compose → wire — **чертёж** для Идеи 2: `refine_chunk` обязан держаться corridor `hydrology_role` / forms `surface_z` ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2).  
+L0 compose → **wire на диске** (`world_map.zst`) — **чертёж** для Идеи 2.
+
+L2 `refine_chunk` читает parent light **только** через `load_parent_light(gx, gy)`:
+
+- SoT = baked `WorldMapCellWire` в pack blob;
+- process-local cache после write/read — latency, не второй SoT; ключ `(world_uid, gx, gy)`;
+- cold / другой process → disk.
+
+Алгоритмические контракты refine (upsample / hard hydro corridor / z-band) — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § **Parent light refine contracts** · WP-PERF-22.  
+Числовые defaults — будущий POJO `ParentLightRefinePolicy` в `dataModel/worldPack/`, не литералы в generators.
+
+Контракт согласованности: corridor `hydrology_role` / forms `surface_z`.  
 Пустая hydro-маска на L0 = сломанный контракт world map и constraints L2.
+
+**Антипаттерн:** refine из live `LightGridCompose` или из `SurfaceTerrainContext` в обход baked mask.
+
+Приёмка согласованности карты и сцены (после кода WP-PERF-22): **MLB-8** — river/ridge L2 внутри L0 corridor / z-band (не отмечать done до имплементации).
 
 ---
 
@@ -329,6 +344,7 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 | MLB-5 | `SurfaceTerrainContext` / meter hydro не являются SoT L0 mask |
 | MLB-6 | ASCII/pack render world map показывает hydro + pins при валидном fixture (не all plains+NONE при declared rivers) |
 | MLB-7 | Новые light-cell поля и hydro merge/defaults живут в `dataModel/worldPack` (+ hydrology enums); application только staging/compose |
+| MLB-8 | L2 river/ridge внутри L0 corridor / z-band — unit ✅ (`test_parent_light_refine`); HTTP fixture smoke — backlog |
 
 ---
 
@@ -352,3 +368,6 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 | 2026-07-14 | § **Связь с dataModel (SoT)** — таблица wire/POJO ↔ bake; staging ≠ SoT; MLB-7 |
 | 2026-07-14 | Каталог кода: **`pack/bake/lightGrid/`** (утверждено) |
 | 2026-07-15 | WP-10 v2: `side=32` константа; масштаб = `light_m`; grid builders — обязательный consumer |
+| 2026-07-15 | § Связь с L2: Parent light SoT = disk + process cache; MLB-8 (post-code); cross-ref storage Идея 2 |
+| 2026-07-15 | Cross-ref Parent light refine contracts (z_band, hard corridor, POJO knobs) |
+| 2026-07-15 | MLB-8 unit path ✅ via WP-PERF-22 impl |

@@ -1,6 +1,6 @@
-"""Bootstrap bulk persist port for materialize-stack — TR-PAR-6.
+"""Bootstrap bulk persist port — TR-PAR-6 (map_cells climate/tests).
 
-Scope: ``materialize-stack`` / ``save_terrain_batch`` bootstrap path only.
+Legacy materialize-stack path removed; pack surface uses ``WorldPackWriter``.
 OLTP (gameplay, lazy, debug slices) uses ``MapCellService`` on ``main_conn``.
 
 See ``docs/tz_terrain_generation.md`` § TR-PAR-6.

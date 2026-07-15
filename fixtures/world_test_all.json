@@ -1,7 +1,7 @@
 {
   "_fixture_meta": {
     "version": "2026-07",
-    "description": "Объединение fixtures/world_test.json (gameplay: Эйдора, Ironhold, races, perks) и fixtures/world_template.json (climate, hydrology.declared_*, geographic declare). map_cells пуст — после import: debug_surface_helpers.api_materialize_surface_stack. character_test.json по-прежнему привязан к world-test-001; для этого мира — свой персонаж или remap.",
+    "description": "Объединение fixtures/world_test.json (gameplay: Эйдора, Ironhold, races, perks) и fixtures/world_template.json (climate, hydrology.declared_*, geographic declare). map_cells пуст — после import: python backend/scripts/initialize_world.py (POST …/map/pack/bake). character_test.json по-прежнему привязан к world-test-001; для этого мира — свой персонаж или remap.",
     "sources": [
       "world_test.json",
       "world_template.json"
