@@ -29,6 +29,7 @@ from app.dataModel.worldPack.worldMapCellsPerTile import (
 from app.dataModel.worldPack.lightSettlementFootprint import LightSettlementFootprintPolicy
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults, resolve_light_tile_cap
 from app.dataModel.worldPack.packBakeMode import PackBakeApiMode, PackBakeMode
+from app.dataModel.worldPack.lightFineTilePolicy import LightFineTilePolicy
 from app.dataModel.worldPack.packCompleteness import (
     PackCompleteness,
     PackCompletenessSnapshot,
@@ -65,6 +66,7 @@ __all__ = [
     "LocationsIndexWire",
     "MapLayerKind",
     "MergedCellView",
+    "LightFineTilePolicy",
     "PackBakeApiMode",
     "PackBakeDefaults",
     "PackBakeMode",

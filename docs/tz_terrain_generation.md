@@ -616,7 +616,7 @@ flowchart LR
 
 ### World Pack storage (TR-PACK) — target persist
 
-> **Статус:** pack L0 + entry L2 — ✅ path; **full_bake** (все location L0) — ⬜. **Продуктовое ТЗ:** [`tz_world_pack_storage.md`](./tz_world_pack_storage.md). **TR-PERF** (ниже) — interim на `map_cells`; для wilderness skeleton **заменяется** TR-PACK.
+> **Статус:** pack L0 + entry L2 — ✅ path; **light / full / detailed** bake API — ✅; climate fine на detailed — ✅ (tile fine + L2 z). **Продуктовое ТЗ:** [`tz_world_pack_storage.md`](./tz_world_pack_storage.md). **TR-PERF** (ниже) — interim на `map_cells`; для wilderness skeleton **заменяется** TR-PACK.
 
 **Цель:** cold load ≤ 5 min; master offline bake (light / full / detailed) + lazy дозаполнение, если pack partial.
 
@@ -662,7 +662,7 @@ flowchart LR
 
 #### Detect (нужно для resume)
 
-Сейчас `tiles_pct` считает готовность **среди уже записанных** manifest tiles → после light легко 100%, хотя full ещё нет. Target:
+`tiles_pct` по-прежнему = ready/total **среди manifest.tiles** (после light часто 100%). Offline case — отдельно: `pack_completeness` в `GET …/loading-progress` (`PackCompletenessClassifier`).
 
 | Сигнал | light_complete | full_complete | full_detailed_complete |
 |---|---|---|---|
@@ -670,15 +670,15 @@ flowchart LR
 | L0 baked ⊇ expected_full (все location tiles) | — | ✅ | ✅ |
 | `location_terrain` готов для всех pins в `locations_index` | — | — | ✅ |
 
-Wire/API и классификатор состояния — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § **Bake modes** / § **Pack completeness**.
+Wire/API и классификатор — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § **Bake modes** / § **Pack completeness**. Auto-resume loop (classify → bake) — caller; incremental skip existing L0 на full — ⬜.
 
 #### Impl status (generators path)
 
 | Mode | Status |
 |---|---|
 | light_bake | ✅ `POST …/map/pack/bake?mode=light` |
-| full_bake | ⬜ тот же L0 orchestrator, scope = все location tiles |
-| detailed_bake | 🟡 partial — entry refine / scene пишет L2; явный master «вся локация» API — ⬜ |
+| full_bake | ✅ `mode=full` — тот же L0 orchestrator, все location tiles (+ hydro scope) |
+| detailed_bake | ✅ `mode=detailed&location_uid=` — L2 territory refine + climate fine (pole+local, L2 z); `l.*.climate.zst` optional v2 |
 
 ### Persist performance (TR-PERF)
 
@@ -1280,7 +1280,7 @@ world_load / first_need
   └─ (legacy interim) generate_surface → hydrology → climate
 ```
 
-**Interim (код):** `POST …/map/pack/bake?mode=light` (+ entry refine); `mode=full` / явный `detailed` — ⬜; handlers `POST …/map/generate-*` — legacy/debug.
+**Interim (код):** `POST …/map/pack/bake?mode=light|full|detailed` (+ entry refine WP-13); handlers `POST …/map/generate-*` — legacy/debug.
 
 **Pass implementation (generators + MapCellService / Pack writer):**
 
@@ -1292,7 +1292,7 @@ world_load / first_need
 
 **Сейчас (код):**
 
-- Pack: entry refine / scene + path (WP-13) — ✅ path; полный `detailed_bake(location_uid)` — 🟡
+- Pack: entry refine / scene + path (WP-13) — ✅; master `detailed_bake(location_uid)` — ✅ (+ climate fine)
 - `check_terrain` → `has_cells_for_location` (не видит wilderness skeleton)
 - `eager_terrain` → `get_by_location` (не scene volume)
 - `lazy_terrain` → `generate_minimal` (только orphan repair)
@@ -1672,6 +1672,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-16 | Bake modes / TR-PACK **impl status sync:** light/full/detailed ✅; classifier detect ✅; climate fine на detailed ⬜; incremental skip / auto-resume ⬜ |
 | 2026-07-15 | § **Bake modes (locations):** light / full / detailed; offline cases; detect+resume; TR-PACK status sync |
 | 2026-06 | § Persist cycle — **локальная** runtime modification (cataclysm, combat, excavate); bootstrap vs patch |
 | 2026-06 | § Phase 9+ **D HY** — surface hydrology H-1…H-7a в план до DAG |

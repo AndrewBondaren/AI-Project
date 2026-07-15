@@ -98,10 +98,11 @@ class FineChunkRunner:
         *,
         refine_role: ChunkRefineRole = "scene",
         phase: str | None = None,
-    ) -> tuple[PersistResult, int, int]:
+    ) -> tuple[PersistResult, int, int, dict[tuple[int, int], int]]:
+        """Returns (persist, wilderness_chunks_written, rect_count, meter_surface_z)."""
         phase_name = phase or refine_role
         if not rects:
-            return PersistResult.from_counts(0, 0), 0, 0
+            return PersistResult.from_counts(0, 0), 0, 0, {}
 
         chunk_size = terrain_chunk_columns(world)
         cell_m = cell_size_m(world)
@@ -133,11 +134,19 @@ class FineChunkRunner:
         )
 
         location_cells: dict[str, list[MapCell]] = {}
+        meter_surface_z: dict[tuple[int, int], int] = {}
         total_cells = 0
         written = 0
         world_uid = world.world_uid
         indexed_rects = list(enumerate(rects, start=1))
         write_lock = asyncio.Lock()
+
+        def _note_surface_z(cells: list[MapCell]) -> None:
+            for cell in cells:
+                key = (int(cell.x), int(cell.y))
+                prev = meter_surface_z.get(key)
+                if prev is None or cell.z > prev:
+                    meter_surface_z[key] = int(cell.z)
 
         def compute_indexed(
             pair: tuple[int, ColumnRect],
@@ -167,6 +176,7 @@ class FineChunkRunner:
             chunk_t0: float,
         ) -> None:
             nonlocal total_cells, written
+            _note_surface_z(cells)
             wilderness, loc_additions, loc_hits = partition_chunk_cells(
                 cells, location_pairs, volumes,
             )
@@ -249,4 +259,10 @@ class FineChunkRunner:
             total_cells += len(loc_cells)
         writer.recalc_manifest_counters()
         writer.save_manifest()
-        return PersistResult.from_counts(total_cells, total_cells), written, len(rects)
+        return (
+            PersistResult.from_counts(total_cells, total_cells),
+            written,
+            len(rects),
+            meter_surface_z,
+        )
+

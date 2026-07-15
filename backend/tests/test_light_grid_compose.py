@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField, GridBBox
+from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
 )
@@ -92,6 +93,7 @@ class TestLightGridCompose(unittest.TestCase):
         )
         surface = SurfaceTerrainContext(
             pole_field=pole,
+            local_field=ClimateAnchorField(()),
             coarse_hm=hm,
             coarse_hydro={
                 (0, 0): MapCellHydrology(role=HydrologyCellRole.RIVER_BED),

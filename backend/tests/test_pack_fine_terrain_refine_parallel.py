@@ -65,7 +65,7 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
             "app.application.worldData.pack.refine.fineChunkRunner.require_parent_light",
             return_value=MagicMock(gx=0, gy=0),
         ):
-            result, written, total = await runner.refine_rects(
+            result, written, total, _z = await runner.refine_rects(
                 _world(),
                 [],
                 writer,
@@ -99,7 +99,7 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
             "app.application.worldData.pack.refine.fineChunkRunner.require_parent_light",
             return_value=MagicMock(gx=0, gy=0),
         ):
-            result, written, total = await runner.refine_rects(
+            result, written, total, _z = await runner.refine_rects(
                 _world(),
                 [],
                 writer,
@@ -125,7 +125,7 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
             "app.application.worldData.pack.refine.fineChunkRunner.require_parent_light",
             return_value=MagicMock(gx=0, gy=0),
         ):
-            result, written, total = await facade._refine_rects(
+            result, written, total, _z = await facade._refine_rects(
                 _world(),
                 [],
                 writer,

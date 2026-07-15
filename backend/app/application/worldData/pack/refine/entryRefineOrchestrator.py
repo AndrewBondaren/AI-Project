@@ -189,7 +189,6 @@ class EntryRefineOrchestrator:
             surface_ctx=surface_ctx, tile_gx=tile_gx, tile_gy=tile_gy,
             xy_radius=policy.scene_xy_radius,
         )
-        self._climate_fine.enqueue(tile_gx, tile_gy)
 
         path_chunks = await self._fine_terrain.refine_path_corridor(
             world, locations, writer, anchor_x, anchor_y, mat_ctx, surface_ctx,

@@ -1134,11 +1134,13 @@ Read merge: **fine → coarse** field-wise; `climate_delta` (patch) выше о�
 
 Кросс-срез: [`tz_terrain_generation.md`](./tz_terrain_generation.md) § **Bake modes (locations)**; wire — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md).
 
-| Mode | Climate |
-|---|---|
-| **light_bake** | Пишет **coarse** (`climate_coarse.zst`); optional fine enqueue на spawn / P0 tiles |
-| **full_bake** | Тот же coarse pipeline на **все** location L0 tiles (без location cap) |
-| **detailed_bake** | Fine climate по territory одной локации (tier B denser), после/вместе с L2 terrain refine |
+| Mode | Climate | Impl |
+|---|---|---|
+| **light_bake** | Пишет **coarse** (`climate_coarse.zst`); optional fine enqueue на spawn / P0 tiles | ✅ |
+| **full_bake** | Тот же coarse pipeline на **все** location L0 tiles (без location cap) | ✅ |
+| **detailed_bake** | Fine climate по territory одной локации (tier B denser), после/вместе с L2 terrain refine | ✅ tile fine + L2 z; unit=`r.{gx}.{gy}.climate.zst` (`l.{uid}.climate.zst` — optional v2) |
+
+**Sample contract:** pole + local → zone/base; `weather_at_elevation(zone, z)` с best-available z (L2 → parent light → coarse). Elevation не выбирает zone.
 
 **Offline cases:** light complete ⇒ coarse готов на P0; full complete ⇒ coarse покрывает все location tiles; full+all detailed ⇒ coarse + fine/`location_terrain` climate для каждой pin-локации. Partial → resume bake, не `generate-climate`.
 
@@ -1190,6 +1192,8 @@ python scripts/initialize_world.py --fixture ../fixtures/world_terrain_test.json
 
 | Дата | Версия | Изменение |
 |---|---|---|
+| 2026-07-16 | Pack climate correct resolve: pole+local + z ladder; light `spawn_player` / full `none` / detailed fine+L2 z |
+| 2026-07-16 | Pack bake modes climate: light/full coarse ✅; detailed climate fine territory ⬜ |
 | 2026-07-15 | § World Pack climate | **Bake modes:** light / full / detailed; offline cases + resume |
 | 2026-07-12 | § World Pack climate | CL-PACK-1…11 fix; CL-PACK-4 accepted as L0 tint; denser fine + ClimatePackBakeOrchestrator |
 | 2026-07-12 | § World Pack climate | cutover status; `climate_status` coarse/fine; debt CL-PACK-1…11 (ревью до smoke) |

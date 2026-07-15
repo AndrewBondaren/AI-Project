@@ -128,7 +128,7 @@ class FineTerrainRefineOrchestrator:
         loc_volumes = location_volumes or [
             vol for _, vol in territory_volumes_by_location(world, locations)
         ]
-        result, _, _ = await self._runner.refine_rects(
+        result, _, _, _ = await self._runner.refine_rects(
             world, locations, writer, mat_ctx, surface_ctx,
             tile_gx, tile_gy, [rect], loc_volumes,
             refine_role=refine_role,
@@ -257,7 +257,7 @@ class FineTerrainRefineOrchestrator:
             rects=len(corridor),
             heading=f"dx={heading.dx} dy={heading.dy}",
         )
-        result, written, _ = await self._runner.refine_rects(
+        result, written, _, _ = await self._runner.refine_rects(
             world, locations, writer, mat_ctx, surface_ctx,
             tile_gx, tile_gy, corridor, loc_volumes,
             refine_role="path",

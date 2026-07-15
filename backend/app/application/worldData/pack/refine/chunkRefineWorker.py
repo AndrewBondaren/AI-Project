@@ -73,7 +73,22 @@ class ChunkRefineWorker:
             if nxt is None:
                 break
             gx, gy = nxt
-            self._climate.bake_fine_tile(world, surface_ctx, writer, gx, gy)
+            parent = None
+            from app.application.worldData.generators.coordinates import cell_size_m
+            from app.application.worldData.pack.io.worldPackReader import WorldPackReader
+            from app.application.worldData.pack.read.parentLightLoad import load_parent_light
+
+            parent = load_parent_light(
+                world.world_uid,
+                gx,
+                gy,
+                reader=WorldPackReader(writer.paths),
+                cache=writer.parent_light_cache,
+                tile_m=cell_size_m(world),
+            )
+            self._climate.bake_fine_tile(
+                world, surface_ctx, writer, gx, gy, parent_light=parent,
+            )
             baked += 1
         return baked
 

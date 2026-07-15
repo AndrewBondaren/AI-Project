@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 
 from app.application.worldData.generators.coordinates import cell_size_m
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
@@ -19,6 +20,7 @@ from app.application.worldData.pack.bake.packBakeLog import (
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.persistResult import PersistResult
+from app.dataModel.worldPack.parentLightTile import ParentLightTile
 from app.dataModel.worldPack.worldMapCellsPerTile import resolve_world_map_cells_per_tile
 from app.db.models.world import World
 
@@ -39,6 +41,7 @@ class ClimatePackBakeOrchestrator:
             world,
             surface_ctx.pole_field,
             surface_ctx.coarse_hm.bbox,
+            local_field=surface_ctx.local_field,
             coarse_surface_z=surface_ctx.coarse_surface_z,
         )
         climate_hash = writer.write_climate_coarse(coarse)
@@ -59,6 +62,9 @@ class ClimatePackBakeOrchestrator:
         writer: WorldPackWriter,
         tile_gx: int,
         tile_gy: int,
+        *,
+        parent_light: ParentLightTile | None = None,
+        l2_surface_z: Mapping[tuple[int, int], int] | None = None,
     ) -> tuple[PersistResult, int]:
         """Write denser per-tile climate. Returns (blob PersistResult, sample count)."""
         side = resolve_world_map_cells_per_tile(
@@ -70,8 +76,12 @@ class ClimatePackBakeOrchestrator:
             surface_ctx.pole_field,
             tile_gx,
             tile_gy,
+            local_field=surface_ctx.local_field,
             cells_per_side=side,
             coarse_surface_z=surface_ctx.coarse_surface_z,
+            meter_z_overrides=surface_ctx.meter_z_overrides,
+            parent_light=parent_light,
+            l2_surface_z=l2_surface_z,
         )
         writer.write_climate_tile(tile_gx, tile_gy, tile_field)
         log_pack_climate_tile_done(

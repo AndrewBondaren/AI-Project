@@ -15,6 +15,7 @@ from app.application.worldData.generators.hydrology.shore.parentLightHydroCorrid
 from app.application.worldData.generators.terrain.passes.parentLightUpsample import (
     upsample_from_parent_light,
 )
+from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
 )
@@ -145,6 +146,7 @@ class TestUpsampleAndCorridor(unittest.TestCase):
         w.z_max = 8
         ctx = SurfaceTerrainContext(
             pole_field=MagicMock(),
+            local_field=ClimateAnchorField(()),
             coarse_hm=MagicMock(),
             coarse_hydro={},
             sparse_meter_hydro={},

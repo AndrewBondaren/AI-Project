@@ -275,8 +275,8 @@ flowchart TB
 | **WP-24** | **Уровни импорта** — registry → skeleton → light pack → pack; patches только local session |
 | **WP-25** | **Сессия** = world + character; персонаж — **`POST /characters/import` (✅)**; `starter_characters[]` / `npcs[]` — **backlog spec**, не impl в Pack migration |
 | **WP-26** | **Legacy freeze:** `map_cells` / `materialize-stack` / TR-PERF — **вне scope** Pack migration; только bugfix; новые фичи — L1…L7 |
-| **WP-27** | **Bake modes:** `light` \| `full` \| `detailed` — см. § **Bake modes**; старый смысл `tile`/`full`=wilderness-complete **не** путать с `full_bake`=все location L0 |
-| **WP-28** | **Pack completeness:** уметь classify offline cases + resume missing L0 / missing `location_terrain` |
+| **WP-27** | ✅ **Bake modes:** `light` \| `full` \| `detailed` — см. § **Bake modes**; старый смысл `tile`/`full`=wilderness-complete **не** путать с `full_bake`=все location L0 |
+| **WP-28** | ✅ detect (`pack_completeness`); resume — caller `POST pack/bake` (incremental skip / auto-loop — ⬜) |
 
 ### Bake modes (утверждено 2026-07-15)
 
@@ -319,26 +319,26 @@ flowchart LR
 
 **Инвариант:** все три — валидные master packages. Partial → **определять и дозаполнять** (WP-28), не требовать case 3.
 
-#### Pack completeness (detect + resume) — target
+#### Pack completeness (detect + resume)
 
-`GET …/map/loading-progress` сегодня: `tiles_pct` = ready/total **среди manifest.tiles** → после light часто 100%, хотя full ещё нет.
+`GET …/map/loading-progress`: `tiles_pct` = ready/total **среди manifest.tiles** (после light часто 100%). Offline case — поле `pack_completeness` (+ counts / `light_cap`).
 
-| Поле / сигнал (target) | Смысл |
-|---|---|
-| `expected_l0_light` | bootstrap priority set (с cap) |
-| `expected_l0_full` | все macro-tiles покрывающие `named_locations` (+ hydro scope) |
-| `l0_baked` | tiles с `world_map_path` |
-| `locations_expected` | pins в `locations_index` |
-| `locations_detailed` | `location_terrain_entries` с `terrain_path` |
-| `pack_completeness` | `light_complete` \| `full_complete` \| `full_detailed_complete` \| `partial` |
+| Поле / сигнал | Смысл | Статус |
+|---|---|---|
+| `expected_l0_light` | bootstrap priority set (с cap) | ✅ |
+| `expected_l0_full` | все macro-tiles покрывающие `named_locations` (+ hydro scope) | ✅ |
+| `l0_baked` | tiles с `world_map_path` | ✅ |
+| `locations_expected` | pins в `locations_index` | ✅ |
+| `locations_detailed` | `location_terrain_entries` с `terrain_path` | ✅ |
+| `pack_completeness` | `light_complete` \| `full_complete` \| `full_detailed_complete` \| `partial` | ✅ |
 
-| Нехватка | Resume |
-|---|---|
-| `l0_baked` ⊊ `expected_l0_full` | `POST pack/bake?mode=full` (incremental skip existing) |
-| `locations_detailed` ⊊ `locations_expected` | `POST pack/bake?mode=detailed&location_uid=` (или batch) / runtime entry |
-| wilderness chunks absent | runtime queue / optional offline wilderness bake — **не** блокирует case 2→3 |
+| Нехватка | Resume | Статус |
+|---|---|---|
+| `l0_baked` ⊊ `expected_l0_full` | `POST pack/bake?mode=full` | ✅ API; incremental skip existing — ⬜ |
+| `locations_detailed` ⊊ `locations_expected` | `POST pack/bake?mode=detailed&location_uid=` / runtime entry | ✅ single uid; batch — ⬜ |
+| wilderness chunks absent | runtime queue / optional offline wilderness bake — **не** блокирует case 2→3 | ✅ rings path |
 
-**Impl:** light ✅; detailed 🟡 (entry refine); full ⬜; classifier WP-28 ⬜.
+**Impl:** light ✅; full ✅; detailed ✅ (climate fine tile + L2 z); WP-28 classifier ✅; auto-resume orchestration — caller.
 
 ### L0 — WorldMapTile (Идея 1)
 
@@ -1554,9 +1554,9 @@ flowchart TB
 | `POST /characters/import` | персонаж отдельно | ✅ **есть** |
 | `POST /worlds/{uid}/pack/import` | zip → `pack/` | L6 |
 | `POST /worlds/{uid}/map/pack/bake?mode=light` | **light_bake** | ✅ |
-| `POST …/pack/bake?mode=full` | **full_bake** — все location L0 | ⬜ |
-| `POST …/pack/bake?mode=detailed&location_uid=` | **detailed_bake** одной локации | ⬜ (entry refine 🟡) |
-| `GET /worlds/{uid}/map/loading-progress` | progress + (target) `pack_completeness` | ✅ pct; classifier ⬜ |
+| `POST …/pack/bake?mode=full` | **full_bake** — все location L0 | ✅ |
+| `POST …/pack/bake?mode=detailed&location_uid=` | **detailed_bake** одной локации | ✅ (+ climate fine) |
+| `GET /worlds/{uid}/map/loading-progress` | progress + `pack_completeness` | ✅ pct + classifier |
 | `GET /worlds/{uid}/export?level=skeleton` | без map_cells / pack blobs | L6 |
 
 ### Связь с загрузкой игрока
@@ -1811,5 +1811,6 @@ flowchart LR
 | 2026-07-14 | L0 compose архитектура вынесена в [`tz_map_light_bake.md`](./tz_map_light_bake.md); cross-ref из § L0 |
 | 2026-07-15 | **Parent light SoT:** disk `world_map.zst` + process-local cache после write/read; live compose не SoT; WP-PERF-22 target уточнён |
 | 2026-07-15 | **Parent light refine contracts:** upsample z_band=±1, hard hydro corridor, cache key `(world_uid,gx,gy)`; SoT knobs → future `ParentLightRefinePolicy` |
+| 2026-07-16 | WP-27/28 **impl status sync:** bake `light\|full\|detailed` ✅; `pack_completeness` ✅; climate fine на detailed / incremental skip / auto-resume ⬜ |
 | 2026-07-15 | **Bake modes WP-27/28:** `light_bake` / `full_bake` (=все location L0) / `detailed_bake`; offline cases 1–3; detect+resume; API `mode=light\|full\|detailed`; старый tile/full wilderness ≠ full_bake |
 | 2026-07-15 | **WP-PERF-22 ✅:** `ParentLightTile` / cache / upsample / hard corridor wired in pack refine |

@@ -6,6 +6,8 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.dataModel.worldPack.lightFineTilePolicy import LightFineTilePolicy
+
 
 class PackBakeDefaults(BaseModel):
     SCHEMA_ID: ClassVar[str] = "SCH-PACK-BAKE-DEFAULTS"
@@ -26,6 +28,10 @@ class PackBakeDefaults(BaseModel):
     refine_scene_on_light: bool = True
     refine_scene_on_full: bool = False
     detailed_include_climate_fine: bool = True
+    # When to write r.{gx}.{gy}.climate.zst on light/full L0 bake.
+    light_fine_tile_policy: LightFineTilePolicy = "spawn_player"
+    # full_bake default: defer denser climate to detailed / runtime.
+    full_fine_tile_policy: LightFineTilePolicy = "none"
 
     @classmethod
     def canonical_defaults(cls) -> PackBakeDefaults:

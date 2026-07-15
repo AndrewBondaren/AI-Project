@@ -2,39 +2,25 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
+from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.climate.climateGeneratorService import ClimateGeneratorService
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField, GridBBox
 from app.application.worldData.generators.coordinates import (
     cell_size_m,
     grid_tile_origin_x,
     grid_tile_origin_y,
-    meters_to_grid_x,
-    meters_to_grid_y,
+)
+from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
+from app.application.worldData.pack.climate.climatePackSample import (
+    sample_pack_climate_at,
+    sample_pack_climate_at_macro,
 )
 from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire, ClimateSampleWire
+from app.dataModel.worldPack.parentLightTile import ParentLightTile
 from app.dataModel.worldPack.worldMapCellsPerTile import resolve_world_map_cells_per_tile
-from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.db.models.world import World
-
-
-def _sample_wire(
-    world: World,
-    pole_field: ClimatePoleField,
-    climate: ClimateGeneratorService,
-    gx: int,
-    gy: int,
-    *,
-    surface_z: int | None = None,
-) -> ClimateSampleWire:
-    pole = pole_field.sample(world, gx, gy)
-    z = surface_z if surface_z is not None else pole.typical_elevation_z
-    temp, rain = climate.weather_at_elevation(
-        world,
-        pole.system_climate_zone,
-        z,
-        base_temperature_override=pole.base_temperature_override,
-    )
-    return ClimateSampleWire(temperature_base=temp, rainfall=rain)
 
 
 def build_climate_coarse_wire(
@@ -42,11 +28,14 @@ def build_climate_coarse_wire(
     pole_field: ClimatePoleField,
     bbox: GridBBox,
     *,
+    local_field: ClimateAnchorField | None = None,
     coarse_surface_z: dict[tuple[int, int], int] | None = None,
     climate: ClimateGeneratorService | None = None,
 ) -> ClimateFieldWire:
-    """Coarse: one sample per macro-grid cell over *bbox*."""
+    """Coarse: one sample per macro-grid cell over *bbox* (pole+local + coarse z)."""
     svc = climate or ClimateGeneratorService()
+    anchors = local_field if local_field is not None else ClimateAnchorField(())
+    tile_m = cell_size_m(world)
     z_map = coarse_surface_z or {}
     width = bbox.x_max - bbox.x_min + 1
     height = bbox.y_max - bbox.y_min + 1
@@ -54,13 +43,15 @@ def build_climate_coarse_wire(
     for gy in range(bbox.y_min, bbox.y_max + 1):
         for gx in range(bbox.x_min, bbox.x_max + 1):
             samples.append(
-                _sample_wire(
+                sample_pack_climate_at_macro(
                     world,
                     pole_field,
-                    svc,
+                    anchors,
                     gx,
                     gy,
-                    surface_z=z_map.get((gx, gy)),
+                    tile_m=tile_m,
+                    coarse_surface_z=z_map,
+                    climate=svc,
                 ),
             )
     return ClimateFieldWire(
@@ -80,12 +71,17 @@ def build_climate_tile_wire(
     tile_gx: int,
     tile_gy: int,
     *,
+    local_field: ClimateAnchorField | None = None,
     cells_per_side: int | None = None,
     coarse_surface_z: dict[tuple[int, int], int] | None = None,
+    meter_z_overrides: Mapping[tuple[int, int], int] | None = None,
+    parent_light: ParentLightTile | None = None,
+    l2_surface_z: Mapping[tuple[int, int], int] | None = None,
     climate: ClimateGeneratorService | None = None,
 ) -> ClimateFieldWire:
     """Fine: denser light-grid samples over one macro-tile (origin in meters)."""
     svc = climate or ClimateGeneratorService()
+    anchors = local_field if local_field is not None else ClimateAnchorField(())
     tile_m = cell_size_m(world)
     side = cells_per_side or resolve_world_map_cells_per_tile(
         tile_m,
@@ -95,22 +91,24 @@ def build_climate_tile_wire(
     step = scale.light_m
     origin_x = int(grid_tile_origin_x(tile_gx, tile_m))
     origin_y = int(grid_tile_origin_y(tile_gy, tile_m))
-    z_map = coarse_surface_z or {}
     samples: list[ClimateSampleWire] = []
     for ty in range(side):
         for tx in range(side):
             xm = origin_x + tx * step
             ym = origin_y + ty * step
-            mgx = int(meters_to_grid_x(xm, tile_m))
-            mgy = int(meters_to_grid_y(ym, tile_m))
             samples.append(
-                _sample_wire(
+                sample_pack_climate_at(
                     world,
                     pole_field,
-                    svc,
-                    mgx,
-                    mgy,
-                    surface_z=z_map.get((mgx, mgy)),
+                    anchors,
+                    xm=xm,
+                    ym=ym,
+                    tile_m=tile_m,
+                    coarse_surface_z=coarse_surface_z,
+                    meter_z_overrides=meter_z_overrides,
+                    parent_light=parent_light,
+                    l2_surface_z=l2_surface_z,
+                    climate=svc,
                 ),
             )
     return ClimateFieldWire(

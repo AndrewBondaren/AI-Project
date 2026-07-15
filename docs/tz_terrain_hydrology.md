@@ -1186,11 +1186,11 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 
 Кросс-срез с [`tz_terrain_generation.md`](./tz_terrain_generation.md) § **Bake modes (locations)** и [`tz_world_pack_storage.md`](./tz_world_pack_storage.md).
 
-| Mode | Hydrology role |
-|---|---|
-| **light_bake** | Rasterize declared / resolved hydro на L0 light canvas **priority tiles** (cap). Пустая L0 hydro при declared rivers — broken contract (Идея 1). |
-| **full_bake** | Тот же L0 hydro pipeline на **все** location tiles (+ hydro tiles в bootstrap scope без location cap). |
-| **detailed_bake** | L2 refine **не invents** world-map rivers/coast; читает parent light `hydrology_role` / width. Cave hydrology (U12) — отдельно, не surface L0. |
+| Mode | Hydrology role | Impl |
+|---|---|---|
+| **light_bake** | Rasterize declared / resolved hydro на L0 light canvas **priority tiles** (cap). Пустая L0 hydro при declared rivers — broken contract (Идея 1). | ✅ |
+| **full_bake** | Тот же L0 hydro pipeline на **все** location tiles (+ hydro tiles в bootstrap scope без location cap). | ✅ |
+| **detailed_bake** | L2 refine **не invents** world-map rivers/coast; читает parent light `hydrology_role` / width. Cave hydrology (U12) — отдельно, не surface L0. | ✅ parent-light refine |
 
 **Resume:** missing L0 hydro mask на location tile → full_bake (или light tile bake того tile); missing fine carve в territory → detailed_bake / entry refine.
 
@@ -1294,6 +1294,7 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-16 | Pack bake modes hydro: light/full/detailed parent-light refine — impl status ✅ |
 | 2026-07-15 | § **Pack bake modes — hydrology:** light / full / detailed; L2 не invents L0 rivers |
 | 2026-07-12 | **Layout:** `generators/hydrology/{load,basins,rivers,shore,geom,autoresolve}` — peer climate; убран flat `terrain/hydrology/` |
 | 2026-07 | **U27 topology:** `river_system_topology` on `system_role=system` (basin); default confluence без system nodes; `RiverSystemIndex` в loader |

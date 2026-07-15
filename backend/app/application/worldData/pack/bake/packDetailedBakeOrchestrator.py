@@ -19,15 +19,22 @@ from app.application.worldData.generators.terrain.worldMapSettings import (
     terrain_chunk_columns,
 )
 from app.application.worldData.materializationContext import MaterializationContext
+from app.application.worldData.pack.climate.climatePackBakeOrchestrator import (
+    ClimatePackBakeOrchestrator,
+)
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volume_for_location,
 )
-from app.application.worldData.pack.read.parentLightLoad import require_parent_light
+from app.application.worldData.pack.read.parentLightLoad import (
+    load_parent_light,
+    require_parent_light,
+)
 from app.application.worldData.pack.refine.fineChunkRunner import FineChunkRunner
 from app.application.worldData.persistResult import PersistResult
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
 from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
 from app.db.models.namedLocation import NamedLocation
@@ -87,8 +94,12 @@ class PackDetailedBakeOrchestrator:
         terrain: TerrainBatchOrchestrator,
         *,
         runner: FineChunkRunner | None = None,
+        climate_bake: ClimatePackBakeOrchestrator | None = None,
+        bake_defaults: PackBakeDefaults | None = None,
     ) -> None:
         self._runner = runner or FineChunkRunner(terrain)
+        self._climate = climate_bake or ClimatePackBakeOrchestrator()
+        self._defaults = bake_defaults or PackBakeDefaults.canonical_defaults()
 
     async def bake_location(
         self,
@@ -122,21 +133,46 @@ class PackDetailedBakeOrchestrator:
             )
 
         aggregate = PersistResult.from_counts(0, 0)
+        l2_surface_z: dict[tuple[int, int], int] = {}
         for gx, gy in tiles:
             rects = rects_for_volume_on_tile(world, volume, gx, gy)
             if not rects:
                 continue
-            result, _written, _n = await self._runner.refine_rects(
+            result, _written, _n, meter_z = await self._runner.refine_rects(
                 world, locations, writer, mat_ctx, surface_ctx,
                 gx, gy, rects, [volume],
                 refine_role=DETAILED_REFINE_ROLE,
                 phase="detailed",
             )
+            for key, z in meter_z.items():
+                prev = l2_surface_z.get(key)
+                if prev is None or z > prev:
+                    l2_surface_z[key] = z
             aggregate = PersistResult.from_counts(
                 aggregate.total + result.total,
                 aggregate.succeeded + result.succeeded,
                 failed=aggregate.failed + result.failed,
             )
+
+        if self._defaults.detailed_include_climate_fine:
+            climate_tiles = 0
+            for gx, gy in tiles:
+                parent = load_parent_light(
+                    world.world_uid, gx, gy,
+                    reader=reader, cache=cache, tile_m=tile_m,
+                )
+                self._climate.bake_fine_tile(
+                    world, surface_ctx, writer, gx, gy,
+                    parent_light=parent,
+                    l2_surface_z=l2_surface_z or None,
+                )
+                climate_tiles += 1
+            if climate_tiles:
+                aggregate = PersistResult.from_counts(
+                    aggregate.total + climate_tiles,
+                    aggregate.succeeded + climate_tiles,
+                    failed=aggregate.failed,
+                )
 
         writer.recalc_manifest_counters()
         writer.save_manifest()

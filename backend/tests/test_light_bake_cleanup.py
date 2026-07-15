@@ -34,11 +34,12 @@ from app.dataModel.worldPack.worldMapCellsPerTile import (
     resolve_world_map_cells_per_tile,
     resolve_world_map_side,
 )
+from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
+from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField, GridBBox
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
 )
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
-from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField, GridBBox
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
 
@@ -94,6 +95,7 @@ class TestLightBakeCleanup(unittest.TestCase):
         )
         surface = SurfaceTerrainContext(
             pole_field=pole,
+            local_field=ClimateAnchorField(()),
             coarse_hm=hm,
             coarse_hydro={
                 (0, 0): MapCellHydrology(role=HydrologyCellRole.COASTAL_SEA),
