@@ -1182,6 +1182,20 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 
 ---
 
+## Pack bake modes — hydrology (утверждено 2026-07-15)
+
+Кросс-срез с [`tz_terrain_generation.md`](./tz_terrain_generation.md) § **Bake modes (locations)** и [`tz_world_pack_storage.md`](./tz_world_pack_storage.md).
+
+| Mode | Hydrology role |
+|---|---|
+| **light_bake** | Rasterize declared / resolved hydro на L0 light canvas **priority tiles** (cap). Пустая L0 hydro при declared rivers — broken contract (Идея 1). |
+| **full_bake** | Тот же L0 hydro pipeline на **все** location tiles (+ hydro tiles в bootstrap scope без location cap). |
+| **detailed_bake** | L2 refine **не invents** world-map rivers/coast; читает parent light `hydrology_role` / width. Cave hydrology (U12) — отдельно, не surface L0. |
+
+**Resume:** missing L0 hydro mask на location tile → full_bake (или light tile bake того tile); missing fine carve в territory → detailed_bake / entry refine.
+
+---
+
 ## Фазы реализации
 
 > **План до DAG:** Phase **D HY** (D HY-1…D HY-7a) — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Phase 9+ «D HY»; агент — [`.cursor/plans/hydrology-pre-dag.md`](../.cursor/plans/hydrology-pre-dag.md).  
@@ -1280,6 +1294,7 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-15 | § **Pack bake modes — hydrology:** light / full / detailed; L2 не invents L0 rivers |
 | 2026-07-12 | **Layout:** `generators/hydrology/{load,basins,rivers,shore,geom,autoresolve}` — peer climate; убран flat `terrain/hydrology/` |
 | 2026-07 | **U27 topology:** `river_system_topology` on `system_role=system` (basin); default confluence без system nodes; `RiverSystemIndex` в loader |
 | 2026-07 | **U23 TZ sync:** declare geometry — канон `world.hydrology.declared_*`; connection-edge declare deprecated; loader/code hard cut |
@@ -1310,8 +1325,9 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 
 | Документ | Роль |
 |---|---|
-| [`tz_terrain_generation.md`](./tz_terrain_generation.md) | Multi-pass skeleton, gap analysis, layers |
+| [`tz_terrain_generation.md`](./tz_terrain_generation.md) | Multi-pass skeleton, gap analysis, layers; **Bake modes (locations)** |
 | [`tz_climate.md`](./tz_climate.md) | Liquid overlay, temperature phase, **Climate LOD**, partial recalc |
+| [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | Pack L0/L2; light / full / detailed bake |
 | [`tz_structure_connections.md`](./tz_structure_connections.md) | `sea_route`, world routes |
 | [`tz_city_generation.md`](./tz_city_generation.md) | Port, `river_linear`, `adjacent_terrain` |
 | [`tz_locations.md`](./tz_locations.md) | `z=0` sea level, coordinates |

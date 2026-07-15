@@ -10,10 +10,11 @@ from app.dataModel.worldPack.climateFieldWire import (
     ClimateBakeStatus,
     normalize_climate_bake_status,
 )
+from app.dataModel.worldPack.packBakeMode import PackBakeMode
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
 
 PACK_WIRE_VERSION = "1.0.0"
-BakeMode = Literal["light", "full"]
+BakeMode = PackBakeMode  # manifest last L0 mode — not "detailed"
 WildernessRefineStatus = Literal["absent", "partial", "complete"]
 ChunkRefineRole = Literal["scene", "background", "path"]
 

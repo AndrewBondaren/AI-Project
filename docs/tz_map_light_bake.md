@@ -12,11 +12,13 @@ metadata:
 
 Зафиксировать **целевую архитектуру и контракты** materialize **light world map** (LOD L0): единый light-grid canvas, contributors по доменам, persist только через `WorldMapCellWire` → `world_map.zst`.
 
-**Продуктовый контекст:** Идея 1 (light bake для корректной world map) и pipeline L0 — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § LOD bake / § Идея 1.
+**Продуктовый контекст:** Идея 1 (light bake для корректной world map) и pipeline L0 — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § LOD bake / § **Bake modes**.  
+**Compose один:** `light_bake` и `full_bake` используют **тот же** L0 canvas pipeline; отличается только **набор macro-tiles** (cap vs все location tiles). `detailed_bake` — вне этого ТЗ (L2).
 
 **Не в scope этого ТЗ:**
 
 - L2 refine / wilderness chunks / location terrain blobs ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2, WP-13; **module layout** — § «L2 refine module layout»);
+- Pack completeness classifier / resume (WP-28) — pack TZ;
 - Patch Store / merge priority WP-20;
 - DAG wiring;
 - план имплементации агента (`.cursor/plans/`).

@@ -22,7 +22,33 @@ class PackBakeDefaults(BaseModel):
     smoke_max_refine_queue_depth: int = Field(default=200, ge=0)
     # Pack ASCII: mosaic only when tile count ≤ this (else macro aggregate).
     light_mosaic_max_tiles: int = Field(default=16, ge=1)
+    # Entry refine after L0 bake (light default on; full offline usually off).
+    refine_scene_on_light: bool = True
+    refine_scene_on_full: bool = False
+    detailed_include_climate_fine: bool = True
 
     @classmethod
     def canonical_defaults(cls) -> PackBakeDefaults:
         return cls()
+
+
+def resolve_light_tile_cap(
+    max_tiles: int | None,
+    *,
+    defaults: PackBakeDefaults | None = None,
+) -> int | None:
+    """Normalize light-bake tile cap.
+
+    ``None`` → ``defaults.max_tiles_light``;
+    ``<= 0`` → ``None`` (no cap);
+    ``> 0`` → that cap.
+
+    HTTP must pass query ``0`` through as ``0``, not convert to ``None`` first
+    (that incorrectly re-applies the default 16).
+    """
+    defs = defaults or PackBakeDefaults.canonical_defaults()
+    if max_tiles is None:
+        return int(defs.max_tiles_light)
+    if int(max_tiles) <= 0:
+        return None
+    return int(max_tiles)

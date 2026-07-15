@@ -26,7 +26,6 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
 from app.application.worldData.generators.terrain.terrainGeneratorService import TerrainGeneratorService
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.mapCellService import MapCellService
-from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.dataModel.worldPack.parentLightRefinePolicy import ParentLightRefinePolicy
 from app.dataModel.worldPack.parentLightTile import ParentLightTile
 from app.db.models.connectionEdge import ConnectionEdge
@@ -66,9 +65,7 @@ class TerrainBatchOrchestrator:
         hydrology_generator: HydrologyGeneratorService | None = None,
         max_tiles: int | None = None,
     ) -> list[tuple[int, int]]:
-        from app.application.worldData.generators.terrain.passes.bootstrapMacroTiles import (
-            bootstrap_macro_tiles,
-        )
+        from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
 
         ctx = prepare_surface_terrain_context(
             world,
@@ -79,18 +76,10 @@ class TerrainBatchOrchestrator:
         )
         if ctx is None:
             return []
-        cap = (
-            max_tiles
-            if max_tiles is not None
-            else PackBakeDefaults.canonical_defaults().max_tiles_light
+        plan = PackTilePlanner().plan(
+            world, locations, ctx, scope="light", max_tiles=max_tiles,
         )
-        return bootstrap_macro_tiles(
-            world,
-            locations,
-            ctx.coarse_hydro,
-            ctx.sparse_meter_hydro,
-            max_tiles=cap,
-        )
+        return plan.tile_tuples()
 
     async def save_z_slice(
         self,

@@ -11,7 +11,7 @@ from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology i
 from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
     is_hydrology_enabled,
 )
-from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
+from app.dataModel.worldPack.packBakeDefaults import resolve_light_tile_cap
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -29,7 +29,8 @@ def bootstrap_macro_tiles(
     """
     Priority macro tiles for init testing: anchors → declared hydro → meter rivers → coarse flood.
 
-    ``max_tiles``: ``None`` → ``PackBakeDefaults.max_tiles_light``; ``<= 0`` → no cap.
+    ``max_tiles``: ``None`` → ``PackBakeDefaults.max_tiles_light``; ``<= 0`` → no cap
+    (via ``resolve_light_tile_cap``).
     """
     cell_m = cell_size_m(world)
     priority: dict[Tile, int] = {}
@@ -62,11 +63,7 @@ def bootstrap_macro_tiles(
         add((gx, gy), 3)
 
     ordered = sorted(priority.keys(), key=lambda t: (priority[t], t[1], t[0]))
-    cap = (
-        PackBakeDefaults.canonical_defaults().max_tiles_light
-        if max_tiles is None
-        else max_tiles
-    )
-    if cap > 0:
+    cap = resolve_light_tile_cap(max_tiles)
+    if cap is not None:
         ordered = ordered[:cap]
     return ordered

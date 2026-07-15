@@ -1,4 +1,4 @@
-"""Pack-backed materialization facade — world map light bake (+ entry refine via session)."""
+"""Pack L0 materialization — light_bake / full_bake share one body (WP-27)."""
 
 from __future__ import annotations
 
@@ -21,11 +21,14 @@ from app.application.worldData.pack.refine.entryRefineOrchestrator import EntryR
 from app.application.worldData.pack.refine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
 from app.application.worldData.pack.bake.locationsIndexBake import build_locations_index
 from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_on_world
+from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.parallelPolicy import resolve_terrain_workers
 from app.core.generationLogging import generation_world_log
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
+from app.dataModel.worldPack.packBakeMode import PackBakeMode
+from app.dataModel.worldPack.packTilePlan import PackTilePlanScope
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.application.worldData.worldService import WorldService
 from app.db.models.connectionEdge import ConnectionEdge
@@ -40,7 +43,7 @@ from app.application.worldData.pack.bake.packBakeLog import (
 
 
 class PackMaterializationOrchestrator:
-    """L0 world_map / climate coarse bake. Entry refine lives on ``EntryRefineOrchestrator``."""
+    """L0 world_map / climate coarse bake. Entry refine on ``EntryRefineOrchestrator``."""
 
     def __init__(
         self,
@@ -54,10 +57,12 @@ class PackMaterializationOrchestrator:
         bake_defaults: PackBakeDefaults | None = None,
         read_context: PackReadContext | None = None,
         climate_bake: ClimatePackBakeOrchestrator | None = None,
+        tile_planner: PackTilePlanner | None = None,
     ) -> None:
         self._terrain = terrain
         self._world_map = world_map or WorldMapBakeOrchestrator()
         self._defaults = bake_defaults or PackBakeDefaults.canonical_defaults()
+        self._planner = tile_planner or PackTilePlanner(bake_defaults=self._defaults)
         self._world_service = world_service
         if entry is not None:
             self._entry = entry
@@ -74,8 +79,16 @@ class PackMaterializationOrchestrator:
             )
 
     @property
+    def terrain(self) -> TerrainBatchOrchestrator:
+        return self._terrain
+
+    @property
     def entry(self) -> EntryRefineOrchestrator:
         return self._entry
+
+    @property
+    def tile_planner(self) -> PackTilePlanner:
+        return self._planner
 
     async def materialize_light_pack(
         self,
@@ -93,15 +106,16 @@ class PackMaterializationOrchestrator:
         anchor_y: int | None = None,
         heading_dx: int | None = None,
         heading_dy: int | None = None,
-        refine_scene: bool = True,
+        refine_scene: bool | None = None,
     ) -> MaterializationJobReport:
         with generation_world_log(world_uid, mode="light"):
-            return await self._materialize_light_pack_body(
+            return await self._materialize_l0_pack(
                 world_uid,
                 world,
                 locations,
                 writer,
                 mat_ctx,
+                scope="light",
                 max_tiles=max_tiles,
                 nodes=nodes,
                 edges=edges,
@@ -110,10 +124,14 @@ class PackMaterializationOrchestrator:
                 anchor_y=anchor_y,
                 heading_dx=heading_dx,
                 heading_dy=heading_dy,
-                refine_scene=refine_scene,
+                refine_scene=(
+                    self._defaults.refine_scene_on_light
+                    if refine_scene is None
+                    else refine_scene
+                ),
             )
 
-    async def _materialize_light_pack_body(
+    async def materialize_full_pack(
         self,
         world_uid: str,
         world: World,
@@ -121,6 +139,40 @@ class PackMaterializationOrchestrator:
         writer: WorldPackWriter,
         mat_ctx: MaterializationContext,
         *,
+        nodes: list[ConnectionNode] | None = None,
+        edges: list[ConnectionEdge] | None = None,
+        hydrology_generator: HydrologyGeneratorService | None = None,
+        refine_scene: bool | None = None,
+    ) -> MaterializationJobReport:
+        """full_bake — same L0 pipeline, all location tiles (no location cap)."""
+        with generation_world_log(world_uid, mode="full"):
+            return await self._materialize_l0_pack(
+                world_uid,
+                world,
+                locations,
+                writer,
+                mat_ctx,
+                scope="full",
+                max_tiles=None,
+                nodes=nodes,
+                edges=edges,
+                hydrology_generator=hydrology_generator,
+                refine_scene=(
+                    self._defaults.refine_scene_on_full
+                    if refine_scene is None
+                    else refine_scene
+                ),
+            )
+
+    async def _materialize_l0_pack(
+        self,
+        world_uid: str,
+        world: World,
+        locations: list[NamedLocation],
+        writer: WorldPackWriter,
+        mat_ctx: MaterializationContext,
+        *,
+        scope: PackTilePlanScope,
         max_tiles: int | None = None,
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
@@ -131,22 +183,22 @@ class PackMaterializationOrchestrator:
         heading_dy: int | None = None,
         refine_scene: bool = True,
     ) -> MaterializationJobReport:
-        tile_cap = max_tiles if max_tiles is not None else self._defaults.max_tiles_light
-        tiles = self._terrain.plan_bootstrap_tiles(
+        surface_ctx = require_surface_terrain_context(
             world, locations, nodes=nodes, edges=edges,
-            hydrology_generator=hydrology_generator, max_tiles=tile_cap,
+            hydrology_generator=hydrology_generator,
         )
+        plan = self._planner.plan(
+            world, locations, surface_ctx, scope=scope, max_tiles=max_tiles,
+        )
+        tiles = plan.tile_tuples()
+        bake_mode: PackBakeMode = "full" if scope == "full" else "light"
         bake_t0 = log_pack_bake_start(
             world_uid,
-            tile_cap=tile_cap,
+            tile_cap=plan.cap_applied if plan.cap_applied is not None else 0,
             tiles_planned=len(tiles),
             refine_scene=refine_scene,
             locations=len(locations),
             terrain_workers=resolve_terrain_workers(mat_ctx, world),
-        )
-        surface_ctx = require_surface_terrain_context(
-            world, locations, nodes=nodes, edges=edges,
-            hydrology_generator=hydrology_generator,
         )
         drain = self._defaults.background_drain_per_request
         if self._entry.has_job_repo and drain > 0:
@@ -165,11 +217,13 @@ class PackMaterializationOrchestrator:
         locations_index = build_locations_index(locations)
         writer.write_locations_index(locations_index)
 
+        # Incremental: still bake all planned tiles (overwrite) so content stays consistent
         world_map_cells = self._world_map.bake_tiles(
             world, locations, writer, tiles,
             surface_ctx=surface_ctx,
             locations_index=locations_index,
             nodes=nodes, edges=edges, hydrology_generator=hydrology_generator,
+            bake_mode=bake_mode,
         )
         terrain_result = PersistResult.from_counts(world_map_cells, world_map_cells)
         chunks_done = 0
@@ -186,7 +240,7 @@ class PackMaterializationOrchestrator:
                         break
             if ax is None or ay is None:
                 raise ValueError(
-                    "pack light bake refine requires anchor_x/anchor_y "
+                    "pack L0 bake refine requires anchor_x/anchor_y "
                     "or a location with map_x/map_y",
                 )
             entry = await self._entry.refine_from_entry(

@@ -616,17 +616,69 @@ flowchart LR
 
 ### World Pack storage (TR-PACK) — target persist
 
-> **Статус:** ⬜ impl. **Продуктовое ТЗ:** [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) (WP-13: L2 **от точки входа**, chunk partial, blocking = scene volume). **TR-PERF** (ниже) — interim на `map_cells`; **заменяется** TR-PACK для wilderness skeleton.
+> **Статус:** pack L0 + entry L2 — ✅ path; **full_bake** (все location L0) — ⬜. **Продуктовое ТЗ:** [`tz_world_pack_storage.md`](./tz_world_pack_storage.md). **TR-PERF** (ниже) — interim на `map_cells`; для wilderness skeleton **заменяется** TR-PACK.
 
-**Цель:** cold load ≤ 5 min; fast bake (глобальная карта + скелеты локаций) ≤ 10 min.
+**Цель:** cold load ≤ 5 min; master offline bake (light / full / detailed) + lazy дозаполнение, если pack partial.
 
 | Было | Станет |
 |---|---|
 | wilderness terrain → `map_cells` INSERT | **L0/L2** → World Pack (zstd tiles) |
 | gameplay patches → `map_cells` | **`map_cell_patches`** SQLite |
-| eager full bbox fine grid на bake | **LOD:** L0 world map + L1 location skeletons; **L2 fine tile** при приближении |
+| eager full bbox fine grid на bake | **LOD:** L0 world map + L1 pins; **L2** = refine L0 (detailed / entry-first) |
 
-**LOD bake:** § Идея 1 (light world map per tile) + § Идея 2 (L2 refine from L0); `world_map_cells_per_tile ∝ 1/map_cell_size_m`. См. [`tz_world_pack_storage.md`](./tz_world_pack_storage.md). Доп. оптимизация orchestration/L2 prep — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § **WP-PERF**.
+**LOD bake:** § Идея 1 + § Идея 2; `world_map_cells_per_tile = 32` (WP-10). Wire/API modes — ниже § **Bake modes (locations)**. Pack orchestration — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md); L0 compose — [`tz_map_light_bake.md`](./tz_map_light_bake.md).
+
+### Bake modes (locations) — terrain + hydrology + climate
+
+> **Утверждено 2026-07-15.** Три **master/offline** режима генерации поверхности локаций. Runtime background (rings / path) — отдельно, не четвёртый offline case.
+
+| Термин | LOD | Pipeline | Scope |
+|---|---|---|---|
+| **light_bake** | L0 (+ climate coarse) | surface → hydrology mask → climate coarse на light canvas | Priority tiles: spawn + **subset** named_locations (+ declared hydro). Cap: `PackBakeDefaults.max_tiles_light` |
+| **full_bake** | L0 (+ climate coarse) | **Тот же** L0 pipeline, что light_bake | **Все** macro-tiles, покрывающие `named_locations` (без location cap). Hydro/coast tiles — как в bootstrap priority, без artificial cap по локациям |
+| **detailed_bake** | L2 `location_terrain` | refine L0 → fine terrain (+ hydro constraints из parent light) + climate fine по territory | **Одна** `location_uid` |
+
+**Инварианты генераторов (все три режима):**
+
+1. Generators pure: materialize geometry/masks; persist — Pack writer / orchestrator ([`layer-boundaries.mdc`](../.cursor/rules/layer-boundaries.mdc)).
+2. L2 **не** invents world-map rivers/coast — только refine parent light ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2; hydrology — [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md)).
+3. Base climate на pack-мире — только через bake; `POST generate-climate` → 422 ([`tz_climate.md`](./tz_climate.md) § World Pack climate).
+
+#### Offline completeness (master package)
+
+| Case | Pack state | Игрок получает |
+|---|---|---|
+| **1. light_bake complete** | L0 на priority subset; `locations_index` pins | World map с дырами вне P0; L2 — lazy / detailed |
+| **2. full_bake complete** | L0 на **все** location tiles (+ hydro as scoped) | Сплошная world map по локациям; L2 всё ещё lazy, если не было detailed |
+| **3. full + all detailed_bake complete** | (2) + `location_terrain` на **каждую** pin-локацию | Тёплый старт по локациям; wilderness L2 rings — всё ещё runtime/optional |
+
+**Partial pack — норма:** отсутствие prebake **не** ломает игру; ломает отсутствие resume / lazy path.
+
+| Нехватка | Дозаполнение |
+|---|---|
+| Missing L0 location tiles (case 1 → 2) | **full_bake** (или incremental full resume) |
+| Missing `location_terrain` для uid | **detailed_bake(uid)** offline **или** entry-first / location_entry в runtime (WP-13) |
+| Missing wilderness fine chunks | Runtime rings / path queue — **не** обязательный offline case 3 |
+
+#### Detect (нужно для resume)
+
+Сейчас `tiles_pct` считает готовность **среди уже записанных** manifest tiles → после light легко 100%, хотя full ещё нет. Target:
+
+| Сигнал | light_complete | full_complete | full_detailed_complete |
+|---|---|---|---|
+| L0 baked ⊇ expected_light (P0+cap) | ✅ | — | — |
+| L0 baked ⊇ expected_full (все location tiles) | — | ✅ | ✅ |
+| `location_terrain` готов для всех pins в `locations_index` | — | — | ✅ |
+
+Wire/API и классификатор состояния — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § **Bake modes** / § **Pack completeness**.
+
+#### Impl status (generators path)
+
+| Mode | Status |
+|---|---|
+| light_bake | ✅ `POST …/map/pack/bake?mode=light` |
+| full_bake | ⬜ тот же L0 orchestrator, scope = все location tiles |
+| detailed_bake | 🟡 partial — entry refine / scene пишет L2; явный master «вся локация» API — ⬜ |
 
 ### Persist performance (TR-PERF)
 
@@ -1210,47 +1262,49 @@ app/api/routes/map.py                  ← debug harness: POST …/generate-* (�
 
 ## Три кейса использования
 
-### 1. Материализация мира (generation pipeline)
+### 1. Материализация мира (master bake + generation pipeline)
 
 **Мастер** — JSON-редактор в **настройках мира** (`settings/world`): import bundle, registries, anchors. **Не** отдельный «admin»-интерфейс.
 
-**Игрок** — выбирает мир → сессия. Если `map_cells` для skeleton ещё нет — **engine DAG** прогоняет очередь passes (target).
+**Offline bake (pack, утверждено):** § **Bake modes (locations)** — `light_bake` → optional `full_bake` → optional `detailed_bake` per location. Игрок может получить любой из трёх offline cases; недоделанное дозаполняется resume / lazy.
 
-**Target flow (ноды):**
+**Игрок** — выбирает мир → сессия. Если pack partial / нет L2 — **engine DAG** + entry-first (WP-13); legacy `map_cells` skeleton — только до полного cutover.
+
+**Target flow (ноды, после gate):**
 
 ```
 world_load / first_need
+  └─ pack completeness classify → resume light|full|detailed as needed
   └─ pole_resolve_node
-  └─ generate_surface_node → persist
-  └─ generate_ores_node   → STUB
-  └─ generate_caves_node  → STUB
-  └─ generate_climate_node → persist
+  └─ (pack path) entry refine / detailed — не eager full bbox
+  └─ (legacy interim) generate_surface → hydrology → climate
 ```
 
-**Interim (код):** handlers `POST …/map/generate-*` — те же passes, вызываются вручную/dev; **player flow** пока в основном `lazy_terrain` (repair), полная очередь на load — ⬜.
+**Interim (код):** `POST …/map/pack/bake?mode=light` (+ entry refine); `mode=full` / явный `detailed` — ⬜; handlers `POST …/map/generate-*` — legacy/debug.
 
-**Pass implementation (generators + MapCellService):**
+**Pass implementation (generators + MapCellService / Pack writer):**
 
 ---
 
 ### 2. Lazy init (gameplay) — частично
 
-**Задумка:** при входе в регион — загрузить **scene volume** вокруг `(map_x, map_y, map_z)`; если колонка не materialized — `generate_z_slice` + persist.
+**Задумка:** при входе в регион — загрузить **scene volume** вокруг `(map_x, map_y, map_z)`; если L2 / колонка нет — refine from L0 (`detailed_bake` semantics) или `generate_z_slice` (legacy).
 
 **Сейчас (код):**
 
+- Pack: entry refine / scene + path (WP-13) — ✅ path; полный `detailed_bake(location_uid)` — 🟡
 - `check_terrain` → `has_cells_for_location` (не видит wilderness skeleton)
 - `eager_terrain` → `get_by_location` (не scene volume)
 - `lazy_terrain` → `generate_minimal` (только orphan repair)
 - HTTP `POST …/generate-z-slice` + `TerrainBatchOrchestrator.save_z_slice` — ✅ есть, gameplay **не** wired
 
-**Целевой flow:** § **TR-LAZY-LOAD** — сначала service/debug; ноды — после gate.
+**Целевой flow:** § **TR-LAZY-LOAD** + pack entry-first — сначала service/debug; ноды — после gate.
 
 ```
-check_terrain → has_column_cells OR has_cells_for_location
+check_terrain → has_column_cells OR has_cells_for_location OR pack chunk present
 eager_terrain → get_scene_volume(…)          # blocking: со стороны игрока
              → optional bg: get_by_location  # соседние локации целиком
-lazy_terrain  → generate_z_slice if column empty → get_scene_volume
+lazy_terrain  → refine/generate_z_slice if empty → get_scene_volume
              → generate_minimal fallback (orphan)
 lazy_settlement → без изменений (SettlementGeneratorService)
 ```
@@ -1259,10 +1313,11 @@ lazy_settlement → без изменений (SettlementGeneratorService)
 
 ### 3. Broken location repair (gameplay)
 
-**Триггер:** named_location без единой `map_cell` (orphan-tolerant design, `tz_locations.md`).
+**Триггер:** named_location без единой `map_cell` / без pack L2 (orphan-tolerant design, `tz_locations.md`).
 
 **Flow:** `lazyTerrainNode` → `generate_minimal` → upsert одной anchor cell.  
 Climate: **не** full eager — `resolve_climate` + `weather_at_elevation` (см. § «generate_minimal»).
+На pack-мире предпочтителен **detailed_bake** / entry refine от L0, а не orphan minimal, если parent light есть.
 
 ---
 
@@ -1617,6 +1672,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-15 | § **Bake modes (locations):** light / full / detailed; offline cases; detect+resume; TR-PACK status sync |
 | 2026-06 | § Persist cycle — **локальная** runtime modification (cataclysm, combat, excavate); bootstrap vs patch |
 | 2026-06 | § Phase 9+ **D HY** — surface hydrology H-1…H-7a в план до DAG |
 | 2026-06 | § Phase 9+ — production DAG materialization (план после TR-1) |
@@ -1637,10 +1693,12 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 
 ## Связанные документы
 
+- [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) — Pack L0/L2; **Bake modes** light / full / detailed
 - [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) — generators ↔ DAG (lazy terrain, generate_climate target)
 - [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) — моря / озёра / реки как carve heightmap (target)
 - [`tz_climate.md`](./tz_climate.md) — три процесса, orchestrator, recalc contracts, **Climate LOD**
 - `tz_city_generation.md` — settlement, occupancy, urban
 - `tz_locations.md` — named_location fields
 - `tz_generator_technical_debt.md` — NC-1, smells
+- [`tz_map_light_bake.md`](./tz_map_light_bake.md) — L0 light-grid compose |
 - `project_data_storage_tz.md` — map_cells schema

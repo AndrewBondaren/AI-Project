@@ -21,7 +21,7 @@ from app.db.models.world import World
 BASE_URL = os.environ.get("DEBUG_API_URL", "http://localhost:8000/api")
 TIMEOUT  = float(os.environ.get("DEBUG_API_TIMEOUT", "120"))
 
-PackBakeMode = Literal["light", "tile", "full"]
+PackBakeMode = Literal["light", "full", "detailed"]
 
 
 class DebugApiError(RuntimeError):
@@ -98,20 +98,24 @@ def api_pack_bake(
     *,
     mode: PackBakeMode = "light",
     max_tiles: int | None = None,
+    location_uid: str | None = None,
     anchor_x: int | None = None,
     anchor_y: int | None = None,
     heading_dx: int | None = None,
     heading_dy: int | None = None,
 ) -> dict:
     """Canonical debug bake — ``POST …/map/pack/bake`` (single SoT helper)."""
-    cap = (
-        max_tiles
-        if max_tiles is not None
-        else PackBakeDefaults.canonical_defaults().max_tiles_light
-    )
     params: dict[str, str | int] = {"mode": mode}
-    if cap > 0:
+    if mode == "light":
+        cap = (
+            max_tiles
+            if max_tiles is not None
+            else PackBakeDefaults.canonical_defaults().max_tiles_light
+        )
+        # Always send max_tiles for light (including 0 = uncapped light priority set)
         params["max_tiles"] = cap
+    if location_uid is not None:
+        params["location_uid"] = location_uid
     if anchor_x is not None:
         params["anchor_x"] = anchor_x
     if anchor_y is not None:

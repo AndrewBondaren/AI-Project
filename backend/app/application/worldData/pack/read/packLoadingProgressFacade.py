@@ -1,4 +1,4 @@
-"""Pack loading progress snapshot — WP-15 / REVIEW-5."""
+"""Pack loading progress snapshot — WP-15 / REVIEW-5 / WP-28 completeness."""
 
 from __future__ import annotations
 
@@ -12,8 +12,12 @@ from app.application.worldData.loadingProgress import (
     progress_pct,
 )
 from app.application.worldData.pack.bake.packBakeLog import log_pack_loading_progress
+from app.application.worldData.pack.bake.packCompletenessClassifier import (
+    PackCompletenessClassifier,
+)
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
+from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
@@ -60,8 +64,14 @@ def _world_map_phase(
 class PackLoadingProgressFacade:
     def __init__(self, context: PackReadContext) -> None:
         self._ctx = context
+        self._classifier = PackCompletenessClassifier()
 
-    def get_loading_progress(self, world: World) -> LoadingProgressSnapshot:
+    def get_loading_progress(
+        self,
+        world: World,
+        *,
+        locations: list[NamedLocation] | None = None,
+    ) -> LoadingProgressSnapshot:
         if not self._ctx.has_pack_for(world):
             return LoadingProgressSnapshot(world_uid=world.world_uid)
         reader = self._ctx.reader_for(world)
@@ -90,6 +100,17 @@ class PackLoadingProgressFacade:
         phase = _world_map_phase(tiles_pct, locations_pct, wilderness_pct)
         local_phase: LoadingPhase = "wilderness" if refine_pct < 100.0 else "idle"
 
+        pack_completeness = None
+        if locations is not None:
+            index = PackCompletenessClassifier.load_locations_index(reader)
+            snap = self._classifier.classify(
+                world,
+                locations,
+                manifest=manifest,
+                locations_index=index,
+            )
+            pack_completeness = snap.to_dict()
+
         log_pack_loading_progress(
             world.world_uid,
             phase=phase,
@@ -108,6 +129,7 @@ class PackLoadingProgressFacade:
         return LoadingProgressSnapshot(
             world_uid=world.world_uid,
             has_climate_coarse=has_coarse,
+            pack_completeness=pack_completeness,
             world_map=WorldMapLoading(
                 phase=phase,
                 tiles_pct=tiles_pct,

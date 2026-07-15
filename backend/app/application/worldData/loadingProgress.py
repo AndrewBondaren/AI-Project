@@ -48,9 +48,10 @@ class LoadingProgressSnapshot:
     world_map: WorldMapLoading = field(default_factory=WorldMapLoading)
     local_grid: LocalGridLoading = field(default_factory=LocalGridLoading)
     has_climate_coarse: bool = False
+    pack_completeness: dict | None = None
 
     def to_dict(self) -> dict:
-        return {
+        out = {
             "world_uid": self.world_uid,
             "has_climate_coarse": self.has_climate_coarse,
             "worldMapLoading": {
@@ -77,3 +78,6 @@ class LoadingProgressSnapshot:
                 "climate_status": self.local_grid.climate_status,
             },
         }
+        if self.pack_completeness is not None:
+            out["pack_completeness"] = self.pack_completeness
+        return out

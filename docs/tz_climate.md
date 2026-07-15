@@ -1124,11 +1124,23 @@ class VolumeClimateContext:
 
 | Blob | Путь | Координаты sample |
 |---|---|---|
-| **coarse** | `climate_coarse.zst` | macro grid; `sample_step_m=1`; light bake |
-| **fine** | `r.{gx}.{gy}.climate.zst` | meters + stride; после scene / фон (целевое) |
+| **coarse** | `climate_coarse.zst` | macro grid; `sample_step_m=1`; light / full bake |
+| **fine** | `r.{gx}.{gy}.climate.zst` / location climate | meters + stride; detailed_bake / scene / фон |
 
 Read merge: **fine → coarse** field-wise; `climate_delta` (patch) выше обоих.  
 `POST …/map/generate-climate` на pack-мире → **422** (base climate только через `pack/bake`).
+
+### Pack bake modes — climate (утверждено 2026-07-15)
+
+Кросс-срез: [`tz_terrain_generation.md`](./tz_terrain_generation.md) § **Bake modes (locations)**; wire — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md).
+
+| Mode | Climate |
+|---|---|
+| **light_bake** | Пишет **coarse** (`climate_coarse.zst`); optional fine enqueue на spawn / P0 tiles |
+| **full_bake** | Тот же coarse pipeline на **все** location L0 tiles (без location cap) |
+| **detailed_bake** | Fine climate по territory одной локации (tier B denser), после/вместе с L2 terrain refine |
+
+**Offline cases:** light complete ⇒ coarse готов на P0; full complete ⇒ coarse покрывает все location tiles; full+all detailed ⇒ coarse + fine/`location_terrain` climate для каждой pin-локации. Partial → resume bake, не `generate-climate`.
 
 ### Impl cutover
 
@@ -1178,6 +1190,7 @@ python scripts/initialize_world.py --fixture ../fixtures/world_terrain_test.json
 
 | Дата | Версия | Изменение |
 |---|---|---|
+| 2026-07-15 | § World Pack climate | **Bake modes:** light / full / detailed; offline cases + resume |
 | 2026-07-12 | § World Pack climate | CL-PACK-1…11 fix; CL-PACK-4 accepted as L0 tint; denser fine + ClimatePackBakeOrchestrator |
 | 2026-07-12 | § World Pack climate | cutover status; `climate_status` coarse/fine; debt CL-PACK-1…11 (ревью до smoke) |
 | 2026-07 | § CL-PAR — `ClimateBatchOrchestrator`; DAG `MaterializationContext` (CL-PAR-DAG-1) |

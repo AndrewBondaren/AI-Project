@@ -18,8 +18,8 @@ metadata:
 |---|---|
 | Cold load сессии | **≤ 5 мин** (attach pack + DB; **не** ожидание L2) |
 | **Первый ход игрока (WP-14)** | **≤ 30 s** от spawn (цель **≤ 15 s**); § **UX: время до gameplay** |
-| Bake light world map + скелеты локаций | **≤ 2 мин** на типичном мире |
-| Offline full bake | допустим часы; **только** master/CI, не gameplay |
+| Bake light world map + скелеты локаций | **≤ 2 мин** на типичном мире (`light_bake`) |
+| Offline `full_bake` / all `detailed_bake` | допустим дольше; **только** master/CI, не gameplay |
 | Детализация при приближении | chunk lazy от точки входа; **фон**, без блокировки чата |
 
 ### UX: время до gameplay (непереговорно)
@@ -36,7 +36,7 @@ metadata:
 
 **Пока L2 chunk не готов:** narration и механика опираются на **L0 + L1 + patches** (грубая геометрия); уточнение подгружается **без** остановки сессии.
 
-**Единственный допустимый «долгий» путь:** offline `bake --mode tile|full` у мастера / в CI — **никогда** в hot path игрока.
+**Допустимые «долгие» пути (не gameplay hot path):** master offline `light_bake` / `full_bake` / `detailed_bake` (и опциональная добивка wilderness L2). Partial pack у игрока — норма; дозаполнение — resume bake или runtime WP-13.
 
 **Антипаттерн (hard reject):** `ensure_tile(entire_tile)` blocking; bootstrap `materialize-stack` на gameplay spawn; любой UX «генерация мира… 45%» дольше **30 s** без возможности играть.
 
@@ -275,6 +275,70 @@ flowchart TB
 | **WP-24** | **Уровни импорта** — registry → skeleton → light pack → pack; patches только local session |
 | **WP-25** | **Сессия** = world + character; персонаж — **`POST /characters/import` (✅)**; `starter_characters[]` / `npcs[]` — **backlog spec**, не impl в Pack migration |
 | **WP-26** | **Legacy freeze:** `map_cells` / `materialize-stack` / TR-PERF — **вне scope** Pack migration; только bugfix; новые фичи — L1…L7 |
+| **WP-27** | **Bake modes:** `light` \| `full` \| `detailed` — см. § **Bake modes**; старый смысл `tile`/`full`=wilderness-complete **не** путать с `full_bake`=все location L0 |
+| **WP-28** | **Pack completeness:** уметь classify offline cases + resume missing L0 / missing `location_terrain` |
+
+### Bake modes (утверждено 2026-07-15)
+
+Продуктовые термины генерации поверхности локаций (terrain + hydrology + climate). Домен generators — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § **Bake modes (locations)**; hydro — [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md); climate — [`tz_climate.md`](./tz_climate.md).
+
+| Термин | Wire `mode` | LOD | Scope |
+|---|---|---|---|
+| **light_bake** | `light` | L0 + climate coarse | Priority tiles (spawn + named_locations + declared hydro), cap `PackBakeDefaults.max_tiles_light` |
+| **full_bake** | `full` | L0 + climate coarse | **Тот же** L0 pipeline на **все** tiles с `named_locations` (без location cap) |
+| **detailed_bake** | `detailed` + `location_uid` | L2 `location_terrain` (+ climate fine territory) | **Одна** локация — refine from parent light |
+
+```mermaid
+flowchart LR
+  LB["light_bake L0 subset"]
+  FB["full_bake L0 all locations"]
+  DB["detailed_bake L2 one location"]
+  RT["runtime WP-13 rings/path"]
+  LB -->|"resume missing L0"| FB
+  FB -->|"per location"| DB
+  LB --> RT
+  FB --> RT
+  DB --> RT
+```
+
+**Не путать:**
+
+| Старый ТЗ / backlog | Новый смысл |
+|---|---|
+| `mode=tile` / `mode=full` = offline wilderness tile complete | **Опциональный** master/CI путь; **не** называется `full_bake`. Wire: отдельный mode позже (`wilderness`?) или CLI flag |
+| `full_bake` | только **все location L0** |
+| Runtime background rings | не offline case; догоняет wilderness L2 у игрока |
+
+#### Offline package cases
+
+| Case | Pack | Игрок |
+|---|---|---|
+| **1. light_bake complete** | L0 на P0/cap subset; pins в `locations_index` | World map с дырами; L2 lazy |
+| **2. full_bake complete** | L0 на все location tiles | Сплошная map по локациям; L2 lazy |
+| **3. full + all detailed_bake complete** | (2) + `location_terrain` на каждый pin | Тёплый старт локаций |
+
+**Инвариант:** все три — валидные master packages. Partial → **определять и дозаполнять** (WP-28), не требовать case 3.
+
+#### Pack completeness (detect + resume) — target
+
+`GET …/map/loading-progress` сегодня: `tiles_pct` = ready/total **среди manifest.tiles** → после light часто 100%, хотя full ещё нет.
+
+| Поле / сигнал (target) | Смысл |
+|---|---|
+| `expected_l0_light` | bootstrap priority set (с cap) |
+| `expected_l0_full` | все macro-tiles покрывающие `named_locations` (+ hydro scope) |
+| `l0_baked` | tiles с `world_map_path` |
+| `locations_expected` | pins в `locations_index` |
+| `locations_detailed` | `location_terrain_entries` с `terrain_path` |
+| `pack_completeness` | `light_complete` \| `full_complete` \| `full_detailed_complete` \| `partial` |
+
+| Нехватка | Resume |
+|---|---|
+| `l0_baked` ⊊ `expected_l0_full` | `POST pack/bake?mode=full` (incremental skip existing) |
+| `locations_detailed` ⊊ `locations_expected` | `POST pack/bake?mode=detailed&location_uid=` (или batch) / runtime entry |
+| wilderness chunks absent | runtime queue / optional offline wilderness bake — **не** блокирует case 2→3 |
+
+**Impl:** light ✅; detailed 🟡 (entry refine); full ⬜; classifier WP-28 ⬜.
 
 ### L0 — WorldMapTile (Идея 1)
 
@@ -316,19 +380,19 @@ light_m  = map_cell_size_m // side            # физический шаг ligh
 
 **Не забыть (consumers):** grid / ASCII builders и pack render, которые сейчас схлопывают macro `(gx,gy)` в **один символ**, должны читать **маску** `32×32` (zoom light-grid и/или агрегат с явной семантикой) — см. plan `.cursor/plans/light-bake-mask.md`.
 
-#### Приоритет light bake (утверждено, WP-15)
+#### Приоритет L0 bake (утверждено, WP-15 / WP-27)
 
-**Не ждать** полный `world_bounds` перед входом игрока. Порядок:
+**Не ждать** полный `world_bounds` перед входом игрока.
 
-| Приоритет | Что bake | Blocking для входа |
+| Mode | Что bake | Blocking для входа |
 |---|---|---|
-| **P0** | tile spawn + **все tiles с `named_locations`** (L0 pins + L1 skeleton) | да — минимум для world map с локациями |
-| **P1** | climate coarse + `locations_index` | да |
-| **P2** | остальные wilderness tiles L0 в `world_bounds` | **фон** после впуска игрока |
+| **light_bake** | P0: spawn + **cap** named_location tiles; P1: climate coarse + `locations_index` | да — минимум для map с локациями |
+| **full_bake** | все tiles с `named_locations` (тот же L0 pipeline) | master offline; у игрока — если pack уже full |
+| **P2 wilderness L0** (без локаций) | остальные tiles в `world_bounds` | **фон** / optional — не часть `full_bake` |
 
-**Инвариант:** игрок **входит в мир** после P0+P1; wilderness L0 без локаций догоняется в фоне (`worldMapLoading` растёт по мере готовности pins).
+**Инвариант:** игрок **входит в мир** после light P0+P1 (или attach готового pack); недостающее — resume / lazy (WP-28).
 
-**Cross-ref:** L2 gameplay — § WP-13 (spawn entry-first); L0 wilderness — не блокирует WP-14.
+**Cross-ref:** L2 — § WP-13 + **detailed_bake**; generators — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Bake modes.
 
 **L2 не зависит:** fine grid всегда `map_cell_size_m × map_cell_size_m` meter cells; L0 всегда `32×32`, меняется только `light_m`, не детализация gameplay.
 
@@ -879,7 +943,7 @@ flowchart LR
 | **`tile`** | L2 **все chunks** одного tile из L0 | offline ~20–40 мин/tile | debug, master |
 | **`full`** | все tiles L2 в `world_bounds` | часы offline | дистрибуция, CI golden |
 
-**Gameplay** использует только **entry-first chunk** path (WP-13); `tile` / `full` — offline, не blocking UI.
+**Gameplay** использует только **entry-first chunk** path (WP-13) + optional runtime detailed; master offline — § **Bake modes** (`light` / `full` / `detailed`). Wilderness tile-complete — optional offline, не gameplay.
 
 Cold load **`light` pack:** **≤ 5 min** (validate + mmap; decode L0 для viewport).
 
@@ -1026,7 +1090,7 @@ effective_climate(x,y) =
 |---|---|
 | `pack_version` | wire semver |
 | `world_uid`, `content_hash`, `registry_hash` | validation |
-| `bake_mode` | `light` \| `full` |
+| `bake_mode` | last completed master bake: `light` \| `full` (detailed не меняет mode; смотри `location_terrain_entries`) |
 | `map_cell_size_m` | из `worlds` |
 | `world_map_cells_per_tile` | resolved при bake, см. § L0 |
 | `cell_size_m`, `map_subsurface_depth` | из `WorldTerrainScalars` / `worlds` |
@@ -1489,16 +1553,20 @@ flowchart TB
 | `POST /worlds/import?level=skeleton` | JSON bundle ≤ skeleton | L6 |
 | `POST /characters/import` | персонаж отдельно | ✅ **есть** |
 | `POST /worlds/{uid}/pack/import` | zip → `pack/` | L6 |
-| `POST /worlds/{uid}/pack/bake?mode=light` | bake после skeleton | L6 |
+| `POST /worlds/{uid}/map/pack/bake?mode=light` | **light_bake** | ✅ |
+| `POST …/pack/bake?mode=full` | **full_bake** — все location L0 | ⬜ |
+| `POST …/pack/bake?mode=detailed&location_uid=` | **detailed_bake** одной локации | ⬜ (entry refine 🟡) |
+| `GET /worlds/{uid}/map/loading-progress` | progress + (target) `pack_completeness` | ✅ pct; classifier ⬜ |
 | `GET /worlds/{uid}/export?level=skeleton` | без map_cells / pack blobs | L6 |
 
 ### Связь с загрузкой игрока
 
 | Импорт мастера | Игрок при старте сессии |
 |---|---|
-| skeleton + light pack | cold load ≤5 min; spawn ≤30s (WP-14) |
-| skeleton only | auto light bake или blocking bake P0 locations |
-| pack с L2 locations | меньше фоновой работы у spawn |
+| skeleton + light pack (case 1) | cold load; spawn; L2 / missing L0 — resume/lazy |
+| skeleton + full L0 pack (case 2) | сплошная map; L2 lazy / detailed |
+| full + all detailed (case 3) | минимум фона на spawn по локациям |
+| skeleton only | auto **light_bake** P0 или blocking bake P0 locations |
 
 ### Миграция с текущего export
 
@@ -1629,7 +1697,7 @@ flowchart TB
 
 | ID | Задача | Target fix | Ожидаемый выигрыш |
 |---|---|---|---|
-| **WP-PERF-10** | На `mode=light` **не** enqueue весь tile в `chunk_refine_jobs` | `schedule_tile_background` / `schedule_chunk_refine` только rings/corridor (WP-13); full tile — offline `tile`/`full` | ✅ rings; см. WP-13-OPEN-8 для остального PERF |
+| **WP-PERF-10** | На `mode=light` **не** enqueue весь tile в `chunk_refine_jobs` | rings/corridor (WP-13); полный wilderness tile — optional offline, **не** `full_bake` | ✅ rings; см. WP-13-OPEN-8 |
 | **WP-PERF-11** | `persist_enqueue` batch | `executemany` / bulk upsert jobs; или manifest-only queue без SQLite до фонового worker | **−3…5 s** при большой очереди |
 | **WP-PERF-12** | `drain_persisted` policy | `max_jobs=0` когда `background_drain_per_request=0`; rebake → purge stale jobs или async drain **после** HTTP | **−12 s** на повторном bake |
 | **WP-PERF-13** | Один `surface_ctx` на run | `prepare_surface_terrain_context` вызывается в `PackMaterializationOrchestrator` и повторно в `WorldMapBakeOrchestrator.bake_tiles` — передавать cached ctx | **−1 s** |
@@ -1743,4 +1811,5 @@ flowchart LR
 | 2026-07-14 | L0 compose архитектура вынесена в [`tz_map_light_bake.md`](./tz_map_light_bake.md); cross-ref из § L0 |
 | 2026-07-15 | **Parent light SoT:** disk `world_map.zst` + process-local cache после write/read; live compose не SoT; WP-PERF-22 target уточнён |
 | 2026-07-15 | **Parent light refine contracts:** upsample z_band=±1, hard hydro corridor, cache key `(world_uid,gx,gy)`; SoT knobs → future `ParentLightRefinePolicy` |
+| 2026-07-15 | **Bake modes WP-27/28:** `light_bake` / `full_bake` (=все location L0) / `detailed_bake`; offline cases 1–3; detect+resume; API `mode=light\|full\|detailed`; старый tile/full wilderness ≠ full_bake |
 | 2026-07-15 | **WP-PERF-22 ✅:** `ParentLightTile` / cache / upsample / hard corridor wired in pack refine |

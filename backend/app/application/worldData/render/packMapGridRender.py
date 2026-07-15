@@ -71,7 +71,7 @@ class PackMapGridRender:
         gy1: int | None = None,
         mark_locations: bool = True,
     ) -> WorldGridPayload:
-        """Pack world ASCII — L0 mosaic when small/bbox; else macro aggregate."""
+        """Pack world ASCII — L0 light-cell mosaic when small/bbox; else macro aggregate."""
         renderer = self._world_renderer(world)
         if renderer is None:
             return WorldGridPayload(

@@ -182,23 +182,79 @@ class WorldMapPackRenderer:
         gy1: int | None = None,
         mark_location: bool = False,
     ) -> str:
-        """Concatenate per-tile light grids — primary pack smoke for L0 mask."""
+        """One ASCII matrix: each light cell = one symbol; tiles placed by (gx, gy).
+
+        Missing macro-tiles inside the bbox are spaces. Per-tile dumps stay in
+        ``render_tile_light_grid`` / ``render_all_tile_light_grids``.
+        """
         if not self._by_xy:
             return ""
         if gx0 is None or gy0 is None or gx1 is None or gy1 is None:
-            keys = sorted(self._by_xy)
-        else:
-            keys = [
-                (gx, gy)
-                for gy in range(gy0, gy1 + 1)
-                for gx in range(gx0, gx1 + 1)
-                if (gx, gy) in self._by_xy
-            ]
-        parts = [
-            self.render_tile_light_grid(gx, gy, mark_location=mark_location)
-            for gx, gy in keys
+            xs = [gx for gx, _ in self._by_xy]
+            ys = [gy for _, gy in self._by_xy]
+            gx0, gx1 = min(xs), max(xs)
+            gy0, gy1 = min(ys), max(ys)
+
+        side = 0
+        for gy in range(gy0, gy1 + 1):
+            for gx in range(gx0, gx1 + 1):
+                tile = self._by_xy.get((gx, gy))
+                if tile is not None and tile.side > 0:
+                    side = tile.side
+                    break
+            if side > 0:
+                break
+        if side <= 0:
+            for tile in self._by_xy.values():
+                if tile.side > 0:
+                    side = tile.side
+                    break
+        if side <= 0:
+            return ""
+
+        light_m = max(1, self._tile_m // side)
+        lx0, lx1 = gx0 * side, (gx1 + 1) * side - 1
+        ly0, ly1 = gy0 * side, (gy1 + 1) * side - 1
+
+        pin_wxy: set[tuple[int, int]] = set()
+        if mark_location:
+            for pin in self._pins:
+                pgx, lx = tile_index(pin.map_x, self._tile_m)
+                pgy, ly = tile_index(pin.map_y, self._tile_m)
+                if not (gx0 <= pgx <= gx1 and gy0 <= pgy <= gy1):
+                    continue
+                tx = world_map_sample_index(lx, self._tile_m, side)
+                ty = world_map_sample_index(ly, self._tile_m, side)
+                pin_wxy.add((pgx * side + tx, pgy * side + ty))
+
+        lines: list[str] = [
+            (
+                f"pack L0 light mosaic  "
+                f"(macro Gx{gx0}..Gx{gx1} Gy{gy0}..Gy{gy1}, "
+                f"{side}×{side} light cells per tile)"
+            ),
+            format_grid_header(
+                lx0, lx1, ly0, ly1, cell_size_m=light_m, prefix="light ",
+            ),
         ]
-        return "\n\n".join(p for p in parts if p)
+        label_w = max(4, len(str(ly0)), len(str(ly1)))
+        for wy in range(ly1, ly0 - 1, -1):
+            row: list[str] = []
+            for wx in range(lx0, lx1 + 1):
+                if mark_location and (wx, wy) in pin_wxy:
+                    row.append(LOCATION_PIN_SYMBOL)
+                    continue
+                gx, tx = divmod(wx, side)
+                gy, ty = divmod(wy, side)
+                tile = self._by_xy.get((gx, gy))
+                if tile is None or (tx, ty) not in tile.cells:
+                    row.append(" ")
+                    continue
+                row.append(
+                    wire_symbol(tile.cells[(tx, ty)], mark_pin=mark_location),
+                )
+            lines.append(f"{wy:{label_w}d} |{''.join(row)}|")
+        return "\n".join(lines)
 
     def render_all_tile_light_grids(
         self,

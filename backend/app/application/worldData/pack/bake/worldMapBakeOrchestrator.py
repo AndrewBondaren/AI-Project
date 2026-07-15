@@ -6,6 +6,7 @@ import time
 from collections import Counter
 
 from app.application.jsonValidation import terrain_system_keys
+from app.dataModel.worldPack.packBakeMode import PackBakeMode
 from app.application.worldData.generators.coordinates import cell_size_m
 from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
     is_hydrology_enabled,
@@ -80,6 +81,7 @@ class WorldMapBakeOrchestrator:
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
         hydrology_generator: HydrologyGeneratorService | None = None,
+        bake_mode: PackBakeMode = "light",
     ) -> int:
         world_uid = world.world_uid
         ctx_t0 = time.perf_counter()
@@ -160,7 +162,7 @@ class WorldMapBakeOrchestrator:
                 macro_hydro_role=_hydro_cell_role_label(surface_ctx.coarse_hydro.get((gx, gy))),
                 macro_surface_z=int(surface_ctx.coarse_surface_z.get((gx, gy), 0)),
             )
-        writer.manifest.bake_mode = "light"
+        writer.manifest.bake_mode = bake_mode
         writer.recalc_manifest_counters()
         writer.save_manifest()
         log_pack_world_map_bake_done(

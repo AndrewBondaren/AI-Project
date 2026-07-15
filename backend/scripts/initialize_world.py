@@ -128,9 +128,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--mode",
-        choices=("light",),
+        choices=("light", "full"),
         default="light",
-        help="pack bake mode (only light is implemented on the server)",
+        help="pack bake mode: light (capped) or full (all location L0)",
     )
     parser.add_argument("--skip-import", action="store_true")
     parser.add_argument("--skip-clear", action="store_true")
@@ -199,7 +199,7 @@ def main() -> None:
             client,
             world_uid,
             mode=args.mode,
-            max_tiles=args.max_tiles,
+            max_tiles=args.max_tiles if args.mode == "light" else None,
             anchor_x=args.anchor_x,
             anchor_y=args.anchor_y,
         )
