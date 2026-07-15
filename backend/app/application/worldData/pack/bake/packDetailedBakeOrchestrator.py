@@ -1,9 +1,8 @@
-"""detailed_bake — L2 location_terrain for one location (WP-27).
-
-Reuses ``FineChunkRunner``; does not clone L0 bake or entry session.
-"""
+"""detailed_bake — L2 location_terrain (+ optional climate fine) for one location."""
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 from app.application.worldData.generators.coordinates import cell_size_m
 from app.application.worldData.generators.coordinates.worldTile import (
@@ -27,10 +26,7 @@ from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volume_for_location,
 )
-from app.application.worldData.pack.read.parentLightLoad import (
-    load_parent_light,
-    require_parent_light,
-)
+from app.application.worldData.pack.read.parentLightLoad import require_parent_light
 from app.application.worldData.pack.refine.fineChunkRunner import FineChunkRunner
 from app.application.worldData.persistResult import PersistResult
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
@@ -41,6 +37,12 @@ from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 DETAILED_REFINE_ROLE: ChunkRefineRole = "location"
+
+
+@dataclass(frozen=True)
+class PackDetailedBakeResult:
+    terrain: PersistResult
+    climate_fine_tiles: int = 0
 
 
 def _rect_overlaps_volume(rect: ColumnRect, volume: TerritoryVolume) -> bool:
@@ -87,7 +89,7 @@ def rects_for_volume_on_tile(
 
 
 class PackDetailedBakeOrchestrator:
-    """Bake L2 ``location_terrain`` for one ``location_uid`` from parent light."""
+    """Bake L2 ``location_terrain`` (+ optional tile climate fine) for one location."""
 
     def __init__(
         self,
@@ -97,9 +99,11 @@ class PackDetailedBakeOrchestrator:
         climate_bake: ClimatePackBakeOrchestrator | None = None,
         bake_defaults: PackBakeDefaults | None = None,
     ) -> None:
-        self._runner = runner or FineChunkRunner(terrain)
-        self._climate = climate_bake or ClimatePackBakeOrchestrator()
         self._defaults = bake_defaults or PackBakeDefaults.canonical_defaults()
+        self._runner = runner or FineChunkRunner(terrain)
+        self._climate = climate_bake or ClimatePackBakeOrchestrator(
+            bake_defaults=self._defaults,
+        )
 
     async def bake_location(
         self,
@@ -109,7 +113,7 @@ class PackDetailedBakeOrchestrator:
         mat_ctx: MaterializationContext,
         surface_ctx: SurfaceTerrainContext,
         location_uid: str,
-    ) -> PersistResult:
+    ) -> PackDetailedBakeResult:
         location = next((loc for loc in locations if loc.location_uid == location_uid), None)
         if location is None:
             raise ValueError(f"location_uid not found: {location_uid}")
@@ -138,42 +142,36 @@ class PackDetailedBakeOrchestrator:
             rects = rects_for_volume_on_tile(world, volume, gx, gy)
             if not rects:
                 continue
-            result, _written, _n, meter_z = await self._runner.refine_rects(
+            refined = await self._runner.refine_rects(
                 world, locations, writer, mat_ctx, surface_ctx,
                 gx, gy, rects, [volume],
                 refine_role=DETAILED_REFINE_ROLE,
                 phase="detailed",
             )
-            for key, z in meter_z.items():
+            for key, z in refined.meter_surface_z.items():
                 prev = l2_surface_z.get(key)
                 if prev is None or z > prev:
                     l2_surface_z[key] = z
             aggregate = PersistResult.from_counts(
-                aggregate.total + result.total,
-                aggregate.succeeded + result.succeeded,
-                failed=aggregate.failed + result.failed,
+                aggregate.total + refined.persist.total,
+                aggregate.succeeded + refined.persist.succeeded,
+                failed=aggregate.failed + refined.persist.failed,
             )
 
+        climate_fine_tiles = 0
         if self._defaults.detailed_include_climate_fine:
-            climate_tiles = 0
             for gx, gy in tiles:
-                parent = load_parent_light(
-                    world.world_uid, gx, gy,
-                    reader=reader, cache=cache, tile_m=tile_m,
-                )
-                self._climate.bake_fine_tile(
+                if self._climate.bake_fine_tile_with_parent(
                     world, surface_ctx, writer, gx, gy,
-                    parent_light=parent,
                     l2_surface_z=l2_surface_z or None,
-                )
-                climate_tiles += 1
-            if climate_tiles:
-                aggregate = PersistResult.from_counts(
-                    aggregate.total + climate_tiles,
-                    aggregate.succeeded + climate_tiles,
-                    failed=aggregate.failed,
-                )
+                    locations=locations,
+                    require_parent=True,
+                ):
+                    climate_fine_tiles += 1
 
         writer.recalc_manifest_counters()
         writer.save_manifest()
-        return aggregate
+        return PackDetailedBakeResult(
+            terrain=aggregate,
+            climate_fine_tiles=climate_fine_tiles,
+        )

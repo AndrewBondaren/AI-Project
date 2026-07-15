@@ -14,6 +14,7 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
 from app.application.worldData.pack.bake.packBakeResult import PackBakeResult
 from app.application.worldData.pack.bake.packDetailedBakeOrchestrator import (
     PackDetailedBakeOrchestrator,
+    PackDetailedBakeResult,
 )
 from app.application.worldData.pack.bake.packMaterializationOrchestrator import (
     PackMaterializationOrchestrator,
@@ -22,7 +23,6 @@ from app.application.worldData.materializationContext import (
     MaterializationContext,
     MaterializationJobReport,
 )
-from app.application.worldData.persistResult import PersistResult
 from app.dataModel.worldPack.packBakeMode import PackBakeApiMode
 from app.dataModel.worldPack.packTilePlan import PackTilePlanScope
 from app.db.models.connectionEdge import ConnectionEdge
@@ -100,8 +100,9 @@ class WorldSurfaceMaterializationOrchestrator:
             )
             return PackBakeResult(
                 mode=mode,
-                terrain_failed=detailed.failed,
+                terrain_failed=detailed.terrain.failed,
                 detailed=detailed,
+                climate_fine_tiles=detailed.climate_fine_tiles or None,
             )
         raise ValueError(f"unknown pack bake mode '{mode}'")
 
@@ -186,7 +187,7 @@ class WorldSurfaceMaterializationOrchestrator:
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
         hydrology_generator: HydrologyGeneratorService | None = None,
-    ) -> PersistResult:
+    ) -> PackDetailedBakeResult:
         surface_ctx = require_surface_terrain_context(
             world, locations, nodes=nodes, edges=edges,
             hydrology_generator=hydrology_generator,

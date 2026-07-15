@@ -65,7 +65,7 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
             "app.application.worldData.pack.refine.fineChunkRunner.require_parent_light",
             return_value=MagicMock(gx=0, gy=0),
         ):
-            result, written, total, _z = await runner.refine_rects(
+            refined = await runner.refine_rects(
                 _world(),
                 [],
                 writer,
@@ -77,6 +77,11 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
                 volumes=[],
                 refine_role="scene",
                 phase="scene",
+            )
+            result, written, total = (
+                refined.persist,
+                refined.wilderness_chunks_written,
+                refined.rect_count,
             )
 
         pool_cls.assert_called_once_with(
@@ -99,7 +104,7 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
             "app.application.worldData.pack.refine.fineChunkRunner.require_parent_light",
             return_value=MagicMock(gx=0, gy=0),
         ):
-            result, written, total, _z = await runner.refine_rects(
+            refined = await runner.refine_rects(
                 _world(),
                 [],
                 writer,
@@ -111,6 +116,11 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
                 volumes=[],
                 refine_role="scene",
                 phase="scene",
+            )
+            result, written, total = (
+                refined.persist,
+                refined.wilderness_chunks_written,
+                refined.rect_count,
             )
 
         pool_cls.assert_not_called()
@@ -125,7 +135,7 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
             "app.application.worldData.pack.refine.fineChunkRunner.require_parent_light",
             return_value=MagicMock(gx=0, gy=0),
         ):
-            result, written, total, _z = await facade._refine_rects(
+            refined = await facade._refine_rects(
                 _world(),
                 [],
                 writer,
@@ -137,6 +147,11 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
                 volumes=[],
                 refine_role="scene",
                 phase="scene",
+            )
+            result, written, total = (
+                refined.persist,
+                refined.wilderness_chunks_written,
+                refined.rect_count,
             )
         self.assertEqual(total, 1)
         self.assertEqual(written, 1)

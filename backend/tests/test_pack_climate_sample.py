@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from app.application.worldData.generators.climate.climateAnchor import (
     AnchorSource,
@@ -57,6 +57,7 @@ class TestResolvePackSurfaceZ(unittest.TestCase):
             coarse_surface_z={(0, 0): 3},
             parent_light=parent,
             l2_surface_z={(0, 0): 9},
+            light_m=500,
         )
         self.assertEqual(z, 9)
         z2 = resolve_pack_surface_z(
@@ -76,6 +77,40 @@ class TestResolvePackSurfaceZ(unittest.TestCase):
             coarse_surface_z={(0, 0): 3},
         )
         self.assertEqual(z3, 3)
+
+    def test_l2_z_max_in_light_cell_window(self) -> None:
+        z = resolve_pack_surface_z(
+            xm=0,
+            ym=0,
+            tile_m=1000,
+            typical_elevation_z=1,
+            coarse_surface_z={(0, 0): 3},
+            l2_surface_z={(10, 20): 7, (50, 50): 12, (500, 0): 99},
+            light_m=100,
+        )
+        self.assertEqual(z, 12)
+
+
+class TestLightFineTilePolicy(unittest.TestCase):
+    def test_spawn_policy_skips_outside_planned(self) -> None:
+        from app.application.worldData.pack.climate.lightFineTileResolve import (
+            resolve_fine_tiles_for_policy,
+        )
+
+        world = SimpleNamespace(world_uid="w", map_cell_size_m=1000)
+        with patch(
+            "app.application.worldData.pack.climate.lightFineTileResolve.tile_for_anchor",
+            return_value=(9, 9),
+        ):
+            out = resolve_fine_tiles_for_policy(
+                "spawn_player",
+                [(0, 0), (1, 1)],
+                world,
+                [],
+                anchor_x=0,
+                anchor_y=0,
+            )
+        self.assertEqual(out, [])
 
 
 class TestSamplePackClimateVolcanicHigh(unittest.TestCase):

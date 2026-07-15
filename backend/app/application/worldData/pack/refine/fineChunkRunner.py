@@ -39,6 +39,7 @@ from app.application.worldData.pack.read.mapCellToFineTerrainWire import (
 )
 from app.application.worldData.pack.refine.entryRingGeom import tile_local_chunk_indices
 from app.application.worldData.pack.read.parentLightLoad import require_parent_light
+from app.application.worldData.pack.refine.fineRefineResult import FineRefineResult
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume, inside_location_volume
 from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
@@ -98,11 +99,11 @@ class FineChunkRunner:
         *,
         refine_role: ChunkRefineRole = "scene",
         phase: str | None = None,
-    ) -> tuple[PersistResult, int, int, dict[tuple[int, int], int]]:
-        """Returns (persist, wilderness_chunks_written, rect_count, meter_surface_z)."""
+    ) -> FineRefineResult:
+        """Generate + persist fine chunks; ``meter_surface_z`` for climate ladder."""
         phase_name = phase or refine_role
         if not rects:
-            return PersistResult.from_counts(0, 0), 0, 0, {}
+            return FineRefineResult.empty()
 
         chunk_size = terrain_chunk_columns(world)
         cell_m = cell_size_m(world)
@@ -259,10 +260,10 @@ class FineChunkRunner:
             total_cells += len(loc_cells)
         writer.recalc_manifest_counters()
         writer.save_manifest()
-        return (
-            PersistResult.from_counts(total_cells, total_cells),
-            written,
-            len(rects),
-            meter_surface_z,
+        return FineRefineResult(
+            persist=PersistResult.from_counts(total_cells, total_cells),
+            wilderness_chunks_written=written,
+            rect_count=len(rects),
+            meter_surface_z=meter_surface_z,
         )
 

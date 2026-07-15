@@ -15,7 +15,6 @@ from app.application.worldData.materializationContext import (
     MaterializationContext,
     MaterializationJobReport,
 )
-from app.application.worldData.generators.coordinates import cell_size_m
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import ClimatePackBakeOrchestrator
 from app.application.worldData.pack.bake.worldMapBakeOrchestrator import WorldMapBakeOrchestrator
 from app.application.worldData.pack.refine.entryRefineOrchestrator import EntryRefineOrchestrator
@@ -23,14 +22,10 @@ from app.application.worldData.pack.refine.fineTerrainRefineOrchestrator import 
 from app.application.worldData.pack.bake.locationsIndexBake import build_locations_index
 from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_on_world
 from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
-from app.application.worldData.pack.io.worldPackReader import WorldPackReader
-from app.application.worldData.pack.read.packMapHelpers import tile_for_anchor
 from app.application.worldData.pack.read.packReadContext import PackReadContext
-from app.application.worldData.pack.read.parentLightLoad import load_parent_light
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.parallelPolicy import resolve_terrain_workers
 from app.core.generationLogging import generation_world_log
-from app.dataModel.worldPack.lightFineTilePolicy import LightFineTilePolicy
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.dataModel.worldPack.packBakeMode import PackBakeMode
 from app.dataModel.worldPack.packTilePlan import PackTilePlanScope
@@ -73,7 +68,10 @@ class PackMaterializationOrchestrator:
             self._entry = entry
             self._climate = climate_bake or entry.climate_bake
         else:
-            self._climate = climate_bake or ClimatePackBakeOrchestrator(read_context=read_context)
+            self._climate = climate_bake or ClimatePackBakeOrchestrator(
+                read_context=read_context,
+                bake_defaults=self._defaults,
+            )
             fine = fine_terrain or FineTerrainRefineOrchestrator(terrain)
             self._entry = EntryRefineOrchestrator(
                 fine,
@@ -94,69 +92,6 @@ class PackMaterializationOrchestrator:
     @property
     def tile_planner(self) -> PackTilePlanner:
         return self._planner
-
-    def _fine_tiles_for_policy(
-        self,
-        policy: LightFineTilePolicy,
-        tiles: list[tuple[int, int]],
-        world: World,
-        locations: list[NamedLocation],
-        *,
-        anchor_x: int | None,
-        anchor_y: int | None,
-    ) -> list[tuple[int, int]]:
-        if policy == "none" or not tiles:
-            return []
-        if policy == "all_baked_tiles":
-            return list(tiles)
-        # spawn_player
-        ax, ay = anchor_x, anchor_y
-        if ax is None or ay is None:
-            for loc in locations:
-                if loc.map_x is not None and loc.map_y is not None:
-                    ax, ay = loc.map_x, loc.map_y
-                    break
-        if ax is None or ay is None:
-            return [tiles[0]]
-        spawn = tile_for_anchor(world, ax, ay)
-        return [spawn] if spawn in tiles else [spawn]
-
-    def _bake_l0_climate_fine(
-        self,
-        world: World,
-        surface_ctx,
-        writer: WorldPackWriter,
-        tiles: list[tuple[int, int]],
-        *,
-        scope: PackTilePlanScope,
-        anchor_x: int | None,
-        anchor_y: int | None,
-        locations: list[NamedLocation],
-    ) -> int:
-        policy: LightFineTilePolicy = (
-            self._defaults.full_fine_tile_policy
-            if scope == "full"
-            else self._defaults.light_fine_tile_policy
-        )
-        fine_tiles = self._fine_tiles_for_policy(
-            policy, tiles, world, locations, anchor_x=anchor_x, anchor_y=anchor_y,
-        )
-        if not fine_tiles:
-            return 0
-        tile_m = cell_size_m(world)
-        reader = WorldPackReader(writer.paths)
-        cache = writer.parent_light_cache
-        baked = 0
-        for gx, gy in fine_tiles:
-            parent = load_parent_light(
-                world.world_uid, gx, gy,
-                reader=reader, cache=cache, tile_m=tile_m,
-            )
-            self._climate.bake_fine_tile(
-                world, surface_ctx, writer, gx, gy, parent_light=parent,
-            )
-            baked += 1
-        return baked
 
     async def materialize_light_pack(
         self,
@@ -279,7 +214,7 @@ class PackMaterializationOrchestrator:
         climate_coarse_samples = 0
         climate_fine_tiles = 0
         climate_result, climate_coarse_samples = self._climate.bake_coarse(
-            world, surface_ctx, writer,
+            world, surface_ctx, writer, locations=locations,
         )
 
         locations_index = build_locations_index(locations)
@@ -297,12 +232,11 @@ class PackMaterializationOrchestrator:
         chunks_done = 0
         chunks_total = 0
 
-        climate_fine_tiles = self._bake_l0_climate_fine(
-            world, surface_ctx, writer, tiles,
+        climate_fine_tiles = self._climate.bake_fine_for_l0_policy(
+            world, surface_ctx, writer, tiles, locations,
             scope=scope,
             anchor_x=anchor_x,
             anchor_y=anchor_y,
-            locations=locations,
         )
         if climate_fine_tiles and climate_result is not None:
             climate_result = PersistResult.from_counts(

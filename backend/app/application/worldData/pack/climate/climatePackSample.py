@@ -17,8 +17,13 @@ from app.application.worldData.generators.coordinates import (
     meters_to_grid_x,
     meters_to_grid_y,
 )
+from app.application.worldData.generators.coordinates.worldTile import (
+    tile_origin_x,
+    tile_origin_y,
+)
 from app.dataModel.worldPack.climateFieldWire import ClimateSampleWire
 from app.dataModel.worldPack.parentLightTile import ParentLightTile
+from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
@@ -29,13 +34,37 @@ def resolve_pack_zone_sample(
     mgx: int,
     mgy: int,
     *,
+    uid_map: dict[str, NamedLocation] | None = None,
     climate: ClimateGeneratorService | None = None,
 ) -> SurfaceClimateSample:
     """Pole + local tier — elevation does not choose zone."""
     svc = climate or ClimateGeneratorService()
     return svc.resolve_surface_sample(
-        world, {}, pole_field, local_field, mgx, mgy,
+        world, uid_map or {}, pole_field, local_field, mgx, mgy,
     )
+
+
+def _l2_z_in_light_cell(
+    xm: int,
+    ym: int,
+    l2_surface_z: Mapping[tuple[int, int], int],
+    light_m: int,
+) -> int | None:
+    """Exact meter hit, else max surface_z in light-cell window [xm, xm+light_m)."""
+    exact = l2_surface_z.get((int(xm), int(ym)))
+    if exact is not None:
+        return int(exact)
+    if light_m <= 0:
+        return None
+    x0, y0 = int(xm), int(ym)
+    x1, y1 = x0 + light_m, y0 + light_m
+    best: int | None = None
+    for (x, y), z in l2_surface_z.items():
+        if x0 <= int(x) < x1 and y0 <= int(y) < y1:
+            zi = int(z)
+            if best is None or zi > best:
+                best = zi
+    return best
 
 
 def resolve_pack_surface_z(
@@ -48,12 +77,20 @@ def resolve_pack_surface_z(
     meter_z_overrides: Mapping[tuple[int, int], int] | None = None,
     parent_light: ParentLightTile | None = None,
     l2_surface_z: Mapping[tuple[int, int], int] | None = None,
+    light_m: int | None = None,
 ) -> int:
-    """Best-available surface z: L2 → parent light → meter override → coarse → typical."""
-    if l2_surface_z is not None:
-        hit = l2_surface_z.get((int(xm), int(ym)))
+    """Best-available surface z: L2 (light-cell window) → parent light → meter override → coarse → typical."""
+    step = light_m
+    if step is None and parent_light is not None:
+        step = parent_light.light_m
+    if l2_surface_z is not None and step is not None:
+        hit = _l2_z_in_light_cell(xm, ym, l2_surface_z, int(step))
         if hit is not None:
-            return int(hit)
+            return hit
+    elif l2_surface_z is not None:
+        exact = l2_surface_z.get((int(xm), int(ym)))
+        if exact is not None:
+            return int(exact)
     if parent_light is not None:
         tx, ty = parent_light.meters_to_tx_ty(xm, ym)
         cell = parent_light.cell_at(tx, ty)
@@ -84,6 +121,8 @@ def sample_pack_climate_at(
     meter_z_overrides: Mapping[tuple[int, int], int] | None = None,
     parent_light: ParentLightTile | None = None,
     l2_surface_z: Mapping[tuple[int, int], int] | None = None,
+    light_m: int | None = None,
+    uid_map: dict[str, NamedLocation] | None = None,
     climate: ClimateGeneratorService | None = None,
 ) -> ClimateSampleWire:
     """One pack climate sample at meters — zone from pole+local, temp/rain from z."""
@@ -91,7 +130,7 @@ def sample_pack_climate_at(
     mgx = int(meters_to_grid_x(xm, tile_m))
     mgy = int(meters_to_grid_y(ym, tile_m))
     zone = resolve_pack_zone_sample(
-        world, pole_field, local_field, mgx, mgy, climate=svc,
+        world, pole_field, local_field, mgx, mgy, uid_map=uid_map, climate=svc,
     )
     z = resolve_pack_surface_z(
         xm=xm,
@@ -102,6 +141,7 @@ def sample_pack_climate_at(
         meter_z_overrides=meter_z_overrides,
         parent_light=parent_light,
         l2_surface_z=l2_surface_z,
+        light_m=light_m,
     )
     temp, rain = svc.weather_at_elevation(
         world,
@@ -121,11 +161,12 @@ def sample_pack_climate_at_macro(
     *,
     tile_m: int,
     coarse_surface_z: Mapping[tuple[int, int], int] | None = None,
+    uid_map: dict[str, NamedLocation] | None = None,
     climate: ClimateGeneratorService | None = None,
 ) -> ClimateSampleWire:
     """Coarse grid sample — z from coarse map / typical; zone pole+local."""
-    xm = int(mgx) * int(tile_m)
-    ym = int(mgy) * int(tile_m)
+    xm = tile_origin_x(mgx, tile_m)
+    ym = tile_origin_y(mgy, tile_m)
     return sample_pack_climate_at(
         world,
         pole_field,
@@ -134,5 +175,6 @@ def sample_pack_climate_at_macro(
         ym=ym,
         tile_m=tile_m,
         coarse_surface_z=coarse_surface_z,
+        uid_map=uid_map,
         climate=climate,
     )

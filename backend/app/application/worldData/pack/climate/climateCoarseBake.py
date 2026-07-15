@@ -20,6 +20,7 @@ from app.application.worldData.pack.climate.climatePackSample import (
 from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire, ClimateSampleWire
 from app.dataModel.worldPack.parentLightTile import ParentLightTile
 from app.dataModel.worldPack.worldMapCellsPerTile import resolve_world_map_cells_per_tile
+from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
@@ -30,6 +31,7 @@ def build_climate_coarse_wire(
     *,
     local_field: ClimateAnchorField | None = None,
     coarse_surface_z: dict[tuple[int, int], int] | None = None,
+    uid_map: dict[str, NamedLocation] | None = None,
     climate: ClimateGeneratorService | None = None,
 ) -> ClimateFieldWire:
     """Coarse: one sample per macro-grid cell over *bbox* (pole+local + coarse z)."""
@@ -51,6 +53,7 @@ def build_climate_coarse_wire(
                     gy,
                     tile_m=tile_m,
                     coarse_surface_z=z_map,
+                    uid_map=uid_map,
                     climate=svc,
                 ),
             )
@@ -77,6 +80,7 @@ def build_climate_tile_wire(
     meter_z_overrides: Mapping[tuple[int, int], int] | None = None,
     parent_light: ParentLightTile | None = None,
     l2_surface_z: Mapping[tuple[int, int], int] | None = None,
+    uid_map: dict[str, NamedLocation] | None = None,
     climate: ClimateGeneratorService | None = None,
 ) -> ClimateFieldWire:
     """Fine: denser light-grid samples over one macro-tile (origin in meters)."""
@@ -108,6 +112,8 @@ def build_climate_tile_wire(
                     meter_z_overrides=meter_z_overrides,
                     parent_light=parent_light,
                     l2_surface_z=l2_surface_z,
+                    light_m=step,
+                    uid_map=uid_map,
                     climate=svc,
                 ),
             )

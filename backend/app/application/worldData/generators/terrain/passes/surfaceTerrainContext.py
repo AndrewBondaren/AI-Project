@@ -20,7 +20,9 @@ from app.application.worldData.generators.hydrology.shore.meterHydrologyIndex im
 )
 from app.application.worldData.generators.terrain.passes.surfacePass import run_surface_pass_coarse
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
-from app.application.worldData.pack.climate.packLocalField import build_pack_local_field
+from app.application.worldData.generators.climate.localFieldFromCoarse import (
+    build_local_field_from_coarse,
+)
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
@@ -91,7 +93,7 @@ def prepare_surface_terrain_context(
         locations,
         coarse_hm.surface_z,
     )
-    local_field = build_pack_local_field(world, locations, pole_field, coarse_hm)
+    local_field = build_local_field_from_coarse(world, locations, pole_field, coarse_hm)
 
     return SurfaceTerrainContext(
         pole_field=pole_field,

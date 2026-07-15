@@ -105,11 +105,11 @@ class FineTerrainRefineOrchestrator:
         log_pack_fine_terrain_phase_done(
             world.world_uid,
             "scene",
-            chunks_written=result[1],
-            cells_total=result[0].succeeded,
+            chunks_written=result.wilderness_chunks_written,
+            cells_total=result.persist.succeeded,
             started_at=phase_t0,
         )
-        return result
+        return result.persist, result.wilderness_chunks_written, result.rect_count
 
     async def refine_rect(
         self,
@@ -128,13 +128,13 @@ class FineTerrainRefineOrchestrator:
         loc_volumes = location_volumes or [
             vol for _, vol in territory_volumes_by_location(world, locations)
         ]
-        result, _, _, _ = await self._runner.refine_rects(
+        result = await self._runner.refine_rects(
             world, locations, writer, mat_ctx, surface_ctx,
             tile_gx, tile_gy, [rect], loc_volumes,
             refine_role=refine_role,
             phase=refine_role,
         )
-        return result.succeeded
+        return result.persist.succeeded
 
     async def schedule_tile_background(
         self,
@@ -257,7 +257,7 @@ class FineTerrainRefineOrchestrator:
             rects=len(corridor),
             heading=f"dx={heading.dx} dy={heading.dy}",
         )
-        result, written, _, _ = await self._runner.refine_rects(
+        result = await self._runner.refine_rects(
             world, locations, writer, mat_ctx, surface_ctx,
             tile_gx, tile_gy, corridor, loc_volumes,
             refine_role="path",
@@ -266,11 +266,11 @@ class FineTerrainRefineOrchestrator:
         log_pack_fine_terrain_phase_done(
             world.world_uid,
             "path",
-            chunks_written=written,
-            cells_total=result.succeeded,
+            chunks_written=result.wilderness_chunks_written,
+            cells_total=result.persist.succeeded,
             started_at=phase_t0,
         )
-        return written
+        return result.wilderness_chunks_written
 
     @staticmethod
     def tile_for_anchor(world: World, anchor_x: int, anchor_y: int) -> tuple[int, int]:
