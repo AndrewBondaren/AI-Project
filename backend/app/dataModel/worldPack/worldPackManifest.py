@@ -16,7 +16,7 @@ from app.dataModel.worldPack.territoryVolume import TerritoryVolume
 PACK_WIRE_VERSION = "1.0.0"
 BakeMode = PackBakeMode  # manifest last L0 mode — not "detailed"
 WildernessRefineStatus = Literal["absent", "partial", "complete"]
-ChunkRefineRole = Literal["scene", "background", "path"]
+ChunkRefineRole = Literal["scene", "background", "path", "location"]
 
 
 class ChunkRef(BaseModel):

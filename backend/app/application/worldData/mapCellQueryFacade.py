@@ -149,6 +149,8 @@ class MapCellQueryFacade:
             return MapLayerKind.PLAYER_SCENE
         if role == "path":
             return MapLayerKind.PLAYER_PATH
+        if role == "location":
+            return MapLayerKind.LOCATION
         return MapLayerKind.WILDERNESS
 
     @staticmethod

@@ -194,7 +194,7 @@ class PackMaterializationOrchestrator:
         bake_mode: PackBakeMode = "full" if scope == "full" else "light"
         bake_t0 = log_pack_bake_start(
             world_uid,
-            tile_cap=plan.cap_applied if plan.cap_applied is not None else 0,
+            tile_cap=plan.cap_applied if plan.cap_applied is not None else -1,
             tiles_planned=len(tiles),
             refine_scene=refine_scene,
             locations=len(locations),

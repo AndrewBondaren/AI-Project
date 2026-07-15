@@ -41,6 +41,7 @@ from app.application.worldData.pack.refine.entryRingGeom import tile_local_chunk
 from app.application.worldData.pack.read.parentLightLoad import require_parent_light
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume, inside_location_volume
+from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -95,7 +96,7 @@ class FineChunkRunner:
         rects: list[ColumnRect],
         volumes: list[TerritoryVolume],
         *,
-        refine_role: str = "scene",
+        refine_role: ChunkRefineRole = "scene",
         phase: str | None = None,
     ) -> tuple[PersistResult, int, int]:
         phase_name = phase or refine_role

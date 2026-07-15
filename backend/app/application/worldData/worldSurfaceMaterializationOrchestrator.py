@@ -11,6 +11,7 @@ from app.application.worldData.generators.hydrology.hydrologyGeneratorService im
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     require_surface_terrain_context,
 )
+from app.application.worldData.pack.bake.packBakeResult import PackBakeResult
 from app.application.worldData.pack.bake.packDetailedBakeOrchestrator import (
     PackDetailedBakeOrchestrator,
 )
@@ -22,6 +23,8 @@ from app.application.worldData.materializationContext import (
     MaterializationJobReport,
 )
 from app.application.worldData.persistResult import PersistResult
+from app.dataModel.worldPack.packBakeMode import PackBakeApiMode
+from app.dataModel.worldPack.packTilePlan import PackTilePlanScope
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
@@ -39,6 +42,90 @@ class WorldSurfaceMaterializationOrchestrator:
     ) -> None:
         self._pack = pack
         self._detailed = detailed or PackDetailedBakeOrchestrator(pack.terrain)
+
+    async def bake_pack(
+        self,
+        world_uid: str,
+        world: World,
+        locations: list[NamedLocation],
+        ctx: MaterializationContext,
+        pack_writer,
+        *,
+        mode: PackBakeApiMode,
+        max_tiles: int | None = None,
+        location_uid: str | None = None,
+        nodes: list[ConnectionNode] | None = None,
+        edges: list[ConnectionEdge] | None = None,
+        hydrology_generator: HydrologyGeneratorService | None = None,
+        anchor_x: int | None = None,
+        anchor_y: int | None = None,
+        heading_dx: int | None = None,
+        heading_dy: int | None = None,
+        refine_scene: bool | None = None,
+    ) -> PackBakeResult:
+        """Single application entry for HTTP ``mode=light|full|detailed``."""
+        if mode == "light":
+            report = await self.materialize_pack_light(
+                world_uid, world, locations, ctx, pack_writer,
+                max_tiles=max_tiles,
+                nodes=nodes, edges=edges,
+                hydrology_generator=hydrology_generator,
+                anchor_x=anchor_x, anchor_y=anchor_y,
+                heading_dx=heading_dx, heading_dy=heading_dy,
+            )
+            return PackBakeResult(
+                mode=mode,
+                terrain_failed=report.terrain.failed,
+                report=report,
+            )
+        if mode == "full":
+            report = await self.materialize_pack_full(
+                world_uid, world, locations, ctx, pack_writer,
+                nodes=nodes, edges=edges,
+                hydrology_generator=hydrology_generator,
+                refine_scene=refine_scene,
+            )
+            return PackBakeResult(
+                mode=mode,
+                terrain_failed=report.terrain.failed,
+                report=report,
+            )
+        if mode == "detailed":
+            if not location_uid:
+                raise ValueError("mode=detailed requires location_uid")
+            detailed = await self.materialize_pack_detailed(
+                world, locations, ctx, pack_writer, location_uid,
+                nodes=nodes, edges=edges,
+                hydrology_generator=hydrology_generator,
+            )
+            return PackBakeResult(
+                mode=mode,
+                terrain_failed=detailed.failed,
+                detailed=detailed,
+            )
+        raise ValueError(f"unknown pack bake mode '{mode}'")
+
+    def plan_bootstrap_tiles(
+        self,
+        world: World,
+        locations: list[NamedLocation],
+        *,
+        scope: PackTilePlanScope = "light",
+        max_tiles: int | None = None,
+        nodes: list[ConnectionNode] | None = None,
+        edges: list[ConnectionEdge] | None = None,
+        hydrology_generator: HydrologyGeneratorService | None = None,
+    ):
+        """Preview L0 tile set — application owns surface_ctx + planner."""
+        surface_ctx = require_surface_terrain_context(
+            world, locations, nodes=nodes, edges=edges,
+            hydrology_generator=hydrology_generator,
+        )
+        return self._pack.tile_planner.plan(
+            world, locations, surface_ctx,
+            scope=scope,
+            max_tiles=max_tiles if scope == "light" else None,
+        )
 
     async def materialize_pack_light(
         self,

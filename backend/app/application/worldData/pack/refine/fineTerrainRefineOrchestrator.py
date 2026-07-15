@@ -46,6 +46,7 @@ from app.application.worldData.pack.read.locationTerritoryVolumes import (
 from app.application.worldData.pack.read.packMapHelpers import tile_for_anchor
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -122,7 +123,7 @@ class FineTerrainRefineOrchestrator:
         rect: ColumnRect,
         location_volumes: list[TerritoryVolume] | None = None,
         *,
-        refine_role: str = "background",
+        refine_role: ChunkRefineRole = "background",
     ) -> int:
         loc_volumes = location_volumes or [
             vol for _, vol in territory_volumes_by_location(world, locations)
@@ -130,7 +131,7 @@ class FineTerrainRefineOrchestrator:
         result, _, _ = await self._runner.refine_rects(
             world, locations, writer, mat_ctx, surface_ctx,
             tile_gx, tile_gy, [rect], loc_volumes,
-            refine_role=refine_role,  # type: ignore[arg-type]
+            refine_role=refine_role,
             phase=refine_role,
         )
         return result.succeeded

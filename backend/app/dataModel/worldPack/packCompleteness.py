@@ -28,6 +28,8 @@ class PackCompletenessSnapshot(BaseModel):
     l0_baked: int = 0
     locations_expected: int = 0
     locations_detailed: int = 0
+    # Cap used for light expected set: None = uncapped light priority; int = PackBakeDefaults / override
+    light_cap: int | None = None
     missing_l0_full: list[PackTileRef] = Field(default_factory=list)
     missing_detailed: list[str] = Field(default_factory=list)
 
@@ -39,6 +41,7 @@ class PackCompletenessSnapshot(BaseModel):
             "l0_baked": self.l0_baked,
             "locations_expected": self.locations_expected,
             "locations_detailed": self.locations_detailed,
+            "light_cap": self.light_cap,
             "missing_l0_full": [
                 {"gx": t.gx, "gy": t.gy} for t in self.missing_l0_full
             ],

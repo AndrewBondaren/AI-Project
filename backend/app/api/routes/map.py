@@ -29,6 +29,8 @@ from app.application.worldData.pack.read.parentLightLoad import MissingParentLig
 from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
+from app.dataModel.worldPack.packBakeMode import PackBakeApiMode
+from app.dataModel.worldPack.packTilePlan import PackTilePlanScope
 
 router = APIRouter()
 _hydrology_generator = HydrologyGeneratorService()
@@ -53,15 +55,11 @@ async def get_loading_progress(
 async def list_bootstrap_tiles(
     world_uid: str,
     max_tiles: int = Query(default=PackBakeDefaults.canonical_defaults().max_tiles_light, ge=0),
-    scope: str = Query(default="light", pattern="^(light|full)$"),
+    scope: PackTilePlanScope = Query(default="light"),
     container=Depends(get_container),
 ) -> JSONResponse:
     """Debug — macro tiles selected for L0 bake (no persist)."""
-    from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
-    from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-        prepare_surface_terrain_context,
-    )
-
+    stack = container.surface_materialization_orchestrator()
     world_svc = container.world_service()
     location_svc = container.location_service()
     conn_svc = container.connection_graph_service()
@@ -73,23 +71,16 @@ async def list_bootstrap_tiles(
     locations = await location_svc.get_all(world_uid)
     nodes = await conn_svc.get_nodes(world_uid)
     edges = await conn_svc.get_edges(world_uid)
-    ctx = prepare_surface_terrain_context(
-        world, locations, nodes=nodes, edges=edges,
-        hydrology_generator=_hydrology_generator,
-    )
-    if ctx is None:
-        return JSONResponse(content={
-            "world_uid": world_uid,
-            "scope": scope,
-            "max_tiles": max_tiles,
-            "tile_count": 0,
-            "tiles": [],
-        })
-    plan = PackTilePlanner().plan(
-        world, locations, ctx,
-        scope=scope,  # type: ignore[arg-type]
-        max_tiles=max_tiles if scope == "light" else None,
-    )
+    try:
+        plan = stack.plan_bootstrap_tiles(
+            world, locations,
+            scope=scope,
+            max_tiles=max_tiles,
+            nodes=nodes, edges=edges,
+            hydrology_generator=_hydrology_generator,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return JSONResponse(content={
         "world_uid": world_uid,
         "scope": plan.scope,
@@ -103,7 +94,7 @@ async def list_bootstrap_tiles(
 @router.post("/worlds/{world_uid}/map/pack/bake")
 async def bake_world_pack(
     world_uid: str,
-    mode: str = Query(default="light", pattern="^(light|full|detailed)$"),
+    mode: PackBakeApiMode = Query(default="light"),
     max_tiles: int = Query(default=PackBakeDefaults.canonical_defaults().max_tiles_light, ge=0),
     location_uid: str | None = Query(default=None),
     anchor_x: int | None = Query(default=None),
@@ -126,48 +117,21 @@ async def bake_world_pack(
     locations = await location_svc.get_all(world_uid)
     nodes = await conn_svc.get_nodes(world_uid)
     edges = await conn_svc.get_edges(world_uid)
-    # Pass max_tiles through (0 = uncapped light); do NOT map 0→None before resolve.
     mat_ctx = resolve_materialization_context(
         world, free_cores=free_cores, parallel_workers_override=parallel_workers,
     )
     writer = container.world_pack_writer_for(world)
 
     try:
-        if mode == "light":
-            report = await stack.materialize_pack_light(
-                world_uid, world, locations, mat_ctx, writer,
-                max_tiles=max_tiles,
-                nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
-                anchor_x=anchor_x, anchor_y=anchor_y,
-                heading_dx=heading_dx, heading_dy=heading_dy,
-            )
-            payload = report.to_dict()
-            failed = report.terrain.failed
-        elif mode == "full":
-            report = await stack.materialize_pack_full(
-                world_uid, world, locations, mat_ctx, writer,
-                nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
-            )
-            payload = report.to_dict()
-            failed = report.terrain.failed
-        elif mode == "detailed":
-            if not location_uid:
-                raise HTTPException(
-                    status_code=422,
-                    detail="mode=detailed requires location_uid",
-                )
-            result = await stack.materialize_pack_detailed(
-                world, locations, mat_ctx, writer, location_uid,
-                nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
-            )
-            payload = result.to_dict() if hasattr(result, "to_dict") else {
-                "total": result.total,
-                "succeeded": result.succeeded,
-                "failed": result.failed,
-            }
-            failed = result.failed
-        else:
-            raise HTTPException(status_code=422, detail=f"unknown pack bake mode '{mode}'")
+        result = await stack.bake_pack(
+            world_uid, world, locations, mat_ctx, writer,
+            mode=mode,
+            max_tiles=max_tiles,
+            location_uid=location_uid,
+            nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
+            anchor_x=anchor_x, anchor_y=anchor_y,
+            heading_dx=heading_dx, heading_dy=heading_dy,
+        )
     except MissingParentLightError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
@@ -176,12 +140,9 @@ async def bake_world_pack(
     progress = container.map_cell_read_service(world_uid).pack.loading.get_loading_progress(
         world, locations=locations,
     )
-    status_code = 200 if failed == 0 else 207
-    return JSONResponse(status_code=status_code, content={
-        **payload,
-        "pack_mode": mode,
-        "loading_progress": progress.to_dict(),
-    })
+    result.loading_progress = progress.to_dict()
+    status_code = 200 if result.terrain_failed == 0 else 207
+    return JSONResponse(status_code=status_code, content=result.to_dict())
 
 
 @router.get("/worlds/{world_uid}/map/pack/fine-terrain-read")

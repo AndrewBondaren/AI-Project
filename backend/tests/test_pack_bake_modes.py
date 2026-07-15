@@ -72,13 +72,13 @@ class TestPackTilePlannerScopes(unittest.TestCase):
         ctx.sparse_meter_hydro = {}
 
         with patch(
-            "app.application.worldData.pack.bake.packTilePlanner.is_hydrology_enabled",
+            "app.application.worldData.pack.bake.packTileCollect.is_hydrology_enabled",
             return_value=False,
         ), patch(
-            "app.application.worldData.pack.bake.packTilePlanner.static_map_anchors",
+            "app.application.worldData.pack.bake.packTileCollect.static_map_anchors",
             side_effect=lambda locs: [loc for loc in locs if loc.map_x is not None],
         ), patch(
-            "app.application.worldData.pack.bake.packTilePlanner.cell_size_m",
+            "app.application.worldData.pack.bake.packTileCollect.cell_size_m",
             return_value=3000,
         ):
             plan = PackTilePlanner(bake_defaults=PackBakeDefaults(max_tiles_light=1)).plan(
@@ -123,10 +123,12 @@ class TestPackCompletenessClassifier(unittest.TestCase):
             MagicMock(
                 tiles=[PackTileRef(gx=0, gy=0)],
                 scope="light",
+                cap_applied=16,
             ),
             MagicMock(
                 tiles=[PackTileRef(gx=0, gy=0), PackTileRef(gx=1, gy=1)],
                 scope="full",
+                cap_applied=None,
             ),
         ]
         manifest = WorldPackManifest(
@@ -145,6 +147,7 @@ class TestPackCompletenessClassifier(unittest.TestCase):
         self.assertEqual(snap.completeness, "light_complete")
         self.assertEqual(snap.expected_l0_full, 2)
         self.assertEqual(len(snap.missing_l0_full), 1)
+        self.assertEqual(snap.light_cap, 16)
 
 
 if __name__ == "__main__":

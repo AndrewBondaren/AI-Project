@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.climate.locations import static_map_anchors
 from app.application.worldData.generators.coordinates import cell_size_m
 from app.application.worldData.generators.coordinates.worldTile import macro_tile_of
-from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology import (
-    load_declared_hydrology,
+from app.application.worldData.pack.bake.packTileCollect import (
+    declared_hydro_tiles,
+    location_anchor_tiles,
 )
-from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
-    is_hydrology_enabled,
+from app.dataModel.worldPack.packBakeDefaults import (
+    PackBakeDefaults,
+    resolve_light_tile_cap,
 )
-from app.dataModel.worldPack.packBakeDefaults import resolve_light_tile_cap
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -25,37 +25,26 @@ def bootstrap_macro_tiles(
     sparse_meter_hydro: dict[Tile, object] | None,
     *,
     max_tiles: int | None = None,
+    defaults: PackBakeDefaults | None = None,
 ) -> list[Tile]:
     """
     Priority macro tiles for init testing: anchors → declared hydro → meter rivers → coarse flood.
 
-    ``max_tiles``: ``None`` → ``PackBakeDefaults.max_tiles_light``; ``<= 0`` → no cap
+    ``max_tiles``: ``None`` → ``defaults.max_tiles_light``; ``<= 0`` → no cap
     (via ``resolve_light_tile_cap``).
     """
-    cell_m = cell_size_m(world)
     priority: dict[Tile, int] = {}
 
     def add(tile: Tile, tier: int) -> None:
         if tile not in priority or priority[tile] > tier:
             priority[tile] = tier
 
-    for loc in static_map_anchors(locations):
-        add(macro_tile_of(loc.map_x, loc.map_y, cell_m), 0)
+    for tile in location_anchor_tiles(world, locations):
+        add(tile, 0)
+    for tile in declared_hydro_tiles(world, locations):
+        add(tile, 1)
 
-    if is_hydrology_enabled(world):
-        loaded = load_declared_hydrology(world, locations)
-        for a, b in loaded.coastline_segments:
-            add(macro_tile_of(a[0], a[1], cell_m), 1)
-            add(macro_tile_of(b[0], b[1], cell_m), 1)
-        for lake in loaded.lake_specs:
-            for a, b in lake.shoreline_segments:
-                add(macro_tile_of(a[0], a[1], cell_m), 1)
-                add(macro_tile_of(b[0], b[1], cell_m), 1)
-        for edge in loaded.river_edges:
-            a, b = edge.segment
-            add(macro_tile_of(a[0], a[1], cell_m), 1)
-            add(macro_tile_of(b[0], b[1], cell_m), 1)
-
+    cell_m = cell_size_m(world)
     for xm, ym in (sparse_meter_hydro or {}):
         add(macro_tile_of(xm, ym, cell_m), 2)
 
@@ -63,7 +52,7 @@ def bootstrap_macro_tiles(
         add((gx, gy), 3)
 
     ordered = sorted(priority.keys(), key=lambda t: (priority[t], t[1], t[0]))
-    cap = resolve_light_tile_cap(max_tiles)
+    cap = resolve_light_tile_cap(max_tiles, defaults=defaults)
     if cap is not None:
         ordered = ordered[:cap]
     return ordered

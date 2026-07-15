@@ -19,17 +19,21 @@ from app.application.worldData.generators.terrain.worldMapSettings import (
     terrain_chunk_columns,
 )
 from app.application.worldData.materializationContext import MaterializationContext
+from app.application.worldData.pack.io.worldPackReader import WorldPackReader
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volume_for_location,
 )
-from app.application.worldData.pack.read.parentLightLoad import MissingParentLightError
+from app.application.worldData.pack.read.parentLightLoad import require_parent_light
 from app.application.worldData.pack.refine.fineChunkRunner import FineChunkRunner
 from app.application.worldData.persistResult import PersistResult
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+
+DETAILED_REFINE_ROLE: ChunkRefineRole = "location"
 
 
 def _rect_overlaps_volume(rect: ColumnRect, volume: TerritoryVolume) -> bool:
@@ -108,10 +112,14 @@ class PackDetailedBakeOrchestrator:
         if not tiles:
             raise ValueError(f"location {location_uid}: no macro-tiles for territory")
 
+        tile_m = cell_size_m(world)
+        reader = WorldPackReader(writer.paths)
+        cache = writer.parent_light_cache
         for gx, gy in tiles:
-            entry = writer.manifest.tile_entry(gx, gy)
-            if entry is None or not entry.world_map_path:
-                raise MissingParentLightError(world.world_uid, gx, gy)
+            require_parent_light(
+                world.world_uid, gx, gy,
+                reader=reader, cache=cache, tile_m=tile_m,
+            )
 
         aggregate = PersistResult.from_counts(0, 0)
         for gx, gy in tiles:
@@ -121,7 +129,7 @@ class PackDetailedBakeOrchestrator:
             result, _written, _n = await self._runner.refine_rects(
                 world, locations, writer, mat_ctx, surface_ctx,
                 gx, gy, rects, [volume],
-                refine_role="scene",
+                refine_role=DETAILED_REFINE_ROLE,
                 phase="detailed",
             )
             aggregate = PersistResult.from_counts(

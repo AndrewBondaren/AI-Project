@@ -100,6 +100,7 @@ class PackCompletenessClassifier:
             l0_baked=len(baked),
             locations_expected=len(expected_locs),
             locations_detailed=len(detailed_uids),
+            light_cap=getattr(light_plan, "cap_applied", None),
             missing_l0_full=[
                 PackTileRef(gx=gx, gy=gy)
                 for gx, gy in missing_full[:max_missing_list]
