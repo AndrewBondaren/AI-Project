@@ -9,7 +9,7 @@ from app.application.worldData.generators.hydrology.hydrologyGeneratorService im
     HydrologyGeneratorService,
 )
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
-    prepare_surface_terrain_context,
+    require_surface_terrain_context,
 )
 from app.application.worldData.materializationContext import (
     MaterializationContext,
@@ -36,7 +36,6 @@ from app.db.repositories.iChunkRefineJobRepository import IChunkRefineJobReposit
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_bake_done,
     log_pack_bake_start,
-    log_pack_entry_anchor_fallback,
 )
 
 
@@ -145,23 +144,23 @@ class PackMaterializationOrchestrator:
             locations=len(locations),
             terrain_workers=resolve_terrain_workers(mat_ctx, world),
         )
-        surface_ctx = prepare_surface_terrain_context(
+        surface_ctx = require_surface_terrain_context(
             world, locations, nodes=nodes, edges=edges,
             hydrology_generator=hydrology_generator,
         )
-        if surface_ctx is not None and self._entry.has_job_repo:
+        drain = self._defaults.background_drain_per_request
+        if self._entry.has_job_repo and drain > 0:
             await self._entry.drain_persisted(
                 world_uid, world, locations, writer, mat_ctx, surface_ctx,
-                max_jobs=max(self._defaults.background_drain_per_request, 1),
+                max_jobs=drain,
             )
 
         climate_result: PersistResult | None = None
         climate_coarse_samples = 0
         climate_fine_tiles = 0
-        if surface_ctx is not None:
-            climate_result, climate_coarse_samples = self._climate.bake_coarse(
-                world, surface_ctx, writer,
-            )
+        climate_result, climate_coarse_samples = self._climate.bake_coarse(
+            world, surface_ctx, writer,
+        )
 
         locations_index = build_locations_index(locations)
         writer.write_locations_index(locations_index)
@@ -176,7 +175,7 @@ class PackMaterializationOrchestrator:
         chunks_done = 0
         chunks_total = 0
 
-        if refine_scene and tiles and surface_ctx is not None:
+        if refine_scene and tiles:
             ax = anchor_x
             ay = anchor_y
             if ax is None or ay is None:
@@ -186,21 +185,9 @@ class PackMaterializationOrchestrator:
                         ay = loc.map_y
                         break
             if ax is None or ay is None:
-                missing: list[str] = []
-                if ax is None:
-                    missing.append("anchor_x")
-                if ay is None:
-                    missing.append("anchor_y")
-                ax = 0 if ax is None else ax
-                ay = 0 if ay is None else ay
-                log_pack_entry_anchor_fallback(
-                    world_uid,
-                    reason=(
-                        f"{','.join(missing)} unresolved: no explicit bake anchor "
-                        "and no location with map_x/map_y; using default"
-                    ),
-                    anchor_x=ax,
-                    anchor_y=ay,
+                raise ValueError(
+                    "pack light bake refine requires anchor_x/anchor_y "
+                    "or a location with map_x/map_y",
                 )
             entry = await self._entry.refine_from_entry(
                 world_uid, world, locations, writer, mat_ctx, surface_ctx,

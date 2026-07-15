@@ -558,13 +558,50 @@ flowchart TB
 
 | Кусок | Код |
 |---|---|
-| Blocking scene + path | `EntryRefineOrchestrator.refine_from_entry` |
-| Фон rings + path-ahead (predicted border entry) | `schedule_chunk_refine` → `schedule_tile_background` / `schedule_path_ahead_tiles` |
+| Blocking scene + path | `EntryRefineOrchestrator.refine_from_entry` → `FineTerrainRefineOrchestrator` (facade) |
+| L2 chunk generate + persist | `FineChunkRunner.refine_rects` (parent light → pool → wilderness / location_terrain) |
+| Фон rings + path-ahead (predicted border entry) | `schedule_chunk_refine` → `chunkSchedule.schedule_tile_background` / `schedule_path_ahead_tiles` |
+| Path corridor rect select | `pathCorridorSelect.select_path_corridor_rects` |
 | Виды якоря (лейблы) | `AnchorKind`: `session_start` \| `tile_cross` \| `location_entry` |
 | Light bake spawn | `kind=session_start` + schedule |
 | Debug HTTP | `POST …/refine-from-entry`, `POST …/schedule-chunk-refine` |
 | WP-PERF-10 rings (не full-tile enqueue) | ✅ `background_expand_radius_m` |
 | Read ≠ write | § Read path / Entry load — два потока |
+
+#### L2 refine module layout (утверждено)
+
+Разрез application-слоя L2 (не меняет wire/контракты parent light / WP-13 entry-first):
+
+```mermaid
+flowchart TB
+  Entry[EntryRefineOrchestrator]
+  Worker[ChunkRefineWorker]
+  Facade[FineTerrainRefineOrchestrator]
+  Select[pathCorridorSelect]
+  Sched[chunkSchedule]
+  Runner[FineChunkRunner]
+  Terrain[TerrainBatchOrchestrator]
+  Writer[WorldPackWriter]
+
+  Entry --> Facade
+  Worker --> Facade
+  Facade --> Select
+  Facade --> Sched
+  Facade --> Runner
+  Runner --> Terrain
+  Runner --> Writer
+  Sched --> Queue[ChunkRefineQueue]
+```
+
+| Модуль | Ответственность | Запреты |
+|---|---|---|
+| `FineTerrainRefineOrchestrator` | Thin facade: scene / path / rect / queued chunk; делегирует schedule и helpers | Нет `ChunkComputePool`; нет прямой записи blobs |
+| `FineChunkRunner` | `require_parent_light` → surface → generate → partition → wilderness / location_terrain + manifest | Нет enqueue в `ChunkRefineQueue` |
+| `chunkSchedule` | Free functions: rings / path-ahead enqueue | Не пишет pack blobs; не generate cells |
+| `pathCorridorSelect` | `select_path_corridor_rects` → `ColumnRect[]` | Не persist |
+| `packMapHelpers.tile_for_anchor` / `entryRingGeom` | Coord / scene chunk indices | — |
+
+**Публичный entry:** debug HTTP / bake → `EntryRefineOrchestrator` → facade; background worker → `refine_queued_chunk` → runner.
 
 **Открыто (зафиксировано; не смешивать с «контракт утверждён»):**
 
@@ -940,7 +977,7 @@ effective_climate(x,y) =
 |---|---|---|---|
 | **L0** | Light world map per macro-tile | `world_map`, `WorldMapCellWire`, `world_map_path`, `world_map_hash`, `world_map_cells` | `r.{gx}.{gy}.world_map.zst`, `WorldMapBakeOrchestrator`, `WorldMapPackReader` |
 | **L1** | Location skeleton (pins, anchors) | SQLite `named_locations`; mirror `locations_index.json` (`LocationsIndexWire` / `LocationsIndexPin` в `dataModel/worldPack`) | не blob в pack |
-| **L2 wilderness** | Fine terrain chunk в tile | `wilderness_chunk`, `FineTerrainChunkWire`, `wilderness_refine_status`, `wilderness_chunks_baked` | `r.{gx}.{gy}.c.{cx}.{cy}.zst`, `FineTerrainRefineOrchestrator` |
+| **L2 wilderness** | Fine terrain chunk в tile | `wilderness_chunk`, `FineTerrainChunkWire`, `wilderness_refine_status`, `wilderness_chunks_baked` | `r.{gx}.{gy}.c.{cx}.{cy}.zst`, `FineTerrainRefineOrchestrator` + `FineChunkRunner` |
 | **L2 location** | Fine terrain территории локации | `location_terrain`, `LocationTerrainEntry`, `location_terrain_entries[]`, `terrain_path`, `terrain_hash` | `locations/l.{uid}.terrain.zst` |
 | **Merge fallback** | Coarse cell при отсутствии fine | `MapLayerKind.WORLD_MAP` | `merge_layers` / `MapCellQueryFacade` |
 

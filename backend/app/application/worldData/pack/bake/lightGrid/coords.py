@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.dataModel.worldPack.worldMapCellsPerTile import light_m_for
+
 
 @dataclass(frozen=True)
 class LightGridScale:
@@ -15,8 +17,7 @@ class LightGridScale:
     def from_tile(cls, tile_m: int, side: int) -> LightGridScale:
         side = max(1, int(side))
         tile_m = max(1, int(tile_m))
-        light_m = max(1, tile_m // side)
-        return cls(tile_m=tile_m, side=side, light_m=light_m)
+        return cls(tile_m=tile_m, side=side, light_m=light_m_for(tile_m, side))
 
 
 def meters_to_light(xm: int, ym: int, scale: LightGridScale) -> tuple[int, int]:

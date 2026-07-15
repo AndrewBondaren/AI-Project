@@ -22,12 +22,14 @@ from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
 from app.dataModel.worldPack.worldMapCellsPerTile import (
     WORLD_MAP_CELLS_PER_TILE,
     WorldMapCellsPerTilePolicy,
+    light_m_for,
     resolve_world_map_cells_per_tile,
     resolve_world_map_side,
 )
 from app.dataModel.worldPack.lightSettlementFootprint import LightSettlementFootprintPolicy
 from app.dataModel.worldPack.parentLightTile import ParentLightTile
 from app.dataModel.worldPack.parentLightRefinePolicy import ParentLightRefinePolicy
+from app.dataModel.worldPack.pathHeadingPolicy import PathHeadingPolicy
 from app.dataModel.worldPack.worldPackManifest import (
     PACK_WIRE_VERSION,
     ChunkRef,
@@ -68,6 +70,7 @@ __all__ = [
     "ParentLightRefinePolicy",
     "WorldPackManifest",
     "inside_location_volume",
+    "light_m_for",
     "merge_layers",
     "resolve_world_map_cells_per_tile",
     "resolve_world_map_side",

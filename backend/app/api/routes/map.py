@@ -287,13 +287,18 @@ async def bake_world_pack(
     writer = container.world_pack_writer_for(world)
 
     if mode == "light":
-        report = await stack.materialize_pack_light(
-            world_uid, world, locations, mat_ctx, writer,
-            max_tiles=cap,
-            nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
-            anchor_x=anchor_x, anchor_y=anchor_y,
-            heading_dx=heading_dx, heading_dy=heading_dy,
-        )
+        try:
+            report = await stack.materialize_pack_light(
+                world_uid, world, locations, mat_ctx, writer,
+                max_tiles=cap,
+                nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
+                anchor_x=anchor_x, anchor_y=anchor_y,
+                heading_dx=heading_dx, heading_dy=heading_dy,
+            )
+        except MissingParentLightError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
     else:
         raise HTTPException(status_code=422, detail=f"pack bake mode '{mode}' not implemented yet")
 

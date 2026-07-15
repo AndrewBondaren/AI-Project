@@ -11,6 +11,7 @@ from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology i
 from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
     is_hydrology_enabled,
 )
+from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -23,12 +24,12 @@ def bootstrap_macro_tiles(
     coarse_hydro: dict[Tile, object],
     sparse_meter_hydro: dict[Tile, object] | None,
     *,
-    max_tiles: int | None = 16,
+    max_tiles: int | None = None,
 ) -> list[Tile]:
     """
     Priority macro tiles for init testing: anchors → declared hydro → meter rivers → coarse flood.
 
-    ``max_tiles`` caps how many tiles get a full fine grid (default 16). Pass ``None`` for no cap.
+    ``max_tiles``: ``None`` → ``PackBakeDefaults.max_tiles_light``; ``<= 0`` → no cap.
     """
     cell_m = cell_size_m(world)
     priority: dict[Tile, int] = {}
@@ -61,6 +62,11 @@ def bootstrap_macro_tiles(
         add((gx, gy), 3)
 
     ordered = sorted(priority.keys(), key=lambda t: (priority[t], t[1], t[0]))
-    if max_tiles is not None and max_tiles > 0:
-        ordered = ordered[:max_tiles]
+    cap = (
+        PackBakeDefaults.canonical_defaults().max_tiles_light
+        if max_tiles is None
+        else max_tiles
+    )
+    if cap > 0:
+        ordered = ordered[:cap]
     return ordered

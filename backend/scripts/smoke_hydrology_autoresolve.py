@@ -21,6 +21,9 @@ def _ok(r: httpx.Response, ctx: str) -> None:
 
 
 def main() -> None:
+    from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
+
+    max_tiles = PackBakeDefaults.canonical_defaults().max_tiles_light
     with httpx.Client(base_url=BASE, timeout=300.0) as c:
         r = c.post("/worlds/import", data={"path": str(FIXTURE)})
         _ok(r, "POST /worlds/import")
@@ -35,7 +38,7 @@ def main() -> None:
 
         r = c.post(
             f"/worlds/{WORLD}/map/pack/bake",
-            params={"mode": "light", "max_tiles": 16},
+            params={"mode": "light", "max_tiles": max_tiles},
         )
         _ok(r, "pack/bake")
         bake = r.json()

@@ -1,6 +1,7 @@
 """Path heading defaults — docs/tz_world_pack_storage.md § WP-16, MERGE-5.
 
-``AppSettings.path_ahead_depth`` counts **macro-tiles** ahead on heading.
+``path_ahead_depth`` counts **macro-tiles** ahead on heading (POJO SoT).
+Runtime may override via ``AppSettings.path_ahead_depth`` / config.toml.
 Corridor depth in meters: ``depth_tiles * map_cell_size_m``.
 Corridor half-width: ``terrain_chunk_columns * corridor_half_width_chunk_multiplier`` meters.
 """
@@ -21,6 +22,8 @@ class PathHeadingPolicy(BaseModel):
 
     position_history_max: int = 5
     corridor_half_width_chunk_multiplier: float = 1.0
+    # Macro-tiles ahead on heading — SoT for refine defaults (config may override via AppSettings).
+    path_ahead_depth: int = 2
 
     @classmethod
     def canonical_defaults(cls) -> PathHeadingPolicy:

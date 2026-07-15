@@ -95,7 +95,9 @@ class WorldMapBakeOrchestrator:
             )
         if surface_ctx is None:
             log_pack_surface_context(world_uid, ok=False, started_at=ctx_t0)
-            return 0
+            raise ValueError(
+                f"surface terrain context unavailable for world_map bake ({world_uid})",
+            )
         log_pack_surface_context(
             world_uid,
             ok=True,

@@ -58,3 +58,11 @@ def resolve_world_map_side(
     """Preferred API — side only, no misleading tile_m argument."""
     pol = policy or WorldMapCellsPerTilePolicy.canonical_defaults()
     return pol.resolve_side(override)
+
+
+def light_m_for(tile_m: int, side: int) -> int:
+    """Meters per light cell: ``map_cell_size_m // side`` (WP-10).
+
+    Single SoT for ``LightGridScale.light_m`` and ``ParentLightTile.light_m``.
+    """
+    return max(1, int(tile_m) // max(1, int(side)))

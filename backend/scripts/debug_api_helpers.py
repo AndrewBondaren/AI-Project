@@ -3,23 +3,25 @@
 Requires running backend on ``http://localhost:8000`` — **start it yourself** (``npm run backend`` / ``python start.py``).
 Agents must **not** start the server; only run these helpers after the user has it up.
 
-Surface / pack bake HTTP helpers: ``debug_surface_helpers.api_pack_bake`` /
-``debug_api_helpers.api_pack_bake``. Legacy generate-surface routes are removed.
+Surface / pack bake: ``api_pack_bake`` (canonical; re-exported from ``debug_surface_helpers``).
 """
 from __future__ import annotations
 
 import os
 from contextlib import contextmanager
 from dataclasses import asdict
-from typing import Iterator
+from typing import Iterator, Literal
 
 import httpx
 
+from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 BASE_URL = os.environ.get("DEBUG_API_URL", "http://localhost:8000/api")
 TIMEOUT  = float(os.environ.get("DEBUG_API_TIMEOUT", "120"))
+
+PackBakeMode = Literal["light", "tile", "full"]
 
 
 class DebugApiError(RuntimeError):
@@ -94,12 +96,14 @@ def api_pack_bake(
     client: httpx.Client,
     world_uid: str,
     *,
-    mode: str = "light",
+    mode: PackBakeMode = "light",
     max_tiles: int | None = None,
+    anchor_x: int | None = None,
+    anchor_y: int | None = None,
+    heading_dx: int | None = None,
+    heading_dy: int | None = None,
 ) -> dict:
-    """Canonical debug bake — ``POST …/map/pack/bake``."""
-    from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
-
+    """Canonical debug bake — ``POST …/map/pack/bake`` (single SoT helper)."""
     cap = (
         max_tiles
         if max_tiles is not None
@@ -108,6 +112,14 @@ def api_pack_bake(
     params: dict[str, str | int] = {"mode": mode}
     if cap > 0:
         params["max_tiles"] = cap
+    if anchor_x is not None:
+        params["anchor_x"] = anchor_x
+    if anchor_y is not None:
+        params["anchor_y"] = anchor_y
+    if heading_dx is not None:
+        params["heading_dx"] = heading_dx
+    if heading_dy is not None:
+        params["heading_dy"] = heading_dy
     r = client.post(f"/worlds/{world_uid}/map/pack/bake", params=params)
     _require_ok(r, f"POST pack/bake {world_uid}")
     data = r.json()

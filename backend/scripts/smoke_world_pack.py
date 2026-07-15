@@ -26,7 +26,14 @@ BACKEND = REPO / "backend"
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
-from debug_api_helpers import BASE_URL, DebugApiError, _require_ok, api_clear_map, api_client
+from debug_api_helpers import (
+    BASE_URL,
+    DebugApiError,
+    _require_ok,
+    api_clear_map,
+    api_client,
+    api_pack_bake,
+)
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 
 DEFAULT_FIXTURE = REPO / "fixtures" / "world_terrain_test.json"
@@ -126,15 +133,6 @@ def _import_fixture(client: httpx.Client, fixture: Path) -> dict:
     return r.json()
 
 
-def _pack_bake(client: httpx.Client, world_uid: str, *, max_tiles: int) -> dict:
-    params: dict[str, int | str] = {"mode": "light"}
-    if max_tiles > 0:
-        params["max_tiles"] = max_tiles
-    r = client.post(f"/worlds/{world_uid}/map/pack/bake", params=params)
-    _require_ok(r, f"POST pack/bake {world_uid}")
-    return r.json()
-
-
 def run_http(
     result: SmokeResult,
     *,
@@ -167,7 +165,7 @@ def run_http(
 
         if not skip_bake:
             t0 = time.perf_counter()
-            bake = _pack_bake(client, world_uid, max_tiles=max_tiles)
+            bake = api_pack_bake(client, world_uid, max_tiles=max_tiles)
             elapsed = time.perf_counter() - t0
             terrain = bake.get("terrain") or {}
             failed = int(terrain.get("failed") or 0)
@@ -316,7 +314,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="World Pack WP-A smoke")
     parser.add_argument("--fixture", type=Path, default=DEFAULT_FIXTURE)
     parser.add_argument("--world-uid", default=None)
-    parser.add_argument("--max-tiles", type=int, default=16)
+    from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
+    parser.add_argument(
+        "--max-tiles",
+        type=int,
+        default=PackBakeDefaults.canonical_defaults().max_tiles_light,
+    )
     parser.add_argument("--base-url", default=BASE_URL)
     parser.add_argument("--offline-only", action="store_true")
     parser.add_argument("--skip-import", action="store_true")

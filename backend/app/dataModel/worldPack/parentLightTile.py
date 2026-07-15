@@ -8,7 +8,7 @@ from typing import ClassVar, Mapping
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
-from app.dataModel.worldPack.worldMapCellsPerTile import WORLD_MAP_CELLS_PER_TILE
+from app.dataModel.worldPack.worldMapCellsPerTile import WORLD_MAP_CELLS_PER_TILE, light_m_for
 
 
 class ParentLightTile(BaseModel):
@@ -51,7 +51,8 @@ class ParentLightTile(BaseModel):
 
     @property
     def light_m(self) -> int:
-        return max(1, self.tile_m // self.side)
+        """Meters per light cell — same SoT as ``LightGridScale`` (``light_m_for``)."""
+        return light_m_for(self.tile_m, self.side)
 
     def cell_at(self, tx: int, ty: int) -> WorldMapCellWire | None:
         return self.cells.get((int(tx), int(ty)))

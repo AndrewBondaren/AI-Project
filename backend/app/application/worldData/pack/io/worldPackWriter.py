@@ -38,6 +38,10 @@ from app.db.models.world import World
 
 
 class WorldPackWriter:
+    """Atomic pack writer. Prefer Container.world_pack_writer_for so parent-light
+    cache is process-scoped; constructing with bare paths creates a private cache.
+    """
+
     def __init__(
         self,
         paths: WorldPackPaths,

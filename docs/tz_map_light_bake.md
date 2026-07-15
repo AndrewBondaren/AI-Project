@@ -16,7 +16,7 @@ metadata:
 
 **Не в scope этого ТЗ:**
 
-- L2 refine / wilderness chunks / location terrain blobs ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2, WP-13);
+- L2 refine / wilderness chunks / location terrain blobs ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2, WP-13; **module layout** — § «L2 refine module layout»);
 - Patch Store / merge priority WP-20;
 - DAG wiring;
 - план имплементации агента (`.cursor/plans/`).

@@ -17,6 +17,14 @@ def tile_index(coord: int, tile_size: int) -> tuple[int, int]:
     return gx, local
 
 
+def tile_for_anchor(world: World, anchor_x: int, anchor_y: int) -> tuple[int, int]:
+    """Macro-tile (gx, gy) containing meter anchor."""
+    tile_size = world_tile_size_m(world)
+    gx, _ = tile_index(anchor_x, tile_size)
+    gy, _ = tile_index(anchor_y, tile_size)
+    return gx, gy
+
+
 def world_map_sample_index(local: int, tile_size: int, cells_per_side: int) -> int:
     """Map meter-local offset inside a macro-tile to light ``tx``/``ty``.
 

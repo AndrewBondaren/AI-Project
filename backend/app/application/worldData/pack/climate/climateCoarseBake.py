@@ -13,6 +13,7 @@ from app.application.worldData.generators.coordinates import (
 )
 from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire, ClimateSampleWire
 from app.dataModel.worldPack.worldMapCellsPerTile import resolve_world_map_cells_per_tile
+from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
 from app.db.models.world import World
 
 
@@ -90,7 +91,8 @@ def build_climate_tile_wire(
         tile_m,
         world.world_map_cells_per_tile,
     )
-    step = max(1, tile_m // side)
+    scale = LightGridScale.from_tile(tile_m, side)
+    step = scale.light_m
     origin_x = int(grid_tile_origin_x(tile_gx, tile_m))
     origin_y = int(grid_tile_origin_y(tile_gy, tile_m))
     z_map = coarse_surface_z or {}

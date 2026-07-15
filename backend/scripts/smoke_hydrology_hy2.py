@@ -21,6 +21,9 @@ def _ok(r: httpx.Response, ctx: str) -> None:
 
 
 def main() -> None:
+    from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
+
+    max_tiles = PackBakeDefaults.canonical_defaults().max_tiles_light
     with httpx.Client(base_url=BASE, timeout=600.0) as c:
         r = c.get("/worlds")
         _ok(r, "GET /worlds")
@@ -40,14 +43,14 @@ def main() -> None:
         if r.status_code not in (204, 404):
             _ok(r, "DELETE map")
 
-        r = c.get(f"/worlds/{WORLD}/map/bootstrap-tiles", params={"max_tiles": 16})
+        r = c.get(f"/worlds/{WORLD}/map/bootstrap-tiles", params={"max_tiles": max_tiles})
         _ok(r, "bootstrap-tiles")
         preview = r.json()
         print(f"bootstrap preview: {preview.get('tile_count')} tiles")
 
         r = c.post(
             f"/worlds/{WORLD}/map/pack/bake",
-            params={"mode": "light", "max_tiles": 16},
+            params={"mode": "light", "max_tiles": max_tiles},
         )
         _ok(r, "pack/bake")
         bake = r.json()

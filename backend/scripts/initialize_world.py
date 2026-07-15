@@ -120,7 +120,12 @@ def main() -> None:
         default=REPO / "fixtures" / "world_terrain_test.json",
     )
     parser.add_argument("--world-uid", default=None, help="defaults to fixture world_uid")
-    parser.add_argument("--max-tiles", type=int, default=16, help="0 = no cap on bootstrap tiles")
+    parser.add_argument(
+        "--max-tiles",
+        type=int,
+        default=None,
+        help="cap bootstrap tiles (default PackBakeDefaults.max_tiles_light)",
+    )
     parser.add_argument(
         "--mode",
         choices=("light",),

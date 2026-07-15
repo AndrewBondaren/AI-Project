@@ -190,7 +190,7 @@ class TestRefineFailClosed(unittest.IsolatedAsyncioTestCase):
             terrain_parallel_workers=None,
         )
         with patch(
-            "app.application.worldData.pack.refine.fineTerrainRefineOrchestrator.require_parent_light",
+            "app.application.worldData.pack.refine.fineChunkRunner.require_parent_light",
             side_effect=MissingParentLightError("w-miss", 0, 0),
         ):
             with self.assertRaises(MissingParentLightError):
