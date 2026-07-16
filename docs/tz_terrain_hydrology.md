@@ -23,6 +23,7 @@ metadata:
 | U8 | **Declare (optional):** водоёмы / рельеф — **`NamedLocation`** только если мастер объявляет; иначе autoresolve без location |
 | U9 | **Реки:** declare — `declared_rivers[]` (U27); bed carve + **routing graph** — `ConnectionEdge` после emit (U18). **`NamedLocation` optional** — только для имени |
 | U10 | **Default: autoresolve** если в template не объявлено; **отключение** — `hydrology.enabled` или `default_<category>.enabled: false` |
+| U10b | **Единая mask-policy** (hydro + terrain + road): `enabled` default true; `DefaultOnWire`→DB; `IgnoreOnWire` overrides; empty declare ≠ off — [`tz_map_light_bake.md`](./tz_map_light_bake.md) § Surface mask domains |
 | U11 | **`NamedLocation`** — optional: geometry **не требует** location; master declare — всегда вручную |
 | U12 | **Подземные реки и озёра** — в **cave systems** (`generate-caves`), **не** surface hydrology; **своя экосистема** (volume climate, без surface rain/pole) |
 | U13 | **`materialize_named_locations`** в **шаблоне мира** (default **OFF**); при **ON** — отдельная **LLM-нода DAG** придумывает `display_name` из контекста; python-нода persist |

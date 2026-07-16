@@ -51,9 +51,13 @@ def _world(**overrides):
                 },
             ],
         },
+        terrain_masks={},
         terrain_registry=[
             {"system_terrain": "plains", "display_name": "Plains"},
             {"system_terrain": "forest", "display_name": "Forest"},
+            {"system_terrain": "mountain", "display_name": "Mountain"},
+            {"system_terrain": "ravine", "display_name": "Ravine"},
+            {"system_terrain": "road", "display_name": "Road"},
         ],
     )
     base.update(overrides)
@@ -66,6 +70,23 @@ class TestLightGridCompose(unittest.TestCase):
         scale = LightGridScale.from_tile(1000, 32)
         self.assertEqual(scale.side, 32)
         self.assertEqual(scale.light_m, 31)
+
+    def test_default_pipeline_order(self):
+        from app.application.worldData.pack.bake.lightGrid.bake import DEFAULT_CONTRIBUTORS
+
+        self.assertEqual(
+            [c.name for c in DEFAULT_CONTRIBUTORS],
+            [
+                "relief",
+                "climate",
+                "landcover",
+                "mountain",
+                "ravine",
+                "hydro",
+                "settlement",
+                "road",
+            ],
+        )
 
     def test_river_corridor_not_flat_macro_sample(self):
         world = _world()
@@ -121,7 +142,7 @@ class TestLightGridCompose(unittest.TestCase):
             scale=scale,
             surface_planning=surface,
             pole_field=pole,
-            terrain_system_keys={"plains", "forest"},
+            terrain_system_keys={"plains", "forest", "mountain", "ravine", "road"},
         )
         compose = compose_light_grid(ctx)
         cells = compose.to_wire_tile(0, 0)
@@ -139,6 +160,113 @@ class TestLightGridCompose(unittest.TestCase):
 
         z_values = {c.surface_z for c in cells}
         self.assertGreaterEqual(len(z_values), 1)
+
+        # Temperate + wet → forest (not z==1 stub); climate_zone set before landcover.
+        forest_n = sum(1 for c in cells if c.system_terrain == "forest")
+        self.assertGreater(forest_n, 0)
+        climate_n = sum(1 for c in cells if c.climate_zone_id is not None)
+        self.assertEqual(climate_n, 1024)
+
+    def test_road_paints_from_edges(self):
+        from app.db.models.connectionEdge import ConnectionEdge
+        from app.db.models.connectionNode import ConnectionNode
+
+        world = _world()
+        pole = MagicMock(spec=ClimatePoleField)
+        pole.sample.return_value = SimpleNamespace(
+            typical_elevation_z=0,
+            system_climate_zone="arid",
+        )
+        scale = LightGridScale.from_tile(1000, 32)
+        nodes = [
+            ConnectionNode(
+                node_uid="n0",
+                x=100,
+                y=200,
+                z=0,
+                node_type="waypoint",
+                graph_level="world",
+                world_uid=world.world_uid,
+            ),
+            ConnectionNode(
+                node_uid="n1",
+                x=800,
+                y=200,
+                z=0,
+                node_type="waypoint",
+                graph_level="world",
+                world_uid=world.world_uid,
+            ),
+        ]
+        edges = [
+            ConnectionEdge(
+                edge_uid="e0",
+                from_node_uid="n0",
+                to_node_uid="n1",
+                connection_type="road",
+                graph_level="world",
+                world_uid=world.world_uid,
+            ),
+        ]
+        ctx = LightGridBakeContext(
+            world=world,
+            locations=[],
+            locations_index=LocationsIndexWire(locations=[]),
+            tiles=[(0, 0)],
+            scale=scale,
+            nodes=nodes,
+            edges=edges,
+            pole_field=pole,
+            terrain_system_keys={"plains", "forest", "mountain", "ravine", "road"},
+        )
+        compose = compose_light_grid(ctx)
+        cells = compose.to_wire_tile(0, 0)
+        road_n = sum(1 for c in cells if c.system_terrain == "road")
+        self.assertGreater(road_n, 0)
+
+    def test_mountains_disabled(self):
+        world = _world(terrain_masks={"default_mountains": {"enabled": False}})
+        pole = MagicMock(spec=ClimatePoleField)
+        pole.sample.return_value = SimpleNamespace(
+            typical_elevation_z=3,
+            system_climate_zone="cold",
+        )
+        scale = LightGridScale.from_tile(1000, 32)
+        ctx = LightGridBakeContext(
+            world=world,
+            locations=[],
+            locations_index=LocationsIndexWire(locations=[]),
+            tiles=[(0, 0)],
+            scale=scale,
+            pole_field=pole,
+            terrain_system_keys={"plains", "forest", "mountain", "ravine", "road"},
+        )
+        compose = compose_light_grid(ctx)
+        cells = compose.to_wire_tile(0, 0)
+        self.assertEqual(sum(1 for c in cells if c.system_terrain == "mountain"), 0)
+
+    def test_mountains_autoresolve_without_declare(self):
+        world = _world(
+            terrain_masks={"default_mountains": {"threshold": 0.0, "autoresolve": True}},
+        )
+        pole = MagicMock(spec=ClimatePoleField)
+        pole.sample.return_value = SimpleNamespace(
+            typical_elevation_z=2,
+            system_climate_zone="temperate",
+        )
+        scale = LightGridScale.from_tile(1000, 32)
+        ctx = LightGridBakeContext(
+            world=world,
+            locations=[],
+            locations_index=LocationsIndexWire(locations=[]),
+            tiles=[(0, 0)],
+            scale=scale,
+            pole_field=pole,
+            terrain_system_keys={"plains", "forest", "mountain", "ravine", "road"},
+        )
+        compose = compose_light_grid(ctx)
+        cells = compose.to_wire_tile(0, 0)
+        self.assertGreater(sum(1 for c in cells if c.system_terrain == "mountain"), 0)
 
 
 if __name__ == "__main__":

@@ -221,6 +221,7 @@
         }
       ]
     },
+    "terrain_masks": {},
     "caves": {
       "hydrology": {
         "enabled": false,
@@ -245,6 +246,8 @@
       "terrain_plains": { "display_name": "Равнина", "description": "Открытая ровная местность." },
       "terrain_forest": { "display_name": "Лес", "description": "Густой лес." },
       "terrain_mountain": { "display_name": "Горы", "description": "Высокий рельеф." },
+      "terrain_ravine": { "display_name": "Овраг", "description": "Локальное понижение рельефа." },
+      "terrain_road": { "display_name": "Дорога", "description": "Дорога на world map." },
       "terrain_shore": { "display_name": "Берег", "description": "Прибрежная полоса." },
       "terrain_liquid_body": { "display_name": "Водоём", "description": "Море, океан, река." },
       "geo_pole_north": { "display_name": "Северный полюс", "description": "Северный климатический полюс мира (якорь + binary autoresolve)." },
@@ -262,6 +265,8 @@
       { "system_terrain": "plains", "glossary_ref": "terrain_plains", "terrain_category": "solid", "travel_modifier": 1.5, "danger_level": "none", "has_state": false, "default_state": null, "default_material": "earth" },
       { "system_terrain": "forest", "glossary_ref": "terrain_forest", "terrain_category": "solid", "travel_modifier": 2.5, "danger_level": "medium", "has_state": false, "default_state": null, "default_material": "wood" },
       { "system_terrain": "mountain", "glossary_ref": "terrain_mountain", "terrain_category": "solid", "travel_modifier": 3.0, "danger_level": "medium", "has_state": false, "default_state": null, "default_material": "stone" },
+      { "system_terrain": "ravine", "glossary_ref": "terrain_ravine", "terrain_category": "solid", "travel_modifier": 2.5, "danger_level": "medium", "has_state": false, "default_state": null, "default_material": "earth" },
+      { "system_terrain": "road", "glossary_ref": "terrain_road", "terrain_category": "solid", "travel_modifier": 1.0, "danger_level": "none", "has_state": false, "default_state": null, "default_material": "earth" },
       { "system_terrain": "shore", "glossary_ref": "terrain_shore", "terrain_category": "solid", "travel_modifier": 1.8, "danger_level": "low", "has_state": false, "default_state": null, "default_material": "sand" },
       { "system_terrain": "liquid_body", "glossary_ref": "terrain_liquid_body", "terrain_category": "liquid", "travel_modifier": null, "danger_level": "high", "has_state": false, "default_state": null, "default_material": "water" }
     ],

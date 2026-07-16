@@ -1,25 +1,23 @@
-"""Elevation → terrain type mapping for skeleton cells (solid only; no liquid)."""
+"""Skeleton column terrain helpers (solid only; no liquid). Surface biome → masks.resolveForestPlains."""
+
+from __future__ import annotations
+
+from app.application.worldData.masks.resolveForestPlains import resolve_forest_plains_from_zone
+from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
+from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
 
 
 def _pick(candidates: list[str], terrain_set: set[str]) -> str:
     for t in candidates:
         if t in terrain_set:
             return t
-    return next(iter(terrain_set), "plains")
-
-
-def surface_terrain_at_z(z: int, terrain_set: set[str]) -> str:
-    if z >= 2:
-        candidates = ["tundra", "plains"]
-    elif z == 1:
-        candidates = ["forest", "plains"]
-    else:
-        candidates = ["plains"]
-    return _pick(candidates, terrain_set)
+    plains = WorldTerrainMasks.canonical_defaults().default_plains.system_terrain
+    return next(iter(terrain_set), plains)
 
 
 def subsurface_terrain_at_z(terrain_set: set[str]) -> str:
-    return _pick(["earth", "plains"], terrain_set)
+    plains = WorldTerrainMasks.canonical_defaults().default_plains.system_terrain
+    return _pick(["earth", plains], terrain_set)
 
 
 def magma_terrain(terrain_set: set[str]) -> str:
@@ -28,6 +26,18 @@ def magma_terrain(terrain_set: set[str]) -> str:
     return subsurface_terrain_at_z(terrain_set)
 
 
-def z_to_terrain(z: int, terrain_set: set[str]) -> str:
-    """Backward-compat alias — surface mapping only (no liquid_body by z)."""
-    return surface_terrain_at_z(z, terrain_set)
+def surface_biome_terrain(
+    terrain_set: set[str],
+    *,
+    system_climate_zone: str | None = None,
+    masks: WorldTerrainMasks | None = None,
+) -> str:
+    """Outdoor surface biome (forest/plains/tundra) — not mountain/ravine/road."""
+    zone = system_climate_zone
+    if zone is None:
+        zone = WorldClimateScalars.canonical_defaults().default_climate_zone
+    return resolve_forest_plains_from_zone(
+        system_climate_zone=zone,
+        terrain_set=terrain_set,
+        masks=masks,
+    )

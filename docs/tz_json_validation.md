@@ -177,6 +177,7 @@ backend/app/application/worldData/  # WorldService, bundle — без domain val
 | SCH-WORLD-MATERIAL | `WorldMaterialRegistry` | `material_registry` | ✅ | ✅ |
 | SCH-WORLD-TERRAIN | `WorldTerrainRegistry` | `terrain_registry` | ✅ | ✅ |
 | SCH-WORLD-HYDROLOGY | `WorldHydrology` | `hydrology` | ✅ | ✅ |
+| SCH-WORLD-TERRAIN-MASKS | `WorldTerrainMasks` | `terrain_masks` | ✅ | ✅ |
 | SCH-WORLD-CLIMATE-ZONE | `WorldClimateZoneRegistry` | `climate_zone_registry` | ✅ | ✅ |
 | SCH-WORLD-BARRIER-TEMPLATE | `WorldBarrierTemplateRegistry` | `barrier_template_registry` | ✅ | ✅ runtime |
 | SCH-WORLD-CITY-SIZE | `WorldCitySizeRegistry` | `city_size_registry` | ✅ | ✅ runtime |

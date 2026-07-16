@@ -258,6 +258,7 @@
         }
       ]
     },
+    "terrain_masks": {},
     "caves": {
       "hydrology": {
         "enabled": true,
@@ -369,6 +370,14 @@
         "display_name": "Горы",
         "description": "Высокий рельеф, крутые склоны."
       },
+      "terrain_ravine": {
+        "display_name": "Овраг",
+        "description": "Локальное понижение рельефа на world map."
+      },
+      "terrain_road": {
+        "display_name": "Дорога",
+        "description": "Дорога / тракт на world map light mask."
+      },
       "terrain_shore": {
         "display_name": "Берег",
         "description": "Прибрежная полоса: shore + shallow deepening (U15)."
@@ -456,6 +465,26 @@
         "has_state": false,
         "default_state": null,
         "default_material": "stone"
+      },
+      {
+        "system_terrain": "ravine",
+        "glossary_ref": "terrain_ravine",
+        "terrain_category": "solid",
+        "travel_modifier": 2.5,
+        "danger_level": "medium",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "earth"
+      },
+      {
+        "system_terrain": "road",
+        "glossary_ref": "terrain_road",
+        "terrain_category": "solid",
+        "travel_modifier": 1.0,
+        "danger_level": "none",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "earth"
       },
       {
         "system_terrain": "shore",

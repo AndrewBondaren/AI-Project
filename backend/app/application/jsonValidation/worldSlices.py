@@ -32,6 +32,7 @@ from app.dataModel import (
     WorldTerrainRegistry,
     WorldWeatherTypeRegistry,
 )
+from app.dataModel.terrainMasks import WorldTerrainMasks
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
 )
@@ -180,6 +181,13 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
         pojo_cls=WorldHydrology,
         wire_kind="json_blob",
         world_keys=("hydrology",),
+        facade=True,
+    ),
+    WorldSlice(
+        schema_id=WorldTerrainMasks.SCHEMA_ID,
+        pojo_cls=WorldTerrainMasks,
+        wire_kind="json_blob",
+        world_keys=("terrain_masks",),
         facade=True,
     ),
     _registry_slice(

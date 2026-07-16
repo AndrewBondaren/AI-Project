@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
 from app.dataModel.hydrology.bands import HydrologyBands
 from app.dataModel.annotationPolicy import DefaultOnWire
+from app.dataModel.masks.maskCategoryPolicy import MaskCategoryPolicy
 
 
-class HydrologyCategoryPolicy(BaseModel):
-    """default_rivers / default_lakes — enabled, autoresolve, bands."""
+class HydrologyCategoryPolicy(MaskCategoryPolicy):
+    """default_rivers / default_lakes — MaskCategoryPolicy + bands."""
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    enabled: DefaultOnWire[bool] = True
-    autoresolve: DefaultOnWire[bool] = True
     bands: DefaultOnWire[HydrologyBands] = Field(default_factory=lambda: HydrologyBands(min=1, max=5))

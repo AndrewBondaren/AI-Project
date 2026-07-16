@@ -34,6 +34,22 @@ _CANONICAL_ENTRIES: tuple[TerrainRegistryEntry, ...] = (
         default_material="stone",
     ),
     TerrainRegistryEntry(
+        system_terrain="ravine",
+        glossary_ref="terrain_ravine",
+        terrain_category="solid",
+        travel_modifier=2.5,
+        danger_level="medium",
+        default_material="earth",
+    ),
+    TerrainRegistryEntry(
+        system_terrain="road",
+        glossary_ref="terrain_road",
+        terrain_category="solid",
+        travel_modifier=1.0,
+        danger_level="none",
+        default_material="earth",
+    ),
+    TerrainRegistryEntry(
         system_terrain="shore",
         glossary_ref="terrain_shore",
         terrain_category="solid",

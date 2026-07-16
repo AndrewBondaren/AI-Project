@@ -98,6 +98,8 @@ from app.dataModel.terrain import (
     WorldTerrainRegistry,
     WorldTerrainScalars,
 )
+from app.dataModel.masks import MaskCategoryPolicy
+from app.dataModel.terrainMasks import WorldTerrainMasks
 
 __all__ = [
     "BAND_COMMON",
@@ -174,7 +176,9 @@ __all__ = [
     "WorldMaterialRegistry",
     "WorldRoadSettings",
     "WorldRoomTypeRegistry",
+    "MaskCategoryPolicy",
     "WorldTerrainCategoryRegistry",
+    "WorldTerrainMasks",
     "WorldTerrainRegistry",
     "WorldTerrainScalars",
     "WorldWeatherTypeRegistry",

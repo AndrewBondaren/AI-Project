@@ -1,4 +1,4 @@
-from app.application.jsonValidation import terrain_scalars, terrain_system_keys
+from app.application.jsonValidation import terrain_masks, terrain_scalars, terrain_system_keys
 from app.application.worldData.generators.terrain.passes.gapAnalysisPass import n_base
 from app.application.worldData.generators.hydrology.shore.shoreProfile import (
     apply_shore_surface,
@@ -8,9 +8,10 @@ from app.application.worldData.generators.terrain.worldMapSettings import world_
 from app.application.worldData.generators.terrain.terrainZ import (
     magma_terrain,
     subsurface_terrain_at_z,
-    surface_terrain_at_z,
+    surface_biome_terrain,
 )
 from app.application.worldData.generators.terrain.types import ColumnRect, SurfaceHeightmap
+from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology, dump_cell_hydrology
 from app.db.models.mapCell import MapCell
@@ -41,6 +42,8 @@ def run_column_fill(
     magma_thick = _magma_thickness(world)
     use_magma   = magma_thick > 0 and bool(terrain_scalars(world).closed_planet_grid)
     shore_terrain, shore_material = shore_terrain_material(world)
+    default_zone = WorldClimateScalars.canonical_defaults().default_climate_zone
+    masks = terrain_masks(world)
 
     x_lo = rect.x_min if rect else heightmap.bbox.x_min
     x_hi = rect.x_max if rect else heightmap.bbox.x_max
@@ -60,7 +63,11 @@ def run_column_fill(
 
             for z in range(z_bottom, z_top + 1):
                 terrain = (
-                    surface_terrain_at_z(z, terrain_set)
+                    surface_biome_terrain(
+                        terrain_set,
+                        system_climate_zone=default_zone,
+                        masks=masks,
+                    )
                     if z == z_top
                     else subsurface_terrain_at_z(terrain_set)
                 )

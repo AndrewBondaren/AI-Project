@@ -27,6 +27,7 @@ from app.dataModel import (
     WorldTerrainRegistry,
     WorldWeatherTypeRegistry,
 )
+from app.dataModel.terrainMasks import WorldTerrainMasks
 from app.application.jsonValidation.worldSlices import (
     climate_zone_wire_from_raw,
     location_type_wire_from_raw,
@@ -116,6 +117,21 @@ def hydrology(world: Any) -> WorldHydrology:
 
 def hydrology_dict(world: Any) -> dict:
     return hydrology(world).model_dump(mode="json")
+
+
+def terrain_masks(world: Any) -> WorldTerrainMasks:
+    raw = getattr(world, "terrain_masks", None)
+    if not raw:
+        return WorldTerrainMasks.canonical_empty()
+    return resolve_model(
+        WorldTerrainMasks,
+        raw,
+        label=f"world={_uid(world)} terrain_masks",
+    )
+
+
+def terrain_masks_dict(world: Any) -> dict:
+    return terrain_masks(world).model_dump(mode="json")
 
 
 def river_type_classify_defaults() -> PojoRiverTypeClassify:

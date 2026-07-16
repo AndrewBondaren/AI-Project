@@ -25,6 +25,14 @@ _CANONICAL_ENTRIES: dict[str, LoreRegistryEntry] = {
         display_name="Горы",
         description="Высокий рельеф, крутые склоны.",
     ),
+    "terrain_ravine": LoreRegistryEntry(
+        display_name="Овраг",
+        description="Локальное понижение рельефа на world map.",
+    ),
+    "terrain_road": LoreRegistryEntry(
+        display_name="Дорога",
+        description="Дорога / тракт на world map light mask.",
+    ),
     "terrain_shore": LoreRegistryEntry(
         display_name="Берег",
         description="Прибрежная полоса: shore + shallow deepening (U15).",

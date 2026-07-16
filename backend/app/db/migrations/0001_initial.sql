@@ -79,8 +79,9 @@ CREATE TABLE IF NOT EXISTS worlds (
     barrier_template_registry   TEXT,
     connection_type_registry    TEXT,
 
-    -- generation policy (hydrology / caves — tz_terrain_hydrology.md)
+    -- generation policy (hydrology / caves / terrain masks — tz_terrain_hydrology.md, tz_map_light_bake.md)
     hydrology                   TEXT,
+    terrain_masks               TEXT,
     caves                       TEXT,
 
     -- faction registries

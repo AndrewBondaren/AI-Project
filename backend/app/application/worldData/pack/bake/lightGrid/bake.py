@@ -12,7 +12,10 @@ from app.application.worldData.pack.bake.lightGrid.contributor import LightGridC
 from app.application.worldData.pack.bake.lightGrid.contributors.climate import ClimateContributor
 from app.application.worldData.pack.bake.lightGrid.contributors.hydro import HydroContributor
 from app.application.worldData.pack.bake.lightGrid.contributors.landcover import LandcoverContributor
+from app.application.worldData.pack.bake.lightGrid.contributors.mountain import MountainContributor
+from app.application.worldData.pack.bake.lightGrid.contributors.ravine import RavineContributor
 from app.application.worldData.pack.bake.lightGrid.contributors.relief import ReliefContributor
+from app.application.worldData.pack.bake.lightGrid.contributors.road import RoadContributor
 from app.application.worldData.pack.bake.lightGrid.contributors.settlement import (
     SettlementContributor,
 )
@@ -22,10 +25,13 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CONTRIBUTORS: tuple[LightGridContributor, ...] = (
     ReliefContributor(),
+    ClimateContributor(),
     LandcoverContributor(),
+    MountainContributor(),
+    RavineContributor(),
     HydroContributor(),
     SettlementContributor(),
-    ClimateContributor(),
+    RoadContributor(),
 )
 
 
