@@ -1,8 +1,9 @@
 {
   "_fixture_meta": {
-    "description": "Аналог world_test_gen.json без секции locations — скелет мира для генерации (states/races/perks + registries).",
+    "description": "Аналог world_test_gen.json без секции locations — скелет мира (states/races/perks + registries). L0 bake сейчас fail-closed: см. tz_map_light_bake § Edge case / MLB-11.",
     "world_uid": "world-test-gen-noloc",
-    "based_on": "fixtures/world_test_gen.json"
+    "based_on": "fixtures/world_test_gen.json",
+    "expected_bake": "422 surface terrain context unavailable until wilderness-without-anchors"
   },
   "world": {
     "world_uid": "world-test-gen-noloc",

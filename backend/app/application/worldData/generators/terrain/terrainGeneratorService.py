@@ -1,5 +1,5 @@
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
-from app.application.worldData.generators.climate.terrainZ import z_to_terrain
+from app.application.worldData.generators.terrain.terrainZ import surface_biome_terrain
 from app.application.worldData.generators.terrain.passes.columnFillPass import (
     run_column_fill,
     run_column_fill_single,
@@ -96,7 +96,10 @@ class TerrainGeneratorService:
         return [MapCell(
             world_uid=world.world_uid,
             x=x, y=y, z=z,
-            system_terrain=z_to_terrain(z, terrain_set),
+            system_terrain=surface_biome_terrain(
+                terrain_set,
+                system_climate_zone=climate_zone,
+            ),
             temperature_base=temp,
             rainfall=rainfall,
             location_uid=location.location_uid,

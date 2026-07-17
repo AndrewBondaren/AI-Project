@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.application.worldData.pack.read.packRenderReadFacade import PackRenderReadFacade
 from app.application.worldData.render.locationTerrainPackRenderer import LocationTerrainPackRenderer
 from app.application.worldData.render.renderPayloads import (
+    LEVEL_HEIGHT,
     LEVEL_LIGHT,
     LocationEntryPayload,
     LocationGridPayload,
@@ -86,6 +87,12 @@ class PackMapGridRender:
         use_mosaic = self._use_light_mosaic(
             renderer, gx0=gx0, gy0=gy0, gx1=gx1, gy1=gy1,
         )
+        ascii_height, legend_height = renderer.render_light_height_mosaic(
+            gx0=gx0,
+            gy0=gy0,
+            gx1=gx1,
+            gy1=gy1,
+        )
         if use_mosaic:
             ascii_grid = renderer.render_light_mask_mosaic(
                 gx0=gx0,
@@ -106,6 +113,8 @@ class PackMapGridRender:
             cell_size_m=world.map_cell_size_m,
             read_path="pack",
             read_mode=read_mode,
+            ascii_height=ascii_height,
+            legend_height=legend_height,
         )
 
     def render_world_tile_grids(self, world: World) -> WorldTileGridsPayload:
@@ -113,15 +122,20 @@ class PackMapGridRender:
         renderer = self._world_renderer(world)
         tiles: dict[str, WorldTileEntryPayload] = {}
         if renderer is not None:
+            height_by_xy = renderer.render_all_tile_light_height_grids()
             for (gx, gy), ascii_grid in renderer.render_all_tile_light_grids(
                 mark_location=True,
             ).items():
                 key = f"Gx{gx}_Gy{gy}"
+                levels = {LEVEL_LIGHT: ascii_grid}
+                height = height_by_xy.get((gx, gy))
+                if height:
+                    levels[LEVEL_HEIGHT] = height
                 tiles[key] = WorldTileEntryPayload(
                     tile_gx=gx,
                     tile_gy=gy,
-                    levels={LEVEL_LIGHT: ascii_grid},
-                    z_levels=[LEVEL_LIGHT],
+                    levels=levels,
+                    z_levels=list(levels.keys()),
                     legend=WorldMapPackRenderer.render_legend(mark_location=True),
                     grid_kind="world_map_light",
                 )

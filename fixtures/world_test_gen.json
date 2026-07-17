@@ -6,78 +6,341 @@
     "narrative_language": "ru",
     "measurement_system": "metric",
     "stat_schema": {
-      "strength":     { "display_name": "Сила",        "min": 1, "max": 20 },
-      "agility":      { "display_name": "Ловкость",    "min": 1, "max": 20 },
-      "endurance":    { "display_name": "Выносливость", "min": 1, "max": 20 },
-      "intelligence": { "display_name": "Интеллект",   "min": 1, "max": 20 },
-      "perception":   { "display_name": "Восприятие",  "min": 1, "max": 20 },
-      "charisma":     { "display_name": "Харизма",     "min": 1, "max": 20 }
+      "strength": {
+        "display_name": "Сила",
+        "min": 1,
+        "max": 20
+      },
+      "agility": {
+        "display_name": "Ловкость",
+        "min": 1,
+        "max": 20
+      },
+      "endurance": {
+        "display_name": "Выносливость",
+        "min": 1,
+        "max": 20
+      },
+      "intelligence": {
+        "display_name": "Интеллект",
+        "min": 1,
+        "max": 20
+      },
+      "perception": {
+        "display_name": "Восприятие",
+        "min": 1,
+        "max": 20
+      },
+      "charisma": {
+        "display_name": "Харизма",
+        "min": 1,
+        "max": 20
+      }
     },
     "hp_enabled": true,
     "faint_threshold": 0.05,
     "wounds_enabled": false,
     "location_type_registry": {
-      "continent": { "display_name": "Континент" },
-      "region":    { "display_name": "Регион" },
-      "kingdom":   { "display_name": "Королевство" },
-      "empire":    { "display_name": "Империя" },
-      "duchy":     { "display_name": "Герцогство" },
-      "city":      { "display_name": "Город" },
-      "town":      { "display_name": "Посёлок" },
-      "village":   { "display_name": "Деревня" },
-      "district":  { "display_name": "Район" },
-      "square":    { "display_name": "Площадь" },
-      "street":    { "display_name": "Улица" },
-      "building":  { "display_name": "Здание" },
-      "gate":      { "display_name": "Ворота" },
-      "room":      { "display_name": "Комната" },
-      "dungeon":   { "display_name": "Подземелье" },
-      "cave":      { "display_name": "Пещера" },
-      "camp":      { "display_name": "Лагерь" }
+      "continent": {
+        "display_name": "Континент"
+      },
+      "region": {
+        "display_name": "Регион"
+      },
+      "kingdom": {
+        "display_name": "Королевство"
+      },
+      "empire": {
+        "display_name": "Империя"
+      },
+      "duchy": {
+        "display_name": "Герцогство"
+      },
+      "city": {
+        "display_name": "Город"
+      },
+      "town": {
+        "display_name": "Посёлок"
+      },
+      "village": {
+        "display_name": "Деревня"
+      },
+      "district": {
+        "display_name": "Район"
+      },
+      "square": {
+        "display_name": "Площадь"
+      },
+      "street": {
+        "display_name": "Улица"
+      },
+      "building": {
+        "display_name": "Здание"
+      },
+      "gate": {
+        "display_name": "Ворота"
+      },
+      "room": {
+        "display_name": "Комната"
+      },
+      "dungeon": {
+        "display_name": "Подземелье"
+      },
+      "cave": {
+        "display_name": "Пещера"
+      },
+      "camp": {
+        "display_name": "Лагерь"
+      }
     },
     "map_cell_size_m": 3000,
     "default_passage_height": 2,
     "lore_registry": {
-      "terrain_plains":      { "display_name": "Равнина",               "description": "Открытая ровная местность. Хорошо проходимая, слабоопасная." },
-      "terrain_tundra":      { "display_name": "Тундра",                "description": "Холодная открытая местность с вечной мерзлотой. Сложно проходимая." },
-      "terrain_forest":      { "display_name": "Лес",                   "description": "Густой лесной массив. Скрывает опасности, замедляет движение." },
-      "terrain_liquid_body": { "display_name": "Водоём",                "description": "Открытая вода: море, озеро, река. Непроходимо без навыка плавания." },
-      "terrain_urban":       { "display_name": "Городская застройка",   "description": "Улицы и постройки поселения. Легко проходимо." },
-      "terrain_road":        { "display_name": "Дорога",                "description": "Мощёная или грунтовая дорога. Ускоряет передвижение." },
-      "terrain_crevice":     { "display_name": "Расщелина",             "description": "Вертикальный разлом в земле. Можно перепрыгнуть при достаточной прыгучести." },
-      "terrain_floor":       { "display_name": "Пол",                   "description": "Поверхность пола внутри здания." },
-      "terrain_roof":        { "display_name": "Крыша",                 "description": "Внешняя поверхность крыши здания." },
-      "terrain_wall":        { "display_name": "Стена",                 "description": "Несущая или разделительная стена. Непроходимо без разрушения." },
-      "terrain_door":        { "display_name": "Дверь",                 "description": "Проём с дверью. Можно открыть, закрыть, запереть, сломать." },
-      "terrain_gate":        { "display_name": "Ворота",                "description": "Большие ворота в стене или заборе. Могут быть на замке." },
-      "terrain_window":      { "display_name": "Окно",                  "description": "Проём в стене со стеклом. Может быть разбито." },
-      "terrain_open_space":  { "display_name": "Открытое пространство", "description": "Воздушное пространство без твёрдой поверхности." },
-      "terrain_rubble":      { "display_name": "Обломки",               "description": "Разрушенные конструкции и мусор. Проходимо с трудом." }
+      "terrain_plains": {
+        "display_name": "Равнина",
+        "description": "Открытая ровная местность. Хорошо проходимая, слабоопасная."
+      },
+      "terrain_tundra": {
+        "display_name": "Тундра",
+        "description": "Холодная открытая местность с вечной мерзлотой. Сложно проходимая."
+      },
+      "terrain_forest": {
+        "display_name": "Лес",
+        "description": "Густой лесной массив. Скрывает опасности, замедляет движение."
+      },
+      "terrain_liquid_body": {
+        "display_name": "Водоём",
+        "description": "Открытая вода: море, озеро, река. Непроходимо без навыка плавания."
+      },
+      "terrain_urban": {
+        "display_name": "Городская застройка",
+        "description": "Улицы и постройки поселения. Легко проходимо."
+      },
+      "terrain_road": {
+        "display_name": "Дорога",
+        "description": "Мощёная или грунтовая дорога. Ускоряет передвижение."
+      },
+      "terrain_crevice": {
+        "display_name": "Расщелина",
+        "description": "Вертикальный разлом в земле. Можно перепрыгнуть при достаточной прыгучести."
+      },
+      "terrain_floor": {
+        "display_name": "Пол",
+        "description": "Поверхность пола внутри здания."
+      },
+      "terrain_roof": {
+        "display_name": "Крыша",
+        "description": "Внешняя поверхность крыши здания."
+      },
+      "terrain_wall": {
+        "display_name": "Стена",
+        "description": "Несущая или разделительная стена. Непроходимо без разрушения."
+      },
+      "terrain_door": {
+        "display_name": "Дверь",
+        "description": "Проём с дверью. Можно открыть, закрыть, запереть, сломать."
+      },
+      "terrain_gate": {
+        "display_name": "Ворота",
+        "description": "Большие ворота в стене или заборе. Могут быть на замке."
+      },
+      "terrain_window": {
+        "display_name": "Окно",
+        "description": "Проём в стене со стеклом. Может быть разбито."
+      },
+      "terrain_open_space": {
+        "display_name": "Открытое пространство",
+        "description": "Воздушное пространство без твёрдой поверхности."
+      },
+      "terrain_rubble": {
+        "display_name": "Обломки",
+        "description": "Разрушенные конструкции и мусор. Проходимо с трудом."
+      }
     },
     "terrain_registry": [
-      { "system_terrain": "plains",      "glossary_ref": "terrain_plains",      "terrain_category": "solid",   "travel_modifier": 1.5,  "danger_level": "none",   "has_state": false, "default_state": null,     "default_material": "earth" },
-      { "system_terrain": "tundra",      "glossary_ref": "terrain_tundra",      "terrain_category": "solid",   "travel_modifier": 2.0,  "danger_level": "low",    "has_state": false, "default_state": null,     "default_material": "earth" },
-      { "system_terrain": "forest",      "glossary_ref": "terrain_forest",      "terrain_category": "solid",   "travel_modifier": 2.5,  "danger_level": "medium", "has_state": false, "default_state": null,     "default_material": "wood"  },
-      { "system_terrain": "liquid_body", "glossary_ref": "terrain_liquid_body", "terrain_category": "liquid",  "travel_modifier": null, "danger_level": "high",   "has_state": false, "default_state": null,     "default_material": "water" },
-      { "system_terrain": "urban",       "glossary_ref": "terrain_urban",       "terrain_category": "solid",   "travel_modifier": 1.0,  "danger_level": "none",   "has_state": false, "default_state": null,     "default_material": null    },
-      { "system_terrain": "road",        "glossary_ref": "terrain_road",        "terrain_category": "solid",   "travel_modifier": 0.8,  "danger_level": "none",   "has_state": false, "default_state": null,     "default_material": null    },
-      { "system_terrain": "crevice",     "glossary_ref": "terrain_crevice",     "terrain_category": "crevice", "travel_modifier": null, "danger_level": "high",   "has_state": false, "default_state": null,     "default_material": "stone", "gap_width": 2 },
-      { "system_terrain": "floor",       "glossary_ref": "terrain_floor",       "terrain_category": "solid",   "travel_modifier": 1.0,  "danger_level": "none",   "has_state": false, "default_state": null,     "default_material": null    },
-      { "system_terrain": "roof",        "glossary_ref": "terrain_roof",        "terrain_category": "solid",   "travel_modifier": 1.0,  "danger_level": "none",   "has_state": false, "default_state": null,     "default_material": null    },
-      { "system_terrain": "wall",        "glossary_ref": "terrain_wall",        "terrain_category": "barrier", "travel_modifier": null, "danger_level": "none",   "has_state": false, "default_state": null,     "default_material": null    },
-      { "system_terrain": "door",        "glossary_ref": "terrain_door",        "terrain_category": "barrier", "travel_modifier": null, "danger_level": "none",   "has_state": true,  "default_state": "closed", "default_material": null    },
-      { "system_terrain": "gate",        "glossary_ref": "terrain_gate",        "terrain_category": "barrier", "travel_modifier": null, "danger_level": "none",   "has_state": true,  "default_state": "closed", "default_material": null    },
-      { "system_terrain": "window",      "glossary_ref": "terrain_window",      "terrain_category": "barrier", "travel_modifier": null, "danger_level": "none",   "has_state": true,  "default_state": "closed", "default_material": null    },
-      { "system_terrain": "open_space",  "glossary_ref": "terrain_open_space",  "terrain_category": "aerial",  "travel_modifier": null, "danger_level": "none",   "has_state": false, "default_state": null,     "default_material": null    },
-      { "system_terrain": "rubble",      "glossary_ref": "terrain_rubble",      "terrain_category": "solid",   "travel_modifier": 2.0,  "danger_level": "low",    "has_state": false, "default_state": null,     "default_material": null    }
+      {
+        "system_terrain": "plains",
+        "glossary_ref": "terrain_plains",
+        "terrain_category": "solid",
+        "travel_modifier": 1.5,
+        "danger_level": "none",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "earth"
+      },
+      {
+        "system_terrain": "tundra",
+        "glossary_ref": "terrain_tundra",
+        "terrain_category": "solid",
+        "travel_modifier": 2.0,
+        "danger_level": "low",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "earth"
+      },
+      {
+        "system_terrain": "forest",
+        "glossary_ref": "terrain_forest",
+        "terrain_category": "solid",
+        "travel_modifier": 2.5,
+        "danger_level": "medium",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "wood"
+      },
+      {
+        "system_terrain": "liquid_body",
+        "glossary_ref": "terrain_liquid_body",
+        "terrain_category": "liquid",
+        "travel_modifier": null,
+        "danger_level": "high",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "water"
+      },
+      {
+        "system_terrain": "urban",
+        "glossary_ref": "terrain_urban",
+        "terrain_category": "solid",
+        "travel_modifier": 1.0,
+        "danger_level": "none",
+        "has_state": false,
+        "default_state": null,
+        "default_material": null
+      },
+      {
+        "system_terrain": "road",
+        "glossary_ref": "terrain_road",
+        "terrain_category": "solid",
+        "travel_modifier": 0.8,
+        "danger_level": "none",
+        "has_state": false,
+        "default_state": null,
+        "default_material": null
+      },
+      {
+        "system_terrain": "crevice",
+        "glossary_ref": "terrain_crevice",
+        "terrain_category": "crevice",
+        "travel_modifier": null,
+        "danger_level": "high",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "stone",
+        "gap_width": 2
+      },
+      {
+        "system_terrain": "floor",
+        "glossary_ref": "terrain_floor",
+        "terrain_category": "solid",
+        "travel_modifier": 1.0,
+        "danger_level": "none",
+        "has_state": false,
+        "default_state": null,
+        "default_material": null
+      },
+      {
+        "system_terrain": "roof",
+        "glossary_ref": "terrain_roof",
+        "terrain_category": "solid",
+        "travel_modifier": 1.0,
+        "danger_level": "none",
+        "has_state": false,
+        "default_state": null,
+        "default_material": null
+      },
+      {
+        "system_terrain": "wall",
+        "glossary_ref": "terrain_wall",
+        "terrain_category": "barrier",
+        "travel_modifier": null,
+        "danger_level": "none",
+        "has_state": false,
+        "default_state": null,
+        "default_material": null
+      },
+      {
+        "system_terrain": "door",
+        "glossary_ref": "terrain_door",
+        "terrain_category": "barrier",
+        "travel_modifier": null,
+        "danger_level": "none",
+        "has_state": true,
+        "default_state": "closed",
+        "default_material": null
+      },
+      {
+        "system_terrain": "gate",
+        "glossary_ref": "terrain_gate",
+        "terrain_category": "barrier",
+        "travel_modifier": null,
+        "danger_level": "none",
+        "has_state": true,
+        "default_state": "closed",
+        "default_material": null
+      },
+      {
+        "system_terrain": "window",
+        "glossary_ref": "terrain_window",
+        "terrain_category": "barrier",
+        "travel_modifier": null,
+        "danger_level": "none",
+        "has_state": true,
+        "default_state": "closed",
+        "default_material": null
+      },
+      {
+        "system_terrain": "open_space",
+        "glossary_ref": "terrain_open_space",
+        "terrain_category": "aerial",
+        "travel_modifier": null,
+        "danger_level": "none",
+        "has_state": false,
+        "default_state": null,
+        "default_material": null
+      },
+      {
+        "system_terrain": "rubble",
+        "glossary_ref": "terrain_rubble",
+        "terrain_category": "solid",
+        "travel_modifier": 2.0,
+        "danger_level": "low",
+        "has_state": false,
+        "default_state": null,
+        "default_material": null
+      }
     ],
     "city_size_registry": [
-      { "system_size": "hamlet",      "display_size": "Хутор",       "radius": 0 },
-      { "system_size": "village",     "display_size": "Деревня",     "radius": 0 },
-      { "system_size": "town",        "display_size": "Городок",     "radius": 1 },
-      { "system_size": "city",        "display_size": "Город",       "radius": 1 },
-      { "system_size": "metropolis",  "display_size": "Метрополис",  "radius": 2 },
-      { "system_size": "megalopolis", "display_size": "Мегалополис", "radius": 3 }
+      {
+        "system_size": "hamlet",
+        "display_size": "Хутор",
+        "radius": 0
+      },
+      {
+        "system_size": "village",
+        "display_size": "Деревня",
+        "radius": 0
+      },
+      {
+        "system_size": "town",
+        "display_size": "Городок",
+        "radius": 1
+      },
+      {
+        "system_size": "city",
+        "display_size": "Город",
+        "radius": 1
+      },
+      {
+        "system_size": "metropolis",
+        "display_size": "Метрополис",
+        "radius": 2
+      },
+      {
+        "system_size": "megalopolis",
+        "display_size": "Мегалополис",
+        "radius": 3
+      }
     ]
   },
   "states": [
@@ -104,21 +367,30 @@
       "world_uid": "world-test-002",
       "display_race": "Человек",
       "created_at": "2026-05-23T00:00:00",
-      "race_traits": { "adaptive": true, "lifespan_years": 80 }
+      "race_traits": {
+        "adaptive": true,
+        "lifespan_years": 80
+      }
     },
     {
       "race_uid": "race-elf-002",
       "world_uid": "world-test-002",
       "display_race": "Эльф",
       "created_at": "2026-05-23T00:00:00",
-      "race_traits": { "night_vision": true, "lifespan_years": 500 }
+      "race_traits": {
+        "night_vision": true,
+        "lifespan_years": 500
+      }
     },
     {
       "race_uid": "race-dwarf-002",
       "world_uid": "world-test-002",
       "display_race": "Дворф",
       "created_at": "2026-05-23T00:00:00",
-      "race_traits": { "stone_sense": true, "lifespan_years": 200 }
+      "race_traits": {
+        "stone_sense": true,
+        "lifespan_years": 200
+      }
     }
   ],
   "perks": [
@@ -144,29 +416,28 @@
       "location_uid": "loc-continent-eidor-002",
       "world_uid": "world-test-002",
       "display_name": "Континент Эйдор",
-      "location_type": "continent",
       "created_at": "2026-05-23T00:00:00",
       "system_description": "main_continent",
       "display_description": "Главный континент мира Эйдоры",
       "is_accessible": false,
-      "is_selectable": false
+      "is_selectable": false,
+      "system_location_type": "continent"
     },
     {
       "location_uid": "loc-region-northern-002",
       "world_uid": "world-test-002",
       "display_name": "Северные земли",
-      "location_type": "region",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-continent-eidor-002",
       "display_description": "Суровые северные территории",
       "is_accessible": false,
-      "is_selectable": false
+      "is_selectable": false,
+      "system_location_type": "region"
     },
     {
       "location_uid": "loc-city-ironhold-002",
       "world_uid": "world-test-002",
       "display_name": "Айронхолд",
-      "location_type": "city",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-region-northern-002",
       "display_description": "Укреплённый торговый город на севере",
@@ -174,41 +445,41 @@
       "is_accessible": true,
       "is_public": true,
       "guard_level": 3,
-      "city_size": "city",
       "state_uid": "state-iron-crown-002",
       "map_x": 2,
       "map_y": 2,
-      "map_z": 0
+      "map_z": 0,
+      "system_location_type": "city",
+      "system_city_size": "city"
     },
     {
       "location_uid": "loc-tavern-broken-axe-002",
       "world_uid": "world-test-002",
       "display_name": "Таверна «Сломанный топор»",
-      "location_type": "building",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-city-ironhold-002",
       "display_description": "Шумная таверна в центре Айронхолда. Старые дубовые балки, очаг и запах пива.",
       "is_discovered": true,
       "is_accessible": true,
-      "is_public": true
+      "is_public": true,
+      "system_location_type": "building"
     },
     {
       "location_uid": "loc-market-ironhold-002",
       "world_uid": "world-test-002",
       "display_name": "Рыночная площадь",
-      "location_type": "square",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-city-ironhold-002",
       "display_description": "Главная торговая площадь Айронхолда.",
       "is_discovered": true,
       "is_accessible": true,
-      "is_public": true
+      "is_public": true,
+      "system_location_type": "square"
     },
     {
       "location_uid": "loc-city-gate-ironhold-002",
       "world_uid": "world-test-002",
       "display_name": "Северные ворота",
-      "location_type": "gate",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-city-ironhold-002",
       "display_description": "Массивные каменные ворота с постоянной стражей.",
@@ -216,59 +487,60 @@
       "is_accessible": true,
       "is_public": true,
       "guard_level": 5,
-      "is_forbidden": true
+      "is_forbidden": true,
+      "system_location_type": "gate"
     },
     {
       "location_uid": "loc-region-southern-002",
       "world_uid": "world-test-002",
       "display_name": "Южные земли",
-      "location_type": "region",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-continent-eidor-002",
       "display_description": "Тёплые южные территории с плодородными равнинами и торговыми портами.",
       "is_accessible": false,
-      "is_selectable": false
+      "is_selectable": false,
+      "system_location_type": "region"
     },
     {
       "location_uid": "loc-city-amberport-002",
       "world_uid": "world-test-002",
       "display_name": "Амберпорт",
-      "location_type": "city",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-region-southern-002",
       "display_description": "Оживлённый портовый город на южном побережье.",
       "is_discovered": true,
       "is_accessible": true,
       "is_public": true,
-      "city_size": "city",
       "state_uid": "state-amber-league-002",
       "map_x": 2,
       "map_y": 6,
-      "map_z": 0
+      "map_z": 0,
+      "system_location_type": "city",
+      "system_city_size": "city"
     },
     {
       "location_uid": "loc-amberport-harbor-002",
       "world_uid": "world-test-002",
       "display_name": "Портовые доки",
-      "location_type": "district",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-city-amberport-002",
       "display_description": "Шумный район доков. Запах соли и рыбы, скрип снастей, крики матросов.",
       "is_discovered": true,
       "is_accessible": true,
-      "is_public": true
+      "is_public": true,
+      "system_location_type": "district"
     },
     {
       "location_uid": "loc-amberport-tavern-002",
       "world_uid": "world-test-002",
       "display_name": "Таверна «Золотой якорь»",
-      "location_type": "building",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-city-amberport-002",
       "display_description": "Любимое место моряков и купцов.",
       "is_discovered": true,
       "is_accessible": true,
-      "is_public": true
+      "is_public": true,
+      "system_location_type": "building"
     }
   ]
 }

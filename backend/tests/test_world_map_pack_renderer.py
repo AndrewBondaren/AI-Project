@@ -20,8 +20,14 @@ class TestWorldMapPackRenderer(unittest.TestCase):
             hydrology_role=WorldMapHydrologyRole.RIVER,
         )
         plains = WorldMapCellWire(tx=1, ty=0, surface_z=1, system_terrain="plains")
+        ravine = WorldMapCellWire(tx=2, ty=0, surface_z=1, system_terrain="ravine")
+        mountain = WorldMapCellWire(tx=3, ty=0, surface_z=1, system_terrain="mountain")
+        unmapped = WorldMapCellWire(tx=4, ty=0, surface_z=1, system_terrain="crevice")
         self.assertEqual(wire_symbol(river), "y")
         self.assertEqual(wire_symbol(plains), ".")
+        self.assertEqual(wire_symbol(ravine), "v")
+        self.assertEqual(wire_symbol(mountain), "m")
+        self.assertEqual(wire_symbol(unmapped), " ")
 
     def test_macro_and_light_grid_with_pin(self):
         cells = {
@@ -95,9 +101,39 @@ class TestWorldMapPackRenderer(unittest.TestCase):
         ).render_light_mask_mosaic()
         # y=0: . r | r .  → ".rr."
         # y=1: . . | . f  → "...f"
-        self.assertIn("   0 |.rr.|", mosaic)
+        self.assertIn("   0 |.yy.|", mosaic)
         self.assertIn("   1 |...f|", mosaic)
         self.assertNotIn("tile Gx=", mosaic)
+
+    def test_light_height_mosaic_pads_to_widest_z(self):
+        cells = {
+            (0, 0): WorldMapCellWire(tx=0, ty=0, surface_z=1, system_terrain="plains"),
+            (1, 0): WorldMapCellWire(tx=1, ty=0, surface_z=12, system_terrain="mountain"),
+            (0, 1): WorldMapCellWire(tx=0, ty=1, surface_z=-3, system_terrain="plains"),
+            (1, 1): WorldMapCellWire(tx=1, ty=1, surface_z=7, system_terrain="plains"),
+        }
+        tile = PackTileLightView(gx=0, gy=0, side=2, cells=cells)
+        renderer = WorldMapPackRenderer([tile], tile_size_m=3000)
+        ascii_h, legend = renderer.render_light_height_mosaic()
+        self.assertIn("cell_width=2", ascii_h)
+        self.assertIn("| 1 12|", ascii_h)
+        self.assertIn("|-3  7|", ascii_h)
+        self.assertIn("cell_width=2", legend)
+        self.assertIn("z_min=-3", legend)
+        self.assertIn("z_max=12", legend)
+
+    def test_format_height_cell_width(self):
+        from app.application.worldData.render.mapSymbols import (
+            format_height_cell,
+            height_cell_width,
+            join_height_row,
+        )
+
+        self.assertEqual(height_cell_width([1, 12, -3]), 2)
+        self.assertEqual(format_height_cell(1, width=2), " 1")
+        self.assertEqual(format_height_cell(12, width=2), "12")
+        self.assertEqual(format_height_cell(None, width=2), "  ")
+        self.assertEqual(join_height_row([" 1", "12"]), " 1 12")
 
     def test_legend(self):
         legend = WorldMapPackRenderer.render_legend(mark_location=True)

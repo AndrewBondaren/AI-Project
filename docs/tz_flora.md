@@ -33,22 +33,25 @@ metadata:
 world.tree_registry | bush_registry | grass_registry | plant_registry | crops_registry
         │
         ▼
-FloraClimateSuitability ∩ climate(cell/zone)
+FloraSuitabilityIndex   # build once / bake; from FloraClimateSuitability ranges
         │
         ▼
-FloraGenerator(context) → FloraLayout / FloraCellOccupancy
+query(climate cell|zone profile) → eligible entries
         │
-        ├── forest domain (terrain_masks) → paint forest + full_bake noise
-        ├── plains / meadow
-        ├── settlement park / yard
-        ├── farmland (crops only)
-        └── mountain FORESTED slopes
+        ├── forest autoresolve / landcover gate (trees empty? → no forest paint)
+        └── FloraGenerator(context) → FloraLayout / FloraCellOccupancy
+                ├── forest domain → paint forest + type refs / full_bake noise
+                ├── plains / meadow
+                ├── settlement park / yard
+                ├── farmland (crops only)
+                └── mountain FORESTED slopes
 ```
 
 | Слой | Делает | Не делает |
 |---|---|---|
-| **FloraGenerator** | mix + occupancy (tree/bush/plant/grass) | `system_terrain`, declare Spec маски |
-| **Consumer** (forest…) | region, policy, paint, оркестрация bake | литералы видов, climate filter |
+| **FloraSuitabilityIndex** | кэш eligible по climate query; SoT ranges из registries | paint terrain, литералы видов |
+| **FloraGenerator** | mix + occupancy (tree/bush/plant/grass) через index | `system_terrain`, declare Spec маски |
+| **Consumer** (forest…) | region, policy, paint, оркестрация bake | свой climate filter / свой скан реестра |
 | **Registries** | N+1 виды + suitability | materialize клеток |
 
 ---
@@ -446,7 +449,7 @@ GrassCellState:                    # не TreeInstance; coverage на cell
 **light_bake:** `system_grass` = type ref.  
 **full/detailed:** coverage на cell (и development coverage later, если понадобится).
 
-### Climate suitability (вариант B)
+### Climate suitability (вариант B) — утверждено
 
 Shared POJO на все flora registries:
 
@@ -460,6 +463,51 @@ FloraClimateSuitability
 
 Eligible = profile клетки (`base_rainfall`, `base_temperature`, elev) ∈ диапазонам; `None` = нет ограничения.  
 `climate_zones`, если задан — gate по зоне.
+
+### FloraSuitabilityIndex (утверждено 2026-07-17)
+
+**Назначение:** один shared lookup для autoresolve леса и FloraGenerator — без повторного скана реестра и без дубля фильтра в landcover/forest contributor.
+
+```text
+build(world.*_registry) → FloraSuitabilityIndex
+  # один раз на bake (или до смены registry / climate scalars)
+  # вход: FloraClimateSuitability ranges на каждом entry
+
+query(climate) → eligible[FloraKind]   # climate = zone profile или cell sample
+  # ключ кэша ответа: обычно system_climate_zone / (rainfall, temp[, elev])
+  # дискретные корзины temp/rain — optional ускорение; SoT остаётся ranges
+```
+
+| Правило | |
+|---|---|
+| SoT видов | только `world.*_registry` + `FloraClimateSuitability` |
+| Consumers | только `index.query(...)` / FloraGenerator; **запрещён** локальный скан + свой rainfall gate по видам |
+| Scope кэша | bake / world revision — не вечный process-global без инвалидации |
+| Landcover порог | `terrain_masks.default_forests.forest_min_rainfall` = «мир **хочет** класс forest» — **не** замена suitability |
+
+#### Forest birth = пересечение двух правил мира
+
+| Слой | Вопрос | Источник |
+|---|---|---|
+| **A — landcover / masks** | Кандидат на `system_terrain=forest`? | `forest_min_rainfall` (+ enable / declare region) |
+| **B — flora** | Есть ли eligible **trees** (и understory по policy)? | `FloraSuitabilityIndex.query` ∩ `tree_registry` |
+
+```text
+candidate_forest = landcover gate (A)
+eligible_trees   = index.query(climate).trees     # (B)
+paint forest     = candidate_forest ∧ eligible_trees ≠ ∅
+```
+
+| Исход | Маска | Flora |
+|---|---|---|
+| A∧B | `forest` + type refs | mix / dominant refs |
+| A, B=∅ | **не** `forest` → fallback plains / ниже по rank | без tree refs; **warn** в generation log (master: лес разрешён, видов нет) |
+| ¬A, B≠∅ | не forest (луг/редко tree на plains — по plains policy) | plains layers |
+| ¬A∧¬B | plains / фон | пусто / grass-only если eligible |
+
+**Запрещено:** лес без деревьев; подстановка builtin-вида; игнор suitability при прошедшем A.
+
+**Stub сейчас:** light bake красит forest только по A (flora index ещё нет) — tech debt до FloraGenerator; target = A∧B.
 
 ---
 
@@ -602,11 +650,12 @@ relief → climate → landcover → flora → mountain → …
 
 | Правило | |
 |---|---|
-| Flora **после** climate | type refs только из eligible ∩ `FloraClimateSuitability` / climate cell |
-| Flora **после** landcover | знает forest/plains/tundra context (какие layers) |
-| Запрещено | flora до climate (нет zone/rainfall/temp для фильтра) |
+| Flora **после** climate | type refs только из `FloraSuitabilityIndex.query` / climate cell |
+| Flora **после** landcover | знает forest/plains context (какие layers); forest paint только если A∧B |
+| Запрещено | flora до climate; свой скан registry в contributor мимо index |
 
-`FloraGenerator` на light path: resolve eligible → выбрать dominant type ref на слой → писать на cell; **не** ставить инстансы.
+`FloraGenerator` на light path: `index.query` → dominant type ref на слой → писать на cell; **не** ставить инстансы.  
+Forest autoresolve / landcover: тот же index для gate B (empty trees → нет `forest`).
 
 | Режим | Terrain mask | Flora storage |
 |---|---|---|
@@ -654,6 +703,8 @@ system_plant: str | None   # → plant_registry
 | FL2 | Виды — только `world.*_registry`, не литералы |
 | FL2b | **`FloraKind` — engine StrEnum в `dataModel/flora/enums/`**; N+1 = виды; wire = `StrictEnumOnWire`; не glossary/имя/литералы в generators |
 | FL3 | Eligible = registry ∩ `FloraClimateSuitability` |
+| FL3b | **`FloraSuitabilityIndex`**: build из registries once/bake; autoresolve + FloraGenerator только через `query`; запрещён дубль фильтра в landcover |
+| FL3c | **Forest paint = A∧B**: landcover `forest_min_rainfall` (A) ∧ eligible trees ≠ ∅ (B); B=∅ → не `forest`, fallback plains, warn log; без phantom canopy / builtin tree |
 | FL4 | `crops_registry` ⊥ wild forest mix |
 | FL5 | Consumers оркестрируют; generator не пишет `system_terrain` |
 | FL6 | light_bake: **type refs per cell** (не инстансы); full_bake: chunk weight/occupancy |
@@ -676,7 +727,8 @@ system_plant: str | None   # → plant_registry
 | light bake forest | footprint + `system_terrain=forest` как сейчас; **без** полной flora materialize |
 | Возврат | после стабилизации **map / mountain / terrain_masks** engine |
 
-Consumers карты **не** блокируются на flora: forest mask → paint terrain; type refs / weight — later.
+Consumers карты **не** блокируются на flora stub: сейчас forest mask → paint по gate A only.  
+**Норматив target (уже в инвариантах):** A∧B + `FloraSuitabilityIndex` — см. FL3b/FL3c; stub не отменяет правило.
 
 ---
 
@@ -702,3 +754,4 @@ Consumers карты **не** блокируются на flora: forest mask →
 | 2026-07-17 | `FloraReproduction` sum type; `FloraDevelopment` abstract (materialize/tick/grow/die); background growth cycle |
 | 2026-07-17 | bush/plant/crops declare+instance по аналогии с tree (volume/height, без trunk/canopy) |
 | 2026-07-17 | **DEFER impl:** flora stub; SoT остаётся в TZ; фокус → map/mountain generator |
+| 2026-07-17 | **FL3b/FL3c:** `FloraSuitabilityIndex` + forest birth = landcover gate ∧ eligible trees; empty → no forest paint |

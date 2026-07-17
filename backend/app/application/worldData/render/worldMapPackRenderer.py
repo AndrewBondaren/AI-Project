@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections import Counter
+from dataclasses import dataclass
+
 from app.application.worldData.pack.read.packMapHelpers import (
     tile_index,
     world_map_sample_index,
@@ -10,6 +13,10 @@ from app.application.worldData.pack.read.packRenderReadFacade import PackTileLig
 from app.application.worldData.render.gridAxes import format_grid_header
 from app.application.worldData.render.mapSymbols import (
     LOCATION_PIN_SYMBOL,
+    format_height_cell,
+    height_cell_width,
+    join_height_row,
+    render_height_legend,
     render_map_legend,
     symbol_for_role_or_terrain,
 )
@@ -52,6 +59,20 @@ def _pin_light_xy(
     )
 
 
+@dataclass(frozen=True)
+class _MosaicFrame:
+    gx0: int
+    gy0: int
+    gx1: int
+    gy1: int
+    side: int
+    light_m: int
+    lx0: int
+    lx1: int
+    ly0: int
+    ly1: int
+
+
 class WorldMapPackRenderer:
     """L0 world map ASCII from pack light tiles + optional locations_index pins."""
 
@@ -90,6 +111,64 @@ class WorldMapPackRenderer:
             mark_location=mark_location,
             pin_label="locations_index pin",
         )
+
+    def _mosaic_frame(
+        self,
+        *,
+        gx0: int | None,
+        gy0: int | None,
+        gx1: int | None,
+        gy1: int | None,
+    ) -> _MosaicFrame | None:
+        if not self._by_xy:
+            return None
+        if gx0 is None or gy0 is None or gx1 is None or gy1 is None:
+            xs = [gx for gx, _ in self._by_xy]
+            ys = [gy for _, gy in self._by_xy]
+            gx0, gx1 = min(xs), max(xs)
+            gy0, gy1 = min(ys), max(ys)
+
+        side = 0
+        for gy in range(gy0, gy1 + 1):
+            for gx in range(gx0, gx1 + 1):
+                tile = self._by_xy.get((gx, gy))
+                if tile is not None and tile.side > 0:
+                    side = tile.side
+                    break
+            if side > 0:
+                break
+        if side <= 0:
+            for tile in self._by_xy.values():
+                if tile.side > 0:
+                    side = tile.side
+                    break
+        if side <= 0:
+            return None
+
+        return _MosaicFrame(
+            gx0=gx0,
+            gy0=gy0,
+            gx1=gx1,
+            gy1=gy1,
+            side=side,
+            light_m=max(1, self._tile_m // side),
+            lx0=gx0 * side,
+            lx1=(gx1 + 1) * side - 1,
+            ly0=gy0 * side,
+            ly1=(gy1 + 1) * side - 1,
+        )
+
+    def _pin_world_xy(self, frame: _MosaicFrame) -> set[tuple[int, int]]:
+        pin_wxy: set[tuple[int, int]] = set()
+        for pin in self._pins:
+            pgx, lx = tile_index(pin.map_x, self._tile_m)
+            pgy, ly = tile_index(pin.map_y, self._tile_m)
+            if not (frame.gx0 <= pgx <= frame.gx1 and frame.gy0 <= pgy <= frame.gy1):
+                continue
+            tx = world_map_sample_index(lx, self._tile_m, frame.side)
+            ty = world_map_sample_index(ly, self._tile_m, frame.side)
+            pin_wxy.add((pgx * frame.side + tx, pgy * frame.side + ty))
+        return pin_wxy
 
     def render_macro_bbox(
         self,
@@ -173,6 +252,45 @@ class WorldMapPackRenderer:
             lines.append(f"{ty:4d} |{row}|")
         return "\n".join(lines)
 
+    def render_tile_light_height_grid(self, gx: int, gy: int) -> str:
+        """L0 ``surface_z`` ASCII for one macro-tile (fixed-width decimal cells)."""
+        tile = self._by_xy.get((gx, gy))
+        if tile is None or tile.side <= 0:
+            return ""
+        zs = [int(cell.surface_z) for cell in tile.cells.values()]
+        width = height_cell_width(zs)
+        hist: Counter[int] = Counter(zs)
+        lines = [
+            f"tile Gx={gx} Gy={gy}  (pack L0 height grid {tile.side}×{tile.side})",
+            format_grid_header(
+                0, tile.side - 1,
+                0, tile.side - 1,
+                cell_size_m=max(1, self._tile_m // tile.side),
+                prefix="light ",
+            ),
+            f"cell_width={width}",
+        ]
+        for ty in range(tile.side - 1, -1, -1):
+            row = [
+                format_height_cell(
+                    None if (tx, ty) not in tile.cells else tile.cells[(tx, ty)].surface_z,
+                    width=width,
+                )
+                for tx in range(tile.side)
+            ]
+            lines.append(f"{ty:4d} |{join_height_row(row)}|")
+        if hist:
+            lines.append("")
+            lines.append(
+                render_height_legend(
+                    z_min=min(hist),
+                    z_max=max(hist),
+                    z_hist=dict(hist),
+                    cell_width=width,
+                ),
+            )
+        return "\n".join(lines)
+
     def render_light_mask_mosaic(
         self,
         *,
@@ -187,65 +305,31 @@ class WorldMapPackRenderer:
         Missing macro-tiles inside the bbox are spaces. Per-tile dumps stay in
         ``render_tile_light_grid`` / ``render_all_tile_light_grids``.
         """
-        if not self._by_xy:
-            return ""
-        if gx0 is None or gy0 is None or gx1 is None or gy1 is None:
-            xs = [gx for gx, _ in self._by_xy]
-            ys = [gy for _, gy in self._by_xy]
-            gx0, gx1 = min(xs), max(xs)
-            gy0, gy1 = min(ys), max(ys)
-
-        side = 0
-        for gy in range(gy0, gy1 + 1):
-            for gx in range(gx0, gx1 + 1):
-                tile = self._by_xy.get((gx, gy))
-                if tile is not None and tile.side > 0:
-                    side = tile.side
-                    break
-            if side > 0:
-                break
-        if side <= 0:
-            for tile in self._by_xy.values():
-                if tile.side > 0:
-                    side = tile.side
-                    break
-        if side <= 0:
+        frame = self._mosaic_frame(gx0=gx0, gy0=gy0, gx1=gx1, gy1=gy1)
+        if frame is None:
             return ""
 
-        light_m = max(1, self._tile_m // side)
-        lx0, lx1 = gx0 * side, (gx1 + 1) * side - 1
-        ly0, ly1 = gy0 * side, (gy1 + 1) * side - 1
-
-        pin_wxy: set[tuple[int, int]] = set()
-        if mark_location:
-            for pin in self._pins:
-                pgx, lx = tile_index(pin.map_x, self._tile_m)
-                pgy, ly = tile_index(pin.map_y, self._tile_m)
-                if not (gx0 <= pgx <= gx1 and gy0 <= pgy <= gy1):
-                    continue
-                tx = world_map_sample_index(lx, self._tile_m, side)
-                ty = world_map_sample_index(ly, self._tile_m, side)
-                pin_wxy.add((pgx * side + tx, pgy * side + ty))
-
+        pin_wxy = self._pin_world_xy(frame) if mark_location else set()
         lines: list[str] = [
             (
                 f"pack L0 light mosaic  "
-                f"(macro Gx{gx0}..Gx{gx1} Gy{gy0}..Gy{gy1}, "
-                f"{side}×{side} light cells per tile)"
+                f"(macro Gx{frame.gx0}..Gx{frame.gx1} Gy{frame.gy0}..Gy{frame.gy1}, "
+                f"{frame.side}×{frame.side} light cells per tile)"
             ),
             format_grid_header(
-                lx0, lx1, ly0, ly1, cell_size_m=light_m, prefix="light ",
+                frame.lx0, frame.lx1, frame.ly0, frame.ly1,
+                cell_size_m=frame.light_m, prefix="light ",
             ),
         ]
-        label_w = max(4, len(str(ly0)), len(str(ly1)))
-        for wy in range(ly1, ly0 - 1, -1):
+        label_w = max(4, len(str(frame.ly0)), len(str(frame.ly1)))
+        for wy in range(frame.ly1, frame.ly0 - 1, -1):
             row: list[str] = []
-            for wx in range(lx0, lx1 + 1):
+            for wx in range(frame.lx0, frame.lx1 + 1):
                 if mark_location and (wx, wy) in pin_wxy:
                     row.append(LOCATION_PIN_SYMBOL)
                     continue
-                gx, tx = divmod(wx, side)
-                gy, ty = divmod(wy, side)
+                gx, tx = divmod(wx, frame.side)
+                gy, ty = divmod(wy, frame.side)
                 tile = self._by_xy.get((gx, gy))
                 if tile is None or (tx, ty) not in tile.cells:
                     row.append(" ")
@@ -256,6 +340,67 @@ class WorldMapPackRenderer:
             lines.append(f"{wy:{label_w}d} |{''.join(row)}|")
         return "\n".join(lines)
 
+    def render_light_height_mosaic(
+        self,
+        *,
+        gx0: int | None = None,
+        gy0: int | None = None,
+        gx1: int | None = None,
+        gy1: int | None = None,
+    ) -> tuple[str, str]:
+        """``surface_z`` mosaic — decimal z per cell, pad width = max token in frame."""
+        frame = self._mosaic_frame(gx0=gx0, gy0=gy0, gx1=gx1, gy1=gy1)
+        if frame is None:
+            return "", render_height_legend()
+
+        zs: list[int] = []
+        for wy in range(frame.ly0, frame.ly1 + 1):
+            for wx in range(frame.lx0, frame.lx1 + 1):
+                gx, tx = divmod(wx, frame.side)
+                gy, ty = divmod(wy, frame.side)
+                tile = self._by_xy.get((gx, gy))
+                cell = None if tile is None else tile.cells.get((tx, ty))
+                if cell is not None:
+                    zs.append(int(cell.surface_z))
+        width = height_cell_width(zs)
+        hist: Counter[int] = Counter(zs)
+
+        lines: list[str] = [
+            (
+                f"pack L0 height mosaic  "
+                f"(macro Gx{frame.gx0}..Gx{frame.gx1} Gy{frame.gy0}..Gy{frame.gy1}, "
+                f"{frame.side}×{frame.side} light cells per tile)"
+            ),
+            format_grid_header(
+                frame.lx0, frame.lx1, frame.ly0, frame.ly1,
+                cell_size_m=frame.light_m, prefix="light ",
+            ),
+            f"cell_width={width}",
+        ]
+        label_w = max(4, len(str(frame.ly0)), len(str(frame.ly1)))
+        for wy in range(frame.ly1, frame.ly0 - 1, -1):
+            row: list[str] = []
+            for wx in range(frame.lx0, frame.lx1 + 1):
+                gx, tx = divmod(wx, frame.side)
+                gy, ty = divmod(wy, frame.side)
+                tile = self._by_xy.get((gx, gy))
+                cell = None if tile is None else tile.cells.get((tx, ty))
+                row.append(
+                    format_height_cell(
+                        None if cell is None else cell.surface_z,
+                        width=width,
+                    ),
+                )
+            lines.append(f"{wy:{label_w}d} |{join_height_row(row)}|")
+
+        legend = render_height_legend(
+            z_min=min(hist) if hist else None,
+            z_max=max(hist) if hist else None,
+            z_hist=dict(hist) if hist else None,
+            cell_width=width,
+        )
+        return "\n".join(lines), legend
+
     def render_all_tile_light_grids(
         self,
         *,
@@ -264,6 +409,14 @@ class WorldMapPackRenderer:
         out: dict[tuple[int, int], str] = {}
         for gx, gy in sorted(self._by_xy):
             text = self.render_tile_light_grid(gx, gy, mark_location=mark_location)
+            if text:
+                out[(gx, gy)] = text
+        return out
+
+    def render_all_tile_light_height_grids(self) -> dict[tuple[int, int], str]:
+        out: dict[tuple[int, int], str] = {}
+        for gx, gy in sorted(self._by_xy):
+            text = self.render_tile_light_height_grid(gx, gy)
             if text:
                 out[(gx, gy)] = text
         return out

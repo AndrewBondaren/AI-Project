@@ -2,12 +2,13 @@
 
 ``levels`` semantics
 --------------------
-- pack world tiles: ``{ LEVEL_LIGHT: ascii }``
+- pack world tiles: ``{ LEVEL_LIGHT: ascii, LEVEL_HEIGHT: ascii }``
 - pack location: ``{ LEVEL_SURFACE: ascii, \"<z>\": ascii }`` where z are FineTerrain
   run *endpoints* (not every meter in a thick band); query ``?z=`` slices arbitrary world-z
 - legacy tiles: ``WorldTileGridRenderer`` surface key ``-1`` plus numeric z strings
 - ``indoor`` on pack location payloads is always False (shape-compat with legacy; structures
   live in patches, not location_terrain blobs)
+- world grid: ``ascii`` = terrain/hydro mosaic; ``ascii_height`` = ``surface_z`` mosaic (pack)
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ ReadMode = Literal[
 
 LEVEL_SURFACE = "surface"
 LEVEL_LIGHT = "light"
+LEVEL_HEIGHT = "height"
 
 
 @dataclass(frozen=True)
@@ -38,9 +40,11 @@ class WorldGridPayload:
     cell_size_m: int
     read_path: ReadPath
     read_mode: ReadMode
+    ascii_height: str = ""
+    legend_height: str = ""
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        out: dict[str, object] = {
             "ascii": self.ascii,
             "legend": self.legend,
             "mark_locations": self.mark_locations,
@@ -48,6 +52,11 @@ class WorldGridPayload:
             "read_path": self.read_path,
             "read_mode": self.read_mode,
         }
+        if self.ascii_height:
+            out["ascii_height"] = self.ascii_height
+        if self.legend_height:
+            out["legend_height"] = self.legend_height
+        return out
 
 
 @dataclass(frozen=True)

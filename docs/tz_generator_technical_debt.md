@@ -265,6 +265,7 @@ Perimeter не учитывает template района — v1 compromise.
 | **HY-2** | medium | Cave STUB без подземной воды / ecosystem | U12: `CaveHydrologyService` в `generate-caves` (Phase B); `cave_liquid_candidate` ≠ surface mask | open |
 | **HY-3** | medium | Нет LLM naming для autoresolved geography | U13: `llm_name_procedural_locations` + persist; **после DAG**, gate `materialize_named_locations` | open |
 | **HY-4** | low | `type_classify` null в template без normalize | U22: import validator подставляет schema defaults и пишет explicit values; runtime fallback до validator | open |
+| **HY-5** | medium | **Smoke 2026-07-17:** `world-test-002` — `rivers cells=0`. **Root cause:** `find_river_sources` → `min_z = mountain_min_source_z // 2` (default **20**), а coarse land `z` ∈ **5…7** → sources=∅. Mouths есть (5× OPEN_OCEAN). Лог `edges=` = declared only (misleading). | Fix: scale `min_z` к heightmap/`z_max` (не абсолют 20). **Follow-up HY-5b:** light `HydroContributor` красит только declared rivers + coarse SEA/LAKE — procedural `RIVER_BED` на light не растеризуется | open |
 | **TR-1b** | medium | Generator isolation: pole resolve **вне** `TerrainGeneratorService` | **resolved** — `MapCellService` / `map.py`; `pole_field` аргумент |
 | **DBG-1** | medium | `debug_settlement.py` pipeline smoke in-process | **resolved** — HTTP path **2** + `debug_api_helpers.py` |
 | **TR-M** | low | Magma antipode teleport (edge case) | **partial** — skeleton band + `antipode_xy`; M-3 movement ⬜ |

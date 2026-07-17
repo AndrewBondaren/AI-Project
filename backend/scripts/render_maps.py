@@ -1,8 +1,8 @@
 """Dump world ASCII renders to ``.local/map-render/`` — L0 light + L2 location_terrain.
 
 Pack path (default after light bake):
-  - ``render-world-grid`` → macro overview
-  - ``render-world-tile-grids`` → per-tile light grids (``levels.light``)
+  - ``render-world-grid`` → terrain mosaic + ``ascii_height`` (``world-height.txt``)
+  - ``render-world-tile-grids`` → per-tile light + height (``levels.light`` / ``levels.height``)
   - ``render-location-grids`` → location_terrain when blob exists (may be empty after light-only)
 
 Legacy path still works via the same endpoints (MapCell-backed levels).
@@ -35,6 +35,7 @@ from debug_api_helpers import BASE_URL, DebugApiError, _require_ok  # noqa: E402
 
 LEVEL_SURFACE = "surface"
 LEVEL_LIGHT = "light"
+LEVEL_HEIGHT = "height"
 
 
 def _write(path: Path, content: str) -> None:
@@ -43,9 +44,11 @@ def _write(path: Path, content: str) -> None:
 
 
 def _level_sort_key(key: str) -> tuple[int, int | str]:
-    """Order: light/surface first, then numeric z, then other strings."""
+    """Order: light/surface first, height next, then numeric z, then other strings."""
     if key in (LEVEL_LIGHT, LEVEL_SURFACE, "-1"):
         return (0, key)
+    if key == LEVEL_HEIGHT:
+        return (0, "z_height")
     try:
         return (1, int(key))
     except ValueError:
@@ -94,6 +97,16 @@ def dump_map_renders(
         world_path,
         f"{world.get('ascii', '')}\n\n--- legend ---\n{world.get('legend', '')}\n",
     )
+
+    height_path: Path | None = None
+    ascii_height = str(world.get("ascii_height") or "")
+    if ascii_height.strip():
+        height_path = run_dir / "world-height.txt"
+        legend_h = world.get("legend_height") or ""
+        body = ascii_height
+        if legend_h:
+            body = f"{ascii_height}\n\n--- legend ---\n{legend_h}\n"
+        _write(height_path, body)
 
     loc_root = run_dir / "locations"
     location_uids = list(locations_payload.get("location_uids") or [])
@@ -147,7 +160,10 @@ def dump_map_renders(
             if z_key == level_key or not str(grid).strip():
                 continue
             p = tile_dir / f"{str(z_key).replace('/', '_')}.txt"
-            _write(p, f"{grid}\n\n--- legend ---\n{legend}\n")
+            if str(z_key) == LEVEL_HEIGHT:
+                _write(p, f"{grid}\n")
+            else:
+                _write(p, f"{grid}\n\n--- legend ---\n{legend}\n")
             extra[str(z_key)] = str(p.relative_to(REPO))
         tile_index[tile_key] = {
             "tile_gx": entry.get("tile_gx"),
@@ -167,6 +183,9 @@ def dump_map_renders(
         "locations_read_mode": locations_payload.get("read_mode"),
         "mark_locations": mark_locations,
         "world_map": str(world_path.relative_to(REPO)),
+        "world_height": (
+            str(height_path.relative_to(REPO)) if height_path is not None else None
+        ),
         "location_uids": location_uids,
         "locations_with_terrain": list(locations_meta.keys()),
         "locations_index_pins": locations_payload.get("locations_index_pins") or [],
@@ -180,6 +199,9 @@ def dump_map_renders(
         "run_dir": str(run_dir.relative_to(REPO)),
         "index": str(index_path.relative_to(REPO)),
         "world_map": str(world_path.relative_to(REPO)),
+        "world_height": (
+            str(height_path.relative_to(REPO)) if height_path is not None else None
+        ),
         "tile_count": len(tile_index),
         "location_terrain_count": len(locations_meta),
         "location_pin_count": len(index["locations_index_pins"]),  # type: ignore[arg-type]
@@ -191,6 +213,8 @@ def dump_map_renders(
 
 def _print_summary(summary: dict[str, Any]) -> None:
     print(f"world-map: {summary['world_map']}")
+    if summary.get("world_height"):
+        print(f"world-height: {summary['world_height']}")
     print(f"tiles (L0 light / fine): {summary['tile_count']}")
     print(
         f"locations L2 terrain: {summary['location_terrain_count']} "
