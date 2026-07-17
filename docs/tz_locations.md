@@ -119,7 +119,10 @@ Generators **не** пишут в `named_locations` и **не** вызывают
 
 **Правило declare · autoresolve · opt-out:** нет `NamedLocation` → autoresolve geometry **без имени**. Opt-out — явный флаг в template ([`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) U10).
 
-**Горы и равнины:** procedural без location — норма. `NamedLocation` — если мастер задаёт имя и/или anchor.
+**Горы / леса / равнины / овраги (terrain masks):** declare геометрии — **`world.terrain_masks.declared_*[]`** (полные Spec, подход A — как hydro). Procedural без location — норма.  
+`NamedLocation` — **поверх** объекта маски (имя пика, храм на горе, святилище в лесу…), optional `location_uid` на declare entry.  
+Geographic subtype **не** является SoT declare маски ([`tz_map_light_bake.md`](./tz_map_light_bake.md) § Surface mask domains).  
+Состав растительности леса / луга — [`tz_flora.md`](./tz_flora.md) (`FloraGenerator`), не location.
 
 **Реки:** declare — `world.hydrology.declared_rivers[]`; routing polyline — **`ConnectionEdge`** после carve/emit (U9/U18). **Имя optional** (`location_uid` на declare entry).
 

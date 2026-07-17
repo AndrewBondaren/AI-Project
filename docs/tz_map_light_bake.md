@@ -182,9 +182,9 @@ CategoryPolicy:
   # knobs плотности / пороги / min massif — DefaultOnWire → DB
   # optional IgnoreOnWire: per-region ignore, master overlay without fill
 
-# на корне домена:
-declared_*[]   # optional geometry / anchors
-default_<name> # CategoryPolicy + autoresolve knobs
+# на корне домена (подход A — как hydrology.declared_*):
+declared_*[]   # полные typed Spec / geometry POJO; SoT declare маски
+default_<name> # CategoryPolicy + autoresolve knobs (+ default Spec fragments)
 ```
 
 Цепочка resolve:
@@ -197,30 +197,117 @@ IgnoreOnWire override (если ключ был в JSON)
 
 **Запрещено:** generator подставляет `enabled=True` / knobs мимо строки мира после import.
 
+### Declare = Spec в домене; Location — поверх (утверждено 2026-07-16)
+
+**Подход A** (как `world.hydrology.declared_rivers|lakes|…`):
+
+| Правило | |
+|---|---|
+| SoT declare маски | `terrain_masks.declared_*[]` — **полный** typed entry (Spec / geometry), не disk от location |
+| `NamedLocation` | **опционально поверх** объекта маски (имя, якорь сцены, «храм на горе») |
+| Location → mask | **запрещено** как declare-path: geographic.mountain/peak/plain **не** рисует маску сам |
+| Пустой `declared_*` | ≠ off; autoresolve materialize Specs без имён |
+| Optional link | declare entry может иметь `location_uid` (имя), но геометрия живёт в declare Spec |
+
+```text
+# правильно
+terrain_masks.declared_mountains[] → MountainSpec / RangeSpec → engine → mask
+NamedLocation(temple) / NamedLocation(peak name) → поверх / optional link
+
+# запрещено как declare маски
+NamedLocation(geographic.mountain) → disk paint  # interim; убрать
+```
+
+То же для **всех** поддоменов `terrain_masks` (не только горы).
+
 ### Домены terrain_masks (target)
 
-| Поддомен | `system_terrain` (типично) | Declare | Autoresolve (если enabled, даже без declare) |
+| Поддомен | `system_terrain` | Declare SoT (`declared_*[]`) | Autoresolve (enabled, даже без declare) |
 |---|---|---|---|
-| **mountains** | `mountain` (+ summit overlay по kind) | geographic → default `MountainSpec` | placement + elevation + kind/form — § **Mountain (engine)** |
-| **forests** | `forest` | optional named forest / bias | climate rainfall / zone policy |
-| **plains** | `plains` | `geographic.plain` | фон суши, где нет mountain/forest/ravine/road |
-| **ravines** | `ravine` | optional | локальные депрессии vs соседи / noise |
-| **roads** | `road` | structure edges | нет «пустых» дорог: без edges маска пуста; `enabled: false` запрещает paint даже при edges |
+| **mountains** | `mountain` (+ summit по kind) | `declared_mountains[]`: `MountainSpec` \| `MountainRangeSpec` | placement → Spec → § Mountain engine |
+| **forests** | `forest` | `declared_forests[]`: `ForestSpec` | region + [`tz_flora`](./tz_flora.md) → paint forest |
+| **plains** | `plains` | `declared_plains[]`: `PlainSpec` (region footprint) | фон суши, где нет выше по rank |
+| **ravines** | `ravine` | `declared_ravines[]`: `RavineSpec` (path / polygon) | депрессии → RavineSpec |
+| **roads** | `road` | geometry = structure edges; enable в `default_roads` | без edges маска пуста; `enabled: false` запрещает paint |
 
-**Гидрология** — тот же паттерн, уже в `world.hydrology` (`enabled`, `default_rivers|lakes|seas`, `declared_*`).
+Каждый `*Spec` — POJO домена (поля footprint/knobs свои); materialize → общий merge/paint.  
+Defaults kind/form/… для гор — в `MountainsCategoryPolicy`, не в location.
+
+#### Forest mask → flora (не дублировать домен)
+
+**Лес в light bake** = footprint + `system_terrain=forest` + **per-cell ссылки на типы** flora.  
+**Вес, occupancy, инстансы, FloraGenerator** — [`tz_flora.md`](./tz_flora.md).
+
+**Stub (2026-07-17):** полная flora **отложена**; forest contributor пока paint footprint/`forest` без FloraGenerator. Type refs / mix — после map/mountain.
+
+| Bake | Mask | Flora на cell |
+|---|---|---|
+| **light_bake** | footprint → `forest` | **только type refs** (`system_tree` / …) — **later**; сейчас достаточно `forest` terrain |
+| **full_bake** | — | chunk flora layer — later (flora TZ) |
+
+Target: Forest contributor зовёт FloraGenerator → type refs; списков видов в contributor нет.
+
+**Гидрология** — тот же паттерн A, уже в `world.hydrology` (`declared_*`).
+
+**Гора = поддомен общего `terrain_masks`, не отдельный bake.**  
+`MountainKind` / Form / Sides / Range — **алгоритм materialize внутри** `default_mountains` + entries из `declared_mountains[]`.  
+Те же: `enabled` / declare / autoresolve / `IgnoreOnWire` / merge rank / `paint_system_terrain`.  
+Запрещено: параллельный «mountain pipeline» мимо `WorldTerrainMasks` / `MaskCategoryPolicy`.
 
 ### Mountain (engine) — kind / form / sides / range + elevation (утверждено 2026-07-16)
 
-**Гора** — составной engine-объект (не N+1). Оси: **kind** (наполнение), **form** (силуэт footprint), **sides** (склоны).  
+**Гора** — составной engine-объект (не N+1), materialize **поддомена** `terrain_masks`.  
+Оси: **kind** (наполнение), **form** (силуэт footprint), **sides** (склоны).  
 Отдельно: **горный хребет / range** — протяжённая **система** гор (не одна точка).
+
+```text
+# gate + declare — общий домен (подход A)
+world.terrain_masks.enabled
+world.terrain_masks.default_mountains     # MountainsCategoryPolicy ⊂ MaskCategoryPolicy
+world.terrain_masks.declared_mountains[]  # MountainSpec | MountainRangeSpec (полные)
+
+# если category_enabled(default_mountains):
+#   declared Specs (не затираются autoresolve)
+#   + autoresolve Specs  (ниже)
+#   → FormGeometry → FormRaster → SideFill → KindElevation
+#   → paint через общий terrain merge (rank mountain)
+# NamedLocation — optional поверх (имя пика, храм на горе, …)
+```
+
+#### Autoresolve (A + D) — утверждено 2026-07-16
+
+**A:** placement → собрать Spec → **тот же** engine, что declare.  
+Запрещён bypass `score → paint` без Spec (M8).
+
+**D** (частный случай A — двухфазный placement):
+
+```text
+1. Ridge field (policy knobs: threshold, ridge_cell_m, elev/relief weights)
+     → MountainRangeSpec (spine + width + kind/form defaults)
+2. Sample peaks along spine
+     → MountainSpec[] (origin, radius_m, kind/form/sides from policy defaults)
+3. Optional isolated peak candidates (тот же score → MountainSpec)
+4. Все Specs → FormGeometry → FormRaster → SideFill → KindElevation → merge
+```
+
+| Слой | Ответственность | Knobs |
+|---|---|---|
+| **Placement** | *где* candidate / spine | `threshold`, `elevation_bias_weight`, `relief_weight`, `ridge_cell_m` |
+| **Spec assemble** | *какой* объект | `default_kind`, `default_form`, default sides, `default_radius_m` |
+| **Engine** | *как* нарисовать | Kind / Form / Sides pipeline |
+
+`declare_radius_light` (disk от location) — **убрать**; радиус = `MountainSpec.radius_m` / policy `default_radius_m`.  
+Declare Specs ∩ autoresolve: declare побеждает / не перезаписывается (domain #6).
 
 #### Иерархия абстракций
 
 ```text
 MountainKind (Enum + profile)
 MountainForm  = MountainFormBySides | StarForm | PeakForm | PlateauForm | …
-MountainFormBySides { side_count: int >= 3 }     # контракт 1
-StarForm { rays: int >= 3 }                      # контракт 2: стороны внутри объекта
+MountainFormBySides { side_count: int >= 3 }                    # контракт 1
+StarForm { rays: int >= 3, inner_ratio: float }                  # контракт 2
+PeakForm { side_count: int >= 3 }
+PlateauForm { side_count: int >= 3, hat_fraction: float }        # hat ∈ (0,1]
 MountainSideKind / MountainSideSpec
 MountainSpec  # kind + form: MountainForm + sides[]
 MountainRangeSpec
@@ -277,17 +364,17 @@ MountainFormBySides
 
 ```text
 MountainFormGeometryObj   # engine tagged union
-  | StarForm     { rays: int }           # кол-во лучей/сторон УЖЕ внутри Star (≥3; profile default часто 5)
-  | PeakForm     { … }                   # параметры пика внутри объекта (в т.ч. стороны, если нужны)
-  | PlateauForm  { … }
-  | …                                    # новые geometry objects = PR движка
+  | StarForm     { rays: int >= 3, inner_ratio: float }   # лучи/стороны внутри Star
+  | PeakForm     { side_count: int >= 3 }                 # острый выпуклый N-gon
+  | PlateauForm  { side_count: int >= 3, hat_fraction: float }  # широкий контур + доля плоской шляпки
+  | …                                                     # новые geometry objects = PR движка
 ```
 
-| Объект | Параметры внутри объекта (примеры) |
+| Объект | Параметры внутри объекта (SoT) |
 |---|---|
-| `StarForm` | `rays` (стороны звезды) — **не** внешнее поле `side_count` |
-| `PeakForm` | свои knobs (в т.ч. грани, если есть) |
-| `PlateauForm` | свои knobs (размер шляпки, грани, …) |
+| `StarForm` | `rays` (≥3); `inner_ratio` (R_inner/R_outer; default в POJO) — **не** внешнее `side_count` |
+| `PeakForm` | `side_count` (≥3; default часто 3) — выпуклый острый N-gon |
+| `PlateauForm` | `side_count` (≥3); `hat_fraction` ∈ (0,1] — доля радиуса плоской вершины (footprint hat); kind `PLATEAU` усиливает материал вершины |
 
 ```text
 # OK
@@ -303,126 +390,233 @@ Resolve сторон для `MountainSpec.sides`:
 ```text
 side_count =
   match form
-    BySides(n)     → n
-    StarForm(rays) → rays
-    PeakForm(…)    → peak.side_count_or_default
-    …
+    BySides(n)              → n
+    StarForm(rays)          → rays
+    PeakForm(side_count)    → side_count
+    PlateauForm(side_count) → side_count
 len(sides) == side_count
 ```
 
 Form ⊥ kind: `ICE_PEAK` + `StarForm(rays=5)`, `ROCKY` + `BySides(4)`, …
 
-#### Resolve геометрической формы (метод)
+#### Целевая архитектура apply (не slice)
 
-Один entrypoint на sum type — **без** `if geometry == "star"` в contributor:
-
-```text
-resolve_mountain_form_footprint(
-  form: MountainForm,           # BySides | StarForm | PeakForm | …
-  origin_m: (x, y),             # якорь горы (метры)
-  radius_m: float,              # габарит footprint (из declare / policy / kind profile)
-  scale: LightGridScale,        # → light cells
-) → set[(lx, ly)]               # клетки основания на light grid
-```
-
-**Как резолвится (dispatch по варианту form):**
-
-| `MountainForm` | Метод / стратегия (engine) |
-|---|---|
-| `MountainFormBySides` | `raster_regular_polygon(origin, radius, n=side_count)` |
-| `StarForm` | `raster_star(origin, radius, rays=form.rays)` — лучи/впадины; N только из `form.rays` |
-| `PeakForm` | `raster_peak_footprint(origin, radius, form.…)` |
-| `PlateauForm` | `raster_plateau_footprint(origin, radius, form.…)` |
+Один pipeline для одиночной горы и для peak внутри range. Contributor — тонкий caller; вся геометрия в engine-модулях.
 
 ```text
-# псевдокод контракта (один модуль masks/mountainFormFootprint.py)
-def resolve_mountain_form_footprint(form, origin_m, radius_m, scale) -> set[LightCell]:
-    match form:
-        case MountainFormBySides(side_count=n):
-            return raster_regular_polygon(..., n=n)
-        case StarForm(rays=r):
-            return raster_star(..., rays=r)      # стороны уже в Star
-        case PeakForm() as peak:
-            return raster_peak(..., peak)
-        case PlateauForm() as plateau:
-            return raster_plateau(..., plateau)
+MountainSpec | (RangeSpec + peak)
+        │
+        ▼
+┌───────────────────────────────┐
+│ 1. FormGeometry               │  vertices + closed polygon + SideSector[]
+│    construct_mountain_form()  │  (метры; без light grid)
+└───────────────┬───────────────┘
+                ▼
+┌───────────────────────────────┐
+│ 2. FormRaster                 │  polygon → light cells (footprint mask)
+│    raster_form_footprint()    │  Pineda (convex) / winding (concave/star)
+└───────────────┬───────────────┘
+                ▼
+┌───────────────────────────────┐
+│ 3. SideFill (per side)        │  profile(t) → height fraction на секторе
+│    fill_sheer_side |          │  SHEER ≠ SLOPE = разные алгоритмы
+│    fill_slope_side            │
+└───────────────┬───────────────┘
+                ▼
+┌───────────────────────────────┐
+│ 4. KindElevation + material   │  rise from kind×z_max; summit overlays
+│    apply_mountain_cell()      │  z = base + rise * side_fraction
+└───────────────────────────────┘
 ```
 
-**Инварианты resolve**
+| Слой | Ответственность | Не делает |
+|---|---|---|
+| **FormGeometry** | вершины, рёбра, `SideSector[]` из form | z, soft/hard, terrain id |
+| **FormRaster** | occupancy footprint на light grid | профили склонов |
+| **SideFill** | `fraction∈[0,1]` по алгоритму стороны | выбор form, kind material |
+| **KindElevation** | `rise`, clamp `z_min..z_max`, summit/terrain | геометрия силуэта |
+| **Contributor** | scope, policy, вызов pipeline, merge | polygon math, profile math |
 
-| # | Правило |
+Range: spine corridor = тот же SideFill вдоль нормали к spine; peaks = полный pipeline на якорях.
+
+```mermaid
+flowchart TD
+  Spec[MountainSpec] --> FG[FormGeometry]
+  FG --> FR[FormRaster footprint]
+  FG --> Sec[SideSector i]
+  Sec --> SF{SideKind}
+  SF -->|SHEER| Sheer[fill_sheer_side]
+  SF -->|SLOPE| Slope[fill_slope_side]
+  Sheer --> Frac[side_fraction map]
+  Slope --> Frac
+  FR --> Apply[apply_mountain_cell]
+  Frac --> Apply
+  Kind[MountainKind profile] --> Apply
+  Apply --> Grid[LightGrid surface_z + terrain]
+```
+
+#### FormGeometry + FormRaster (алгоритмы SoT)
+
+```text
+MountainFormGeometry
+  vertices_m: list[(x,y)]      # замкнутый контур
+  sectors: list[SideSector]    # ровно N сторон
+
+SideSector
+  index: int
+  edge: ((x0,y0),(x1,y1))      # внешнее ребро стороны
+  wedge_poly: list[(x,y)]      # сектор: origin → edge
+  outward_n: (nx,ny)           # нормаль ребра наружу
+```
+
+**Construct (метры):**
+
+| Form | Алгоритм вершин |
 |---|---|
-| R1 | Contributor зовёт только `resolve_mountain_form_footprint` (+ elevation/apply) |
-| R2 | Новая geometry = новый variant + своя `raster_*`; не ветка в contributor |
-| R3 | `StarForm`: параметр лучей только `form.rays` — снаружи N не передаётся |
-| R4 | Выход — light indices в scope bake; дальше `apply_mountain_cell` на каждую клетку |
+| `MountainFormBySides(n)` | правильный N-gon: `(R·cos(2πi/n+φ), R·sin(…))` |
+| `StarForm(rays, inner_ratio)` | **isotoxal star**: `2·rays` вершин, чередование `R_outer=R` и `R_inner=R·inner_ratio`; `sides[]` length = `rays` |
+| `PeakForm(side_count)` | правильный N-gon (тот же construct, что BySides); семантика «пик» — острый default N + KindElevation |
+| `PlateauForm(side_count, hat_fraction)` | внешний N-gon радиуса R + внутренний hat-контур радиуса `R·hat_fraction` (плоская зона вершины для SideFill/elevation) |
 
-#### Горный хребет (range) — отдельный уровень
+**Raster (light cells):** центр клетки ∈ полигон:
+
+| Полигон | Тест |
+|---|---|
+| выпуклый (`BySides`, plateau, peak) | **Pineda edge functions** |
+| вогнутый / star | **winding number** (nonzero; Sunday) |
+
+```text
+construct_mountain_form(form, origin_m, radius_m) → MountainFormGeometry
+raster_form_footprint(geometry, scale) → set[LightCell]
+resolve_mountain_form(form, origin_m, radius_m, scale)
+  → (geometry, footprint_cells)
+```
+
+| # | Инвариант form |
+|---|---|
+| R1 | Contributor зовёт facade `resolve_mountain_form` (+ sides/elevation apply) |
+| R2 | Новая geometry = variant + construct/raster; не ветка в contributor |
+| R3 | `StarForm`: лучи только `form.rays` |
+| R4 | Выход = geometry + footprint → вход SideFill |
+
+#### SideFill — отдельные алгоритмы на сторону (SoT)
+
+Число сторон = из form; `len(sides) == N`.  
+Мягкость **не** параметр form и **не** свойство горы целиком.
+
+```text
+t(p) = clamp( dist_along_outward(p, sector) / sector_width , 0, 1)
+side_fraction(p) = profile_side(side, t(p))   # ∈ [0,1]
+z(p) = base_z(p) + rise(kind) * side_fraction(p)  # clamp z_min..z_max
+```
+
+| `MountainSideKind` | Алгоритм `profile(t)` | Смысл |
+|---|---|---|
+| `SHEER` | **step**: `1` при `t < 1−ε`, иначе `0` | жёсткий обрыв |
+| `SLOPE` | **smooth falloff**: default `1 − smoothstep(0,1,t)`; optional `(1−t)^k` | мягкий склон |
+
+#### POJO defaults (SoT; рекомендация утверждена)
+
+| Поле | Default |
+|---|---|
+| `MountainsCategoryPolicy.default_kind` | `ROCKY` |
+| `default_form` | `MountainFormBySides(side_count=6)` |
+| `default_side_kind` (все стороны, если не заданы) | `SLOPE` |
+| `default_radius_m` | `500` |
+| `StarForm.rays` | `5` |
+| `StarForm.inner_ratio` | `0.45` |
+| `PeakForm.side_count` | `3` |
+| `PlateauForm.side_count` | `6` |
+| `PlateauForm.hat_fraction` | `0.45` |
+| `SHEER.sheer_band_light` (ε в light cells) | `1` |
+| `SLOPE` profile | `smoothstep` (не power) |
+| `SLOPE.k` (если profile=`power`) | `2.0` |
+| Kind `rise_fraction_of_z_max` | ROCKY `0.35`, ICE_PEAK `0.45`, VOLCANO `0.40`, PLATEAU `0.25`, FORESTED `0.20` |
+
+Все defaults — `DefaultOnWire` / field default на POJO; generate только читает мир.
+
+```text
+fill_sheer_side(sector, cells, side) → {(cell, fraction)}
+fill_slope_side(sector, cells, side) → {(cell, fraction)}
+
+apply_mountain_sides(geometry, sides[], footprint, kind, z_min, z_max, relief_z)
+  for each side i:
+    match sides[i].kind → fill_* → merge fractions (sector ownership)
+  apply_mountain_cell(... z = base + rise * fraction ...)
+```
+
+**Ownership клетки (утверждено: B — nearest edge):**
+
+```text
+side_index(p) = argmin_i dist(p, edge_i)   # tie-break: меньший i
+t(p), profile — только у sides[side_index]
+# запрещено: max(fraction) across sides (SHEER забивает SLOPE)
+# запрещено: blend нескольких сторон
+```
+
+Plateau hat (`R·hat_fraction`): внутри hat → `fraction = 1` (плоскость), ownership сторон не применяется; снаружи hat → до внешнего контура — B + SideFill.
+
+Один writer на клетку внутри одной `MountainSpec`.  
+Новый side-algorithm = новый `MountainSideKind` + `fill_*` (PR движка).
+
+**L0 / L2 — уровни детализации одного контракта, не v1/v2 архитектуры:**
+
+| | L0 (light bake) | L2 (fine) |
+|---|---|---|
+| FormGeometry / sectors | те же | те же |
+| SideFill profile | пишет `surface_z` (+ band) | тот же profile → меш/нормали/3D склон |
+| Kind material | `system_terrain` / summit | детализация cap/crater |
+
+#### Горный хребет (range) — тот же pipeline
 
 | | Одиночная гора (`MountainSpec`) | Хребет (`MountainRangeSpec`) |
 |---|---|---|
 | Протяжённость | компактный footprint | **длина вдоль spine ≫ ширины** |
-| Геометрия | form (peak/star/plateau) | polyline spine + width corridor |
-| Состав | один kind/form/sides | непрерывное тело хребта + optional peaks вдоль оси |
-| Declare | `geographic.peak` / точечный mountain | `geographic.mountain` massif / будущий ridge path |
-| Autoresolve | ridge-noise blobs → isolated или short chains | elongated ridge field вдоль seed axes |
-
-Хребет **не** является значением `MountainForm` (STAR/PEAK — про одну гору).  
-Хребет = **агрегат** (`MountainRangeSpec`), внутри могут быть несколько `MountainSpec` (вершины) с своими kind/form.
-
-#### Стороны (на `MountainSpec`)
-
-- Число сторон = **из выбранного контракта формы** (`BySides.side_count` / `StarForm.rays` / …); ≥ 3.
-- `len(sides) ==` этому числу.
-- Каждая сторона: `SHEER` | `SLOPE` — **не** флаг «мягкости горы», а выбор **отдельного алгоритма заполнения этой стороны**.
-- Form задаёт только силуэт / разбиение на стороны; мягкость/жёсткость края **не** параметр form.
+| Геометрия | FormGeometry | polyline spine + width; `t` = dist to spine / half-width |
+| Стороны | `sides[]` на peak form | **2 латерали** (left/right) = SideFill; **optional 2 торца** (start/end) |
+| Состав | один kind/form/sides | тело хребта + optional peaks (полный MountainSpec) |
+| Declare / autoresolve | peak / isolated | massif / elongated ridge |
 
 ```text
-# per side — свой fill algorithm
-apply_mountain_side(
-  side_index: int,
-  side: MountainSideSpec,     # SHEER | SLOPE (+ knobs стороны)
-  sector: SideSector,         # клин/грань из form footprint
-  cells: set[LightCell],
-) → updates surface_z / slope band на клетках сектора
-
-match side.kind:
-  SHEER → fill_sheer_side(...)   # жёсткий обрыв: резкий z-step
-  SLOPE → fill_slope_side(...)   # мягкий склон: градиент z к base
+# Range sides (утверждено с defaults)
+MountainRangeSpec.sides:
+  left, right            # обязательны; default SLOPE
+  start?, end?           # optional торцы; default SHEER если заданы, иначе открытый хребет
+half_width_m: default = default_radius_m  # или отдельное поле policy
 ```
 
-| Side | Алгоритм заполнения (контракт) |
-|---|---|
-| `SHEER` | жёсткий край: почти без промежуточных z между peak и base на секторе |
-| `SLOPE` | мягкий край: интерполяция / falloff z вдоль нормали стороны |
-
-- L0 может писать z/band по стороне; полный 3D склон — L2.
-- Новая сторона-алгоритм = новый `MountainSideKind` + `fill_*` (PR движка).
+Ownership на corridor: nearest к left vs right boundary (B); торцы — nearest к end-cap edge, если есть.  
+Хребет ≠ значение `MountainForm`. Range = агрегат.
 
 #### Инварианты
 
 | # | Правило |
 |---|---|
-| M1 | Kind / form / side / range — **engine**; не N+1 |
+| M0 | Маска горы проходит **только** через общий домен `terrain_masks` (`MountainsCategoryPolicy`); engine ≠ отдельный корень/bake |
+| M0b | Declare = `declared_mountains[]` полные Spec (подход A); `NamedLocation` поверх объекта, не declare-path маски |
+| M0c | Autoresolve = A+D: placement → Spec/Range → engine; запрещён score→paint; D = Range + peaks along spine |
+| M0d | Ownership клетки = nearest edge (B); не max-fraction / не blend; hat Plateau — fraction=1 внутри |
+| M0e | Numeric defaults — таблица POJO defaults (§ SideFill); Range = left/right + optional end caps |
+| M1 | Kind / form / side / range — **engine materialize** внутри domain; не N+1 |
 | M2 | Нет строковых ветвлений в contributor — только enums / Spec |
-| M3 | Form = sum type: `BySides` **или** geometry object (`StarForm` с `rays` внутри); запрещён плоский `{side_count, geometry}` |
+| M3 | Form = sum type: `BySides` **или** geometry object; запрещён плоский `{side_count, geometry}` |
 | M4 | Range ≠ Form; range = протяжённая система |
 | M5 | Elevation по **kind**; mask без подъёма z — запрещена |
 | M6 | Новый kind/geometry-object/side/range = PR движка |
-| M7 | Мягкость края = **алгоритм fill стороны** (`SHEER`/`SLOPE`), не свойство form/горы целиком |
+| M7 | Мягкость края = **алгоритм SideFill** (`SHEER`/`SLOPE`), не свойство form/горы |
+| M8 | Pipeline FormGeometry → FormRaster → SideFill → KindElevation — целевой; не mask-only slice |
+| M9 | L0 и L2 потребляют **один** SideFill/Form контракт |
 
-#### Elevation (одна формула; knobs с **kind**)
+#### Elevation (kind; fraction — от SideFill)
 
 ```text
-base_z = cell.surface_z
+base_z = cell.surface_z          # после relief
 rise   = round(z_max * kind.profile.rise_fraction_of_z_max)
-z      = min(z_max, max(z_min, base_z + rise))
+z      = min(z_max, max(z_min, base_z + rise * side_fraction))
 ```
 
-На хребте: та же формула per-cell / per-peak; вдоль spine может быть ниже к краям (profile range), всё ещё ≤ `z_max`.
-
 ```text
-resolve_mountain_z(base_z, z_min, z_max, kind) → int
+resolve_mountain_z(base_z, z_min, z_max, kind, side_fraction) → int
 apply_mountain_cell(..., MountainSpec | range context) → terrain(+summit) + surface_z
 ```
 
@@ -467,6 +661,7 @@ Mutable dataclass **до** persist. Поля **1:1** с wire SoT [`WorldMapCellW
 | `hydrology_width` | int \| None | hydro |
 | `climate_zone_id` | int \| None | climate |
 | `location_pin` | int \| None | settlement |
+| `system_tree` / `system_bush` / `system_grass` / `system_plant` (и т.п.) | str \| None | flora type refs — [`tz_flora`](./tz_flora.md); **только ключи registry**, не инстансы |
 
 Wire/POJO SoT — § **Связь с dataModel** выше. Compose **не** дублирует defaults литералами в обход POJO.
 
@@ -488,20 +683,21 @@ LightGridCompose
 ### `LightGridContributor` (protocol)
 
 ```text
-name: str   # relief|climate|landcover|ravine|hydro|settlement|road
+name: str   # relief|climate|landcover|flora|mountain|ravine|hydro|settlement|road
 apply(compose: LightGridCompose, ctx: LightGridBakeContext) → None
 ```
 
 **Порядок вызова (target; каждый terrain/hydro contributor читает свой `enabled`):**
 
 1. `relief` — `surface_z`
-2. `climate` — `climate_zone_id` (вход для forest/plains)
-3. `landcover` — plains/forest (и tundra) по climate **если** `terrain_masks.default_forests|plains.enabled`
-4. `mountain` — declare + autoresolve; пишет `system_terrain` **и** поднимает `surface_z` от `z_max` (§ Mountain elevation)
-5. `ravine` — **если** `default_ravines.enabled`
-6. `hydro` — `hydrology_*` Path A **если** `hydrology.enabled` (+ subtype flags)
-7. `settlement` — `location_pin`
-8. `road` — **если** `default_roads.enabled`; не затирает SEA/LAKE/RIVER
+2. `climate` — `climate_zone_id` (**обязательно до flora**)
+3. `landcover` — plains/forest/tundra по climate **если** `terrain_masks.default_forests|plains.enabled`
+4. `flora` — type refs (`system_tree`/bush/grass/plant) через FloraGenerator; **только после climate**; suitability ∩ climate cell; обычно после landcover (контекст forest/plains)
+5. `mountain` — declare + autoresolve; пишет `system_terrain` **и** поднимает `surface_z` от `z_max` (§ Mountain elevation)
+6. `ravine` — **если** `default_ravines.enabled`
+7. `hydro` — `hydrology_*` Path A **если** `hydrology.enabled` (+ subtype flags)
+8. `settlement` — `location_pin`
+9. `road` — **если** `default_roads.enabled`; не затирает SEA/LAKE/RIVER
 
 Пустой declare при `enabled=true` → autoresolve всё равно materialize (кроме road: нужна geometry edges).
 
@@ -526,6 +722,7 @@ apply(compose: LightGridCompose, ctx: LightGridBakeContext) → None
 | **relief** | `surface_z` | per `(tx,ty)`; coarse + pole typical + noise |
 | **climate** | `climate_zone_id` | pole (+ local) в центре light cell |
 | **landcover** | `system_terrain` plains/forest/tundra | climate + `terrain_masks` forest/plains policy; **не** гора |
+| **flora** | `system_tree` / bush / grass / plant | FloraGenerator ∩ climate (**после** climate + landcover); [`tz_flora`](./tz_flora.md) |
 | **mountain** | `system_terrain=mountain` | declare + autoresolve (`default_mountains`); empty declare ≠ off |
 | **ravine** | `system_terrain=ravine` | `default_ravines` + autoresolve; не затирает hydro |
 | **hydro** | `hydrology_*` | `world.hydrology` Path A |
@@ -573,6 +770,7 @@ flowchart TB
     R[relief]
     CL[climate]
     L[landcover]
+    F[flora]
     M[mountain]
     RV[ravine]
     H[hydro]
@@ -581,11 +779,14 @@ flowchart TB
     R --> C
     CL --> C
     L --> C
+    F --> C
     M --> C
     RV --> C
     H --> C
     S --> C
     RD --> C
+    CL -.->|suitability input| F
+    L -.->|forest/plains context| F
   end
 
   subgraph persist [Persist]
@@ -707,4 +908,15 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 | 2026-07-16 | Impl: `WorldTerrainMasks` + shared MaskCategoryPolicy; mountain contributor; deleted Light* interim |
 | 2026-07-16 | § **Mountain elevation**: подъём = % от `z_max` над terrain base; clamp ≤ `z_max`; mask-only без z — запрещён |
 | 2026-07-16 | § **Mountain (engine)**: Form = sum type `BySides` \| `StarForm(rays…)` (не плоский side_count+geometry); Range; elevation kind×z_max |
+| 2026-07-16 | § Mountain: целевой pipeline FormGeometry→FormRaster→SideFill→KindElevation (M8/M9); SHEER/SLOPE = отдельные fill-алгоритмы; не L0-slice |
+| 2026-07-16 | Declare подход A: `declared_*[]` полные Spec (горы/леса/равнины/овраги); NamedLocation поверх объекта маски; geographic ≠ declare-path |
+| 2026-07-16 | Autoresolve A+D: placement→Spec→engine; Range + peaks along spine; запрещён score→paint |
+| 2026-07-16 | Side ownership B: nearest edge; Plateau hat fraction=1 inside |
+| 2026-07-16 | POJO defaults (inner_ratio 0.45, ε=1 light, smoothstep, radius 500…); Range left/right + optional caps |
+| 2026-07-16 | § Forest/flora: `tree|bush|grass|plant|crops_registry`; forest = tree_mix (+ understory) ∩ climate; crops ⊥ wild forest |
+| 2026-07-16 | FloraClimateSuitability (B): rainfall/temp/elev ranges + optional climate_zones; shared across flora registries |
+| 2026-07-16 | Forest L0=D (mix на Spec); full_bake=noise occupancy (`full_cell_side` 32, `canopy_noise`; чаща=низкий noise) |
+| 2026-07-17 | Flora → отдельное ТЗ [`tz_flora.md`](./tz_flora.md); light bake forests только ссылка + mask knobs |
+| 2026-07-17 | light_bake flora: per-cell type refs (`system_tree`/bush/grass/plant); не инстансы |
+| 2026-07-17 | Compose order: climate → landcover → **flora**; suitability ∩ climate before type refs |
 | 2026-07-15 | MLB-8 unit path ✅ via WP-PERF-22 impl |
