@@ -24,7 +24,7 @@ class TestWorldGridRenderer(unittest.TestCase):
             ),
         ]
         grid = WorldGridRenderer(cells, cell_size_m=3000).render_bbox(1, 1, 2, 1)
-        self.assertIn("r", grid)
+        self.assertIn("y", grid)
         self.assertIn("~", grid)
 
     def test_render_legend(self):

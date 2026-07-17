@@ -6,7 +6,7 @@ ROLE_SYMBOLS: dict[str, str] = {
     "coastal_sea": "~",
     "open_ocean": "≈",
     "lake": "o",
-    "river_bed": "r",
+    "river_bed": "y",  # interim; `r` reserved for road
     "shore": "s",
 }
 
@@ -16,6 +16,7 @@ TERRAIN_SYMBOLS: dict[str, str] = {
     "forest": "f",
     "shore": "s",
     "urban": "u",
+    "road": "r",
 }
 
 LOCATION_PIN_SYMBOL = "@"

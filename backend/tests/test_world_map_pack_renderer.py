@@ -20,7 +20,7 @@ class TestWorldMapPackRenderer(unittest.TestCase):
             hydrology_role=WorldMapHydrologyRole.RIVER,
         )
         plains = WorldMapCellWire(tx=1, ty=0, surface_z=1, system_terrain="plains")
-        self.assertEqual(wire_symbol(river), "r")
+        self.assertEqual(wire_symbol(river), "y")
         self.assertEqual(wire_symbol(plains), ".")
 
     def test_macro_and_light_grid_with_pin(self):
