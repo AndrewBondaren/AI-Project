@@ -11,6 +11,10 @@ from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import
     WorldConnectionTypeRegistry,
 )
 from app.dataModel.constrainedField import constrained_field
+from app.dataModel.masks.enums.maskDomainId import (
+    TERRAIN_MERGE_RANK_HIGH_TO_LOW,
+    MaskDomainId,
+)
 from app.dataModel.masks.maskCategoryPolicy import MaskCategoryPolicy
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 
@@ -49,12 +53,10 @@ class MountainsCategoryPolicy(MaskCategoryPolicy):
 
 
 class ForestsCategoryPolicy(MaskCategoryPolicy):
-    """Climate rainfall → forest."""
+    """Climate rainfall → forest (cold biomes stay on climate_zone_id, not terrain)."""
 
     system_terrain: DefaultOnWire[str] = Field(default_factory=lambda: _terrain_key("forest"))
     forest_min_rainfall: DefaultOnWire[int] = Field(default=45, ge=0)
-    tundra_system_terrain: DefaultOnWire[str] = "tundra"
-    tundra_max_base_temperature: DefaultOnWire[int] = 0
 
 
 class PlainsCategoryPolicy(MaskCategoryPolicy):
@@ -116,12 +118,22 @@ class WorldTerrainMasks(BaseModel):
     def category_enabled(self, category: MaskCategoryPolicy) -> bool:
         return bool(self.enabled) and bool(category.enabled)
 
+    def system_terrain_for_domain(self, domain: MaskDomainId) -> str | None:
+        """Resolve ``system_terrain`` key for a terrain-painting mask domain."""
+        accessors: dict[MaskDomainId, str] = {
+            MaskDomainId.ROADS: self.default_roads.system_terrain,
+            MaskDomainId.RAVINES: self.default_ravines.system_terrain,
+            MaskDomainId.MOUNTAINS: self.default_mountains.system_terrain,
+            MaskDomainId.FORESTS: self.default_forests.system_terrain,
+            MaskDomainId.PLAINS: self.default_plains.system_terrain,
+        }
+        return accessors.get(domain)
+
     def merge_rank_order(self) -> tuple[str, ...]:
-        """High → low paint priority for ``system_terrain``."""
-        return (
-            self.default_roads.system_terrain,
-            self.default_ravines.system_terrain,
-            self.default_mountains.system_terrain,
-            self.default_forests.system_terrain,
-            self.default_plains.system_terrain,
-        )
+        """High → low paint priority for ``system_terrain`` (SoT: TERRAIN_MERGE_RANK)."""
+        keys: list[str] = []
+        for domain in TERRAIN_MERGE_RANK_HIGH_TO_LOW:
+            key = self.system_terrain_for_domain(domain)
+            if key is not None:
+                keys.append(key)
+        return tuple(keys)

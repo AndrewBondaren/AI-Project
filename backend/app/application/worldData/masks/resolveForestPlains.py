@@ -1,4 +1,8 @@
-"""Climate → forest / plains / tundra (no mountain). tz_map_light_bake § Surface mask domains."""
+"""Climate → forest / plains landcover (no mountain; no biome-as-terrain).
+
+Cold zones (tundra, …) stay on ``climate_zone_id``; landcover paints forest|plains only.
+tz_map_light_bake § Mask domain vs climate.
+"""
 
 from __future__ import annotations
 
@@ -42,18 +46,17 @@ def resolve_forest_plains(
     forests: ForestsCategoryPolicy,
     plains: PlainsCategoryPolicy,
 ) -> str:
-    """Biome only — mountain/ravine/road are other domains."""
+    """Landcover keys only — mountain/ravine/road are other domains.
+
+    ``base_temperature`` retained for call-site/profile symmetry; cold does not
+    invent a terrain key (biome lives on climate_zone_id).
+    """
+    del base_temperature  # climate only; not a terrain discriminator
     plains_key = plains.system_terrain
     if not terrain_set:
         return plains_key
     if base_rainfall >= forests.forest_min_rainfall:
         return _pick([forests.system_terrain, plains_key], terrain_set, plains_key)
-    if base_temperature <= forests.tundra_max_base_temperature:
-        return _pick(
-            [forests.tundra_system_terrain, plains_key],
-            terrain_set,
-            plains_key,
-        )
     return _pick([plains_key], terrain_set, plains_key)
 
 

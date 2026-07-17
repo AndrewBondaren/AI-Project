@@ -1,4 +1,4 @@
-"""Mask-domain shared POJOs — tz_map_light_bake § Surface mask domains."""
+"""Mask-domain enums — tz_map_light_bake § Hybrid C."""
 
 from app.dataModel.masks.enums.maskDomainId import (
     COMPOSE_CONTRIBUTOR_ORDER,
@@ -7,13 +7,11 @@ from app.dataModel.masks.enums.maskDomainId import (
     LightContributorId,
     MaskDomainId,
 )
-from app.dataModel.masks.maskCategoryPolicy import MaskCategoryPolicy
 
 __all__ = [
     "COMPOSE_CONTRIBUTOR_ORDER",
     "MASK_DOMAIN_CONTRIBUTOR",
     "TERRAIN_MERGE_RANK_HIGH_TO_LOW",
     "LightContributorId",
-    "MaskCategoryPolicy",
     "MaskDomainId",
 ]

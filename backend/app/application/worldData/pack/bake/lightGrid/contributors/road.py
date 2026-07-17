@@ -12,6 +12,7 @@ from app.application.worldData.pack.bake.lightGrid.contributors.hydro.raster imp
     light_polyline_from_meters,
 )
 from app.application.worldData.pack.bake.lightGrid.paintTerrain import paint_system_terrain
+from app.dataModel.masks.enums.maskDomainId import LightContributorId
 from app.db.models.namedLocation import NamedLocation
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,7 @@ def _node_meters(
 
 
 class RoadContributor:
-    name = "road"
+    name = LightContributorId.ROAD.value
 
     def apply(self, compose: LightGridCompose, ctx: LightGridBakeContext) -> None:
         masks = terrain_masks(ctx.world)

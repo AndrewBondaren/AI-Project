@@ -8,13 +8,14 @@ from app.application.jsonValidation.worldRow import city_sizes
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.coords import meters_to_macro_local
+from app.dataModel.masks.enums.maskDomainId import LightContributorId
 from app.dataModel.worldPack.lightSettlementFootprint import LightSettlementFootprintPolicy
 
 logger = logging.getLogger(__name__)
 
 
 class SettlementContributor:
-    name = "settlement"
+    name = LightContributorId.SETTLEMENT.value
 
     def __init__(self, footprint: LightSettlementFootprintPolicy | None = None) -> None:
         self._footprint = footprint or LightSettlementFootprintPolicy.canonical_defaults()

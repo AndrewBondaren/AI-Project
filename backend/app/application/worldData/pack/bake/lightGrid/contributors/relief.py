@@ -12,12 +12,13 @@ from app.application.worldData.generators.terrain.worldMapSettings import world_
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.coords import light_cell_center_m
+from app.dataModel.masks.enums.maskDomainId import LightContributorId
 
 logger = logging.getLogger(__name__)
 
 
 class ReliefContributor:
-    name = "relief"
+    name = LightContributorId.RELIEF.value
 
     def apply(self, compose: LightGridCompose, ctx: LightGridBakeContext) -> None:
         world = ctx.world

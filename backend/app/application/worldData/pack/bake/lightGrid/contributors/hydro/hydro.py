@@ -21,12 +21,13 @@ from app.application.worldData.pack.bake.lightGrid.contributors.hydro.declaredBa
 from app.application.worldData.pack.bake.lightGrid.contributors.hydro.declaredRivers import (
     apply_declared_rivers,
 )
+from app.dataModel.masks.enums.maskDomainId import LightContributorId
 
 logger = logging.getLogger(__name__)
 
 
 class HydroContributor:
-    name = "hydro"
+    name = LightContributorId.HYDRO.value
 
     def apply(self, compose: LightGridCompose, ctx: LightGridBakeContext) -> None:
         world_uid = ctx.world.world_uid

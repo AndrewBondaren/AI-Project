@@ -9,6 +9,7 @@ from app.application.worldData.pack.bake.lightGrid.paintTerrain import paint_sys
 from app.application.worldData.masks.terrainMerge import PRESERVE_HYDROLOGY_ROLES
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
+from app.dataModel.masks.enums.maskDomainId import LightContributorId
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ _NEIGHBORS_8: tuple[tuple[int, int], ...] = (
 
 
 class RavineContributor:
-    name = "ravine"
+    name = LightContributorId.RAVINE.value
 
     def apply(self, compose: LightGridCompose, ctx: LightGridBakeContext) -> None:
         masks = terrain_masks(ctx.world)

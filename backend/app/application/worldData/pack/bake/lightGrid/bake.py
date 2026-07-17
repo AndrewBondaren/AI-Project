@@ -9,30 +9,15 @@ from collections import Counter
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.contributor import LightGridContributor
-from app.application.worldData.pack.bake.lightGrid.contributors.climate import ClimateContributor
-from app.application.worldData.pack.bake.lightGrid.contributors.hydro import HydroContributor
-from app.application.worldData.pack.bake.lightGrid.contributors.landcover import LandcoverContributor
-from app.application.worldData.pack.bake.lightGrid.contributors.mountain import MountainContributor
-from app.application.worldData.pack.bake.lightGrid.contributors.ravine import RavineContributor
-from app.application.worldData.pack.bake.lightGrid.contributors.relief import ReliefContributor
-from app.application.worldData.pack.bake.lightGrid.contributors.road import RoadContributor
-from app.application.worldData.pack.bake.lightGrid.contributors.settlement import (
-    SettlementContributor,
+from app.application.worldData.pack.bake.lightGrid.maskDomainRegistry import (
+    build_default_contributors,
 )
 from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CONTRIBUTORS: tuple[LightGridContributor, ...] = (
-    ReliefContributor(),
-    ClimateContributor(),
-    LandcoverContributor(),
-    MountainContributor(),
-    RavineContributor(),
-    HydroContributor(),
-    SettlementContributor(),
-    RoadContributor(),
-)
+# Built from dataModel ``COMPOSE_CONTRIBUTOR_ORDER`` (tz_map_light_bake § Hybrid C).
+DEFAULT_CONTRIBUTORS: tuple[LightGridContributor, ...] = build_default_contributors()
 
 
 def compose_light_grid(

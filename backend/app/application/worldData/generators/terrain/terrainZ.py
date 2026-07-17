@@ -32,7 +32,7 @@ def surface_biome_terrain(
     system_climate_zone: str | None = None,
     masks: WorldTerrainMasks | None = None,
 ) -> str:
-    """Outdoor surface biome (forest/plains/tundra) — not mountain/ravine/road."""
+    """Outdoor surface landcover (forest/plains) — not mountain/ravine/road; not biome keys."""
     zone = system_climate_zone
     if zone is None:
         zone = WorldClimateScalars.canonical_defaults().default_climate_zone

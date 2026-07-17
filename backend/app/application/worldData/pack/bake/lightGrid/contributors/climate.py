@@ -10,6 +10,7 @@ from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridB
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.coords import light_cell_center_m
 from app.dataModel.climate.enums.climateZone import ClimateZone
+from app.dataModel.masks.enums.maskDomainId import LightContributorId
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ def _climate_zone_id(zone_key: str) -> int | None:
 
 
 class ClimateContributor:
-    name = "climate"
+    name = LightContributorId.CLIMATE.value
 
     def apply(self, compose: LightGridCompose, ctx: LightGridBakeContext) -> None:
         pole = ctx.pole_field

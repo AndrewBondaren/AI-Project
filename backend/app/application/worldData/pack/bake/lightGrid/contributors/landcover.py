@@ -1,4 +1,4 @@
-"""Landcover contributor — forest/plains/tundra from climate (tz_map_light_bake)."""
+"""Landcover contributor — forest/plains from climate (tz_map_light_bake)."""
 
 from __future__ import annotations
 
@@ -6,20 +6,21 @@ import logging
 from collections import Counter
 
 from app.application.jsonValidation import terrain_masks
-from app.application.worldData.pack.bake.lightGrid.paintTerrain import paint_system_terrain_cell
 from app.application.worldData.masks.resolveForestPlains import (
     profile_for_zone_key,
     resolve_forest_plains,
 )
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
+from app.application.worldData.pack.bake.lightGrid.paintTerrain import paint_system_terrain_cell
 from app.dataModel.climate.enums.climateZone import ClimateZone
+from app.dataModel.masks.enums.maskDomainId import LightContributorId
 
 logger = logging.getLogger(__name__)
 
 
 class LandcoverContributor:
-    name = "landcover"
+    name = LightContributorId.LANDCOVER.value
 
     def apply(self, compose: LightGridCompose, ctx: LightGridBakeContext) -> None:
         masks = terrain_masks(ctx.world)
@@ -36,7 +37,7 @@ class LandcoverContributor:
         terrain_set = ctx.terrain_system_keys
         if not terrain_set:
             return
-        forest_keys = {forests.system_terrain, forests.tundra_system_terrain}
+        forest_key = forests.system_terrain
         terrain_hist: Counter[str] = Counter()
         cells = 0
         for gx, gy in ctx.tiles:
@@ -55,7 +56,7 @@ class LandcoverContributor:
                     forests=forests,
                     plains=plains,
                 )
-                if preferred in forest_keys:
+                if preferred == forest_key:
                     key = preferred if forests_on else (plains.system_terrain if plains_on else None)
                 elif preferred == plains.system_terrain:
                     key = plains.system_terrain if plains_on else None

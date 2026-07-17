@@ -98,7 +98,7 @@ from app.dataModel.terrain import (
     WorldTerrainRegistry,
     WorldTerrainScalars,
 )
-from app.dataModel.masks import MaskCategoryPolicy
+from app.dataModel.masks import LightContributorId, MaskCategoryPolicy, MaskDomainId
 from app.dataModel.terrainMasks import WorldTerrainMasks
 
 __all__ = [
@@ -176,7 +176,9 @@ __all__ = [
     "WorldMaterialRegistry",
     "WorldRoadSettings",
     "WorldRoomTypeRegistry",
+    "LightContributorId",
     "MaskCategoryPolicy",
+    "MaskDomainId",
     "WorldTerrainCategoryRegistry",
     "WorldTerrainMasks",
     "WorldTerrainRegistry",

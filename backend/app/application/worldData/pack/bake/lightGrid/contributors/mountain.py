@@ -23,6 +23,7 @@ from app.dataModel.locations.enums.geographicSubtype import (
     GEOGRAPHIC_LOCATION_TYPE,
     GeographicSubtype,
 )
+from app.dataModel.masks.enums.maskDomainId import LightContributorId
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ _DECLARE_SUBTYPES = frozenset({GeographicSubtype.MOUNTAIN, GeographicSubtype.PEA
 
 
 class MountainContributor:
-    name = "mountain"
+    name = LightContributorId.MOUNTAIN.value
 
     def apply(self, compose: LightGridCompose, ctx: LightGridBakeContext) -> None:
         masks = terrain_masks(ctx.world)
