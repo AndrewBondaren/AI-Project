@@ -19,6 +19,7 @@ from app.application.worldData.generators.hydrology.shore.meterHydrologyIndex im
     apply_declared_meter_river_carves,
 )
 from app.application.worldData.generators.terrain.passes.surfacePass import run_surface_pass_coarse
+from app.application.worldData.generators.terrain.reliefObjects import apply_relief_objects_z
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.application.worldData.generators.climate.localFieldFromCoarse import (
     build_local_field_from_coarse,
@@ -38,7 +39,10 @@ class SurfaceTerrainContext:
     coarse_hydro: dict[tuple[int, int], object]
     sparse_meter_hydro: dict[tuple[int, int], MapCellHydrology]
     meter_z_overrides: dict[tuple[int, int], int]
-    # Macro-grid keys only: (gx, gy) → surface z. Meter overrides live in meter_z_overrides.
+    # Pre-1.4 macro z (relief only) — light ReliefContributor base. Not hydro SoT.
+    coarse_relief_z: dict[tuple[int, int], int]
+    # Post-1.4 (+ hydro carve) macro z — hydro / fine upsample SoT.
+    # Meter overrides live in meter_z_overrides.
     coarse_surface_z: dict[tuple[int, int], int]
 
 
@@ -76,6 +80,12 @@ def prepare_surface_terrain_context(
     if coarse_hm is None:
         return None
 
+    # Pre-1.4 snapshot for light relief (avoid double-rise when mountain raises on light).
+    coarse_relief_z = dict(coarse_hm.surface_z)
+
+    # Pass 1.4 — mountain rise / ravine drop before hydrology detect (1.5).
+    apply_relief_objects_z(world, locations, coarse_hm, pole_field=pole_field)
+
     coarse_hydro: dict[tuple[int, int], object] = {}
     if is_hydrology_enabled(world):
         hydro = hydrology_generator or HydrologyGeneratorService()
@@ -102,5 +112,6 @@ def prepare_surface_terrain_context(
         coarse_hydro=coarse_hydro,
         sparse_meter_hydro=sparse_meter_hydro,
         meter_z_overrides=meter_z_overrides,
+        coarse_relief_z=coarse_relief_z,
         coarse_surface_z=dict(coarse_hm.surface_z),
     )

@@ -44,3 +44,6 @@ curl -X POST http://localhost:8000/api/chat \
 # 3. Запуск UI
 Запустить браузерную версию: cd frontend && npm run dev:browser
 Запустить с Electron: cd frontend && npm run dev:electron
+
+TEST fixtures
+python backend/scripts/initialize_world.py --fixture fixtures/world_test_gen.json --max-tiles 16

@@ -151,6 +151,7 @@ class TestUpsampleAndCorridor(unittest.TestCase):
             coarse_hydro={},
             sparse_meter_hydro={},
             meter_z_overrides={},
+            coarse_relief_z={},
             coarse_surface_z={},
         )
         state = terrain.build_tile_surface_state(

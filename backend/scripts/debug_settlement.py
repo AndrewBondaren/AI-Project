@@ -919,7 +919,10 @@ def test_climate_orchestrator_passes() -> None:
 def test_climate_detect_relative_elevation() -> None:
     """Auto anchors: terrain features only; zone from pole field, not elevation."""
     from app.application.worldData.generators.climate.anchorAssign import auto_anchors_from_features
-    from app.application.worldData.generators.climate.anchorDetect import detect_terrain_features
+    from app.application.worldData.generators.climate.anchorDetect import (
+        ProminenceScale,
+        detect_terrain_features,
+    )
     from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField, GridBBox
     from app.application.worldData.generators.climate.poleResolve import resolve_pole_field
     from app.db.models.world import World
@@ -942,10 +945,10 @@ def test_climate_detect_relative_elevation() -> None:
         )
 
     plateau = [_cell(0, 0, 3200), _cell(1, 0, 3200), _cell(0, 1, 3200), _cell(1, 1, 3200)]
-    assert detect_terrain_features(plateau) == []
+    assert detect_terrain_features(plateau, scale=ProminenceScale.METRIC) == []
 
     peak_row = plateau + [_cell(2, 0, 3400), _cell(2, 1, 3200), _cell(3, 0, 3200)]
-    features = detect_terrain_features(peak_row)
+    features = detect_terrain_features(peak_row, scale=ProminenceScale.METRIC)
     assert len(features) == 1
     assert features[0].gx == 2 and features[0].gy == 0
 
@@ -959,7 +962,7 @@ def test_climate_detect_relative_elevation() -> None:
         _cell(0, 2, 3000), _cell(1, 2, 3000), _cell(2, 2, 3000),
     ]
     gorge_auto = auto_anchors_from_features(
-        detect_terrain_features(gorge), world, {}, pole_field,
+        detect_terrain_features(gorge, scale=ProminenceScale.METRIC), world, {}, pole_field,
     )
     assert len(gorge_auto) == 1
     assert gorge_auto[0].system_climate_zone == "desert"
@@ -969,7 +972,7 @@ def test_climate_detect_relative_elevation() -> None:
         _cell(0, 1, 3000), _cell(1, 1, 2990, "liquid_body"),
     ]
     lake_auto = auto_anchors_from_features(
-        detect_terrain_features(lake), world, {}, pole_field,
+        detect_terrain_features(lake, scale=ProminenceScale.METRIC), world, {}, pole_field,
     )
     assert len(lake_auto) == 1
 

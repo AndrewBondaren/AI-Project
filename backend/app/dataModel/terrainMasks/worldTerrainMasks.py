@@ -50,6 +50,10 @@ class MountainsCategoryPolicy(MaskCategoryPolicy):
     declare_radius_light: DefaultOnWire[int] = Field(default=3, ge=0)
     # Quantize meters for ridge noise (must be ≪ tile_m so L0 sees variation).
     ridge_cell_m: DefaultOnWire[int] = Field(default=250, ge=1)
+    # Interim KindElevation (Pass 1.4): rise = round(z_max * fraction); full MountainKind later.
+    rise_fraction_of_z_max: DefaultOnWire[float] = constrained_field(
+        default=0.25, greater_equals=0.0, lesser_equals=1.0,
+    )
 
 
 class ForestsCategoryPolicy(MaskCategoryPolicy):
@@ -71,6 +75,8 @@ class RavinesCategoryPolicy(MaskCategoryPolicy):
     system_terrain: DefaultOnWire[str] = Field(default_factory=lambda: _terrain_key("ravine"))
     min_drop: DefaultOnWire[int] = Field(default=1, ge=1)
     min_neighbors: DefaultOnWire[int] = Field(default=3, ge=1)
+    # Pass 1.4 / light: lower surface_z by this many units when ravine paints.
+    drop_z: DefaultOnWire[int] = Field(default=1, ge=1)
 
 
 class RoadsCategoryPolicy(MaskCategoryPolicy):

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.application.worldData.generators.climate.anchorDetect import detect_terrain_features
+from app.application.worldData.generators.climate.anchorDetect import (
+    ProminenceScale,
+    detect_terrain_features,
+)
 from app.application.worldData.generators.climate.math import world_seed
 from app.application.worldData.generators.hydrology.shore.heightmapSurfaceCells import (
     heightmap_top_surface_cells,
@@ -17,6 +20,8 @@ from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 
 MAX_RIVERS_PER_BBOX = 8
 MAX_PATH_CELLS = 128
+# Fraction of post-1.4 land_z_max for source floor when policy half-cap is too high.
+RIVER_SOURCE_LAND_Z_FRACTION = 0.5
 
 
 def _neighbors8(gx: int, gy: int) -> list[tuple[int, int]]:
@@ -73,6 +78,22 @@ def _local_max_sources(
     return [cell for cell, _ in sources]
 
 
+def _river_source_min_z(
+    heightmap: SurfaceHeightmap,
+    type_classify: RiverTypeClassify,
+) -> int:
+    """
+    Grid-aware floor after Pass 1.4: ``min(policy//2, ceil(land_z_max * fraction))``.
+    Depends on post-relief ``land_z_max`` (mountains raise the span).
+    """
+    configured = max(1, int(type_classify.mountain_min_source_z) // 2)
+    if not heightmap.surface_z:
+        return configured
+    land_z_max = max(heightmap.surface_z.values())
+    scaled = max(1, int((int(land_z_max) * RIVER_SOURCE_LAND_Z_FRACTION) + 0.999))
+    return max(1, min(configured, scaled))
+
+
 def find_river_sources(
     heightmap: SurfaceHeightmap,
     occupied: dict[tuple[int, int], MapCellHydrology],
@@ -83,11 +104,14 @@ def find_river_sources(
     cells = heightmap_top_surface_cells(heightmap)
     peaks = [
         (feature.gx, feature.gy)
-        for feature in detect_terrain_features(cells, world_uid)
+        for feature in detect_terrain_features(
+            cells,
+            world_uid,
+            scale=ProminenceScale.GRID,
+        )
         if feature.kind == "peak"
     ]
-    peak_set = set(peaks)
-    min_z = max(1, type_classify.mountain_min_source_z // 2)
+    min_z = _river_source_min_z(heightmap, type_classify)
     locals_ = _local_max_sources(heightmap, occupied, min_z=min_z)
     ordered: list[tuple[int, int]] = []
     seen: set[tuple[int, int]] = set()

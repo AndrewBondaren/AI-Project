@@ -3,7 +3,10 @@ from app.application.worldData.generators.climate.anchorCollect import (
     build_merged_field,
     collect_manual_anchors,
 )
-from app.application.worldData.generators.climate.anchorDetect import detect_terrain_features
+from app.application.worldData.generators.climate.anchorDetect import (
+    ProminenceScale,
+    detect_terrain_features,
+)
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
 from app.db.models.mapCell import MapCell
@@ -22,7 +25,9 @@ def run_anchor_collect_pass(
     cell_m   = cell_size_m(world)
     uid_map  = {loc.location_uid: loc for loc in locations}
     manual   = collect_manual_anchors(locations, cell_m)
-    features = detect_terrain_features(heightmap_cells, world.world_uid)
+    features = detect_terrain_features(
+        heightmap_cells, world.world_uid, scale=ProminenceScale.METRIC,
+    )
     auto     = auto_anchors_from_features(features, world, uid_map, pole_field)
     return build_merged_field(
         manual, auto, locations, cell_m,

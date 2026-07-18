@@ -102,6 +102,7 @@ class TestLightBakeCleanup(unittest.TestCase):
             },
             sparse_meter_hydro={},
             meter_z_overrides={},
+            coarse_relief_z={(0, 0): 0},
             coarse_surface_z={(0, 0): 0},
         )
         ctx = LightGridBakeContext(

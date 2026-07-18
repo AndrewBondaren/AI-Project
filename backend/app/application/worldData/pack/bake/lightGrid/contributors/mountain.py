@@ -6,7 +6,12 @@ import logging
 
 from app.application.jsonValidation import terrain_masks
 from app.application.worldData.generators.climate.math import world_seed
-from app.application.worldData.masks.mountainField import is_mountain_autoresolve
+from app.application.worldData.generators.terrain.reliefObjects import resolve_mountain_surface_z
+from app.application.worldData.generators.terrain.reliefObjects.footprint import (
+    declare_disk_keys,
+    mountain_autoresolve_hit,
+)
+from app.application.worldData.generators.terrain.worldMapSettings import world_z_max, world_z_min
 from app.application.worldData.pack.bake.lightGrid.paintTerrain import (
     paint_system_terrain,
     paint_system_terrain_cell,
@@ -19,15 +24,10 @@ from app.application.worldData.pack.bake.lightGrid.coords import (
     meters_to_light,
 )
 from app.dataModel.climate.enums.climateZone import ClimateZone
-from app.dataModel.locations.enums.geographicSubtype import (
-    GEOGRAPHIC_LOCATION_TYPE,
-    GeographicSubtype,
-)
 from app.dataModel.masks.enums.maskDomainId import LightContributorId
+from app.db.models.namedLocation import NamedLocation
 
 logger = logging.getLogger(__name__)
-
-_DECLARE_SUBTYPES = frozenset({GeographicSubtype.MOUNTAIN, GeographicSubtype.PEAK})
 
 
 class MountainContributor:
@@ -47,29 +47,48 @@ class MountainContributor:
         tile_set = set(ctx.tiles)
         seed = world_seed(ctx.world)
         key = policy.system_terrain
+        z_min = world_z_min(ctx.world)
+        z_max = world_z_max(ctx.world)
         painted = 0
+        raised: set[tuple[int, int, int, int]] = set()
 
-        # Declare: geographic.mountain / peak disks.
-        declare_cells: set[tuple[int, int]] = set()
-        radius = int(policy.declare_radius_light)
-        for loc in ctx.locations:
-            if loc.system_location_type != GEOGRAPHIC_LOCATION_TYPE:
-                continue
-            subtype = GeographicSubtype.from_wire(getattr(loc, "system_location_subtype", None))
-            if subtype not in _DECLARE_SUBTYPES:
-                continue
-            if loc.map_x is None or loc.map_y is None:
-                continue
-            lx, ly = meters_to_light(int(loc.map_x), int(loc.map_y), scale)
-            for dy in range(-radius, radius + 1):
-                for dx in range(-radius, radius + 1):
-                    if dx * dx + dy * dy > radius * radius:
-                        continue
-                    declare_cells.add((lx + dx, ly + dy))
+        def _raise_z(gx: int, gy: int, tx: int, ty: int) -> None:
+            key4 = (gx, gy, tx, ty)
+            if key4 in raised:
+                return
+            cell = compose.get(gx, gy, tx, ty)
+            if cell is None:
+                return
+            cell.surface_z = resolve_mountain_surface_z(
+                cell.surface_z,
+                z_min=z_min,
+                z_max=z_max,
+                policy=policy,
+            )
+            raised.add(key4)
+
+        def _xy_of(loc: NamedLocation) -> tuple[int, int]:
+            return meters_to_light(int(loc.map_x), int(loc.map_y), scale)
+
+        declare_cells = declare_disk_keys(
+            ctx.locations,
+            radius=int(policy.declare_radius_light),
+            xy_of=_xy_of,
+        )
         if declare_cells:
             painted += paint_system_terrain(
                 compose, declare_cells, key, masks=masks, tile_set=tile_set, preserve_hydro=True,
             )
+            for lx, ly in declare_cells:
+                gx = lx // scale.side
+                gy = ly // scale.side
+                tx = lx % scale.side
+                ty = ly % scale.side
+                if (gx, gy) not in tile_set:
+                    continue
+                cell = compose.get(gx, gy, tx, ty)
+                if cell is not None and cell.system_terrain == key:
+                    _raise_z(gx, gy, tx, ty)
 
         if not policy.autoresolve:
             logger.debug(
@@ -89,7 +108,7 @@ class MountainContributor:
                 zone_key = zone.system_climate if zone is not None else None
                 profile = profile_for_zone_key(zone_key)
                 xm, ym = light_cell_center_m(gx, gy, tx, ty, scale)
-                if not is_mountain_autoresolve(
+                if not mountain_autoresolve_hit(
                     seed=seed,
                     xm=int(xm),
                     ym=int(ym),
@@ -102,6 +121,7 @@ class MountainContributor:
                     compose, gx, gy, tx, ty, key, masks=masks, preserve_hydro=True,
                 ):
                     painted += 1
+                    _raise_z(gx, gy, tx, ty)
 
         logger.debug(
             "light_contributor_mountain | world=%s painted=%d declare_cells=%d",

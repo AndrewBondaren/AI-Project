@@ -38,8 +38,9 @@ class ReliefContributor:
         z_min = world_z_min(world)
         z_max = world_z_max(world)
         seed = world_seed(world)
+        # Pre-1.4 relief base — mountain/ravine contributors apply rise/drop once on light.
         planning_z = (
-            ctx.surface_planning.coarse_surface_z if ctx.surface_planning is not None else {}
+            ctx.surface_planning.coarse_relief_z if ctx.surface_planning is not None else {}
         )
         z_hist: Counter[int] = Counter()
         cells = 0

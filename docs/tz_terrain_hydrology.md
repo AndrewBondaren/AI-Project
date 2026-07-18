@@ -79,23 +79,27 @@ metadata:
 ```mermaid
 flowchart TB
   P1["Pass 1 — SurfaceHeightmap\npole + noise + clamp"]
-  HY["Hydrology passes\ncoastal sea → open ocean → lakes → rivers"]
+  R4["Pass 1.4 — relief objects z\nmountain/ravine on heightmap"]
+  HY["Pass 1.5 — Hydrology\ncoastal sea → ocean → lakes → rivers"]
   GA["Gap analysis\nN_eff"]
   P2["Pass 2 — column fill\nsolid only"]
   CL["generate-climate\n+ liquid overlay"]
   OR["generate-ores / caves"]
 
-  P1 --> HY --> GA --> P2 --> CL
+  P1 --> R4 --> HY --> GA --> P2 --> CL
   P2 --> OR
 ```
 
 | Этап | Класс / entry | Мутирует | Persist layer |
 |---|---|---|---|
 | 1 | `run_surface_pass` | `SurfaceHeightmap.surface_z` | — |
+| **1.4** | **Relief objects z** (mountain / ravine materialize на heightmap; `terrain_masks`) | **`surface_z` (± terrain ids на planning)** | — |
 | **1.5** | **`HydrologyGeneratorService.apply`** | **`surface_z`, hydrology metadata** | — |
 | 1.6 | `run_gap_analysis` | `N_eff` | — |
 | 2 | `run_column_fill` | `MapCell[]` solid | `save_terrain_batch` |
 | 3 | `ClimateOrchestrator` + `liquidOverlayPass` | `liquid_body` where allowed | `save_pass climate` |
+
+**Инвариант порядка (2026-07-17):** Pass **1.4 до 1.5**. Hydrology detect (peaks / basins / river sources) читает heightmap **после** подъёма/carve объектов рельефа. Mask-only mountain paint на light **не** заменяет 1.4 — см. [`tz_map_light_bake.md`](./tz_map_light_bake.md) § Coarse planning ↔ light compose.
 
 **Инвариант:** после hydrology сосед с `surface_z=2` и озером `surface_z=0` — gap analysis видит **Δz=2** и углубляет колонку берега при необходимости.
 

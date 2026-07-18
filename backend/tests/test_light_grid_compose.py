@@ -121,6 +121,7 @@ class TestLightGridCompose(unittest.TestCase):
             },
             sparse_meter_hydro={},
             meter_z_overrides={},
+            coarse_relief_z={(0, 0): 1},
             coarse_surface_z={(0, 0): 1},
         )
         scale = LightGridScale.from_tile(1000, 32)

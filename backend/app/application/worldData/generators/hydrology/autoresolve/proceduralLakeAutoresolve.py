@@ -5,7 +5,10 @@ from __future__ import annotations
 from collections import deque
 from typing import Any
 
-from app.application.worldData.generators.climate.anchorDetect import detect_terrain_features
+from app.application.worldData.generators.climate.anchorDetect import (
+    ProminenceScale,
+    detect_terrain_features,
+)
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
 from app.application.worldData.generators.hydrology.shore.deepeningBandCarver import _neighbors4
 from app.application.worldData.generators.hydrology.shore.heightmapSurfaceCells import (
@@ -88,7 +91,11 @@ def autoresolve_lakes(
     cells = heightmap_top_surface_cells(heightmap)
     features = [
         feature
-        for feature in detect_terrain_features(cells, master.world_uid)
+        for feature in detect_terrain_features(
+            cells,
+            master.world_uid,
+            scale=ProminenceScale.GRID,
+        )
         if feature.kind == "basin"
     ]
     if not features:
