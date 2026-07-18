@@ -86,7 +86,9 @@ class TestApplyReliefObjectsZ(unittest.TestCase):
             bbox=GridBBox(0, 2, 0, 2),
             surface_z={(x, y): 1 for x in range(3) for y in range(3)},
         )
-        apply_relief_objects_z(world, [], hm)
+        pole = MagicMock()
+        pole.sample.return_value = SimpleNamespace(typical_elevation_z=0)
+        apply_relief_objects_z(world, [], hm, pole_field=pole, light_side=32)
         zs = list(hm.surface_z.values())
         self.assertTrue(any(z > 1 for z in zs), zs)
         self.assertTrue(all(z <= 8 for z in zs), zs)
