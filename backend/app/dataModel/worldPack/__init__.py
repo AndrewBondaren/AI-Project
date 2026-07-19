@@ -18,6 +18,7 @@ from app.dataModel.worldPack.mergeMapCells import (
 from app.dataModel.worldPack.packReadPolicy import PackReadPolicy
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume, inside_location_volume
 from app.dataModel.worldPack.territoryVolumePolicy import TerritoryVolumePolicy
+from app.dataModel.worldPack.worldBounds import WorldBounds
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
 from app.dataModel.worldPack.worldMapCellsPerTile import (
     WORLD_MAP_CELLS_PER_TILE,
@@ -80,6 +81,7 @@ __all__ = [
     "TerritoryVolume",
     "TerritoryVolumePolicy",
     "TileManifestEntry",
+    "WorldBounds",
     "WorldMapCellWire",
     "WorldMapCellsPerTilePolicy",
     "LightSettlementFootprintPolicy",

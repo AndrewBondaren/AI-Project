@@ -14,9 +14,10 @@ def _world(**kwargs):
         "world_uid": "test-world",
         "hydrology": {"enabled": True},
         "map_cell_size_m": 3000,
+        "map_settings": None,
     }
     defaults.update(kwargs)
-    return SimpleNamespace(**kwargs)
+    return SimpleNamespace(**defaults)
 
 
 def _loc(uid: str, x: int, y: int, z: int = 0) -> NamedLocation:
@@ -24,10 +25,12 @@ def _loc(uid: str, x: int, y: int, z: int = 0) -> NamedLocation:
         world_uid="test-world",
         location_uid=uid,
         display_name=uid,
+        system_location_type="geographic",
         map_x=x,
         map_y=y,
         map_z=z,
         is_mobile=False,
+        created_at="2026-01-01T00:00:00Z",
     )
 
 

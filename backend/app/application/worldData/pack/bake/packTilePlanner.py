@@ -1,17 +1,17 @@
-"""Pack L0 tile planner — light (bootstrap+cap) vs full (all location tiles).
+"""Pack L0 tile planner — light (location∪hydro tiles) vs full (world_bounds).
 
-docs/tz_world_pack_storage.md § Bake modes (WP-27).
+docs/tz_world_pack_storage.md § Bake modes (master contract 2026-07-19).
 """
 
 from __future__ import annotations
 
-from app.application.worldData.generators.terrain.passes.bootstrapMacroTiles import (
-    bootstrap_macro_tiles,
-)
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
 )
-from app.application.worldData.pack.bake.packTileCollect import full_location_l0_tiles
+from app.application.worldData.pack.bake.packTileCollect import (
+    light_l0_tiles,
+    world_bounds_l0_tiles,
+)
 from app.dataModel.worldPack.packBakeDefaults import (
     PackBakeDefaults,
     resolve_light_tile_cap,
@@ -35,13 +35,15 @@ class PackTilePlanner:
         self,
         world: World,
         locations: list[NamedLocation],
-        surface_ctx: SurfaceTerrainContext,
+        surface_ctx: SurfaceTerrainContext | None = None,
         *,
         scope: PackTilePlanScope,
         max_tiles: int | None = None,
     ) -> PackTilePlan:
+        """``surface_ctx`` unused for tile-set resolve; optional for caller compatibility."""
+        del surface_ctx
         if scope == "full":
-            tiles = full_location_l0_tiles(world, locations)
+            tiles = world_bounds_l0_tiles(world, locations)
             return PackTilePlan(
                 scope="full",
                 tiles=[PackTileRef(gx=gx, gy=gy) for gx, gy in tiles],
@@ -49,18 +51,13 @@ class PackTilePlanner:
                 cap_applied=None,
             )
 
+        tiles = light_l0_tiles(world, locations)
         cap = resolve_light_tile_cap(max_tiles, defaults=self._defaults)
-        ordered = bootstrap_macro_tiles(
-            world,
-            locations,
-            surface_ctx.coarse_hydro,
-            surface_ctx.sparse_meter_hydro,
-            max_tiles=max_tiles,
-            defaults=self._defaults,
-        )
+        if cap is not None:
+            tiles = tiles[:cap]
         return PackTilePlan(
             scope="light",
-            tiles=[PackTileRef(gx=gx, gy=gy) for gx, gy in ordered],
+            tiles=[PackTileRef(gx=gx, gy=gy) for gx, gy in tiles],
             capped=cap is not None,
             cap_applied=cap,
         )

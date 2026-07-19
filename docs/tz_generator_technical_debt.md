@@ -266,6 +266,7 @@ Perimeter не учитывает template района — v1 compromise.
 | **HY-3** | medium | Нет LLM naming для autoresolved geography | U13: `llm_name_procedural_locations` + persist; **после DAG**, gate `materialize_named_locations` | open |
 | **HY-4** | low | `type_classify` null в template без normalize | U22: import validator подставляет schema defaults и пишет explicit values; runtime fallback до validator | open |
 | **HY-5** | medium | **Smoke 2026-07-17:** rivers/lakes cells=0 (flat z, absolute detect, min_z=20). | **partial (Pass 1.4 + debt fixes):** relief_objects_z before hydro; `coarse_relief_z` vs post-1.4 (no light double-rise); shared footprint/depression; explicit `ProminenceScale`; pole required on coarse mountain. **Smoke checklist:** rebake `world_test_gen` → `world-height` max ≫ plains; rivers/lakes cells>0 **or** sources/basins in log. **HY-5b:** light procedural RIVER paint still open | partial |
+| **HY-BATH-1** | medium | Light SEA (`~`) с `surface_z` как у plains: hydro paint role без bathymetry z; Relief читает `coarse_relief_z` (намеренно). | **partial (stub 2026-07-19):** `HydrologySeasPolicy.stub_drop_fraction_of_span` + `resolve_open_water_surface_z`; light `apply_coarse_open_water` пишет floor (prefer coarse ≤ z_sea, else stub drop). **TZ:** full DepressionForm pipeline still open | partial |
 | **TR-1b** | medium | Generator isolation: pole resolve **вне** `TerrainGeneratorService` | **resolved** — `MapCellService` / `map.py`; `pole_field` аргумент |
 | **DBG-1** | medium | `debug_settlement.py` pipeline smoke in-process | **resolved** — HTTP path **2** + `debug_api_helpers.py` |
 | **TR-M** | low | Magma antipode teleport (edge case) | **partial** — skeleton band + `antipode_xy`; M-3 movement ⬜ |
@@ -801,6 +802,7 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 | BUNDLE-1 | medium | P2 | `_remap_bundle` monolith | **resolved** — `bundleRemapService.py` registry |
 | HY-S-2 | low | P2 | connections import special-case | open |
 | HY-5 | medium | P1 | StrEnum / policy parse (Retrofit 2) | **partial** — dataModel ✅; shims + literals ⬜; JV-0 ⬜ |
+| HY-BATH-1 | medium | P1 | light SEA z = plains; Depression forms TZ | **partial** — stub drop ✅; full Form pipeline ⬜ |
 | HY-S-4 | low | P2 | `HYDROLOGY_SCHEMA_DEFAULTS` scatter | open |
 | HY-S-3 | medium | P1 | MasterInput stub vs TZ | open |
 | HY-S-5 | low | P2 | edges as dict | open |
@@ -833,6 +835,7 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 | 2026-06 | Climate v2.6 TZ: LOD C6–C13; CL-17 SurfaceClimateField; CL-18 LOD policy |
 | 2026-06 | Polish backlog rework; CL-2a..CL-2e, DR-5 added; FM-1 resolved |
 | 2026-07 | **CONN-1 todo:** wire rename `node_type` → `connection_node_type` на `connection_nodes` (см. § CONN-1) |
+| 2026-07 | **HY-BATH-1:** ocean Depression forms TZ; light R5b **stub** (`stub_drop_fraction_of_span`) shipped; Form pipeline open; TZ stub→target mapping |
 | 2026-07 | **HY-5 progress:** structure/roads/climate enums → `dataModel`; shims removed; P1-A roads literals |
 | 2026-06 | **HY-S registry:** BUNDLE-1, HY-5, HY-S-4, HY-GEO-1 |
 | 2026-06 | **`docs/tz_json_validation.md` v0.1** — Field Contract Registry; ENUM-E / REF-W / N1-S / N1-W (§0) |

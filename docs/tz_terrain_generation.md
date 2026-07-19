@@ -67,6 +67,24 @@ metadata:
 **Инвариант v1:** города только расширяют bbox точкой anchor, не footprint.  
 **Инвариант v2:** skeleton покрывает **всю** объявленную заготовку — «склад» основных сущностей до gameplay.
 
+#### Форма мира = `world_bounds` (утверждено 2026-07-19)
+
+**SoT формы мира** — extent мира, не набор уже запечённых pack-тайлов.
+
+| Правило | Норматив |
+|---|---|
+| Геометрия | Всегда **ось-выровненный прямоугольник** (квадрат = частный случай `W == H`) |
+| Wire v2 | `world.world_bounds`: `{ x_min, x_max, y_min, y_max }` (grid indices) |
+| v1 fallback | anchors ± `grid_bbox_padding` тоже даёт **AABB** того же класса форм |
+| Запрещено | трактовать AABB только уже запечённых тайлов (дыры до `full_bake`) как «непрямоугольный мир» |
+
+**Заполнение ячеек внутри extent** — progressive bake ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Bake modes):
+
+- `light_bake` — **все** macro-tiles с `named_locations` (тайлы с локациями);
+- `full_bake` — **весь** `world_bounds` (полное заполнение прямоугольника мира).
+
+Отдельного product bake stage «wilderness» **нет**. Дыры на world map после light — **незапечённые** клетки внутри прямоугольника, не другая форма мира. Render/ASCII frame предпочтительно = declared/`resolved` bounds — [`tz_map_light_bake.md`](./tz_map_light_bake.md).
+
 Lazy gameplay (`generate_z_slice`) в v2 может генерировать **тот же column API**, но порциями; eager materialization — весь declared extent (или bbox в v1).
 
 ### Column semantics (surface + subsurface band)
@@ -628,14 +646,14 @@ flowchart LR
 
 **LOD bake:** § Идея 1 + § Идея 2; `world_map_cells_per_tile = 32` (WP-10). Wire/API modes — ниже § **Bake modes (locations)**. Pack orchestration — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md); L0 compose — [`tz_map_light_bake.md`](./tz_map_light_bake.md).
 
-### Bake modes (locations) — terrain + hydrology + climate
+### Bake modes — terrain + hydrology + climate
 
-> **Утверждено 2026-07-15.** Три **master/offline** режима генерации поверхности локаций. Runtime background (rings / path) — отдельно, не четвёртый offline case.
+> **Утверждено мастером 2026-07-19.** Продуктовый процесс: `light_bake` → `full_bake`; `detailed_bake` — L2 одной локации. Runtime background (rings / path) — отдельно, не четвёртый offline L0 mode.
 
 | Термин | LOD | Pipeline | Scope |
 |---|---|---|---|
-| **light_bake** | L0 (+ climate coarse) | surface → hydrology mask → climate coarse на light canvas | Priority tiles: spawn + **subset** named_locations (+ declared hydro). Cap: `PackBakeDefaults.max_tiles_light` |
-| **full_bake** | L0 (+ climate coarse) | **Тот же** L0 pipeline, что light_bake | **Все** macro-tiles, покрывающие `named_locations` (без location cap). Hydro/coast tiles — как в bootstrap priority, без artificial cap по локациям |
+| **light_bake** | L0 (+ climate coarse) | surface → hydrology mask → climate coarse на light canvas | **Все** macro-tiles с `named_locations` **∪ declared hydro** |
+| **full_bake** | L0 (+ climate coarse) | **Тот же** L0 pipeline | **Весь** `world_bounds` (AABB) |
 | **detailed_bake** | L2 `location_terrain` | refine L0 → fine terrain (+ hydro constraints из parent light) + climate fine по territory | **Одна** `location_uid` |
 
 **Инварианты генераторов (все три режима):**
@@ -643,43 +661,44 @@ flowchart LR
 1. Generators pure: materialize geometry/masks; persist — Pack writer / orchestrator ([`layer-boundaries.mdc`](../.cursor/rules/layer-boundaries.mdc)).
 2. L2 **не** invents world-map rivers/coast — только refine parent light ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2; hydrology — [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md)).
 3. Base climate на pack-мире — только через bake; `POST generate-climate` → 422 ([`tz_climate.md`](./tz_climate.md) § World Pack climate).
+4. Product L0 process — только light → full; имена `wilderness_*` в pack I/O — storage legacy, не bake mode.
 
 #### Offline completeness (master package)
 
 | Case | Pack state | Игрок получает |
 |---|---|---|
-| **1. light_bake complete** | L0 на priority subset; `locations_index` pins | World map с дырами вне P0; L2 — lazy / detailed |
-| **2. full_bake complete** | L0 на **все** location tiles (+ hydro as scoped) | Сплошная world map по локациям; L2 всё ещё lazy, если не было detailed |
-| **3. full + all detailed_bake complete** | (2) + `location_terrain` на **каждую** pin-локацию | Тёплый старт по локациям; wilderness L2 rings — всё ещё runtime/optional |
+| **1. light_bake complete** | L0 на всех location tiles; `locations_index` pins | World map по локациям; вне них — дыры до full; L2 — lazy / detailed |
+| **2. full_bake complete** | L0 на **весь** `world_bounds` | Сплошная world map в прямоугольнике мира; L2 всё ещё lazy, если не было detailed |
+| **3. full + all detailed_bake complete** | (2) + `location_terrain` на **каждую** pin-локацию | Тёплый старт по локациям; non-location L2 rings — runtime/optional |
 
 **Partial pack — норма:** отсутствие prebake **не** ломает игру; ломает отсутствие resume / lazy path.
 
 | Нехватка | Дозаполнение |
 |---|---|
-| Missing L0 location tiles (case 1 → 2) | **full_bake** (или incremental full resume) |
+| Missing L0 location tiles | **light_bake** (или resume light) |
+| Missing L0 вне локаций (case 1 → 2) | **full_bake** (весь bounds) |
 | Missing `location_terrain` для uid | **detailed_bake(uid)** offline **или** entry-first / location_entry в runtime (WP-13) |
-| Missing wilderness fine chunks | Runtime rings / path queue — **не** обязательный offline case 3 |
+| Missing fine chunks вне локаций | Runtime rings / path queue — **не** обязательный offline case 3 |
 
 #### Detect (нужно для resume)
 
-`tiles_pct` по-прежнему = ready/total **среди manifest.tiles** (после light часто 100%). Offline case — отдельно: `pack_completeness` в `GET …/loading-progress` (`PackCompletenessClassifier`).
+`tiles_pct` по-прежнему = ready/total **среди manifest.tiles**. Offline case — отдельно: `pack_completeness` в `GET …/loading-progress` (`PackCompletenessClassifier`).
 
 | Сигнал | light_complete | full_complete | full_detailed_complete |
 |---|---|---|---|
-| L0 baked ⊇ expected_light (P0+cap) | ✅ | — | — |
-| L0 baked ⊇ expected_full (все location tiles) | — | ✅ | ✅ |
+| L0 baked ⊇ expected_light (**все** location tiles) | ✅ | — | — |
+| L0 baked ⊇ expected_full (**весь** `world_bounds`) | — | ✅ | ✅ |
 | `location_terrain` готов для всех pins в `locations_index` | — | — | ✅ |
 
-Wire/API и классификатор — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § **Bake modes** / § **Pack completeness**. Auto-resume loop (classify → bake) — caller; incremental skip existing L0 на full — ⬜.
+Wire/API и классификатор — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § **Bake modes** / § **Pack completeness**. Auto-resume loop (classify → bake) — caller.
 
 #### Impl status (generators path)
 
 | Mode | Status |
 |---|---|
-| light_bake | ✅ `POST …/map/pack/bake?mode=light` |
-| full_bake | ✅ `mode=full` — тот же L0 orchestrator, все location tiles (+ hydro scope) |
-| detailed_bake | ✅ `mode=detailed&location_uid=` — L2 territory refine + climate fine (pole+local, L2 z); `l.*.climate.zst` optional v2 |
-
+| light_bake | ✅ `POST …/map/pack/bake?mode=light` — все location tiles (cap только debug `max_tiles>0`) |
+| full_bake | ✅ `mode=full` — весь resolved `world_bounds` AABB |
+| detailed_bake | ✅ `mode=detailed&location_uid=` — L2 territory refine + climate fine |
 ### Persist performance (TR-PERF)
 
 > **Статус:** ✅ TR-PERF-1…4 impl. **Scope:** bootstrap / `materialize-stack` / `save_terrain_batch` — **не** gameplay patch, **не** parallel persist.
@@ -1672,6 +1691,8 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-19 | § Охват мира: форма = `world_bounds` AABB (квадрат/прямоугольник) |
+| 2026-07-19 | **Bake modes — контракт мастера:** light = тайлы с локациями; full = весь `world_bounds`; без product wilderness stage |
 | 2026-07-16 | Bake modes / TR-PACK **impl status sync:** light/full/detailed ✅; classifier detect ✅; climate fine на detailed ⬜; incremental skip / auto-resume ⬜ |
 | 2026-07-15 | § **Bake modes (locations):** light / full / detailed; offline cases; detect+resume; TR-PACK status sync |
 | 2026-06 | § Persist cycle — **локальная** runtime modification (cataclysm, combat, excavate); bootstrap vs patch |

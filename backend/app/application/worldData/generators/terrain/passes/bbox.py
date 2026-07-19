@@ -1,3 +1,7 @@
+"""Resolve materialization / bake extent from world_bounds or anchor AABB."""
+
+from __future__ import annotations
+
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
 from app.application.worldData.generators.climate.locations import static_map_anchors
 from app.application.worldData.generators.coordinates import (
@@ -6,34 +10,32 @@ from app.application.worldData.generators.coordinates import (
     meters_to_grid_y,
 )
 from app.application.worldData.generators.terrain.worldMapSettings import grid_bbox_padding
+from app.dataModel.worldPack.worldBounds import WorldBounds
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
-def _bounds_dict(world: World) -> dict | None:
-    raw = world.world_bounds
-    if not isinstance(raw, dict):
+def _declared_grid_bbox(world: World) -> GridBBox | None:
+    bounds = WorldBounds.try_parse(world.world_bounds)
+    if bounds is None:
         return None
-    keys = ("x_min", "x_max", "y_min", "y_max")
-    if not all(k in raw for k in keys):
-        return None
-    return raw
+    return GridBBox(
+        x_min=bounds.x_min,
+        x_max=bounds.x_max,
+        y_min=bounds.y_min,
+        y_max=bounds.y_max,
+    )
 
 
 def grid_bbox_from_locations(
     world: World,
     locations: list[NamedLocation],
 ) -> GridBBox | None:
-    padding = grid_bbox_padding(world)
-    declared = _bounds_dict(world)
+    declared = _declared_grid_bbox(world)
     if declared is not None:
-        return GridBBox(
-            x_min=int(declared["x_min"]),
-            x_max=int(declared["x_max"]),
-            y_min=int(declared["y_min"]),
-            y_max=int(declared["y_max"]),
-        )
+        return declared
 
+    padding = grid_bbox_padding(world)
     anchors = static_map_anchors(locations)
     if not anchors:
         return None

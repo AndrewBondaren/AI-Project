@@ -1,24 +1,34 @@
 """Shared L0 macro-tile collectors for light/full bake planning (WP-27).
 
-Single SoT for location anchors + declared hydro endpoints — used by
-``bootstrap_macro_tiles`` (tiers 0–1) and ``PackTilePlanner`` full scope.
+Master contract (2026-07-19): light = location tiles ∪ declared hydro;
+full = entire world_bounds. ``bootstrap_macro_tiles`` — debug priority preview only.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from app.application.worldData.generators.climate.locations import static_map_anchors
 from app.application.worldData.generators.coordinates import cell_size_m
-from app.application.worldData.generators.coordinates.worldTile import macro_tile_of
+from app.application.worldData.generators.coordinates.worldTile import (
+    iter_macro_tiles,
+    macro_tile_of,
+)
 from app.application.worldData.generators.hydrology.load.loadDeclaredHydrology import (
     load_declared_hydrology,
 )
 from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
     is_hydrology_enabled,
 )
+from app.application.worldData.generators.terrain.passes.bbox import grid_bbox_from_locations
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 Tile = tuple[int, int]
+
+
+def _sorted_tiles(tiles: Iterable[Tile]) -> list[Tile]:
+    return sorted(tiles, key=lambda t: (t[1], t[0]))
 
 
 def location_anchor_tiles(
@@ -56,10 +66,22 @@ def declared_hydro_tiles(
     return tiles
 
 
-def full_location_l0_tiles(
+def light_l0_tiles(
     world: World,
     locations: list[NamedLocation],
 ) -> list[Tile]:
-    """All named_location tiles ∪ declared hydro — no cap, no coarse flood."""
-    tiles = location_anchor_tiles(world, locations) | declared_hydro_tiles(world, locations)
-    return sorted(tiles, key=lambda t: (t[1], t[0]))
+    """Light L0 set: named_location tiles ∪ declared hydro — no cap, no coarse flood."""
+    return _sorted_tiles(
+        location_anchor_tiles(world, locations) | declared_hydro_tiles(world, locations),
+    )
+
+
+def world_bounds_l0_tiles(
+    world: World,
+    locations: list[NamedLocation],
+) -> list[Tile]:
+    """Full L0 set: every macro-tile covering resolved ``world_bounds`` / v1 AABB."""
+    bbox = grid_bbox_from_locations(world, locations)
+    if bbox is None:
+        return []
+    return _sorted_tiles(iter_macro_tiles(bbox))

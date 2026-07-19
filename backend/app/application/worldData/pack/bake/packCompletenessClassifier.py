@@ -50,10 +50,10 @@ class PackCompletenessClassifier:
             return PackCompletenessSnapshot(completeness="partial")
 
         light_plan = self._planner.plan(
-            world, locations, ctx, scope="light", max_tiles=None,
+            world, locations, None, scope="light", max_tiles=None,
         )
         full_plan = self._planner.plan(
-            world, locations, ctx, scope="full",
+            world, locations, None, scope="full",
         )
         baked = {
             (t.gx, t.gy)

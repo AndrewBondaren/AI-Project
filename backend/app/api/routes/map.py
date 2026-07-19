@@ -28,7 +28,6 @@ from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_o
 from app.application.worldData.pack.read.parentLightLoad import MissingParentLightError
 from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
-from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.dataModel.worldPack.packBakeMode import PackBakeApiMode
 from app.dataModel.worldPack.packTilePlan import PackTilePlanScope
 
@@ -54,7 +53,11 @@ async def get_loading_progress(
 @router.get("/worlds/{world_uid}/map/bootstrap-tiles")
 async def list_bootstrap_tiles(
     world_uid: str,
-    max_tiles: int = Query(default=PackBakeDefaults.canonical_defaults().max_tiles_light, ge=0),
+    max_tiles: int = Query(
+        default=0,
+        ge=0,
+        description="Debug cap for light scope; 0=uncapped (product default)",
+    ),
     scope: PackTilePlanScope = Query(default="light"),
     container=Depends(get_container),
 ) -> JSONResponse:
@@ -95,7 +98,11 @@ async def list_bootstrap_tiles(
 async def bake_world_pack(
     world_uid: str,
     mode: PackBakeApiMode = Query(default="light"),
-    max_tiles: int = Query(default=PackBakeDefaults.canonical_defaults().max_tiles_light, ge=0),
+    max_tiles: int = Query(
+        default=0,
+        ge=0,
+        description="Debug cap for light_bake only; 0=uncapped (all location tiles)",
+    ),
     location_uid: str | None = Query(default=None),
     anchor_x: int | None = Query(default=None),
     anchor_y: int | None = Query(default=None),

@@ -14,7 +14,6 @@ from typing import Iterator, Literal
 
 import httpx
 
-from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -107,13 +106,8 @@ def api_pack_bake(
     """Canonical debug bake — ``POST …/map/pack/bake`` (single SoT helper)."""
     params: dict[str, str | int] = {"mode": mode}
     if mode == "light":
-        cap = (
-            max_tiles
-            if max_tiles is not None
-            else PackBakeDefaults.canonical_defaults().max_tiles_light
-        )
-        # Always send max_tiles for light (including 0 = uncapped light priority set)
-        params["max_tiles"] = cap
+        # 0 = uncapped product default; positive = debug-only slice
+        params["max_tiles"] = 0 if max_tiles is None else int(max_tiles)
     if location_uid is not None:
         params["location_uid"] = location_uid
     if anchor_x is not None:

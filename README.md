@@ -1,4 +1,4 @@
-pip install fastapi uvicorn httpx pydantic
+﻿pip install fastapi uvicorn httpx pydantic
 
 # Install project for dev
 1. python -m venv .venv
@@ -46,4 +46,6 @@ curl -X POST http://localhost:8000/api/chat \
 Запустить с Electron: cd frontend && npm run dev:electron
 
 TEST fixtures
-python backend/scripts/initialize_world.py --fixture fixtures/world_test_gen.json --max-tiles 16
+python backend/scripts/initialize_world.py --fixture fixtures/world_test_gen.json
+# optional debug cap: --max-tiles 16
+# full world_bounds: --mode full

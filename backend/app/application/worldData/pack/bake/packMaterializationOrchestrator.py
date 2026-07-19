@@ -147,7 +147,7 @@ class PackMaterializationOrchestrator:
         hydrology_generator: HydrologyGeneratorService | None = None,
         refine_scene: bool | None = None,
     ) -> MaterializationJobReport:
-        """full_bake — same L0 pipeline, all location tiles (no location cap)."""
+        """full_bake — same L0 pipeline, all macro-tiles in world_bounds / resolved AABB."""
         with generation_world_log(world_uid, mode="full"):
             return await self._materialize_l0_pack(
                 world_uid,

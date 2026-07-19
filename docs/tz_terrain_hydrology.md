@@ -191,12 +191,213 @@ flowchart LR
 
 **Column fill:** shore + deepening bands — **solid** surface cells с shore material; `liquid_candidate` только на open water cells после profile. Gap analysis видит ступенчатый склон берега.
 
+### Ocean bathymetry / Depression forms (утверждено 2026-07-19)
+
+**Scope A (зафиксировано):** только **ocean bathymetry** на `coastal_sea` / `open_ocean` (роль SEA / open ocean mass).  
+**Вне scope этого контракта:** озёра, ravines, `inland_sea` (возможен reuse pipeline позже — не сейчас).
+
+Домен: **`world.hydrology.default_seas`** (+ declare).  
+**Не** `terrain_masks` / Mountain Form. Параллельный pipeline с горами (Form → Raster → Depth), **не** общий класс с `MountainSpec`.
+
+#### Семантика z
+
+```text
+z_sea     = зеркало воды (reference; v1: 0)
+surface_z = дно (bathymetry) на водных клетках; после carve всегда ≤ z_sea
+```
+
+Height / ASCII height map показывает **дно**, не уровень зеркала.
+
+| Слой | Что задаёт | Не заменяет |
+|---|---|---|
+| **U15 shore bands** | Поперечный профиль *от берега* → shelf / мелководье | формы желобов и котловин в open water |
+| **DepressionSpec** | Именованные / procedural **впадины внутри open ocean** (котловина, желоб) с width × length × depth | U15 |
+
+Оба слоя допустимы; Depression **не заменяет** U15.
+
+#### Оси формы (width / length / depth)
+
+| Ось | Смысл | Где в модели |
+|---|---|---|
+| **Width** | поперечный размер footprint | `EllipseForm.semi_minor_m` / `CorridorForm.half_width_m` |
+| **Length** | продольный размер | `EllipseForm.semi_major_m` / длина `CorridorForm.spine_m` |
+| **Depth** | вертикаль (drop от `z_sea`) | `DepressionKind` → knobs + DepthFill profile |
+
+**Инвариант разделения:** Form **не** знает depth; Kind **не** знает polygon / spine math (зеркало Mountain Form vs KindElevation).
+
+#### Sum type Form + Kind + Spec
+
+```text
+DepressionForm =
+  | EllipseForm   { semi_major_m, semi_minor_m, yaw_rad }
+  | CorridorForm  { spine_m: list[(x,y)], half_width_m }
+  | …             # новый variant = PR: construct + raster (+ optional depth profile hook)
+
+DepressionKind   # builtin append-only table (как MountainKind)
+  | SHELF_BASIN   # мелкая котловина
+  | ABYSSAL       # глубокая котловина
+  | TRENCH        # узкий глубокий желоб (часто с CorridorForm)
+  | …
+
+DepressionSpec
+  form: DepressionForm
+  kind: DepressionKind
+  # origin для Ellipse — центр эллипса в метрах (поле Spec или convention construct)
+  # Corridor: spine уже в form
+  # optional: declare uid, seed
+```
+
+**Неверно:** плоский `{radius_cells, depth}` как единственная модель.  
+**Верно:** discriminated union Form + отдельный Kind.
+
+#### EllipseForm / CorridorForm (норматив метрик)
+
+**EllipseForm** — котловина:
+
+- length = `2 · semi_major_m`, width = `2 · semi_minor_m`
+- `yaw_rad` — поворот major axis
+- `depth_fraction`: 1 в центре, 0 на контуре (elliptical radius → smoothstep)
+
+**CorridorForm** — желоб:
+
+- length = длина polyline `spine_m`
+- width = `2 · half_width_m`
+- `depth_fraction`: 1 на spine, 0 на боковых краях; optional taper на концах spine
+
+#### Engine interface (единственный способ роста)
+
+```text
+construct_depression_form(form, …) → DepressionFormGeometry
+  # метры; без light grid — vertices / SDF / spine+offset по variant
+
+raster_depression_footprint(geometry, scale) → set[Cell]
+  # Ellipse: inclusion; Corridor: stadium / capsule along spine
+
+fill_depression_depth(geometry, footprint, kind) → {(cell, depth_fraction)}
+  # fraction ∈ [0, 1]; 1 = deepest (axis / center)
+
+apply_depression_cell(base_z, z_sea, z_min, kind, depth_fraction) → z
+  drop = resolve_drop(kind, z_sea, z_min)   # Kind table / POJO DefaultOnWire
+  z    = max(z_min, z_sea - round(drop * depth_fraction))
+  # только клетки SEA / open_ocean (или становящиеся ими); никогда не поднимает сушу
+
+resolve_depression / apply_depression_spec(spec, …)  # facade для generators / light hydro
+```
+
+```mermaid
+flowchart TD
+  Spec[DepressionSpec]
+  Spec --> FG[construct_depression_form]
+  FG --> FR[raster_depression_footprint]
+  FG --> DF[fill_depression_depth]
+  Kind[DepressionKind] --> Apply[apply_depression_cell]
+  FR --> Apply
+  DF --> Apply
+  Apply --> Grid[surface_z bathymetry on SEA]
+```
+
+| # | Инвариант интерфейса |
+|---|---|
+| D1 | Generator / light hydro contributor зовёт **facade** (`resolve_depression` / `apply_depression_spec`), не math внутри contributor |
+| D2 | Новый form = новый variant + `construct_*` + `raster_*`; **запрещён** `if form ==` в hydro contributor |
+| D3 | Новый kind = строка в Kind table + depth knobs; без смены FormGeometry |
+| D4 | Scope gate: footprint ∩ **open_ocean_mask** (или SEA open mass); суша и coastal-only shelf **не** углубляются DepressionSpec (shelf = U15) |
+| D5 | Один Spec — single-writer на клетку внутри apply; merge нескольких Spec на одной клетке = **min z** (глубже побеждает) |
+
+#### POJO / wire
+
+Под `world.hydrology.default_seas` (`HydrologySeasPolicy`; позже соседний `default_seas.bathymetry` при росте Kind table):
+
+| Поле / область | Статус | Смысл |
+|---|---|---|
+| `stub_drop_fraction_of_span` | **shipped** (interim) | uniform floor drop vs `(z_sea - z_min)`; analog `rise_fraction_of_z_max` |
+| `depression_autoresolve` | target | procedural DepressionSpec внутри open ocean |
+| `default_form` / `default_kind` | target | defaults для autoresolve / declare без явной form |
+| Kind table | target | `max_drop` **или** `drop_fraction` vs `(z_sea - z_min)` — DefaultOnWire; **заменяет** stub knob |
+| `declared_depressions[]` | target | hydrology declare рядом с `declared_coastlines` (метры); **не** `connection_edges` (U23) |
+
+**Autoresolve v1 (target, не блокер контракта):** seed field внутри open ocean → Ellipse и/или Corridor с random yaw / aspect; clamp размера к bbox воды.
+
+#### Light / coarse writers
+
+- Coarse: `HydrologyGeneratorService` / ocean path materialize U15 + DepressionSpec → `surface_z` на heightmap.
+- Light: hydro contributor после paint SEA **обязан** писать bathymetry `surface_z` (см. [`tz_map_light_bake.md`](./tz_map_light_bake.md) R5 / R5b). Mask SEA без понижения z — **запрещён**.
+
+#### Interim stub (shipped 2026-07-19) — analog mountain KindElevation stub
+
+**Зачем:** закрыть R5b / HY-BATH-1 (SEA с plains-level z на light), не блокируясь на полном Form engine. Зеркало Pass 1.4 mountain interim: один POJO-fraction → единый apply helper → light writer.
+
+| | **Горы (Pass 1.4 interim)** | **Океан stub (сейчас)** | **Океан target (Depression)** |
+|---|---|---|---|
+| Домен | `terrain_masks.default_mountains` | `hydrology.default_seas` | тот же `default_seas` (+ declare) |
+| POJO knob | `rise_fraction_of_z_max` | `stub_drop_fraction_of_span` | Kind table `max_drop` / `drop_fraction` (stub knob **снимается** или становится default Kind) |
+| Формула | `z = clamp(base + round(z_max·f))` | `z = max(z_min, z_sea - drop)` при `depth_fraction=1` | `z = max(z_min, z_sea - round(drop·depth_fraction))` |
+| Footprint | declare disk + autoresolve score | весь SEA/LAKE macro fill (Path A) | `raster_depression_footprint(Ellipse\|Corridor\|…)` ∩ open_ocean |
+| Depth profile | later SideFill fraction | **uniform** (весь footprint = deepest) | `fill_depression_depth` → fraction map |
+| Helper | `resolve_mountain_surface_z` | `resolve_open_water_surface_z` | `apply_depression_cell` (тот же clamp-паттерн) |
+| Light writer | `MountainContributor` | `apply_coarse_open_water` после `paint_role` | facade `apply_depression_spec` из hydro contributor |
+| Coarse SoT | `apply_relief_objects_z` до hydro | prefer `coarse_surface_z` если ≤ `z_sea` | U15 + DepressionSpec на coarse heightmap |
+
+**Алгоритм stub (`resolve_open_water_surface_z`):**
+
+```text
+drop = max(1, round((z_sea - z_min) * stub_drop_fraction_of_span))   # span>0
+if coarse_z is not None and coarse_z <= z_sea:
+    return max(z_min, coarse_z)          # post-hydro carve wins
+return max(z_min, z_sea - drop)          # uniform floor (depth_fraction ≡ 1)
+```
+
+**Код (SoT путей):**
+
+- POJO: `HydrologySeasPolicy.stub_drop_fraction_of_span` (DefaultOnWire, default `0.05`)
+- Helper: `generators/hydrology/bathymetry/stubElevation.py`
+- Light: `pack/bake/lightGrid/contributors/hydro/coarseOpenWater.py` — paint SEA/LAKE → write `surface_z`
+
+**Как stub ложится на целевой pipeline (не выкидывать слой, а сузить):**
+
+```text
+TARGET:  Spec → construct_form → raster → fill_depth → apply_depression_cell
+STUB:    (no Spec)  →  footprint = painted SEA/LAKE cells
+                     →  depth_fraction = 1 everywhere
+                     →  drop from stub_drop_fraction_of_span  ≈  future Kind.default drop
+                     →  same apply clamp as apply_depression_cell
+```
+
+| Целевой слой | Stub сейчас | Миграция |
+|---|---|---|
+| `DepressionSpec` / Form | нет | добавить declare/autoresolve Spec |
+| `construct` + `raster` | macro tile fill | заменить на Ellipse/Corridor footprint |
+| `fill_depression_depth` | константа `1` | profile от Form |
+| `resolve_drop(kind)` | `stub_drop_fraction_of_span` | Kind table; stub field deprecate |
+| `apply_*_cell` | `resolve_open_water_surface_z` | тонкий wrap → `apply_depression_cell` |
+| Light R5b writer | ✅ | остаётся; только источник z меняется |
+
+**Инварианты stub (сохранить при миграции):**
+
+1. Light hydro пишет z на open water (R5b) — не откатывать к paint-only.  
+2. Prefer coarse carved floor ≤ `z_sea` перед stub drop.  
+3. Не поднимать сушу; не писать bathymetry вне SEA/LAKE roles.  
+4. Не класть depth math в `terrain_masks` / mountain contributor.  
+5. `stub_drop_fraction_of_span` — **временный** DefaultOnWire; после Kind table не дублировать литералом в generator.
+
+**Вне stub (ещё open):** U15 shelf bands на light; Ellipse/Corridor; declare `declared_depressions[]`; autoresolve field; неоднородное дно (width×length×depth).
+
+#### Антипаттерны
+
+- Noise-only «неровное дно» без Form/Kind как SoT  
+- Depth knobs в Form POJO  
+- Depression в `terrain_masks` / mountain contributor  
+- Один disk `radius_cells` как единственная модель желоба  
+- Light hydro: paint `hydrology_role=SEA` без bathymetry `surface_z`  
+- Оставить stub forever как SoT вместо Form/Kind (stub = bridge, не конечная архитектура)
+
 ### Lake
 
 - **Lake basin** — локальный минимум `surface_z` **на суше** (выше или ниже `z_sea` — отдельный `target_depth`; **не** open ocean).
 - **Профиль (U15):** от линии берега basin → deepening bands **1–5** → open water в центре; **не** `radius_cells` disk как единственная модель.
 - **Endorheic lake** — без outflow; река не обязана.
-- Река **может** впадать в озеро; из озера **может** выходить река к морю (outlet) — v2; v1 достаточно lake **или** sea sink.
+- Река **может** впадать в озеро; из озера **может** выходить река к морю (outlet) — v2; v1 достаточно lake **или** sea sink.  
+- **Не** использует `DepressionForm` / `DepressionSpec` (scope A — только ocean); reuse pipeline — later.
 
 ### River
 
@@ -1300,6 +1501,8 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 | Дата | Изменение |
 |---|---|
 | 2026-07-16 | Pack bake modes hydro: light/full/detailed parent-light refine — impl status ✅ |
+| 2026-07-19 | § **Ocean bathymetry / Depression forms** (scope A): Ellipse/Corridor Form + Kind + Spec; engine interface; U15 ≠ Depression |
+| 2026-07-19 | § **Interim stub shipped:** `stub_drop_fraction_of_span` + light R5b writer; mapping stub → target Depression pipeline (mountain-rise analog) |
 | 2026-07-15 | § **Pack bake modes — hydrology:** light / full / detailed; L2 не invents L0 rivers |
 | 2026-07-12 | **Layout:** `generators/hydrology/{load,basins,rivers,shore,geom,autoresolve}` — peer climate; убран flat `terrain/hydrology/` |
 | 2026-07 | **U27 topology:** `river_system_topology` on `system_role=system` (basin); default confluence без system nodes; `RiverSystemIndex` в loader |
@@ -1337,5 +1540,6 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 | [`tz_structure_connections.md`](./tz_structure_connections.md) | `sea_route`, world routes |
 | [`tz_city_generation.md`](./tz_city_generation.md) | Port, `river_linear`, `adjacent_terrain` |
 | [`tz_locations.md`](./tz_locations.md) | `z=0` sea level, coordinates |
-| [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | Registry smells (interim liquid overlay) |
+| [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | Registry smells (interim liquid overlay); **HY-BATH-1** |
+| [`tz_map_light_bake.md`](./tz_map_light_bake.md) | Light compose; R5b bathymetry z on hydro paint |
 | `.cursor/rules/layer-boundaries.mdc` | generate ≠ persist ≠ LLM |

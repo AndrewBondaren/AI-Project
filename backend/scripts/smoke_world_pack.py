@@ -314,11 +314,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="World Pack WP-A smoke")
     parser.add_argument("--fixture", type=Path, default=DEFAULT_FIXTURE)
     parser.add_argument("--world-uid", default=None)
-    from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
     parser.add_argument(
         "--max-tiles",
         type=int,
-        default=PackBakeDefaults.canonical_defaults().max_tiles_light,
+        default=0,
+        help="debug-only light bake cap; 0=uncapped (all location tiles)",
     )
     parser.add_argument("--base-url", default=BASE_URL)
     parser.add_argument("--offline-only", action="store_true")

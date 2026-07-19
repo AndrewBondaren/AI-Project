@@ -18,7 +18,6 @@ from debug_api_helpers import (
     api_client,
     api_pack_bake,
 )
-from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 
 # Re-export mode typing from helpers module contract
 PackBakeMode = str  # "light" | "tile" | "full" — validated by HTTP API
@@ -45,20 +44,15 @@ def api_list_bootstrap_tiles(
     *,
     max_tiles: int | None = None,
 ) -> dict:
-    """Preview which macro-tiles light bake will touch."""
-    cap = (
-        max_tiles
-        if max_tiles is not None
-        else PackBakeDefaults.canonical_defaults().max_tiles_light
-    )
-    params: dict[str, int] = {}
-    if cap > 0:
-        params["max_tiles"] = cap
+    """Preview which macro-tiles light bake will touch (0 = uncapped)."""
+    params: dict[str, int] = {
+        "max_tiles": 0 if max_tiles is None else int(max_tiles),
+    }
     return _get_json(
         client,
         f"/worlds/{world_uid}/map/bootstrap-tiles",
         f"GET bootstrap-tiles {world_uid}",
-        params=params or None,
+        params=params,
     )
 
 

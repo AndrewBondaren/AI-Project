@@ -124,13 +124,13 @@ def main() -> None:
         "--max-tiles",
         type=int,
         default=None,
-        help="cap bootstrap tiles (default PackBakeDefaults.max_tiles_light)",
+        help="debug-only light bake cap; omit/0 = uncapped (all location tiles)",
     )
     parser.add_argument(
         "--mode",
         choices=("light", "full"),
         default="light",
-        help="pack bake mode: light (capped) or full (all location L0)",
+        help="pack bake mode: light (location tiles) or full (entire world_bounds)",
     )
     parser.add_argument("--skip-import", action="store_true")
     parser.add_argument("--skip-clear", action="store_true")

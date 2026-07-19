@@ -50,15 +50,14 @@ async def _run(world_uid: str, mode: str, max_tiles: int) -> int:
 
 
 def main() -> None:
-    from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
-
     parser = argparse.ArgumentParser(description="Bake World Pack")
     parser.add_argument("--world-uid", required=True)
     parser.add_argument("--mode", default="light", choices=["light", "tile", "full"])
     parser.add_argument(
         "--max-tiles",
         type=int,
-        default=PackBakeDefaults.canonical_defaults().max_tiles_light,
+        default=0,
+        help="debug-only light bake cap; 0=uncapped (all location tiles)",
     )
     args = parser.parse_args()
     raise SystemExit(asyncio.run(_run(args.world_uid, args.mode, args.max_tiles)))

@@ -14,7 +14,8 @@ class PackBakeDefaults(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    max_tiles_light: int = 16
+    # Debug-only light bake slice. 0 = uncapped (product default: all location∪hydro tiles).
+    max_tiles_light: int = Field(default=0, ge=0)
     zstd_level: int = 3
     codec_version: int = 1
     background_drain_per_request: int = 0
@@ -43,18 +44,19 @@ def resolve_light_tile_cap(
     *,
     defaults: PackBakeDefaults | None = None,
 ) -> int | None:
-    """Normalize light-bake tile cap.
+    """Normalize light-bake debug tile cap.
 
-    ``None`` → ``defaults.max_tiles_light``;
+    ``None`` → ``defaults.max_tiles_light`` (``<=0`` means uncapped);
     ``<= 0`` → ``None`` (no cap);
     ``> 0`` → that cap.
 
-    HTTP must pass query ``0`` through as ``0``, not convert to ``None`` first
-    (that incorrectly re-applies the default 16).
+    Product default is uncapped (``max_tiles_light=0``). Positive values are
+    debug/smoke overrides only — not product light scope.
     """
     defs = defaults or PackBakeDefaults.canonical_defaults()
     if max_tiles is None:
-        return int(defs.max_tiles_light)
+        raw = int(defs.max_tiles_light)
+        return None if raw <= 0 else raw
     if int(max_tiles) <= 0:
         return None
     return int(max_tiles)
