@@ -43,15 +43,17 @@ def api_list_bootstrap_tiles(
     world_uid: str,
     *,
     max_tiles: int | None = None,
+    scope: str = "light",
 ) -> dict:
-    """Preview which macro-tiles light bake will touch (0 = uncapped)."""
-    params: dict[str, int] = {
+    """Preview which macro-tiles L0 bake will touch (``scope=light|full``; 0 = uncapped)."""
+    params: dict[str, str | int] = {
+        "scope": scope,
         "max_tiles": 0 if max_tiles is None else int(max_tiles),
     }
     return _get_json(
         client,
         f"/worlds/{world_uid}/map/bootstrap-tiles",
-        f"GET bootstrap-tiles {world_uid}",
+        f"GET bootstrap-tiles {world_uid} scope={scope}",
         params=params,
     )
 
