@@ -84,3 +84,15 @@ class PackReadContext:
     def invalidate_climate_tile(self, world: World, gx: int, gy: int) -> None:
         key = (str(self.paths_for(world).root), gx, gy)
         self._climate_tile_cache.pop(key, None)
+
+    def invalidate_pack(self, world: World) -> None:
+        """After bake/write: drop manifest + climate caches for this pack root.
+
+        Manifest also self-validates via disk stamp on read; this covers same-stamp
+        races and clears climate that may have been rewritten with the pack.
+        """
+        key = str(self.paths_for(world).root)
+        reader = self._readers.get(key)
+        if reader is not None:
+            reader.invalidate_manifest()
+        self.invalidate_climate(world)

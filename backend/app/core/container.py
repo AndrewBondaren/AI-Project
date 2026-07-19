@@ -482,6 +482,7 @@ class Container:
                 climate_bake=entry.climate_bake,
                 job_repo=self.chunk_refine_job_repository(),
                 world_service=self.world_service(),
+                read_context_for=lambda uid: self.pack_read_services(uid).context,
             )
         return self._pack_materialization_orchestrator
 

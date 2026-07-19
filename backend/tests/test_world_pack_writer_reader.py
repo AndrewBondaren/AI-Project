@@ -71,6 +71,47 @@ class TestWorldPackWriterReader(unittest.TestCase):
         restored = self.reader.read_location_terrain("loc-a")
         self.assertEqual(restored.chunk_columns, 8)
 
+    def test_manifest_cache_reloads_when_disk_stamp_changes(self):
+        """Stale in-memory manifest must not hide tiles written by a later bake."""
+        self.writer.write_world_map_tile(
+            0, 0, [WorldMapCellWire(tx=0, ty=0, surface_z=1)], cells_per_side=32,
+        )
+        self.writer.save_manifest()
+        first = self.reader.manifest
+        self.assertEqual(len(first.tiles), 1)
+
+        # Second writer simulates full bake expanding the pack (same process as reader).
+        writer2 = WorldPackWriter(self.paths)
+        writer2.write_world_map_tile(
+            0, 0, [WorldMapCellWire(tx=0, ty=0, surface_z=1)], cells_per_side=32,
+        )
+        writer2.write_world_map_tile(
+            1, 0, [WorldMapCellWire(tx=0, ty=0, surface_z=2)], cells_per_side=32,
+        )
+        writer2.save_manifest()
+
+        second = self.reader.manifest
+        self.assertEqual(len(second.tiles), 2)
+        self.assertIsNotNone(second.tile_entry(1, 0))
+
+    def test_invalidate_manifest_forces_reload(self):
+        self.writer.write_world_map_tile(
+            0, 0, [WorldMapCellWire(tx=0, ty=0, surface_z=1)], cells_per_side=32,
+        )
+        self.writer.save_manifest()
+        self.assertEqual(len(self.reader.manifest.tiles), 1)
+        self.reader.invalidate_manifest()
+        # Corrupt stamp simulation: rewrite without going through property
+        writer2 = WorldPackWriter(self.paths)
+        writer2.write_world_map_tile(
+            0, 0, [WorldMapCellWire(tx=0, ty=0, surface_z=1)], cells_per_side=32,
+        )
+        writer2.write_world_map_tile(
+            -1, -1, [WorldMapCellWire(tx=0, ty=0, surface_z=3)], cells_per_side=32,
+        )
+        writer2.save_manifest()
+        self.assertEqual(len(self.reader.manifest.tiles), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

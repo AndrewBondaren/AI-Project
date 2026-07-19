@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 
 from app.application.worldData.persistResult import PersistResult
 from app.application.worldData.generators.hydrology.hydrologyGeneratorService import (
@@ -56,6 +57,7 @@ class PackMaterializationOrchestrator:
         world_service: WorldService | None = None,
         bake_defaults: PackBakeDefaults | None = None,
         read_context: PackReadContext | None = None,
+        read_context_for: Callable[[str], PackReadContext] | None = None,
         climate_bake: ClimatePackBakeOrchestrator | None = None,
         tile_planner: PackTilePlanner | None = None,
     ) -> None:
@@ -64,6 +66,8 @@ class PackMaterializationOrchestrator:
         self._defaults = bake_defaults or PackBakeDefaults.canonical_defaults()
         self._planner = tile_planner or PackTilePlanner(bake_defaults=self._defaults)
         self._world_service = world_service
+        self._read_context = read_context
+        self._read_context_for = read_context_for
         if entry is not None:
             self._entry = entry
             self._climate = climate_bake or entry.climate_bake
@@ -292,7 +296,15 @@ class PackMaterializationOrchestrator:
                     climate_result = PersistResult.from_counts(extra_fine, extra_fine)
 
         if self._world_service is not None:
-            await finalize_pack_on_world(self._world_service, world, writer)
+            read_ctx = self._read_context
+            if read_ctx is None and self._read_context_for is not None:
+                read_ctx = self._read_context_for(world_uid)
+            await finalize_pack_on_world(
+                self._world_service,
+                world,
+                writer,
+                read_context=read_ctx,
+            )
 
         workers = resolve_terrain_workers(mat_ctx, world)
         elapsed_s = time.perf_counter() - bake_t0

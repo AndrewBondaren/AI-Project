@@ -443,7 +443,12 @@ async def refine_from_entry_route(
                     tile_gy=entry.tile_gy,
                     heading=entry.heading,
                 )
-            await finalize_pack_on_world(world_svc, world, writer)
+            await finalize_pack_on_world(
+                world_svc,
+                world,
+                writer,
+                read_context=container.pack_read_services(world_uid).context,
+            )
     except MissingParentLightError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return JSONResponse(content={
@@ -516,7 +521,12 @@ async def schedule_chunk_refine_route(
             heading_dx=heading_dx,
             heading_dy=heading_dy,
         )
-        await finalize_pack_on_world(world_svc, world, writer)
+        await finalize_pack_on_world(
+            world_svc,
+            world,
+            writer,
+            read_context=container.pack_read_services(world_uid).context,
+        )
     except MissingParentLightError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return JSONResponse(content={

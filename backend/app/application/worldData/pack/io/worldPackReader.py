@@ -1,4 +1,8 @@
-"""Read World Pack blobs and manifest."""
+"""Read World Pack blobs and manifest.
+
+Manifest cache is **validated** against disk stamp ``(mtime_ns, size)`` — after bake
+rewrites ``manifest.json``, the next ``.manifest`` access reloads automatically.
+"""
 
 from __future__ import annotations
 
@@ -23,6 +27,9 @@ from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
 from app.dataModel.worldPack.worldPackManifest import WorldPackManifest
 
+# Disk identity of manifest.json — cache hit only if stamp matches.
+ManifestStamp = tuple[int, int]  # (mtime_ns, size)
+
 
 class WorldPackReader:
     def __init__(
@@ -38,18 +45,39 @@ class WorldPackReader:
         self._store = store or PackManifestStore()
         self._fine_terrain_cache = fine_terrain_cache
         self._manifest: WorldPackManifest | None = None
+        self._manifest_stamp: ManifestStamp | None = None
+
+    def _disk_manifest_stamp(self) -> ManifestStamp | None:
+        path = self._paths.manifest_path()
+        if not path.is_file():
+            return None
+        st = path.stat()
+        return (int(st.st_mtime_ns), int(st.st_size))
+
+    def _manifest_cache_valid(self) -> bool:
+        """Cached manifest is valid iff it was loaded and disk stamp is unchanged."""
+        if self._manifest is None or self._manifest_stamp is None:
+            return False
+        return self._manifest_stamp == self._disk_manifest_stamp()
+
+    def invalidate_manifest(self) -> None:
+        """Drop cached manifest (e.g. after in-process bake write)."""
+        self._manifest = None
+        self._manifest_stamp = None
 
     def load_manifest(self) -> WorldPackManifest:
         path = self._paths.manifest_path()
         if not path.is_file():
             raise FileNotFoundError(f"manifest not found: {path}")
         self._manifest = self._store.load(path)
+        self._manifest_stamp = self._disk_manifest_stamp()
         return self._manifest
 
     @property
     def manifest(self) -> WorldPackManifest:
-        if self._manifest is None:
+        if not self._manifest_cache_valid():
             return self.load_manifest()
+        assert self._manifest is not None
         return self._manifest
 
     @property

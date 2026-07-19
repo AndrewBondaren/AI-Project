@@ -1194,6 +1194,22 @@ map_cell_patches (
 
 **Не смешивать:** Query facade только **читает** (merge). Generate/entry — отдельно (`refine_from_entry` / `schedule_chunk_refine`).
 
+### Manifest cache (reader)
+
+`WorldPackReader` держит process-local кэш `manifest.json`. **Инвариант:** кэш валиден iff stamp диска `(mtime_ns, size)` совпадает со stamp при последнем load.
+
+| Событие | Поведение |
+|---|---|
+| Hit (stamp без изменений) | вернуть кэш; **без** re-read / parse JSON |
+| Miss (файл переписан bake’ом / снаружи) | `load_manifest()` с диска, обновить stamp |
+| После in-process write (`finalize_pack_on_world` и аналоги) | `PackReadContext.invalidate_pack(world)` → `invalidate_manifest()` + climate caches |
+
+**Зачем оба пути:** stamp ловит любой rewrite `manifest.json` на диске (в т.ч. другой процесс / smoke без restart). Явный invalidate закрывает same-stamp race и сбрасывает связанные climate caches.
+
+**Не SoT:** stamp — только identity файла для cache validity; содержимое SoT = wire `WorldPackManifest` на диске. Content-hash манифеста для этого слоя **не** требуется (single-writer / local pack root).
+
+**Код:** `pack/io/worldPackReader.py`, `pack/read/packReadContext.py`.
+
 ```mermaid
 sequenceDiagram
   participant Session as SessionOrDAG
@@ -1813,6 +1829,7 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-19 | § Read path: **Manifest cache** — stamp `(mtime_ns, size)` + `invalidate_pack` после bake |
 | 2026-07-19 | § Приоритет L0: `world_bounds` = форма мира (AABB) |
 | 2026-07-19 | **Bake modes — контракт мастера:** light = тайлы с локациями; full = весь `world_bounds`; нет product «wilderness» stage; `wilderness_*` = storage legacy |
 | 2026-07-19 | **Impl:** `PackTilePlanner` + classifier + HTTP/smoke `max_tiles` default uncapped |

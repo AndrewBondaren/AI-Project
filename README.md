@@ -49,3 +49,6 @@ TEST fixtures
 python backend/scripts/initialize_world.py --fixture fixtures/world_test_gen.json
 # optional debug cap: --max-tiles 16
 # full world_bounds: --mode full
+
+python backend/scripts/initialize_world.py --fixture fixtures/world_test_gen.json --mode full
+
