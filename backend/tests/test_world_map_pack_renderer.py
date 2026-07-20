@@ -66,6 +66,27 @@ class TestWorldMapPackRenderer(unittest.TestCase):
         self.assertIn("~", mosaic)
         self.assertIn("@", mosaic)
 
+    def test_light_mask_mosaic_unmapped_tiles_are_spaces(self):
+        """MLB-12: frame larger than baked set → spaces, not crop to baked only."""
+        tile = PackTileLightView(
+            gx=0,
+            gy=0,
+            side=2,
+            cells={
+                (0, 0): WorldMapCellWire(tx=0, ty=0, surface_z=1, system_terrain="plains"),
+                (1, 0): WorldMapCellWire(tx=1, ty=0, surface_z=1, system_terrain="plains"),
+                (0, 1): WorldMapCellWire(tx=0, ty=1, surface_z=1, system_terrain="plains"),
+                (1, 1): WorldMapCellWire(tx=1, ty=1, surface_z=1, system_terrain="mountain"),
+            },
+        )
+        mosaic = WorldMapPackRenderer(
+            [tile], tile_size_m=3000,
+        ).render_light_mask_mosaic(gx0=-1, gy0=0, gx1=0, gy1=0)
+        self.assertIn("macro Gx-1..Gx0 Gy0..Gy0", mosaic)
+        # left macro-tile unmapped (2 spaces) + right tile "..m" on y=1 / ".." on y=0
+        self.assertIn("   0 |  ..|", mosaic)
+        self.assertIn("   1 |  .m|", mosaic)
+
     def test_light_mask_mosaic_stitches_adjacent_tiles(self):
         """Adjacent macro-tiles form one matrix — rivers continue across the seam."""
         left = PackTileLightView(
@@ -99,7 +120,7 @@ class TestWorldMapPackRenderer(unittest.TestCase):
         mosaic = WorldMapPackRenderer(
             [left, right], tile_size_m=3000,
         ).render_light_mask_mosaic()
-        # y=0: . r | r .  → ".rr."
+        # y=0: . r | r .  → ".yy."
         # y=1: . . | . f  → "...f"
         self.assertIn("   0 |.yy.|", mosaic)
         self.assertIn("   1 |...f|", mosaic)

@@ -120,13 +120,22 @@ class WorldMapPackRenderer:
         gx1: int | None,
         gy1: int | None,
     ) -> _MosaicFrame | None:
-        if not self._by_xy:
-            return None
+        """Build mosaic frame. Prefer caller bbox (MLB-12 world_bounds / AABB).
+
+        When bbox omitted and tiles exist — fall back to baked tile extent only.
+        Missing macro-tiles inside the frame render as spaces (unmapped).
+        """
         if gx0 is None or gy0 is None or gx1 is None or gy1 is None:
+            if not self._by_xy:
+                return None
             xs = [gx for gx, _ in self._by_xy]
             ys = [gy for _, gy in self._by_xy]
             gx0, gx1 = min(xs), max(xs)
             gy0, gy1 = min(ys), max(ys)
+        elif not self._by_xy:
+            # Frame known (bounds) but no baked tiles yet — still need side from caller.
+            # Without any tile we cannot know light side; empty mosaic.
+            return None
 
         side = 0
         for gy in range(gy0, gy1 + 1):

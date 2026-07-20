@@ -1,4 +1,4 @@
-"""Cleanup acceptance — footprint POJO, hydro SEA/RIVER, climate wire, mosaic cap."""
+"""Cleanup acceptance — footprint POJO, hydro SEA/RIVER, climate wire, mosaic SoT."""
 
 from __future__ import annotations
 
@@ -29,7 +29,6 @@ from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.worldPack import WorldMapCellWire
 from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
 from app.dataModel.worldPack.lightSettlementFootprint import LightSettlementFootprintPolicy
-from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.dataModel.worldPack.worldMapCellsPerTile import (
     resolve_world_map_cells_per_tile,
     resolve_world_map_side,
@@ -41,7 +40,7 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
 )
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
+from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
 
 
 class TestLightBakeCleanup(unittest.TestCase):
@@ -124,14 +123,14 @@ class TestLightBakeCleanup(unittest.TestCase):
         )
 
 
-class TestMosaicCap(unittest.IsolatedAsyncioTestCase):
+class TestWorldGridMosaic(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self._tmpdir = tempfile.TemporaryDirectory()
         self.db_path = str(Path(self._tmpdir.name) / "game.db")
-        self.uid = "w-mosaic-cap"
+        self.uid = "w-mosaic-sot"
         paths = WorldPackPaths.from_db_parent(self.db_path, self.uid)
         writer = WorldPackWriter(paths)
-        # 20 tiles > default light_mosaic_max_tiles=16
+        # Many tiles — formerly triggered MACRO AGGREGATE; must stay mask mosaic.
         for gx in range(5):
             for gy in range(4):
                 writer.write_world_map_tile(
@@ -144,7 +143,12 @@ class TestMosaicCap(unittest.IsolatedAsyncioTestCase):
         self.pack = build_pack_read_services(
             self.uid, PatchStoreService(), db_path=self.db_path,
         )
-        self.world = SimpleNamespace(world_uid=self.uid, map_cell_size_m=3000)
+        self.world = SimpleNamespace(
+            world_uid=self.uid,
+            map_cell_size_m=3000,
+            world_bounds=None,
+            grid_bbox_padding=2,
+        )
         self.map_cells = MagicMock()
         self.map_cells.uses_pack_read.return_value = True
         self.map_cells.pack_read_services.return_value = self.pack
@@ -154,25 +158,86 @@ class TestMosaicCap(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self) -> None:
         self._tmpdir.cleanup()
 
-    async def test_world_grid_aggregate_when_over_cap(self) -> None:
+    async def test_world_grid_always_light_mask_mosaic(self) -> None:
         payload = await self.svc.render_world_grid(self.world)
         self.assertEqual(payload["read_path"], "pack")
-        self.assertEqual(payload["read_mode"], "world_map_light_macro_aggregate")
-        self.assertIn("MACRO AGGREGATE", payload["ascii"])
+        self.assertEqual(payload["read_mode"], "world_map_light_mask")
+        self.assertIn("pack L0 light mosaic", payload["ascii"])
+        self.assertNotIn("MACRO AGGREGATE", payload["ascii"])
 
     async def test_world_grid_mosaic_when_bbox(self) -> None:
         payload = await self.svc.render_world_grid(
             self.world, gx0=0, gy0=0, gx1=1, gy1=1,
         )
         self.assertEqual(payload["read_mode"], "world_map_light_mask")
+        self.assertIn("macro Gx0..Gx1 Gy0..Gy1", payload["ascii"])
 
-    async def test_world_grid_mosaic_when_under_cap(self) -> None:
-        render = PackMapGridRender(
-            self.pack.render,
-            bake_defaults=PackBakeDefaults(light_mosaic_max_tiles=64),
+    async def test_mlb12_frame_from_declared_world_bounds(self) -> None:
+        """Sparse bake: frame = world_bounds; missing tiles = spaces."""
+        sparse_uid = "w-mlb12-bounds"
+        paths = WorldPackPaths.from_db_parent(self.db_path, sparse_uid)
+        writer = WorldPackWriter(paths)
+        writer.write_world_map_tile(
+            0, 0,
+            [
+                WorldMapCellWire(tx=0, ty=0, surface_z=1, system_terrain="plains"),
+                WorldMapCellWire(tx=1, ty=0, surface_z=1, system_terrain="plains"),
+                WorldMapCellWire(tx=0, ty=1, surface_z=1, system_terrain="plains"),
+                WorldMapCellWire(tx=1, ty=1, surface_z=1, system_terrain="mountain"),
+            ],
+            cells_per_side=2,
         )
-        payload = render.render_world_grid(self.world).to_dict()
+        writer.save_manifest()
+        pack = build_pack_read_services(
+            sparse_uid, PatchStoreService(), db_path=self.db_path,
+        )
+        world = SimpleNamespace(
+            world_uid=sparse_uid,
+            map_cell_size_m=3000,
+            world_bounds={"x_min": -1, "x_max": 1, "y_min": -1, "y_max": 1},
+            grid_bbox_padding=2,
+        )
+        render = PackMapGridRender(pack.render)
+        payload = render.render_world_grid(world).to_dict()
         self.assertEqual(payload["read_mode"], "world_map_light_mask")
+        self.assertIn("macro Gx-1..Gx1 Gy-1..Gy1", payload["ascii"])
+        self.assertNotIn("MACRO AGGREGATE", payload["ascii"])
+
+    async def test_mlb12_frame_from_pins_when_no_bounds(self) -> None:
+        sparse_uid = "w-mlb12-pins"
+        paths = WorldPackPaths.from_db_parent(self.db_path, sparse_uid)
+        writer = WorldPackWriter(paths)
+        writer.write_world_map_tile(
+            0, 0,
+            [WorldMapCellWire(tx=0, ty=0, surface_z=1, system_terrain="plains")],
+            cells_per_side=2,
+        )
+        writer.write_locations_index(
+            LocationsIndexWire(
+                locations=[
+                    LocationsIndexPin(
+                        location_uid="loc-a",
+                        map_x=1500,
+                        map_y=1500,
+                        display_name="A",
+                    ),
+                ],
+            ),
+        )
+        writer.save_manifest()
+        pack = build_pack_read_services(
+            sparse_uid, PatchStoreService(), db_path=self.db_path,
+        )
+        world = SimpleNamespace(
+            world_uid=sparse_uid,
+            map_cell_size_m=3000,
+            world_bounds=None,
+            grid_bbox_padding=2,
+        )
+        render = PackMapGridRender(pack.render)
+        payload = render.render_world_grid(world).to_dict()
+        # pin at tile (0,0) + padding 2 → Gx-2..Gx2 Gy-2..Gy2
+        self.assertIn("macro Gx-2..Gx2 Gy-2..Gy2", payload["ascii"])
 
 
 if __name__ == "__main__":
