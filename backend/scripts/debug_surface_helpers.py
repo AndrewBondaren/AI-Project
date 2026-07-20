@@ -17,6 +17,7 @@ from debug_api_helpers import (
     _require_ok,
     api_client,
     api_pack_bake,
+    api_refine_from_entry,
 )
 
 # Re-export mode typing from helpers module contract
@@ -74,4 +75,5 @@ __all__ = [
     "api_list_bootstrap_tiles",
     "api_loading_progress",
     "api_pack_bake",
+    "api_refine_from_entry",
 ]

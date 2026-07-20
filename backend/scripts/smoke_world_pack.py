@@ -1,5 +1,8 @@
 """WP-A1…A14 World Pack smoke — master/CI (path 2).
 
+Bake step = L0 only (``POST …/pack/bake``). Entry/L2 = separate step
+(``POST …/refine-from-entry``, WP-A9b) — not part of light bake.
+
 Offline gates + unit tests (no backend):
   python scripts/smoke_world_pack.py --offline-only
 
@@ -8,7 +11,7 @@ Full HTTP smoke (backend on localhost:8000 — start it yourself):
   python scripts/smoke_world_pack.py --fixture ../fixtures/world_terrain_test.json
   python scripts/smoke_world_pack.py --skip-bake --skip-import
 
-TZ: docs/tz_world_pack_storage.md § WP-A*
+TZ: docs/tz_world_pack_storage.md § WP-A* / § Job boundaries
 """
 from __future__ import annotations
 
@@ -179,7 +182,8 @@ def run_http(
                 tiles_pct = wm.get("tiles_pct")
                 result.ok(
                     "WP-A1",
-                    f"light bake {elapsed:.1f}s, tiles_ready={tiles_ready}, tiles_pct={tiles_pct}",
+                    f"light bake L0-only {elapsed:.1f}s, "
+                    f"tiles_ready={tiles_ready}, tiles_pct={tiles_pct}",
                 )
             queue_depth = bake.get("refine_queue_depth")
             if isinstance(queue_depth, int) and queue_depth <= A5_MAX_REFINE_QUEUE:
@@ -253,6 +257,7 @@ def run_http(
         else:
             result.ok("WP-A9", f"scene-volume {count} cells in {scene_s:.2f}s at ({ax},{ay},{az})")
 
+        # Separate entry/L2 job (not part of pack/bake light) — Job boundaries.
         t0 = time.perf_counter()
         r = client.post(
             f"/worlds/{world_uid}/map/refine-from-entry",

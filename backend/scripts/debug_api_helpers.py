@@ -103,7 +103,10 @@ def api_pack_bake(
     heading_dx: int | None = None,
     heading_dy: int | None = None,
 ) -> dict:
-    """Canonical debug bake — ``POST …/map/pack/bake`` (single SoT helper)."""
+    """Canonical L0 pack bake — ``POST …/map/pack/bake`` (light/full/detailed).
+
+    Does **not** run entry/L2 refine (Job boundaries). Use ``api_refine_from_entry``.
+    """
     params: dict[str, str | int] = {"mode": mode}
     if mode == "light":
         # 0 = uncapped product default; positive = debug-only slice
@@ -123,6 +126,41 @@ def api_pack_bake(
     data = r.json()
     if not isinstance(data, dict):
         raise DebugApiError(f"pack/bake {world_uid}: expected object, got {type(data)}")
+    return data
+
+
+def api_refine_from_entry(
+    client: httpx.Client,
+    world_uid: str,
+    *,
+    x: int,
+    y: int,
+    kind: str = "session_start",
+    location_uid: str | None = None,
+    heading_dx: int | None = None,
+    heading_dy: int | None = None,
+    schedule_bg: bool = True,
+) -> dict:
+    """Separate entry/L2 job — ``POST …/map/refine-from-entry`` (not part of pack bake)."""
+    params: dict[str, str | int | bool] = {
+        "x": int(x),
+        "y": int(y),
+        "kind": kind,
+        "schedule_bg": schedule_bg,
+    }
+    if location_uid is not None:
+        params["location_uid"] = location_uid
+    if heading_dx is not None:
+        params["heading_dx"] = heading_dx
+    if heading_dy is not None:
+        params["heading_dy"] = heading_dy
+    r = client.post(f"/worlds/{world_uid}/map/refine-from-entry", params=params)
+    _require_ok(r, f"POST refine-from-entry {world_uid} ({x},{y})")
+    data = r.json()
+    if not isinstance(data, dict):
+        raise DebugApiError(
+            f"refine-from-entry {world_uid}: expected object, got {type(data)}"
+        )
     return data
 
 

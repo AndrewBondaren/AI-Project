@@ -1,7 +1,7 @@
 # ТЗ: Снимок состояния проекта
 
-**Версия:** 1.0  
-**Дата:** 2026-07-04  
+**Версия:** 1.1  
+**Дата:** 2026-07-20  
 **Тип:** living snapshot — фиксирует *фактическое* состояние кода, не целевую архитектуру.
 
 > Целевые спецификации по доменам — отдельные `docs/tz_*.md`.  
@@ -19,8 +19,6 @@
 | **Игрок** | Выбор мира → персонаж → чат | Только narrative и UI |
 
 Принцип: **движок и геометрия — source of truth**; LLM рендерит факты из БД, не придумывает мир с нуля.
-
-**Приоритет разработки:** vertical slice `intent → scene gate → terrain/settlement lazy → narration`, не полный `TaskType` enum.
 
 ---
 
@@ -176,13 +174,13 @@ INTENT_DETECTION
        └── terrain lazy chain (check → eager/lazy → context → summary)
 ```
 
-### 5.5 Критический gap vertical slice
+### 5.5 Gap: `scene_narration` (осознанный блокер)
 
 `ResponseResolver._OUTPUT_NODE` ожидает ноду `scene_narration` для `TaskType.SCENE_NARRATION`, но **LLM-нода не зарегистрирована** в `engine/nodes/__init__.py`.
 
-Intent detection может вернуть `scene_narration_render` → engine завершит passes → resolver вернёт ошибку «задача завершилась без результата».
+Intent detection может вернуть `scene_narration_render` → engine завершит passes → resolver вернёт ошибку «задача завершилась без результата». Аналогично нет нод для большинства user-facing `TaskType`.
 
-Аналогично нет нод для большинства user-facing `TaskType`.
+**Статус:** осознанный блокер / отложено. Не приоритет разработки и не «критический gap для срочного закрытия». Ранний обрезанный narration на нестабильном входе (`terrain_context` / scene / pack) даёт мало value и будет переписываться; wiring — после стабилизации контракта данных и gate на DAG ([`tz_world_generation_dag.md`](./tz_world_generation_dag.md)). Агенту **не** предлагать vertical slice / narration как следующий шаг по умолчанию.
 
 ### 5.6 Инфраструктура engine (готова)
 
@@ -330,18 +328,18 @@ Feature-slices: `session`, `chat`, `settings`. API base: `VITE_API_URL` (default
 | Lazy settlement geometry (map_cells) | ✅ partial persist |
 | Terrain context → shared_context | ✅ |
 | Debug: map surface/climate, structure, settlement | ✅ |
-| **Player narration turn** | ❌ нет `scene_narration` node |
+| **Player narration turn** | ❌ осознанный блокер — нет `scene_narration` node (§5.5) |
 | Hydrology | ❌ stub |
 | Interior furnishing | ❌ не начато |
 | Большинство TaskType | ❌ enum only |
 
 ---
 
-## 11. Ближайшие блокеры vertical slice
+## 11. Известные пробелы engine path (не backlog-priority)
 
-Порядок по зависимостям:
+Факт состояния кода; **не** упорядоченный план «сделать следующим»:
 
-1. **`scene_narration` LLM-node** — читает `terrain_context` / scene; регистрация в `nodes/__init__.py` + `_OUTPUT_NODE` уже ждёт `scene_narration`.
+1. **`scene_narration` LLM-node** — осознанный блокер (§5.5, §12). `_OUTPUT_NODE` уже ждёт id; регистрация отложена до стабильного входа и gate DAG.
 2. **`lazy_settlement` → полный outdoor persist** — connections graph + building `NamedLocations` через `SettlementPersistService`.
 3. **Eager world surface** (опционально для wilderness) — `eager_terrain` сейчас только load; full `generate_surface` только debug HTTP / будущая engine node.
 
@@ -351,6 +349,7 @@ Feature-slices: `session`, `chat`, `settings`. API base: `VITE_API_URL` (default
 
 | Тема | Документ | Статус |
 |------|----------|--------|
+| **`scene_narration` / player narration turn** | этот snapshot §5.5 | **осознанный блокер** — не пилить interim |
 | Lazy simulation LOD | `tz_lazy_simulation.md` | концепция |
 | Multiplayer | `tz_multiplayer.md` | концепция |
 | World editor UI | `tz_frontend.md` | placeholder |
@@ -381,5 +380,6 @@ Feature-slices: `session`, `chat`, `settings`. API base: `VITE_API_URL` (default
 | Версия | Дата | Изменения |
 |--------|------|-----------|
 | 1.0 | 2026-07-04 | Первый снимок: API, engine, generators, JV, gaps |
+| 1.1 | 2026-07-20 | Убран приоритет vertical slice; `scene_narration` зафиксирован как осознанный блокер (§5.5, §11, §12) |
 
-**Правило обновления:** при закрытии блокера из §11 — bump minor version и строка в §10/§11.
+**Правило обновления:** при закрытии осознанного блокера из §12 / изменении пробелов §11 — bump minor version и строка в §10–§12.

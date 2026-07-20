@@ -1,5 +1,8 @@
 """Smoke: light_bake → full_bake on **one** world (same generation).
 
+L0-only chain (Job boundaries). Does **not** run entry/L2 refine.
+For L2 after light use ``initialize_world.py --entry`` or ``POST refine-from-entry``.
+
 Unlike ``initialize_world.py`` (single mode), this script:
 1. imports fixture if world missing (clean DB); else reuses skeleton uid
 2. wipes local pack + clears map patches
@@ -15,13 +18,6 @@ Requires a running backend (``npm run backend``) — agents must not start it.
 Examples:
   python backend/scripts/light_and_full_bake.py --fixture fixtures/world_test_gen.json
   python backend/scripts/light_and_full_bake.py --reuse --world-uid world-test-002
-
-Artifacts (default):
-  .local/map-render/{world_uid}/light-and-full/light-and-full-latest.log
-  .local/map-render/{world_uid}/light-and-full/light-and-full-latest.json
-  .local/map-render/{world_uid}/light-and-full/light-bake-render-latest.log
-  .local/map-render/{world_uid}/light-and-full/full-bake-render-latest.log
-  .local/map-render/{world_uid}/light-and-full/after-light|after-full/…
 """
 from __future__ import annotations
 

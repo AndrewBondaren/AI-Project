@@ -1,10 +1,12 @@
-"""World initialization smoke — import fixture, pack bake, dump ASCII maps.
+"""World initialization smoke — import fixture, L0 pack bake, optional entry job.
 
-Uses ``POST …/map/pack/bake`` (L0 light World Pack + entry refine).
+Uses ``POST …/map/pack/bake`` (L0 only — Job boundaries).
+Entry/L2 is a **separate** job: ``--entry`` → ``POST …/map/refine-from-entry``.
 Requires running backend (``npm run backend``) — agents must not start it.
 
 Examples:
   python scripts/initialize_world.py --fixture ../fixtures/world_terrain_test.json
+  python scripts/initialize_world.py --fixture ../fixtures/world_test_gen.json --entry
   python scripts/initialize_world.py --no-render
   python scripts/smoke_world_pack.py --fixture ../fixtures/world_terrain_test.json
 """
@@ -24,7 +26,13 @@ if str(REPO / "backend") not in sys.path:
     sys.path.insert(0, str(REPO / "backend"))
 
 from app.application.worldData.pack.import_.importLevels import filter_bundle_for_export
-from debug_api_helpers import DebugApiError, _require_ok, api_clear_map, api_client
+from debug_api_helpers import (
+    DebugApiError,
+    _require_ok,
+    api_clear_map,
+    api_client,
+    api_refine_from_entry,
+)
 from debug_surface_helpers import (
     api_list_bootstrap_tiles,
     api_loading_progress,
@@ -55,6 +63,29 @@ def _import_fixture(client, path: str) -> dict:
 def _fixture_world_uid(fixture: Path) -> str:
     data = json.loads(fixture.read_text(encoding="utf-8"))
     return data.get("world", data)["world_uid"]
+
+
+def _resolve_entry_anchor(
+    client,
+    world_uid: str,
+    *,
+    anchor_x: int | None,
+    anchor_y: int | None,
+) -> tuple[int, int]:
+    if anchor_x is not None and anchor_y is not None:
+        return int(anchor_x), int(anchor_y)
+    r = client.get(f"/worlds/{world_uid}/locations")
+    _require_ok(r, f"GET locations {world_uid}")
+    locs = r.json()
+    if not isinstance(locs, list):
+        raise SystemExit(f"locations: expected list, got {type(locs)}")
+    for loc in locs:
+        mx, my = loc.get("map_x"), loc.get("map_y")
+        if mx is not None and my is not None:
+            return int(mx), int(my)
+    raise SystemExit(
+        "--entry requires --anchor-x/--anchor-y or a location with map_x/map_y",
+    )
 
 
 def _loading_world_map(progress: dict) -> dict[str, Any]:
@@ -112,7 +143,7 @@ def main() -> None:
     sys.stderr.reconfigure(encoding="utf-8")
 
     parser = argparse.ArgumentParser(
-        description="Bootstrap world via World Pack light bake (pack/bake)",
+        description="Bootstrap world via World Pack L0 bake (pack/bake); optional --entry job",
     )
     parser.add_argument(
         "--fixture",
@@ -135,10 +166,15 @@ def main() -> None:
     parser.add_argument("--skip-import", action="store_true")
     parser.add_argument("--skip-clear", action="store_true")
     parser.add_argument(
+        "--entry",
+        action="store_true",
+        help="After L0 bake: separate POST refine-from-entry (L2 scene + bg schedule)",
+    )
+    parser.add_argument(
         "--render",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="After bake: dump L0 + L2 ASCII via render API (default: on)",
+        help="After bake: dump L0 ASCII via render API (default: on)",
     )
     parser.add_argument(
         "--render-out",
@@ -156,13 +192,13 @@ def main() -> None:
         "--anchor-x",
         type=int,
         default=None,
-        help="Optional entry refine anchor (meters)",
+        help="Entry job anchor meters (with --entry; else first location map_x)",
     )
     parser.add_argument(
         "--anchor-y",
         type=int,
         default=None,
-        help="Optional entry refine anchor (meters)",
+        help="Entry job anchor meters (with --entry; else first location map_y)",
     )
     args = parser.parse_args()
 
@@ -200,8 +236,6 @@ def main() -> None:
             world_uid,
             mode=args.mode,
             max_tiles=args.max_tiles if args.mode == "light" else None,
-            anchor_x=args.anchor_x,
-            anchor_y=args.anchor_y,
         )
         http_elapsed_s = time.perf_counter() - t0
         finished_at = datetime.now().astimezone()
@@ -210,7 +244,7 @@ def main() -> None:
             bake = {**bake, "loading_progress": api_loading_progress(client, world_uid)}
 
         _print_metrics(
-            "pack bake metrics",
+            "pack bake metrics (L0 only)",
             _build_pack_bake_metrics(
                 bake,
                 started_at=started_at,
@@ -219,8 +253,21 @@ def main() -> None:
             ),
         )
 
+        if args.entry:
+            ax, ay = _resolve_entry_anchor(
+                client, world_uid, anchor_x=args.anchor_x, anchor_y=args.anchor_y,
+            )
+            print(f"\n=== entry job (separate from bake) anchor=({ax},{ay}) ===")
+            t1 = time.perf_counter()
+            entry = api_refine_from_entry(client, world_uid, x=ax, y=ay)
+            print(
+                f"refine-from-entry: {time.perf_counter() - t1:.2f}s "
+                f"chunks_done={entry.get('chunks_done')} "
+                f"queue={entry.get('refine_queue_depth')}"
+            )
+
         if args.render:
-            print("\n=== map render (L0 light + L2 location_terrain) ===")
+            print("\n=== map render (L0; L2 only if --entry ran) ===")
             summary = dump_map_renders(
                 client,
                 world_uid,

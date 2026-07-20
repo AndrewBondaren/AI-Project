@@ -46,13 +46,16 @@ curl -X POST http://localhost:8000/api/chat \
 Запустить с Electron: cd frontend && npm run dev:electron
 
 TEST fixtures
+# L0 bake only (no entry/L2 inside bake)
 python backend/scripts/initialize_world.py --fixture fixtures/world_test_gen.json
+# optional: separate entry job after bake
+python backend/scripts/initialize_world.py --fixture fixtures/world_test_gen.json --entry
 # optional debug cap: --max-tiles 16
 # full world_bounds: --mode full
 
 python backend/scripts/initialize_world.py --fixture fixtures/world_test_gen.json --mode full
 
-# light → full on ONE world (same generation; does not remap uid)
+# light → full on ONE world (L0 only; does not remap uid)
 python backend/scripts/light_and_full_bake.py --fixture fixtures/world_test_gen.json
 # report: .local/map-render/{world_uid}/light-and-full/
 #   light-and-full-latest.log|.json

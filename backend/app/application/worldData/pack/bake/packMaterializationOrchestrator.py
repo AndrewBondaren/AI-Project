@@ -188,7 +188,7 @@ class PackMaterializationOrchestrator:
         anchor_y: int | None = None,
         heading_dx: int | None = None,
         heading_dy: int | None = None,
-        refine_scene: bool = True,
+        refine_scene: bool = False,
     ) -> MaterializationJobReport:
         surface_ctx = require_surface_terrain_context(
             world, locations, nodes=nodes, edges=edges,
