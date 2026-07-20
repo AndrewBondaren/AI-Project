@@ -62,6 +62,12 @@ async def update_world(
 
 @router.delete("/worlds/{world_uid}", status_code=204)
 async def delete_world(world_uid: str, container=Depends(get_container)) -> None:
+    # TODO(WP-DELETE-1): DELETE world is not FK-safe / not atomic.
+    # Symptom (smoke 2026-07-19): sqlite3.IntegrityError FOREIGN KEY constraint failed → HTTP 500.
+    # Cause: child tables reference worlds(world_uid) without ON DELETE CASCADE; service deletes
+    # only the worlds row. Partial purge (e.g. locations first) → half-deleted world on FK fail.
+    # Tech debt: docs/tz_generator_technical_debt.md § WP-DELETE-1;
+    #            docs/tz_world_pack_storage.md § WP-FIX-DEBT-10.
     await container.world_service().delete(world_uid)
 
 

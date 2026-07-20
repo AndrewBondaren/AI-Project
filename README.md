@@ -54,5 +54,8 @@ python backend/scripts/initialize_world.py --fixture fixtures/world_test_gen.jso
 
 # light → full on ONE world (same generation; does not remap uid)
 python backend/scripts/light_and_full_bake.py --fixture fixtures/world_test_gen.json
-# report: .local/map-render/{world_uid}/light-and-full/light-and-full-latest.log|.json
+# report: .local/map-render/{world_uid}/light-and-full/
+#   light-and-full-latest.log|.json
+#   light-bake-render-latest.log  (ASCII after light)
+#   full-bake-render-latest.log   (ASCII after full)
 

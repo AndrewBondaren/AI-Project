@@ -14,6 +14,7 @@
 | [tz_terrain_generation.md](./tz_terrain_generation.md) | Продуктовое ТЗ terrain |
 | [tz_terrain_hydrology.md](./tz_terrain_hydrology.md) | Гидрология: моря, озёра, реки (target) |
 | [tz_climate.md](./tz_climate.md) | Продуктовое ТЗ climate (pole/local tiers) |
+| [tz_world_pack_storage.md](./tz_world_pack_storage.md) | World Pack; § WP-FIX-DEBT (в т.ч. WP-DELETE-1 → DEBT-10) |
 | `.cursor/plans/settlement-assembler.md` | Phase-план settlement |
 | `.cursor/plans/coordinate-spaces.md` | Phase-план NC-1 |
 
@@ -539,6 +540,33 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 
 ---
 
+### WP-DELETE-1 — `DELETE /worlds/{uid}` не FK-safe / не atomic
+
+**Severity:** high · **P:** P1 · **Status:** open  
+**Cross-ref:** [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Fix debt **WP-FIX-DEBT-10**; API TODO в `api/routes/worlds.py` → `delete_world`.
+
+**Симптом (smoke 2026-07-19):** `DELETE /api/worlds/{world_uid}` → HTTP 500, `sqlite3.IntegrityError: FOREIGN KEY constraint failed`.
+
+**Причина:**
+
+1. Много child-таблиц ссылаются на `worlds(world_uid)` **без** `ON DELETE CASCADE`.
+2. `WorldService.delete` / repo удаляют только строку `worlds`.
+3. Debug helper (`api_delete_world`) сначала purge'ит `locations`, потом вызывает API delete → при FK fail мир остаётся **half-deleted** (локации уже снесены, другие children + `worlds` row живы) → последующий bake: `surface terrain context unavailable`.
+
+**Целевое решение:**
+
+| Вариант | Идея |
+|---|---|
+| **A (предпочтительно)** | Ordered purge всех world-scoped children в одной транзакции, затем `worlds` row; либо schema `ON DELETE CASCADE` где безопасно |
+| **B** | Перед delete — probe blockers; HTTP **409** со списком, не 500 |
+| **C (smoke)** | Не полагаться на partial delete; wipe pack + clear map без `DELETE world`, либо полный recreate DB |
+
+**Размещение fix:** `WorldService.delete` (+ при необходимости schema `0001_initial.sql`); route остаётся thin.
+
+**Связь:** BUNDLE-1 (duplicate-import remap) — ортогонально; оба бьют master smoke lifecycle (import → bake → reset).
+
+---
+
 ### HY-S-2 — connections import вне `sections` loop
 
 **Severity:** low · **P:** P2 · **Status:** open
@@ -834,6 +862,7 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 | 2026-06 | `tz_world_snapshot.md` — unified WorldSnapshotService; climate terminology disambiguation v2.6.1 |
 | 2026-06 | Climate v2.6 TZ: LOD C6–C13; CL-17 SurfaceClimateField; CL-18 LOD policy |
 | 2026-06 | Polish backlog rework; CL-2a..CL-2e, DR-5 added; FM-1 resolved |
+| 2026-07-19 | **WP-DELETE-1:** `DELETE /worlds/{uid}` FK/atomic gap → HTTP 500 / half-deleted world (smoke) |
 | 2026-07 | **CONN-1 todo:** wire rename `node_type` → `connection_node_type` на `connection_nodes` (см. § CONN-1) |
 | 2026-07 | **HY-BATH-1:** ocean Depression forms TZ; light R5b **stub** (`stub_drop_fraction_of_span`) shipped; Form pipeline open; TZ stub→target mapping |
 | 2026-07 | **HY-5 progress:** structure/roads/climate enums → `dataModel`; shims removed; P1-A roads literals |

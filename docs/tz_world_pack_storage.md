@@ -284,21 +284,33 @@ flowchart TB
 
 | Термин | Wire `mode` | LOD | Scope |
 |---|---|---|---|
-| **light_bake** | `light` | L0 + climate coarse | **Все** macro-tiles с `named_locations` **∪ declared hydro** (тайлы локаций + declare endpoints) |
-| **full_bake** | `full` | L0 + climate coarse | **Тот же** L0 pipeline на **весь** `world_bounds` (AABB квадрат/прямоугольник) |
-| **detailed_bake** | `detailed` + `location_uid` | L2 `location_terrain` (+ climate fine territory) | **Одна** локация — refine from parent light |
+| **light_bake** | `light` | **только L0** + climate coarse | **Все** macro-tiles с `named_locations` **∪ declared hydro** (тайлы локаций + declare endpoints) |
+| **full_bake** | `full` | **только L0** + climate coarse | **Тот же** L0 pipeline на **весь** `world_bounds` (AABB квадрат/прямоугольник) |
+| **detailed_bake** | `detailed` + `location_uid` | **L2** `location_terrain` (+ climate fine territory) | **Одна** локация — refine from parent light |
+
+#### Job boundaries (утверждено мастером 2026-07-20)
+
+**Инвариант:** `light_bake` и `full_bake` **не** включают L2. L2 — только `detailed_bake` и/или **отдельная** runtime/entry джоба (WP-13).
+
+| Job | Делает | Не делает |
+|---|---|---|
+| **light_bake** | L0 на location∪hydro tiles; `locations_index`; climate coarse; finalize pack | L2 `location_terrain` / wilderness chunks; blocking `refine_from_entry` |
+| **full_bake** | L0 на весь `world_bounds` (добить дыры после light) | L2; entry refine |
+| **detailed_bake** | L2 одной `location_uid` от parent light | L0 world map bake |
+| **entry / WP-13** | scene volume + background rings/path у spawn | часть `POST …/pack/bake?mode=light\|full` |
+
+**После light (отдельный шаг процесса, не фаза bake):** caller **может** стартовать entry job (blocking scene у player entry point + enqueue фоновой инициализации) — это **старт другой джобы**, не продолжение `light_bake`. Full не обязан ждать entry; entry не обязан ждать full.
 
 ```mermaid
 flowchart LR
-  LB["light_bake location tiles"]
-  FB["full_bake entire world_bounds"]
+  LB["light_bake L0 only"]
+  FB["full_bake L0 world_bounds"]
   DB["detailed_bake L2 one location"]
-  RT["runtime WP-13 rings/path L2"]
+  EJ["entry / WP-13 L2 scene + bg"]
   LB -->|"resume / offline"| FB
+  LB -.->|"отдельная джоба после light"| EJ
   FB -->|"per location"| DB
-  LB --> RT
-  FB --> RT
-  DB --> RT
+  EJ --> DB
 ```
 
 **Инвариант процесса (мастер):** отдельного product bake mode «wilderness» **нет**. Полное заполнение прямоугольника мира = `full_bake`.
@@ -310,6 +322,8 @@ flowchart LR
 | `light` = capped priority subset локаций | `light` = **все** тайлы с локациями |
 | `full_bake` = только все location L0 | `full_bake` = **весь** `world_bounds` L0 |
 | P2 / «wilderness L0» как третий bake stage | **не** product mode; остаток bounds входит в `full_bake` |
+| L2 / entry refine **внутри** light или full bake | **запрещено** product-контрактом; L2 = detailed \| entry job |
+| `refine_scene_on_light=True` вшитый в `pack/bake?mode=light` | **impl debt** — смешивает jobs; target: light = L0 only (WP-PERF-50) |
 | Имена файлов `wilderness_chunk` / layer `wilderness` | **storage/impl legacy** — см. § ниже; не путать с bake process |
 | Runtime rings | L2 дозаполнение у игрока; **не** замена `full_bake` L0 |
 
@@ -343,7 +357,8 @@ flowchart LR
 | `locations_detailed` ⊊ `locations_expected` | `POST pack/bake?mode=detailed&location_uid=` / runtime entry | ✅ single uid; batch — ⬜ |
 | L2 fine chunks вне локаций absent | runtime rings / path — **не** блокирует case 2→3 | ✅ rings path |
 
-**Impl vs ТЗ:** wire `mode=light\|full\|detailed` ✅; `PackTilePlanner` scope ✅ (light = location tiles; full = `world_bounds`); classifier uses planner ✅; `--max-tiles` / query = debug override only (0 = uncapped).
+**Impl vs ТЗ:** wire `mode=light\|full\|detailed` ✅; `PackTilePlanner` scope ✅; classifier uses planner ✅; `--max-tiles` / query = debug override only (0 = uncapped).  
+**Impl debt (job boundary):** `PackBakeDefaults.refine_scene_on_light=True` всё ещё вшивает entry refine в light HTTP — **не** по контракту § Job boundaries; target `False` / caller стартует entry отдельно (WP-PERF-50).
 
 #### Storage name `wilderness_*` (не product bake mode)
 
@@ -1338,6 +1353,7 @@ sequenceDiagram
 | **DEBT-7** | PLAYER_PATH corridor только +X | ✅ `pathHeading.py`; intent/history; без heading — no prefetch |
 | **DEBT-8** | debug routes / `export` мимо facade | ✅ MERGE-9 |
 | **DEBT-9** | pack orchestrators → `api.schemas.ImportResult` | ✅ `PersistResult` |
+| **DEBT-10** | `DELETE /worlds/{uid}` — FK fail → HTTP 500; delete не atomic (half-deleted world после partial purge) | ordered purge / CASCADE + transaction; 409 с blockers; см. [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) § **WP-DELETE-1** |
 
 ---
 
@@ -1768,7 +1784,7 @@ flowchart TB
 
 | ID | Рычаг | Когда |
 |---|---|---|
-| **WP-PERF-50** | `refine_scene=false` на bake | master-only world map (только L0) |
+| **WP-PERF-50** | `refine_scene=false` на light/full bake | **Job boundary:** L0-only bake; entry — отдельная джоба после light (не внутри `mode=light`) |
 | **WP-PERF-51** | P0 tiles only (spawn + locations) | меньше L0 tiles на первом bake |
 | **WP-PERF-52** | attach `fixtures/packs/{uid}/` | cold start без bake |
 | **WP-PERF-53** | `path_ahead_depth` | меньше фоновой очереди на слабых машинах |
@@ -1822,6 +1838,7 @@ flowchart LR
 | [`tz_city_generation.md`](./tz_city_generation.md) | CitySkeleton L1 vs layout L2 lazy |
 | [`project_data_storage_tz.md`](./project_data_storage_tz.md) | schema patch store |
 | [`tz_world_snapshot.md`](./tz_world_snapshot.md) | pack_hash в snapshot |
+| [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | техдолг; § **WP-DELETE-1** ↔ WP-FIX-DEBT-10 |
 
 ---
 
@@ -1829,6 +1846,8 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-20 | § Bake modes **Job boundaries:** L2 ∉ light/full; L2 = detailed \| entry job; entry после light — отдельная джоба |
+| 2026-07-19 | **WP-FIX-DEBT-10** / WP-DELETE-1: `DELETE /worlds` FK-safe purge (link → `tz_generator_technical_debt.md`) |
 | 2026-07-19 | § Read path: **Manifest cache** — stamp `(mtime_ns, size)` + `invalidate_pack` после bake |
 | 2026-07-19 | § Приоритет L0: `world_bounds` = форма мира (AABB) |
 | 2026-07-19 | **Bake modes — контракт мастера:** light = тайлы с локациями; full = весь `world_bounds`; нет product «wilderness» stage; `wilderness_*` = storage legacy |

@@ -648,13 +648,13 @@ flowchart LR
 
 ### Bake modes — terrain + hydrology + climate
 
-> **Утверждено мастером 2026-07-19.** Продуктовый процесс: `light_bake` → `full_bake`; `detailed_bake` — L2 одной локации. Runtime background (rings / path) — отдельно, не четвёртый offline L0 mode.
+> **Утверждено мастером 2026-07-19; job boundaries 2026-07-20.** Продуктовый процесс: `light_bake` → `full_bake` (**только L0**); `detailed_bake` — **L2** одной локации. Entry / rings (WP-13) — **отдельная джоба**, не фаза light/full. Cross-ref: [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § **Job boundaries**.
 
 | Термин | LOD | Pipeline | Scope |
 |---|---|---|---|
-| **light_bake** | L0 (+ climate coarse) | surface → hydrology mask → climate coarse на light canvas | **Все** macro-tiles с `named_locations` **∪ declared hydro** |
-| **full_bake** | L0 (+ climate coarse) | **Тот же** L0 pipeline | **Весь** `world_bounds` (AABB) |
-| **detailed_bake** | L2 `location_terrain` | refine L0 → fine terrain (+ hydro constraints из parent light) + climate fine по territory | **Одна** `location_uid` |
+| **light_bake** | **только L0** (+ climate coarse) | surface → hydrology mask → climate coarse на light canvas | **Все** macro-tiles с `named_locations` **∪ declared hydro** |
+| **full_bake** | **только L0** (+ climate coarse) | **Тот же** L0 pipeline | **Весь** `world_bounds` (AABB) |
+| **detailed_bake** | **L2** `location_terrain` | refine L0 → fine terrain (+ hydro constraints из parent light) + climate fine по territory | **Одна** `location_uid` |
 
 **Инварианты генераторов (все три режима):**
 
@@ -662,6 +662,7 @@ flowchart LR
 2. L2 **не** invents world-map rivers/coast — только refine parent light ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2; hydrology — [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md)).
 3. Base climate на pack-мире — только через bake; `POST generate-climate` → 422 ([`tz_climate.md`](./tz_climate.md) § World Pack climate).
 4. Product L0 process — только light → full; имена `wilderness_*` в pack I/O — storage legacy, не bake mode.
+5. **L2 ∉ light_bake / full_bake.** После light caller **может** стартовать entry job (scene + bg у spawn) — это другая джоба, не часть `pack/bake?mode=light`.
 
 #### Offline completeness (master package)
 
@@ -1692,6 +1693,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 | Дата | Изменение |
 |---|---|
 | 2026-07-19 | § Охват мира: форма = `world_bounds` AABB (квадрат/прямоугольник) |
+| 2026-07-20 | § Bake modes invariant: L2 ∉ light/full; entry после light — отдельная джоба (см. pack storage Job boundaries) |
 | 2026-07-19 | **Bake modes — контракт мастера:** light = тайлы с локациями; full = весь `world_bounds`; без product wilderness stage |
 | 2026-07-16 | Bake modes / TR-PACK **impl status sync:** light/full/detailed ✅; classifier detect ✅; climate fine на detailed ⬜; incremental skip / auto-resume ⬜ |
 | 2026-07-15 | § **Bake modes (locations):** light / full / detailed; offline cases; detect+resume; TR-PACK status sync |

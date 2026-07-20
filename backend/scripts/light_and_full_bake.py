@@ -1,11 +1,14 @@
 """Smoke: light_bake → full_bake on **one** world (same generation).
 
 Unlike ``initialize_world.py`` (single mode), this script:
-1. deletes the fixture world_uid (avoids import remap → new UUID world)
-2. imports once
+1. imports fixture if world missing (clean DB); else reuses skeleton uid
+2. wipes local pack + clears map patches
 3. runs ``mode=light``, then ``mode=full`` without re-import
 4. writes **full transcript + JSON report** under ``.local/map-render/…``
-   (terminal also mirrors, but disk is the source of truth — buffers truncate)
+
+**Workaround WP-DELETE-1** ([``tz_generator_technical_debt.md``](../../docs/tz_generator_technical_debt.md)):
+do **not** call ``DELETE /worlds/{uid}`` — FK fail leaves a half-deleted world.
+Reset = wipe ``db/worlds/{uid}/`` + ``DELETE …/map`` patches only.
 
 Requires a running backend (``npm run backend``) — agents must not start it.
 
@@ -16,7 +19,9 @@ Examples:
 Artifacts (default):
   .local/map-render/{world_uid}/light-and-full/light-and-full-latest.log
   .local/map-render/{world_uid}/light-and-full/light-and-full-latest.json
-  .local/map-render/{world_uid}/light-and-full/light-and-full-{UTC}.log|.json
+  .local/map-render/{world_uid}/light-and-full/light-bake-render-latest.log
+  .local/map-render/{world_uid}/light-and-full/full-bake-render-latest.log
+  .local/map-render/{world_uid}/light-and-full/after-light|after-full/…
 """
 from __future__ import annotations
 
@@ -37,7 +42,7 @@ if str(REPO / "backend") not in sys.path:
     sys.path.insert(0, str(REPO / "backend"))
 
 from app.application.worldData.pack.import_.importLevels import filter_bundle_for_export
-from debug_api_helpers import DebugApiError, _require_ok, api_clear_map, api_client, api_delete_world
+from debug_api_helpers import DebugApiError, _require_ok, api_clear_map, api_client
 from debug_surface_helpers import (
     api_list_bootstrap_tiles,
     api_loading_progress,
@@ -337,6 +342,55 @@ def _wipe_local_pack(world_uid: str) -> None:
         print(f"wiped local pack dir: {pack_root}")
 
 
+def _write_stage_render_log(
+    path: Path,
+    *,
+    stage: str,
+    world_uid: str,
+    summary: dict[str, Any],
+) -> None:
+    """Write a standalone log with render summary + world-map ASCII for one bake stage."""
+    lines: list[str] = [
+        f"stage={stage}",
+        f"world_uid={world_uid}",
+        f"generated_at={datetime.now(timezone.utc).isoformat()}",
+        f"run_dir={summary.get('run_dir')}",
+        f"index={summary.get('index')}",
+        f"world_map_path={summary.get('world_map')}",
+        f"world_height_path={summary.get('world_height')}",
+        f"tile_count={summary.get('tile_count')}",
+        f"location_terrain_count={summary.get('location_terrain_count')}",
+        f"location_pin_count={summary.get('location_pin_count')}",
+        f"read_path={summary.get('read_path')}",
+        f"world_read_mode={summary.get('world_read_mode')}",
+        f"locations_read_mode={summary.get('locations_read_mode')}",
+        "",
+        "=== world-map.txt ===",
+        "",
+    ]
+    world_map_rel = summary.get("world_map")
+    if world_map_rel:
+        world_map_abs = REPO / str(world_map_rel)
+        if world_map_abs.is_file():
+            lines.append(world_map_abs.read_text(encoding="utf-8").rstrip())
+        else:
+            lines.append(f"(missing file: {world_map_abs})")
+    else:
+        lines.append("(no world_map in summary)")
+
+    height_rel = summary.get("world_height")
+    if height_rel:
+        lines.extend(["", "=== world-height.txt ===", ""])
+        height_abs = REPO / str(height_rel)
+        if height_abs.is_file():
+            lines.append(height_abs.read_text(encoding="utf-8").rstrip())
+        else:
+            lines.append(f"(missing file: {height_abs})")
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def _print_delta_report(
     *,
     world_uid: str,
@@ -421,18 +475,13 @@ def main() -> None:
     parser.add_argument(
         "--reuse",
         action="store_true",
-        help="skip delete/import; bake light→full on existing --world-uid",
+        help="require existing world_uid; skip import (WP-DELETE-1: no DELETE world)",
     )
     parser.add_argument(
         "--render",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="After full bake: dump L0 ASCII (default: on)",
-    )
-    parser.add_argument(
-        "--render-after-light",
-        action="store_true",
-        help="Also dump render after light (into …/after-light)",
+        help="Dump L0 ASCII after light and after full + stage render logs (default: on)",
     )
     parser.add_argument(
         "--render-out",
@@ -460,6 +509,10 @@ def main() -> None:
     log_stamped = out_root / f"light-and-full-{stamp}.log"
     json_latest = out_root / "light-and-full-latest.json"
     json_stamped = out_root / f"light-and-full-{stamp}.json"
+    light_render_log = out_root / "light-bake-render-latest.log"
+    light_render_stamped = out_root / f"light-bake-render-{stamp}.log"
+    full_render_log = out_root / "full-bake-render-latest.log"
+    full_render_stamped = out_root / f"full-bake-render-{stamp}.log"
 
     with _tee_stdio(log_latest):
         print(f"report dir: {out_root}")
@@ -468,10 +521,32 @@ def main() -> None:
         with api_client() as client:
             client.timeout = _DEFAULT_TIMEOUT_S
 
-            if not args.reuse:
-                print(f"reset world for stable uid: {world_uid}")
-                api_delete_world(client, world_uid)
-                _wipe_local_pack(world_uid)
+            # WP-DELETE-1 workaround: never DELETE /worlds/{uid} (FK → 500 / half-delete).
+            print(
+                "WP-DELETE-1 workaround: skip DELETE world; "
+                "reset = wipe pack dir + clear map patches only"
+            )
+            _wipe_local_pack(world_uid)
+            existing = client.get(f"/worlds/{world_uid}")
+            if args.reuse:
+                if existing.status_code != 200:
+                    raise SystemExit(
+                        f"--reuse: world '{world_uid}' not found "
+                        f"(HTTP {existing.status_code})",
+                    )
+                print(f"reuse skeleton world: {world_uid}")
+            elif existing.status_code == 200:
+                print(
+                    f"world '{world_uid}' already exists — reuse skeleton "
+                    f"(re-import would remap to a new UUID)"
+                )
+            else:
+                before = {
+                    w.get("world_uid")
+                    for w in (client.get("/worlds").json() or [])
+                    if isinstance(w, dict)
+                }
+                print(f"import fixture → {world_uid}")
                 imp = _import_fixture(client, str(fixture))
                 print(
                     "import:",
@@ -482,19 +557,36 @@ def main() -> None:
                 )
                 r = client.get(f"/worlds/{world_uid}")
                 if r.status_code != 200:
-                    raise SystemExit(
-                        f"after import, world '{world_uid}' missing "
-                        f"(HTTP {r.status_code}) — remapped? use --reuse with real uid",
-                    )
-                api_clear_map(client, world_uid)
-                print(f"cleared map patches: {world_uid}")
-            else:
-                print(f"reuse existing world: {world_uid}")
-                r = client.get(f"/worlds/{world_uid}")
-                if r.status_code != 200:
-                    raise SystemExit(
-                        f"world '{world_uid}' not found (HTTP {r.status_code})",
-                    )
+                    after = {
+                        w.get("world_uid")
+                        for w in (client.get("/worlds").json() or [])
+                        if isinstance(w, dict)
+                    }
+                    created = sorted(uid for uid in (after - before) if uid)
+                    if len(created) == 1:
+                        world_uid = created[0]
+                        print(
+                            f"NOTE: import remapped uid → {world_uid} "
+                            f"(fixture uid missing after import)"
+                        )
+                        out_root = args.render_out or (
+                            REPO / ".local" / "map-render" / world_uid / "light-and-full"
+                        )
+                        log_latest = out_root / "light-and-full-latest.log"
+                        json_latest = out_root / "light-and-full-latest.json"
+                        json_stamped = out_root / f"light-and-full-{stamp}.json"
+                        light_render_log = out_root / "light-bake-render-latest.log"
+                        light_render_stamped = out_root / f"light-bake-render-{stamp}.log"
+                        full_render_log = out_root / "full-bake-render-latest.log"
+                        full_render_stamped = out_root / f"full-bake-render-{stamp}.log"
+                    else:
+                        raise SystemExit(
+                            f"after import, world '{world_uid}' missing "
+                            f"(HTTP {r.status_code}); new uids={created!r} — "
+                            f"pass --world-uid explicitly",
+                        )
+            api_clear_map(client, world_uid)
+            print(f"cleared map patches: {world_uid}")
 
             light_plan = api_list_bootstrap_tiles(
                 client, world_uid, max_tiles=args.max_tiles, scope="light",
@@ -523,15 +615,23 @@ def main() -> None:
             after_light = _snapshot_pack(world_uid)
             _print_stage_inventory("light_bake", after_light)
 
-            if args.render and args.render_after_light:
+            if args.render:
                 print("\n=== map render after light ===")
-                summary = dump_map_renders(
+                light_summary = dump_map_renders(
                     client,
                     world_uid,
                     out_root=out_root / "after-light",
                     mark_locations=args.mark_locations,
                 )
-                _print_summary(summary)
+                _print_summary(light_summary)
+                _write_stage_render_log(
+                    light_render_log,
+                    stage="light_bake",
+                    world_uid=world_uid,
+                    summary=light_summary,
+                )
+                shutil.copyfile(light_render_log, light_render_stamped)
+                print(f"light bake render log: {light_render_log}")
 
             _run_bake(client, world_uid, mode="full", max_tiles=None)
             after_full = _snapshot_pack(world_uid)
@@ -560,13 +660,21 @@ def main() -> None:
 
             if args.render:
                 print("\n=== map render after full ===")
-                summary = dump_map_renders(
+                full_summary = dump_map_renders(
                     client,
                     world_uid,
                     out_root=out_root / "after-full",
                     mark_locations=args.mark_locations,
                 )
-                _print_summary(summary)
+                _print_summary(full_summary)
+                _write_stage_render_log(
+                    full_render_log,
+                    stage="full_bake",
+                    world_uid=world_uid,
+                    summary=full_summary,
+                )
+                shutil.copyfile(full_render_log, full_render_stamped)
+                print(f"full bake render log: {full_render_log}")
                 print(f"render root: {out_root}")
 
         # Stamp a copy of the full transcript after tee closes its handle…
