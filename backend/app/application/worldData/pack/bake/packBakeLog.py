@@ -81,16 +81,14 @@ def log_pack_bake_start(
     *,
     tile_cap: int | None,
     tiles_planned: int,
-    refine_scene: bool,
     locations: int,
     terrain_workers: int | None = None,
 ) -> float:
     _info(
-        "pack bake start | world=%s tile_cap=%s tiles_planned=%d refine_scene=%s locations=%d terrain_workers=%s",
+        "pack bake start | world=%s tile_cap=%s tiles_planned=%d locations=%d terrain_workers=%s",
         world_uid,
         tile_cap if tile_cap is not None else "none",
         tiles_planned,
-        refine_scene,
         locations,
         terrain_workers if terrain_workers is not None else "-",
         activity="bake_orchestrate",

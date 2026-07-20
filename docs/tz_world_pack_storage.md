@@ -323,7 +323,7 @@ flowchart LR
 | `full_bake` = только все location L0 | `full_bake` = **весь** `world_bounds` L0 |
 | P2 / «wilderness L0» как третий bake stage | **не** product mode; остаток bounds входит в `full_bake` |
 | L2 / entry refine **внутри** light или full bake | **запрещено** product-контрактом; L2 = detailed \| entry job |
-| `refine_scene` вшитый в `pack/bake?mode=light` | ✅ закрыто: `refine_scene_on_light=False` (WP-PERF-50); entry = отдельная джоба |
+| `refine_scene` вшитый в `pack/bake?mode=light` | ✅ закрыто (WP-PERF-50): параметр убран из L0 bake; entry = отдельная джоба |
 | Имена файлов `wilderness_chunk` / layer `wilderness` | **storage/impl legacy** — см. § ниже; не путать с bake process |
 | Runtime rings | L2 дозаполнение у игрока; **не** замена `full_bake` L0 |
 
@@ -358,7 +358,7 @@ flowchart LR
 | L2 fine chunks вне локаций absent | runtime rings / path — **не** блокирует case 2→3 | ✅ rings path |
 
 **Impl vs ТЗ:** wire `mode=light\|full\|detailed` ✅; `PackTilePlanner` scope ✅; classifier uses planner ✅; `--max-tiles` / query = debug override only (0 = uncapped).  
-**Job boundary:** `PackBakeDefaults.refine_scene_on_light/full=False` ✅ (WP-PERF-50); entry — `POST …/refine-from-entry` / `initialize_world --entry`, не внутри bake.
+**Job boundary:** L0 bake path без `refine_scene` ✅ (WP-PERF-50); entry — `POST …/refine-from-entry` / `initialize_world --entry`, не внутри bake.
 
 #### Storage name `wilderness_*` (не product bake mode)
 
@@ -1784,7 +1784,7 @@ flowchart TB
 
 | ID | Рычаг | Когда |
 |---|---|---|
-| **WP-PERF-50** | `refine_scene=false` на light/full bake | **Job boundary:** L0-only bake; entry — отдельная джоба после light | ✅ `refine_scene_on_light/full=False` |
+| **WP-PERF-50** | L0-only light/full bake | **Job boundary:** нет `refine_scene` в bake path; entry — отдельная джоба | ✅ параметр убран; entry HTTP отдельно |
 | **WP-PERF-51** | P0 tiles only (spawn + locations) | меньше L0 tiles на первом bake |
 | **WP-PERF-52** | attach `fixtures/packs/{uid}/` | cold start без bake |
 | **WP-PERF-53** | `path_ahead_depth` | меньше фоновой очереди на слабых машинах |
@@ -1846,7 +1846,7 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
-| 2026-07-20 | **WP-PERF-50 ✅:** light/full L0-only (`refine_scene_on_*=False`); entry = отдельная джоба |
+| 2026-07-20 | **WP-PERF-50 ✅:** light/full L0-only; `refine_scene` убран из bake path; entry = отдельная джоба |
 | 2026-07-20 | § Bake modes **Job boundaries:** L2 ∉ light/full; L2 = detailed \| entry job; entry после light — отдельная джоба |
 | 2026-07-19 | **WP-FIX-DEBT-10** / WP-DELETE-1: `DELETE /worlds` FK-safe purge (link → `tz_generator_technical_debt.md`) |
 | 2026-07-19 | § Read path: **Manifest cache** — stamp `(mtime_ns, size)` + `invalidate_pack` после bake |

@@ -106,13 +106,14 @@ async def bake_world_pack(
     location_uid: str | None = Query(default=None),
     anchor_x: int | None = Query(default=None),
     anchor_y: int | None = Query(default=None),
-    heading_dx: int | None = Query(default=None),
-    heading_dy: int | None = Query(default=None),
     free_cores: int | None = Query(default=None, ge=1),
     parallel_workers: int | None = Query(default=None, ge=1),
     container=Depends(get_container),
 ) -> JSONResponse:
-    """Debug — bake World Pack: light_bake / full_bake / detailed_bake (WP-27)."""
+    """Debug — bake World Pack: light_bake / full_bake / detailed_bake (WP-27).
+
+    L0 only for light/full. Entry/L2 → ``POST …/map/refine-from-entry``.
+    """
     stack = container.surface_materialization_orchestrator()
     world_svc = container.world_service()
     location_svc = container.location_service()
@@ -137,7 +138,6 @@ async def bake_world_pack(
             location_uid=location_uid,
             nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
             anchor_x=anchor_x, anchor_y=anchor_y,
-            heading_dx=heading_dx, heading_dy=heading_dy,
         )
     except MissingParentLightError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

@@ -25,11 +25,6 @@ class PackBakeDefaults(BaseModel):
     smoke_max_refine_queue_depth: int = Field(default=200, ge=0)
     # Pack ASCII: mosaic only when tile count ≤ this (else macro aggregate).
     light_mosaic_max_tiles: int = Field(default=16, ge=1)
-    # L0 bake only (Job boundaries). Entry/L2 = separate job (refine-from-entry /
-    # detailed_bake), never part of light/full. Explicit refine_scene=True override
-    # remains for tests only — product defaults stay False.
-    refine_scene_on_light: bool = False
-    refine_scene_on_full: bool = False
     detailed_include_climate_fine: bool = True
     # When to write r.{gx}.{gy}.climate.zst on light/full L0 bake.
     light_fine_tile_policy: LightFineTilePolicy = "spawn_player"

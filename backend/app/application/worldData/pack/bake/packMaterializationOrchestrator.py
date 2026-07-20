@@ -1,4 +1,8 @@
-"""Pack L0 materialization — light_bake / full_bake share one body (WP-27)."""
+"""Pack L0 materialization — light_bake / full_bake share one body (WP-27).
+
+L0 only (Job boundaries). Entry/L2 — ``EntryRefineOrchestrator`` /
+``POST …/refine-from-entry``, never this path.
+"""
 
 from __future__ import annotations
 
@@ -111,9 +115,6 @@ class PackMaterializationOrchestrator:
         hydrology_generator: HydrologyGeneratorService | None = None,
         anchor_x: int | None = None,
         anchor_y: int | None = None,
-        heading_dx: int | None = None,
-        heading_dy: int | None = None,
-        refine_scene: bool | None = None,
     ) -> MaterializationJobReport:
         with generation_world_log(world_uid, mode="light"):
             return await self._materialize_l0_pack(
@@ -129,13 +130,6 @@ class PackMaterializationOrchestrator:
                 hydrology_generator=hydrology_generator,
                 anchor_x=anchor_x,
                 anchor_y=anchor_y,
-                heading_dx=heading_dx,
-                heading_dy=heading_dy,
-                refine_scene=(
-                    self._defaults.refine_scene_on_light
-                    if refine_scene is None
-                    else refine_scene
-                ),
             )
 
     async def materialize_full_pack(
@@ -149,7 +143,6 @@ class PackMaterializationOrchestrator:
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
         hydrology_generator: HydrologyGeneratorService | None = None,
-        refine_scene: bool | None = None,
     ) -> MaterializationJobReport:
         """full_bake — same L0 pipeline, all macro-tiles in world_bounds / resolved AABB."""
         with generation_world_log(world_uid, mode="full"):
@@ -164,11 +157,6 @@ class PackMaterializationOrchestrator:
                 nodes=nodes,
                 edges=edges,
                 hydrology_generator=hydrology_generator,
-                refine_scene=(
-                    self._defaults.refine_scene_on_full
-                    if refine_scene is None
-                    else refine_scene
-                ),
             )
 
     async def _materialize_l0_pack(
@@ -186,9 +174,6 @@ class PackMaterializationOrchestrator:
         hydrology_generator: HydrologyGeneratorService | None = None,
         anchor_x: int | None = None,
         anchor_y: int | None = None,
-        heading_dx: int | None = None,
-        heading_dy: int | None = None,
-        refine_scene: bool = False,
     ) -> MaterializationJobReport:
         surface_ctx = require_surface_terrain_context(
             world, locations, nodes=nodes, edges=edges,
@@ -203,7 +188,6 @@ class PackMaterializationOrchestrator:
             world_uid,
             tile_cap=plan.cap_applied if plan.cap_applied is not None else -1,
             tiles_planned=len(tiles),
-            refine_scene=refine_scene,
             locations=len(locations),
             terrain_workers=resolve_terrain_workers(mat_ctx, world),
         )
@@ -233,8 +217,6 @@ class PackMaterializationOrchestrator:
             bake_mode=bake_mode,
         )
         terrain_result = PersistResult.from_counts(world_map_cells, world_map_cells)
-        chunks_done = 0
-        chunks_total = 0
 
         climate_fine_tiles = self._climate.bake_fine_for_l0_policy(
             world, surface_ctx, writer, tiles, locations,
@@ -249,51 +231,6 @@ class PackMaterializationOrchestrator:
             )
         elif climate_fine_tiles:
             climate_result = PersistResult.from_counts(climate_fine_tiles, climate_fine_tiles)
-
-        if refine_scene and tiles:
-            ax = anchor_x
-            ay = anchor_y
-            if ax is None or ay is None:
-                for loc in locations:
-                    if loc.map_x is not None and loc.map_y is not None:
-                        ax = loc.map_x
-                        ay = loc.map_y
-                        break
-            if ax is None or ay is None:
-                raise ValueError(
-                    "pack L0 bake refine requires anchor_x/anchor_y "
-                    "or a location with map_x/map_y",
-                )
-            entry = await self._entry.refine_from_entry(
-                world_uid, world, locations, writer, mat_ctx, surface_ctx,
-                kind="session_start",
-                anchor_x=ax,
-                anchor_y=ay,
-                heading_dx=heading_dx,
-                heading_dy=heading_dy,
-            )
-            scheduled = await self._entry.schedule_chunk_refine(
-                world_uid, world, locations, writer, mat_ctx, surface_ctx,
-                anchor_x=ax,
-                anchor_y=ay,
-                tile_gx=entry.tile_gx,
-                tile_gy=entry.tile_gy,
-                heading=entry.heading,
-            )
-            terrain_result = entry.terrain
-            chunks_done = entry.chunks_done
-            chunks_total = entry.chunks_total
-            # Legacy drain may still bake fine if something else enqueued.
-            extra_fine = scheduled.climate_fine_tiles
-            if extra_fine:
-                climate_fine_tiles += extra_fine
-                if climate_result is not None:
-                    climate_result = PersistResult.from_counts(
-                        climate_result.total + extra_fine,
-                        climate_result.succeeded + extra_fine,
-                    )
-                else:
-                    climate_result = PersistResult.from_counts(extra_fine, extra_fine)
 
         if self._world_service is not None:
             read_ctx = self._read_context
@@ -312,16 +249,16 @@ class PackMaterializationOrchestrator:
         log_pack_bake_done(
             world_uid,
             world_map_cells=world_map_cells,
-            chunks_done=chunks_done,
-            chunks_total=chunks_total,
+            chunks_done=0,
+            chunks_total=0,
             queue_depth=queue_depth,
             started_at=bake_t0,
         )
         return MaterializationJobReport(
             terrain=terrain_result,
             climate=climate_result,
-            chunks_done=chunks_done,
-            chunks_total=chunks_total,
+            chunks_done=0,
+            chunks_total=0,
             terrain_workers=workers,
             climate_workers=0,
             elapsed_s=elapsed_s,

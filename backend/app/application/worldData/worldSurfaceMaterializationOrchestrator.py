@@ -59,11 +59,11 @@ class WorldSurfaceMaterializationOrchestrator:
         hydrology_generator: HydrologyGeneratorService | None = None,
         anchor_x: int | None = None,
         anchor_y: int | None = None,
-        heading_dx: int | None = None,
-        heading_dy: int | None = None,
-        refine_scene: bool | None = None,
     ) -> PackBakeResult:
-        """Single application entry for HTTP ``mode=light|full|detailed``."""
+        """Single application entry for HTTP ``mode=light|full|detailed``.
+
+        L0 only for light/full (Job boundaries). Entry/L2 → refine-from-entry.
+        """
         if mode == "light":
             report = await self.materialize_pack_light(
                 world_uid, world, locations, ctx, pack_writer,
@@ -71,7 +71,6 @@ class WorldSurfaceMaterializationOrchestrator:
                 nodes=nodes, edges=edges,
                 hydrology_generator=hydrology_generator,
                 anchor_x=anchor_x, anchor_y=anchor_y,
-                heading_dx=heading_dx, heading_dy=heading_dy,
             )
             return PackBakeResult(
                 mode=mode,
@@ -83,7 +82,6 @@ class WorldSurfaceMaterializationOrchestrator:
                 world_uid, world, locations, ctx, pack_writer,
                 nodes=nodes, edges=edges,
                 hydrology_generator=hydrology_generator,
-                refine_scene=refine_scene,
             )
             return PackBakeResult(
                 mode=mode,
@@ -142,8 +140,6 @@ class WorldSurfaceMaterializationOrchestrator:
         hydrology_generator: HydrologyGeneratorService | None = None,
         anchor_x: int | None = None,
         anchor_y: int | None = None,
-        heading_dx: int | None = None,
-        heading_dy: int | None = None,
         pack_orchestrator: PackMaterializationOrchestrator | None = None,
     ) -> MaterializationJobReport:
         orch = pack_orchestrator if pack_orchestrator is not None else self._pack
@@ -153,7 +149,6 @@ class WorldSurfaceMaterializationOrchestrator:
             nodes=nodes, edges=edges,
             hydrology_generator=hydrology_generator,
             anchor_x=anchor_x, anchor_y=anchor_y,
-            heading_dx=heading_dx, heading_dy=heading_dy,
         )
 
     async def materialize_pack_full(
@@ -167,13 +162,11 @@ class WorldSurfaceMaterializationOrchestrator:
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
         hydrology_generator: HydrologyGeneratorService | None = None,
-        refine_scene: bool | None = None,
     ) -> MaterializationJobReport:
         return await self._pack.materialize_full_pack(
             world_uid, world, locations, pack_writer, ctx,
             nodes=nodes, edges=edges,
             hydrology_generator=hydrology_generator,
-            refine_scene=refine_scene,
         )
 
     async def materialize_pack_detailed(

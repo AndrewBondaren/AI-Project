@@ -100,8 +100,6 @@ def api_pack_bake(
     location_uid: str | None = None,
     anchor_x: int | None = None,
     anchor_y: int | None = None,
-    heading_dx: int | None = None,
-    heading_dy: int | None = None,
 ) -> dict:
     """Canonical L0 pack bake — ``POST …/map/pack/bake`` (light/full/detailed).
 
@@ -117,10 +115,6 @@ def api_pack_bake(
         params["anchor_x"] = anchor_x
     if anchor_y is not None:
         params["anchor_y"] = anchor_y
-    if heading_dx is not None:
-        params["heading_dx"] = heading_dx
-    if heading_dy is not None:
-        params["heading_dy"] = heading_dy
     r = client.post(f"/worlds/{world_uid}/map/pack/bake", params=params)
     _require_ok(r, f"POST pack/bake {world_uid}")
     data = r.json()
