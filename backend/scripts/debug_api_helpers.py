@@ -101,9 +101,9 @@ def api_pack_bake(
     anchor_x: int | None = None,
     anchor_y: int | None = None,
 ) -> dict:
-    """Canonical L0 pack bake — ``POST …/map/pack/bake`` (light/full/detailed).
+    """``POST …/map/pack/bake`` — light/full (L0) or detailed (L2 one location).
 
-    Does **not** run entry/L2 refine (Job boundaries). Use ``api_refine_from_entry``.
+    detailed requires ``location_uid``. Entry/bg refine is separate — ``api_refine_from_entry``.
     """
     params: dict[str, str | int] = {"mode": mode}
     if mode == "light":
@@ -120,6 +120,15 @@ def api_pack_bake(
     data = r.json()
     if not isinstance(data, dict):
         raise DebugApiError(f"pack/bake {world_uid}: expected object, got {type(data)}")
+    return data
+
+
+def api_list_locations(client: httpx.Client, world_uid: str) -> list[dict]:
+    r = client.get(f"/worlds/{world_uid}/locations")
+    _require_ok(r, f"GET locations {world_uid}")
+    data = r.json()
+    if not isinstance(data, list):
+        raise DebugApiError(f"GET locations {world_uid}: expected list, got {type(data)}")
     return data
 
 
@@ -154,6 +163,37 @@ def api_refine_from_entry(
     if not isinstance(data, dict):
         raise DebugApiError(
             f"refine-from-entry {world_uid}: expected object, got {type(data)}"
+        )
+    return data
+
+
+def api_schedule_chunk_refine(
+    client: httpx.Client,
+    world_uid: str,
+    *,
+    x: int,
+    y: int,
+    tile_gx: int | None = None,
+    tile_gy: int | None = None,
+    heading_dx: int | None = None,
+    heading_dy: int | None = None,
+) -> dict:
+    """Background rings / path-ahead only — ``POST …/map/schedule-chunk-refine``."""
+    params: dict[str, str | int] = {"x": int(x), "y": int(y)}
+    if tile_gx is not None:
+        params["tile_gx"] = int(tile_gx)
+    if tile_gy is not None:
+        params["tile_gy"] = int(tile_gy)
+    if heading_dx is not None:
+        params["heading_dx"] = int(heading_dx)
+    if heading_dy is not None:
+        params["heading_dy"] = int(heading_dy)
+    r = client.post(f"/worlds/{world_uid}/map/schedule-chunk-refine", params=params)
+    _require_ok(r, f"POST schedule-chunk-refine {world_uid} ({x},{y})")
+    data = r.json()
+    if not isinstance(data, dict):
+        raise DebugApiError(
+            f"schedule-chunk-refine {world_uid}: expected object, got {type(data)}"
         )
     return data
 

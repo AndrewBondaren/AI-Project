@@ -16,8 +16,10 @@ from debug_api_helpers import (
     DebugApiError,
     _require_ok,
     api_client,
+    api_list_locations,
     api_pack_bake,
     api_refine_from_entry,
+    api_schedule_chunk_refine,
 )
 
 # Re-export mode typing from helpers module contract
@@ -73,7 +75,9 @@ __all__ = [
     "PackBakeMode",
     "api_client",
     "api_list_bootstrap_tiles",
+    "api_list_locations",
     "api_loading_progress",
     "api_pack_bake",
     "api_refine_from_entry",
+    "api_schedule_chunk_refine",
 ]
