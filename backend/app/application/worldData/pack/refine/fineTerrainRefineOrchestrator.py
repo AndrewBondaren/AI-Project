@@ -9,10 +9,7 @@ from __future__ import annotations
 
 from app.application.worldData.persistResult import PersistResult
 from app.application.worldData.generators.coordinates import cell_size_m
-from app.application.worldData.generators.coordinates.worldTile import (
-    iter_meter_chunks,
-    meter_bbox_for_tile,
-)
+from app.application.worldData.generators.coordinates.worldTile import meter_bbox_for_tile
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.generators.terrain.worldMapSettings import (
     terrain_chunk_columns,
@@ -44,6 +41,7 @@ from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volumes_by_location,
 )
 from app.application.worldData.pack.read.packMapHelpers import tile_for_anchor
+from app.application.worldData.pack.refine.meterChunkGeom import rects_for_macro_tile
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
 from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
@@ -79,10 +77,8 @@ class FineTerrainRefineOrchestrator:
         loc_volumes = location_volumes or [
             vol for _, vol in territory_volumes_by_location(world, locations)
         ]
-        cell_m = cell_size_m(world)
-        meter_bbox = meter_bbox_for_tile(tile_gx, tile_gy, cell_m)
+        rects = rects_for_macro_tile(world, tile_gx, tile_gy)
         chunk_size = terrain_chunk_columns(world)
-        rects = list(iter_meter_chunks(meter_bbox, chunk_size))
         scene_rects = [
             rect for rect in rects
             if chunk_within_ring(rect, float(anchor_x), float(anchor_y), float(xy_radius), chunk_size)

@@ -30,8 +30,13 @@ class PackBakeResult:
         elif isinstance(self.detailed, PackDetailedBakeResult):
             payload = {
                 **self.detailed.terrain.to_dict(),
+                "scope": self.detailed.scope,
+                "tiles_refined": self.detailed.tiles_refined,
+                "wilderness_chunks": self.detailed.wilderness_chunks,
                 "climate_fine_tiles": self.detailed.climate_fine_tiles,
             }
+            if self.detailed.location_uid is not None:
+                payload["location_uid"] = self.detailed.location_uid
         elif self.detailed is not None:
             payload = self.detailed.to_dict()
         else:

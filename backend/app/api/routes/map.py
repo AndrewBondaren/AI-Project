@@ -4,6 +4,7 @@ Production materialization runs through **engine DAG nodes** (not these routes).
 
 Canonical debug harness:
 - ``POST …/map/pack/bake?mode=light|full|detailed`` — L0 / detailed L2 (WP-27)
+  (detailed: ``scope=location|wilderness``; location needs ``location_uid``)
 - ``POST …/map/refine-from-entry`` / ``schedule-chunk-refine``
 - ``GET …/map/render-*``, ``pack/fine-terrain-read``, ``loading-progress``, ``bootstrap-tiles``
 
@@ -28,6 +29,7 @@ from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_o
 from app.application.worldData.pack.read.parentLightLoad import MissingParentLightError
 from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
+from app.dataModel.worldPack.detailedBakeScope import DetailedBakeScopeKind
 from app.dataModel.worldPack.packBakeMode import PackBakeApiMode
 from app.dataModel.worldPack.packTilePlan import PackTilePlanScope
 
@@ -101,9 +103,19 @@ async def bake_world_pack(
     max_tiles: int = Query(
         default=0,
         ge=0,
-        description="Debug cap for light_bake only; 0=uncapped (all location tiles)",
+        description=(
+            "Debug cap: light_bake location tiles; detailed scope=wilderness L0 tiles; "
+            "0=uncapped"
+        ),
     ),
-    location_uid: str | None = Query(default=None),
+    scope: DetailedBakeScopeKind | None = Query(
+        default=None,
+        description="detailed only: location | wilderness (required unless location_uid)",
+    ),
+    location_uid: str | None = Query(
+        default=None,
+        description="detailed scope=location: required location_uid",
+    ),
     anchor_x: int | None = Query(default=None),
     anchor_y: int | None = Query(default=None),
     free_cores: int | None = Query(default=None, ge=1),
@@ -112,7 +124,8 @@ async def bake_world_pack(
 ) -> JSONResponse:
     """Debug — bake World Pack: light_bake / full_bake / detailed_bake (WP-27).
 
-    L0 only for light/full. Entry/L2 → ``POST …/map/refine-from-entry``.
+    L0 only for light/full. L2 offline: ``mode=detailed&scope=location|wilderness``.
+    Entry/runtime L2 → ``POST …/map/refine-from-entry``.
     """
     stack = container.surface_materialization_orchestrator()
     world_svc = container.world_service()
@@ -136,6 +149,7 @@ async def bake_world_pack(
             mode=mode,
             max_tiles=max_tiles,
             location_uid=location_uid,
+            detailed_scope=scope,
             nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
             anchor_x=anchor_x, anchor_y=anchor_y,
         )

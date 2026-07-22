@@ -24,6 +24,10 @@ from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
 from app.application.worldData.pack.read.parentLightCache import ParentLightCache
 from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
+from app.dataModel.worldPack.wildernessRefineStatus import (
+    wilderness_refine_status_for_counts,
+    wilderness_refine_status_without_expected,
+)
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
 from app.dataModel.worldPack.parentLightTile import ParentLightTile
@@ -32,6 +36,7 @@ from app.dataModel.worldPack.worldPackManifest import (
     ChunkRef,
     ChunkRefineRole,
     TileManifestEntry,
+    WildernessRefineStatus,
     WorldPackManifest,
 )
 from app.db.models.world import World
@@ -259,6 +264,7 @@ class WorldPackWriter:
         nbytes: int | None = None,
         refine_role: ChunkRefineRole | None = None,
     ) -> None:
+        """Append/replace chunk ref; status via ``recalc_wilderness_status`` (single writer)."""
         tile = self._upsert_tile(gx, gy)
         chunks = [c for c in tile.chunks if not (c.cx == cx and c.cy == cy)]
         chunks.append(
@@ -270,8 +276,31 @@ class WorldPackWriter:
                 bytes=nbytes,
             ),
         )
-        updated = tile.model_copy(update={"chunks": chunks, "wilderness_refine_status": "partial"})
-        self._replace_tile(updated)
+        self._replace_tile(tile.model_copy(update={"chunks": chunks}))
+        # Unknown full-tile expected → provisional partial/absent (entry/rings).
+        self.recalc_wilderness_status(gx, gy, expected_chunks=None)
+
+    def recalc_wilderness_status(
+        self,
+        gx: int,
+        gy: int,
+        *,
+        expected_chunks: int | None = None,
+    ) -> WildernessRefineStatus:
+        """Sole setter for ``wilderness_refine_status`` (WP-12).
+
+        ``expected_chunks is None`` → entry/runtime provisional status.
+        Otherwise → complete/partial/absent from baked vs expected counts.
+        """
+        tile = self._upsert_tile(gx, gy)
+        if expected_chunks is None:
+            status = wilderness_refine_status_without_expected(len(tile.chunks))
+        else:
+            status = wilderness_refine_status_for_counts(len(tile.chunks), expected_chunks)
+        if tile.wilderness_refine_status == status:
+            return status
+        self._replace_tile(tile.model_copy(update={"wilderness_refine_status": status}))
+        return status
 
     def recalc_manifest_counters(self) -> None:
         side = self._manifest.world_map_cells_per_tile

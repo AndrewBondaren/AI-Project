@@ -23,6 +23,11 @@ from app.application.worldData.materializationContext import (
     MaterializationContext,
     MaterializationJobReport,
 )
+from app.dataModel.worldPack.detailedBakeScope import (
+    DetailedBakeRequest,
+    DetailedBakeScopeKind,
+    resolve_detailed_bake_request,
+)
 from app.dataModel.worldPack.packBakeMode import PackBakeApiMode
 from app.dataModel.worldPack.packTilePlan import PackTilePlanScope
 from app.db.models.connectionEdge import ConnectionEdge
@@ -54,6 +59,8 @@ class WorldSurfaceMaterializationOrchestrator:
         mode: PackBakeApiMode,
         max_tiles: int | None = None,
         location_uid: str | None = None,
+        detailed_scope: DetailedBakeScopeKind | None = None,
+        detailed_request: DetailedBakeRequest | None = None,
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
         hydrology_generator: HydrologyGeneratorService | None = None,
@@ -62,7 +69,8 @@ class WorldSurfaceMaterializationOrchestrator:
     ) -> PackBakeResult:
         """Single application entry for HTTP ``mode=light|full|detailed``.
 
-        L0 only for light/full (Job boundaries). Entry/L2 → refine-from-entry.
+        L0 only for light/full (Job boundaries). Entry/L2 → refine-from-entry
+        or ``mode=detailed`` with typed scope / ``DetailedBakeRequest``.
         """
         if mode == "light":
             report = await self.materialize_pack_light(
@@ -89,10 +97,13 @@ class WorldSurfaceMaterializationOrchestrator:
                 report=report,
             )
         if mode == "detailed":
-            if not location_uid:
-                raise ValueError("mode=detailed requires location_uid")
+            request = detailed_request or resolve_detailed_bake_request(
+                scope=detailed_scope,
+                location_uid=location_uid,
+                max_tiles=max_tiles or 0,
+            )
             detailed = await self.materialize_pack_detailed(
-                world, locations, ctx, pack_writer, location_uid,
+                world, locations, ctx, pack_writer, request,
                 nodes=nodes, edges=edges,
                 hydrology_generator=hydrology_generator,
             )
@@ -175,7 +186,7 @@ class WorldSurfaceMaterializationOrchestrator:
         locations: list[NamedLocation],
         ctx: MaterializationContext,
         pack_writer,
-        location_uid: str,
+        request: DetailedBakeRequest,
         *,
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
@@ -185,6 +196,6 @@ class WorldSurfaceMaterializationOrchestrator:
             world, locations, nodes=nodes, edges=edges,
             hydrology_generator=hydrology_generator,
         )
-        return await self._detailed.bake_location(
-            world, locations, pack_writer, ctx, surface_ctx, location_uid,
+        return await self._detailed.bake(
+            world, locations, pack_writer, ctx, surface_ctx, request,
         )

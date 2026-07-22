@@ -30,6 +30,16 @@ from app.dataModel.worldPack.worldMapCellsPerTile import (
 from app.dataModel.worldPack.lightSettlementFootprint import LightSettlementFootprintPolicy
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults, resolve_light_tile_cap
 from app.dataModel.worldPack.packBakeMode import PackBakeApiMode, PackBakeMode
+from app.dataModel.worldPack.detailedBakeScope import (
+    DetailedBakeRequest,
+    DetailedBakeScopeKind,
+    refine_role_for_detailed_scope,
+    resolve_detailed_bake_request,
+)
+from app.dataModel.worldPack.wildernessRefineStatus import (
+    wilderness_refine_status_for_counts,
+    wilderness_refine_status_without_expected,
+)
 from app.dataModel.worldPack.lightFineTilePolicy import LightFineTilePolicy
 from app.dataModel.worldPack.packCompleteness import (
     PackCompleteness,
@@ -42,8 +52,10 @@ from app.dataModel.worldPack.pathHeadingPolicy import PathHeadingPolicy
 from app.dataModel.worldPack.worldPackManifest import (
     PACK_WIRE_VERSION,
     ChunkRef,
+    ChunkRefineRole,
     LocationTerrainEntry,
     TileManifestEntry,
+    WildernessRefineStatus,
     WorldPackManifest,
 )
 
@@ -52,9 +64,12 @@ __all__ = [
     "WORLD_MAP_CELLS_PER_TILE",
     "CellContribution",
     "ChunkRef",
+    "ChunkRefineRole",
     "ClimateBakeStatus",
     "ClimateFieldWire",
     "ClimateSampleWire",
+    "DetailedBakeRequest",
+    "DetailedBakeScopeKind",
     "HydrologyMaskWire",
     "WorldMapHydrologyRole",
     "FineTerrainChunkWire",
@@ -81,6 +96,7 @@ __all__ = [
     "TerritoryVolume",
     "TerritoryVolumePolicy",
     "TileManifestEntry",
+    "WildernessRefineStatus",
     "WorldBounds",
     "WorldMapCellWire",
     "WorldMapCellsPerTilePolicy",
@@ -91,7 +107,11 @@ __all__ = [
     "inside_location_volume",
     "light_m_for",
     "merge_layers",
+    "refine_role_for_detailed_scope",
+    "resolve_detailed_bake_request",
     "resolve_light_tile_cap",
     "resolve_world_map_cells_per_tile",
     "resolve_world_map_side",
+    "wilderness_refine_status_for_counts",
+    "wilderness_refine_status_without_expected",
 ]

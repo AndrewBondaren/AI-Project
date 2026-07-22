@@ -98,17 +98,23 @@ def api_pack_bake(
     mode: PackBakeMode = "light",
     max_tiles: int | None = None,
     location_uid: str | None = None,
+    scope: str | None = None,
     anchor_x: int | None = None,
     anchor_y: int | None = None,
 ) -> dict:
-    """``POST …/map/pack/bake`` — light/full (L0) or detailed (L2 one location).
+    """``POST …/map/pack/bake`` — light/full (L0) or detailed (L2 scope).
 
-    detailed requires ``location_uid``. Entry/bg refine is separate — ``api_refine_from_entry``.
+    detailed: ``scope=location|wilderness`` (or ``location_uid`` alone ⇒ location).
+    Entry/bg refine is separate — ``api_refine_from_entry``.
     """
     params: dict[str, str | int] = {"mode": mode}
     if mode == "light":
         # 0 = uncapped product default; positive = debug-only slice
         params["max_tiles"] = 0 if max_tiles is None else int(max_tiles)
+    elif mode == "detailed" and max_tiles is not None:
+        params["max_tiles"] = int(max_tiles)
+    if scope is not None:
+        params["scope"] = scope
     if location_uid is not None:
         params["location_uid"] = location_uid
     if anchor_x is not None:

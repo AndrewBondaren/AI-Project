@@ -286,7 +286,7 @@ flowchart TB
 |---|---|---|---|
 | **light_bake** | `light` | **только L0** + climate coarse | **Все** macro-tiles с `named_locations` **∪ declared hydro** (тайлы локаций + declare endpoints) |
 | **full_bake** | `full` | **только L0** + climate coarse | **Тот же** L0 pipeline на **весь** `world_bounds` (AABB квадрат/прямоугольник) |
-| **detailed_bake** | `detailed` + `location_uid` | **L2** `location_terrain` (+ climate fine territory) | **Одна** локация — refine from parent light |
+| **detailed_bake** | `detailed` + `scope` (+ `location_uid` при `scope=location`) | **L2** | `scope=location` → `location_terrain` (+ climate fine territory); `scope=wilderness` → wilderness chunks по L0 tiles (optional offline topping) |
 
 #### Job boundaries (утверждено мастером 2026-07-20)
 
@@ -296,7 +296,7 @@ flowchart TB
 |---|---|---|
 | **light_bake** | L0 на location∪hydro tiles; `locations_index`; climate coarse; finalize pack | L2 `location_terrain` / wilderness chunks; blocking `refine_from_entry` |
 | **full_bake** | L0 на весь `world_bounds` (добить дыры после light) | L2; entry refine |
-| **detailed_bake** | L2 одной `location_uid` от parent light | L0 world map bake |
+| **detailed_bake** | L2 offline: `scope=location` (одна `location_uid`) или `scope=wilderness` (tile topping от parent light); partition WP-19 | L0 world map bake; climate fine на wilderness (debt) |
 | **entry / WP-13** | scene volume + background rings/path у spawn | часть `POST …/pack/bake?mode=light\|full` |
 
 **После light (отдельный шаг процесса, не фаза bake):** caller **может** стартовать entry job (blocking scene у player entry point + enqueue фоновой инициализации) — это **старт другой джобы**, не продолжение `light_bake`. Full не обязан ждать entry; entry не обязан ждать full.
@@ -305,15 +305,15 @@ flowchart TB
 flowchart LR
   LB["light_bake L0 only"]
   FB["full_bake L0 world_bounds"]
-  DB["detailed_bake L2 one location"]
+  DB["detailed_bake L2 scope location|wilderness"]
   EJ["entry / WP-13 L2 scene + bg"]
   LB -->|"resume / offline"| FB
   LB -.->|"отдельная джоба после light"| EJ
-  FB -->|"per location"| DB
+  FB -->|"per location / wilderness topping"| DB
   EJ --> DB
 ```
 
-**Инвариант процесса (мастер):** отдельного product bake mode «wilderness» **нет**. Полное заполнение прямоугольника мира = `full_bake`.
+**Инвариант процесса (мастер):** отдельного product bake mode «wilderness» **нет**. Полное заполнение прямоугольника мира L0 = `full_bake`. L2 wilderness topping = `detailed&scope=wilderness` (тот же product mode `detailed`, не третий bake mode).
 
 **Не путать:**
 
@@ -354,7 +354,7 @@ flowchart LR
 |---|---|---|
 | `l0_baked` ⊊ `expected_l0_light` | `POST pack/bake?mode=light` | ✅ |
 | `l0_baked` ⊊ `expected_l0_full` | `POST pack/bake?mode=full` | ✅ |
-| `locations_detailed` ⊊ `locations_expected` | `POST pack/bake?mode=detailed&location_uid=` / runtime entry | ✅ single uid; batch — ⬜ |
+| `locations_detailed` ⊊ `locations_expected` | `POST pack/bake?mode=detailed&scope=location&location_uid=` / runtime entry | ✅ single uid; batch — ⬜ |
 | L2 fine chunks вне локаций absent | runtime rings / path — **не** блокирует case 2→3 | ✅ rings path |
 
 **Impl vs ТЗ:** wire `mode=light\|full\|detailed` ✅; `PackTilePlanner` scope ✅; classifier uses planner ✅; `--max-tiles` / query = debug override only (0 = uncapped).  
@@ -366,7 +366,7 @@ flowchart LR
 
 | Слой | Смысл |
 |---|---|
-| Product process | только `light_bake` → `full_bake` → (`detailed_bake`) |
+| Product process | только `light_bake` → `full_bake` → (`detailed_bake` scope location\|wilderness) |
 | Storage / read merge | `wilderness_chunk` = L2 (или fine) данные вне location files — WP-19/20 |
 | Rename | optional later; до rename в ТЗ процесса использовать нейтрально «tiles вне локаций» / «non-location L2» |
 
@@ -1609,7 +1609,8 @@ flowchart TB
 | `POST /worlds/{uid}/pack/import` | zip → `pack/` | L6 |
 | `POST /worlds/{uid}/map/pack/bake?mode=light` | **light_bake** | ✅ |
 | `POST …/pack/bake?mode=full` | **full_bake** — весь `world_bounds` L0 | ✅ |
-| `POST …/pack/bake?mode=detailed&location_uid=` | **detailed_bake** одной локации | ✅ (+ climate fine) |
+| `POST …/pack/bake?mode=detailed&scope=location&location_uid=` | **detailed_bake** location | ✅ (+ climate fine) |
+| `POST …/pack/bake?mode=detailed&scope=wilderness` | **detailed_bake** wilderness topping | ✅ |
 | `GET /worlds/{uid}/map/loading-progress` | progress + `pack_completeness` | ✅ pct + classifier |
 | `GET /worlds/{uid}/export?level=skeleton` | без map_cells / pack blobs | L6 |
 

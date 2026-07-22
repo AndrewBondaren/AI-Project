@@ -1,17 +1,21 @@
-"""Smoke: detailed_bake (L2 location_terrain) for one or all pin locations.
+"""Smoke: detailed_bake L2 — location territory and/or wilderness tiles.
 
 Assumes the world already has L0 parent light (after light_and_full_bake / full).
 Does **not** wipe pack, re-import, or run entry/bg refine.
 
-HTTP: ``POST …/map/pack/bake?mode=detailed&location_uid=``
+HTTP:
+  ``POST …/map/pack/bake?mode=detailed&scope=location&location_uid=``
+  ``POST …/map/pack/bake?mode=detailed&scope=wilderness``
+
 Reports + renders → ``.local/map-render/{uid}/detailed-bake/``
 
 Requires a running backend (``npm run backend``) — agents must not start it.
 
 Examples:
-  python backend/scripts/detailed_bake.py --world-uid world-test-002 --all
+  python backend/scripts/detailed_bake.py --world-uid world-test-003 --scope wilderness
+  python backend/scripts/detailed_bake.py --world-uid world-test-002 --scope location --all
   python backend/scripts/detailed_bake.py --world-uid world-test-002 \\
-      --location-uid loc-city-ironhold-002
+      --scope location --location-uid loc-city-ironhold-002
 """
 from __future__ import annotations
 
@@ -108,7 +112,29 @@ def _location_terrain_entries(world_uid: str) -> list[dict[str, Any]]:
     return [e for e in entries if isinstance(e, dict)]
 
 
-def _resolve_targets(
+def _wilderness_tile_summary(world_uid: str) -> dict[str, Any]:
+    manifest = _pack_dir(world_uid) / "manifest.json"
+    if not manifest.is_file():
+        return {"tiles": 0, "chunks": 0, "status_counts": {}}
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    tiles = data.get("tiles") or []
+    status_counts: dict[str, int] = {}
+    chunks = 0
+    for tile in tiles:
+        if not isinstance(tile, dict):
+            continue
+        status = str(tile.get("wilderness_refine_status") or "absent")
+        status_counts[status] = status_counts.get(status, 0) + 1
+        chunks += len(tile.get("chunks") or [])
+    return {
+        "tiles": len(tiles),
+        "chunks": chunks,
+        "wilderness_chunks_baked": data.get("wilderness_chunks_baked"),
+        "status_counts": status_counts,
+    }
+
+
+def _resolve_location_targets(
     client,
     world_uid: str,
     *,
@@ -120,7 +146,7 @@ def _resolve_targets(
     if location_uid:
         return [location_uid]
     if not all_locations:
-        raise SystemExit("specify --location-uid UID or --all")
+        raise SystemExit("scope=location requires --location-uid UID or --all")
 
     pins = _read_locations_index_uids(world_uid)
     if pins:
@@ -145,7 +171,7 @@ def _resolve_targets(
     return uids
 
 
-def _run_detailed(
+def _run_detailed_location(
     client,
     world_uid: str,
     location_uid: str,
@@ -156,6 +182,7 @@ def _run_detailed(
         client,
         world_uid,
         mode="detailed",
+        scope="location",
         location_uid=location_uid,
     )
     http_elapsed_s = time.perf_counter() - t0
@@ -164,19 +191,63 @@ def _run_detailed(
         bake = {**bake, "loading_progress": api_loading_progress(client, world_uid)}
 
     terrain = bake.get("terrain") or {}
-    detailed = bake.get("detailed") or {}
     metrics = {
+        "scope": bake.get("scope") or "location",
         "location_uid": location_uid,
         "started_at": started_at.isoformat(timespec="seconds"),
         "finished_at": finished_at.isoformat(timespec="seconds"),
         "http_elapsed_s": round(http_elapsed_s, 2),
         "pack_mode": bake.get("pack_mode"),
-        "terrain_succeeded": terrain.get("succeeded") or detailed.get("succeeded"),
-        "terrain_failed": terrain.get("failed") or detailed.get("failed") or bake.get("terrain_failed"),
+        "tiles_refined": bake.get("tiles_refined"),
+        "wilderness_chunks": bake.get("wilderness_chunks"),
+        "terrain_succeeded": terrain.get("succeeded") or bake.get("succeeded"),
+        "terrain_failed": terrain.get("failed") or bake.get("failed") or bake.get("terrain_failed"),
         "climate_fine_tiles": bake.get("climate_fine_tiles"),
         "elapsed_s": bake.get("elapsed_s"),
     }
-    print(f"\n=== detailed_bake {location_uid} ===")
+    print(f"\n=== detailed_bake location {location_uid} ===")
+    width = max(len(k) for k in metrics)
+    for key, value in metrics.items():
+        print(f"{key:<{width}}  {value}")
+    return metrics
+
+
+def _run_detailed_wilderness(
+    client,
+    world_uid: str,
+    *,
+    max_tiles: int,
+) -> dict[str, Any]:
+    started_at = datetime.now().astimezone()
+    t0 = time.perf_counter()
+    bake = api_pack_bake(
+        client,
+        world_uid,
+        mode="detailed",
+        scope="wilderness",
+        max_tiles=max_tiles if max_tiles > 0 else None,
+    )
+    http_elapsed_s = time.perf_counter() - t0
+    finished_at = datetime.now().astimezone()
+    if not bake.get("loading_progress"):
+        bake = {**bake, "loading_progress": api_loading_progress(client, world_uid)}
+
+    terrain = bake.get("terrain") or {}
+    metrics = {
+        "scope": bake.get("scope") or "wilderness",
+        "started_at": started_at.isoformat(timespec="seconds"),
+        "finished_at": finished_at.isoformat(timespec="seconds"),
+        "http_elapsed_s": round(http_elapsed_s, 2),
+        "pack_mode": bake.get("pack_mode"),
+        "tiles_refined": bake.get("tiles_refined"),
+        "wilderness_chunks": bake.get("wilderness_chunks"),
+        "terrain_succeeded": terrain.get("succeeded") or bake.get("succeeded"),
+        "terrain_failed": terrain.get("failed") or bake.get("failed") or bake.get("terrain_failed"),
+        "climate_fine_tiles": bake.get("climate_fine_tiles"),
+        "elapsed_s": bake.get("elapsed_s"),
+        "max_tiles": max_tiles or None,
+    }
+    print("\n=== detailed_bake wilderness ===")
     width = max(len(k) for k in metrics)
     for key, value in metrics.items():
         print(f"{key:<{width}}  {value}")
@@ -188,15 +259,26 @@ def main() -> None:
     os.environ.setdefault("DEBUG_API_TIMEOUT", str(int(_DEFAULT_TIMEOUT_S)))
 
     parser = argparse.ArgumentParser(
-        description="Smoke detailed_bake for one or all locations_index pins",
+        description="Smoke detailed_bake (scope=location|wilderness)",
     )
     parser.add_argument("--world-uid", required=True, help="Existing world with L0 pack")
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--location-uid", help="Single location detailed_bake")
-    group.add_argument(
+    parser.add_argument(
+        "--scope",
+        choices=("location", "wilderness"),
+        required=True,
+        help="Detailed L2 scope (SoT; not inferred from missing uid)",
+    )
+    parser.add_argument("--location-uid", help="scope=location: single location")
+    parser.add_argument(
         "--all",
         action="store_true",
-        help="detailed_bake each locations_index pin (fallback: map_x/map_y locations)",
+        help="scope=location: each locations_index pin (fallback: map_x/map_y)",
+    )
+    parser.add_argument(
+        "--max-tiles",
+        type=int,
+        default=0,
+        help="scope=wilderness: debug tile cap (0=all L0 tiles with world_map)",
     )
     parser.add_argument(
         "--render",
@@ -227,45 +309,73 @@ def main() -> None:
                 f"no pack manifest for {world_uid} — run light_and_full_bake / full first"
             )
 
-        targets = _resolve_targets(
-            client,
-            world_uid,
-            location_uid=args.location_uid,
-            all_locations=args.all,
+        before_loc = _location_terrain_entries(world_uid)
+        before_wild = _wilderness_tile_summary(world_uid)
+        print(f"\nlocation_terrain_entries before: {len(before_loc)}")
+        print(
+            f"wilderness before: tiles={before_wild['tiles']} "
+            f"chunks={before_wild['chunks']} status={before_wild['status_counts']}"
         )
-        before = _location_terrain_entries(world_uid)
-        print(f"\nlocation_terrain_entries before: {len(before)}")
 
         results: list[dict[str, Any]] = []
         failures = 0
-        for uid in targets:
+        targets: list[str] = []
+
+        if args.scope == "wilderness":
             try:
-                results.append(_run_detailed(client, world_uid, uid))
+                results.append(
+                    _run_detailed_wilderness(
+                        client, world_uid, max_tiles=args.max_tiles,
+                    )
+                )
             except DebugApiError as exc:
                 failures += 1
-                print(f"FAIL detailed_bake {uid}: {exc}")
-                results.append({
-                    "location_uid": uid,
-                    "error": str(exc),
-                })
+                print(f"FAIL detailed_bake wilderness: {exc}")
+                results.append({"scope": "wilderness", "error": str(exc)})
+        else:
+            targets = _resolve_location_targets(
+                client,
+                world_uid,
+                location_uid=args.location_uid,
+                all_locations=args.all,
+            )
+            for uid in targets:
+                try:
+                    results.append(_run_detailed_location(client, world_uid, uid))
+                except DebugApiError as exc:
+                    failures += 1
+                    print(f"FAIL detailed_bake {uid}: {exc}")
+                    results.append({
+                        "scope": "location",
+                        "location_uid": uid,
+                        "error": str(exc),
+                    })
 
-        after = _location_terrain_entries(world_uid)
-        print(f"\nlocation_terrain_entries after: {len(after)}")
-        for entry in after:
+        after_loc = _location_terrain_entries(world_uid)
+        after_wild = _wilderness_tile_summary(world_uid)
+        print(f"\nlocation_terrain_entries after: {len(after_loc)}")
+        for entry in after_loc:
             print(
                 f"  {entry.get('location_uid')}  "
                 f"path={entry.get('terrain_path')}  "
                 f"hash={str(entry.get('terrain_hash') or '')[:12]}"
             )
+        print(
+            f"wilderness after: tiles={after_wild['tiles']} "
+            f"chunks={after_wild['chunks']} status={after_wild['status_counts']}"
+        )
 
         report = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "world_uid": world_uid,
+            "scope": args.scope,
             "targets": targets,
             "results": results,
             "failures": failures,
-            "location_terrain_before": before,
-            "location_terrain_after": after,
+            "location_terrain_before": before_loc,
+            "location_terrain_after": after_loc,
+            "wilderness_before": before_wild,
+            "wilderness_after": after_wild,
         }
         json_latest = report_root / "detailed-bake-latest.json"
         json_stamped = report_root / f"detailed-bake-{stamp}.json"
