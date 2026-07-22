@@ -238,6 +238,15 @@ def _cell_progress(world_uid: str, gx: int, gy: int) -> dict[str, Any]:
 def _online_cell_progress(world_uid: str, gx: int, gy: int) -> Iterator[None]:
     stop = threading.Event()
     last: tuple[int, str] | None = None
+    t0 = time.perf_counter()
+
+    def _fmt_line(chunks: int, status: str, *, suffix: str = "") -> str:
+        elapsed_s = time.perf_counter() - t0
+        tail = f" {suffix}" if suffix else ""
+        return (
+            f"[online] cell=({gx},{gy}) chunks={chunks} status={status} "
+            f"elapsed_s={elapsed_s:.2f}{tail}"
+        )
 
     def _loop() -> None:
         nonlocal last
@@ -247,10 +256,7 @@ def _online_cell_progress(world_uid: str, gx: int, gy: int) -> Iterator[None]:
             if key == last:
                 continue
             last = key
-            print(
-                f"[online] cell=({gx},{gy}) chunks={key[0]} status={key[1]}",
-                flush=True,
-            )
+            print(_fmt_line(key[0], key[1]), flush=True)
 
     thread = threading.Thread(target=_loop, name=f"detailed-bake-poll-{gx}-{gy}", daemon=True)
     thread.start()
@@ -261,8 +267,7 @@ def _online_cell_progress(world_uid: str, gx: int, gy: int) -> Iterator[None]:
         thread.join(timeout=_POLL_INTERVAL_S + 1.0)
         prog = _cell_progress(world_uid, gx, gy)
         print(
-            f"[online] cell=({gx},{gy}) chunks={prog['chunks']} "
-            f"status={prog['status']} (final poll)",
+            _fmt_line(int(prog["chunks"]), str(prog["status"]), suffix="(final poll)"),
             flush=True,
         )
 
@@ -349,7 +354,9 @@ def _run_detailed_location(
                 or 0
             )
             detail = "ok" if not (bake.get("terrain_failed") or terrain.get("failed")) else "failed"
+            elapsed_s = time.perf_counter() - t0
             print(f"=== detailed_bake location {location_uid} done ===", flush=True)
+            print(f"elapsed_s={elapsed_s:.2f}", flush=True)
             for key in (
                 "tiles_refined",
                 "wilderness_chunks",
@@ -436,7 +443,7 @@ def _run_detailed_wilderness_cell(
             print(f"=== detailed_bake wilderness cell=({gx},{gy}) start ===", flush=True)
             print(
                 f"[online] cell=({gx},{gy}) chunks={before['chunks']} "
-                f"status={before['status']} (before)",
+                f"status={before['status']} elapsed_s=0.00 (before)",
                 flush=True,
             )
             with _online_cell_progress(world_uid, gx, gy):
@@ -456,10 +463,11 @@ def _run_detailed_wilderness_cell(
                 }
             cells = int(after["chunks"])
             detail = str(after["status"])
+            elapsed_s = time.perf_counter() - t0
             print(f"=== detailed_bake wilderness cell=({gx},{gy}) done ===", flush=True)
             print(
                 f"chunks_before={before['chunks']} chunks_after={after['chunks']} "
-                f"detail={detail}",
+                f"detail={detail} elapsed_s={elapsed_s:.2f}",
                 flush=True,
             )
     except DebugApiError as exc:
