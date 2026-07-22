@@ -26,6 +26,9 @@ class DetailedBakeRequest(BaseModel):
     location_uid: str | None = None
     # Debug cap for wilderness tiles; 0 = all L0 tiles with world_map_path.
     max_tiles: int = Field(default=0, ge=0)
+    # Wilderness single-tile job (recommended debug unit). Both set or both None.
+    tile_gx: int | None = None
+    tile_gy: int | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -34,11 +37,17 @@ class DetailedBakeRequest(BaseModel):
             return data
         scope = data.get("scope")
         uid = data.get("location_uid")
+        gx = data.get("tile_gx")
+        gy = data.get("tile_gy")
+        if (gx is None) ^ (gy is None):
+            raise ValueError("tile_gx and tile_gy must both be set or both omitted")
         if scope == "location":
             uid_s = str(uid).strip() if uid is not None else ""
             if not uid_s:
                 raise ValueError("scope=location requires location_uid")
-            return {**data, "location_uid": uid_s}
+            if gx is not None:
+                raise ValueError("tile_gx/tile_gy only apply to scope=wilderness")
+            return {**data, "location_uid": uid_s, "tile_gx": None, "tile_gy": None}
         if scope == "wilderness":
             if uid is not None and str(uid).strip():
                 raise ValueError("scope=wilderness must not include location_uid")
@@ -51,6 +60,8 @@ def resolve_detailed_bake_request(
     scope: DetailedBakeScopeKind | None = None,
     location_uid: str | None = None,
     max_tiles: int = 0,
+    tile_gx: int | None = None,
+    tile_gy: int | None = None,
 ) -> DetailedBakeRequest:
     """Build validated request. Explicit ``scope`` is SoT.
 
@@ -69,6 +80,8 @@ def resolve_detailed_bake_request(
         scope=scope,
         location_uid=location_uid,
         max_tiles=max_tiles,
+        tile_gx=tile_gx,
+        tile_gy=tile_gy,
     )
 
 

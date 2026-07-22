@@ -116,6 +116,14 @@ async def bake_world_pack(
         default=None,
         description="detailed scope=location: required location_uid",
     ),
+    tile_gx: int | None = Query(
+        default=None,
+        description="detailed scope=wilderness: single macro-tile gx (with tile_gy)",
+    ),
+    tile_gy: int | None = Query(
+        default=None,
+        description="detailed scope=wilderness: single macro-tile gy (with tile_gx)",
+    ),
     anchor_x: int | None = Query(default=None),
     anchor_y: int | None = Query(default=None),
     free_cores: int | None = Query(default=None, ge=1),
@@ -125,6 +133,7 @@ async def bake_world_pack(
     """Debug — bake World Pack: light_bake / full_bake / detailed_bake (WP-27).
 
     L0 only for light/full. L2 offline: ``mode=detailed&scope=location|wilderness``.
+    Wilderness debug unit: ``tile_gx``+``tile_gy`` (one macro-cell per request).
     Entry/runtime L2 → ``POST …/map/refine-from-entry``.
     """
     stack = container.surface_materialization_orchestrator()
@@ -150,6 +159,8 @@ async def bake_world_pack(
             max_tiles=max_tiles,
             location_uid=location_uid,
             detailed_scope=scope,
+            tile_gx=tile_gx,
+            tile_gy=tile_gy,
             nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
             anchor_x=anchor_x, anchor_y=anchor_y,
         )

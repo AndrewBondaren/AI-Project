@@ -24,6 +24,8 @@ class PackBakeDefaults(BaseModel):
     # WP-PERF-10 / WP-A5: light/entry refine queue depth must stay well below whole-tile enqueue.
     smoke_max_refine_queue_depth: int = Field(default=200, ge=0)
     detailed_include_climate_fine: bool = True
+    # Detailed wilderness: checkpoint manifest every N wilderness chunks (0=only at phase end).
+    detailed_manifest_save_every_chunks: int = Field(default=50, ge=0)
     # When to write r.{gx}.{gy}.climate.zst on light/full L0 bake.
     light_fine_tile_policy: LightFineTilePolicy = "spawn_player"
     # full_bake default: defer denser climate to detailed / runtime.

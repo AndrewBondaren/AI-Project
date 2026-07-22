@@ -206,6 +206,7 @@ class FineChunkRunner:
                 )
                 total_cells += len(wilderness)
                 written += 1
+                writer.maybe_checkpoint_manifest(written)
             log_pack_wilderness_chunk_done(
                 world_uid,
                 phase=phase_name,

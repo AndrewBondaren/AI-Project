@@ -46,7 +46,8 @@ def location_payload(loc: NamedLocation) -> dict:
 
 @contextmanager
 def api_client(base_url: str = BASE_URL) -> Iterator[httpx.Client]:
-    with httpx.Client(base_url=base_url, timeout=TIMEOUT) as client:
+    timeout = float(os.environ.get("DEBUG_API_TIMEOUT", "120"))
+    with httpx.Client(base_url=base_url, timeout=timeout) as client:
         yield client
 
 
@@ -99,12 +100,15 @@ def api_pack_bake(
     max_tiles: int | None = None,
     location_uid: str | None = None,
     scope: str | None = None,
+    tile_gx: int | None = None,
+    tile_gy: int | None = None,
     anchor_x: int | None = None,
     anchor_y: int | None = None,
 ) -> dict:
     """``POST …/map/pack/bake`` — light/full (L0) or detailed (L2 scope).
 
     detailed: ``scope=location|wilderness`` (or ``location_uid`` alone ⇒ location).
+    wilderness single cell: ``tile_gx``+``tile_gy``.
     Entry/bg refine is separate — ``api_refine_from_entry``.
     """
     params: dict[str, str | int] = {"mode": mode}
@@ -117,6 +121,10 @@ def api_pack_bake(
         params["scope"] = scope
     if location_uid is not None:
         params["location_uid"] = location_uid
+    if tile_gx is not None:
+        params["tile_gx"] = int(tile_gx)
+    if tile_gy is not None:
+        params["tile_gy"] = int(tile_gy)
     if anchor_x is not None:
         params["anchor_x"] = anchor_x
     if anchor_y is not None:

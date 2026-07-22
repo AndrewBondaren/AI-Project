@@ -164,7 +164,12 @@ class PackDetailedBakeOrchestrator:
         surface_ctx: SurfaceTerrainContext,
         request: DetailedBakeRequest,
     ) -> PackDetailedBakeResult:
-        tiles = self._wilderness_tiles(writer, max_tiles=request.max_tiles)
+        tiles = self._wilderness_tiles(
+            writer,
+            max_tiles=request.max_tiles,
+            tile_gx=request.tile_gx,
+            tile_gy=request.tile_gy,
+        )
         volumes = [vol for _, vol in territory_volumes_by_location(world, locations)]
 
         aggregate = await self._refine_tiles(
@@ -192,7 +197,20 @@ class PackDetailedBakeOrchestrator:
         writer: WorldPackWriter,
         *,
         max_tiles: int,
+        tile_gx: int | None = None,
+        tile_gy: int | None = None,
     ) -> list[tuple[int, int]]:
+        if tile_gx is not None and tile_gy is not None:
+            tile = writer.manifest.tile_entry(tile_gx, tile_gy)
+            if tile is None or not tile.world_map_path:
+                raise ValueError(
+                    f"wilderness tile=({tile_gx},{tile_gy}) has no L0 world_map_path "
+                    "(run full/light bake first)",
+                )
+            if tile.wilderness_refine_status == "complete":
+                return []
+            return [(tile_gx, tile_gy)]
+
         out: list[tuple[int, int]] = []
         for tile in writer.manifest.tiles:
             if not tile.world_map_path:

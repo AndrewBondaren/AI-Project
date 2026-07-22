@@ -61,6 +61,8 @@ class WorldSurfaceMaterializationOrchestrator:
         location_uid: str | None = None,
         detailed_scope: DetailedBakeScopeKind | None = None,
         detailed_request: DetailedBakeRequest | None = None,
+        tile_gx: int | None = None,
+        tile_gy: int | None = None,
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
         hydrology_generator: HydrologyGeneratorService | None = None,
@@ -101,6 +103,8 @@ class WorldSurfaceMaterializationOrchestrator:
                 scope=detailed_scope,
                 location_uid=location_uid,
                 max_tiles=max_tiles or 0,
+                tile_gx=tile_gx,
+                tile_gy=tile_gy,
             )
             detailed = await self.materialize_pack_detailed(
                 world, locations, ctx, pack_writer, request,
