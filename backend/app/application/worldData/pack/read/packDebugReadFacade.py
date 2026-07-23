@@ -1,6 +1,6 @@
 """Debug world map / merged bbox read — MERGE-9 / REVIEW-5.
 
-ASCII render I/O lives in ``PackRenderReadFacade`` (L0 light tiles + location_terrain).
+ASCII render I/O lives in ``PackRenderReadFacade`` (L0 + location_terrain + wilderness L2).
 """
 
 from __future__ import annotations

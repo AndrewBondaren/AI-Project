@@ -62,3 +62,7 @@ python backend/scripts/light_and_full_bake.py --fixture fixtures/world_test_gen.
 #   light-bake-render-latest.log  (ASCII after light)
 #   full-bake-render-latest.log   (ASCII after full)
 
+
+python backend/scripts/light_and_full_bake.py --fixture fixtures/world_test_gen_003.json
+python backend/scripts/detailed_bake.py --world-uid world-test-003 --scope wilderness --gx -2 --gy -2
+

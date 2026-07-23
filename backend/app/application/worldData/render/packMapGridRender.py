@@ -14,10 +14,12 @@ from app.application.worldData.render.renderPayloads import (
     LocationEntryPayload,
     LocationGridPayload,
     LocationGridsPayload,
+    WildernessTileGridPayload,
     WorldGridPayload,
     WorldTileEntryPayload,
     WorldTileGridsPayload,
 )
+from app.application.worldData.render.wildernessTilePackRenderer import WildernessTilePackRenderer
 from app.application.worldData.render.worldMapPackRenderer import WorldMapPackRenderer
 from app.dataModel.worldPack.worldBounds import WorldBounds
 from app.db.models.world import World
@@ -233,4 +235,68 @@ class PackMapGridRender:
             read_mode="location_terrain",
             indoor=False,
             levels=levels,
+        )
+
+    def render_wilderness_tile_grid(
+        self,
+        world: World,
+        tile_gx: int,
+        tile_gy: int,
+        *,
+        z: int | None = None,
+        include_z_slices: bool = False,
+    ) -> WildernessTileGridPayload:
+        """L2 wilderness mosaic for one macro-tile (detailed-bake).
+
+        Default levels = surface only (meter grid can be large). Pass ``z=`` for a
+        slice, or ``include_z_slices=True`` for all run-endpoint levels.
+        """
+        legend = WildernessTilePackRenderer.render_legend()
+        source = self._read.try_wilderness_tile(world, tile_gx, tile_gy)
+        if source is None:
+            return WildernessTileGridPayload(
+                tile_gx=tile_gx,
+                tile_gy=tile_gy,
+                legend=legend,
+                cell_size_m=world.map_cell_size_m,
+                read_path="pack",
+                read_mode="wilderness_tile_l2_missing",
+            )
+        renderer = WildernessTilePackRenderer(
+            source.chunks,
+            tile_gx=source.gx,
+            tile_gy=source.gy,
+            tile_size_m=source.tile_size_m,
+        )
+        if z is not None:
+            ascii_grid = renderer.render_level(z)
+            return WildernessTileGridPayload(
+                tile_gx=tile_gx,
+                tile_gy=tile_gy,
+                legend=legend,
+                cell_size_m=world.map_cell_size_m,
+                read_path="pack",
+                read_mode="wilderness_tile_l2",
+                ascii=ascii_grid,
+                z=z,
+                chunks_listed=source.chunks_listed,
+                chunks_loaded=source.chunks_loaded,
+                column_count=renderer.column_count,
+                wilderness_refine_status=source.wilderness_refine_status,
+                z_levels=[z] if ascii_grid.strip() else [],
+            )
+        levels = renderer.render_all_levels(include_z_slices=include_z_slices)
+        return WildernessTileGridPayload(
+            tile_gx=tile_gx,
+            tile_gy=tile_gy,
+            legend=legend,
+            cell_size_m=world.map_cell_size_m,
+            read_path="pack",
+            read_mode="wilderness_tile_l2",
+            levels=levels,
+            z_levels=list(levels.keys()),
+            chunks_listed=source.chunks_listed,
+            chunks_loaded=source.chunks_loaded,
+            column_count=renderer.column_count,
+            wilderness_refine_status=source.wilderness_refine_status,
         )

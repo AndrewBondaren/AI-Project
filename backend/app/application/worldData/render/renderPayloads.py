@@ -5,6 +5,7 @@
 - pack world tiles: ``{ LEVEL_LIGHT: ascii, LEVEL_HEIGHT: ascii }``
 - pack location: ``{ LEVEL_SURFACE: ascii, \"<z>\": ascii }`` where z are FineTerrain
   run *endpoints* (not every meter in a thick band); query ``?z=`` slices arbitrary world-z
+- pack wilderness tile: same ``LEVEL_SURFACE`` / z keys from wilderness chunk mosaic
 - legacy tiles: ``WorldTileGridRenderer`` surface key ``-1`` plus numeric z strings
 - ``indoor`` on pack location payloads is always False (shape-compat with legacy; structures
   live in patches, not location_terrain blobs)
@@ -23,6 +24,8 @@ ReadMode = Literal[
     "world_map_light_macro_aggregate",
     "location_terrain",
     "location_terrain_missing",
+    "wilderness_tile_l2",
+    "wilderness_tile_l2_missing",
     "map_cells",
     "map_cells_tiles",
 ]
@@ -171,4 +174,46 @@ class LocationGridPayload:
         if self.levels is not None:
             out["levels"] = self.levels
             out["indoor"] = self.indoor
+        return out
+
+
+@dataclass(frozen=True)
+class WildernessTileGridPayload:
+    """L2 wilderness mosaic for one macro-tile (detailed-bake smoke)."""
+
+    tile_gx: int
+    tile_gy: int
+    legend: str
+    cell_size_m: int
+    read_path: ReadPath
+    read_mode: ReadMode
+    levels: dict[str, str] = field(default_factory=dict)
+    z_levels: list[object] = field(default_factory=list)
+    chunks_listed: int = 0
+    chunks_loaded: int = 0
+    column_count: int = 0
+    wilderness_refine_status: str | None = None
+    ascii: str | None = None
+    z: int | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        out: dict[str, object] = {
+            "tile_gx": self.tile_gx,
+            "tile_gy": self.tile_gy,
+            "legend": self.legend,
+            "cell_size_m": self.cell_size_m,
+            "read_path": self.read_path,
+            "read_mode": self.read_mode,
+            "chunks_listed": self.chunks_listed,
+            "chunks_loaded": self.chunks_loaded,
+            "column_count": self.column_count,
+            "z_levels": self.z_levels,
+            "levels": self.levels,
+        }
+        if self.wilderness_refine_status is not None:
+            out["wilderness_refine_status"] = self.wilderness_refine_status
+        if self.ascii is not None:
+            out["ascii"] = self.ascii
+        if self.z is not None:
+            out["z"] = self.z
         return out

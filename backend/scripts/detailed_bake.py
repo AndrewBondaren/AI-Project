@@ -48,7 +48,7 @@ from debug_api_helpers import (  # noqa: E402
     api_pack_bake,
 )
 from debug_surface_helpers import api_loading_progress  # noqa: E402
-from render_maps import _print_summary, dump_map_renders  # noqa: E402
+from render_maps import _print_detailed_summary, dump_detailed_renders  # noqa: E402
 
 _POLL_INTERVAL_S = float(os.environ.get("DETAILED_BAKE_POLL_S", "5"))
 
@@ -558,11 +558,7 @@ def main() -> None:
         "--render",
         action=argparse.BooleanOptionalAction,
         default=True,
-    )
-    parser.add_argument(
-        "--mark-locations",
-        action=argparse.BooleanOptionalAction,
-        default=True,
+        help="Dump L2 ASCII (location + wilderness mosaics) after bake (default: on)",
     )
     args = parser.parse_args()
 
@@ -704,14 +700,17 @@ def main() -> None:
         print(f"JSON report: {json_latest}")
 
         if args.render:
-            print("=== map render after detailed_bake ===")
-            summary = dump_map_renders(
+            print("=== detailed L2 render after detailed_bake ===")
+            wild_tiles = list(cells) if args.scope == "wilderness" else []
+            loc_uids = list(targets) if args.scope == "location" else []
+            summary = dump_detailed_renders(
                 client,
                 world_uid,
                 out_root=report_root / "after-detailed",
-                mark_locations=args.mark_locations,
+                wilderness_tiles=wild_tiles,
+                location_uids=loc_uids,
             )
-            _print_summary(summary)
+            _print_detailed_summary(summary)
             report["render"] = summary
             payload = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
             json_latest.write_text(payload, encoding="utf-8")

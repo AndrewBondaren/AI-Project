@@ -73,3 +73,36 @@ class MapGridRenderService:
         if pack is not None:
             return pack.render_location_grid(world, location_uid, z=z).to_dict()
         return (await self._legacy.render_location_grid(world, location_uid, z=z)).to_dict()
+
+    async def render_wilderness_tile_grid(
+        self,
+        world: World,
+        tile_gx: int,
+        tile_gy: int,
+        *,
+        z: int | None = None,
+        include_z_slices: bool = False,
+    ) -> dict[str, object]:
+        """Pack-only L2 wilderness mosaic (no legacy map_cells path)."""
+        pack = self._pack(world)
+        if pack is None:
+            from app.application.worldData.render.renderPayloads import WildernessTileGridPayload
+            from app.application.worldData.render.wildernessTilePackRenderer import (
+                WildernessTilePackRenderer,
+            )
+
+            return WildernessTileGridPayload(
+                tile_gx=tile_gx,
+                tile_gy=tile_gy,
+                legend=WildernessTilePackRenderer.render_legend(),
+                cell_size_m=world.map_cell_size_m,
+                read_path="pack",
+                read_mode="wilderness_tile_l2_missing",
+            ).to_dict()
+        return pack.render_wilderness_tile_grid(
+            world,
+            tile_gx,
+            tile_gy,
+            z=z,
+            include_z_slices=include_z_slices,
+        ).to_dict()

@@ -7,6 +7,7 @@ Canonical debug harness:
   (detailed: ``scope=location|wilderness``; location needs ``location_uid``)
 - ``POST …/map/refine-from-entry`` / ``schedule-chunk-refine``
 - ``GET …/map/render-*``, ``pack/fine-terrain-read``, ``loading-progress``, ``bootstrap-tiles``
+  (detailed L2 wilderness: ``render-wilderness-tile-grid?gx=&gy=``)
 
 Legacy map_cells write routes (generate-surface / materialize-stack / …) are removed.
 """
@@ -352,6 +353,36 @@ async def render_all_location_grids(
     payload = await svc.render_all_location_grids(world)
     return JSONResponse(content=payload)
 
+
+@router.get("/worlds/{world_uid}/map/render-wilderness-tile-grid")
+async def render_wilderness_tile_grid(
+    world_uid: str,
+    gx: int = Query(..., description="Macro-tile gx"),
+    gy: int = Query(..., description="Macro-tile gy"),
+    z: int | None = Query(default=None, description="Optional world-z slice"),
+    include_z_slices: bool = Query(
+        default=False,
+        description="Include all FineTerrain run-endpoint levels (default: surface only)",
+    ),
+    container=Depends(get_container),
+) -> JSONResponse:
+    """Debug only — L2 wilderness ASCII mosaic for one macro-tile (detailed-bake)."""
+    from app.application.worldData.render.mapGridRenderService import MapGridRenderService
+
+    world_svc = container.world_service()
+    world = await world_svc.get_by_id(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+
+    svc = MapGridRenderService(container.map_cell_service())
+    payload = await svc.render_wilderness_tile_grid(
+        world,
+        gx,
+        gy,
+        z=z,
+        include_z_slices=include_z_slices,
+    )
+    return JSONResponse(content=payload)
 
 
 @router.get("/worlds/{world_uid}/map/has-column")

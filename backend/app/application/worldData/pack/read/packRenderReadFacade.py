@@ -1,4 +1,4 @@
-"""Pack I/O for ASCII map render — L0 light tiles + location_terrain blobs."""
+"""Pack I/O for ASCII map render — L0 light tiles + location_terrain + wilderness L2."""
 
 from __future__ import annotations
 
@@ -43,6 +43,19 @@ class LocationTerrainRenderSource:
     location_uid: str
     volume: TerritoryVolume
     chunk: FineTerrainChunkWire
+
+
+@dataclass(frozen=True)
+class WildernessTileRenderSource:
+    """Loaded wilderness L2 chunks for one macro-tile (may be partial)."""
+
+    gx: int
+    gy: int
+    tile_size_m: int
+    chunks: list[FineTerrainChunkWire]
+    chunks_listed: int
+    chunks_loaded: int
+    wilderness_refine_status: str | None
 
 
 def _tile_cell_hists(
@@ -185,3 +198,40 @@ class PackRenderReadFacade:
             if self.has_location_terrain(world, entry.location_uid):
                 out.append(entry.location_uid)
         return sorted(out)
+
+    def try_wilderness_tile(
+        self,
+        world: World,
+        gx: int,
+        gy: int,
+    ) -> WildernessTileRenderSource | None:
+        """``None`` = no pack; otherwise tile source (chunks may be empty)."""
+        if not self._ctx.has_pack_for(world):
+            return None
+        reader = self._ctx.reader_for(world)
+        tile = reader.manifest.tile_entry(gx, gy)
+        listed = list(tile.chunks) if tile is not None else []
+        chunks: list[FineTerrainChunkWire] = []
+        for ref in listed:
+            if not reader.chunk_exists(gx, gy, ref.cx, ref.cy):
+                continue
+            chunks.append(reader.read_wilderness_chunk(gx, gy, ref.cx, ref.cy))
+            status = None if tile is None else str(tile.wilderness_refine_status)
+        logger.info(
+            "pack render wilderness tile | world=%s gx=%d gy=%d listed=%d loaded=%d status=%s",
+            world.world_uid,
+            gx,
+            gy,
+            len(listed),
+            len(chunks),
+            status,
+        )
+        return WildernessTileRenderSource(
+            gx=gx,
+            gy=gy,
+            tile_size_m=world_tile_size_m(world),
+            chunks=chunks,
+            chunks_listed=len(listed),
+            chunks_loaded=len(chunks),
+            wilderness_refine_status=status,
+        )
