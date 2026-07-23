@@ -1071,6 +1071,8 @@ L2 `refine_chunk` читает parent light **только** через `load_pa
 Контракт согласованности: corridor `hydrology_role` / forms `surface_z`.  
 Пустая hydro-маска на L0 = сломанный контракт world map и constraints L2.
 
+**Terrain mask carry (утверждено):** L2 surface `system_terrain` = nearest parent wire — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § **Terrain mask carry**; climate fine — denser field, не SoT маски; chunks WP-19 не режутся по зонам.
+
 **Антипаттерн:** refine из live `LightGridCompose` или из `SurfaceTerrainContext` в обход baked mask.
 
 Приёмка согласованности карты и сцены (после кода WP-PERF-22): **MLB-8** — river/ridge L2 внутри L0 corridor / z-band (не отмечать done до имплементации).
@@ -1128,6 +1130,7 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 | Дата | Изменение |
 |---|---|
 | 2026-07-20 | Compose scope: light/full = L0 only; L2 = detailed/entry (pack storage Job boundaries) |
+| 2026-07-23 | Cross-ref terrain mask carry (hard stamp nearest; OPEN-1 closed) |
 | 2026-07-14 | Первая фиксация: LightGridCompose, contributors, Path A hydro, границы vs SurfaceTerrainContext |
 | 2026-07-14 | § **Связь с dataModel (SoT)** — таблица wire/POJO ↔ bake; staging ≠ SoT; MLB-7 |
 | 2026-07-14 | Каталог кода: **`pack/bake/lightGrid/`** (утверждено) |

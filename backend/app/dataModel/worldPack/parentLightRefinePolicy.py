@@ -18,6 +18,8 @@ class ParentLightRefinePolicy(BaseModel):
     resample: Literal["bilinear", "nearest"] = "bilinear"
     # Detail noise amplitude around resampled L0 form (then clamped by z_band).
     detail_noise_amplitude: int = Field(default=1, ge=0)
+    # Categorical L0 system_terrain → meter; bilinear forbidden (mask carry).
+    terrain_resample: Literal["nearest"] = "nearest"
 
     @classmethod
     def canonical_defaults(cls) -> ParentLightRefinePolicy:

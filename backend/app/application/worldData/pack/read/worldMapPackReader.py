@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from app.application.jsonValidation import terrain_system_keys
 from app.application.worldData.generators.terrain.terrainZ import subsurface_terrain_at_z
+from app.application.worldData.generators.terrain.resolveWorldMapTerrain import (
+    resolve_world_map_terrain,
+)
 from app.application.worldData.generators.terrain.worldMapSettings import n_base
 from app.application.worldData.pack.climate.climatePackApply import apply_climate_to_view
 from app.application.worldData.pack.read.packMapHelpers import world_map_sample_index, world_tile_size_m
 from app.application.worldData.pack.read.packReadContext import PackReadContext
-from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
 from app.dataModel.worldPack.layerPriority import MapLayerKind
 from app.dataModel.worldPack.mergeMapCells import (
@@ -75,7 +77,7 @@ class WorldMapPackReader:
                 x=x,
                 y=y,
                 z=z,
-                system_terrain=self._resolve_world_map_terrain(world, cell),
+                system_terrain=resolve_world_map_terrain(world, cell),
                 hydrology=hydro,
             )
         if surface_z - depth <= z < surface_z:
@@ -119,18 +121,3 @@ class WorldMapPackReader:
             if merged.has_any_data():
                 out.append(merged_view_to_map_cell(world.world_uid, merged))
         return out
-
-    def _default_surface_terrain(self, world: World) -> str:
-        registry = WorldTerrainRegistry.canonical_defaults()
-        entry = registry.entry_for("plains")
-        if entry is not None:
-            return entry.system_terrain
-        keys = terrain_system_keys(world)
-        if keys:
-            return next(iter(sorted(keys)))
-        return registry.root[0].system_terrain
-
-    def _resolve_world_map_terrain(self, world: World, cell: WorldMapCellWire) -> str:
-        if cell.system_terrain:
-            return cell.system_terrain
-        return self._default_surface_terrain(world)

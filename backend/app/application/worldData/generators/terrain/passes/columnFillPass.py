@@ -5,6 +5,9 @@ from app.application.worldData.generators.hydrology.shore.shoreProfile import (
     shore_terrain_material,
 )
 from app.application.worldData.generators.terrain.worldMapSettings import world_z_min
+from app.application.worldData.generators.terrain.resolveWorldMapTerrain import (
+    default_surface_terrain,
+)
 from app.application.worldData.generators.terrain.terrainZ import (
     magma_terrain,
     subsurface_terrain_at_z,
@@ -35,8 +38,13 @@ def run_column_fill(
     n_eff: dict[tuple[int, int], int],
     rect: ColumnRect | None = None,
     hydrology_by_cell: dict[tuple[int, int], MapCellHydrology] | None = None,
+    surface_terrain: dict[tuple[int, int], str] | None = None,
 ) -> list[MapCell]:
-    """Pass 2: fill solid columns (optional rect slice for chunking)."""
+    """Pass 2: fill solid columns (optional rect slice for chunking).
+
+    Pack L2 refine: pass ``surface_terrain`` from parent light (mask carry).
+    Legacy path without map: climate landcover via ``surface_biome_terrain``.
+    """
     terrain_set = _terrain_set(world)
     z_min       = world_z_min(world)
     magma_thick = _magma_thickness(world)
@@ -44,6 +52,7 @@ def run_column_fill(
     shore_terrain, shore_material = shore_terrain_material(world)
     default_zone = WorldClimateScalars.canonical_defaults().default_climate_zone
     masks = terrain_masks(world)
+    plains_fallback = default_surface_terrain(world)
 
     x_lo = rect.x_min if rect else heightmap.bbox.x_min
     x_hi = rect.x_max if rect else heightmap.bbox.x_max
@@ -62,15 +71,17 @@ def run_column_fill(
             z_bottom = max(z_min, z_top - depth)
 
             for z in range(z_bottom, z_top + 1):
-                terrain = (
-                    surface_biome_terrain(
-                        terrain_set,
-                        system_climate_zone=default_zone,
-                        masks=masks,
-                    )
-                    if z == z_top
-                    else subsurface_terrain_at_z(terrain_set)
-                )
+                if z == z_top:
+                    if surface_terrain is not None:
+                        terrain = surface_terrain.get(key) or plains_fallback
+                    else:
+                        terrain = surface_biome_terrain(
+                            terrain_set,
+                            system_climate_zone=default_zone,
+                            masks=masks,
+                        )
+                else:
+                    terrain = subsurface_terrain_at_z(terrain_set)
                 hydrology_entry = hydrology_by_cell.get(key) if hydrology_by_cell else None
                 hydrology_wire = None
                 material = None

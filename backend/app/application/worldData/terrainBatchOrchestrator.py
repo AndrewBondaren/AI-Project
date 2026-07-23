@@ -42,6 +42,7 @@ class TileSurfaceState:
     heightmap: object
     n_eff: object
     hydrology: dict | None
+    surface_terrain: dict[tuple[int, int], str] | None = None
 
 
 class TerrainBatchOrchestrator:
@@ -111,6 +112,9 @@ class TerrainBatchOrchestrator:
         from app.application.worldData.generators.hydrology.shore.parentLightHydroCorridor import (
             merge_hydro_hard_corridor,
         )
+        from app.application.worldData.generators.terrain.passes.parentLightTerrain import (
+            upsample_terrain_from_parent_light,
+        )
         from app.application.worldData.generators.terrain.passes.parentLightUpsample import (
             meter_bbox_for_parent,
             upsample_from_parent_light,
@@ -125,6 +129,7 @@ class TerrainBatchOrchestrator:
 
         policy = refine_policy or ParentLightRefinePolicy.canonical_defaults()
         fine_z = upsample_from_parent_light(parent_light, world, policy=policy)
+        fine_terrain = upsample_terrain_from_parent_light(parent_light, world, policy=policy)
         cell_m = parent_light.tile_m
         for (xm, ym), z in ctx.meter_z_overrides.items():
             if xm // cell_m == tile_gx and ym // cell_m == tile_gy:
@@ -141,7 +146,12 @@ class TerrainBatchOrchestrator:
         )
         tile_hydro = merge_hydro_hard_corridor(parent_light, ctx.sparse_meter_hydro)
         n_eff = run_gap_analysis(world, heightmap)
-        return TileSurfaceState(heightmap=heightmap, n_eff=n_eff, hydrology=tile_hydro or None)
+        return TileSurfaceState(
+            heightmap=heightmap,
+            n_eff=n_eff,
+            hydrology=tile_hydro or None,
+            surface_terrain=fine_terrain,
+        )
 
     async def generate_chunk_cells(
         self,
@@ -188,4 +198,5 @@ class TerrainBatchOrchestrator:
             surface_state.n_eff,
             rect,
             hydrology_by_cell=surface_state.hydrology,
+            surface_terrain=surface_state.surface_terrain,
         )
