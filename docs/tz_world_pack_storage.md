@@ -228,9 +228,11 @@ load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
 
 **Антипаттерн (запрещено):** независимый `run_surface_pass` на fine grid без L0 → река на карте и в сцене в разных местах.
 
-#### Terrain mask carry (`system_terrain`) — утверждено 2026-07-23 (WP-PERF-22-OPEN-1)
+#### Terrain mask carry (`system_terrain`) — ✅ закрыто 2026-07-23 (было WP-PERF-22-OPEN-1)
 
-**Было:** write/refine игнорировал parent `system_terrain` → `surface_biome_terrain(default_zone)` → сплошной forest (smoke `world-test-003` `(-2,-2)`). Read fallback уже брал wire. **Статус:** контракт утверждён; impl ✅ вместе с кодом.
+**Статус:** ✅ контракт + impl + smoke.  
+**Было:** write/refine игнорировал parent `system_terrain` → `surface_biome_terrain(default_zone)` → сплошной forest. Read fallback уже брал wire.  
+**Приёмка:** `world-test-003` tile `(-2,-2)` — L2 surface ASCII: plains / mountain / ravine согласованы с L0 light (не all `f`).
 
 **Контракт (вариант A — hard stamp nearest):**
 
@@ -249,7 +251,7 @@ load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
          → hydro corridor may recolor
 ```
 
-**Архитектура классов (целевое):**
+**Архитектура классов (impl):**
 
 | Модуль | Ответственность |
 |---|---|
@@ -1802,7 +1804,7 @@ flowchart TB
 |---|---|---|---|
 | **WP-PERF-20** | Partial `TileSurfaceState` | gap analysis + fine upsample **по chunk rect + halo ±1**, не на весь macro-tile | **−10…12 s** scene phase |
 | **WP-PERF-21** | Кэш `TileSurfaceState` per `(gx, gy)` | один build на tile per bake run; scene + background chunks reuse | меньше повторов WP-PERF-20 |
-| **WP-PERF-22** | L0-constrained refine (Идея 2) | `refine_chunk(load_parent_light(L0), rect)`: upsample L0 `surface_z` + hydro corridor + **nearest `system_terrain`**; SoT = disk wire + process cache | ✅ z/hydro/terrain mask carry (OPEN-1 закрыт 2026-07-23) |
+| **WP-PERF-22** | L0-constrained refine (Идея 2) | upsample L0 `surface_z` + hydro corridor + nearest `system_terrain` | ✅ z/hydro + terrain mask carry; smoke `world-test-003` `(-2,-2)` 2026-07-23 |
 
 #### P2 — CPU generate (offline / фон)
 
@@ -1918,4 +1920,5 @@ flowchart LR
 | 2026-07-15 | **Bake modes WP-27/28:** `light_bake` / `full_bake` (=все location L0) / `detailed_bake`; offline cases 1–3; detect+resume; API `mode=light\|full\|detailed`; старый tile/full wilderness ≠ full_bake |
 | 2026-07-15 | **WP-PERF-22 ✅:** `ParentLightTile` / cache / upsample / hard corridor wired in pack refine |
 | 2026-07-23 | **WP-PERF-22-OPEN-1 открыт:** L0 terrain mask не в L2 fill (smoke all forest) |
-| 2026-07-23 | **Terrain mask carry утверждён + impl:** hard stamp nearest; hydro после; climate fine ≠ terrain; WP-19 chunks без изменений; классы — § Parent light |
+| 2026-07-23 | **Terrain mask carry утверждён + impl:** hard stamp nearest; hydro после; climate fine ≠ terrain; WP-19 chunks без изменений |
+| 2026-07-23 | **Terrain mask carry ✅ закрыто:** smoke `world-test-003` `(-2,-2)` L2 = plains/mountain/ravine vs L0 light (не all forest) |

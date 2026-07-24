@@ -6,7 +6,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.annotationPolicy import DefaultOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire, DefaultEnumOnWire
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
 )
@@ -17,6 +17,15 @@ from app.dataModel.masks.enums.maskDomainId import (
 )
 from app.dataModel.masks.maskCategoryPolicy import MaskCategoryPolicy
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
+from app.dataModel.terrainMasks.mountain.enums import MountainKind, MountainSideKind
+from app.dataModel.terrainMasks.mountain.specs import (
+    MountainDeclareEntry,
+    MountainForm,
+    MountainFormBySides,
+    MountainSideSpec,
+    default_sides_for_count,
+    form_side_count,
+)
 
 
 def _terrain_key(system_terrain: str) -> str:
@@ -37,23 +46,26 @@ def _road_connection_types() -> tuple[str, ...]:
 
 
 class MountainsCategoryPolicy(MaskCategoryPolicy):
-    """Declare + autoresolve mountain massifs."""
+    """Declare + autoresolve mountain massifs — Spec pipeline (not location disk)."""
 
     system_terrain: DefaultOnWire[str] = Field(default_factory=lambda: _terrain_key("mountain"))
-    # Autoresolve: score = ridge_noise + elev_bias + relief_term; paint if >= threshold.
     threshold: DefaultOnWire[float] = constrained_field(
         default=0.82, greater_equals=0.0, lesser_equals=2.0,
     )
     elevation_bias_weight: DefaultOnWire[float] = constrained_field(default=0.04, greater_equals=0.0)
     relief_weight: DefaultOnWire[float] = constrained_field(default=0.05, greater_equals=0.0)
-    # Light-cell disk radius around geographic.mountain / peak anchors.
-    declare_radius_light: DefaultOnWire[int] = Field(default=3, ge=0)
-    # Quantize meters for ridge noise (must be ≪ tile_m so L0 sees variation).
     ridge_cell_m: DefaultOnWire[int] = Field(default=250, ge=1)
-    # Interim KindElevation (Pass 1.4): rise = round(z_max * fraction); full MountainKind later.
-    rise_fraction_of_z_max: DefaultOnWire[float] = constrained_field(
-        default=0.25, greater_equals=0.0, lesser_equals=1.0,
-    )
+    default_kind: DefaultEnumOnWire[MountainKind] = MountainKind.ROCKY
+    default_form: MountainForm = Field(default_factory=MountainFormBySides)
+    default_side_kind: DefaultEnumOnWire[MountainSideKind] = MountainSideKind.SLOPE
+    default_radius_m: DefaultOnWire[int] = Field(default=500, ge=1)
+    default_sides: DefaultOnWire[list[MountainSideSpec]] = Field(default_factory=list)
+
+    def resolved_sides(self) -> list[MountainSideSpec]:
+        n = form_side_count(self.default_form)
+        if len(self.default_sides) == n:
+            return list(self.default_sides)
+        return default_sides_for_count(n, kind=self.default_side_kind)
 
 
 class ForestsCategoryPolicy(MaskCategoryPolicy):
@@ -75,7 +87,6 @@ class RavinesCategoryPolicy(MaskCategoryPolicy):
     system_terrain: DefaultOnWire[str] = Field(default_factory=lambda: _terrain_key("ravine"))
     min_drop: DefaultOnWire[int] = Field(default=1, ge=1)
     min_neighbors: DefaultOnWire[int] = Field(default=3, ge=1)
-    # Pass 1.4 / light: lower surface_z by this many units when ravine paints.
     drop_z: DefaultOnWire[int] = Field(default=1, ge=1)
 
 
@@ -99,6 +110,7 @@ class WorldTerrainMasks(BaseModel):
     default_mountains: DefaultOnWire[MountainsCategoryPolicy] = Field(
         default_factory=MountainsCategoryPolicy,
     )
+    declared_mountains: DefaultOnWire[list[MountainDeclareEntry]] = Field(default_factory=list)
     default_forests: DefaultOnWire[ForestsCategoryPolicy] = Field(
         default_factory=ForestsCategoryPolicy,
     )

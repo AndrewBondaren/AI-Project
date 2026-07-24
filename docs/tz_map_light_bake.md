@@ -1,6 +1,6 @@
 ---
 name: tz-map-light-bake
-description: "ТЗ L0 light-grid compose — маска world map + единая политика surface mask domains (enabled/declare/autoresolve)"
+description: "ТЗ L0 light-grid compose — маска world map, surface mask domains, MaskDomain materialize (collect→materialize→apply)"
 metadata:
   node_type: memory
   type: project
@@ -230,8 +230,10 @@ flowchart TB
 | Корень | Домены | Статус |
 |---|---|---|
 | `world.hydrology` | реки / озёра / моря / shore / landforms hydro | уже есть (`WorldHydrology`) |
-| `world.terrain_masks` | mountains / forests / plains / ravines / roads | **норматив этого §** |
+| `world.terrain_masks` | mountains / forests / plains / ravines / roads (+ later farmland declare) | **норматив этого §** |
 | structure graph (`connection_*`) + policy enable | road | enable в `terrain_masks.default_roads`; geometry — edges |
+| settlement pins / footprint | `MaskDomainId.SETTLEMENT` | L0 Spec→pin/footprint; L2 layout — не mask domain |
+| farmland (later) | новый `MaskDomainId.FARMLAND` | тот же materialize; crops — flora, не маска |
 
 Не дублировать hydro-флаги вторым деревом: light bake **читает** `world.hydrology.*`. Terrain-типы — отдельный корень с **той же формой category policy**. Не mega-dict доменов: typed fields `default_*` / `declared_*`.
 
@@ -244,7 +246,8 @@ MaskDomain (engine):
   policy: CategoryPolicy        # enabled + autoresolve + knobs (DefaultOnWire)
   declared: list[DomainSpec]    # подход A; typed per domain
   merge: MergeRule              # system_terrain → rank; hydro → role priority; settlement → pin
-  materialize: declare ∪ autoresolve → Spec(s) → raster/paint
+  materialize: declare ∪ autoresolve → Spec(s) → MaskFootprint → apply
+  # детали контракта / anti-smell: § MaskDomain materialize (2026-07-24)
 ```
 
 ```text
@@ -273,12 +276,217 @@ IgnoreOnWire override (если ключ был в JSON)
 
 1. `MaskDomainId` member + slot в `TERRAIN_MERGE_RANK_HIGH_TO_LOW` / `COMPOSE_CONTRIBUTOR_ORDER` (+ `LightContributorId` + factory)
 2. Typed `*CategoryPolicy` + `declared_*[]` / Spec POJO на корне (`terrain_masks` или `hydrology`)
-3. Contributor в `lightGrid/contributors/` — thin: `category_enabled` → materialize → shared paint
-4. Запись в compose contributor registry / `DEFAULT_CONTRIBUTORS` в **нужной phase**, не «в конец наугад»
-5. Shared writers only: `may_paint_terrain` / `paint_system_terrain(_cell)` для terrain; hydro — свой role merge
-6. Unit: enabled gate + merge rank vs соседний домен; light/full = один pipeline (`ctx.tiles` only)
+3. `MaskDomainMaterializer[SpecT]` (collect helpers + `materialize` + `apply`) — **не** логика в contributor
+4. Contributor: только `run_mask_domain(compose, ctx, materializer, masks)` (или эквивалент)
+5. Shared writers only: `may_paint_terrain` / `paint_system_terrain(_cell)` / pin helpers; hydro — свой role merge
+6. Unit: enabled gate + merge rank vs соседний домен; light/full = один pipeline (`ctx.tiles` only); **нет Spec → нет paint**
 
 `light_bake` / `full_bake` — **один** compose; отличается только набор macro-tiles (location tiles vs весь `world_bounds`).
+
+### MaskDomain materialize — общая абстракция (утверждено 2026-07-24)
+
+**Смысл имплементации:** закрыть дыру между `WorldTerrainMasks` / category policy и shared paint.  
+Не общий blob Spec и не god-orchestrator всех доменов — **один жизненный цикл** (`collect → materialize → apply`), **N доменных engine**. Compose по-прежнему вызывает contributors; contributor — тонкий runner, не место geometry/score→paint.
+
+Эталон формы уже у hydrology (`declared_*` → Spec → raster → write). Terrain / settlement / later farmland копируют **паттерн**, не типы.
+
+#### Фазы (обязательный контракт)
+
+```text
+category_enabled(policy)?
+  → load_declared(ctx) ∪ autoresolve_specs(ctx, policy)   # merge: declare побеждает
+  → per Spec: materialize(spec) → MaskFootprint             # domain engine, без paint
+  → engine.apply(compose, footprint, spec, masks)           # writers only
+```
+
+| Фаза | Ответственность | Не делает |
+|---|---|---|
+| **load_declared** | Specs из `declared_*[]` | placement, paint |
+| **autoresolve_specs** | placement / detect → **Spec[]** (не cells) | paint, merge rank |
+| **merge_declare_over_auto** | shared helper; declare не затирается | domain geometry |
+| **materialize** | Spec → `MaskFootprint` (facade; внутри — шаги engine) | `may_paint` / compose writes |
+| **apply** | footprint → shared writers (+ domain z/pins) | construct form, score |
+| **Contributor** | `run_mask_domain(...)` | polygon math, score→paint, disk-from-location |
+
+**Запрещено:** score / detect / location-disk → paint в contributor в обход Spec.  
+**Запрещено:** общий `BaseSpec` с полями всех доменов; общий `raster()` с `if domain == …`.  
+**Запрещено:** bake-only поля (`pin_index`, tile keys) на wire Spec — резолв в apply/ctx.
+
+#### Shared runtime types
+
+```text
+LightCellRef
+  gx, gy, tx, ty: int
+
+MaskFootprint
+  cells: frozenset[LightCellRef]
+  # typed optional payloads — НЕ Mapping[str, object] bag
+  elevation_fraction: Mapping[LightCellRef, float] | None = None
+  # новые attrs = новое optional поле или domain Result ≅ Footprint+payload;
+  # не свободный dict
+```
+
+Shared helpers (application, один раз):
+
+```text
+merge_declare_over_auto(declared, auto, *, key) → list[Spec]
+run_mask_domain(compose, ctx, engine, masks) → None
+  # gate category_enabled → collect → materialize → apply
+
+apply_terrain_footprint(compose, footprint, *, system_terrain, masks, preserve_hydro)
+apply_location_pins(compose, footprint, *, pin_index)   # pin_index из ctx, не из wire Spec
+```
+
+Geom utilities (shared, без доменной семантики): `raster_disk`, polygon fill — переиспользуют settlement / simple specs; **не** дублировать disk в каждом contributor.
+
+#### Protocol materializer (per domain)
+
+```text
+MaskDomainMaterializer[SpecT]:
+  domain: MaskDomainId
+  begin_pass() → None                   # required; no-op if no pass-state
+
+  load_declared(ctx) → list[SpecT]      # wire declared_*[] only
+  load_anchor_specs(ctx) → list[SpecT]  # optional geo/named → Spec; not declare
+  autoresolve_specs(ctx, policy) → list[SpecT]
+  collect(ctx, policy) → list[SpecT]
+    # default_collect: merge declared > anchors > autoresolve
+
+  materialize(spec, scale) → MaskFootprint
+  apply(compose, footprint, spec, masks, *, tile_set, ctx) → None
+  category_policy(masks) → CategoryPolicy
+```
+
+Имя **Materializer** (не Engine): `application/engine` — DAG runtime; mask materializer — L0 Spec→footprint→paint.
+
+**Merge order Spec sources:** `declared_*` > anchor Specs > autoresolve.  
+Geographic / named → Spec = **anchor** (не declare-path, не внутри `load_declared`).
+
+Модули (target):
+
+| Артефакт | Слой |
+|---|---|
+| Spec / Form / Kind POJO, `declared_*` на корне | `dataModel/` (`terrainMasks/…`, later farmland) |
+| `MaskFootprint`, `run_mask_domain`, `apply_*`, merge helper | `application/worldData/masks/` (или `pack/bake/lightGrid/materialize/`) |
+| Domain materializer + geometry steps | `application/worldData/generators/…` (pure) или masks subdomain |
+| `*Contributor` | `lightGrid/contributors/` — runner only |
+
+```mermaid
+flowchart LR
+  C[Contributor / run_mask_domain]
+  E[MaskDomainMaterializer]
+  S[Domain Spec]
+  F[MaskFootprint]
+  A[materializer.apply → shared writers]
+
+  C --> E
+  E -->|collect| S
+  E -->|materialize| F
+  E --> A
+  A --> G[LightGridCompose]
+```
+#### Plugin map (тот же контракт)
+
+| Domain | SpecT (wire) | materialize | apply writes | Scope сейчас |
+|---|---|---|---|---|
+| **mountains** | `MountainSpec` \| `MountainRangeSpec` | FormGeometry→FormRaster→SideFill → footprint (+ fractions) | terrain + KindElevation z | **первый полный plugin**; stub disk/score→paint **удалить** |
+| **ravines** | `RavineSpec` | depression/path → footprint | terrain + drop z | тем же каркасом после гор |
+| **settlement** | `SettlementSpec` (origin, radius_m / size, `location_uid`) | disk / later outline | `location_pin` (index из `locations_index`) | углубить pin→Spec pipeline |
+| **farmland** | `FarmlandSpec` (region) | region fill | terrain key | **новый** `MaskDomainId.FARMLAND` (PR); flora/crops — отдельно ([`tz_flora`](./tz_flora.md)) |
+| **forests / plains** | `ForestSpec` / `PlainSpec` | region / climate | terrain | **отложено**; landcover interim OK до Spec |
+| **roads** | geometry = structure edges | polyline (+ dilate) | terrain | edges SoT; enable в policy; тот же apply_terrain |
+| **hydrology** | already declared Specs | raster roles | `hydrology_*` (+ bathymetry) | эталон; не переписывать под terrain types |
+
+**Settlement / farmland** — culture/land-use plugins той же абстракции, не отдельные bake pipeline.  
+L2 `SettlementAssembler` ≠ L0 mask domain (на L0 только Spec→footprint/pin).  
+Farmland mask ≠ `crops_registry`: маска = «здесь пашня»; flora = какие crops на клетке (later).
+
+#### MountainsCategoryPolicy (target knobs; stub fields убрать)
+
+```text
+MountainsCategoryPolicy ⊂ MaskCategoryPolicy
+  system_terrain
+  enabled / autoresolve
+  default_kind / default_form / default_radius_m / default sides
+  placement: threshold, elevation_bias_weight, relief_weight, ridge_cell_m
+  # УДАЛИТЬ при имплементации engine: declare_radius_light (location disk)
+```
+
+`WorldTerrainMasks.declared_mountains[]` — полные `MountainSpec | MountainRangeSpec` (подход A).
+
+#### Порядок имплементации (слои, не slice «только paint»)
+
+1. Shared: `MaskFootprint`, `merge_declare_over_auto`, `run_mask_domain`, `apply_terrain_footprint` / pins  
+2. dataModel: mountain Spec/Form/Kind/Side + `declared_mountains` на `WorldTerrainMasks`; policy без `declare_radius_light`  
+3. `MountainMaskMaterializer`: collect helpers + `materialize` facade (FG→FR→SF) + `apply` (terrain+z)  
+4. Thin `MountainContributor`; удалить stub disk + score→paint  
+5. Later: ravine/settlement на том же каркасе; farmland = новый MaskDomainId; forest Spec — отдельно  
+
+Anti-smell (обязательно при ревью PR):
+
+| # | Правило |
+|---|---|
+| S1 | Нет god-`raster()`: шаги гор — отдельные модули; `materialize` = facade |
+| S2 | `collect` не inline’ит placement+declare — только merge двух helpers |
+| S3 | Нет копипасты loop в contributors — `run_mask_domain` |
+| S4 | Wire Spec без bake indices (`pin_index` и т.п.) |
+| S5 | Typed footprint payloads, не `dict[str, object]` |
+
+#### Открытые вопросы (post MLB-13 review + post-P0 re-review, 2026-07-24)
+
+Приоритет: **P0 (закрыт) → P1 → P2 → P3**. Forest / farmland **не** начинать, пока P1 не закрыт.
+
+**P0 — контракты** ✅
+
+| # | Статус | Вопрос / фикс |
+|---|---|---|
+| Q1 | ✅ | `begin_pass()` в Protocol; `run_mask_domain` зовёт напрямую (не `getattr`) |
+| Q2 | ✅ | `load_declared` = wire only; `load_anchor_specs` = geo→Spec; merge в `default_collect` (declare > anchors > auto) |
+| Q3 | ✅ interim B | Coarse Pass 1.4 = **disk**; light = FormRaster+SideFill. Follow-up **Q3-A**: unify coarse → Spec→FormRaster |
+
+---
+
+**Остаток после P0** (ревью: неявные контракты / god-object / SRP / дубли)
+
+##### Неявные контракты
+
+| # | Статус | Вопрос / фикс |
+|---|---|---|
+| Q9 | ✅ | Typed `sample.typical_elevation_z` в collect/ridge; `0` только если `pole_field is None` |
+| Q13 | ✅ | `MountainsCategoryPolicy` isinstance в materializer; `policy.autoresolve` typed на `MaskCategoryPolicy` / `default_collect` |
+| Q14 | ✅ | `expand_ranges_for_coarse_disk` — явный coarse-only adapter; light Range → corridor в `formPipeline` |
+| Q15 | ✅ | Merge SoT: `identity_key()` + `merge_mountain_spec_sources` / `default_collect` |
+| Q3-A | follow-up | Unify coarse footprint с FormRaster (сейчас interim B задокументирован) |
+
+##### God-object
+
+| # | Статус | Вопрос / фикс |
+|---|---|---|
+| Q4 | ✅ | Ridge core: `ridgePlacement.place_ridge_candidates`; light/coarse — adapters поверх; Range expand — отдельный helper |
+| — | ок | `MountainMaskMaterializer` / `run_mask_domain` — **не** god; не раздувать |
+
+##### Смешение ответственности
+
+| # | Статус | Вопрос / фикс |
+|---|---|---|
+| Q11 | ✅ | `MountainMaskMaterializer._apply_elevation` — terrain paint vs z |
+| Q14 | ✅ | см. выше — coarse expand отделён |
+| Q10 | ✅ | `formPipeline.py` (Form→Raster→SideFill + interim `coarse_disk_keys`); `materialize.py` удалён |
+| Q16 | ✅ | `geoAnchors.anchor_mountain_locations` (+ alias `declare_mountain_locations`) |
+| Q17 | ✅ | Coarse и light materializer collect → `merge_mountain_spec_sources` |
+
+##### Дублирование кода
+
+| # | Статус | Вопрос / фикс |
+|---|---|---|
+| Q4 | ✅ | см. ridgePlacement |
+| Q5 | ✅ | Один merge path (Q2 + Q4 + Q17) |
+| Q6 | ✅ | `mountains/geom.py` + `light_cell_center_m` в range/SideFill |
+| Q7 | ✅ | SHEER ε = `sheer_band_light * light_m` |
+| Q8 | ✅ | Spec `radius_m` / Range `width_m` default ← `MountainsCategoryPolicy.default_radius_m` (factory) |
+| Q12 | ✅ interim | Range corridor + docstring «not full SideFill»; fuller left/right/caps — follow-up |
+
+**Остаток open:** Q3-A (coarse→FormRaster); fuller Range SideFill (после Q12 interim).
 
 ### Declare = Spec в домене; Location — поверх (утверждено 2026-07-16)
 
@@ -287,9 +495,10 @@ IgnoreOnWire override (если ключ был в JSON)
 | Правило | |
 |---|---|
 | SoT declare маски | `terrain_masks.declared_*[]` — **полный** typed entry (Spec / geometry), не disk от location |
+| **Anchor Specs** | geographic / named → Spec через `load_anchor_specs` — **не** declare; merge: declare > anchors > autoresolve |
 | `NamedLocation` | **опционально поверх** объекта маски (имя, якорь сцены, «храм на горе») |
-| Location → mask | **запрещено** как declare-path: geographic.mountain/peak/plain **не** рисует маску сам |
-| Пустой `declared_*` | ≠ off; autoresolve materialize Specs без имён |
+| Location → mask | **запрещено** как declare-path: geographic.mountain/peak/plain **не** рисует маску сам и **не** живёт в `load_declared` |
+| Пустой `declared_*` | ≠ off; anchors + autoresolve всё равно materialize Specs |
 | Optional link | declare entry может иметь `location_uid` (имя), но геометрия живёт в declare Spec |
 
 ```text
@@ -312,8 +521,10 @@ NamedLocation(geographic.mountain) → disk paint  # interim; убрать
 | **plains** | `plains` | `declared_plains[]`: `PlainSpec` (region footprint) | фон суши, где нет выше по rank |
 | **ravines** | `ravine` | `declared_ravines[]`: `RavineSpec` (path / polygon) | депрессии → RavineSpec |
 | **roads** | `road` | geometry = structure edges; enable в `default_roads` | без edges маска пуста; `enabled: false` запрещает paint |
+| **settlement** (mask) | pin / optional terrain later | `SettlementSpec` (или declared list) | pins → Spec → footprint; не L2 assembler |
+| **farmland** (later) | farmland terrain key | `declared_fields[]`: `FarmlandSpec` | region → mask; crops via flora |
 
-Каждый `*Spec` — POJO домена (поля footprint/knobs свои); materialize → общий merge/paint.  
+Каждый `*Spec` — POJO домена (поля footprint/knobs свои); materialize → `MaskFootprint` → shared apply (§ MaskDomain materialize).  
 Defaults kind/form/… для гор — в `MountainsCategoryPolicy`, не в location.
 
 #### Forest mask → flora (не дублировать домен)
@@ -734,7 +945,12 @@ Climate contributor пишет только `climate_zone_id` — вход дл�
 ### Tech debt
 
 - ~~Interim LightLandcoverPolicy / mountain-from-z~~ — удалено.  
-- **Open:** нет engine `MountainKind`/`Form`/`Sides` + elevation — § Mountain (engine); mountain contributor = stub (disk + score→paint).  
+- **Open (blocker):** ~~нет shared MaskDomain materialize~~ — **shipped** (`MaskFootprint` / `run_mask_domain` / Spec→apply) — § **MaskDomain materialize**.  
+- **Partial:** mountain Spec plugin (FormGeometry→FormRaster→SideFill→KindElevation + thin contributor); refine algorithms / Range SideFill later. Stub disk/score→paint **удалён**.  
+- **Open (post-review):** § Открытые вопросы — P0 ✅; Q4–Q17 ✅ (Q12 corridor interim); остаток **Q3-A** + fuller Range SideFill.  
+- **INTERIM Q3-B:** Pass 1.4 mountain z = macro **disk**; L0 light = FormRaster+SideFill. Follow-up **Q3-A**.  
+- **INTERIM Q12:** Range = spine corridor (+ peaks); fuller left/right/caps SideFill — follow-up.  
+- **Deferred:** forest Spec + flora gate B; farmland `MaskDomainId`; settlement Spec pipeline (сейчас pin disk в contributor).  
 - **Open (2026-07-17):** coarse **relief_objects_z до hydrology** — § Coarse planning ↔ light compose; без этого procedural lakes/rivers на flat z.  
 - ~~Debt: landcover `tundra` as terrain~~ — **fixed** (cold = climate_zone_id; landcover forest|plains).  
 - **Stub:** flora type refs / FloraGenerator — [`tz_flora.md`](./tz_flora.md).  
@@ -771,16 +987,18 @@ Climate contributor пишет только `climate_zone_id` — вход дл�
 | 4 Structural | `mountain` → `ravine` | `MOUNTAINS`, `RAVINES` |
 | 5 Hydro | `hydro` | `HYDROLOGY` |
 | 6 Culture | `settlement` → `road` | `SETTLEMENT`, `ROADS` |
+| (later) Land-use | `farmland` | `FARMLAND` (новый MaskDomainId) |
 | (later) Flora | type refs | — flora TZ |
 
-**Shared paint**
+**Shared paint / materialize**
 
 | Shared | Ответственность |
 |---|---|
 | `may_paint_terrain` / merge | единственный gate `system_terrain` |
-| `paint_system_terrain(_cell)` | единственный writer terrain |
-| Domain materialize | Spec → cells (+ optional z / hydro side effects) |
-| Contributor | оркестрация домена, не второй merge |
+| `paint_system_terrain(_cell)` / `apply_terrain_footprint` | единственный writer terrain |
+| `MaskFootprint` + `run_mask_domain` | общий жизненный цикл Spec→apply (§ MaskDomain materialize) |
+| Domain `MaskDomainMaterializer` | SpecT + `materialize` + `apply` (z/pins) |
+| Contributor | тонкий runner; не второй merge и не geometry |
 
 ---
 
@@ -1071,7 +1289,7 @@ L2 `refine_chunk` читает parent light **только** через `load_pa
 Контракт согласованности: corridor `hydrology_role` / forms `surface_z`.  
 Пустая hydro-маска на L0 = сломанный контракт world map и constraints L2.
 
-**Terrain mask carry (утверждено):** L2 surface `system_terrain` = nearest parent wire — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § **Terrain mask carry**; climate fine — denser field, не SoT маски; chunks WP-19 не режутся по зонам.
+**Terrain mask carry (✅ закрыто):** L2 surface `system_terrain` = nearest parent wire — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § **Terrain mask carry**; smoke `world-test-003` `(-2,-2)` принят.
 
 **Антипаттерн:** refine из live `LightGridCompose` или из `SurfaceTerrainContext` в обход baked mask.
 
@@ -1107,9 +1325,10 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 | MLB-7 | Новые light-cell поля и hydro merge/defaults живут в `dataModel/worldPack` (+ hydrology enums); application только staging/compose |
 | MLB-8 | L2 river/ridge внутри L0 corridor / z-band — unit ✅ (`test_parent_light_refine`); HTTP fixture smoke — backlog |
 | MLB-9 | Единая policy всех mask-доменов (`WorldTerrainMasks` + hydrology) — ✅ unit (`test_terrain_masks`, `test_light_grid_compose`) |
-| MLB-10 | Mountain domain declare+autoresolve; forest/plains без mountain-from-z — ✅ |
+| MLB-10 | Mountain domain declare+autoresolve; forest/plains без mountain-from-z — ✅ interim stub; target Spec engine — open |
 | MLB-11 | Мир **без** `locations`: bake/bootstrap **fail-closed** (422 context unavailable), не empty pack; wilderness-without-anchors — open (§ Edge case) |
 | MLB-12 | World mosaic frame = `world_bounds` / resolved AABB; пустые клетки = unmapped внутри прямоугольника, не «кривая» форма мира | ✅ `PackMapGridRender` |
+| MLB-13 | MaskDomain materialize: `MaskFootprint` + `run_mask_domain` + mountain Spec plugin; stub disk/score→paint удалён; S1–S5 anti-smell | ✅ unit (`test_mask_domain_materialize`, relief/light compose) |
 
 ---
 
@@ -1129,8 +1348,15 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-24 | § **MaskDomain materialize**: общая абстракция collect→materialize→apply; `MaskFootprint`; `run_mask_domain`; anti-smell S1–S5; settlement/farmland как plugins; mountain = первый plugin; forest deferred; MLB-13 |
+| 2026-07-24 | Impl MLB-13: shared materialize + `MountainMaskMaterializer` (FG→FR→SF→KindElevation); `declared_mountains`; removed `declare_radius_light` / score→paint stub |
+| 2026-07-24 | Rename: `MaskDomainEngine`/`MountainMaskEngine` → `MaskDomainMaterializer`/`MountainMaskMaterializer` (Engine = DAG only) |
+| 2026-07-24 | § MaskDomain materialize: **Открытые вопросы** Q1–Q13 (P0–P3 post MLB-13 review) |
+| 2026-07-24 | P0 closed: Q1 `begin_pass` Protocol; Q2 declare vs `load_anchor_specs`; Q3-B coarse disk interim documented |
+| 2026-07-24 | § Открытые вопросы: post-P0 re-review — группы неявные контракты / god-object / SRP / дубли; Q14–Q17 |
+| 2026-07-24 | Closed Q4–Q17: ridgePlacement + merge SoT; geom; coarse Range expand; typed policy/climate; SHEER ε; radius SoT; formPipeline; `_apply_elevation`; anchor rename; Q12 corridor interim. Open: Q3-A |
 | 2026-07-20 | Compose scope: light/full = L0 only; L2 = detailed/entry (pack storage Job boundaries) |
-| 2026-07-23 | Cross-ref terrain mask carry (hard stamp nearest; OPEN-1 closed) |
+| 2026-07-23 | Terrain mask carry ✅ closed (smoke world-test-003 (-2,-2)) |
 | 2026-07-14 | Первая фиксация: LightGridCompose, contributors, Path A hydro, границы vs SurfaceTerrainContext |
 | 2026-07-14 | § **Связь с dataModel (SoT)** — таблица wire/POJO ↔ bake; staging ≠ SoT; MLB-7 |
 | 2026-07-14 | Каталог кода: **`pack/bake/lightGrid/`** (утверждено) |

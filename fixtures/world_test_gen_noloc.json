@@ -99,7 +99,6 @@
         "display_name": "Лагерь"
       }
     },
-    "map_cell_size_m": 3000,
     "default_passage_height": 2,
     "lore_registry": {
       "terrain_plains": {

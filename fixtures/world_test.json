@@ -35,7 +35,6 @@
       "cave":      { "display_name": "Пещера" },
       "camp":      { "display_name": "Лагерь" }
     },
-    "map_cell_size_m": 3000,
     "default_passage_height": 2,
     "lore_registry": {
       "terrain_plains":      { "display_name": "Равнина",               "description": "Открытая ровная местность. Хорошо проходимая, слабоопасная." },

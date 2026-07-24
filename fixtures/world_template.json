@@ -42,7 +42,7 @@
     "hp_enabled": true,
     "faint_threshold": 0.05,
     "wounds_enabled": false,
-    "map_cell_size_m": 3000,
+
     "default_passage_height": 2,
     "map_subsurface_depth": 0,
     "grid_bbox_padding": 2,

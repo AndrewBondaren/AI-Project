@@ -89,7 +89,7 @@ class TestLightGridCompose(unittest.TestCase):
         )
 
     def test_river_corridor_not_flat_macro_sample(self):
-        world = _world()
+        world = _world(terrain_masks={"default_mountains": {"enabled": False}})
         locations = [
             NamedLocation(
                 location_uid="town-1",

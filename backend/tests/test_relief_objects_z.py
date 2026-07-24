@@ -57,16 +57,16 @@ def _world(**overrides):
 
 
 class TestElevationResolve(unittest.TestCase):
-    def test_rise_from_pojo_fraction(self) -> None:
-        policy = WorldTerrainMasks.canonical_defaults().default_mountains
-        self.assertEqual(policy.rise_fraction_of_z_max, 0.25)
-        self.assertEqual(mountain_rise_amount(policy, 8), 2)
+    def test_rise_from_kind_profile(self) -> None:
+        from app.dataModel.terrainMasks.mountain import MountainKind
+
+        self.assertEqual(mountain_rise_amount(MountainKind.ROCKY, 8), 3)
         self.assertEqual(
-            resolve_mountain_surface_z(3, z_min=0, z_max=8, policy=policy),
-            5,
+            resolve_mountain_surface_z(3, z_min=0, z_max=8, kind=MountainKind.ROCKY),
+            6,
         )
         self.assertEqual(
-            resolve_mountain_surface_z(7, z_min=0, z_max=8, policy=policy),
+            resolve_mountain_surface_z(7, z_min=0, z_max=8, kind=MountainKind.ROCKY),
             8,
         )
 
@@ -78,7 +78,6 @@ class TestApplyReliefObjectsZ(unittest.TestCase):
         world.terrain_masks = {
             "default_mountains": {
                 "threshold": 0.0,
-                "rise_fraction_of_z_max": 0.25,
             },
         }
         hm = SurfaceHeightmap(
@@ -92,7 +91,8 @@ class TestApplyReliefObjectsZ(unittest.TestCase):
         zs = list(hm.surface_z.values())
         self.assertTrue(any(z > 1 for z in zs), zs)
         self.assertTrue(all(z <= 8 for z in zs), zs)
-        self.assertEqual(max(zs), 3)  # 1 + round(8*0.25)=1+2
+        # ROCKY rise = round(8*0.35)=3 → max 1+3=4
+        self.assertEqual(max(zs), 4)
 
 
 class TestGridDetectThresholds(unittest.TestCase):
@@ -209,11 +209,11 @@ class TestAntiDoubleRise(unittest.TestCase):
         from app.application.worldData.pack.bake.lightGrid.contributors.relief import (
             ReliefContributor,
         )
+        from app.dataModel.terrainMasks.mountain import MountainKind
 
         world = _world(z_max=8, z_min=0, map_cell_size_m=1000)
-        policy = WorldTerrainMasks.canonical_defaults().default_mountains
-        rise = mountain_rise_amount(policy, 8)
-        self.assertEqual(rise, 2)
+        rise = mountain_rise_amount(MountainKind.ROCKY, 8)
+        self.assertEqual(rise, 3)
 
         pole = MagicMock()
         pole.sample.return_value = SimpleNamespace(
@@ -248,7 +248,7 @@ class TestAntiDoubleRise(unittest.TestCase):
         )
         ReliefContributor().apply(compose, ctx)
         relief_z = compose.get(0, 0, 0, 0).surface_z
-        # Base from pre-1.4 (=1) ± noise amplitude 1 → in [0, 2], not post-1.4 (=3).
+        # Base from pre-1.4 (=1) ± noise amplitude 1 → in [0, 2], not post-1.4.
         self.assertLessEqual(relief_z, 1 + 1)
         self.assertNotEqual(relief_z, 1 + rise)
 
@@ -256,8 +256,7 @@ class TestAntiDoubleRise(unittest.TestCase):
             "default_mountains": {
                 "autoresolve": True,
                 "threshold": 0.0,
-                "rise_fraction_of_z_max": 0.25,
-                "declare_radius_light": 0,
+                "default_radius_m": 800,
             },
         }
         cell = compose.get(0, 0, 0, 0)
@@ -266,7 +265,9 @@ class TestAntiDoubleRise(unittest.TestCase):
         before = cell.surface_z
         MountainContributor().apply(compose, ctx)
         after = compose.get(0, 0, 0, 0).surface_z
-        self.assertEqual(after, min(8, before + rise))
+        self.assertEqual(compose.get(0, 0, 0, 0).system_terrain, "mountain")
+        self.assertGreaterEqual(after, before)
+        self.assertLessEqual(after, min(8, before + rise))
 
 
 class TestMountainLightZ(unittest.TestCase):
@@ -276,8 +277,7 @@ class TestMountainLightZ(unittest.TestCase):
             "default_mountains": {
                 "autoresolve": True,
                 "threshold": 0.0,
-                "rise_fraction_of_z_max": 0.25,
-                "declare_radius_light": 0,
+                "default_radius_m": 800,
             },
         }
         scale = LightGridScale.from_tile(1000, 4)
@@ -306,7 +306,7 @@ class TestMutateContract(unittest.TestCase):
     def test_apply_relief_mutates_in_place(self) -> None:
         world = _world(z_max=8, z_min=0)
         world.terrain_masks = {
-            "default_mountains": {"threshold": 0.0, "rise_fraction_of_z_max": 0.25},
+            "default_mountains": {"threshold": 0.0},
         }
         hm = SurfaceHeightmap(
             world_uid=world.world_uid,
@@ -336,9 +336,14 @@ class TestMutateContract(unittest.TestCase):
 
 class TestTerrainMasksKnobs(unittest.TestCase):
     def test_pojo_knobs_present(self) -> None:
+        from app.dataModel.terrainMasks.mountain import MountainKind, mountain_kind_profile
+
         masks = WorldTerrainMasks.canonical_defaults()
-        self.assertEqual(masks.default_mountains.rise_fraction_of_z_max, 0.25)
+        self.assertEqual(masks.default_mountains.default_radius_m, 500)
+        self.assertEqual(masks.default_mountains.default_kind, MountainKind.ROCKY)
+        self.assertEqual(mountain_kind_profile(MountainKind.ROCKY).rise_fraction_of_z_max, 0.35)
         self.assertEqual(masks.default_ravines.drop_z, 1)
+        self.assertEqual(masks.declared_mountains, [])
 
 
 if __name__ == "__main__":
