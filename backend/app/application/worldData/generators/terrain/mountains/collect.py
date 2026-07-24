@@ -81,34 +81,6 @@ def merge_mountain_spec_sources(
     return merge_declare_over_auto(base, auto, key=key)
 
 
-def expand_ranges_for_coarse_disk(
-    entries: list[MountainSpec | MountainRangeSpec],
-    policy: MountainsCategoryPolicy,
-) -> list[MountainSpec]:
-    """Q14: coarse-only adapter — Range → peaks + mid-spine Spec for disk apply.
-
-    Light bake materializes ``MountainRangeSpec`` via corridor Form path; Pass 1.4
-    disk path needs MountainSpec list only.
-    """
-    out: list[MountainSpec] = []
-    for e in entries:
-        if isinstance(e, MountainSpec):
-            out.append(e)
-        elif isinstance(e, MountainRangeSpec):
-            out.extend(e.peaks)
-            if e.spine:
-                mid = e.spine[len(e.spine) // 2]
-                out.append(
-                    _spec_from_policy(
-                        origin_x_m=int(mid[0]),
-                        origin_y_m=int(mid[1]),
-                        policy=policy,
-                        location_uid=e.location_uid,
-                    )
-                )
-    return out
-
-
 def _typical_from_pole(pole_field, world, gx: int, gy: int) -> int:
     """Q9: typed ``ClimatePoleSample.typical_elevation_z`` (no getattr)."""
     if pole_field is None:
@@ -162,7 +134,7 @@ def autoresolve_mountain_specs(
     ]
 
 
-def collect_mountain_specs_for_coarse(
+def collect_mountain_entries_for_coarse(
     world: World,
     locations: list[NamedLocation],
     masks: WorldTerrainMasks,
@@ -171,8 +143,8 @@ def collect_mountain_specs_for_coarse(
     pole_field,
     heightmap_keys: set[tuple[int, int]],
     cell_m: int,
-) -> list[MountainSpec]:
-    """Pass 1.4 collect — same merge SoT as light; then Q14 coarse Range expand."""
+) -> list[MountainSpec | MountainRangeSpec]:
+    """Pass 1.4 collect — same merge SoT as light (Q3-A: no Range→disk expand)."""
     declared = load_declared_mountains(masks)
     anchors = specs_from_geographic_locations(locations, policy)
     auto: list[MountainSpec] = []
@@ -205,7 +177,10 @@ def collect_mountain_specs_for_coarse(
             _spec_from_policy(origin_x_m=c.origin_x_m, origin_y_m=c.origin_y_m, policy=policy)
             for c in candidates
         ]
-    merged = merge_mountain_spec_sources(
+    return merge_mountain_spec_sources(
         declared=declared, anchors=anchors, auto=auto,
     )
-    return expand_ranges_for_coarse_disk(merged, policy)
+
+
+# Back-compat alias
+collect_mountain_specs_for_coarse = collect_mountain_entries_for_coarse

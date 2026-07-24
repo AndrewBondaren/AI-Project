@@ -67,3 +67,28 @@ def raster_form_footprint(
             if point_in_form(float(cx), float(cy), geometry, concave=concave):
                 cells.add(LightCellRef(gx, gy, tx, ty))
     return frozenset(cells)
+
+
+def raster_form_macro_keys(
+    geometry: MountainFormGeometry,
+    *,
+    cell_m: int,
+    concave: bool = False,
+) -> set[tuple[int, int]]:
+    """Q3-A: FormRaster on macro grid — cell centers inside polygon → (gx, gy)."""
+    cell = max(1, int(cell_m))
+    xs = [v[0] for v in geometry.vertices_m]
+    ys = [v[1] for v in geometry.vertices_m]
+    gx0 = int(min(xs)) // cell
+    gy0 = int(min(ys)) // cell
+    gx1 = int(max(xs)) // cell
+    gy1 = int(max(ys)) // cell
+    half = cell // 2
+    keys: set[tuple[int, int]] = set()
+    for gy in range(gy0, gy1 + 1):
+        for gx in range(gx0, gx1 + 1):
+            cx = gx * cell + half
+            cy = gy * cell + half
+            if point_in_form(float(cx), float(cy), geometry, concave=concave):
+                keys.add((gx, gy))
+    return keys

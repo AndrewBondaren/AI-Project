@@ -17,7 +17,7 @@ from app.dataModel.masks.enums.maskDomainId import (
 )
 from app.dataModel.masks.maskCategoryPolicy import MaskCategoryPolicy
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
-from app.dataModel.terrainMasks.mountain.enums import MountainKind, MountainSideKind
+from app.dataModel.terrainMasks.mountain.enums import MountainKind
 from app.dataModel.terrainMasks.mountain.specs import (
     MountainDeclareEntry,
     MountainForm,
@@ -57,15 +57,20 @@ class MountainsCategoryPolicy(MaskCategoryPolicy):
     ridge_cell_m: DefaultOnWire[int] = Field(default=250, ge=1)
     default_kind: DefaultEnumOnWire[MountainKind] = MountainKind.ROCKY
     default_form: MountainForm = Field(default_factory=MountainFormBySides)
-    default_side_kind: DefaultEnumOnWire[MountainSideKind] = MountainSideKind.SLOPE
     default_radius_m: DefaultOnWire[int] = Field(default=500, ge=1)
-    default_sides: DefaultOnWire[list[MountainSideSpec]] = Field(default_factory=list)
+    sides: DefaultOnWire[list[MountainSideSpec]] = Field(default_factory=list)
 
     def resolved_sides(self) -> list[MountainSideSpec]:
+        """Assemble Spec.sides — empty → N× MountainSideSpec(); wrong len → raise."""
         n = form_side_count(self.default_form)
-        if len(self.default_sides) == n:
-            return list(self.default_sides)
-        return default_sides_for_count(n, kind=self.default_side_kind)
+        if len(self.sides) == n:
+            return list(self.sides)
+        if self.sides:
+            raise ValueError(
+                f"MountainsCategoryPolicy.sides length {len(self.sides)} "
+                f"!= form side_count {n}"
+            )
+        return default_sides_for_count(n)
 
 
 class ForestsCategoryPolicy(MaskCategoryPolicy):

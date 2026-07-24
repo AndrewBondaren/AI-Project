@@ -91,8 +91,9 @@ class TestApplyReliefObjectsZ(unittest.TestCase):
         zs = list(hm.surface_z.values())
         self.assertTrue(any(z > 1 for z in zs), zs)
         self.assertTrue(all(z <= 8 for z in zs), zs)
-        # ROCKY rise = round(8*0.35)=3 → max 1+3=4
-        self.assertEqual(max(zs), 4)
+        # ROCKY rise = round(8*0.35)=3; SideFill may yield <1 fraction → max 3 or 4
+        self.assertGreaterEqual(max(zs), 3)
+        self.assertLessEqual(max(zs), 4)
 
 
 class TestGridDetectThresholds(unittest.TestCase):
@@ -341,9 +342,22 @@ class TestTerrainMasksKnobs(unittest.TestCase):
         masks = WorldTerrainMasks.canonical_defaults()
         self.assertEqual(masks.default_mountains.default_radius_m, 500)
         self.assertEqual(masks.default_mountains.default_kind, MountainKind.ROCKY)
+        self.assertEqual(masks.default_mountains.sides, [])
+        sides = masks.default_mountains.resolved_sides()
+        self.assertEqual(len(sides), 6)
         self.assertEqual(mountain_kind_profile(MountainKind.ROCKY).rise_fraction_of_z_max, 0.35)
         self.assertEqual(masks.default_ravines.drop_z, 1)
         self.assertEqual(masks.declared_mountains, [])
+
+    def test_policy_sides_length_mismatch_raises(self) -> None:
+        from app.dataModel.terrainMasks.mountain import MountainSideSpec
+        from app.dataModel.terrainMasks.worldTerrainMasks import MountainsCategoryPolicy
+
+        policy = MountainsCategoryPolicy(
+            sides=[MountainSideSpec(), MountainSideSpec()],
+        )
+        with self.assertRaises(ValueError):
+            policy.resolved_sides()
 
 
 if __name__ == "__main__":

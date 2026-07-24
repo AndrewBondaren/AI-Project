@@ -407,7 +407,9 @@ Farmland mask ≠ `crops_registry`: маска = «здесь пашня»; flor
 MountainsCategoryPolicy ⊂ MaskCategoryPolicy
   system_terrain
   enabled / autoresolve
-  default_kind / default_form / default_radius_m / default sides
+  default_kind / default_form / default_radius_m
+  sides: list[MountainSideSpec]   # один SoT; empty → N× MountainSideSpec() (kind=SLOPE на поле)
+  # НЕ default_side_kind / НЕ default_sides — дубль убран
   placement: threshold, elevation_bias_weight, relief_weight, ridge_cell_m
   # УДАЛИТЬ при имплементации engine: declare_radius_light (location disk)
 ```
@@ -442,7 +444,7 @@ Anti-smell (обязательно при ревью PR):
 |---|---|---|
 | Q1 | ✅ | `begin_pass()` в Protocol; `run_mask_domain` зовёт напрямую (не `getattr`) |
 | Q2 | ✅ | `load_declared` = wire only; `load_anchor_specs` = geo→Spec; merge в `default_collect` (declare > anchors > auto) |
-| Q3 | ✅ interim B | Coarse Pass 1.4 = **disk**; light = FormRaster+SideFill. Follow-up **Q3-A**: unify coarse → Spec→FormRaster |
+| Q3 | ✅ | Coarse Pass 1.4 = FormRaster+SideFill на macro (Q3-A); light = тот же SoT на light grid |
 
 ---
 
@@ -454,9 +456,9 @@ Anti-smell (обязательно при ревью PR):
 |---|---|---|
 | Q9 | ✅ | Typed `sample.typical_elevation_z` в collect/ridge; `0` только если `pole_field is None` |
 | Q13 | ✅ | `MountainsCategoryPolicy` isinstance в materializer; `policy.autoresolve` typed на `MaskCategoryPolicy` / `default_collect` |
-| Q14 | ✅ | `expand_ranges_for_coarse_disk` — явный coarse-only adapter; light Range → corridor в `formPipeline` |
+| Q14 | ✅ | Collect merge as-is; Range materialize на coarse через Form path (expand-disk удалён) |
 | Q15 | ✅ | Merge SoT: `identity_key()` + `merge_mountain_spec_sources` / `default_collect` |
-| Q3-A | follow-up | Unify coarse footprint с FormRaster (сейчас interim B задокументирован) |
+| Q3-A | ✅ | Coarse footprint = Spec→FormGeometry→FormRaster→SideFill (`coarse_footprint_for_entry`); disk SoT удалён |
 
 ##### God-object
 
@@ -470,8 +472,8 @@ Anti-smell (обязательно при ревью PR):
 | # | Статус | Вопрос / фикс |
 |---|---|---|
 | Q11 | ✅ | `MountainMaskMaterializer._apply_elevation` — terrain paint vs z |
-| Q14 | ✅ | см. выше — coarse expand отделён |
-| Q10 | ✅ | `formPipeline.py` (Form→Raster→SideFill + interim `coarse_disk_keys`); `materialize.py` удалён |
+| Q14 | ✅ | см. выше — Range на coarse через тот же materialize path |
+| Q10 | ✅ | `formPipeline.py` (Form→Raster→SideFill + `coarse_footprint_for_entry`) |
 | Q16 | ✅ | `geoAnchors.anchor_mountain_locations` (+ alias `declare_mountain_locations`) |
 | Q17 | ✅ | Coarse и light materializer collect → `merge_mountain_spec_sources` |
 
@@ -484,9 +486,9 @@ Anti-smell (обязательно при ревью PR):
 | Q6 | ✅ | `mountains/geom.py` + `light_cell_center_m` в range/SideFill |
 | Q7 | ✅ | SHEER ε = `sheer_band_light * light_m` |
 | Q8 | ✅ | Spec `radius_m` / Range `width_m` default ← `MountainsCategoryPolicy.default_radius_m` (factory) |
-| Q12 | ✅ interim | Range corridor + docstring «not full SideFill»; fuller left/right/caps — follow-up |
+| Q12 | ✅ | Range left/right + optional start/end caps (`MountainRangeSides` + `rangeSideFill`) |
 
-**Остаток open:** Q3-A (coarse→FormRaster); fuller Range SideFill (после Q12 interim).
+**Остаток open (mountain follow-ups):** MountainPassBuilder / D (≥2 вершины, declare immutable); ridge noise→склон; kind summit; cap `t`; ущелья / cliff — § Autoresolve + **Реализовано vs target**.
 
 ### Declare = Spec в домене; Location — поверх (утверждено 2026-07-16)
 
@@ -577,30 +579,101 @@ world.terrain_masks.declared_mountains[]  # MountainSpec | MountainRangeSpec (п
 # NamedLocation — optional поверх (имя пика, храм на горе, …)
 ```
 
-#### Autoresolve (A + D) — утверждено 2026-07-16
+#### Autoresolve (A + D) + MountainPassBuilder — утверждено 2026-07-16 / уточнено 2026-07-24
 
 **A:** placement → собрать Spec → **тот же** engine, что declare.  
 Запрещён bypass `score → paint` без Spec (M8).
 
-**D** (частный случай A — двухфазный placement):
+**Слои (утверждено):** `MountainPassBuilder` **выше** обычной сборки горы (FG→FR→SF).  
+Он отвечает: **есть хребет или нет**; materialize горы только рисует уже собранный Spec.
 
 ```text
-1. Ridge field (policy knobs: threshold, ridge_cell_m, elev/relief weights)
-     → MountainRangeSpec (spine + width + kind/form defaults)
-2. Sample peaks along spine
-     → MountainSpec[] (origin, radius_m, kind/form/sides from policy defaults)
-3. Optional isolated peak candidates (тот же score → MountainSpec)
-4. Все Specs → FormGeometry → FormRaster → SideFill → KindElevation → merge
+ridge field → candidates (ridge-cell score)
+        │
+        ▼
+MountainPassBuilder          # topology; не FormRaster
+  │  хребет? ≥ 2 вершины/пика (система гор)
+  │  иначе → одна гора
+  ▼
+MountainRangeSpec (+ peaks)  |  MountainSpec
+        │
+        ▼
+formPipeline / KindElevation   # обычное построение горы — ниже
 ```
+
+| Правило | |
+|---|---|
+| Хребет | **система гор** → не меньше **2 вершин** (`MountainSpec` / peak). Не «много ridge-cell» |
+| Одна гора, хребет не объявлен и не собран | всегда просто `MountainSpec` |
+| Declare | auto **не модифицирует** объявленное (ни поля Spec/Range, ни «втягивание» declare peak в auto-Range). Заказ мастера = as-is |
+| Merge | `declared > anchors > auto` по `identity_key`; на клетке — существующий apply (max fraction / terrain rank) |
+
+**Ridge-cell ≠ вершина**
+
+| | Ridge-cell | Вершина (гора) |
+|---|---|---|
+| Что | квант placement-сетки (`ridge_cell_m`), score ≥ threshold | якорь вершины собранного `MountainSpec` / peak |
+| Роль | сырьё детекта / позже шум склона | объект мира / критерий хребта |
+| Хребет? | **нет** (много клеток ≠ система гор) | да, если **≥ 2** вершин в системе |
+
+##### Нахождение вершины (утверждено 2026-07-24)
+
+Вершина **не** = центр ridge-cell.  
+Положение и форма вершины — из **типа горы** (`MountainKind` + `MountainForm`): у разных kind/form разный якорь относительно `origin`/`radius` и разная геометрия tip/hat.
+
+```text
+ridge-cell / mass → MountainSpec(kind, form, origin, radius, …)   # assemble из policy / declare
+summit_anchor(spec) → vertex_m (или hat-зона)                    # SoT: kind + form
+PassBuilder считает уже эти якоря: ≥2 → хребет, иначе одна гора
+```
+
+| Kind / form | Вершина (смысл для PassBuilder / later summit) |
+|---|---|
+| `PeakForm` / острый peak | tip у `origin` (компактный якорь) |
+| `MountainFormBySides` / `ROCKY` | якорь ≈ `origin` (центр масс силуэта); tip по секторам FormGeometry |
+| `StarForm` | якорь ≈ `origin`; лучи — форма footprint, не отдельные вершины хребта |
+| `PlateauForm` | «вершина» = **hat-зона** (`R · hat_fraction`), не точка; якорь для topology = `origin` |
+| `VOLCANO` | L0 якорь ≈ `origin`; crater ring — later summit overlay |
+| `ICE_PEAK` / `FORESTED` | L0 якорь ≈ `origin`; cap / forest — later summit overlays |
+
+**Контракт helper (target):** `summit_anchor(spec: MountainSpec) -> (x_m, y_m)` (+ optional hat radius для Plateau).  
+Живёт рядом с FormGeometry / Kind profile — **не** в ridge score.  
+PassBuilder и summit overlays читают один SoT; placement только задаёт mass/`origin`.
+
+**Шум ridge-field (follow-up, не detect хребта):** использовать для **неровностей** склонов и подъёмов (горы редко «прямые») — модуляция SideFill / мелкий relief на уже собранном footprint. Не критерий PassBuilder.
+
+**D** (через PassBuilder) — **target; не shipped**:
+
+```text
+1. Ridge field → candidates (mass / ridge-cell)
+2. Assemble peak MountainSpec(s) from policy (kind/form/…)
+3. vertex_i = summit_anchor(spec_i)     # kind+form, не cell center
+4. MountainPassBuilder:
+     if count(distinct vertices) ≥ 2 → MountainRangeSpec (spine + width + peaks[])
+     else → одна MountainSpec
+5. Merge с declare/anchors (declare immutable)
+6. Specs → FormGeometry → FormRaster → SideFill → KindElevation
+```
+
+**Spine хребта** — отдельный алгоритм (polyline через вершины / mass); кандидат v1 = PCA (не утверждён до отдельного решения). См. обсуждение / план имплементации.
+**Shipped autoresolve (A only):** каждый ridge candidate → isolated `MountainSpec` (PassBuilder нет). Declare `MountainRangeSpec` вручную OK.
 
 | Слой | Ответственность | Knobs |
 |---|---|---|
-| **Placement** | *где* candidate / spine | `threshold`, `elevation_bias_weight`, `relief_weight`, `ridge_cell_m` |
-| **Spec assemble** | *какой* объект | `default_kind`, `default_form`, default sides, `default_radius_m` |
+| **Placement** | *где* candidate (ridge-cell) | `threshold`, `elevation_bias_weight`, `relief_weight`, `ridge_cell_m` |
+| **PassBuilder** | *хребет или одна гора* (≥2 вершины) | peak spacing / assemble (константы или later knobs) |
+| **Spec assemble** | *какой* объект | `default_kind`, `default_form`, `sides`, `default_radius_m` |
 | **Engine** | *как* нарисовать | Kind / Form / Sides pipeline |
 
-`declare_radius_light` (disk от location) — **убрать**; радиус = `MountainSpec.radius_m` / policy `default_radius_m`.  
-Declare Specs ∩ autoresolve: declare побеждает / не перезаписывается (domain #6).
+`declare_radius_light` (disk от location) — **убрать**; радиус = `MountainSpec.radius_m` / policy `default_radius_m`.
+
+#### Отдельные системы (не смешивать с PassBuilder / slope noise)
+
+| Система | Статус | Примечание |
+|---|---|---|
+| **Ущелья (ravine)** | deferred | свой MaskDomain / Spec — § Plugin map; не «шум на горе» |
+| **Обрывы / вертикальные склоны** | deferred / partial | L0: `MountainSideKind.SHEER` на стороне горы/хребта; самостоятельный cliff Spec — later PR |
+| Ridge noise → неровность склона | follow-up | после PassBuilder; см. выше |
 
 #### Иерархия абстракций
 
@@ -622,26 +695,30 @@ MountainFormBySides(side_count=6)
 StarForm(rays=5)
 
 MountainRangeSpec
-  spine / width
-  kind_default
-  form_default: MountainForm
-  peaks: list[MountainSpec]
+  spine / width_m
+  kind                    # KindElevation тела хребта (default на поле)
+  sides: MountainRangeSides   # left/right + optional start/end
+  peaks: list[MountainSpec]  # полный Spec; form/sides — на peak, не *_default на range
 
 MountainsCategoryPolicy
   enabled / autoresolve
   default_kind
   default_form: MountainForm
+  default_radius_m
+  sides: list[MountainSideSpec]   # empty → expand; len mismatch → reject (как MountainSpec)
 ```
 
 #### Engine kinds (builtin)
 
-| Kind | Смысл | Summit / состав (profile) |
-|---|---|---|
-| `ROCKY` | каменистая гора | камень / mountain |
-| `ICE_PEAK` | основа + лёд/снег наверху | cap snow/ice |
-| `VOLCANO` | вулкан | crater; внутри **magma** (L2) |
-| `PLATEAU` | плато на вершине | **plains** на summit |
-| `FORESTED` | гора с лесами | низкий rise; forest на склонах |
+| Kind | Смысл | Summit / состав (profile) | Shipped |
+|---|---|---|---|
+| `ROCKY` | каменистая гора | камень / mountain | rise only |
+| `ICE_PEAK` | основа + лёд/снег наверху | cap snow/ice | rise only (**summit overlay = target**) |
+| `VOLCANO` | вулкан | crater; внутри **magma** (L2) | rise only (**summit = target**) |
+| `PLATEAU` | плато на вершине | **plains** на summit | rise + hat fraction в SideFill; **plains paint = target** |
+| `FORESTED` | гора с лесами | низкий rise; forest на склонах | rise only (**forest on slopes = target**) |
+
+`MountainKindProfile` shipped: только `rise_fraction_of_z_max`. KindElevation = `z = base + rise * side_fraction`; material summit overlays — follow-up.
 
 #### Engine forms (два контракта, не плоский `{side_count, geometry}`)
 
@@ -824,8 +901,8 @@ z(p) = base_z(p) + rise(kind) * side_fraction(p)  # clamp z_min..z_max
 |---|---|
 | `MountainsCategoryPolicy.default_kind` | `ROCKY` |
 | `default_form` | `MountainFormBySides(side_count=6)` |
-| `default_side_kind` (все стороны, если не заданы) | `SLOPE` |
 | `default_radius_m` | `500` |
+| `sides` (policy) | `[]` → N× `MountainSideSpec()`; kind default = `SLOPE` на `MountainSideSpec.kind` |
 | `StarForm.rays` | `5` |
 | `StarForm.inner_ratio` | `0.45` |
 | `PeakForm.side_count` | `3` |
@@ -835,6 +912,9 @@ z(p) = base_z(p) + rise(kind) * side_fraction(p)  # clamp z_min..z_max
 | `SLOPE` profile | `smoothstep` (не power) |
 | `SLOPE.k` (если profile=`power`) | `2.0` |
 | Kind `rise_fraction_of_z_max` | ROCKY `0.35`, ICE_PEAK `0.45`, VOLCANO `0.40`, PLATEAU `0.25`, FORESTED `0.20` |
+
+Правило: default живёт **на поле**, к которому относится. Нет пары `X` + `X_default` / `default_X` + `default_X_kind` на одном POJO.  
+~~`default_side_kind`~~ — удалён; uniform kind сторон = default `MountainSideSpec.kind` или явный `sides[]`.
 
 Все defaults — `DefaultOnWire` / field default на POJO; generate только читает мир.
 
@@ -891,13 +971,15 @@ half_width_m: default = default_radius_m  # или отдельное поле p
 Ownership на corridor: nearest к left vs right boundary (B); торцы — nearest к end-cap edge, если есть.  
 Хребет ≠ значение `MountainForm`. Range = агрегат.
 
+**Shipped note (caps `t`):** ownership выбирает side (left/right/start/end); profile `t` / SHEER band сейчас от **dist to spine / half_width** (не dist to cap-edge). Target: для торцов `t` = dist to cap-edge / half_width.
+
 #### Инварианты
 
 | # | Правило |
 |---|---|
 | M0 | Маска горы проходит **только** через общий домен `terrain_masks` (`MountainsCategoryPolicy`); engine ≠ отдельный корень/bake |
 | M0b | Declare = `declared_mountains[]` полные Spec (подход A); `NamedLocation` поверх объекта, не declare-path маски |
-| M0c | Autoresolve = A+D: placement → Spec/Range → engine; запрещён score→paint; D = Range + peaks along spine |
+| M0c | Autoresolve = A+D через **MountainPassBuilder**; хребет = ≥2 вершины; score→paint запрещён; **declare immutable** (auto не меняет заказ мастера) |
 | M0d | Ownership клетки = nearest edge (B); не max-fraction / не blend; hat Plateau — fraction=1 внутри |
 | M0e | Numeric defaults — таблица POJO defaults (§ SideFill); Range = left/right + optional end caps |
 | M1 | Kind / form / side / range — **engine materialize** внутри domain; не N+1 |
@@ -909,6 +991,47 @@ Ownership на corridor: nearest к left vs right boundary (B); торцы — n
 | M7 | Мягкость края = **алгоритм SideFill** (`SHEER`/`SLOPE`), не свойство form/горы |
 | M8 | Pipeline FormGeometry → FormRaster → SideFill → KindElevation — целевой; не mask-only slice |
 | M9 | L0 и L2 потребляют **один** SideFill/Form контракт |
+
+#### Реализовано vs target (mountain plugin, 2026-07-24)
+
+Единый geometric SoT для light и coarse; различается только grid sampler (light cell vs macro cell center).
+
+```text
+declared > geo anchors > ridge auto
+  → MountainSpec | MountainRangeSpec
+  → FormGeometry | spine corridor
+  → FormRaster / occupancy + SideFill fractions
+  → Light: terrain + KindElevation z
+  → Pass 1.4: KindElevation z only (macro)
+```
+
+| Блок | Статус | Код / заметка |
+|---|---|---|
+| MaskDomain materialize (`MaskFootprint`, `run_mask_domain`, thin contributor) | ✅ shipped | `masks/`, `MountainContributor` |
+| POJO Spec / Form / Kind / Side / Range / policy `sides` | ✅ shipped | `dataModel/terrainMasks/` |
+| `declared_mountains` + anchors + merge `identity_key` | ✅ shipped | `collect.py`, `geoAnchors.py` |
+| FG → FR → SF → KindElevation (rise) | ✅ shipped | `formPipeline`, `elevationResolve` |
+| Light + coarse один footprint SoT (Q3-A) | ✅ shipped | `coarse_footprint_for_entry` |
+| Range left/right + optional caps | ✅ shipped | `MountainRangeSides`, `rangeSideFill` |
+| Cap `t` = dist to cap-edge | ⚠ partial | ownership side OK; `t`/SHEER от dist to spine |
+| Autoresolve A (isolated Spec) | ✅ shipped | `ridgePlacement` → `MountainSpec` (без PassBuilder) |
+| **MountainPassBuilder** + Autoresolve D (≥2 вершины → Range) | ❌ target | хребет ≠ много ridge-cell; declare immutable |
+| Ridge noise → неровность склона | ❌ follow-up | не критерий хребта |
+| Ущелья / отдельные обрывы (cliff Spec) | deferred | § Plugin map + SHEER на стороне горы |
+| Kind summit materials (ice/crater/plains/forest) | ❌ target | profile = rise only |
+| `fill_sheer_side` / `fill_slope_side` как отдельные facade | ⚠ OK | логика в `sideFill` / `profile_side_*` helpers |
+| Ravine / settlement / farmland / forest Spec plugins | deferred | § Plugin map |
+| Stub disk / score→paint / `declare_radius_light` | ✅ removed | — |
+
+**Каталог (shipped):**
+
+| Слой | Путь |
+|---|---|
+| Wire / POJO | `dataModel/terrainMasks/` |
+| Shared runner | `application/worldData/masks/` |
+| Geometry + collect | `generators/terrain/mountains/` |
+| Light plugin | `MountainMaskMaterializer` + `contributors/mountain.py` |
+| Coarse z | `reliefObjects/mountainZ.py` |
 
 #### Elevation (kind; fraction — от SideFill)
 
@@ -946,11 +1069,9 @@ Climate contributor пишет только `climate_zone_id` — вход дл�
 
 - ~~Interim LightLandcoverPolicy / mountain-from-z~~ — удалено.  
 - **Open (blocker):** ~~нет shared MaskDomain materialize~~ — **shipped** (`MaskFootprint` / `run_mask_domain` / Spec→apply) — § **MaskDomain materialize**.  
-- **Partial:** mountain Spec plugin (FormGeometry→FormRaster→SideFill→KindElevation + thin contributor); refine algorithms / Range SideFill later. Stub disk/score→paint **удалён**.  
-- **Open (post-review):** § Открытые вопросы — P0 ✅; Q4–Q17 ✅ (Q12 corridor interim); остаток **Q3-A** + fuller Range SideFill.  
-- **INTERIM Q3-B:** Pass 1.4 mountain z = macro **disk**; L0 light = FormRaster+SideFill. Follow-up **Q3-A**.  
-- **INTERIM Q12:** Range = spine corridor (+ peaks); fuller left/right/caps SideFill — follow-up.  
-- **Deferred:** forest Spec + flora gate B; farmland `MaskDomainId`; settlement Spec pipeline (сейчас pin disk в contributor).  
+- **Mountain plugin:** core ✅ — см. § **Реализовано vs target**. Follow-ups: **MountainPassBuilder** / D (≥2 вершины); ridge noise→склон; **kind summit**; **cap `t`**; ущелья / cliff Spec.  
+- ~~**INTERIM Q3-B / Q12 corridor**~~ — closed (FormRaster+SideFill; Range sides).  
+- **Deferred:** forest Spec + flora gate B; farmland `MaskDomainId`; settlement Spec pipeline (сейчас pin disk в contributor); **ravine** / standalone **cliff** builders.  
 - **Open (2026-07-17):** coarse **relief_objects_z до hydrology** — § Coarse planning ↔ light compose; без этого procedural lakes/rivers на flat z.  
 - ~~Debt: landcover `tundra` as terrain~~ — **fixed** (cold = climate_zone_id; landcover forest|plains).  
 - **Stub:** flora type refs / FloraGenerator — [`tz_flora.md`](./tz_flora.md).  
@@ -1355,6 +1476,12 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 | 2026-07-24 | P0 closed: Q1 `begin_pass` Protocol; Q2 declare vs `load_anchor_specs`; Q3-B coarse disk interim documented |
 | 2026-07-24 | § Открытые вопросы: post-P0 re-review — группы неявные контракты / god-object / SRP / дубли; Q14–Q17 |
 | 2026-07-24 | Closed Q4–Q17: ridgePlacement + merge SoT; geom; coarse Range expand; typed policy/climate; SHEER ε; radius SoT; formPipeline; `_apply_elevation`; anchor rename; Q12 corridor interim. Open: Q3-A |
+| 2026-07-24 | **Q3-A + Q12:** coarse `coarse_footprint_for_entry` (FormRaster+SideFill); `MountainRangeSides` left/right/caps; removed disk / expand-disk path |
+| 2026-07-24 | `MountainRangeSpec`: `kind_default`→`kind`; removed `form_default` / `sides_default` (defaults on field / on peak Spec) |
+| 2026-07-24 | `MountainsCategoryPolicy`: убраны `default_side_kind` / `default_sides` → одно поле `sides`; empty→N×`MountainSideSpec()`; len mismatch→raise |
+| 2026-07-24 | § Mountain: **Реализовано vs target** — pipeline/каталог shipped; gaps: Autoresolve D, kind summit overlays, cap `t`; sync M0c / kinds / tech debt |
+| 2026-07-24 | § Autoresolve: **MountainPassBuilder** выше сборки горы; хребет = ≥2 вершины (не ridge-cell count); declare immutable; ridge noise→склон later; ravine/cliff — отдельные системы |
+| 2026-07-24 | § Нахождение вершины: `summit_anchor(spec)` из Kind+Form (не центр ridge-cell); spine PCA — кандидат, не утверждён |
 | 2026-07-20 | Compose scope: light/full = L0 only; L2 = detailed/entry (pack storage Job boundaries) |
 | 2026-07-23 | Terrain mask carry ✅ closed (smoke world-test-003 (-2,-2)) |
 | 2026-07-14 | Первая фиксация: LightGridCompose, contributors, Path A hydro, границы vs SurfaceTerrainContext |

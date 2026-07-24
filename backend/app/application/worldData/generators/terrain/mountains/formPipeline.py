@@ -1,6 +1,6 @@
 """Mountain form pipeline — FormGeometry→FormRaster→SideFill → MaskFootprint.
 
-Formerly ``materialize.py`` (Q10: avoid clash with ``materializer.py``).
+Light and coarse share Form/SideFill SoT; only the grid sampler differs (Q3-A).
 """
 
 from __future__ import annotations
@@ -10,15 +10,16 @@ from app.application.worldData.generators.terrain.mountains.formGeometry import 
 )
 from app.application.worldData.generators.terrain.mountains.formRaster import (
     raster_form_footprint,
+    raster_form_macro_keys,
 )
-from app.application.worldData.generators.terrain.mountains.geom import (
-    dist_point_to_polyline_m,
+from app.application.worldData.generators.terrain.mountains.rangeSideFill import (
+    range_side_fill_at_points,
 )
 from app.application.worldData.generators.terrain.mountains.sideFill import (
     side_fill_fractions,
+    side_fill_fractions_at_points,
 )
 from app.application.worldData.masks.footprint import LightCellRef, MaskFootprint
-from app.application.worldData.masks.rasterDisk import raster_disk
 from app.application.worldData.pack.bake.lightGrid.coords import (
     LightGridScale,
     light_cell_center_m,
@@ -41,29 +42,23 @@ def materialize_mountain_spec(spec: MountainSpec, scale: LightGridScale) -> Mask
 
 
 def materialize_mountain_range(spec: MountainRangeSpec, scale: LightGridScale) -> MaskFootprint:
-    """INTERIM corridor (Q12): distance-to-spine falloff — not full Range SideFill left/right/caps.
-
-    Target: lateral SideFill per § Mountain Range. Peaks use full mountain Spec pipeline.
-    """
-    half = max(1, int(spec.width_m) // 2)
+    """Corridor + left/right/caps SideFill; peaks use full mountain Spec pipeline."""
+    half = max(1, int(spec.width_m)) // 2
     xs = [p[0] for p in spec.spine]
     ys = [p[1] for p in spec.spine]
     pad = half
     lx0, ly0 = meters_to_light(min(xs) - pad, min(ys) - pad, scale)
     lx1, ly1 = meters_to_light(max(xs) + pad, max(ys) + pad, scale)
-    cells: set[LightCellRef] = set()
-    fractions: dict[LightCellRef, float] = {}
-    half_f = float(half)
+    points: list[tuple[LightCellRef, float, float]] = []
     for ly in range(ly0, ly1 + 1):
         for lx in range(lx0, lx1 + 1):
             gx, gy, tx, ty = light_to_macro_local(lx, ly, scale)
             cx, cy = light_cell_center_m(gx, gy, tx, ty, scale)
-            d = dist_point_to_polyline_m(float(cx), float(cy), list(spec.spine))
-            if d > half_f:
-                continue
-            ref = LightCellRef(gx, gy, tx, ty)
-            cells.add(ref)
-            fractions[ref] = max(0.0, 1.0 - d / half_f)
+            points.append((LightCellRef(gx, gy, tx, ty), float(cx), float(cy)))
+    fractions = range_side_fill_at_points(
+        spec, points, light_m=float(scale.light_m),
+    )
+    cells: set[LightCellRef] = set(fractions.keys())
     for peak in spec.peaks:
         peak_fp = materialize_mountain_spec(peak, scale)
         cells |= set(peak_fp.cells)
@@ -81,18 +76,73 @@ def materialize_mountain_entry(
     return materialize_mountain_spec(spec, scale)
 
 
-def coarse_disk_keys_for_spec(
+def _coarse_macro_points(
+    keys: set[tuple[int, int]],
+    *,
+    cell_m: int,
+) -> list[tuple[tuple[int, int], float, float]]:
+    cell = max(1, int(cell_m))
+    half = cell // 2
+    return [
+        ((gx, gy), float(gx * cell + half), float(gy * cell + half))
+        for gx, gy in keys
+    ]
+
+
+def coarse_footprint_for_spec(
     spec: MountainSpec,
     *,
     cell_m: int,
-) -> set[tuple[int, int]]:
-    """INTERIM Pass 1.4: macro-grid **disk** from ``radius_m`` (not FormRaster).
+    light_m: float,
+) -> dict[tuple[int, int], float]:
+    """Q3-A: FormGeometry→FormRaster→SideFill on macro grid."""
+    geom = construct_mountain_form(spec.form, (spec.origin_x_m, spec.origin_y_m), spec.radius_m)
+    concave = isinstance(spec.form, StarForm)
+    keys = raster_form_macro_keys(geom, cell_m=cell_m, concave=concave)
+    return side_fill_fractions_at_points(
+        geom,
+        spec.resolved_sides(),
+        _coarse_macro_points(keys, cell_m=cell_m),
+        light_m=float(light_m),
+    )
 
-    L0 light bake uses FormGeometry→FormRaster→SideFill on the same Spec.
-    Footprints intentionally differ until Q3-A (unify coarse to Spec→FormRaster).
-    See tz_map_light_bake § Open questions Q3 / tech debt.
-    """
-    cx = int(spec.origin_x_m) // max(1, cell_m)
-    cy = int(spec.origin_y_m) // max(1, cell_m)
-    radius_cells = max(0, int(round(int(spec.radius_m) / max(1, cell_m))))
-    return raster_disk(cx, cy, radius_cells)
+
+def coarse_footprint_for_range(
+    spec: MountainRangeSpec,
+    *,
+    cell_m: int,
+    light_m: float,
+) -> dict[tuple[int, int], float]:
+    """Q3-A: Range SideFill sampled on macro centers; peaks overlay."""
+    cell = max(1, int(cell_m))
+    half = max(1, int(spec.width_m)) // 2
+    xs = [p[0] for p in spec.spine]
+    ys = [p[1] for p in spec.spine]
+    pad = half
+    gx0 = (min(xs) - pad) // cell
+    gy0 = (min(ys) - pad) // cell
+    gx1 = (max(xs) + pad) // cell
+    gy1 = (max(ys) + pad) // cell
+    candidate_keys = {(gx, gy) for gy in range(gy0, gy1 + 1) for gx in range(gx0, gx1 + 1)}
+    fractions = range_side_fill_at_points(
+        spec,
+        _coarse_macro_points(candidate_keys, cell_m=cell),
+        light_m=float(light_m),
+    )
+    for peak in spec.peaks:
+        peak_fp = coarse_footprint_for_spec(peak, cell_m=cell, light_m=light_m)
+        for key, frac in peak_fp.items():
+            fractions[key] = max(fractions.get(key, 0.0), float(frac))
+    return fractions
+
+
+def coarse_footprint_for_entry(
+    spec: MountainSpec | MountainRangeSpec,
+    *,
+    cell_m: int,
+    light_m: float,
+) -> dict[tuple[int, int], float]:
+    """Pass 1.4 footprint + elevation fractions — same SoT as light materialize."""
+    if isinstance(spec, MountainRangeSpec):
+        return coarse_footprint_for_range(spec, cell_m=cell_m, light_m=light_m)
+    return coarse_footprint_for_spec(spec, cell_m=cell_m, light_m=light_m)

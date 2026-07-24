@@ -184,5 +184,106 @@ class TestWorldTerrainMasksDeclared(unittest.TestCase):
         self.assertEqual(len(spec.resolved_sides()), 6)
 
 
+class TestQ3ACoarseFormRaster(unittest.TestCase):
+    def test_macro_footprint_uses_form_not_disk(self) -> None:
+        from app.application.worldData.generators.terrain.mountains.formPipeline import (
+            coarse_footprint_for_spec,
+        )
+        from app.application.worldData.masks.rasterDisk import raster_disk
+        from app.dataModel.terrainMasks import StarForm
+
+        # Star is concave — disk over-covers; FormRaster should be a proper subset.
+        spec = MountainSpec(
+            origin_x_m=5000,
+            origin_y_m=5000,
+            radius_m=2000,
+            form=StarForm(rays=5, inner_ratio=0.35),
+        )
+        cell_m = 500
+        form_keys = set(coarse_footprint_for_spec(spec, cell_m=cell_m, light_m=31).keys())
+        cx = spec.origin_x_m // cell_m
+        cy = spec.origin_y_m // cell_m
+        disk_keys = raster_disk(cx, cy, max(0, int(round(spec.radius_m / cell_m))))
+        self.assertGreater(len(form_keys), 0)
+        self.assertTrue(form_keys.issubset(disk_keys) or form_keys != disk_keys)
+        # At least: not identical to a filled disk of same radius (star punches gaps).
+        self.assertNotEqual(form_keys, disk_keys)
+
+    def test_coarse_edge_fraction_below_one(self) -> None:
+        from app.application.worldData.generators.terrain.mountains.formPipeline import (
+            coarse_footprint_for_spec,
+        )
+
+        spec = MountainSpec(
+            origin_x_m=2500,
+            origin_y_m=2500,
+            radius_m=2000,
+            form=MountainFormBySides(side_count=6),
+        )
+        fp = coarse_footprint_for_spec(spec, cell_m=500, light_m=31)
+        self.assertGreater(len(fp), 1)
+        self.assertTrue(any(f > 0.85 for f in fp.values()))
+        self.assertTrue(any(f < 0.5 for f in fp.values()))
+
+
+class TestRangeSideFill(unittest.TestCase):
+    def test_left_sheer_right_slope_asymmetric(self) -> None:
+        from app.application.worldData.generators.terrain.mountains.rangeSideFill import (
+            range_side_fraction_at_xy,
+        )
+        from app.dataModel.terrainMasks import (
+            MountainRangeSides,
+            MountainRangeSpec,
+            MountainSideKind,
+            MountainSideSpec,
+        )
+
+        sides = MountainRangeSides(
+            left=MountainSideSpec(kind=MountainSideKind.SHEER, sheer_band_light=1),
+            right=MountainSideSpec(kind=MountainSideKind.SLOPE),
+        )
+        spec = MountainRangeSpec(
+            spine=[(0, 0), (2000, 0)],
+            width_m=1000,
+            sides=sides,
+        )
+        half = 500.0
+        light_m = 31.0
+        # Point near left boundary (y>0 with spine along +x → left = +y)
+        left_frac = range_side_fraction_at_xy(
+            1000.0, 480.0,
+            spine=list(spec.spine),
+            half_width_m=half,
+            sides=sides,
+            light_m=light_m,
+        )
+        right_frac = range_side_fraction_at_xy(
+            1000.0, -480.0,
+            spine=list(spec.spine),
+            half_width_m=half,
+            sides=sides,
+            light_m=light_m,
+        )
+        self.assertIsNotNone(left_frac)
+        self.assertIsNotNone(right_frac)
+        # SHEER near outer edge → 0; SLOPE near outer → small but smooth > 0 typically
+        self.assertEqual(left_frac, 0.0)
+        self.assertGreater(right_frac, 0.0)
+
+    def test_range_materialize_light_nonempty(self) -> None:
+        from app.application.worldData.generators.terrain.mountains.formPipeline import (
+            materialize_mountain_range,
+        )
+        from app.dataModel.terrainMasks import MountainRangeSpec
+
+        scale = LightGridScale.from_tile(1000, 32)
+        spec = MountainRangeSpec(
+            spine=[(100, 500), (900, 500)],
+            width_m=400,
+        )
+        fp = materialize_mountain_range(spec, scale)
+        self.assertGreater(len(fp.cells), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

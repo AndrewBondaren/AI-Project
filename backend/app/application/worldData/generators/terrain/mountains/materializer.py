@@ -107,9 +107,7 @@ class MountainMaskMaterializer:
             tile_set=tile_set,
             preserve_hydro=True,
         )
-        kind: MountainKind = (
-            spec.kind_default if isinstance(spec, MountainRangeSpec) else spec.kind
-        )
+        kind: MountainKind = spec.kind
         self._apply_elevation(
             compose, footprint, kind=kind, policy_terrain=policy.system_terrain,
             tile_set=tile_set, ctx=ctx,

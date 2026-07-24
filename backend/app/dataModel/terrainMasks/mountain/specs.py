@@ -112,6 +112,21 @@ class MountainSpec(BaseModel):
         return ("mountain", self.location_uid, self.origin_x_m, self.origin_y_m, self.radius_m)
 
 
+class MountainRangeSides(BaseModel):
+    """Lateral + optional end-cap SideFill for a range corridor (tz § Range sides)."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    left: MountainSideSpec = Field(
+        default_factory=lambda: MountainSideSpec(kind=MountainSideKind.SLOPE),
+    )
+    right: MountainSideSpec = Field(
+        default_factory=lambda: MountainSideSpec(kind=MountainSideKind.SLOPE),
+    )
+    start: MountainSideSpec | None = None
+    end: MountainSideSpec | None = None
+
+
 class MountainRangeSpec(BaseModel):
     """Elongated ridge — spine + width; peaks use full MountainSpec pipeline."""
 
@@ -120,9 +135,8 @@ class MountainRangeSpec(BaseModel):
     entry_type: Literal["range"] = "range"
     spine: list[tuple[int, int]] = Field(min_length=2)
     width_m: DefaultOnWire[int] = Field(default_factory=_policy_default_radius_m, ge=1)
-    kind_default: DefaultEnumOnWire[MountainKind] = MountainKind.ROCKY
-    form_default: MountainForm = Field(default_factory=MountainFormBySides)
-    sides_default: DefaultOnWire[list[MountainSideSpec]] = Field(default_factory=list)
+    kind: DefaultEnumOnWire[MountainKind] = MountainKind.ROCKY
+    sides: DefaultOnWire[MountainRangeSides] = Field(default_factory=MountainRangeSides)
     peaks: DefaultOnWire[list[MountainSpec]] = Field(default_factory=list)
     location_uid: str | None = None
 
