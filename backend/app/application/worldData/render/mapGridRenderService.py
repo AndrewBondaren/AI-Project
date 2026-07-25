@@ -82,6 +82,7 @@ class MapGridRenderService:
         *,
         z: int | None = None,
         include_z_slices: bool = False,
+        include_column_diagnostics: bool = True,
     ) -> dict[str, object]:
         """Pack-only L2 wilderness mosaic (no legacy map_cells path)."""
         pack = self._pack(world)
@@ -105,4 +106,5 @@ class MapGridRenderService:
             tile_gy,
             z=z,
             include_z_slices=include_z_slices,
+            include_column_diagnostics=include_column_diagnostics,
         ).to_dict()

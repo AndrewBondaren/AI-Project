@@ -362,7 +362,16 @@ async def render_wilderness_tile_grid(
     z: int | None = Query(default=None, description="Optional world-z slice"),
     include_z_slices: bool = Query(
         default=False,
-        description="Include all FineTerrain run-endpoint levels (default: surface only)",
+        description=(
+            "Include dense occupied world-z ASCII in ``levels`` (heavy). "
+            "Prefer ``occupied_z_levels`` + ``?z=`` for per-file dumps."
+        ),
+    ),
+    include_column_diagnostics: bool = Query(
+        default=True,
+        description=(
+            "Include column_span + cliff_delta levels (thin fill vs steep neighbor tops)"
+        ),
     ),
     container=Depends(get_container),
 ) -> JSONResponse:
@@ -381,6 +390,7 @@ async def render_wilderness_tile_grid(
         gy,
         z=z,
         include_z_slices=include_z_slices,
+        include_column_diagnostics=include_column_diagnostics,
     )
     return JSONResponse(content=payload)
 

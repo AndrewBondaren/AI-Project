@@ -7,7 +7,10 @@ Pack path (default after light bake):
 
 Detailed L2 (after detailed_bake):
   - ``dump_detailed_renders`` → location_terrain + ``render-wilderness-tile-grid``
-    (does **not** re-dump L0 mosaic)
+    Pack-read-only: each ``z/<n>.txt`` = cells already in FineTerrain runs (no generation).
+    Default: ``surface`` / ``column_span`` / ``cliff_delta``, then one file per occupied world-z
+    under ``wilderness/Gx*_Gy*/z/`` (fetched via ``?z=``, not one mega JSON).
+  - does **not** re-dump L0 mosaic
 
 Legacy path still works via the same endpoints (MapCell-backed levels).
 
@@ -39,6 +42,8 @@ if str(REPO / "backend") not in sys.path:
 from debug_api_helpers import BASE_URL, DebugApiError, _require_ok  # noqa: E402
 
 LEVEL_SURFACE = "surface"
+LEVEL_COLUMN_SPAN = "column_span"
+LEVEL_CLIFF_DELTA = "cliff_delta"
 LEVEL_LIGHT = "light"
 LEVEL_HEIGHT = "height"
 
@@ -49,9 +54,13 @@ def _write(path: Path, content: str) -> None:
 
 
 def _level_sort_key(key: str) -> tuple[int, int | str]:
-    """Order: light/surface first, height next, then numeric z, then other strings."""
+    """Order: light/surface first, column diagnostics, height, then numeric z."""
     if key in (LEVEL_LIGHT, LEVEL_SURFACE, "-1"):
         return (0, key)
+    if key == LEVEL_COLUMN_SPAN:
+        return (0, "z_column_span")
+    if key == LEVEL_CLIFF_DELTA:
+        return (0, "z_cliff_delta")
     if key == LEVEL_HEIGHT:
         return (0, "z_height")
     try:
@@ -76,8 +85,13 @@ def _write_level_bundle(
     header_lines: list[str],
     levels: dict[str, str],
     legend: str,
+    combine_grids: bool = True,
 ) -> dict[str, object]:
-    """Write per-level txt + all-levels.txt; return meta for index."""
+    """Write per-level txt + all-levels.txt; return meta for index.
+
+    When ``combine_grids=False``, ``all-levels.txt`` lists level file paths only
+    (no concatenated ASCII) — used when dense z lives under ``z/``.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     level_paths: dict[str, str] = {}
     combined: list[str] = [*header_lines, ""]
@@ -88,9 +102,13 @@ def _write_level_bundle(
         z_path = out_dir / f"{safe}.txt"
         body = f"{grid}\n\n--- legend ---\n{legend}\n"
         _write(z_path, body)
-        level_paths[str(z_key)] = str(z_path.relative_to(REPO))
+        rel = str(z_path.relative_to(REPO))
+        level_paths[str(z_key)] = rel
         combined.append(f"=== {z_key} ===")
-        combined.append(grid)
+        if combine_grids:
+            combined.append(grid)
+        else:
+            combined.append(f"(file) {rel}")
         combined.append("")
     all_path = out_dir / "all-levels.txt"
     combined.append(f"--- legend ---\n{legend}")
@@ -104,6 +122,111 @@ def _write_level_bundle(
         primary_meta["primary_level"] = picked[0]
         primary_meta["primary"] = level_paths.get(picked[0])
     return primary_meta
+
+
+def _wilderness_pack_renderer(world_uid: str, gx: int, gy: int):
+    """Load FineTerrain chunks for one macro-tile from on-disk pack (dump helper)."""
+    from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
+    from app.application.worldData.pack.io.worldPackReader import WorldPackReader
+    from app.application.worldData.render.wildernessTilePackRenderer import (
+        WildernessTilePackRenderer,
+    )
+
+    pack_root = REPO / "db" / "worlds" / world_uid / "pack"
+    if not (pack_root / "manifest.json").is_file():
+        return None
+    reader = WorldPackReader(WorldPackPaths(pack_root, world_uid))
+    tile = reader.manifest.tile_entry(gx, gy)
+    if tile is None:
+        return None
+    chunks = []
+    for ref in tile.chunks:
+        if not reader.chunk_exists(gx, gy, ref.cx, ref.cy):
+            continue
+        chunks.append(reader.read_wilderness_chunk(gx, gy, ref.cx, ref.cy))
+    if not chunks:
+        return None
+    tile_size_m = int(reader.manifest.map_cell_size_m)
+    return WildernessTilePackRenderer(
+        chunks,
+        tile_gx=gx,
+        tile_gy=gy,
+        tile_size_m=tile_size_m,
+    )
+
+
+def _write_wilderness_z_slices(
+    client: httpx.Client,
+    world_uid: str,
+    *,
+    gx: int,
+    gy: int,
+    occupied_z_levels: list[int],
+    tile_dir: Path,
+    legend: str,
+) -> dict[str, str]:
+    """Write ``z/<n>.txt`` for each occupied world-z (pack-local preferred).
+
+    Pack path: one tile load + single-pass ``symbols_by_occupied_z`` → one sparse
+    file per world-z (``format=sparse_xy``). Full ASCII bbox is unsuitable for
+    mountain tiles (thousands of z × nearly empty 1000² grids). HTTP ``?z=``
+    fallback still returns dense ASCII from the API.
+    """
+    z_dir = tile_dir / "z"
+    paths: dict[str, str] = {}
+    occupied_filter = {int(z) for z in occupied_z_levels}
+    renderer = _wilderness_pack_renderer(world_uid, gx, gy)
+    source = "http"
+    slice_format = "ascii"
+    if renderer is not None:
+        source = "pack"
+        slice_format = "sparse_xy"
+        levels = renderer.render_occupied_z_levels_sparse()
+        if occupied_filter:
+            levels = {z: text for z, text in levels.items() if z in occupied_filter}
+        total = len(levels)
+        print(
+            f"  wilderness ({gx},{gy}): writing {total} z-slice files "
+            f"(format=sparse_xy) under z/",
+            flush=True,
+        )
+        for i, (z_val, body) in enumerate(sorted(levels.items()), start=1):
+            if not body.strip():
+                continue
+            z_path = z_dir / f"{int(z_val)}.txt"
+            _write(z_path, f"{body}\n\n--- legend ---\n{legend}\n")
+            paths[str(int(z_val))] = str(z_path.relative_to(REPO))
+            if i == 1 or i == total or i % 200 == 0:
+                print(f"    z-files {i}/{total} (last z={z_val})", flush=True)
+    else:
+        occupied = sorted(occupied_filter)
+        for z_val in occupied:
+            r = client.get(
+                f"/worlds/{world_uid}/map/render-wilderness-tile-grid",
+                params={"gx": gx, "gy": gy, "z": z_val},
+                timeout=600.0,
+            )
+            _require_ok(r, f"render-wilderness-tile-grid gx={gx} gy={gy} z={z_val}")
+            payload = r.json()
+            ascii_grid = str(payload.get("ascii") or "")
+            if not ascii_grid.strip():
+                continue
+            z_path = z_dir / f"{int(z_val)}.txt"
+            _write(z_path, f"{ascii_grid}\n\n--- legend ---\n{legend}\n")
+            paths[str(int(z_val))] = str(z_path.relative_to(REPO))
+    index_lines = [
+        f"tile=({gx},{gy})",
+        f"occupied_z_count={len(paths)}",
+        f"files_written={len(paths)}",
+        f"source={source}",
+        f"slice_format={slice_format}",
+        "",
+        "z_files:",
+    ]
+    for key in sorted(paths.keys(), key=lambda k: int(k)):
+        index_lines.append(f"  {key}: {paths[key]}")
+    _write(tile_dir / "z-levels-index.txt", "\n".join(index_lines) + "\n")
+    return paths
 
 
 def dump_map_renders(
@@ -248,10 +371,15 @@ def dump_detailed_renders(
     wilderness_tiles: list[tuple[int, int]] | None = None,
     location_uids: list[str] | None = None,
     include_z_slices: bool = False,
+    write_z_slice_files: bool = True,
 ) -> dict[str, Any]:
     """Dump L2 detailed ASCII only — location_terrain + wilderness tile mosaics.
 
-    Does not call L0 ``render-world-grid`` / ``render-world-tile-grids``.
+    Renderer is pack-read-only: z slices = ``terrain_at_z`` over existing FineTerrain
+    runs (empty cell at z ⇒ blank). Does not call L0 ``render-world-grid``.
+
+    Wilderness default: base call without dense ASCII in JSON; each occupied world-z
+    is fetched with ``?z=`` and written to ``wilderness/.../z/<n>.txt``.
     """
     out_root = out_root or (
         REPO / ".local" / "map-render" / world_uid / "detailed-bake" / "after-detailed"
@@ -288,24 +416,45 @@ def dump_detailed_renders(
 
     wilderness_meta: dict[str, object] = {}
     for gx, gy in wilderness_tiles:
+        # Dense z ASCII must not ride in one JSON — use occupied_z_levels + ?z= files.
+        bulk_z = bool(include_z_slices) and not write_z_slice_files
         r = client.get(
             f"/worlds/{world_uid}/map/render-wilderness-tile-grid",
             params={
                 "gx": gx,
                 "gy": gy,
-                "include_z_slices": include_z_slices,
+                "include_z_slices": bulk_z,
+                "include_column_diagnostics": True,
             },
             timeout=600.0,
         )
         _require_ok(r, f"render-wilderness-tile-grid gx={gx} gy={gy}")
         payload = r.json()
         tile_key = f"Gx{gx}_Gy{gy}"
+        tile_dir = run_dir / "wilderness" / tile_key
         levels: dict[str, str] = dict(payload.get("levels") or {})
         if payload.get("ascii") and not levels:
             key = LEVEL_SURFACE if payload.get("z") is None else str(payload["z"])
             levels[key] = str(payload["ascii"])
+        # When writing per-z files, keep base bundle free of numeric z grids.
+        if write_z_slice_files:
+            levels = {
+                k: v
+                for k, v in levels.items()
+                if k in (LEVEL_SURFACE, LEVEL_COLUMN_SPAN, LEVEL_CLIFF_DELTA)
+                or not str(k).lstrip("-").isdigit()
+            }
+        legend = str(payload.get("legend") or "")
+        occupied_raw = payload.get("occupied_z_levels") or []
+        occupied: list[int] = []
+        for item in occupied_raw:
+            try:
+                occupied.append(int(item))
+            except (TypeError, ValueError):
+                continue
+        occupied = sorted(set(occupied))
         meta = _write_level_bundle(
-            run_dir / "wilderness" / tile_key,
+            tile_dir,
             header_lines=[
                 f"tile=({gx},{gy})",
                 f"read_mode={payload.get('read_mode')}",
@@ -313,10 +462,30 @@ def dump_detailed_renders(
                 f"chunks_loaded={payload.get('chunks_loaded')}",
                 f"column_count={payload.get('column_count')}",
                 f"wilderness_refine_status={payload.get('wilderness_refine_status')}",
+                f"occupied_z_levels={occupied}",
             ],
             levels=levels,
-            legend=str(payload.get("legend") or ""),
+            legend=legend,
+            combine_grids=not write_z_slice_files,
         )
+        z_slice_paths: dict[str, str] = {}
+        if write_z_slice_files:
+            z_slice_paths = _write_wilderness_z_slices(
+                client,
+                world_uid,
+                gx=gx,
+                gy=gy,
+                occupied_z_levels=occupied,
+                tile_dir=tile_dir,
+                legend=legend,
+            )
+            if z_slice_paths and not occupied:
+                occupied = sorted(int(k) for k in z_slice_paths)
+            meta["z_slice_files"] = z_slice_paths
+            meta["z_levels_index"] = str(
+                (tile_dir / "z-levels-index.txt").relative_to(REPO)
+            )
+            meta["occupied_z_levels"] = occupied
         meta.update(
             {
                 "tile_gx": gx,
@@ -326,6 +495,8 @@ def dump_detailed_renders(
                 "chunks_loaded": payload.get("chunks_loaded"),
                 "column_count": payload.get("column_count"),
                 "wilderness_refine_status": payload.get("wilderness_refine_status"),
+                "occupied_z_levels": occupied,
+                "z_slice_file_count": len(z_slice_paths),
             }
         )
         wilderness_meta[tile_key] = meta
@@ -358,10 +529,16 @@ def dump_detailed_renders(
         "latest": str(latest.relative_to(REPO)),
         "location_terrain_count": len(locations_meta),
         "wilderness_tile_count": len(wilderness_meta),
+        "wilderness_tiles": wilderness_meta,
         "wilderness_tiles_with_grid": sum(
             1
             for m in wilderness_meta.values()
             if isinstance(m, dict) and m.get("primary")
+        ),
+        "wilderness_z_slice_file_count": sum(
+            int(m.get("z_slice_file_count") or 0)
+            for m in wilderness_meta.values()
+            if isinstance(m, dict)
         ),
     }
 
@@ -394,6 +571,9 @@ def _print_detailed_summary(summary: dict[str, Any]) -> None:
         f"detailed L2 wilderness tiles: {summary['wilderness_tile_count']} "
         f"(with grid: {summary['wilderness_tiles_with_grid']})"
     )
+    z_files = int(summary.get("wilderness_z_slice_file_count") or 0)
+    if z_files:
+        print(f"wilderness z-slice files: {z_files}")
     print(f"run_dir: {summary['run_dir']}")
     print(f"latest: {summary.get('latest')}")
     print(f"index: {summary['index']}")

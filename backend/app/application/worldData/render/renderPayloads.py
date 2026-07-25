@@ -3,9 +3,10 @@
 ``levels`` semantics
 --------------------
 - pack world tiles: ``{ LEVEL_LIGHT: ascii, LEVEL_HEIGHT: ascii }``
-- pack location: ``{ LEVEL_SURFACE: ascii, \"<z>\": ascii }`` where z are FineTerrain
-  run *endpoints* (not every meter in a thick band); query ``?z=`` slices arbitrary world-z
-- pack wilderness tile: same ``LEVEL_SURFACE`` / z keys from wilderness chunk mosaic
+- pack location / wilderness: ``LEVEL_SURFACE`` (top z); optional dense ``\"<z>\"`` slices
+  (every occupied world-z in runs); diagnostics ``LEVEL_COLUMN_SPAN`` / ``LEVEL_CLIFF_DELTA``
+  expose thin columns vs steep neighbor tops (L2 wall/gap problem vs building stacks);
+  query ``?z=`` slices arbitrary world-z
 - legacy tiles: ``WorldTileGridRenderer`` surface key ``-1`` plus numeric z strings
 - ``indoor`` on pack location payloads is always False (shape-compat with legacy; structures
   live in patches, not location_terrain blobs)
@@ -31,6 +32,8 @@ ReadMode = Literal[
 ]
 
 LEVEL_SURFACE = "surface"
+LEVEL_COLUMN_SPAN = "column_span"
+LEVEL_CLIFF_DELTA = "cliff_delta"
 LEVEL_LIGHT = "light"
 LEVEL_HEIGHT = "height"
 
@@ -189,6 +192,7 @@ class WildernessTileGridPayload:
     read_mode: ReadMode
     levels: dict[str, str] = field(default_factory=dict)
     z_levels: list[object] = field(default_factory=list)
+    occupied_z_levels: list[int] = field(default_factory=list)
     chunks_listed: int = 0
     chunks_loaded: int = 0
     column_count: int = 0
@@ -208,6 +212,7 @@ class WildernessTileGridPayload:
             "chunks_loaded": self.chunks_loaded,
             "column_count": self.column_count,
             "z_levels": self.z_levels,
+            "occupied_z_levels": self.occupied_z_levels,
             "levels": self.levels,
         }
         if self.wilderness_refine_status is not None:

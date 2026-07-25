@@ -245,11 +245,12 @@ class PackMapGridRender:
         *,
         z: int | None = None,
         include_z_slices: bool = False,
+        include_column_diagnostics: bool = True,
     ) -> WildernessTileGridPayload:
         """L2 wilderness mosaic for one macro-tile (detailed-bake).
 
-        Default levels = surface only (meter grid can be large). Pass ``z=`` for a
-        slice, or ``include_z_slices=True`` for all run-endpoint levels.
+        Default: surface + column_span / cliff_delta (expose thin fill vs steep tops).
+        Pass ``z=`` for a slice, or ``include_z_slices=True`` for dense occupied z grids.
         """
         legend = WildernessTilePackRenderer.render_legend()
         source = self._read.try_wilderness_tile(world, tile_gx, tile_gy)
@@ -268,6 +269,7 @@ class PackMapGridRender:
             tile_gy=source.gy,
             tile_size_m=source.tile_size_m,
         )
+        occupied = list(renderer.z_levels())
         if z is not None:
             ascii_grid = renderer.render_level(z)
             return WildernessTileGridPayload(
@@ -284,8 +286,12 @@ class PackMapGridRender:
                 column_count=renderer.column_count,
                 wilderness_refine_status=source.wilderness_refine_status,
                 z_levels=[z] if ascii_grid.strip() else [],
+                occupied_z_levels=occupied,
             )
-        levels = renderer.render_all_levels(include_z_slices=include_z_slices)
+        levels = renderer.render_all_levels(
+            include_z_slices=include_z_slices,
+            include_column_diagnostics=include_column_diagnostics,
+        )
         return WildernessTileGridPayload(
             tile_gx=tile_gx,
             tile_gy=tile_gy,
@@ -295,6 +301,7 @@ class PackMapGridRender:
             read_mode="wilderness_tile_l2",
             levels=levels,
             z_levels=list(levels.keys()),
+            occupied_z_levels=occupied,
             chunks_listed=source.chunks_listed,
             chunks_loaded=source.chunks_loaded,
             column_count=renderer.column_count,

@@ -3,13 +3,23 @@
 from __future__ import annotations
 
 from app.application.worldData.render.fineTerrainAsciiKernel import (
+    column_diagnostics_summary,
+    draw_int_grid,
     draw_symbol_grid,
+    format_sparse_symbol_cells,
     symbols_at_z,
+    symbols_by_occupied_z,
     symbols_surface_top,
-    z_endpoints,
+    values_cliff_delta,
+    values_column_span,
+    z_occupied,
 )
 from app.application.worldData.render.mapSymbols import render_map_legend
-from app.application.worldData.render.renderPayloads import LEVEL_SURFACE
+from app.application.worldData.render.renderPayloads import (
+    LEVEL_CLIFF_DELTA,
+    LEVEL_COLUMN_SPAN,
+    LEVEL_SURFACE,
+)
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire
 
 
@@ -84,6 +94,7 @@ class WildernessTilePackRenderer:
         )
 
     def render_level(self, z: int) -> str:
+        """Horizontal slice at world-z — only columns whose pack runs cover ``z``."""
         if not self._cols:
             return ""
         level = symbols_at_z(self._cols, z)
@@ -93,23 +104,116 @@ class WildernessTilePackRenderer:
             level,
             title=(
                 f"wilderness tile=({self.tile_gx},{self.tile_gy}) z={z}  "
-                f"(pack wilderness_chunk mosaic)"
+                f"(pack wilderness_chunk mosaic; cells present in FineTerrain only)"
             ),
         )
 
-    def z_levels(self) -> list[int]:
-        return z_endpoints(self._cols.values())
+    def render_occupied_z_levels(self) -> dict[int, str]:
+        """Dense ASCII for every occupied world-z (single-pass). Prefer sparse for dumps."""
+        if not self._cols:
+            return {}
+        by_z = symbols_by_occupied_z(self._cols)
+        out: dict[int, str] = {}
+        for z in sorted(by_z):
+            text = self._draw(
+                by_z[z],
+                title=(
+                    f"wilderness tile=({self.tile_gx},{self.tile_gy}) z={z}  "
+                    f"(pack wilderness_chunk mosaic; cells present in FineTerrain only)"
+                ),
+            )
+            if text.strip():
+                out[int(z)] = text
+        return out
 
-    def render_all_levels(self, *, include_z_slices: bool = True) -> dict[str, str]:
-        """Keys: ``LEVEL_SURFACE``; optional decimal world-z run endpoints."""
+    def render_occupied_z_levels_sparse(self) -> dict[int, str]:
+        """``format=sparse_xy`` per occupied world-z — detailed_bake dump default."""
+        if not self._cols:
+            return {}
+        by_z = symbols_by_occupied_z(self._cols)
+        out: dict[int, str] = {}
+        for z in sorted(by_z):
+            cells = by_z[z]
+            xs = [x for x, _ in cells]
+            ys = [y for _, y in cells]
+            text = format_sparse_symbol_cells(
+                cells,
+                title=(
+                    f"wilderness tile=({self.tile_gx},{self.tile_gy}) z={z}  "
+                    f"(pack wilderness_chunk mosaic; cells present in FineTerrain only)"
+                ),
+                extra_headers=self._extra_headers(
+                    min(xs), min(ys), max(xs), max(ys),
+                ),
+            )
+            if text.strip():
+                out[int(z)] = text
+        return out
+
+    def render_column_span(self) -> str:
+        """Occupied z-count per column — exposes thin L2 fill vs building-like walls."""
+        if not self._cols:
+            return ""
+        values = values_column_span(self._cols)
+        if not values:
+            return ""
+        xs = [x for x, _ in values]
+        ys = [y for _, y in values]
+        return draw_int_grid(
+            values,
+            title=(
+                f"wilderness tile=({self.tile_gx},{self.tile_gy})  "
+                f"column_span (occupied world-z count)"
+            ),
+            extra_headers=self._extra_headers(min(xs), min(ys), max(xs), max(ys))
+            + [column_diagnostics_summary(self._cols)],
+            coord_prefix="tile-local ",
+        )
+
+    def render_cliff_delta(self) -> str:
+        """Max |Δz_top| vs 4-neighbors — steep edge without mid-z cells = gap suspect."""
+        if not self._cols:
+            return ""
+        values = values_cliff_delta(self._cols)
+        if not values:
+            return ""
+        xs = [x for x, _ in values]
+        ys = [y for _, y in values]
+        return draw_int_grid(
+            values,
+            title=(
+                f"wilderness tile=({self.tile_gx},{self.tile_gy})  "
+                f"cliff_delta (max |Δz_top| to neighbors)"
+            ),
+            extra_headers=self._extra_headers(min(xs), min(ys), max(xs), max(ys))
+            + [column_diagnostics_summary(self._cols)],
+            coord_prefix="tile-local ",
+        )
+
+    def z_levels(self) -> list[int]:
+        """Dense occupied world-z (every z in runs — mid-band of thick walls)."""
+        return z_occupied(self._cols.values())
+
+    def render_all_levels(
+        self,
+        *,
+        include_z_slices: bool = True,
+        include_column_diagnostics: bool = True,
+    ) -> dict[str, str]:
+        """Keys: surface; optional dense z slices; column_span / cliff_delta diagnostics."""
         out: dict[str, str] = {}
         surface = self.render_surface_top()
         if surface:
             out[LEVEL_SURFACE] = surface
+        if include_column_diagnostics:
+            span = self.render_column_span()
+            if span:
+                out[LEVEL_COLUMN_SPAN] = span
+            cliff = self.render_cliff_delta()
+            if cliff:
+                out[LEVEL_CLIFF_DELTA] = cliff
         if not include_z_slices:
             return out
-        for z in self.z_levels():
-            text = self.render_level(z)
-            if text.strip():
-                out[str(z)] = text
+        for z, text in self.render_occupied_z_levels().items():
+            out[str(z)] = text
         return out
