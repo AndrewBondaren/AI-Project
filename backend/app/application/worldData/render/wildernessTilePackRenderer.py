@@ -6,7 +6,6 @@ from app.application.worldData.render.fineTerrainAsciiKernel import (
     column_diagnostics_summary,
     draw_int_grid,
     draw_symbol_grid,
-    format_sparse_symbol_cells,
     symbols_at_z,
     symbols_by_occupied_z,
     symbols_surface_top,
@@ -70,16 +69,36 @@ class WildernessTilePackRenderer:
             f"world meters x: {wx0}..{wx1 + 1}  y: {wy0}..{wy1 + 1}",
         ]
 
-    def _draw(self, symbols: dict[tuple[int, int], str], *, title: str) -> str:
-        if not symbols:
+    def mosaic_xy_bounds(self) -> tuple[int, int, int, int] | None:
+        """Inclusive tile-local (x0,x1,y0,y1) over all mosaic columns — max frame for z-slices."""
+        if not self._cols:
+            return None
+        xs = [x for x, _ in self._cols]
+        ys = [y for _, y in self._cols]
+        return min(xs), max(xs), min(ys), max(ys)
+
+    def _draw(
+        self,
+        symbols: dict[tuple[int, int], str],
+        *,
+        title: str,
+        bounds: tuple[int, int, int, int] | None = None,
+    ) -> str:
+        """ASCII grid; ``bounds`` locks frame (empty cells → space)."""
+        frame = bounds
+        if frame is None and symbols:
+            xs = [x for x, _ in symbols]
+            ys = [y for _, y in symbols]
+            frame = (min(xs), max(xs), min(ys), max(ys))
+        if frame is None:
             return ""
-        xs = [x for x, _ in symbols]
-        ys = [y for _, y in symbols]
+        x0, x1, y0, y1 = frame
         return draw_symbol_grid(
             symbols,
             title=title,
-            extra_headers=self._extra_headers(min(xs), min(ys), max(xs), max(ys)),
+            extra_headers=self._extra_headers(x0, y0, x1, y1),
             coord_prefix="tile-local ",
+            bounds=frame,
         )
 
     def render_surface_top(self) -> str:
@@ -91,10 +110,11 @@ class WildernessTilePackRenderer:
                 f"wilderness tile=({self.tile_gx},{self.tile_gy})  "
                 f"(pack wilderness_chunk mosaic, top z)"
             ),
+            bounds=self.mosaic_xy_bounds(),
         )
 
     def render_level(self, z: int) -> str:
-        """Horizontal slice at world-z — only columns whose pack runs cover ``z``."""
+        """Horizontal slice at world-z — mosaic frame; missing cells are spaces."""
         if not self._cols:
             return ""
         level = symbols_at_z(self._cols, z)
@@ -106,12 +126,14 @@ class WildernessTilePackRenderer:
                 f"wilderness tile=({self.tile_gx},{self.tile_gy}) z={z}  "
                 f"(pack wilderness_chunk mosaic; cells present in FineTerrain only)"
             ),
+            bounds=self.mosaic_xy_bounds(),
         )
 
     def render_occupied_z_levels(self) -> dict[int, str]:
-        """Dense ASCII for every occupied world-z (single-pass). Prefer sparse for dumps."""
+        """ASCII per occupied world-z on the shared mosaic frame (aligned axes)."""
         if not self._cols:
             return {}
+        frame = self.mosaic_xy_bounds()
         by_z = symbols_by_occupied_z(self._cols)
         out: dict[int, str] = {}
         for z in sorted(by_z):
@@ -121,34 +143,30 @@ class WildernessTilePackRenderer:
                     f"wilderness tile=({self.tile_gx},{self.tile_gy}) z={z}  "
                     f"(pack wilderness_chunk mosaic; cells present in FineTerrain only)"
                 ),
+                bounds=frame,
             )
             if text.strip():
                 out[int(z)] = text
         return out
 
-    def render_occupied_z_levels_sparse(self) -> dict[int, str]:
-        """``format=sparse_xy`` per occupied world-z — detailed_bake dump default."""
-        if not self._cols:
-            return {}
+    def iter_occupied_z_levels_aligned(self):
+        """Yield ``(z, ascii)`` on mosaic frame; frees per-z symbol maps as it goes."""
+        frame = self.mosaic_xy_bounds()
+        if frame is None:
+            return
         by_z = symbols_by_occupied_z(self._cols)
-        out: dict[int, str] = {}
         for z in sorted(by_z):
-            cells = by_z[z]
-            xs = [x for x, _ in cells]
-            ys = [y for _, y in cells]
-            text = format_sparse_symbol_cells(
+            cells = by_z.pop(z)
+            text = self._draw(
                 cells,
                 title=(
                     f"wilderness tile=({self.tile_gx},{self.tile_gy}) z={z}  "
                     f"(pack wilderness_chunk mosaic; cells present in FineTerrain only)"
                 ),
-                extra_headers=self._extra_headers(
-                    min(xs), min(ys), max(xs), max(ys),
-                ),
+                bounds=frame,
             )
             if text.strip():
-                out[int(z)] = text
-        return out
+                yield int(z), text
 
     def render_column_span(self) -> str:
         """Occupied z-count per column — exposes thin L2 fill vs building-like walls."""

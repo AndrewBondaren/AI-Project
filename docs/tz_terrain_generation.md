@@ -291,6 +291,14 @@ z_bottom = max(world.z_min, z_top - N_eff)
 
 **Не в v1:** горизонтальный «мост» между далёкими колонками (только local neighborhood).
 
+### Relief grade (домен — указатель)
+
+**Отдельный домен** SLOPE / SHEER + uphill facing:  
+→ [`tz_terrain_relief.md`](./tz_terrain_relief.md) (SoT ownership, consumers, target layout).
+
+Кратко: grade — **не** MaskDomain `mountains`; горы только вызывают shared SideFill.  
+Column `N_eff` / gap (этот документ § Зазоры) задаёт **объём** колонки; relief — **проходимость грани**.
+
 ### Terrain ↔ ClimateData (разделение ответственности, физическая связь)
 
 **Выбрано: вариант A** — terrain **физически зависит** от climate-related данных (pole field, `typical_elevation_z`, zone profile), но **модули разделены**:
@@ -1692,6 +1700,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-27 | Домен **relief** → [`tz_terrain_relief.md`](./tz_terrain_relief.md); здесь — указатель (не SoT grade) |
 | 2026-07-19 | § Охват мира: форма = `world_bounds` AABB (квадрат/прямоугольник) |
 | 2026-07-20 | § Bake modes invariant: L2 ∉ light/full; entry после light — отдельная джоба (см. pack storage Job boundaries) |
 | 2026-07-19 | **Bake modes — контракт мастера:** light = тайлы с локациями; full = весь `world_bounds`; без product wilderness stage |
@@ -1724,5 +1733,8 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 - `tz_city_generation.md` — settlement, occupancy, urban
 - `tz_locations.md` — named_location fields
 - `tz_generator_technical_debt.md` — NC-1, smells
-- [`tz_map_light_bake.md`](./tz_map_light_bake.md) — L0 light-grid compose |
+- [`tz_terrain_relief.md`](./tz_terrain_relief.md) — **домен** SLOPE/SHEER/facing (горы = consumer)
+- [`tz_map_light_bake.md`](./tz_map_light_bake.md) — L0 light-grid compose; горы consumer SideFill
+- [`tz_mountain_architecture.md`](./tz_mountain_architecture.md) — PassBuilder topology (не Relief grade)
+- [`tz_locations.md`](./tz_locations.md) — `system_facing` / staircase chain (аналог uphill facing)
 - `project_data_storage_tz.md` — map_cells schema

@@ -154,11 +154,15 @@ class TestWildernessTilePackRenderer(unittest.TestCase):
         occupied_ascii = renderer.render_occupied_z_levels()
         self.assertEqual(sorted(occupied_ascii), [1, 2, 3])
         self.assertIn("m", occupied_ascii[2])
-
-        sparse = renderer.render_occupied_z_levels_sparse()
-        self.assertEqual(sorted(sparse), [1, 2, 3])
-        self.assertIn("format=sparse_xy", sparse[2])
-        self.assertIn("0\t0\tm", sparse[2])  # x=0 y=0 mountain at z=2
+        # Shared mosaic frame: z=2 only has thick col, but x span includes thin neighbor.
+        row2 = [ln for ln in occupied_ascii[2].splitlines() if ln.startswith("   0 |")]
+        self.assertEqual(len(row2), 1)
+        self.assertEqual(row2[0], "   0 |m |")
+        row1 = [ln for ln in occupied_ascii[1].splitlines() if ln.startswith("   0 |")]
+        self.assertEqual(row1[0], "   0 |m.|")
+        # Same grid width on every z (no shift).
+        self.assertEqual(len(row1[0]), len(row2[0]))
+        self.assertIn("tile-local grid gx: 0..1", occupied_ascii[2])
 
 
 if __name__ == "__main__":

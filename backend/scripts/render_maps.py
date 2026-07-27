@@ -167,37 +167,38 @@ def _write_wilderness_z_slices(
 ) -> dict[str, str]:
     """Write ``z/<n>.txt`` for each occupied world-z (pack-local preferred).
 
-    Pack path: one tile load + single-pass ``symbols_by_occupied_z`` → one sparse
-    file per world-z (``format=sparse_xy``). Full ASCII bbox is unsuitable for
-    mountain tiles (thousands of z × nearly empty 1000² grids). HTTP ``?z=``
-    fallback still returns dense ASCII from the API.
+    Pack path: one tile load + single-pass symbols → ASCII grid on the **shared
+    mosaic frame** (empty cell = space; same x/y axes on every z — no shift).
+    HTTP ``?z=`` fallback when pack is unavailable.
     """
     z_dir = tile_dir / "z"
     paths: dict[str, str] = {}
     occupied_filter = {int(z) for z in occupied_z_levels}
     renderer = _wilderness_pack_renderer(world_uid, gx, gy)
     source = "http"
-    slice_format = "ascii"
+    slice_format = "ascii_aligned"
     if renderer is not None:
         source = "pack"
-        slice_format = "sparse_xy"
-        levels = renderer.render_occupied_z_levels_sparse()
-        if occupied_filter:
-            levels = {z: text for z, text in levels.items() if z in occupied_filter}
-        total = len(levels)
+        frame = renderer.mosaic_xy_bounds()
         print(
-            f"  wilderness ({gx},{gy}): writing {total} z-slice files "
-            f"(format=sparse_xy) under z/",
+            f"  wilderness ({gx},{gy}): writing z-slice ASCII grids "
+            f"(aligned frame={frame}) under z/",
             flush=True,
         )
-        for i, (z_val, body) in enumerate(sorted(levels.items()), start=1):
+        for i, (z_val, body) in enumerate(
+            renderer.iter_occupied_z_levels_aligned(),
+            start=1,
+        ):
+            if occupied_filter and int(z_val) not in occupied_filter:
+                continue
             if not body.strip():
                 continue
             z_path = z_dir / f"{int(z_val)}.txt"
             _write(z_path, f"{body}\n\n--- legend ---\n{legend}\n")
             paths[str(int(z_val))] = str(z_path.relative_to(REPO))
-            if i == 1 or i == total or i % 200 == 0:
-                print(f"    z-files {i}/{total} (last z={z_val})", flush=True)
+            if i == 1 or i % 200 == 0:
+                print(f"    z-files {len(paths)} (last z={z_val})", flush=True)
+        print(f"    z-files done: {len(paths)}", flush=True)
     else:
         occupied = sorted(occupied_filter)
         for z_val in occupied:

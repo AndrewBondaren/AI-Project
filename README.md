@@ -64,5 +64,6 @@ python backend/scripts/light_and_full_bake.py --fixture fixtures/world_test_gen.
 
 
 python backend/scripts/light_and_full_bake.py --fixture fixtures/world_test_gen_003.json
-python backend/scripts/detailed_bake.py --world-uid world-test-003 --scope wilderness --gx -2 --gy -2
+python backend/scripts/detailed_bake.py --world-uid world-test-003 --scope wilderness --gx -2 --gy -2 --render
+
 

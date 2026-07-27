@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 
-from app.application.worldData.render.gridAxes import format_grid_header
+from app.application.worldData.render.gridAxes import format_grid_header, format_x_axis_ruler
 from app.application.worldData.render.mapSymbols import (
     format_height_cell,
     height_cell_width,
@@ -186,21 +186,34 @@ def draw_symbol_grid(
     title: str,
     extra_headers: list[str] | None = None,
     coord_prefix: str = "",
+    bounds: tuple[int, int, int, int] | None = None,
 ) -> str:
-    """Draw ASCII from (x,y)→symbol. Empty symbols → empty string."""
-    if not symbols:
+    """Draw ASCII from (x,y)→symbol. Missing cells → space (aligned frame).
+
+    ``bounds=(x0,x1,y0,y1)`` fixes the frame (use mosaic / max extent so every
+    z-slice shares the same axes and does not shift when sparse).
+    Without bounds, frame is the content bbox of ``symbols``.
+    """
+    if bounds is not None:
+        x0, x1, y0, y1 = bounds
+    elif symbols:
+        xs = [x for x, _ in symbols]
+        ys = [y for _, y in symbols]
+        x0, x1 = min(xs), max(xs)
+        y0, y1 = min(ys), max(ys)
+    else:
         return ""
-    xs = [x for x, _ in symbols]
-    ys = [y for _, y in symbols]
-    x0, x1 = min(xs), max(xs)
-    y0, y1 = min(ys), max(ys)
+    if x1 < x0 or y1 < y0:
+        return ""
     lines = [title]
     if extra_headers:
         lines.extend(extra_headers)
     lines.append(format_grid_header(x0, x1, y0, y1, cell_size_m=1, prefix=coord_prefix))
+    lines.extend(format_x_axis_ruler(x0, x1))
     for y in range(y1, y0 - 1, -1):
         row = "".join(symbols.get((x, y), " ") for x in range(x0, x1 + 1))
         lines.append(f"{y:4d} |{row}|")
+    lines.extend(format_x_axis_ruler(x0, x1))
     return "\n".join(lines)
 
 

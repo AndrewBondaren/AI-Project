@@ -5,6 +5,8 @@ Light and coarse share Form/SideFill SoT; only the grid sampler differs (Q3-A).
 
 from __future__ import annotations
 
+import logging
+
 from app.application.worldData.generators.terrain.mountains.formGeometry import (
     construct_mountain_form,
 )
@@ -19,6 +21,10 @@ from app.application.worldData.generators.terrain.mountains.sideFill import (
     side_fill_fractions,
     side_fill_fractions_at_points,
 )
+from app.application.worldData.generators.terrain.mountains.sideGradeDecision import (
+    explain_side_grade_at_xy,
+    format_sides_summary,
+)
 from app.application.worldData.masks.footprint import LightCellRef, MaskFootprint
 from app.application.worldData.pack.bake.lightGrid.coords import (
     LightGridScale,
@@ -26,23 +32,105 @@ from app.application.worldData.pack.bake.lightGrid.coords import (
     light_to_macro_local,
     meters_to_light,
 )
+from app.dataModel.terrainMasks.mountain.enums import MountainSideKind
 from app.dataModel.terrainMasks.mountain.specs import (
     MountainRangeSpec,
     MountainSpec,
     StarForm,
 )
 
+logger = logging.getLogger(__name__)
+
+# Cap DEBUG cell samples per Spec (full footprint would flood logs).
+_GRADE_SAMPLE_LIMIT = 8
+
+
+def _log_mountain_spec_grade(
+    spec: MountainSpec,
+    geom,
+    sides: list,
+    cells: frozenset[LightCellRef],
+    scale: LightGridScale,
+) -> None:
+    """INFO sides summary + DEBUG sample: why SLOPE/SHEER and facing (tz_terrain_relief R8)."""
+    logger.info(
+        "relief_grade_spec | mountain origin=(%s,%s) r=%s kind=%s sides=%s cells=%d",
+        spec.origin_x_m,
+        spec.origin_y_m,
+        spec.radius_m,
+        spec.kind,
+        format_sides_summary(sides),
+        len(cells),
+    )
+    if not logger.isEnabledFor(logging.DEBUG) or not cells:
+        return
+    # Prefer diversity: some SHEER-ish (low frac) and some SLOPE mid-t if present.
+    samples: list[LightCellRef] = []
+    for ref in cells:
+        samples.append(ref)
+        if len(samples) >= _GRADE_SAMPLE_LIMIT:
+            break
+    for ref in samples:
+        px, py = light_cell_center_m(ref.gx, ref.gy, ref.tx, ref.ty, scale)
+        decision = explain_side_grade_at_xy(
+            geom, sides, float(px), float(py), light_m=float(scale.light_m),
+        )
+        facing = decision.facing if decision.facing is not None else "none"
+        logger.debug(
+            "relief_grade_cell | mountain=(%s,%s) light=(%d,%d,%d,%d) "
+            "kind=%s sector=%s t=%.3f frac=%.3f facing=%s | %s",
+            spec.origin_x_m,
+            spec.origin_y_m,
+            ref.gx,
+            ref.gy,
+            ref.tx,
+            ref.ty,
+            decision.kind.value,
+            decision.sector_index,
+            decision.t,
+            decision.fraction,
+            facing,
+            decision.reason,
+        )
+
+
+def _log_range_sides(spec: MountainRangeSpec) -> None:
+    rs = spec.sides
+    parts = [
+        f"left={rs.left.kind.value}",
+        f"right={rs.right.kind.value}",
+    ]
+    if rs.start is not None:
+        parts.append(f"start={rs.start.kind.value}")
+    if rs.end is not None:
+        parts.append(f"end={rs.end.kind.value}")
+    sheer_n = sum(
+        1
+        for s in (rs.left, rs.right, rs.start, rs.end)
+        if s is not None and s.kind == MountainSideKind.SHEER
+    )
+    logger.info(
+        "relief_grade_spec | range peaks=%d spine_pts=%d sides={%s} sheer_sides=%d",
+        len(spec.peaks),
+        len(spec.spine),
+        ", ".join(parts),
+        sheer_n,
+    )
+
 
 def materialize_mountain_spec(spec: MountainSpec, scale: LightGridScale) -> MaskFootprint:
     geom = construct_mountain_form(spec.form, (spec.origin_x_m, spec.origin_y_m), spec.radius_m)
     concave = isinstance(spec.form, StarForm)
     cells = raster_form_footprint(geom, scale, concave=concave)
-    fractions = side_fill_fractions(geom, spec.resolved_sides(), cells, scale)
+    sides = spec.resolved_sides()
+    fractions = side_fill_fractions(geom, sides, cells, scale)
+    _log_mountain_spec_grade(spec, geom, sides, cells, scale)
     return MaskFootprint(cells=cells, elevation_fraction=fractions)
 
 
 def materialize_mountain_range(spec: MountainRangeSpec, scale: LightGridScale) -> MaskFootprint:
     """Corridor + left/right/caps SideFill; peaks use full mountain Spec pipeline."""
+    _log_range_sides(spec)
     half = max(1, int(spec.width_m)) // 2
     xs = [p[0] for p in spec.spine]
     ys = [p[1] for p in spec.spine]
@@ -98,10 +186,18 @@ def coarse_footprint_for_spec(
     """Q3-A: FormGeometry→FormRaster→SideFill on macro grid."""
     geom = construct_mountain_form(spec.form, (spec.origin_x_m, spec.origin_y_m), spec.radius_m)
     concave = isinstance(spec.form, StarForm)
+    sides = spec.resolved_sides()
+    logger.info(
+        "relief_grade_spec | coarse mountain origin=(%s,%s) r=%s sides=%s",
+        spec.origin_x_m,
+        spec.origin_y_m,
+        spec.radius_m,
+        format_sides_summary(sides),
+    )
     keys = raster_form_macro_keys(geom, cell_m=cell_m, concave=concave)
     return side_fill_fractions_at_points(
         geom,
-        spec.resolved_sides(),
+        sides,
         _coarse_macro_points(keys, cell_m=cell_m),
         light_m=float(light_m),
     )
@@ -114,6 +210,7 @@ def coarse_footprint_for_range(
     light_m: float,
 ) -> dict[tuple[int, int], float]:
     """Q3-A: Range SideFill sampled on macro centers; peaks overlay."""
+    _log_range_sides(spec)
     cell = max(1, int(cell_m))
     half = max(1, int(spec.width_m)) // 2
     xs = [p[0] for p in spec.spine]

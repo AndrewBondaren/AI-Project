@@ -563,8 +563,12 @@ Target: forest/landcover зовут **тот же** index + FloraGenerator; сп
 ### Mountain (engine) — kind / form / sides / range + elevation (утверждено 2026-07-16)
 
 **Гора** — составной engine-объект (не N+1), materialize **поддомена** `terrain_masks`.  
-Оси: **kind** (наполнение), **form** (силуэт footprint), **sides** (склоны).  
+Оси: **kind** (наполнение), **form** (силуэт footprint), **sides** (профили сторон).  
 Отдельно: **горный хребет / range** — протяжённая **система** гор (не одна точка).
+
+**SLOPE / SHEER + uphill facing — отдельный домен.**  
+SoT: [`tz_terrain_relief.md`](./tz_terrain_relief.md).  
+Горы **переиспользуют** relief SideFill; запрещено держать уникальный SoT grade только в `mountains/`.
 
 ```text
 # gate + declare — общий домен (подход A)
@@ -575,7 +579,7 @@ world.terrain_masks.declared_mountains[]  # MountainSpec | MountainRangeSpec (п
 # если category_enabled(default_mountains):
 #   declared Specs (не затираются autoresolve)
 #   + autoresolve Specs  (ниже)
-#   → FormGeometry → FormRaster → SideFill → KindElevation
+#   → FormGeometry → FormRaster → SideFill(relief) → KindElevation
 #   → paint через общий terrain merge (rank mountain)
 # NamedLocation — optional поверх (имя пика, храм на горе, …)
 ```
@@ -608,7 +612,7 @@ ridge field → candidates
 | Система | Статус | Примечание |
 |---|---|---|
 | **Ущелья (ravine)** | deferred | свой MaskDomain / Spec — § Plugin map; не «шум на горе» |
-| **Обрывы / вертикальные склоны** | deferred / partial | L0: `MountainSideKind.SHEER` на стороне горы/хребта; самостоятельный cliff Spec — later PR |
+| **Обрывы / вертикальные грани** | deferred / partial | **relief** `SHEER` — [`tz_terrain_relief.md`](./tz_terrain_relief.md); горы задают kind на стороне Spec; standalone cliff Spec — later PR |
 | Ridge noise → неровность склона | follow-up | после PassBuilder — [`tz_mountain_architecture.md`](./tz_mountain_architecture.md) U8 |
 
 #### Иерархия абстракций
@@ -831,10 +835,14 @@ side_fraction(p) = profile_side(side, t(p))   # ∈ [0,1]
 z(p) = base_z(p) + rise(kind) * side_fraction(p)  # clamp z_min..z_max
 ```
 
-| `MountainSideKind` | Алгоритм `profile(t)` | Смысл |
+| `MountainSideKind` / `ReliefSideKind` | Алгоритм `profile(t)` | Смысл |
 |---|---|---|
-| `SHEER` | **step**: `1` при `t < 1−ε`, иначе `0` | жёсткий обрыв |
-| `SLOPE` | **smooth falloff**: default `1 − smoothstep(0,1,t)`; optional `(1−t)^k` | мягкий склон |
+| `SHEER` | **step**: `1` при `t < 1−ε`, иначе `0` | жёсткий обрыв (terrain grade) |
+| `SLOPE` | **smooth falloff**: default `1 − smoothstep(0,1,t)`; optional `(1−t)^k` | мягкий склон (terrain grade) |
+
+> Kind / profile — домен [`tz_terrain_relief.md`](./tz_terrain_relief.md).  
+> Имена `MountainSideKind` / `fill_*_side` в shipped коде — **адаптер** consumer-а; target: `generators/terrain/relief/`.  
+> Uphill **facing** — контракт relief (аналог stair `system_facing`).
 
 #### POJO defaults (SoT; рекомендация утверждена)
 
@@ -1404,6 +1412,7 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 | [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | L0 wire, WP-10, Идея 1/2, WP-PERF-31 |
 | [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) | declared river/coast, fine roles; **Ocean bathymetry / Depression forms** (R5b) |
 | [`tz_terrain_generation.md`](./tz_terrain_generation.md) | surface pass, coarse planning |
+| [`tz_terrain_relief.md`](./tz_terrain_relief.md) | **Relief grade** SoT (SLOPE/SHEER/facing); горы = SideFill consumer |
 | [`tz_climate.md`](./tz_climate.md) | pole / zone sample |
 | [`tz_city_generation.md`](./tz_city_generation.md) | L1 skeletons vs L2 layout |
 
@@ -1413,6 +1422,7 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-27 | Домен **relief** → [`tz_terrain_relief.md`](./tz_terrain_relief.md); § Mountain = consumer SideFill; shipped `MountainSideKind` = адаптер |
 | 2026-07-24 | § **MaskDomain materialize**: общая абстракция collect→materialize→apply; `MaskFootprint`; `run_mask_domain`; anti-smell S1–S5; settlement/farmland как plugins; mountain = первый plugin; forest deferred; MLB-13 |
 | 2026-07-24 | Impl MLB-13: shared materialize + `MountainMaskMaterializer` (FG→FR→SF→KindElevation); `declared_mountains`; removed `declare_radius_light` / score→paint stub |
 | 2026-07-24 | Rename: `MaskDomainEngine`/`MountainMaskEngine` → `MaskDomainMaterializer`/`MountainMaskMaterializer` (Engine = DAG only) |
