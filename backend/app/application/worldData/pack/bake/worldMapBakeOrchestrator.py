@@ -34,6 +34,7 @@ from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
 from app.dataModel.worldPack.worldMapCellsPerTile import resolve_world_map_cells_per_tile
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
@@ -82,6 +83,7 @@ class WorldMapBakeOrchestrator:
         edges: list[ConnectionEdge] | None = None,
         hydrology_generator: HydrologyGeneratorService | None = None,
         bake_mode: PackBakeMode = "light",
+        relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
     ) -> int:
         world_uid = world.world_uid
         ctx_t0 = time.perf_counter()
@@ -129,6 +131,7 @@ class WorldMapBakeOrchestrator:
             surface_planning=surface_ctx,
             pole_field=surface_ctx.pole_field,
             terrain_system_keys=terrain_system_keys(world),
+            relief_templates_by_uid=dict(relief_templates_by_uid or {}),
         )
         compose = compose_light_grid(bake_ctx)
 

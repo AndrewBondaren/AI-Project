@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -9,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.dataModel.annotationPolicy import DefaultOnWire, DefaultEnumOnWire
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.terrain.relief.specs import ReliefSideSpec
+from app.dataModel.terrain.relief.worldReliefPickPolicy import ObjectReliefPickPolicy
 from app.dataModel.terrainMasks.mountain.enums import (
     MountainFormType,
     MountainKind,
@@ -18,6 +20,7 @@ from app.dataModel.terrainMasks.mountain.enums import (
 
 # Shim: mountain sides are relief SideSpec (tz_terrain_relief R6).
 MountainSideSpec = ReliefSideSpec
+_log = logging.getLogger(__name__)
 
 
 def _policy_default_radius_m() -> int:
@@ -94,9 +97,16 @@ class MountainSpec(BaseModel):
     kind: DefaultEnumOnWire[MountainKind] = MountainKind.ROCKY
     form: MountainForm = Field(default_factory=MountainFormBySides)
     sides: DefaultOnWire[list[MountainSideSpec]] = Field(default_factory=list)
+    relief_pick_policy: DefaultOnWire[ObjectReliefPickPolicy | None] = None
     location_uid: str | None = None
 
     def resolved_sides(self) -> list[MountainSideSpec]:
+        """Prefer declare/stamp-filled ``sides``; empty → all-SLOPE defaults.
+
+        RELIEF-T-10: R33 template materialize must run via
+        ``stamp_mountain_sides_from_relief`` before SideFill; this fallback is
+        only for legacy/callers that skip stamp (logs WARNING).
+        """
         n = form_side_count(self.form)
         if len(self.sides) == n:
             return list(self.sides)
@@ -104,6 +114,12 @@ class MountainSpec(BaseModel):
             raise ValueError(
                 f"MountainSpec.sides length {len(self.sides)} != form side_count {n}"
             )
+        _log.warning(
+            "relief | MountainSpec.resolved_sides empty → all-SLOPE defaults "
+            "(stamp_mountain_sides_from_relief not applied) origin=(%s,%s)",
+            self.origin_x_m,
+            self.origin_y_m,
+        )
         return default_sides_for_count(n)
 
     def identity_key(self) -> tuple[object, ...]:

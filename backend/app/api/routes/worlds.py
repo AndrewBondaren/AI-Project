@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from app.api.deps import get_container
 from app.api.utils.jsonResolver import JsonResolver
 from app.api.utils.responseHelpers import json_or_download
+from app.application.worldData.reliefErrors import ReliefNotFoundError, ReliefValidationError
 
 router = APIRouter()
 
@@ -81,9 +82,12 @@ async def import_world(
     data = await JsonResolver.resolve(file=file, path=path)
     if not isinstance(data, dict):
         raise HTTPException(status_code=422, detail="World bundle JSON must be an object")
-    results, rolled_back = await container.world_bundle_service().import_bundle(
-        data, level=level,  # type: ignore[arg-type]
-    )
+    try:
+        results, rolled_back = await container.world_bundle_service().import_bundle(
+            data, level=level,  # type: ignore[arg-type]
+        )
+    except (ReliefValidationError, ReliefNotFoundError) as exc:
+        raise HTTPException(status_code=422, detail=exc.message) from exc
     content = {k: v.to_dict() for k, v in results.items()}
     if rolled_back:
         failed_sections = [k for k, v in results.items() if v.failed > 0]

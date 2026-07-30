@@ -1,15 +1,21 @@
-"""Road contributor — world ConnectionEdge → road terrain (tz_map_light_bake)."""
+"""Road contributor — world ConnectionEdge → road terrain + shoulder grade (R20)."""
 
 from __future__ import annotations
 
 import logging
 
 from app.application.jsonValidation import terrain_masks
+from app.application.worldData.parseObjectReliefPickPolicy import (
+    parse_object_relief_pick_policy,
+)
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.contributors.hydro.raster import (
     dilate,
     light_polyline_from_meters,
+)
+from app.application.worldData.pack.bake.lightGrid.contributors.roadShoulderApply import (
+    apply_road_shoulder_grades,
 )
 from app.application.worldData.pack.bake.lightGrid.paintTerrain import paint_system_terrain
 from app.dataModel.masks.enums.maskDomainId import LightContributorId
@@ -61,6 +67,7 @@ class RoadContributor:
         level_set = set(policy.graph_levels)
         painted = 0
         edges_used = 0
+        shoulder_seq = 0
 
         for edge in ctx.edges:
             if edge.connection_type not in type_set:
@@ -71,7 +78,8 @@ class RoadContributor:
             b = _node_meters(edge.to_node_uid, nodes_by_uid, locations_by_uid)
             if a is None or b is None:
                 continue
-            light_cells = set(light_polyline_from_meters([a, b], scale))
+            ordered = light_polyline_from_meters([a, b], scale)
+            light_cells = set(ordered)
             if policy.dilate_radius_light > 0:
                 light_cells = dilate(light_cells, int(policy.dilate_radius_light))
             n = paint_system_terrain(
@@ -85,10 +93,26 @@ class RoadContributor:
             if n:
                 edges_used += 1
                 painted += n
+            # RELIEF-T-9: shoulder grade data-out (facing stamp; barrier later)
+            applied = apply_road_shoulder_grades(
+                compose,
+                ctx,
+                edge_uid=edge.edge_uid,
+                ordered_road_light=ordered,
+                road_cells=light_cells,
+                object_policy=parse_object_relief_pick_policy(
+                    edge.relief_pick_policy,
+                    owner_uid=edge.edge_uid,
+                ),
+                occurrence_start=shoulder_seq,
+            )
+            shoulder_seq += len(applied)
 
         logger.debug(
-            "light_contributor_road | world=%s edges_used=%d cells_painted=%d",
+            "light_contributor_road | world=%s edges_used=%d cells_painted=%d "
+            "shoulder_intents=%d",
             ctx.world.world_uid,
             edges_used,
             painted,
+            len(ctx.road_shoulder_intents),
         )

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Awaitable, Callable, TypeVar
 
-from app.api.schemas.imports import ImportError, ImportResult
+from app.application.importResult import ImportError, ImportResult
 
 T = TypeVar("T")
 

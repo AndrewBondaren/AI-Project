@@ -6,7 +6,7 @@ L0 only (Job boundaries). Entry/L2 — ``EntryRefineOrchestrator`` /
 
 from __future__ import annotations
 
-import time
+import logging
 from collections.abc import Callable
 
 from app.application.worldData.persistResult import PersistResult
@@ -21,6 +21,9 @@ from app.application.worldData.materializationContext import (
     MaterializationJobReport,
 )
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import ClimatePackBakeOrchestrator
+from app.application.worldData.loadReliefTemplatesForWorld import (
+    load_relief_templates_for_world,
+)
 from app.application.worldData.pack.bake.worldMapBakeOrchestrator import WorldMapBakeOrchestrator
 from app.application.worldData.pack.refine.entryRefineOrchestrator import EntryRefineOrchestrator
 from app.application.worldData.pack.refine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
@@ -30,6 +33,7 @@ from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.parallelPolicy import resolve_terrain_workers
+from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
 from app.core.generationLogging import generation_world_log
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.dataModel.worldPack.packBakeMode import PackBakeMode
@@ -64,6 +68,7 @@ class PackMaterializationOrchestrator:
         read_context_for: Callable[[str], PackReadContext] | None = None,
         climate_bake: ClimatePackBakeOrchestrator | None = None,
         tile_planner: PackTilePlanner | None = None,
+        relief_library: ReliefTemplateLibraryService | None = None,
     ) -> None:
         self._terrain = terrain
         self._world_map = world_map or WorldMapBakeOrchestrator()
@@ -72,6 +77,7 @@ class PackMaterializationOrchestrator:
         self._world_service = world_service
         self._read_context = read_context
         self._read_context_for = read_context_for
+        self._relief_library = relief_library
         if entry is not None:
             self._entry = entry
             self._climate = climate_bake or entry.climate_bake
@@ -208,6 +214,18 @@ class PackMaterializationOrchestrator:
         locations_index = build_locations_index(locations)
         writer.write_locations_index(locations_index)
 
+        relief_templates: dict = {}
+        if self._relief_library is not None:
+            relief_templates = await load_relief_templates_for_world(
+                self._relief_library, world,
+            )
+        else:
+            logging.getLogger(__name__).warning(
+                "relief | pack bake: relief_library unbound world=%s — "
+                "mountain/road_shoulder templates not preloaded",
+                world.world_uid,
+            )
+
         # Incremental: still bake all planned tiles (overwrite) so content stays consistent
         world_map_cells = self._world_map.bake_tiles(
             world, locations, writer, tiles,
@@ -215,6 +233,7 @@ class PackMaterializationOrchestrator:
             locations_index=locations_index,
             nodes=nodes, edges=edges, hydrology_generator=hydrology_generator,
             bake_mode=bake_mode,
+            relief_templates_by_uid=relief_templates,
         )
         terrain_result = PersistResult.from_counts(world_map_cells, world_map_cells)
 

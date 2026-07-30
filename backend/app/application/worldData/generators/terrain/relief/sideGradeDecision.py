@@ -15,8 +15,8 @@ from app.dataModel.terrain.relief.specs import ReliefSideSpec
 
 
 @dataclass(frozen=True)
-class ReliefGradeDecision:
-    """One cell/point grade decision — for logs, stamp, diagnostics."""
+class RadialGradeDecision:
+    """Footprint/radial grade at a point (mountains SideFill) — RELIEF-T-1."""
 
     kind: ReliefSideKind
     sector_index: int
@@ -50,7 +50,7 @@ def decide_radial_grade(
     py: float,
     origin_x: float,
     origin_y: float,
-) -> ReliefGradeDecision:
+) -> RadialGradeDecision:
     """Profile + reason/facing for a radial (peak) ownership point."""
     frac = profile_side_fraction(
         side,
@@ -81,7 +81,7 @@ def decide_radial_grade(
             f"(склон: uphill к origin)"
         )
         facing = uphill_facing_toward(px, py, origin_x, origin_y)
-    return ReliefGradeDecision(
+    return RadialGradeDecision(
         kind=kind,
         sector_index=int(sector_index),
         t=float(t),
@@ -91,8 +91,8 @@ def decide_radial_grade(
     )
 
 
-def plateau_hat_decision() -> ReliefGradeDecision:
-    return ReliefGradeDecision(
+def plateau_hat_decision() -> RadialGradeDecision:
+    return RadialGradeDecision(
         kind=ReliefSideKind.SLOPE,
         sector_index=-1,
         t=0.0,

@@ -12,6 +12,10 @@ from app.application.worldData.generators.terrain.mountains.collect import (
     merge_mountain_spec_sources,
     specs_from_geographic_locations,
 )
+from app.application.worldData.generators.terrain.relief.bakeSeed import bake_seed
+from app.application.worldData.generators.terrain.mountains.reliefSidesStamp import (
+    stamp_entries_from_relief,
+)
 from app.application.worldData.generators.terrain.mountains.formPipeline import (
     materialize_mountain_entry,
 )
@@ -85,8 +89,15 @@ class MountainMaskMaterializer:
         if policy.autoresolve:
             reserved: list[MountainEntry] = list(declared) + list(anchors)
             auto = list(autoresolve_mountain_specs(ctx, policy, reserved=reserved))
-        return merge_mountain_spec_sources(
+        merged = merge_mountain_spec_sources(
             declared=declared, anchors=list(anchors), auto=auto,
+        )
+        seed = bake_seed(ctx.world)
+        return stamp_entries_from_relief(
+            merged,
+            world=ctx.world,
+            world_seed=seed,
+            templates_by_uid=ctx.relief_templates_by_uid,
         )
 
     def materialize(self, spec: MountainEntry, scale: LightGridScale) -> MaskFootprint:

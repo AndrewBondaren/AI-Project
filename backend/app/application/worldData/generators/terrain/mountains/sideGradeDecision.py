@@ -13,13 +13,13 @@ from app.application.worldData.generators.terrain.mountains.sideFill import (
 )
 from app.application.worldData.generators.terrain.relief.facing import uphill_facing_toward
 from app.application.worldData.generators.terrain.relief.sideGradeDecision import (
-    ReliefGradeDecision,
+    RadialGradeDecision,
     format_sides_summary,
 )
 from app.dataModel.terrainMasks.mountain.specs import MountainSideSpec
 
-# Back-compat alias used by tests / formPipeline.
-SideGradeDecision = ReliefGradeDecision
+# Back-compat alias (mountains FormGeometry callers / tests).
+SideGradeDecision = RadialGradeDecision
 
 
 def explain_side_grade_at_xy(

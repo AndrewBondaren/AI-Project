@@ -31,3 +31,4 @@ class ConnectionEdge:
     under_repair:         bool       = bool_col(default=False)
     street_objects:       list | None = json_nullable_col(default=None)
     traversal_conditions: dict | None = json_nullable_col(default=None)
+    relief_pick_policy:   dict | None = json_nullable_col(default=None)

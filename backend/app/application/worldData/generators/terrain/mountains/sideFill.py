@@ -25,7 +25,7 @@ from app.application.worldData.generators.terrain.relief.profiles import (
     slope_fraction,
 )
 from app.application.worldData.generators.terrain.relief.sideGradeDecision import (
-    ReliefGradeDecision,
+    RadialGradeDecision,
     decide_radial_grade,
     plateau_hat_decision,
 )
@@ -39,16 +39,12 @@ from app.dataModel.terrainMasks.mountain.specs import MountainSideSpec
 KeyT = TypeVar("KeyT", bound=Hashable)
 
 __all__ = [
-    "profile_side_fraction",
-    "sheer_band_m",
-    "sheer_fraction_lateral",
-    "sheer_fraction_radial",
     "side_fill_fraction_at_xy",
     "side_fill_fractions",
     "side_fill_fractions_at_points",
     "side_fill_grade_at_xy",
-    "slope_fraction",
-    "uphill_facing_toward",
+    "side_fill_grades",
+    "side_fill_grades_at_points",
 ]
 
 
@@ -82,7 +78,7 @@ def side_fill_grade_at_xy(
     py: float,
     *,
     light_m: float,
-) -> ReliefGradeDecision:
+) -> RadialGradeDecision:
     """Ownership B + profile + facing — used for stamp and R8 logs."""
     if len(sides) != len(geometry.sectors):
         raise ValueError(
@@ -135,8 +131,8 @@ def side_fill_grades_at_points(
     points: Iterable[tuple[KeyT, float, float]],
     *,
     light_m: float,
-) -> dict[KeyT, ReliefGradeDecision]:
-    out: dict[KeyT, ReliefGradeDecision] = {}
+) -> dict[KeyT, RadialGradeDecision]:
+    out: dict[KeyT, RadialGradeDecision] = {}
     for key, px, py in points:
         out[key] = side_fill_grade_at_xy(
             geometry, sides, float(px), float(py), light_m=light_m,
@@ -165,7 +161,7 @@ def side_fill_grades(
     sides: list[MountainSideSpec],
     cells: frozenset[LightCellRef],
     scale: LightGridScale,
-) -> dict[LightCellRef, ReliefGradeDecision]:
+) -> dict[LightCellRef, RadialGradeDecision]:
     points = (
         (ref, *light_cell_center_m(ref.gx, ref.gy, ref.tx, ref.ty, scale))
         for ref in cells

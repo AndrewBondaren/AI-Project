@@ -40,6 +40,8 @@ from app.dataModel.settlement.district.worldDistrictTemplateRegistry import Worl
 from app.dataModel.settlement.settlement.worldCitySizeRegistry import WorldCitySizeRegistry
 from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import WorldBarrierTemplateRegistry
 from app.dataModel.structure.building.worldBuildingTemplateRegistry import WorldBuildingTemplateRegistry
+from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy
+from app.dataModel.terrain.relief.worldReliefTemplateRegistry import WorldReliefTemplateRegistry
 
 _DEFAULT_PRECIPITATION_LIQUID = WorldClimateScalars.canonical_defaults().precipitation_liquid
 _ENGINE_ECONOMIC_TIERS = WorldEconomyTierRegistry.canonical_engine()
@@ -348,3 +350,24 @@ def building_template_registry(world: Any) -> WorldBuildingTemplateRegistry:
         label="building_template_registry",
         world_uid=_uid(world),
     )
+
+
+def relief_template_registry(world: Any) -> WorldReliefTemplateRegistry:
+    return resolve_root_list(
+        WorldReliefTemplateRegistry,
+        getattr(world, "relief_template_registry", None),
+        empty_factory=WorldReliefTemplateRegistry.canonical_defaults,
+        label="relief_template_registry",
+        world_uid=_uid(world),
+    )
+
+
+def relief_pick_policy(world: Any) -> WorldReliefPickPolicy:
+    raw = getattr(world, "relief_pick_policy", None)
+    if not raw:
+        return WorldReliefPickPolicy.canonical_defaults()
+    return resolve_model(
+        WorldReliefPickPolicy,
+        raw,
+        label="relief_pick_policy",
+    )  # type: ignore[return-value]

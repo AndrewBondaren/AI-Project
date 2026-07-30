@@ -25,13 +25,14 @@ def make_lifespan(db: Database):
     from app.db.models.connectionEdgeCell import ConnectionEdgeCell
     from app.db.models.state import State
     from app.db.models.sessionPending import SessionPending
+    from app.db.models.reliefTemplate import ReliefTemplateRow
     from app.db.repositories.sqlite.pendingRepository import SqlitePendingRepository
 
     _models = [
         World, GameSession, Player, Npc, Turn, Message, NodeExecutionLog,
         Race, WorldPerk, NamedLocation, MapCell,
         ConnectionNode, ConnectionEdge, ConnectionEdgeCell,
-        State, SessionPending,
+        State, SessionPending, ReliefTemplateRow,
     ]
 
     @asynccontextmanager
@@ -89,6 +90,7 @@ def create_app():
     from app.api.routes.map import router as map_router
     from app.api.routes.connections import router as connections_router
     from app.api.routes.debug import router as debug_router
+    from app.api.routes.reliefTemplates import router as relief_templates_router
 
     app.include_router(chat_router, prefix="/api")
     app.include_router(settings_router, prefix="/api")
@@ -102,6 +104,7 @@ def create_app():
     app.include_router(map_router, prefix="/api")
     app.include_router(connections_router, prefix="/api")
     app.include_router(debug_router, prefix="/api")
+    app.include_router(relief_templates_router, prefix="/api")
 
     return app
 

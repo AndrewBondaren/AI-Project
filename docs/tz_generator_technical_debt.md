@@ -2,8 +2,8 @@
 
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
-**Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py`.  
-**Обновлено:** post TR-1b/DBG-1 architecture review — terrain/map orchestration smells (2026-06).
+**Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py`, `worldBundleService.py`, relief library/import services.  
+**Обновлено:** 2026-07-30 — relief tech-debt fixes wave (T-12, T-16…T-27); plan [`.cursor/plans/relief-tech-debt-fixes.md`](../.cursor/plans/relief-tech-debt-fixes.md).
 
 **Связанные документы:**
 
@@ -59,6 +59,8 @@
 | `scripts/debug_settlement.py` | ~1500 | settlement + coordinates + terrain + climate smoke (см. DBG-2) |
 | `climate/precipitation.py` | ~180 | physics + liquid overlay helpers |
 | `planner/footprint.py` | 190+ | sizing + gates + coordinate facade + deprecated aliases |
+| `worldData/worldBundleService.py` | ~190 | validate/remap/tx + N section imports + **inline relief export** — см. **BUNDLE-2** (не god-class generators) |
+| `worldData/reliefTemplateLibraryService.py` | ~135 | CRUD + R29 FS + validate + **HTTPException** — см. **RELIEF-T-3** |
 
 ---
 
@@ -579,6 +581,45 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | A | `ConnectionGraphService.import_from_json(world_uid, {"nodes":…,"edges":…})` |
 | B | Единый `BundleSectionImporter` registry: `key → (optional preprocess, import_fn)` |
 
+**Связь:** поглощается / уточняется **BUNDLE-2** (section handlers).
+
+---
+
+### BUNDLE-2 — `WorldBundleService` → section handlers по доменам
+
+**Severity:** medium · **P:** P2 (при следующей секции bundle после `relief_templates`) · **Status:** **partial** (ReliefSection 2026-07-30)  
+**Refs:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) R35 · audit 2026-07-30 · HY-S-2 · BUNDLE-1 (remap уже вынесен).
+
+**Симптом:** ctor тянет 8–10 сервисов; `export` / `import_bundle` знают каждую секцию inline. Relief **import** делегирован в `ReliefWorldImportService`, но **export** тел шаблонов всё ещё в `WorldBundleService` (`entry.get("system_template_uid")` + `except HTTPException: continue`). Каждый новый `BundleSection` → ещё одна зависимость и ветка.
+
+**Сделано (partial):** `application/worldData/bundle/reliefSection.py` — typed `relief_template_registry` export + WARN on miss; import через `ReliefWorldImportService`. `WorldBundleService` делегирует relief section.
+
+**Остаток:** полный `IBundleSectionHandler` registry для races/connections/… (HY-S-2); HTTPException всё ещё в facade validate path (как у других world services).
+
+**Почему не god-class:** ~190 LOC, порядок секций + transaction — законная роль facade. Запах — **раздувание оркестратора** и смешение domain export с orchestration.
+
+**Целевая форма (рекомендация):**
+
+```text
+WorldBundleService                 # validate, remap, transaction, порядок секций
+  └─ IBundleSectionHandler         # export_section / import_section → ImportResult
+       ├─ WorldSection             → WorldService
+       ├─ Races / Perks / …        → existing *Service.import_from_json
+       ├─ ConnectionsSection       → ConnectionGraphService  (закрывает HY-S-2)
+       ├─ ReliefSection            → ReliefLibrary + ReliefWorldImport (R35)
+       └─ …
+```
+
+| Вариант | Идея | Когда |
+|---|---|---|
+| **A — Section handlers** | тонкий orchestrator + вкладчики секций; route по-прежнему зовёт только `WorldBundleService` | **предпочтительно** |
+| **B — Много равноправных `*BundleService`** | отдельный HTTP/entry на домен | **антипаттерн** — ломает порядок/tx |
+| **C — Defer** | оставить inline до buildings/barriers/climate в bundle | допустимо кратко; долг линейный |
+
+**Инварианты:** один facade для API; доменные сервисы **не** дублируют create-world; typed `worldRow.relief_template_registry` на export (не raw `dict.get`); miss library body → **WARNING**, не silent skip (**RELIEF-T-6**).
+
+**Размещение:** `application/worldData/bundle/` (handlers) или `bundleSections/*.py`; не в `generators/`.
+
 ---
 
 ### HY-5 — wire enum (JSON ↔ StrEnum, без string literals в коде)
@@ -829,7 +870,8 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 |---|---|---|---|---|
 | HY-GEO-1 | high | P1 | geographic filter doc↔DB notation | **partial** (filter ✅; `GeographicSubtype` in dataModel; hydrology member compares — HY-5) |
 | BUNDLE-1 | medium | P2 | `_remap_bundle` monolith | **resolved** — `bundleRemapService.py` registry |
-| HY-S-2 | low | P2 | connections import special-case | open |
+| HY-S-2 | low | P2 | connections import special-case | open → см. BUNDLE-2 |
+| **BUNDLE-2** | medium | P2 | WorldBundleService → section handlers | **partial** — ReliefSection shipped |
 | HY-5 | medium | P1 | StrEnum / policy parse (Retrofit 2) | **partial** — dataModel ✅; shims + literals ⬜; JV-0 ⬜ |
 | HY-BATH-1 | medium | P1 | light SEA z = plains; Depression forms TZ | **partial** — stub drop ✅; full Form pipeline ⬜ |
 | HY-S-4 | low | P2 | `HYDROLOGY_SCHEMA_DEFAULTS` scatter | open |
@@ -849,6 +891,69 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 
 ---
 
+## Relief templates — post-impl architecture smells (RELIEF-T)
+
+**Scope:** `dataModel/terrain/relief`, `generators/terrain/relief`, mountains stamp, library/import, bundle R35, bake preload / road_shoulder.  
+**Refs:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) R8/R20–R35 · audits 2026-07-30 (×2) · **BUNDLE-2** · **RELIEF-BAR-1**.  
+**Plan фиксов:** [`.cursor/plans/relief-tech-debt-fixes.md`](../.cursor/plans/relief-tech-debt-fixes.md).  
+**Не в scope здесь:** UI R30; climb gameplay; DAG nodes; full barrier materialize (→ RELIEF-BAR-1).
+
+**Verdict (god-object):** 500+ LOC god-class нет. Round-1 + round-2 fix wave — **resolved** (width bake, ImportResult, bake_seed, typed edge policy, knobs SoT, FS split, BakeContext intent). Остаток: **BUNDLE-2** (полные section handlers; `WorldBundleService` ещё с FastAPI на общих validate), **RELIEF-BAR-1**, wire letters A–D на `MountainSideRecipeMode` (**T-26** accepted).
+
+### Registry — round 1 (закрыто / accepted)
+
+| ID | Sev | Status | P | Суть |
+|---|---|---|---|---|
+| **RELIEF-T-1** | high | **resolved** | P1 | `RadialGradeDecision` vs `RibbonGradeDecision`; package `__init__` exports both. |
+| **RELIEF-T-2** | high | **resolved** | P1 | R21 miss/empty body → all-SLOPE via `fallback_kind`; Mode D only for live template empty recipe. |
+| **RELIEF-T-3** | high | **resolved** | P1 | `ReliefNotFoundError` / `ReliefValidationError`; HTTP mapping in `api/routes/reliefTemplates.py` only. |
+| **RELIEF-T-4** | high | **resolved** | P1 | Preload → `application/worldData/loadReliefTemplatesForWorld.py` (not generators). |
+| **RELIEF-T-5** | medium | **resolved** | P2 | TZ R31: v1 = world→object; side-level deferred (documented). `side_policy` reserved. |
+| **RELIEF-T-6** | medium | **resolved** | P2 | Bundle export via typed registry + WARNING on miss (`bundle/reliefSection.py`). |
+| **RELIEF-T-7** | medium | **resolved** | P2 | `import_path` enforces `resolve_relief_domain_root()` (env `RELIEF_TEMPLATES_ROOT` or `cwd/relief_templates`); pack = direct child; relative paths under root. |
+| **RELIEF-T-8** | medium | **resolved** | P2 | `MountainSideRecipe.EMPTY_*_WEIGHT`; logs use `mode.log_label()` (weights\|pattern\|fixed\|empty). |
+| **RELIEF-T-9** | medium | **resolved** | P2 | `roadShoulderApply` after `RoadContributor` paint: segmentize → grade → stamp `system_facing`; intents on `BakeContext.road_shoulder_intents` (barrier = RELIEF-BAR-1). **Остаток width → T-16.** |
+| **RELIEF-T-10** | medium | **resolved** | P2 | `resolved_sides` empty → WARNING + all-SLOPE defaults (stamp path required for R33). |
+| **RELIEF-T-11** | medium | **resolved** | P3 | Bake seed SoT = `bake_seed(world)` → `world_uid` (см. T-17). |
+| **RELIEF-T-12** | medium | **resolved** | P2 | FS/pack → `reliefTemplateFsImport.py`; library = SQL upsert/CRUD + thin `import_path` delegate. |
+| **RELIEF-T-13** | low | **resolved** | P3 | `terrainMap` from enum; row version from POJO; invalid edge policy → WARNING. |
+| **RELIEF-T-14** | low | **resolved** | P3 | Schedule hole → R21 safe SLOPE (`schedule_hole_r21_slope`), not skip. |
+| **RELIEF-T-15** | low | **accepted** | P3 | Logging in pick/grade kept intentionally (R8 apply diagnostics); not extracted. |
+
+### Registry — round 2 (re-audit → fixed 2026-07-30)
+
+| ID | Sev | Status | P | Категория | Суть |
+|---|---|---|---|---|---|
+| **RELIEF-T-16** | **high** | **resolved** | P1 | неявный контракт | `expand_shoulder_ring` + apply after grade: width outward ray; pocket between roads = seeds only. |
+| **RELIEF-T-17** | medium | **resolved** | P2 | неявный контракт | `bake_seed(world)` в `relief/bakeSeed.py`; materializer + roadShoulderApply. |
+| **RELIEF-T-18** | medium | **resolved** | P2 | неявный контракт | Empty/partial preload WARNING; unbound library WARNING в pack orchestrator. |
+| **RELIEF-T-19** | medium | **resolved** | P2 | неявный контракт | TZ: v1 consumers = mountain + road_shoulder; open_land/shore = H later. |
+| **RELIEF-T-20** | medium | **resolved** | P2 | неявный контракт | `parseObjectReliefPickPolicy` на bake boundary; RoadContributor передаёт typed policy. |
+| **RELIEF-T-21** | medium | **resolved** | P2 | слои | `ImportResult` в `application/`; reliefSection без api; relief errors → `api/routes/worlds.py`. |
+| **RELIEF-T-22** | medium | **resolved** | P2 | dataModel | Defaults ширины из `ReliefGradeKnobs` → RoleCase / Template / DeltaInterval. |
+| **RELIEF-T-23** | low–med | **resolved** | P3 | неявный контракт | TZ: range laterals declare-only; stamp только `peaks[]`. |
+| **RELIEF-T-24** | low | **resolved** | P3 | слои | `RoadShoulderIntent` на bake boundary; `sideFill.__all__` без profile re-exports. |
+| **RELIEF-T-25** | low | **resolved** | P3 | dataModel | Pick/stamp/grade paths: `ReliefContext` enum (`.value` только в логах). |
+| **RELIEF-T-26** | low | **accepted** | P3 | dataModel | Sentinel → `UNBOUNDED_DELTA_Z_MAX`; wire letters A–D **не** меняем (breaking persist); logs = `log_label`. |
+| **RELIEF-T-27** | low | **resolved** | P3 | неявный контракт | `relief_dz(ref, adjacent)` в `shoulderWidth.py`; sampler зовёт helper. |
+
+### Clean (не долг / wins)
+
+- POJO SoT: R26/R27/R32/R33 validators; I8 normalize→schedule→classify.
+- R34 skip unknown terrain; R35 bodies не в world JSON.
+- Domain errors в library; preload вне generators; dual Decision split.
+- Thin `reliefTemplates` route; mountain declare wins; road_shoulder intents boundary для BAR-1.
+- Shoulder width bake; bake_seed; typed edge policy; FS import split.
+
+### Приоритетный backlog (после fix wave)
+
+1. **BUNDLE-2** — полные section handlers; снять FastAPI из `WorldBundleService` validate path  
+2. **RELIEF-BAR-1** — barrier materialize (отдельно)  
+3. (optional) rename `MountainSideRecipeMode` wire away from A–D — breaking, только с миграцией тел
+
+---
+
+
 ## Out of scope (не tech debt этого registry)
 
 - Imperial conversion in generators (display only)
@@ -862,6 +967,11 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-30 | **RELIEF-T-12 / T-16…T-27** fix wave: width bake, ImportResult, bake_seed, preload WARN, typed edge policy, knobs SoT, FS split, RoadShoulderIntent; T-26 accepted (wire letters) |
+| 2026-07-30 | **RELIEF-T-16…T-27** + plan `relief-tech-debt-fixes.md`: re-audit (width dead, bundle HTTP/api, seed, knobs SoT, …) |
+| 2026-07-30 | **RELIEF-T-7/T-9/T-14:** domain_root enforce; road_shoulder bake wire + intents; schedule hole → SLOPE; T-15 accepted |
+| 2026-07-30 | **RELIEF-T polish:** T-1…T-6/T-8/T-10/T-11/T-13 resolved; BUNDLE-2 ReliefSection partial; T-7/T-9/T-12/T-14/T-15 open |
+| 2026-07-30 | **BUNDLE-2** + **RELIEF-T-1…T-15:** post-impl audit (god-object/layers/dataModel); section handlers; R21≠Mode D; FastAPI в services; dual ReliefGradeDecision |
 | 2026-07-30 | **RELIEF-BAR-1:** structure_refs stub (`system_type`); materialize deferred; link relief ↔ locations |
 | 2026-06 | `tz_city_generation.md` sync TZ ↔ код (SettlementGeneratorService, фазы A–F, §10) |
 | 2026-06 | TR-3 resolved: `worldMapSettings` incl. `world_z_min/max` fallback −8000…8000 |

@@ -78,6 +78,8 @@ CREATE TABLE IF NOT EXISTS worlds (
     room_type_registry          TEXT,
     barrier_template_registry   TEXT,
     connection_type_registry    TEXT,
+    relief_template_registry    TEXT,
+    relief_pick_policy          TEXT,
 
     -- generation policy (hydrology / caves / terrain masks — tz_terrain_hydrology.md, tz_map_light_bake.md)
     hydrology                   TEXT,
@@ -628,6 +630,19 @@ CREATE TABLE IF NOT EXISTS building_templates (
 );
 
 -- ============================================================
+-- relief_templates  (глобальная библиотека шаблонов relief grade)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS relief_templates (
+    template_uid   TEXT PRIMARY KEY,
+    system_name    TEXT NOT NULL UNIQUE,
+    display_name   TEXT NOT NULL,
+    context        TEXT NOT NULL,
+    version        TEXT NOT NULL DEFAULT '1.0',
+    data           TEXT NOT NULL,
+    source_file    TEXT
+);
+
+-- ============================================================
 -- named_locations
 -- ============================================================
 CREATE TABLE IF NOT EXISTS named_locations (
@@ -1160,7 +1175,8 @@ CREATE TABLE IF NOT EXISTS connection_edges (
     under_construction  INTEGER NOT NULL DEFAULT 0,
     under_repair        INTEGER NOT NULL DEFAULT 0,
     street_objects      TEXT,                -- JSON: list[dict]
-    traversal_conditions TEXT               -- JSON: dict
+    traversal_conditions TEXT,              -- JSON: dict
+    relief_pick_policy  TEXT                -- JSON: ObjectReliefPickPolicy (R31 road_shoulder)
 );
 
 -- ============================================================

@@ -49,6 +49,10 @@ from app.dataModel.structure.building.worldBuildingTemplateRegistry import (
     WorldBuildingTemplateRegistry,
 )
 from app.dataModel.structure.room.worldRoomTypeRegistry import WorldRoomTypeRegistry
+from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy
+from app.dataModel.terrain.relief.worldReliefTemplateRegistry import (
+    WorldReliefTemplateRegistry,
+)
 from app.dataModel.terrain.worldTerrainCategoryRegistry import WorldTerrainCategoryRegistry
 
 WireKind = Literal["multi_column", "registry_list", "registry_dict", "json_blob"]
@@ -250,6 +254,19 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
     _registry_slice(
         pojo_cls=WorldBuildingTemplateRegistry,
         world_key="building_template_registry",
+        facade=True,
+    ),
+    _registry_slice(
+        pojo_cls=WorldReliefTemplateRegistry,
+        world_key="relief_template_registry",
+        facade=True,
+    ),
+    WorldSlice(
+        schema_id=WorldReliefPickPolicy.SCHEMA_ID,
+        pojo_cls=WorldReliefPickPolicy,
+        wire_kind="json_blob",
+        world_keys=("relief_pick_policy",),
+        empty_factory=WorldReliefPickPolicy.canonical_defaults,
         facade=True,
     ),
 )

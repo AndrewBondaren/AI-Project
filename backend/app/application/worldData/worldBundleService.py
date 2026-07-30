@@ -1,13 +1,17 @@
-"""WorldBundleService — import/export connections (D HY-0b)."""
+"""WorldBundleService — import/export world skeleton (BUNDLE-2 facade)."""
 
 from dataclasses import asdict
 
 from fastapi import HTTPException
 
-from app.api.schemas.imports import ImportResult
+from app.application.importResult import ImportResult
 from app.application.jsonValidation.bundle import normalize_bundle_connections
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.types import ImportValidationError, import_validation_http_detail
+from app.application.worldData.bundle.reliefSection import (
+    export_relief_template_bodies,
+    import_relief_templates_section,
+)
 from app.application.worldData.bundleRemapService import remap_bundle
 from app.application.worldData.deriveWorldUid import derive_world_uid
 from app.application.worldData.connectionGraphService import ConnectionGraphService
@@ -17,6 +21,8 @@ from app.application.worldData.raceService import RaceService
 from app.application.worldData.stateService import StateService
 from app.application.worldData.worldPerkService import WorldPerkService
 from app.application.worldData.worldService import WorldService
+from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
+from app.application.worldData.reliefWorldImportService import ReliefWorldImportService
 from app.application.worldData.pack.import_.importLevels import (
     ImportLevel,
     filter_bundle_for_export,
@@ -43,6 +49,8 @@ class WorldBundleService:
         map_cell_service: MapCellService,
         state_service: StateService,
         connection_graph_service: ConnectionGraphService,
+        relief_world_import: ReliefWorldImportService | None = None,
+        relief_library: ReliefTemplateLibraryService | None = None,
     ) -> None:
         self._db = db
         self._world = world_service
@@ -52,6 +60,8 @@ class WorldBundleService:
         self._map_cells = map_cell_service
         self._states = state_service
         self._connections = connection_graph_service
+        self._relief_import = relief_world_import
+        self._relief_library = relief_library
 
     async def export(self, world_uid: str, *, level: ImportLevel = "skeleton") -> dict:
         world = await self._world.get_by_id(world_uid)
@@ -61,6 +71,9 @@ class WorldBundleService:
         states = await self._states.get_all(world_uid)
         nodes = await self._connections.export_nodes(world_uid)
         edges = await self._connections.export_edges(world_uid)
+        relief_bodies: list[dict] = []
+        if self._relief_library is not None:
+            relief_bodies = await export_relief_template_bodies(world, self._relief_library)
         bundle = {
             BundleSection.WORLD: asdict(world),
             BundleSection.RACES: [asdict(r) for r in races],
@@ -69,6 +82,7 @@ class WorldBundleService:
             BundleSection.STATES: [asdict(s) for s in states],
             BundleSection.CONNECTION_NODES: nodes,
             BundleSection.CONNECTION_EDGES: edges,
+            BundleSection.RELIEF_TEMPLATES: relief_bodies,
         }
         return filter_bundle_for_export(bundle, level)
 
@@ -141,6 +155,15 @@ class WorldBundleService:
                 if BundleSection.CONNECTION_EDGES in data:
                     results[BundleSection.CONNECTION_EDGES] = await self._connections.import_edges(
                         world_uid, data[BundleSection.CONNECTION_EDGES],
+                    )
+
+                if BundleSection.RELIEF_TEMPLATES in data and self._relief_import is not None:
+                    results[BundleSection.RELIEF_TEMPLATES] = (
+                        await import_relief_templates_section(
+                            world_uid,
+                            data[BundleSection.RELIEF_TEMPLATES],
+                            self._relief_import,
+                        )
                     )
 
                 if any(r.failed > 0 for r in results.values()):

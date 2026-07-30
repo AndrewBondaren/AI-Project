@@ -24,8 +24,8 @@ metadata:
 | `shore` | берег озера / реки / моря |
 | `road_shoulder` | **обочины** дороги (две стороны), когда есть Δz между полотном и соседним рельефом |
 
-**Не** landcover (`system_terrain`) и **не** topology хребтов (PassBuilder).  
-**Не** построение полотна дороги ([`tz_structure_connections.md`](./tz_structure_connections.md)): context `road_shoulder` ≠ «как кладётся `road`».
+**v1 bake consumers (shipped):** `mountain` (SideFill stamp) + `road_shoulder` (after RoadContributor).  
+**Deferred (H):** `open_land` / `shore` — contexts + pick policy wire ready; light-grid consumers **не** подключены (см. tech debt **RELIEF-T-19**).
 
 | Владеет | Не владеет |
 |---|---|
@@ -190,7 +190,9 @@ JSON-массив на мире (как `building_template_registry`):
 | **Object** | на объекте мира | гора (Spec), дорога (`ConnectionEdge`), … |
 | **Side** (горы) | на **каждой стороне** `sides[i]` | разные стороны одной горы — разный pick |
 
-Гора — **сложный объект**: grade/pick смотрят **контекст стороны**, не только «эта гора целиком».
+**v1 shipped:** merge **world → object** only. Side-level wire на `ReliefSideSpec` / `sides[i].relief_pick_policy` — **deferred** (см. `tz_generator_technical_debt.md` **RELIEF-T-5**). API `side_policy` в pick зарезервирован, consumers не передают.
+
+Гора — **сложный объект**: grade/pick смотрят **контекст стороны**, не только «эта гора целиком» (target; v1 — object/world).
 
 ```text
 # дорога / простой объект:
@@ -884,6 +886,8 @@ MountainSpec "Белая"
 ```
 
 **Default path мира** = mountain preset (R33); declare `sides[]` = точечный override мастера, не «дизайн всего мира».
+
+**Range laterals (v1):** `MountainRangeSpec.sides` (`MountainRangeSides` left/right/caps) — **declare-only**; relief stamp materializes only `peaks[]` via R33. Corridor laterals из mountain template — **не** в v1 (tech debt **RELIEF-T-23**).
 
 ### Persist (R24)
 

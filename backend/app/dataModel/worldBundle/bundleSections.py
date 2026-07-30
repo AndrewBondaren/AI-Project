@@ -21,6 +21,7 @@ class BundleSection:
     LOCATIONS: ClassVar[str] = "locations"
     CONNECTION_NODES: ClassVar[str] = "connection_nodes"
     CONNECTION_EDGES: ClassVar[str] = "connection_edges"
+    RELIEF_TEMPLATES: ClassVar[str] = "relief_templates"
     # Rejected on skeleton/registry import (pack path) — not in allowlists below.
     MAP_CELLS: ClassVar[str] = "map_cells"
 
@@ -33,6 +34,7 @@ class BundleSection:
         LOCATIONS,
         CONNECTION_NODES,
         CONNECTION_EDGES,
+        RELIEF_TEMPLATES,
     })
 
     @classmethod

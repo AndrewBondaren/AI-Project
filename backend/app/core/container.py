@@ -35,7 +35,11 @@ from app.db.repositories.iConnectionEdgeCellRepository import IConnectionEdgeCel
 from app.db.repositories.sqlite.connectionEdgeCellRepository import SqliteConnectionEdgeCellRepository
 from app.db.repositories.iStateRepository import IStateRepository
 from app.db.repositories.sqlite.stateRepository import SqliteStateRepository
+from app.db.repositories.iReliefTemplateRepository import IReliefTemplateRepository
+from app.db.repositories.sqlite.reliefTemplateRepository import SqliteReliefTemplateRepository
 from app.application.worldData.worldService import WorldService
+from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
+from app.application.worldData.reliefWorldImportService import ReliefWorldImportService
 from app.application.worldData.raceService import RaceService
 from app.application.worldData.worldPerkService import WorldPerkService
 from app.application.worldData.namedLocationService import NamedLocationService
@@ -121,11 +125,14 @@ class Container:
         self._connection_edge_repository: IConnectionEdgeRepository | None = None
         self._connection_edge_cell_repository: IConnectionEdgeCellRepository | None = None
         self._state_repository: IStateRepository | None = None
+        self._relief_template_repository: IReliefTemplateRepository | None = None
 
         # DOMAIN SERVICES
         self._player_service: PlayerService | None = None
         self._game_session_service: GameSessionService | None = None
         self._world_service: WorldService | None = None
+        self._relief_template_library_service: ReliefTemplateLibraryService | None = None
+        self._relief_world_import_service: ReliefWorldImportService | None = None
         self._race_service: RaceService | None = None
         self._perk_service: WorldPerkService | None = None
         self._location_service: NamedLocationService | None = None
@@ -443,6 +450,11 @@ class Container:
             self._race_repository = SqliteRaceRepository(db=self._db)
         return self._race_repository
 
+    def relief_template_repository(self) -> IReliefTemplateRepository:
+        if self._relief_template_repository is None:
+            self._relief_template_repository = SqliteReliefTemplateRepository(db=self._db)
+        return self._relief_template_repository
+
     def perk_repository(self) -> IWorldPerkRepository:
         if self._perk_repository is None:
             self._perk_repository = SqliteWorldPerkRepository(db=self._db)
@@ -483,6 +495,7 @@ class Container:
                 job_repo=self.chunk_refine_job_repository(),
                 world_service=self.world_service(),
                 read_context_for=lambda uid: self.pack_read_services(uid).context,
+                relief_library=self.relief_template_library_service(),
             )
         return self._pack_materialization_orchestrator
 
@@ -510,6 +523,13 @@ class Container:
         if self._world_service is None:
             self._world_service = WorldService(repo=self.world_repository())
         return self._world_service
+
+    def relief_template_library_service(self) -> ReliefTemplateLibraryService:
+        if self._relief_template_library_service is None:
+            self._relief_template_library_service = ReliefTemplateLibraryService(
+                repo=self.relief_template_repository(),
+            )
+        return self._relief_template_library_service
 
     def race_service(self) -> RaceService:
         if self._race_service is None:
@@ -672,8 +692,18 @@ class Container:
                 map_cell_service=self.map_cell_service(),
                 state_service=self.state_service(),
                 connection_graph_service=self.connection_graph_service(),
+                relief_world_import=self.relief_world_import_service(),
+                relief_library=self.relief_template_library_service(),
             )
         return self._world_bundle_service
+
+    def relief_world_import_service(self) -> ReliefWorldImportService:
+        if self._relief_world_import_service is None:
+            self._relief_world_import_service = ReliefWorldImportService(
+                world_service=self.world_service(),
+                library=self.relief_template_library_service(),
+            )
+        return self._relief_world_import_service
 
     def session_repository(self) -> ISessionRepository:
         if self._session_repository is None:
