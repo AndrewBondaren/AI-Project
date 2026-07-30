@@ -1526,6 +1526,7 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 | 2026-06 | U11: NamedLocation optional — geometry without name; declare only when master adds location |
 | 2026-06 | U12: underground lakes/rivers in cave systems; separate volume ecosystem; not surface hydrology |
 | 2026-06 | U13: world template `materialize_named_locations`; LLM DAG node names features from context; python persist |
+| 2026-07-29 | Pointer: береговой grade → [`tz_terrain_relief.md`](./tz_terrain_relief.md) context `shore` |
 | 2026-07 | § Interim bug — smoke `world_test_all`: 2 false `liquid_body`; declare hydrology 0 until D HY-7a |
 
 ---
@@ -1542,4 +1543,5 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 | [`tz_locations.md`](./tz_locations.md) | `z=0` sea level, coordinates |
 | [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | Registry smells (interim liquid overlay); **HY-BATH-1** |
 | [`tz_map_light_bake.md`](./tz_map_light_bake.md) | Light compose; R5b bathymetry z on hydro paint |
+| [`tz_terrain_relief.md`](./tz_terrain_relief.md) | **Shore grade** (SLOPE/SHEER + facing): context `shore` → relief template; hydro пишет role/bands, не SoT grade |
 | `.cursor/rules/layer-boundaries.mdc` | generate ≠ persist ≠ LLM |

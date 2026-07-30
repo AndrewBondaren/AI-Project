@@ -16,7 +16,7 @@ metadata:
 
 - MaskDomain materialize lifecycle / light compose canvas — [`tz_map_light_bake.md`](./tz_map_light_bake.md);
 - FormGeometry / FormRaster / SideFill алгоритмы сторон — там же § Mountain (engine);
-- **SLOPE / SHEER / uphill facing** — домен [`tz_terrain_relief.md`](./tz_terrain_relief.md); горы только переиспользуют;
+- **SLOPE / SHEER / uphill facing / relief templates** — домен [`tz_terrain_relief.md`](./tz_terrain_relief.md); горы = consumer (context `mountain`); PassBuilder не SoT grade;
 - DAG-ноды (`application/engine/nodes/`);
 - ravine / cliff MaskDomain; slope noise (U8); summit material overlays (U10) — слоты ниже, не PassBuilder;
 - план агента (чеклисты PR) — `.cursor/plans/` (ссылка на этот документ).
@@ -431,6 +431,7 @@ HTTP: `GET …/map/render-wilderness-tile-grid` (`include_column_diagnostics` de
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-29 | Relief templates / outdoor grade pointer — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-07-27 | Scope: relief grade → [`tz_terrain_relief.md`](./tz_terrain_relief.md); PassBuilder не SoT grade |
 | 2026-07-25 | § Debug render: L2 `column_span` / `cliff_delta` / dense z — вскрыть thin fill vs steep tops |
 | 2026-07-24 | Вынесено из [`tz_map_light_bake.md`](./tz_map_light_bake.md): SoT lock, карта классов, PassBuilder topology (MST, saddles B, U1/U2, secondary, gap), разрыв с shipped |

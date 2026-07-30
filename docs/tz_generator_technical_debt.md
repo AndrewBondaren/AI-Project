@@ -11,7 +11,8 @@
 |---|---|
 | [tz_assembler_hierarchy.md](./tz_assembler_hierarchy.md) | Целевая архитектура assembler stack |
 | [tz_city_generation.md](./tz_city_generation.md) | Продуктовое ТЗ города |
-| [tz_terrain_generation.md](./tz_terrain_generation.md) | Продуктовое ТЗ terrain |
+| [tz_terrain_relief.md](./tz_terrain_relief.md) | Relief grade + templates; **RELIEF-BAR-1** shoulder→barrier stub |
+| [tz_locations.md](./tz_locations.md) | `barrier_template_registry`; perimeter barriers |
 | [tz_terrain_hydrology.md](./tz_terrain_hydrology.md) | Гидрология: моря, озёра, реки (target) |
 | [tz_climate.md](./tz_climate.md) | Продуктовое ТЗ climate (pole/local tiers) |
 | [tz_world_pack_storage.md](./tz_world_pack_storage.md) | World Pack; § WP-FIX-DEBT (в т.ч. WP-DELETE-1 → DEBT-10) |
@@ -838,6 +839,16 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 
 ---
 
+## Relief ↔ barrier — smells registry (RELIEF-BAR)
+
+| ID | Sev | Status | P | Суть | Связь ТЗ |
+|---|---|---|---|---|---|
+| **RELIEF-BAR-1** | medium | open | P2 | `structure_refs[]` на relief template (road_shoulder case/band) = stub: **`system_type`** → `barrier_template_registry`. Relief **emit refs only**; materialize fence/wall/lined canal cells **не** в `generators/terrain/relief`. Shoulder→barrier consumer + validate-on-import + optional later global barrier library — backlog. | [`tz_terrain_relief.md`](./tz_terrain_relief.md) R28 · [`tz_locations.md`](./tz_locations.md) § `barrier_template_registry` |
+
+**Не путать:** `earthen_canal` (relief landform) ≠ barrier; world map pack ≠ template pack.
+
+---
+
 ## Out of scope (не tech debt этого registry)
 
 - Imperial conversion in generators (display only)
@@ -851,6 +862,7 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-30 | **RELIEF-BAR-1:** structure_refs stub (`system_type`); materialize deferred; link relief ↔ locations |
 | 2026-06 | `tz_city_generation.md` sync TZ ↔ код (SettlementGeneratorService, фазы A–F, §10) |
 | 2026-06 | TR-3 resolved: `worldMapSettings` incl. `world_z_min/max` fallback −8000…8000 |
 | 2026-06 | TR-3 partial: `grid_bbox_padding`, `terrain_chunk_columns`, `map_subsurface_depth` on `World` + `worldMapSettings.py` |

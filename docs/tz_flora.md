@@ -730,6 +730,8 @@ system_plant: str | None   # → plant_registry
 Consumers карты **не** блокируются на flora stub: сейчас forest mask → paint по gate A only.  
 **Норматив target (уже в инвариантах):** A∧B + `FloraSuitabilityIndex` — см. FL3b/FL3c; stub не отменяет правило.
 
+**Relief grade** на склонах под лесом / равниной — не flora: домен [`tz_terrain_relief.md`](./tz_terrain_relief.md) (context `open_land`). `system_terrain=forest` ≠ SLOPE/SHEER.
+
 ---
 
 ## Open
@@ -745,6 +747,7 @@ Consumers карты **не** блокируются на flora stub: сейча
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-29 | Pointer: open_land grade under forest/plains → [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-07-17 | Домен flora вынесен из light bake; FloraGenerator multi-context; registries + suitability B; forest = consumer |
 | 2026-07-17 | Entry fields tree/bush/plant/crops/grass; occupancy = volume weight + bulk chunk + per-cell API |
 | 2026-07-17 | Гибрид уточнён: allometry-lite weight + PCG place; формулы BA / V^(2/3) / canopy ZOI / shade caps |

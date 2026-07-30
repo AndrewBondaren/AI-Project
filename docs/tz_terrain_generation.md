@@ -291,13 +291,13 @@ z_bottom = max(world.z_min, z_top - N_eff)
 
 **Не в v1:** горизонтальный «мост» между далёкими колонками (только local neighborhood).
 
-### Relief grade (домен — указатель)
+### Relief grade (поддомен Terrain — указатель)
 
-**Отдельный домен** SLOPE / SHEER + uphill facing:  
-→ [`tz_terrain_relief.md`](./tz_terrain_relief.md) (SoT ownership, consumers, target layout).
+**Поддомен Terrain** outdoor SLOPE / SHEER + facing + **шаблоны 1:1 buildings** (global `relief_templates` + world registry; `context` singular):  
+→ [`tz_terrain_relief.md`](./tz_terrain_relief.md) (SoT ownership, storage, consumers).
 
-Кратко: grade — **не** MaskDomain `mountains`; горы только вызывают shared SideFill.  
-Column `N_eff` / gap (этот документ § Зазоры) задаёт **объём** колонки; relief — **проходимость грани**.
+Кратко: grade — **не** MaskDomain и **не** `N_eff`. Column gap (этот документ § Зазоры) = *объём* колонки; relief = *проходимость грани*.
+Consumers: горы, open land (plains/forest), shore, roads.
 
 ### Terrain ↔ ClimateData (разделение ответственности, физическая связь)
 
@@ -1700,6 +1700,8 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-29 | Relief: storage 1:1 buildings + `context` singular — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R11/R17/R18 |
+| 2026-07-29 | Pointer: outdoor grade + relief templates — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R9–R16 |
 | 2026-07-27 | Домен **relief** → [`tz_terrain_relief.md`](./tz_terrain_relief.md); здесь — указатель (не SoT grade) |
 | 2026-07-19 | § Охват мира: форма = `world_bounds` AABB (квадрат/прямоугольник) |
 | 2026-07-20 | § Bake modes invariant: L2 ∉ light/full; entry после light — отдельная джоба (см. pack storage Job boundaries) |
@@ -1733,7 +1735,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 - `tz_city_generation.md` — settlement, occupancy, urban
 - `tz_locations.md` — named_location fields
 - `tz_generator_technical_debt.md` — NC-1, smells
-- [`tz_terrain_relief.md`](./tz_terrain_relief.md) — **домен** SLOPE/SHEER/facing (горы = consumer)
+- [`tz_terrain_relief.md`](./tz_terrain_relief.md) — **поддомен Terrain** outdoor SLOPE/SHEER/facing + library/registry (горы/shore/open_land/`road_shoulder` = consumers)
 - [`tz_map_light_bake.md`](./tz_map_light_bake.md) — L0 light-grid compose; горы consumer SideFill
 - [`tz_mountain_architecture.md`](./tz_mountain_architecture.md) — PassBuilder topology (не Relief grade)
 - [`tz_locations.md`](./tz_locations.md) — `system_facing` / staircase chain (аналог uphill facing)

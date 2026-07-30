@@ -1412,7 +1412,7 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 | [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | L0 wire, WP-10, Идея 1/2, WP-PERF-31 |
 | [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) | declared river/coast, fine roles; **Ocean bathymetry / Depression forms** (R5b) |
 | [`tz_terrain_generation.md`](./tz_terrain_generation.md) | surface pass, coarse planning |
-| [`tz_terrain_relief.md`](./tz_terrain_relief.md) | **Relief grade** SoT (SLOPE/SHEER/facing); горы = SideFill consumer |
+| [`tz_terrain_relief.md`](./tz_terrain_relief.md) | **Relief grade** SoT (SLOPE/SHEER/facing + templates); mountains/forests/`road_shoulder` = consumers (не construction полотна) |
 | [`tz_climate.md`](./tz_climate.md) | pole / zone sample |
 | [`tz_city_generation.md`](./tz_city_generation.md) | L1 skeletons vs L2 layout |
 
@@ -1422,6 +1422,8 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-29 | Relief: context `road` → `road_shoulder` (обочины) — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R20 |
+| 2026-07-29 | Pointer: relief templates / outdoor grade — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R9–R16 |
 | 2026-07-27 | Домен **relief** → [`tz_terrain_relief.md`](./tz_terrain_relief.md); § Mountain = consumer SideFill; shipped `MountainSideKind` = адаптер |
 | 2026-07-24 | § **MaskDomain materialize**: общая абстракция collect→materialize→apply; `MaskFootprint`; `run_mask_domain`; anti-smell S1–S5; settlement/farmland как plugins; mountain = первый plugin; forest deferred; MLB-13 |
 | 2026-07-24 | Impl MLB-13: shared materialize + `MountainMaskMaterializer` (FG→FR→SF→KindElevation); `declared_mountains`; removed `declare_radius_light` / score→paint stub |
