@@ -6,7 +6,7 @@ metadata:
   type: project
 ---
 
-> **Статус:** ownership **утверждён** (2026-07-27) · **world outdoor grade + templates** — утверждено (2026-07-29) · **storage 1:1 buildings** — утверждено (2026-07-29) · **mountain preset / side_recipe (R33)** — утверждено (2026-07-30) · **terrain map R34** (import upsert ∥ world API) — утверждено (2026-07-30) · **Impl:** shared `terrain/relief` + column facing persist — ✅ extract; **templates / world pass** — ⬜.  
+> **Статус:** ownership **утверждён** (2026-07-27) · **world outdoor grade + templates** — утверждено (2026-07-29) · **storage 1:1 buildings** — утверждено (2026-07-29) · **mountain preset / side_recipe (R33)** — утверждено (2026-07-30) · **terrain map R34** (import upsert ∥ world API) — утверждено (2026-07-30) · **bundle R35** (`relief_templates` section) — утверждено (2026-07-30) · **Impl:** shared `terrain/relief` + column facing persist — ✅ extract; **templates / world pass** — ⬜.  
 > **Связь:** SoT grade; **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT.
 
 # Terrain relief grade (поддомен Terrain)
@@ -57,9 +57,9 @@ metadata:
 | # | Решение |
 |---|---|
 | R9 | Grade — **слой всего outdoor**, не plugin только гор |
-| R10 | Мастер **не** задаёт SHEER/SLOPE поклеточно / на каждую локацию вручную |
+| R10 | Мастер **не** задаёт SHEER/SLOPE **поклеточно** / paint по карте. Допустимо: шаблоны + pick; **точечный** declare `sides[].kind` на **стороне горы** (= сектор form / один большой объект Spec, **не** клетка) |
 | R11 | Хранение шаблонов — **1:1 как здания**: глобальная библиотека + per-world pointer registry ([`tz_building_generator.md`](./tz_building_generator.md) §5–6) |
-| R12 | **Контекст выбирает шаблон**; шум рандомизирует **внутри** шаблона |
+| R12 | **Context + pick policy** выбирают шаблон; **внутри** шаблона — `side_recipe` (mountain) или schedule/`classify(dz)` (ribbon) + **seeded** noise (R15). Не «только шум» и не «Δz без шаблона» |
 | R13 | Контексты v1: `mountain` \| `open_land` \| `shore` \| `road_shoulder` (приоритет — § Context priority) |
 | R14 | **Δz сам по себе не выбирает** SHEER vs SLOPE; шаблон + noise (пороги/веса — knobs шаблона) |
 | R15 | Шум **детерминирован** от `world_seed(world)` + `(context, template_uid, x, y [, edge])` — воспроизводим recreate |
@@ -82,6 +82,7 @@ metadata:
 | R32 | Условия terrain — **XOR двух режимов** (не смешивать): **(A)** `slope_none`/`slope_down`/`slope_up` + один `delta_z` **или** **(B)** bands `{delta_z_min, delta_z_max?}` на down/up; `delta_z_min >= 1` |
 | R33 | **Mountain preset** = `ReliefTemplate` с `context: mountain` в той же library/packs (R29). Тело — **side recipe** (не Mode A/B `conditions` дорог). XOR режимов раскладки сторон: **(A)** weights \| **(B)** pattern \| **(C)** fixed kind; **пусто / ничего не указано** → **seeded random** per side (R15). `MountainKind` ≠ preset (elevation/content). R30 не про это — UI-only для shoulder/`delta_z` чисел |
 | R34 | **G2:** `ReliefConditionTerrain` ↔ `system_terrain` — 1:1 по имени. Клетка вне таблицы / без condition → **skip grade**. **Запрещено** R21 «левый SLOPE» для unknown N+1. Два **независимых** пути каталога: (1) **import relief** — upsert missing keys из `conditions` (canonical, не затирать существующие); (2) **API настройки мира** — мастер/редактор правит любые N+1 (`PUT /worlds/…`). R21 — только битый pick/template/дыра schedule |
+| R35 | **G4 / bundle:** тела шаблонов **не** в `world` JSON. В мире — только `relief_template_registry` + `relief_pick_policy`. Self-contained bundle: top-level секция **`relief_templates`** (массив полных тел) + pointers/policy внутри `world`. Import: upsert SQL library ← секция + registry/policy ← `world`. Имя ключа = `BundleSection.RELIEF_TEMPLATES` (`"relief_templates"`). API — тонкий слой |
 
 ---
 
@@ -625,6 +626,25 @@ JSON мастера **не** меняется: Mode A = `delta_z` на policy; M
 
 Оба пути валидны; bundle не обязан ссылаться на «чужую» библиотеку хоста без копирования тел.
 
+#### Bundle wire (R35 / G4)
+
+```text
+# top-level world JSON bundle
+world:                      # BundleSection.WORLD — обязателен
+  relief_template_registry  # pointers only (uid, display, context, imported_at)
+  relief_pick_policy        # per-context pick
+  terrain_registry          # N+1 catalog (R34)
+  … прочие поля мира
+relief_templates: [         # BundleSection.RELIEF_TEMPLATES — полные тела
+  { system_name, display_name, context, side_recipe? | conditions?, … }
+]
+races / perks / locations / …   # как сейчас
+# ❌ полные тела внутри world.relief_template_registry
+# ❌ map_cells в skeleton/registry import
+```
+
+Import level: секция `relief_templates` обрабатывается вместе со skeleton/self-contained export (точный allowlist — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) + `BundleSection`); route только делегирует в bundle service.
+
 ### Pick + noise (целевой поток I8)
 
 Единый pipeline для любого `ReliefContext` (в т.ч. `road_shoulder`).  
@@ -805,7 +825,7 @@ flowchart LR
 - ❌ PassBuilder / ridge noise вместо grade  
 - ❌ Per-cell ручной SHEER как основной UX мастера  
 - ❌ `contexts: list` на одном шаблоне (R17)  
-- ❌ Только inline knobs в мире без `relief_templates` library (ломает 1:1 buildings)  
+- ❌ Полные тела relief внутри `world` / registry entry (R35 — секция `relief_templates`) |
 - ❌ Context как «строительство дороги» вместо обочин (R20)  
 - ❌ SHEER на travel-полотне дороги  
 - ❌ Мастер задаёт left\|right / ручная сторона edge (R25)  
@@ -930,7 +950,8 @@ Wire: column facing — ✅ SoT (R24). Validate A XOR B + normalize — library/
 
 | Дата | Изменение |
 |---|---|
-| 2026-07-30 | **R34 product why:** (1) import upsert = min friction add preset→generate; (2) world API = edit/delete mistaken N+1 |
+| 2026-07-30 | **T1 closed:** R14 OK — sheer_weight=1 deterministic is intentional knobs |
+| 2026-07-30 | **T3 closed:** R12 = context+pick → template; inside = recipe/schedule + seeded noise |
 | 2026-07-30 | **R34:** no silent terrain upsert; master edits N+1 via world API (`PUT /worlds`); relief import reject missing keys; skip unknown grade |
 | 2026-07-30 | **R34 / G2 closed:** 1:1 map ReliefConditionTerrain↔system_terrain; import upsert missing terrain_registry; unknown N+1 → skip grade (no R21 fake SLOPE) |
 | 2026-07-30 | R29: domain root `relief_templates/`; packs not mixed with `structures_templates/`; rule updated |

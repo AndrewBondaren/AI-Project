@@ -1503,6 +1503,7 @@ sequenceDiagram
 |---|---|
 | `POST /worlds/import` | [`WorldBundleService.import_bundle`](../backend/app/application/worldData/worldBundleService.py) — транзакция, rollback при ошибке |
 | Секции bundle | ключи — [`BundleSection`](../backend/app/dataModel/worldBundle/bundleSections.py); `world` **обязателен**; skeleton: races/perks/states/locations/connections; `map_cells` reject |
+| Relief templates (target R35) | pointers/policy в `world`; полные тела — top-level **`relief_templates`** — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R35; в коде `BundleSection` ⬜ |
 | Дубликат `world_uid` | auto-remap → `имя vN` |
 | `GET /worlds/{uid}/export` | **всё**, включая `map_cells` если есть |
 | По-секционно | `POST …/locations/import`, `races/import`, … — уже **частичный** импорт |
