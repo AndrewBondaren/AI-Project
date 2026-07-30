@@ -37,3 +37,31 @@ def dist_point_to_polyline_m(
         if d < best:
             best = d
     return best
+
+
+def nearest_point_on_polyline_m(
+    px: float,
+    py: float,
+    spine: list[tuple[int, int]] | list[tuple[float, float]],
+) -> tuple[float, float] | None:
+    """Closest point on spine polyline (for corridor uphill facing → spine)."""
+    if not spine:
+        return None
+    if len(spine) == 1:
+        return float(spine[0][0]), float(spine[0][1])
+    best_d = float("inf")
+    best = (float(spine[0][0]), float(spine[0][1]))
+    for i in range(len(spine) - 1):
+        ax, ay = float(spine[i][0]), float(spine[i][1])
+        bx, by = float(spine[i + 1][0]), float(spine[i + 1][1])
+        dx, dy = bx - ax, by - ay
+        if dx == 0.0 and dy == 0.0:
+            qx, qy = ax, ay
+        else:
+            t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)))
+            qx, qy = ax + t * dx, ay + t * dy
+        d = math.hypot(px - qx, py - qy)
+        if d < best_d:
+            best_d = d
+            best = (qx, qy)
+    return best

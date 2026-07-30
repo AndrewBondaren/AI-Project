@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.constrainedField import constrained_field
+from app.dataModel.terrain.relief.enums import ReliefSideKind
+
+# Shim → relief domain SoT (tz_terrain_relief R6).
+MountainSideKind = ReliefSideKind
 
 
 class MountainKind(StrEnum):
@@ -17,11 +21,26 @@ class MountainKind(StrEnum):
     FORESTED = "forested"
 
 
+class MountainRangeStyle(StrEnum):
+    """Spine sample style — tz_mountain_architecture."""
+
+    BROKEN = "broken"
+    SMOOTH = "smooth"
+    HYBRID = "hybrid"
+
+
 class MountainKindProfile(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     rise_fraction_of_z_max: float = constrained_field(
         default=0.35, greater_equals=0.0, lesser_equals=1.0,
+    )
+    # TODO(U7): per-kind inset calibration — docs/tz_mountain_architecture.md U7
+    peak_gap_inset_fraction: float = constrained_field(
+        default=0.30, greater_equals=0.0, lesser_equals=1.0,
+    )
+    saddle_rise_fraction: float = constrained_field(
+        default=0.65, greater_equals=0.0, lesser_equals=1.0,
     )
 
 
@@ -36,11 +55,6 @@ _KIND_PROFILES: dict[MountainKind, MountainKindProfile] = {
 
 def mountain_kind_profile(kind: MountainKind) -> MountainKindProfile:
     return _KIND_PROFILES[kind]
-
-
-class MountainSideKind(StrEnum):
-    SHEER = "sheer"
-    SLOPE = "slope"
 
 
 class MountainFormType(StrEnum):

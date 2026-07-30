@@ -10,6 +10,7 @@ from app.application.worldData.generators.terrain.mountains.sideGradeDecision im
     format_sides_summary,
     uphill_facing_toward,
 )
+from app.dataModel.spatial.facing import Facing
 from app.dataModel.terrainMasks.mountain.enums import MountainSideKind
 from app.dataModel.terrainMasks.mountain.specs import (
     MountainFormBySides,
@@ -20,10 +21,10 @@ from app.dataModel.terrainMasks.mountain.specs import (
 
 class TestSideGradeDecision(unittest.TestCase):
     def test_uphill_facing_toward_origin(self) -> None:
-        self.assertEqual(uphill_facing_toward(10.0, 0.0, 0.0, 0.0), "west")
-        self.assertEqual(uphill_facing_toward(-10.0, 0.0, 0.0, 0.0), "east")
-        self.assertEqual(uphill_facing_toward(0.0, 10.0, 0.0, 0.0), "south")
-        self.assertEqual(uphill_facing_toward(0.0, -10.0, 0.0, 0.0), "north")
+        self.assertEqual(uphill_facing_toward(10.0, 0.0, 0.0, 0.0), Facing.WEST)
+        self.assertEqual(uphill_facing_toward(-10.0, 0.0, 0.0, 0.0), Facing.EAST)
+        self.assertEqual(uphill_facing_toward(0.0, 10.0, 0.0, 0.0), Facing.SOUTH)
+        self.assertEqual(uphill_facing_toward(0.0, -10.0, 0.0, 0.0), Facing.NORTH)
 
     def test_slope_decision_has_facing_and_reason(self) -> None:
         geom = construct_mountain_form(
@@ -32,10 +33,9 @@ class TestSideGradeDecision(unittest.TestCase):
             100,
         )
         sides = default_sides_for_count(4, kind=MountainSideKind.SLOPE)
-        # Point east of origin on slope band
         d = explain_side_grade_at_xy(geom, sides, 50.0, 0.0, light_m=1.0)
         self.assertEqual(d.kind, MountainSideKind.SLOPE)
-        self.assertEqual(d.facing, "west")  # uphill to origin
+        self.assertEqual(d.facing, Facing.WEST)
         self.assertIn("SLOPE", d.reason)
         self.assertIn("smoothstep", d.reason)
 
@@ -49,7 +49,6 @@ class TestSideGradeDecision(unittest.TestCase):
             MountainSideSpec(kind=MountainSideKind.SHEER, sheer_band_light=1)
             for _ in range(4)
         ]
-        # Near outer rim → SHEER step 0
         d = explain_side_grade_at_xy(geom, sides, 99.5, 0.0, light_m=1.0)
         self.assertEqual(d.kind, MountainSideKind.SHEER)
         self.assertIsNone(d.facing)

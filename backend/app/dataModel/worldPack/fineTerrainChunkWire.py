@@ -48,6 +48,8 @@ class FineTerrainColumnWire(BaseModel):
     lx: int
     ly: int
     runs: list[FineTerrainZRun]
+    system_facing: str | None = None
+    """Column-level uphill grade (tz_terrain_relief); not per-run."""
 
 
 class FineTerrainChunkWire(BaseModel):

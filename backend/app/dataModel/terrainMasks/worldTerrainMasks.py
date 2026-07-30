@@ -17,7 +17,7 @@ from app.dataModel.masks.enums.maskDomainId import (
 )
 from app.dataModel.masks.maskCategoryPolicy import MaskCategoryPolicy
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
-from app.dataModel.terrainMasks.mountain.enums import MountainKind
+from app.dataModel.terrainMasks.mountain.enums import MountainKind, MountainRangeStyle
 from app.dataModel.terrainMasks.mountain.specs import (
     MountainDeclareEntry,
     MountainForm,
@@ -59,6 +59,23 @@ class MountainsCategoryPolicy(MaskCategoryPolicy):
     default_form: MountainForm = Field(default_factory=MountainFormBySides)
     default_radius_m: DefaultOnWire[int] = Field(default=500, ge=1)
     sides: DefaultOnWire[list[MountainSideSpec]] = Field(default_factory=list)
+    default_range_style: DefaultEnumOnWire[MountainRangeStyle] = MountainRangeStyle.BROKEN
+    hybrid_smooth_edge_factor: DefaultOnWire[float] = constrained_field(
+        default=1.5, greater_equals=0.0,
+    )
+    range_gap_length_fraction: DefaultOnWire[float] = constrained_field(
+        default=0.25, greater_equals=0.0,
+    )
+    range_gap_height_factor: DefaultOnWire[float] = constrained_field(
+        default=1.0, greater_equals=0.0,
+    )
+    range_gap_spread: DefaultOnWire[float] = constrained_field(
+        default=1.4, greater_equals=1.0,
+    )
+    range_gap_other_radius_factor: DefaultOnWire[float] = constrained_field(
+        default=0.25, greater_equals=0.0,
+    )
+    enable_secondary_ridges: DefaultOnWire[bool] = True
 
     def resolved_sides(self) -> list[MountainSideSpec]:
         """Assemble Spec.sides — empty → N× MountainSideSpec(); wrong len → raise."""

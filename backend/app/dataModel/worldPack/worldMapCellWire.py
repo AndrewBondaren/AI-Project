@@ -25,6 +25,8 @@ class WorldMapCellWire(BaseModel):
     hydrology_width: int | None = None
     climate_zone_id: int | None = None
     location_pin: int | None = None
+    system_facing: str | None = None
+    """Uphill relief grade cardinal (tz_terrain_relief); stairs analogy."""
 
     @field_validator("hydrology_role", mode="before")
     @classmethod

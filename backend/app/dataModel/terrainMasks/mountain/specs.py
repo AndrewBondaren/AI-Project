@@ -8,11 +8,16 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire, DefaultEnumOnWire
 from app.dataModel.constrainedField import constrained_field
+from app.dataModel.terrain.relief.specs import ReliefSideSpec
 from app.dataModel.terrainMasks.mountain.enums import (
     MountainFormType,
     MountainKind,
+    MountainRangeStyle,
     MountainSideKind,
 )
+
+# Shim: mountain sides are relief SideSpec (tz_terrain_relief R6).
+MountainSideSpec = ReliefSideSpec
 
 
 def _policy_default_radius_m() -> int:
@@ -60,13 +65,6 @@ MountainForm = Annotated[
     Union[MountainFormBySides, StarForm, PeakForm, PlateauForm],
     Field(discriminator="form_type"),
 ]
-
-
-class MountainSideSpec(BaseModel):
-    model_config = ConfigDict(extra="ignore", frozen=True)
-
-    kind: DefaultEnumOnWire[MountainSideKind] = MountainSideKind.SLOPE
-    sheer_band_light: DefaultOnWire[int] = Field(default=1, ge=0)
 
 
 def default_sides_for_count(
@@ -127,6 +125,23 @@ class MountainRangeSides(BaseModel):
     end: MountainSideSpec | None = None
 
 
+class MountainSaddleSpec(BaseModel):
+    """Saddle between two peaks on a range — tz_mountain_architecture U3.
+
+    ``peak_a_index`` / ``peak_b_index`` index into ``MountainRangeSpec.peaks[]``
+    (0..n-1), not runtime ``RidgeVertex.index``.
+    """
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    peak_a_index: int = Field(ge=0)
+    peak_b_index: int = Field(ge=0)
+    t: DefaultOnWire[float] = constrained_field(
+        default=0.5, greater_equals=0.0, lesser_equals=1.0,
+    )
+    rise_fraction: float | None = None
+
+
 class MountainRangeSpec(BaseModel):
     """Elongated ridge — spine + width; peaks use full MountainSpec pipeline."""
 
@@ -138,6 +153,11 @@ class MountainRangeSpec(BaseModel):
     kind: DefaultEnumOnWire[MountainKind] = MountainKind.ROCKY
     sides: DefaultOnWire[MountainRangeSides] = Field(default_factory=MountainRangeSides)
     peaks: DefaultOnWire[list[MountainSpec]] = Field(default_factory=list)
+    style: DefaultEnumOnWire[MountainRangeStyle] = MountainRangeStyle.BROKEN
+    peak_spacing_m: int | None = Field(default=None, ge=1)
+    peak_spacings_m: DefaultOnWire[list[int]] = Field(default_factory=list)
+    saddle_rise_fraction: float | None = None
+    saddles: DefaultOnWire[list[MountainSaddleSpec]] = Field(default_factory=list)
     location_uid: str | None = None
 
     def identity_key(self) -> tuple[object, ...]:

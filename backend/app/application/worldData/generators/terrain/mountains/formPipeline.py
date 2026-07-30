@@ -1,6 +1,7 @@
 """Mountain form pipeline — FormGeometry→FormRaster→SideFill → MaskFootprint.
 
 Light and coarse share Form/SideFill SoT; only the grid sampler differs (Q3-A).
+Range U6 corridor+saddle lives in ``rangeCompose``; peaks max-wins here.
 """
 
 from __future__ import annotations
@@ -14,17 +15,18 @@ from app.application.worldData.generators.terrain.mountains.formRaster import (
     raster_form_footprint,
     raster_form_macro_keys,
 )
-from app.application.worldData.generators.terrain.mountains.rangeSideFill import (
-    range_side_fill_at_points,
+from app.application.worldData.generators.terrain.mountains.rangeCompose import (
+    compose_range_corridor,
 )
 from app.application.worldData.generators.terrain.mountains.sideFill import (
-    side_fill_fractions,
     side_fill_fractions_at_points,
+    side_fill_grades,
 )
 from app.application.worldData.generators.terrain.mountains.sideGradeDecision import (
     explain_side_grade_at_xy,
     format_sides_summary,
 )
+from app.application.worldData.generators.terrain.relief.facing import facing_wire
 from app.application.worldData.masks.footprint import LightCellRef, MaskFootprint
 from app.application.worldData.pack.bake.lightGrid.coords import (
     LightGridScale,
@@ -41,7 +43,6 @@ from app.dataModel.terrainMasks.mountain.specs import (
 
 logger = logging.getLogger(__name__)
 
-# Cap DEBUG cell samples per Spec (full footprint would flood logs).
 _GRADE_SAMPLE_LIMIT = 8
 
 
@@ -64,7 +65,6 @@ def _log_mountain_spec_grade(
     )
     if not logger.isEnabledFor(logging.DEBUG) or not cells:
         return
-    # Prefer diversity: some SHEER-ish (low frac) and some SLOPE mid-t if present.
     samples: list[LightCellRef] = []
     for ref in cells:
         samples.append(ref)
@@ -75,7 +75,7 @@ def _log_mountain_spec_grade(
         decision = explain_side_grade_at_xy(
             geom, sides, float(px), float(py), light_m=float(scale.light_m),
         )
-        facing = decision.facing if decision.facing is not None else "none"
+        facing = facing_wire(decision.facing) or "none"
         logger.debug(
             "relief_grade_cell | mountain=(%s,%s) light=(%d,%d,%d,%d) "
             "kind=%s sector=%s t=%.3f frac=%.3f facing=%s | %s",
@@ -123,13 +123,15 @@ def materialize_mountain_spec(spec: MountainSpec, scale: LightGridScale) -> Mask
     concave = isinstance(spec.form, StarForm)
     cells = raster_form_footprint(geom, scale, concave=concave)
     sides = spec.resolved_sides()
-    fractions = side_fill_fractions(geom, sides, cells, scale)
+    grades = side_fill_grades(geom, sides, cells, scale)
+    fractions = {ref: float(g.fraction) for ref, g in grades.items()}
+    facing = {ref: facing_wire(g.facing) for ref, g in grades.items()}
     _log_mountain_spec_grade(spec, geom, sides, cells, scale)
-    return MaskFootprint(cells=cells, elevation_fraction=fractions)
+    return MaskFootprint(cells=cells, elevation_fraction=fractions, system_facing=facing)
 
 
 def materialize_mountain_range(spec: MountainRangeSpec, scale: LightGridScale) -> MaskFootprint:
-    """Corridor + left/right/caps SideFill; peaks use full mountain Spec pipeline."""
+    """U6: corridor+saddle (rangeCompose) → peaks max-wins."""
     _log_range_sides(spec)
     half = max(1, int(spec.width_m)) // 2
     xs = [p[0] for p in spec.spine]
@@ -143,7 +145,7 @@ def materialize_mountain_range(spec: MountainRangeSpec, scale: LightGridScale) -
             gx, gy, tx, ty = light_to_macro_local(lx, ly, scale)
             cx, cy = light_cell_center_m(gx, gy, tx, ty, scale)
             points.append((LightCellRef(gx, gy, tx, ty), float(cx), float(cy)))
-    fractions = range_side_fill_at_points(
+    fractions, facing = compose_range_corridor(
         spec, points, light_m=float(scale.light_m),
     )
     cells: set[LightCellRef] = set(fractions.keys())
@@ -152,7 +154,14 @@ def materialize_mountain_range(spec: MountainRangeSpec, scale: LightGridScale) -
         cells |= set(peak_fp.cells)
         for ref, frac in peak_fp.elevation_fraction.items():
             fractions[ref] = max(fractions.get(ref, 0.0), float(frac))
-    return MaskFootprint(cells=frozenset(cells), elevation_fraction=fractions)
+        for ref, face in peak_fp.system_facing.items():
+            if face is not None:
+                facing[ref] = face
+    return MaskFootprint(
+        cells=frozenset(cells),
+        elevation_fraction=fractions,
+        system_facing=facing,
+    )
 
 
 def materialize_mountain_entry(
@@ -209,7 +218,7 @@ def coarse_footprint_for_range(
     cell_m: int,
     light_m: float,
 ) -> dict[tuple[int, int], float]:
-    """Q3-A: Range SideFill sampled on macro centers; peaks overlay."""
+    """Q3-A: shared U6 corridor compose; peaks overlay."""
     _log_range_sides(spec)
     cell = max(1, int(cell_m))
     half = max(1, int(spec.width_m)) // 2
@@ -221,10 +230,9 @@ def coarse_footprint_for_range(
     gx1 = (max(xs) + pad) // cell
     gy1 = (max(ys) + pad) // cell
     candidate_keys = {(gx, gy) for gy in range(gy0, gy1 + 1) for gx in range(gx0, gx1 + 1)}
-    fractions = range_side_fill_at_points(
-        spec,
-        _coarse_macro_points(candidate_keys, cell_m=cell),
-        light_m=float(light_m),
+    points = _coarse_macro_points(candidate_keys, cell_m=cell)
+    fractions, _facing = compose_range_corridor(
+        spec, points, light_m=float(light_m),
     )
     for peak in spec.peaks:
         peak_fp = coarse_footprint_for_spec(peak, cell_m=cell, light_m=light_m)

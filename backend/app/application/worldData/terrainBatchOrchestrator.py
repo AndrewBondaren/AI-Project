@@ -43,6 +43,7 @@ class TileSurfaceState:
     n_eff: object
     hydrology: dict | None
     surface_terrain: dict[tuple[int, int], str] | None = None
+    surface_facing: dict[tuple[int, int], str] | None = None
 
 
 class TerrainBatchOrchestrator:
@@ -113,6 +114,7 @@ class TerrainBatchOrchestrator:
             merge_hydro_hard_corridor,
         )
         from app.application.worldData.generators.terrain.passes.parentLightTerrain import (
+            upsample_facing_from_parent_light,
             upsample_terrain_from_parent_light,
         )
         from app.application.worldData.generators.terrain.passes.parentLightUpsample import (
@@ -130,6 +132,7 @@ class TerrainBatchOrchestrator:
         policy = refine_policy or ParentLightRefinePolicy.canonical_defaults()
         fine_z = upsample_from_parent_light(parent_light, world, policy=policy)
         fine_terrain = upsample_terrain_from_parent_light(parent_light, world, policy=policy)
+        fine_facing = upsample_facing_from_parent_light(parent_light, policy=policy)
         cell_m = parent_light.tile_m
         for (xm, ym), z in ctx.meter_z_overrides.items():
             if xm // cell_m == tile_gx and ym // cell_m == tile_gy:
@@ -151,6 +154,7 @@ class TerrainBatchOrchestrator:
             n_eff=n_eff,
             hydrology=tile_hydro or None,
             surface_terrain=fine_terrain,
+            surface_facing=fine_facing or None,
         )
 
     async def generate_chunk_cells(
@@ -199,4 +203,5 @@ class TerrainBatchOrchestrator:
             rect,
             hydrology_by_cell=surface_state.hydrology,
             surface_terrain=surface_state.surface_terrain,
+            surface_facing=surface_state.surface_facing,
         )

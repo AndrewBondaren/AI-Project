@@ -1,12 +1,22 @@
-"""Collect mountain Specs — declare / anchors / autoresolve (tz_map_light_bake)."""
+"""Collect mountain Specs — declare / anchors / autoresolve (tz_map_light_bake).
+
+Auto path: MountainPassBuilder (tz_mountain_architecture) — breaking vs 1:1 Specs.
+"""
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING
 
 from app.application.worldData.generators.climate.math import world_seed
 from app.application.worldData.generators.terrain.mountains.geoAnchors import (
     anchor_mountain_locations,
+)
+from app.application.worldData.generators.terrain.mountains.passBuilder import (
+    build_mountain_pass,
+)
+from app.application.worldData.generators.terrain.mountains.peakAssembler import (
+    assemble_peak_from_policy,
 )
 from app.application.worldData.generators.terrain.mountains.ridgePlacement import (
     iter_ridge_cells_in_meter_rect,
@@ -28,6 +38,8 @@ if TYPE_CHECKING:
     from app.db.models.namedLocation import NamedLocation
     from app.db.models.world import World
 
+MountainEntry = MountainSpec | MountainRangeSpec
+
 
 def _spec_from_policy(
     *,
@@ -36,13 +48,11 @@ def _spec_from_policy(
     policy: MountainsCategoryPolicy,
     location_uid: str | None = None,
 ) -> MountainSpec:
-    return MountainSpec(
+    """Back-compat alias — PeakAssembler SoT."""
+    return assemble_peak_from_policy(
         origin_x_m=origin_x_m,
         origin_y_m=origin_y_m,
-        radius_m=int(policy.default_radius_m),
-        kind=policy.default_kind,
-        form=policy.default_form,
-        sides=policy.resolved_sides(),
+        policy=policy,
         location_uid=location_uid,
     )
 
@@ -59,7 +69,7 @@ def specs_from_geographic_locations(
     out: list[MountainSpec] = []
     for loc in anchor_mountain_locations(locations):
         out.append(
-            _spec_from_policy(
+            assemble_peak_from_policy(
                 origin_x_m=int(loc.map_x),
                 origin_y_m=int(loc.map_y),
                 policy=policy,
@@ -73,7 +83,7 @@ def merge_mountain_spec_sources(
     *,
     declared: list[MountainSpec | MountainRangeSpec],
     anchors: list[MountainSpec],
-    auto: list[MountainSpec],
+    auto: list[MountainEntry],
 ) -> list[MountainSpec | MountainRangeSpec]:
     """Shared merge SoT: declared > anchors > autoresolve (identity_key). Q15/Q17."""
     key = lambda s: s.identity_key()
@@ -89,11 +99,38 @@ def _typical_from_pole(pole_field, world, gx: int, gy: int) -> int:
     return int(sample.typical_elevation_z)
 
 
+def candidates_from_ridge_cells(
+    *,
+    seed: int,
+    policy: MountainsCategoryPolicy,
+    cells: Iterable[tuple[int, int, int, int]],
+    typical_of: Callable[[int, int], int],
+    accept: Callable[[int, int], bool] | None = None,
+    reserved: list[MountainEntry] | None = None,
+) -> list[MountainEntry]:
+    """Shared placement → PassBuilder path (light + coarse)."""
+    candidates = place_ridge_candidates(
+        seed=seed,
+        policy=policy,
+        cells=cells,
+        typical_of=typical_of,
+        accept=accept,
+    )
+    return build_mountain_pass(
+        candidates,
+        policy,
+        seed=seed,
+        reserved=reserved,
+    )
+
+
 def autoresolve_mountain_specs(
     ctx: LightGridBakeContext,
     policy: MountainsCategoryPolicy,
-) -> list[MountainSpec]:
-    """Placement A: ridge-quantized candidates → MountainSpec (not score→paint)."""
+    *,
+    reserved: list[MountainEntry] | None = None,
+) -> list[MountainEntry]:
+    """Placement → MountainPassBuilder → MountainSpec | MountainRangeSpec."""
     if not policy.autoresolve:
         return []
     seed = world_seed(ctx.world)
@@ -121,17 +158,14 @@ def autoresolve_mountain_specs(
         mgx, mgy, _tx, _ty = light_to_macro_local(lx, ly, scale)
         return (mgx, mgy) in tile_set
 
-    candidates = place_ridge_candidates(
+    return candidates_from_ridge_cells(
         seed=seed,
         policy=policy,
         cells=cells,
         typical_of=_typical,
         accept=_accept,
+        reserved=reserved,
     )
-    return [
-        _spec_from_policy(origin_x_m=c.origin_x_m, origin_y_m=c.origin_y_m, policy=policy)
-        for c in candidates
-    ]
 
 
 def collect_mountain_entries_for_coarse(
@@ -147,7 +181,7 @@ def collect_mountain_entries_for_coarse(
     """Pass 1.4 collect — same merge SoT as light (Q3-A: no Range→disk expand)."""
     declared = load_declared_mountains(masks)
     anchors = specs_from_geographic_locations(locations, policy)
-    auto: list[MountainSpec] = []
+    auto: list[MountainEntry] = []
     if policy.autoresolve:
         seed = world_seed(world)
         cells: list[tuple[int, int, int, int]] = []
@@ -167,16 +201,14 @@ def collect_mountain_entries_for_coarse(
             gy = oy // max(1, cell_m)
             return _typical_from_pole(pole_field, world, gx, gy)
 
-        candidates = place_ridge_candidates(
+        reserved: list[MountainEntry] = list(declared) + list(anchors)
+        auto = candidates_from_ridge_cells(
             seed=seed,
             policy=policy,
             cells=cells,
             typical_of=_typical,
+            reserved=reserved,
         )
-        auto = [
-            _spec_from_policy(origin_x_m=c.origin_x_m, origin_y_m=c.origin_y_m, policy=policy)
-            for c in candidates
-        ]
     return merge_mountain_spec_sources(
         declared=declared, anchors=anchors, auto=auto,
     )

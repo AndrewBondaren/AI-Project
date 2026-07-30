@@ -17,6 +17,7 @@ class LightGridCell:
     hydrology_width: int | None = None
     climate_zone_id: int | None = None
     location_pin: int | None = None
+    system_facing: str | None = None
 
     def to_wire(self, tx: int, ty: int) -> WorldMapCellWire:
         return WorldMapCellWire(
@@ -29,6 +30,7 @@ class LightGridCell:
             hydrology_width=self.hydrology_width,
             climate_zone_id=self.climate_zone_id,
             location_pin=self.location_pin,
+            system_facing=self.system_facing,
         )
 
     @classmethod
@@ -42,4 +44,5 @@ class LightGridCell:
             hydrology_width=d.hydrology_width,
             climate_zone_id=d.climate_zone_id,
             location_pin=d.location_pin,
+            system_facing=d.system_facing,
         )

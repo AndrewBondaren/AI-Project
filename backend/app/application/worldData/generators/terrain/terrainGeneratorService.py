@@ -41,6 +41,7 @@ class TerrainGeneratorService:
         rect: ColumnRect,
         hydrology_by_cell: dict | None = None,
         surface_terrain: dict[tuple[int, int], str] | None = None,
+        surface_facing: dict[tuple[int, int], str] | None = None,
     ) -> list[MapCell]:
         return run_column_fill(
             world,
@@ -49,6 +50,7 @@ class TerrainGeneratorService:
             rect=rect,
             hydrology_by_cell=hydrology_by_cell,
             surface_terrain=surface_terrain,
+            surface_facing=surface_facing,
         )
 
     def build_surface_heightmap(

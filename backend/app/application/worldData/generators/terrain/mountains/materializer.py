@@ -64,7 +64,10 @@ class MountainMaskMaterializer:
             raise TypeError(
                 f"mountains autoresolve expects MountainsCategoryPolicy, got {type(policy)!r}"
             )
-        return list(autoresolve_mountain_specs(ctx, policy))
+        reserved: list[MountainEntry] = list(self.load_declared(ctx)) + list(
+            self.load_anchor_specs(ctx)
+        )
+        return list(autoresolve_mountain_specs(ctx, policy, reserved=reserved))
 
     def collect(
         self,
@@ -78,9 +81,10 @@ class MountainMaskMaterializer:
             )
         declared = self.load_declared(ctx)
         anchors = self.load_anchor_specs(ctx)
-        auto: list[MountainSpec] = []
+        auto: list[MountainEntry] = []
         if policy.autoresolve:
-            auto = list(autoresolve_mountain_specs(ctx, policy))
+            reserved: list[MountainEntry] = list(declared) + list(anchors)
+            auto = list(autoresolve_mountain_specs(ctx, policy, reserved=reserved))
         return merge_mountain_spec_sources(
             declared=declared, anchors=list(anchors), auto=auto,
         )
@@ -146,3 +150,6 @@ class MountainMaskMaterializer:
             )
             if new_z > cell.surface_z:
                 cell.surface_z = new_z
+            face = footprint.system_facing.get(ref)
+            if face is not None:
+                cell.system_facing = face

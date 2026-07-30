@@ -35,3 +35,26 @@ def upsample_terrain_from_parent_light(
             cell = parent.cell_at(tx, ty)
             out[(xm, ym)] = resolve_world_map_terrain(world, cell)
     return out
+
+
+def upsample_facing_from_parent_light(
+    parent: ParentLightTile,
+    *,
+    policy: ParentLightRefinePolicy | None = None,
+) -> dict[tuple[int, int], str]:
+    """Resample L0 ``system_facing`` to meter grid — nearest; omit unset columns."""
+    pol = policy or ParentLightRefinePolicy.canonical_defaults()
+    if pol.terrain_resample != "nearest":
+        raise ValueError(
+            f"terrain_resample={pol.terrain_resample!r} unsupported; only 'nearest'",
+        )
+    tile_m = parent.tile_m
+    out: dict[tuple[int, int], str] = {}
+    for ly in range(tile_m):
+        for lx in range(tile_m):
+            xm, ym = world_meter_xy(parent.gx, parent.gy, lx, ly, tile_m)
+            tx, ty = parent.meters_to_tx_ty(xm, ym)
+            cell = parent.cell_at(tx, ty)
+            if cell is not None and cell.system_facing:
+                out[(xm, ym)] = str(cell.system_facing)
+    return out

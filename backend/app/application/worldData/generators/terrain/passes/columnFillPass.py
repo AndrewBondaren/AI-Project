@@ -39,10 +39,11 @@ def run_column_fill(
     rect: ColumnRect | None = None,
     hydrology_by_cell: dict[tuple[int, int], MapCellHydrology] | None = None,
     surface_terrain: dict[tuple[int, int], str] | None = None,
+    surface_facing: dict[tuple[int, int], str] | None = None,
 ) -> list[MapCell]:
     """Pass 2: fill solid columns (optional rect slice for chunking).
 
-    Pack L2 refine: pass ``surface_terrain`` from parent light (mask carry).
+    Pack L2 refine: pass ``surface_terrain`` / ``surface_facing`` from parent light.
     Legacy path without map: climate landcover via ``surface_biome_terrain``.
     """
     terrain_set = _terrain_set(world)
@@ -109,6 +110,11 @@ def run_column_fill(
                     system_terrain=terrain,
                     system_material=material,
                     hydrology=hydrology_wire,
+                    system_facing=(
+                        surface_facing.get(key)
+                        if z == z_top and surface_facing is not None
+                        else None
+                    ),
                 ))
 
             if use_magma:
