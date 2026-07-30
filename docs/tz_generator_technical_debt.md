@@ -587,39 +587,12 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 
 ### BUNDLE-2 — `WorldBundleService` → section handlers по доменам
 
-**Severity:** medium · **P:** P2 (при следующей секции bundle после `relief_templates`) · **Status:** **partial** (ReliefSection 2026-07-30)  
-**Refs:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) R35 · audit 2026-07-30 · HY-S-2 · BUNDLE-1 (remap уже вынесен).
+**Severity:** medium · **P:** P2 · **Status:** **resolved** (2026-07-30)  
+**Product SoT:** [`tz_world_bundle.md`](./tz_world_bundle.md) (WB-1…WB-15) · plan [`.cursor/plans/bundle-2-section-handlers.md`](../.cursor/plans/bundle-2-section-handlers.md)
 
-**Симптом:** ctor тянет 8–10 сервисов; `export` / `import_bundle` знают каждую секцию inline. Relief **import** делегирован в `ReliefWorldImportService`, но **export** тел шаблонов всё ещё в `WorldBundleService` (`entry.get("system_template_uid")` + `except HTTPException: continue`). Каждый новый `BundleSection` → ещё одна зависимость и ветка.
+**Сделано:** `WorldBundleService` = thin facade (no FastAPI); `build_bundle_handlers` + entity/library kinds; skeleton keys `race_templates` / `perk_templates` / `building_templates` / `relief_templates`; global `race_templates` / `perk_templates` SQL + world pointer registries; HY-S-2 via two connection handlers; remap skips library UIDs.
 
-**Сделано (partial):** `application/worldData/bundle/reliefSection.py` — typed `relief_template_registry` export + WARN on miss; import через `ReliefWorldImportService`. `WorldBundleService` делегирует relief section.
-
-**Остаток:** полный `IBundleSectionHandler` registry для races/connections/… (HY-S-2); HTTPException всё ещё в facade validate path (как у других world services).
-
-**Почему не god-class:** ~190 LOC, порядок секций + transaction — законная роль facade. Запах — **раздувание оркестратора** и смешение domain export с orchestration.
-
-**Целевая форма (рекомендация):**
-
-```text
-WorldBundleService                 # validate, remap, transaction, порядок секций
-  └─ IBundleSectionHandler         # export_section / import_section → ImportResult
-       ├─ WorldSection             → WorldService
-       ├─ Races / Perks / …        → existing *Service.import_from_json
-       ├─ ConnectionsSection       → ConnectionGraphService  (закрывает HY-S-2)
-       ├─ ReliefSection            → ReliefLibrary + ReliefWorldImport (R35)
-       └─ …
-```
-
-| Вариант | Идея | Когда |
-|---|---|---|
-| **A — Section handlers** | тонкий orchestrator + вкладчики секций; route по-прежнему зовёт только `WorldBundleService` | **предпочтительно** |
-| **B — Много равноправных `*BundleService`** | отдельный HTTP/entry на домен | **антипаттерн** — ломает порядок/tx |
-| **C — Defer** | оставить inline до buildings/barriers/climate в bundle | допустимо кратко; долг линейный |
-
-**Инварианты:** один facade для API; доменные сервисы **не** дублируют create-world; typed `worldRow.relief_template_registry` на export (не raw `dict.get`); miss library body → **WARNING**, не silent skip (**RELIEF-T-6**).
-
-**Размещение:** `application/worldData/bundle/` (handlers) или `bundleSections/*.py`; не в `generators/`.
-
+**Follow-up (не BUNDLE-2):** fixture/scripts rename `races`→`race_templates`; subgraph location transfer API; ImportResult import sweep (T-29).
 ---
 
 ### HY-5 — wire enum (JSON ↔ StrEnum, без string literals в коде)
@@ -870,8 +843,8 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 |---|---|---|---|---|
 | HY-GEO-1 | high | P1 | geographic filter doc↔DB notation | **partial** (filter ✅; `GeographicSubtype` in dataModel; hydrology member compares — HY-5) |
 | BUNDLE-1 | medium | P2 | `_remap_bundle` monolith | **resolved** — `bundleRemapService.py` registry |
-| HY-S-2 | low | P2 | connections import special-case | open → см. BUNDLE-2 |
-| **BUNDLE-2** | medium | P2 | WorldBundleService → section handlers | **partial** — ReliefSection shipped |
+| HY-S-2 | low | P2 | connections import special-case | **resolved** (BUNDLE-2 connection handlers) |
+| **BUNDLE-2** | medium | P2 | WorldBundleService → section handlers | **resolved** — handlers + library domains (relief/building/race/perk); see [`tz_world_bundle.md`](./tz_world_bundle.md) |
 | HY-5 | medium | P1 | StrEnum / policy parse (Retrofit 2) | **partial** — dataModel ✅; shims + literals ⬜; JV-0 ⬜ |
 | HY-BATH-1 | medium | P1 | light SEA z = plains; Depression forms TZ | **partial** — stub drop ✅; full Form pipeline ⬜ |
 | HY-S-4 | low | P2 | `HYDROLOGY_SCHEMA_DEFAULTS` scatter | open |
@@ -947,8 +920,8 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 
 ### Приоритетный backlog (после fix wave)
 
-1. **BUNDLE-2** — полные section handlers; снять FastAPI из `WorldBundleService` validate path  
-2. **RELIEF-BAR-1** — barrier materialize (отдельно)  
+1. **RELIEF-BAR-1** — barrier materialize (отдельно)  
+2. Fixtures/scripts: `races`/`perks` → `*_templates` + registries  
 3. (optional) rename `MountainSideRecipeMode` wire away from A–D — breaking, только с миграцией тел
 
 ---
@@ -967,6 +940,8 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-30 | **BUNDLE-2 resolved:** handlers facade; library race/perk/building/relief; schema `race_templates`/`perk_templates`; HY-S-2 closed |
+| 2026-07-30 | **BUNDLE-2 SoT:** [`tz_world_bundle.md`](./tz_world_bundle.md) WB-1…WB-10 + plan `bundle-2-section-handlers.md`; debt symptom sync |
 | 2026-07-30 | **RELIEF-T-12 / T-16…T-27** fix wave: width bake, ImportResult, bake_seed, preload WARN, typed edge policy, knobs SoT, FS split, RoadShoulderIntent; T-26 accepted (wire letters) |
 | 2026-07-30 | **RELIEF-T-16…T-27** + plan `relief-tech-debt-fixes.md`: re-audit (width dead, bundle HTTP/api, seed, knobs SoT, …) |
 | 2026-07-30 | **RELIEF-T-7/T-9/T-14:** domain_root enforce; road_shoulder bake wire + intents; schedule hole → SLOPE; T-15 accepted |

@@ -80,6 +80,8 @@ CREATE TABLE IF NOT EXISTS worlds (
     connection_type_registry    TEXT,
     relief_template_registry    TEXT,
     relief_pick_policy          TEXT,
+    race_template_registry      TEXT,
+    perk_template_registry      TEXT,
 
     -- generation policy (hydrology / caves / terrain masks — tz_terrain_hydrology.md, tz_map_light_bake.md)
     hydrology                   TEXT,
@@ -133,19 +135,18 @@ CREATE TABLE IF NOT EXISTS worlds (
 );
 
 -- ============================================================
--- races
+-- race_templates  (global library — tz_world_bundle WB-13)
 -- ============================================================
-CREATE TABLE IF NOT EXISTS races (
-    race_uid      TEXT PRIMARY KEY,
-    world_uid      TEXT NOT NULL,
-    display_race  TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS race_templates (
+    template_uid  TEXT PRIMARY KEY,
+    system_name   TEXT NOT NULL UNIQUE,
+    display_name  TEXT NOT NULL,
     race_traits   TEXT,
     male          TEXT,
     female        TEXT,
     asexual       TEXT,
     both          TEXT,
-    created_at    TEXT NOT NULL,
-    FOREIGN KEY (world_uid) REFERENCES worlds(world_uid)
+    created_at    TEXT NOT NULL
 );
 
 -- ============================================================
@@ -398,12 +399,11 @@ CREATE TABLE IF NOT EXISTS character_wounds (
 );
 
 -- ============================================================
--- world_perks  (world perk registry)
+-- perk_templates  (global library — tz_world_bundle WB-14)
 -- ============================================================
-CREATE TABLE IF NOT EXISTS world_perks (
-    perk_uid            TEXT PRIMARY KEY,
-    world_uid            TEXT NOT NULL,
-    system_name         TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS perk_templates (
+    template_uid        TEXT PRIMARY KEY,
+    system_name         TEXT NOT NULL UNIQUE,
     display_name        TEXT NOT NULL,
     system_description  TEXT,
     display_description TEXT,
@@ -413,12 +413,11 @@ CREATE TABLE IF NOT EXISTS world_perks (
     display_tags        TEXT,
     system_condition    TEXT,
     display_condition   TEXT,
-    terrain_access      TEXT,
-    FOREIGN KEY (world_uid) REFERENCES worlds(world_uid) ON DELETE CASCADE
+    terrain_access      TEXT
 );
 
 -- ============================================================
--- character_perks  (common perks — uid ref + rank)
+-- character_perks  (common perks — uid ref + rank → global library)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS character_perks (
     character_id  TEXT NOT NULL,
@@ -426,7 +425,7 @@ CREATE TABLE IF NOT EXISTS character_perks (
     current_rank  TEXT,
     PRIMARY KEY (character_id, perk_uid),
     FOREIGN KEY (character_id) REFERENCES character_sheet(character_uid) ON DELETE CASCADE,
-    FOREIGN KEY (perk_uid)     REFERENCES world_perks(perk_uid) ON DELETE CASCADE
+    FOREIGN KEY (perk_uid)     REFERENCES perk_templates(template_uid) ON DELETE CASCADE
 );
 
 -- ============================================================
@@ -1218,9 +1217,7 @@ CREATE INDEX IF NOT EXISTS idx_registry_deps_entity     ON registry_dependencies
 CREATE INDEX IF NOT EXISTS idx_snapshots_timeline       ON world_snapshots (timeline_id);
 CREATE INDEX IF NOT EXISTS idx_snapshots_parent         ON world_snapshots (parent_snapshot_id);
 
-CREATE INDEX IF NOT EXISTS idx_races_world              ON races (world_uid);
 
-CREATE INDEX IF NOT EXISTS idx_world_perks_world         ON world_perks (world_uid);
 
 CREATE INDEX IF NOT EXISTS idx_factions_world           ON factions (world_uid);
 

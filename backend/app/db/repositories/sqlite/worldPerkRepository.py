@@ -9,11 +9,21 @@ class SqliteWorldPerkRepository(BaseRepository[WorldPerk], IWorldPerkRepository)
     def __init__(self, db: Database) -> None:
         super().__init__(db, WorldPerk)
 
-    async def get_by_id(self, perk_uid: str) -> WorldPerk | None:
-        return await self.fetch_one("perk_uid = ?", [perk_uid])
+    async def get_by_id(self, template_uid: str) -> WorldPerk | None:
+        return await self.fetch_one("template_uid = ?", [template_uid])
 
-    async def get_by_world(self, world_uid: str) -> list[WorldPerk]:
-        return await self.fetch_all("world_uid = ?", [world_uid], order="display_name ASC")
+    async def list_all(self) -> list[WorldPerk]:
+        return await self.fetch_all(order="display_name ASC")
+
+    async def get_by_uids(self, uids: list[str]) -> list[WorldPerk]:
+        if not uids:
+            return []
+        placeholders = ",".join("?" * len(uids))
+        return await self.fetch_all(
+            f"template_uid IN ({placeholders})",
+            list(uids),
+            order="display_name ASC",
+        )
 
     async def create(self, perk: WorldPerk) -> None:
         await self.insert(perk)
@@ -24,5 +34,5 @@ class SqliteWorldPerkRepository(BaseRepository[WorldPerk], IWorldPerkRepository)
     async def upsert(self, perk: WorldPerk) -> None:
         await super().upsert(perk)
 
-    async def delete(self, perk_uid: str) -> None:
-        await super().delete(perk_uid)
+    async def delete(self, template_uid: str) -> None:
+        await super().delete(template_uid)

@@ -1497,20 +1497,23 @@ sequenceDiagram
 
 **П.9:** нужны **разные уровни импорта**, не один монолитный bundle. Согласовано с текущим кодом и целевым Pack.
 
+**Оркестрация JSON bundle (handlers / facade):** продуктовый контракт — [`tz_world_bundle.md`](./tz_world_bundle.md) (**BUNDLE-2 / WP-BUNDLE**, WB-1…WB-10). Этот § WP-24 = **уровни** (registry/skeleton ↔ pack); не дублировать handler architecture здесь.
+
 ### Что есть сейчас (код)
 
 | Компонент | Поведение |
 |---|---|
-| `POST /worlds/import` | [`WorldBundleService.import_bundle`](../backend/app/application/worldData/worldBundleService.py) — транзакция, rollback при ошибке |
-| Секции bundle | ключи — [`BundleSection`](../backend/app/dataModel/worldBundle/bundleSections.py); `world` **обязателен**; skeleton: races/perks/states/locations/connections; `map_cells` reject |
-| Relief templates (target R35) | pointers/policy в `world`; полные тела — top-level **`relief_templates`** — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R35; в коде `BundleSection` ⬜ |
-| Дубликат `world_uid` | auto-remap → `имя vN` |
-| `GET /worlds/{uid}/export` | **всё**, включая `map_cells` если есть |
-| По-секционно | `POST …/locations/import`, `races/import`, … — уже **частичный** импорт |
+| `POST /worlds/import` | [`WorldBundleService.import_bundle`](../backend/app/application/worldData/worldBundleService.py) — транзакция, rollback при ошибке; `?level=registry\|skeleton` |
+| Секции bundle | ключи — [`BundleSection`](../backend/app/dataModel/worldBundle/bundleSections.py); `world` **обязателен**; skeleton: races/perks/states/locations/connections/**`relief_templates`**; `map_cells` reject |
+| Relief templates (R35) | pointers/policy в `world`; полные тела — top-level **`relief_templates`** — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R35; код: `BundleSection.RELIEF_TEMPLATES` + `bundle/reliefSection.py` ✅ |
+| Дубликат `world_uid` | auto-remap → `имя vN` (`bundleRemapService`, BUNDLE-1) |
+| `GET /worlds/{uid}/export` | filter by `level` (skeleton/registry); legacy `map_cells` **не** в allowlist |
+| По-секционно | `POST …/locations/import`, `races/import`, … — уже **частичный** импорт (не замена facade) |
 | [`fixtures/world_template.json`](../fixtures/world_template.json) | world + registries + hydro declare; **без** settlements и `map_cells` |
 | `init_mode` partial/full | в [`tz_city_generation.md`](./tz_city_generation.md) §11 — **когда генерировать**, не что в файле; в `AppSettings` ⬜ |
+| Bundle orchestration debt | inline section branches + HTTP в facade — [`tz_world_bundle.md`](./tz_world_bundle.md) / BUNDLE-2 |
 
-**Проблема:** нет явного `import_level`; export тянет legacy `map_cells`; pack как артефакт **не** подключён.
+**Проблема (историческая, частично снята):** явный `import_level` ✅; `map_cells` reject ✅; pack — отдельный path. Остаток — раздувание `WorldBundleService` (handlers).
 
 ### Целевые уровни импорта
 
@@ -1558,12 +1561,12 @@ flowchart TB
 | Level | ID | Секции bundle | После import |
 |---|---|---|---|
 | **0** | `registry` | `world` | registries, scalars |
-| **1** | `skeleton` | + `races`, `perks`, `states`, `locations`, `connection_*` | L1, без персонажей |
+| **1** | `skeleton` | + `races`, `perks`, `states`, `locations`, `connection_*`, `relief_templates` | L1, без персонажей |
 | ~~npcs~~ | — | **`npcs[]` backlog** | отдельный spec |
 | ~~starter_characters~~ | — | **`starter_characters[]` backlog** | отдельный spec; **не** L6 |
 | ~~legacy~~ | — | `map_cells` | **reject** (WP-23) |
 
-**Сейчас в коде:** [`WorldBundleService`](../backend/app/application/worldData/worldBundleService.py) — `world`, `races`, `perks`, `states`, `locations`, `map_cells`, `connection_*` only. Персонажи — **`POST /characters/import`** отдельно (✅). Bundle персонажей — **нет**.
+**Сейчас в коде:** [`WorldBundleService`](../backend/app/application/worldData/worldBundleService.py) — `world`, `races`, `perks`, `states`, `locations`, `connection_*`, `relief_templates`; `map_cells` reject. Персонажи — **`POST /characters/import`** отдельно (✅). Bundle персонажей — **нет**. Оркестрация секций → [`tz_world_bundle.md`](./tz_world_bundle.md).
 
 #### Backlog: bundle characters (spec only, не impl)
 
@@ -1889,6 +1892,7 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-30 | WP-24 ↔ **BUNDLE-2 SoT** [`tz_world_bundle.md`](./tz_world_bundle.md); sync skeleton/`relief_templates` в таблице «сейчас» |
 | 2026-07-20 | **WP-PERF-50 ✅:** light/full L0-only; `refine_scene` убран из bake path; entry = отдельная джоба |
 | 2026-07-20 | § Bake modes **Job boundaries:** L2 ∉ light/full; L2 = detailed \| entry job; entry после light — отдельная джоба |
 | 2026-07-19 | **WP-FIX-DEBT-10** / WP-DELETE-1: `DELETE /worlds` FK-safe purge (link → `tz_generator_technical_debt.md`) |

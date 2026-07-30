@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
 from app.api.utils.jsonResolver import JsonResolver
+from app.application.worldData.bundle.errors import BundleValidationError
 
 router = APIRouter()
 
@@ -18,7 +19,10 @@ async def list_perks(world_uid: str, container=Depends(get_container)) -> list[d
 
 @router.get("/worlds/{world_uid}/perks/{perk_uid}")
 async def get_perk(world_uid: str, perk_uid: str, container=Depends(get_container)) -> dict:
-    perk = await container.perk_service().get_by_id(world_uid, perk_uid)
+    try:
+        perk = await container.perk_service().get_by_id(world_uid, perk_uid)
+    except BundleValidationError as exc:
+        raise HTTPException(status_code=404, detail=exc.message) from exc
     return asdict(perk)
 
 

@@ -7,6 +7,8 @@ from fastapi.responses import JSONResponse
 from app.api.deps import get_container
 from app.api.utils.jsonResolver import JsonResolver
 from app.api.utils.responseHelpers import json_or_download
+from app.application.jsonValidation.types import ImportValidationError, import_validation_http_detail
+from app.application.worldData.bundle.errors import BundleValidationError
 from app.application.worldData.reliefErrors import ReliefNotFoundError, ReliefValidationError
 
 router = APIRouter()
@@ -86,6 +88,12 @@ async def import_world(
         results, rolled_back = await container.world_bundle_service().import_bundle(
             data, level=level,  # type: ignore[arg-type]
         )
+    except BundleValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.message) from exc
+    except ImportValidationError as exc:
+        raise HTTPException(
+            status_code=422, detail=import_validation_http_detail(exc),
+        ) from exc
     except (ReliefValidationError, ReliefNotFoundError) as exc:
         raise HTTPException(status_code=422, detail=exc.message) from exc
     content = {k: v.to_dict() for k, v in results.items()}

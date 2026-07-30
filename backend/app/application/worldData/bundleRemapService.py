@@ -1,4 +1,8 @@
-"""Duplicate-import UID remapping for world bundles — BUNDLE-1 variant A (section registry)."""
+"""Duplicate-import UID remapping for world bundles — BUNDLE-1.
+
+Library template sections (relief/building/race/perk) keep stable UIDs — global
+library rows are shared; only entity sections remap.
+"""
 
 from __future__ import annotations
 
@@ -13,8 +17,6 @@ from app.dataModel.worldBundle.bundleSections import BundleSection
 
 @dataclass(frozen=True)
 class UidCollectSpec:
-    """Register primary (and referenced) UIDs before deepcopy apply."""
-
     section_key: str
     pk_field: str
     extra_uid_fields: tuple[str, ...] = ()
@@ -23,8 +25,6 @@ class UidCollectSpec:
 UID_COLLECT_REGISTRY: tuple[UidCollectSpec, ...] = (
     UidCollectSpec(BundleSection.LOCATIONS, "location_uid"),
     UidCollectSpec(BundleSection.STATES, "state_uid"),
-    UidCollectSpec(BundleSection.RACES, "race_uid"),
-    UidCollectSpec(BundleSection.PERKS, "perk_uid"),
     UidCollectSpec(BundleSection.CONNECTION_NODES, "node_uid"),
     UidCollectSpec(
         BundleSection.CONNECTION_EDGES, "edge_uid", ("from_node_uid", "to_node_uid"),
@@ -82,8 +82,6 @@ def _apply_map_cell(
 APPLY_ITEM_REGISTRY: dict[str, ApplyItemFn] = {
     BundleSection.LOCATIONS: _apply_location,
     BundleSection.STATES: lambda i, m, w: _apply_pk_world(i, m, w, "state_uid"),
-    BundleSection.RACES: lambda i, m, w: _apply_pk_world(i, m, w, "race_uid"),
-    BundleSection.PERKS: lambda i, m, w: _apply_pk_world(i, m, w, "perk_uid"),
     BundleSection.CONNECTION_NODES: _apply_connection_node,
     BundleSection.CONNECTION_EDGES: _apply_connection_edge,
 }
@@ -94,11 +92,10 @@ def remap_bundle(
     version_n: int,
     strip_suffix: Callable[[str], str],
 ) -> dict[str, Any]:
-    """Return a deep copy of the bundle with all UIDs replaced and name versioned."""
+    """Return a deep copy of the bundle with entity UIDs replaced and name versioned."""
     uid_map = _build_uid_map(data)
     result = copy.deepcopy(data)
-    original_world_uid = data[BundleSection.WORLD]["world_uid"]
-    new_world_uid = uid_map[original_world_uid]
+    new_world_uid = uid_map[data[BundleSection.WORLD]["world_uid"]]
 
     world = result[BundleSection.WORLD]
     world["world_uid"] = new_world_uid
@@ -128,6 +125,7 @@ def _build_uid_map(data: dict[str, Any]) -> dict[str, str]:
         for item in data.get(spec.section_key, []):
             register(item[spec.pk_field])
             for field in spec.extra_uid_fields:
-                register(item[field])
+                if field in item and item[field]:
+                    register(item[field])
 
     return uid_map

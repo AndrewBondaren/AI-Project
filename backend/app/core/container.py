@@ -37,9 +37,13 @@ from app.db.repositories.iStateRepository import IStateRepository
 from app.db.repositories.sqlite.stateRepository import SqliteStateRepository
 from app.db.repositories.iReliefTemplateRepository import IReliefTemplateRepository
 from app.db.repositories.sqlite.reliefTemplateRepository import SqliteReliefTemplateRepository
+from app.db.repositories.iBuildingTemplateRepository import IBuildingTemplateRepository
+from app.db.repositories.sqlite.buildingTemplateRepository import SqliteBuildingTemplateRepository
 from app.application.worldData.worldService import WorldService
 from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
 from app.application.worldData.reliefWorldImportService import ReliefWorldImportService
+from app.application.worldData.buildingTemplateLibraryService import BuildingTemplateLibraryService
+from app.application.worldData.bundle.registry import build_bundle_handlers
 from app.application.worldData.raceService import RaceService
 from app.application.worldData.worldPerkService import WorldPerkService
 from app.application.worldData.namedLocationService import NamedLocationService
@@ -126,6 +130,7 @@ class Container:
         self._connection_edge_cell_repository: IConnectionEdgeCellRepository | None = None
         self._state_repository: IStateRepository | None = None
         self._relief_template_repository: IReliefTemplateRepository | None = None
+        self._building_template_repository: IBuildingTemplateRepository | None = None
 
         # DOMAIN SERVICES
         self._player_service: PlayerService | None = None
@@ -133,6 +138,7 @@ class Container:
         self._world_service: WorldService | None = None
         self._relief_template_library_service: ReliefTemplateLibraryService | None = None
         self._relief_world_import_service: ReliefWorldImportService | None = None
+        self._building_template_library_service: BuildingTemplateLibraryService | None = None
         self._race_service: RaceService | None = None
         self._perk_service: WorldPerkService | None = None
         self._location_service: NamedLocationService | None = None
@@ -455,6 +461,11 @@ class Container:
             self._relief_template_repository = SqliteReliefTemplateRepository(db=self._db)
         return self._relief_template_repository
 
+    def building_template_repository(self) -> IBuildingTemplateRepository:
+        if self._building_template_repository is None:
+            self._building_template_repository = SqliteBuildingTemplateRepository(db=self._db)
+        return self._building_template_repository
+
     def perk_repository(self) -> IWorldPerkRepository:
         if self._perk_repository is None:
             self._perk_repository = SqliteWorldPerkRepository(db=self._db)
@@ -533,13 +544,27 @@ class Container:
 
     def race_service(self) -> RaceService:
         if self._race_service is None:
-            self._race_service = RaceService(repo=self.race_repository())
+            self._race_service = RaceService(
+                repo=self.race_repository(),
+                world_service=self.world_service(),
+            )
         return self._race_service
 
     def perk_service(self) -> WorldPerkService:
         if self._perk_service is None:
-            self._perk_service = WorldPerkService(repo=self.perk_repository())
+            self._perk_service = WorldPerkService(
+                repo=self.perk_repository(),
+                world_service=self.world_service(),
+            )
         return self._perk_service
+
+    def building_template_library_service(self) -> BuildingTemplateLibraryService:
+        if self._building_template_library_service is None:
+            self._building_template_library_service = BuildingTemplateLibraryService(
+                repo=self.building_template_repository(),
+                world_service=self.world_service(),
+            )
+        return self._building_template_library_service
 
     def location_service(self) -> NamedLocationService:
         if self._location_service is None:
@@ -683,17 +708,21 @@ class Container:
 
     def world_bundle_service(self) -> WorldBundleService:
         if self._world_bundle_service is None:
+            handlers = build_bundle_handlers(
+                world_service=self.world_service(),
+                state_service=self.state_service(),
+                location_service=self.location_service(),
+                connection_graph_service=self.connection_graph_service(),
+                race_service=self.race_service(),
+                perk_service=self.perk_service(),
+                relief_library=self.relief_template_library_service(),
+                relief_import=self.relief_world_import_service(),
+                building_library=self.building_template_library_service(),
+            )
             self._world_bundle_service = WorldBundleService(
                 db=self._db,
                 world_service=self.world_service(),
-                race_service=self.race_service(),
-                perk_service=self.perk_service(),
-                location_service=self.location_service(),
-                map_cell_service=self.map_cell_service(),
-                state_service=self.state_service(),
-                connection_graph_service=self.connection_graph_service(),
-                relief_world_import=self.relief_world_import_service(),
-                relief_library=self.relief_template_library_service(),
+                handlers=handlers,
             )
         return self._world_bundle_service
 

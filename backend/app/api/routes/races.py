@@ -6,8 +6,13 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
 from app.api.utils.jsonResolver import JsonResolver
+from app.application.worldData.bundle.errors import BundleValidationError
 
 router = APIRouter()
+
+
+def _map_bundle_err(exc: BundleValidationError) -> HTTPException:
+    return HTTPException(status_code=404, detail=exc.message)
 
 
 @router.get("/worlds/{world_uid}/races")
@@ -18,7 +23,10 @@ async def list_races(world_uid: str, container=Depends(get_container)) -> list[d
 
 @router.get("/worlds/{world_uid}/races/{race_uid}")
 async def get_race(world_uid: str, race_uid: str, container=Depends(get_container)) -> dict:
-    race = await container.race_service().get_by_id(world_uid, race_uid)
+    try:
+        race = await container.race_service().get_by_id(world_uid, race_uid)
+    except BundleValidationError as exc:
+        raise _map_bundle_err(exc) from exc
     return asdict(race)
 
 

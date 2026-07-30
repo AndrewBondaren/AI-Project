@@ -26,13 +26,14 @@ def make_lifespan(db: Database):
     from app.db.models.state import State
     from app.db.models.sessionPending import SessionPending
     from app.db.models.reliefTemplate import ReliefTemplateRow
+    from app.db.models.buildingTemplate import BuildingTemplateRow
     from app.db.repositories.sqlite.pendingRepository import SqlitePendingRepository
 
     _models = [
         World, GameSession, Player, Npc, Turn, Message, NodeExecutionLog,
         Race, WorldPerk, NamedLocation, MapCell,
         ConnectionNode, ConnectionEdge, ConnectionEdgeCell,
-        State, SessionPending, ReliefTemplateRow,
+        State, SessionPending, ReliefTemplateRow, BuildingTemplateRow,
     ]
 
     @asynccontextmanager
