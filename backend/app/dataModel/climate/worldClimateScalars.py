@@ -11,19 +11,23 @@ Wire keys ``climate_pole_mode`` / ``climate_pole_preset`` must match
 must match ``ClimateZone.TEMPERATE``. Consumers: ``climate_scalars(world)``
 via ``jsonValidation.worldRow``, not raw literals in generators/DAG/db. См. ``docs/tz_json_validation.md``.
 
-Wire projection: ``CLIMATE_SCALAR_WIRE_KEYS`` + ``climate_scalar_wire_from_mapping``.
-Startup sync: ``validate_world_row_climate_columns(World)`` — POJO fields ⊆ ``worlds`` columns.
+Wire projection / startup column sync: thin wrappers over
+``app.dataModel.worldScalarWire`` (**JV-SCALARS-1**).
 """
 
 from __future__ import annotations
 
-from dataclasses import fields as dataclass_fields
 from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire
 from app.dataModel.constrainedField import constrained_field
+from app.dataModel.worldScalarWire import (
+    pojo_wire_keys,
+    scalar_wire_from_mapping,
+    validate_world_row_pojo_columns,
+)
 
 # Sync with ClimatePoleMode / ClimatePolePreset / ClimateZone.TEMPERATE (no enum import — package cycle).
 DEFAULT_CLIMATE_ZONE = "temperate"
@@ -104,22 +108,14 @@ class WorldClimateScalars(BaseModel):
         return int(lo), int(hi)
 
 
-CLIMATE_SCALAR_WIRE_KEYS: frozenset[str] = frozenset(WorldClimateScalars.model_fields.keys())
+CLIMATE_SCALAR_WIRE_KEYS: frozenset[str] = pojo_wire_keys(WorldClimateScalars)
 
 
 def climate_scalar_wire_from_mapping(source: Any) -> dict[str, Any]:
     """Project ``worlds`` row or wire dict → wire slice for ``resolve_model``."""
-    if isinstance(source, dict):
-        return {key: source.get(key) for key in CLIMATE_SCALAR_WIRE_KEYS}
-    return {key: getattr(source, key, None) for key in CLIMATE_SCALAR_WIRE_KEYS}
+    return scalar_wire_from_mapping(CLIMATE_SCALAR_WIRE_KEYS, source)
 
 
 def validate_world_row_climate_columns(world_cls: type) -> None:
     """Startup assert: every POJO scalar field has a matching ``World`` column."""
-    row_fields = {field.name for field in dataclass_fields(world_cls)}
-    missing = CLIMATE_SCALAR_WIRE_KEYS - row_fields
-    if missing:
-        raise RuntimeError(
-            f"{world_cls.__name__} missing climate scalar columns "
-            f"{sorted(missing)} — sync with WorldClimateScalars",
-        )
+    validate_world_row_pojo_columns(world_cls, WorldClimateScalars, label="climate")

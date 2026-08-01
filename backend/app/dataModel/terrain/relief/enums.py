@@ -47,6 +47,24 @@ class ReliefPickMode(StrEnum):
     ROUND_ROBIN = "round_robin"
 
 
+class ReliefGradeObstaclePolicy(StrEnum):
+    """World ``relief_grade_obstacle_policy`` — tz_terrain_relief R36n.
+
+    ``free_gap`` = free cells outward until obstacle footprint (0 if next is obstacle).
+    """
+
+    TRUNCATE_SKIP = "truncate_skip"
+    ALLOW_FLUSH = "allow_flush"
+
+    def effective_outward_length(self, requested_length: int, free_gap: int) -> int:
+        """``L_eff``; ``< 1`` → caller skips grade (R36m)."""
+        requested = max(0, int(requested_length))
+        gap = max(0, int(free_gap))
+        if self is ReliefGradeObstaclePolicy.TRUNCATE_SKIP:
+            return max(0, min(requested, gap - 1))
+        return max(0, min(requested, gap))
+
+
 class MountainSideRecipeMode(StrEnum):
     """Detected side_recipe mode (R33) — runtime label, not wire.
 

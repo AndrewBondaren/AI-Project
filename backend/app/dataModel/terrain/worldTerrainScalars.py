@@ -1,19 +1,23 @@
 """Terrain generation scalars on `worlds` row (not registries).
 
-Wire projection: ``TERRAIN_SCALAR_WIRE_KEYS`` + ``terrain_scalar_wire_from_mapping``.
-Startup sync: ``validate_world_row_terrain_columns(World)`` — POJO fields ⊆ ``worlds`` columns.
+Wire projection / startup column sync: thin wrappers over
+``app.dataModel.worldScalarWire`` (**JV-SCALARS-1**).
 Consumers: ``terrain_scalars(world)`` via ``jsonValidation.worldRow``.
 """
 
 from __future__ import annotations
 
-from dataclasses import fields as dataclass_fields
 from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
+from app.dataModel.worldScalarWire import (
+    pojo_wire_keys,
+    scalar_wire_from_mapping,
+    validate_world_row_pojo_columns,
+)
 
 CHUNK_COLUMNS_MIN = 1
 SUBSURFACE_DEPTH_MIN = 0
@@ -71,22 +75,14 @@ class WorldTerrainScalars(BaseModel):
         return float(default) if default is not None else 0.65
 
 
-TERRAIN_SCALAR_WIRE_KEYS: frozenset[str] = frozenset(WorldTerrainScalars.model_fields.keys())
+TERRAIN_SCALAR_WIRE_KEYS: frozenset[str] = pojo_wire_keys(WorldTerrainScalars)
 
 
 def terrain_scalar_wire_from_mapping(source: Any) -> dict[str, Any]:
     """Project ``worlds`` row or wire dict → wire slice for ``resolve_model``."""
-    if isinstance(source, dict):
-        return {key: source.get(key) for key in TERRAIN_SCALAR_WIRE_KEYS}
-    return {key: getattr(source, key, None) for key in TERRAIN_SCALAR_WIRE_KEYS}
+    return scalar_wire_from_mapping(TERRAIN_SCALAR_WIRE_KEYS, source)
 
 
 def validate_world_row_terrain_columns(world_cls: type) -> None:
     """Startup assert: every POJO scalar field has a matching ``World`` column."""
-    row_fields = {field.name for field in dataclass_fields(world_cls)}
-    missing = TERRAIN_SCALAR_WIRE_KEYS - row_fields
-    if missing:
-        raise RuntimeError(
-            f"{world_cls.__name__} missing terrain scalar columns "
-            f"{sorted(missing)} — sync with WorldTerrainScalars",
-        )
+    validate_world_row_pojo_columns(world_cls, WorldTerrainScalars, label="terrain")

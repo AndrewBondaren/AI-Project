@@ -13,7 +13,11 @@ from app.application.worldData.generators.terrain.relief.mountainSideMaterialize
 )
 from app.application.worldData.generators.terrain.relief.slopeClassify import classify
 from app.application.worldData.generators.terrain.relief.templatePick import pick_template
+from app.application.worldData.generators.terrain.relief.obstacleClearance import (
+    outward_length_for_policy,
+)
 from app.dataModel.terrain.relief import (
+    ReliefGradeObstaclePolicy,
     ReliefSideKind,
     ReliefSideSpec,
     ReliefTemplate,
@@ -22,6 +26,9 @@ from app.dataModel.terrain.relief import (
     WorldReliefTemplateRegistry,
 )
 from app.dataModel.terrain.relief.enums import ReliefPickMode, ReliefSlopePolicy
+from app.dataModel.terrain.relief.worldReliefGradeObstacle import (
+    WorldReliefGradeObstacleScalars,
+)
 from app.dataModel.terrain.relief.worldReliefPickPolicy import ReliefContextPickPolicy
 
 
@@ -118,6 +125,18 @@ class ReliefPureTest(unittest.TestCase):
             declare_sides=declare,
         )
         self.assertEqual([s.kind for s in out], [ReliefSideKind.SLOPE, ReliefSideKind.SHEER])
+
+    def test_obstacle_policy_leff(self) -> None:
+        skip = ReliefGradeObstaclePolicy.TRUNCATE_SKIP
+        flush = ReliefGradeObstaclePolicy.ALLOW_FLUSH
+        self.assertEqual(outward_length_for_policy(skip, requested_length=3, free_gap=1), 0)
+        self.assertEqual(outward_length_for_policy(flush, requested_length=3, free_gap=1), 1)
+        self.assertEqual(outward_length_for_policy(skip, requested_length=3, free_gap=2), 1)
+        self.assertEqual(outward_length_for_policy(flush, requested_length=3, free_gap=2), 2)
+        self.assertEqual(
+            WorldReliefGradeObstacleScalars.canonical_defaults().relief_grade_obstacle_policy,
+            ReliefGradeObstaclePolicy.TRUNCATE_SKIP,
+        )
 
 
 if __name__ == "__main__":

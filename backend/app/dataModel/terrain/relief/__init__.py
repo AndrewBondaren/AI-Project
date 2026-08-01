@@ -4,6 +4,7 @@ from app.dataModel.terrain.relief.enums import (
     MountainSideRecipeMode,
     ReliefConditionTerrain,
     ReliefContext,
+    ReliefGradeObstaclePolicy,
     ReliefPickMode,
     ReliefSideKind,
     ReliefSlopePolicy,
@@ -22,6 +23,9 @@ from app.dataModel.terrain.relief.reliefTemplateRegistryEntry import (
 )
 from app.dataModel.terrain.relief.reliefTerrainCondition import ReliefTerrainCondition
 from app.dataModel.terrain.relief.specs import ReliefSideSpec
+from app.dataModel.terrain.relief.worldReliefGradeObstacle import (
+    WorldReliefGradeObstacleScalars,
+)
 from app.dataModel.terrain.relief.worldReliefPickPolicy import (
     ObjectReliefPickPolicy,
     ReliefContextPickPolicy,
@@ -42,6 +46,7 @@ __all__ = [
     "ReliefDeltaInterval",
     "ReliefDeltaSchedule",
     "ReliefGradeKnobs",
+    "ReliefGradeObstaclePolicy",
     "ReliefPickMode",
     "ReliefRoleCase",
     "ReliefSideKind",
@@ -50,6 +55,7 @@ __all__ = [
     "ReliefTemplate",
     "ReliefTemplateRegistryEntry",
     "ReliefTerrainCondition",
+    "WorldReliefGradeObstacleScalars",
     "WorldReliefPickPolicy",
     "WorldReliefTemplateRegistry",
 ]

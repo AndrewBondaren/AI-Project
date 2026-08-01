@@ -49,6 +49,11 @@ from app.dataModel.structure.building.worldBuildingTemplateRegistry import (
     WorldBuildingTemplateRegistry,
 )
 from app.dataModel.structure.room.worldRoomTypeRegistry import WorldRoomTypeRegistry
+from app.dataModel.terrain.relief.worldReliefGradeObstacle import (
+    RELIEF_OBSTACLE_SCALAR_WIRE_KEYS,
+    WorldReliefGradeObstacleScalars,
+    relief_obstacle_scalar_wire_from_mapping,
+)
 from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy
 from app.dataModel.terrain.relief.worldReliefTemplateRegistry import (
     WorldReliefTemplateRegistry,
@@ -157,6 +162,14 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
         wire_kind="multi_column",
         world_keys=tuple(TERRAIN_SCALAR_WIRE_KEYS),
         wire_from_mapping=terrain_scalar_wire_from_mapping,
+        facade=True,
+    ),
+    WorldSlice(
+        schema_id=WorldReliefGradeObstacleScalars.SCHEMA_ID,
+        pojo_cls=WorldReliefGradeObstacleScalars,
+        wire_kind="multi_column",
+        world_keys=tuple(RELIEF_OBSTACLE_SCALAR_WIRE_KEYS),
+        wire_from_mapping=relief_obstacle_scalar_wire_from_mapping,
         facade=True,
     ),
     _registry_slice(
@@ -277,9 +290,45 @@ WORLD_SLICE_BY_KEY: dict[str, WorldSlice] = {
     for key in world_slice.world_keys
 }
 
+WORLD_SLICE_BY_POJO: dict[type, WorldSlice] = {
+    world_slice.pojo_cls: world_slice for world_slice in WORLD_SLICES
+}
+
 
 def slice_for_world_key(key: str) -> WorldSlice | None:
     return WORLD_SLICE_BY_KEY.get(key)
+
+
+def slice_for_pojo(pojo_cls: type) -> WorldSlice | None:
+    return WORLD_SLICE_BY_POJO.get(pojo_cls)
+
+
+def resolve_multi_column_world(
+    world: Any,
+    pojo_cls: type,
+    *,
+    label: str | None = None,
+) -> Any:
+    """Runtime resolve for ``multi_column`` slices — SoT = ``WORLD_SLICES``.
+
+    Import/facade merge and generate use the same ``wire_from_mapping`` /
+    ``pojo_cls`` (JV-SCALARS-2). Avoid hand-rolled resolve in ``worldRow``.
+    """
+    world_slice = slice_for_pojo(pojo_cls)
+    if (
+        world_slice is None
+        or world_slice.wire_kind != "multi_column"
+        or world_slice.wire_from_mapping is None
+    ):
+        raise RuntimeError(
+            f"no multi_column WorldSlice registered for {pojo_cls.__name__}",
+        )
+    resolve_label = label or f"world multi_column {world_slice.schema_id}"
+    return resolve_model(
+        pojo_cls,
+        world_slice.wire_from_mapping(world),
+        label=resolve_label,
+    )
 
 
 def facade_world_slices() -> tuple[WorldSlice, ...]:

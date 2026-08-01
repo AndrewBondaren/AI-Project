@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS worlds (
     connection_type_registry    TEXT,
     relief_template_registry    TEXT,
     relief_pick_policy          TEXT,
+    relief_grade_obstacle_policy TEXT,  -- truncate_skip | allow_flush (R36n); NULL → POJO default
     race_template_registry      TEXT,
     perk_template_registry      TEXT,
 

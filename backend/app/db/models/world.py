@@ -85,6 +85,7 @@ class World:
     connection_type_registry:       list = json_col(default_factory=list)
     relief_template_registry:       list = json_col(default_factory=list)
     relief_pick_policy:             dict = json_col(default_factory=dict)
+    relief_grade_obstacle_policy:   str | None = None  # R36n; NULL → POJO default
     race_template_registry:         list = json_col(default_factory=list)
     perk_template_registry:         list = json_col(default_factory=list)
 

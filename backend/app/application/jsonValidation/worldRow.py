@@ -5,14 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from app.application.jsonValidation.resolve import resolve_model, resolve_root_dict, resolve_root_list
-from app.dataModel.climate.worldClimateScalars import (
-    WorldClimateScalars,
-    climate_scalar_wire_from_mapping,
-)
-from app.dataModel.terrain.worldTerrainScalars import (
-    WorldTerrainScalars,
-    terrain_scalar_wire_from_mapping,
-)
+from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
+from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars
 from app.dataModel import (
     WorldClimateZoneRegistry,
     WorldEconomyTierRegistry,
@@ -31,6 +25,7 @@ from app.dataModel.terrainMasks import WorldTerrainMasks
 from app.application.jsonValidation.worldSlices import (
     climate_zone_wire_from_raw,
     location_type_wire_from_raw,
+    resolve_multi_column_world,
 )
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
@@ -40,6 +35,8 @@ from app.dataModel.settlement.district.worldDistrictTemplateRegistry import Worl
 from app.dataModel.settlement.settlement.worldCitySizeRegistry import WorldCitySizeRegistry
 from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import WorldBarrierTemplateRegistry
 from app.dataModel.structure.building.worldBuildingTemplateRegistry import WorldBuildingTemplateRegistry
+from app.dataModel.terrain.relief.enums import ReliefGradeObstaclePolicy
+from app.dataModel.terrain.relief.worldReliefGradeObstacle import WorldReliefGradeObstacleScalars
 from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy
 from app.dataModel.terrain.relief.worldReliefTemplateRegistry import WorldReliefTemplateRegistry
 
@@ -168,17 +165,17 @@ def climate_zones(world: Any) -> WorldClimateZoneRegistry:
 
 
 def climate_scalars(world: Any) -> WorldClimateScalars:
-    return resolve_model(
+    return resolve_multi_column_world(
+        world,
         WorldClimateScalars,
-        climate_scalar_wire_from_mapping(world),
         label=f"world={_uid(world)} climate_scalars",
     )
 
 
 def terrain_scalars(world: Any) -> WorldTerrainScalars:
-    return resolve_model(
+    return resolve_multi_column_world(
+        world,
         WorldTerrainScalars,
-        terrain_scalar_wire_from_mapping(world),
         label=f"world={_uid(world)} terrain_scalars",
     )
 
@@ -371,3 +368,16 @@ def relief_pick_policy(world: Any) -> WorldReliefPickPolicy:
         raw,
         label="relief_pick_policy",
     )  # type: ignore[return-value]
+
+
+def relief_obstacle_scalars(world: Any) -> WorldReliefGradeObstacleScalars:
+    return resolve_multi_column_world(
+        world,
+        WorldReliefGradeObstacleScalars,
+        label=f"world={_uid(world)} relief_obstacle_scalars",
+    )
+
+
+def relief_grade_obstacle_policy(world: Any) -> ReliefGradeObstaclePolicy:
+    """World R36n setting; missing/NULL → ``truncate_skip``."""
+    return relief_obstacle_scalars(world).relief_grade_obstacle_policy
