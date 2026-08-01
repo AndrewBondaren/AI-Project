@@ -858,9 +858,9 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 
 | ID | Sev | Status | P | Суть | Связь ТЗ |
 |---|---|---|---|---|---|
-| **RELIEF-BAR-1** | medium | open | P2 | `structure_refs[]` на relief template (road_shoulder case/band) = stub: **`system_type`** → `barrier_template_registry`. Relief **emit refs only**; materialize fence/wall/lined canal cells **не** в `generators/terrain/relief`. Shoulder→barrier consumer + validate-on-import + optional later global barrier library — backlog. | [`tz_terrain_relief.md`](./tz_terrain_relief.md) R28 · [`tz_locations.md`](./tz_locations.md) § `barrier_template_registry` |
+| **RELIEF-BAR-1** | medium | open | P2 | **Только трек B (R28 knobs):** `structure_refs[]` stub → `barrier_template_registry`. Emit refs only; materialize **не** в relief. **R36m** = clearance truncate/skip у barrier cells, не canal. | [`tz_terrain_relief.md`](./tz_terrain_relief.md) R28+R36m · [`tz_locations.md`](./tz_locations.md) § `barrier_template_registry` |
 
-**Не путать:** `earthen_canal` (relief landform) ≠ barrier; world map pack ≠ template pack.
+**Не путать:** `earthen_canal` (relief knobs) ≠ lined/`structure_refs` (BAR-1); R36m/n obstacle policy ≠ canal; world map pack ≠ template pack.
 
 ---
 
@@ -920,9 +920,10 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 
 ### Приоритетный backlog (после fix wave)
 
-1. **RELIEF-BAR-1** — barrier materialize (отдельно)  
-2. Fixtures/scripts: `races`/`perks` → `*_templates` + registries  
-3. (optional) rename `MountainSideRecipeMode` wire away from A–D — breaking, только с миграцией тел
+1. **R36** ([`tz_terrain_relief.md`](./tz_terrain_relief.md) checklist C1–C12) — normalize POJO → materialize SLOPE ramp / SHEER L×h solid + angle; facing-only устарел  
+2. **RELIEF-BAR-1** — barrier materialize (отдельно)  
+3. Fixtures/scripts: `races`/`perks` → `*_templates` + registries  
+4. (optional) rename `MountainSideRecipeMode` wire away from A–D — breaking, только с миграцией тел
 
 ---
 
@@ -940,6 +941,7 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 
 | Дата | Изменение |
 |---|---|
+| 2026-07-31 | **R36** locked in TZ: SLOPE h/L/θ triangle; Geom-A\|B bake; backlog #1 = normalize POJO + materialize |
 | 2026-07-30 | **BUNDLE-2 resolved:** handlers facade; library race/perk/building/relief; schema `race_templates`/`perk_templates`; HY-S-2 closed |
 | 2026-07-30 | **BUNDLE-2 SoT:** [`tz_world_bundle.md`](./tz_world_bundle.md) WB-1…WB-10 + plan `bundle-2-section-handlers.md`; debt symptom sync |
 | 2026-07-30 | **RELIEF-T-12 / T-16…T-27** fix wave: width bake, ImportResult, bake_seed, preload WARN, typed edge policy, knobs SoT, FS split, RoadShoulderIntent; T-26 accepted (wire letters) |
