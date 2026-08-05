@@ -36,6 +36,7 @@ from app.dataModel.settlement.settlement.worldCitySizeRegistry import WorldCityS
 from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import WorldBarrierTemplateRegistry
 from app.dataModel.structure.building.worldBuildingTemplateRegistry import WorldBuildingTemplateRegistry
 from app.dataModel.terrain.relief.enums import ReliefGradeObstaclePolicy
+from app.dataModel.terrain.relief.worldCanalTemplateRegistry import WorldCanalTemplateRegistry
 from app.dataModel.terrain.relief.worldReliefGradeObstacle import WorldReliefGradeObstacleScalars
 from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy
 from app.dataModel.terrain.relief.worldReliefTemplateRegistry import WorldReliefTemplateRegistry
@@ -355,6 +356,17 @@ def relief_template_registry(world: Any) -> WorldReliefTemplateRegistry:
         getattr(world, "relief_template_registry", None),
         empty_factory=WorldReliefTemplateRegistry.canonical_defaults,
         label="relief_template_registry",
+        world_uid=_uid(world),
+    )
+
+
+def canal_templates(world: Any) -> WorldCanalTemplateRegistry:
+    """World ``canal_template_registry`` (R36q); empty → no entries."""
+    return resolve_root_list(
+        WorldCanalTemplateRegistry,
+        getattr(world, "canal_template_registry", None),
+        empty_factory=WorldCanalTemplateRegistry.canonical_defaults,
+        label="canal_template_registry",
         world_uid=_uid(world),
     )
 

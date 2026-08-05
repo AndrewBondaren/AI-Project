@@ -28,6 +28,8 @@ def instance_to_row(
         angle_deg=inst.angle_deg,
         facing=inst.facing,
         earthen_canal=bool(inst.earthen_canal),
+        structure_refs=list(inst.structure_refs),
+        structure_canal=inst.structure_canal,
         template_uid=inst.template_uid,
         edge_uid=inst.edge_uid,
         site_id=inst.site_id,

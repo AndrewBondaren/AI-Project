@@ -13,6 +13,8 @@ from app.dataModel.terrain.relief.reliefGradeKnobs import (
     WEIGHT_SUM_EPS,
     reject_removed_shoulder_width,
     resolved_slope_length_cells,
+    validate_canal_flat_refs,
+    validate_canal_xor,
     validate_geom_xor,
     weights_sum_ok,
 )
@@ -34,7 +36,8 @@ class ReliefTemplate(BaseModel):
     target_angle_deg: DefaultOnWire[float | None] = None
     slope_weight: DefaultOnWire[float | None] = None
     sheer_weight: DefaultOnWire[float | None] = None
-    earthen_canal: DefaultOnWire[bool] = False
+    earthen_canal: DefaultOnWire[bool | None] = None
+    structure_canal: DefaultOnWire[str | None] = None
     structure_refs: DefaultOnWire[list[str]] = Field(default_factory=list)
     version: DefaultOnWire[str] = "1.0"
 
@@ -70,6 +73,8 @@ class ReliefTemplate(BaseModel):
                     f"root slope_weight + sheer_weight must == 1 (±{WEIGHT_SUM_EPS})"
                 )
         validate_geom_xor(self.slope_length_cells, self.target_angle_deg)
+        validate_canal_xor(self.earthen_canal, self.structure_canal)
+        validate_canal_flat_refs(self.structure_canal, self.structure_refs)
         return self
 
     def outward_length_cells(self) -> int:

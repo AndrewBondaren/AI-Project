@@ -3,7 +3,7 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py`, `worldBundleService.py`, relief library/import services.  
-**Обновлено:** 2026-08-02 — **JV-SCALARS-1/2** resolved; T-28 partial; relief SOLID **RELIEF-T-28…T-41**; R36n POJO.
+**Обновлено:** 2026-08-06 — DRY canal single-writer (**T-55/T-57/T-58** resolved); residual **T-52…T-54, T-56, T-59**.
 
 **Связанные документы:**
 
@@ -11,7 +11,7 @@
 |---|---|
 | [tz_assembler_hierarchy.md](./tz_assembler_hierarchy.md) | Целевая архитектура assembler stack |
 | [tz_city_generation.md](./tz_city_generation.md) | Продуктовое ТЗ города |
-| [tz_terrain_relief.md](./tz_terrain_relief.md) | Relief grade + templates; R36/R36n; **RELIEF-BAR-1**; SOLID smells → **RELIEF-T-28…** |
+| [tz_terrain_relief.md](./tz_terrain_relief.md) | Relief grade + templates; R36/R36n/p/q; **RELIEF-BAR-1**; SOLID → **RELIEF-T-28…**; canal → **RELIEF-T-42…T-59** |
 | [tz_locations.md](./tz_locations.md) | `barrier_template_registry`; perimeter barriers |
 | [tz_terrain_hydrology.md](./tz_terrain_hydrology.md) | Гидрология: моря, озёра, реки (target) |
 | [tz_climate.md](./tz_climate.md) | Продуктовое ТЗ climate (pole/local tiers) |
@@ -858,16 +858,16 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 
 | ID | Sev | Status | P | Суть | Связь ТЗ |
 |---|---|---|---|---|---|
-| **RELIEF-BAR-1** | medium | open | P2 | **Только трек B (R28 knobs):** `structure_refs[]` stub → `barrier_template_registry`. Emit refs only; materialize **не** в relief. Clearance у barrier cells = **R36m/n** (`relief_grade_obstacle_policy`), не canal. | [`tz_terrain_relief.md`](./tz_terrain_relief.md) R28+R36m/n · [`tz_locations.md`](./tz_locations.md) § `barrier_template_registry` |
+| **RELIEF-BAR-1** | medium | open | P2 | **Трек B / structure canal:** emit `structure_refs` (knobs legacy **или** из `canal_template_registry.structure` via `structure_canal` / `canal_ref`). Materialize cells **не** в relief. Clearance у barrier = R36m/n. | [`tz_terrain_relief.md`](./tz_terrain_relief.md) R28+R36p/q · [`tz_locations.md`](./tz_locations.md) § barrier registry |
 
-**Не путать:** `earthen_canal` (relief knobs) ≠ lined/`structure_refs` (BAR-1); R36m/n obstacle policy ≠ canal; world map pack ≠ template pack.
+**Не путать:** `earthen_canal` ≠ lined/`structure_refs`; R36n clearance ≠ R36p canal policy; `canal_template_registry` ≠ `barrier_template_registry`.
 
 ---
 
 ## Relief templates — post-impl architecture smells (RELIEF-T)
 
 **Scope:** `dataModel/terrain/relief`, `generators/terrain/relief`, mountains stamp, library/import, bundle R35, bake preload / road_shoulder, JV relief accessors.  
-**Refs:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) R8/R20–R36n · audits 2026-07-30 (×2) · **SOLID+dataModel 2026-08-02** · **BUNDLE-2** · **RELIEF-BAR-1**.  
+**Refs:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) R8/R20–R36q · audits 2026-07-30 (×2) · **SOLID+dataModel 2026-08-02** · **canal R36p/q audit 2026-08-05** · **BUNDLE-2** · **RELIEF-BAR-1**.  
 **Plan фиксов (round 1–2):** [`.cursor/plans/relief-tech-debt-fixes.md`](../.cursor/plans/relief-tech-debt-fixes.md).  
 **Не в scope здесь:** UI R30; climb gameplay; DAG nodes; full barrier materialize (→ RELIEF-BAR-1); footprint scan для R36n в bake (helper `obstacleClearance` есть — wire gap later).
 
@@ -935,6 +935,37 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 **Связь R36n (не smell):** `WorldReliefGradeObstacleScalars` + `ReliefGradeObstaclePolicy` + `obstacleClearance` — shipped; bake footprint→`free_gap` ещё нет (отдельный impl после R36 materialize).
 
+### Registry — round 4 (R36p/q canal impl audit, 2026-08-05)
+
+**Scope:** `canal_template_registry`, knobs XOR `earthen_canal`\|`structure_canal`, `canal_obstacle_policy`, bake clearance-path canal.  
+**Wire/product lock:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) R28/R36p/q / C20–C21 — **не** менять без мастера.  
+**Impl:** `seedCanalResolve` / `canalObstacleResolve` / `canalAttachments` / `outlineCanalCollect`; bake thin call.  
+**Fix wave:** **T-42…T-51** resolved. **Post-fix smell (2026-08-06):** residual → **T-52…T-59** (+ pre-existing **T-30** / **T-34**).
+
+| ID | Sev | Status | P | Категория | Суть |
+|---|---|---|---|---|---|
+| **RELIEF-T-42** | **high** | **resolved** | P1 | слои / SRP | Canal resolve → `seedCanalResolve.resolve_seed_canal_attachments`; bake thin call. Остаток multi-concern bake → **T-30** / **T-52**. |
+| **RELIEF-T-43** | **high** | **resolved** | P1 | single-writer | Per-seed cut → Grade; Intent = `aggregate_canal_attachments` over stamped seeds (no `max_L` re-resolve). |
+| **RELIEF-T-44** | medium | **resolved** | P2 | dataModel | `earthen_canal: bool\|None = None` (omit); reject flat `structure_refs` + `structure_canal` (R28). Flat refs alone = BAR-1 OK. |
+| **RELIEF-T-45** | medium | **resolved** | P2 | dataModel | Map `ReliefConditionTerrain`(+`road`) → `CanalObstacleEntity` в `canalObstacleResolve._TERRAIN_TO_CANAL_ENTITY`. |
+| **RELIEF-T-46** | medium | **resolved** | P2 | dataModel | Conflicting `canal_ref` reject ✅. pick+canal в одном blob — **accepted** wire TZ. |
+| **RELIEF-T-47** | medium | **resolved** | P2 | DRY | `resolve_knobs_canal` → `CanalAttachments`; collect/cache; Intent aggregate (no second resolve). |
+| **RELIEF-T-48** | medium | **resolved** | P2 | хардкод / R21 | Константы why/fallback в `canalAttachments` (`WHY_*` / `FALLBACK_*` / `EVENT_*`). Canal-only; bake events → **T-56**. |
+| **RELIEF-T-49** | low | **resolved** | P3 | SRP | Fit/не-fit в одном `resolve_seed_canal_attachments`; knobs enrich = `resolve_knobs_canal_attachments`. Alias leftover → **T-58**. |
+| **RELIEF-T-50** | **high** | **resolved** | P1 | dataModel / persist | Grade + SQL: `structure_refs` + `structure_canal` (+ R36j); persist/factory stamp same cut as Intent. **DB recreate.** Intent parity → **T-53**. |
+| **RELIEF-T-51** | medium | **resolved** | P2 | SRP / UX | `roadShoulderGrade` = raw knobs only; single resolve in bake `resolve_seed_canal_attachments`. |
+| **RELIEF-T-52** | medium | open | P2 | god-object / SRP | `roadShoulderApply` ~522 LOC + `_materialize_segment` = clearance∥canal∥anchor∥volume∥stamp∥Grade∥aggregate. Target: `_materialize_seed` + sample/stamp/intent modules. = **T-30**. |
+| **RELIEF-T-53** | medium | open | P2 | dataModel | `ReliefGradeInstance.structure_canal` есть; `RoadShoulderIntent` — нет. Три формы: Decision (`bool\|None` omit), `CanalAttachments` (resolved), Intent (bool+refs). Target: Intent.`structure_canal` **или** TZ lock «Intent = BAR-1 refs only». |
+| **RELIEF-T-54** | medium | open | P2 | dataModel / values | Skipped Intent без bake: `_to_intent` → `bool(d.earthen_canal)` coerce omit→False до resolve. Target: null/omit canal на skipped; не silent False. |
+| **RELIEF-T-55** | medium | **resolved** | P2 | хардкод | `EMPTY_EARTHEN_CUT` рядом с `EMPTY_CANAL` (policy omit ref). |
+| **RELIEF-T-56** | medium | open | P2 | хардкод | Bake/grade event strings вне canal tokens: `"road_shoulder_skip"`, `"clearance_skip"`, `"no_edge_road_anchor"`, `"schedule_hole"`, `"r21_fallback"` (gradePass). Target: shared relief event module. |
+| **RELIEF-T-57** | medium | **resolved** | P2 | DRY | Один `_resolve_canal_ref` + `_r21_no_canal`; lookup = `attachments_from_registry_ref` (None→R21). Knobs и policy — тот же путь. |
+| **RELIEF-T-58** | low | **resolved** | P3 | DRY / API | Alias `resolve_knobs_canal_attachments` удалён; `CanalAttachments.grade_fields()` / `intent_fields()` в bake. Persist row mapping — отдельный layer OK. |
+| **RELIEF-T-59** | low | open | P3 | dataModel / mapper | `json_col` empty `structure_refs` → NULL → deserialize `{}` (list contract). Target: always-dump list или hydrate `[]`. |
+
+**Связанный pre-existing (не новый, но в том же ревью):** **RELIEF-T-34** — `ReliefRoleCase` Mode A дублирует knobs-поля.  
+**Не путать с product lock:** R36p «policy только если не вмещается» + knobs XOR — **correct**; долг = слои/POJO/DTO parity, не отмена контракта.
+
 ### World multi_column scalars — DRY (JV-SCALARS)
 
 Клон механики (не «разные consumer одних полей»): climate / terrain / relief-obstacle — **разные** колонки `worlds`, одинаковый каркас `WIRE_KEYS` + `wire_from_mapping` + `validate_world_row_*`.
@@ -955,6 +986,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 - Shoulder width bake; bake_seed; typed edge policy; FS import split.
 - **R36n scalars:** `WorldReliefGradeObstacleScalars`; `obstacleClearance` thin; grade path без `dict.get` knobs.
 - **JV-SCALARS-1/2:** `worldScalarWire` + `resolve_multi_column_world` (import slice = runtime SoT).
+- **R36p/q canal:** pure resolve; Grade+SQL refs; omit earthen; single bake resolve; Intent aggregate; **one** `_resolve_canal_ref`/`_r21_no_canal` (T-57); `grade_fields`/`intent_fields`. Residual: **T-52…T-54, T-56, T-59**.
 - Generators package split (pick / normalize / classify / kindRoll / gradePass / expand) — нет 300+ LOC domain blob.
 
 ### Приоритетный backlog (после fix wave)
@@ -962,12 +994,14 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 1. **R36** ([`tz_terrain_relief.md`](./tz_terrain_relief.md) C1–C18) — materialize SLOPE/SHEER + Grade entity; facing-only устарел; obstacle policy читает world setting (**R36n**)  
 2. **RELIEF-T-28** (partial) — registry/json_blob accessors → slice-driven / per-domain (P1); multi_column ✅ JV-SCALARS-2  
 
-3. **RELIEF-T-30…T-36** — bake SRP + knobs DRY (P2)  
-4. **RELIEF-T-37…T-39** — wire keys / value fallbacks vs dataModel (P2)  
-5. **RELIEF-BAR-1** — barrier materialize (отдельно)  
-6. Fixtures/scripts: `races`/`perks` → `*_templates` + registries  
-7. (optional) rename `MountainSideRecipeMode` wire away from A–D — breaking, только с миграцией тел  
-8. **RELIEF-T-40…T-41** — polish (P3)
+3. **RELIEF-T-52 / T-30** — bake SRP split (`_materialize_seed` + modules)  
+4. **RELIEF-T-53 / T-54 / T-56** — Intent canal parity, skipped coerce, bake event tokens (P2)  
+5. **RELIEF-T-34 / T-35…T-36** — RoleCase knobs compose + knobs DRY (P2)  
+6. **RELIEF-T-37…T-39**, **T-59** — wire/mapper polish (P2–P3)  
+7. **RELIEF-BAR-1** — barrier materialize (отдельно)  
+8. Fixtures/scripts: `races`/`perks` → `*_templates` + registries  
+9. (optional) rename `MountainSideRecipeMode` wire away from A–D — breaking, только с миграцией тел  
+10. **RELIEF-T-40…T-41** — polish (P3)
 
 ---
 
@@ -985,6 +1019,9 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-06 | **DRY canal single-writer:** T-55/T-57/T-58 resolved (`_resolve_canal_ref`, `EMPTY_EARTHEN_CUT`, `grade_fields`/`intent_fields`) |
+| 2026-08-06 | **Post-fix smell → T-53…T-59:** Intent≠Grade `structure_canal`; skipped coerce; earthen literal; bake event strings; R21 DRY; alias/mapper. T-52 → medium (=T-30). Review canvas `canal-debt-fix-smell-review` |
+| 2026-08-05 | **R36p/q fix wave T-43…T-51 resolved;** T-52 open |
 | 2026-08-02 | **JV-SCALARS-2 resolved:** `resolve_multi_column_world`; T-28 partial (multi_column) |
 | 2026-08-02 | **JV-SCALARS-1 resolved:** `worldScalarWire` helper; climate/terrain/relief-obstacle thin wrappers |
 | 2026-08-02 | **RELIEF-T-28…T-41:** SOLID+dataModel audit (god/SRP/DRY/wire keys/values); R36n obstacle POJO = clean win; backlog sync |

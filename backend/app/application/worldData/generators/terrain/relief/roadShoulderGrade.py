@@ -1,12 +1,18 @@
 """road_shoulder grade sites — segmentize + classify (R20–R28 data out).
 
-Pure consumer: emits RibbonGradeDecision; barrier materialize is RELIEF-BAR-1 (out of scope).
+Pure consumer: emits RibbonGradeDecision with raw canal knobs.
+Registry/policy resolve happens once in bake (RELIEF-T-51).
+Barrier materialize is RELIEF-BAR-1 (out of scope).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.application.jsonValidation.worldRow import (
+    relief_pick_policy,
+    relief_template_registry,
+)
 from app.application.worldData.generators.terrain.relief.gradePass import (
     RibbonGradeDecision,
     grade_from_template,
@@ -14,7 +20,6 @@ from app.application.worldData.generators.terrain.relief.gradePass import (
 from app.application.worldData.generators.terrain.relief.reliefLog import relief_info
 from app.application.worldData.generators.terrain.relief.templatePick import pick_template
 from app.application.worldData.generators.terrain.relief.terrainMap import map_system_terrain
-from app.application.jsonValidation.worldRow import relief_pick_policy, relief_template_registry
 from app.dataModel.terrain.relief.enums import ReliefContext
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.terrain.relief.worldReliefPickPolicy import ObjectReliefPickPolicy
@@ -159,6 +164,7 @@ def grade_road_shoulder_segments(
             skipped=decision.skipped,
             kind=None if decision.kind is None else decision.kind.value,
             earthen_canal=decision.earthen_canal,
+            structure_canal=decision.structure_canal,
             structure_refs=list(decision.structure_refs),
             width=decision.requested_length,
         )

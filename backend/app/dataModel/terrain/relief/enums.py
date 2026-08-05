@@ -65,6 +65,20 @@ class ReliefGradeObstaclePolicy(StrEnum):
         return max(0, min(requested, gap))
 
 
+class CanalObstacleEntity(StrEnum):
+    """``canal_obstacle_policy.entities`` — tz_terrain_relief R36p.
+
+    ``road`` ≠ ReliefContext ``road_shoulder``; ``plains`` ≠ ``open_land``.
+    """
+
+    ROAD = "road"
+    MOUNTAIN = "mountain"
+    FOREST = "forest"
+    PLAINS = "plains"
+    SHORE = "shore"
+    ALL = "all"
+
+
 class MountainSideRecipeMode(StrEnum):
     """Detected side_recipe mode (R33) — runtime label, not wire.
 

@@ -68,7 +68,7 @@ class RoadShoulderGradeTest(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertFalse(results[0].decision.skipped)
         self.assertEqual(results[0].decision.kind.value, "sheer")
-        self.assertFalse(results[0].decision.earthen_canal)
+        self.assertIsNone(results[0].decision.earthen_canal)
 
     def test_earthen_canal_and_structure_refs(self) -> None:
         tpl = ReliefTemplate.model_validate({

@@ -46,6 +46,34 @@ def validate_geom_xor(
             raise ValueError("target_angle_deg must be in (0, 90) for SLOPE geom")
 
 
+def validate_canal_xor(
+    earthen_canal: bool | None,
+    structure_canal: str | None,
+) -> None:
+    """``earthen_canal: true`` XOR ``structure_canal`` ref (R28/R36q).
+
+    Omit / ``False`` = no earthen; only explicit ``True`` conflicts with ref.
+    """
+    ref = (structure_canal or "").strip() or None
+    if earthen_canal is True and ref is not None:
+        raise ValueError(
+            "earthen_canal XOR structure_canal — both set (R28/R36q)"
+        )
+
+
+def validate_canal_flat_refs(
+    structure_canal: str | None,
+    structure_refs: list[str] | tuple[str, ...] | None,
+) -> None:
+    """Flat ``structure_refs`` with ``structure_canal`` — not canonical (R28)."""
+    ref = (structure_canal or "").strip() or None
+    if ref and structure_refs:
+        raise ValueError(
+            "structure_refs with structure_canal — materials come from "
+            "canal_template_registry (R28)"
+        )
+
+
 def resolved_slope_length_cells(
     slope_length_cells: int | None,
     *,
@@ -71,7 +99,8 @@ class ReliefGradeKnobs(BaseModel):
     # R36b Geom XOR — neither → default L at resolve time
     slope_length_cells: DefaultOnWire[int | None] = None
     target_angle_deg: DefaultOnWire[float | None] = None
-    earthen_canal: DefaultOnWire[bool] = False
+    earthen_canal: DefaultOnWire[bool | None] = None
+    structure_canal: DefaultOnWire[str | None] = None
     structure_refs: DefaultOnWire[list[str]] = Field(default_factory=list)
 
     @model_validator(mode="before")
@@ -87,6 +116,8 @@ class ReliefGradeKnobs(BaseModel):
                 f"got {self.slope_weight}+{self.sheer_weight}"
             )
         validate_geom_xor(self.slope_length_cells, self.target_angle_deg)
+        validate_canal_xor(self.earthen_canal, self.structure_canal)
+        validate_canal_flat_refs(self.structure_canal, self.structure_refs)
         return self
 
     def outward_length_cells(self) -> int:

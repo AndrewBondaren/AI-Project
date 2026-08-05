@@ -47,7 +47,9 @@ class ReliefGradeInstanceTest(unittest.TestCase):
             plan=plan,
             cell_refs=((1, 0), (2, 0)),
             facing="west",
-            earthen_canal=False,
+            earthen_canal=True,
+            structure_refs=("lined_canal_stone",),
+            structure_canal="lined_cut",
             template_uid="tpl",
             edge_uid="edge1",
         )
@@ -57,9 +59,14 @@ class ReliefGradeInstanceTest(unittest.TestCase):
         self.assertAlmostEqual(inst.angle_deg or 0.0, 45.0)
         self.assertEqual(inst.facing, "west")
         self.assertEqual(len(inst.cell_refs), 2)
+        self.assertEqual(list(inst.structure_refs), ["lined_canal_stone"])
+        self.assertEqual(inst.structure_canal, "lined_cut")
         row = instance_to_row(inst, created_at="2026-01-01T00:00:00Z")
         self.assertEqual(row.kind, "slope")
         self.assertEqual(row.cell_refs, [[1, 0], [2, 0]])
+        self.assertEqual(row.structure_refs, ["lined_canal_stone"])
+        self.assertEqual(row.structure_canal, "lined_cut")
+        self.assertTrue(row.earthen_canal)
 
     def test_sheer_rejects_angle(self) -> None:
         with self.assertRaises(ValidationError):

@@ -22,13 +22,17 @@ from app.dataModel.terrain.relief.reliefGradeKnobs import ReliefGradeKnobs
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 
 
-def _attachment_defaults() -> tuple[bool, tuple[str, ...]]:
-    """``earthen_canal`` / ``structure_refs`` from knobs POJO defaults (RELIEF-T-41)."""
+def _attachment_defaults() -> tuple[bool | None, str | None, tuple[str, ...]]:
+    """Canal knobs defaults from POJO (RELIEF-T-41 / R28). Raw omit until bake."""
     knobs = ReliefGradeKnobs.model_validate({
         "slope_weight": 1.0,
         "sheer_weight": 0.0,
     })
-    return bool(knobs.earthen_canal), tuple(knobs.structure_refs)
+    return (
+        knobs.earthen_canal,
+        knobs.structure_canal,
+        tuple(knobs.structure_refs),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +40,7 @@ class RibbonGradeDecision:
     """Ribbon/edge grade site (road_shoulder / open_land / shore) — RELIEF-T-1.
 
     ``requested_length`` / ``geom`` are pre-clearance; bake shortens via §9.
+    Canal knobs are raw (omit/`structure_canal` ref); resolve once at bake (T-51).
     """
 
     template_uid: str
@@ -44,10 +49,11 @@ class RibbonGradeDecision:
     requested_length: int
     h: int
     geom: ResolvedGeom | None
-    earthen_canal: bool
+    earthen_canal: bool | None
     structure_refs: tuple[str, ...]
     reason: str
     skipped: bool = False
+    structure_canal: str | None = None
 
 
 def grade_from_template(
@@ -61,7 +67,7 @@ def grade_from_template(
 ) -> RibbonGradeDecision:
     """Classify + kindRoll + geom for one ribbon site."""
     h = abs(int(dz))
-    earthen_default, refs_default = _attachment_defaults()
+    earthen_default, canal_default, refs_default = _attachment_defaults()
     root_length = template.outward_length_cells()
 
     cond = template.condition_for(terrain_key)
@@ -84,6 +90,7 @@ def grade_from_template(
             structure_refs=refs_default,
             reason="no_condition",
             skipped=True,
+            structure_canal=canal_default,
         )
 
     schedule = normalize_condition(cond)
@@ -113,6 +120,7 @@ def grade_from_template(
             structure_refs=refs_default,
             reason="schedule_hole_r21_slope",
             skipped=False,
+            structure_canal=canal_default,
         )
 
     if hit.policy == ReliefSlopePolicy.SLOPE_NONE:
@@ -134,6 +142,7 @@ def grade_from_template(
             structure_refs=refs_default,
             reason=hit.reason,
             skipped=True,
+            structure_canal=canal_default,
         )
 
     assert hit.knobs is not None
@@ -154,6 +163,7 @@ def grade_from_template(
         requested_length=geom.L,
         angle_deg=geom.angle_deg,
         earthen_canal=hit.knobs.earthen_canal,
+        structure_canal=hit.knobs.structure_canal,
         reason=hit.reason,
         site_id=site_id,
     )
@@ -168,4 +178,5 @@ def grade_from_template(
         structure_refs=tuple(hit.knobs.structure_refs),
         reason=hit.reason,
         skipped=False,
+        structure_canal=hit.knobs.structure_canal,
     )

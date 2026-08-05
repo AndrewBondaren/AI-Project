@@ -13,6 +13,8 @@ from app.dataModel.terrain.relief.reliefGradeKnobs import (
     WEIGHT_SUM_EPS,
     reject_removed_shoulder_width,
     resolved_slope_length_cells,
+    validate_canal_flat_refs,
+    validate_canal_xor,
     validate_geom_xor,
     weights_sum_ok,
 )
@@ -33,7 +35,8 @@ class ReliefRoleCase(BaseModel):
     sheer_weight: DefaultOnWire[float | None] = None
     slope_length_cells: DefaultOnWire[int | None] = None
     target_angle_deg: DefaultOnWire[float | None] = None
-    earthen_canal: DefaultOnWire[bool] = False
+    earthen_canal: DefaultOnWire[bool | None] = None
+    structure_canal: DefaultOnWire[str | None] = None
     structure_refs: DefaultOnWire[list[str]] = Field(default_factory=list)
     # Mode B
     bands: DefaultOnWire[list[ReliefDeltaBand] | None] = None
@@ -68,6 +71,8 @@ class ReliefRoleCase(BaseModel):
             if self.slope_weight < 0 or self.sheer_weight < 0:
                 raise ValueError("weights must be >= 0")
             validate_geom_xor(self.slope_length_cells, self.target_angle_deg)
+            validate_canal_xor(self.earthen_canal, self.structure_canal)
+            validate_canal_flat_refs(self.structure_canal, self.structure_refs)
         else:
             assert self.bands is not None
             if self.policy == ReliefSlopePolicy.SLOPE_NONE:
@@ -76,6 +81,8 @@ class ReliefRoleCase(BaseModel):
             elif len(self.bands) < 1:
                 raise ValueError(f"{self.policy.value} Mode B requires non-empty bands")
             _reject_band_overlap(self.bands)
+            validate_canal_xor(self.earthen_canal, self.structure_canal)
+            validate_canal_flat_refs(self.structure_canal, self.structure_refs)
         return self
 
     @property

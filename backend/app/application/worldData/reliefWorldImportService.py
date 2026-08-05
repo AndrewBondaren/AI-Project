@@ -20,8 +20,13 @@ from app.dataModel.terrain.relief.reliefTemplateRegistryEntry import (
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.application.jsonValidation.worldRow import (
     barrier_templates,
+    canal_templates,
     relief_template_registry,
     terrain,
+)
+from app.application.worldData.generators.terrain.relief.outlineCanalCollect import (
+    collect_outline_structure_canal_refs,
+    collect_outline_structure_refs,
 )
 
 
@@ -50,6 +55,7 @@ class ReliefWorldImportService:
         for raw in outlines:
             outline = ReliefTemplate.model_validate(raw)
             self._validate_structure_refs(outline, barrier_keys)
+            self._validate_structure_canal(outline, world)
             row = await self._library.upsert_outline(outline, source_file="bundle")
             imported_uids.append(row.template_uid)
             await self._ensure_registry_pointer(world_uid, row.template_uid, outline)
@@ -69,6 +75,7 @@ class ReliefWorldImportService:
             e.system_type for e in barrier_templates(world).root
         } if barrier_templates(world).root else set()
         self._validate_structure_refs(outline, barrier_keys)
+        self._validate_structure_canal(outline, world)
         await self._ensure_registry_pointer(world_uid, template_uid, outline)
         await self._sync_terrain_from_outline(world_uid, outline, template_uid)
         return {"imported": 1, "uids": [template_uid]}
@@ -78,19 +85,55 @@ class ReliefWorldImportService:
         outline: ReliefTemplate,
         barrier_keys: set[str],
     ) -> None:
-        if not barrier_keys:
+        refs = collect_outline_structure_refs(outline)
+        if not refs:
             return
-        refs: set[str] = set(outline.structure_refs)
-        for cond in outline.conditions:
-            for case in cond.cases:
-                refs.update(case.structure_refs)
-                if case.bands:
-                    for band in case.bands:
-                        refs.update(band.structure_refs)
+        if not barrier_keys:
+            raise ReliefValidationError(
+                "structure_refs present but barrier_template_registry is empty: "
+                f"{sorted(refs)}",
+            )
         unknown = sorted(refs - barrier_keys)
         if unknown:
             raise ReliefValidationError(
                 f"structure_refs unknown in barrier_template_registry: {unknown}",
+            )
+
+    def _validate_structure_canal(
+        self,
+        outline: ReliefTemplate,
+        world: object,
+    ) -> None:
+        """``structure_canal`` ∈ ``canal_template_registry``; nested barrier refs."""
+        canal_refs = collect_outline_structure_canal_refs(outline)
+        if not canal_refs:
+            return
+        reg = canal_templates(world)
+        known = {e.system_type for e in reg.root}
+        unknown = sorted(canal_refs - known)
+        if unknown:
+            raise ReliefValidationError(
+                f"structure_canal unknown in canal_template_registry: {unknown}",
+            )
+        barrier_keys = {e.system_type for e in barrier_templates(world).root}
+        nested: set[str] = set()
+        for ref in canal_refs:
+            entry = reg.entry_for(ref)
+            if entry is None or entry.structure is None:
+                continue
+            nested.update(entry.structure.structure_refs)
+        if not nested:
+            return
+        if not barrier_keys:
+            raise ReliefValidationError(
+                "canal structure_refs present but barrier_template_registry "
+                f"is empty: {sorted(nested)}",
+            )
+        bad = sorted(nested - barrier_keys)
+        if bad:
+            raise ReliefValidationError(
+                "canal_template_registry.structure.structure_refs unknown "
+                f"in barrier_template_registry: {bad}",
             )
 
     async def _ensure_registry_pointer(

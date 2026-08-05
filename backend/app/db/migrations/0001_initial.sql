@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS worlds (
     barrier_template_registry   TEXT,
     connection_type_registry    TEXT,
     relief_template_registry    TEXT,
+    canal_template_registry     TEXT,  -- R36q canal bodies (system_type + earthen/structure)
     relief_pick_policy          TEXT,
     relief_grade_obstacle_policy TEXT,  -- truncate_skip | allow_flush (R36n); NULL → POJO default
     race_template_registry      TEXT,
@@ -1220,6 +1221,8 @@ CREATE TABLE IF NOT EXISTS relief_grade_instances (
     angle_deg        REAL,                   -- NULL for SHEER
     facing           TEXT,                   -- NULL / none for SHEER
     earthen_canal    INTEGER NOT NULL DEFAULT 0,
+    structure_refs   TEXT,                   -- JSON ["barrier_ref", ...] (BAR-1)
+    structure_canal  TEXT,                   -- canal_template_registry system_type
     template_uid     TEXT,
     edge_uid         TEXT,
     site_id          TEXT,

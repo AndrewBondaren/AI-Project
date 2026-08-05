@@ -20,7 +20,8 @@ class ReliefDeltaInterval:
     sheer_weight: float
     slope_length_cells: int | None = None
     target_angle_deg: float | None = None
-    earthen_canal: bool = False
+    earthen_canal: bool | None = None
+    structure_canal: str | None = None
     structure_refs: tuple[str, ...] = ()
 
     def outward_length_cells(self) -> int:

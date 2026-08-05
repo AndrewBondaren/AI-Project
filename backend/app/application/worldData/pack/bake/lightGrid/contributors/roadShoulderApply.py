@@ -1,7 +1,8 @@
 """Apply road_shoulder grade after road paint (R20–R28 / R36 §8b–§9 / §8c).
 
 Phases per seed: clearance → edgeRoadAnchor → volume plan → stamp → Grade.
-``structure_refs`` / ``earthen_canal`` stay on intents (RELIEF-BAR-1).
+Canal resolved once per seed; Intent = aggregate of stamped seeds (T-43).
+Grade + Intent carry ``earthen_canal`` / ``structure_refs`` (BAR-1 consumer).
 Dilate sample = Q6 (open).
 """
 
@@ -9,10 +10,17 @@ from __future__ import annotations
 
 import logging
 
+from app.application.jsonValidation.worldRow import canal_templates, relief_pick_policy
 from app.application.worldData.generators.terrain.relief.bakeSeed import bake_seed
 from app.application.worldData.generators.terrain.relief.edgeRoadAnchor import (
     EdgeRoadAnchor,
     edge_road_abutment,
+)
+from app.application.worldData.generators.terrain.relief.seedCanalResolve import (
+    EMPTY_CANAL,
+    CanalAttachments,
+    aggregate_canal_attachments,
+    resolve_seed_canal_attachments,
 )
 from app.application.worldData.generators.terrain.relief.facing import (
     facing_wire,
@@ -83,6 +91,9 @@ def apply_road_shoulder_grades(
         return []
 
     segments = segmentize_by_terrain(edge_uid=edge_uid, cells=samples)
+    # T-47: resolve world canal policy/registry once per edge apply
+    canal_reg = canal_templates(ctx.world)
+    canal_rules = relief_pick_policy(ctx.world).canal_obstacle_policy
     results = grade_road_shoulder_segments(
         world=ctx.world,
         world_seed=bake_seed(ctx.world),
@@ -96,12 +107,14 @@ def apply_road_shoulder_grades(
         if result.decision.skipped or result.decision.kind is None:
             intents.append(_to_intent(result, result.segment.cell_coords))
             continue
-        stamped, width_used = _materialize_segment(
+        stamped, width_used, canal_att = _materialize_segment(
             compose,
             ctx,
             result,
             road_cells=road_cells,
             tile_set=tile_set,
+            canal_registry=canal_reg,
+            canal_rules=canal_rules,
         )
         if not stamped:
             intents.append(
@@ -111,10 +124,13 @@ def apply_road_shoulder_grades(
                     skipped=True,
                     reason="clearance_skip",
                     width=0,
+                    canal=canal_att,
                 )
             )
             continue
-        intents.append(_to_intent(result, stamped, width=width_used))
+        intents.append(
+            _to_intent(result, stamped, width=width_used, canal=canal_att),
+        )
     ctx.road_shoulder_intents.extend(intents)
     logger.debug(
         "relief | road_shoulder edge=%s segments=%d applied=%d",
@@ -132,9 +148,17 @@ def _to_intent(
     skipped: bool | None = None,
     reason: str | None = None,
     width: int | None = None,
+    canal: CanalAttachments | None = None,
 ) -> RoadShoulderIntent:
     d = result.decision
     kind = d.kind.value if d.kind is not None else None
+    if canal is None:
+        canal_fields = {
+            "earthen_canal": bool(d.earthen_canal),
+            "structure_refs": d.structure_refs,
+        }
+    else:
+        canal_fields = canal.intent_fields()
     return RoadShoulderIntent(
         edge_uid=result.segment.edge_uid,
         site_id=result.segment.site_id,
@@ -142,10 +166,9 @@ def _to_intent(
         kind=kind,
         width=d.requested_length if width is None else int(width),
         cell_coords=cell_coords,
-        earthen_canal=d.earthen_canal,
-        structure_refs=d.structure_refs,
         skipped=d.skipped if skipped is None else skipped,
         reason=d.reason if reason is None else reason,
+        **canal_fields,
     )
 
 
@@ -156,17 +179,21 @@ def _materialize_segment(
     *,
     road_cells: set[tuple[int, int]],
     tile_set: set[tuple[int, int]],
-) -> tuple[tuple[tuple[int, int], ...], int]:
-    """Orchestrate per-seed phases; no inline clearance/geom/stamp logic."""
+    canal_registry,
+    canal_rules,
+) -> tuple[tuple[tuple[int, int], ...], int, CanalAttachments]:
+    """Orchestrate per-seed phases; one canal cut per seed → Grade; Intent aggregates."""
     kind = result.decision.kind
     assert kind is not None
     h = int(result.decision.h)
-    if h < 1:
-        return (), 0
-    sign = ribbon_sign_from_dz(int(result.segment.dz))
     requested = max(0, int(result.decision.requested_length))
+    if h < 1:
+        return (), 0, EMPTY_CANAL
+    sign = ribbon_sign_from_dz(int(result.segment.dz))
     stamped: list[tuple[int, int]] = []
     max_L = 0
+    stamped_atts: list[CanalAttachments] = []
+    d = result.decision
 
     for seed in result.segment.cell_coords:
         clearance = resolve_seed_clearance(
@@ -189,6 +216,18 @@ def _materialize_segment(
                 L_eff=clearance.L_eff,
             )
             continue
+
+        att = resolve_seed_canal_attachments(
+            requested_length=requested,
+            L_eff=clearance.L_eff,
+            terrain_key=result.segment.terrain_key,
+            knobs_earthen=d.earthen_canal,
+            knobs_structure_canal=d.structure_canal,
+            knobs_structure_refs=d.structure_refs,
+            policy_rules=canal_rules,
+            registry=canal_registry,
+            site_id=result.segment.site_id,
+        )
 
         anchor = _resolve_edge_road_anchor(
             compose, clearance, road_cells=road_cells, tile_set=tile_set,
@@ -234,18 +273,23 @@ def _materialize_segment(
                 plan=plan,
                 cell_refs=tuple(wrote),
                 facing=facing,
-                earthen_canal=result.decision.earthen_canal,
                 template_uid=result.template_uid,
                 edge_uid=result.segment.edge_uid,
+                **att.grade_fields(),
             )
             _stamp_grade_uid(
                 compose, wrote, grade.grade_uid, tile_set=tile_set,
             )
             ctx.relief_grade_instances.append(grade)
+            stamped_atts.append(att)
         stamped.extend(wrote)
         max_L = max(max_L, len(wrote))
 
-    return tuple(sorted(set(stamped))), max_L
+    return (
+        tuple(sorted(set(stamped))),
+        max_L,
+        aggregate_canal_attachments(stamped_atts),
+    )
 
 
 def _plan_seed_volume(

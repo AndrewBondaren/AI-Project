@@ -22,6 +22,8 @@ class ReliefGradeInstanceRow:
     angle_deg: float | None = None
     facing: str | None = None
     earthen_canal: bool = bool_col(default=False)
+    structure_refs: list = json_col(default_factory=list)  # barrier refs
+    structure_canal: str | None = None  # canal_template_registry system_type
     template_uid: str | None = None
     edge_uid: str | None = None
     site_id: str | None = None

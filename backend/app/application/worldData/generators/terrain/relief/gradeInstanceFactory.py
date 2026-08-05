@@ -45,6 +45,8 @@ def build_ribbon_grade_instance(
     cell_refs: tuple[tuple[int, int], ...],
     facing: str | None,
     earthen_canal: bool = False,
+    structure_refs: tuple[str, ...] = (),
+    structure_canal: str | None = None,
     template_uid: str | None = None,
     edge_uid: str | None = None,
 ) -> ReliefGradeInstance:
@@ -63,6 +65,8 @@ def build_ribbon_grade_instance(
         angle_deg=plan.angle_deg,
         facing=face,
         earthen_canal=earthen_canal,
+        structure_refs=list(structure_refs),
+        structure_canal=structure_canal,
         template_uid=template_uid,
         edge_uid=edge_uid,
         site_id=site_id,
@@ -83,6 +87,8 @@ def build_ribbon_grade_instance(
         template_uid=inst.template_uid,
         edge_uid=inst.edge_uid,
         earthen_canal=inst.earthen_canal,
+        structure_refs=list(inst.structure_refs),
+        structure_canal=inst.structure_canal,
     )
     return inst
 

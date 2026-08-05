@@ -54,6 +54,9 @@ from app.dataModel.terrain.relief.worldReliefGradeObstacle import (
     WorldReliefGradeObstacleScalars,
     relief_obstacle_scalar_wire_from_mapping,
 )
+from app.dataModel.terrain.relief.worldCanalTemplateRegistry import (
+    WorldCanalTemplateRegistry,
+)
 from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy
 from app.dataModel.terrain.relief.worldReliefTemplateRegistry import (
     WorldReliefTemplateRegistry,
@@ -272,6 +275,11 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
     _registry_slice(
         pojo_cls=WorldReliefTemplateRegistry,
         world_key="relief_template_registry",
+        facade=True,
+    ),
+    _registry_slice(
+        pojo_cls=WorldCanalTemplateRegistry,
+        world_key="canal_template_registry",
         facade=True,
     ),
     WorldSlice(

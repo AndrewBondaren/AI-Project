@@ -32,6 +32,7 @@ def _knobs_from_case(case: ReliefRoleCase, *, value_min: int) -> ReliefDeltaInte
         slope_length_cells=case.slope_length_cells,
         target_angle_deg=case.target_angle_deg,
         earthen_canal=case.earthen_canal,
+        structure_canal=case.structure_canal,
         structure_refs=tuple(case.structure_refs),
     )
 
@@ -45,6 +46,7 @@ def _knobs_from_band(band: ReliefDeltaBand) -> ReliefDeltaInterval:
         slope_length_cells=band.slope_length_cells,
         target_angle_deg=band.target_angle_deg,
         earthen_canal=band.earthen_canal,
+        structure_canal=band.structure_canal,
         structure_refs=tuple(band.structure_refs),
     )
 

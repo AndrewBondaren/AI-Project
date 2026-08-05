@@ -30,6 +30,9 @@ class ReliefGradeInstance(BaseModel):
     angle_deg: DefaultOnWire[float | None] = None
     facing: DefaultOnWire[str | None] = None
     earthen_canal: DefaultOnWire[bool] = False
+    # Resolved canal attachments (R28/R36q); BAR-1 consumes structure_refs
+    structure_refs: DefaultOnWire[list[str]] = Field(default_factory=list)
+    structure_canal: DefaultOnWire[str | None] = None
     template_uid: DefaultOnWire[str | None] = None
     edge_uid: DefaultOnWire[str | None] = None
     site_id: DefaultOnWire[str | None] = None

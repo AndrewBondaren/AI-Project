@@ -84,6 +84,7 @@ class World:
     barrier_template_registry:      dict = json_col(default_factory=dict)
     connection_type_registry:       list = json_col(default_factory=list)
     relief_template_registry:       list = json_col(default_factory=list)
+    canal_template_registry:        list = json_col(default_factory=list)  # R36q
     relief_pick_policy:             dict = json_col(default_factory=dict)
     relief_grade_obstacle_policy:   str | None = None  # R36n; NULL → POJO default
     race_template_registry:         list = json_col(default_factory=list)
