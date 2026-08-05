@@ -1198,7 +1198,7 @@ CREATE TABLE IF NOT EXISTS connection_edge_cells (
 CREATE TABLE IF NOT EXISTS relief_grade_systems (
     grade_system_uid TEXT PRIMARY KEY,
     world_uid        TEXT NOT NULL,
-    grade_uids       TEXT NOT NULL,          -- JSON ordered list, len ≥ 2
+    grade_instance_uids TEXT NOT NULL,       -- JSON ordered ReliefGradeInstance.grade_uid, len ≥ 2
     created_at       TEXT NOT NULL,
     edge_uid         TEXT,
     display_name     TEXT,

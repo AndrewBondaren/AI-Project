@@ -1,20 +1,34 @@
-"""Build ``ReliefGradeInstance`` after ribbon materialize — tz_terrain_relief §8c."""
+"""Build ``ReliefGradeInstance`` / ``ReliefGradeSystem`` — tz_terrain_relief §8c / R8."""
 
 from __future__ import annotations
 
 import hashlib
 from datetime import datetime, timezone
 
+from app.application.worldData.generators.terrain.relief.reliefLog import (
+    relief_debug,
+    relief_info,
+)
 from app.application.worldData.generators.terrain.relief.volumeMaterialize import (
     RibbonVolumePlan,
 )
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
+from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
 
 
 def make_grade_uid(*, world_uid: str, site_id: str, seed: tuple[int, int]) -> str:
     """Deterministic uid for re-bake upsert."""
     key = f"{world_uid}|{site_id}|{seed[0]},{seed[1]}"
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+    return (
+        f"{digest[:8]}-{digest[8:12]}-{digest[12:16]}-"
+        f"{digest[16:20]}-{digest[20:32]}"
+    )
+
+
+def make_grade_system_uid(*, world_uid: str, site_id: str) -> str:
+    key = f"{world_uid}|grade_system|{site_id}"
     digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
     return (
         f"{digest[:8]}-{digest[8:12]}-{digest[12:16]}-"
@@ -39,9 +53,7 @@ def build_ribbon_grade_instance(
         raise ValueError("build_ribbon_grade_instance requires non-empty cell_refs")
     kind = plan.kind
     face = None if kind is ReliefSideKind.SHEER else facing
-    if kind is ReliefSideKind.SHEER:
-        face = None
-    return ReliefGradeInstance(
+    inst = ReliefGradeInstance(
         grade_uid=make_grade_uid(world_uid=world_uid, site_id=site_id, seed=seed),
         world_uid=world_uid,
         kind=kind,
@@ -56,6 +68,80 @@ def build_ribbon_grade_instance(
         site_id=site_id,
         grade_system_uid=None,
     )
+    relief_debug(
+        "grade_instance_create",
+        grade_uid=inst.grade_uid,
+        world_uid=inst.world_uid,
+        kind=inst.kind.value,
+        height_cells=inst.height_cells,
+        length_cells=inst.length_cells,
+        angle_deg=inst.angle_deg,
+        facing=inst.facing,
+        cell_count=len(inst.cell_refs),
+        seed=seed,
+        site_id=inst.site_id,
+        template_uid=inst.template_uid,
+        edge_uid=inst.edge_uid,
+        earthen_canal=inst.earthen_canal,
+    )
+    return inst
+
+
+def build_relief_grade_system(
+    *,
+    world_uid: str,
+    site_id: str,
+    grades: list[ReliefGradeInstance],
+    why: str,
+    edge_uid: str | None = None,
+    display_name: str | None = None,
+) -> ReliefGradeSystem:
+    """Create system when steepness changes (≥2 grades). Logs why + members (R36l / R8)."""
+    if len(grades) < 2:
+        raise ValueError(
+            "ReliefGradeSystem requires ≥2 grades (R36l); "
+            f"got {len(grades)} — leave lone Grade without system"
+        )
+    grade_instance_uids = [g.grade_uid for g in grades]
+    kinds = [g.kind.value for g in grades]
+    angles = [g.angle_deg for g in grades]
+    system = ReliefGradeSystem(
+        grade_system_uid=make_grade_system_uid(world_uid=world_uid, site_id=site_id),
+        world_uid=world_uid,
+        grade_instance_uids=grade_instance_uids,
+        edge_uid=edge_uid,
+        display_name=display_name,
+    )
+    # INFO: rare structural event — why system exists + membership
+    relief_info(
+        "grade_system_create",
+        grade_system_uid=system.grade_system_uid,
+        world_uid=world_uid,
+        why=why,
+        grade_count=len(grade_instance_uids),
+        grade_instance_uids=grade_instance_uids,
+        kinds=kinds,
+        angles=angles,
+        site_id=site_id,
+        edge_uid=edge_uid,
+        display_name=display_name,
+    )
+    relief_debug(
+        "grade_system_members",
+        grade_system_uid=system.grade_system_uid,
+        members=[
+            {
+                "grade_uid": g.grade_uid,
+                "kind": g.kind.value,
+                "h": g.height_cells,
+                "L": g.length_cells,
+                "angle_deg": g.angle_deg,
+                "cell_count": len(g.cell_refs),
+            }
+            for g in grades
+        ],
+    )
+    return system
 
 
 def utc_now_iso() -> str:

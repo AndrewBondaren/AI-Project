@@ -13,7 +13,7 @@ from app.dataModel.annotationPolicy import DefaultOnWire
 
 
 class ReliefGradeSystem(BaseModel):
-    """Ordered chain of grade_uids (len ≥ 2)."""
+    """Ordered chain of ``ReliefGradeInstance.grade_uid`` (len ≥ 2)."""
 
     SCHEMA_ID: ClassVar[str] = "SCH-RELIEF-GRADE-SYSTEM"
 
@@ -21,6 +21,6 @@ class ReliefGradeSystem(BaseModel):
 
     grade_system_uid: str
     world_uid: str
-    grade_uids: list[str] = Field(min_length=2)
+    grade_instance_uids: list[str] = Field(min_length=2)
     edge_uid: DefaultOnWire[str | None] = None
     display_name: DefaultOnWire[str | None] = None

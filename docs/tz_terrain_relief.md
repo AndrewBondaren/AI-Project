@@ -6,7 +6,7 @@ metadata:
   type: project
 ---
 
-> **Статус:** ownership **утверждён** (2026-07-27) · **world outdoor grade + templates** — утверждено (2026-07-29) · **storage 1:1 buildings** — утверждено (2026-07-29) · **mountain preset / side_recipe (R33)** — утверждено (2026-07-30) · **terrain map R34** (import upsert ∥ world API) — утверждено (2026-07-30) · **bundle R35** (`relief_templates` section) — утверждено (2026-07-30) · **SLOPE triangle / materialize (R36)** — утверждено (2026-07-31) · **Impl:** каркас 1–6 ✅; **§7–9** ✅; **§8c Grade** ✅ (SQL tables + wire `system_grade_uid` + bake persist).  
+> **Статус:** ownership **утверждён** (2026-07-27) · **world outdoor grade + templates** — утверждено (2026-07-29) · **storage 1:1 buildings** — утверждено (2026-07-29) · **mountain preset / side_recipe (R33)** — утверждено (2026-07-30) · **terrain map R34** (import upsert ∥ world API) — утверждено (2026-07-30) · **bundle R35** — утверждено (2026-07-30) · **SLOPE (R36)** — утверждено (2026-07-31) · **canal R36p/q / C20–C21** — утверждено (2026-08-05; `canal_template_registry`; knobs XOR; policy only if не вмещается) · **Impl:** §7–9/8c ✅; R36p/q wire — ТЗ lock, code later.  
 > **Связь:** SoT grade; **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT.
 
 # Terrain relief grade (поддомен Terrain)
@@ -76,14 +76,14 @@ metadata:
 | R25 | Шаблоны `road_shoulder`: **typed conditions**; left\|right выводит движок; мастер сторону не назначает |
 | R26 | Conditions: enums + POJO; ≤1 condition на `terrain`; на terrain — **ровно три** policy (`slope_none` / `slope_down` / `slope_up`); wire mode — **XOR A\|B** (R32), не «только bands» |
 | R27 | `slope_weight + sheer_weight == 1` (±eps); иначе **reject** — шаблон не в библиотеку/мир (без silent normalize) |
-| R28 | **Два независимых трека canal/attachments (не смешивать):** (1) **`earthen_canal`** = домен **relief** — **только явные knobs** шаблона (не auto при collision); (2) **`structure_refs`** / lined canal / retaining = домен **barrier/structures** (materialize **не** в relief; BAR-1). Collision → **R36m/n** (world obstacle policy), не canal. Slope\|sheer у lined задаёт structure template |
+| R28 | **Canal attachments — XOR на knobs + world canal registry.** На case/band grade-шаблона: либо optional **`earthen_canal`** (bool; omit ок), либо **`structure_canal`** = ref → **`worlds.canal_template_registry`**, **не оба** (reject). Оба omit → без canal на нормальном path. Запись canal registry может нести `earthen_canal` и/или `structure.structure_refs[]` → **`barrier_template_registry`** (из чего lined/built). Плоский `structure_refs` на grade knobs для canal — **не** канон (идти через `structure_canal` + registry). Clearance-путь → R36p. Silent canal без knobs/registry и без match политики — **запрещён**. Materialize built — BAR-1 (не в relief generators) |
 | R29 | **FS layout:** корень библиотеки **`relief_templates/`** (не смешивать с buildings/иным). Пак: `{pack_name}/` внутри корня; файлы `{system_name}.json` (stem == `system_name`); иначе **reject**. Одиночный файл — тоже под `relief_templates/`. Конвенция — `.cursor/rules/template-pack-layout.mdc` |
 | R30 | Пресеты / подсказки weights, `delta_z`, **`slope_length_cells` / `target_angle_deg`** (Geom-A\|B\|C калькулятор) — **только UI-модуль**; backend хранит и validate сырой контракт, **не** генерирует пресеты |
 | R31 | `relief_pick_policy`: **мир** → **объект** → (для гор) **сторона**; более специфичный уровень перезаписывает; см. § Pick policy |
 | R32 | Условия terrain — **XOR двух режимов** (не смешивать): **(A)** `slope_none`/`slope_down`/`slope_up` + один `delta_z` **или** **(B)** bands `{delta_z_min, delta_z_max?}` на down/up; `delta_z_min >= 1` |
 | R33 | **Mountain preset** = `ReliefTemplate` с `context: mountain` в той же library/packs (R29). Тело — **side recipe** (не Mode A/B `conditions` дорог). XOR режимов раскладки сторон: **(A)** weights \| **(B)** pattern \| **(C)** fixed kind; **пусто / ничего не указано** → **seeded random** per side (R15). `MountainKind` ≠ preset (elevation/content). R30 не про это — UI-only для shoulder/`delta_z` чисел |
 | R34 | **G2:** `ReliefConditionTerrain` ↔ `system_terrain` — 1:1 по имени. Клетка вне таблицы / без condition → **skip grade**. **Запрещено** R21 «левый SLOPE» для unknown N+1. Два **независимых** пути каталога: (1) **import relief** — upsert missing keys из `conditions` (canonical, не затирать существующие); (2) **API настройки мира** — мастер/редактор правит любые N+1 (`PUT /worlds/…`). R21 — только битый pick/template/дыра schedule |
-| R35 | **G4 / bundle:** тела шаблонов **не** в `world` JSON. В мире — `relief_template_registry` + `relief_pick_policy` + **`relief_grade_obstacle_policy`** (R36n). Self-contained bundle: top-level секция **`relief_templates`** (массив полных тел) + pointers/policy внутри `world`. Import: upsert SQL library ← секция + registry/policy ← `world`. Имя ключа = `BundleSection.RELIEF_TEMPLATES` (`"relief_templates"`). API — тонкий слой |
+| R35 | **G4 / bundle:** тела **relief**-шаблонов **не** в `world` JSON. В мире — `relief_template_registry` + `relief_pick_policy` (в т.ч. **`canal_obstacle_policy`**, R36p) + **`relief_grade_obstacle_policy`** (R36n) + **`canal_template_registry`** (R36q). Self-contained bundle: top-level **`relief_templates`** + pointers/policy (+ canal registry) внутри `world`. Import: upsert SQL library ← секция + registry/policy ← `world`. Имя ключа relief = `BundleSection.RELIEF_TEMPLATES` (`"relief_templates"`). API — тонкий слой |
 
 ### SLOPE geometry / materialize (2026-07-31)
 
@@ -101,10 +101,12 @@ metadata:
 | R36h | **`h`/`dz` на клетке не хранить.** На клетке — **`system_grade_uid`** (omit если клетка не в grade). L/angle/h/kind/facing grade — на **сущности**. См. R36j |
 | R36i | **Materialize на всю `h=\|dz\|`:** SLOPE ramp / SHEER L×h solid. Без void. Затем создать Grade instance + проставить ссылки (R36j) |
 | R36j | **Grade = один составной объект** (аналог **одной горы** `MountainSpec`). Состоит из grid-клеток; `cell_refs[]` ↔ `system_grade_uid` подтверждают состав. Поля: `grade_uid`, `kind`, `height_cells`, `length_cells`, **`angle_deg` (одно место; omit SHEER)**, `facing` (omit SHEER). **Запрещено:** несколько углов в одном Grade |
-| R36l | **Иерархия как у гор** ([`tz_mountain_architecture.md`](./tz_mountain_architecture.md): хребет ↔ ≥2 вершины). **Один** постоянный угол → один `ReliefGradeInstance`. **Ломаный / смена крутизны** → **`ReliefGradeSystem`** (аналог `MountainRangeSpec`): упорядоченный список **≥2** `grade_uid` (части-склоны). **1 Grade** → система **не** создаётся (как одна гора ≠ хребет). Клетка ссылается на **свой** grade; система — контейнер/порядок для LLM и стыков. Persist: package (+ later DB) |
-| R36m | **Obstacle policy (мир) + truncate/skip.** Поведение у building / чужой road / barrier / structure задаёт **`worlds.relief_grade_obstacle_policy`** (R36n). Оба режима: footprint **не** затирать; `L_eff < 1` → **skip** (+ WARN). **Устарело:** auto `earthen_canal` при collision. Canal/refs — только knobs (R28) |
+| R36l | **Иерархия как у гор** ([`tz_mountain_architecture.md`](./tz_mountain_architecture.md): хребет ↔ ≥2 вершины). **Один** постоянный угол → один `ReliefGradeInstance`. **Ломаный / смена крутизны** → **`ReliefGradeSystem`** (аналог `MountainRangeSpec`): упорядоченный **`grade_instance_uids`** (≥2 → `ReliefGradeInstance.grade_uid`). **1 Grade** → система **не** создаётся. Клетка → **свой** Instance (`system_grade_uid`), не System. Persist: package + DB |
+| R36m | **Obstacle clearance (мир) + truncate/skip.** Длину grade до footprint задаёт **`worlds.relief_grade_obstacle_policy`** (R36n). Оба режима: footprint **не** затирать; `L_eff < 1` → **skip** (+ WARN). **Не** включает earthen (это R36p / knobs). **Устарело:** silent auto `earthen_canal` при collision без knobs и без `canal_obstacle_policy` |
 | R36n | **Wire (мир):** `relief_grade_obstacle_policy`: **`truncate_skip`** \| **`allow_flush`**. Default = **`truncate_skip`**. Не на object/side (v1). Generate читает setting и ветвится; без silent fallback на другой режим. См. § Obstacle policy |
 | R36o | **Junction smooth (later):** модификатор сглаживания **стыка** прямой Grade с другим объектом (road / platform / соседний Grade / barrier footprint). **Не** меняет инвариант «один Grade = одна прямая / один θ». Не profile `smoothstep` (SideFill). Не `ReliefGradeSystem` (ломаный = ≥2 прямых). Не obstacle policy (clearance режет `L`). Wire-эскиз на knobs/grade: `junction_smooth`: **`none`** (default) \| **`chamfer`** \| **`fillet`**; опц. `junction_smooth_cells` ≥ 1 при режиме ≠ none. Materialize: после ядра ramp/sheer — переходные колонки на стыке. **v1 R36:** не impl |
+| R36p | **Canal-by-world-rule — только если grade не вмещается.** Нормальный path: knobs XOR `earthen_canal` \| `structure_canal` (R28/R36q). Спец-ключ **`canal_obstacle_policy`**: `{ to_canal_cut_enable, entities, canal_ref? }`. Enum entities: `road` \| `mountain` \| `forest` \| `plains` \| `shore` \| `all`. Смотреть **только** если не вмещается; match → cut по enable; при `enable: true` опц. **`canal_ref`** → `canal_template_registry` (omit ref = earthen-only cut). Overlap enable: **false wins**. Места хватает → политика игнор. См. § Canal obstacle policy |
+| R36q | **`worlds.canal_template_registry`.** Переиспользуемые canal-описания мира (не новый объект на каждом case). Entry: `system_type` + optional `earthen_canal` + optional `structure.structure_refs[]` (каждый ref ∈ `barrier_template_registry`). Grade knobs: `structure_canal` = `system_type`. Unknown ref → reject import / R21 warn+fallback на generate. См. § Canal template registry |
 
 ### Locked checklist (master, 2026-08-01)
 
@@ -127,10 +129,12 @@ metadata:
 | C13 | LLM/игрок ← сущность Grade (`length_cells`, `angle_deg`), не скан клеток | locked |
 | C14 | Pathfinding = **grid**; cost/block slope ← **один** Grade object по uid | locked (R36k) |
 | C15 | **Один угол на один Grade** (как одна гора). Ломаный → **`ReliefGradeSystem` ≥2 Grade** (как хребет ≥2 вершины); 1 Grade → без системы | locked (R36l) |
-| C16 | Expand → obstacles: по **`relief_grade_obstacle_policy`**; `L_eff < 1` → skip; не overwrite; не auto-canal | locked (R36m/n) |
-| C17 | **R28 split:** earthen = relief (только knobs); lined/`structure_refs` = structure. Collision ≠ canal любого трека | locked (R28+R36m) |
+| C16 | Expand → obstacles: по **`relief_grade_obstacle_policy`**; `L_eff < 1` → skip; не overwrite; silent auto-canal без политики/knobs — запрещён | locked (R36m/n) |
+| C17 | **R28/R36q:** knobs XOR `earthen_canal` \| `structure_canal`→`canal_template_registry`; structure materials → `barrier_template_registry`. Clearance-path → R36p | locked (R28+R36p+R36q) |
 | C18 | Два режима мира: **`truncate_skip`** (default, ≥1 free между grade и объектом) \| **`allow_flush`** (последняя free OK) | locked (R36n) |
 | C19 | **Junction smooth** — опциональный модификатор стыка; ядро Grade остаётся прямой; v1 = `none` / не impl (R36o) | locked direction (R36o) |
+| C20 | **Нормальный canal:** knobs XOR. **Не вмещается:** `canal_obstacle_policy` `{to_canal_cut_enable, entities, canal_ref?}`; overlap false wins (R36p/q) | locked (R36p/q) |
+| C21 | **`canal_template_registry`** на мире; `structure_canal` / `canal_ref` = `system_type` entry (R36q) | locked (R36q) |
 
 ---
 
@@ -280,7 +284,7 @@ SideReliefPickPolicy = ObjectReliefPickPolicy
 
 #### Wire JSON
 
-**Мир** — `worlds.relief_pick_policy` (полный набор context v1):
+**Мир** — `worlds.relief_pick_policy` (context v1 + опц. `canal_obstacle_policy`, R36p):
 
 ```json
 {
@@ -293,12 +297,114 @@ SideReliefPickPolicy = ObjectReliefPickPolicy
   "road_shoulder": {
     "mode": "fixed",
     "default_template_uid": "e5f6…-intercity_shoulder_pack"
-  }
+  },
+  "canal_obstacle_policy": [
+    {
+      "to_canal_cut_enable": true,
+      "entities": ["forest"],
+      "canal_ref": "forest_ditch"
+    },
+    {
+      "to_canal_cut_enable": false,
+      "entities": ["mountain"]
+    }
+  ]
 }
 ```
 
 При `mode: "random"` | `"round_robin"` — `default_template_uid` не задаётся.  
-При `mode: "fixed"` — обязателен.
+При `mode: "fixed"` — обязателен.  
+Ключи context и **`canal_obstacle_policy`** — в одном JSON; canal bodies — в **`canal_template_registry`** (R36q), не inline в правиле.
+
+#### Canal template registry (R36q) — locked
+
+**Где:** `worlds.canal_template_registry` (массив entries на мире).
+
+```json
+{
+  "canal_template_registry": [
+    {
+      "system_type": "forest_ditch",
+      "earthen_canal": true
+    },
+    {
+      "system_type": "lined_shoulder_cut",
+      "structure": {
+        "structure_refs": ["lined_canal_stone"]
+      }
+    }
+  ]
+}
+```
+
+| Поле | Обязательность | Смысл |
+|---|---|---|
+| `system_type` | да | ключ; цель `structure_canal` / `canal_ref` |
+| `earthen_canal` | нет (omit ок) | земляной кювет |
+| `structure` | нет | объект; `structure_refs[]` → каждый ∈ `barrier_template_registry` |
+
+**Запрещено:** unknown `structure_refs`; дублировать полный barrier outline в canal entry; canal body inline в каждом grade case вместо registry.
+
+#### Canal knobs на grade-шаблоне (R28) — locked
+
+На case/band — **XOR**:
+
+```json
+{ "policy": "slope_down", "delta_z": 2, "slope_weight": 1.0, "sheer_weight": 0.0, "earthen_canal": true }
+```
+
+```json
+{ "policy": "slope_down", "delta_z": 2, "slope_weight": 1.0, "sheer_weight": 0.0, "structure_canal": "lined_shoulder_cut" }
+```
+
+| | |
+|---|---|
+| `earthen_canal` | optional bool; omit = не задан |
+| `structure_canal` | optional `system_type` ∈ `canal_template_registry` |
+| оба заданы | **reject** |
+| оба omit | без canal на нормальном path |
+
+#### Canal obstacle policy (R36p) — locked
+
+| Путь | Когда | Где |
+|---|---|---|
+| **Нормальный grade** | `L_eff` ≥ requested | knobs XOR `earthen_canal` \| `structure_canal` |
+| **Не вмещается** | `L_eff` < requested / skip-кандидат | `canal_obstacle_policy` |
+
+Политика **не читается**, пока grade вмещается.
+
+**Где:** `worlds.relief_pick_policy.canal_obstacle_policy`.
+
+**`CanalObstacleEntity`:** `road` \| `mountain` \| `forest` \| `plains` \| `shore` \| `all`  
+(`road` ≠ `road_shoulder`; `plains` ≠ `open_land`)
+
+| Поле правила | Тип | Смысл |
+|---|---|---|
+| `to_canal_cut_enable` | `bool` | обязателен |
+| `entities` | `CanalObstacleEntity[]` | непустой |
+| `canal_ref` | `str?` | при `enable: true` — опц. ∈ `canal_template_registry`; omit = earthen-only cut. При `enable: false` — omit (иначе reject) |
+
+```text
+if L_eff >= requested:
+    canal ← knobs XOR; policy ИГНОР
+else:
+    match = rules where entity ∈ entities OR "all" ∈ entities
+    0 match → canal ВЫКЛ
+    enable ← false if any match.enable=false else true   # false wins
+    if not enable → no canal
+    else → canal_ref from true-rules (все заданные canal_ref должны совпадать; иначе reject validate)
+```
+
+**Overlap enable:** **false wins**.
+
+| Намерение | Как |
+|---|---|
+| Обычный earthen | knobs `earthen_canal: true` |
+| Обычный lined | knobs `structure_canal` + entry в `canal_template_registry` |
+| Не влез у forest → cut | `enable: true`, `entities: ["forest"]`, `canal_ref: "forest_ditch"` |
+| Не влез у mountain → не резать | `enable: false`, `entities: ["mountain"]` |
+
+**Запрещено:** silent canal без match; читать policy когда вмещается; omit `to_canal_cut_enable`; freeform entities; inline canal object вместо `canal_ref` / registry.
 
 **Дорога** (object, без sides):
 
@@ -397,8 +503,10 @@ ReliefTemplate
   # target_angle_deg: float             # XOR с slope_length_cells (R36b)
   # ❌ shoulder_width_cells — removed; rename to slope_length_cells
   slope_weight / sheer_weight / sheer_band / noise …
-  earthen_canal: bool = false
-  structure_refs: list[str] = []          # barrier_template_registry
+  # Canal XOR on case/band (R28/R36q): earthen_canal? XOR structure_canal?
+  earthen_canal?: bool                    # optional; omit ok
+  structure_canal?: str                   # → canal_template_registry.system_type
+  # ❌ both set; legacy flat structure_refs on knobs for canal — not canonical
   # mountain only — § Mountain side recipe (R33):
   side_recipe?: MountainSideRecipe      # отсутствует / пустой = seeded random
 ```
@@ -623,34 +731,35 @@ Match inclusive; первый в списке; overlap → **reject**; дыра 
 `classify(dz, schedule)` — **одна** функция. Consumers **не** ветвятся `if mode==A`.  
 Детали: [`.cursor/plans/relief-templates-implementation.md`](../.cursor/plans/relief-templates-implementation.md) § Abstraction.
 
-#### Features / attachments (R28) — два трека (locked)
+#### Features / attachments (R28 + R36q) — locked
 
-| Трек | Домен | Wire | Когда | Grade / профиль |
-|---|---|---|---|---|
-| **A. Земляной кювет** | **relief** | `earthen_canal: true` | **только** явные knobs шаблона | landform в open run; не в желобе «забор» |
-| **B. Built / lined / retaining…** | **barrier / structures** | `structure_refs: [system_type, …]` | только явные knobs | materialize **не** в relief (BAR-1); не размещать built **в** earthen bed |
+| Трек | Домен | Wire на grade case/band | SoT материалов |
+|---|---|---|---|
+| **A. Земляной** | relief | `earthen_canal?: bool` (omit ок) | landform; не registry |
+| **B. Structure canal** | barrier/structures | `structure_canal?: system_type` | → `canal_template_registry` → `structure.structure_refs` → `barrier_template_registry` |
 
-```text
-# ✅ obstacle → world.relief_grade_obstacle_policy (R36n); canal не из collision
-# ✅ earthen_canal / structure_refs → только knobs шаблона
-# ❌ auto earthen или lined при упоре в здание/barrier
-# ❌ игнор setting / silent fallback на другой режим
-# ❌ забор / built внутри канавы
-# ❌ строить barrier cells внутри generators/terrain/relief
-```
+**XOR** A\|B на одном case/band (оба заданы → reject). Оба omit → без canal.
 
 ```text
-# ✅ stub contract трек B (не «fence в кювете»)
-structure_refs: ["retaining_wall_stone", "lined_canal_stone"]
-# ❌ uid / freeform feature enums without registry
+# ✅ clearance L → relief_grade_obstacle_policy (R36n)
+# ✅ нормальный canal → knobs XOR earthen_canal | structure_canal
+# ✅ не вмещается → canal_obstacle_policy (+ optional canal_ref)
+# ✅ canal bodies → worlds.canal_template_registry (R36q)
+# ✅ barrier materials → barrier_template_registry
+# ❌ earthen_canal + structure_canal вместе
+# ❌ читать canal_obstacle_policy когда L_eff хватает
+# ❌ silent canal в clearance-пути без match
+# ❌ плоский structure_refs на grade knobs вместо structure_canal (для canal)
+# ❌ забор / built внутри земляной канавы
+# ❌ materialize barrier cells в generators/terrain/relief (BAR-1)
 ```
 
-| Слой | Трек A (earthen) | Трек B (structure_refs) |
+| Слой | A earthen | B structure_canal |
 |---|---|---|
-| SoT | relief Grade + knobs | barrier consumer |
-| Validate | POJO | ref ∈ `barrier_template_registry` |
-| Generate | materialize landform в relief | **emit refs only**; cells — BAR-1 |
-| vs obstacles | R36m clearance (truncate/skip) | R36m: grade не упирается в barrier cells |
+| SoT | knobs / canal registry earthen flag | `canal_template_registry` + barrier registry |
+| Validate | POJO | `structure_canal` ∈ canal registry; refs ∈ barrier registry |
+| Generate | landform в relief | **emit refs**; cells — BAR-1 |
+| vs obstacles | R36m + R36p | R36m: grade не в barrier cells |
 
 **Tech debt:** [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) **RELIEF-BAR-1** — только трек B.
 
@@ -978,14 +1087,16 @@ for each cell in ramp: cell.system_grade_uid = grade_uid  # omit keys if none
 
 ```text
 obstacles = building | other_road | barrier | structure footprints
-policy    = world.relief_grade_obstacle_policy   # R36n; default truncate_skip
+clearance = world.relief_grade_obstacle_policy   # R36n; default truncate_skip
+canal     = world.relief_pick_policy.canal_obstacle_policy  # R36p; optional
 
 1) gap = free cells outward until obstacle (0 if next cell is obstacle)
 2) L_eff = min(L, gap-1) if truncate_skip else min(L, gap)
 3) never enter / overwrite obstacle
 4) if L_eff < 1 → skip (+ WARN)
 5) else materialize на L_eff (R36i) + Grade (R36j)
-6) earthen_canal / structure_refs — только knobs; не из collision
+6) canal: if вмещается → knobs XOR earthen|structure_canal;
+   if не вмещается → R36p enable + optional canal_ref → canal_template_registry
 ```
 
 ```json
@@ -993,6 +1104,8 @@ policy    = world.relief_grade_obstacle_policy   # R36n; default truncate_skip
   "relief_grade_obstacle_policy": "truncate_skip"
 }
 ```
+
+Clearance (R36n) считает `L_eff`; R36p — только ветка «не вмещается».
 
 **Пример** (`gap=1`, объект на y=3, free y=2):
 
@@ -1003,7 +1116,7 @@ allow_flush   → L_eff = 1 → grade на y=2 (flush к объекту)
 
 **POJO (target):** `ReliefGradeObstaclePolicy` enum + field на world model / `canonical_defaults()` → `TRUNCATE_SKIP`.
 
-**Устарело:** auto `earthen_canal` при collision; хардкод clearance без чтения setting.
+**Устарело:** silent auto `earthen_canal` при collision без knobs и без `canal_obstacle_policy`; хардкод clearance без чтения setting.
 
 #### Запрещено
 
@@ -1027,7 +1140,7 @@ allow_flush   → L_eff = 1 → grade на y=2 (flush к объекту)
 |---|---|---|
 | Q1 | ~~angle field on cell~~ | **superseded:** angle на **Grade entity** (`angle_deg`) |
 | Q2 | ~~L+angle on cell~~ | **locked R36j:** Grade entity + `system_grade_uid` на клетке; h/L/angle **не** на клетке |
-| Q3 | ~~Expand → building/road~~ | **locked R36m/n:** world `relief_grade_obstacle_policy` (`truncate_skip`\|`allow_flush`); no auto-canal |
+| Q3 | ~~Expand → building/road~~ | **locked R36m/n + R36p/q:** clearance = `L_eff`; knobs XOR canal; policy only if не вмещается; `canal_template_registry` |
 | Q4 | Mountain SideFill + R36 angle | later; v1 = `road_shoulder` |
 | Q5 | Max `L` / max θ clamp | later; v1 `L_eff = min(L,h)` для SLOPE; SHEER L без clamp к h |
 | Q6 | Shoulder **sample** при `dilate_radius_light > 0`: сейчас walk по осевой `ordered`, а seed = ortho ∉ `road_cells` (dilated footprint) — при толстом dilate ortho от оси часто ещё внутри полотна → мало/нет seeds. **Открыто:** семплить край footprint, не только `ordered`. Не смешивать с `edgeRoadAnchor` |
@@ -1110,9 +1223,9 @@ Defaults profile (mountain SideFill): SHEER `ε` = `sheer_band_light` (default 1
 
 | Уровень | Что писать |
 |---|---|
-| **INFO** | template_uid, context, sides/kind summary, identity |
-| **DEBUG** (sample) | `kind`, `h`/`L`/`angle` (R36) или `t`/`Δz`/`fraction`, **`reason`**, **`facing`** или `facing=none` |
-| **Запрещено** | silent grade без reason при диагностике |
+| **INFO** | template_uid, context, sides/kind summary, identity; **`grade_system_create`** — `why` + `grade_instance_uids` / kinds / angles |
+| **DEBUG** (sample) | `kind`, `h`/`L`/`angle` (R36) или `t`/`Δz`/`fraction`, **`reason`**, **`facing`** или `facing=none`; **`grade_instance_create`** — базовые поля Instance; **`grade_system_members`** — детали частей |
+| **Запрещено** | silent grade без reason при диагностике; System из 1 Grade |
 
 ```text
 relief_grade_cell | context=road_shoulder template=intercity_plains
@@ -1266,13 +1379,13 @@ ReliefGradeInstance                 # ≈ MountainSpec
   earthen_canal?: bool              # только R28 knobs; не auto collision
   cell_refs[]                       # состав (grid)
 
-ReliefGradeSystem                   # ≈ MountainRangeSpec; только если len(grades) ≥ 2
-  system_uid: str
-  grade_uids: list[str]             # упорядоченная цепочка (≥2)
+ReliefGradeSystem                   # ≈ MountainRangeSpec; только если len(grade_instance_uids) ≥ 2
+  grade_system_uid: str
+  grade_instance_uids: list[str]    # → ReliefGradeInstance.grade_uid; упорядочено (≥2)
   # optional: edge_uid, site_id, display
 
 Cell
-  system_grade_uid?: str            # ссылка на Grade (не на System)
+  system_grade_uid?: str            # ссылка на ReliefGradeInstance (не на System)
 ```
 
 | Что | Где | Не туда |
@@ -1416,6 +1529,11 @@ Clearance режет `L` до stamp; Grade пишет уже финальный 
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-05 | **R36q / C21:** `worlds.canal_template_registry`; knobs XOR `earthen_canal`\|`structure_canal`; structure via `structure.structure_refs` → barrier registry |
+| 2026-08-05 | **R36p wire:** `{ to_canal_cut_enable, entities, canal_ref? }`; only if не вмещается; overlap enable → false wins |
+| 2026-08-05 | **R36p entities enum:** `road\|mountain\|forest\|plains\|shore\|all` |
+| 2026-08-05 | **R36p / C20:** canal paths — knobs vs clearance policy (no knobs↔policy conflict) |
+| 2026-08-05 | **Rename:** `ReliefGradeSystem.grade_uids` → **`grade_instance_uids`** (→ Instance.grade_uid); TZ sketch `system_uid` → `grade_system_uid` |
 | 2026-08-05 | **§8c done:** SQL grade tables + `system_grade_uid` wire/patches; bake factory + persist |
 | 2026-08-05 | **TZ sync:** phases / `RibbonGradeDecision` / obstacle helper / target layout / notions; Q6 open |
 | 2026-08-05 | **Refactor apply:** phases + `edgeRoadAnchor` + obstacle helper; `RibbonGradeDecision` +geom/h; Q6 open |

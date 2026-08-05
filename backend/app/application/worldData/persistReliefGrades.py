@@ -43,7 +43,7 @@ def system_to_row(
     return ReliefGradeSystemRow(
         grade_system_uid=system.grade_system_uid,
         world_uid=system.world_uid,
-        grade_uids=list(system.grade_uids),
+        grade_instance_uids=list(system.grade_instance_uids),
         created_at=created_at or utc_now_iso(),
         edge_uid=system.edge_uid,
         display_name=system.display_name,

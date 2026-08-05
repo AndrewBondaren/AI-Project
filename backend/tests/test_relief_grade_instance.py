@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 
 from app.application.worldData.generators.terrain.relief.gradeInstanceFactory import (
+    build_relief_grade_system,
     build_ribbon_grade_instance,
     make_grade_uid,
 )
@@ -77,14 +78,57 @@ class ReliefGradeInstanceTest(unittest.TestCase):
             ReliefGradeSystem(
                 grade_system_uid="sys",
                 world_uid="w",
-                grade_uids=["only-one"],
+                grade_instance_uids=["only-one"],
             )
         ok = ReliefGradeSystem(
             grade_system_uid="sys",
             world_uid="w",
-            grade_uids=["a", "b"],
+            grade_instance_uids=["a", "b"],
         )
-        self.assertEqual(len(ok.grade_uids), 2)
+        self.assertEqual(len(ok.grade_instance_uids), 2)
+
+    def test_build_system_logs_why_and_members(self) -> None:
+        plan = RibbonVolumePlan(
+            kind=ReliefSideKind.SLOPE,
+            h=2,
+            L=1,
+            angle_deg=63.43,
+            sign=-1,
+            columns=(RibbonColumnPlan(k=1, surface_z=8),),
+        )
+        g1 = build_ribbon_grade_instance(
+            world_uid="w", site_id="s", seed=(1, 0), plan=plan,
+            cell_refs=((1, 0),), facing="west",
+        )
+        plan2 = RibbonVolumePlan(
+            kind=ReliefSideKind.SLOPE,
+            h=2,
+            L=2,
+            angle_deg=45.0,
+            sign=-1,
+            columns=(
+                RibbonColumnPlan(k=1, surface_z=9),
+                RibbonColumnPlan(k=2, surface_z=8),
+            ),
+        )
+        g2 = build_ribbon_grade_instance(
+            world_uid="w", site_id="s", seed=(2, 0), plan=plan2,
+            cell_refs=((2, 0), (3, 0)), facing="west",
+        )
+        with self.assertRaises(ValueError):
+            build_relief_grade_system(
+                world_uid="w", site_id="s", grades=[g1], why="should_fail",
+            )
+        system = build_relief_grade_system(
+            world_uid="w",
+            site_id="s",
+            grades=[g1, g2],
+            why="steepness_change_along_edge",
+            edge_uid="e1",
+        )
+        self.assertEqual(len(system.grade_instance_uids), 2)
+        self.assertEqual(system.grade_instance_uids[0], g1.grade_uid)
+        self.assertEqual(system.grade_instance_uids[1], g2.grade_uid)
 
 
 if __name__ == "__main__":
