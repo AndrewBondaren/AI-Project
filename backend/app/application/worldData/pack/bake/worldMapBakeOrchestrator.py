@@ -34,6 +34,7 @@ from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
 from app.dataModel.worldPack.worldMapCellsPerTile import resolve_world_map_cells_per_tile
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
@@ -69,6 +70,9 @@ def _hydro_cell_role_label(cell_hydro: object | None) -> str | None:
 
 class WorldMapBakeOrchestrator:
     """Persist L0 tiles from LightGridCompose — no per-field sampling here."""
+
+    def __init__(self) -> None:
+        self.last_relief_grade_instances: list[ReliefGradeInstance] = []
 
     def bake_tiles(
         self,
@@ -134,6 +138,7 @@ class WorldMapBakeOrchestrator:
             relief_templates_by_uid=dict(relief_templates_by_uid or {}),
         )
         compose = compose_light_grid(bake_ctx)
+        self.last_relief_grade_instances = list(bake_ctx.relief_grade_instances)
 
         writer.sync_world_metadata(world, cells_per_side=side)
         world_map_t0 = log_pack_world_map_bake_start(world_uid, tiles=len(tiles), cells_per_side=side)

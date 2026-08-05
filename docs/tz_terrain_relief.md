@@ -6,7 +6,7 @@ metadata:
   type: project
 ---
 
-> **Статус:** ownership **утверждён** (2026-07-27) · **world outdoor grade + templates** — утверждено (2026-07-29) · **storage 1:1 buildings** — утверждено (2026-07-29) · **mountain preset / side_recipe (R33)** — утверждено (2026-07-30) · **terrain map R34** (import upsert ∥ world API) — утверждено (2026-07-30) · **bundle R35** (`relief_templates` section) — утверждено (2026-07-30) · **SLOPE triangle / materialize (R36)** — утверждено (2026-07-31) · **Impl:** каркас 1–6 ✅; **§7–8a** ✅; **§8b volume** ✅ (light `surface_z`); **§9 bake clearance** ✅; **§8c Grade / `system_grade_uid`** ⬜.  
+> **Статус:** ownership **утверждён** (2026-07-27) · **world outdoor grade + templates** — утверждено (2026-07-29) · **storage 1:1 buildings** — утверждено (2026-07-29) · **mountain preset / side_recipe (R33)** — утверждено (2026-07-30) · **terrain map R34** (import upsert ∥ world API) — утверждено (2026-07-30) · **bundle R35** (`relief_templates` section) — утверждено (2026-07-30) · **SLOPE triangle / materialize (R36)** — утверждено (2026-07-31) · **Impl:** каркас 1–6 ✅; **§7–9** ✅; **§8c Grade** ✅ (SQL tables + wire `system_grade_uid` + bake persist).  
 > **Связь:** SoT grade; **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT.
 
 # Terrain relief grade (поддомен Terrain)
@@ -1015,11 +1015,11 @@ allow_flush   → L_eff = 1 → grade на y=2 (flush к объекту)
 
 #### Impl order (R36 product — см. § Порядок 7–9)
 
-1. **§7** Normalize POJO/template (R36b Geom XOR)  
-2. **§8a** `partition_height` + geom resolve  
-3. **§8b–8c** Consumer `road_shoulder`: volume materialize + Grade + `system_grade_uid`  
-4. **§9** Bake clearance (`free_gap` → `obstacleClearance`)  
-5. Gameplay penalty — later (R36f)
+1. ✅ **§7** Geom XOR POJO  
+2. ✅ **§8a** `geomResolve` + `partition_height` + rich `RibbonGradeDecision`  
+3. ✅ **§8b / §9** volume + clearance phases (`edgeRoadAnchor`)  
+4. ✅ **§8c** Grade + `system_grade_uid` (tables + pack wire + bake)  
+5. Gameplay penalty — later (R36f); Q6 dilate sample — open
 
 ### Open (не блокер checklist; при normalize/impl)
 
@@ -1317,11 +1317,13 @@ dataModel/terrain/relief/
   worldReliefTemplateRegistry / worldReliefPickPolicy ✅
   worldReliefGradeObstacle ✅   # R36n scalars
   # R36b Geom XOR: slope_length_cells | target_angle_deg ✅; shoulder_width_cells removed
-  # ReliefGradeInstance / ReliefGradeSystem ⬜
+  reliefGradeInstance / reliefGradeSystem ✅
 
 db/
   relief_templates ✅
-  grade instances + map_cells.system_grade_uid (R36j) ⬜
+  relief_grade_instances / relief_grade_systems ✅
+  map_cell_patches.system_grade_uid ✅
+  WorldMapCellWire.system_grade_uid ✅
 
 generators/terrain/relief/
   profiles / facing / sideGradeDecision   # ✅
@@ -1330,14 +1332,14 @@ generators/terrain/relief/
   shoulderWidth / roadShoulderGrade ✅
   geomResolve / freeGap / volumeMaterialize ✅
   obstacleClearance / gradeObstacleLight / ribbonSeedResolve / edgeRoadAnchor ✅
-  # ReliefGradeInstance / system_grade_uid ⬜ (§8c)
+  gradeInstanceFactory ✅
 
-pack/bake/.../roadShoulderApply.py  # phases: clearance → anchor → plan → stamp ✅
+pack/bake/.../roadShoulderApply.py  # phases + Grade + system_grade_uid stamp ✅
+application/worldData/persistReliefGrades.py ✅
 ```
 
-Wire: column facing — ✅; Mode A\|B / Geom XOR — ✅; **volume surface_z** ✅; **Grade entity** ⬜.  
-R36n: world setting + bake `free_gap` → truncate/skip — ✅.  
-Ribbon: `edgeRoadAnchor` + phases ✅; dilate sample **Q6** open.
+Wire: facing + volume + **Grade uid** ✅.  
+R36n clearance ✅. Ribbon phases ✅; dilate sample **Q6** open.
 
 ---
 
@@ -1350,7 +1352,7 @@ Ribbon: `edgeRoadAnchor` + phases ✅; dilate sample **Q6** open.
 3. ✅ Validate: unique terrain; ровно 3 policy; weights / `delta_z` rules  
 4. ✅ Classify `dz` → policy; pick; R21 fallback  
 5. ✅ Mountains R33: `side_recipe` A\|B\|C\|D + materialize sides; declare wins  
-6. ✅ road_shoulder segments + classify (**facing stamp — interim**; width expand ✅)  
+6. ✅ road_shoulder segments + classify + width expand (facing-only **replaced** by §8b volume)  
 
 ### Дальше — план R36 / R36n (locked 2026-08-05)
 
@@ -1360,10 +1362,10 @@ Clearance режет `L` до stamp; Grade пишет уже финальный 
 | # | Шаг | Статус | Что будет сделано | Done when |
 |---|---|---|---|---|
 | **7** | Geom knobs POJO (R36b) | ✅ | Wire **XOR** `slope_length_cells` **или** `target_angle_deg`; оба → **reject**. **`shoulder_width_cells` удалён** (reject на wire). Mode A\|B не трогали | unit XOR + legacy reject; grep clean |
-| **8a** | `geomResolve` + `partition_height` | ✅ | Pure: `h=\|dz\|` + knobs → `{h,L,angle_deg,kind,steps}`. Geom-A h+L→θ; Geom-B θ+h→L (`ceil`, min 1); SLOPE `L_eff=min(L,h)`; steps `sum==h`. SHEER: angle N/A; L из length (Geom-B ignore). `gradePass.width` ← `geom.L` | unit: 45°; partition; SHEER L; Geom-B clamp |
-| **8b** | Volume materialize `road_shoulder` | ✅ | `volumeMaterialize` + bake stamp: SLOPE ramp `surface_z` (`sum==h`); SHEER face top z + `facing=none`; SLOPE facing uphill (down→road / up→outward). Solid×h 3D — later skeleton | unit volume plan; bake writes z |
-| **8c** | Grade entity + `system_grade_uid` | ⬜ | `ReliefGradeInstance` (один угол: kind, h, L, `angle_deg?`, facing?, `cell_refs[]`, опц. canal). Ломаный → `ReliefGradeSystem` ≥2; 1 grade → без системы. Клетка: только `system_grade_uid` (omit). Persist v1: package/bake wire + schema (`0001` + models); полная DB-история Grade — later OK | после materialize есть entity + refs на клетках |
-| **9** | R36n bake clearance | ✅ | `freeGap.measure` + `obstacleClearance` в `roadShoulderApply`; obstacles v1 = road \| `location_pin` \| OOB; `L_eff<1` → skip+WARN; no auto-canal | unit gap + truncate_skip gap=1 |
+| **8a** | `geomResolve` + `partition_height` | ✅ | Pure: `h=\|dz\|` + knobs → `ResolvedGeom`. Geom-A/B; SLOPE `L_eff=min(L,h)`; SHEER L из length. **`RibbonGradeDecision`:** `requested_length` + `h` + `geom` | unit: 45°; partition; SHEER; Geom-B clamp; decision carries geom |
+| **8b** | Volume materialize `road_shoulder` | ✅ | phases: clearance → `edgeRoadAnchor` → plan → stamp; SLOPE `surface_z`; SHEER face top + `facing=none`; uphill via anchor | unit volume; bake writes z |
+| **8c** | Grade entity + `system_grade_uid` | ✅ | POJO + SQL `relief_grade_instances` / `relief_grade_systems`; wire/pack + patches column; bake: 1 Grade/seed strip; `persistReliefGrades` replace-on-rebake. System row only ≥2 (v1 ribbon не создаёт) | unit POJO; bake stamps uid; tables in 0001 |
+| **9** | R36n bake clearance | ✅ | `ribbonSeedResolve` + `freeGap` + `obstacleClearance`; predicate `is_grade_obstacle_light` (road \| pin \| OOB); `L_eff<1` → skip+WARN | unit gap + truncate_skip gap=1 |
 
 ```text
 7 Geom XOR POJO
@@ -1414,6 +1416,8 @@ Clearance режет `L` до stamp; Grade пишет уже финальный 
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-05 | **§8c done:** SQL grade tables + `system_grade_uid` wire/patches; bake factory + persist |
+| 2026-08-05 | **TZ sync:** phases / `RibbonGradeDecision` / obstacle helper / target layout / notions; Q6 open |
 | 2026-08-05 | **Refactor apply:** phases + `edgeRoadAnchor` + obstacle helper; `RibbonGradeDecision` +geom/h; Q6 open |
 | 2026-08-05 | **edgeRoadAnchor** locked (seed−outward); Q6 dilate sample open |
 | 2026-08-05 | **§8b+§9 done:** volume `surface_z` stamp; bake free_gap clearance (road/pin); §8c still open |

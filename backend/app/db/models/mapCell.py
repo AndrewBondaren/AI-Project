@@ -30,3 +30,4 @@ class MapCell:
     display_facing:             str | None = None   # localised label for system_facing ("север", "к выходу", …)
     glass_material:             str | None = None   # filling material for openings (glass, stained_glass, iron_mesh, …); None = open slit
     hydrology:                  dict | None = json_nullable_col(default=None)  # MapCellHydrology wire — dataModel/hydrology/mapCellHydrology.py
+    system_grade_uid:           str | None = None   # R36j; pack L0 SoT also on WorldMapCellWire

@@ -17,6 +17,7 @@ from app.db.models.world import World
 from app.application.worldData.pack.bake.lightGrid.roadShoulderIntent import (
     RoadShoulderIntent,
 )
+from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 
 
@@ -36,3 +37,5 @@ class LightGridBakeContext:
     relief_templates_by_uid: dict[str, ReliefTemplate] = field(default_factory=dict)
     # R20/R28 intents from road_shoulder grade (barrier materialize = RELIEF-BAR-1)
     road_shoulder_intents: list[RoadShoulderIntent] = field(default_factory=list)
+    # §8c Grade entities created during shoulder/volume stamp
+    relief_grade_instances: list[ReliefGradeInstance] = field(default_factory=list)

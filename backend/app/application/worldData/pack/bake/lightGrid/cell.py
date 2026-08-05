@@ -18,6 +18,7 @@ class LightGridCell:
     climate_zone_id: int | None = None
     location_pin: int | None = None
     system_facing: str | None = None
+    system_grade_uid: str | None = None
 
     def to_wire(self, tx: int, ty: int) -> WorldMapCellWire:
         return WorldMapCellWire(
@@ -31,6 +32,7 @@ class LightGridCell:
             climate_zone_id=self.climate_zone_id,
             location_pin=self.location_pin,
             system_facing=self.system_facing,
+            system_grade_uid=self.system_grade_uid,
         )
 
     @classmethod
@@ -45,4 +47,5 @@ class LightGridCell:
             climate_zone_id=d.climate_zone_id,
             location_pin=d.location_pin,
             system_facing=d.system_facing,
+            system_grade_uid=d.system_grade_uid,
         )

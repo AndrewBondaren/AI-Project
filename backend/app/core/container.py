@@ -36,7 +36,9 @@ from app.db.repositories.sqlite.connectionEdgeCellRepository import SqliteConnec
 from app.db.repositories.iStateRepository import IStateRepository
 from app.db.repositories.sqlite.stateRepository import SqliteStateRepository
 from app.db.repositories.iReliefTemplateRepository import IReliefTemplateRepository
+from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository
 from app.db.repositories.sqlite.reliefTemplateRepository import SqliteReliefTemplateRepository
+from app.db.repositories.sqlite.reliefGradeRepository import SqliteReliefGradeRepository
 from app.db.repositories.iBuildingTemplateRepository import IBuildingTemplateRepository
 from app.db.repositories.sqlite.buildingTemplateRepository import SqliteBuildingTemplateRepository
 from app.application.worldData.worldService import WorldService
@@ -130,6 +132,7 @@ class Container:
         self._connection_edge_cell_repository: IConnectionEdgeCellRepository | None = None
         self._state_repository: IStateRepository | None = None
         self._relief_template_repository: IReliefTemplateRepository | None = None
+        self._relief_grade_repository: IReliefGradeRepository | None = None
         self._building_template_repository: IBuildingTemplateRepository | None = None
 
         # DOMAIN SERVICES
@@ -461,6 +464,11 @@ class Container:
             self._relief_template_repository = SqliteReliefTemplateRepository(db=self._db)
         return self._relief_template_repository
 
+    def relief_grade_repository(self) -> IReliefGradeRepository:
+        if self._relief_grade_repository is None:
+            self._relief_grade_repository = SqliteReliefGradeRepository(db=self._db)
+        return self._relief_grade_repository
+
     def building_template_repository(self) -> IBuildingTemplateRepository:
         if self._building_template_repository is None:
             self._building_template_repository = SqliteBuildingTemplateRepository(db=self._db)
@@ -507,6 +515,7 @@ class Container:
                 world_service=self.world_service(),
                 read_context_for=lambda uid: self.pack_read_services(uid).context,
                 relief_library=self.relief_template_library_service(),
+                relief_grade_repo=self.relief_grade_repository(),
             )
         return self._pack_materialization_orchestrator
 

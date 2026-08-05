@@ -27,6 +27,8 @@ class WorldMapCellWire(BaseModel):
     location_pin: int | None = None
     system_facing: str | None = None
     """Uphill relief grade cardinal (tz_terrain_relief); stairs analogy."""
+    system_grade_uid: str | None = None
+    """Relief Grade instance uid (R36j); omit if cell not in a grade."""
 
     @field_validator("hydrology_role", mode="before")
     @classmethod

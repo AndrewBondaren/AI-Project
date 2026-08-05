@@ -711,6 +711,7 @@ CREATE TABLE IF NOT EXISTS map_cell_patches (
     display_facing          TEXT,
     glass_material          TEXT,
     hydrology               TEXT,
+    system_grade_uid        TEXT,              -- R36j; omit/NULL if not in grade (no FK: L0 SoT = pack)
     PRIMARY KEY (world_uid, x, y, z),
     FOREIGN KEY (world_uid)    REFERENCES worlds(world_uid),
     FOREIGN KEY (location_uid) REFERENCES named_locations(location_uid)
@@ -1192,6 +1193,44 @@ CREATE TABLE IF NOT EXISTS connection_edge_cells (
 );
 
 -- ============================================================
+-- relief_grade_systems  (R36l: ≥2 grades; 1 grade → no system row)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS relief_grade_systems (
+    grade_system_uid TEXT PRIMARY KEY,
+    world_uid        TEXT NOT NULL,
+    grade_uids       TEXT NOT NULL,          -- JSON ordered list, len ≥ 2
+    created_at       TEXT NOT NULL,
+    edge_uid         TEXT,
+    display_name     TEXT,
+    FOREIGN KEY (world_uid) REFERENCES worlds(world_uid),
+    FOREIGN KEY (edge_uid)  REFERENCES connection_edges(edge_uid)
+);
+
+-- ============================================================
+-- relief_grade_instances  (R36j: one constant-angle Grade ≈ MountainSpec)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS relief_grade_instances (
+    grade_uid        TEXT PRIMARY KEY,
+    world_uid        TEXT NOT NULL,
+    kind             TEXT NOT NULL,          -- SLOPE | SHEER
+    height_cells     INTEGER NOT NULL,
+    length_cells     INTEGER NOT NULL,
+    cell_refs        TEXT NOT NULL,          -- JSON [[lx,ly], ...] light-grid
+    created_at       TEXT NOT NULL,
+    angle_deg        REAL,                   -- NULL for SHEER
+    facing           TEXT,                   -- NULL / none for SHEER
+    earthen_canal    INTEGER NOT NULL DEFAULT 0,
+    template_uid     TEXT,
+    edge_uid         TEXT,
+    site_id          TEXT,
+    grade_system_uid TEXT,
+    FOREIGN KEY (world_uid)        REFERENCES worlds(world_uid),
+    FOREIGN KEY (template_uid)     REFERENCES relief_templates(template_uid),
+    FOREIGN KEY (edge_uid)         REFERENCES connection_edges(edge_uid),
+    FOREIGN KEY (grade_system_uid) REFERENCES relief_grade_systems(grade_system_uid)
+);
+
+-- ============================================================
 -- indexes
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_character_sheet_world    ON character_sheet (world_uid);
@@ -1235,6 +1274,9 @@ CREATE INDEX IF NOT EXISTS idx_location_passages_to     ON location_passages (to
 
 CREATE INDEX IF NOT EXISTS idx_map_cell_patches_location ON map_cell_patches (world_uid, location_uid, z);
 CREATE INDEX IF NOT EXISTS idx_map_cell_patches_xy       ON map_cell_patches (world_uid, x, y);
+CREATE INDEX IF NOT EXISTS idx_map_cell_patches_grade    ON map_cell_patches (world_uid, system_grade_uid);
+CREATE INDEX IF NOT EXISTS idx_relief_grade_instances_world ON relief_grade_instances (world_uid);
+CREATE INDEX IF NOT EXISTS idx_relief_grade_systems_world   ON relief_grade_systems (world_uid);
 CREATE INDEX IF NOT EXISTS idx_chunk_refine_jobs_world   ON chunk_refine_jobs (world_uid, status);
 
 CREATE INDEX IF NOT EXISTS idx_cell_states_cell         ON cell_states (world_uid, x, y, z);

@@ -24,7 +24,9 @@ from app.application.worldData.pack.climate.climatePackBakeOrchestrator import C
 from app.application.worldData.loadReliefTemplatesForWorld import (
     load_relief_templates_for_world,
 )
+from app.application.worldData.persistReliefGrades import persist_relief_grades
 from app.application.worldData.pack.bake.worldMapBakeOrchestrator import WorldMapBakeOrchestrator
+from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository
 from app.application.worldData.pack.refine.entryRefineOrchestrator import EntryRefineOrchestrator
 from app.application.worldData.pack.refine.fineTerrainRefineOrchestrator import FineTerrainRefineOrchestrator
 from app.application.worldData.pack.bake.locationsIndexBake import build_locations_index
@@ -69,6 +71,7 @@ class PackMaterializationOrchestrator:
         climate_bake: ClimatePackBakeOrchestrator | None = None,
         tile_planner: PackTilePlanner | None = None,
         relief_library: ReliefTemplateLibraryService | None = None,
+        relief_grade_repo: IReliefGradeRepository | None = None,
     ) -> None:
         self._terrain = terrain
         self._world_map = world_map or WorldMapBakeOrchestrator()
@@ -78,6 +81,7 @@ class PackMaterializationOrchestrator:
         self._read_context = read_context
         self._read_context_for = read_context_for
         self._relief_library = relief_library
+        self._relief_grade_repo = relief_grade_repo
         if entry is not None:
             self._entry = entry
             self._climate = climate_bake or entry.climate_bake
@@ -235,6 +239,17 @@ class PackMaterializationOrchestrator:
             bake_mode=bake_mode,
             relief_templates_by_uid=relief_templates,
         )
+        if self._relief_grade_repo is not None:
+            n_grades = await persist_relief_grades(
+                self._relief_grade_repo,
+                world_uid=world.world_uid,
+                instances=self._world_map.last_relief_grade_instances,
+            )
+            logging.getLogger(__name__).info(
+                "relief | persisted grade instances world=%s n=%d",
+                world.world_uid,
+                n_grades,
+            )
         terrain_result = PersistResult.from_counts(world_map_cells, world_map_cells)
 
         climate_fine_tiles = self._climate.bake_fine_for_l0_policy(

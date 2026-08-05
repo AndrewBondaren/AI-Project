@@ -15,7 +15,9 @@ from app.dataModel.terrain.relief.reliefDeltaSchedule import (
     ReliefDeltaInterval,
     ReliefDeltaSchedule,
 )
+from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeKnobs import ReliefGradeKnobs
+from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
 from app.dataModel.terrain.relief.reliefRoleCase import ReliefRoleCase
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.terrain.relief.reliefTemplateRegistryEntry import (
@@ -45,8 +47,10 @@ __all__ = [
     "ReliefDeltaBand",
     "ReliefDeltaInterval",
     "ReliefDeltaSchedule",
+    "ReliefGradeInstance",
     "ReliefGradeKnobs",
     "ReliefGradeObstaclePolicy",
+    "ReliefGradeSystem",
     "ReliefPickMode",
     "ReliefRoleCase",
     "ReliefSideKind",

@@ -1,8 +1,8 @@
-"""Apply road_shoulder grade after road paint (R20–R28 / R36 §8b+§9).
+"""Apply road_shoulder grade after road paint (R20–R28 / R36 §8b–§9 / §8c).
 
-Phases per seed: clearance → edgeRoadAnchor → volume plan → stamp.
+Phases per seed: clearance → edgeRoadAnchor → volume plan → stamp → Grade.
 ``structure_refs`` / ``earthen_canal`` stay on intents (RELIEF-BAR-1).
-Grade entity / ``system_grade_uid`` = §8c. Dilate sample = Q6 (open).
+Dilate sample = Q6 (open).
 """
 
 from __future__ import annotations
@@ -19,6 +19,9 @@ from app.application.worldData.generators.terrain.relief.facing import (
     uphill_facing_toward,
 )
 from app.application.worldData.generators.terrain.relief.geomResolve import ResolvedGeom
+from app.application.worldData.generators.terrain.relief.gradeInstanceFactory import (
+    build_ribbon_grade_instance,
+)
 from app.application.worldData.generators.terrain.relief.gradeObstacleLight import (
     is_grade_obstacle_light,
 )
@@ -220,6 +223,25 @@ def _materialize_segment(
             road_cells=road_cells,
             tile_set=tile_set,
         )
+        if wrote:
+            facing = _first_column_facing(
+                compose, wrote[0], tile_set=tile_set,
+            )
+            grade = build_ribbon_grade_instance(
+                world_uid=ctx.world.world_uid,
+                site_id=result.segment.site_id,
+                seed=seed,
+                plan=plan,
+                cell_refs=tuple(wrote),
+                facing=facing,
+                earthen_canal=result.decision.earthen_canal,
+                template_uid=result.template_uid,
+                edge_uid=result.segment.edge_uid,
+            )
+            _stamp_grade_uid(
+                compose, wrote, grade.grade_uid, tile_set=tile_set,
+            )
+            ctx.relief_grade_instances.append(grade)
         stamped.extend(wrote)
         max_L = max(max_L, len(wrote))
 
@@ -314,6 +336,39 @@ def _stamp_ribbon_plan(
             break
         wrote.append(cell_xy)
     return wrote
+
+
+def _stamp_grade_uid(
+    compose: LightGridCompose,
+    cells: list[tuple[int, int]],
+    grade_uid: str,
+    *,
+    tile_set: set[tuple[int, int]],
+) -> None:
+    scale = compose.scale
+    for lx, ly in cells:
+        gx, gy, tx, ty = light_to_macro_local(lx, ly, scale)
+        if (gx, gy) not in tile_set:
+            continue
+        cell = compose.get(gx, gy, tx, ty)
+        if cell is not None:
+            cell.system_grade_uid = grade_uid
+
+
+def _first_column_facing(
+    compose: LightGridCompose,
+    cell_xy: tuple[int, int],
+    *,
+    tile_set: set[tuple[int, int]],
+) -> str | None:
+    scale = compose.scale
+    gx, gy, tx, ty = light_to_macro_local(cell_xy[0], cell_xy[1], scale)
+    if (gx, gy) not in tile_set:
+        return None
+    cell = compose.get(gx, gy, tx, ty)
+    if cell is None:
+        return None
+    return cell.system_facing
 
 
 def _stamp_column(
