@@ -1,8 +1,8 @@
-"""Apply road_shoulder grade after road paint (R20–R28 data out).
+"""Apply road_shoulder grade after road paint (R20–R28 / R36 §8b+§9).
 
-Samples orthogonal neighbors → grade → expand by ``decision.width`` (RELIEF-T-16)
-→ stamp ``system_facing``. ``structure_refs`` / ``earthen_canal`` stay on intents
-(RELIEF-BAR-1 materialize).
+Phases per seed: clearance → edgeRoadAnchor → volume plan → stamp.
+``structure_refs`` / ``earthen_canal`` stay on intents (RELIEF-BAR-1).
+Grade entity / ``system_grade_uid`` = §8c. Dilate sample = Q6 (open).
 """
 
 from __future__ import annotations
@@ -10,19 +10,35 @@ from __future__ import annotations
 import logging
 
 from app.application.worldData.generators.terrain.relief.bakeSeed import bake_seed
+from app.application.worldData.generators.terrain.relief.edgeRoadAnchor import (
+    EdgeRoadAnchor,
+    edge_road_abutment,
+)
 from app.application.worldData.generators.terrain.relief.facing import (
     facing_wire,
     uphill_facing_toward,
 )
+from app.application.worldData.generators.terrain.relief.geomResolve import ResolvedGeom
+from app.application.worldData.generators.terrain.relief.gradeObstacleLight import (
+    is_grade_obstacle_light,
+)
+from app.application.worldData.generators.terrain.relief.reliefLog import relief_warning
+from app.application.worldData.generators.terrain.relief.ribbonSeedResolve import (
+    SeedClearance,
+    SeedClearanceSkip,
+    resolve_seed_clearance,
+)
 from app.application.worldData.generators.terrain.relief.roadShoulderGrade import (
     RoadShoulderGradeResult,
-    RoadShoulderSegment,
     grade_road_shoulder_segments,
     segmentize_by_terrain,
 )
-from app.application.worldData.generators.terrain.relief.shoulderWidth import (
-    expand_shoulder_ring,
-    relief_dz,
+from app.application.worldData.generators.terrain.relief.shoulderWidth import relief_dz
+from app.application.worldData.generators.terrain.relief.volumeMaterialize import (
+    RibbonVolumePlan,
+    geom_for_cleared_length,
+    plan_ribbon_volume,
+    ribbon_sign_from_dz,
 )
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
@@ -33,6 +49,7 @@ from app.application.worldData.pack.bake.lightGrid.coords import (
 from app.application.worldData.pack.bake.lightGrid.roadShoulderIntent import (
     RoadShoulderIntent,
 )
+from app.dataModel.spatial.facing import opposite
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.worldReliefPickPolicy import ObjectReliefPickPolicy
 
@@ -51,7 +68,7 @@ def apply_road_shoulder_grades(
     object_policy: ObjectReliefPickPolicy | None = None,
     occurrence_start: int = 0,
 ) -> list[RoadShoulderIntent]:
-    """Grade one edge's shoulders; mutate compose facing; append intents on ctx."""
+    """Grade one edge's shoulders; mutate compose z/facing; append intents."""
     if not ordered_road_light or not ctx.relief_templates_by_uid:
         return []
 
@@ -76,32 +93,25 @@ def apply_road_shoulder_grades(
         if result.decision.skipped or result.decision.kind is None:
             intents.append(_to_intent(result, result.segment.cell_coords))
             continue
-        expanded = expand_shoulder_ring(
-            result.segment.cell_coords,
-            road_cells,
-            result.decision.width,
-        )
-        wide_coords = tuple(sorted(expanded))
-        wide_segment = RoadShoulderSegment(
-            edge_uid=result.segment.edge_uid,
-            terrain_key=result.segment.terrain_key,
-            system_terrain=result.segment.system_terrain,
-            dz=result.segment.dz,
-            site_id=result.segment.site_id,
-            cell_coords=wide_coords,
-        )
-        wide_result = RoadShoulderGradeResult(
-            segment=wide_segment,
-            decision=result.decision,
-            template_uid=result.template_uid,
-        )
-        _stamp_segment(
+        stamped, width_used = _materialize_segment(
             compose,
-            wide_result,
+            ctx,
+            result,
             road_cells=road_cells,
             tile_set=tile_set,
         )
-        intents.append(_to_intent(wide_result, wide_coords))
+        if not stamped:
+            intents.append(
+                _to_intent(
+                    result,
+                    (),
+                    skipped=True,
+                    reason="clearance_skip",
+                    width=0,
+                )
+            )
+            continue
+        intents.append(_to_intent(result, stamped, width=width_used))
     ctx.road_shoulder_intents.extend(intents)
     logger.debug(
         "relief | road_shoulder edge=%s segments=%d applied=%d",
@@ -115,6 +125,10 @@ def apply_road_shoulder_grades(
 def _to_intent(
     result: RoadShoulderGradeResult,
     cell_coords: tuple[tuple[int, int], ...],
+    *,
+    skipped: bool | None = None,
+    reason: str | None = None,
+    width: int | None = None,
 ) -> RoadShoulderIntent:
     d = result.decision
     kind = d.kind.value if d.kind is not None else None
@@ -123,12 +137,248 @@ def _to_intent(
         site_id=result.segment.site_id,
         template_uid=result.template_uid,
         kind=kind,
-        width=d.width,
+        width=d.requested_length if width is None else int(width),
         cell_coords=cell_coords,
         earthen_canal=d.earthen_canal,
         structure_refs=d.structure_refs,
-        skipped=d.skipped,
-        reason=d.reason,
+        skipped=d.skipped if skipped is None else skipped,
+        reason=d.reason if reason is None else reason,
+    )
+
+
+def _materialize_segment(
+    compose: LightGridCompose,
+    ctx: LightGridBakeContext,
+    result: RoadShoulderGradeResult,
+    *,
+    road_cells: set[tuple[int, int]],
+    tile_set: set[tuple[int, int]],
+) -> tuple[tuple[tuple[int, int], ...], int]:
+    """Orchestrate per-seed phases; no inline clearance/geom/stamp logic."""
+    kind = result.decision.kind
+    assert kind is not None
+    h = int(result.decision.h)
+    if h < 1:
+        return (), 0
+    sign = ribbon_sign_from_dz(int(result.segment.dz))
+    requested = max(0, int(result.decision.requested_length))
+    stamped: list[tuple[int, int]] = []
+    max_L = 0
+
+    for seed in result.segment.cell_coords:
+        clearance = resolve_seed_clearance(
+            seed=seed,
+            road_cells=road_cells,
+            requested_length=requested,
+            world=ctx.world,
+            cell_blocked=lambda c: _cell_blocked_light(
+                compose, c, tile_set=tile_set,
+            ),
+        )
+        if isinstance(clearance, SeedClearanceSkip):
+            relief_warning(
+                "road_shoulder_skip",
+                site_id=result.segment.site_id,
+                why=clearance.why,
+                seed=clearance.seed,
+                free_gap=clearance.free_gap,
+                requested=clearance.requested,
+                L_eff=clearance.L_eff,
+            )
+            continue
+
+        anchor = _resolve_edge_road_anchor(
+            compose, clearance, road_cells=road_cells, tile_set=tile_set,
+        )
+        if anchor is None:
+            relief_warning(
+                "road_shoulder_skip",
+                site_id=result.segment.site_id,
+                why="no_edge_road_anchor",
+                seed=seed,
+            )
+            continue
+
+        plan = _plan_seed_volume(
+            decision_geom=result.decision.geom,
+            h=h,
+            kind=kind,
+            L_eff=clearance.L_eff,
+            z_road=anchor.z,
+            sign=sign,
+        )
+        if plan is None or not plan.columns:
+            continue
+
+        wrote = _stamp_ribbon_plan(
+            compose,
+            seed=seed,
+            plan=plan,
+            kind=kind,
+            sign=sign,
+            anchor=anchor,
+            road_cells=road_cells,
+            tile_set=tile_set,
+        )
+        stamped.extend(wrote)
+        max_L = max(max_L, len(wrote))
+
+    return tuple(sorted(set(stamped))), max_L
+
+
+def _plan_seed_volume(
+    *,
+    decision_geom: ResolvedGeom | None,
+    h: int,
+    kind: ReliefSideKind,
+    L_eff: int,
+    z_road: int,
+    sign: int,
+) -> RibbonVolumePlan | None:
+    """Phase: geom after clearance + volume columns."""
+    if (
+        decision_geom is not None
+        and decision_geom.kind is kind
+        and int(decision_geom.L) == int(L_eff)
+        and int(decision_geom.h) == int(h)
+    ):
+        geom = decision_geom
+    else:
+        geom = geom_for_cleared_length(h=h, kind=kind, length=L_eff)
+    if geom.L < 1:
+        return None
+    return plan_ribbon_volume(z_road=z_road, h=h, sign=sign, geom=geom)
+
+
+def _resolve_edge_road_anchor(
+    compose: LightGridCompose,
+    clearance: SeedClearance,
+    *,
+    road_cells: set[tuple[int, int]],
+    tile_set: set[tuple[int, int]],
+) -> EdgeRoadAnchor | None:
+    """Phase: footprint-edge abutment (seed − outward)."""
+    abutment = edge_road_abutment(
+        clearance.seed, clearance.outward, road_cells,
+    )
+    if abutment is None:
+        return None
+    scale = compose.scale
+    gx, gy, tx, ty = light_to_macro_local(abutment[0], abutment[1], scale)
+    if (gx, gy) not in tile_set:
+        return None
+    cell = compose.get(gx, gy, tx, ty)
+    if cell is None:
+        return None
+    return EdgeRoadAnchor(
+        xy=abutment,
+        outward=clearance.outward,
+        z=int(cell.surface_z),
+        center_m=light_cell_center_m(gx, gy, tx, ty, scale),
+    )
+
+
+def _stamp_ribbon_plan(
+    compose: LightGridCompose,
+    *,
+    seed: tuple[int, int],
+    plan: RibbonVolumePlan,
+    kind: ReliefSideKind,
+    sign: int,
+    anchor: EdgeRoadAnchor,
+    road_cells: set[tuple[int, int]],
+    tile_set: set[tuple[int, int]],
+) -> list[tuple[int, int]]:
+    """Phase: write surface_z + facing along outward from seed."""
+    dx, dy = anchor.outward
+    sx, sy = seed
+    wrote: list[tuple[int, int]] = []
+    for col in plan.columns:
+        lx = sx + dx * (col.k - 1)
+        ly = sy + dy * (col.k - 1)
+        cell_xy = (lx, ly)
+        if _is_obstacle(
+            compose, cell_xy, road_cells=road_cells, tile_set=tile_set,
+        ):
+            break
+        if not _stamp_column(
+            compose,
+            lx,
+            ly,
+            surface_z=col.surface_z,
+            kind=kind,
+            sign=sign,
+            anchor=anchor,
+            tile_set=tile_set,
+        ):
+            break
+        wrote.append(cell_xy)
+    return wrote
+
+
+def _stamp_column(
+    compose: LightGridCompose,
+    lx: int,
+    ly: int,
+    *,
+    surface_z: int,
+    kind: ReliefSideKind,
+    sign: int,
+    anchor: EdgeRoadAnchor,
+    tile_set: set[tuple[int, int]],
+) -> bool:
+    scale = compose.scale
+    gx, gy, tx, ty = light_to_macro_local(lx, ly, scale)
+    if (gx, gy) not in tile_set:
+        return False
+    cell = compose.get(gx, gy, tx, ty)
+    if cell is None:
+        return False
+    cell.surface_z = int(surface_z)
+    if kind is ReliefSideKind.SHEER:
+        cell.system_facing = None
+        return True
+    cx, cy = light_cell_center_m(gx, gy, tx, ty, scale)
+    toward_road = uphill_facing_toward(cx, cy, anchor.center_m[0], anchor.center_m[1])
+    if toward_road is None:
+        cell.system_facing = None
+        return True
+    facing = toward_road if sign < 0 else opposite(toward_road)
+    cell.system_facing = facing_wire(facing)
+    return True
+
+
+def _cell_blocked_light(
+    compose: LightGridCompose,
+    cell: tuple[int, int],
+    *,
+    tile_set: set[tuple[int, int]],
+) -> bool:
+    """Bake adapter: OOB / missing / settlement pin (not road — see obstacle helper)."""
+    lx, ly = cell
+    scale = compose.scale
+    gx, gy, tx, ty = light_to_macro_local(lx, ly, scale)
+    if (gx, gy) not in tile_set:
+        return True
+    if not (0 <= tx < scale.side and 0 <= ty < scale.side):
+        return True
+    grid_cell = compose.get(gx, gy, tx, ty)
+    if grid_cell is None:
+        return True
+    return grid_cell.location_pin is not None
+
+
+def _is_obstacle(
+    compose: LightGridCompose,
+    cell: tuple[int, int],
+    *,
+    road_cells: set[tuple[int, int]],
+    tile_set: set[tuple[int, int]],
+) -> bool:
+    return is_grade_obstacle_light(
+        cell,
+        road_cells=road_cells,
+        cell_blocked=lambda c: _cell_blocked_light(compose, c, tile_set=tile_set),
     )
 
 
@@ -139,7 +389,10 @@ def _sample_shoulder_cells(
     *,
     tile_set: set[tuple[int, int]],
 ) -> list[tuple[tuple[int, int], str, int]]:
-    """Stable walk: for each road cell, emit orthogonal non-road neighbors once."""
+    """Stable walk: for each road cell, emit orthogonal non-road neighbors once.
+
+    Q6: still walks ``ordered`` (centerline), not dilated footprint edge.
+    """
     scale = compose.scale
     seen: set[tuple[int, int]] = set()
     out: list[tuple[tuple[int, int], str, int]] = []
@@ -166,53 +419,3 @@ def _sample_shoulder_cells(
             seen.add((nx, ny))
             out.append(((nx, ny), str(neighbor.system_terrain), relief_dz(road_z, neighbor.surface_z)))
     return out
-
-
-def _stamp_segment(
-    compose: LightGridCompose,
-    result: RoadShoulderGradeResult,
-    *,
-    road_cells: set[tuple[int, int]],
-    tile_set: set[tuple[int, int]],
-) -> None:
-    scale = compose.scale
-    kind = result.decision.kind
-    for lx, ly in result.segment.cell_coords:
-        gx, gy, tx, ty = light_to_macro_local(lx, ly, scale)
-        if (gx, gy) not in tile_set:
-            continue
-        cell = compose.get(gx, gy, tx, ty)
-        if cell is None:
-            continue
-        if kind == ReliefSideKind.SHEER:
-            cell.system_facing = None
-            continue
-        target = _nearest_road_center(compose, lx, ly, road_cells, tile_set)
-        if target is None:
-            continue
-        cx, cy = light_cell_center_m(gx, gy, tx, ty, scale)
-        facing = uphill_facing_toward(cx, cy, target[0], target[1])
-        cell.system_facing = facing_wire(facing)
-
-
-def _nearest_road_center(
-    compose: LightGridCompose,
-    lx: int,
-    ly: int,
-    road_cells: set[tuple[int, int]],
-    tile_set: set[tuple[int, int]],
-) -> tuple[float, float] | None:
-    scale = compose.scale
-    # Prefer ortho neighbor; else any road cell by manhattan (expanded ring)
-    best: tuple[int, tuple[int, int]] | None = None
-    for rx, ry in road_cells:
-        dist = abs(rx - lx) + abs(ry - ly)
-        if best is None or dist < best[0]:
-            best = (dist, (rx, ry))
-    if best is None:
-        return None
-    rx, ry = best[1]
-    ngx, ngy, ntx, nty = light_to_macro_local(rx, ry, scale)
-    if (ngx, ngy) not in tile_set:
-        return None
-    return light_cell_center_m(ngx, ngy, ntx, nty, scale)

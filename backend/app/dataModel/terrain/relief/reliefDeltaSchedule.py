@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.dataModel.terrain.relief.reliefGradeKnobs import ReliefGradeKnobs
-
-_DEFAULT_WIDTH = int(ReliefGradeKnobs.model_fields["shoulder_width_cells"].default)
+from app.dataModel.terrain.relief.reliefGradeKnobs import (
+    DEFAULT_SLOPE_LENGTH_CELLS,
+    resolved_slope_length_cells,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -17,9 +18,16 @@ class ReliefDeltaInterval:
     value_max: int | None  # None = unbounded
     slope_weight: float
     sheer_weight: float
-    shoulder_width_cells: int = _DEFAULT_WIDTH
+    slope_length_cells: int | None = None
+    target_angle_deg: float | None = None
     earthen_canal: bool = False
     structure_refs: tuple[str, ...] = ()
+
+    def outward_length_cells(self) -> int:
+        return resolved_slope_length_cells(
+            self.slope_length_cells,
+            default=DEFAULT_SLOPE_LENGTH_CELLS,
+        )
 
 
 @dataclass(frozen=True, slots=True)

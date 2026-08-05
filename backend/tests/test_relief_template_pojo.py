@@ -104,6 +104,51 @@ class ReliefTemplatePojoTest(unittest.TestCase):
                 "side_recipe": {"default_side_kind": "slope"},
             })
 
+    def test_geom_xor_length_ok(self) -> None:
+        tpl = ReliefTemplate.model_validate({
+            "system_name": "len2",
+            "display_name": "Len2",
+            "context": "road_shoulder",
+            "slope_length_cells": 2,
+            "conditions": [{
+                "terrain": "plains",
+                "cases": [
+                    {
+                        "policy": "slope_down",
+                        "delta_z": 1,
+                        "slope_weight": 1.0,
+                        "sheer_weight": 0.0,
+                        "slope_length_cells": 3,
+                    },
+                    {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0},
+                    {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0},
+                ],
+            }],
+        })
+        self.assertEqual(tpl.outward_length_cells(), 2)
+        self.assertEqual(tpl.conditions[0].cases[0].outward_length_cells(), 3)
+
+    def test_geom_xor_both_reject(self) -> None:
+        with self.assertRaises(ValidationError):
+            ReliefTemplate.model_validate({
+                "system_name": "both",
+                "display_name": "Both",
+                "context": "road_shoulder",
+                "slope_length_cells": 2,
+                "target_angle_deg": 30.0,
+                "conditions": [],
+            })
+
+    def test_shoulder_width_removed_reject(self) -> None:
+        with self.assertRaises(ValidationError):
+            ReliefTemplate.model_validate({
+                "system_name": "legacy",
+                "display_name": "Legacy",
+                "context": "road_shoulder",
+                "shoulder_width_cells": 2,
+                "conditions": [],
+            })
+
 
 if __name__ == "__main__":
     unittest.main()

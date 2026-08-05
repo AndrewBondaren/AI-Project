@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.dataModel.terrain.relief.enums import ReliefSlopePolicy
+from app.dataModel.terrain.relief.reliefDeltaBand import ReliefDeltaBand
 from app.dataModel.terrain.relief.reliefDeltaSchedule import (
     ReliefDeltaInterval,
     ReliefDeltaSchedule,
@@ -22,15 +23,29 @@ def normalize_condition(condition: ReliefTerrainCondition) -> ReliefDeltaSchedul
     return _normalize_mode_b(none_case, down_case, up_case)
 
 
-def _knobs_from_case(case: ReliefRoleCase) -> ReliefDeltaInterval:
+def _knobs_from_case(case: ReliefRoleCase, *, value_min: int) -> ReliefDeltaInterval:
     return ReliefDeltaInterval(
-        value_min=0,
+        value_min=value_min,
         value_max=None,
         slope_weight=float(case.slope_weight or 0.0),
         sheer_weight=float(case.sheer_weight or 0.0),
-        shoulder_width_cells=case.shoulder_width_cells,
+        slope_length_cells=case.slope_length_cells,
+        target_angle_deg=case.target_angle_deg,
         earthen_canal=case.earthen_canal,
         structure_refs=tuple(case.structure_refs),
+    )
+
+
+def _knobs_from_band(band: ReliefDeltaBand) -> ReliefDeltaInterval:
+    return ReliefDeltaInterval(
+        value_min=band.delta_z_min,
+        value_max=band.delta_z_max,
+        slope_weight=band.slope_weight,
+        sheer_weight=band.sheer_weight,
+        slope_length_cells=band.slope_length_cells,
+        target_angle_deg=band.target_angle_deg,
+        earthen_canal=band.earthen_canal,
+        structure_refs=tuple(band.structure_refs),
     )
 
 
@@ -44,25 +59,9 @@ def _normalize_mode_a(
     up_min = int(up_case.delta_z or 1)
     return ReliefDeltaSchedule(
         none_max_abs=none_max,
-        none_knobs=_knobs_from_case(none_case),
-        down=(ReliefDeltaInterval(
-            value_min=down_min,
-            value_max=None,
-            slope_weight=float(down_case.slope_weight or 0.0),
-            sheer_weight=float(down_case.sheer_weight or 0.0),
-            shoulder_width_cells=down_case.shoulder_width_cells,
-            earthen_canal=down_case.earthen_canal,
-            structure_refs=tuple(down_case.structure_refs),
-        ),),
-        up=(ReliefDeltaInterval(
-            value_min=up_min,
-            value_max=None,
-            slope_weight=float(up_case.slope_weight or 0.0),
-            sheer_weight=float(up_case.sheer_weight or 0.0),
-            shoulder_width_cells=up_case.shoulder_width_cells,
-            earthen_canal=up_case.earthen_canal,
-            structure_refs=tuple(up_case.structure_refs),
-        ),),
+        none_knobs=_knobs_from_case(none_case, value_min=0),
+        down=(_knobs_from_case(down_case, value_min=down_min),),
+        up=(_knobs_from_case(up_case, value_min=up_min),),
     )
 
 
@@ -71,32 +70,11 @@ def _normalize_mode_b(
     down_case: ReliefRoleCase,
     up_case: ReliefRoleCase,
 ) -> ReliefDeltaSchedule:
-    down = tuple(
-        ReliefDeltaInterval(
-            value_min=b.delta_z_min,
-            value_max=b.delta_z_max,
-            slope_weight=b.slope_weight,
-            sheer_weight=b.sheer_weight,
-            shoulder_width_cells=b.shoulder_width_cells,
-            earthen_canal=b.earthen_canal,
-            structure_refs=tuple(b.structure_refs),
-        )
-        for b in (down_case.bands or [])
-    )
-    up = tuple(
-        ReliefDeltaInterval(
-            value_min=b.delta_z_min,
-            value_max=b.delta_z_max,
-            slope_weight=b.slope_weight,
-            sheer_weight=b.sheer_weight,
-            shoulder_width_cells=b.shoulder_width_cells,
-            earthen_canal=b.earthen_canal,
-            structure_refs=tuple(b.structure_refs),
-        )
-        for b in (up_case.bands or [])
-    )
+    del none_case  # Mode B: none_max_abs=0; knobs unused
+    down = tuple(_knobs_from_band(b) for b in (down_case.bands or []))
+    up = tuple(_knobs_from_band(b) for b in (up_case.bands or []))
     return ReliefDeltaSchedule(
-        none_max_abs=0,  # Mode B: abs(dz) < 1 → none
+        none_max_abs=0,
         none_knobs=None,
         down=down,
         up=up,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import unittest
 
 from app.application.worldData.generators.terrain.relief.conditionNormalize import (
@@ -13,6 +14,12 @@ from app.application.worldData.generators.terrain.relief.mountainSideMaterialize
 )
 from app.application.worldData.generators.terrain.relief.slopeClassify import classify
 from app.application.worldData.generators.terrain.relief.templatePick import pick_template
+from app.application.worldData.generators.terrain.relief.geomResolve import (
+    angle_from_height_length,
+    geom_resolve,
+    length_from_target_angle,
+    partition_height,
+)
 from app.application.worldData.generators.terrain.relief.obstacleClearance import (
     outward_length_for_policy,
 )
@@ -137,6 +144,180 @@ class ReliefPureTest(unittest.TestCase):
             WorldReliefGradeObstacleScalars.canonical_defaults().relief_grade_obstacle_policy,
             ReliefGradeObstaclePolicy.TRUNCATE_SKIP,
         )
+
+    def test_partition_height_canon(self) -> None:
+        self.assertEqual(partition_height(1, 1), (1,))
+        self.assertEqual(partition_height(4, 2), (2, 2))
+        self.assertEqual(partition_height(5, 2), (3, 2))
+        self.assertEqual(partition_height(3, 5), (1, 1, 1, 0, 0))
+        self.assertEqual(sum(partition_height(5, 2)), 5)
+
+    def test_partition_height_matrix_h_l_1_to_4(self) -> None:
+        """Raw partition for every (h,L) in 1..4 — includes flat tails when h < L."""
+        expected = {
+            (1, 1): (1,),
+            (1, 2): (1, 0),
+            (1, 3): (1, 0, 0),
+            (1, 4): (1, 0, 0, 0),
+            (2, 1): (2,),
+            (2, 2): (1, 1),
+            (2, 3): (1, 1, 0),
+            (2, 4): (1, 1, 0, 0),
+            (3, 1): (3,),
+            (3, 2): (2, 1),
+            (3, 3): (1, 1, 1),
+            (3, 4): (1, 1, 1, 0),
+            (4, 1): (4,),
+            (4, 2): (2, 2),
+            (4, 3): (2, 1, 1),
+            (4, 4): (1, 1, 1, 1),
+        }
+        for h in range(1, 5):
+            for L in range(1, 5):
+                steps = partition_height(h, L)
+                self.assertEqual(steps, expected[(h, L)], msg=f"h={h} L={L}")
+                self.assertEqual(sum(steps), h)
+                self.assertEqual(len(steps), L)
+
+    def test_geom_a_matrix_h_l_1_to_4(self) -> None:
+        """Geom-A resolve: L_eff=min(L,h); steps all ≥1; θ=atan(h/L_eff)."""
+        # Realized angle (deg) after clamp — cubic cell.
+        # Diagonal h==L → 45°; L>h clamps to L_eff=h → also 45°;
+        # L<h → steeper than 45°.
+        expected_angle = {
+            (1, 1): 45.0,
+            (1, 2): 45.0,   # clamp L→1
+            (1, 3): 45.0,
+            (1, 4): 45.0,
+            (2, 1): math.degrees(math.atan(2 / 1)),  # ~63.43
+            (2, 2): 45.0,
+            (2, 3): 45.0,   # clamp L→2
+            (2, 4): 45.0,
+            (3, 1): math.degrees(math.atan(3 / 1)),  # ~71.57
+            (3, 2): math.degrees(math.atan(3 / 2)),  # ~56.31
+            (3, 3): 45.0,
+            (3, 4): 45.0,   # clamp L→3
+            (4, 1): math.degrees(math.atan(4 / 1)),  # ~75.96
+            (4, 2): math.degrees(math.atan(4 / 2)),  # ~63.43
+            (4, 3): math.degrees(math.atan(4 / 3)),  # ~53.13
+            (4, 4): 45.0,
+        }
+        expected_steps = {
+            (1, 1): (1,),
+            (1, 2): (1,),
+            (1, 3): (1,),
+            (1, 4): (1,),
+            (2, 1): (2,),
+            (2, 2): (1, 1),
+            (2, 3): (1, 1),
+            (2, 4): (1, 1),
+            (3, 1): (3,),
+            (3, 2): (2, 1),
+            (3, 3): (1, 1, 1),
+            (3, 4): (1, 1, 1),
+            (4, 1): (4,),
+            (4, 2): (2, 2),
+            (4, 3): (2, 1, 1),
+            (4, 4): (1, 1, 1, 1),
+        }
+        for h in range(1, 5):
+            for L in range(1, 5):
+                g = geom_resolve(
+                    h=h,
+                    kind=ReliefSideKind.SLOPE,
+                    slope_length_cells=L,
+                )
+                L_eff = min(L, h)
+                self.assertEqual(g.h, h, msg=f"h={h} L={L}")
+                self.assertEqual(g.L, L_eff, msg=f"h={h} L={L}")
+                self.assertEqual(g.steps, expected_steps[(h, L)], msg=f"h={h} L={L}")
+                self.assertEqual(sum(g.steps), h, msg=f"h={h} L={L}")
+                self.assertTrue(all(s >= 1 for s in g.steps), msg=f"h={h} L={L}")
+                self.assertAlmostEqual(
+                    g.angle_deg or 0.0,
+                    expected_angle[(h, L)],
+                    places=5,
+                    msg=f"h={h} L={L}",
+                )
+                self.assertAlmostEqual(
+                    angle_from_height_length(h, L_eff),
+                    expected_angle[(h, L)],
+                    places=5,
+                    msg=f"h={h} L={L}",
+                )
+
+    def test_geom_b_length_then_clamp(self) -> None:
+        # Formula: h=2, θ=30 → L≈4; resolve clamps L_eff=min(L,h)=2 → realized 45°
+        self.assertEqual(length_from_target_angle(2, 30.0), 4)
+        g = geom_resolve(
+            h=2,
+            kind=ReliefSideKind.SLOPE,
+            target_angle_deg=30.0,
+        )
+        self.assertEqual(g.L, 2)
+        self.assertEqual(sum(g.steps), 2)
+        self.assertTrue(all(s >= 1 for s in g.steps))
+        self.assertAlmostEqual(g.angle_deg or 0.0, 45.0, places=5)
+
+    def test_geom_b_matrix_angles_for_h_1_to_4(self) -> None:
+        """Geom-B: L_raw=ceil(h/tanθ); after clamp θ_realized ≥ 45° when cubic + steps≥1."""
+        # Gentle targets (<45°) always clamp to L_eff=h → realized 45°.
+        for h in range(1, 5):
+            for target in (20.0, 30.0, 40.0):
+                L_raw = length_from_target_angle(h, target)
+                self.assertGreaterEqual(L_raw, h, msg=f"h={h} θ={target}")
+                g = geom_resolve(
+                    h=h,
+                    kind=ReliefSideKind.SLOPE,
+                    target_angle_deg=target,
+                )
+                self.assertEqual(g.L, h)
+                self.assertAlmostEqual(g.angle_deg or 0.0, 45.0, places=5)
+
+        # Steeper than 45°: L_raw < h possible → keep steep realized angle.
+        # h=4, θ=60 → L=ceil(4/tan60)=ceil(2.309)=3 → L_eff=3 → atan(4/3)≈53.13
+        self.assertEqual(length_from_target_angle(4, 60.0), 3)
+        g60 = geom_resolve(h=4, kind=ReliefSideKind.SLOPE, target_angle_deg=60.0)
+        self.assertEqual(g60.L, 3)
+        self.assertAlmostEqual(g60.angle_deg or 0.0, math.degrees(math.atan(4 / 3)), places=5)
+        self.assertEqual(sum(g60.steps), 4)
+
+        # h=4, θ=75 → L=ceil(4/tan75)=ceil(1.072)=2 → atan(4/2)=63.43
+        self.assertEqual(length_from_target_angle(4, 75.0), 2)
+        g75 = geom_resolve(h=4, kind=ReliefSideKind.SLOPE, target_angle_deg=75.0)
+        self.assertEqual(g75.L, 2)
+        self.assertAlmostEqual(g75.angle_deg or 0.0, math.degrees(math.atan(4 / 2)), places=5)
+
+    def test_sheer_l_times_h(self) -> None:
+        g = geom_resolve(
+            h=6,
+            kind=ReliefSideKind.SHEER,
+            slope_length_cells=2,
+        )
+        self.assertEqual(g.h, 6)
+        self.assertEqual(g.L, 2)
+        self.assertIsNone(g.angle_deg)
+        self.assertEqual(g.steps, ())
+        # Geom-B ignored for SHEER
+        g2 = geom_resolve(
+            h=6,
+            kind=ReliefSideKind.SHEER,
+            target_angle_deg=30.0,
+        )
+        self.assertEqual(g2.L, 1)
+
+        # SHEER L matrix: no clamp to h (XY columns independent of vertical h)
+        for h in range(1, 5):
+            for L in range(1, 5):
+                gs = geom_resolve(
+                    h=h,
+                    kind=ReliefSideKind.SHEER,
+                    slope_length_cells=L,
+                )
+                self.assertEqual(gs.L, L, msg=f"SHEER h={h} L={L}")
+                self.assertEqual(gs.h, h)
+                self.assertIsNone(gs.angle_deg)
+                self.assertEqual(gs.steps, ())
 
 
 if __name__ == "__main__":

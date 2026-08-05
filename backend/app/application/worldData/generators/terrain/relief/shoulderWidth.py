@@ -21,7 +21,7 @@ def expand_shoulder_ring(
     if w == 1 or not road_cells:
         return out
     for seed in seed_cells:
-        direction = _unique_outward(seed, road_cells)
+        direction = unique_outward(seed, road_cells)
         if direction is None:
             continue
         dx, dy = direction
@@ -36,7 +36,7 @@ def expand_shoulder_ring(
     return out
 
 
-def _unique_outward(
+def unique_outward(
     cell: tuple[int, int],
     road_cells: set[tuple[int, int]],
 ) -> tuple[int, int] | None:

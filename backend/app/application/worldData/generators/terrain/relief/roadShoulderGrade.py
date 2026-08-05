@@ -160,6 +160,6 @@ def grade_road_shoulder_segments(
             kind=None if decision.kind is None else decision.kind.value,
             earthen_canal=decision.earthen_canal,
             structure_refs=list(decision.structure_refs),
-            width=decision.width,
+            width=decision.requested_length,
         )
     return results

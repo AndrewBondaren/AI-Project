@@ -928,10 +928,10 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | **RELIEF-T-35** | medium | open | P2 | DRY | `slope_weight+sheer_weight==1` ×3 (`reliefRoleCase`, `reliefTemplate`, `mountainSideRecipe`). Target: `require_weights_pair` |
 | **RELIEF-T-36** | medium | open | P2 | DRY | pick+load дубль: `roadShoulderGrade` ↔ `reliefSidesStamp`. Target: `resolve_picked_template(...)` |
 | **RELIEF-T-37** | medium | open | P2 | wire keys | `worldRow` литералы `"relief_template_registry"` / `"relief_pick_policy"` ≠ `model_fields` / `WorldSlice.world_keys`. Эталон: `RELIEF_OBSTACLE_SCALAR_WIRE_KEYS` |
-| **RELIEF-T-38** | medium | open | P2 | values | `shoulderWidth`: `max(1, width)` режет `0`; POJO `shoulder_width_cells` `ge=0`. Target: honor 0 или clamp в POJO/TZ |
+| **RELIEF-T-38** | medium | open | P2 | values | `expand_shoulder_ring`: `max(1, width)` режет `0`; POJO `slope_length_cells` допускает 0. Target: honor 0 или clamp в POJO/TZ |
 | **RELIEF-T-39** | medium | open | P2 | values | `conditionNormalize`: `float(... or 0.0)`, `delta_z or 0/1` — silent fallback мимо validators |
 | **RELIEF-T-40** | low | open | P3 | DRY | seeded SHA256 дубль (`kindRoll`/`templatePick`); skip `RibbonGradeDecision` factory; log `"SLOPE"` → `ReliefSideKind.SLOPE.value` |
-| **RELIEF-T-41** | low | open | P3 | values | `gradePass` skip: литералы `earthen_canal=False`, `structure_refs=()` vs defaults `ReliefGradeKnobs` |
+| **RELIEF-T-41** | low | **resolved** | P3 | values | `gradePass` skip attachments ← `ReliefGradeKnobs` defaults |
 
 **Связь R36n (не smell):** `WorldReliefGradeObstacleScalars` + `ReliefGradeObstaclePolicy` + `obstacleClearance` — shipped; bake footprint→`free_gap` ещё нет (отдельный impl после R36 materialize).
 

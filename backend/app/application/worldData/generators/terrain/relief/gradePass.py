@@ -7,6 +7,10 @@ from dataclasses import dataclass
 from app.application.worldData.generators.terrain.relief.conditionNormalize import (
     normalize_condition,
 )
+from app.application.worldData.generators.terrain.relief.geomResolve import (
+    ResolvedGeom,
+    geom_resolve,
+)
 from app.application.worldData.generators.terrain.relief.kindRoll import kind_roll
 from app.application.worldData.generators.terrain.relief.reliefLog import (
     relief_info,
@@ -14,17 +18,32 @@ from app.application.worldData.generators.terrain.relief.reliefLog import (
 )
 from app.application.worldData.generators.terrain.relief.slopeClassify import classify
 from app.dataModel.terrain.relief.enums import ReliefSideKind, ReliefSlopePolicy
+from app.dataModel.terrain.relief.reliefGradeKnobs import ReliefGradeKnobs
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
+
+
+def _attachment_defaults() -> tuple[bool, tuple[str, ...]]:
+    """``earthen_canal`` / ``structure_refs`` from knobs POJO defaults (RELIEF-T-41)."""
+    knobs = ReliefGradeKnobs.model_validate({
+        "slope_weight": 1.0,
+        "sheer_weight": 0.0,
+    })
+    return bool(knobs.earthen_canal), tuple(knobs.structure_refs)
 
 
 @dataclass(frozen=True, slots=True)
 class RibbonGradeDecision:
-    """Ribbon/edge grade site (road_shoulder / open_land / shore) — RELIEF-T-1."""
+    """Ribbon/edge grade site (road_shoulder / open_land / shore) — RELIEF-T-1.
+
+    ``requested_length`` / ``geom`` are pre-clearance; bake shortens via §9.
+    """
 
     template_uid: str
     policy: ReliefSlopePolicy | None
     kind: ReliefSideKind | None
-    width: int
+    requested_length: int
+    h: int
+    geom: ResolvedGeom | None
     earthen_canal: bool
     structure_refs: tuple[str, ...]
     reason: str
@@ -40,7 +59,11 @@ def grade_from_template(
     world_seed: str,
     site_id: str,
 ) -> RibbonGradeDecision:
-    """Classify + kindRoll for one ribbon site; skip on slope_none / missing condition."""
+    """Classify + kindRoll + geom for one ribbon site."""
+    h = abs(int(dz))
+    earthen_default, refs_default = _attachment_defaults()
+    root_length = template.outward_length_cells()
+
     cond = template.condition_for(terrain_key)
     if cond is None:
         relief_info(
@@ -54,9 +77,11 @@ def grade_from_template(
             template_uid=template_uid,
             policy=None,
             kind=None,
-            width=template.shoulder_width_cells,
-            earthen_canal=False,
-            structure_refs=(),
+            requested_length=root_length,
+            h=h,
+            geom=None,
+            earthen_canal=earthen_default,
+            structure_refs=refs_default,
             reason="no_condition",
             skipped=True,
         )
@@ -74,13 +99,18 @@ def grade_from_template(
             chosen_fallback="SLOPE",
             site_id=site_id,
         )
+        geom = geom_resolve(
+            h=h, kind=ReliefSideKind.SLOPE, slope_length_cells=root_length,
+        )
         return RibbonGradeDecision(
             template_uid=template_uid,
             policy=None,
             kind=ReliefSideKind.SLOPE,
-            width=template.shoulder_width_cells,
-            earthen_canal=False,
-            structure_refs=(),
+            requested_length=geom.L,
+            h=h,
+            geom=geom,
+            earthen_canal=earthen_default,
+            structure_refs=refs_default,
             reason="schedule_hole_r21_slope",
             skipped=False,
         )
@@ -97,9 +127,11 @@ def grade_from_template(
             template_uid=template_uid,
             policy=hit.policy,
             kind=None,
-            width=template.shoulder_width_cells,
-            earthen_canal=False,
-            structure_refs=(),
+            requested_length=root_length,
+            h=h,
+            geom=None,
+            earthen_canal=earthen_default,
+            structure_refs=refs_default,
             reason=hit.reason,
             skipped=True,
         )
@@ -113,12 +145,14 @@ def grade_from_template(
         slope_weight=hit.knobs.slope_weight,
         sheer_weight=hit.knobs.sheer_weight,
     )
+    geom = geom_resolve(h=h, kind=kind, knobs=hit.knobs)
     relief_info(
         "grade_apply",
         template_uid=template_uid,
         policy=hit.policy.value,
         kind=kind.value,
-        width=hit.knobs.shoulder_width_cells,
+        requested_length=geom.L,
+        angle_deg=geom.angle_deg,
         earthen_canal=hit.knobs.earthen_canal,
         reason=hit.reason,
         site_id=site_id,
@@ -127,9 +161,11 @@ def grade_from_template(
         template_uid=template_uid,
         policy=hit.policy,
         kind=kind,
-        width=hit.knobs.shoulder_width_cells,
+        requested_length=geom.L,
+        h=h,
+        geom=geom,
         earthen_canal=hit.knobs.earthen_canal,
-        structure_refs=hit.knobs.structure_refs,
+        structure_refs=tuple(hit.knobs.structure_refs),
         reason=hit.reason,
         skipped=False,
     )

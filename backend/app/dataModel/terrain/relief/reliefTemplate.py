@@ -2,21 +2,21 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire, StrictOnWire
 from app.dataModel.terrain.relief.enums import ReliefContext
 from app.dataModel.terrain.relief.mountainSideRecipe import MountainSideRecipe
 from app.dataModel.terrain.relief.reliefGradeKnobs import (
-    ReliefGradeKnobs,
     WEIGHT_SUM_EPS,
+    reject_removed_shoulder_width,
+    resolved_slope_length_cells,
+    validate_geom_xor,
     weights_sum_ok,
 )
 from app.dataModel.terrain.relief.reliefTerrainCondition import ReliefTerrainCondition
-
-_DEFAULT_SHOULDER_WIDTH = int(
-    ReliefGradeKnobs.model_fields["shoulder_width_cells"].default
-)
 
 
 class ReliefTemplate(BaseModel):
@@ -29,13 +29,19 @@ class ReliefTemplate(BaseModel):
     context: StrictEnumOnWire[ReliefContext]
     conditions: DefaultOnWire[list[ReliefTerrainCondition]] = Field(default_factory=list)
     side_recipe: DefaultOnWire[MountainSideRecipe | None] = None
-    # root defaults when conditions empty / case does not override
-    shoulder_width_cells: DefaultOnWire[int] = Field(default=_DEFAULT_SHOULDER_WIDTH, ge=0)
+    # root defaults when conditions empty / case does not override (R36b Geom XOR)
+    slope_length_cells: DefaultOnWire[int | None] = None
+    target_angle_deg: DefaultOnWire[float | None] = None
     slope_weight: DefaultOnWire[float | None] = None
     sheer_weight: DefaultOnWire[float | None] = None
     earthen_canal: DefaultOnWire[bool] = False
     structure_refs: DefaultOnWire[list[str]] = Field(default_factory=list)
     version: DefaultOnWire[str] = "1.0"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_legacy_width(cls, data: Any) -> Any:
+        return reject_removed_shoulder_width(data)
 
     @model_validator(mode="after")
     def _context_body_rules(self) -> ReliefTemplate:
@@ -63,7 +69,11 @@ class ReliefTemplate(BaseModel):
                 raise ValueError(
                     f"root slope_weight + sheer_weight must == 1 (±{WEIGHT_SUM_EPS})"
                 )
+        validate_geom_xor(self.slope_length_cells, self.target_angle_deg)
         return self
+
+    def outward_length_cells(self) -> int:
+        return resolved_slope_length_cells(self.slope_length_cells)
 
     def condition_for(self, terrain: str) -> ReliefTerrainCondition | None:
         for cond in self.conditions:

@@ -93,7 +93,7 @@ class RoadContributor:
             if n:
                 edges_used += 1
                 painted += n
-            # RELIEF-T-9: shoulder grade data-out (facing stamp; barrier later)
+            # R36 §8b/§9: shoulder volume + clearance (Grade entity = §8c)
             applied = apply_road_shoulder_grades(
                 compose,
                 ctx,
