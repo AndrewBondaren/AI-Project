@@ -17,9 +17,11 @@ from app.application.worldData.generators.terrain.relief.reliefEvents import (
     WHY_NOT_STAMPED,
 )
 from app.application.worldData.generators.terrain.relief.reliefLog import relief_debug
+from app.application.worldData.generators.terrain.relief.ribbonSegmentize import (
+    segmentize_by_terrain,
+)
 from app.application.worldData.generators.terrain.relief.roadShoulderGrade import (
     grade_road_shoulder_segments,
-    segmentize_by_terrain,
 )
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose

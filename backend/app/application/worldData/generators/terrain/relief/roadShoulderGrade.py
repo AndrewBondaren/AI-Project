@@ -1,5 +1,6 @@
-"""road_shoulder grade sites — segmentize + classify (R20–R28 data out).
+"""Ribbon grade sites — pick + classify (R20–R28 data out).
 
+Segmentize lives in ``ribbonSegmentize`` (RELIEF-T-32).
 Pure consumer: emits RibbonGradeDecision with raw canal knobs.
 Registry/policy resolve happens once in bake (RELIEF-T-51).
 Barrier stamp = bake ``roadShoulderBarrierApply`` (RELIEF-BAR-1); not this module.
@@ -23,24 +24,22 @@ from app.application.worldData.generators.terrain.relief.reliefEvents import (
     WHY_NO_TEMPLATE_BODY,
 )
 from app.application.worldData.generators.terrain.relief.reliefLog import relief_info
+from app.application.worldData.generators.terrain.relief.ribbonSegmentize import (
+    RoadShoulderSegment,
+    segmentize_by_terrain,
+)
 from app.application.worldData.generators.terrain.relief.templatePick import pick_template
-from app.application.worldData.generators.terrain.relief.terrainMap import map_system_terrain
 from app.dataModel.terrain.relief.enums import ReliefContext
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.terrain.relief.worldReliefPickPolicy import ObjectReliefPickPolicy
 from app.db.models.world import World
 
-
-@dataclass(frozen=True, slots=True)
-class RoadShoulderSegment:
-    """One pick site: contiguous corridor terrain × side along an edge."""
-
-    edge_uid: str
-    terrain_key: str  # ReliefConditionTerrain value
-    system_terrain: str
-    dz: int
-    site_id: str
-    cell_coords: tuple[tuple[int, int], ...]  # (x,y) shoulder cells
+__all__ = [
+    "RoadShoulderGradeResult",
+    "RoadShoulderSegment",
+    "grade_road_shoulder_segments",
+    "segmentize_by_terrain",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,69 +47,6 @@ class RoadShoulderGradeResult:
     segment: RoadShoulderSegment
     decision: RibbonGradeDecision
     template_uid: str | None
-
-
-def segmentize_by_terrain(
-    *,
-    edge_uid: str,
-    cells: list[tuple[tuple[int, int], str, int]],
-) -> list[RoadShoulderSegment]:
-    """Split shoulder cells into segments on system_terrain change.
-
-    cells: ((x,y), system_terrain, dz) in stable walk order along the edge side.
-    """
-    segments: list[RoadShoulderSegment] = []
-    if not cells:
-        return segments
-
-    buf_coords: list[tuple[int, int]] = []
-    cur_terrain = cells[0][1]
-    cur_dz = cells[0][2]
-    for (xy, terrain, dz) in cells:
-        mapped = map_system_terrain(terrain)
-        if mapped is None:
-            # flush and skip
-            if buf_coords:
-                key = map_system_terrain(cur_terrain)
-                if key is not None:
-                    segments.append(_seg(edge_uid, key.value, cur_terrain, cur_dz, buf_coords))
-                buf_coords = []
-            cur_terrain = terrain
-            cur_dz = dz
-            continue
-        if terrain != cur_terrain:
-            key = map_system_terrain(cur_terrain)
-            if key is not None and buf_coords:
-                segments.append(_seg(edge_uid, key.value, cur_terrain, cur_dz, buf_coords))
-            buf_coords = [xy]
-            cur_terrain = terrain
-            cur_dz = dz
-        else:
-            buf_coords.append(xy)
-            cur_dz = dz
-    if buf_coords:
-        key = map_system_terrain(cur_terrain)
-        if key is not None:
-            segments.append(_seg(edge_uid, key.value, cur_terrain, cur_dz, buf_coords))
-    return segments
-
-
-def _seg(
-    edge_uid: str,
-    terrain_key: str,
-    system_terrain: str,
-    dz: int,
-    coords: list[tuple[int, int]],
-) -> RoadShoulderSegment:
-    site_id = f"{edge_uid}|{terrain_key}|{coords[0][0]},{coords[0][1]}"
-    return RoadShoulderSegment(
-        edge_uid=edge_uid,
-        terrain_key=terrain_key,
-        system_terrain=system_terrain,
-        dz=dz,
-        site_id=site_id,
-        cell_coords=tuple(coords),
-    )
 
 
 def grade_road_shoulder_segments(

@@ -1059,7 +1059,8 @@ Climate contributor пишет только `climate_zone_id` — вход дл�
 | 3 Landcover | `landcover` | `FORESTS`, `PLAINS` |
 | 4 Structural | `mountain` → `ravine` | `MOUNTAINS`, `RAVINES` |
 | 5 Hydro | `hydro` | `HYDROLOGY` |
-| 6 Culture | `settlement` → `road` | `SETTLEMENT`, `ROADS` |
+| 5b Ribbon (pre-culture) | `open_land` → `shore` | — grade (не MaskDomain) |
+| 6 Culture | `settlement` → `road` → `road_shoulder` | `SETTLEMENT`, `ROADS` (shoulder = grade) |
 | (later) Land-use | `farmland` | `FARMLAND` (новый MaskDomainId) |
 | (later) Flora | type refs | — flora TZ |
 

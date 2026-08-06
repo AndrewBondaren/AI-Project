@@ -1609,7 +1609,7 @@ templates → R36 → BAR-1 →  open_land + shore ✅               →  R36s 8
 | **D2** | `shore` — `hydrology_role=SHORE` landward seeds | `ShoreContributor`; hydro SoT не трогаем | ✅ |
 | **D3** | polish (post-review) | shared facade / sample util; rename surface; BAR-1 once; road early-exit dedupe | ✅ |
 
-**Impl (D1–D2):** sample (`openLandSample` / `shoreSample`) → `apply_context_ribbon` → `apply_ribbon_grades(context=…)`. Compose order: `… hydro → open_land → shore → settlement → road` (priority road > shore > open_land). Abutment / footprint = `ref_cells` (uphill / SHORE role / road).
+**Impl (D1–D2):** sample (`openLandSample` / `shoreSample`) → `apply_context_ribbon` → `apply_ribbon_grades(context=…)`. Compose order: `… hydro → open_land → shore → settlement → road → road_shoulder` (priority road > shore > open_land; shoulder after paint). Abutment / footprint = `ref_cells` (uphill / SHORE role / road).
 
 **Polish locked (D3, 2026-08-06):**
 
@@ -1624,7 +1624,7 @@ templates → R36 → BAR-1 →  open_land + shore ✅               →  R36s 8
 | BAR-1 | once in `compose_light_grid` after contributors |
 | Early-exit | только в `apply_ribbon_grades` (road Apply не дублирует) |
 
-**Residual (не Wave D / не gate E):** type/module names ещё `RoadShoulderIntent` / `grade_road_shoulder_*` — naming debt; parallel eng **T-31/T-32**.
+**Residual (не Wave D / не gate E):** type/module names ещё `RoadShoulderIntent` / `grade_road_shoulder_*` — naming debt. ~~T-31/T-32~~ ✅.
 
 ### Wave E — later (контракт locked, код не сейчас)
 
@@ -1637,7 +1637,7 @@ templates → R36 → BAR-1 →  open_land + shore ✅               →  R36s 8
 | **Junction smooth (R36o)** | после стабильного volume+Grade; v1 = `none` |
 | Mountain SideFill + R36 angle (**Q4**) | v1 ribbon = `road_shoulder` |
 | UI Geom-C / пресеты (**R30**) | UI-only; ≠ mountain library R33 |
-| SOLID / JV **T-28…T-41**, **T-31/T-32** | engineering; parallel, не gate product waves |
+| SOLID / JV **T-28…T-41** (excl. T-31/T-32 ✅) | engineering; parallel, не gate product waves |
 | U8 ridge noise; cliff Spec paint | вне relief grade checklist |
 
 ### Gates (все waves)
@@ -1675,6 +1675,7 @@ templates → R36 → BAR-1 →  open_land + shore ✅               →  R36s 8
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-06 | **RELIEF-T-31/T-32:** `ribbonSegmentize`; ROAD paint → `painted_road_edges` → `RoadShoulderContributor`; compose `… → road → road_shoulder` |
 | 2026-08-06 | **Wave D polish locked:** `contextRibbonApply` / `ribbonSampleUtil`; `ribbon_intents` + `ref_cells`; BAR-1 once in `compose_light_grid`; events `EVENT_RIBBON_*`; residual `RoadShoulder*` naming |
 | 2026-08-06 | **Wave D shipped:** `open_land` + `shore` contributors; shared `ribbonGradeApply`; compose order hydro→open_land→shore→road |
 | 2026-08-06 | **Wave C / RELIEF-BAR-1 shipped:** `ribbonFence` + `roadShoulderBarrierApply` → light `wall`; call site later → once after compose (D3) |

@@ -63,6 +63,10 @@ class ComposeOrderWaveDTest(unittest.TestCase):
             order.index(LightContributorId.ROAD),
         )
         self.assertLess(
+            order.index(LightContributorId.ROAD),
+            order.index(LightContributorId.ROAD_SHOULDER),
+        )
+        self.assertLess(
             order.index(LightContributorId.HYDRO),
             order.index(LightContributorId.OPEN_LAND),
         )

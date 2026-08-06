@@ -16,11 +16,13 @@ from app.application.worldData.generators.terrain.relief.profiles import (
     sheer_fraction_radial,
     slope_fraction,
 )
+from app.application.worldData.generators.terrain.relief.ribbonSegmentize import (
+    RoadShoulderSegment,
+    segmentize_by_terrain,
+)
 from app.application.worldData.generators.terrain.relief.roadShoulderGrade import (
     RoadShoulderGradeResult,
-    RoadShoulderSegment,
     grade_road_shoulder_segments,
-    segmentize_by_terrain,
 )
 from app.application.worldData.generators.terrain.relief.shoulderWidth import (
     expand_shoulder_ring,

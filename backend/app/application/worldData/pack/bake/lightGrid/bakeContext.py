@@ -17,6 +17,7 @@ from app.db.models.world import World
 from app.application.worldData.pack.bake.lightGrid.roadShoulderIntent import (
     RoadShoulderIntent,
 )
+from app.application.worldData.pack.bake.lightGrid.paintedRoadEdge import PaintedRoadEdge
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 
@@ -35,6 +36,8 @@ class LightGridBakeContext:
     terrain_system_keys: set[str] = field(default_factory=set)
     # Preloaded relief library bodies for mountain/road consumers (R33/R35)
     relief_templates_by_uid: dict[str, ReliefTemplate] = field(default_factory=dict)
+    # Road paint → shoulder grade handoff (RELIEF-T-31)
+    painted_road_edges: list[PaintedRoadEdge] = field(default_factory=list)
     # Ribbon grade intents (road_shoulder / open_land / shore) → BAR-1 after compose
     ribbon_intents: list[RoadShoulderIntent] = field(default_factory=list)
     # §8c Grade entities created during shoulder/volume stamp

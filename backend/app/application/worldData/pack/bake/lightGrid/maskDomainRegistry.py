@@ -16,6 +16,9 @@ from app.application.worldData.pack.bake.lightGrid.contributors.openLand import 
 from app.application.worldData.pack.bake.lightGrid.contributors.ravine import RavineContributor
 from app.application.worldData.pack.bake.lightGrid.contributors.relief import ReliefContributor
 from app.application.worldData.pack.bake.lightGrid.contributors.road import RoadContributor
+from app.application.worldData.pack.bake.lightGrid.contributors.roadShoulder import (
+    RoadShoulderContributor,
+)
 from app.application.worldData.pack.bake.lightGrid.contributors.settlement import (
     SettlementContributor,
 )
@@ -38,6 +41,7 @@ _CONTRIBUTOR_FACTORY: dict[LightContributorId, Callable[[], LightGridContributor
     LightContributorId.SHORE: ShoreContributor,
     LightContributorId.SETTLEMENT: SettlementContributor,
     LightContributorId.ROAD: RoadContributor,
+    LightContributorId.ROAD_SHOULDER: RoadShoulderContributor,
 }
 
 

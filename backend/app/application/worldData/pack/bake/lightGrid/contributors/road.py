@@ -1,4 +1,7 @@
-"""Road contributor — world ConnectionEdge → road terrain + shoulder grade (R20)."""
+"""Road contributor — ConnectionEdge → road terrain paint only (RELIEF-T-31).
+
+Shoulder grade = ``RoadShoulderContributor`` after ROAD in compose order.
+"""
 
 from __future__ import annotations
 
@@ -14,10 +17,8 @@ from app.application.worldData.pack.bake.lightGrid.contributors.hydro.raster imp
     dilate,
     light_polyline_from_meters,
 )
-from app.application.worldData.pack.bake.lightGrid.contributors.roadShoulderApply import (
-    apply_road_shoulder_grades,
-)
 from app.application.worldData.pack.bake.lightGrid.paintTerrain import paint_system_terrain
+from app.application.worldData.pack.bake.lightGrid.paintedRoadEdge import PaintedRoadEdge
 from app.dataModel.masks.enums.maskDomainId import LightContributorId
 from app.db.models.namedLocation import NamedLocation
 
@@ -67,7 +68,6 @@ class RoadContributor:
         level_set = set(policy.graph_levels)
         painted = 0
         edges_used = 0
-        shoulder_seq = 0
 
         for edge in ctx.edges:
             if edge.connection_type not in type_set:
@@ -93,25 +93,22 @@ class RoadContributor:
             if n:
                 edges_used += 1
                 painted += n
-            # R36 §8b/§9: shoulder volume + clearance (Grade entity = §8c)
-            applied = apply_road_shoulder_grades(
-                compose,
-                ctx,
-                edge_uid=edge.edge_uid,
-                road_cells=light_cells,
-                object_policy=parse_object_relief_pick_policy(
-                    edge.relief_pick_policy,
-                    owner_uid=edge.edge_uid,
-                ),
-                occurrence_start=shoulder_seq,
+            ctx.painted_road_edges.append(
+                PaintedRoadEdge(
+                    edge_uid=edge.edge_uid,
+                    road_cells=frozenset(light_cells),
+                    object_policy=parse_object_relief_pick_policy(
+                        edge.relief_pick_policy,
+                        owner_uid=edge.edge_uid,
+                    ),
+                )
             )
-            shoulder_seq += len(applied)
 
         logger.debug(
             "light_contributor_road | world=%s edges_used=%d cells_painted=%d "
-            "ribbon_intents=%d",
+            "painted_edges=%d",
             ctx.world.world_uid,
             edges_used,
             painted,
-            len(ctx.ribbon_intents),
+            len(ctx.painted_road_edges),
         )
