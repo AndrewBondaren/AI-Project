@@ -70,7 +70,7 @@ Ribbon shared: `ribbonGradeApply` + `contextRibbonApply` / `ribbonSampleUtil`; i
 | R18 | Мастер: (A) импорт шаблона из глобальной библиотеки в мир **и/или** (B) `relief_template_registry` (+ тела шаблонов) входит в **world bundle** |
 | R19 | Pick policy **на каждый context**: `fixed` (default uid) \| `random` \| `round_robin` — см. § Pick policy |
 | R20 | `road_shoulder` = grade **обочин** при Δz дорога↔рельеф (2 стороны). **Не** layout/строительство полотна. Полотно `road` **не** получает SHEER (противоречит замыслу дороги) |
-| R21 | Пустой candidates / битый `fixed` uid → **warn + fallback** (общая политика resolve); не silent, не hard-fail generate |
+| R21 | Пустой candidates / битый `fixed` uid / дыра schedule / unknown canal\|barrier ref → **warn + soft fallback** (общая политика resolve); не silent, не hard-fail generate. **Wire event:** `EVENT_RESOLVE_FALLBACK` = `"resolve_fallback"` (`reliefEvents.py`). Не путать с R34 skip |
 | R22 | **Длина наклона (slope)** обочины default = **1 клетка** (`slope_length_cells`); в поселениях обочина **optional**; см. R36. **`shoulder_width_cells` — убрать** (не alias, не wire) |
 | R23 | `round_robin` seq — на **pick site**; для `road_shoulder` site = **segment × slope policy**, не целый edge / left\|right мастера |
 | R24 | Persist grade = **сущность** SLOPE\|SHEER + **двусторонние ссылки** (R36h/j). На клетке — только ref (`system_grade_uid`, omit если нет) + при необходимости `system_facing` для совместимости stairs. **Не** дублировать h/L/angle на каждой клетке |
@@ -466,7 +466,7 @@ else:
 
 ### Warn + fallback (R21 — общая политика)
 
-При невозможности взять шаблон «как задумано»:
+При невозможности взять шаблон «как задумано» (пустой pick / битый `fixed` / дыра schedule / unknown canal|barrier ref):
 
 ```text
 1. WARN в generation log (context, mode, why, chosen_fallback)
@@ -478,6 +478,18 @@ else:
 ```
 
 То же для `fixed` с отсутствующим/чужим uid.
+
+**Wire / code SoT** (`generators/terrain/relief/reliefEvents.py`):
+
+| Политика / ситуация | Event / reason token | Wire string |
+|---|---|---|
+| R21 warn + soft fallback (общий) | `EVENT_RESOLVE_FALLBACK` | `resolve_fallback` |
+| Schedule hole → safe SLOPE (не silent skip) | `REASON_SCHEDULE_HOLE_SAFE_SLOPE` + why `WHY_SCHEDULE_HOLE` | `schedule_hole_safe_slope` / `schedule_hole` |
+| Shared ribbon skip / apply / BAR-1 | `EVENT_RIBBON_SKIP` / `EVENT_RIBBON_GRADE_APPLY` / `EVENT_RIBBON_BARRIER` | `ribbon_skip` / `ribbon_grade_apply` / `ribbon_barrier` |
+| Grade column height &lt; 1 | `WHY_HEIGHT_LT_1` | `height_lt_1` |
+| Нет abutment / footprint cells | `WHY_NO_REF_CELLS` | `no_ref_cells` |
+
+**Не** wire-имена: `r21_fallback`, `schedule_hole_r21_slope`, `road_shoulder_barrier`, `h_lt_1`, legacy aliases (`EVENT_R21_FALLBACK`, `EVENT_ROAD_SHOULDER_*`, `WHY_NO_ROAD_CELLS`). R21 в тексте ТЗ = **правило**, не строка лога.
 
 ### `round_robin` — что такое seq (R23)
 
@@ -1601,7 +1613,7 @@ templates → R36 → BAR-1 →  open_land + shore ✅               →  R36s 8
 |---|---|---|---|
 | **C1** | Consumer: Intent `structure_refs` (+ structure canal) → light `wall` along ribbon | cells вне `generators/terrain/relief`; validate refs on import; no overwrite road/grade/pin/hydro; bake treats wall as grade obstacle | ✅ |
 
-**Impl:** `generators/barrier/ribbonFence.py` (pure) + `paintBarrier.stamp_barrier_terrain` (write-only) + `ribbonBarrierApply`. **Call site (Wave D polish):** **один** проход в `compose_light_grid` после всех mask contributors (не из каждого ribbon Apply / не из `RoadContributor`). Placement predicate once (`_may_place_fence`); stamp keys ← `WorldTerrainRegistry`. Unknown ref → R21 warn+skip. **v1 multi-ref:** один footprint; material log = first resolved; wire без `system_material`. **Не** canal resolve в Apply.
+**Impl:** `generators/barrier/ribbonFence.py` (pure) + `paintBarrier.stamp_barrier_terrain` (write-only) + `ribbonBarrierApply`. **Call site (Wave D polish):** **один** проход в `compose_light_grid` после всех mask contributors (не из каждого ribbon Apply / не из `RoadContributor`). Placement predicate once (`_may_place_fence`); stamp keys ← `WorldTerrainRegistry`. Unknown ref → R21 / `EVENT_RESOLVE_FALLBACK` warn+skip. **v1 multi-ref:** один footprint; material log = first resolved; wire без `system_material`. **Не** canal resolve в Apply.
 
 ### Wave D — новые bake consumers ✅
 
@@ -1621,7 +1633,7 @@ templates → R36 → BAR-1 →  open_land + shore ✅               →  R36s 8
 | Sample DRY | `ribbonSampleUtil`: `CARDINAL_ORTHO_DELTAS`, `iter_compose_cells`, landward/skip helpers |
 | Intents bag | `LightGridBakeContext.ribbon_intents` (не `road_shoulder_intents`) |
 | Materialize / stamp / anchor API | `ref_cells=` (road footprint остаётся `road_cells` только на road sample/apply boundary) |
-| Events | `EVENT_RIBBON_SKIP` / `EVENT_RIBBON_GRADE_APPLY` / `WHY_NO_REF_CELLS` (+ legacy aliases) |
+| Events | `EVENT_RIBBON_SKIP` / `EVENT_RIBBON_GRADE_APPLY` / `EVENT_RIBBON_BARRIER` / `EVENT_RESOLVE_FALLBACK`; why/reason — § Warn + fallback (R21) |
 | Owner uid | `ReliefContext.OPEN_LAND.value` / `.SHORE.value` |
 | BAR-1 | once in `compose_light_grid` after contributors |
 | Early-exit | только в `apply_ribbon_grades` (road Apply не дублирует) |
@@ -1677,6 +1689,7 @@ templates → R36 → BAR-1 →  open_land + shore ✅               →  R36s 8
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-07 | **reliefEvents rename SoT:** `EVENT_RESOLVE_FALLBACK` / `EVENT_RIBBON_BARRIER` / `REASON_SCHEDULE_HOLE_SAFE_SLOPE` / `WHY_HEIGHT_LT_1`; drop legacy `r21_*` / `road_shoulder_barrier` / `h_lt_1` aliases — § Warn + fallback (R21) |
 | 2026-08-06 | **RELIEF-T-31/T-32:** `ribbonSegmentize`; ROAD paint → `painted_road_edges` → `RoadShoulderContributor`; compose `… → road → road_shoulder` |
 | 2026-08-07 | **Grade `owner_uid`:** POJO/SQL/db `edge_uid`→`owner_uid`; drop FK to `connection_edges` (owner ≠ always edge); bake handoff aligned |
 | 2026-08-07 | **Ribbon residual naming:** `RibbonIntent` / `RibbonGradeResult` / `grade_ribbon_segments` / `apply_ribbon_barriers`; Intent.`owner_uid` |

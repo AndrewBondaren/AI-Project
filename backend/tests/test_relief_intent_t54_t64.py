@@ -9,7 +9,7 @@ from app.application.worldData.generators.terrain.relief.gradePass import (
 )
 from app.application.worldData.generators.terrain.relief.reliefEvents import (
     WHY_EMPTY_PLAN,
-    WHY_H_LT_1,
+    WHY_HEIGHT_LT_1,
     WHY_NO_EDGE_ROAD_ANCHOR,
     WHY_NOT_STAMPED,
 )
@@ -127,7 +127,7 @@ class SkipReasonT64Test(unittest.TestCase):
             width_used=0,
             canal=None,
             extra_structure_refs=(),
-            skip_why=WHY_H_LT_1,
+            skip_why=WHY_HEIGHT_LT_1,
         )
         intent = to_intent(
             _result(kind=ReliefSideKind.SHEER),
@@ -138,7 +138,7 @@ class SkipReasonT64Test(unittest.TestCase):
             canal=mat.canal,
             extra_structure_refs=mat.extra_structure_refs,
         )
-        self.assertEqual(intent.reason, WHY_H_LT_1)
+        self.assertEqual(intent.reason, WHY_HEIGHT_LT_1)
         self.assertNotEqual(intent.reason, "clearance_skip")
 
 

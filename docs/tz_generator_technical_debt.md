@@ -891,7 +891,7 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 | **RELIEF-T-11** | medium | **resolved** | P3 | Bake seed SoT = `bake_seed(world)` → `world_uid` (см. T-17). |
 | **RELIEF-T-12** | medium | **resolved** | P2 | FS/pack → `reliefTemplateFsImport.py`; library = SQL upsert/CRUD + thin `import_path` delegate. |
 | **RELIEF-T-13** | low | **resolved** | P3 | `terrainMap` from enum; row version from POJO; invalid edge policy → WARNING. |
-| **RELIEF-T-14** | low | **resolved** | P3 | Schedule hole → R21 safe SLOPE (`schedule_hole_r21_slope`), not skip. |
+| **RELIEF-T-14** | low | **resolved** | P3 | Schedule hole → R21 safe SLOPE (`schedule_hole_safe_slope`), not skip. |
 | **RELIEF-T-15** | low | **accepted** | P3 | Logging in pick/grade kept intentionally (R8 apply diagnostics); not extracted. |
 
 ### Registry — round 2 (re-audit → fixed 2026-07-30)
@@ -958,7 +958,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | **RELIEF-T-53** | medium | **resolved** | P2 | dataModel | `Canal` = `EarthenCanal` \| `StructureCanal`; Intent.`canal` + `build_canal`/`draw_canal`; Grade flat из draw. Entry XOR. |
 | **RELIEF-T-54** | medium | **resolved** | P2 | dataModel / values | Intent.`earthen_canal` → `bool\|None` (omit=`None`); skipped `to_intent` не synthesize `EarthenCanal` from knobs. Wave **B4a**. |
 | **RELIEF-T-55** | medium | **resolved** | P2 | хардкод | `EMPTY_EARTHEN_CUT` рядом с `EMPTY_CANAL` (policy omit ref). |
-| **RELIEF-T-56** | medium | **resolved** | P2 | хардкод | Shared `reliefEvents.py` (EVENT/WHY/REASON); canalAttachments re-exports `EVENT_R21_FALLBACK`; bake/grade/mountain call sites use tokens. |
+| **RELIEF-T-56** | medium | **resolved** | P2 | хардкод | Shared `reliefEvents.py` (EVENT/WHY/REASON); canalAttachments re-exports `EVENT_RESOLVE_FALLBACK`; bake/grade/mountain call sites use tokens. |
 | **RELIEF-T-57** | medium | **resolved** | P2 | DRY | Один `_resolve_canal_ref` + `_r21_no_canal`; lookup = `attachments_from_registry_ref` (None→R21). Knobs и policy — тот же путь. |
 | **RELIEF-T-58** | low | **resolved** | P3 | DRY / API | Alias `resolve_knobs_canal_attachments` удалён; `CanalAttachments.grade_fields()` / `intent_fields()` в bake. Persist row mapping — отдельный layer OK. |
 | **RELIEF-T-59** | low | **resolved** | P3 | dataModel / mapper | `json_list_col`: always dump `[]`; NULL/`{}` → `[]`. Grade `structure_refs` + `cell_refs`. Wave **B5**. |
@@ -968,7 +968,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | **RELIEF-T-63** | low | **resolved** | P3 | хардкод | `project_canal_draw` / `EMPTY_DRAW` в materialize+Intent. Wave **B5**. |
 | **RELIEF-T-64** | medium | **resolved** | P2 | ответственность / values | `SeedMaterializeSkip` + `SegmentMaterializeResult.skip_why`; apply `reason=mat.skip_why or WHY_NOT_STAMPED` (не всегда `clearance_skip`). Wave **B4b**. |
 | **RELIEF-T-65** | low | **resolved** | P3 | DRY / observability | Empty-sample log = apply only; sample pure. Wave **B5**. |
-| **RELIEF-T-66** | low | open | P3 | observability | `EVENT_ROAD_SHOULDER_SKIP` монотокен — **deferred** (why достаточно; не блокер C). Optional later. |
+| **RELIEF-T-66** | low | open | P3 | observability | `EVENT_RIBBON_SKIP` монотокен — **deferred** (why достаточно; не блокер C). Optional later. |
 | **RELIEF-T-67** | **high** | **resolved** | P1 | observability | Bake file miss: `reliefLog` → `app.relief` не в `_GENERATION_PREFIXES` → shoulder/canal warnings не в `bake-light-*.log`. **Fix:** allowlist `app.relief`. |
 
 **Связанный pre-existing (не новый, но в том же ревью):** **RELIEF-T-34** — `ReliefRoleCase` Mode A дублирует knobs-поля.  
@@ -1000,7 +1000,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | 4 | `materialize` pipeline + bake adapters; stamp log vs outcome | SRP | **T-61** | **B5** ✅ | § Wave B · B5 |
 | 5 | `_ORTHO` ≠ Facing | хардкод | **T-62** | **B5** ✅ | § Wave B · B5 |
 | 6 | `CanalDrawResult(False,…)` мимо `EMPTY_DRAW` | хардкод | **T-63** | **B5** ✅ | § Wave B · B5 |
-| 7 | `EVENT_ROAD_SHOULDER_SKIP` монотокен | observability | **T-66** | deferred optional | § Wave B · B5 |
+| 7 | `EVENT_RIBBON_SKIP` монотокен | observability | **T-66** | deferred optional | § Wave B · B5 |
 | 8 | `json_col` structure_refs `{}` | mapper | **T-59** | **B5** ✅ | § Wave B · B5 |
 
 #### B4 schedule (T-54 / T-64) — shipped 2026-08-06

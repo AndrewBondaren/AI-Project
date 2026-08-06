@@ -35,7 +35,7 @@ class ReliefDebtFollowupTest(unittest.IsolatedAsyncioTestCase):
         root = resolve_relief_domain_root()
         self.assertEqual(root.name, "relief_templates")
 
-    def test_schedule_hole_r21_slope(self) -> None:
+    def test_schedule_hole_safe_slope(self) -> None:
         """Mode B with gap between bands → SLOPE fallback (RELIEF-T-14)."""
         tpl = ReliefTemplate.model_validate({
             "system_name": "gappy",
@@ -86,7 +86,7 @@ class ReliefDebtFollowupTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertFalse(decision.skipped)
         self.assertEqual(decision.kind, ReliefSideKind.SLOPE)
-        self.assertEqual(decision.reason, "schedule_hole_r21_slope")
+        self.assertEqual(decision.reason, "schedule_hole_safe_slope")
 
 
 if __name__ == "__main__":

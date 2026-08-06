@@ -6,15 +6,14 @@ import unittest
 
 from app.application.worldData.generators.terrain.relief import canalAttachments
 from app.application.worldData.generators.terrain.relief.reliefEvents import (
-    EVENT_R21_FALLBACK,
     EVENT_RESOLVE_FALLBACK,
+    EVENT_RIBBON_BARRIER,
     EVENT_RIBBON_SKIP,
-    EVENT_ROAD_SHOULDER_SKIP,
-    REASON_SCHEDULE_HOLE_R21_SLOPE,
+    REASON_SCHEDULE_HOLE_SAFE_SLOPE,
     WHY_EMPTY_SAMPLE,
+    WHY_HEIGHT_LT_1,
     WHY_NO_EDGE_ROAD_ANCHOR,
     WHY_NO_REF_CELLS,
-    WHY_NO_ROAD_CELLS,
     WHY_NO_TEMPLATES,
     WHY_NOT_STAMPED,
     WHY_SCHEDULE_HOLE,
@@ -33,16 +32,15 @@ from app.db.models.world import World
 
 
 class ReliefEventsTokensTest(unittest.TestCase):
-    def test_shared_r21_reexported_from_canal(self) -> None:
-        self.assertEqual(canalAttachments.EVENT_R21_FALLBACK, EVENT_RESOLVE_FALLBACK)
-        self.assertEqual(EVENT_R21_FALLBACK, EVENT_RESOLVE_FALLBACK)
+    def test_shared_resolve_fallback_reexported_from_canal(self) -> None:
+        self.assertEqual(canalAttachments.EVENT_RESOLVE_FALLBACK, EVENT_RESOLVE_FALLBACK)
         self.assertEqual(EVENT_RESOLVE_FALLBACK, "resolve_fallback")
+        self.assertEqual(EVENT_RIBBON_BARRIER, "ribbon_barrier")
         self.assertEqual(WHY_SCHEDULE_HOLE, "schedule_hole")
-        self.assertEqual(REASON_SCHEDULE_HOLE_R21_SLOPE, "schedule_hole_r21_slope")
+        self.assertEqual(REASON_SCHEDULE_HOLE_SAFE_SLOPE, "schedule_hole_safe_slope")
+        self.assertEqual(WHY_HEIGHT_LT_1, "height_lt_1")
         self.assertEqual(WHY_NO_EDGE_ROAD_ANCHOR, "no_edge_road_anchor")
         self.assertEqual(WHY_NOT_STAMPED, "not_stamped")
-        self.assertEqual(EVENT_ROAD_SHOULDER_SKIP, EVENT_RIBBON_SKIP)
-        self.assertEqual(WHY_NO_ROAD_CELLS, WHY_NO_REF_CELLS)
         self.assertEqual(EVENT_RIBBON_SKIP, "ribbon_skip")
         self.assertEqual(WHY_NO_REF_CELLS, "no_ref_cells")
 

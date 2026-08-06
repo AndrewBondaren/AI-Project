@@ -18,7 +18,7 @@ from app.application.worldData.generators.barrier.ribbonFence import fence_cells
 from app.application.worldData.generators.terrain.relief.bakeSeed import bake_seed
 from app.application.worldData.generators.terrain.relief.reliefEvents import (
     EVENT_RESOLVE_FALLBACK,
-    EVENT_ROAD_SHOULDER_BARRIER,
+    EVENT_RIBBON_BARRIER,
     WHY_EMPTY_FENCE_FOOTPRINT,
     WHY_NO_BARRIER_REFS,
     WHY_UNKNOWN_BARRIER_REF,
@@ -67,7 +67,7 @@ def apply_ribbon_barriers(
             world=ctx.world,
         )
     relief_debug(
-        EVENT_ROAD_SHOULDER_BARRIER,
+        EVENT_RIBBON_BARRIER,
         intents=len(ctx.ribbon_intents),
         cells_painted=painted,
     )
@@ -103,7 +103,7 @@ def _apply_intent_barriers(
     )
     if not footprint:
         relief_debug(
-            EVENT_ROAD_SHOULDER_BARRIER,
+            EVENT_RIBBON_BARRIER,
             site_id=intent.site_id,
             why=WHY_EMPTY_FENCE_FOOTPRINT,
             grade_cells=len(grade),
@@ -117,7 +117,7 @@ def _apply_intent_barriers(
         compose, footprint, _BARRIER_TERRAIN, tile_set=tile_set,
     )
     relief_debug(
-        EVENT_ROAD_SHOULDER_BARRIER,
+        EVENT_RIBBON_BARRIER,
         site_id=intent.site_id,
         refs=[e.system_type for e in entries],
         material=material,
@@ -148,7 +148,7 @@ def _resolve_barrier_entries(
         entries.append(entry)
     if not entries:
         relief_debug(
-            EVENT_ROAD_SHOULDER_BARRIER,
+            EVENT_RIBBON_BARRIER,
             site_id=site_id,
             why=WHY_NO_BARRIER_REFS,
             refs=list(refs),

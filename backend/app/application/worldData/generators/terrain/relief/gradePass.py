@@ -15,7 +15,7 @@ from app.application.worldData.generators.terrain.relief.kindRoll import kind_ro
 from app.application.worldData.generators.terrain.relief.reliefEvents import (
     EVENT_GRADE_SKIP,
     EVENT_RESOLVE_FALLBACK,
-    REASON_SCHEDULE_HOLE_R21_SLOPE,
+    REASON_SCHEDULE_HOLE_SAFE_SLOPE,
     WHY_SCHEDULE_HOLE,
 )
 from app.application.worldData.generators.terrain.relief.reliefLog import (
@@ -124,7 +124,7 @@ def grade_from_template(
             geom=geom,
             earthen_canal=earthen_default,
             structure_refs=refs_default,
-            reason=REASON_SCHEDULE_HOLE_R21_SLOPE,
+            reason=REASON_SCHEDULE_HOLE_SAFE_SLOPE,
             skipped=False,
             structure_canal=canal_default,
         )

@@ -22,7 +22,6 @@ WHY_UNKNOWN_STRUCTURE_CANAL = "unknown_structure_canal"
 WHY_UNKNOWN_CANAL_REF = "unknown_canal_ref"
 FALLBACK_NO_CANAL = "no_canal"
 EVENT_CANAL_CUT_NO_CELLS = "canal_cut_no_cells"
-EVENT_R21_FALLBACK = EVENT_RESOLVE_FALLBACK  # legacy alias
 
 
 @dataclass(frozen=True, slots=True)

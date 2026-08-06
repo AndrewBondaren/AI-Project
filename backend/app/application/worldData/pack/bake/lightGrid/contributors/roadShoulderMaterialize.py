@@ -20,7 +20,7 @@ from app.application.worldData.generators.terrain.relief.reliefEvents import (
     EVENT_RIBBON_SKIP,
     WHY_EMPTY_PLAN,
     WHY_EMPTY_STAMP,
-    WHY_H_LT_1,
+    WHY_HEIGHT_LT_1,
     WHY_NO_EDGE_ROAD_ANCHOR,
     WHY_NOT_STAMPED,
 )
@@ -122,11 +122,11 @@ def materialize_segment(
         relief_debug(
             EVENT_RIBBON_SKIP,
             site_id=result.segment.site_id,
-            why=WHY_H_LT_1,
+            why=WHY_HEIGHT_LT_1,
             h=h,
         )
         return SegmentMaterializeResult(
-            (), 0, None, extras, skip_why=WHY_H_LT_1,
+            (), 0, None, extras, skip_why=WHY_HEIGHT_LT_1,
         )
 
     sign = ribbon_sign_from_dz(int(result.segment.dz))
