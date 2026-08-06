@@ -1,8 +1,7 @@
 """Apply road_shoulder grade after road paint (R20–R28 / R36 §8b–§9 / §8c).
 
 Phases per seed: clearance → edgeRoadAnchor → volume plan → stamp → Grade.
-Canal resolved once per seed; Intent = aggregate of stamped seeds (T-43).
-Grade + Intent carry ``earthen_canal`` / ``structure_refs`` (BAR-1 consumer).
+Canal: typed ``Canal``; Intent/Grade via ``build_canal`` / ``draw_canal``.
 Dilate sample = Q6 (open).
 """
 
@@ -12,15 +11,14 @@ import logging
 
 from app.application.jsonValidation.worldRow import canal_templates, relief_pick_policy
 from app.application.worldData.generators.terrain.relief.bakeSeed import bake_seed
+from app.application.worldData.generators.terrain.relief.canalAttachments import (
+    CanalDrawResult,
+    build_canal,
+    knobs_extra_structure_refs,
+)
 from app.application.worldData.generators.terrain.relief.edgeRoadAnchor import (
     EdgeRoadAnchor,
     edge_road_abutment,
-)
-from app.application.worldData.generators.terrain.relief.seedCanalResolve import (
-    EMPTY_CANAL,
-    CanalAttachments,
-    aggregate_canal_attachments,
-    resolve_seed_canal_attachments,
 )
 from app.application.worldData.generators.terrain.relief.facing import (
     facing_wire,
@@ -44,6 +42,10 @@ from app.application.worldData.generators.terrain.relief.roadShoulderGrade impor
     grade_road_shoulder_segments,
     segmentize_by_terrain,
 )
+from app.application.worldData.generators.terrain.relief.seedCanalResolve import (
+    aggregate_canals,
+    resolve_seed_canal,
+)
 from app.application.worldData.generators.terrain.relief.shoulderWidth import relief_dz
 from app.application.worldData.generators.terrain.relief.volumeMaterialize import (
     RibbonVolumePlan,
@@ -61,6 +63,7 @@ from app.application.worldData.pack.bake.lightGrid.roadShoulderIntent import (
     RoadShoulderIntent,
 )
 from app.dataModel.spatial.facing import opposite
+from app.dataModel.terrain.relief.canal import Canal
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.worldReliefPickPolicy import ObjectReliefPickPolicy
 
@@ -107,7 +110,7 @@ def apply_road_shoulder_grades(
         if result.decision.skipped or result.decision.kind is None:
             intents.append(_to_intent(result, result.segment.cell_coords))
             continue
-        stamped, width_used, canal_att = _materialize_segment(
+        stamped, width_used, canal, extras = _materialize_segment(
             compose,
             ctx,
             result,
@@ -124,12 +127,19 @@ def apply_road_shoulder_grades(
                     skipped=True,
                     reason="clearance_skip",
                     width=0,
-                    canal=canal_att,
+                    canal=canal,
+                    extra_structure_refs=extras,
                 )
             )
             continue
         intents.append(
-            _to_intent(result, stamped, width=width_used, canal=canal_att),
+            _to_intent(
+                result,
+                stamped,
+                width=width_used,
+                canal=canal,
+                extra_structure_refs=extras,
+            ),
         )
     ctx.road_shoulder_intents.extend(intents)
     logger.debug(
@@ -148,17 +158,22 @@ def _to_intent(
     skipped: bool | None = None,
     reason: str | None = None,
     width: int | None = None,
-    canal: CanalAttachments | None = None,
+    canal: Canal | None = None,
+    extra_structure_refs: tuple[str, ...] = (),
 ) -> RoadShoulderIntent:
     d = result.decision
     kind = d.kind.value if d.kind is not None else None
-    if canal is None:
-        canal_fields = {
-            "earthen_canal": bool(d.earthen_canal),
-            "structure_refs": d.structure_refs,
-        }
-    else:
-        canal_fields = canal.intent_fields()
+    extras = extra_structure_refs
+    resolved = canal
+    if resolved is None and not extras:
+        extras = knobs_extra_structure_refs(
+            earthen_canal=d.earthen_canal,
+            structure_canal=d.structure_canal,
+            structure_refs=d.structure_refs,
+        )
+        if d.earthen_canal is True:
+            from app.dataModel.terrain.relief.canal import EarthenCanal
+            resolved = EarthenCanal()
     return RoadShoulderIntent(
         edge_uid=result.segment.edge_uid,
         site_id=result.segment.site_id,
@@ -168,7 +183,8 @@ def _to_intent(
         cell_coords=cell_coords,
         skipped=d.skipped if skipped is None else skipped,
         reason=d.reason if reason is None else reason,
-        **canal_fields,
+        canal=resolved,
+        extra_structure_refs=extras,
     )
 
 
@@ -181,19 +197,24 @@ def _materialize_segment(
     tile_set: set[tuple[int, int]],
     canal_registry,
     canal_rules,
-) -> tuple[tuple[tuple[int, int], ...], int, CanalAttachments]:
-    """Orchestrate per-seed phases; one canal cut per seed → Grade; Intent aggregates."""
+) -> tuple[tuple[tuple[int, int], ...], int, Canal | None, tuple[str, ...]]:
+    """Per-seed phases; typed Canal; Intent aggregates."""
     kind = result.decision.kind
     assert kind is not None
     h = int(result.decision.h)
     requested = max(0, int(result.decision.requested_length))
+    d = result.decision
+    extras = knobs_extra_structure_refs(
+        earthen_canal=d.earthen_canal,
+        structure_canal=d.structure_canal,
+        structure_refs=d.structure_refs,
+    )
     if h < 1:
-        return (), 0, EMPTY_CANAL
+        return (), 0, None, extras
     sign = ribbon_sign_from_dz(int(result.segment.dz))
     stamped: list[tuple[int, int]] = []
     max_L = 0
-    stamped_atts: list[CanalAttachments] = []
-    d = result.decision
+    stamped_canals: list[Canal] = []
 
     for seed in result.segment.cell_coords:
         clearance = resolve_seed_clearance(
@@ -217,13 +238,12 @@ def _materialize_segment(
             )
             continue
 
-        att = resolve_seed_canal_attachments(
+        canal = resolve_seed_canal(
             requested_length=requested,
             L_eff=clearance.L_eff,
             terrain_key=result.segment.terrain_key,
             knobs_earthen=d.earthen_canal,
             knobs_structure_canal=d.structure_canal,
-            knobs_structure_refs=d.structure_refs,
             policy_rules=canal_rules,
             registry=canal_registry,
             site_id=result.segment.site_id,
@@ -266,6 +286,10 @@ def _materialize_segment(
             facing = _first_column_facing(
                 compose, wrote[0], tile_set=tile_set,
             )
+            if canal is not None:
+                drawn = build_canal(canal, extra_structure_refs=extras)
+            else:
+                drawn = CanalDrawResult(False, extras, None)
             grade = build_ribbon_grade_instance(
                 world_uid=ctx.world.world_uid,
                 site_id=result.segment.site_id,
@@ -273,22 +297,26 @@ def _materialize_segment(
                 plan=plan,
                 cell_refs=tuple(wrote),
                 facing=facing,
+                earthen_canal=drawn.earthen_canal,
+                structure_refs=drawn.structure_refs,
+                structure_canal=drawn.structure_canal,
                 template_uid=result.template_uid,
                 edge_uid=result.segment.edge_uid,
-                **att.grade_fields(),
             )
             _stamp_grade_uid(
                 compose, wrote, grade.grade_uid, tile_set=tile_set,
             )
             ctx.relief_grade_instances.append(grade)
-            stamped_atts.append(att)
+            if canal is not None:
+                stamped_canals.append(canal)
         stamped.extend(wrote)
         max_L = max(max_L, len(wrote))
 
     return (
         tuple(sorted(set(stamped))),
         max_L,
-        aggregate_canal_attachments(stamped_atts),
+        aggregate_canals(stamped_canals),
+        extras,
     )
 
 

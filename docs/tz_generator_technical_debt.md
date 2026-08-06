@@ -3,7 +3,7 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py`, `worldBundleService.py`, relief library/import services.  
-**Обновлено:** 2026-08-06 — DRY canal single-writer (**T-55/T-57/T-58** resolved); residual **T-52…T-54, T-56, T-59**.
+**Обновлено:** 2026-08-06 — Canal typed union + build/draw (**T-53** resolved); residual **T-52, T-54, T-56, T-59**.
 
 **Связанные документы:**
 
@@ -955,7 +955,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | **RELIEF-T-50** | **high** | **resolved** | P1 | dataModel / persist | Grade + SQL: `structure_refs` + `structure_canal` (+ R36j); persist/factory stamp same cut as Intent. **DB recreate.** Intent parity → **T-53**. |
 | **RELIEF-T-51** | medium | **resolved** | P2 | SRP / UX | `roadShoulderGrade` = raw knobs only; single resolve in bake `resolve_seed_canal_attachments`. |
 | **RELIEF-T-52** | medium | open | P2 | god-object / SRP | `roadShoulderApply` ~522 LOC + `_materialize_segment` = clearance∥canal∥anchor∥volume∥stamp∥Grade∥aggregate. Target: `_materialize_seed` + sample/stamp/intent modules. = **T-30**. |
-| **RELIEF-T-53** | medium | open | P2 | dataModel | `ReliefGradeInstance.structure_canal` есть; `RoadShoulderIntent` — нет. Три формы: Decision (`bool\|None` omit), `CanalAttachments` (resolved), Intent (bool+refs). Target: Intent.`structure_canal` **или** TZ lock «Intent = BAR-1 refs only». |
+| **RELIEF-T-53** | medium | **resolved** | P2 | dataModel | `Canal` = `EarthenCanal` \| `StructureCanal`; Intent.`canal` + `build_canal`/`draw_canal`; Grade flat из draw. Entry XOR. |
 | **RELIEF-T-54** | medium | open | P2 | dataModel / values | Skipped Intent без bake: `_to_intent` → `bool(d.earthen_canal)` coerce omit→False до resolve. Target: null/omit canal на skipped; не silent False. |
 | **RELIEF-T-55** | medium | **resolved** | P2 | хардкод | `EMPTY_EARTHEN_CUT` рядом с `EMPTY_CANAL` (policy omit ref). |
 | **RELIEF-T-56** | medium | open | P2 | хардкод | Bake/grade event strings вне canal tokens: `"road_shoulder_skip"`, `"clearance_skip"`, `"no_edge_road_anchor"`, `"schedule_hole"`, `"r21_fallback"` (gradePass). Target: shared relief event module. |
@@ -1019,6 +1019,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-06 | **Canal kinds:** `EarthenCanal`\|`StructureCanal`; entry XOR; `draw_canal`/`build_canal`; Intent.`canal` — T-53 resolved |
 | 2026-08-06 | **DRY canal single-writer:** T-55/T-57/T-58 resolved (`_resolve_canal_ref`, `EMPTY_EARTHEN_CUT`, `grade_fields`/`intent_fields`) |
 | 2026-08-06 | **Post-fix smell → T-53…T-59:** Intent≠Grade `structure_canal`; skipped coerce; earthen literal; bake event strings; R21 DRY; alias/mapper. T-52 → medium (=T-30). Review canvas `canal-debt-fix-smell-review` |
 | 2026-08-05 | **R36p/q fix wave T-43…T-51 resolved;** T-52 open |

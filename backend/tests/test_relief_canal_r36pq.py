@@ -1,12 +1,12 @@
-"""Unit: R36p/q canal registry, knobs XOR, obstacle policy resolve."""
+"""Unit: R36p/q canal registry, knobs XOR, typed Canal resolve."""
 
 from __future__ import annotations
 
 import unittest
 
 from app.application.worldData.generators.terrain.relief.canalAttachments import (
-    CanalAttachments,
-    aggregate_canal_attachments,
+    aggregate_canals,
+    build_canal,
     resolve_knobs_canal,
 )
 from app.application.worldData.generators.terrain.relief.canalObstacleResolve import (
@@ -14,12 +14,15 @@ from app.application.worldData.generators.terrain.relief.canalObstacleResolve im
     resolve_canal_obstacle_cut,
 )
 from app.application.worldData.generators.terrain.relief.seedCanalResolve import (
-    resolve_seed_canal_attachments,
+    resolve_seed_canal,
 )
 from app.dataModel.terrain.relief import (
     CanalObstacleEntity,
     CanalObstaclePolicyRule,
+    CanalTemplateEntry,
+    EarthenCanal,
     ReliefGradeKnobs,
+    StructureCanal,
     WorldCanalTemplateRegistry,
     WorldReliefPickPolicy,
 )
@@ -70,6 +73,20 @@ class CanalKnobsXorTest(unittest.TestCase):
             })
 
 
+class CanalEntryXorTest(unittest.TestCase):
+    def test_entry_both_reject(self) -> None:
+        with self.assertRaises(Exception):
+            CanalTemplateEntry.model_validate({
+                "system_type": "x",
+                "earthen_canal": True,
+                "structure": {"structure_refs": ["a"]},
+            })
+
+    def test_entry_neither_reject(self) -> None:
+        with self.assertRaises(Exception):
+            CanalTemplateEntry.model_validate({"system_type": "x"})
+
+
 class CanalRegistryResolveTest(unittest.TestCase):
     def test_resolve_structure_canal(self) -> None:
         reg = WorldCanalTemplateRegistry.model_validate([
@@ -78,15 +95,19 @@ class CanalRegistryResolveTest(unittest.TestCase):
                 "structure": {"structure_refs": ["lined_canal_stone"]},
             },
         ])
-        att = resolve_knobs_canal(
+        canal = resolve_knobs_canal(
             earthen_canal=None,
             structure_canal="lined_cut",
             structure_refs=(),
             registry=reg,
         )
-        self.assertFalse(att.earthen_canal)
-        self.assertEqual(att.structure_refs, ("lined_canal_stone",))
-        self.assertEqual(att.structure_canal, "lined_cut")
+        self.assertIsInstance(canal, StructureCanal)
+        assert isinstance(canal, StructureCanal)
+        self.assertEqual(canal.structure_refs, ["lined_canal_stone"])
+        self.assertEqual(canal.system_type, "lined_cut")
+        drawn = build_canal(canal)
+        self.assertFalse(drawn.earthen_canal)
+        self.assertEqual(drawn.structure_refs, ("lined_canal_stone",))
 
 
 class CanalObstaclePolicyTest(unittest.TestCase):
@@ -173,18 +194,17 @@ class CanalObstaclePolicyTest(unittest.TestCase):
 class SeedCanalResolveTest(unittest.TestCase):
     def test_fit_uses_knobs(self) -> None:
         reg = WorldCanalTemplateRegistry.canonical_defaults()
-        att = resolve_seed_canal_attachments(
+        canal = resolve_seed_canal(
             requested_length=3,
             L_eff=3,
             terrain_key="forest",
             knobs_earthen=True,
             knobs_structure_canal=None,
-            knobs_structure_refs=(),
             policy_rules=[],
             registry=reg,
             site_id="s1",
         )
-        self.assertTrue(att.earthen_canal)
+        self.assertIsInstance(canal, EarthenCanal)
 
     def test_not_fit_uses_policy(self) -> None:
         reg = WorldCanalTemplateRegistry.model_validate([
@@ -197,45 +217,45 @@ class SeedCanalResolveTest(unittest.TestCase):
                 "canal_ref": "forest_ditch",
             }),
         ]
-        att = resolve_seed_canal_attachments(
+        canal = resolve_seed_canal(
             requested_length=3,
             L_eff=1,
             terrain_key="forest",
             knobs_earthen=False,
             knobs_structure_canal=None,
-            knobs_structure_refs=(),
             policy_rules=rules,
             registry=reg,
             site_id="s1",
         )
-        self.assertTrue(att.earthen_canal)
-        self.assertEqual(att.structure_canal, "forest_ditch")
+        self.assertIsInstance(canal, EarthenCanal)
+        assert isinstance(canal, EarthenCanal)
+        self.assertEqual(canal.system_type, "forest_ditch")
 
     def test_aggregate_union(self) -> None:
-        att = aggregate_canal_attachments([
-            CanalAttachments(True, ("a",), "c1"),
-            CanalAttachments(False, ("b", "a"), "c1"),
+        canal = aggregate_canals([
+            StructureCanal(system_type="c1", structure_refs=["a"]),
+            StructureCanal(system_type="c1", structure_refs=["b", "a"]),
         ])
-        self.assertTrue(att.earthen_canal)
-        self.assertEqual(att.structure_refs, ("a", "b"))
-        self.assertEqual(att.structure_canal, "c1")
+        self.assertIsInstance(canal, StructureCanal)
+        assert isinstance(canal, StructureCanal)
+        self.assertEqual(canal.structure_refs, ["a", "b"])
 
     def test_unknown_structure_canal_r21(self) -> None:
         reg = WorldCanalTemplateRegistry.canonical_defaults()
-        att = resolve_seed_canal_attachments(
+        canal = resolve_seed_canal(
             requested_length=2,
             L_eff=2,
             terrain_key="plains",
             knobs_earthen=None,
             knobs_structure_canal="missing_canal",
-            knobs_structure_refs=(),
             policy_rules=[],
             registry=reg,
             site_id="s-unknown",
         )
-        self.assertFalse(att.earthen_canal)
-        self.assertEqual(att.structure_refs, ())
-        self.assertEqual(att.structure_canal, "missing_canal")
+        self.assertIsInstance(canal, StructureCanal)
+        assert isinstance(canal, StructureCanal)
+        self.assertEqual(canal.system_type, "missing_canal")
+        self.assertEqual(canal.structure_refs, [])
 
 
 if __name__ == "__main__":

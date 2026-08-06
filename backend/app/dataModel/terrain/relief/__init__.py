@@ -1,5 +1,6 @@
 """Relief grade domain POJOs — tz_terrain_relief."""
 
+from app.dataModel.terrain.relief.canal import Canal, EarthenCanal, StructureCanal
 from app.dataModel.terrain.relief.canalObstaclePolicy import CanalObstaclePolicyRule
 from app.dataModel.terrain.relief.canalTemplateEntry import (
     CanalStructureSpec,
@@ -47,10 +48,12 @@ from app.dataModel.terrain.relief.worldReliefTemplateRegistry import (
 )
 
 __all__ = [
+    "Canal",
     "CanalObstacleEntity",
     "CanalObstaclePolicyRule",
     "CanalStructureSpec",
     "CanalTemplateEntry",
+    "EarthenCanal",
     "MountainSideRecipe",
     "MountainSideRecipeMode",
     "ObjectReliefPickPolicy",
@@ -72,6 +75,7 @@ __all__ = [
     "ReliefTemplate",
     "ReliefTemplateRegistryEntry",
     "ReliefTerrainCondition",
+    "StructureCanal",
     "WorldCanalTemplateRegistry",
     "WorldReliefGradeObstacleScalars",
     "WorldReliefPickPolicy",
