@@ -1,6 +1,7 @@
-"""Bake-boundary road_shoulder intent (RELIEF-T-24 / BAR-1 / T-52 phase 4).
+"""Bake-boundary ribbon intent (RELIEF-T-24 / BAR-1 / T-52 phase 4).
 
 Neutral DTO + emit helper — typed ``Canal`` + optional flat fence refs.
+Used by road_shoulder / open_land / shore.
 """
 
 from __future__ import annotations
@@ -12,17 +13,17 @@ from app.application.worldData.generators.terrain.relief.canalAttachments import
     knobs_extra_structure_refs,
     project_canal_draw,
 )
-from app.application.worldData.generators.terrain.relief.roadShoulderGrade import (
-    RoadShoulderGradeResult,
+from app.application.worldData.generators.terrain.relief.ribbonGrade import (
+    RibbonGradeResult,
 )
 from app.dataModel.terrain.relief.canal import Canal
 
 
 @dataclass(frozen=True, slots=True)
-class RoadShoulderIntent:
-    """Data-out after shoulder grade/stamp; barrier stamp = roadShoulderBarrierApply."""
+class RibbonIntent:
+    """Data-out after ribbon grade/stamp; barrier stamp = ribbonBarrierApply."""
 
-    edge_uid: str
+    owner_uid: str
     site_id: str
     template_uid: str | None
     kind: str | None
@@ -58,7 +59,7 @@ class RoadShoulderIntent:
 
 
 def to_intent(
-    result: RoadShoulderGradeResult,
+    result: RibbonGradeResult,
     cell_coords: tuple[tuple[int, int], ...],
     *,
     skipped: bool | None = None,
@@ -66,7 +67,7 @@ def to_intent(
     width: int | None = None,
     canal: Canal | None = None,
     extra_structure_refs: tuple[str, ...] = (),
-) -> RoadShoulderIntent:
+) -> RibbonIntent:
     """Emit Intent from grade result + bake canal cut (no knobs→Canal synthesize — T-61)."""
     d = result.decision
     kind = d.kind.value if d.kind is not None else None
@@ -79,9 +80,8 @@ def to_intent(
             structure_canal=d.structure_canal,
             structure_refs=d.structure_refs,
         )
-    return RoadShoulderIntent(
-        # Bake Intent field still named edge_uid (persist/wire); value = ribbon owner.
-        edge_uid=result.segment.owner_uid,
+    return RibbonIntent(
+        owner_uid=result.segment.owner_uid,
         site_id=result.segment.site_id,
         template_uid=result.template_uid,
         kind=kind,

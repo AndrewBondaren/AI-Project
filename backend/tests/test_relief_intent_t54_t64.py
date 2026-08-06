@@ -16,15 +16,15 @@ from app.application.worldData.generators.terrain.relief.reliefEvents import (
 from app.application.worldData.generators.terrain.relief.ribbonSegmentize import (
     RibbonSegment,
 )
-from app.application.worldData.generators.terrain.relief.roadShoulderGrade import (
-    RoadShoulderGradeResult,
+from app.application.worldData.generators.terrain.relief.ribbonGrade import (
+    RibbonGradeResult,
 )
 from app.application.worldData.pack.bake.lightGrid.contributors.roadShoulderMaterialize import (
     SegmentMaterializeResult,
     _aggregate_skip_why,
 )
-from app.application.worldData.pack.bake.lightGrid.roadShoulderIntent import (
-    RoadShoulderIntent,
+from app.application.worldData.pack.bake.lightGrid.ribbonIntent import (
+    RibbonIntent,
     to_intent,
 )
 from app.dataModel.terrain.relief.canal import EarthenCanal
@@ -37,7 +37,7 @@ def _result(
     earthen: bool | None = None,
     reason: str = "",
     kind: ReliefSideKind | None = ReliefSideKind.SHEER,
-) -> RoadShoulderGradeResult:
+) -> RibbonGradeResult:
     seg = RibbonSegment(
         owner_uid="e1",
         terrain_key="plains",
@@ -59,7 +59,7 @@ def _result(
         skipped=skipped,
         structure_canal=None,
     )
-    return RoadShoulderGradeResult(
+    return RibbonGradeResult(
         segment=seg, decision=decision, template_uid="t1",
     )
 
@@ -78,8 +78,8 @@ class IntentOmitT54Test(unittest.TestCase):
         self.assertIsNone(intent.earthen_canal)
 
     def test_drawn_earthen_still_true(self) -> None:
-        intent = RoadShoulderIntent(
-            edge_uid="e1",
+        intent = RibbonIntent(
+            owner_uid="e1",
             site_id="s",
             template_uid="t",
             kind="sheer",
@@ -91,8 +91,8 @@ class IntentOmitT54Test(unittest.TestCase):
         self.assertTrue(intent.earthen_canal)
 
     def test_fence_only_extras_earthen_false(self) -> None:
-        intent = RoadShoulderIntent(
-            edge_uid="e1",
+        intent = RibbonIntent(
+            owner_uid="e1",
             site_id="s",
             template_uid="t",
             kind="sheer",

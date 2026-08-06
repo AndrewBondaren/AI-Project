@@ -1143,7 +1143,7 @@ allow_flush   → L_eff = 1 → grade на y=2 (flush к объекту)
 8. ✅ **Wave B2/B3** T-60/T-56 (`reliefEvents` + silent logs)  
 9. ✅ **Wave B4** T-54/T-64 (Intent omit + honest skip_why)  
 10. ✅ **Wave B5** T-59…T-63/T-65 polish (T-66 deferred)  
-11. ✅ **Wave C** RELIEF-BAR-1 (`roadShoulderBarrierApply` + `ribbonFence`)
+11. ✅ **Wave C** RELIEF-BAR-1 (`ribbonBarrierApply` + `ribbonFence`)
 12. ✅ **Wave D** open_land + shore (`ribbonGradeApply`)
 13. ✅ **Wave D polish** — `contextRibbonApply` / `ribbonSampleUtil`; `ribbon_intents` + `ref_cells`; BAR-1 once in `compose_light_grid`
 14. → **Wave E** later (см. § Порядок)
@@ -1515,13 +1515,15 @@ generators/terrain/relief/
   profiles / facing / sideGradeDecision   # ✅
   slopeClassify / conditionNormalize / templatePick / kindRoll / gradePass  # ✅
   # gradePass → RibbonGradeDecision(requested_length, h, geom, …)
-  shoulderWidth / roadShoulderGrade ✅
+  shoulderWidth / ribbonGrade / ribbonSegmentize ✅
   geomResolve / freeGap / volumeMaterialize ✅
   obstacleClearance / gradeObstacleLight / ribbonSeedResolve / edgeRoadAnchor ✅
   gradeInstanceFactory ✅
 
-pack/bake/.../roadShoulder{Apply,Sample,Materialize,Stamp,BarrierApply}.py + roadShoulderIntent.py  # T-30/T-52 + BAR-1 ✅
+pack/bake/.../roadShoulder{Apply,Sample,Materialize,Stamp}.py  # road facades ✅
+pack/bake/.../ribbonIntent.py · ribbonBarrierApply.py  # shared Intent + BAR-1 ✅
 pack/bake/.../ribbonGradeApply.py · contextRibbonApply.py · ribbonSampleUtil.py  # Wave D + polish ✅
+generators/.../ribbonGrade.py · ribbonSegmentize.py ✅
 pack/bake/.../{openLand,shore}{Apply,Sample}.py ✅
 generators/barrier/ribbonFence.py ✅
 application/worldData/persistReliefGrades.py ✅
@@ -1529,7 +1531,7 @@ application/worldData/persistReliefGrades.py ✅
 
 Wire: facing + volume + **Grade uid** ✅.  
 R36n clearance ✅. Ribbon phases ✅; dilate sample **Q6** ✅. BAR-1 wall ✅ (once after compose).  
-Bake DTO list: `LightGridBakeContext.ribbon_intents` (type still `RoadShoulderIntent` — naming residual).
+Bake DTO list: `LightGridBakeContext.ribbon_intents` (`RibbonIntent`; `owner_uid`). Grade/SQL still `edge_uid` (= owner value).
 
 ---
 
@@ -1599,7 +1601,7 @@ templates → R36 → BAR-1 →  open_land + shore ✅               →  R36s 8
 |---|---|---|---|
 | **C1** | Consumer: Intent `structure_refs` (+ structure canal) → light `wall` along ribbon | cells вне `generators/terrain/relief`; validate refs on import; no overwrite road/grade/pin/hydro; bake treats wall as grade obstacle | ✅ |
 
-**Impl:** `generators/barrier/ribbonFence.py` (pure) + `paintBarrier.stamp_barrier_terrain` (write-only) + `roadShoulderBarrierApply`. **Call site (Wave D polish):** **один** проход в `compose_light_grid` после всех mask contributors (не из каждого ribbon Apply / не из `RoadContributor`). Placement predicate once (`_may_place_fence`); stamp keys ← `WorldTerrainRegistry`. Unknown ref → R21 warn+skip. **v1 multi-ref:** один footprint; material log = first resolved; wire без `system_material`. **Не** canal resolve в Apply.
+**Impl:** `generators/barrier/ribbonFence.py` (pure) + `paintBarrier.stamp_barrier_terrain` (write-only) + `ribbonBarrierApply`. **Call site (Wave D polish):** **один** проход в `compose_light_grid` после всех mask contributors (не из каждого ribbon Apply / не из `RoadContributor`). Placement predicate once (`_may_place_fence`); stamp keys ← `WorldTerrainRegistry`. Unknown ref → R21 warn+skip. **v1 multi-ref:** один footprint; material log = first resolved; wire без `system_material`. **Не** canal resolve в Apply.
 
 ### Wave D — новые bake consumers ✅
 
@@ -1624,7 +1626,7 @@ templates → R36 → BAR-1 →  open_land + shore ✅               →  R36s 8
 | BAR-1 | once in `compose_light_grid` after contributors |
 | Early-exit | только в `apply_ribbon_grades` (road Apply не дублирует) |
 
-**Residual (не Wave D / не gate E):** type/module names ещё `RoadShoulderIntent` / `grade_road_shoulder_*` — naming debt. ~~T-31/T-32~~ ✅.
+**Residual (не Wave D / не gate E):** road-facade names (`RoadShoulderContributor`, `apply_road_shoulder_grades`, materialize/sample/stamp) + Grade/SQL `edge_uid` wire. Shared path: `RibbonSegment` / `RibbonIntent` / `grade_ribbon_segments` / `apply_ribbon_barriers` ✅.
 
 ### Wave E — later (контракт locked, код не сейчас)
 
@@ -1676,7 +1678,8 @@ templates → R36 → BAR-1 →  open_land + shore ✅               →  R36s 8
 | Дата | Изменение |
 |---|---|
 | 2026-08-06 | **RELIEF-T-31/T-32:** `ribbonSegmentize`; ROAD paint → `painted_road_edges` → `RoadShoulderContributor`; compose `… → road → road_shoulder` |
-| 2026-08-06 | **Wave D polish locked:** `contextRibbonApply` / `ribbonSampleUtil`; `ribbon_intents` + `ref_cells`; BAR-1 once in `compose_light_grid`; events `EVENT_RIBBON_*`; residual `RoadShoulder*` naming |
+| 2026-08-07 | **Ribbon residual naming:** `RibbonIntent` / `RibbonGradeResult` / `grade_ribbon_segments` / `apply_ribbon_barriers`; Intent.`owner_uid`; Grade SQL `edge_uid` unchanged |
+| 2026-08-06 | **Wave D polish locked:** `contextRibbonApply` / `ribbonSampleUtil`; `ribbon_intents` + `ref_cells`; BAR-1 once in `compose_light_grid`; events `EVENT_RIBBON_*` |
 | 2026-08-06 | **Wave D shipped:** `open_land` + `shore` contributors; shared `ribbonGradeApply`; compose order hydro→open_land→shore→road |
 | 2026-08-06 | **Wave C / RELIEF-BAR-1 shipped:** `ribbonFence` + `roadShoulderBarrierApply` → light `wall`; call site later → once after compose (D3) |
 | 2026-08-06 | **R36s / C23:** facing scope locked — v1 = 4 cardinals; later = 8-way полный `Facing` + Chebyshev step; R3/ownership/понятия sync |

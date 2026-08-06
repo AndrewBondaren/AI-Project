@@ -3,7 +3,7 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py`, `worldBundleService.py`, relief library/import services.  
-**Обновлено:** 2026-08-06 — relief **Wave A–D ✅**; **T-31/T-32 ✅**; residual opt **T-66** / `RoadShoulder*` naming; next **Wave E** later; plan [`relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).
+**Обновлено:** 2026-08-07 — relief **Wave A–D ✅**; **T-31/T-32 ✅**; shared ribbon naming ✅ (`RibbonIntent`…); residual opt **T-66** / road-facade names; next **Wave E** later; plan [`relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).
 
 **Связанные документы:**
 
@@ -858,7 +858,7 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 
 | ID | Sev | Status | P | Суть | Связь ТЗ |
 |---|---|---|---|---|---|
-| **RELIEF-BAR-1** | medium | **resolved** | P2 | Intent `structure_refs` → light wall via `ribbonFence` + `roadShoulderBarrierApply` (не в relief). Stamp/obstacle keys ← `WorldTerrainRegistry` (`require_engine_terrain_key` / `canonical_barrier_terrain_keys`), не литералы wall/gate. | [`tz_terrain_relief.md`](./tz_terrain_relief.md) Wave C · [`tz_locations.md`](./tz_locations.md) § barrier registry |
+| **RELIEF-BAR-1** | medium | **resolved** | P2 | Intent `structure_refs` → light wall via `ribbonFence` + `ribbonBarrierApply` (не в relief). Stamp/obstacle keys ← `WorldTerrainRegistry` (`require_engine_terrain_key` / `canonical_barrier_terrain_keys`), не литералы wall/gate. | [`tz_terrain_relief.md`](./tz_terrain_relief.md) Wave C · [`tz_locations.md`](./tz_locations.md) § barrier registry |
 
 **Не путать:** `earthen_canal` ≠ lined/`structure_refs`; R36n clearance ≠ R36p canal policy; `canal_template_registry` ≠ `barrier_template_registry`.
 
@@ -922,11 +922,11 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | **RELIEF-T-29** | medium | open | P2 | god-object / JV | `worldSlices.py` (~432 LOC) — catalog ~27 slices + merge strategies. Catalog OK; merge helpers вынести; slices ближе к POJO-пакету домена |
 | **RELIEF-T-30** | medium | **resolved** | P2 | SRP | Bake split ✅: sample / materialize / stamp / intent + thin `apply_*` facade. = **T-52**. § [roadShoulderApply split](#roadshoulderapply-split-t-30--t-52). |
 | **RELIEF-T-31** | medium | **resolved** | P2 | SRP | `RoadContributor` = paint only; `RoadShoulderContributor` after ROAD via `ctx.painted_road_edges` (`PaintedRoadEdge`). |
-| **RELIEF-T-32** | medium | **resolved** | P2 | SRP | `ribbonSegmentize.py` (`RibbonSegment` + `owner_uid`); `roadShoulderGrade` = pick/grade only (no segmentize re-export). |
+| **RELIEF-T-32** | medium | **resolved** | P2 | SRP | `ribbonSegmentize.py` (`RibbonSegment` + `owner_uid`); `ribbonGrade.py` = pick/grade only. |
 | **RELIEF-T-33** | medium | open | P2 | DRY | `conditionNormalize`: `_knobs_from_case` есть, Mode A down/up копирует `ReliefDeltaInterval` вручную |
 | **RELIEF-T-34** | medium | open | P2 | DRY / dataModel | `ReliefRoleCase` дублирует knobs-поля; Mode B = `ReliefDeltaBand(ReliefGradeKnobs)`. Target: embed/compose knobs на Mode A |
 | **RELIEF-T-35** | medium | open | P2 | DRY | `slope_weight+sheer_weight==1` ×3 (`reliefRoleCase`, `reliefTemplate`, `mountainSideRecipe`). Target: `require_weights_pair` |
-| **RELIEF-T-36** | medium | open | P2 | DRY | pick+load дубль: `roadShoulderGrade` ↔ `reliefSidesStamp`. Target: `resolve_picked_template(...)` |
+| **RELIEF-T-36** | medium | open | P2 | DRY | pick+load дубль: `ribbonGrade` ↔ `reliefSidesStamp`. Target: `resolve_picked_template(...)` |
 | **RELIEF-T-37** | medium | open | P2 | wire keys | `worldRow` литералы `"relief_template_registry"` / `"relief_pick_policy"` ≠ `model_fields` / `WorldSlice.world_keys`. Эталон: `RELIEF_OBSTACLE_SCALAR_WIRE_KEYS` |
 | **RELIEF-T-38** | medium | open | P2 | values | `expand_shoulder_ring`: `max(1, width)` режет `0`; POJO `slope_length_cells` допускает 0. Target: honor 0 или clamp в POJO/TZ |
 | **RELIEF-T-39** | medium | open | P2 | values | `conditionNormalize`: `float(... or 0.0)`, `delta_z or 0/1` — silent fallback мимо validators |
@@ -1021,20 +1021,22 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 **Scope:** только `pack/bake/lightGrid/` contributor. Canal kinds / resolve — **не** трогать (уже out).  
 **Правило (было):** один PR = одна phase — **waived** for this ship (full split). Stamp/adapters **не** в `generators/terrain`. Q6 dilate sample — Wave B1 ✅.
 
-**Уже вынесено (не трогать):** `ribbonSeedResolve`, `edgeRoadAnchor`, `volumeMaterialize`, `seedCanalResolve` / `canalAttachments` (`build_canal`), `roadShoulderGrade`, `gradeInstanceFactory`.
+**Уже вынесено (не трогать):** `ribbonSeedResolve`, `edgeRoadAnchor`, `volumeMaterialize`, `seedCanalResolve` / `canalAttachments` (`build_canal`), `ribbonGrade`, `gradeInstanceFactory`.
 
 **Modules (shipped)**
 
 | Файл | Роль | Public |
 |---|---|---|
-| `contributors/roadShoulderApply.py` | facade only | `apply_road_shoulder_grades` |
+| `contributors/roadShoulderApply.py` | road facade only | `apply_road_shoulder_grades` |
 | `contributors/roadShoulderSample.py` | discovery | `sample_shoulder_cells` |
 | `contributors/roadShoulderMaterialize.py` | seed + segment pipeline | `materialize_segment` / `materialize_seed` + contracts |
 | `contributors/roadShoulderStamp.py` | compose writes | stamp ribbon / column / `grade_uid` / `cell_blocked_light` |
-| `roadShoulderIntent.py` | DTO + emit | `RoadShoulderIntent`, `to_intent` |
+| `ribbonIntent.py` | DTO + emit | `RibbonIntent`, `to_intent` |
+| `generators/.../ribbonGrade.py` | pick/grade | `RibbonGradeResult`, `grade_ribbon_segments` |
+| `contributors/ribbonBarrierApply.py` | BAR-1 | `apply_ribbon_barriers` |
 
 **Data flow:**  
-`apply` → sample → `roadShoulderGrade` → `materialize_segment` → per seed (`clearance` → `resolve_seed_canal` → anchor → volume → stamp → Grade) → aggregate canal → `to_intent` → `ctx.intents`.
+`apply` → sample → `grade_ribbon_segments` → `materialize_segment` → per seed (`clearance` → `resolve_seed_canal` → anchor → volume → stamp → Grade) → aggregate canal → `to_intent` → `ctx.ribbon_intents`.
 
 ### World multi_column scalars — DRY (JV-SCALARS)
 
@@ -1068,11 +1070,12 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 2. ~~**Wave B2/B3 — T-60 / T-56**~~ ✅  
 3. ~~**Wave B4 — B4a T-54 → B4b T-64**~~ ✅  
 4. ~~**Wave B5 — T-59…T-63, T-65**~~ ✅ (**T-66** deferred)  
-5. ~~**Wave C — RELIEF-BAR-1**~~ ✅ (`ribbonFence` + `roadShoulderBarrierApply`)
+5. ~~**Wave C — RELIEF-BAR-1**~~ ✅ (`ribbonFence` + `ribbonBarrierApply`)
 6. ~~**Wave D —** `open_land` / `shore`~~ ✅ (`ribbonGradeApply` + contributors)
 7. ~~**Wave D polish**~~ ✅ (`contextRibbonApply` / `ribbonSampleUtil` / `ribbon_intents`+`ref_cells` / BAR-1 once)
 8. **Wave E —** R36s / R36r / R36o / Q4 / R36f/k / UI R30 (later)
-9. **Parallel eng (не gate waves):** **T-28** (partial), **T-34…T-39**; residual naming `RoadShoulder*` → ribbon; **T-66** deferred; fixtures `*_templates`  
+9. **Parallel eng (не gate waves):** **T-28** (partial), **T-34…T-39**; road-facade naming optional; **T-66** deferred; fixtures `*_templates`  
+   ~~shared `RoadShoulderIntent`/`grade_road_shoulder_*`~~ ✅ → `RibbonIntent` / `grade_ribbon_segments`  
    ~~**T-31/T-32**~~ ✅  
 9. (optional) rename `MountainSideRecipeMode` wire A–D — breaking + migration
 
@@ -1092,6 +1095,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-07 | **Ribbon residual naming:** `RibbonIntent` / `RibbonGradeResult` / `grade_ribbon_segments` / `apply_ribbon_barriers`; Intent.`owner_uid`; Grade SQL `edge_uid` unchanged |
 | 2026-08-07 | **Ribbon naming:** `RoadShoulderSegment`→`RibbonSegment`; `edge_uid`→`owner_uid` on segment; Intent/Grade `edge_uid` field still wire name (= owner value) |
 | 2026-08-06 | **RELIEF-T-31/T-32 resolved:** `ribbonSegmentize`; `RoadShoulderContributor` + `painted_road_edges` after ROAD paint |
 | 2026-08-06 | **Wave D polish:** `contextRibbonApply` / `ribbonSampleUtil`; `ribbon_intents` + `ref_cells`; BAR-1 once in `compose_light_grid`; road early-exit deduped |

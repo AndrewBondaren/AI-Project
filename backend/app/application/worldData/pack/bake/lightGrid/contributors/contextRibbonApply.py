@@ -11,8 +11,8 @@ from app.application.worldData.pack.bake.lightGrid.contributors.ribbonGradeApply
     SampleCell,
     apply_ribbon_grades,
 )
-from app.application.worldData.pack.bake.lightGrid.roadShoulderIntent import (
-    RoadShoulderIntent,
+from app.application.worldData.pack.bake.lightGrid.ribbonIntent import (
+    RibbonIntent,
 )
 from app.dataModel.terrain.relief.enums import ReliefContext
 
@@ -29,7 +29,7 @@ def apply_context_ribbon_grades(
     context: ReliefContext,
     sample_fn: SampleFn,
     occurrence_start: int = 0,
-) -> list[RoadShoulderIntent]:
+) -> list[RibbonIntent]:
     """Shared open_land / shore wire (BAR-1 runs once after full compose)."""
     if not ctx.relief_templates_by_uid:
         return []

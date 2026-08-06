@@ -880,7 +880,7 @@ price = tier.base_value × location.economic_modifier × supply_demand_modifier 
 
 Городские стены и стены крепостей — `barrier_template_registry`, не часть ни одного здания; размещаются на уровне settlement/territory.
 
-**Связь с relief:** шаблоны обочин ([`tz_terrain_relief.md`](./tz_terrain_relief.md) R28) могут нести `structure_refs: [system_type, …]`. Stamp вдоль дороги — bake `roadShoulderBarrierApply` (**RELIEF-BAR-1 ✅**), не в relief generators.
+**Связь с relief:** шаблоны обочин ([`tz_terrain_relief.md`](./tz_terrain_relief.md) R28) могут нести `structure_refs: [system_type, …]`. Stamp вдоль ribbon — bake `ribbonBarrierApply` (**RELIEF-BAR-1 ✅**), не в relief generators.
 
 ---
 

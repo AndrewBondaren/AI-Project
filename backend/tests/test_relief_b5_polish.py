@@ -19,8 +19,8 @@ from app.application.worldData.generators.terrain.relief.reliefEvents import (
 from app.application.worldData.generators.terrain.relief.ribbonSegmentize import (
     RibbonSegment,
 )
-from app.application.worldData.generators.terrain.relief.roadShoulderGrade import (
-    RoadShoulderGradeResult,
+from app.application.worldData.generators.terrain.relief.ribbonGrade import (
+    RibbonGradeResult,
 )
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
@@ -34,7 +34,7 @@ from app.application.worldData.pack.bake.lightGrid.contributors.roadShoulderSamp
     sample_shoulder_cells,
 )
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
-from app.application.worldData.pack.bake.lightGrid.roadShoulderIntent import to_intent
+from app.application.worldData.pack.bake.lightGrid.ribbonIntent import to_intent
 from app.dataModel.spatial.facing import CARDINAL_WALL_OUTWARD_DELTA, Facing
 from app.dataModel.terrain.relief.canal import EarthenCanal
 from app.dataModel.terrain.relief.enums import ReliefSideKind
@@ -89,7 +89,7 @@ class IntentNoSynthesizeT61Test(unittest.TestCase):
             skipped=False,
             structure_canal=None,
         )
-        result = RoadShoulderGradeResult(
+        result = RibbonGradeResult(
             segment=seg, decision=decision, template_uid="t1",
         )
         intent = to_intent(result, ((0, 0),), canal=None)

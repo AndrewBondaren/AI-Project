@@ -35,9 +35,7 @@ from app.application.worldData.pack.bake.lightGrid.contributors.roadShoulderStam
     cell_blocked_light,
 )
 from app.application.worldData.pack.bake.lightGrid.paintBarrier import stamp_barrier_terrain
-from app.application.worldData.pack.bake.lightGrid.roadShoulderIntent import (
-    RoadShoulderIntent,
-)
+from app.application.worldData.pack.bake.lightGrid.ribbonIntent import RibbonIntent
 from app.dataModel.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.db.models.world import World
@@ -45,7 +43,7 @@ from app.db.models.world import World
 _BARRIER_TERRAIN = WorldTerrainRegistry.require_engine_terrain_key("wall")
 
 
-def apply_road_shoulder_barriers(
+def apply_ribbon_barriers(
     compose: LightGridCompose,
     ctx: LightGridBakeContext,
 ) -> int:
@@ -78,7 +76,7 @@ def apply_road_shoulder_barriers(
 
 def _apply_intent_barriers(
     compose: LightGridCompose,
-    intent: RoadShoulderIntent,
+    intent: RibbonIntent,
     *,
     tile_set: set[tuple[int, int]],
     road_key: str,

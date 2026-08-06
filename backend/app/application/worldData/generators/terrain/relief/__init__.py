@@ -20,9 +20,9 @@ from app.application.worldData.generators.terrain.relief.ribbonSegmentize import
     RibbonSegment,
     segmentize_by_terrain,
 )
-from app.application.worldData.generators.terrain.relief.roadShoulderGrade import (
-    RoadShoulderGradeResult,
-    grade_road_shoulder_segments,
+from app.application.worldData.generators.terrain.relief.ribbonGrade import (
+    RibbonGradeResult,
+    grade_ribbon_segments,
 )
 from app.application.worldData.generators.terrain.relief.shoulderWidth import (
     expand_shoulder_ring,
@@ -38,15 +38,15 @@ from app.application.worldData.generators.terrain.relief.sideGradeDecision impor
 __all__ = [
     "RadialGradeDecision",
     "RibbonGradeDecision",
+    "RibbonGradeResult",
     "RibbonSegment",
-    "RoadShoulderGradeResult",
     "bake_seed",
     "decide_radial_grade",
     "expand_shoulder_ring",
     "facing_wire",
     "format_sides_summary",
     "grade_from_template",
-    "grade_road_shoulder_segments",
+    "grade_ribbon_segments",
     "plateau_hat_decision",
     "profile_side_fraction",
     "relief_dz",

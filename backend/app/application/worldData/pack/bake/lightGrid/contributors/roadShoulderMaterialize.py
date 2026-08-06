@@ -32,8 +32,8 @@ from app.application.worldData.generators.terrain.relief.ribbonSeedResolve impor
     SeedClearanceSkip,
     resolve_seed_clearance,
 )
-from app.application.worldData.generators.terrain.relief.roadShoulderGrade import (
-    RoadShoulderGradeResult,
+from app.application.worldData.generators.terrain.relief.ribbonGrade import (
+    RibbonGradeResult,
 )
 from app.application.worldData.generators.terrain.relief.seedCanalResolve import (
     aggregate_canals,
@@ -100,7 +100,7 @@ def _aggregate_skip_why(whys: list[str]) -> str:
 def materialize_segment(
     compose: LightGridCompose,
     ctx: LightGridBakeContext,
-    result: RoadShoulderGradeResult,
+    result: RibbonGradeResult,
     *,
     ref_cells: set[tuple[int, int]],
     tile_set: set[tuple[int, int]],
@@ -172,7 +172,7 @@ def materialize_segment(
 def materialize_seed(
     compose: LightGridCompose,
     ctx: LightGridBakeContext,
-    result: RoadShoulderGradeResult,
+    result: RibbonGradeResult,
     *,
     seed: tuple[int, int],
     requested: int,

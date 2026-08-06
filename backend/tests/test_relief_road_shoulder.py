@@ -7,8 +7,8 @@ import unittest
 from app.application.worldData.generators.terrain.relief.ribbonSegmentize import (
     segmentize_by_terrain,
 )
-from app.application.worldData.generators.terrain.relief.roadShoulderGrade import (
-    grade_road_shoulder_segments,
+from app.application.worldData.generators.terrain.relief.ribbonGrade import (
+    grade_ribbon_segments,
 )
 from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
 from app.dataModel.terrain.relief import ReliefTemplate
@@ -61,7 +61,7 @@ class RoadShoulderGradeTest(unittest.TestCase):
             owner_uid="e1",
             cells=[((0, 0), "plains", 2)],
         )
-        results = grade_road_shoulder_segments(
+        results = grade_ribbon_segments(
             world=world,
             world_seed="w1",
             segments=segs,
@@ -110,7 +110,7 @@ class RoadShoulderGradeTest(unittest.TestCase):
             owner_uid="e1",
             cells=[((0, 0), "plains", 2)],
         )
-        results = grade_road_shoulder_segments(
+        results = grade_ribbon_segments(
             world=world,
             world_seed="w1",
             segments=segs,

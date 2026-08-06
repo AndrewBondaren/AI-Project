@@ -13,8 +13,8 @@ from app.application.worldData.pack.bake.lightGrid.contributors.ribbonGradeApply
 from app.application.worldData.pack.bake.lightGrid.contributors.roadShoulderSample import (
     sample_shoulder_cells,
 )
-from app.application.worldData.pack.bake.lightGrid.roadShoulderIntent import (
-    RoadShoulderIntent,
+from app.application.worldData.pack.bake.lightGrid.ribbonIntent import (
+    RibbonIntent,
 )
 from app.dataModel.terrain.relief.enums import ReliefContext
 from app.dataModel.terrain.relief.worldReliefPickPolicy import ObjectReliefPickPolicy
@@ -28,7 +28,7 @@ def apply_road_shoulder_grades(
     road_cells: set[tuple[int, int]],
     object_policy: ObjectReliefPickPolicy | None = None,
     occurrence_start: int = 0,
-) -> list[RoadShoulderIntent]:
+) -> list[RibbonIntent]:
     """Grade one edge's shoulders; mutate compose z/facing; append intents."""
     tile_set = set(ctx.tiles)
     samples = sample_shoulder_cells(

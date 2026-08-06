@@ -3,7 +3,7 @@
 Segmentize: ``ribbonSegmentize`` (RELIEF-T-32). This module = pick/grade only.
 Pure consumer: emits RibbonGradeDecision with raw canal knobs.
 Registry/policy resolve happens once in bake (RELIEF-T-51).
-Barrier stamp = bake ``roadShoulderBarrierApply`` (RELIEF-BAR-1); not this module.
+Barrier stamp = bake ``ribbonBarrierApply`` (RELIEF-BAR-1); not this module.
 """
 
 from __future__ import annotations
@@ -34,20 +34,20 @@ from app.dataModel.terrain.relief.worldReliefPickPolicy import ObjectReliefPickP
 from app.db.models.world import World
 
 __all__ = [
+    "RibbonGradeResult",
     "RibbonSegment",
-    "RoadShoulderGradeResult",
-    "grade_road_shoulder_segments",
+    "grade_ribbon_segments",
 ]
 
 
 @dataclass(frozen=True, slots=True)
-class RoadShoulderGradeResult:
+class RibbonGradeResult:
     segment: RibbonSegment
     decision: RibbonGradeDecision
     template_uid: str | None
 
 
-def grade_road_shoulder_segments(
+def grade_ribbon_segments(
     *,
     world: World,
     world_seed: str,
@@ -56,11 +56,11 @@ def grade_road_shoulder_segments(
     object_policy: ObjectReliefPickPolicy | None = None,
     occurrence_start: int = 0,
     context: ReliefContext = ReliefContext.ROAD_SHOULDER,
-) -> list[RoadShoulderGradeResult]:
+) -> list[RibbonGradeResult]:
     """Grade ribbon segments for ``context`` (road_shoulder / open_land / shore)."""
     registry = relief_template_registry(world)
     world_policy = relief_pick_policy(world)
-    results: list[RoadShoulderGradeResult] = []
+    results: list[RibbonGradeResult] = []
     seq = occurrence_start
     for segment in segments:
         pick = pick_template(
@@ -92,7 +92,7 @@ def grade_road_shoulder_segments(
             site_id=segment.site_id,
         )
         results.append(
-            RoadShoulderGradeResult(
+            RibbonGradeResult(
                 segment=segment,
                 decision=decision,
                 template_uid=pick.template_uid,

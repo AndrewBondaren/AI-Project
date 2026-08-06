@@ -20,16 +20,16 @@ from app.application.worldData.generators.terrain.relief.reliefLog import relief
 from app.application.worldData.generators.terrain.relief.ribbonSegmentize import (
     segmentize_by_terrain,
 )
-from app.application.worldData.generators.terrain.relief.roadShoulderGrade import (
-    grade_road_shoulder_segments,
+from app.application.worldData.generators.terrain.relief.ribbonGrade import (
+    grade_ribbon_segments,
 )
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.contributors.roadShoulderMaterialize import (
     materialize_segment,
 )
-from app.application.worldData.pack.bake.lightGrid.roadShoulderIntent import (
-    RoadShoulderIntent,
+from app.application.worldData.pack.bake.lightGrid.ribbonIntent import (
+    RibbonIntent,
     to_intent,
 )
 from app.dataModel.terrain.relief.enums import ReliefContext
@@ -48,7 +48,7 @@ def apply_ribbon_grades(
     context: ReliefContext,
     object_policy: ObjectReliefPickPolicy | None = None,
     occurrence_start: int = 0,
-) -> list[RoadShoulderIntent]:
+) -> list[RibbonIntent]:
     """Segmentize → grade(context) → materialize; append intents to bake ctx."""
     if not ref_cells:
         relief_debug(
@@ -80,7 +80,7 @@ def apply_ribbon_grades(
     segments = segmentize_by_terrain(owner_uid=owner_uid, cells=samples)
     canal_reg = canal_templates(ctx.world)
     canal_rules = relief_pick_policy(ctx.world).canal_obstacle_policy
-    results = grade_road_shoulder_segments(
+    results = grade_ribbon_segments(
         world=ctx.world,
         world_seed=bake_seed(ctx.world),
         segments=segments,
@@ -89,7 +89,7 @@ def apply_ribbon_grades(
         occurrence_start=occurrence_start,
         context=context,
     )
-    intents: list[RoadShoulderIntent] = []
+    intents: list[RibbonIntent] = []
     for result in results:
         if result.decision.skipped or result.decision.kind is None:
             intents.append(to_intent(result, result.segment.cell_coords))

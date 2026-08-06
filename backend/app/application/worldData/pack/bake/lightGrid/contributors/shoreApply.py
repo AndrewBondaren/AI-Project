@@ -10,8 +10,8 @@ from app.application.worldData.pack.bake.lightGrid.contributors.contextRibbonApp
 from app.application.worldData.pack.bake.lightGrid.contributors.shoreSample import (
     sample_shore_cells,
 )
-from app.application.worldData.pack.bake.lightGrid.roadShoulderIntent import (
-    RoadShoulderIntent,
+from app.application.worldData.pack.bake.lightGrid.ribbonIntent import (
+    RibbonIntent,
 )
 from app.dataModel.terrain.relief.enums import ReliefContext
 
@@ -21,7 +21,7 @@ def apply_shore_grades(
     ctx: LightGridBakeContext,
     *,
     occurrence_start: int = 0,
-) -> list[RoadShoulderIntent]:
+) -> list[RibbonIntent]:
     """Hydro SHORE edge → ribbon Grade."""
     return apply_context_ribbon_grades(
         compose,
