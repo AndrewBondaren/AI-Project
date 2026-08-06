@@ -102,7 +102,7 @@ def materialize_segment(
     ctx: LightGridBakeContext,
     result: RoadShoulderGradeResult,
     *,
-    road_cells: set[tuple[int, int]],
+    ref_cells: set[tuple[int, int]],
     tile_set: set[tuple[int, int]],
     canal_registry: WorldCanalTemplateRegistry,
     canal_rules: Sequence[CanalObstaclePolicyRule],
@@ -146,7 +146,7 @@ def materialize_segment(
             kind=kind,
             sign=sign,
             extras=extras,
-            road_cells=road_cells,
+            ref_cells=ref_cells,
             tile_set=tile_set,
             canal_registry=canal_registry,
             canal_rules=canal_rules,
@@ -180,7 +180,7 @@ def materialize_seed(
     kind: ReliefSideKind,
     sign: int,
     extras: tuple[str, ...],
-    road_cells: set[tuple[int, int]],
+    ref_cells: set[tuple[int, int]],
     tile_set: set[tuple[int, int]],
     canal_registry: WorldCanalTemplateRegistry,
     canal_rules: Sequence[CanalObstaclePolicyRule],
@@ -189,7 +189,7 @@ def materialize_seed(
     d = result.decision
     clearance = resolve_seed_clearance(
         seed=seed,
-        road_cells=road_cells,
+        ref_cells=ref_cells,
         requested_length=requested,
         world=ctx.world,
         cell_blocked=lambda c: cell_blocked_light(
@@ -220,7 +220,7 @@ def materialize_seed(
     )
 
     anchor = resolve_edge_road_anchor(
-        compose, clearance, road_cells=road_cells, tile_set=tile_set,
+        compose, clearance, ref_cells=ref_cells, tile_set=tile_set,
     )
     if anchor is None:
         relief_warning(
@@ -257,7 +257,7 @@ def materialize_seed(
         kind=kind,
         sign=sign,
         anchor=anchor,
-        road_cells=road_cells,
+        ref_cells=ref_cells,
         tile_set=tile_set,
     )
     if outcome.break_why is not None:

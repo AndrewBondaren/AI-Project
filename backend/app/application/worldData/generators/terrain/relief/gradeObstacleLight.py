@@ -15,13 +15,13 @@ CellBlockedFn = Callable[[Coord], bool]
 def is_grade_obstacle_light(
     cell: Coord,
     *,
-    road_cells: set[Coord],
+    ref_cells: set[Coord],
     cell_blocked: CellBlockedFn,
 ) -> bool:
     """``True`` if grade must not enter ``cell``.
 
     ``cell_blocked``: bake adapter for OOB / missing / ``location_pin``.
     """
-    if cell in road_cells:
+    if cell in ref_cells:
         return True
     return bool(cell_blocked(cell))

@@ -39,13 +39,13 @@ class EdgeRoadAnchorTest(unittest.TestCase):
             return c in pins
 
         self.assertTrue(
-            is_grade_obstacle_light((0, 0), road_cells=road, cell_blocked=blocked)
+            is_grade_obstacle_light((0, 0), ref_cells=road, cell_blocked=blocked)
         )
         self.assertTrue(
-            is_grade_obstacle_light((2, 0), road_cells=road, cell_blocked=blocked)
+            is_grade_obstacle_light((2, 0), ref_cells=road, cell_blocked=blocked)
         )
         self.assertFalse(
-            is_grade_obstacle_light((1, 0), road_cells=road, cell_blocked=blocked)
+            is_grade_obstacle_light((1, 0), ref_cells=road, cell_blocked=blocked)
         )
 
     def test_clearance_truncate_skip(self) -> None:
@@ -62,7 +62,7 @@ class EdgeRoadAnchorTest(unittest.TestCase):
         pins = {(2, 0)}
         out = resolve_seed_clearance(
             seed=(1, 0),
-            road_cells=road,
+            ref_cells=road,
             requested_length=3,
             world=w,
             cell_blocked=lambda c: c in pins,
@@ -79,7 +79,7 @@ class EdgeRoadAnchorTest(unittest.TestCase):
         )
         out2 = resolve_seed_clearance(
             seed=(1, 0),
-            road_cells=road,
+            ref_cells=road,
             requested_length=3,
             world=w2,
             cell_blocked=lambda c: c in pins,

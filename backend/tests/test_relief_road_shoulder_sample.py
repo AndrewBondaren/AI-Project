@@ -176,7 +176,7 @@ class RoadShoulderSampleTest(unittest.TestCase):
             compose, ctx, edge_uid="e1", road_cells=road,
         )
         self.assertTrue(intents)
-        self.assertTrue(ctx.road_shoulder_intents)
+        self.assertTrue(ctx.ribbon_intents)
 
 
 if __name__ == "__main__":

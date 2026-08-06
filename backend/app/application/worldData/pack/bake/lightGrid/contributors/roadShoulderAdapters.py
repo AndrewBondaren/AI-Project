@@ -53,11 +53,11 @@ def resolve_edge_road_anchor(
     compose: LightGridCompose,
     clearance: SeedClearance,
     *,
-    road_cells: set[tuple[int, int]],
+    ref_cells: set[tuple[int, int]],
     tile_set: set[tuple[int, int]],
 ) -> EdgeRoadAnchor | None:
     abutment = edge_road_abutment(
-        clearance.seed, clearance.outward, road_cells,
+        clearance.seed, clearance.outward, ref_cells,
     )
     if abutment is None:
         return None

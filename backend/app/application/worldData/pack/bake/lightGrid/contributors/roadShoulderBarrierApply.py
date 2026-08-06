@@ -51,14 +51,14 @@ def apply_road_shoulder_barriers(
 ) -> int:
     """Stamp fence cells for all non-skipped intents with resolved barrier refs."""
     tile_set = set(ctx.tiles)
-    if not tile_set or not ctx.road_shoulder_intents:
+    if not tile_set or not ctx.ribbon_intents:
         return 0
     masks = terrain_masks(ctx.world)
     road_key = masks.default_roads.system_terrain
     registry = barrier_templates(ctx.world)
     world_seed = bake_seed(ctx.world)
     painted = 0
-    for intent in ctx.road_shoulder_intents:
+    for intent in ctx.ribbon_intents:
         painted += _apply_intent_barriers(
             compose,
             intent,
@@ -70,7 +70,7 @@ def apply_road_shoulder_barriers(
         )
     relief_debug(
         EVENT_ROAD_SHOULDER_BARRIER,
-        intents=len(ctx.road_shoulder_intents),
+        intents=len(ctx.ribbon_intents),
         cells_painted=painted,
     )
     return painted

@@ -43,19 +43,19 @@ class SeedClearanceSkip:
 def resolve_seed_clearance(
     *,
     seed: Coord,
-    road_cells: set[Coord],
+    ref_cells: set[Coord],
     requested_length: int,
     world: Any,
     cell_blocked: CellBlockedFn,
 ) -> SeedClearance | SeedClearanceSkip:
     """Phase 1: outward + gap + world policy → ``L_eff`` or skip."""
-    outward = unique_outward(seed, road_cells)
+    outward = unique_outward(seed, ref_cells)
     if outward is None:
         return SeedClearanceSkip(seed=seed, why="no_unique_outward")
 
     def _blocked(cell: Coord) -> bool:
         return is_grade_obstacle_light(
-            cell, road_cells=road_cells, cell_blocked=cell_blocked,
+            cell, ref_cells=ref_cells, cell_blocked=cell_blocked,
         )
 
     gap = measure_free_gap(start=seed, outward=outward, is_blocked=_blocked)

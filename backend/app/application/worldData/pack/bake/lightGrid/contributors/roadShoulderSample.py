@@ -10,12 +10,8 @@ from __future__ import annotations
 from app.application.worldData.generators.terrain.relief.shoulderWidth import relief_dz
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.coords import light_to_macro_local
-from app.dataModel.spatial.facing import CARDINAL_WALL_OUTWARD_DELTA, Facing
-
-# Stable cardinal order (E,W,N,S) — Facing SoT deltas (RELIEF-T-62).
-_ORTHO = tuple(
-    CARDINAL_WALL_OUTWARD_DELTA[f]
-    for f in (Facing.EAST, Facing.WEST, Facing.NORTH, Facing.SOUTH)
+from app.application.worldData.pack.bake.lightGrid.contributors.ribbonSampleUtil import (
+    CARDINAL_ORTHO_DELTAS,
 )
 
 
@@ -43,7 +39,7 @@ def sample_shoulder_cells(
         if road_cell is None:
             continue
         road_z = int(road_cell.surface_z)
-        for dx, dy in _ORTHO:
+        for dx, dy in CARDINAL_ORTHO_DELTAS:
             nx, ny = lx + dx, ly + dy
             seed = (nx, ny)
             if seed in road_cells or seed in seen:

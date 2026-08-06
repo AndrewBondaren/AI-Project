@@ -96,7 +96,7 @@ def apply_ribbon_grades(
             compose,
             ctx,
             result,
-            road_cells=ref_cells,
+            ref_cells=ref_cells,
             tile_set=tile_set,
             canal_registry=canal_reg,
             canal_rules=canal_rules,
@@ -123,7 +123,7 @@ def apply_ribbon_grades(
                 extra_structure_refs=mat.extra_structure_refs,
             ),
         )
-    ctx.road_shoulder_intents.extend(intents)
+    ctx.ribbon_intents.extend(intents)
     relief_debug(
         EVENT_RIBBON_GRADE_APPLY,
         owner_uid=owner_uid,

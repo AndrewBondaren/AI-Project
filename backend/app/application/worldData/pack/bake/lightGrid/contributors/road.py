@@ -17,9 +17,6 @@ from app.application.worldData.pack.bake.lightGrid.contributors.hydro.raster imp
 from app.application.worldData.pack.bake.lightGrid.contributors.roadShoulderApply import (
     apply_road_shoulder_grades,
 )
-from app.application.worldData.pack.bake.lightGrid.contributors.roadShoulderBarrierApply import (
-    apply_road_shoulder_barriers,
-)
 from app.application.worldData.pack.bake.lightGrid.paintTerrain import paint_system_terrain
 from app.dataModel.masks.enums.maskDomainId import LightContributorId
 from app.db.models.namedLocation import NamedLocation
@@ -110,15 +107,11 @@ class RoadContributor:
             )
             shoulder_seq += len(applied)
 
-        # RELIEF-BAR-1: structure_refs → wall along stamped ribbons (not in relief/).
-        barrier_cells = apply_road_shoulder_barriers(compose, ctx)
-
         logger.debug(
             "light_contributor_road | world=%s edges_used=%d cells_painted=%d "
-            "shoulder_intents=%d barrier_cells=%d",
+            "ribbon_intents=%d",
             ctx.world.world_uid,
             edges_used,
             painted,
-            len(ctx.road_shoulder_intents),
-            barrier_cells,
+            len(ctx.ribbon_intents),
         )

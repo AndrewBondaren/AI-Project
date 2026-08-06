@@ -25,8 +25,10 @@ from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompo
 from app.application.worldData.pack.bake.lightGrid.contributors.roadShoulderApply import (
     apply_road_shoulder_grades,
 )
+from app.application.worldData.pack.bake.lightGrid.contributors.ribbonSampleUtil import (
+    CARDINAL_ORTHO_DELTAS,
+)
 from app.application.worldData.pack.bake.lightGrid.contributors.roadShoulderSample import (
-    _ORTHO,
     sample_shoulder_cells,
 )
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
@@ -45,7 +47,7 @@ class OrthoFacingT62Test(unittest.TestCase):
             CARDINAL_WALL_OUTWARD_DELTA[f]
             for f in (Facing.EAST, Facing.WEST, Facing.NORTH, Facing.SOUTH)
         )
-        self.assertEqual(_ORTHO, expected)
+        self.assertEqual(CARDINAL_ORTHO_DELTAS, expected)
 
 
 class ProjectCanalDrawT63Test(unittest.TestCase):

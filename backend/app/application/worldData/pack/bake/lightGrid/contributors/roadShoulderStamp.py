@@ -55,7 +55,7 @@ def stamp_ribbon_plan(
     kind: ReliefSideKind,
     sign: int,
     anchor: EdgeRoadAnchor,
-    road_cells: set[tuple[int, int]],
+    ref_cells: set[tuple[int, int]],
     tile_set: set[tuple[int, int]],
 ) -> StampRibbonOutcome:
     """Write surface_z + facing along outward from seed."""
@@ -69,7 +69,7 @@ def stamp_ribbon_plan(
         ly = sy + dy * (col.k - 1)
         cell_xy = (lx, ly)
         if _is_obstacle(
-            compose, cell_xy, road_cells=road_cells, tile_set=tile_set,
+            compose, cell_xy, ref_cells=ref_cells, tile_set=tile_set,
         ):
             break_why = WHY_STAMP_OBSTACLE_BREAK
             break_cell = cell_xy
@@ -191,11 +191,11 @@ def _is_obstacle(
     compose: LightGridCompose,
     cell: tuple[int, int],
     *,
-    road_cells: set[tuple[int, int]],
+    ref_cells: set[tuple[int, int]],
     tile_set: set[tuple[int, int]],
 ) -> bool:
     return is_grade_obstacle_light(
         cell,
-        road_cells=road_cells,
+        ref_cells=ref_cells,
         cell_blocked=lambda c: cell_blocked_light(compose, c, tile_set=tile_set),
     )

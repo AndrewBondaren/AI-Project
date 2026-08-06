@@ -48,7 +48,7 @@ def _ctx(world: World, tiles: set[tuple[int, int]], intents: list[RoadShoulderIn
         tiles=sorted(tiles),
         scale=scale,
     )
-    ctx.road_shoulder_intents.extend(intents)
+    ctx.ribbon_intents.extend(intents)
     return ctx
 
 

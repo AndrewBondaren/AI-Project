@@ -6,7 +6,7 @@ metadata:
   type: project
 ---
 
-> **Статус:** ownership **утверждён** · templates R33–R35 ✅ · **R36 core (§7–9/8c) ✅** · **canal R36p/q wire+bake ✅** · bake SRP **T-30/T-52 ✅** · **Wave B–C ✅** · **Wave D open_land/shore ✅**.  
+> **Статус:** ownership **утверждён** · templates R33–R35 ✅ · **R36 core (§7–9/8c) ✅** · **canal R36p/q wire+bake ✅** · bake SRP **T-30/T-52 ✅** · **Wave B–D ✅** (open_land/shore + polish).  
 > **Next:** § [Порядок имплементации](#порядок-имплементации-anti-slice) → **Wave E** later (R36s / R36r / R36o / gameplay).  
 > **Связь:** SoT grade; **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT. · Agent pointer: [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md)
 
@@ -25,7 +25,8 @@ metadata:
 | `shore` | берег озера / реки / моря |
 | `road_shoulder` | **обочины** дороги (две стороны), когда есть Δz между полотном и соседним рельефом |
 
-**v1 bake consumers (shipped):** `mountain` (SideFill) · `road_shoulder` · `open_land` · `shore`. Ribbon shared: `ribbonGradeApply`.
+**v1 bake consumers (shipped):** `mountain` (SideFill) · `road_shoulder` · `open_land` · `shore`.  
+Ribbon shared: `ribbonGradeApply` + `contextRibbonApply` / `ribbonSampleUtil`; intents → `ctx.ribbon_intents`; BAR-1 **once** after compose contributors.
 
 | Владеет | Не владеет |
 |---|---|
@@ -108,7 +109,7 @@ metadata:
 | R36p | **Canal-by-world-rule — только если grade не вмещается.** Нормальный path: knobs XOR `earthen_canal` \| `structure_canal` (R28/R36q). Спец-ключ **`canal_obstacle_policy`**: `{ to_canal_cut_enable, entities, canal_ref? }`. Enum entities: `road` \| `mountain` \| `forest` \| `plains` \| `shore` \| `all`. Смотреть **только** если не вмещается; match → cut по enable; при `enable: true` опц. **`canal_ref`** → `canal_template_registry` (omit ref = earthen-only cut). Overlap enable: **false wins**. Места хватает → политика игнор. См. § Canal obstacle policy |
 | R36q | **`worlds.canal_template_registry`.** Переиспользуемые canal-описания мира (не новый объект на каждом case). Entry: `system_type` + optional `earthen_canal` + optional `structure.structure_refs[]` (каждый ref ∈ `barrier_template_registry`). Grade knobs: `structure_canal` = `system_type`. Unknown ref → reject import / R21 warn+fallback на generate. См. § Canal template registry |
 | R36r | **Diagonal ribbon + width (candidate, later; зависит от R36s):** при intercardinal outward — materialize как **thick line on grid**: core ray вдоль outward (`L` = Chebyshev steps) + поперечный fill ширины `W` с **теми же** steps/θ → **один** Grade (R36j). Clearance — на core. **Не** voxel corner/shim / Minecraft stair shapes (mesh; стыки → R36o). Источник: [Murphy’s Modified Bresenham](http://www.zoo.co.uk/murphy/thickline/). **v1:** не impl (нет диагонального outward) |
-| R36s | **Facing scope — locked.** Wire/entity: `Facing` (`north`…`west` + `north_east`…`south_west`). **SLOPE:** uphill на Grade entity; **SHEER:** omit / `none`. **v1 (сейчас):** только **cardinal** (`CARDINAL_FACINGS`); outward = ortho `(±1,0)\|(0,±1)` из `CARDINAL_WALL_OUTWARD_DELTA` / bake `_ORTHO`; resolve snap к cardinal (`uphill_facing_toward`). **Later (target):** полный **8-way** — Grade.`facing` ∈ cardinal ∪ intercardinal; outward delta `(±1,0)\|(0,±1)\|(±1,±1)`; длина шага = **Chebyshev 1** (диагональ ≠ √2) — [GoRogue Chebyshev](https://github.com/Chris3606/GoRogue/wiki/Measuring-Distance). Диагональный ribbon materialize → **R36r**. **Запрещено:** параллельный relief-facing enum / литералы сторон вне `Facing`. Stairs per-cell — по [`tz_locations.md`](./tz_locations.md); outdoor grade facing — на entity (C10) |
+| R36s | **Facing scope — locked.** Wire/entity: `Facing` (`north`…`west` + `north_east`…`south_west`). **SLOPE:** uphill на Grade entity; **SHEER:** omit / `none`. **v1 (сейчас):** только **cardinal** (`CARDINAL_FACINGS`); outward = ortho `(±1,0)\|(0,±1)` из `CARDINAL_WALL_OUTWARD_DELTA` / bake `ribbonSampleUtil.CARDINAL_ORTHO_DELTAS`; resolve snap к cardinal (`uphill_facing_toward`). **Later (target):** полный **8-way** — Grade.`facing` ∈ cardinal ∪ intercardinal; outward delta `(±1,0)\|(0,±1)\|(±1,±1)`; длина шага = **Chebyshev 1** (диагональ ≠ √2) — [GoRogue Chebyshev](https://github.com/Chris3606/GoRogue/wiki/Measuring-Distance). Диагональный ribbon materialize → **R36r**. **Запрещено:** параллельный relief-facing enum / литералы сторон вне `Facing`. Stairs per-cell — по [`tz_locations.md`](./tz_locations.md); outdoor grade facing — на entity (C10) |
 
 ### Locked checklist (master, 2026-08-01)
 
@@ -765,7 +766,7 @@ Match inclusive; первый в списке; overlap → **reject**; дыра 
 | Generate | landform в relief | **emit refs**; cells — BAR-1 ✅ bake consumer |
 | vs obstacles | R36m + R36p | R36m: grade не в barrier cells |
 
-**Tech debt:** [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) **RELIEF-BAR-1 ✅**; canal/bake/Wave B **T-42…T-65** ✅; open opt **T-66**.
+**Tech debt:** [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) **RELIEF-BAR-1 ✅**; canal/bake/Wave B **T-42…T-65** ✅; Wave D polish ✅; open opt **T-66**; residual naming `RoadShoulder*`.
 
 **POJO (target `dataModel/terrain/relief/`):**
 
@@ -1144,7 +1145,8 @@ allow_flush   → L_eff = 1 → grade на y=2 (flush к объекту)
 10. ✅ **Wave B5** T-59…T-63/T-65 polish (T-66 deferred)  
 11. ✅ **Wave C** RELIEF-BAR-1 (`roadShoulderBarrierApply` + `ribbonFence`)
 12. ✅ **Wave D** open_land + shore (`ribbonGradeApply`)
-13. → **Wave E** later (см. § Порядок)
+13. ✅ **Wave D polish** — `contextRibbonApply` / `ribbonSampleUtil`; `ribbon_intents` + `ref_cells`; BAR-1 once in `compose_light_grid`
+14. → **Wave E** later (см. § Порядок)
 
 ### Open (не блокер checklist; при normalize/impl)
 
@@ -1519,12 +1521,15 @@ generators/terrain/relief/
   gradeInstanceFactory ✅
 
 pack/bake/.../roadShoulder{Apply,Sample,Materialize,Stamp,BarrierApply}.py + roadShoulderIntent.py  # T-30/T-52 + BAR-1 ✅
+pack/bake/.../ribbonGradeApply.py · contextRibbonApply.py · ribbonSampleUtil.py  # Wave D + polish ✅
+pack/bake/.../{openLand,shore}{Apply,Sample}.py ✅
 generators/barrier/ribbonFence.py ✅
 application/worldData/persistReliefGrades.py ✅
 ```
 
 Wire: facing + volume + **Grade uid** ✅.  
-R36n clearance ✅. Ribbon phases ✅; dilate sample **Q6** ✅. BAR-1 wall ✅.
+R36n clearance ✅. Ribbon phases ✅; dilate sample **Q6** ✅. BAR-1 wall ✅ (once after compose).  
+Bake DTO list: `LightGridBakeContext.ribbon_intents` (type still `RoadShoulderIntent` — naming residual).
 
 ---
 
@@ -1534,9 +1539,10 @@ R36n clearance ✅. Ribbon phases ✅; dilate sample **Q6** ✅. BAR-1 wall ✅.
 Debt IDs: [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md).
 
 ```text
-Wave A–C (shipped)        Wave D (shipped)         Wave E (later)
-templates → R36 → BAR-1 →   open_land + shore ✅  →  R36s 8-way / R36r / R36o / Q4 / gameplay
-                            ribbonGradeApply         R36f/k · UI R30
+Wave A–C (shipped)     Wave D + polish (shipped)              Wave E (later)
+templates → R36 → BAR-1 →  open_land + shore ✅               →  R36s 8-way / R36r / R36o / Q4 / gameplay
+                           ribbonGradeApply / contextRibbon       R36f/k · UI R30
+                           ribbon_intents · BAR-1 once
 ```
 
 ### Wave A — shipped (не переоткрывать)
@@ -1593,7 +1599,7 @@ templates → R36 → BAR-1 →   open_land + shore ✅  →  R36s 8-way / R36r 
 |---|---|---|---|
 | **C1** | Consumer: Intent `structure_refs` (+ structure canal) → light `wall` along ribbon | cells вне `generators/terrain/relief`; validate refs on import; no overwrite road/grade/pin/hydro; bake treats wall as grade obstacle | ✅ |
 
-**Impl:** `generators/barrier/ribbonFence.py` (pure) + `paintBarrier.stamp_barrier_terrain` (write-only) + `roadShoulderBarrierApply` after shoulder grades in `RoadContributor`. Placement predicate once (`_may_place_fence`); stamp keys ← `WorldTerrainRegistry`. Unknown ref → R21 warn+skip. **v1 multi-ref:** один footprint; material log = first resolved; wire без `system_material`. **Не** canal resolve в Apply.
+**Impl:** `generators/barrier/ribbonFence.py` (pure) + `paintBarrier.stamp_barrier_terrain` (write-only) + `roadShoulderBarrierApply`. **Call site (Wave D polish):** **один** проход в `compose_light_grid` после всех mask contributors (не из каждого ribbon Apply / не из `RoadContributor`). Placement predicate once (`_may_place_fence`); stamp keys ← `WorldTerrainRegistry`. Unknown ref → R21 warn+skip. **v1 multi-ref:** один footprint; material log = first resolved; wire без `system_material`. **Не** canal resolve в Apply.
 
 ### Wave D — новые bake consumers ✅
 
@@ -1601,8 +1607,24 @@ templates → R36 → BAR-1 →   open_land + shore ✅  →  R36s 8-way / R36r 
 |---|---|---|---|
 | **D1** | `open_land` — Δz plains/forest → ribbon | `OpenLandContributor` after hydro; shared `ribbonGradeApply` | ✅ |
 | **D2** | `shore` — `hydrology_role=SHORE` landward seeds | `ShoreContributor`; hydro SoT не трогаем | ✅ |
+| **D3** | polish (post-review) | shared facade / sample util; rename surface; BAR-1 once; road early-exit dedupe | ✅ |
 
-**Impl:** sample (`openLandSample` / `shoreSample`) → `apply_ribbon_grades(context=…)` → BAR-1 if refs. Compose order: `… hydro → open_land → shore → settlement → road` (priority road > shore > open_land). `ref_cells` = abutment (uphill / SHORE role / road).
+**Impl (D1–D2):** sample (`openLandSample` / `shoreSample`) → `apply_context_ribbon` → `apply_ribbon_grades(context=…)`. Compose order: `… hydro → open_land → shore → settlement → road` (priority road > shore > open_land). Abutment / footprint = `ref_cells` (uphill / SHORE role / road).
+
+**Polish locked (D3, 2026-08-06):**
+
+| Контракт | SoT |
+|---|---|
+| open_land / shore Apply | thin → `contextRibbonApply.apply_context_ribbon` (без BAR-1 внутри) |
+| Sample DRY | `ribbonSampleUtil`: `CARDINAL_ORTHO_DELTAS`, `iter_compose_cells`, landward/skip helpers |
+| Intents bag | `LightGridBakeContext.ribbon_intents` (не `road_shoulder_intents`) |
+| Materialize / stamp / anchor API | `ref_cells=` (road footprint остаётся `road_cells` только на road sample/apply boundary) |
+| Events | `EVENT_RIBBON_SKIP` / `EVENT_RIBBON_GRADE_APPLY` / `WHY_NO_REF_CELLS` (+ legacy aliases) |
+| Owner uid | `ReliefContext.OPEN_LAND.value` / `.SHORE.value` |
+| BAR-1 | once in `compose_light_grid` after contributors |
+| Early-exit | только в `apply_ribbon_grades` (road Apply не дублирует) |
+
+**Residual (не Wave D / не gate E):** type/module names ещё `RoadShoulderIntent` / `grade_road_shoulder_*` — naming debt; parallel eng **T-31/T-32**.
 
 ### Wave E — later (контракт locked, код не сейчас)
 
@@ -1653,8 +1675,9 @@ templates → R36 → BAR-1 →   open_land + shore ✅  →  R36s 8-way / R36r 
 
 | Дата | Изменение |
 |---|---|
-| 2026-08-06 | **Wave D shipped:** `open_land` + `shore` contributors; shared `ribbonGradeApply`; compose order hydro→open_land→shore→road; next Wave E |
-| 2026-08-06 | **Wave C / RELIEF-BAR-1 shipped:** `ribbonFence` + `roadShoulderBarrierApply` → light `wall`; RoadContributor after grades; next Wave D |
+| 2026-08-06 | **Wave D polish locked:** `contextRibbonApply` / `ribbonSampleUtil`; `ribbon_intents` + `ref_cells`; BAR-1 once in `compose_light_grid`; events `EVENT_RIBBON_*`; residual `RoadShoulder*` naming |
+| 2026-08-06 | **Wave D shipped:** `open_land` + `shore` contributors; shared `ribbonGradeApply`; compose order hydro→open_land→shore→road |
+| 2026-08-06 | **Wave C / RELIEF-BAR-1 shipped:** `ribbonFence` + `roadShoulderBarrierApply` → light `wall`; call site later → once after compose (D3) |
 | 2026-08-06 | **R36s / C23:** facing scope locked — v1 = 4 cardinals; later = 8-way полный `Facing` + Chebyshev step; R3/ownership/понятия sync |
 | 2026-08-06 | **R36r / C22:** diagonal ribbon + width — candidate thick-line ([Murphy Bresenham](http://www.zoo.co.uk/murphy/thickline/)); после R36s later; corner/shim out of scope; стыки → R36o |
 | 2026-08-06 | **Wave B5 shipped:** T-65/63/62/61/59; Wave B complete; next C BAR-1 |
