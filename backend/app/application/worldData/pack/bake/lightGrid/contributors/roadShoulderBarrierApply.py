@@ -1,8 +1,9 @@
-"""RELIEF-BAR-1: Intent ``structure_refs`` → light-grid ``wall`` along ribbon.
+"""RELIEF-BAR-1: Intent ``structure_refs`` → light-grid barrier along ribbon.
 
-Outside ``generators/terrain/relief``. Clearance: no road / grade / pin / hydro /
-existing wall (same spirit as R36m — do not overwrite footprints).
-Light wire has no ``system_material`` — material resolved for log/RNG only.
+Outside ``generators/terrain/relief``. Placement predicate once → write-only stamp.
+Light wire has no ``system_material`` — material = log/RNG from **first** resolved ref.
+
+v1 multi-ref: union one footprint; stamp once; unknown refs warn+skip individually.
 """
 
 from __future__ import annotations
@@ -33,15 +34,15 @@ from app.application.worldData.pack.bake.lightGrid.coords import light_to_macro_
 from app.application.worldData.pack.bake.lightGrid.contributors.roadShoulderStamp import (
     cell_blocked_light,
 )
+from app.application.worldData.pack.bake.lightGrid.paintBarrier import stamp_barrier_terrain
 from app.application.worldData.pack.bake.lightGrid.roadShoulderIntent import (
     RoadShoulderIntent,
 )
 from app.dataModel.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
+from app.db.models.world import World
 
-# Stamp / obstacle SoT = terrain_registry (engine barrier category), not string literals.
 _BARRIER_TERRAIN = WorldTerrainRegistry.require_engine_terrain_key("wall")
-_EXISTING_BARRIER = WorldTerrainRegistry.canonical_barrier_terrain_keys()
 
 
 def apply_road_shoulder_barriers(
@@ -83,46 +84,25 @@ def _apply_intent_barriers(
     road_key: str,
     registry_entry_for: Callable[[str], BarrierTemplateEntry | None],
     world_seed: str,
-    world,
+    world: World,
 ) -> int:
     if intent.skipped or not intent.cell_coords:
         return 0
-    refs = intent.structure_refs
-    if not refs:
-        return 0
-    entries: list[BarrierTemplateEntry] = []
-    for ref in refs:
-        entry = registry_entry_for(ref)
-        if entry is None:
-            relief_warning(
-                EVENT_R21_FALLBACK,
-                site_id=intent.site_id,
-                why=WHY_UNKNOWN_BARRIER_REF,
-                ref=ref,
-            )
-            continue
-        entries.append(entry)
+    entries = _resolve_barrier_entries(
+        intent.structure_refs,
+        registry_entry_for=registry_entry_for,
+        site_id=intent.site_id,
+    )
     if not entries:
-        relief_debug(
-            EVENT_ROAD_SHOULDER_BARRIER,
-            site_id=intent.site_id,
-            why=WHY_NO_BARRIER_REFS,
-            refs=list(refs),
-        )
         return 0
 
     grade = set(intent.cell_coords)
-
-    def allow(cell: tuple[int, int]) -> bool:
-        return _may_place_fence(
-            compose,
-            cell,
-            tile_set=tile_set,
-            grade=grade,
-            road_key=road_key,
-        )
-
-    footprint = fence_cells_along_ribbon(grade, allow=allow)
+    footprint = fence_cells_along_ribbon(
+        grade,
+        allow=lambda c: _may_place_fence(
+            compose, c, tile_set=tile_set, grade=grade, road_key=road_key,
+        ),
+    )
     if not footprint:
         relief_debug(
             EVENT_ROAD_SHOULDER_BARRIER,
@@ -132,10 +112,12 @@ def _apply_intent_barriers(
         )
         return 0
 
-    # Material for observability (light wire has no system_material yet).
+    # v1: one footprint; material from first resolved ref (wire has no system_material).
     rng = Random(f"{world_seed}:barrier:{intent.site_id}")
     material = pick_barrier_material(world, entries[0], economic_tier=None, rng=rng)
-    n = _stamp_wall_cells(compose, footprint, tile_set=tile_set)
+    n = stamp_barrier_terrain(
+        compose, footprint, _BARRIER_TERRAIN, tile_set=tile_set,
+    )
     relief_debug(
         EVENT_ROAD_SHOULDER_BARRIER,
         site_id=intent.site_id,
@@ -146,6 +128,36 @@ def _apply_intent_barriers(
     return n
 
 
+def _resolve_barrier_entries(
+    refs: tuple[str, ...],
+    *,
+    registry_entry_for: Callable[[str], BarrierTemplateEntry | None],
+    site_id: str,
+) -> list[BarrierTemplateEntry]:
+    if not refs:
+        return []
+    entries: list[BarrierTemplateEntry] = []
+    for ref in refs:
+        entry = registry_entry_for(ref)
+        if entry is None:
+            relief_warning(
+                EVENT_R21_FALLBACK,
+                site_id=site_id,
+                why=WHY_UNKNOWN_BARRIER_REF,
+                ref=ref,
+            )
+            continue
+        entries.append(entry)
+    if not entries:
+        relief_debug(
+            EVENT_ROAD_SHOULDER_BARRIER,
+            site_id=site_id,
+            why=WHY_NO_BARRIER_REFS,
+            refs=list(refs),
+        )
+    return entries
+
+
 def _may_place_fence(
     compose: LightGridCompose,
     cell: tuple[int, int],
@@ -154,8 +166,10 @@ def _may_place_fence(
     grade: set[tuple[int, int]],
     road_key: str,
 ) -> bool:
+    """Single placement gate (R36m spirit). Stamp does not re-check."""
     if cell in grade:
         return False
+    # pin / OOB / missing / terrain_category=barrier
     if cell_blocked_light(compose, cell, tile_set=tile_set):
         return False
     lx, ly = cell
@@ -165,35 +179,8 @@ def _may_place_fence(
         return False
     if grid.system_terrain == road_key:
         return False
-    if grid.system_terrain in _EXISTING_BARRIER:
-        return False
     if grid.system_grade_uid:
         return False
     if grid.hydrology_role in PRESERVE_HYDROLOGY_ROLES:
         return False
     return True
-
-
-def _stamp_wall_cells(
-    compose: LightGridCompose,
-    cells: set[tuple[int, int]],
-    *,
-    tile_set: set[tuple[int, int]],
-) -> int:
-    """Force ``wall`` — barrier is not a MaskDomain (no merge-rank entry)."""
-    scale = compose.scale
-    painted = 0
-    for lx, ly in sorted(cells):
-        gx, gy, tx, ty = light_to_macro_local(lx, ly, scale)
-        if (gx, gy) not in tile_set:
-            continue
-        if not (0 <= tx < scale.side and 0 <= ty < scale.side):
-            continue
-        cell = compose.ensure(gx, gy, tx, ty)
-        if cell.hydrology_role in PRESERVE_HYDROLOGY_ROLES:
-            continue
-        if cell.system_grade_uid or cell.location_pin is not None:
-            continue
-        cell.system_terrain = _BARRIER_TERRAIN
-        painted += 1
-    return painted

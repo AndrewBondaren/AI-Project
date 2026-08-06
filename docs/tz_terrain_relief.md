@@ -1593,7 +1593,7 @@ canal R36p/q + T-52       (T-66 deferred)          barrier cells       bake cons
 |---|---|---|---|
 | **C1** | Consumer: Intent `structure_refs` (+ structure canal) → light `wall` along ribbon | cells вне `generators/terrain/relief`; validate refs on import; no overwrite road/grade/pin/hydro; bake treats wall as grade obstacle | ✅ |
 
-**Impl:** `generators/barrier/ribbonFence.py` (pure) + `pack/bake/.../roadShoulderBarrierApply.py` after shoulder grades in `RoadContributor`. Unknown ref → R21 warn+skip. Light wire без `system_material` (material = log/RNG only). **Не** canal resolve в Apply.
+**Impl:** `generators/barrier/ribbonFence.py` (pure) + `paintBarrier.stamp_barrier_terrain` (write-only) + `roadShoulderBarrierApply` after shoulder grades in `RoadContributor`. Placement predicate once (`_may_place_fence`); stamp keys ← `WorldTerrainRegistry`. Unknown ref → R21 warn+skip. **v1 multi-ref:** один footprint; material log = first resolved; wire без `system_material`. **Не** canal resolve в Apply.
 
 ### Wave D — новые bake consumers
 

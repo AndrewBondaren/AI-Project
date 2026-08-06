@@ -1090,6 +1090,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-06 | **BAR-1 polish:** `paintBarrier` write-only; single `_may_place_fence`; terrain keys from registry; multi-ref = first material + union footprint |
 | 2026-08-06 | **RELIEF-BAR-1 resolved (Wave C):** Intent refs → light `wall`; `ribbonFence` + `roadShoulderBarrierApply`; next Wave D |
 | 2026-08-06 | **RELIEF-T-67 resolved:** `app.relief` in `generationLogging` allowlist → bake-light file gets relief/canal events |
 | 2026-08-06 | **Wave B5 shipped:** T-65/T-63/T-62/T-61/T-59; T-66 deferred; Wave B complete → next C BAR-1 |

@@ -161,6 +161,34 @@ class RoadShoulderBarrierApplyTest(unittest.TestCase):
         gx, gy, tx, ty = light_to_macro_local(2, 0, compose.scale)
         self.assertEqual(compose.get(gx, gy, tx, ty).system_terrain, "plains")
 
+    def test_multi_ref_unknown_second_still_stamps(self) -> None:
+        """v1: union footprint; unknown refs skipped; first resolved is enough."""
+        cells = {
+            (1, 0): ("plains", 9, "g1"),
+            (2, 0): ("plains", 8, None),
+        }
+        compose, tiles = _compose_with(cells)
+        world = World(
+            world_uid="w_bar1_multi",
+            name="W",
+            created_at="2026-01-01T00:00:00Z",
+        )
+        intent = RoadShoulderIntent(
+            edge_uid="e1",
+            site_id="e1:0",
+            template_uid=None,
+            kind="slope",
+            width=1,
+            cell_coords=((1, 0),),
+            skipped=False,
+            extra_structure_refs=("wooden_fence", "not_a_real_barrier"),
+        )
+        ctx = _ctx(world, tiles, [intent])
+        n = apply_road_shoulder_barriers(compose, ctx)
+        self.assertGreaterEqual(n, 1)
+        gx, gy, tx, ty = light_to_macro_local(2, 0, compose.scale)
+        self.assertEqual(compose.get(gx, gy, tx, ty).system_terrain, "wall")
+
     def test_structure_canal_refs_via_intent_canal(self) -> None:
         cells = {
             (1, 0): ("plains", 9, "g1"),
