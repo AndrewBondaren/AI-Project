@@ -34,7 +34,8 @@ class ReliefGradeInstance(BaseModel):
     structure_refs: DefaultOnWire[list[str]] = Field(default_factory=list)
     structure_canal: DefaultOnWire[str | None] = None
     template_uid: DefaultOnWire[str | None] = None
-    edge_uid: DefaultOnWire[str | None] = None
+    # Ribbon owner: connection edge uid or context token (open_land / shore)
+    owner_uid: DefaultOnWire[str | None] = None
     site_id: DefaultOnWire[str | None] = None
     grade_system_uid: DefaultOnWire[str | None] = None
 

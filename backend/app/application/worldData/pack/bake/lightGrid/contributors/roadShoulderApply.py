@@ -24,7 +24,7 @@ def apply_road_shoulder_grades(
     compose: LightGridCompose,
     ctx: LightGridBakeContext,
     *,
-    edge_uid: str,
+    owner_uid: str,
     road_cells: set[tuple[int, int]],
     object_policy: ObjectReliefPickPolicy | None = None,
     occurrence_start: int = 0,
@@ -37,7 +37,7 @@ def apply_road_shoulder_grades(
     return apply_ribbon_grades(
         compose,
         ctx,
-        owner_uid=edge_uid,
+        owner_uid=owner_uid,
         ref_cells=road_cells,
         samples=samples,
         context=ReliefContext.ROAD_SHOULDER,

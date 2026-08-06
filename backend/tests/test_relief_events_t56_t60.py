@@ -7,6 +7,7 @@ import unittest
 from app.application.worldData.generators.terrain.relief import canalAttachments
 from app.application.worldData.generators.terrain.relief.reliefEvents import (
     EVENT_R21_FALLBACK,
+    EVENT_RESOLVE_FALLBACK,
     EVENT_RIBBON_SKIP,
     EVENT_ROAD_SHOULDER_SKIP,
     REASON_SCHEDULE_HOLE_R21_SLOPE,
@@ -33,8 +34,9 @@ from app.db.models.world import World
 
 class ReliefEventsTokensTest(unittest.TestCase):
     def test_shared_r21_reexported_from_canal(self) -> None:
-        self.assertEqual(canalAttachments.EVENT_R21_FALLBACK, EVENT_R21_FALLBACK)
-        self.assertEqual(EVENT_R21_FALLBACK, "r21_fallback")
+        self.assertEqual(canalAttachments.EVENT_R21_FALLBACK, EVENT_RESOLVE_FALLBACK)
+        self.assertEqual(EVENT_R21_FALLBACK, EVENT_RESOLVE_FALLBACK)
+        self.assertEqual(EVENT_RESOLVE_FALLBACK, "resolve_fallback")
         self.assertEqual(WHY_SCHEDULE_HOLE, "schedule_hole")
         self.assertEqual(REASON_SCHEDULE_HOLE_R21_SLOPE, "schedule_hole_r21_slope")
         self.assertEqual(WHY_NO_EDGE_ROAD_ANCHOR, "no_edge_road_anchor")
@@ -62,7 +64,7 @@ class ReliefSilentPathLogsTest(unittest.TestCase):
         )
         with self.assertLogs("app.relief", level="DEBUG") as cm:
             out = apply_road_shoulder_grades(
-                compose, ctx, edge_uid="e1", road_cells=set(),
+                compose, ctx, owner_uid="e1", road_cells=set(),
             )
         self.assertEqual(out, [])
         blob = "\n".join(cm.output)
@@ -85,7 +87,7 @@ class ReliefSilentPathLogsTest(unittest.TestCase):
         )
         with self.assertLogs("app.relief", level="DEBUG") as cm:
             out = apply_road_shoulder_grades(
-                compose, ctx, edge_uid="e1", road_cells={(1, 1)},
+                compose, ctx, owner_uid="e1", road_cells={(1, 1)},
             )
         self.assertEqual(out, [])
         blob = "\n".join(cm.output)

@@ -34,7 +34,7 @@ class RoadShoulderContributor:
             intents = apply_road_shoulder_grades(
                 compose,
                 ctx,
-                edge_uid=painted.edge_uid,
+                owner_uid=painted.owner_uid,
                 road_cells=set(painted.road_cells),
                 object_policy=painted.object_policy,
                 occurrence_start=shoulder_seq,

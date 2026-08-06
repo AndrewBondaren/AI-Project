@@ -31,7 +31,7 @@ def instance_to_row(
         structure_refs=list(inst.structure_refs),
         structure_canal=inst.structure_canal,
         template_uid=inst.template_uid,
-        edge_uid=inst.edge_uid,
+        owner_uid=inst.owner_uid,
         site_id=inst.site_id,
         grade_system_uid=inst.grade_system_uid,
     )
@@ -47,7 +47,7 @@ def system_to_row(
         world_uid=system.world_uid,
         grade_instance_uids=list(system.grade_instance_uids),
         created_at=created_at or utc_now_iso(),
-        edge_uid=system.edge_uid,
+        owner_uid=system.owner_uid,
         display_name=system.display_name,
     )
 

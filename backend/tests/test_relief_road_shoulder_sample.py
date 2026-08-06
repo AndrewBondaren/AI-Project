@@ -173,7 +173,7 @@ class RoadShoulderSampleTest(unittest.TestCase):
             relief_templates_by_uid={uid: tpl},
         )
         intents = apply_road_shoulder_grades(
-            compose, ctx, edge_uid="e1", road_cells=road,
+            compose, ctx, owner_uid="e1", road_cells=road,
         )
         self.assertTrue(intents)
         self.assertTrue(ctx.ribbon_intents)

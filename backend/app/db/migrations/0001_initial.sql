@@ -1201,10 +1201,9 @@ CREATE TABLE IF NOT EXISTS relief_grade_systems (
     world_uid        TEXT NOT NULL,
     grade_instance_uids TEXT NOT NULL,       -- JSON ordered ReliefGradeInstance.grade_uid, len ≥ 2
     created_at       TEXT NOT NULL,
-    edge_uid         TEXT,
+    owner_uid        TEXT,                   -- edge uid or ribbon context token (not FK)
     display_name     TEXT,
-    FOREIGN KEY (world_uid) REFERENCES worlds(world_uid),
-    FOREIGN KEY (edge_uid)  REFERENCES connection_edges(edge_uid)
+    FOREIGN KEY (world_uid) REFERENCES worlds(world_uid)
 );
 
 -- ============================================================
@@ -1224,12 +1223,11 @@ CREATE TABLE IF NOT EXISTS relief_grade_instances (
     structure_refs   TEXT,                   -- JSON ["barrier_ref", ...] (BAR-1)
     structure_canal  TEXT,                   -- canal_template_registry system_type
     template_uid     TEXT,
-    edge_uid         TEXT,
+    owner_uid        TEXT,                   -- edge uid or ribbon context token (not FK)
     site_id          TEXT,
     grade_system_uid TEXT,
     FOREIGN KEY (world_uid)        REFERENCES worlds(world_uid),
     FOREIGN KEY (template_uid)     REFERENCES relief_templates(template_uid),
-    FOREIGN KEY (edge_uid)         REFERENCES connection_edges(edge_uid),
     FOREIGN KEY (grade_system_uid) REFERENCES relief_grade_systems(grade_system_uid)
 );
 

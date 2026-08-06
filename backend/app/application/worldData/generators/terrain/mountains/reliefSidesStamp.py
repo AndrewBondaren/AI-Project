@@ -6,7 +6,7 @@ from app.application.worldData.generators.terrain.relief.mountainSideMaterialize
     resolve_sides_with_declare,
 )
 from app.application.worldData.generators.terrain.relief.reliefEvents import (
-    EVENT_R21_FALLBACK,
+    EVENT_RESOLVE_FALLBACK,
 )
 from app.application.worldData.generators.terrain.relief.reliefLog import relief_info, relief_warning
 from app.application.worldData.generators.terrain.relief.templatePick import pick_template
@@ -67,7 +67,7 @@ def stamp_mountain_sides_from_relief(
         template = templates_by_uid[pick.template_uid]
     elif pick.template_uid:
         relief_warning(
-            EVENT_R21_FALLBACK,
+            EVENT_RESOLVE_FALLBACK,
             context=ReliefContext.MOUNTAIN.value,
             why=f"missing_body={pick.template_uid}",
             chosen_fallback="SLOPE",
@@ -81,7 +81,7 @@ def stamp_mountain_sides_from_relief(
         relief_info(
             "mountain_sides",
             template_uid=pick.template_uid,
-            recipe_mode=EVENT_R21_FALLBACK,
+            recipe_mode=EVENT_RESOLVE_FALLBACK,
             N=n,
             kinds=",".join(s.kind.value for s in sides),
             reason=pick.reason,

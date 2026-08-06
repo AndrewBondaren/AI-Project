@@ -11,8 +11,11 @@ Coord = tuple[int, int]
 
 @dataclass(frozen=True, slots=True)
 class PaintedRoadEdge:
-    """One connection edge after terrain paint; shoulder grades consume this."""
+    """One connection edge after terrain paint; shoulder grades consume this.
 
-    edge_uid: str
+    ``owner_uid`` = ``ConnectionEdge.edge_uid`` (road graph), used as ribbon owner.
+    """
+
+    owner_uid: str
     road_cells: frozenset[Coord]
     object_policy: ObjectReliefPickPolicy | None = None

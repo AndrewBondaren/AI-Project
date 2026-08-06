@@ -1398,7 +1398,7 @@ ReliefGradeInstance                 # ≈ MountainSpec
 ReliefGradeSystem                   # ≈ MountainRangeSpec; только если len(grade_instance_uids) ≥ 2
   grade_system_uid: str
   grade_instance_uids: list[str]    # → ReliefGradeInstance.grade_uid; упорядочено (≥2)
-  # optional: edge_uid, site_id, display
+  # optional: owner_uid, site_id, display
 
 Cell
   system_grade_uid?: str            # ссылка на ReliefGradeInstance (не на System)
@@ -1531,7 +1531,7 @@ application/worldData/persistReliefGrades.py ✅
 
 Wire: facing + volume + **Grade uid** ✅.  
 R36n clearance ✅. Ribbon phases ✅; dilate sample **Q6** ✅. BAR-1 wall ✅ (once after compose).  
-Bake DTO list: `LightGridBakeContext.ribbon_intents` (`RibbonIntent`; `owner_uid`). Grade/SQL still `edge_uid` (= owner value).
+Bake DTO list: `LightGridBakeContext.ribbon_intents` (`RibbonIntent`; `owner_uid`). Grade/SQL `owner_uid` (same; no FK to connection_edges).
 
 ---
 
@@ -1626,7 +1626,7 @@ templates → R36 → BAR-1 →  open_land + shore ✅               →  R36s 8
 | BAR-1 | once in `compose_light_grid` after contributors |
 | Early-exit | только в `apply_ribbon_grades` (road Apply не дублирует) |
 
-**Residual (не Wave D / не gate E):** road-facade names (`RoadShoulderContributor`, `apply_road_shoulder_grades`, materialize/sample/stamp) + Grade/SQL `edge_uid` wire. Shared path: `RibbonSegment` / `RibbonIntent` / `grade_ribbon_segments` / `apply_ribbon_barriers` ✅.
+**Residual (не Wave D / не gate E):** road-facade module names (`RoadShoulderContributor`, `apply_road_shoulder_grades`, materialize/sample/stamp). Shared path + Grade wire: `owner_uid` ✅.
 
 ### Wave E — later (контракт locked, код не сейчас)
 
@@ -1678,7 +1678,8 @@ templates → R36 → BAR-1 →  open_land + shore ✅               →  R36s 8
 | Дата | Изменение |
 |---|---|
 | 2026-08-06 | **RELIEF-T-31/T-32:** `ribbonSegmentize`; ROAD paint → `painted_road_edges` → `RoadShoulderContributor`; compose `… → road → road_shoulder` |
-| 2026-08-07 | **Ribbon residual naming:** `RibbonIntent` / `RibbonGradeResult` / `grade_ribbon_segments` / `apply_ribbon_barriers`; Intent.`owner_uid`; Grade SQL `edge_uid` unchanged |
+| 2026-08-07 | **Grade `owner_uid`:** POJO/SQL/db `edge_uid`→`owner_uid`; drop FK to `connection_edges` (owner ≠ always edge); bake handoff aligned |
+| 2026-08-07 | **Ribbon residual naming:** `RibbonIntent` / `RibbonGradeResult` / `grade_ribbon_segments` / `apply_ribbon_barriers`; Intent.`owner_uid` |
 | 2026-08-06 | **Wave D polish locked:** `contextRibbonApply` / `ribbonSampleUtil`; `ribbon_intents` + `ref_cells`; BAR-1 once in `compose_light_grid`; events `EVENT_RIBBON_*` |
 | 2026-08-06 | **Wave D shipped:** `open_land` + `shore` contributors; shared `ribbonGradeApply`; compose order hydro→open_land→shore→road |
 | 2026-08-06 | **Wave C / RELIEF-BAR-1 shipped:** `ribbonFence` + `roadShoulderBarrierApply` → light `wall`; call site later → once after compose (D3) |

@@ -10,7 +10,7 @@ from collections.abc import Sequence
 
 from app.application.worldData.generators.terrain.relief.canalAttachments import (
     EVENT_CANAL_CUT_NO_CELLS,
-    EVENT_R21_FALLBACK,
+    EVENT_RESOLVE_FALLBACK,
     FALLBACK_NO_CANAL,
     WHY_UNKNOWN_CANAL_REF,
     WHY_UNKNOWN_STRUCTURE_CANAL,
@@ -126,7 +126,7 @@ def _r21_unknown(
     site_id: str,
 ) -> StructureCanal:
     relief_warning(
-        EVENT_R21_FALLBACK,
+        EVENT_RESOLVE_FALLBACK,
         why=why,
         canal_ref=canal_ref,
         site_id=site_id,

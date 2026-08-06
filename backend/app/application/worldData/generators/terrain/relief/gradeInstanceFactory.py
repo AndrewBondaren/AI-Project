@@ -48,7 +48,7 @@ def build_ribbon_grade_instance(
     structure_refs: tuple[str, ...] = (),
     structure_canal: str | None = None,
     template_uid: str | None = None,
-    edge_uid: str | None = None,
+    owner_uid: str | None = None,
 ) -> ReliefGradeInstance:
     """One Grade per successfully stamped seed strip (constant θ)."""
     if not cell_refs:
@@ -68,7 +68,7 @@ def build_ribbon_grade_instance(
         structure_refs=list(structure_refs),
         structure_canal=structure_canal,
         template_uid=template_uid,
-        edge_uid=edge_uid,
+        owner_uid=owner_uid,
         site_id=site_id,
         grade_system_uid=None,
     )
@@ -85,7 +85,7 @@ def build_ribbon_grade_instance(
         seed=seed,
         site_id=inst.site_id,
         template_uid=inst.template_uid,
-        edge_uid=inst.edge_uid,
+        owner_uid=inst.owner_uid,
         earthen_canal=inst.earthen_canal,
         structure_refs=list(inst.structure_refs),
         structure_canal=inst.structure_canal,
@@ -99,7 +99,7 @@ def build_relief_grade_system(
     site_id: str,
     grades: list[ReliefGradeInstance],
     why: str,
-    edge_uid: str | None = None,
+    owner_uid: str | None = None,
     display_name: str | None = None,
 ) -> ReliefGradeSystem:
     """Create system when steepness changes (≥2 grades). Logs why + members (R36l / R8)."""
@@ -115,7 +115,7 @@ def build_relief_grade_system(
         grade_system_uid=make_grade_system_uid(world_uid=world_uid, site_id=site_id),
         world_uid=world_uid,
         grade_instance_uids=grade_instance_uids,
-        edge_uid=edge_uid,
+        owner_uid=owner_uid,
         display_name=display_name,
     )
     # INFO: rare structural event — why system exists + membership
@@ -129,7 +129,7 @@ def build_relief_grade_system(
         kinds=kinds,
         angles=angles,
         site_id=site_id,
-        edge_uid=edge_uid,
+        owner_uid=owner_uid,
         display_name=display_name,
     )
     relief_debug(

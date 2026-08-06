@@ -17,7 +17,7 @@ from app.application.worldData.generators.barrier.material import pick_barrier_m
 from app.application.worldData.generators.barrier.ribbonFence import fence_cells_along_ribbon
 from app.application.worldData.generators.terrain.relief.bakeSeed import bake_seed
 from app.application.worldData.generators.terrain.relief.reliefEvents import (
-    EVENT_R21_FALLBACK,
+    EVENT_RESOLVE_FALLBACK,
     EVENT_ROAD_SHOULDER_BARRIER,
     WHY_EMPTY_FENCE_FOOTPRINT,
     WHY_NO_BARRIER_REFS,
@@ -139,7 +139,7 @@ def _resolve_barrier_entries(
         entry = registry_entry_for(ref)
         if entry is None:
             relief_warning(
-                EVENT_R21_FALLBACK,
+                EVENT_RESOLVE_FALLBACK,
                 site_id=site_id,
                 why=WHY_UNKNOWN_BARRIER_REF,
                 ref=ref,

@@ -286,7 +286,7 @@ def materialize_seed(
         structure_refs=drawn.structure_refs,
         structure_canal=drawn.structure_canal,
         template_uid=result.template_uid,
-        edge_uid=result.segment.owner_uid,
+        owner_uid=result.segment.owner_uid,
     )
     stamp_grade_uid(compose, wrote, grade.grade_uid, tile_set=tile_set)
     ctx.relief_grade_instances.append(grade)

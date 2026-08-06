@@ -1,7 +1,7 @@
 """Shared relief event / why tokens — bake + grade (RELIEF-T-56).
 
-Canal-only WHY_* stay in ``canalAttachments``. ``EVENT_R21_FALLBACK`` is shared
-(R21) and re-exported from canalAttachments for existing imports.
+Canal-only WHY_* stay in ``canalAttachments``. Resolve-fallback (TZ R21) is
+shared and re-exported from canalAttachments for existing imports.
 """
 
 from __future__ import annotations
@@ -10,7 +10,10 @@ from __future__ import annotations
 EVENT_RIBBON_SKIP = "ribbon_skip"
 EVENT_RIBBON_GRADE_APPLY = "ribbon_grade_apply"
 EVENT_ROAD_SHOULDER_BARRIER = "road_shoulder_barrier"
-EVENT_R21_FALLBACK = "r21_fallback"
+# TZ R21: empty pick / broken fixed uid / schedule hole / unknown canal|barrier
+# ref → warn + soft fallback (generate continues). Not Mode D / not R34 skip.
+EVENT_RESOLVE_FALLBACK = "resolve_fallback"
+EVENT_R21_FALLBACK = EVENT_RESOLVE_FALLBACK  # legacy alias
 EVENT_GRADE_SKIP = "grade_skip"
 
 # Legacy alias — shared ribbon path (road_shoulder / open_land / shore).

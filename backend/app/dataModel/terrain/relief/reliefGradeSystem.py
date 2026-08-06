@@ -22,5 +22,6 @@ class ReliefGradeSystem(BaseModel):
     grade_system_uid: str
     world_uid: str
     grade_instance_uids: list[str] = Field(min_length=2)
-    edge_uid: DefaultOnWire[str | None] = None
+    # Ribbon owner: connection edge uid or context token (open_land / shore)
+    owner_uid: DefaultOnWire[str | None] = None
     display_name: DefaultOnWire[str | None] = None

@@ -3,7 +3,7 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py`, `worldBundleService.py`, relief library/import services.  
-**Обновлено:** 2026-08-07 — relief **Wave A–D ✅**; **T-31/T-32 ✅**; shared ribbon naming ✅ (`RibbonIntent`…); residual opt **T-66** / road-facade names; next **Wave E** later; plan [`relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).
+**Обновлено:** 2026-08-07 — relief **Wave A–D ✅**; shared ribbon + Grade `owner_uid` ✅; residual opt **T-66** / road-facade module names; next **Wave E** later; plan [`relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).
 
 **Связанные документы:**
 
@@ -1095,7 +1095,8 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 | Дата | Изменение |
 |---|---|
-| 2026-08-07 | **Ribbon residual naming:** `RibbonIntent` / `RibbonGradeResult` / `grade_ribbon_segments` / `apply_ribbon_barriers`; Intent.`owner_uid`; Grade SQL `edge_uid` unchanged |
+| 2026-08-07 | **Grade `owner_uid`:** dataModel + `0001` + rows; drop FK to connection_edges; factory/persist/PaintedRoadEdge/`apply_road_shoulder_grades` aligned |
+| 2026-08-07 | **Ribbon residual naming:** `RibbonIntent` / `RibbonGradeResult` / `grade_ribbon_segments` / `apply_ribbon_barriers`; Intent.`owner_uid` |
 | 2026-08-07 | **Ribbon naming:** `RoadShoulderSegment`→`RibbonSegment`; `edge_uid`→`owner_uid` on segment; Intent/Grade `edge_uid` field still wire name (= owner value) |
 | 2026-08-06 | **RELIEF-T-31/T-32 resolved:** `ribbonSegmentize`; `RoadShoulderContributor` + `painted_road_edges` after ROAD paint |
 | 2026-08-06 | **Wave D polish:** `contextRibbonApply` / `ribbonSampleUtil`; `ribbon_intents` + `ref_cells`; BAR-1 once in `compose_light_grid`; road early-exit deduped |

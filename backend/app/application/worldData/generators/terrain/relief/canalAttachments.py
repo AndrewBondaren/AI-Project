@@ -10,18 +10,19 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from app.application.worldData.generators.terrain.relief.reliefEvents import (
-    EVENT_R21_FALLBACK,
+    EVENT_RESOLVE_FALLBACK,
 )
 from app.dataModel.terrain.relief.canal import Canal, EarthenCanal, StructureCanal
 from app.dataModel.terrain.relief.worldCanalTemplateRegistry import (
     WorldCanalTemplateRegistry,
 )
 
-# Canal-only why + events (RELIEF-T-48). Shared R21 event → reliefEvents (T-56).
+# Canal-only why + events (RELIEF-T-48). Shared resolve-fallback → reliefEvents (T-56).
 WHY_UNKNOWN_STRUCTURE_CANAL = "unknown_structure_canal"
 WHY_UNKNOWN_CANAL_REF = "unknown_canal_ref"
 FALLBACK_NO_CANAL = "no_canal"
 EVENT_CANAL_CUT_NO_CELLS = "canal_cut_no_cells"
+EVENT_R21_FALLBACK = EVENT_RESOLVE_FALLBACK  # legacy alias
 
 
 @dataclass(frozen=True, slots=True)

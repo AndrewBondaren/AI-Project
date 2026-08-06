@@ -51,7 +51,7 @@ class ReliefGradeInstanceTest(unittest.TestCase):
             structure_refs=("lined_canal_stone",),
             structure_canal="lined_cut",
             template_uid="tpl",
-            edge_uid="edge1",
+            owner_uid="edge1",
         )
         self.assertEqual(inst.kind, ReliefSideKind.SLOPE)
         self.assertEqual(inst.height_cells, 2)
@@ -131,7 +131,7 @@ class ReliefGradeInstanceTest(unittest.TestCase):
             site_id="s",
             grades=[g1, g2],
             why="steepness_change_along_edge",
-            edge_uid="e1",
+            owner_uid="e1",
         )
         self.assertEqual(len(system.grade_instance_uids), 2)
         self.assertEqual(system.grade_instance_uids[0], g1.grade_uid)

@@ -95,7 +95,7 @@ class RoadContributor:
                 painted += n
             ctx.painted_road_edges.append(
                 PaintedRoadEdge(
-                    edge_uid=edge.edge_uid,
+                    owner_uid=edge.edge_uid,
                     road_cells=frozenset(light_cells),
                     object_policy=parse_object_relief_pick_policy(
                         edge.relief_pick_policy,

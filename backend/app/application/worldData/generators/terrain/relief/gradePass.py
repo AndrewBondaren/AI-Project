@@ -14,7 +14,7 @@ from app.application.worldData.generators.terrain.relief.geomResolve import (
 from app.application.worldData.generators.terrain.relief.kindRoll import kind_roll
 from app.application.worldData.generators.terrain.relief.reliefEvents import (
     EVENT_GRADE_SKIP,
-    EVENT_R21_FALLBACK,
+    EVENT_RESOLVE_FALLBACK,
     REASON_SCHEDULE_HOLE_R21_SLOPE,
     WHY_SCHEDULE_HOLE,
 )
@@ -104,7 +104,7 @@ def grade_from_template(
     if hit is None:
         # RELIEF-T-14 / R21: schedule hole → safe SLOPE (not silent skip)
         relief_warning(
-            EVENT_R21_FALLBACK,
+            EVENT_RESOLVE_FALLBACK,
             context=template.context.value,
             why=WHY_SCHEDULE_HOLE,
             dz=dz,

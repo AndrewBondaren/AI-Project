@@ -25,6 +25,6 @@ class ReliefGradeInstanceRow:
     structure_refs: list = json_list_col()  # barrier refs (T-59)
     structure_canal: str | None = None  # canal_template_registry system_type
     template_uid: str | None = None
-    edge_uid: str | None = None
+    owner_uid: str | None = None
     site_id: str | None = None
     grade_system_uid: str | None = None

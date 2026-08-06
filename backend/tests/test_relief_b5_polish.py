@@ -121,7 +121,7 @@ class EmptySampleLogT65Test(unittest.TestCase):
         )
         with self.assertLogs("app.relief", level="DEBUG") as cm:
             apply_road_shoulder_grades(
-                compose, ctx, edge_uid="e1", road_cells={(1, 1)},
+                compose, ctx, owner_uid="e1", road_cells={(1, 1)},
             )
         self.assertIn(WHY_EMPTY_SAMPLE, "\n".join(cm.output))
 
