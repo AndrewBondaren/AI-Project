@@ -9,17 +9,19 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from app.application.worldData.generators.terrain.relief.reliefEvents import (
+    EVENT_R21_FALLBACK,
+)
 from app.dataModel.terrain.relief.canal import Canal, EarthenCanal, StructureCanal
 from app.dataModel.terrain.relief.worldCanalTemplateRegistry import (
     WorldCanalTemplateRegistry,
 )
 
-# R21 / canal why + fallback tokens (RELIEF-T-48)
+# Canal-only why + events (RELIEF-T-48). Shared R21 event → reliefEvents (T-56).
 WHY_UNKNOWN_STRUCTURE_CANAL = "unknown_structure_canal"
 WHY_UNKNOWN_CANAL_REF = "unknown_canal_ref"
 FALLBACK_NO_CANAL = "no_canal"
 EVENT_CANAL_CUT_NO_CELLS = "canal_cut_no_cells"
-EVENT_R21_FALLBACK = "r21_fallback"
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +88,23 @@ def build_canal(
         structure_refs=drawn.structure_refs + tuple(extra_structure_refs),
         structure_canal=drawn.structure_canal,
     )
+
+
+def project_canal_draw(
+    canal: Canal | None,
+    *,
+    extra_structure_refs: tuple[str, ...] = (),
+) -> CanalDrawResult:
+    """Intent/bake projection: omit → EMPTY_DRAW; extras-only; or build_canal (T-63)."""
+    if canal is None:
+        if not extra_structure_refs:
+            return EMPTY_DRAW
+        return CanalDrawResult(
+            earthen_canal=False,
+            structure_refs=tuple(extra_structure_refs),
+            structure_canal=None,
+        )
+    return build_canal(canal, extra_structure_refs=extra_structure_refs)
 
 
 def canal_from_registry_ref(

@@ -98,7 +98,6 @@ class RoadContributor:
                 compose,
                 ctx,
                 edge_uid=edge.edge_uid,
-                ordered_road_light=ordered,
                 road_cells=light_cells,
                 object_policy=parse_object_relief_pick_policy(
                     edge.relief_pick_policy,

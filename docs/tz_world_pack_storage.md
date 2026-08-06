@@ -1731,7 +1731,7 @@ flowchart TB
 
 **Контекст:** `initialize_world.py --fixture world_terrain_test.json` → `POST /map/pack/bake?mode=light&max_tiles=16` для `world-terrain-test-001`.
 
-**Логи bake (per-world):** `backend/logs/generation/{world_uid}/bake-light-latest.log` (+ stamped `bake-light-{UTC}.log`). Общий runtime: `backend/logs/app.log` / терминал `npm run dev`. Sink: `app.core.generationLogging`.
+**Логи bake (per-world):** `backend/logs/generation/{world_uid}/bake-light-latest.log` (+ stamped `bake-light-{UTC}.log`). Общий runtime: `backend/logs/app.log` / терминал `npm run dev`. Sink: `app.core.generationLogging` — allowlist включает `app.application.worldData.pack` / `generators` **и** `app.relief` (relief/canal/`road_shoulder_skip` via `reliefLog`).
 
 | Метрика | Значение | WP-A1 |
 |---|---|---|

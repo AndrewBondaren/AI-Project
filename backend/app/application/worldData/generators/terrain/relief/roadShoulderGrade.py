@@ -17,6 +17,10 @@ from app.application.worldData.generators.terrain.relief.gradePass import (
     RibbonGradeDecision,
     grade_from_template,
 )
+from app.application.worldData.generators.terrain.relief.reliefEvents import (
+    EVENT_ROAD_SHOULDER_SKIP,
+    WHY_NO_TEMPLATE_BODY,
+)
 from app.application.worldData.generators.terrain.relief.reliefLog import relief_info
 from app.application.worldData.generators.terrain.relief.templatePick import pick_template
 from app.application.worldData.generators.terrain.relief.terrainMap import map_system_terrain
@@ -134,9 +138,9 @@ def grade_road_shoulder_segments(
         seq += 1
         if not pick.template_uid or pick.template_uid not in templates_by_uid:
             relief_info(
-                "road_shoulder_skip",
+                EVENT_ROAD_SHOULDER_SKIP,
                 site_id=segment.site_id,
-                reason="no_template_body",
+                reason=WHY_NO_TEMPLATE_BODY,
                 template_uid=pick.template_uid,
             )
             continue

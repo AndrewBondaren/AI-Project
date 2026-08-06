@@ -12,6 +12,12 @@ from app.application.worldData.generators.terrain.relief.geomResolve import (
     geom_resolve,
 )
 from app.application.worldData.generators.terrain.relief.kindRoll import kind_roll
+from app.application.worldData.generators.terrain.relief.reliefEvents import (
+    EVENT_GRADE_SKIP,
+    EVENT_R21_FALLBACK,
+    REASON_SCHEDULE_HOLE_R21_SLOPE,
+    WHY_SCHEDULE_HOLE,
+)
 from app.application.worldData.generators.terrain.relief.reliefLog import (
     relief_info,
     relief_warning,
@@ -73,7 +79,7 @@ def grade_from_template(
     cond = template.condition_for(terrain_key)
     if cond is None:
         relief_info(
-            "grade_skip",
+            EVENT_GRADE_SKIP,
             template_uid=template_uid,
             terrain=terrain_key,
             reason="no_condition",
@@ -98,9 +104,9 @@ def grade_from_template(
     if hit is None:
         # RELIEF-T-14 / R21: schedule hole → safe SLOPE (not silent skip)
         relief_warning(
-            "r21_fallback",
+            EVENT_R21_FALLBACK,
             context=template.context.value,
-            why="schedule_hole",
+            why=WHY_SCHEDULE_HOLE,
             dz=dz,
             terrain=terrain_key,
             chosen_fallback="SLOPE",
@@ -118,14 +124,14 @@ def grade_from_template(
             geom=geom,
             earthen_canal=earthen_default,
             structure_refs=refs_default,
-            reason="schedule_hole_r21_slope",
+            reason=REASON_SCHEDULE_HOLE_R21_SLOPE,
             skipped=False,
             structure_canal=canal_default,
         )
 
     if hit.policy == ReliefSlopePolicy.SLOPE_NONE:
         relief_info(
-            "grade_skip",
+            EVENT_GRADE_SKIP,
             template_uid=template_uid,
             policy="slope_none",
             reason=hit.reason,

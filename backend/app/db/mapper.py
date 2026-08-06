@@ -23,6 +23,17 @@ def json_col(
     return dataclasses.field(**kw)
 
 
+def json_list_col(
+    *,
+    default_factory: Any = list,
+) -> Any:
+    """list JSON: always dump (incl. ``[]``); NULL/``{}`` hydrate → ``[]`` (T-59)."""
+    return dataclasses.field(
+        default_factory=default_factory,
+        metadata={"db_type": "json_list"},
+    )
+
+
 def json_nullable_col(default: Any = None) -> Any:
     """dict-поле: None → NULL в БД, NULL → None."""
     return dataclasses.field(default=default, metadata={"db_type": "json_nullable"})
@@ -45,6 +56,8 @@ def _serialize(f: dataclasses.Field, value: Any) -> Any:
     db_type = f.metadata.get("db_type")
     if db_type == "json":
         return json.dumps(value, ensure_ascii=False) if value else None
+    if db_type == "json_list":
+        return json.dumps(list(value) if value is not None else [], ensure_ascii=False)
     if db_type == "json_nullable":
         return json.dumps(value, ensure_ascii=False) if value is not None else None
     if db_type == "bool":
@@ -56,6 +69,11 @@ def _deserialize(f: dataclasses.Field, value: Any) -> Any:
     db_type = f.metadata.get("db_type")
     if db_type == "json":
         return json.loads(value) if value else {}
+    if db_type == "json_list":
+        if not value:
+            return []
+        loaded = json.loads(value)
+        return loaded if isinstance(loaded, list) else []
     if db_type == "json_nullable":
         return json.loads(value) if value is not None else None
     if db_type == "bool":

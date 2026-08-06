@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.db.mapper import bool_col, json_col
+from app.db.mapper import bool_col, json_list_col
 
 
 @dataclass
@@ -17,12 +17,12 @@ class ReliefGradeInstanceRow:
     kind: str
     height_cells: int
     length_cells: int
-    cell_refs: list = json_col(default_factory=list)  # [[lx,ly], ...]
+    cell_refs: list = json_list_col()  # [[lx,ly], ...]
     created_at: str = ""
     angle_deg: float | None = None
     facing: str | None = None
     earthen_canal: bool = bool_col(default=False)
-    structure_refs: list = json_col(default_factory=list)  # barrier refs
+    structure_refs: list = json_list_col()  # barrier refs (T-59)
     structure_canal: str | None = None  # canal_template_registry system_type
     template_uid: str | None = None
     edge_uid: str | None = None

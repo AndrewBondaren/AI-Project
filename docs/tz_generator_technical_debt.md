@@ -3,7 +3,7 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py`, `worldBundleService.py`, relief library/import services.  
-**Обновлено:** 2026-08-06 — Canal typed union + build/draw (**T-53** resolved); residual **T-52, T-54, T-56, T-59**.
+**Обновлено:** 2026-08-06 — relief **Wave B** ✅ (B1–B5); residual opt **T-66**; next **Wave C** BAR-1; plan [`relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).
 
 **Связанные документы:**
 
@@ -11,7 +11,7 @@
 |---|---|
 | [tz_assembler_hierarchy.md](./tz_assembler_hierarchy.md) | Целевая архитектура assembler stack |
 | [tz_city_generation.md](./tz_city_generation.md) | Продуктовое ТЗ города |
-| [tz_terrain_relief.md](./tz_terrain_relief.md) | Relief grade + templates; R36/R36n/p/q; **RELIEF-BAR-1**; SOLID → **RELIEF-T-28…**; canal → **RELIEF-T-42…T-59** |
+| [tz_terrain_relief.md](./tz_terrain_relief.md) | Relief grade + templates; R36/R36n/p/q; **RELIEF-BAR-1**; SOLID → **RELIEF-T-28…**; canal/bake → **RELIEF-T-42…T-63** |
 | [tz_locations.md](./tz_locations.md) | `barrier_template_registry`; perimeter barriers |
 | [tz_terrain_hydrology.md](./tz_terrain_hydrology.md) | Гидрология: моря, озёра, реки (target) |
 | [tz_climate.md](./tz_climate.md) | Продуктовое ТЗ climate (pole/local tiers) |
@@ -920,7 +920,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 |---|---|---|---|---|---|
 | **RELIEF-T-28** | **high** | **partial** | P1 | god-object / JV | `worldRow` facade (~39 def). **Partial:** multi_column runtime → `resolve_multi_column_world` / `WORLD_SLICES` (**JV-SCALARS-2**). Остаток: registry/json_blob accessors + полный split per-domain |
 | **RELIEF-T-29** | medium | open | P2 | god-object / JV | `worldSlices.py` (~432 LOC) — catalog ~27 slices + merge strategies. Catalog OK; merge helpers вынести; slices ближе к POJO-пакету домена |
-| **RELIEF-T-30** | medium | open | P2 | SRP | `roadShoulderApply.py`: sample + grade call + expand + stamp facing + intents в одном contributor. Target: тонкий `apply_*`; sample/stamp/intent отдельно |
+| **RELIEF-T-30** | medium | **resolved** | P2 | SRP | Bake split ✅: sample / materialize / stamp / intent + thin `apply_*` facade. = **T-52**. § [roadShoulderApply split](#roadshoulderapply-split-t-30--t-52). |
 | **RELIEF-T-31** | medium | open | P2 | SRP | `RoadContributor.apply`: paint road **и** shoulder grade. Target: `RoadShoulderContributor` / post-pass |
 | **RELIEF-T-32** | medium | open | P2 | SRP | `roadShoulderGrade.py`: `segmentize_by_terrain` + pick/grade loop. Target: segmentize — отдельный модуль |
 | **RELIEF-T-33** | medium | open | P2 | DRY | `conditionNormalize`: `_knobs_from_case` есть, Mode A down/up копирует `ReliefDeltaInterval` вручную |
@@ -940,7 +940,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 **Scope:** `canal_template_registry`, knobs XOR `earthen_canal`\|`structure_canal`, `canal_obstacle_policy`, bake clearance-path canal.  
 **Wire/product lock:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) R28/R36p/q / C20–C21 — **не** менять без мастера.  
 **Impl:** `seedCanalResolve` / `canalObstacleResolve` / `canalAttachments` / `outlineCanalCollect`; bake thin call.  
-**Fix wave:** **T-42…T-51** resolved. **Post-fix smell (2026-08-06):** residual → **T-52…T-59** (+ pre-existing **T-30** / **T-34**).
+**Fix wave:** **T-42…T-51** resolved. **Post-fix:** **T-52/T-30** ✅ · **T-54/T-56/T-59…T-65** ✅; residual opt **T-66** (+ pre-existing **T-34**).
 
 | ID | Sev | Status | P | Категория | Суть |
 |---|---|---|---|---|---|
@@ -954,17 +954,87 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | **RELIEF-T-49** | low | **resolved** | P3 | SRP | Fit/не-fit в одном `resolve_seed_canal_attachments`; knobs enrich = `resolve_knobs_canal_attachments`. Alias leftover → **T-58**. |
 | **RELIEF-T-50** | **high** | **resolved** | P1 | dataModel / persist | Grade + SQL: `structure_refs` + `structure_canal` (+ R36j); persist/factory stamp same cut as Intent. **DB recreate.** Intent parity → **T-53**. |
 | **RELIEF-T-51** | medium | **resolved** | P2 | SRP / UX | `roadShoulderGrade` = raw knobs only; single resolve in bake `resolve_seed_canal_attachments`. |
-| **RELIEF-T-52** | medium | open | P2 | god-object / SRP | `roadShoulderApply` ~522 LOC + `_materialize_segment` = clearance∥canal∥anchor∥volume∥stamp∥Grade∥aggregate. Target: `_materialize_seed` + sample/stamp/intent modules. = **T-30**. |
+| **RELIEF-T-52** | medium | **resolved** | P2 | god-object / SRP | = **T-30**. Split ✅: `roadShoulderSample` / `Materialize` / `Stamp` / `Intent` + thin apply (~109 LOC). |
 | **RELIEF-T-53** | medium | **resolved** | P2 | dataModel | `Canal` = `EarthenCanal` \| `StructureCanal`; Intent.`canal` + `build_canal`/`draw_canal`; Grade flat из draw. Entry XOR. |
-| **RELIEF-T-54** | medium | open | P2 | dataModel / values | Skipped Intent без bake: `_to_intent` → `bool(d.earthen_canal)` coerce omit→False до resolve. Target: null/omit canal на skipped; не silent False. |
+| **RELIEF-T-54** | medium | **resolved** | P2 | dataModel / values | Intent.`earthen_canal` → `bool\|None` (omit=`None`); skipped `to_intent` не synthesize `EarthenCanal` from knobs. Wave **B4a**. |
 | **RELIEF-T-55** | medium | **resolved** | P2 | хардкод | `EMPTY_EARTHEN_CUT` рядом с `EMPTY_CANAL` (policy omit ref). |
-| **RELIEF-T-56** | medium | open | P2 | хардкод | Bake/grade event strings вне canal tokens: `"road_shoulder_skip"`, `"clearance_skip"`, `"no_edge_road_anchor"`, `"schedule_hole"`, `"r21_fallback"` (gradePass). Target: shared relief event module. |
+| **RELIEF-T-56** | medium | **resolved** | P2 | хардкод | Shared `reliefEvents.py` (EVENT/WHY/REASON); canalAttachments re-exports `EVENT_R21_FALLBACK`; bake/grade/mountain call sites use tokens. |
 | **RELIEF-T-57** | medium | **resolved** | P2 | DRY | Один `_resolve_canal_ref` + `_r21_no_canal`; lookup = `attachments_from_registry_ref` (None→R21). Knobs и policy — тот же путь. |
 | **RELIEF-T-58** | low | **resolved** | P3 | DRY / API | Alias `resolve_knobs_canal_attachments` удалён; `CanalAttachments.grade_fields()` / `intent_fields()` в bake. Persist row mapping — отдельный layer OK. |
-| **RELIEF-T-59** | low | open | P3 | dataModel / mapper | `json_col` empty `structure_refs` → NULL → deserialize `{}` (list contract). Target: always-dump list или hydrate `[]`. |
+| **RELIEF-T-59** | low | **resolved** | P3 | dataModel / mapper | `json_list_col`: always dump `[]`; NULL/`{}` → `[]`. Grade `structure_refs` + `cell_refs`. Wave **B5**. |
+| **RELIEF-T-60** | medium | **resolved** | P2 | observability | Silent paths logged: stamp obstacle/column/empty; sample empty; apply early-exit (no road/templates/samples) debug; materialize empty plan + h&lt;1. Clearance/anchor warning unchanged. |
+| **RELIEF-T-61** | low | **resolved** | P3 | SRP | `project_canal_draw`; no knobs→`EarthenCanal` synthesize; adapters → `roadShoulderAdapters`; `StampRibbonOutcome` + log in materialize. Wave **B5**. |
+| **RELIEF-T-62** | low | **resolved** | P3 | хардкод / dataModel | `_ORTHO` ← `CARDINAL_WALL_OUTWARD_DELTA` (E,W,N,S). Wave **B5**. |
+| **RELIEF-T-63** | low | **resolved** | P3 | хардкод | `project_canal_draw` / `EMPTY_DRAW` в materialize+Intent. Wave **B5**. |
+| **RELIEF-T-64** | medium | **resolved** | P2 | ответственность / values | `SeedMaterializeSkip` + `SegmentMaterializeResult.skip_why`; apply `reason=mat.skip_why or WHY_NOT_STAMPED` (не всегда `clearance_skip`). Wave **B4b**. |
+| **RELIEF-T-65** | low | **resolved** | P3 | DRY / observability | Empty-sample log = apply only; sample pure. Wave **B5**. |
+| **RELIEF-T-66** | low | open | P3 | observability | `EVENT_ROAD_SHOULDER_SKIP` монотокен — **deferred** (why достаточно; не блокер C). Optional later. |
+| **RELIEF-T-67** | **high** | **resolved** | P1 | observability | Bake file miss: `reliefLog` → `app.relief` не в `_GENERATION_PREFIXES` → shoulder/canal warnings не в `bake-light-*.log`. **Fix:** allowlist `app.relief`. |
 
 **Связанный pre-existing (не новый, но в том же ревью):** **RELIEF-T-34** — `ReliefRoleCase` Mode A дублирует knobs-поля.  
 **Не путать с product lock:** R36p «policy только если не вмещается» + knobs XOR — **correct**; долг = слои/POJO/DTO parity, не отмена контракта.
+
+### Post-split review (T-30/T-52 ship, 2026-08-06)
+
+Проверка split-модулей: логи · SRP · хардкоды · dataModel.
+
+| Критерий | Вердикт | Open IDs |
+|---|---|---|
+| Логи | Silent paths → `relief_warning`/`relief_debug` | **T-60** ✅ |
+| SRP | Split + adapters / StampOutcome / project_canal_draw | **T-61** ✅ |
+| Хардкоды event/reason | Shared `reliefEvents` | **T-56** ✅ |
+| Хардкоды ortho / draw False | Facing deltas; `project_canal_draw` | **T-62/T-63** ✅ |
+| dataModel canal/kind/facing | OK (`Canal`, `ReliefSideKind`, `Facing.opposite`, registries) | — |
+| Intent property coerce | omit→None (not silent False) | **T-54** ✅ |
+| json list hydrate | `json_list_col` | **T-59** ✅ |
+
+### Post-B2/B3 review (god / DRY / SRP, 2026-08-06)
+
+Ревью изменений Wave B1–B3 (Q6 sample + T-56/T-60). **God-object регрессии нет** (apply thin; materialize = pipeline, не blob).
+
+| # | Находка | Ось | Debt | Когда чинить | Ссылка волны |
+|---|---|---|---|---|---|
+| 1 | Skipped Intent omit→False via `_drawn` | dataModel | **T-54** | **B4a** ✅ | [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Wave B · B4 |
+| 2 | Intent `reason=clearance_skip` при любом `not mat.stamped` | ответственность | **T-64** | **B4b** ✅ | § Wave B · B4 |
+| 3 | Double log `empty_sample` (sample + apply) | DRY | **T-65** | **B5** ✅ | § Wave B · B5 |
+| 4 | `materialize` pipeline + bake adapters; stamp log vs outcome | SRP | **T-61** | **B5** ✅ | § Wave B · B5 |
+| 5 | `_ORTHO` ≠ Facing | хардкод | **T-62** | **B5** ✅ | § Wave B · B5 |
+| 6 | `CanalDrawResult(False,…)` мимо `EMPTY_DRAW` | хардкод | **T-63** | **B5** ✅ | § Wave B · B5 |
+| 7 | `EVENT_ROAD_SHOULDER_SKIP` монотокен | observability | **T-66** | deferred optional | § Wave B · B5 |
+| 8 | `json_col` structure_refs `{}` | mapper | **T-59** | **B5** ✅ | § Wave B · B5 |
+
+#### B4 schedule (T-54 / T-64) — shipped 2026-08-06
+
+| Step | ID | Что | Статус |
+|---|---|---|---|
+| **B4a** | **T-54** | Intent.`earthen_canal` omit=`None`; skipped без knobs→`EarthenCanal` synthesize | ✅ |
+| **B4b** | **T-64** | `SeedMaterializeSkip` + `skip_why`; apply `reason=skip_why or WHY_NOT_STAMPED` | ✅ |
+
+**Не смешивать с B5:** T-61 adapters, T-62 `_ORTHO`, T-63 `EMPTY_DRAW`, T-65 double log, T-66 event split.
+
+**Не долг:** sample без `ordered` (Q6); `reliefEvents` SoT; silent-path logs (T-60).  
+**Agent pointer:** [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).
+
+### roadShoulderApply split (T-30 / T-52)
+
+**Locked:** 2026-08-06. **Shipped:** 2026-08-06 (phases 0–5 one PR). Canvas: `road-shoulder-apply-split-plan`.  
+**Scope:** только `pack/bake/lightGrid/` contributor. Canal kinds / resolve — **не** трогать (уже out).  
+**Правило (было):** один PR = одна phase — **waived** for this ship (full split). Stamp/adapters **не** в `generators/terrain`. Q6 dilate sample — Wave B1 ✅.
+
+**Уже вынесено (не трогать):** `ribbonSeedResolve`, `edgeRoadAnchor`, `volumeMaterialize`, `seedCanalResolve` / `canalAttachments` (`build_canal`), `roadShoulderGrade`, `gradeInstanceFactory`.
+
+**Modules (shipped)**
+
+| Файл | Роль | Public |
+|---|---|---|
+| `contributors/roadShoulderApply.py` | facade only | `apply_road_shoulder_grades` |
+| `contributors/roadShoulderSample.py` | discovery | `sample_shoulder_cells` |
+| `contributors/roadShoulderMaterialize.py` | seed + segment pipeline | `materialize_segment` / `materialize_seed` + contracts |
+| `contributors/roadShoulderStamp.py` | compose writes | stamp ribbon / column / `grade_uid` / `cell_blocked_light` |
+| `roadShoulderIntent.py` | DTO + emit | `RoadShoulderIntent`, `to_intent` |
+
+**Data flow:**  
+`apply` → sample → `roadShoulderGrade` → `materialize_segment` → per seed (`clearance` → `resolve_seed_canal` → anchor → volume → stamp → Grade) → aggregate canal → `to_intent` → `ctx.intents`.
 
 ### World multi_column scalars — DRY (JV-SCALARS)
 
@@ -986,22 +1056,23 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 - Shoulder width bake; bake_seed; typed edge policy; FS import split.
 - **R36n scalars:** `WorldReliefGradeObstacleScalars`; `obstacleClearance` thin; grade path без `dict.get` knobs.
 - **JV-SCALARS-1/2:** `worldScalarWire` + `resolve_multi_column_world` (import slice = runtime SoT).
-- **R36p/q canal:** pure resolve; Grade+SQL refs; omit earthen; single bake resolve; Intent aggregate; **one** `_resolve_canal_ref`/`_r21_no_canal` (T-57); `grade_fields`/`intent_fields`. Residual: **T-52…T-54, T-56, T-59**.
+- **R36p/q canal:** typed `EarthenCanal`\|`StructureCanal`; `build_canal`/`draw_canal`; Intent.`canal`; single resolve. Bake SRP: **T-30/T-52** ✅. Wave B polish **T-54…T-65** ✅. Residual opt: **T-66**.
 - Generators package split (pick / normalize / classify / kindRoll / gradePass / expand) — нет 300+ LOC domain blob.
 
-### Приоритетный backlog (после fix wave)
+### Приоритетный backlog (sync relief waves)
 
-1. **R36** ([`tz_terrain_relief.md`](./tz_terrain_relief.md) C1–C18) — materialize SLOPE/SHEER + Grade entity; facing-only устарел; obstacle policy читает world setting (**R36n**)  
-2. **RELIEF-T-28** (partial) — registry/json_blob accessors → slice-driven / per-domain (P1); multi_column ✅ JV-SCALARS-2  
+**Product SoT:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Порядок · [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).  
+**Post-B2/B3 review map:** § [Post-B2/B3 review](#post-b2b3-review-god--dry--srp-2026-08-06) выше.
 
-3. **RELIEF-T-52 / T-30** — bake SRP split (`_materialize_seed` + modules)  
-4. **RELIEF-T-53 / T-54 / T-56** — Intent canal parity, skipped coerce, bake event tokens (P2)  
-5. **RELIEF-T-34 / T-35…T-36** — RoleCase knobs compose + knobs DRY (P2)  
-6. **RELIEF-T-37…T-39**, **T-59** — wire/mapper polish (P2–P3)  
-7. **RELIEF-BAR-1** — barrier materialize (отдельно)  
-8. Fixtures/scripts: `races`/`perks` → `*_templates` + registries  
-9. (optional) rename `MountainSideRecipeMode` wire away from A–D — breaking, только с миграцией тел  
-10. **RELIEF-T-40…T-41** — polish (P3)
+1. ~~**Wave B1 — Q6** dilate shoulder sample~~ ✅  
+2. ~~**Wave B2/B3 — T-60 / T-56**~~ ✅  
+3. ~~**Wave B4 — B4a T-54 → B4b T-64**~~ ✅  
+4. ~~**Wave B5 — T-59…T-63, T-65**~~ ✅ (**T-66** deferred)  
+5. **Wave C — RELIEF-BAR-1** barrier materialize from Intent/Grade refs  
+6. **Wave D —** `open_land` / `shore` bake consumers  
+7. **Wave E —** R36o / Q4 / R36f/k / UI R30 (later)  
+8. **Parallel eng (не gate waves):** **T-28** (partial), **T-31/T-32**, **T-34…T-39**, fixtures `*_templates`  
+9. (optional) rename `MountainSideRecipeMode` wire A–D — breaking + migration
 
 ---
 
@@ -1019,6 +1090,17 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-06 | **RELIEF-T-67 resolved:** `app.relief` in `generationLogging` allowlist → bake-light file gets relief/canal events |
+| 2026-08-06 | **Wave B5 shipped:** T-65/T-63/T-62/T-61/T-59; T-66 deferred; Wave B complete → next C BAR-1 |
+| 2026-08-06 | **Wave B4 shipped:** T-54 Intent omit=`None`; T-64 `SeedMaterializeSkip` + `skip_why` / `WHY_NOT_STAMPED` |
+| 2026-08-06 | **B4 schedule locked:** B4a T-54 → B4b T-64 (same PR preferred; else next PR before B5/C; T-64 not deferrable to B5) |
+| 2026-08-06 | **Post-B2/B3 SRP review → T-64…T-66:** false `clearance_skip`; double `empty_sample` log; EVENT монотокен; map → Wave B4/B5 |
+| 2026-08-06 | **Wave B2/B3 — T-60/T-56 resolved:** `reliefEvents.py`; silent bake/grade paths → `relief_warning`/`relief_debug` |
+| 2026-08-06 | **Wave B1 / Q6 shipped:** footprint-edge `sample_shoulder_cells`; apply drops `ordered_road_light` |
+| 2026-08-06 | **Relief dev plan sync:** Wave A shipped; backlog → Wave B (Q6→T-60/T-56→T-54) → C BAR-1 → D consumers → E later; pointer `relief-dev-plan.md` |
+| 2026-08-06 | **Post-split review → T-60…T-63 open:** silent bake logs; Intent/emit glue; `_ORTHO`≠Facing; `CanalDrawResult(False,…)` vs `EMPTY_DRAW`. T-56 loci уточнены |
+| 2026-08-06 | **T-30/T-52 bake split shipped:** sample / materialize / stamp / intent + thin apply facade; god-orchestrator gone |
+| 2026-08-06 | **T-30/T-52 split plan locked:** phases 0–5 (contracts → materialize_seed → stamp → sample → intent → thin apply); leave canal/grade helpers as-is |
 | 2026-08-06 | **Canal kinds:** `EarthenCanal`\|`StructureCanal`; entry XOR; `draw_canal`/`build_canal`; Intent.`canal` — T-53 resolved |
 | 2026-08-06 | **DRY canal single-writer:** T-55/T-57/T-58 resolved (`_resolve_canal_ref`, `EMPTY_EARTHEN_CUT`, `grade_fields`/`intent_fields`) |
 | 2026-08-06 | **Post-fix smell → T-53…T-59:** Intent≠Grade `structure_canal`; skipped coerce; earthen literal; bake event strings; R21 DRY; alias/mapper. T-52 → medium (=T-30). Review canvas `canal-debt-fix-smell-review` |

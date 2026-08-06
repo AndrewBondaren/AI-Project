@@ -5,6 +5,9 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 
+from app.application.worldData.generators.terrain.relief.reliefEvents import (
+    EVENT_R21_FALLBACK,
+)
 from app.application.worldData.generators.terrain.relief.reliefLog import (
     relief_info,
     relief_warning,
@@ -73,7 +76,7 @@ def pick_template(
     candidates = registry.entries_for_context(ctx)
     if not candidates:
         relief_warning(
-            "r21_fallback",
+            EVENT_R21_FALLBACK,
             context=ctx,
             mode=effective.mode.value,
             why="empty_candidates",
@@ -107,7 +110,7 @@ def pick_template(
             )
             return result
         relief_warning(
-            "r21_fallback",
+            EVENT_R21_FALLBACK,
             context=ctx,
             mode="fixed",
             why=f"missing_uid={uid}",

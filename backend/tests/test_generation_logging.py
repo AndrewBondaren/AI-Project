@@ -11,11 +11,16 @@ from app.core.generationLogging import generation_world_log
 
 def test_generation_world_log_writes_bake_files(tmp_path: Path) -> None:
     root = tmp_path / "generation"
+    logging.getLogger().setLevel(logging.DEBUG)
     pack_log = logging.getLogger("app.application.worldData.pack.bake.packBakeLog")
+    relief_log = logging.getLogger("app.relief")
     http_log = logging.getLogger("http")
+    pack_log.setLevel(logging.DEBUG)
+    relief_log.setLevel(logging.DEBUG)
 
     with generation_world_log("world-terrain-test-001", mode="light", root=root) as run_path:
         pack_log.info("pack surface context | world=world-terrain-test-001 ok=True")
+        relief_log.warning("relief | road_shoulder_skip | why='clearance_L_eff'")
         http_log.info("request_end should not appear in generation file")
 
     assert run_path.is_file()
@@ -26,6 +31,7 @@ def test_generation_world_log_writes_bake_files(tmp_path: Path) -> None:
     msgs = [row["msg"] for row in lines]
     assert any("generation log open" in m for m in msgs)
     assert any("pack surface context" in m for m in msgs)
+    assert any("road_shoulder_skip" in m for m in msgs)
     assert any("generation log close" in m for m in msgs)
     assert not any("request_end" in m for m in msgs)
 

@@ -6,8 +6,9 @@ metadata:
   type: project
 ---
 
-> **Статус:** ownership **утверждён** (2026-07-27) · **world outdoor grade + templates** — утверждено (2026-07-29) · **storage 1:1 buildings** — утверждено (2026-07-29) · **mountain preset / side_recipe (R33)** — утверждено (2026-07-30) · **terrain map R34** (import upsert ∥ world API) — утверждено (2026-07-30) · **bundle R35** — утверждено (2026-07-30) · **SLOPE (R36)** — утверждено (2026-07-31) · **canal R36p/q / C20–C21** — утверждено (2026-08-05; `canal_template_registry`; knobs XOR; policy only if не вмещается) · **Impl:** §7–9/8c ✅; R36p/q wire — ТЗ lock, code later.  
-> **Связь:** SoT grade; **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT.
+> **Статус:** ownership **утверждён** · templates R33–R35 ✅ · **R36 core (§7–9/8c) ✅** · **canal R36p/q wire+bake ✅** · bake SRP **T-30/T-52 ✅** · **Wave B (Q6…T-65) ✅**.  
+> **Next:** § [Порядок имплементации](#порядок-имплементации-anti-slice) → **Wave C** RELIEF-BAR-1 → consumers `open_land`/`shore`.  
+> **Связь:** SoT grade; **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT. · Agent pointer: [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md)
 
 # Terrain relief grade (поддомен Terrain)
 
@@ -25,7 +26,7 @@ metadata:
 | `road_shoulder` | **обочины** дороги (две стороны), когда есть Δz между полотном и соседним рельефом |
 
 **v1 bake consumers (shipped):** `mountain` (SideFill stamp) + `road_shoulder` (after RoadContributor).  
-**Deferred (H):** `open_land` / `shore` — contexts + pick policy wire ready; light-grid consumers **не** подключены (см. tech debt **RELIEF-T-19**).
+**Deferred (Wave D):** `open_land` / `shore` — contexts + pick policy wire ready; light-grid consumers **не** подключены (контракт зафиксирован; было RELIEF-T-19).
 
 | Владеет | Не владеет |
 |---|---|
@@ -761,7 +762,7 @@ Match inclusive; первый в списке; overlap → **reject**; дыра 
 | Generate | landform в relief | **emit refs**; cells — BAR-1 |
 | vs obstacles | R36m + R36p | R36m: grade не в barrier cells |
 
-**Tech debt:** [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) **RELIEF-BAR-1**; **RELIEF-T-42…T-51** ✅; residual post-fix **T-52…T-59** (bake SRP, Intent/Grade canal parity, R21/event DRY, mapper).
+**Tech debt:** [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) **RELIEF-BAR-1** (Wave C); canal/bake/Wave B **T-42…T-65** ✅; open opt **T-66**.
 
 **POJO (target `dataModel/terrain/relief/`):**
 
@@ -1126,13 +1127,19 @@ allow_flush   → L_eff = 1 → grade на y=2 (flush к объекту)
 - Geom-C в bake (только UI)  
 - Затирать building/road при expand
 
-#### Impl order (R36 product — см. § Порядок 7–9)
+#### Impl order (R36 product — см. § Порядок)
 
 1. ✅ **§7** Geom XOR POJO  
 2. ✅ **§8a** `geomResolve` + `partition_height` + rich `RibbonGradeDecision`  
 3. ✅ **§8b / §9** volume + clearance phases (`edgeRoadAnchor`)  
 4. ✅ **§8c** Grade + `system_grade_uid` (tables + pack wire + bake)  
-5. Gameplay penalty — later (R36f); Q6 dilate sample — open
+5. ✅ **Canal R36p/q** knobs XOR + registry + clearance-path resolve + Intent.`canal`  
+6. ✅ **Bake split** T-30/T-52 (sample / materialize / stamp / intent)  
+7. ✅ **Q6** sample = outer ring of `road_cells` (не walk по `ordered`)
+8. ✅ **Wave B2/B3** T-60/T-56 (`reliefEvents` + silent logs)  
+9. ✅ **Wave B4** T-54/T-64 (Intent omit + honest skip_why)  
+10. ✅ **Wave B5** T-59…T-63/T-65 polish (T-66 deferred)  
+11. → **Wave C** BAR-1 → D consumers (см. § Порядок)
 
 ### Open (не блокер checklist; при normalize/impl)
 
@@ -1143,7 +1150,7 @@ allow_flush   → L_eff = 1 → grade на y=2 (flush к объекту)
 | Q3 | ~~Expand → building/road~~ | **locked R36m/n + R36p/q:** clearance = `L_eff`; knobs XOR canal; policy only if не вмещается; `canal_template_registry` |
 | Q4 | Mountain SideFill + R36 angle | later; v1 = `road_shoulder` |
 | Q5 | Max `L` / max θ clamp | later; v1 `L_eff = min(L,h)` для SLOPE; SHEER L без clamp к h |
-| Q6 | Shoulder **sample** при `dilate_radius_light > 0`: сейчас walk по осевой `ordered`, а seed = ortho ∉ `road_cells` (dilated footprint) — при толстом dilate ortho от оси часто ещё внутри полотна → мало/нет seeds. **Открыто:** семплить край footprint, не только `ordered`. Не смешивать с `edgeRoadAnchor` |
+| Q6 | ~~Shoulder sample при dilate~~ | **locked Wave B1:** seeds = ortho exterior of `road_cells` (footprint edge); `dz` с abutment; stable sort; apply не принимает `ordered`. Не смешивать с `edgeRoadAnchor` |
 
 #### Bake ribbon anchor (locked direction, 2026-08-05)
 
@@ -1171,7 +1178,7 @@ Per seed после `RibbonGradeDecision` (не skipped):
 4) stamp columns            # surface_z + facing; obstacle = is_grade_obstacle_light
 ```
 
-Orchestrator: `roadShoulderApply._materialize_segment` — тонкий loop; логика в pure helpers.
+Orchestrator: `roadShoulderMaterialize.materialize_segment` — тонкий loop; логика в pure helpers.
 
 #### `RibbonGradeDecision` (runtime, pre-clearance)
 
@@ -1447,62 +1454,110 @@ generators/terrain/relief/
   obstacleClearance / gradeObstacleLight / ribbonSeedResolve / edgeRoadAnchor ✅
   gradeInstanceFactory ✅
 
-pack/bake/.../roadShoulderApply.py  # phases + Grade + system_grade_uid stamp ✅
+pack/bake/.../roadShoulder{Apply,Sample,Materialize,Stamp}.py + roadShoulderIntent.py  # T-30/T-52 split ✅
 application/worldData/persistReliefGrades.py ✅
 ```
 
 Wire: facing + volume + **Grade uid** ✅.  
-R36n clearance ✅. Ribbon phases ✅; dilate sample **Q6** open.
+R36n clearance ✅. Ribbon phases ✅; dilate sample **Q6** ✅.
 
 ---
 
 ## Порядок имплементации (anti-slice)
 
-### Сделано (каркас templates)
-
-1. ✅ Relief extract (profiles, facing, mountain shim, column facing)  
-2. ✅ POJO R26 (`ReliefSlopePolicy` + Mode A\|B) + SQL library + registry  
-3. ✅ Validate: unique terrain; ровно 3 policy; weights / `delta_z` rules  
-4. ✅ Classify `dz` → policy; pick; R21 fallback  
-5. ✅ Mountains R33: `side_recipe` A\|B\|C\|D + materialize sides; declare wins  
-6. ✅ road_shoulder segments + classify + width expand (facing-only **replaced** by §8b volume)  
-
-### Дальше — план R36 / R36n (locked 2026-08-05)
-
-Порядок зависимостей: **7 → 8a → (9 ∥ 8b) → 8c**.  
-Clearance режет `L` до stamp; Grade пишет уже финальный состав клеток.
-
-| # | Шаг | Статус | Что будет сделано | Done when |
-|---|---|---|---|---|
-| **7** | Geom knobs POJO (R36b) | ✅ | Wire **XOR** `slope_length_cells` **или** `target_angle_deg`; оба → **reject**. **`shoulder_width_cells` удалён** (reject на wire). Mode A\|B не трогали | unit XOR + legacy reject; grep clean |
-| **8a** | `geomResolve` + `partition_height` | ✅ | Pure: `h=\|dz\|` + knobs → `ResolvedGeom`. Geom-A/B; SLOPE `L_eff=min(L,h)`; SHEER L из length. **`RibbonGradeDecision`:** `requested_length` + `h` + `geom` | unit: 45°; partition; SHEER; Geom-B clamp; decision carries geom |
-| **8b** | Volume materialize `road_shoulder` | ✅ | phases: clearance → `edgeRoadAnchor` → plan → stamp; SLOPE `surface_z`; SHEER face top + `facing=none`; uphill via anchor | unit volume; bake writes z |
-| **8c** | Grade entity + `system_grade_uid` | ✅ | POJO + SQL `relief_grade_instances` / `relief_grade_systems`; wire/pack + patches column; bake: 1 Grade/seed strip; `persistReliefGrades` replace-on-rebake. System row only ≥2 (v1 ribbon не создаёт) | unit POJO; bake stamps uid; tables in 0001 |
-| **9** | R36n bake clearance | ✅ | `ribbonSeedResolve` + `freeGap` + `obstacleClearance`; predicate `is_grade_obstacle_light` (road \| pin \| OOB); `L_eff<1` → skip+WARN | unit gap + truncate_skip gap=1 |
+**SoT очереди.** Agent pointer: [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).  
+Debt IDs: [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md).
 
 ```text
-7 Geom XOR POJO
-  → 8a geomResolve + partition_height
-      → 9 bake clearance (режет L_eff)     ⎫
-      → 8b volume materialize road_shoulder ⎬ можно параллелить после 8a
-      → 8c Grade + system_grade_uid         ⎭ (Grade после финального набора клеток)
+Wave A (shipped)          Wave B (shipped)        Wave C (next)       Wave D              Wave E (later)
+templates → R36 §7–9  →   B1–B5 ✅             →   RELIEF-BAR-1   →   open_land/shore  →  R36o / Q4 / gameplay
+canal R36p/q + T-52       (T-66 deferred)          barrier cells       bake consumers      R36f/k · UI R30
 ```
 
-**Gate:** DAG nodes не трогать; schema только `0001_initial.sql` + `db/models/`; generators pure (нет HTTP/LLM); `structure_refs` materialize → **RELIEF-BAR-1** (не в этом плане).
+### Wave A — shipped (не переоткрывать)
 
-### Вне этого плана (явно)
+**A0 Templates / mountain**
+
+1. ✅ Relief extract (profiles, facing, mountain shim, column facing)  
+2. ✅ POJO R26 + SQL library + registry + validate  
+3. ✅ Classify / pick / R21  
+4. ✅ Mountains R33 `side_recipe`  
+5. ✅ road_shoulder segmentize + grade path (facing-only → volume)
+
+**A1 R36 / R36n ribbon** (locked 2026-08-05; deps **7 → 8a → (9 ∥ 8b) → 8c**)
+
+| # | Шаг | Статус |
+|---|---|---|
+| **7** | Geom knobs XOR (R36b); `shoulder_width_cells` removed | ✅ |
+| **8a** | `geomResolve` + `partition_height` + rich `RibbonGradeDecision` | ✅ |
+| **8b** | Volume materialize `road_shoulder` (anchor → plan → stamp) | ✅ |
+| **8c** | Grade entity + `system_grade_uid` + persist | ✅ |
+| **9** | R36n bake clearance (`L_eff` / skip+WARN) | ✅ |
+
+**A2 Canal + bake SRP**
+
+| # | Шаг | Статус |
+|---|---|---|
+| **canal** | R36p/q: knobs XOR, `canal_template_registry`, policy only if не вмещается, Intent.`canal`, single resolve | ✅ |
+| **T-30/T-52** | bake split: Sample / Materialize / Stamp / Intent + thin Apply | ✅ |
+
+```text
+7 → 8a → (9 ∥ 8b) → 8c → canal → bake split
+```
+
+### Wave B — road_shoulder correctness + observability
+
+Делать **до** BAR-1 и новых consumers. Не смешивать stamp/canal «заодно».
+
+| # | Шаг | P | Debt | Done when |
+|---|---|---|---|---|
+| **B1** | **Q6** dilate sample: seeds с края footprint, не ortho от осевой `ordered` | P1 product | Q6 | ✅ thick dilate → outer ring; unit + apply smoke |
+| **B2** | Silent bake paths → `relief_warning`/`relief_debug` | P2 | **T-60** | ✅ early-exit / empty sample / stamp break / empty plan logged |
+| **B3** | Shared relief event tokens (bake+grade) | P2 | **T-56** | ✅ `reliefEvents.py`; call sites на tokens |
+| **B4** | Intent surface (два шага) | P2 | **T-54**, **T-64** | ✅ B4a+B4b |
+| **B4a** | Skipped Intent: omit canal ≠ silent False | P2 | **T-54** | ✅ `earthen_canal` omit=`None`; no knobs synthesize when skipped |
+| **B4b** | Honest skip reason when `not stamped` | P2 | **T-64** | ✅ `skip_why` / `WHY_NOT_STAMPED` (не всегда `clearance_skip`) |
+| **B5** | P3 polish | P3 | **T-59…T-63**, **T-65** | ✅ adapters; Facing ortho; `project_canal_draw`; empty-sample apply-only; `json_list_col` |
+
+**Порядок Wave B:** **B1–B5 ✅** → Wave C. **T-66** deferred.  
+**B4 schedule (historical):** [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) § B4 schedule.
+
+### Wave C — RELIEF-BAR-1 (structure / fence cells)
+
+| # | Шаг | Done when |
+|---|---|---|
+| **C1** | Consumer: Intent / Grade `structure_refs` (+ structure canal materials) → barrier cells | cells вне `generators/terrain/relief`; validate refs on import; clearance = R36m/n |
+
+Emit refs уже ✅; materialize — этот wave. **Не** возвращать canal resolve в bake apply.
+
+### Wave D — новые bake consumers
+
+| # | Шаг | Done when |
+|---|---|---|
+| **D1** | `open_land` light-grid contributor (Δz sites → same ribbon/Grade path) | bake stamps grade; policy wire reused |
+| **D2** | `shore` contributor (hydro edge sites) | то же; не смешивать с hydrology SoT |
+
+После Wave B (желательно после C, если barriers нужны на shore/open_land). Переиспользовать Sample→Grade→Materialize, не копировать god-apply.
+
+### Wave E — later (контракт locked, код не сейчас)
 
 | Вне | Почему |
 |---|---|
-| Gameplay climb / travel penalty (R36f) | later |
-| Pathfinding cost от Grade (R36k) | later; контракт уже locked |
-| **Junction smooth (R36o)** | direction locked; после volume + Grade + clearance |
-| Mountain SideFill + R36 angle (Q4) | v1 = `road_shoulder` |
-| `open_land` / `shore` bake consumers | H / RELIEF-T-19 |
-| RELIEF-BAR-1 built cells | отдельный epic; emit refs OK |
-| UI Geom-C / пресеты (R30) | UI-only |
-| SOLID polish RELIEF-T-28…41 | engineering debt, не блокер R36 product |
-| U8 ridge noise; cliff Spec paint | вне R36 checklist |
+| Gameplay climb / travel penalty (**R36f**) | later |
+| Pathfinding cost от Grade (**R36k**) | later; контракт locked |
+| **Junction smooth (R36o)** | после стабильного volume+Grade; v1 = `none` |
+| Mountain SideFill + R36 angle (**Q4**) | v1 ribbon = `road_shoulder` |
+| UI Geom-C / пресеты (**R30**) | UI-only; ≠ mountain library R33 |
+| SOLID / JV **T-28…T-41**, **T-31/T-32** | engineering; parallel, не gate product waves |
+| U8 ridge noise; cliff Spec paint | вне relief grade checklist |
+
+### Gates (все waves)
+
+- DAG nodes **не** трогать без мастера  
+- Schema только `0001_initial.sql` + `db/models/`  
+- Generators pure (нет HTTP/LLM payload)  
+- Stamp/adapters bake — в `pack/bake/lightGrid/`, не в `generators/terrain`  
+- Canal kinds / resolve — не размазывать обратно в Apply  
 
 **UI-модуль (не backend):** пресеты weights / `delta_z` / Geom-A\|B\|C калькулятор (R30) — **не** путать с mountain library presets (R33).
 
@@ -1522,6 +1577,8 @@ Clearance режет `L` до stamp; Grade пишет уже финальный 
 | [`tz_locations.md`](./tz_locations.md) | facing stairs; **barrier_template_registry** для `structure_refs` |
 | [`tz_building_generator.md`](./tz_building_generator.md) | library + world registry + import образец |
 | [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | world bundle levels; relief registry/bodies в bundle |
+| [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | open IDs; backlog sync с Wave B–E |
+| [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md) | agent pointer на § Порядок |
 
 ---
 
@@ -1529,6 +1586,16 @@ Clearance режет `L` до stamp; Grade пишет уже финальный 
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-06 | **Wave B5 shipped:** T-65/63/62/61/59; Wave B complete; next C BAR-1 |
+| 2026-08-06 | **Wave B4 shipped:** T-54 omit=`None`; T-64 `SeedMaterializeSkip` + `skip_why` |
+| 2026-08-06 | **B4 schedule:** B4a T-54 → B4b T-64 (один PR или два подряд до B5/C) — debt § B4 schedule |
+| 2026-08-06 | **Post-B2/B3 review → debt:** T-64…T-66 + map B4/B5 — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) |
+| 2026-08-06 | **Wave B2/B3 shipped:** T-60 silent logs + T-56 `reliefEvents` tokens |
+| 2026-08-06 | **Wave B1 / Q6 shipped:** `sample_shoulder_cells` = outer ring of `road_cells`; apply без `ordered`; unit + apply smoke |
+| 2026-08-06 | **План разработки уточнён:** Wave A shipped; **Wave B** (Q6→T-60/T-56→T-54) → **C BAR-1** → **D consumers** → **E later**; pointer [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md) |
+| 2026-08-06 | **Post-split review → T-60…T-63** (logs / SRP glue / `_ORTHO` / `EMPTY_DRAW`) — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) |
+| 2026-08-06 | **T-30/T-52 bake split shipped** (sample / materialize / stamp / intent + thin apply) — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) § roadShoulderApply split |
+| 2026-08-06 | **T-30/T-52 bake split plan locked** (phases 0–5) — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) § roadShoulderApply split |
 | 2026-08-06 | **Canal kinds lock:** `EarthenCanal` \| `StructureCanal`; registry entry XOR; terrain `draw_canal` + `build_canal` handlers; Intent.`canal` (T-53) — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) |
 | 2026-08-06 | **Tech debt post-fix smell:** **T-53…T-59** (Intent.`structure_canal`, skipped coerce, earthen const, event tokens, R21 DRY, alias/mapper); T-52→medium — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) |
 | 2026-08-05 | **Tech debt R36p/q fix wave:** T-43…T-51 resolved; **T-52**=T-30 open — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) |
