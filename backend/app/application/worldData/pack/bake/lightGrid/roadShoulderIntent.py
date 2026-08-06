@@ -80,7 +80,8 @@ def to_intent(
             structure_refs=d.structure_refs,
         )
     return RoadShoulderIntent(
-        edge_uid=result.segment.edge_uid,
+        # Bake Intent field still named edge_uid (persist/wire); value = ribbon owner.
+        edge_uid=result.segment.owner_uid,
         site_id=result.segment.site_id,
         template_uid=result.template_uid,
         kind=kind,

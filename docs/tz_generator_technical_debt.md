@@ -922,7 +922,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | **RELIEF-T-29** | medium | open | P2 | god-object / JV | `worldSlices.py` (~432 LOC) — catalog ~27 slices + merge strategies. Catalog OK; merge helpers вынести; slices ближе к POJO-пакету домена |
 | **RELIEF-T-30** | medium | **resolved** | P2 | SRP | Bake split ✅: sample / materialize / stamp / intent + thin `apply_*` facade. = **T-52**. § [roadShoulderApply split](#roadshoulderapply-split-t-30--t-52). |
 | **RELIEF-T-31** | medium | **resolved** | P2 | SRP | `RoadContributor` = paint only; `RoadShoulderContributor` after ROAD via `ctx.painted_road_edges` (`PaintedRoadEdge`). |
-| **RELIEF-T-32** | medium | **resolved** | P2 | SRP | `ribbonSegmentize.py` (`RoadShoulderSegment` + `segmentize_by_terrain`); `roadShoulderGrade` = pick/grade only. |
+| **RELIEF-T-32** | medium | **resolved** | P2 | SRP | `ribbonSegmentize.py` (`RibbonSegment` + `owner_uid`); `roadShoulderGrade` = pick/grade only (no segmentize re-export). |
 | **RELIEF-T-33** | medium | open | P2 | DRY | `conditionNormalize`: `_knobs_from_case` есть, Mode A down/up копирует `ReliefDeltaInterval` вручную |
 | **RELIEF-T-34** | medium | open | P2 | DRY / dataModel | `ReliefRoleCase` дублирует knobs-поля; Mode B = `ReliefDeltaBand(ReliefGradeKnobs)`. Target: embed/compose knobs на Mode A |
 | **RELIEF-T-35** | medium | open | P2 | DRY | `slope_weight+sheer_weight==1` ×3 (`reliefRoleCase`, `reliefTemplate`, `mountainSideRecipe`). Target: `require_weights_pair` |
@@ -1092,6 +1092,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-07 | **Ribbon naming:** `RoadShoulderSegment`→`RibbonSegment`; `edge_uid`→`owner_uid` on segment; Intent/Grade `edge_uid` field still wire name (= owner value) |
 | 2026-08-06 | **RELIEF-T-31/T-32 resolved:** `ribbonSegmentize`; `RoadShoulderContributor` + `painted_road_edges` after ROAD paint |
 | 2026-08-06 | **Wave D polish:** `contextRibbonApply` / `ribbonSampleUtil`; `ribbon_intents` + `ref_cells`; BAR-1 once in `compose_light_grid`; road early-exit deduped |
 | 2026-08-06 | **Wave D shipped:** open_land/shore contributors + `ribbonGradeApply`; compose hydro→open_land→shore→road |

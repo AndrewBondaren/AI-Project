@@ -77,7 +77,7 @@ def apply_ribbon_grades(
         return []
 
     tile_set = set(ctx.tiles)
-    segments = segmentize_by_terrain(edge_uid=owner_uid, cells=samples)
+    segments = segmentize_by_terrain(owner_uid=owner_uid, cells=samples)
     canal_reg = canal_templates(ctx.world)
     canal_rules = relief_pick_policy(ctx.world).canal_obstacle_policy
     results = grade_road_shoulder_segments(

@@ -13,9 +13,11 @@ from app.application.worldData.generators.terrain.relief.reliefEvents import (
     WHY_NO_EDGE_ROAD_ANCHOR,
     WHY_NOT_STAMPED,
 )
+from app.application.worldData.generators.terrain.relief.ribbonSegmentize import (
+    RibbonSegment,
+)
 from app.application.worldData.generators.terrain.relief.roadShoulderGrade import (
     RoadShoulderGradeResult,
-    RoadShoulderSegment,
 )
 from app.application.worldData.pack.bake.lightGrid.contributors.roadShoulderMaterialize import (
     SegmentMaterializeResult,
@@ -36,8 +38,8 @@ def _result(
     reason: str = "",
     kind: ReliefSideKind | None = ReliefSideKind.SHEER,
 ) -> RoadShoulderGradeResult:
-    seg = RoadShoulderSegment(
-        edge_uid="e1",
+    seg = RibbonSegment(
+        owner_uid="e1",
         terrain_key="plains",
         system_terrain="plains",
         dz=1,

@@ -1,6 +1,6 @@
 """Ribbon grade sites — pick + classify (R20–R28 data out).
 
-Segmentize lives in ``ribbonSegmentize`` (RELIEF-T-32).
+Segmentize: ``ribbonSegmentize`` (RELIEF-T-32). This module = pick/grade only.
 Pure consumer: emits RibbonGradeDecision with raw canal knobs.
 Registry/policy resolve happens once in bake (RELIEF-T-51).
 Barrier stamp = bake ``roadShoulderBarrierApply`` (RELIEF-BAR-1); not this module.
@@ -25,8 +25,7 @@ from app.application.worldData.generators.terrain.relief.reliefEvents import (
 )
 from app.application.worldData.generators.terrain.relief.reliefLog import relief_info
 from app.application.worldData.generators.terrain.relief.ribbonSegmentize import (
-    RoadShoulderSegment,
-    segmentize_by_terrain,
+    RibbonSegment,
 )
 from app.application.worldData.generators.terrain.relief.templatePick import pick_template
 from app.dataModel.terrain.relief.enums import ReliefContext
@@ -35,16 +34,15 @@ from app.dataModel.terrain.relief.worldReliefPickPolicy import ObjectReliefPickP
 from app.db.models.world import World
 
 __all__ = [
+    "RibbonSegment",
     "RoadShoulderGradeResult",
-    "RoadShoulderSegment",
     "grade_road_shoulder_segments",
-    "segmentize_by_terrain",
 ]
 
 
 @dataclass(frozen=True, slots=True)
 class RoadShoulderGradeResult:
-    segment: RoadShoulderSegment
+    segment: RibbonSegment
     decision: RibbonGradeDecision
     template_uid: str | None
 
@@ -53,7 +51,7 @@ def grade_road_shoulder_segments(
     *,
     world: World,
     world_seed: str,
-    segments: list[RoadShoulderSegment],
+    segments: list[RibbonSegment],
     templates_by_uid: dict[str, ReliefTemplate],
     object_policy: ObjectReliefPickPolicy | None = None,
     occurrence_start: int = 0,

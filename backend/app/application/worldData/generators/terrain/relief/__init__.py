@@ -17,7 +17,7 @@ from app.application.worldData.generators.terrain.relief.profiles import (
     slope_fraction,
 )
 from app.application.worldData.generators.terrain.relief.ribbonSegmentize import (
-    RoadShoulderSegment,
+    RibbonSegment,
     segmentize_by_terrain,
 )
 from app.application.worldData.generators.terrain.relief.roadShoulderGrade import (
@@ -38,8 +38,8 @@ from app.application.worldData.generators.terrain.relief.sideGradeDecision impor
 __all__ = [
     "RadialGradeDecision",
     "RibbonGradeDecision",
+    "RibbonSegment",
     "RoadShoulderGradeResult",
-    "RoadShoulderSegment",
     "bake_seed",
     "decide_radial_grade",
     "expand_shoulder_ring",

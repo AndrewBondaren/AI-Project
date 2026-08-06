@@ -23,7 +23,7 @@ class RoadShoulderGradeTest(unittest.TestCase):
             ((2, 0), "forest", 3),
             ((3, 0), "forest", 3),
         ]
-        segs = segmentize_by_terrain(edge_uid="e1", cells=cells)
+        segs = segmentize_by_terrain(owner_uid="e1", cells=cells)
         self.assertEqual(len(segs), 2)
         self.assertEqual(segs[0].terrain_key, "plains")
         self.assertEqual(len(segs[0].cell_coords), 2)
@@ -58,7 +58,7 @@ class RoadShoulderGradeTest(unittest.TestCase):
             },
         )
         segs = segmentize_by_terrain(
-            edge_uid="e1",
+            owner_uid="e1",
             cells=[((0, 0), "plains", 2)],
         )
         results = grade_road_shoulder_segments(
@@ -107,7 +107,7 @@ class RoadShoulderGradeTest(unittest.TestCase):
             },
         )
         segs = segmentize_by_terrain(
-            edge_uid="e1",
+            owner_uid="e1",
             cells=[((0, 0), "plains", 2)],
         )
         results = grade_road_shoulder_segments(

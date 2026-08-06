@@ -16,9 +16,11 @@ from app.application.worldData.generators.terrain.relief.gradePass import (
 from app.application.worldData.generators.terrain.relief.reliefEvents import (
     WHY_EMPTY_SAMPLE,
 )
+from app.application.worldData.generators.terrain.relief.ribbonSegmentize import (
+    RibbonSegment,
+)
 from app.application.worldData.generators.terrain.relief.roadShoulderGrade import (
     RoadShoulderGradeResult,
-    RoadShoulderSegment,
 )
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
@@ -66,8 +68,8 @@ class ProjectCanalDrawT63Test(unittest.TestCase):
 
 class IntentNoSynthesizeT61Test(unittest.TestCase):
     def test_non_skipped_does_not_synthesize_earthen(self) -> None:
-        seg = RoadShoulderSegment(
-            edge_uid="e1",
+        seg = RibbonSegment(
+            owner_uid="e1",
             terrain_key="plains",
             system_terrain="plains",
             dz=1,

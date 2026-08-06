@@ -11,27 +11,35 @@ from app.application.worldData.generators.terrain.relief.terrainMap import map_s
 
 
 @dataclass(frozen=True, slots=True)
-class RoadShoulderSegment:
-    """One pick site: contiguous corridor terrain × side along an owner."""
+class RibbonSegment:
+    """One pick site: contiguous terrain run along a ribbon owner.
 
-    edge_uid: str
+    ``owner_uid`` — connection edge uid (road) or context token (``open_land`` /
+    ``shore``), not always a graph edge.
+
+    ``site_id`` — stable pick/seed key:
+    ``{owner_uid}|{terrain_key}|{anchor_x},{anchor_y}`` where anchor = first
+    cell of the run in walk order (not stamp geometry).
+    """
+
+    owner_uid: str
     terrain_key: str  # ReliefConditionTerrain value
     system_terrain: str
     dz: int
     site_id: str
-    cell_coords: tuple[tuple[int, int], ...]  # (x,y) shoulder cells
+    cell_coords: tuple[tuple[int, int], ...]  # (x,y) ribbon seed cells
 
 
 def segmentize_by_terrain(
     *,
-    edge_uid: str,
+    owner_uid: str,
     cells: list[tuple[tuple[int, int], str, int]],
-) -> list[RoadShoulderSegment]:
-    """Split shoulder cells into segments on system_terrain change.
+) -> list[RibbonSegment]:
+    """Split sample cells into segments on system_terrain change.
 
-    cells: ((x,y), system_terrain, dz) in stable walk order along the edge side.
+    cells: ((x,y), system_terrain, dz) in stable walk order.
     """
-    segments: list[RoadShoulderSegment] = []
+    segments: list[RibbonSegment] = []
     if not cells:
         return segments
 
@@ -44,7 +52,9 @@ def segmentize_by_terrain(
             if buf_coords:
                 key = map_system_terrain(cur_terrain)
                 if key is not None:
-                    segments.append(_seg(edge_uid, key.value, cur_terrain, cur_dz, buf_coords))
+                    segments.append(
+                        _seg(owner_uid, key.value, cur_terrain, cur_dz, buf_coords)
+                    )
                 buf_coords = []
             cur_terrain = terrain
             cur_dz = dz
@@ -52,7 +62,9 @@ def segmentize_by_terrain(
         if terrain != cur_terrain:
             key = map_system_terrain(cur_terrain)
             if key is not None and buf_coords:
-                segments.append(_seg(edge_uid, key.value, cur_terrain, cur_dz, buf_coords))
+                segments.append(
+                    _seg(owner_uid, key.value, cur_terrain, cur_dz, buf_coords)
+                )
             buf_coords = [xy]
             cur_terrain = terrain
             cur_dz = dz
@@ -62,20 +74,20 @@ def segmentize_by_terrain(
     if buf_coords:
         key = map_system_terrain(cur_terrain)
         if key is not None:
-            segments.append(_seg(edge_uid, key.value, cur_terrain, cur_dz, buf_coords))
+            segments.append(_seg(owner_uid, key.value, cur_terrain, cur_dz, buf_coords))
     return segments
 
 
 def _seg(
-    edge_uid: str,
+    owner_uid: str,
     terrain_key: str,
     system_terrain: str,
     dz: int,
     coords: list[tuple[int, int]],
-) -> RoadShoulderSegment:
-    site_id = f"{edge_uid}|{terrain_key}|{coords[0][0]},{coords[0][1]}"
-    return RoadShoulderSegment(
-        edge_uid=edge_uid,
+) -> RibbonSegment:
+    site_id = f"{owner_uid}|{terrain_key}|{coords[0][0]},{coords[0][1]}"
+    return RibbonSegment(
+        owner_uid=owner_uid,
         terrain_key=terrain_key,
         system_terrain=system_terrain,
         dz=dz,
