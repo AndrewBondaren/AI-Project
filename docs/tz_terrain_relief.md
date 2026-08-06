@@ -6,8 +6,8 @@ metadata:
   type: project
 ---
 
-> **Статус:** ownership **утверждён** · templates R33–R35 ✅ · **R36 core (§7–9/8c) ✅** · **canal R36p/q wire+bake ✅** · bake SRP **T-30/T-52 ✅** · **Wave B (Q6…T-65) ✅**.  
-> **Next:** § [Порядок имплементации](#порядок-имплементации-anti-slice) → **Wave C** RELIEF-BAR-1 → consumers `open_land`/`shore`.  
+> **Статус:** ownership **утверждён** · templates R33–R35 ✅ · **R36 core (§7–9/8c) ✅** · **canal R36p/q wire+bake ✅** · bake SRP **T-30/T-52 ✅** · **Wave B (Q6…T-65) ✅** · **Wave C RELIEF-BAR-1 ✅**.  
+> **Next:** § [Порядок имплементации](#порядок-имплементации-anti-slice) → **Wave D** consumers `open_land`/`shore`.  
 > **Связь:** SoT grade; **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT. · Agent pointer: [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md)
 
 # Terrain relief grade (поддомен Terrain)
@@ -32,7 +32,7 @@ metadata:
 |---|---|
 | `ReliefSideKind` (SLOPE \| SHEER) | `system_terrain` biome keys (`mountain`, `plains`, `forest`, `road`, …) |
 | profile(t) → `side_fraction` | FormGeometry / MaskDomain paint merge |
-| uphill **facing** (cardinal) | PassBuilder / MST / saddles |
+| uphill **facing** (`Facing` enum; **v1** cardinal / **later** 8-way — R36s) | PassBuilder / MST / saddles |
 | **SLOPE geometry** — `h`/`L`/`θ` (R36); materialize объёма грани | gameplay climb resolver (читает angle) |
 | **Relief templates** + context pick + seeded noise | hydrology roles, flora types |
 | контракт mid-band ↔ grade | column gap fill / `N_eff` (skeleton исполняет объём) |
@@ -47,7 +47,7 @@ metadata:
 |---|---|
 | R1 | Relief grade — **поддомен Terrain** (рядом со skeleton / hydrology); SoT **не** в MaskDomain |
 | R2 | `SLOPE` = проходимый grade (smooth profile); `SHEER` = отвес (step profile) |
-| R3 | Uphill **facing** — смысл как `system_facing` у лестниц ([`tz_locations.md`](./tz_locations.md)) |
+| R3 | Uphill **facing** — смысл как `system_facing` у лестниц ([`tz_locations.md`](./tz_locations.md)); wire = `dataModel.spatial.facing.Facing`. **Объём направлений** — R36s (v1 cardinal / later 8-way) |
 | R4 | **Запрещено** `system_terrain=slope` как biome |
 | R5 | Горы / shore / open land / road_shoulder / later cliff — только **consumers** shared API |
 | R6 | Shipped mountain SideFill — **адаптер**/consumer; shared API в `generators/terrain/relief/` |
@@ -108,6 +108,8 @@ metadata:
 | R36o | **Junction smooth (later):** модификатор сглаживания **стыка** прямой Grade с другим объектом (road / platform / соседний Grade / barrier footprint). **Не** меняет инвариант «один Grade = одна прямая / один θ». Не profile `smoothstep` (SideFill). Не `ReliefGradeSystem` (ломаный = ≥2 прямых). Не obstacle policy (clearance режет `L`). Wire-эскиз на knobs/grade: `junction_smooth`: **`none`** (default) \| **`chamfer`** \| **`fillet`**; опц. `junction_smooth_cells` ≥ 1 при режиме ≠ none. Materialize: после ядра ramp/sheer — переходные колонки на стыке. **v1 R36:** не impl |
 | R36p | **Canal-by-world-rule — только если grade не вмещается.** Нормальный path: knobs XOR `earthen_canal` \| `structure_canal` (R28/R36q). Спец-ключ **`canal_obstacle_policy`**: `{ to_canal_cut_enable, entities, canal_ref? }`. Enum entities: `road` \| `mountain` \| `forest` \| `plains` \| `shore` \| `all`. Смотреть **только** если не вмещается; match → cut по enable; при `enable: true` опц. **`canal_ref`** → `canal_template_registry` (omit ref = earthen-only cut). Overlap enable: **false wins**. Места хватает → политика игнор. См. § Canal obstacle policy |
 | R36q | **`worlds.canal_template_registry`.** Переиспользуемые canal-описания мира (не новый объект на каждом case). Entry: `system_type` + optional `earthen_canal` + optional `structure.structure_refs[]` (каждый ref ∈ `barrier_template_registry`). Grade knobs: `structure_canal` = `system_type`. Unknown ref → reject import / R21 warn+fallback на generate. См. § Canal template registry |
+| R36r | **Diagonal ribbon + width (candidate, later; зависит от R36s):** при intercardinal outward — materialize как **thick line on grid**: core ray вдоль outward (`L` = Chebyshev steps) + поперечный fill ширины `W` с **теми же** steps/θ → **один** Grade (R36j). Clearance — на core. **Не** voxel corner/shim / Minecraft stair shapes (mesh; стыки → R36o). Источник: [Murphy’s Modified Bresenham](http://www.zoo.co.uk/murphy/thickline/). **v1:** не impl (нет диагонального outward) |
+| R36s | **Facing scope — locked.** Wire/entity: `Facing` (`north`…`west` + `north_east`…`south_west`). **SLOPE:** uphill на Grade entity; **SHEER:** omit / `none`. **v1 (сейчас):** только **cardinal** (`CARDINAL_FACINGS`); outward = ortho `(±1,0)\|(0,±1)` из `CARDINAL_WALL_OUTWARD_DELTA` / bake `_ORTHO`; resolve snap к cardinal (`uphill_facing_toward`). **Later (target):** полный **8-way** — Grade.`facing` ∈ cardinal ∪ intercardinal; outward delta `(±1,0)\|(0,±1)\|(±1,±1)`; длина шага = **Chebyshev 1** (диагональ ≠ √2) — [GoRogue Chebyshev](https://github.com/Chris3606/GoRogue/wiki/Measuring-Distance). Диагональный ribbon materialize → **R36r**. **Запрещено:** параллельный relief-facing enum / литералы сторон вне `Facing`. Stairs per-cell — по [`tz_locations.md`](./tz_locations.md); outdoor grade facing — на entity (C10) |
 
 ### Locked checklist (master, 2026-08-01)
 
@@ -136,6 +138,8 @@ metadata:
 | C19 | **Junction smooth** — опциональный модификатор стыка; ядро Grade остаётся прямой; v1 = `none` / не impl (R36o) | locked direction (R36o) |
 | C20 | **Нормальный canal:** knobs XOR. **Не вмещается:** `canal_obstacle_policy` `{to_canal_cut_enable, entities, canal_ref?}`; overlap false wins (R36p/q) | locked (R36p/q) |
 | C21 | **`canal_template_registry`** на мире; `structure_canal` / `canal_ref` = `system_type` entry (R36q) | locked (R36q) |
+| C22 | **Diagonal + W:** candidate = thick-line (Murphy) + Chebyshev; **не** corner/shim; стыки → R36o; только после R36s later | locked direction (R36r); v1 out of scope |
+| C23 | **Facing:** v1 = 4 cardinals; later = 8-way полный `Facing`; шаг diag = Chebyshev 1; wire = `Facing` only | locked (R36s); later impl |
 
 ---
 
@@ -752,17 +756,17 @@ Match inclusive; первый в списке; overlap → **reject**; дыра 
 # ❌ silent canal в clearance-пути без match
 # ❌ плоский structure_refs на grade knobs вместо structure_canal (для canal)
 # ❌ забор / built внутри земляной канавы
-# ❌ materialize barrier cells в generators/terrain/relief (BAR-1)
+# ❌ materialize barrier cells в generators/terrain/relief (BAR-1 → bake consumer)
 ```
 
 | Слой | A earthen | B structure_canal |
 |---|---|---|
 | SoT | knobs / canal registry earthen flag | `canal_template_registry` + barrier registry |
 | Validate | POJO | `structure_canal` ∈ canal registry; refs ∈ barrier registry |
-| Generate | landform в relief | **emit refs**; cells — BAR-1 |
+| Generate | landform в relief | **emit refs**; cells — BAR-1 ✅ bake consumer |
 | vs obstacles | R36m + R36p | R36m: grade не в barrier cells |
 
-**Tech debt:** [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) **RELIEF-BAR-1** (Wave C); canal/bake/Wave B **T-42…T-65** ✅; open opt **T-66**.
+**Tech debt:** [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) **RELIEF-BAR-1 ✅**; canal/bake/Wave B **T-42…T-65** ✅; open opt **T-66**.
 
 **POJO (target `dataModel/terrain/relief/`):**
 
@@ -1139,7 +1143,8 @@ allow_flush   → L_eff = 1 → grade на y=2 (flush к объекту)
 8. ✅ **Wave B2/B3** T-60/T-56 (`reliefEvents` + silent logs)  
 9. ✅ **Wave B4** T-54/T-64 (Intent omit + honest skip_why)  
 10. ✅ **Wave B5** T-59…T-63/T-65 polish (T-66 deferred)  
-11. → **Wave C** BAR-1 → D consumers (см. § Порядок)
+11. ✅ **Wave C** RELIEF-BAR-1 (`roadShoulderBarrierApply` + `ribbonFence`)
+12. → **Wave D** consumers (см. § Порядок)
 
 ### Open (не блокер checklist; при normalize/impl)
 
@@ -1197,7 +1202,7 @@ Bake укорачивает через §9; при `L_eff == geom.L` — reuse `
 `is_grade_obstacle_light(cell, road_cells, cell_blocked)`:
 - road ∈ `road_cells`
 - `cell_blocked` (bake): OOB / missing / `location_pin`
-- barrier/structure masks — later (не v1)
+- barrier cells — **BAR-1 ✅** (light `wall` along ribbon; bake `cell_blocked_light` treats wall/gate as obstacle)
 
 ---
 
@@ -1208,7 +1213,9 @@ Bake укорачивает через §9; при `L_eff == geom.L` — reuse `
 | **SLOPE** | Graded face на всю `h`; проходим вдоль facing; **angle** = `atan(h/L)` (R36) |
 | **SHEER** | Отвес: L колонок XY × solid на всю `h` по z; `facing=none`; grade-проход нет |
 | **h / L / θ** | высота; **длина стройки** наружу (`slope_length_cells`); угол только у SLOPE |
-| **Facing** | SLOPE: uphill cardinal (`system_facing`); SHEER: `none` |
+| **Facing** | SLOPE: uphill на Grade (`Facing`); SHEER: `none`. **v1** = cardinal only; **later** = 8-way (R36s). Клетка может кэшировать `system_facing` для stairs-совместимости (C10) |
+| **Outward** | Единичный шаг от abutment/seed вдоль facing: v1 ortho; later 8-way delta. Длина шага всегда **1 клетка** (Chebyshev) |
+| **Intercardinal** | `north_east` / `north_west` / `south_east` / `south_west` — later Grade facing; ribbon → R36r |
 | **edgeRoadAnchor** | Край footprint: `seed − outward` ∈ `road_cells`; z + center для volume/facing |
 | **requested_length** | Pre-clearance L на `RibbonGradeDecision` (не путать с bake `L_eff`) |
 | **side_fraction** | `profile(kind, t) ∈ [0,1]` — вход elevation / footprint fill (горы) |
@@ -1402,9 +1409,35 @@ Cell
 | Ломаный склон | **GradeSystem ≥2** | Ломаный угол в одном Grade; System из 1 |
 | Pathfinding | Grid; cost с Grade | Path-нода = System |
 | Стык / сглаживание угла | **Junction smooth** (R36o, later) | Ломать θ Grade; путать с System / clearance / SideFill smoothstep |
+| Facing directions | **R36s** — v1 cardinal / later 8-way `Facing` | Параллельный enum; √2 длина шага; SHEER с uphill facing |
+| Диагональный ribbon + ширина | **Thick line** (R36r, later; после R36s) | Voxel corner/shim / stair shapes; Euclidean √2 step; несколько θ в одном Grade |
 
 **Инвариант:** двусторонние ссылки клетка↔Grade; System содержит ≥2 существующих grade_uid.  
 Смена крутизны = новый Grade (+ System, если частей ≥2).
+
+#### Facing scope (R36s) — locked; later = 8-way
+
+| | v1 (shipped / current) | Later (target, locked) |
+|---|---|---|
+| Допустимый `Facing` на SLOPE Grade | `north` `south` `east` `west` | + `north_east` `north_west` `south_east` `south_west` |
+| Outward Δxy | `(±1,0)` / `(0,±1)` — `CARDINAL_WALL_OUTWARD_DELTA` / `_ORTHO` | те же + `(±1,±1)` для intercardinal |
+| Resolve uphill | snap к cardinal (`uphill_facing_toward`) | 8-way (ближайший из 8; точная формула — при impl) |
+| Длина одного шага ray | 1 клетка | 1 клетка (**Chebyshev**; diag ≠ √2) |
+| SHEER | `facing` omit / `none` | без изменений |
+| Materialize diag ribbon | N/A | **R36r** (thick-line + optional W) |
+| Wire SoT | `app.dataModel.spatial.facing.Facing` | то же; **не** второй enum в relief |
+
+```text
+Facing (wire) ──► Grade.facing (SLOPE) | omit/none (SHEER)
+       │
+       ├─ v1: CARDINAL only ──► ortho outward ──► R36 volume (как сейчас)
+       └─ later: 8-way ──► outward 8-delta ──► if intercardinal: R36r ribbon
+                                              else: ortho volume (как v1)
+```
+
+**Метрика:** [GoRogue — Measuring Distance (Chebyshev)](https://github.com/Chris3606/GoRogue/wiki/Measuring-Distance) — на 8-connected grid диагональный ход = cardinal cost → `L` в клетках однороден для N и NE.
+
+**Не путать:** stairs `system_facing` per-cell ([`tz_locations.md`](./tz_locations.md)) vs outdoor grade facing на **entity** (C10). R36s не меняет stairs SoT.
 
 #### Junction smooth (R36o) — направление, не v1
 
@@ -1423,8 +1456,39 @@ Grade (прямая, θ) ──materialize──► voxel ramp/sheer
 | `ReliefGradeSystem` | Несколько прямых с **разными** θ |
 | `relief_grade_obstacle_policy` | Сколько L влезает до препятствия |
 | Geom-A\|B | Задают θ/L **ядра**, не fillet |
+| R36r thick-line width | Ширина **ядра** ribbon при диагонали; не fillet стыка |
 
 Default wire: omit / `none`. Impl — после §8b–8c + §9.
+
+#### Diagonal ribbon + width (R36r) — candidate; после R36s later
+
+**Предусловие:** R36s later (8-way facing / intercardinal outward) уже в коде.
+
+**Проблема:** диагональный луч `W=1` даёт тонкий footprint; нужна поперечная ширина без ломания «один Grade = один θ» (R36j).
+
+**Возможное решение (candidate):**
+
+```text
+outward (intercardinal) ──► core ray  (L Chebyshev steps)
+                                 │
+                                 + transverse fill (width W, same steps/θ)
+                                 ▼
+                           one Grade (R36j); clearance on core only
+```
+
+| Решение | Детали |
+|---|---|
+| Thick line on grid | Core = Murphy outer loop; width = perpendicular segments на каждом шаге |
+| Шаг | как R36s: **Chebyshev 1**, не √2 |
+| Width `W` | Поперечный fill; те же `h`/steps/`θ` → один `ReliefGradeInstance` |
+| Clearance | Только core ray; side cells не расширяют obstacle probe |
+| Corner / shim | **Out of scope** для cell Grade. Стык → **R36o** |
+
+**Источник (внешний):** [Murphy’s Modified Bresenham Line Algorithm](http://www.zoo.co.uk/murphy/thickline/) — outer + perpendicular; на 45° — phase / *double square* против дыр в width.
+
+**Не брать:** voxel corner shim / Minecraft stair shapes (mesh). Pathfinding — entity (R36k).
+
+Порядок impl: **R36s later** (8-way facing + deltas) → затем R36r (width). Optional knobs ширины — отдельно; **не** путать с удалённым `shoulder_width_cells` (= длина наклона, R36b).
 
 ---
 
@@ -1454,12 +1518,13 @@ generators/terrain/relief/
   obstacleClearance / gradeObstacleLight / ribbonSeedResolve / edgeRoadAnchor ✅
   gradeInstanceFactory ✅
 
-pack/bake/.../roadShoulder{Apply,Sample,Materialize,Stamp}.py + roadShoulderIntent.py  # T-30/T-52 split ✅
+pack/bake/.../roadShoulder{Apply,Sample,Materialize,Stamp,BarrierApply}.py + roadShoulderIntent.py  # T-30/T-52 + BAR-1 ✅
+generators/barrier/ribbonFence.py ✅
 application/worldData/persistReliefGrades.py ✅
 ```
 
 Wire: facing + volume + **Grade uid** ✅.  
-R36n clearance ✅. Ribbon phases ✅; dilate sample **Q6** ✅.
+R36n clearance ✅. Ribbon phases ✅; dilate sample **Q6** ✅. BAR-1 wall ✅.
 
 ---
 
@@ -1469,8 +1534,8 @@ R36n clearance ✅. Ribbon phases ✅; dilate sample **Q6** ✅.
 Debt IDs: [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md).
 
 ```text
-Wave A (shipped)          Wave B (shipped)        Wave C (next)       Wave D              Wave E (later)
-templates → R36 §7–9  →   B1–B5 ✅             →   RELIEF-BAR-1   →   open_land/shore  →  R36o / Q4 / gameplay
+Wave A (shipped)          Wave B (shipped)        Wave C (shipped)    Wave D (next)       Wave E (later)
+templates → R36 §7–9  →   B1–B5 ✅             →   RELIEF-BAR-1 ✅ →   open_land/shore  →  R36s 8-way / R36r / R36o / Q4 / gameplay
 canal R36p/q + T-52       (T-66 deferred)          barrier cells       bake consumers      R36f/k · UI R30
 ```
 
@@ -1522,13 +1587,13 @@ canal R36p/q + T-52       (T-66 deferred)          barrier cells       bake cons
 **Порядок Wave B:** **B1–B5 ✅** → Wave C. **T-66** deferred.  
 **B4 schedule (historical):** [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) § B4 schedule.
 
-### Wave C — RELIEF-BAR-1 (structure / fence cells)
+### Wave C — RELIEF-BAR-1 (structure / fence cells) ✅
 
-| # | Шаг | Done when |
-|---|---|---|
-| **C1** | Consumer: Intent / Grade `structure_refs` (+ structure canal materials) → barrier cells | cells вне `generators/terrain/relief`; validate refs on import; clearance = R36m/n |
+| # | Шаг | Done when | Статус |
+|---|---|---|---|
+| **C1** | Consumer: Intent `structure_refs` (+ structure canal) → light `wall` along ribbon | cells вне `generators/terrain/relief`; validate refs on import; no overwrite road/grade/pin/hydro; bake treats wall as grade obstacle | ✅ |
 
-Emit refs уже ✅; materialize — этот wave. **Не** возвращать canal resolve в bake apply.
+**Impl:** `generators/barrier/ribbonFence.py` (pure) + `pack/bake/.../roadShoulderBarrierApply.py` after shoulder grades in `RoadContributor`. Unknown ref → R21 warn+skip. Light wire без `system_material` (material = log/RNG only). **Не** canal resolve в Apply.
 
 ### Wave D — новые bake consumers
 
@@ -1537,7 +1602,7 @@ Emit refs уже ✅; materialize — этот wave. **Не** возвращат
 | **D1** | `open_land` light-grid contributor (Δz sites → same ribbon/Grade path) | bake stamps grade; policy wire reused |
 | **D2** | `shore` contributor (hydro edge sites) | то же; не смешивать с hydrology SoT |
 
-После Wave B (желательно после C, если barriers нужны на shore/open_land). Переиспользовать Sample→Grade→Materialize, не копировать god-apply.
+После Wave C. Переиспользовать Sample→Grade→Materialize (+ BAR-1 barrier consumer при refs), не копировать god-apply.
 
 ### Wave E — later (контракт locked, код не сейчас)
 
@@ -1545,6 +1610,8 @@ Emit refs уже ✅; materialize — этот wave. **Не** возвращат
 |---|---|
 | Gameplay climb / travel penalty (**R36f**) | later |
 | Pathfinding cost от Grade (**R36k**) | later; контракт locked |
+| **Facing 8-way (R36s later)** | полный `Facing` + intercardinal outward Δ; Chebyshev step=1; v1 остаётся cardinal |
+| **Diagonal ribbon + width (R36r)** | после R36s later; candidate Murphy thick-line; не corner/shim |
 | **Junction smooth (R36o)** | после стабильного volume+Grade; v1 = `none` |
 | Mountain SideFill + R36 angle (**Q4**) | v1 ribbon = `road_shoulder` |
 | UI Geom-C / пресеты (**R30**) | UI-only; ≠ mountain library R33 |
@@ -1586,6 +1653,9 @@ Emit refs уже ✅; materialize — этот wave. **Не** возвращат
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-06 | **Wave C / RELIEF-BAR-1 shipped:** `ribbonFence` + `roadShoulderBarrierApply` → light `wall`; RoadContributor after grades; next Wave D |
+| 2026-08-06 | **R36s / C23:** facing scope locked — v1 = 4 cardinals; later = 8-way полный `Facing` + Chebyshev step; R3/ownership/понятия sync |
+| 2026-08-06 | **R36r / C22:** diagonal ribbon + width — candidate thick-line ([Murphy Bresenham](http://www.zoo.co.uk/murphy/thickline/)); после R36s later; corner/shim out of scope; стыки → R36o |
 | 2026-08-06 | **Wave B5 shipped:** T-65/63/62/61/59; Wave B complete; next C BAR-1 |
 | 2026-08-06 | **Wave B4 shipped:** T-54 omit=`None`; T-64 `SeedMaterializeSkip` + `skip_why` |
 | 2026-08-06 | **B4 schedule:** B4a T-54 → B4b T-64 (один PR или два подряд до B5/C) — debt § B4 schedule |

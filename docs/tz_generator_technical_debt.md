@@ -3,7 +3,7 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py`, `worldBundleService.py`, relief library/import services.  
-**Обновлено:** 2026-08-06 — relief **Wave B** ✅ (B1–B5); residual opt **T-66**; next **Wave C** BAR-1; plan [`relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).
+**Обновлено:** 2026-08-06 — relief **Wave B ✅** · **Wave C RELIEF-BAR-1 ✅**; residual opt **T-66**; next **Wave D** consumers; plan [`relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).
 
 **Связанные документы:**
 
@@ -858,7 +858,7 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 
 | ID | Sev | Status | P | Суть | Связь ТЗ |
 |---|---|---|---|---|---|
-| **RELIEF-BAR-1** | medium | open | P2 | **Трек B / structure canal:** emit `structure_refs` (knobs legacy **или** из `canal_template_registry.structure` via `structure_canal` / `canal_ref`). Materialize cells **не** в relief. Clearance у barrier = R36m/n. | [`tz_terrain_relief.md`](./tz_terrain_relief.md) R28+R36p/q · [`tz_locations.md`](./tz_locations.md) § barrier registry |
+| **RELIEF-BAR-1** | medium | **resolved** | P2 | Intent `structure_refs` → light wall via `ribbonFence` + `roadShoulderBarrierApply` (не в relief). Stamp/obstacle keys ← `WorldTerrainRegistry` (`require_engine_terrain_key` / `canonical_barrier_terrain_keys`), не литералы wall/gate. | [`tz_terrain_relief.md`](./tz_terrain_relief.md) Wave C · [`tz_locations.md`](./tz_locations.md) § barrier registry |
 
 **Не путать:** `earthen_canal` ≠ lined/`structure_refs`; R36n clearance ≠ R36p canal policy; `canal_template_registry` ≠ `barrier_template_registry`.
 
@@ -1068,9 +1068,9 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 2. ~~**Wave B2/B3 — T-60 / T-56**~~ ✅  
 3. ~~**Wave B4 — B4a T-54 → B4b T-64**~~ ✅  
 4. ~~**Wave B5 — T-59…T-63, T-65**~~ ✅ (**T-66** deferred)  
-5. **Wave C — RELIEF-BAR-1** barrier materialize from Intent/Grade refs  
-6. **Wave D —** `open_land` / `shore` bake consumers  
-7. **Wave E —** R36o / Q4 / R36f/k / UI R30 (later)  
+5. ~~**Wave C — RELIEF-BAR-1**~~ ✅ (`ribbonFence` + `roadShoulderBarrierApply`)
+6. **Wave D —** `open_land` / `shore` bake consumers
+7. **Wave E —** R36s / R36r / R36o / Q4 / R36f/k / UI R30 (later)
 8. **Parallel eng (не gate waves):** **T-28** (partial), **T-31/T-32**, **T-34…T-39**, fixtures `*_templates`  
 9. (optional) rename `MountainSideRecipeMode` wire A–D — breaking + migration
 
@@ -1090,6 +1090,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-06 | **RELIEF-BAR-1 resolved (Wave C):** Intent refs → light `wall`; `ribbonFence` + `roadShoulderBarrierApply`; next Wave D |
 | 2026-08-06 | **RELIEF-T-67 resolved:** `app.relief` in `generationLogging` allowlist → bake-light file gets relief/canal events |
 | 2026-08-06 | **Wave B5 shipped:** T-65/T-63/T-62/T-61/T-59; T-66 deferred; Wave B complete → next C BAR-1 |
 | 2026-08-06 | **Wave B4 shipped:** T-54 Intent omit=`None`; T-64 `SeedMaterializeSkip` + `skip_why` / `WHY_NOT_STAMPED` |

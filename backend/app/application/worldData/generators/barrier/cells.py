@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
+
+_WALL = WorldTerrainRegistry.require_engine_terrain_key("wall")
+_GATE = WorldTerrainRegistry.require_engine_terrain_key("gate")
 
 
 def emit_barrier_cells(
@@ -21,7 +25,7 @@ def emit_barrier_cells(
             x=x,
             y=y,
             z=ground_z,
-            system_terrain="gate" if (x, y) in gate_coords else "wall",
+            system_terrain=_GATE if (x, y) in gate_coords else _WALL,
             system_material=material,
             is_structural=True,
             location_uid=location_uid,

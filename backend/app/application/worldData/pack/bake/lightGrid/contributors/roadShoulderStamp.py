@@ -33,6 +33,9 @@ from app.application.worldData.pack.bake.lightGrid.coords import (
 )
 from app.dataModel.spatial.facing import opposite
 from app.dataModel.terrain.relief.enums import ReliefSideKind
+from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
+
+_BARRIER_TERRAIN_KEYS = WorldTerrainRegistry.canonical_barrier_terrain_keys()
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,7 +168,7 @@ def cell_blocked_light(
     *,
     tile_set: set[tuple[int, int]],
 ) -> bool:
-    """Bake adapter: OOB / missing / settlement pin."""
+    """Bake adapter: OOB / missing / settlement pin / barrier wall (BAR-1)."""
     lx, ly = cell
     scale = compose.scale
     gx, gy, tx, ty = light_to_macro_local(lx, ly, scale)
@@ -176,7 +179,12 @@ def cell_blocked_light(
     grid_cell = compose.get(gx, gy, tx, ty)
     if grid_cell is None:
         return True
-    return grid_cell.location_pin is not None
+    if grid_cell.location_pin is not None:
+        return True
+    # RELIEF-BAR-1: terrain_category=barrier is a grade obstacle (R36m spirit).
+    if grid_cell.system_terrain in _BARRIER_TERRAIN_KEYS:
+        return True
+    return False
 
 
 def _is_obstacle(

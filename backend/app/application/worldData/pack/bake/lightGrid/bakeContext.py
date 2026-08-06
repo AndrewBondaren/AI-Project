@@ -35,7 +35,7 @@ class LightGridBakeContext:
     terrain_system_keys: set[str] = field(default_factory=set)
     # Preloaded relief library bodies for mountain/road consumers (R33/R35)
     relief_templates_by_uid: dict[str, ReliefTemplate] = field(default_factory=dict)
-    # R20/R28 intents from road_shoulder grade (barrier materialize = RELIEF-BAR-1)
+    # R20/R28 intents from road_shoulder grade (BAR-1 consumer = roadShoulderBarrierApply)
     road_shoulder_intents: list[RoadShoulderIntent] = field(default_factory=list)
     # §8c Grade entities created during shoulder/volume stamp
     relief_grade_instances: list[ReliefGradeInstance] = field(default_factory=list)

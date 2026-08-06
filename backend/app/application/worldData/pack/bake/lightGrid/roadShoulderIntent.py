@@ -20,7 +20,7 @@ from app.dataModel.terrain.relief.canal import Canal
 
 @dataclass(frozen=True, slots=True)
 class RoadShoulderIntent:
-    """Data-out after shoulder grade/stamp; barrier materialize = RELIEF-BAR-1."""
+    """Data-out after shoulder grade/stamp; barrier stamp = roadShoulderBarrierApply."""
 
     edge_uid: str
     site_id: str

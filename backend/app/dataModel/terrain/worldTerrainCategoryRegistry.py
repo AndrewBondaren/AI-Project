@@ -34,3 +34,13 @@ class WorldTerrainCategoryRegistry(RootModel[list[TerrainCategoryEntry]]):
             if entry.system_category == system_category:
                 return entry
         return None
+
+    @classmethod
+    def require_canonical_category(cls, system_category: str) -> str:
+        """Builtin category key from canonical registry (not a free string)."""
+        entry = cls.canonical_defaults().entry_for(system_category)
+        if entry is None:
+            raise RuntimeError(
+                f"WorldTerrainCategoryRegistry.canonical_defaults missing {system_category!r}"
+            )
+        return entry.system_category

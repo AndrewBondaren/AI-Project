@@ -150,3 +150,31 @@ class WorldTerrainRegistry(RootModel[list[TerrainRegistryEntry]]):
             if entry.system_terrain == system_terrain:
                 return entry
         return None
+
+    def keys_for_category(self, terrain_category: str) -> frozenset[str]:
+        """``system_terrain`` keys whose ``terrain_category`` matches."""
+        return frozenset(
+            e.system_terrain
+            for e in self.root
+            if e.terrain_category == terrain_category
+        )
+
+    @classmethod
+    def require_engine_terrain_key(cls, system_terrain: str) -> str:
+        """Builtin terrain key from ``canonical_engine`` (wall/gate/… live here)."""
+        entry = cls.canonical_engine().entry_for(system_terrain)
+        if entry is None:
+            raise RuntimeError(
+                f"WorldTerrainRegistry.canonical_engine missing {system_terrain!r}"
+            )
+        return entry.system_terrain
+
+    @classmethod
+    def canonical_barrier_terrain_keys(cls) -> frozenset[str]:
+        """All engine terrains in category ``barrier`` (wall/gate/door/window)."""
+        from app.dataModel.terrain.worldTerrainCategoryRegistry import (
+            WorldTerrainCategoryRegistry,
+        )
+
+        cat = WorldTerrainCategoryRegistry.require_canonical_category("barrier")
+        return cls.canonical_engine().keys_for_category(cat)

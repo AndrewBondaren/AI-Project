@@ -1,7 +1,7 @@
 """v1 light-grid grade obstacle predicate — tz_terrain_relief R36m §9.
 
-Obstacles: road footprint | caller ``blocked`` (pin / OOB / missing).
-Barrier/structure masks — later (not in v1).
+Obstacles: road footprint | caller ``blocked`` (pin / OOB / missing / wall).
+Bake ``cell_blocked_light`` treats BAR-1 ``wall``/``gate`` as blocked.
 """
 
 from __future__ import annotations

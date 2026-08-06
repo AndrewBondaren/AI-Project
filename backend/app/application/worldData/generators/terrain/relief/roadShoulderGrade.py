@@ -2,7 +2,7 @@
 
 Pure consumer: emits RibbonGradeDecision with raw canal knobs.
 Registry/policy resolve happens once in bake (RELIEF-T-51).
-Barrier materialize is RELIEF-BAR-1 (out of scope).
+Barrier stamp = bake ``roadShoulderBarrierApply`` (RELIEF-BAR-1); not this module.
 """
 
 from __future__ import annotations
