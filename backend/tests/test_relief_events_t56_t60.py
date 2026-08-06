@@ -7,10 +7,12 @@ import unittest
 from app.application.worldData.generators.terrain.relief import canalAttachments
 from app.application.worldData.generators.terrain.relief.reliefEvents import (
     EVENT_R21_FALLBACK,
+    EVENT_RIBBON_SKIP,
     EVENT_ROAD_SHOULDER_SKIP,
     REASON_SCHEDULE_HOLE_R21_SLOPE,
     WHY_EMPTY_SAMPLE,
     WHY_NO_EDGE_ROAD_ANCHOR,
+    WHY_NO_REF_CELLS,
     WHY_NO_ROAD_CELLS,
     WHY_NO_TEMPLATES,
     WHY_NOT_STAMPED,
@@ -37,6 +39,10 @@ class ReliefEventsTokensTest(unittest.TestCase):
         self.assertEqual(REASON_SCHEDULE_HOLE_R21_SLOPE, "schedule_hole_r21_slope")
         self.assertEqual(WHY_NO_EDGE_ROAD_ANCHOR, "no_edge_road_anchor")
         self.assertEqual(WHY_NOT_STAMPED, "not_stamped")
+        self.assertEqual(EVENT_ROAD_SHOULDER_SKIP, EVENT_RIBBON_SKIP)
+        self.assertEqual(WHY_NO_ROAD_CELLS, WHY_NO_REF_CELLS)
+        self.assertEqual(EVENT_RIBBON_SKIP, "ribbon_skip")
+        self.assertEqual(WHY_NO_REF_CELLS, "no_ref_cells")
 
 
 class ReliefSilentPathLogsTest(unittest.TestCase):
@@ -60,8 +66,8 @@ class ReliefSilentPathLogsTest(unittest.TestCase):
             )
         self.assertEqual(out, [])
         blob = "\n".join(cm.output)
-        self.assertIn(EVENT_ROAD_SHOULDER_SKIP, blob)
-        self.assertIn(WHY_NO_ROAD_CELLS, blob)
+        self.assertIn(EVENT_RIBBON_SKIP, blob)
+        self.assertIn(WHY_NO_REF_CELLS, blob)
 
     def test_apply_early_exit_no_templates_logged(self) -> None:
         scale = LightGridScale.from_tile(tile_m=320, side=32)

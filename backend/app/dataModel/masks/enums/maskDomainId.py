@@ -30,6 +30,8 @@ class LightContributorId(StrEnum):
     MOUNTAIN = "mountain"
     RAVINE = "ravine"
     HYDRO = "hydro"
+    OPEN_LAND = "open_land"
+    SHORE = "shore"
     SETTLEMENT = "settlement"
     ROAD = "road"
 
@@ -55,6 +57,7 @@ MASK_DOMAIN_CONTRIBUTOR: dict[MaskDomainId, LightContributorId] = {
 }
 
 # Single SoT for compose call order (Base → Context → Landcover → Structural → Hydro → Culture).
+# Relief ribbon grade: open_land → shore → road (priority road > shore > open_land).
 COMPOSE_CONTRIBUTOR_ORDER: tuple[LightContributorId, ...] = (
     LightContributorId.RELIEF,
     LightContributorId.CLIMATE,
@@ -62,6 +65,8 @@ COMPOSE_CONTRIBUTOR_ORDER: tuple[LightContributorId, ...] = (
     LightContributorId.MOUNTAIN,
     LightContributorId.RAVINE,
     LightContributorId.HYDRO,
+    LightContributorId.OPEN_LAND,
+    LightContributorId.SHORE,
     LightContributorId.SETTLEMENT,
     LightContributorId.ROAD,
 )

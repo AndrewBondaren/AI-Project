@@ -6,8 +6,8 @@ metadata:
   type: project
 ---
 
-> **Статус:** ownership **утверждён** · templates R33–R35 ✅ · **R36 core (§7–9/8c) ✅** · **canal R36p/q wire+bake ✅** · bake SRP **T-30/T-52 ✅** · **Wave B (Q6…T-65) ✅** · **Wave C RELIEF-BAR-1 ✅**.  
-> **Next:** § [Порядок имплементации](#порядок-имплементации-anti-slice) → **Wave D** consumers `open_land`/`shore`.  
+> **Статус:** ownership **утверждён** · templates R33–R35 ✅ · **R36 core (§7–9/8c) ✅** · **canal R36p/q wire+bake ✅** · bake SRP **T-30/T-52 ✅** · **Wave B–C ✅** · **Wave D open_land/shore ✅**.  
+> **Next:** § [Порядок имплементации](#порядок-имплементации-anti-slice) → **Wave E** later (R36s / R36r / R36o / gameplay).  
 > **Связь:** SoT grade; **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT. · Agent pointer: [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md)
 
 # Terrain relief grade (поддомен Terrain)
@@ -25,8 +25,7 @@ metadata:
 | `shore` | берег озера / реки / моря |
 | `road_shoulder` | **обочины** дороги (две стороны), когда есть Δz между полотном и соседним рельефом |
 
-**v1 bake consumers (shipped):** `mountain` (SideFill stamp) + `road_shoulder` (after RoadContributor).  
-**Deferred (Wave D):** `open_land` / `shore` — contexts + pick policy wire ready; light-grid consumers **не** подключены (контракт зафиксирован; было RELIEF-T-19).
+**v1 bake consumers (shipped):** `mountain` (SideFill) · `road_shoulder` · `open_land` · `shore`. Ribbon shared: `ribbonGradeApply`.
 
 | Владеет | Не владеет |
 |---|---|
@@ -1144,7 +1143,8 @@ allow_flush   → L_eff = 1 → grade на y=2 (flush к объекту)
 9. ✅ **Wave B4** T-54/T-64 (Intent omit + honest skip_why)  
 10. ✅ **Wave B5** T-59…T-63/T-65 polish (T-66 deferred)  
 11. ✅ **Wave C** RELIEF-BAR-1 (`roadShoulderBarrierApply` + `ribbonFence`)
-12. → **Wave D** consumers (см. § Порядок)
+12. ✅ **Wave D** open_land + shore (`ribbonGradeApply`)
+13. → **Wave E** later (см. § Порядок)
 
 ### Open (не блокер checklist; при normalize/impl)
 
@@ -1534,9 +1534,9 @@ R36n clearance ✅. Ribbon phases ✅; dilate sample **Q6** ✅. BAR-1 wall ✅.
 Debt IDs: [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md).
 
 ```text
-Wave A (shipped)          Wave B (shipped)        Wave C (shipped)    Wave D (next)       Wave E (later)
-templates → R36 §7–9  →   B1–B5 ✅             →   RELIEF-BAR-1 ✅ →   open_land/shore  →  R36s 8-way / R36r / R36o / Q4 / gameplay
-canal R36p/q + T-52       (T-66 deferred)          barrier cells       bake consumers      R36f/k · UI R30
+Wave A–C (shipped)        Wave D (shipped)         Wave E (later)
+templates → R36 → BAR-1 →   open_land + shore ✅  →  R36s 8-way / R36r / R36o / Q4 / gameplay
+                            ribbonGradeApply         R36f/k · UI R30
 ```
 
 ### Wave A — shipped (не переоткрывать)
@@ -1595,14 +1595,14 @@ canal R36p/q + T-52       (T-66 deferred)          barrier cells       bake cons
 
 **Impl:** `generators/barrier/ribbonFence.py` (pure) + `paintBarrier.stamp_barrier_terrain` (write-only) + `roadShoulderBarrierApply` after shoulder grades in `RoadContributor`. Placement predicate once (`_may_place_fence`); stamp keys ← `WorldTerrainRegistry`. Unknown ref → R21 warn+skip. **v1 multi-ref:** один footprint; material log = first resolved; wire без `system_material`. **Не** canal resolve в Apply.
 
-### Wave D — новые bake consumers
+### Wave D — новые bake consumers ✅
 
-| # | Шаг | Done when |
-|---|---|---|
-| **D1** | `open_land` light-grid contributor (Δz sites → same ribbon/Grade path) | bake stamps grade; policy wire reused |
-| **D2** | `shore` contributor (hydro edge sites) | то же; не смешивать с hydrology SoT |
+| # | Шаг | Done when | Статус |
+|---|---|---|---|
+| **D1** | `open_land` — Δz plains/forest → ribbon | `OpenLandContributor` after hydro; shared `ribbonGradeApply` | ✅ |
+| **D2** | `shore` — `hydrology_role=SHORE` landward seeds | `ShoreContributor`; hydro SoT не трогаем | ✅ |
 
-После Wave C. Переиспользовать Sample→Grade→Materialize (+ BAR-1 barrier consumer при refs), не копировать god-apply.
+**Impl:** sample (`openLandSample` / `shoreSample`) → `apply_ribbon_grades(context=…)` → BAR-1 if refs. Compose order: `… hydro → open_land → shore → settlement → road` (priority road > shore > open_land). `ref_cells` = abutment (uphill / SHORE role / road).
 
 ### Wave E — later (контракт locked, код не сейчас)
 
@@ -1653,6 +1653,7 @@ canal R36p/q + T-52       (T-66 deferred)          barrier cells       bake cons
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-06 | **Wave D shipped:** `open_land` + `shore` contributors; shared `ribbonGradeApply`; compose order hydro→open_land→shore→road; next Wave E |
 | 2026-08-06 | **Wave C / RELIEF-BAR-1 shipped:** `ribbonFence` + `roadShoulderBarrierApply` → light `wall`; RoadContributor after grades; next Wave D |
 | 2026-08-06 | **R36s / C23:** facing scope locked — v1 = 4 cardinals; later = 8-way полный `Facing` + Chebyshev step; R3/ownership/понятия sync |
 | 2026-08-06 | **R36r / C22:** diagonal ribbon + width — candidate thick-line ([Murphy Bresenham](http://www.zoo.co.uk/murphy/thickline/)); после R36s later; corner/shim out of scope; стыки → R36o |

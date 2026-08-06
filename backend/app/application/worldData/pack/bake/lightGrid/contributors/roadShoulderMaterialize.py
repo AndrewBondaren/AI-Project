@@ -17,7 +17,7 @@ from app.application.worldData.generators.terrain.relief.gradeInstanceFactory im
     build_ribbon_grade_instance,
 )
 from app.application.worldData.generators.terrain.relief.reliefEvents import (
-    EVENT_ROAD_SHOULDER_SKIP,
+    EVENT_RIBBON_SKIP,
     WHY_EMPTY_PLAN,
     WHY_EMPTY_STAMP,
     WHY_H_LT_1,
@@ -120,7 +120,7 @@ def materialize_segment(
     )
     if h < 1:
         relief_debug(
-            EVENT_ROAD_SHOULDER_SKIP,
+            EVENT_RIBBON_SKIP,
             site_id=result.segment.site_id,
             why=WHY_H_LT_1,
             h=h,
@@ -198,7 +198,7 @@ def materialize_seed(
     )
     if isinstance(clearance, SeedClearanceSkip):
         relief_warning(
-            EVENT_ROAD_SHOULDER_SKIP,
+            EVENT_RIBBON_SKIP,
             site_id=result.segment.site_id,
             why=clearance.why,
             seed=clearance.seed,
@@ -224,7 +224,7 @@ def materialize_seed(
     )
     if anchor is None:
         relief_warning(
-            EVENT_ROAD_SHOULDER_SKIP,
+            EVENT_RIBBON_SKIP,
             site_id=result.segment.site_id,
             why=WHY_NO_EDGE_ROAD_ANCHOR,
             seed=seed,
@@ -241,7 +241,7 @@ def materialize_seed(
     )
     if plan is None or not plan.columns:
         relief_warning(
-            EVENT_ROAD_SHOULDER_SKIP,
+            EVENT_RIBBON_SKIP,
             site_id=result.segment.site_id,
             why=WHY_EMPTY_PLAN,
             seed=seed,
@@ -262,7 +262,7 @@ def materialize_seed(
     )
     if outcome.break_why is not None:
         relief_debug(
-            EVENT_ROAD_SHOULDER_SKIP,
+            EVENT_RIBBON_SKIP,
             site_id=result.segment.site_id,
             why=outcome.break_why,
             seed=seed,

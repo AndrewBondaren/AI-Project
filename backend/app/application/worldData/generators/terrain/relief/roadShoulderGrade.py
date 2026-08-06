@@ -18,7 +18,8 @@ from app.application.worldData.generators.terrain.relief.gradePass import (
     grade_from_template,
 )
 from app.application.worldData.generators.terrain.relief.reliefEvents import (
-    EVENT_ROAD_SHOULDER_SKIP,
+    EVENT_RIBBON_GRADE_APPLY,
+    EVENT_RIBBON_SKIP,
     WHY_NO_TEMPLATE_BODY,
 )
 from app.application.worldData.generators.terrain.relief.reliefLog import relief_info
@@ -120,14 +121,16 @@ def grade_road_shoulder_segments(
     templates_by_uid: dict[str, ReliefTemplate],
     object_policy: ObjectReliefPickPolicy | None = None,
     occurrence_start: int = 0,
+    context: ReliefContext = ReliefContext.ROAD_SHOULDER,
 ) -> list[RoadShoulderGradeResult]:
+    """Grade ribbon segments for ``context`` (road_shoulder / open_land / shore)."""
     registry = relief_template_registry(world)
     world_policy = relief_pick_policy(world)
     results: list[RoadShoulderGradeResult] = []
     seq = occurrence_start
     for segment in segments:
         pick = pick_template(
-            context=ReliefContext.ROAD_SHOULDER,
+            context=context,
             registry=registry,
             world_policy=world_policy,
             world_seed=world_seed,
@@ -138,7 +141,8 @@ def grade_road_shoulder_segments(
         seq += 1
         if not pick.template_uid or pick.template_uid not in templates_by_uid:
             relief_info(
-                EVENT_ROAD_SHOULDER_SKIP,
+                EVENT_RIBBON_SKIP,
+                context=context.value,
                 site_id=segment.site_id,
                 reason=WHY_NO_TEMPLATE_BODY,
                 template_uid=pick.template_uid,
@@ -161,7 +165,8 @@ def grade_road_shoulder_segments(
             )
         )
         relief_info(
-            "road_shoulder_apply",
+            EVENT_RIBBON_GRADE_APPLY,
+            context=context.value,
             site_id=segment.site_id,
             template_uid=pick.template_uid,
             policy_level=pick.policy_level,

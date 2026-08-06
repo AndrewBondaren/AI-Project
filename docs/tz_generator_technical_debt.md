@@ -3,7 +3,7 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py`, `worldBundleService.py`, relief library/import services.  
-**Обновлено:** 2026-08-06 — relief **Wave B ✅** · **Wave C RELIEF-BAR-1 ✅**; residual opt **T-66**; next **Wave D** consumers; plan [`relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).
+**Обновлено:** 2026-08-06 — relief **Wave A–D ✅** (incl. open_land/shore); residual opt **T-66**; next **Wave E** later; plan [`relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).
 
 **Связанные документы:**
 
@@ -1069,7 +1069,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 3. ~~**Wave B4 — B4a T-54 → B4b T-64**~~ ✅  
 4. ~~**Wave B5 — T-59…T-63, T-65**~~ ✅ (**T-66** deferred)  
 5. ~~**Wave C — RELIEF-BAR-1**~~ ✅ (`ribbonFence` + `roadShoulderBarrierApply`)
-6. **Wave D —** `open_land` / `shore` bake consumers
+6. ~~**Wave D —** `open_land` / `shore`~~ ✅ (`ribbonGradeApply` + contributors)
 7. **Wave E —** R36s / R36r / R36o / Q4 / R36f/k / UI R30 (later)
 8. **Parallel eng (не gate waves):** **T-28** (partial), **T-31/T-32**, **T-34…T-39**, fixtures `*_templates`  
 9. (optional) rename `MountainSideRecipeMode` wire A–D — breaking + migration
@@ -1090,6 +1090,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-06 | **Wave D shipped:** open_land/shore contributors + `ribbonGradeApply`; compose hydro→open_land→shore→road |
 | 2026-08-06 | **BAR-1 polish:** `paintBarrier` write-only; single `_may_place_fence`; terrain keys from registry; multi-ref = first material + union footprint |
 | 2026-08-06 | **RELIEF-BAR-1 resolved (Wave C):** Intent refs → light `wall`; `ribbonFence` + `roadShoulderBarrierApply`; next Wave D |
 | 2026-08-06 | **RELIEF-T-67 resolved:** `app.relief` in `generationLogging` allowlist → bake-light file gets relief/canal events |
