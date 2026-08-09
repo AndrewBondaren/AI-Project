@@ -106,7 +106,7 @@ class World:
     climate_pole_mode:              str | None = None   # manual | autoresolve
     climate_pole_preset:            str | None = None   # ice | desert | binary | …
     climate_local_influence_fraction: float | None = None  # × bbox diagonal for local override
-    precipitation_liquid:           str | None = None   # ref → material_registry; fallback water
+    precipitation_liquid:           str | None = None   # ref → material_registry; POJO default water via normalize
     climate_parallel_workers:       int | None = None   # cap CL-PAR pool; NULL = free_cores only
     z_max:                          int | None = None
     z_min:                          int | None = None

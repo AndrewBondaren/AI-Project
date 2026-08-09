@@ -38,6 +38,8 @@ _CANONICAL_ENTRIES: tuple[BarrierTemplateEntry, ...] = (
 
 class WorldBarrierTemplateRegistry(RootModel[list[BarrierTemplateEntry]]):
     SCHEMA_ID: ClassVar[str] = "SCH-WORLD-BARRIER-TEMPLATE"
+    # Runtime worldRow: canonical ⊕ world overrides by this entry field (T-29).
+    RUNTIME_MERGE_ID_FIELD: ClassVar[str] = "system_type"
     root: list[BarrierTemplateEntry]
 
     @classmethod

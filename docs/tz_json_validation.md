@@ -217,7 +217,7 @@ class WorldSlice:
     wire_from_mapping: Callable | None  # multi_column only
 ```
 
-`facade` и `worldRow` итерируют `WORLD_SLICES` — не свои `_LIST_REGISTRY_KEYS`.
+`facade` merge → `worldSliceMerge.merge_facade_slices` (T-29). Runtime (`worldRow`) — thin DX поверх `resolve_multi_column_world` / `resolve_registry_list_world` / `resolve_registry_dict_world` / `resolve_json_blob_world` (тот же catalog; RELIEF-T-28). Registry с `RUNTIME_MERGE_ID_FIELD` на POJO → runtime canonical⊕world (district/barrier). Не свои `_LIST_REGISTRY_KEYS`.
 
 **Чеклист нового POJO на `worlds`:**
 
@@ -566,7 +566,7 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 | SCH-RUNTIME-HYDROLOGY | `canonical_empty()` + warn если `hydrology` пусто |
 | SCH-RUNTIME-CLIMATE | peak NULL → `resolve_peak_bounds` canonical |
 | `precipitation.py` fallback chain | warn_once; target: explicit DB after import |
-| `legacy_standalone_water_material()` | last-resort `"water"` |
+| `legacy_standalone_water_material()` | **removed** — corrupt registry → `repairWorldDefaults` / `normalize_world` + persist |
 
 Целевое ([`tz_climate.md`](./tz_climate.md) v3): defaults материализованы в БД через import normalize; generate только читает.
 

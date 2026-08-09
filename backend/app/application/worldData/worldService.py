@@ -82,6 +82,12 @@ class WorldService:
             map_cells_invalidated=map_size_changed,
         )
 
+    async def repair_defaults(self, world: World) -> World:
+        """Re-apply import ``normalize_world`` defaults and persist if climate liquid missing."""
+        from app.application.worldData.repairWorldDefaults import ensure_world_climate_defaults
+
+        return await ensure_world_climate_defaults(world, repo=self._repo)
+
     async def delete(self, world_uid: str) -> None:
         await self.get_by_id(world_uid)
         await self._repo.delete(world_uid)

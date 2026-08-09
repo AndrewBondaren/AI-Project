@@ -1,4 +1,7 @@
-"""Registry of ``worlds`` master-data slices — ``docs/tz_json_validation.md`` § WorldSlice."""
+"""Registry of ``worlds`` master-data slices — ``docs/tz_json_validation.md`` § WorldSlice.
+
+Catalog + runtime ``resolve_*_world``. Import merge → ``worldSliceMerge`` (T-29).
+"""
 
 from __future__ import annotations
 
@@ -7,7 +10,6 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from app.application.jsonValidation.resolve import (
-    ResolveContext,
     resolve_model,
     resolve_root_dict,
     resolve_root_list,
@@ -67,12 +69,19 @@ WireKind = Literal["multi_column", "registry_list", "registry_dict", "json_blob"
 
 
 def climate_zone_wire_from_raw(raw: Any) -> list[dict] | None:
-    """Normalize ``climate_zone_registry`` wire (array or legacy dict map)."""
-    if not raw:
+    """Normalize ``climate_zone_registry`` wire (array or legacy dict map).
+
+    ``None`` → absent (caller may skip or use empty_factory).
+    Empty list / empty dict → ``[]`` so import merge materializes canonical
+    via ``resolve_root_list`` (same as other registry_list slices).
+    """
+    if raw is None:
         return None
     if isinstance(raw, list):
         return [entry for entry in raw if isinstance(entry, dict)]
     if isinstance(raw, dict):
+        if not raw:
+            return []
         values = list(raw.values())
         if values and all(isinstance(value, dict) for value in values):
             return values
@@ -112,6 +121,8 @@ class WorldSlice:
     wire_adapter: Callable[[Any], Any] | None = None
     facade: bool = False
     dump_by_alias: bool = False
+    # Runtime: canonical_defaults ⊕ world rows keyed by entry attribute (T-29).
+    runtime_merge_id_field: str | None = None
 
 
 def _registry_slice(
@@ -122,6 +133,7 @@ def _registry_slice(
     wire_adapter: Callable[[Any], Any] | None = None,
     dump_by_alias: bool = False,
 ) -> WorldSlice:
+    merge_id = getattr(pojo_cls, "RUNTIME_MERGE_ID_FIELD", None)
     return WorldSlice(
         schema_id=pojo_cls.SCHEMA_ID,
         pojo_cls=pojo_cls,
@@ -131,6 +143,7 @@ def _registry_slice(
         wire_adapter=wire_adapter,
         facade=facade,
         dump_by_alias=dump_by_alias,
+        runtime_merge_id_field=merge_id if isinstance(merge_id, str) else None,
     )
 
 
@@ -201,6 +214,7 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
         pojo_cls=WorldHydrology,
         wire_kind="json_blob",
         world_keys=("hydrology",),
+        empty_factory=WorldHydrology.canonical_empty,
         facade=True,
     ),
     WorldSlice(
@@ -208,6 +222,7 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
         pojo_cls=WorldTerrainMasks,
         wire_kind="json_blob",
         world_keys=("terrain_masks",),
+        empty_factory=WorldTerrainMasks.canonical_empty,
         facade=True,
     ),
     _registry_slice(
@@ -311,6 +326,23 @@ def slice_for_pojo(pojo_cls: type) -> WorldSlice | None:
     return WORLD_SLICE_BY_POJO.get(pojo_cls)
 
 
+def _require_slice(pojo_cls: type, wire_kind: WireKind) -> WorldSlice:
+    world_slice = slice_for_pojo(pojo_cls)
+    if world_slice is None or world_slice.wire_kind != wire_kind:
+        raise RuntimeError(
+            f"no {wire_kind} WorldSlice registered for {pojo_cls.__name__}",
+        )
+    return world_slice
+
+
+def slice_column_key(pojo_cls: type) -> str:
+    """Primary ``worlds`` column for a registered slice (RELIEF-T-28 / T-37)."""
+    world_slice = slice_for_pojo(pojo_cls)
+    if world_slice is None or not world_slice.world_keys:
+        raise RuntimeError(f"no WorldSlice registered for {pojo_cls.__name__}")
+    return world_slice.world_keys[0]
+
+
 def resolve_multi_column_world(
     world: Any,
     pojo_cls: type,
@@ -322,14 +354,10 @@ def resolve_multi_column_world(
     Import/facade merge and generate use the same ``wire_from_mapping`` /
     ``pojo_cls`` (JV-SCALARS-2). Avoid hand-rolled resolve in ``worldRow``.
     """
-    world_slice = slice_for_pojo(pojo_cls)
-    if (
-        world_slice is None
-        or world_slice.wire_kind != "multi_column"
-        or world_slice.wire_from_mapping is None
-    ):
+    world_slice = _require_slice(pojo_cls, "multi_column")
+    if world_slice.wire_from_mapping is None:
         raise RuntimeError(
-            f"no multi_column WorldSlice registered for {pojo_cls.__name__}",
+            f"multi_column WorldSlice for {pojo_cls.__name__} missing wire_from_mapping",
         )
     resolve_label = label or f"world multi_column {world_slice.schema_id}"
     return resolve_model(
@@ -339,138 +367,98 @@ def resolve_multi_column_world(
     )
 
 
-def facade_world_slices() -> tuple[WorldSlice, ...]:
-    return tuple(sl for sl in WORLD_SLICES if sl.facade)
+def resolve_registry_list_world(
+    world: Any,
+    pojo_cls: type,
+    *,
+    label: str | None = None,
+    world_uid: str | None = None,
+) -> Any:
+    """Runtime resolve for ``registry_list`` slices — SoT = ``WORLD_SLICES`` (T-28).
 
-
-def _slice_ctx(ctx: ResolveContext, world_slice: WorldSlice) -> ResolveContext:
-    return ResolveContext(
-        mode=ctx.mode,
-        partial=ctx.partial,
-        path_prefix=ctx.path_prefix,
-        errors=ctx.errors,
-        schema_id=world_slice.schema_id,
-    )
-
-
-def _merge_multi_column(
-    out: dict[str, Any],
-    world_slice: WorldSlice,
-    ctx: ResolveContext,
-) -> None:
-    assert world_slice.wire_from_mapping is not None
-    column_keys = frozenset(world_slice.world_keys)
-    if ctx.partial and not any(key in out for key in column_keys):
-        return
-
-    present_keys = {key for key in column_keys if key in out}
-    wire = world_slice.wire_from_mapping(out)
-    if ctx.partial:
-        wire = {key: wire[key] for key in present_keys}
-    resolved = resolve_model(
-        world_slice.pojo_cls,
-        wire,
-        label=world_slice.schema_id,
-        ctx=ctx,
-    )
-    dump = resolved.model_dump(mode="json")
-    keys_to_write = column_keys if not ctx.partial else present_keys
-    for key in keys_to_write:
-        if key in dump:
-            out[key] = dump[key]
-
-
-def _merge_registry_list(
-    out: dict[str, Any],
-    world_slice: WorldSlice,
-    ctx: ResolveContext,
-) -> None:
+    When ``WorldSlice.runtime_merge_id_field`` is set (T-29): return
+    ``canonical_defaults`` ⊕ world rows keyed by that entry attribute.
+    """
+    world_slice = _require_slice(pojo_cls, "registry_list")
+    if world_slice.empty_factory is None:
+        raise RuntimeError(
+            f"registry_list WorldSlice for {pojo_cls.__name__} missing empty_factory",
+        )
     key = world_slice.world_keys[0]
-    if key not in out:
-        return
-
-    assert world_slice.empty_factory is not None
-    raw = out.get(key)
+    raw: Any = getattr(world, key, None)
     if world_slice.wire_adapter is not None:
         raw = world_slice.wire_adapter(raw)
-        if raw is None:
-            return
-
-    resolved = resolve_root_list(
-        world_slice.pojo_cls,
-        raw,
-        empty_factory=world_slice.empty_factory,
-        label=key,
-        ctx=ctx.child(key),
-    )
-    dump_kw: dict[str, Any] = {"mode": "json"}
-    if world_slice.dump_by_alias:
-        dump_kw["by_alias"] = True
-    out[key] = [entry.model_dump(**dump_kw) for entry in resolved.root]
+    if world_slice.wire_adapter is not None and raw is None:
+        resolved = world_slice.empty_factory()
+    else:
+        resolved = resolve_root_list(
+            pojo_cls,
+            raw,
+            empty_factory=world_slice.empty_factory,
+            label=label or key,
+            world_uid=world_uid,
+        )
+    return _apply_runtime_canonical_merge(world_slice, resolved)
 
 
-def _merge_registry_dict(
-    out: dict[str, Any],
-    world_slice: WorldSlice,
-    ctx: ResolveContext,
-) -> None:
+def _apply_runtime_canonical_merge(world_slice: WorldSlice, resolved: Any) -> Any:
+    id_field = world_slice.runtime_merge_id_field
+    if not id_field or world_slice.empty_factory is None:
+        return resolved
+    by_id: dict[Any, Any] = {
+        getattr(entry, id_field): entry
+        for entry in world_slice.empty_factory().root
+    }
+    for entry in resolved.root:
+        by_id[getattr(entry, id_field)] = entry
+    return world_slice.pojo_cls(list(by_id.values()))
+
+
+def resolve_registry_dict_world(
+    world: Any,
+    pojo_cls: type,
+    *,
+    label: str | None = None,
+    world_uid: str | None = None,
+) -> Any:
+    """Runtime resolve for ``registry_dict`` slices — SoT = ``WORLD_SLICES`` (T-28)."""
+    world_slice = _require_slice(pojo_cls, "registry_dict")
+    if world_slice.empty_factory is None:
+        raise RuntimeError(
+            f"registry_dict WorldSlice for {pojo_cls.__name__} missing empty_factory",
+        )
     key = world_slice.world_keys[0]
-    if key not in out:
-        return
-
-    assert world_slice.empty_factory is not None
-    raw = out.get(key)
-    resolved = resolve_root_dict(
-        world_slice.pojo_cls,
-        raw,
+    return resolve_root_dict(
+        pojo_cls,
+        getattr(world, key, None),
         empty_factory=world_slice.empty_factory,
-        label=key,
-        ctx=ctx.child(key),
+        label=label or key,
+        world_uid=world_uid,
     )
-    out[key] = resolved.model_dump(mode="json")
 
 
-def _merge_json_blob(
-    out: dict[str, Any],
-    world_slice: WorldSlice,
-    ctx: ResolveContext,
-) -> None:
+def resolve_json_blob_world(
+    world: Any,
+    pojo_cls: type,
+    *,
+    label: str | None = None,
+) -> Any:
+    """Runtime resolve for ``json_blob`` slices — SoT = ``WORLD_SLICES`` (T-28)."""
+    world_slice = _require_slice(pojo_cls, "json_blob")
     key = world_slice.world_keys[0]
-    if key not in out:
-        return
-
-    raw = out.get(key)
+    raw = getattr(world, key, None)
     if not raw:
-        return
-
-    resolved = resolve_model(
-        world_slice.pojo_cls,
+        if world_slice.empty_factory is None:
+            raise RuntimeError(
+                f"empty json_blob {pojo_cls.__name__} without empty_factory",
+            )
+        return world_slice.empty_factory()
+    return resolve_model(
+        pojo_cls,
         raw,
-        label=key,
-        ctx=ctx.child(key),
+        label=label or f"world {key}",
     )
-    out[key] = resolved.model_dump(mode="json")
 
 
-def merge_world_slice(
-    out: dict[str, Any],
-    world_slice: WorldSlice,
-    ctx: ResolveContext,
-) -> None:
-    if not world_slice.facade:
-        return
-
-    slice_ctx = _slice_ctx(ctx, world_slice)
-    if world_slice.wire_kind == "multi_column":
-        _merge_multi_column(out, world_slice, slice_ctx)
-    elif world_slice.wire_kind == "registry_list":
-        _merge_registry_list(out, world_slice, slice_ctx)
-    elif world_slice.wire_kind == "registry_dict":
-        _merge_registry_dict(out, world_slice, slice_ctx)
-    elif world_slice.wire_kind == "json_blob":
-        _merge_json_blob(out, world_slice, slice_ctx)
-
-
-def merge_facade_slices(out: dict[str, Any], ctx: ResolveContext) -> None:
-    for world_slice in facade_world_slices():
-        merge_world_slice(out, world_slice, ctx)
+def facade_world_slices() -> tuple[WorldSlice, ...]:
+    return tuple(sl for sl in WORLD_SLICES if sl.facade)

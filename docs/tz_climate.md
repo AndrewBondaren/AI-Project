@@ -311,12 +311,12 @@ Arctic **−60°C** на ячейке: `peak_min: -60` + override в `climate_zo
 
 **Fallback chain** (`precipitation.py` → `resolve_world_precipitation_liquid`):
 
-1. `world.precipitation_liquid` (или `"water"`) — запись с `material_category: "liquid"`
-2. `water` из registry
+1. `world.precipitation_liquid` (после import — default POJO `"water"`) — запись с `material_category: "liquid"`
+2. POJO default key (`DEFAULT_PRECIPITATION_LIQUID`) в registry
 3. первый `liquid` в registry
-4. built-in defaults `{ cool_temp: 0, heat_temp: 100 }`
+4. иначе — **corrupt row**: orchestrator / `WorldService.repair_defaults` → `normalize_world` + persist; generator **не** изобретает synthetic liquid
 
-При шагах 2–4 — `warn_once` **один раз на `(world_uid, reason)`**. Нормальный resolve — без warning.
+При шагах 2–3 — `warn_once` **один раз на `(world_uid, reason)`**. Нормальный resolve — без warning.
 
 ---
 
@@ -342,7 +342,7 @@ Generate **не бросает исключение** на типичных ды
 | Компонент | Условие | Fallback | Модуль |
 |---|---|---|---|
 | Peak band | `peak_min/max` не заданы | Earth preset `−40…45` | `precipitation.peak_bounds` |
-| `precipitation_liquid` | ref не найден | chain: explicit → water → first liquid → built-in | `precipitation.py` |
+| `precipitation_liquid` | ref не найден | chain: explicit → POJO default key → first liquid; else normalize repair | `precipitation.py` + `repairWorldDefaults` |
 | Phase band | `heat_temp ≤ cool_temp` | built-in `{0, 100}` | `precipitation.py` |
 | Unknown zone | `system_climate` нет в registry | `temperate` profile | `registry.py` |
 | Pole count | >1 manual `climate_pole` | первый pole + warning | `poleResolve.py` |

@@ -9,11 +9,9 @@ from app.application.worldData.generators.climate.poleResolve import peak_bounds
 from app.application.jsonValidation import (
     climate_scalars,
     default_precipitation_liquid,
-    legacy_standalone_water_material,
     materials,
 )
 from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
-from app.dataModel.materials.enums.materialCategory import MaterialCategory
 from app.db.models.world import World
 
 logger = logging.getLogger(__name__)
@@ -28,8 +26,14 @@ def _precipitation_liquid_key(world: World) -> str:
 def resolve_world_precipitation_liquid(world: World) -> MaterialRegistryEntry:
     """
     World precipitation liquid from material_registry.
-    Explicit DB value required after import normalize; legacy gaps warn once.
+
+    Soft fallbacks stay inside the registry (requested → POJO default key →
+    first liquid). Empty registry is a corrupt world row — orchestrator must
+    ``ensure_world_climate_defaults`` (import normalize + persist), not invent
+    a synthetic liquid here.
     """
+    from app.application.worldData.repairWorldDefaults import WorldClimateDefaultsError
+
     registry = materials(world)
     key = _precipitation_liquid_key(world)
     default_key = default_precipitation_liquid()
@@ -38,21 +42,23 @@ def resolve_world_precipitation_liquid(world: World) -> MaterialRegistryEntry:
         return entry
 
     water = registry.entry_for(default_key)
-    if water is not None:
+    if water is not None and water.material_category.is_liquid():
         if entry is not None:
             warn_once(
                 world.world_uid,
                 f"not_liquid:{key}",
-                "precipitation_liquid fallback | world=%s requested=%s is not liquid (category=%s); using water",
+                "precipitation_liquid fallback | world=%s requested=%s is not liquid (category=%s); using %s",
                 key,
                 entry.material_category.value,
+                default_key,
             )
         elif key != default_key:
             warn_once(
                 world.world_uid,
                 f"missing:{key}",
-                "precipitation_liquid fallback | world=%s requested=%s not in material_registry; using water",
+                "precipitation_liquid fallback | world=%s requested=%s not in material_registry; using %s",
                 key,
+                default_key,
             )
         return water
 
@@ -61,26 +67,16 @@ def resolve_world_precipitation_liquid(world: World) -> MaterialRegistryEntry:
             warn_once(
                 world.world_uid,
                 "first_liquid",
-                "precipitation_liquid fallback | world=%s requested=%s; water missing; using first liquid=%s",
+                "precipitation_liquid fallback | world=%s requested=%s; %s missing; using first liquid=%s",
                 key,
+                default_key,
                 mat.system_material,
             )
             return mat
 
-    warn_once(
-        world.world_uid,
-        "standalone_water",
-        "precipitation_liquid fallback | world=%s requested=%s; no liquid in material_registry; using legacy standalone water",
-        key,
-    )
-    legacy_key = legacy_standalone_water_material()
-    legacy = registry.entry_for(legacy_key)
-    if legacy is not None:
-        return legacy
-    return MaterialRegistryEntry(
-        system_material=legacy_key,
-        display_name=legacy_key,
-        material_category=MaterialCategory.LIQUID,
+    raise WorldClimateDefaultsError(
+        f"world={world.world_uid}: no liquid in material_registry "
+        f"(requested precipitation_liquid={key!r}) — repair via import normalize",
     )
 
 

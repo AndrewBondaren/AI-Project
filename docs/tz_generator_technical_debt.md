@@ -3,7 +3,7 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py`, `worldBundleService.py`, relief library/import services.  
-**Обновлено:** 2026-08-07 — relief **Wave A–D ✅**; shared ribbon + Grade `owner_uid` ✅; residual opt **T-66** / road-facade module names; next **Wave E** later; plan [`relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).
+**Обновлено:** 2026-08-09 — climate row repair via `normalize_world` (no synthetic water); relief **Wave A–D ✅**; **T-28/T-29/T-37** worldRow/slices ✅; residual opt **T-66** / road-facade / layout dict; next **Wave E** later; plan [`relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).
 
 **Связанные документы:**
 
@@ -918,8 +918,8 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 | ID | Sev | Status | P | Категория | Суть |
 |---|---|---|---|---|---|
-| **RELIEF-T-28** | **high** | **partial** | P1 | god-object / JV | `worldRow` facade (~39 def). **Partial:** multi_column runtime → `resolve_multi_column_world` / `WORLD_SLICES` (**JV-SCALARS-2**). Остаток: registry/json_blob accessors + полный split per-domain |
-| **RELIEF-T-29** | medium | open | P2 | god-object / JV | `worldSlices.py` (~432 LOC) — catalog ~27 slices + merge strategies. Catalog OK; merge helpers вынести; slices ближе к POJO-пакету домена |
+| **RELIEF-T-28** | **high** | **resolved** | P1 | god-object / JV | Runtime resolve via `WORLD_SLICES`: `resolve_registry_list/dict/json_blob_world` + thin `worldRow` DX. Multi_column уже JV-SCALARS-2. Special merge district/barrier → **T-29**. Package split deferred. |
+| **RELIEF-T-29** | medium | **resolved** | P2 | god-object / JV | Import merge → `worldSliceMerge.py`. Runtime canonical⊕world via `WorldSlice.runtime_merge_id_field` ← POJO `RUNTIME_MERGE_ID_FIELD` (district/barrier). Catalog+resolve remain in `worldSlices`. `building_layout` out of scope. |
 | **RELIEF-T-30** | medium | **resolved** | P2 | SRP | Bake split ✅: sample / materialize / stamp / intent + thin `apply_*` facade. = **T-52**. § [roadShoulderApply split](#roadshoulderapply-split-t-30--t-52). |
 | **RELIEF-T-31** | medium | **resolved** | P2 | SRP | `RoadContributor` = paint only; `RoadShoulderContributor` after ROAD via `ctx.painted_road_edges` (`PaintedRoadEdge`). |
 | **RELIEF-T-32** | medium | **resolved** | P2 | SRP | `ribbonSegmentize.py` (`RibbonSegment` + `owner_uid`); `ribbonGrade.py` = pick/grade only. |
@@ -927,7 +927,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | **RELIEF-T-34** | medium | open | P2 | DRY / dataModel | `ReliefRoleCase` дублирует knobs-поля; Mode B = `ReliefDeltaBand(ReliefGradeKnobs)`. Target: embed/compose knobs на Mode A |
 | **RELIEF-T-35** | medium | open | P2 | DRY | `slope_weight+sheer_weight==1` ×3 (`reliefRoleCase`, `reliefTemplate`, `mountainSideRecipe`). Target: `require_weights_pair` |
 | **RELIEF-T-36** | medium | open | P2 | DRY | pick+load дубль: `ribbonGrade` ↔ `reliefSidesStamp`. Target: `resolve_picked_template(...)` |
-| **RELIEF-T-37** | medium | open | P2 | wire keys | `worldRow` литералы `"relief_template_registry"` / `"relief_pick_policy"` ≠ `model_fields` / `WorldSlice.world_keys`. Эталон: `RELIEF_OBSTACLE_SCALAR_WIRE_KEYS` |
+| **RELIEF-T-37** | medium | **resolved** | P2 | wire keys | `worldRow` column names ← `slice_column_key` / `WorldSlice.world_keys` (T-28). Эталон scalars: `RELIEF_OBSTACLE_SCALAR_WIRE_KEYS`. |
 | **RELIEF-T-38** | medium | open | P2 | values | `expand_shoulder_ring`: `max(1, width)` режет `0`; POJO `slope_length_cells` допускает 0. Target: honor 0 или clamp в POJO/TZ |
 | **RELIEF-T-39** | medium | open | P2 | values | `conditionNormalize`: `float(... or 0.0)`, `delta_z or 0/1` — silent fallback мимо validators |
 | **RELIEF-T-40** | low | open | P3 | DRY | seeded SHA256 дубль (`kindRoll`/`templatePick`); skip `RibbonGradeDecision` factory; log `"SLOPE"` → `ReliefSideKind.SLOPE.value` |
@@ -1045,7 +1045,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | ID | Sev | Status | P | Суть |
 |---|---|---|---|---|
 | **JV-SCALARS-1** | medium | **resolved** | P2 | Третий клон scalar wire boilerplate. **Fix:** `dataModel/worldScalarWire.py` — `pojo_wire_keys` / `scalar_wire_from_mapping` / `validate_world_row_pojo_columns`; climate/terrain/relief-obstacle — thin wrappers |
-| **JV-SCALARS-2** | medium | **resolved** | P2 | Hand-written multi_column resolve в `worldRow` (climate/terrain/relief) дублировал `WorldSlice`. **Fix:** `resolve_multi_column_world` + `WORLD_SLICE_BY_POJO`; named accessors = thin DX. Field shorthand `relief_grade_obstacle_policy` OK. Полный T-28 (registry facade) — open |
+| **JV-SCALARS-2** | medium | **resolved** | P2 | Hand-written multi_column resolve в `worldRow` (climate/terrain/relief) дублировал `WorldSlice`. **Fix:** `resolve_multi_column_world` + `WORLD_SLICE_BY_POJO`; named accessors = thin DX. Field shorthand `relief_grade_obstacle_policy` OK. Registry/blob runtime → **T-28** ✅ |
 
 ---
 
@@ -1074,7 +1074,8 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 6. ~~**Wave D —** `open_land` / `shore`~~ ✅ (`ribbonGradeApply` + contributors)
 7. ~~**Wave D polish**~~ ✅ (`contextRibbonApply` / `ribbonSampleUtil` / `ribbon_intents`+`ref_cells` / BAR-1 once)
 8. **Wave E —** R36s / R36r / R36o / Q4 / R36f/k / UI R30 (later)
-9. **Parallel eng (не gate waves):** **T-28** (partial), **T-34…T-39**; road-facade naming optional; **T-66** deferred; fixtures `*_templates`  
+9. **Parallel eng (не gate waves):** **T-33…T-36**, **T-38…T-40**; road-facade naming optional; **T-66** deferred; fixtures `*_templates`  
+~~T-28 / T-29 / T-37~~ ✅ worldRow ← slices + import merge module + runtime merge-policy  
    ~~shared `RoadShoulderIntent`/`grade_road_shoulder_*`~~ ✅ → `RibbonIntent` / `grade_ribbon_segments`  
    ~~**T-31/T-32**~~ ✅  
 9. (optional) rename `MountainSideRecipeMode` wire A–D — breaking + migration
@@ -1118,6 +1119,9 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | 2026-08-06 | **DRY canal single-writer:** T-55/T-57/T-58 resolved (`_resolve_canal_ref`, `EMPTY_EARTHEN_CUT`, `grade_fields`/`intent_fields`) |
 | 2026-08-06 | **Post-fix smell → T-53…T-59:** Intent≠Grade `structure_canal`; skipped coerce; earthen literal; bake event strings; R21 DRY; alias/mapper. T-52 → medium (=T-30). Review canvas `canal-debt-fix-smell-review` |
 | 2026-08-05 | **R36p/q fix wave T-43…T-51 resolved;** T-52 open |
+| 2026-08-09 | **Climate repair:** removed synthetic/`legacy_standalone` water; corrupt row → `repairWorldDefaults` (`normalize_world` + persist at batch/`WorldService`); empty `climate_zone_registry` wire → `[]` so facade merge materializes zones |
+| 2026-08-07 | **RELIEF-T-29 resolved:** `worldSliceMerge`; runtime merge-id from POJO `RUNTIME_MERGE_ID_FIELD` (district/barrier) |
+| 2026-08-07 | **RELIEF-T-28/T-37 resolved:** `resolve_registry_list/dict/json_blob_world` + thin `worldRow`; column keys from slices |
 | 2026-08-02 | **JV-SCALARS-2 resolved:** `resolve_multi_column_world`; T-28 partial (multi_column) |
 | 2026-08-02 | **JV-SCALARS-1 resolved:** `worldScalarWire` helper; climate/terrain/relief-obstacle thin wrappers |
 | 2026-08-02 | **RELIEF-T-28…T-41:** SOLID+dataModel audit (god/SRP/DRY/wire keys/values); R36n obstacle POJO = clean win; backlog sync |

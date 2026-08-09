@@ -668,6 +668,7 @@ class Container:
         if self._climate_batch_orchestrator is None:
             self._climate_batch_orchestrator = ClimateBatchOrchestrator(
                 map_cell_service=self.map_cell_service(),
+                world_repo=self.world_repository(),
             )
         return self._climate_batch_orchestrator
 

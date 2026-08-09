@@ -57,6 +57,26 @@ def _count_anchors(field: ClimateAnchorField) -> tuple[int, int, int]:
     return manual, auto, admin
 
 
+def _ensure_climate_defaults_sync(world: World) -> None:
+    """In-memory import normalize when world row lacks climate defaults."""
+    from app.application.worldData.repairWorldDefaults import (
+        WorldClimateDefaultsError,
+        apply_import_normalize_to_world,
+        precipitation_liquid_resolvable,
+        world_climate_defaults_need_repair,
+    )
+
+    if not world_climate_defaults_need_repair(world):
+        return
+    apply_import_normalize_to_world(world)
+    if not precipitation_liquid_resolvable(world):
+        raise WorldClimateDefaultsError(
+            f"world={world.world_uid}: climate defaults repair failed "
+            "(in-memory normalize; persist via ClimateBatchOrchestrator / "
+            "WorldService.repair_defaults)",
+        )
+
+
 class ClimateSurfaceAssembler:
     """
     Orchestrates surface climate passes. Entry at any pass level (for future DAG nodes).
@@ -73,6 +93,7 @@ class ClimateSurfaceAssembler:
         world: World,
         locations: list[NamedLocation],
     ) -> ClimateSurfaceResult:
+        _ensure_climate_defaults_sync(world)
         scalars = climate_scalars(world)
         pole_field = run_pole_resolve_pass(world, locations)
         logger.info(
@@ -130,6 +151,7 @@ class ClimateSurfaceAssembler:
         heightmap_cells: list[MapCell],
     ) -> list[MapCell]:
         """Climate pass on existing terrain cells: weather + liquid overlay."""
+        _ensure_climate_defaults_sync(world)
         pole_field = run_pole_resolve_pass(world, locations)
         anchor_field = run_anchor_collect_pass(
             world, locations, heightmap_cells, pole_field,

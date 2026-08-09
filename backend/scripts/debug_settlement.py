@@ -1221,6 +1221,7 @@ def test_climate_precipitation_liquid() -> None:
         material_registry=[
             {
                 "system_material": "water",
+                "display_name": "Water",
                 "material_category": "liquid",
                 "cool_into": "ice",
                 "cool_temp": 0,
@@ -1230,7 +1231,7 @@ def test_climate_precipitation_liquid() -> None:
         ],
     )
     liquid = resolve_world_precipitation_liquid(water_world)
-    assert liquid["system_material"] == "water"
+    assert liquid.system_material == "water"
     assert liquid_precipitation_mult(15, liquid) == 1.0
     assert liquid_precipitation_mult(-10, liquid) == 0.0
     assert effective_rainfall(55, 15, water_world) == 55

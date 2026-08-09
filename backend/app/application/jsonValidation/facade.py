@@ -7,7 +7,7 @@ from typing import Any
 from app.application.jsonValidation.resolve import ResolveContext, ResolveMode
 from app.application.jsonValidation.index import validate_ref_w
 from app.application.jsonValidation.types import FieldPathError, ImportValidationError
-from app.application.jsonValidation.worldSlices import merge_facade_slices
+from app.application.jsonValidation.worldSliceMerge import merge_facade_slices
 
 
 def normalize_world(data: dict[str, Any], *, partial: bool = False) -> dict[str, Any]:

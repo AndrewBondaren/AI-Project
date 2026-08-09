@@ -81,6 +81,8 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
 
 class WorldDistrictTemplateRegistry(RootModel[list[DistrictTemplateEntry]]):
     SCHEMA_ID: ClassVar[str] = "SCH-WORLD-DISTRICT-TEMPLATE"
+    # Runtime worldRow: canonical ⊕ world overrides by this entry field (T-29).
+    RUNTIME_MERGE_ID_FIELD: ClassVar[str] = "system_name"
     root: list[DistrictTemplateEntry]
 
     @classmethod

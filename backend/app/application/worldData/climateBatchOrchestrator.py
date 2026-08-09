@@ -33,6 +33,7 @@ from app.application.worldData.parallelPolicy import resolve_climate_workers
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+from app.db.repositories.iWorldRepository import IWorldRepository
 
 if TYPE_CHECKING:
     from app.application.worldData.bootstrapMapCellWriter import BootstrapMapCellWriter
@@ -47,9 +48,11 @@ class ClimateBatchOrchestrator:
         self,
         map_cell_service: MapCellService,
         climate: ClimateGeneratorService | None = None,
+        world_repo: IWorldRepository | None = None,
     ) -> None:
         self._map_cells = map_cell_service
         self._climate = climate or ClimateGeneratorService()
+        self._world_repo = world_repo
 
     async def apply_climate_batch(
         self,
@@ -66,6 +69,12 @@ class ClimateBatchOrchestrator:
 
         Returns ``(import_result, batches_done, batches_total)``.
         """
+        from app.application.worldData.repairWorldDefaults import (
+            ensure_world_climate_defaults,
+        )
+
+        world = await ensure_world_climate_defaults(world, repo=self._world_repo)
+
         heightmap_cells = cells if cells is not None else await self._map_cells.get_all(world_uid)
         if not heightmap_cells:
             return ImportResult(total=0, succeeded=0, failed=0), 0, 0

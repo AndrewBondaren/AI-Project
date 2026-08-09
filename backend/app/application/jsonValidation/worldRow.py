@@ -1,12 +1,20 @@
-"""``worlds`` row + bundle registries → typed dataModel POJOs."""
+"""``worlds`` row + bundle registries → typed dataModel POJOs.
+
+Runtime DX accessors. Slice-backed resolve → ``worldSlices.resolve_*_world``
+(RELIEF-T-28); column names from ``WORLD_SLICES`` (T-37).
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
-from app.application.jsonValidation.resolve import resolve_model, resolve_root_dict, resolve_root_list
-from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
-from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars
+from app.application.jsonValidation.worldSlices import (
+    resolve_json_blob_world,
+    resolve_multi_column_world,
+    resolve_registry_dict_world,
+    resolve_registry_list_world,
+    slice_column_key,
+)
 from app.dataModel import (
     WorldClimateZoneRegistry,
     WorldEconomyTierRegistry,
@@ -21,25 +29,32 @@ from app.dataModel import (
     WorldTerrainRegistry,
     WorldWeatherTypeRegistry,
 )
-from app.dataModel.terrainMasks import WorldTerrainMasks
-from app.application.jsonValidation.worldSlices import (
-    climate_zone_wire_from_raw,
-    location_type_wire_from_raw,
-    resolve_multi_column_world,
-)
+from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
 )
 from app.dataModel.hydrology.rivers import RiverTypeClassify as PojoRiverTypeClassify
-from app.dataModel.settlement.district.worldDistrictTemplateRegistry import WorldDistrictTemplateRegistry
+from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+    WorldDistrictTemplateRegistry,
+)
 from app.dataModel.settlement.settlement.worldCitySizeRegistry import WorldCitySizeRegistry
-from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import WorldBarrierTemplateRegistry
-from app.dataModel.structure.building.worldBuildingTemplateRegistry import WorldBuildingTemplateRegistry
+from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
+    WorldBarrierTemplateRegistry,
+)
+from app.dataModel.structure.building.worldBuildingTemplateRegistry import (
+    WorldBuildingTemplateRegistry,
+)
 from app.dataModel.terrain.relief.enums import ReliefGradeObstaclePolicy
 from app.dataModel.terrain.relief.worldCanalTemplateRegistry import WorldCanalTemplateRegistry
-from app.dataModel.terrain.relief.worldReliefGradeObstacle import WorldReliefGradeObstacleScalars
+from app.dataModel.terrain.relief.worldReliefGradeObstacle import (
+    WorldReliefGradeObstacleScalars,
+)
 from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy
-from app.dataModel.terrain.relief.worldReliefTemplateRegistry import WorldReliefTemplateRegistry
+from app.dataModel.terrain.relief.worldReliefTemplateRegistry import (
+    WorldReliefTemplateRegistry,
+)
+from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars
+from app.dataModel.terrainMasks import WorldTerrainMasks
 
 _DEFAULT_PRECIPITATION_LIQUID = WorldClimateScalars.canonical_defaults().precipitation_liquid
 _ENGINE_ECONOMIC_TIERS = WorldEconomyTierRegistry.canonical_engine()
@@ -51,12 +66,8 @@ def _uid(world: Any) -> str:
 
 
 def economic_tiers(world: Any) -> WorldEconomyTierRegistry:
-    return resolve_root_list(
-        WorldEconomyTierRegistry,
-        getattr(world, "economic_tier_registry", None),
-        empty_factory=WorldEconomyTierRegistry.canonical_defaults,
-        label="economic_tier_registry",
-        world_uid=_uid(world),
+    return resolve_registry_list_world(
+        world, WorldEconomyTierRegistry, world_uid=_uid(world),
     )
 
 
@@ -69,12 +80,8 @@ def economic_tier_engine() -> WorldEconomyTierRegistry:
 
 
 def materials(world: Any) -> WorldMaterialRegistry:
-    return resolve_root_list(
-        WorldMaterialRegistry,
-        getattr(world, "material_registry", None),
-        empty_factory=WorldMaterialRegistry.canonical_defaults,
-        label="material_registry",
-        world_uid=_uid(world),
+    return resolve_registry_list_world(
+        world, WorldMaterialRegistry, world_uid=_uid(world),
     )
 
 
@@ -87,12 +94,8 @@ def materials_engine() -> WorldMaterialRegistry:
 
 
 def terrain(world: Any) -> WorldTerrainRegistry:
-    return resolve_root_list(
-        WorldTerrainRegistry,
-        getattr(world, "terrain_registry", None),
-        empty_factory=WorldTerrainRegistry.canonical_defaults,
-        label="terrain_registry",
-        world_uid=_uid(world),
+    return resolve_registry_list_world(
+        world, WorldTerrainRegistry, world_uid=_uid(world),
     )
 
 
@@ -105,13 +108,8 @@ def terrain_system_keys(world: Any) -> set[str]:
 
 
 def hydrology(world: Any) -> WorldHydrology:
-    raw = getattr(world, "hydrology", None)
-    if not raw:
-        return WorldHydrology.canonical_empty()
-    return resolve_model(
-        WorldHydrology,
-        raw,
-        label=f"world={_uid(world)} hydrology",
+    return resolve_json_blob_world(
+        world, WorldHydrology, label=f"world={_uid(world)} hydrology",
     )
 
 
@@ -120,13 +118,8 @@ def hydrology_dict(world: Any) -> dict:
 
 
 def terrain_masks(world: Any) -> WorldTerrainMasks:
-    raw = getattr(world, "terrain_masks", None)
-    if not raw:
-        return WorldTerrainMasks.canonical_empty()
-    return resolve_model(
-        WorldTerrainMasks,
-        raw,
-        label=f"world={_uid(world)} terrain_masks",
+    return resolve_json_blob_world(
+        world, WorldTerrainMasks, label=f"world={_uid(world)} terrain_masks",
     )
 
 
@@ -139,12 +132,8 @@ def river_type_classify_defaults() -> PojoRiverTypeClassify:
 
 
 def road_settings(world: Any) -> WorldRoadSettings:
-    return resolve_root_list(
-        WorldRoadSettings,
-        getattr(world, "road_settings", None),
-        empty_factory=WorldRoadSettings.canonical_defaults,
-        label="road_settings",
-        world_uid=_uid(world),
+    return resolve_registry_list_world(
+        world, WorldRoadSettings, world_uid=_uid(world),
     )
 
 
@@ -153,15 +142,8 @@ def road_settings_rows(world: Any) -> list[dict]:
 
 
 def climate_zones(world: Any) -> WorldClimateZoneRegistry:
-    wire = climate_zone_wire_from_raw(getattr(world, "climate_zone_registry", None))
-    if wire is None:
-        return WorldClimateZoneRegistry.canonical_defaults()
-    return resolve_root_list(
-        WorldClimateZoneRegistry,
-        wire,
-        empty_factory=WorldClimateZoneRegistry.canonical_defaults,
-        label="climate_zone_registry",
-        world_uid=_uid(world),
+    return resolve_registry_list_world(
+        world, WorldClimateZoneRegistry, world_uid=_uid(world),
     )
 
 
@@ -185,55 +167,33 @@ def default_precipitation_liquid() -> str:
     return _DEFAULT_PRECIPITATION_LIQUID
 
 
-def legacy_standalone_water_material() -> str:
-    liquids = materials_engine().liquid_keys()
-    if liquids:
-        return sorted(liquids)[0]
-    return "water"
-
-
 def city_sizes(world: Any) -> WorldCitySizeRegistry:
-    return resolve_root_list(
-        WorldCitySizeRegistry,
-        getattr(world, "city_size_registry", None),
-        empty_factory=WorldCitySizeRegistry.canonical_defaults,
-        label="city_size_registry",
-        world_uid=_uid(world),
+    return resolve_registry_list_world(
+        world, WorldCitySizeRegistry, world_uid=_uid(world),
     )
 
 
 def district_templates(world: Any) -> WorldDistrictTemplateRegistry:
-    """Canonical defaults merged with world overrides by ``system_name``."""
-    by_name = {
-        entry.system_name: entry
-        for entry in WorldDistrictTemplateRegistry.canonical_defaults().root
-    }
-    raw = getattr(world, "district_template_registry", None)
-    if raw:
-        resolved = resolve_root_list(
-            WorldDistrictTemplateRegistry,
-            raw,
-            empty_factory=WorldDistrictTemplateRegistry.canonical_defaults,
-            label="district_template_registry",
-            world_uid=_uid(world),
-        )
-        for entry in resolved.root:
-            by_name[entry.system_name] = entry
-    return WorldDistrictTemplateRegistry(list(by_name.values()))
-
+    """Canonical ⊕ world by ``RUNTIME_MERGE_ID_FIELD`` (T-29)."""
+    return resolve_registry_list_world(
+        world, WorldDistrictTemplateRegistry, world_uid=_uid(world),
+    )
 
 def building_layout_templates(world: Any) -> list[dict]:
     """
     Merged building layout bodies — engine builtins + world rows.
     Layout JSON is not yet a single POJO row; registry merge stays wire-shaped.
     """
-    from app.dataModel.structure.building.worldBuildingLayoutDefaults import canonical_defaults
+    from app.dataModel.structure.building.worldBuildingLayoutDefaults import (
+        canonical_defaults,
+    )
 
     by_name: dict[str, dict] = {
         layout["system_name"]: dict(layout)
         for layout in canonical_defaults()
     }
-    for row in getattr(world, "building_template_registry", None) or []:
+    col = slice_column_key(WorldBuildingTemplateRegistry)
+    for row in getattr(world, col, None) or []:
         if not isinstance(row, dict):
             continue
         key = row.get("system_name") or row.get("system_template_uid")
@@ -243,24 +203,10 @@ def building_layout_templates(world: Any) -> list[dict]:
 
 
 def barrier_templates(world: Any) -> WorldBarrierTemplateRegistry:
-    """Canonical defaults merged with world overrides by ``system_type``."""
-    by_type = {
-        entry.system_type: entry
-        for entry in WorldBarrierTemplateRegistry.canonical_defaults().root
-    }
-    raw = getattr(world, "barrier_template_registry", None)
-    if raw:
-        resolved = resolve_root_list(
-            WorldBarrierTemplateRegistry,
-            raw,
-            empty_factory=WorldBarrierTemplateRegistry.canonical_defaults,
-            label="barrier_template_registry",
-            world_uid=_uid(world),
-        )
-        for entry in resolved.root:
-            by_type[entry.system_type] = entry
-    return WorldBarrierTemplateRegistry(list(by_type.values()))
-
+    """Canonical ⊕ world by ``RUNTIME_MERGE_ID_FIELD`` (T-29)."""
+    return resolve_registry_list_world(
+        world, WorldBarrierTemplateRegistry, world_uid=_uid(world),
+    )
 
 def barrier_template_defaults() -> list[dict]:
     reg = WorldBarrierTemplateRegistry.canonical_defaults()
@@ -268,118 +214,68 @@ def barrier_template_defaults() -> list[dict]:
 
 
 def connection_types(world: Any) -> WorldConnectionTypeRegistry:
-    return resolve_root_list(
-        WorldConnectionTypeRegistry,
-        getattr(world, "connection_type_registry", None),
-        empty_factory=WorldConnectionTypeRegistry.canonical_defaults,
-        label="connection_type_registry",
-        world_uid=_uid(world),
+    return resolve_registry_list_world(
+        world, WorldConnectionTypeRegistry, world_uid=_uid(world),
     )
 
 
 def location_types(world: Any) -> WorldLocationTypeRegistry:
-    wire = location_type_wire_from_raw(getattr(world, "location_type_registry", None))
-    if wire is None:
-        return WorldLocationTypeRegistry.canonical_defaults()
-    return resolve_root_list(
-        WorldLocationTypeRegistry,
-        wire,
-        empty_factory=WorldLocationTypeRegistry.canonical_defaults,
-        label="location_type_registry",
-        world_uid=_uid(world),
+    return resolve_registry_list_world(
+        world, WorldLocationTypeRegistry, world_uid=_uid(world),
     )
 
 
 def lore(world: Any) -> WorldLoreRegistry:
-    return resolve_root_dict(
-        WorldLoreRegistry,
-        getattr(world, "lore_registry", None),
-        empty_factory=WorldLoreRegistry.canonical_defaults,
-        label="lore_registry",
-        world_uid=_uid(world),
+    return resolve_registry_dict_world(
+        world, WorldLoreRegistry, world_uid=_uid(world),
     )
 
 
 def weather_types(world: Any) -> WorldWeatherTypeRegistry:
-    return resolve_root_list(
-        WorldWeatherTypeRegistry,
-        getattr(world, "weather_type_registry", None),
-        empty_factory=WorldWeatherTypeRegistry.canonical_defaults,
-        label="weather_type_registry",
-        world_uid=_uid(world),
+    return resolve_registry_list_world(
+        world, WorldWeatherTypeRegistry, world_uid=_uid(world),
     )
 
 
 def terrain_categories(world: Any) -> WorldTerrainCategoryRegistry:
-    return resolve_root_list(
-        WorldTerrainCategoryRegistry,
-        getattr(world, "terrain_category_registry", None),
-        empty_factory=WorldTerrainCategoryRegistry.canonical_defaults,
-        label="terrain_category_registry",
-        world_uid=_uid(world),
+    return resolve_registry_list_world(
+        world, WorldTerrainCategoryRegistry, world_uid=_uid(world),
     )
 
 
 def room_types(world: Any) -> WorldRoomTypeRegistry:
-    return resolve_root_list(
-        WorldRoomTypeRegistry,
-        getattr(world, "room_type_registry", None),
-        empty_factory=WorldRoomTypeRegistry.canonical_defaults,
-        label="room_type_registry",
-        world_uid=_uid(world),
+    return resolve_registry_list_world(
+        world, WorldRoomTypeRegistry, world_uid=_uid(world),
     )
 
 
 def location_moods(world: Any) -> WorldLocationMoodRegistry:
-    return resolve_root_list(
-        WorldLocationMoodRegistry,
-        getattr(world, "location_mood_registry", None),
-        empty_factory=WorldLocationMoodRegistry.canonical_defaults,
-        label="location_mood_registry",
-        world_uid=_uid(world),
+    return resolve_registry_list_world(
+        world, WorldLocationMoodRegistry, world_uid=_uid(world),
     )
 
 
 def building_template_registry(world: Any) -> WorldBuildingTemplateRegistry:
-    return resolve_root_list(
-        WorldBuildingTemplateRegistry,
-        getattr(world, "building_template_registry", None),
-        empty_factory=WorldBuildingTemplateRegistry.canonical_defaults,
-        label="building_template_registry",
-        world_uid=_uid(world),
+    return resolve_registry_list_world(
+        world, WorldBuildingTemplateRegistry, world_uid=_uid(world),
     )
 
 
 def relief_template_registry(world: Any) -> WorldReliefTemplateRegistry:
-    return resolve_root_list(
-        WorldReliefTemplateRegistry,
-        getattr(world, "relief_template_registry", None),
-        empty_factory=WorldReliefTemplateRegistry.canonical_defaults,
-        label="relief_template_registry",
-        world_uid=_uid(world),
+    return resolve_registry_list_world(
+        world, WorldReliefTemplateRegistry, world_uid=_uid(world),
     )
 
 
 def canal_templates(world: Any) -> WorldCanalTemplateRegistry:
     """World ``canal_template_registry`` (R36q); empty → no entries."""
-    return resolve_root_list(
-        WorldCanalTemplateRegistry,
-        getattr(world, "canal_template_registry", None),
-        empty_factory=WorldCanalTemplateRegistry.canonical_defaults,
-        label="canal_template_registry",
-        world_uid=_uid(world),
+    return resolve_registry_list_world(
+        world, WorldCanalTemplateRegistry, world_uid=_uid(world),
     )
 
 
 def relief_pick_policy(world: Any) -> WorldReliefPickPolicy:
-    raw = getattr(world, "relief_pick_policy", None)
-    if not raw:
-        return WorldReliefPickPolicy.canonical_defaults()
-    return resolve_model(
-        WorldReliefPickPolicy,
-        raw,
-        label="relief_pick_policy",
-    )  # type: ignore[return-value]
+    return resolve_json_blob_world(world, WorldReliefPickPolicy)
 
 
 def relief_obstacle_scalars(world: Any) -> WorldReliefGradeObstacleScalars:

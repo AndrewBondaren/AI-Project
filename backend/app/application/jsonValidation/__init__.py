@@ -6,6 +6,7 @@ Layers:
   ``resolve``   — per-field ``WireFieldPolicy`` (Strict / Default / Ignore)
   ``facade``    — import / CRUD normalize (strict → 422)
   ``worldRow``  — ``worlds`` DB row → typed POJOs (runtime reads)
+  ``worldSlices`` / ``worldSliceMerge`` — catalog + runtime resolve / import merge
   ``index``     — REF-W cross-refs after normalize (import only)
   ``wire``      — ENUM-E wire parse
 """
@@ -46,7 +47,6 @@ from app.application.jsonValidation.worldRow import (
     economic_tiers,
     hydrology,
     hydrology_dict,
-    legacy_standalone_water_material,
     location_moods,
     location_types,
     lore,
@@ -71,13 +71,15 @@ from app.application.jsonValidation.worldRow import (
     terrain_system_keys,
     weather_types,
 )
+from app.application.jsonValidation.worldSliceMerge import (
+    merge_facade_slices,
+    merge_world_slice,
+)
 from app.application.jsonValidation.worldSlices import (
     WORLD_SLICES,
     WorldSlice,
     climate_zone_wire_from_raw,
     facade_world_slices,
-    merge_facade_slices,
-    merge_world_slice,
     slice_for_world_key,
 )
 
@@ -113,7 +115,6 @@ __all__ = [
     "facade_world_slices",
     "hydrology",
     "hydrology_dict",
-    "legacy_standalone_water_material",
     "location_moods",
     "location_types",
     "lore",
