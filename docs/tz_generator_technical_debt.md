@@ -3,7 +3,7 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py`, `worldBundleService.py`, relief library/import services.  
-**Обновлено:** 2026-08-09 — climate row repair via `normalize_world` (no synthetic water); relief **Wave A–D ✅**; **T-28/T-29/T-37** worldRow/slices ✅; residual opt **T-66** / road-facade / layout dict; next **Wave E** later; plan [`relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).
+**Обновлено:** 2026-08-10 — P2/P3 SOLID/DRY **T-33…T-40** ✅ (excl. T-66); relief Wave A–D ✅; next **Wave E** later; plan [`relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).
 
 **Связанные документы:**
 
@@ -923,14 +923,14 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | **RELIEF-T-30** | medium | **resolved** | P2 | SRP | Bake split ✅: sample / materialize / stamp / intent + thin `apply_*` facade. = **T-52**. § [roadShoulderApply split](#roadshoulderapply-split-t-30--t-52). |
 | **RELIEF-T-31** | medium | **resolved** | P2 | SRP | `RoadContributor` = paint only; `RoadShoulderContributor` after ROAD via `ctx.painted_road_edges` (`PaintedRoadEdge`). |
 | **RELIEF-T-32** | medium | **resolved** | P2 | SRP | `ribbonSegmentize.py` (`RibbonSegment` + `owner_uid`); `ribbonGrade.py` = pick/grade only. |
-| **RELIEF-T-33** | medium | open | P2 | DRY | `conditionNormalize`: `_knobs_from_case` есть, Mode A down/up копирует `ReliefDeltaInterval` вручную |
-| **RELIEF-T-34** | medium | open | P2 | DRY / dataModel | `ReliefRoleCase` дублирует knobs-поля; Mode B = `ReliefDeltaBand(ReliefGradeKnobs)`. Target: embed/compose knobs на Mode A |
-| **RELIEF-T-35** | medium | open | P2 | DRY | `slope_weight+sheer_weight==1` ×3 (`reliefRoleCase`, `reliefTemplate`, `mountainSideRecipe`). Target: `require_weights_pair` |
-| **RELIEF-T-36** | medium | open | P2 | DRY | pick+load дубль: `ribbonGrade` ↔ `reliefSidesStamp`. Target: `resolve_picked_template(...)` |
+| **RELIEF-T-33** | medium | **resolved** | P2 | DRY | `conditionNormalize._interval_from_grade_knobs` — one Mode A\|B builder from `ReliefGradeKnobs` |
+| **RELIEF-T-34** | medium | **resolved** | P2 | DRY / dataModel | Mode A: flat wire + ``mode_a_grade_knobs()`` → ``ReliefGradeKnobs`` validate/read (T-34A). Mode B unchanged (`ReliefDeltaBand`). Nested `knobs:{}` wire rejected (product lock). |
+| **RELIEF-T-35** | medium | **resolved** | P2 | DRY | `require_weights_pair` / `require_weights_sum` in `reliefGradeKnobs`; call sites: RoleCase, Template root, MountainSideRecipe, GradeKnobs |
+| **RELIEF-T-36** | medium | **resolved** | P2 | DRY | `resolve_picked_template` in `templatePick`; ribbon + mountain stamp call it; R21 policy stays at callers |
 | **RELIEF-T-37** | medium | **resolved** | P2 | wire keys | `worldRow` column names ← `slice_column_key` / `WorldSlice.world_keys` (T-28). Эталон scalars: `RELIEF_OBSTACLE_SCALAR_WIRE_KEYS`. |
-| **RELIEF-T-38** | medium | open | P2 | values | `expand_shoulder_ring`: `max(1, width)` режет `0`; POJO `slope_length_cells` допускает 0. Target: honor 0 или clamp в POJO/TZ |
-| **RELIEF-T-39** | medium | open | P2 | values | `conditionNormalize`: `float(... or 0.0)`, `delta_z or 0/1` — silent fallback мимо validators |
-| **RELIEF-T-40** | low | open | P3 | DRY | seeded SHA256 дубль (`kindRoll`/`templatePick`); skip `RibbonGradeDecision` factory; log `"SLOPE"` → `ReliefSideKind.SLOPE.value` |
+| **RELIEF-T-38** | medium | **resolved** | P2 | values | `expand_shoulder_ring`: honor `width<=0` → empty (no `max(1,…)`). POJO `slope_length_cells>=0` unchanged. `geom_resolve` still clamps L≥1 for partition (separate invariant). |
+| **RELIEF-T-39** | medium | **resolved** | P2 | values | `conditionNormalize`: typed `delta_z` / `mode_a_grade_knobs()` — no `or 0`/`or 1`/`or 0.0` |
+| **RELIEF-T-40** | low | **resolved** | P3 | DRY | `seededHash.seeded_u01`/`seeded_index`; `RibbonGradeDecision.skipped_site`; logs `ReliefSideKind.SLOPE.value` |
 | **RELIEF-T-41** | low | **resolved** | P3 | values | `gradePass` skip attachments ← `ReliefGradeKnobs` defaults |
 
 **Связь R36n (не smell):** `WorldReliefGradeObstacleScalars` + `ReliefGradeObstaclePolicy` + `obstacleClearance` — shipped; bake footprint→`free_gap` ещё нет (отдельный impl после R36 materialize).
@@ -1074,7 +1074,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 6. ~~**Wave D —** `open_land` / `shore`~~ ✅ (`ribbonGradeApply` + contributors)
 7. ~~**Wave D polish**~~ ✅ (`contextRibbonApply` / `ribbonSampleUtil` / `ribbon_intents`+`ref_cells` / BAR-1 once)
 8. **Wave E —** R36s / R36r / R36o / Q4 / R36f/k / UI R30 (later)
-9. **Parallel eng (не gate waves):** **T-33…T-36**, **T-38…T-40**; road-facade naming optional; **T-66** deferred; fixtures `*_templates`  
+9. **Parallel eng (не gate waves):** ~~T-33…T-36, T-38…T-40~~ ✅; road-facade naming optional; **T-66** deferred; fixtures `*_templates`  
 ~~T-28 / T-29 / T-37~~ ✅ worldRow ← slices + import merge module + runtime merge-policy  
    ~~shared `RoadShoulderIntent`/`grade_road_shoulder_*`~~ ✅ → `RibbonIntent` / `grade_ribbon_segments`  
    ~~**T-31/T-32**~~ ✅  
@@ -1119,6 +1119,12 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | 2026-08-06 | **DRY canal single-writer:** T-55/T-57/T-58 resolved (`_resolve_canal_ref`, `EMPTY_EARTHEN_CUT`, `grade_fields`/`intent_fields`) |
 | 2026-08-06 | **Post-fix smell → T-53…T-59:** Intent≠Grade `structure_canal`; skipped coerce; earthen literal; bake event strings; R21 DRY; alias/mapper. T-52 → medium (=T-30). Review canvas `canal-debt-fix-smell-review` |
 | 2026-08-05 | **R36p/q fix wave T-43…T-51 resolved;** T-52 open |
+| 2026-08-10 | **RELIEF-T-40 resolved:** `seededHash`; `RibbonGradeDecision.skipped_site`; `chosen_fallback` ← `ReliefSideKind.SLOPE.value` |
+| 2026-08-10 | **RELIEF-T-38 resolved:** honor `slope_length_cells`/width 0 in `expand_shoulder_ring` (empty ring; no clamp to 1) |
+| 2026-08-10 | **RELIEF-T-33/T-39 resolved:** shared `_interval_from_grade_knobs`; Mode A reads validated POJO (no silent or) |
+| 2026-08-10 | **RELIEF-T-34 resolved (A flat):** Mode A compose via `mode_a_grade_knobs()` → `ReliefGradeKnobs`; wire unchanged |
+| 2026-08-10 | **RELIEF-T-36 resolved:** `resolve_picked_template` shared lookup; R21 skip/fallback at callers |
+| 2026-08-10 | **RELIEF-T-35 resolved:** `require_weights_pair` / `require_weights_sum` SoT in `reliefGradeKnobs` |
 | 2026-08-09 | **Climate repair:** removed synthetic/`legacy_standalone` water; corrupt row → `repairWorldDefaults` (`normalize_world` + persist at batch/`WorldService`); empty `climate_zone_registry` wire → `[]` so facade merge materializes zones |
 | 2026-08-07 | **RELIEF-T-29 resolved:** `worldSliceMerge`; runtime merge-id from POJO `RUNTIME_MERGE_ID_FIELD` (district/barrier) |
 | 2026-08-07 | **RELIEF-T-28/T-37 resolved:** `resolve_registry_list/dict/json_blob_world` + thin `worldRow`; column keys from slices |

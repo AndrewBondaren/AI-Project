@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import hashlib
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from app.application.worldData.generators.terrain.relief.reliefEvents import (
@@ -12,7 +12,9 @@ from app.application.worldData.generators.terrain.relief.reliefLog import (
     relief_info,
     relief_warning,
 )
+from app.application.worldData.generators.terrain.relief.seededHash import seeded_index
 from app.dataModel.terrain.relief.enums import ReliefContext, ReliefPickMode, ReliefSideKind
+from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.terrain.relief.worldReliefPickPolicy import (
     ObjectReliefPickPolicy,
     ReliefContextPickPolicy,
@@ -22,7 +24,6 @@ from app.dataModel.terrain.relief.worldReliefTemplateRegistry import (
     WorldReliefTemplateRegistry,
 )
 
-
 @dataclass(frozen=True, slots=True)
 class PickResult:
     template_uid: str | None
@@ -30,6 +31,21 @@ class PickResult:
     mode: ReliefPickMode | None
     reason: str
     fallback_kind: ReliefSideKind | None = None
+
+
+def resolve_picked_template(
+    pick: PickResult,
+    templates_by_uid: Mapping[str, ReliefTemplate],
+) -> ReliefTemplate | None:
+    """Load template body for a pick (RELIEF-T-36).
+
+    Returns ``None`` when uid is missing or body is not in ``templates_by_uid``.
+    Caller owns R21 policy (ribbon skip vs mountain fallback).
+    """
+    uid = pick.template_uid
+    if not uid:
+        return None
+    return templates_by_uid.get(uid)
 
 
 def merge_pick_policy(
@@ -80,7 +96,7 @@ def pick_template(
             context=ctx,
             mode=effective.mode.value,
             why="empty_candidates",
-            chosen_fallback="SLOPE",
+            chosen_fallback=ReliefSideKind.SLOPE.value,
             policy_level=level,
         )
         return PickResult(
@@ -144,10 +160,10 @@ def pick_template(
         )
 
     # random
-    digest = hashlib.sha256(
-        f"{world_seed}|relief_pick|{ctx}|{site_id}".encode("utf-8")
-    ).digest()
-    idx = int.from_bytes(digest[:8], "big") % len(candidates)
+    idx = seeded_index(
+        f"{world_seed}|relief_pick|{ctx}|{site_id}",
+        len(candidates),
+    )
     uid = candidates[idx].system_template_uid
     relief_info(
         "pick",

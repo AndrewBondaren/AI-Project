@@ -10,13 +10,12 @@ from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire, Stri
 from app.dataModel.terrain.relief.enums import ReliefContext
 from app.dataModel.terrain.relief.mountainSideRecipe import MountainSideRecipe
 from app.dataModel.terrain.relief.reliefGradeKnobs import (
-    WEIGHT_SUM_EPS,
     reject_removed_shoulder_width,
+    require_weights_pair,
     resolved_slope_length_cells,
     validate_canal_flat_refs,
     validate_canal_xor,
     validate_geom_xor,
-    weights_sum_ok,
 )
 from app.dataModel.terrain.relief.reliefTerrainCondition import ReliefTerrainCondition
 
@@ -66,12 +65,11 @@ class ReliefTemplate(BaseModel):
                 raise ValueError("all template conditions must share Mode A or Mode B")
 
         if self.slope_weight is not None or self.sheer_weight is not None:
-            if self.slope_weight is None or self.sheer_weight is None:
-                raise ValueError("root slope_weight and sheer_weight must both be set")
-            if not weights_sum_ok(self.slope_weight, self.sheer_weight):
-                raise ValueError(
-                    f"root slope_weight + sheer_weight must == 1 (±{WEIGHT_SUM_EPS})"
-                )
+            require_weights_pair(
+                self.slope_weight,
+                self.sheer_weight,
+                missing="root slope_weight and sheer_weight must both be set",
+            )
         validate_geom_xor(self.slope_length_cells, self.target_angle_deg)
         validate_canal_xor(self.earthen_canal, self.structure_canal)
         validate_canal_flat_refs(self.structure_canal, self.structure_refs)

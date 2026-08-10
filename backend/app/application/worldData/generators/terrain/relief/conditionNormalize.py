@@ -1,13 +1,17 @@
-"""Normalize Mode A|B wire → ReliefDeltaSchedule (I8)."""
+"""Normalize Mode A|B wire → ReliefDeltaSchedule (I8).
+
+RELIEF-T-33: one knobs→interval builder. RELIEF-T-39: no silent ``or`` fallbacks —
+Mode A fields come from validated POJO / ``mode_a_grade_knobs()``.
+"""
 
 from __future__ import annotations
 
 from app.dataModel.terrain.relief.enums import ReliefSlopePolicy
-from app.dataModel.terrain.relief.reliefDeltaBand import ReliefDeltaBand
 from app.dataModel.terrain.relief.reliefDeltaSchedule import (
     ReliefDeltaInterval,
     ReliefDeltaSchedule,
 )
+from app.dataModel.terrain.relief.reliefGradeKnobs import ReliefGradeKnobs
 from app.dataModel.terrain.relief.reliefRoleCase import ReliefRoleCase
 from app.dataModel.terrain.relief.reliefTerrainCondition import ReliefTerrainCondition
 
@@ -23,31 +27,23 @@ def normalize_condition(condition: ReliefTerrainCondition) -> ReliefDeltaSchedul
     return _normalize_mode_b(none_case, down_case, up_case)
 
 
-def _knobs_from_case(case: ReliefRoleCase, *, value_min: int) -> ReliefDeltaInterval:
+def _interval_from_grade_knobs(
+    knobs: ReliefGradeKnobs,
+    *,
+    value_min: int,
+    value_max: int | None = None,
+) -> ReliefDeltaInterval:
+    """Map validated grade knobs → runtime interval (shared Mode A|B)."""
     return ReliefDeltaInterval(
         value_min=value_min,
-        value_max=None,
-        slope_weight=float(case.slope_weight or 0.0),
-        sheer_weight=float(case.sheer_weight or 0.0),
-        slope_length_cells=case.slope_length_cells,
-        target_angle_deg=case.target_angle_deg,
-        earthen_canal=case.earthen_canal,
-        structure_canal=case.structure_canal,
-        structure_refs=tuple(case.structure_refs),
-    )
-
-
-def _knobs_from_band(band: ReliefDeltaBand) -> ReliefDeltaInterval:
-    return ReliefDeltaInterval(
-        value_min=band.delta_z_min,
-        value_max=band.delta_z_max,
-        slope_weight=band.slope_weight,
-        sheer_weight=band.sheer_weight,
-        slope_length_cells=band.slope_length_cells,
-        target_angle_deg=band.target_angle_deg,
-        earthen_canal=band.earthen_canal,
-        structure_canal=band.structure_canal,
-        structure_refs=tuple(band.structure_refs),
+        value_max=value_max,
+        slope_weight=float(knobs.slope_weight),
+        sheer_weight=float(knobs.sheer_weight),
+        slope_length_cells=knobs.slope_length_cells,
+        target_angle_deg=knobs.target_angle_deg,
+        earthen_canal=knobs.earthen_canal,
+        structure_canal=knobs.structure_canal,
+        structure_refs=tuple(knobs.structure_refs),
     )
 
 
@@ -56,14 +52,24 @@ def _normalize_mode_a(
     down_case: ReliefRoleCase,
     up_case: ReliefRoleCase,
 ) -> ReliefDeltaSchedule:
-    none_max = int(none_case.delta_z or 0)
-    down_min = int(down_case.delta_z or 1)
-    up_min = int(up_case.delta_z or 1)
+    # Mode A POJO guarantees delta_z is set (no silent 0/1)
+    none_max = int(none_case.delta_z)  # type: ignore[arg-type]
+    down_min = int(down_case.delta_z)  # type: ignore[arg-type]
+    up_min = int(up_case.delta_z)  # type: ignore[arg-type]
     return ReliefDeltaSchedule(
         none_max_abs=none_max,
-        none_knobs=_knobs_from_case(none_case, value_min=0),
-        down=(_knobs_from_case(down_case, value_min=down_min),),
-        up=(_knobs_from_case(up_case, value_min=up_min),),
+        none_knobs=_interval_from_grade_knobs(
+            none_case.mode_a_grade_knobs(),
+            value_min=0,
+        ),
+        down=(_interval_from_grade_knobs(
+            down_case.mode_a_grade_knobs(),
+            value_min=down_min,
+        ),),
+        up=(_interval_from_grade_knobs(
+            up_case.mode_a_grade_knobs(),
+            value_min=up_min,
+        ),),
     )
 
 
@@ -73,8 +79,23 @@ def _normalize_mode_b(
     up_case: ReliefRoleCase,
 ) -> ReliefDeltaSchedule:
     del none_case  # Mode B: none_max_abs=0; knobs unused
-    down = tuple(_knobs_from_band(b) for b in (down_case.bands or []))
-    up = tuple(_knobs_from_band(b) for b in (up_case.bands or []))
+    assert down_case.bands is not None and up_case.bands is not None
+    down = tuple(
+        _interval_from_grade_knobs(
+            band,
+            value_min=band.delta_z_min,
+            value_max=band.delta_z_max,
+        )
+        for band in down_case.bands
+    )
+    up = tuple(
+        _interval_from_grade_knobs(
+            band,
+            value_min=band.delta_z_min,
+            value_max=band.delta_z_max,
+        )
+        for band in up_case.bands
+    )
     return ReliefDeltaSchedule(
         none_max_abs=0,
         none_knobs=None,

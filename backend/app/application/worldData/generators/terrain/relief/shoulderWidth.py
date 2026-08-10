@@ -10,13 +10,19 @@ def expand_shoulder_ring(
 ) -> set[tuple[int, int]]:
     """Grow shoulder from ortho seeds away from road up to ``width`` light cells.
 
-    ``width`` is clamped to >= 1. Seeds are ring-1 (adjacent to road). Each
-    extra unit steps one cell along the unique outward ortho direction
-    (from nearest road toward the seed). If nearest roads disagree on
-    direction (pocket between roads), the seed is not expanded.
-    Never enters ``ref_cells``.
+    ``width`` is ``slope_length_cells`` / outward L (RELIEF-T-38):
+    - ``<= 0`` → empty (honor explicit 0; no silent clamp to 1)
+    - ``1`` → seed ring only (no extra steps)
+    - ``> 1`` → seed + ``width - 1`` ortho steps outward
+
+    Seeds are ring-1 (adjacent to road). Extra units step along the unique
+    outward ortho direction (from nearest road toward the seed). If nearest
+    roads disagree on direction (pocket between roads), the seed is not
+    expanded. Never enters ``ref_cells``.
     """
-    w = max(1, int(width))
+    w = int(width)
+    if w <= 0:
+        return set()
     out: set[tuple[int, int]] = set(seed_cells)
     if w == 1 or not ref_cells:
         return out

@@ -27,7 +27,10 @@ from app.application.worldData.generators.terrain.relief.reliefLog import relief
 from app.application.worldData.generators.terrain.relief.ribbonSegmentize import (
     RibbonSegment,
 )
-from app.application.worldData.generators.terrain.relief.templatePick import pick_template
+from app.application.worldData.generators.terrain.relief.templatePick import (
+    pick_template,
+    resolve_picked_template,
+)
 from app.dataModel.terrain.relief.enums import ReliefContext
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.terrain.relief.worldReliefPickPolicy import ObjectReliefPickPolicy
@@ -73,7 +76,8 @@ def grade_ribbon_segments(
             object_policy=object_policy,
         )
         seq += 1
-        if not pick.template_uid or pick.template_uid not in templates_by_uid:
+        template = resolve_picked_template(pick, templates_by_uid)
+        if template is None:
             relief_info(
                 EVENT_RIBBON_SKIP,
                 context=context.value,
@@ -82,10 +86,9 @@ def grade_ribbon_segments(
                 template_uid=pick.template_uid,
             )
             continue
-        template = templates_by_uid[pick.template_uid]
         decision = grade_from_template(
             template=template,
-            template_uid=pick.template_uid,
+            template_uid=pick.template_uid or template.system_name,
             terrain_key=segment.terrain_key,
             dz=segment.dz,
             world_seed=world_seed,

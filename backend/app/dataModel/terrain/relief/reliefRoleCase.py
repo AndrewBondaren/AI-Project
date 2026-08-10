@@ -1,22 +1,23 @@
-"""One slope policy case — Mode A (delta_z) or Mode B (bands) — tz_terrain_relief R32/R36b."""
+"""One slope policy case — Mode A (delta_z) or Mode B (bands) — tz_terrain_relief R32/R36b.
+
+Mode A knobs: flat wire (T-34A); validate / read via ``ReliefGradeKnobs`` compose.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire
 from app.dataModel.terrain.relief.enums import ReliefSlopePolicy
 from app.dataModel.terrain.relief.reliefDeltaBand import ReliefDeltaBand
 from app.dataModel.terrain.relief.reliefGradeKnobs import (
-    WEIGHT_SUM_EPS,
+    ReliefGradeKnobs,
     reject_removed_shoulder_width,
     resolved_slope_length_cells,
     validate_canal_flat_refs,
     validate_canal_xor,
-    validate_geom_xor,
-    weights_sum_ok,
 )
 
 # Overlap check: unbounded max acts as a blocker for any later band
@@ -29,7 +30,7 @@ class ReliefRoleCase(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     policy: StrictEnumOnWire[ReliefSlopePolicy]
-    # Mode A
+    # Mode A threshold + flat knobs (wire); knobs SoT = ``mode_a_grade_knobs()``
     delta_z: DefaultOnWire[int | None] = None
     slope_weight: DefaultOnWire[float | None] = None
     sheer_weight: DefaultOnWire[float | None] = None
@@ -62,17 +63,8 @@ class ReliefRoleCase(BaseModel):
                     raise ValueError("slope_none delta_z must be >= 0")
             elif dz < 1:
                 raise ValueError(f"{self.policy.value} delta_z must be >= 1")
-            if self.slope_weight is None or self.sheer_weight is None:
-                raise ValueError("Mode A case requires slope_weight and sheer_weight")
-            if not weights_sum_ok(self.slope_weight, self.sheer_weight):
-                raise ValueError(
-                    f"slope_weight + sheer_weight must == 1 (±{WEIGHT_SUM_EPS})"
-                )
-            if self.slope_weight < 0 or self.sheer_weight < 0:
-                raise ValueError("weights must be >= 0")
-            validate_geom_xor(self.slope_length_cells, self.target_angle_deg)
-            validate_canal_xor(self.earthen_canal, self.structure_canal)
-            validate_canal_flat_refs(self.structure_canal, self.structure_refs)
+            # Weights / geom / canal — single SoT (RELIEF-T-34A)
+            self.mode_a_grade_knobs()
         else:
             assert self.bands is not None
             if self.policy == ReliefSlopePolicy.SLOPE_NONE:
@@ -81,6 +73,7 @@ class ReliefRoleCase(BaseModel):
             elif len(self.bands) < 1:
                 raise ValueError(f"{self.policy.value} Mode B requires non-empty bands")
             _reject_band_overlap(self.bands)
+            # Case-level canal attachments (bands carry their own knobs)
             validate_canal_xor(self.earthen_canal, self.structure_canal)
             validate_canal_flat_refs(self.structure_canal, self.structure_refs)
         return self
@@ -89,7 +82,22 @@ class ReliefRoleCase(BaseModel):
     def is_mode_a(self) -> bool:
         return self.delta_z is not None
 
+    def mode_a_grade_knobs(self) -> ReliefGradeKnobs:
+        """Compose Mode A flat fields into ``ReliefGradeKnobs`` (validate + typed read)."""
+        if not self.is_mode_a:
+            raise RuntimeError("mode_a_grade_knobs is only valid for Mode A cases")
+        payload = {
+            name: getattr(self, name)
+            for name in ReliefGradeKnobs.model_fields
+        }
+        try:
+            return ReliefGradeKnobs.model_validate(payload)
+        except ValidationError as exc:
+            raise ValueError(str(exc)) from exc
+
     def outward_length_cells(self) -> int:
+        if self.is_mode_a:
+            return self.mode_a_grade_knobs().outward_length_cells()
         return resolved_slope_length_cells(self.slope_length_cells)
 
 

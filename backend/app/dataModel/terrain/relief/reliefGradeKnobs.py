@@ -18,6 +18,28 @@ def weights_sum_ok(slope_weight: float, sheer_weight: float) -> bool:
     return abs(float(slope_weight) + float(sheer_weight) - 1.0) <= WEIGHT_SUM_EPS
 
 
+def require_weights_sum(slope_weight: float, sheer_weight: float) -> None:
+    """R27: ``slope_weight + sheer_weight == 1`` (±``WEIGHT_SUM_EPS``)."""
+    if not weights_sum_ok(slope_weight, sheer_weight):
+        raise ValueError(
+            f"slope_weight + sheer_weight must == 1 (±{WEIGHT_SUM_EPS}); "
+            f"got {slope_weight}+{sheer_weight}"
+        )
+
+
+def require_weights_pair(
+    slope_weight: float | None,
+    sheer_weight: float | None,
+    *,
+    missing: str,
+) -> tuple[float, float]:
+    """Both weights required and sum to 1 (RELIEF-T-35). Returns typed pair."""
+    if slope_weight is None or sheer_weight is None:
+        raise ValueError(missing)
+    require_weights_sum(slope_weight, sheer_weight)
+    return float(slope_weight), float(sheer_weight)
+
+
 def reject_removed_shoulder_width(data: Any) -> Any:
     """``shoulder_width_cells`` removed — use ``slope_length_cells`` (R36b)."""
     if isinstance(data, dict) and _REMOVED_SHOULDER_WIDTH in data:
@@ -110,11 +132,7 @@ class ReliefGradeKnobs(BaseModel):
 
     @model_validator(mode="after")
     def _weights_and_geom(self) -> ReliefGradeKnobs:
-        if not weights_sum_ok(self.slope_weight, self.sheer_weight):
-            raise ValueError(
-                f"slope_weight + sheer_weight must == 1 (±{WEIGHT_SUM_EPS}); "
-                f"got {self.slope_weight}+{self.sheer_weight}"
-            )
+        require_weights_sum(self.slope_weight, self.sheer_weight)
         validate_geom_xor(self.slope_length_cells, self.target_angle_deg)
         validate_canal_xor(self.earthen_canal, self.structure_canal)
         validate_canal_flat_refs(self.structure_canal, self.structure_refs)

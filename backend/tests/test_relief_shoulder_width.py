@@ -11,6 +11,11 @@ from app.application.worldData.generators.terrain.relief.shoulderWidth import (
 
 
 class ShoulderWidthTest(unittest.TestCase):
+    def test_width_0_is_empty(self) -> None:
+        seeds = {(1, 0), (2, 0)}
+        road = {(0, 0)}
+        self.assertEqual(expand_shoulder_ring(seeds, road, 0), set())
+
     def test_width_1_is_seeds(self) -> None:
         seeds = {(1, 0), (2, 0)}
         road = {(0, 0), (0, 1)}

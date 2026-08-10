@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire
 from app.dataModel.terrain.relief.enums import MountainSideRecipeMode, ReliefSideKind
-from app.dataModel.terrain.relief.reliefGradeKnobs import WEIGHT_SUM_EPS, weights_sum_ok
+from app.dataModel.terrain.relief.reliefGradeKnobs import require_weights_pair
 
 
 class MountainSideRecipe(BaseModel):
@@ -34,12 +34,11 @@ class MountainSideRecipe(BaseModel):
         if n > 1:
             raise ValueError("side_recipe: mix of weights/pattern/fixed (R33)")
         if has_weights:
-            if self.slope_weight is None or self.sheer_weight is None:
-                raise ValueError("side_recipe Mode A needs both slope_weight and sheer_weight")
-            if not weights_sum_ok(self.slope_weight, self.sheer_weight):
-                raise ValueError(
-                    f"slope_weight + sheer_weight must == 1 (±{WEIGHT_SUM_EPS})"
-                )
+            require_weights_pair(
+                self.slope_weight,
+                self.sheer_weight,
+                missing="side_recipe Mode A needs both slope_weight and sheer_weight",
+            )
         if self.side_kinds is not None and len(self.side_kinds) == 0:
             raise ValueError("side_recipe pattern side_kinds must be non-empty")
         return self

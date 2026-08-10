@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import hashlib
-
 from app.application.worldData.generators.terrain.relief.reliefLog import relief_debug
+from app.application.worldData.generators.terrain.relief.seededHash import seeded_u01
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 
 
@@ -29,9 +28,7 @@ def kind_roll(
         key = f"{world_seed}|{context}|{template_uid}|{site_id}"
         if side_index is not None:
             key += f"|{side_index}"
-        digest = hashlib.sha256(key.encode("utf-8")).digest()
-        # map first 8 bytes → [0, 1)
-        u = int.from_bytes(digest[:8], "big") / float(2**64)
+        u = seeded_u01(key)
         kind = ReliefSideKind.SHEER if u < sheer_weight else ReliefSideKind.SLOPE
         reason = f"u={u:.6f}<sheer={sheer_weight}"
 

@@ -61,6 +61,34 @@ class RibbonGradeDecision:
     skipped: bool = False
     structure_canal: str | None = None
 
+    @classmethod
+    def skipped_site(
+        cls,
+        *,
+        template_uid: str,
+        reason: str,
+        h: int,
+        requested_length: int,
+        earthen_canal: bool | None,
+        structure_refs: tuple[str, ...],
+        structure_canal: str | None,
+        policy: ReliefSlopePolicy | None = None,
+    ) -> RibbonGradeDecision:
+        """Factory for skip paths (no condition / slope_none) — RELIEF-T-40."""
+        return cls(
+            template_uid=template_uid,
+            policy=policy,
+            kind=None,
+            requested_length=requested_length,
+            h=h,
+            geom=None,
+            earthen_canal=earthen_canal,
+            structure_refs=structure_refs,
+            reason=reason,
+            skipped=True,
+            structure_canal=structure_canal,
+        )
+
 
 def grade_from_template(
     *,
@@ -85,17 +113,13 @@ def grade_from_template(
             reason="no_condition",
             site_id=site_id,
         )
-        return RibbonGradeDecision(
+        return RibbonGradeDecision.skipped_site(
             template_uid=template_uid,
-            policy=None,
-            kind=None,
-            requested_length=root_length,
+            reason="no_condition",
             h=h,
-            geom=None,
+            requested_length=root_length,
             earthen_canal=earthen_default,
             structure_refs=refs_default,
-            reason="no_condition",
-            skipped=True,
             structure_canal=canal_default,
         )
 
@@ -109,7 +133,7 @@ def grade_from_template(
             why=WHY_SCHEDULE_HOLE,
             dz=dz,
             terrain=terrain_key,
-            chosen_fallback="SLOPE",
+            chosen_fallback=ReliefSideKind.SLOPE.value,
             site_id=site_id,
         )
         geom = geom_resolve(
@@ -137,18 +161,15 @@ def grade_from_template(
             reason=hit.reason,
             site_id=site_id,
         )
-        return RibbonGradeDecision(
+        return RibbonGradeDecision.skipped_site(
             template_uid=template_uid,
-            policy=hit.policy,
-            kind=None,
-            requested_length=root_length,
+            reason=hit.reason,
             h=h,
-            geom=None,
+            requested_length=root_length,
             earthen_canal=earthen_default,
             structure_refs=refs_default,
-            reason=hit.reason,
-            skipped=True,
             structure_canal=canal_default,
+            policy=hit.policy,
         )
 
     assert hit.knobs is not None

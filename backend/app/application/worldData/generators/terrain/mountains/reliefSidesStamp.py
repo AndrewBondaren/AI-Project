@@ -9,7 +9,10 @@ from app.application.worldData.generators.terrain.relief.reliefEvents import (
     EVENT_RESOLVE_FALLBACK,
 )
 from app.application.worldData.generators.terrain.relief.reliefLog import relief_info, relief_warning
-from app.application.worldData.generators.terrain.relief.templatePick import pick_template
+from app.application.worldData.generators.terrain.relief.templatePick import (
+    pick_template,
+    resolve_picked_template,
+)
 from app.application.jsonValidation.worldRow import relief_pick_policy, relief_template_registry
 from app.dataModel.terrain.relief.enums import ReliefContext, ReliefSideKind
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
@@ -62,15 +65,13 @@ def stamp_mountain_sides_from_relief(
         object_policy=object_policy if isinstance(object_policy, ObjectReliefPickPolicy) else None,
     )
 
-    template: ReliefTemplate | None = None
-    if pick.template_uid and pick.template_uid in templates_by_uid:
-        template = templates_by_uid[pick.template_uid]
-    elif pick.template_uid:
+    template = resolve_picked_template(pick, templates_by_uid)
+    if pick.template_uid and template is None:
         relief_warning(
             EVENT_RESOLVE_FALLBACK,
             context=ReliefContext.MOUNTAIN.value,
             why=f"missing_body={pick.template_uid}",
-            chosen_fallback="SLOPE",
+            chosen_fallback=ReliefSideKind.SLOPE.value,
             site_id=mountain_id,
         )
 
