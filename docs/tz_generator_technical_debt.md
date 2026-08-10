@@ -3,7 +3,7 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py`, `worldBundleService.py`, relief library/import services.  
-**Обновлено:** 2026-08-10 — P2/P3 SOLID/DRY **T-33…T-40** ✅ (excl. T-66); relief Wave A–D ✅; next **Wave E** later; plan [`relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).
+**Обновлено:** 2026-08-10 — SOLID/DRY **T-33…T-41, T-66** ✅; relief Wave A–D ✅; next **Wave E** later; plan [`relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).
 
 **Связанные документы:**
 
@@ -968,7 +968,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | **RELIEF-T-63** | low | **resolved** | P3 | хардкод | `project_canal_draw` / `EMPTY_DRAW` в materialize+Intent. Wave **B5**. |
 | **RELIEF-T-64** | medium | **resolved** | P2 | ответственность / values | `SeedMaterializeSkip` + `SegmentMaterializeResult.skip_why`; apply `reason=mat.skip_why or WHY_NOT_STAMPED` (не всегда `clearance_skip`). Wave **B4b**. |
 | **RELIEF-T-65** | low | **resolved** | P3 | DRY / observability | Empty-sample log = apply only; sample pure. Wave **B5**. |
-| **RELIEF-T-66** | low | open | P3 | observability | `EVENT_RIBBON_SKIP` монотокен — **deferred** (why достаточно; не блокер C). Optional later. |
+| **RELIEF-T-66** | low | **resolved** | P3 | observability | Skip layers: `ribbon_skip_apply` \| `_grade` \| `_materialize` + closed `WHY_*` sets; monotoken `ribbon_skip` removed |
 | **RELIEF-T-67** | **high** | **resolved** | P1 | observability | Bake file miss: `reliefLog` → `app.relief` не в `_GENERATION_PREFIXES` → shoulder/canal warnings не в `bake-light-*.log`. **Fix:** allowlist `app.relief`. |
 
 **Связанный pre-existing (не новый, но в том же ревью):** **RELIEF-T-34** — `ReliefRoleCase` Mode A дублирует knobs-поля.  
@@ -1000,7 +1000,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | 4 | `materialize` pipeline + bake adapters; stamp log vs outcome | SRP | **T-61** | **B5** ✅ | § Wave B · B5 |
 | 5 | `_ORTHO` ≠ Facing | хардкод | **T-62** | **B5** ✅ | § Wave B · B5 |
 | 6 | `CanalDrawResult(False,…)` мимо `EMPTY_DRAW` | хардкод | **T-63** | **B5** ✅ | § Wave B · B5 |
-| 7 | `EVENT_RIBBON_SKIP` монотокен | observability | **T-66** | deferred optional | § Wave B · B5 |
+| 7 | `EVENT_RIBBON_SKIP` монотокен | observability | **T-66** | ✅ layer events + why | § Wave B · B5 |
 | 8 | `json_col` structure_refs `{}` | mapper | **T-59** | **B5** ✅ | § Wave B · B5 |
 
 #### B4 schedule (T-54 / T-64) — shipped 2026-08-06
@@ -1074,7 +1074,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 6. ~~**Wave D —** `open_land` / `shore`~~ ✅ (`ribbonGradeApply` + contributors)
 7. ~~**Wave D polish**~~ ✅ (`contextRibbonApply` / `ribbonSampleUtil` / `ribbon_intents`+`ref_cells` / BAR-1 once)
 8. **Wave E —** R36s / R36r / R36o / Q4 / R36f/k / UI R30 (later)
-9. **Parallel eng (не gate waves):** ~~T-33…T-36, T-38…T-40~~ ✅; road-facade naming optional; **T-66** deferred; fixtures `*_templates`  
+9. **Parallel eng (не gate waves):** ~~T-33…T-41, T-66~~ ✅; road-facade naming optional; fixtures `*_templates`  
 ~~T-28 / T-29 / T-37~~ ✅ worldRow ← slices + import merge module + runtime merge-policy  
    ~~shared `RoadShoulderIntent`/`grade_road_shoulder_*`~~ ✅ → `RibbonIntent` / `grade_ribbon_segments`  
    ~~**T-31/T-32**~~ ✅  
@@ -1119,6 +1119,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | 2026-08-06 | **DRY canal single-writer:** T-55/T-57/T-58 resolved (`_resolve_canal_ref`, `EMPTY_EARTHEN_CUT`, `grade_fields`/`intent_fields`) |
 | 2026-08-06 | **Post-fix smell → T-53…T-59:** Intent≠Grade `structure_canal`; skipped coerce; earthen literal; bake event strings; R21 DRY; alias/mapper. T-52 → medium (=T-30). Review canvas `canal-debt-fix-smell-review` |
 | 2026-08-05 | **R36p/q fix wave T-43…T-51 resolved;** T-52 open |
+| 2026-08-10 | **RELIEF-T-66 resolved:** `ribbon_skip_apply`/`_grade`/`_materialize` + closed why sets; drop monotoken |
 | 2026-08-10 | **RELIEF-T-40 resolved:** `seededHash`; `RibbonGradeDecision.skipped_site`; `chosen_fallback` ← `ReliefSideKind.SLOPE.value` |
 | 2026-08-10 | **RELIEF-T-38 resolved:** honor `slope_length_cells`/width 0 in `expand_shoulder_ring` (empty ring; no clamp to 1) |
 | 2026-08-10 | **RELIEF-T-33/T-39 resolved:** shared `_interval_from_grade_knobs`; Mode A reads validated POJO (no silent or) |

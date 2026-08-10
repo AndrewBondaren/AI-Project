@@ -18,6 +18,9 @@ from app.application.worldData.generators.terrain.relief.ribbonSeedResolve impor
     SeedClearanceSkip,
     resolve_seed_clearance,
 )
+from app.application.worldData.generators.terrain.relief.reliefEvents import (
+    WHY_CLEARANCE_L_EFF,
+)
 from app.dataModel.terrain.relief import ReliefTemplate
 from app.dataModel.terrain.relief.enums import ReliefGradeObstaclePolicy
 from app.dataModel.terrain.relief.worldReliefGradeObstacle import (
@@ -69,7 +72,7 @@ class EdgeRoadAnchorTest(unittest.TestCase):
         )
         self.assertIsInstance(out, SeedClearanceSkip)
         assert isinstance(out, SeedClearanceSkip)
-        self.assertEqual(out.why, "clearance_L_eff")
+        self.assertEqual(out.why, WHY_CLEARANCE_L_EFF)
 
         w2 = World(
             world_uid="w",

@@ -485,9 +485,20 @@ else:
 |---|---|---|
 | R21 warn + soft fallback (общий) | `EVENT_RESOLVE_FALLBACK` | `resolve_fallback` |
 | Schedule hole → safe SLOPE (не silent skip) | `REASON_SCHEDULE_HOLE_SAFE_SLOPE` + why `WHY_SCHEDULE_HOLE` | `schedule_hole_safe_slope` / `schedule_hole` |
-| Shared ribbon skip / apply / BAR-1 | `EVENT_RIBBON_SKIP` / `EVENT_RIBBON_GRADE_APPLY` / `EVENT_RIBBON_BARRIER` | `ribbon_skip` / `ribbon_grade_apply` / `ribbon_barrier` |
+| Ribbon grade apply / BAR-1 | `EVENT_RIBBON_GRADE_APPLY` / `EVENT_RIBBON_BARRIER` | `ribbon_grade_apply` / `ribbon_barrier` |
 | Grade column height &lt; 1 | `WHY_HEIGHT_LT_1` | `height_lt_1` |
 | Нет abutment / footprint cells | `WHY_NO_REF_CELLS` | `no_ref_cells` |
+
+**Ribbon skip (RELIEF-T-66)** — event = **слой**, `why=` = причина (всегда из `WHY_*`). Монотокен `ribbon_skip` **удалён**.
+
+| Event | Wire | Допустимые `why` |
+|---|---|---|
+| `EVENT_RIBBON_SKIP_APPLY` | `ribbon_skip_apply` | `no_ref_cells`, `no_templates`, `empty_sample` |
+| `EVENT_RIBBON_SKIP_GRADE` | `ribbon_skip_grade` | `no_template_body` |
+| `EVENT_RIBBON_SKIP_MATERIALIZE` | `ribbon_skip_materialize` | `height_lt_1`, `no_edge_road_anchor`, `no_unique_outward`, `clearance_L_eff`, `empty_plan`, `stamp_obstacle_break`, `stamp_column_fail`, `empty_stamp` |
+
+`WHY_NOT_STAMPED` — aggregate Intent reason, **не** обязательный event `ribbon_skip_*`.  
+`EVENT_GRADE_SKIP` — classify skip (no_condition / slope_none), **не** ribbon_skip_*.
 
 **Не** wire-имена: `r21_fallback`, `schedule_hole_r21_slope`, `road_shoulder_barrier`, `h_lt_1`, legacy aliases (`EVENT_R21_FALLBACK`, `EVENT_ROAD_SHOULDER_*`, `WHY_NO_ROAD_CELLS`). R21 в тексте ТЗ = **правило**, не строка лога.
 
@@ -1635,7 +1646,7 @@ templates → R36 → BAR-1 →  open_land + shore ✅               →  R36s 8
 | Sample DRY | `ribbonSampleUtil`: `CARDINAL_ORTHO_DELTAS`, `iter_compose_cells`, landward/skip helpers |
 | Intents bag | `LightGridBakeContext.ribbon_intents` (не `road_shoulder_intents`) |
 | Materialize / stamp / anchor API | `ref_cells=` (road footprint остаётся `road_cells` только на road sample/apply boundary) |
-| Events | `EVENT_RIBBON_SKIP` / `EVENT_RIBBON_GRADE_APPLY` / `EVENT_RIBBON_BARRIER` / `EVENT_RESOLVE_FALLBACK`; why/reason — § Warn + fallback (R21) |
+| Events | `EVENT_RIBBON_SKIP_APPLY` / `_GRADE` / `_MATERIALIZE` + why; `EVENT_RIBBON_GRADE_APPLY` / `EVENT_RIBBON_BARRIER` / `EVENT_RESOLVE_FALLBACK` — § Warn + fallback (R21) |
 | Owner uid | `ReliefContext.OPEN_LAND.value` / `.SHORE.value` |
 | BAR-1 | once in `compose_light_grid` after contributors |
 | Early-exit | только в `apply_ribbon_grades` (road Apply не дублирует) |
@@ -1691,6 +1702,7 @@ templates → R36 → BAR-1 →  open_land + shore ✅               →  R36s 8
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-10 | **RELIEF-T-66:** ribbon skip → `ribbon_skip_apply` \| `_grade` \| `_materialize` + closed `why` sets; drop monotoken `ribbon_skip`; clearance WHY → `WHY_NO_UNIQUE_OUTWARD` / `WHY_CLEARANCE_L_EFF` |
 | 2026-08-10 | **L=0 lock (T-38):** wire `slope_length_cells >= 0`; omit→1; explicit 0 = no outward columns / empty ring; materialize `L_eff≥1` when h≥1 (partition) — R22/R36b/e/C4/§8a sync |
 | 2026-08-10 | **P2 SOLID/DRY:** T-33…T-36, T-34A flat, T-39 — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) |
 | 2026-08-07 | **reliefEvents rename SoT:** `EVENT_RESOLVE_FALLBACK` / `EVENT_RIBBON_BARRIER` / `REASON_SCHEDULE_HOLE_SAFE_SLOPE` / `WHY_HEIGHT_LT_1`; drop legacy `r21_*` / `road_shoulder_barrier` / `h_lt_1` aliases — § Warn + fallback (R21) |

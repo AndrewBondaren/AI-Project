@@ -10,7 +10,7 @@ from app.application.jsonValidation.worldRow import canal_templates, relief_pick
 from app.application.worldData.generators.terrain.relief.bakeSeed import bake_seed
 from app.application.worldData.generators.terrain.relief.reliefEvents import (
     EVENT_RIBBON_GRADE_APPLY,
-    EVENT_RIBBON_SKIP,
+    EVENT_RIBBON_SKIP_APPLY,
     WHY_EMPTY_SAMPLE,
     WHY_NO_REF_CELLS,
     WHY_NO_TEMPLATES,
@@ -52,7 +52,7 @@ def apply_ribbon_grades(
     """Segmentize → grade(context) → materialize; append intents to bake ctx."""
     if not ref_cells:
         relief_debug(
-            EVENT_RIBBON_SKIP,
+            EVENT_RIBBON_SKIP_APPLY,
             owner_uid=owner_uid,
             context=context.value,
             why=WHY_NO_REF_CELLS,
@@ -60,7 +60,7 @@ def apply_ribbon_grades(
         return []
     if not ctx.relief_templates_by_uid:
         relief_debug(
-            EVENT_RIBBON_SKIP,
+            EVENT_RIBBON_SKIP_APPLY,
             owner_uid=owner_uid,
             context=context.value,
             why=WHY_NO_TEMPLATES,
@@ -68,7 +68,7 @@ def apply_ribbon_grades(
         return []
     if not samples:
         relief_debug(
-            EVENT_RIBBON_SKIP,
+            EVENT_RIBBON_SKIP_APPLY,
             owner_uid=owner_uid,
             context=context.value,
             why=WHY_EMPTY_SAMPLE,

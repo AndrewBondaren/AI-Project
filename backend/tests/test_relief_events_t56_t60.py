@@ -1,4 +1,4 @@
-"""Unit: RELIEF-T-56 event tokens + RELIEF-T-60 silent-path logs (Wave B2/B3)."""
+"""Unit: RELIEF-T-56 event tokens + RELIEF-T-60/T-66 ribbon skip layers."""
 
 from __future__ import annotations
 
@@ -8,15 +8,22 @@ from app.application.worldData.generators.terrain.relief import canalAttachments
 from app.application.worldData.generators.terrain.relief.reliefEvents import (
     EVENT_RESOLVE_FALLBACK,
     EVENT_RIBBON_BARRIER,
-    EVENT_RIBBON_SKIP,
+    EVENT_RIBBON_SKIP_APPLY,
+    EVENT_RIBBON_SKIP_GRADE,
+    EVENT_RIBBON_SKIP_MATERIALIZE,
     REASON_SCHEDULE_HOLE_SAFE_SLOPE,
+    WHY_CLEARANCE_L_EFF,
     WHY_EMPTY_SAMPLE,
     WHY_HEIGHT_LT_1,
     WHY_NO_EDGE_ROAD_ANCHOR,
     WHY_NO_REF_CELLS,
     WHY_NO_TEMPLATES,
+    WHY_NO_UNIQUE_OUTWARD,
     WHY_NOT_STAMPED,
     WHY_SCHEDULE_HOLE,
+    WHYS_RIBBON_SKIP_APPLY,
+    WHYS_RIBBON_SKIP_GRADE,
+    WHYS_RIBBON_SKIP_MATERIALIZE,
 )
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
@@ -41,8 +48,21 @@ class ReliefEventsTokensTest(unittest.TestCase):
         self.assertEqual(WHY_HEIGHT_LT_1, "height_lt_1")
         self.assertEqual(WHY_NO_EDGE_ROAD_ANCHOR, "no_edge_road_anchor")
         self.assertEqual(WHY_NOT_STAMPED, "not_stamped")
-        self.assertEqual(EVENT_RIBBON_SKIP, "ribbon_skip")
+        self.assertEqual(EVENT_RIBBON_SKIP_APPLY, "ribbon_skip_apply")
+        self.assertEqual(EVENT_RIBBON_SKIP_GRADE, "ribbon_skip_grade")
+        self.assertEqual(EVENT_RIBBON_SKIP_MATERIALIZE, "ribbon_skip_materialize")
         self.assertEqual(WHY_NO_REF_CELLS, "no_ref_cells")
+        self.assertEqual(WHY_NO_UNIQUE_OUTWARD, "no_unique_outward")
+        self.assertEqual(WHY_CLEARANCE_L_EFF, "clearance_L_eff")
+
+    def test_t66_why_sets_closed(self) -> None:
+        self.assertEqual(
+            WHYS_RIBBON_SKIP_APPLY,
+            frozenset({WHY_NO_REF_CELLS, WHY_NO_TEMPLATES, WHY_EMPTY_SAMPLE}),
+        )
+        self.assertEqual(WHYS_RIBBON_SKIP_GRADE, frozenset({"no_template_body"}))
+        self.assertIn(WHY_CLEARANCE_L_EFF, WHYS_RIBBON_SKIP_MATERIALIZE)
+        self.assertIn(WHY_NO_UNIQUE_OUTWARD, WHYS_RIBBON_SKIP_MATERIALIZE)
 
 
 class ReliefSilentPathLogsTest(unittest.TestCase):
@@ -66,7 +86,7 @@ class ReliefSilentPathLogsTest(unittest.TestCase):
             )
         self.assertEqual(out, [])
         blob = "\n".join(cm.output)
-        self.assertIn(EVENT_RIBBON_SKIP, blob)
+        self.assertIn(EVENT_RIBBON_SKIP_APPLY, blob)
         self.assertIn(WHY_NO_REF_CELLS, blob)
 
     def test_apply_early_exit_no_templates_logged(self) -> None:
@@ -89,6 +109,7 @@ class ReliefSilentPathLogsTest(unittest.TestCase):
             )
         self.assertEqual(out, [])
         blob = "\n".join(cm.output)
+        self.assertIn(EVENT_RIBBON_SKIP_APPLY, blob)
         self.assertIn(WHY_NO_TEMPLATES, blob)
 
     def test_sample_empty_silent_t65(self) -> None:

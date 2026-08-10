@@ -13,6 +13,10 @@ from app.application.worldData.generators.terrain.relief.gradeObstacleLight impo
 from app.application.worldData.generators.terrain.relief.obstacleClearance import (
     outward_length,
 )
+from app.application.worldData.generators.terrain.relief.reliefEvents import (
+    WHY_CLEARANCE_L_EFF,
+    WHY_NO_UNIQUE_OUTWARD,
+)
 from app.application.worldData.generators.terrain.relief.shoulderWidth import (
     unique_outward,
 )
@@ -51,7 +55,7 @@ def resolve_seed_clearance(
     """Phase 1: outward + gap + world policy → ``L_eff`` or skip."""
     outward = unique_outward(seed, ref_cells)
     if outward is None:
-        return SeedClearanceSkip(seed=seed, why="no_unique_outward")
+        return SeedClearanceSkip(seed=seed, why=WHY_NO_UNIQUE_OUTWARD)
 
     def _blocked(cell: Coord) -> bool:
         return is_grade_obstacle_light(
@@ -68,7 +72,7 @@ def resolve_seed_clearance(
     if L_eff < 1:
         return SeedClearanceSkip(
             seed=seed,
-            why="clearance_L_eff",
+            why=WHY_CLEARANCE_L_EFF,
             free_gap=gap,
             requested=requested,
             L_eff=L_eff,

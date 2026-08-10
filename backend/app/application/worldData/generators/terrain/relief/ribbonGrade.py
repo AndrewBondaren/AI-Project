@@ -20,7 +20,7 @@ from app.application.worldData.generators.terrain.relief.gradePass import (
 )
 from app.application.worldData.generators.terrain.relief.reliefEvents import (
     EVENT_RIBBON_GRADE_APPLY,
-    EVENT_RIBBON_SKIP,
+    EVENT_RIBBON_SKIP_GRADE,
     WHY_NO_TEMPLATE_BODY,
 )
 from app.application.worldData.generators.terrain.relief.reliefLog import relief_info
@@ -79,10 +79,10 @@ def grade_ribbon_segments(
         template = resolve_picked_template(pick, templates_by_uid)
         if template is None:
             relief_info(
-                EVENT_RIBBON_SKIP,
+                EVENT_RIBBON_SKIP_GRADE,
                 context=context.value,
                 site_id=segment.site_id,
-                reason=WHY_NO_TEMPLATE_BODY,
+                why=WHY_NO_TEMPLATE_BODY,
                 template_uid=pick.template_uid,
             )
             continue
