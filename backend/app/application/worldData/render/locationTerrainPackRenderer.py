@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from app.application.worldData.render.fineTerrainAsciiKernel import (
     column_diagnostics_summary,
     draw_int_grid,
@@ -96,9 +98,14 @@ class LocationTerrainPackRenderer:
             title=f"location={self.location_uid}  (pack location_terrain, surface_grade)",
         )
 
-    def render_grade_at_z(self, z: int) -> str:
+    def render_grade_at_z(
+        self,
+        z: int,
+        *,
+        by_surface_z: Mapping[int, Mapping[tuple[int, int], str]] | None = None,
+    ) -> str:
         """Grade where column surface_z == ``z``; omit if empty."""
-        symbols = symbols_grade_at_z(self._cols, z)
+        symbols = symbols_grade_at_z(self._cols, z, by_surface_z=by_surface_z)
         if not symbols:
             return ""
         return self._draw(
@@ -185,16 +192,9 @@ class LocationTerrainPackRenderer:
             text = self.render_level(z)
             if text.strip():
                 out[str(z)] = text
-        for z, cells in symbols_grade_by_surface_z(self._cols).items():
-            if not cells:
-                continue
-            text = self._draw(
-                cells,
-                title=(
-                    f"location={self.location_uid} grade z={z}  "
-                    f"(pack location_terrain; surface_z only)"
-                ),
-            )
+        by_grade_z = symbols_grade_by_surface_z(self._cols)
+        for z in sorted(by_grade_z):
+            text = self.render_grade_at_z(int(z), by_surface_z=by_grade_z)
             if text.strip():
                 out[grade_level_key(int(z))] = text
         return out

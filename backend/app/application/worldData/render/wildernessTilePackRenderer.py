@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from app.application.worldData.render.fineTerrainAsciiKernel import (
     column_diagnostics_summary,
     draw_int_grid,
@@ -131,9 +133,14 @@ class WildernessTilePackRenderer:
             bounds=self.mosaic_xy_bounds(),
         )
 
-    def render_grade_at_z(self, z: int) -> str:
+    def render_grade_at_z(
+        self,
+        z: int,
+        *,
+        by_surface_z: Mapping[int, Mapping[tuple[int, int], str]] | None = None,
+    ) -> str:
         """Grade where column surface_z == ``z``; mosaic frame; omit if empty."""
-        symbols = symbols_grade_at_z(self._cols, z)
+        symbols = symbols_grade_at_z(self._cols, z, by_surface_z=by_surface_z)
         if not symbols:
             return ""
         return self._draw(
@@ -147,20 +154,9 @@ class WildernessTilePackRenderer:
 
     def iter_grade_z_levels_aligned(self):
         """Yield ``(z, ascii)`` grade overlays on mosaic frame (non-empty only)."""
-        frame = self.mosaic_xy_bounds()
-        if frame is None:
-            return
         by_z = symbols_grade_by_surface_z(self._cols)
         for z in sorted(by_z):
-            cells = by_z.pop(z)
-            text = self._draw(
-                cells,
-                title=(
-                    f"wilderness tile=({self.tile_gx},{self.tile_gy}) grade z={z}  "
-                    f"(pack wilderness_chunk mosaic; surface_z only)"
-                ),
-                bounds=frame,
-            )
+            text = self.render_grade_at_z(int(z), by_surface_z=by_z)
             if text.strip():
                 yield int(z), text
 

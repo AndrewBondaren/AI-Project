@@ -113,29 +113,10 @@ def symbols_grade_surface(
     return out
 
 
-def symbols_grade_at_z(
-    cols: Mapping[tuple[int, int], FineTerrainColumnWire],
-    z: int,
-) -> dict[tuple[int, int], str]:
-    """Grade at world-z: uid present and column top/surface_z == ``z`` (PAR-G9)."""
-    out: dict[tuple[int, int], str] = {}
-    for key, col in cols.items():
-        if not col.system_grade_uid:
-            continue
-        top = top_terrain(col)
-        if top is None or int(top[0]) != int(z):
-            continue
-        out[key] = grade_symbol(
-            system_grade_uid=col.system_grade_uid,
-            system_facing=col.system_facing,
-        )
-    return out
-
-
 def symbols_grade_by_surface_z(
     cols: Mapping[tuple[int, int], FineTerrainColumnWire],
 ) -> dict[int, dict[tuple[int, int], str]]:
-    """Single-pass: surface_z → grade symbols (for ``z/grade_{n}`` dumps)."""
+    """Single-pass SoT: surface/top z → grade symbols (PAR-G9; for ``z/grade_{n}``)."""
     out: dict[int, dict[tuple[int, int], str]] = {}
     for key, col in cols.items():
         if not col.system_grade_uid:
@@ -153,6 +134,18 @@ def symbols_grade_by_surface_z(
             system_facing=col.system_facing,
         )
     return out
+
+
+def symbols_grade_at_z(
+    cols: Mapping[tuple[int, int], FineTerrainColumnWire],
+    z: int,
+    *,
+    by_surface_z: Mapping[int, Mapping[tuple[int, int], str]] | None = None,
+) -> dict[tuple[int, int], str]:
+    """Grade at world-z — thin read of ``symbols_grade_by_surface_z`` bucket."""
+    table = by_surface_z if by_surface_z is not None else symbols_grade_by_surface_z(cols)
+    bucket = table.get(int(z))
+    return dict(bucket) if bucket else {}
 
 
 def symbols_at_z(
