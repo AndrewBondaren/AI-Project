@@ -3,12 +3,12 @@
 Assumes the world already has L0 parent light (after light_and_full_bake / full).
 Does **not** wipe pack, re-import, or run entry/bg refine.
 
-Layout under ``.local/map-render/{uid}/detailed-bake/``:
+**Logs (stdout/stderr → terminal + file):**
 
-- ``detailed-bake-latest.log`` — **global** only: one summary line per tile/location
-  (cells count, detail status, elapsed_s)
-- ``tiles/gx{G}_gy{Y}/tile-latest.log`` — online per-tile transcript
-- ``locations/{location_uid}/location-latest.log`` — online per-location transcript
+- ``.local/map-render/{uid}/detailed-bake/detailed-bake-latest.log`` — **весь** прогон
+  (plan, bake poll, after, render dump); stamped ``detailed-bake-{stamp}.log``
+- ``tiles/gx{G}_gy{Y}/tile-latest.log`` — тот же bake-poll **ещё** в per-tile файл
+- ``locations/{location_uid}/location-latest.log`` — то же для location
 
 HTTP:
   ``POST …/map/pack/bake?mode=detailed&scope=location&location_uid=``
@@ -111,11 +111,8 @@ def _location_dir(report_root: Path, location_uid: str) -> Path:
     return report_root / "locations" / safe
 
 
-def _append_global_line(global_log: Path, line: str) -> None:
-    global_log.parent.mkdir(parents=True, exist_ok=True)
-    with global_log.open("a", encoding="utf-8", newline="\n") as fh:
-        fh.write(line.rstrip() + "\n")
-        fh.flush()
+def _append_global_line(_global_log: Path, line: str) -> None:
+    """Summary line → stdout; outer ``_tee_stdio`` also writes ``detailed-bake-latest.log``."""
     print(line, flush=True)
 
 
@@ -579,145 +576,151 @@ def main() -> None:
     global_log = report_root / "detailed-bake-latest.log"
     stamped_global = report_root / f"detailed-bake-{stamp}.log"
 
-    # Fresh global log for this run
-    global_log.write_text(
-        f"# detailed_bake global summary  world={world_uid}  started={stamp}\n"
-        f"# columns: tile|location  cells  detail  elapsed_s\n",
-        encoding="utf-8",
-    )
+    # Entire run: terminal + detailed-bake-latest.log. Nested tile/location tee
+    # keeps current stdout as primary → also lands in the global log.
+    with _tee_stdio(global_log):
+        print(
+            f"# detailed_bake global transcript  world={world_uid}  started={stamp}",
+            flush=True,
+        )
+        print(f"report dir: {report_root}", flush=True)
+        print(f"global log: {global_log}", flush=True)
+        print(f"DEBUG_API_TIMEOUT={os.environ.get('DEBUG_API_TIMEOUT')}s", flush=True)
 
-    print(f"report dir: {report_root}")
-    print(f"global log: {global_log}")
-    print(f"DEBUG_API_TIMEOUT={os.environ.get('DEBUG_API_TIMEOUT')}s")
+        with api_client() as client:
+            if not (_pack_dir(world_uid) / "manifest.json").is_file():
+                raise SystemExit(
+                    f"no pack manifest for {world_uid} — run light_and_full_bake / full first"
+                )
 
-    with api_client() as client:
-        if not (_pack_dir(world_uid) / "manifest.json").is_file():
-            raise SystemExit(
-                f"no pack manifest for {world_uid} — run light_and_full_bake / full first"
+            before_loc = _location_terrain_entries(world_uid)
+            before_wild = _wilderness_tile_summary(world_uid)
+            print(f"location_terrain_entries before: {len(before_loc)}", flush=True)
+            print(
+                f"wilderness before: tiles={before_wild['tiles']} "
+                f"chunks={before_wild['chunks']} status={before_wild['status_counts']}",
+                flush=True,
             )
 
-        before_loc = _location_terrain_entries(world_uid)
-        before_wild = _wilderness_tile_summary(world_uid)
-        print(f"location_terrain_entries before: {len(before_loc)}")
-        print(
-            f"wilderness before: tiles={before_wild['tiles']} "
-            f"chunks={before_wild['chunks']} status={before_wild['status_counts']}"
-        )
+            results: list[dict[str, Any]] = []
+            failures = 0
+            targets: list[str] = []
+            cells: list[tuple[int, int]] = []
 
-        results: list[dict[str, Any]] = []
-        failures = 0
-        targets: list[str] = []
-        cells: list[tuple[int, int]] = []
+            if args.scope == "wilderness":
+                if args.all_tiles:
+                    cells = _list_wilderness_cells(world_uid)
+                    if args.max_tiles > 0:
+                        cells = cells[: args.max_tiles]
+                    print(f"wilderness tiles to bake ({len(cells)}):", flush=True)
+                    for gx, gy in cells:
+                        print(
+                            f"  tile=({gx},{gy}) → {_tile_dir(report_root, gx, gy)}",
+                            flush=True,
+                        )
+                else:
+                    cells = [(int(args.gx), int(args.gy))]
 
-        if args.scope == "wilderness":
-            if args.all_tiles:
-                cells = _list_wilderness_cells(world_uid)
-                if args.max_tiles > 0:
-                    cells = cells[: args.max_tiles]
-                print(f"wilderness tiles to bake ({len(cells)}):")
                 for gx, gy in cells:
-                    print(f"  tile=({gx},{gy}) → {_tile_dir(report_root, gx, gy)}")
+                    try:
+                        results.append(
+                            _run_detailed_wilderness_cell(
+                                client,
+                                world_uid,
+                                gx,
+                                gy,
+                                report_root=report_root,
+                                global_log=global_log,
+                                stamp=stamp,
+                            )
+                        )
+                    except DebugApiError as exc:
+                        failures += 1
+                        print(f"FAIL detailed_bake tile=({gx},{gy}): {exc}", flush=True)
+                        results.append({
+                            "scope": "wilderness",
+                            "cell_gx": gx,
+                            "cell_gy": gy,
+                            "error": str(exc),
+                        })
             else:
-                cells = [(int(args.gx), int(args.gy))]
-
-            for gx, gy in cells:
-                try:
-                    results.append(
-                        _run_detailed_wilderness_cell(
-                            client,
-                            world_uid,
-                            gx,
-                            gy,
-                            report_root=report_root,
-                            global_log=global_log,
-                            stamp=stamp,
+                targets = _resolve_location_targets(
+                    client,
+                    world_uid,
+                    location_uid=args.location_uid,
+                    all_locations=args.all,
+                )
+                for uid in targets:
+                    try:
+                        results.append(
+                            _run_detailed_location(
+                                client,
+                                world_uid,
+                                uid,
+                                report_root=report_root,
+                                global_log=global_log,
+                                stamp=stamp,
+                            )
                         )
-                    )
-                except DebugApiError as exc:
-                    failures += 1
-                    print(f"FAIL detailed_bake tile=({gx},{gy}): {exc}")
-                    results.append({
-                        "scope": "wilderness",
-                        "cell_gx": gx,
-                        "cell_gy": gy,
-                        "error": str(exc),
-                    })
-        else:
-            targets = _resolve_location_targets(
-                client,
-                world_uid,
-                location_uid=args.location_uid,
-                all_locations=args.all,
+                    except DebugApiError as exc:
+                        failures += 1
+                        print(f"FAIL detailed_bake {uid}: {exc}", flush=True)
+                        results.append({
+                            "scope": "location",
+                            "location_uid": uid,
+                            "error": str(exc),
+                        })
+
+            after_loc = _location_terrain_entries(world_uid)
+            after_wild = _wilderness_tile_summary(world_uid)
+            print(f"location_terrain_entries after: {len(after_loc)}", flush=True)
+            print(
+                f"wilderness after: tiles={after_wild['tiles']} "
+                f"chunks={after_wild['chunks']} status={after_wild['status_counts']}",
+                flush=True,
             )
-            for uid in targets:
-                try:
-                    results.append(
-                        _run_detailed_location(
-                            client,
-                            world_uid,
-                            uid,
-                            report_root=report_root,
-                            global_log=global_log,
-                            stamp=stamp,
-                        )
-                    )
-                except DebugApiError as exc:
-                    failures += 1
-                    print(f"FAIL detailed_bake {uid}: {exc}")
-                    results.append({
-                        "scope": "location",
-                        "location_uid": uid,
-                        "error": str(exc),
-                    })
 
-        after_loc = _location_terrain_entries(world_uid)
-        after_wild = _wilderness_tile_summary(world_uid)
-        print(f"location_terrain_entries after: {len(after_loc)}")
-        print(
-            f"wilderness after: tiles={after_wild['tiles']} "
-            f"chunks={after_wild['chunks']} status={after_wild['status_counts']}"
-        )
-
-        report = {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "world_uid": world_uid,
-            "scope": args.scope,
-            "targets": targets,
-            "cells": [{"gx": gx, "gy": gy} for gx, gy in cells],
-            "results": results,
-            "failures": failures,
-            "global_log": str(global_log),
-            "location_terrain_before": before_loc,
-            "location_terrain_after": after_loc,
-            "wilderness_before": before_wild,
-            "wilderness_after": after_wild,
-        }
-        json_latest = report_root / "detailed-bake-latest.json"
-        json_stamped = report_root / f"detailed-bake-{stamp}.json"
-        payload = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
-        json_latest.write_text(payload, encoding="utf-8")
-        json_stamped.write_text(payload, encoding="utf-8")
-        print(f"JSON report: {json_latest}")
-
-        if args.render:
-            print("=== detailed L2 render after detailed_bake ===")
-            wild_tiles = list(cells) if args.scope == "wilderness" else []
-            loc_uids = list(targets) if args.scope == "location" else []
-            summary = dump_detailed_renders(
-                client,
-                world_uid,
-                out_root=report_root / "after-detailed",
-                wilderness_tiles=wild_tiles,
-                location_uids=loc_uids,
-            )
-            _print_detailed_summary(summary)
-            report["render"] = summary
+            report = {
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "world_uid": world_uid,
+                "scope": args.scope,
+                "targets": targets,
+                "cells": [{"gx": gx, "gy": gy} for gx, gy in cells],
+                "results": results,
+                "failures": failures,
+                "global_log": str(global_log),
+                "location_terrain_before": before_loc,
+                "location_terrain_after": after_loc,
+                "wilderness_before": before_wild,
+                "wilderness_after": after_wild,
+            }
+            json_latest = report_root / "detailed-bake-latest.json"
+            json_stamped = report_root / f"detailed-bake-{stamp}.json"
             payload = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
             json_latest.write_text(payload, encoding="utf-8")
             json_stamped.write_text(payload, encoding="utf-8")
+            print(f"JSON report: {json_latest}", flush=True)
 
-        stamped_global.write_text(global_log.read_text(encoding="utf-8"), encoding="utf-8")
-        print(f"stamped global log: {stamped_global}")
+            if args.render:
+                print("=== detailed L2 render after detailed_bake ===", flush=True)
+                wild_tiles = list(cells) if args.scope == "wilderness" else []
+                loc_uids = list(targets) if args.scope == "location" else []
+                summary = dump_detailed_renders(
+                    client,
+                    world_uid,
+                    out_root=report_root / "after-detailed",
+                    wilderness_tiles=wild_tiles,
+                    location_uids=loc_uids,
+                )
+                _print_detailed_summary(summary)
+                report["render"] = summary
+                payload = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
+                json_latest.write_text(payload, encoding="utf-8")
+                json_stamped.write_text(payload, encoding="utf-8")
+
+    # Copy after tee closes so the file is fully flushed/closed.
+    stamped_global.write_text(global_log.read_text(encoding="utf-8"), encoding="utf-8")
+    print(f"stamped global log: {stamped_global}", flush=True)
 
     if failures:
         raise SystemExit(1)
