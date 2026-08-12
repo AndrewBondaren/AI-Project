@@ -3,7 +3,7 @@
 import unittest
 
 from app.application.worldData.render.locationTerrainPackRenderer import LocationTerrainPackRenderer
-from app.application.worldData.render.renderPayloads import LEVEL_SURFACE
+from app.application.worldData.render.renderPayloads import LEVEL_GRADE, LEVEL_SURFACE
 from app.dataModel.worldPack.fineTerrainChunkWire import (
     FineTerrainChunkWire,
     FineTerrainColumnWire,
@@ -53,20 +53,59 @@ class TestLocationTerrainPackRenderer(unittest.TestCase):
         )
         surface = renderer.render_surface_top()
         self.assertIn("pack location_terrain", surface)
-        self.assertIn(".", surface)
+        self.assertIn("_", surface)
         self.assertIn("f", surface)
         self.assertIn("~", surface)
         self.assertIn("territory meters x: 100..110", surface)
 
         at_z3 = renderer.render_level(3)
         self.assertIn("z=3", at_z3)
-        self.assertIn(".", at_z3)  # plains at (0,0)
+        self.assertIn("_", at_z3)  # plains at (0,0)
         self.assertIn("f", at_z3)  # forest at (1,0)
         self.assertIn("~", at_z3)  # liquid at (0,1)
 
         levels = renderer.render_all_levels()
         self.assertIn(LEVEL_SURFACE, levels)
+        self.assertNotIn(LEVEL_GRADE, levels)  # PAR-G4: no uid → omit
         self.assertEqual(renderer.z_levels(), [0, 1, 2, 3, 4, 5])
+
+    def test_grade_level_crop_and_omit(self):
+        chunk = FineTerrainChunkWire(
+            cx=0,
+            cy=0,
+            chunk_columns=32,
+            columns=[
+                FineTerrainColumnWire(
+                    lx=0,
+                    ly=0,
+                    runs=[FineTerrainZRun(z0=0, z1=1, system_terrain="plains")],
+                    system_grade_uid="g1",
+                    system_facing="north",
+                ),
+                FineTerrainColumnWire(
+                    lx=2,
+                    ly=0,
+                    runs=[FineTerrainZRun(z0=0, z1=1, system_terrain="plains")],
+                    system_grade_uid="g1",
+                    system_facing=None,
+                ),
+                FineTerrainColumnWire(
+                    lx=5,
+                    ly=5,
+                    runs=[FineTerrainZRun(z0=0, z1=1, system_terrain="forest")],
+                ),
+            ],
+        )
+        volume = TerritoryVolume(x0=0, y0=0, z0=0, x1=10, y1=10, z1=5)
+        renderer = LocationTerrainPackRenderer(
+            chunk, volume=volume, location_uid="loc-g",
+        )
+        grade = renderer.render_grade()
+        self.assertIn("↑", grade)
+        self.assertIn("┃", grade)
+        self.assertNotIn("grade:", grade)  # PAR-T-6: legend not in body
+        levels = renderer.render_all_levels(include_column_diagnostics=False)
+        self.assertIn(LEVEL_GRADE, levels)
 
     def test_legend(self):
         self.assertIn("plains", LocationTerrainPackRenderer.render_legend())

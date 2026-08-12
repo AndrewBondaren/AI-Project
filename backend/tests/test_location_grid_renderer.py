@@ -31,7 +31,7 @@ class TestLocationGridRenderer(unittest.TestCase):
         ]
         out = LocationGridRenderer(cells, "loc-a").render_level(0)
         self.assertIn("location=loc-a", out)
-        self.assertIn(".", out)
+        self.assertIn("_", out)
         self.assertIn("f", out)
         self.assertNotIn("loc-b", out)
 

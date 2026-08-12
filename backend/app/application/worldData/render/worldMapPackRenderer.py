@@ -10,12 +10,15 @@ from app.application.worldData.pack.read.packMapHelpers import (
     world_map_sample_index,
 )
 from app.application.worldData.pack.read.packRenderReadFacade import PackTileLightView
-from app.application.worldData.render.gridAxes import format_grid_header
+from app.application.worldData.render.gridAxes import format_grid_header, format_x_axis_ruler
 from app.application.worldData.render.mapSymbols import (
+    GRADE_EMPTY_SYMBOL,
     LOCATION_PIN_SYMBOL,
     format_height_cell,
+    grade_symbol,
     height_cell_width,
     join_height_row,
+    render_grade_legend,
     render_height_legend,
     render_map_legend,
     symbol_for_role_or_terrain,
@@ -35,6 +38,14 @@ def wire_symbol(cell: WorldMapCellWire, *, mark_pin: bool = False) -> str:
     return symbol_for_role_or_terrain(
         hydrology_role=role_name,
         system_terrain=cell.system_terrain,
+    )
+
+
+def wire_grade_symbol(cell: WorldMapCellWire) -> str:
+    """Relief facing overlay — independent of terrain/hydro mask."""
+    return grade_symbol(
+        system_grade_uid=cell.system_grade_uid,
+        system_facing=cell.system_facing,
     )
 
 
@@ -410,6 +421,100 @@ class WorldMapPackRenderer:
         )
         return "\n".join(lines), legend
 
+    def render_tile_light_grade_grid(self, gx: int, gy: int) -> str:
+        """L0 relief facing ASCII for one macro-tile; empty string if no grade cells."""
+        tile = self._by_xy.get((gx, gy))
+        if tile is None or tile.side <= 0:
+            return ""
+        hits: list[tuple[int, int, str]] = []
+        for (tx, ty), cell in tile.cells.items():
+            sym = wire_grade_symbol(cell)
+            if sym != GRADE_EMPTY_SYMBOL:
+                hits.append((tx, ty, sym))
+        if not hits:
+            return ""
+
+        xs = [t[0] for t in hits]
+        ys = [t[1] for t in hits]
+        x0, x1 = min(xs), max(xs)
+        y0, y1 = min(ys), max(ys)
+        by_xy = {(t[0], t[1]): t[2] for t in hits}
+        label_w = max(4, len(str(y0)), len(str(y1)))
+        gutter = label_w + 2  # matches f"{y:{label_w}d} |"
+        lines = [
+            f"tile Gx={gx} Gy={gy}  (pack L0 grade grid crop {x0}..{x1}×{y0}..{y1})",
+            format_grid_header(
+                x0, x1, y0, y1,
+                cell_size_m=max(1, self._tile_m // tile.side),
+                prefix="light ",
+            ),
+        ]
+        lines.extend(format_x_axis_ruler(x0, x1, gutter=gutter))
+        for ty in range(y1, y0 - 1, -1):
+            row = "".join(by_xy.get((tx, ty), GRADE_EMPTY_SYMBOL) for tx in range(x0, x1 + 1))
+            lines.append(f"{ty:{label_w}d} |{row}|")
+        lines.extend(format_x_axis_ruler(x0, x1, gutter=gutter))
+        lines.append("")
+        lines.append(render_grade_legend())
+        return "\n".join(lines)
+
+    def render_light_grade_mosaic(
+        self,
+        *,
+        gx0: int | None = None,
+        gy0: int | None = None,
+        gx1: int | None = None,
+        gy1: int | None = None,
+    ) -> tuple[str, str]:
+        """Relief grade overlay. No grade cells → ``(\"\", \"\")`` (no pseudo-empty grid)."""
+        frame = self._mosaic_frame(gx0=gx0, gy0=gy0, gx1=gx1, gy1=gy1)
+        if frame is None:
+            return "", ""
+
+        hits: list[tuple[int, int, str]] = []
+        for wy in range(frame.ly0, frame.ly1 + 1):
+            for wx in range(frame.lx0, frame.lx1 + 1):
+                gx, tx = divmod(wx, frame.side)
+                gy, ty = divmod(wy, frame.side)
+                tile = self._by_xy.get((gx, gy))
+                cell = None if tile is None else tile.cells.get((tx, ty))
+                if cell is None:
+                    continue
+                sym = wire_grade_symbol(cell)
+                if sym != GRADE_EMPTY_SYMBOL:
+                    hits.append((wx, wy, sym))
+        if not hits:
+            return "", ""
+
+        legend = render_grade_legend()
+        xs = [h[0] for h in hits]
+        ys = [h[1] for h in hits]
+        lx0, lx1 = min(xs), max(xs)
+        ly0, ly1 = min(ys), max(ys)
+        by_xy = {(h[0], h[1]): h[2] for h in hits}
+        label_w = max(4, len(str(ly0)), len(str(ly1)))
+        gutter = label_w + 2
+        lines: list[str] = [
+            (
+                f"pack L0 grade mosaic  "
+                f"(crop light x{lx0}..{lx1} y{ly0}..{ly1}; "
+                f"{len(hits)} grade cells; "
+                f"macro Gx{frame.gx0}..Gx{frame.gx1} Gy{frame.gy0}..Gy{frame.gy1})"
+            ),
+            format_grid_header(
+                lx0, lx1, ly0, ly1,
+                cell_size_m=frame.light_m, prefix="light ",
+            ),
+        ]
+        lines.extend(format_x_axis_ruler(lx0, lx1, gutter=gutter))
+        for wy in range(ly1, ly0 - 1, -1):
+            row = "".join(
+                by_xy.get((wx, wy), GRADE_EMPTY_SYMBOL) for wx in range(lx0, lx1 + 1)
+            )
+            lines.append(f"{wy:{label_w}d} |{row}|")
+        lines.extend(format_x_axis_ruler(lx0, lx1, gutter=gutter))
+        return "\n".join(lines), legend
+
     def render_all_tile_light_grids(
         self,
         *,
@@ -426,6 +531,14 @@ class WorldMapPackRenderer:
         out: dict[tuple[int, int], str] = {}
         for gx, gy in sorted(self._by_xy):
             text = self.render_tile_light_height_grid(gx, gy)
+            if text:
+                out[(gx, gy)] = text
+        return out
+
+    def render_all_tile_light_grade_grids(self) -> dict[tuple[int, int], str]:
+        out: dict[tuple[int, int], str] = {}
+        for gx, gy in sorted(self._by_xy):
+            text = self.render_tile_light_grade_grid(gx, gy)
             if text:
                 out[(gx, gy)] = text
         return out

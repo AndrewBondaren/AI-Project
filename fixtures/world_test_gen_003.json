@@ -352,8 +352,124 @@
       "x_max": 2,
       "y_min": -2,
       "y_max": 2
+    },
+    "relief_template_registry": [
+      {
+        "system_template_uid": "21fb5cb8-eb9a-5f5d-a75b-e632135fc0b5",
+        "context": "open_land",
+        "display_template_name": "Open land soft grade"
+      },
+      {
+        "system_template_uid": "f80e22de-09b1-5f0b-b773-5bd58cab6f10",
+        "context": "shore",
+        "display_template_name": "Shore soft grade"
+      },
+      {
+        "system_template_uid": "1296ee22-f830-5a85-9a55-1f1b46afd3a3",
+        "context": "road_shoulder",
+        "display_template_name": "Road shoulder soft grade"
+      }
+    ],
+    "relief_pick_policy": {
+      "open_land": {
+        "mode": "fixed",
+        "default_template_uid": "21fb5cb8-eb9a-5f5d-a75b-e632135fc0b5"
+      },
+      "shore": {
+        "mode": "fixed",
+        "default_template_uid": "f80e22de-09b1-5f0b-b773-5bd58cab6f10"
+      },
+      "road_shoulder": {
+        "mode": "fixed",
+        "default_template_uid": "1296ee22-f830-5a85-9a55-1f1b46afd3a3"
+      }
     }
   },
+  "relief_templates": [
+    {
+      "system_name": "open_land_soft",
+      "display_name": "Open land soft grade",
+      "context": "open_land",
+      "pack_name": "smoke_003",
+      "slope_length_cells": 2,
+      "conditions": [
+        {
+          "terrain": "plains",
+          "cases": [
+            {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.85, "sheer_weight": 0.15, "slope_length_cells": 2},
+            {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
+            {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
+          ]
+        },
+        {
+          "terrain": "forest",
+          "cases": [
+            {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.7, "sheer_weight": 0.3, "slope_length_cells": 2},
+            {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
+            {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
+          ]
+        }
+      ]
+    },
+    {
+      "system_name": "shore_soft",
+      "display_name": "Shore soft grade",
+      "context": "shore",
+      "pack_name": "smoke_003",
+      "slope_length_cells": 2,
+      "conditions": [
+        {
+          "terrain": "plains",
+          "cases": [
+            {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.8, "sheer_weight": 0.2, "slope_length_cells": 2},
+            {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
+            {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
+          ]
+        },
+        {
+          "terrain": "forest",
+          "cases": [
+            {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.75, "sheer_weight": 0.25, "slope_length_cells": 2},
+            {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
+            {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
+          ]
+        },
+        {
+          "terrain": "shore",
+          "cases": [
+            {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.9, "sheer_weight": 0.1, "slope_length_cells": 1},
+            {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 1},
+            {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
+          ]
+        }
+      ]
+    },
+    {
+      "system_name": "road_shoulder_soft",
+      "display_name": "Road shoulder soft grade",
+      "context": "road_shoulder",
+      "pack_name": "smoke_003",
+      "slope_length_cells": 2,
+      "conditions": [
+        {
+          "terrain": "plains",
+          "cases": [
+            {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.8, "sheer_weight": 0.2, "slope_length_cells": 2},
+            {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
+            {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
+          ]
+        },
+        {
+          "terrain": "forest",
+          "cases": [
+            {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.7, "sheer_weight": 0.3, "slope_length_cells": 2},
+            {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
+            {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
+          ]
+        }
+      ]
+    }
+  ],
   "states": [
     {
       "state_uid": "state-iron-crown-002",

@@ -288,6 +288,18 @@ class ReliefPureTest(unittest.TestCase):
         self.assertEqual(g75.L, 2)
         self.assertAlmostEqual(g75.angle_deg or 0.0, math.degrees(math.atan(4 / 2)), places=5)
 
+    def test_geom_explicit_zero_no_bump(self) -> None:
+        """Wire L=0 → ResolvedGeom.L=0; no silent max(1,L) / no partition."""
+        for kind in (ReliefSideKind.SLOPE, ReliefSideKind.SHEER):
+            g = geom_resolve(h=4, kind=kind, slope_length_cells=0)
+            self.assertEqual(g.L, 0, msg=kind.value)
+            self.assertEqual(g.steps, ())
+            self.assertEqual(g.h, 4)
+        # omit L → default 1
+        g_def = geom_resolve(h=4, kind=ReliefSideKind.SLOPE)
+        self.assertEqual(g_def.L, 1)
+        self.assertEqual(sum(g_def.steps), 4)
+
     def test_sheer_l_times_h(self) -> None:
         g = geom_resolve(
             h=6,

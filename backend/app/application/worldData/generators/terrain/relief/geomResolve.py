@@ -92,6 +92,9 @@ def geom_resolve(
 
     SHEER: angle N/A; L from ``slope_length_cells`` (default 1) — Geom-B ignored;
     no height partition (volume fill is L columns × h solid — §8b).
+
+    Explicit ``slope_length_cells=0`` → ``L=0``, empty ``steps`` (no wedge; no
+    silent bump to 1). Omit L → default 1. ``partition_height`` only when L≥1.
     """
     h_i = abs(int(h))
     if knobs is not None:
@@ -103,7 +106,10 @@ def geom_resolve(
             slope_length_cells,
             default=DEFAULT_SLOPE_LENGTH_CELLS,
         )
-        L = max(1, L)
+        if L < 1:
+            return ResolvedGeom(
+                kind=kind, h=h_i, L=0, angle_deg=None, steps=(),
+            )
         return ResolvedGeom(
             kind=kind,
             h=h_i,
@@ -119,7 +125,7 @@ def geom_resolve(
         return ResolvedGeom(
             kind=kind,
             h=0,
-            L=1,
+            L=0,
             angle_deg=0.0,
             steps=(),
         )
@@ -131,9 +137,12 @@ def geom_resolve(
             slope_length_cells,
             default=DEFAULT_SLOPE_LENGTH_CELLS,
         )
-        L_raw = max(1, L_raw)
+        if L_raw < 1:
+            return ResolvedGeom(
+                kind=kind, h=h_i, L=0, angle_deg=None, steps=(),
+            )
 
-    # Prefer no flat ramp tails (R36i): L_eff = min(L, h)
+    # Prefer no flat ramp tails (R36i): L_eff = min(L, h); L_raw >= 1 here
     L_eff = max(1, min(L_raw, h_i))
     steps = partition_height(h_i, L_eff)
     angle = angle_from_height_length(h_i, L_eff)

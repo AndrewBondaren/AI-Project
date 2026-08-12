@@ -12,7 +12,6 @@ from app.application.worldData.generators.terrain.relief.edgeRoadAnchor import (
     EdgeRoadAnchor,
 )
 from app.application.worldData.generators.terrain.relief.facing import (
-    facing_wire,
     uphill_facing_toward,
 )
 from app.application.worldData.generators.terrain.relief.gradeObstacleLight import (
@@ -158,7 +157,7 @@ def stamp_column(
         cell.system_facing = None
         return True
     facing = toward_road if sign < 0 else opposite(toward_road)
-    cell.system_facing = facing_wire(facing)
+    cell.system_facing = facing
     return True
 
 

@@ -7,6 +7,7 @@ from app.application.worldData.render.fineTerrainAsciiKernel import (
     draw_int_grid,
     draw_symbol_grid,
     symbols_at_z,
+    symbols_grade_surface,
     symbols_surface_top,
     values_cliff_delta,
     values_column_span,
@@ -16,6 +17,7 @@ from app.application.worldData.render.mapSymbols import render_map_legend
 from app.application.worldData.render.renderPayloads import (
     LEVEL_CLIFF_DELTA,
     LEVEL_COLUMN_SPAN,
+    LEVEL_GRADE,
     LEVEL_SURFACE,
 )
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire
@@ -78,6 +80,19 @@ class LocationTerrainPackRenderer:
             title=f"location={self.location_uid}  (pack location_terrain, top z)",
         )
 
+    def render_grade(self) -> str:
+        """Grade overlay — omit entirely when no ``system_grade_uid`` (PAR-G4).
+
+        Legend is not inlined (PAR-T-6); dump/HTTP use payload ``legend`` / grade legend SoT.
+        """
+        symbols = symbols_grade_surface(self._cols)
+        if not symbols:
+            return ""
+        return self._draw(
+            symbols,
+            title=f"location={self.location_uid}  (pack location_terrain, grade)",
+        )
+
     def render_level(self, z: int) -> str:
         """Horizontal slice at world-z — only columns whose pack runs cover ``z``."""
         if not self._cols:
@@ -135,11 +150,14 @@ class LocationTerrainPackRenderer:
         return z_occupied(self._cols.values())
 
     def render_all_levels(self, *, include_column_diagnostics: bool = True) -> dict[str, str]:
-        """Keys: surface; dense z slices; optional column_span / cliff_delta."""
+        """Keys: surface; grade (if any); dense z slices; optional column_span / cliff_delta."""
         out: dict[str, str] = {}
         surface = self.render_surface_top()
         if surface:
             out[LEVEL_SURFACE] = surface
+        grade = self.render_grade()
+        if grade:
+            out[LEVEL_GRADE] = grade
         if include_column_diagnostics:
             span = self.render_column_span()
             if span:

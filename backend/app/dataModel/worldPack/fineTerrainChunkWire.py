@@ -6,6 +6,8 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
+from app.dataModel.spatial.facing import Facing, coerce_facing_wire
+
 
 class FineTerrainZRun(BaseModel):
     """Contiguous z band with constant terrain/material registry keys."""
@@ -48,12 +50,19 @@ class FineTerrainColumnWire(BaseModel):
     lx: int
     ly: int
     runs: list[FineTerrainZRun]
-    system_facing: str | None = None
-    """Column-level uphill grade (tz_terrain_relief); not per-run."""
+    system_facing: Facing | None = None
+    """Column-level uphill cache (tz_terrain_relief R16); not per-run."""
+    system_grade_uid: str | None = None
+    """Ref → ReliefGradeInstance (R24 / PAR-G7/G10); omit if column not in grade."""
+
+    @field_validator("system_facing", mode="before")
+    @classmethod
+    def _parse_facing(cls, value: object) -> Facing | None:
+        return coerce_facing_wire(value)
 
 
 class FineTerrainChunkWire(BaseModel):
-    """Fine chunk payload — default 32×32 m columns."""
+    """Fine terrain chunk payload — default 32×32 m columns."""
 
     SCHEMA_ID: ClassVar[str] = "SCH-FINE-TERRAIN-CHUNK-WIRE"
 

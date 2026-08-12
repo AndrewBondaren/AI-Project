@@ -1,8 +1,11 @@
-"""Shared ASCII map symbols — hydrology roles + terrain keys."""
+"""Shared ASCII map symbols — hydrology roles + terrain keys + relief facing."""
 
 from __future__ import annotations
 
 from collections.abc import Iterable
+
+from app.application.worldData.facingArrows import FACING_ARROW
+from app.dataModel.spatial.facing import Facing
 
 ROLE_SYMBOLS: dict[str, str] = {
     "coastal_sea": "~",
@@ -14,7 +17,8 @@ ROLE_SYMBOLS: dict[str, str] = {
 
 TERRAIN_SYMBOLS: dict[str, str] = {
     "liquid_body": "~",
-    "plains": ".",
+    "plains": "_",  # flat ground; `.` reserved for building floor
+    "earth": "_",  # ordinary dirt / default material landcover if painted as terrain
     "forest": "f",
     "shore": "s",
     "urban": "u",
@@ -22,6 +26,10 @@ TERRAIN_SYMBOLS: dict[str, str] = {
     "ravine": "v",
     "mountain": "m",
 }
+
+# Grade cell without facing (SHEER) — vertical face, not a compass.
+GRADE_SHEER_SYMBOL = "┃"
+GRADE_EMPTY_SYMBOL = " "
 
 # Unknown terrain/role: blank cell — never first-letter of key (collides: ravine→r, road→r).
 UNKNOWN_SYMBOL = " "
@@ -104,3 +112,36 @@ def render_height_legend(
         parts = " ".join(f"{z}×{n}" for z, n in sorted(z_hist.items()))
         lines.append(f"hist: {parts}")
     return "\n".join(lines)
+
+
+def facing_arrow(facing: Facing | str | None) -> str | None:
+    """Unicode arrow for ``Facing``; ``None`` if missing/unknown."""
+    if facing is None:
+        return None
+    try:
+        key = facing if isinstance(facing, Facing) else Facing(str(facing))
+    except ValueError:
+        return None
+    return FACING_ARROW.get(key)
+
+
+def grade_symbol(
+    *,
+    system_grade_uid: str | None,
+    system_facing: Facing | str | None,
+) -> str:
+    """Relief overlay cell: arrow (SLOPE uphill) | sheer bar | blank if not in grade."""
+    if not system_grade_uid:
+        return GRADE_EMPTY_SYMBOL
+    arrow = facing_arrow(system_facing)
+    if arrow is not None:
+        return arrow
+    return GRADE_SHEER_SYMBOL
+
+
+def render_grade_legend() -> str:
+    parts = " ".join(f"{sym}={f.value}" for f, sym in FACING_ARROW.items())
+    return (
+        f"grade: {parts}; {GRADE_SHEER_SYMBOL}=sheer/no facing; "
+        f"(space)=not in grade (no system_grade_uid)"
+    )

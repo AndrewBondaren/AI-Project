@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.dataModel.spatial.facing import Facing
 from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
 
@@ -17,7 +18,7 @@ class LightGridCell:
     hydrology_width: int | None = None
     climate_zone_id: int | None = None
     location_pin: int | None = None
-    system_facing: str | None = None
+    system_facing: Facing | None = None
     system_grade_uid: str | None = None
 
     def to_wire(self, tx: int, ty: int) -> WorldMapCellWire:

@@ -2,9 +2,8 @@
 
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
-**Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py`, `worldBundleService.py`, relief library/import services.  
-**Обновлено:** 2026-08-10 — SOLID/DRY **T-33…T-41, T-66** ✅; relief Wave A–D ✅; next **Wave E** later; plan [`relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).
-
+**Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py` / `render_maps.py`, `worldBundleService.py`, relief library/import, pack render / parent-light refine.  
+**Обновлено:** 2026-08-12 — **PAR-T-1…T-8** ✅ (Facing pack wire T-4); pack ASCII L2 grade shipped.  
 **Связанные документы:**
 
 | Документ | Роль |
@@ -12,12 +11,14 @@
 | [tz_assembler_hierarchy.md](./tz_assembler_hierarchy.md) | Целевая архитектура assembler stack |
 | [tz_city_generation.md](./tz_city_generation.md) | Продуктовое ТЗ города |
 | [tz_terrain_relief.md](./tz_terrain_relief.md) | Relief grade + templates; R36/R36n/p/q; **RELIEF-BAR-1**; SOLID → **RELIEF-T-28…**; canal/bake → **RELIEF-T-42…T-63** |
+| [tz_pack_ascii_render.md](./tz_pack_ascii_render.md) | Pack ASCII SoT (**PAR-G\***); L2 location grade; debt **PAR-T-*** |
 | [tz_locations.md](./tz_locations.md) | `barrier_template_registry`; perimeter barriers |
 | [tz_terrain_hydrology.md](./tz_terrain_hydrology.md) | Гидрология: моря, озёра, реки (target) |
 | [tz_climate.md](./tz_climate.md) | Продуктовое ТЗ climate (pole/local tiers) |
-| [tz_world_pack_storage.md](./tz_world_pack_storage.md) | World Pack; § WP-FIX-DEBT (в т.ч. WP-DELETE-1 → DEBT-10) |
+| [tz_world_pack_storage.md](./tz_world_pack_storage.md) | World Pack; § WP-FIX-DEBT (в т.ч. WP-DELETE-1 → DEBT-10); terrain mask carry |
 | `.cursor/plans/settlement-assembler.md` | Phase-план settlement |
 | `.cursor/plans/coordinate-spaces.md` | Phase-план NC-1 |
+| `.cursor/plans/grade-detailed-location-render.md` | L2 location grade ASCII impl |
 
 ---
 
@@ -928,7 +929,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | **RELIEF-T-35** | medium | **resolved** | P2 | DRY | `require_weights_pair` / `require_weights_sum` in `reliefGradeKnobs`; call sites: RoleCase, Template root, MountainSideRecipe, GradeKnobs |
 | **RELIEF-T-36** | medium | **resolved** | P2 | DRY | `resolve_picked_template` in `templatePick`; ribbon + mountain stamp call it; R21 policy stays at callers |
 | **RELIEF-T-37** | medium | **resolved** | P2 | wire keys | `worldRow` column names ← `slice_column_key` / `WorldSlice.world_keys` (T-28). Эталон scalars: `RELIEF_OBSTACLE_SCALAR_WIRE_KEYS`. |
-| **RELIEF-T-38** | medium | **resolved** | P2 | values | `expand_shoulder_ring`: honor `width<=0` → empty (no `max(1,…)`). POJO `slope_length_cells>=0` unchanged. `geom_resolve` still clamps L≥1 for partition (separate invariant). |
+| **RELIEF-T-38** | medium | **resolved** | P2 | values | `expand_shoulder_ring`: honor `width<=0` → empty. Hybrid D: `geom_resolve` honors explicit L=0 (no partition / no bump); `gradePass` `requested_length=0` + `geom=None`; bake skip via clearance. `expand_shoulder_ring` ≠ bake SoT. |
 | **RELIEF-T-39** | medium | **resolved** | P2 | values | `conditionNormalize`: typed `delta_z` / `mode_a_grade_knobs()` — no `or 0`/`or 1`/`or 0.0` |
 | **RELIEF-T-40** | low | **resolved** | P3 | DRY | `seededHash.seeded_u01`/`seeded_index`; `RibbonGradeDecision.skipped_site`; logs `ReliefSideKind.SLOPE.value` |
 | **RELIEF-T-41** | low | **resolved** | P3 | values | `gradePass` skip attachments ← `ReliefGradeKnobs` defaults |
@@ -1078,10 +1079,35 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 ~~T-28 / T-29 / T-37~~ ✅ worldRow ← slices + import merge module + runtime merge-policy  
    ~~shared `RoadShoulderIntent`/`grade_road_shoulder_*`~~ ✅ → `RibbonIntent` / `grade_ribbon_segments`  
    ~~**T-31/T-32**~~ ✅  
+   **PAR-T-1…T-8** ✅ — L2 grade ASCII post-impl ([§ Pack ASCII](#pack-ascii--l2-grade-carry--post-impl-smells-par-t))
 9. (optional) rename `MountainSideRecipeMode` wire A–D — breaking + migration
 
 ---
 
+## Pack ASCII / L2 grade carry — post-impl smells (PAR-T)
+
+**Контекст:** 2026-08-12 — L2 location grade ASCII shipped ([`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) **PAR-G7…G10**; plan `grade-detailed-location-render`). Ревью: неявные контракты · dataModel · хардкоды · SRP.
+
+**Не долг (locked product):** generate grade только L0; detailed = nearest carry + surface stamp; FineTerrain column `system_grade_uid` → Instance; empty → omit `levels.grade`; wilderness grade v1 out.
+
+| ID | Severity | Status | P | Ось | Smell | Target |
+|---|---|---|---|---|---|---|
+| **PAR-T-1** | **high** | **resolved** | P1 | неявный контракт | facing majority ≠ uid surface | **Fix:** `_column_surface_attrs` — facing+uid surface-only (PAR-G9); majority removed |
+| **PAR-T-2** | medium | **resolved** | P2 | dataModel / POJO | `terrain_resample` overload | **Fix:** `categorical_resample`; legacy `terrain_resample` migrate + property alias |
+| **PAR-T-3** | medium | **resolved** | P2 | DRY / хардкод | тройной upsample + `"nearest"` | **Fix:** `_upsample_optional_str` + `_require_categorical_nearest` |
+| **PAR-T-4** | medium | **resolved** | P2 | dataModel | `system_facing` as `str` on pack wire | **Fix:** `Facing \| None` on `WorldMapCellWire` / `FineTerrainColumnWire` / `LightGridCell`; `coerce_facing_wire`; upsample → `Facing`; MapCell SQL still `str` via `.value` |
+| **PAR-T-5** | medium | **resolved** | P2 | хардкод / wire keys | `LEVEL_*` dup in `render_maps` | **Fix:** import `renderPayloads.LEVEL_*`; `_WILDERNESS_BUNDLE_LEVELS` |
+| **PAR-T-6** | low | **resolved** | P3 | ответственность | grade legend in ASCII body + dump | **Fix:** body = grid only; dump uses `render_grade_legend()` for `LEVEL_GRADE` |
+| **PAR-T-7** | low | **resolved** | P3 | SRP / typing | `TileSurfaceState` `object` bag | **Fix:** typed `SurfaceHeightmap` + `n_eff` + hydro dict |
+| **PAR-T-8** | low | **resolved** | P3 | SRP | columnFill facing+grade inline | **Fix:** `_surface_carry_attrs` helper |
+
+**Related (info, не отдельные ID пока):** dangling `system_grade_uid` без проверки SQL Instance; `grade_symbol` невалидный facing → silent sheer; legacy blob omit без schema version bump.
+
+**Fix order (рекомендация):** ~~T-1 → T-3 → T-2 → T-5 → T-6; T-7/T-8~~ ✅; ~~**T-4**~~ ✅ (Facing pack wire, 2026-08-12).
+
+**Agent pointer:** [`.cursor/plans/grade-detailed-location-render.md`](../.cursor/plans/grade-detailed-location-render.md); SoT [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md).
+
+---
 
 ## Out of scope (не tech debt этого registry)
 
@@ -1096,6 +1122,9 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-12 | **PAR-T-4 resolved:** pack wire `system_facing: Facing \| None` (`WorldMapCellWire` / FineTerrain / LightGridCell); `coerce_facing_wire`; MapCell SQL remains str |
+| 2026-08-12 | **PAR-T-1…T-3,T-5…T-8 resolved:** surface-only facing+uid; `categorical_resample`; shared upsample; LEVEL_* from payloads; grade legend in dump only; typed TileSurfaceState; `_surface_carry_attrs`. **PAR-T-4** remains open |
+| 2026-08-12 | **PAR-T-1…T-8 open:** post-impl L2 location grade ASCII (facing≠uid agg; `terrain_resample` overload; triple upsample; Facing-as-str; LEVEL_* dump dup; grade legend double; TileSurfaceState bag; columnFill fat). SoT [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) |
 | 2026-08-07 | **Grade `owner_uid`:** dataModel + `0001` + rows; drop FK to connection_edges; factory/persist/PaintedRoadEdge/`apply_road_shoulder_grades` aligned |
 | 2026-08-07 | **Ribbon residual naming:** `RibbonIntent` / `RibbonGradeResult` / `grade_ribbon_segments` / `apply_ribbon_barriers`; Intent.`owner_uid` |
 | 2026-08-07 | **Ribbon naming:** `RoadShoulderSegment`→`RibbonSegment`; `edge_uid`→`owner_uid` on segment; Intent/Grade `edge_uid` field still wire name (= owner value) |
@@ -1121,6 +1150,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | 2026-08-05 | **R36p/q fix wave T-43…T-51 resolved;** T-52 open |
 | 2026-08-10 | **RELIEF-T-66 resolved:** `ribbon_skip_apply`/`_grade`/`_materialize` + closed why sets; drop monotoken |
 | 2026-08-10 | **RELIEF-T-40 resolved:** `seededHash`; `RibbonGradeDecision.skipped_site`; `chosen_fallback` ← `ReliefSideKind.SLOPE.value` |
+| 2026-08-10 | **RELIEF-T-38 / hybrid D:** `geom_resolve` honors explicit L=0; gradePass no wedge; bake clearance skip |
 | 2026-08-10 | **RELIEF-T-38 resolved:** honor `slope_length_cells`/width 0 in `expand_shoulder_ring` (empty ring; no clamp to 1) |
 | 2026-08-10 | **RELIEF-T-33/T-39 resolved:** shared `_interval_from_grade_knobs`; Mode A reads validated POJO (no silent or) |
 | 2026-08-10 | **RELIEF-T-34 resolved (A flat):** Mode A compose via `mode_a_grade_knobs()` → `ReliefGradeKnobs`; wire unchanged |

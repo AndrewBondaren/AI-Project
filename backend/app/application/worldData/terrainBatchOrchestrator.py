@@ -24,8 +24,10 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
     prepare_surface_terrain_context,
 )
 from app.application.worldData.generators.terrain.terrainGeneratorService import TerrainGeneratorService
-from app.application.worldData.generators.terrain.types import ColumnRect
+from app.application.worldData.generators.terrain.types import ColumnRect, SurfaceHeightmap
 from app.application.worldData.mapCellService import MapCellService
+from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
+from app.dataModel.spatial.facing import Facing
 from app.dataModel.worldPack.parentLightRefinePolicy import ParentLightRefinePolicy
 from app.dataModel.worldPack.parentLightTile import ParentLightTile
 from app.db.models.connectionEdge import ConnectionEdge
@@ -39,11 +41,12 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class TileSurfaceState:
-    heightmap: object
-    n_eff: object
-    hydrology: dict | None
+    heightmap: SurfaceHeightmap
+    n_eff: dict[tuple[int, int], int]
+    hydrology: dict[tuple[int, int], MapCellHydrology] | None
     surface_terrain: dict[tuple[int, int], str] | None = None
-    surface_facing: dict[tuple[int, int], str] | None = None
+    surface_facing: dict[tuple[int, int], Facing] | None = None
+    surface_grade_uid: dict[tuple[int, int], str] | None = None
 
 
 class TerrainBatchOrchestrator:
@@ -115,6 +118,7 @@ class TerrainBatchOrchestrator:
         )
         from app.application.worldData.generators.terrain.passes.parentLightTerrain import (
             upsample_facing_from_parent_light,
+            upsample_grade_uid_from_parent_light,
             upsample_terrain_from_parent_light,
         )
         from app.application.worldData.generators.terrain.passes.parentLightUpsample import (
@@ -133,6 +137,7 @@ class TerrainBatchOrchestrator:
         fine_z = upsample_from_parent_light(parent_light, world, policy=policy)
         fine_terrain = upsample_terrain_from_parent_light(parent_light, world, policy=policy)
         fine_facing = upsample_facing_from_parent_light(parent_light, policy=policy)
+        fine_grade_uid = upsample_grade_uid_from_parent_light(parent_light, policy=policy)
         cell_m = parent_light.tile_m
         for (xm, ym), z in ctx.meter_z_overrides.items():
             if xm // cell_m == tile_gx and ym // cell_m == tile_gy:
@@ -155,6 +160,7 @@ class TerrainBatchOrchestrator:
             hydrology=tile_hydro or None,
             surface_terrain=fine_terrain,
             surface_facing=fine_facing or None,
+            surface_grade_uid=fine_grade_uid or None,
         )
 
     async def generate_chunk_cells(
@@ -204,4 +210,5 @@ class TerrainBatchOrchestrator:
             hydrology_by_cell=surface_state.hydrology,
             surface_terrain=surface_state.surface_terrain,
             surface_facing=surface_state.surface_facing,
+            surface_grade_uid=surface_state.surface_grade_uid,
         )

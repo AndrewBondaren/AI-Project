@@ -16,6 +16,7 @@ from collections.abc import Iterable, Mapping
 from app.application.worldData.render.gridAxes import format_grid_header, format_x_axis_ruler
 from app.application.worldData.render.mapSymbols import (
     format_height_cell,
+    grade_symbol,
     height_cell_width,
     join_height_row,
     symbol_for_role_or_terrain,
@@ -94,6 +95,21 @@ def symbols_surface_top(
         top = top_terrain(col)
         if top is not None:
             out[key] = symbol_for_role_or_terrain(system_terrain=top[1])
+    return out
+
+
+def symbols_grade_surface(
+    cols: Mapping[tuple[int, int], FineTerrainColumnWire],
+) -> dict[tuple[int, int], str]:
+    """Grade overlay: only columns with ``system_grade_uid`` (PAR-G4 / G10)."""
+    out: dict[tuple[int, int], str] = {}
+    for key, col in cols.items():
+        if not col.system_grade_uid:
+            continue
+        out[key] = grade_symbol(
+            system_grade_uid=col.system_grade_uid,
+            system_facing=col.system_facing,
+        )
     return out
 
 

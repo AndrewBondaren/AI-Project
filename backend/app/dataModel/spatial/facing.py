@@ -63,6 +63,15 @@ def parse_facing(value: str | Facing | None) -> Facing | None:
     return Facing(key)
 
 
+def coerce_facing_wire(value: object) -> Facing | None:
+    """Pydantic before-validator: JSON/str/Facing → Facing; empty → None; invalid → raise."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, Facing):
+        return value
+    return parse_facing(str(value))
+
+
 def parse_facing_or_default(value: str | Facing | None, *, default: Facing) -> Facing:
     """Parse wire facing; ``None`` / invalid → ``default``."""
     if value is None:

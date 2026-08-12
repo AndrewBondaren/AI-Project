@@ -7,6 +7,7 @@ from app.application.worldData.generators.terrain.passes.columnFillPass import (
 from app.application.worldData.generators.terrain.passes.gapAnalysisPass import run_gap_analysis
 from app.application.worldData.generators.terrain.passes.surfacePass import run_surface_pass
 from app.application.worldData.generators.terrain.types import ColumnRect, SurfaceHeightmap
+from app.dataModel.spatial.facing import Facing
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -41,7 +42,8 @@ class TerrainGeneratorService:
         rect: ColumnRect,
         hydrology_by_cell: dict | None = None,
         surface_terrain: dict[tuple[int, int], str] | None = None,
-        surface_facing: dict[tuple[int, int], str] | None = None,
+        surface_facing: dict[tuple[int, int], Facing] | None = None,
+        surface_grade_uid: dict[tuple[int, int], str] | None = None,
     ) -> list[MapCell]:
         return run_column_fill(
             world,
@@ -51,6 +53,7 @@ class TerrainGeneratorService:
             hydrology_by_cell=hydrology_by_cell,
             surface_terrain=surface_terrain,
             surface_facing=surface_facing,
+            surface_grade_uid=surface_grade_uid,
         )
 
     def build_surface_heightmap(

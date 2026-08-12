@@ -2,7 +2,7 @@
 
 ``levels`` semantics
 --------------------
-- pack world tiles: ``{ LEVEL_LIGHT: ascii, LEVEL_HEIGHT: ascii }``
+- pack world tiles: ``{ LEVEL_LIGHT, LEVEL_HEIGHT, LEVEL_GRADE }``
 - pack location / wilderness: ``LEVEL_SURFACE`` (top z); optional dense ``\"<z>\"`` slices
   (every occupied world-z in runs); diagnostics ``LEVEL_COLUMN_SPAN`` / ``LEVEL_CLIFF_DELTA``
   expose thin columns vs steep neighbor tops (L2 wall/gap problem vs building stacks);
@@ -10,7 +10,8 @@
 - legacy tiles: ``WorldTileGridRenderer`` surface key ``-1`` plus numeric z strings
 - ``indoor`` on pack location payloads is always False (shape-compat with legacy; structures
   live in patches, not location_terrain blobs)
-- world grid: ``ascii`` = terrain/hydro mosaic; ``ascii_height`` = ``surface_z`` mosaic (pack)
+- world grid: ``ascii`` = terrain/hydro mosaic; ``ascii_height`` = ``surface_z``;
+  ``ascii_grade`` = relief facing arrows (pack)
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ LEVEL_COLUMN_SPAN = "column_span"
 LEVEL_CLIFF_DELTA = "cliff_delta"
 LEVEL_LIGHT = "light"
 LEVEL_HEIGHT = "height"
+LEVEL_GRADE = "grade"
 
 
 @dataclass(frozen=True)
@@ -48,6 +50,8 @@ class WorldGridPayload:
     read_mode: ReadMode
     ascii_height: str = ""
     legend_height: str = ""
+    ascii_grade: str = ""
+    legend_grade: str = ""
 
     def to_dict(self) -> dict[str, object]:
         out: dict[str, object] = {
@@ -62,6 +66,10 @@ class WorldGridPayload:
             out["ascii_height"] = self.ascii_height
         if self.legend_height:
             out["legend_height"] = self.legend_height
+        if self.ascii_grade:
+            out["ascii_grade"] = self.ascii_grade
+        if self.legend_grade:
+            out["legend_grade"] = self.legend_grade
         return out
 
 

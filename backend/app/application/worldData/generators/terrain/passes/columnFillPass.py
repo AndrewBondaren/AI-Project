@@ -17,6 +17,7 @@ from app.application.worldData.generators.terrain.types import ColumnRect, Surfa
 from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology, dump_cell_hydrology
+from app.dataModel.spatial.facing import Facing
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
@@ -32,6 +33,26 @@ def _magma_thickness(world: World) -> int:
     return t
 
 
+def _surface_carry_attrs(
+    *,
+    z: int,
+    z_top: int,
+    key: tuple[int, int],
+    surface_facing: dict[tuple[int, int], Facing] | None,
+    surface_grade_uid: dict[tuple[int, int], str] | None,
+) -> tuple[str | None, str | None]:
+    """Stamp facing / grade_uid only on surface z (PAR-G9 / PAR-T-8).
+
+    MapCell SQL boundary keeps facing as ``str`` via ``Facing.value``.
+    """
+    if z != z_top:
+        return None, None
+    facing_e = surface_facing.get(key) if surface_facing is not None else None
+    facing = facing_e.value if facing_e is not None else None
+    grade_uid = surface_grade_uid.get(key) if surface_grade_uid is not None else None
+    return facing, grade_uid
+
+
 def run_column_fill(
     world: World,
     heightmap: SurfaceHeightmap,
@@ -39,11 +60,13 @@ def run_column_fill(
     rect: ColumnRect | None = None,
     hydrology_by_cell: dict[tuple[int, int], MapCellHydrology] | None = None,
     surface_terrain: dict[tuple[int, int], str] | None = None,
-    surface_facing: dict[tuple[int, int], str] | None = None,
+    surface_facing: dict[tuple[int, int], Facing] | None = None,
+    surface_grade_uid: dict[tuple[int, int], str] | None = None,
 ) -> list[MapCell]:
     """Pass 2: fill solid columns (optional rect slice for chunking).
 
-    Pack L2 refine: pass ``surface_terrain`` / ``surface_facing`` from parent light.
+    Pack L2 refine: pass ``surface_terrain`` / ``surface_facing`` /
+    ``surface_grade_uid`` from parent light (facing+uid on surface z only — PAR-G9).
     Legacy path without map: climate landcover via ``surface_biome_terrain``.
     """
     terrain_set = _terrain_set(world)
@@ -102,6 +125,13 @@ def run_column_fill(
                         and "liquid_body" in terrain_set
                     ):
                         terrain = "liquid_body"
+                facing, grade_uid = _surface_carry_attrs(
+                    z=z,
+                    z_top=z_top,
+                    key=key,
+                    surface_facing=surface_facing,
+                    surface_grade_uid=surface_grade_uid,
+                )
                 cells.append(MapCell(
                     world_uid=world.world_uid,
                     x=gx,
@@ -110,11 +140,8 @@ def run_column_fill(
                     system_terrain=terrain,
                     system_material=material,
                     hydrology=hydrology_wire,
-                    system_facing=(
-                        surface_facing.get(key)
-                        if z == z_top and surface_facing is not None
-                        else None
-                    ),
+                    system_facing=facing,
+                    system_grade_uid=grade_uid,
                 ))
 
             if use_magma:

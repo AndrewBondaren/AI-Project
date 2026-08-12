@@ -1,0 +1,25 @@
+{
+  "system_name": "road_shoulder_soft",
+  "display_name": "Road shoulder soft grade",
+  "context": "road_shoulder",
+  "pack_name": "smoke_003",
+  "slope_length_cells": 2,
+  "conditions": [
+    {
+      "terrain": "plains",
+      "cases": [
+        {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.8, "sheer_weight": 0.2, "slope_length_cells": 2},
+        {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
+        {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
+      ]
+    },
+    {
+      "terrain": "forest",
+      "cases": [
+        {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.7, "sheer_weight": 0.3, "slope_length_cells": 2},
+        {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
+        {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
+      ]
+    }
+  ]
+}

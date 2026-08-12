@@ -2,6 +2,7 @@
 ASCII-визуализация уровня здания.
 Используется в debug API и скриптах разработки.
 """
+from app.application.worldData.facingArrows import FACING_ARROW
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.structure.enums.buildingElement import (
     StructureElement, _STAIR_DIRECTIONAL,
@@ -24,13 +25,6 @@ _SYMBOLS: dict[StructureElement, str] = {
     StructureElement.TRAPDOOR:   "T",
     StructureElement.LADDER:     "H",
     StructureElement.ARCHWAY:    "'",
-}
-
-FACING_ARROW: dict[Facing, str] = {
-    Facing.NORTH: "↑",
-    Facing.SOUTH: "↓",
-    Facing.EAST:  "→",
-    Facing.WEST:  "←",
 }
 
 

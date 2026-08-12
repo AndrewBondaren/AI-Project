@@ -145,7 +145,7 @@ def grade_from_template(
             kind=ReliefSideKind.SLOPE,
             requested_length=geom.L,
             h=h,
-            geom=geom,
+            geom=geom if geom.L >= 1 else None,
             earthen_canal=earthen_default,
             structure_refs=refs_default,
             reason=REASON_SCHEDULE_HOLE_SAFE_SLOPE,
@@ -182,6 +182,8 @@ def grade_from_template(
         sheer_weight=hit.knobs.sheer_weight,
     )
     geom = geom_resolve(h=h, kind=kind, knobs=hit.knobs)
+    # Explicit L=0 → no wedge (requested_length=0); bake clearance skips stamp.
+    # partition only runs inside geom_resolve when L≥1.
     relief_info(
         "grade_apply",
         template_uid=template_uid,
@@ -193,6 +195,7 @@ def grade_from_template(
         structure_canal=hit.knobs.structure_canal,
         reason=hit.reason,
         site_id=site_id,
+        no_wedge=geom.L < 1,
     )
     return RibbonGradeDecision(
         template_uid=template_uid,
@@ -200,7 +203,7 @@ def grade_from_template(
         kind=kind,
         requested_length=geom.L,
         h=h,
-        geom=geom,
+        geom=geom if geom.L >= 1 else None,
         earthen_canal=hit.knobs.earthen_canal,
         structure_refs=tuple(hit.knobs.structure_refs),
         reason=hit.reason,

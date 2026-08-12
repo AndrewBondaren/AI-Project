@@ -13,7 +13,8 @@ from app.api.utils.jsonResolver import JsonResolver
 from app.application.worldData.generators.structure.structureGeneratorService import (
     StructureGeneratorService,
 )
-from app.application.worldData.generators.structure.gridRenderer import render_all_levels, FACING_ARROW
+from app.application.worldData.facingArrows import FACING_ARROW
+from app.application.worldData.generators.structure.gridRenderer import render_all_levels
 from app.dataModel.spatial.facing import Facing
 from app.db.models.namedLocation import NamedLocation
 from datetime import datetime, timezone

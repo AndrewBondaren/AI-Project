@@ -427,6 +427,8 @@ HTTP: `GET …/map/render-wilderness-tile-grid` (`include_column_diagnostics` de
 
 Это **диагностика**, не SoT объёма — gap fill остаётся в terrain generator (`tz_terrain_generation.md`).
 
+**Прочие pack ASCII levels** (L0 map/height/**grade**, L2 location **grade**): [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) — не дублировать здесь.
+
 ## История
 
 | Дата | Изменение |

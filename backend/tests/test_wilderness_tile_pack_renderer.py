@@ -67,7 +67,7 @@ class TestWildernessTilePackRenderer(unittest.TestCase):
         surface = renderer.render_surface_top()
         self.assertIn("wilderness tile=(-2,-2)", surface)
         self.assertIn("pack wilderness_chunk mosaic", surface)
-        self.assertIn(".", surface)  # plains
+        self.assertIn("_", surface)  # plains
         self.assertIn("f", surface)  # forest
         self.assertIn("~", surface)  # liquid
         # tile-local x: chunk0 → 0,1; chunk1 → 2
@@ -159,7 +159,7 @@ class TestWildernessTilePackRenderer(unittest.TestCase):
         self.assertEqual(len(row2), 1)
         self.assertEqual(row2[0], "   0 |m |")
         row1 = [ln for ln in occupied_ascii[1].splitlines() if ln.startswith("   0 |")]
-        self.assertEqual(row1[0], "   0 |m.|")
+        self.assertEqual(row1[0], "   0 |m_|")
         # Same grid width on every z (no shift).
         self.assertEqual(len(row1[0]), len(row2[0]))
         self.assertIn("tile-local grid gx: 0..1", occupied_ascii[2])

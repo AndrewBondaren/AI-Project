@@ -92,7 +92,7 @@ Ribbon shared: `ribbonGradeApply` + `contextRibbonApply` / `ribbonSampleUtil`; i
 |---|---|
 | R36 | **SLOPE** = прямоугольный треугольник **высота × длина → угол** (rise/run). Materialize закрывает **весь** измеренный `dz` (объём грани, не facing-only stamp). **SHEER** = отвес на всю `dz` (θ ≈ 90°, grade-проход нет). Политики (R32) — *когда* case/band и knobs; угол — *после* resolve геометрии. См. § SLOPE geometry (R36) |
 | R36a | **h (height)** в generate = **measured** `|dz|` сайта (дорога↔сосед / эквивалент consumer). Политика **не** задаёт высоту карты |
-| R36b | Wire knobs на case/band — **XOR Geom:** либо **`slope_length_cells`** (длина наклона L, **`>= 0`**), либо **`target_angle_deg`**; оба сразу → **reject**. Omit L → default **1**. Explicit **`0`** = нет наружных колонок (ring expand → empty). **Materialize** при `h ≥ 1`: `geom_resolve` / `partition_height` требуют **`L_eff ≥ 1`** (иначе skip / не строить клин) — не путать с wire `0`. Третий параметр — derived. **`shoulder_width_cells` удалён** |
+| R36b | Wire knobs на case/band — **XOR Geom:** либо **`slope_length_cells`** (длина наклона L, **`>= 0`**), либо **`target_angle_deg`**; оба сразу → **reject**. Omit L → default **1**. Explicit **`0`** = нет наружных колонок / no wedge (`geom_resolve` → `L=0`, `requested_length=0`; bake clearance skips stamp). **`partition_height` только при L≥1** — не silent bump `0→1`. Третий параметр — derived. **`shoulder_width_cells` удалён** |
 | R36c | Три режима треугольника (клетка кубическая: `cell_xy_m == cell_z_m`): **Geom-A** `h+L→θ`; **Geom-B** `θ+h→L`; **Geom-C** `L+θ→h` — только UI (R30), **не** override карты. **Не путать** с **Mode A\|B** (R32: `delta_z` vs bands) — разные XOR |
 | R36d | Формулы: `θ = atan(h/L)`; `L = ceil(h / tan(θ))` (min 1); `h = L · tan(θ)`. Пример: `h=1`, `L=1` → **45°** |
 | R36e | **SHEER + длина:** `slope_length_cells` (L) = **как строим** отвес по XY (сколько колонок наружу от дороги) — параметр стройки, **не** угол и не «толщина дороги». **`L = 0`** → нет колонок. На каждой из L>0 колонок solid на **все h** z-клеток дельты. `facing=none`, angle N/A. Угол/`target_angle_deg` — только **SLOPE** |
@@ -1045,7 +1045,7 @@ sign   = −1 если slope_down (наружу ниже); +1 если slope_up 
 outward = ortho unit от дороги к seed обочины
 ```
 
-**Wire vs materialize (L=0):** knobs/`expand_shoulder_ring` honor explicit `slope_length_cells=0` (пустой footprint). Клин volume (`partition_height`) при `h ≥ 1` требует `L_eff ≥ 1` — иначе skip site, не silent bump `0→1` на wire.
+**Wire vs materialize (L=0):** explicit `slope_length_cells=0` → pre-clearance `geom_resolve` returns `L=0` (no `partition_height`, no silent `0→1`). `gradePass` sets `requested_length=0` and `geom=None`. Bake clearance / `geom_for_cleared_length` skip stamp when `L_eff<1`. Omit L → default 1. Helper `expand_shoulder_ring(width=0)→∅` is unit/ring utility — **not** bake SoT (sample uses ring-1 seeds; L comes from geom/clearance).
 
 #### SHEER — стройка отвеса (L = длина по XY)
 
@@ -1693,6 +1693,7 @@ templates → R36 → BAR-1 →  open_land + shore ✅               →  R36s 8
 | [`tz_locations.md`](./tz_locations.md) | facing stairs; **barrier_template_registry** для `structure_refs` |
 | [`tz_building_generator.md`](./tz_building_generator.md) | library + world registry + import образец |
 | [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | world bundle levels; relief registry/bodies в bundle |
+| [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) | pack ASCII: L0 `world-grade`; L2 location `levels.grade`; FineTerrain `system_grade_uid`→Instance (PAR-G7/G10); nearest+surface (G8/G9) |
 | [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | open IDs; backlog sync с Wave B–E |
 | [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md) | agent pointer на § Порядок |
 
@@ -1702,7 +1703,9 @@ templates → R36 → BAR-1 →  open_land + shore ✅               →  R36s 8
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-11 | **Pack ASCII SoT:** [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) — L0 grade locked; L2 location target; **PAR-G7** = FineTerrain `system_grade_uid` следствие R16+R24 |
 | 2026-08-10 | **RELIEF-T-66:** ribbon skip → `ribbon_skip_apply` \| `_grade` \| `_materialize` + closed `why` sets; drop monotoken `ribbon_skip`; clearance WHY → `WHY_NO_UNIQUE_OUTWARD` / `WHY_CLEARANCE_L_EFF` |
+| 2026-08-10 | **L=0 hybrid D:** `geom_resolve` honors explicit 0 (no partition / no bump); `gradePass` `requested_length=0` + `geom=None`; bake skip via clearance; `expand_shoulder_ring` ≠ bake SoT |
 | 2026-08-10 | **L=0 lock (T-38):** wire `slope_length_cells >= 0`; omit→1; explicit 0 = no outward columns / empty ring; materialize `L_eff≥1` when h≥1 (partition) — R22/R36b/e/C4/§8a sync |
 | 2026-08-10 | **P2 SOLID/DRY:** T-33…T-36, T-34A flat, T-39 — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) |
 | 2026-08-07 | **reliefEvents rename SoT:** `EVENT_RESOLVE_FALLBACK` / `EVENT_RIBBON_BARRIER` / `REASON_SCHEDULE_HOLE_SAFE_SLOPE` / `WHY_HEIGHT_LT_1`; drop legacy `r21_*` / `road_shoulder_barrier` / `h_lt_1` aliases — § Warn + fallback (R21) |
