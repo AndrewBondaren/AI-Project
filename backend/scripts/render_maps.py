@@ -8,9 +8,10 @@ Pack path (default after light bake):
 
 Detailed L2 (after detailed_bake):
   - ``dump_detailed_renders`` → location_terrain + ``render-wilderness-tile-grid``
-    Pack-read-only: each ``z/<n>.txt`` = cells already in FineTerrain runs (no generation).
-    Default: ``surface`` / ``column_span`` / ``cliff_delta``, then one file per occupied world-z
-    under ``wilderness/Gx*_Gy*/z/`` (fetched via ``?z=``, not one mega JSON).
+    Pack-read-only: each ``z/<n>.txt`` = cells already in FineTerrain runs (no generation);
+    ``surface_grade.txt`` + ``z/grade_<n>.txt`` = relief overlay (surface_z == n).
+    Default: ``surface`` / ``surface_grade`` / ``column_span`` / ``cliff_delta``, then
+    one material + grade file per relevant world-z under ``…/z/``.
   - does **not** re-dump L0 mosaic
 
 Legacy path still works via the same endpoints (MapCell-backed levels).
@@ -48,11 +49,35 @@ from app.application.worldData.render.renderPayloads import (  # noqa: E402
     LEVEL_HEIGHT,
     LEVEL_LIGHT,
     LEVEL_SURFACE,
+    LEVEL_SURFACE_GRADE,
     LEVEL_COLUMN_SPAN,
+    grade_level_key,
 )
 
-# Base wilderness dump keys (no dense z / no grade — PAR-G6).
-_WILDERNESS_BUNDLE_LEVELS = frozenset({LEVEL_SURFACE, LEVEL_COLUMN_SPAN, LEVEL_CLIFF_DELTA})
+# Base L2 dump keys (no dense z — those go under ``z/``).
+_L2_BUNDLE_LEVELS = frozenset({
+    LEVEL_SURFACE,
+    LEVEL_SURFACE_GRADE,
+    LEVEL_COLUMN_SPAN,
+    LEVEL_CLIFF_DELTA,
+})
+# Backward-compatible alias used by wilderness dump filter.
+_WILDERNESS_BUNDLE_LEVELS = _L2_BUNDLE_LEVELS
+
+
+def _is_numeric_z_key(key: str) -> bool:
+    return str(key).lstrip("-").isdigit()
+
+
+def _parse_grade_z_key(key: str) -> int | None:
+    """``grade_{n}`` → n; else None."""
+    s = str(key)
+    if not s.startswith("grade_"):
+        return None
+    rest = s[len("grade_"):]
+    if not rest.lstrip("-").isdigit():
+        return None
+    return int(rest)
 
 
 def _write(path: Path, content: str) -> None:
@@ -64,6 +89,8 @@ def _level_sort_key(key: str) -> tuple[int, int | str]:
     """Order: light/surface first, column diagnostics, height/grade, then numeric z."""
     if key in (LEVEL_LIGHT, LEVEL_SURFACE, "-1"):
         return (0, key)
+    if key == LEVEL_SURFACE_GRADE:
+        return (0, "z_surface_grade")
     if key == LEVEL_COLUMN_SPAN:
         return (0, "z_column_span")
     if key == LEVEL_CLIFF_DELTA:
@@ -72,10 +99,13 @@ def _level_sort_key(key: str) -> tuple[int, int | str]:
         return (0, "z_height")
     if key == LEVEL_GRADE:
         return (0, "z_grade")
+    grade_z = _parse_grade_z_key(key)
+    if grade_z is not None:
+        return (2, grade_z)
     try:
         return (1, int(key))
     except ValueError:
-        return (2, key)
+        return (3, key)
 
 
 def _pick_primary_level(levels: dict[str, str]) -> tuple[str, str] | None:
@@ -95,11 +125,15 @@ def _write_level_bundle(
     levels: dict[str, str],
     legend: str,
     combine_grids: bool = True,
+    z_subdir: bool = False,
 ) -> dict[str, object]:
     """Write per-level txt + all-levels.txt; return meta for index.
 
     When ``combine_grids=False``, ``all-levels.txt`` lists level file paths only
     (no concatenated ASCII) — used when dense z lives under ``z/``.
+
+    When ``z_subdir=True`` (L2 detailed): numeric z → ``z/{n}.txt``,
+    ``grade_{n}`` → ``z/grade_{n}.txt``; base keys stay at ``out_dir`` root.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     level_paths: dict[str, str] = {}
@@ -107,14 +141,22 @@ def _write_level_bundle(
     for z_key, grid in sorted(levels.items(), key=lambda item: _level_sort_key(str(item[0]))):
         if not str(grid).strip():
             continue
-        safe = str(z_key).replace("/", "_")
-        z_path = out_dir / f"{safe}.txt"
-        level_legend = render_grade_legend() if str(z_key) == LEVEL_GRADE else legend
+        key = str(z_key)
+        grade_z = _parse_grade_z_key(key)
+        is_grade_layer = key in (LEVEL_GRADE, LEVEL_SURFACE_GRADE) or grade_z is not None
+        if z_subdir and grade_z is not None:
+            z_path = out_dir / "z" / f"grade_{grade_z}.txt"
+        elif z_subdir and _is_numeric_z_key(key):
+            z_path = out_dir / "z" / f"{int(key)}.txt"
+        else:
+            safe = key.replace("/", "_")
+            z_path = out_dir / f"{safe}.txt"
+        level_legend = render_grade_legend() if is_grade_layer else legend
         body = f"{grid}\n\n--- legend ---\n{level_legend}\n"
         _write(z_path, body)
         rel = str(z_path.relative_to(REPO))
-        level_paths[str(z_key)] = rel
-        combined.append(f"=== {z_key} ===")
+        level_paths[key] = rel
+        combined.append(f"=== {key} ===")
         if combine_grids:
             combined.append(grid)
         else:
@@ -175,14 +217,15 @@ def _write_wilderness_z_slices(
     tile_dir: Path,
     legend: str,
 ) -> dict[str, str]:
-    """Write ``z/<n>.txt`` for each occupied world-z (pack-local preferred).
+    """Write ``z/<n>.txt`` + ``z/grade_<n>.txt`` for occupied / grade surface-z.
 
     Pack path: one tile load + single-pass symbols → ASCII grid on the **shared
     mosaic frame** (empty cell = space; same x/y axes on every z — no shift).
-    HTTP ``?z=`` fallback when pack is unavailable.
+    HTTP ``?z=`` fallback when pack is unavailable (material only; grade via pack).
     """
     z_dir = tile_dir / "z"
     paths: dict[str, str] = {}
+    grade_paths: dict[str, str] = {}
     occupied_filter = {int(z) for z in occupied_z_levels}
     renderer = _wilderness_pack_renderer(world_uid, gx, gy)
     source = "http"
@@ -209,6 +252,16 @@ def _write_wilderness_z_slices(
             if i == 1 or i % 200 == 0:
                 print(f"    z-files {len(paths)} (last z={z_val})", flush=True)
         print(f"    z-files done: {len(paths)}", flush=True)
+        grade_legend = render_grade_legend()
+        grade_count = 0
+        for z_val, body in renderer.iter_grade_z_levels_aligned():
+            if not body.strip():
+                continue
+            g_path = z_dir / f"grade_{int(z_val)}.txt"
+            _write(g_path, f"{body}\n\n--- legend ---\n{grade_legend}\n")
+            grade_paths[str(int(z_val))] = str(g_path.relative_to(REPO))
+            grade_count += 1
+        print(f"    grade_z-files done: {grade_count}", flush=True)
     else:
         occupied = sorted(occupied_filter)
         for z_val in occupied:
@@ -229,6 +282,7 @@ def _write_wilderness_z_slices(
         f"tile=({gx},{gy})",
         f"occupied_z_count={len(paths)}",
         f"files_written={len(paths)}",
+        f"grade_z_files={len(grade_paths)}",
         f"source={source}",
         f"slice_format={slice_format}",
         "",
@@ -236,8 +290,17 @@ def _write_wilderness_z_slices(
     ]
     for key in sorted(paths.keys(), key=lambda k: int(k)):
         index_lines.append(f"  {key}: {paths[key]}")
+    if grade_paths:
+        index_lines.append("")
+        index_lines.append("grade_z_files:")
+        for key in sorted(grade_paths.keys(), key=lambda k: int(k)):
+            index_lines.append(f"  grade_{key}: {grade_paths[key]}")
     _write(tile_dir / "z-levels-index.txt", "\n".join(index_lines) + "\n")
-    return paths
+    # Merge grade paths into return for meta (prefixed keys).
+    out = dict(paths)
+    for z_s, rel in grade_paths.items():
+        out[grade_level_key(int(z_s))] = rel
+    return out
 
 
 def dump_map_renders(
@@ -311,6 +374,8 @@ def dump_map_renders(
             ],
             levels=levels,
             legend=str(legend or ""),
+            combine_grids=False,
+            z_subdir=True,
         )
         meta["indoor"] = entry.get("indoor")
         meta["z_levels"] = entry.get("z_levels")
@@ -439,6 +504,8 @@ def dump_detailed_renders(
                 ],
                 levels=levels,
                 legend=str(entry.get("legend") or ""),
+                combine_grids=False,
+                z_subdir=True,
             )
             meta["z_levels"] = entry.get("z_levels")
             locations_meta[location_uid] = meta
@@ -465,13 +532,12 @@ def dump_detailed_renders(
         if payload.get("ascii") and not levels:
             key = LEVEL_SURFACE if payload.get("z") is None else str(payload["z"])
             levels[key] = str(payload["ascii"])
-        # When writing per-z files, keep base bundle free of numeric z grids.
+        # When writing per-z files, keep base bundle free of numeric / grade_z grids.
         if write_z_slice_files:
             levels = {
                 k: v
                 for k, v in levels.items()
-                if k in _WILDERNESS_BUNDLE_LEVELS
-                or not str(k).lstrip("-").isdigit()
+                if k in _L2_BUNDLE_LEVELS
             }
         legend = str(payload.get("legend") or "")
         occupied_raw = payload.get("occupied_z_levels") or []
@@ -509,7 +575,9 @@ def dump_detailed_renders(
                 legend=legend,
             )
             if z_slice_paths and not occupied:
-                occupied = sorted(int(k) for k in z_slice_paths)
+                occupied = sorted(
+                    int(k) for k in z_slice_paths if _is_numeric_z_key(k)
+                )
             meta["z_slice_files"] = z_slice_paths
             meta["z_levels_index"] = str(
                 (tile_dir / "z-levels-index.txt").relative_to(REPO)

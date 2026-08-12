@@ -8,6 +8,9 @@ from app.application.worldData.render.fineTerrainAsciiKernel import (
     draw_symbol_grid,
     symbols_at_z,
     symbols_by_occupied_z,
+    symbols_grade_at_z,
+    symbols_grade_by_surface_z,
+    symbols_grade_surface,
     symbols_surface_top,
     values_cliff_delta,
     values_column_span,
@@ -18,6 +21,7 @@ from app.application.worldData.render.renderPayloads import (
     LEVEL_CLIFF_DELTA,
     LEVEL_COLUMN_SPAN,
     LEVEL_SURFACE,
+    LEVEL_SURFACE_GRADE,
 )
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire
 
@@ -112,6 +116,53 @@ class WildernessTilePackRenderer:
             ),
             bounds=self.mosaic_xy_bounds(),
         )
+
+    def render_grade(self) -> str:
+        """Surface grade overlay — omit when no ``system_grade_uid`` (PAR-G4)."""
+        symbols = symbols_grade_surface(self._cols)
+        if not symbols:
+            return ""
+        return self._draw(
+            symbols,
+            title=(
+                f"wilderness tile=({self.tile_gx},{self.tile_gy})  "
+                f"(pack wilderness_chunk mosaic, surface_grade)"
+            ),
+            bounds=self.mosaic_xy_bounds(),
+        )
+
+    def render_grade_at_z(self, z: int) -> str:
+        """Grade where column surface_z == ``z``; mosaic frame; omit if empty."""
+        symbols = symbols_grade_at_z(self._cols, z)
+        if not symbols:
+            return ""
+        return self._draw(
+            symbols,
+            title=(
+                f"wilderness tile=({self.tile_gx},{self.tile_gy}) grade z={z}  "
+                f"(pack wilderness_chunk mosaic; surface_z only)"
+            ),
+            bounds=self.mosaic_xy_bounds(),
+        )
+
+    def iter_grade_z_levels_aligned(self):
+        """Yield ``(z, ascii)`` grade overlays on mosaic frame (non-empty only)."""
+        frame = self.mosaic_xy_bounds()
+        if frame is None:
+            return
+        by_z = symbols_grade_by_surface_z(self._cols)
+        for z in sorted(by_z):
+            cells = by_z.pop(z)
+            text = self._draw(
+                cells,
+                title=(
+                    f"wilderness tile=({self.tile_gx},{self.tile_gy}) grade z={z}  "
+                    f"(pack wilderness_chunk mosaic; surface_z only)"
+                ),
+                bounds=frame,
+            )
+            if text.strip():
+                yield int(z), text
 
     def render_level(self, z: int) -> str:
         """Horizontal slice at world-z — mosaic frame; missing cells are spaces."""
@@ -218,11 +269,18 @@ class WildernessTilePackRenderer:
         include_z_slices: bool = True,
         include_column_diagnostics: bool = True,
     ) -> dict[str, str]:
-        """Keys: surface; optional dense z slices; column_span / cliff_delta diagnostics."""
+        """Keys: surface; surface_grade; optional dense z; column diagnostics.
+
+        Per-z grade files are dump-only (``z/grade_{n}.txt``) to avoid mega JSON —
+        use ``iter_grade_z_levels_aligned`` / ``render_grade_at_z``.
+        """
         out: dict[str, str] = {}
         surface = self.render_surface_top()
         if surface:
             out[LEVEL_SURFACE] = surface
+        grade = self.render_grade()
+        if grade:
+            out[LEVEL_SURFACE_GRADE] = grade
         if include_column_diagnostics:
             span = self.render_column_span()
             if span:

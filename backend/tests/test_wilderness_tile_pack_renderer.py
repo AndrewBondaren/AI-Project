@@ -15,6 +15,7 @@ from app.application.worldData.render.renderPayloads import (
     LEVEL_CLIFF_DELTA,
     LEVEL_COLUMN_SPAN,
     LEVEL_SURFACE,
+    LEVEL_SURFACE_GRADE,
 )
 from app.application.worldData.render.wildernessTilePackRenderer import WildernessTilePackRenderer
 from app.dataModel.worldPack.fineTerrainChunkWire import (
@@ -163,6 +164,44 @@ class TestWildernessTilePackRenderer(unittest.TestCase):
         # Same grid width on every z (no shift).
         self.assertEqual(len(row1[0]), len(row2[0]))
         self.assertIn("tile-local grid gx: 0..1", occupied_ascii[2])
+
+    def test_surface_grade_and_grade_at_z(self) -> None:
+        chunks = [
+            FineTerrainChunkWire(
+                cx=0,
+                cy=0,
+                chunk_columns=2,
+                columns=[
+                    FineTerrainColumnWire(
+                        lx=0,
+                        ly=0,
+                        runs=[FineTerrainZRun(z0=0, z1=3, system_terrain="plains")],
+                        system_grade_uid="g1",
+                        system_facing="east",
+                    ),
+                    FineTerrainColumnWire(
+                        lx=1,
+                        ly=0,
+                        runs=[FineTerrainZRun(z0=0, z1=1, system_terrain="forest")],
+                    ),
+                ],
+            ),
+        ]
+        renderer = WildernessTilePackRenderer(
+            chunks, tile_gx=1, tile_gy=2, tile_size_m=1000,
+        )
+        levels = renderer.render_all_levels(
+            include_z_slices=False,
+            include_column_diagnostics=False,
+        )
+        self.assertIn(LEVEL_SURFACE, levels)
+        self.assertIn(LEVEL_SURFACE_GRADE, levels)
+        self.assertIn("→", levels[LEVEL_SURFACE_GRADE])
+        self.assertEqual(renderer.render_grade_at_z(1), "")
+        grade3 = renderer.render_grade_at_z(3)
+        self.assertIn("→", grade3)
+        pairs = list(renderer.iter_grade_z_levels_aligned())
+        self.assertEqual([z for z, _ in pairs], [3])
 
 
 if __name__ == "__main__":

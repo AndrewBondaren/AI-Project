@@ -20,8 +20,8 @@ metadata:
 | Слой | Что рисует | Не делает |
 |---|---|---|
 | L0 world mosaic | light / height / **grade** | ribbon generate, height invent |
-| L2 location | surface (+ diagnostics) / **grade** | detailed ribbon grade |
-| L2 wilderness tile | surface (+ mountain diagnostics) | grade v1 (out of scope) |
+| L2 location | surface (+ diagnostics) / **surface_grade** + **grade_{z}** | detailed ribbon grade |
+| L2 wilderness tile | surface (+ mountain diagnostics) / **surface_grade** + **grade_{z}** | invent uid / ribbon |
 
 Код (ориентиры): `render/worldMapPackRenderer.py`, `locationTerrainPackRenderer.py`, `wildernessTilePackRenderer.py`, `fineTerrainAsciiKernel.py`, `mapSymbols.py`, `facingArrows.py`, `renderPayloads.py`; dump — `scripts/render_maps.py` / `dump_detailed_renders`.
 
@@ -45,29 +45,25 @@ metadata:
 
 **Empty grade:** нет ни одной клетки с `system_grade_uid` → **omit** layer / **не** писать файл (не псевдопустая полная сетка). Non-empty → crop bbox + X/Y rulers.
 
-### L2 location (`LocationTerrainPackRenderer` / `render-location-grids`)
+### L2 location + wilderness (detailed dump)
 
-| Key | Статус | Содержимое |
+| Key / файл | Статус | Содержимое |
 |---|---|---|
-| `surface` | ✅ | FineTerrain top / surface symbols |
-| `column_span` / `cliff_delta` / z-slices | ✅ diag | см. [`tz_mountain_architecture.md`](./tz_mountain_architecture.md) § Debug render |
-| **`grade`** | ✅ | overlay как L0 `grade_symbol`; dump `…/locations/{uid}/grade.txt` |
+| `surface` → `surface.txt` | ✅ | FineTerrain top / surface symbols |
+| `column_span` / `cliff_delta` | ✅ diag | см. [`tz_mountain_architecture.md`](./tz_mountain_architecture.md) § Debug render |
+| numeric z → `z/{n}.txt` | ✅ | material slice at world-z |
+| **`surface_grade`** → **`surface_grade.txt`** | ✅ | overlay `grade_symbol` по column `system_grade_uid` + facing |
+| **`grade_{n}`** → **`z/grade_{n}.txt`** | ✅ | тот же overlay **только** где `surface_z == n` (иначе space); omit файл если пусто |
 
 **Locked (мастер):**
 
 | Bake | Grade **generate** | Grade **render** |
 |---|---|---|
 | light / full (L0) | ✅ ribbon consumers | L0 `world-grade` |
-| detailed (L2) | ❌ не ribbon / не invent uid | **location** `levels.grade` |
+| detailed (L2) | ❌ не ribbon / не invent uid | **location + wilderness** `surface_grade` + `z/grade_{n}` |
 
-Detailed dump **не** подменяет L0 world-grade «вместо» локации.
-
-### L2 wilderness
-
-| Key | Статус |
-|---|---|
-| surface + mountain diagnostics | ✅ |
-| `grade` | **v1 out of scope** (расширение — отдельный lock) |
+Detailed dump **не** подменяет L0 world-grade «вместо» L2.  
+L2 grade **не** смешивать в `surface.txt` / `z/{n}.txt`.
 
 ---
 
@@ -96,9 +92,9 @@ SoT символа: `mapSymbols.grade_symbol(system_grade_uid, system_facing)` +
 | **PAR-G1** | Single-writer **geometry** grade = L0 ribbon only ([`tz_terrain_relief.md`](./tz_terrain_relief.md)) |
 | **PAR-G2** | Detailed = **propagate** L0 refs на fine grid; **не** новый `geom_resolve` / ribbon apply |
 | **PAR-G3** | Membership = только `system_grade_uid` (omit если нет); h/L/angle на Grade entity (R24, R36h/j, C11) |
-| **PAR-G4** | Empty → нет ключа `levels.grade` / нет `grade.txt` |
-| **PAR-G5** | Location grade dump path: under detailed location uid; не путать с L0 `world-grade.txt` |
-| **PAR-G6** | Wilderness `levels.grade` — не v1 |
+| **PAR-G4** | Empty → нет `surface_grade` / нет `surface_grade.txt`; пустой z → нет `z/grade_{n}.txt` |
+| **PAR-G5** | L2 grade dump under detailed location/wilderness tile; не путать с L0 `world-grade.txt` |
+| **PAR-G6** | Wilderness L2 grade ASCII **in scope**: `surface_grade.txt` + `z/grade_{n}.txt` (тот же consumer, что location) |
 | **PAR-G7** | **FineTerrain column wire** несёт оба кэша колонки, по relief: `system_facing` (**R16**) и `system_grade_uid` (клеточный ref **R24** / R36h на pack-колонке; omit если нет). Не дублировать entity-поля. Stairs facing — per-cell ([`tz_locations.md`](./tz_locations.md)); outdoor facing SoT — Grade entity (**C10**), колонка = cache |
 | **PAR-G8** | L0→L2 **`system_grade_uid` carry** = categorical **nearest** parent light (`ParentLightTile.meters_to_tx_ty`), зеркало terrain mask carry / facing. **Запрещено:** bilinear, majority resample, invent uid без L0. Knobs: `ParentLightRefinePolicy.categorical_resample=nearest` (legacy alias `terrain_resample`) ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Terrain mask carry) |
 | **PAR-G9** | Stamp + агрегация колонки: `system_grade_uid` **и** `system_facing` только с **surface** (`z == surface_z` / top cell). **Запрещено:** majority по z-стеку. Wire: `_column_surface_attrs` |
@@ -115,7 +111,9 @@ SoT символа: `mapSymbols.grade_symbol(system_grade_uid, system_facing)` +
 `MapCell.system_grade_uid` и L0 `WorldMapCellWire.system_grade_uid` — уже SoT.  
 `FineTerrainColumnWire.system_facing` — уже; **`system_grade_uid` на том же POJO** (G7).  
 Upsample uid — **PAR-G8**; surface stamp/агрегация — **PAR-G9**.  
-Legacy FineTerrain без поля uid → как empty (**PAR-G4**): omit `levels.grade`; re-bake detailed после имплементации. Forced pack invalidate — не требуется контрактом.
+Legacy FineTerrain без поля uid → как empty (**PAR-G4**): omit `surface_grade` / `grade_{n}`; re-bake detailed после имплементации. Forced pack invalidate — не требуется контрактом.
+
+**Per-z grade (locked):** `grade_{n}` показывает символ только если top/`surface_z` колонки == `n` и есть `system_grade_uid` (PAR-G9). Не копировать полный `surface_grade` в каждый z.
 
 ### Closed Q (больше не open)
 
@@ -135,10 +133,10 @@ Open product XOR по L2 grade ASCII — **нет**. Impl backlog — план [
 
 | Путь | Grade |
 |---|---|
-| `GET …/render-world-grid` (+ dump L0) | `levels.grade` / `world-grade.txt` при non-empty |
-| `GET …/render-location-grids` | target: `levels.grade` |
-| `dump_detailed_renders` | target: `locations/{uid}/grade.txt` only; wilderness — нет |
-| `GET …/render-wilderness-tile-grid` | grade v1 — нет |
+| `GET …/render-world-grid` (+ dump L0) | `ascii_grade` / `world-grade.txt`; tile `levels.grade` |
+| `GET …/render-location-grids` | `levels.surface_grade` (+ optional `grade_{n}` в dense) |
+| `GET …/render-wilderness-tile-grid` | `levels.surface_grade`; per-z grade в dump (`z/grade_{n}.txt`) |
+| `dump_detailed_renders` | `surface_grade.txt` + `z/{n}.txt` + `z/grade_{n}.txt` (location и wilderness) |
 
 Отдельный query `?layer=grade` **не** обязателен, если payload уже несёт `levels` dict.
 
@@ -160,6 +158,7 @@ Open product XOR по L2 grade ASCII — **нет**. Impl backlog — план [
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-12 | **PAR-G6 lift:** L2 dump `surface_grade.txt` + `z/grade_{n}.txt` (location+wilderness); per-z = surface_z==n |
 | 2026-08-12 | **PAR-T-4:** pack/FineTerrain/LightGrid `system_facing: Facing`; coerce on wire; MapCell SQL str |
 | 2026-08-12 | **PAR-T fix wave:** T-1/2/3/5/6/7/8 resolved; T-4 Facing-as-str deferred — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) |
 | 2026-08-12 | **Pack ASCII debt:** post-impl L2 grade → [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) **PAR-T-1…T-8** |

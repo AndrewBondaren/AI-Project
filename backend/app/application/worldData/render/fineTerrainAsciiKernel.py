@@ -113,6 +113,48 @@ def symbols_grade_surface(
     return out
 
 
+def symbols_grade_at_z(
+    cols: Mapping[tuple[int, int], FineTerrainColumnWire],
+    z: int,
+) -> dict[tuple[int, int], str]:
+    """Grade at world-z: uid present and column top/surface_z == ``z`` (PAR-G9)."""
+    out: dict[tuple[int, int], str] = {}
+    for key, col in cols.items():
+        if not col.system_grade_uid:
+            continue
+        top = top_terrain(col)
+        if top is None or int(top[0]) != int(z):
+            continue
+        out[key] = grade_symbol(
+            system_grade_uid=col.system_grade_uid,
+            system_facing=col.system_facing,
+        )
+    return out
+
+
+def symbols_grade_by_surface_z(
+    cols: Mapping[tuple[int, int], FineTerrainColumnWire],
+) -> dict[int, dict[tuple[int, int], str]]:
+    """Single-pass: surface_z → grade symbols (for ``z/grade_{n}`` dumps)."""
+    out: dict[int, dict[tuple[int, int], str]] = {}
+    for key, col in cols.items():
+        if not col.system_grade_uid:
+            continue
+        top = top_terrain(col)
+        if top is None:
+            continue
+        z = int(top[0])
+        bucket = out.get(z)
+        if bucket is None:
+            bucket = {}
+            out[z] = bucket
+        bucket[key] = grade_symbol(
+            system_grade_uid=col.system_grade_uid,
+            system_facing=col.system_facing,
+        )
+    return out
+
+
 def symbols_at_z(
     cols: Mapping[tuple[int, int], FineTerrainColumnWire],
     z: int,

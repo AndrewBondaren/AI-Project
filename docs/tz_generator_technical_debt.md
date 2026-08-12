@@ -1088,7 +1088,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 **Контекст:** 2026-08-12 — L2 location grade ASCII shipped ([`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) **PAR-G7…G10**; plan `grade-detailed-location-render`). Ревью: неявные контракты · dataModel · хардкоды · SRP.
 
-**Не долг (locked product):** generate grade только L0; detailed = nearest carry + surface stamp; FineTerrain column `system_grade_uid` → Instance; empty → omit `levels.grade`; wilderness grade v1 out.
+**Не долг (locked product):** generate grade только L0; detailed = nearest carry + surface stamp; FineTerrain column `system_grade_uid` → Instance; empty → omit `surface_grade` / `grade_{n}`; L2 dump `surface_grade.txt` + `z/grade_{n}.txt` (location **и** wilderness, PAR-G6).
 
 | ID | Severity | Status | P | Ось | Smell | Target |
 |---|---|---|---|---|---|---|
@@ -1123,6 +1123,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 | Дата | Изменение |
 |---|---|
 | 2026-08-12 | **PAR-T-4 resolved:** pack wire `system_facing: Facing \| None` (`WorldMapCellWire` / FineTerrain / LightGridCell); `coerce_facing_wire`; MapCell SQL remains str |
+| 2026-08-12 | **PAR-G6 lift:** L2 `surface_grade.txt` + `z/grade_{n}.txt` (location+wilderness); per-z = surface_z==n |
 | 2026-08-12 | **PAR-T-1…T-3,T-5…T-8 resolved:** surface-only facing+uid; `categorical_resample`; shared upsample; LEVEL_* from payloads; grade legend in dump only; typed TileSurfaceState; `_surface_carry_attrs`. **PAR-T-4** remains open |
 | 2026-08-12 | **PAR-T-1…T-8 open:** post-impl L2 location grade ASCII (facing≠uid agg; `terrain_resample` overload; triple upsample; Facing-as-str; LEVEL_* dump dup; grade legend double; TileSurfaceState bag; columnFill fat). SoT [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) |
 | 2026-08-07 | **Grade `owner_uid`:** dataModel + `0001` + rows; drop FK to connection_edges; factory/persist/PaintedRoadEdge/`apply_road_shoulder_grades` aligned |

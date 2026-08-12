@@ -7,6 +7,8 @@ from app.application.worldData.render.fineTerrainAsciiKernel import (
     draw_int_grid,
     draw_symbol_grid,
     symbols_at_z,
+    symbols_grade_at_z,
+    symbols_grade_by_surface_z,
     symbols_grade_surface,
     symbols_surface_top,
     values_cliff_delta,
@@ -17,8 +19,9 @@ from app.application.worldData.render.mapSymbols import render_map_legend
 from app.application.worldData.render.renderPayloads import (
     LEVEL_CLIFF_DELTA,
     LEVEL_COLUMN_SPAN,
-    LEVEL_GRADE,
     LEVEL_SURFACE,
+    LEVEL_SURFACE_GRADE,
+    grade_level_key,
 )
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
@@ -81,16 +84,29 @@ class LocationTerrainPackRenderer:
         )
 
     def render_grade(self) -> str:
-        """Grade overlay — omit entirely when no ``system_grade_uid`` (PAR-G4).
+        """Surface grade overlay — omit when no ``system_grade_uid`` (PAR-G4).
 
-        Legend is not inlined (PAR-T-6); dump/HTTP use payload ``legend`` / grade legend SoT.
+        Legend is not inlined (PAR-T-6); dump/HTTP use grade legend SoT.
         """
         symbols = symbols_grade_surface(self._cols)
         if not symbols:
             return ""
         return self._draw(
             symbols,
-            title=f"location={self.location_uid}  (pack location_terrain, grade)",
+            title=f"location={self.location_uid}  (pack location_terrain, surface_grade)",
+        )
+
+    def render_grade_at_z(self, z: int) -> str:
+        """Grade where column surface_z == ``z``; omit if empty."""
+        symbols = symbols_grade_at_z(self._cols, z)
+        if not symbols:
+            return ""
+        return self._draw(
+            symbols,
+            title=(
+                f"location={self.location_uid} grade z={z}  "
+                f"(pack location_terrain; surface_z only)"
+            ),
         )
 
     def render_level(self, z: int) -> str:
@@ -150,14 +166,14 @@ class LocationTerrainPackRenderer:
         return z_occupied(self._cols.values())
 
     def render_all_levels(self, *, include_column_diagnostics: bool = True) -> dict[str, str]:
-        """Keys: surface; grade (if any); dense z slices; optional column_span / cliff_delta."""
+        """Keys: surface; surface_grade; dense z; grade_{z}; optional column diagnostics."""
         out: dict[str, str] = {}
         surface = self.render_surface_top()
         if surface:
             out[LEVEL_SURFACE] = surface
         grade = self.render_grade()
         if grade:
-            out[LEVEL_GRADE] = grade
+            out[LEVEL_SURFACE_GRADE] = grade
         if include_column_diagnostics:
             span = self.render_column_span()
             if span:
@@ -169,4 +185,16 @@ class LocationTerrainPackRenderer:
             text = self.render_level(z)
             if text.strip():
                 out[str(z)] = text
+        for z, cells in symbols_grade_by_surface_z(self._cols).items():
+            if not cells:
+                continue
+            text = self._draw(
+                cells,
+                title=(
+                    f"location={self.location_uid} grade z={z}  "
+                    f"(pack location_terrain; surface_z only)"
+                ),
+            )
+            if text.strip():
+                out[grade_level_key(int(z))] = text
         return out

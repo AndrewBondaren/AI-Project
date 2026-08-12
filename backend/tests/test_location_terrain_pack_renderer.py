@@ -3,7 +3,11 @@
 import unittest
 
 from app.application.worldData.render.locationTerrainPackRenderer import LocationTerrainPackRenderer
-from app.application.worldData.render.renderPayloads import LEVEL_GRADE, LEVEL_SURFACE
+from app.application.worldData.render.renderPayloads import (
+    LEVEL_SURFACE,
+    LEVEL_SURFACE_GRADE,
+    grade_level_key,
+)
 from app.dataModel.worldPack.fineTerrainChunkWire import (
     FineTerrainChunkWire,
     FineTerrainColumnWire,
@@ -66,7 +70,7 @@ class TestLocationTerrainPackRenderer(unittest.TestCase):
 
         levels = renderer.render_all_levels()
         self.assertIn(LEVEL_SURFACE, levels)
-        self.assertNotIn(LEVEL_GRADE, levels)  # PAR-G4: no uid → omit
+        self.assertNotIn(LEVEL_SURFACE_GRADE, levels)  # PAR-G4: no uid → omit
         self.assertEqual(renderer.z_levels(), [0, 1, 2, 3, 4, 5])
 
     def test_grade_level_crop_and_omit(self):
@@ -105,7 +109,12 @@ class TestLocationTerrainPackRenderer(unittest.TestCase):
         self.assertIn("┃", grade)
         self.assertNotIn("grade:", grade)  # PAR-T-6: legend not in body
         levels = renderer.render_all_levels(include_column_diagnostics=False)
-        self.assertIn(LEVEL_GRADE, levels)
+        self.assertIn(LEVEL_SURFACE_GRADE, levels)
+        # surface_z == 1 for both grade columns → grade_1 only
+        self.assertIn(grade_level_key(1), levels)
+        self.assertIn("↑", levels[grade_level_key(1)])
+        at_z0 = renderer.render_grade_at_z(0)
+        self.assertEqual(at_z0, "")
 
     def test_legend(self):
         self.assertIn("plains", LocationTerrainPackRenderer.render_legend())
