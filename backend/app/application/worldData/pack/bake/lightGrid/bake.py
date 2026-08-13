@@ -9,9 +9,6 @@ from collections import Counter
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.contributor import LightGridContributor
-from app.application.worldData.pack.bake.lightGrid.contributors.ribbonBarrierApply import (
-    apply_ribbon_barriers,
-)
 from app.application.worldData.pack.bake.lightGrid.maskDomainRegistry import (
     build_default_contributors,
 )
@@ -52,17 +49,6 @@ def compose_light_grid(
             ctx.world.world_uid,
             contributor.name,
             (time.perf_counter() - c0) * 1000.0,
-        )
-    # RELIEF-BAR-1 once after all ribbon contributors (road / open_land / shore).
-    if ctx.ribbon_intents:
-        b0 = time.perf_counter()
-        barrier_n = apply_ribbon_barriers(compose, ctx)
-        logger.info(
-            "light_compose_ribbon_barriers | world=%s intents=%d cells=%d elapsed_ms=%.1f",
-            ctx.world.world_uid,
-            len(ctx.ribbon_intents),
-            barrier_n,
-            (time.perf_counter() - b0) * 1000.0,
         )
     hydro_hist: Counter[str] = Counter()
     pin_n = 0

@@ -104,3 +104,27 @@ def plan_ribbon_volume(
 def ribbon_sign_from_dz(dz: int) -> int:
     """``relief_dz`` > 0 → slope_down (sign −1); < 0 → slope_up (+1)."""
     return -1 if int(dz) > 0 else 1
+
+
+def plan_seed_volume(
+    *,
+    decision_geom: ResolvedGeom | None,
+    h: int,
+    kind: ReliefSideKind,
+    L_eff: int,
+    z_road: int,
+    sign: int,
+) -> RibbonVolumePlan | None:
+    """Reuse decision geom when it matches clearance ``L_eff``; else re-resolve."""
+    if (
+        decision_geom is not None
+        and decision_geom.kind is kind
+        and int(decision_geom.L) == int(L_eff)
+        and int(decision_geom.h) == int(h)
+    ):
+        geom = decision_geom
+    else:
+        geom = geom_for_cleared_length(h=h, kind=kind, length=L_eff)
+    if geom.L < 1:
+        return None
+    return plan_ribbon_volume(z_road=z_road, h=h, sign=sign, geom=geom)

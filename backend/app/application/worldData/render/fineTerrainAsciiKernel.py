@@ -101,7 +101,7 @@ def symbols_surface_top(
 def symbols_grade_surface(
     cols: Mapping[tuple[int, int], FineTerrainColumnWire],
 ) -> dict[tuple[int, int], str]:
-    """Grade overlay: only columns with ``system_grade_uid`` (PAR-G4 / G10)."""
+    """Grade overlay tokens only (uid cells); no terrain fill."""
     out: dict[tuple[int, int], str] = {}
     for key, col in cols.items():
         if not col.system_grade_uid:
@@ -111,6 +111,26 @@ def symbols_grade_surface(
             system_facing=col.system_facing,
         )
     return out
+
+
+def composite_symbol_maps(
+    base: Mapping[tuple[int, int], str],
+    overlay: Mapping[tuple[int, int], str],
+) -> dict[tuple[int, int], str]:
+    """``overlay`` wins on shared keys; used for surface/z + grade dump composites."""
+    out = dict(base)
+    out.update(overlay)
+    return out
+
+
+def symbols_surface_with_grade(
+    cols: Mapping[tuple[int, int], FineTerrainColumnWire],
+) -> dict[tuple[int, int], str]:
+    """Surface terrain with grade on top; empty dict if no grade cells (PAR-G4)."""
+    grade = symbols_grade_surface(cols)
+    if not grade:
+        return {}
+    return composite_symbol_maps(symbols_surface_top(cols), grade)
 
 
 def symbols_grade_by_surface_z(
@@ -158,6 +178,19 @@ def symbols_at_z(
         if terrain is not None:
             out[key] = symbol_for_role_or_terrain(system_terrain=terrain)
     return out
+
+
+def symbols_at_z_with_grade(
+    cols: Mapping[tuple[int, int], FineTerrainColumnWire],
+    z: int,
+    *,
+    by_surface_z: Mapping[int, Mapping[tuple[int, int], str]] | None = None,
+) -> dict[tuple[int, int], str]:
+    """Material at ``z`` with grade overlay where ``surface_z == z``; empty if no grade."""
+    grade = symbols_grade_at_z(cols, z, by_surface_z=by_surface_z)
+    if not grade:
+        return {}
+    return composite_symbol_maps(symbols_at_z(cols, z), grade)
 
 
 def symbols_by_occupied_z(

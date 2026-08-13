@@ -498,7 +498,11 @@ class Container:
         if self._entry_refine_orchestrator is None:
             terrain = self.terrain_batch_orchestrator()
             self._entry_refine_orchestrator = EntryRefineOrchestrator(
-                FineTerrainRefineOrchestrator(terrain),
+                FineTerrainRefineOrchestrator(
+                    terrain,
+                    relief_library=self.relief_template_library_service(),
+                    relief_grade_repo=self.relief_grade_repository(),
+                ),
                 job_repo=self.chunk_refine_job_repository(),
                 bake_defaults=PackBakeDefaults.canonical_defaults(),
             )

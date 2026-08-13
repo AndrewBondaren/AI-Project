@@ -2,7 +2,17 @@
 
 from __future__ import annotations
 
-from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing
+from app.dataModel.spatial.facing import (
+    CARDINAL_FACINGS,
+    CARDINAL_WALL_OUTWARD_DELTA,
+    Facing,
+)
+
+# Stable cardinal order (E,W,N,S) — Facing SoT (RELIEF-T-62 / R36u-T-2).
+CARDINAL_ORTHO_DELTAS: tuple[tuple[int, int], ...] = tuple(
+    CARDINAL_WALL_OUTWARD_DELTA[f]
+    for f in (Facing.EAST, Facing.WEST, Facing.NORTH, Facing.SOUTH)
+)
 
 
 def uphill_facing_toward(

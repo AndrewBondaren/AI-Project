@@ -13,7 +13,6 @@ from app.application.worldData.generators.hydrology.shore.parentLightHydroCorrid
     merge_hydro_hard_corridor,
 )
 from app.application.worldData.generators.terrain.passes.parentLightTerrain import (
-    upsample_grade_uid_from_parent_light,
     upsample_terrain_from_parent_light,
 )
 from app.application.worldData.generators.terrain.passes.parentLightUpsample import (
@@ -219,29 +218,6 @@ class TestTerrainMaskCarry(unittest.TestCase):
             self.assertLess(xm % 8, 4)  # tile-local lx via xm since gx=0
         for xm, _ym in right:
             self.assertGreaterEqual(xm % 8, 4)
-
-    def test_upsample_grade_uid_nearest(self) -> None:
-        cells = [
-            WorldMapCellWire(
-                tx=0, ty=0, surface_z=5, system_terrain="plains",
-                system_grade_uid="g-a", system_facing="north",
-            ),
-            WorldMapCellWire(tx=1, ty=0, surface_z=2, system_terrain="plains"),
-            WorldMapCellWire(
-                tx=0, ty=1, surface_z=5, system_terrain="plains",
-                system_grade_uid="g-a",
-            ),
-            WorldMapCellWire(tx=1, ty=1, surface_z=2, system_terrain="plains"),
-        ]
-        parent = ParentLightTile.from_cells(
-            world_uid="w-g", gx=0, gy=0, side=2, tile_m=8, cells=cells,
-        )
-        fine = upsample_grade_uid_from_parent_light(parent)
-        self.assertTrue(fine)
-        self.assertTrue(all(uid == "g-a" for uid in fine.values()))
-        # Right half light cells have no uid → no meter keys there
-        for xm, ym in fine:
-            self.assertLess(xm % 8, 4)
 
     def test_column_fill_uses_surface_terrain_not_default_forest(self) -> None:
         parent = _parent_mixed_terrain(side=2, tile_m=4)

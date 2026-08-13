@@ -66,7 +66,8 @@ def run_column_fill(
     """Pass 2: fill solid columns (optional rect slice for chunking).
 
     Pack L2 refine: pass ``surface_terrain`` / ``surface_facing`` /
-    ``surface_grade_uid`` from parent light (facing+uid on surface z only — PAR-G9).
+    ``surface_grade_uid`` from detailed geometry (R36u) or caller bag
+    (facing+uid on surface z only — PAR-G9). Mask carry from L0 unchanged.
     Legacy path without map: climate landcover via ``surface_biome_terrain``.
     """
     terrain_set = _terrain_set(world)

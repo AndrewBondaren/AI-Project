@@ -150,7 +150,8 @@ flowchart TB
 
 - fine `map_cells` / meter grid;
 - полный hydrology carve (русло в 1 m);
-- `SettlementLayout`, district cells.
+- `SettlementLayout`, district cells;
+- outdoor grade (`system_grade_uid` / SLOPE\|SHEER) — **R36u**, только detailed_bake geometry.
 
 **Потребители:** world map UI (мастер и игрок), travel overview, far LLM context (L0 + L1), constraints для Идеи 2.
 
@@ -245,6 +246,10 @@ load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
 | **Climate fine** | denser climate **field** ([`tz_climate.md`](./tz_climate.md)); **не** SoT `system_terrain`; elevation не выбирает zone |
 | **Chunk partition** | WP-19 без изменений — не резать chunks по light cells / climate zones |
 | **Запрещено** | второй compose / declare rematerialize; `surface_biome_terrain(default_zone)` на pack refine path |
+
+**Outdoor grade uid:** **не** этот контракт. `system_grade_uid` **не** nearest-carry с L0 (**R36u** / ~~PAR-G8~~) — writer = `FineChunkRunner` + `detailedGradeGenerate` ([`tz_terrain_relief.md`](./tz_terrain_relief.md)).
+
+**Не смешивать имена (R36u lock):** «terrain mask carry» = **только** `system_terrain`. Hydro hard corridor, `system_facing` upsample и `surface_z` upsample — **соседние** parent-light контракты (WP-PERF-22 / facing), не mask carry; R36u их тоже не меняет.
 
 ```text
 (xm, ym) → meters_to_tx_ty → wire.system_terrain → columnFill z_top
@@ -449,7 +454,7 @@ light_m  = map_cell_size_m // side            # физический шаг ligh
 
 **Зачем:** стабильный бюджет blob/UI (`1024` cells/tile); динамический `map_cell_size_m` без формулы `3000↔32` / clamp 8…48.
 
-**Consumers (ASCII / grid):** pack render default = **light-mask mosaic** `32×32` per tile (WP-10 ✅). Macro one-symbol-per-tile (`render_macro`) — debug-only, не SoT world map. Frame — [`tz_map_light_bake.md`](./tz_map_light_bake.md) MLB-12. **SoT уровней ASCII (в т.ч. L0/`grade`, L2 location grade):** [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md).
+**Consumers (ASCII / grid):** pack render default = **light-mask mosaic** `32×32` per tile (WP-10 ✅). Macro one-symbol-per-tile (`render_macro`) — debug-only, не SoT world map. Frame — [`tz_map_light_bake.md`](./tz_map_light_bake.md) MLB-12. **SoT уровней ASCII** (L0 map/height **без** outdoor grade; L2 `surface_grade` / `grade_{n}`): [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) · grade writer — [`tz_terrain_relief.md`](./tz_terrain_relief.md) **R36u**.
 
 #### Приоритет L0 bake (утверждено мастером, WP-15 / WP-27)
 
@@ -1892,6 +1897,7 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-13 | **R36u lock wording:** terrain mask carry = только `system_terrain`; hydro/facing/z не под этим именем |
 | 2026-07-30 | WP-24 ↔ **BUNDLE-2 SoT** [`tz_world_bundle.md`](./tz_world_bundle.md); sync skeleton/`relief_templates` в таблице «сейчас» |
 | 2026-07-20 | **WP-PERF-50 ✅:** light/full L0-only; `refine_scene` убран из bake path; entry = отдельная джоба |
 | 2026-07-20 | § Bake modes **Job boundaries:** L2 ∉ light/full; L2 = detailed \| entry job; entry после light — отдельная джоба |

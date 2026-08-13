@@ -111,12 +111,6 @@ class PackMapGridRender:
             gx1=frame_gx1,
             gy1=frame_gy1,
         )
-        ascii_grade, legend_grade = renderer.render_light_grade_mosaic(
-            gx0=frame_gx0,
-            gy0=frame_gy0,
-            gx1=frame_gx1,
-            gy1=frame_gy1,
-        )
         ascii_grid = renderer.render_light_mask_mosaic(
             gx0=frame_gx0,
             gy0=frame_gy0,
@@ -133,8 +127,6 @@ class PackMapGridRender:
             read_mode="world_map_light_mask",
             ascii_height=ascii_height,
             legend_height=legend_height,
-            ascii_grade=ascii_grade,
-            legend_grade=legend_grade,
         )
 
     def render_world_tile_grids(self, world: World) -> WorldTileGridsPayload:
@@ -144,7 +136,6 @@ class PackMapGridRender:
         if source is not None:
             renderer = self._world_renderer(world, source)
             height_by_xy = renderer.render_all_tile_light_height_grids()
-            grade_by_xy = renderer.render_all_tile_light_grade_grids()
             for (gx, gy), ascii_grid in renderer.render_all_tile_light_grids(
                 mark_location=True,
             ).items():
@@ -153,9 +144,6 @@ class PackMapGridRender:
                 height = height_by_xy.get((gx, gy))
                 if height:
                     levels[LEVEL_HEIGHT] = height
-                grade = grade_by_xy.get((gx, gy))
-                if grade:
-                    levels[LEVEL_GRADE] = grade
                 tiles[key] = WorldTileEntryPayload(
                     tile_gx=gx,
                     tile_gy=gy,

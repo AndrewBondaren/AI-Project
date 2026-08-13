@@ -38,6 +38,7 @@ from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.parallelPolicy import resolve_terrain_workers
 from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
 from app.core.generationLogging import generation_world_log
+from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.dataModel.worldPack.packBakeMode import PackBakeMode
 from app.dataModel.worldPack.packTilePlan import PackTilePlanScope
@@ -91,7 +92,11 @@ class PackMaterializationOrchestrator:
                 read_context=read_context,
                 bake_defaults=self._defaults,
             )
-            fine = fine_terrain or FineTerrainRefineOrchestrator(terrain)
+            fine = fine_terrain or FineTerrainRefineOrchestrator(
+                terrain,
+                relief_library=relief_library,
+                relief_grade_repo=relief_grade_repo,
+            )
             self._entry = EntryRefineOrchestrator(
                 fine,
                 job_repo=job_repo,
@@ -103,6 +108,14 @@ class PackMaterializationOrchestrator:
     @property
     def terrain(self) -> TerrainBatchOrchestrator:
         return self._terrain
+
+    @property
+    def relief_library(self) -> ReliefTemplateLibraryService | None:
+        return self._relief_library
+
+    @property
+    def relief_grade_repo(self) -> IReliefGradeRepository | None:
+        return self._relief_grade_repo
 
     @property
     def entry(self) -> EntryRefineOrchestrator:
@@ -219,7 +232,7 @@ class PackMaterializationOrchestrator:
         locations_index = build_locations_index(locations)
         writer.write_locations_index(locations_index)
 
-        relief_templates: dict = {}
+        relief_templates: dict[str, ReliefTemplate] = {}
         if self._relief_library is not None:
             relief_templates = await load_relief_templates_for_world(
                 self._relief_library, world,
@@ -245,6 +258,7 @@ class PackMaterializationOrchestrator:
                 self._relief_grade_repo,
                 world_uid=world.world_uid,
                 instances=self._world_map.last_relief_grade_instances,
+                replace_world=False,
             )
             logging.getLogger(__name__).info(
                 "relief | persisted grade instances world=%s n=%d",

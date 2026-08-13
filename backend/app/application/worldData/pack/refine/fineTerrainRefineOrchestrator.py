@@ -29,6 +29,8 @@ from app.application.worldData.pack.refine.entryRingGeom import (
     scene_chunk_indices as geom_scene_chunk_indices,
 )
 from app.application.worldData.pack.refine.fineChunkRunner import FineChunkRunner
+from app.application.worldData.pack.refine.fineRefineResult import FineRefineResult
+from app.application.worldData.persistReliefGrades import persist_relief_grades
 from app.application.worldData.pack.refine.pathCorridorSelect import (
     select_path_corridor_rects,
 )
@@ -42,11 +44,14 @@ from app.application.worldData.pack.read.locationTerritoryVolumes import (
 )
 from app.application.worldData.pack.read.packMapHelpers import tile_for_anchor
 from app.application.worldData.pack.refine.meterChunkGeom import rects_for_macro_tile
+from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
 from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository
 
 
 class FineTerrainRefineOrchestrator:
@@ -55,9 +60,14 @@ class FineTerrainRefineOrchestrator:
         terrain: TerrainBatchOrchestrator,
         *,
         runner: FineChunkRunner | None = None,
+        relief_library: ReliefTemplateLibraryService | None = None,
+        relief_grade_repo: IReliefGradeRepository | None = None,
     ) -> None:
         self._terrain = terrain
         self._runner = runner or FineChunkRunner(terrain)
+        self._relief_library = relief_library
+        self._relief_grade_repo = relief_grade_repo
+        self._templates_by_world: dict[str, dict[str, ReliefTemplate]] = {}
 
     async def refine_scene_volume(
         self,
@@ -97,7 +107,9 @@ class FineTerrainRefineOrchestrator:
             tile_gx, tile_gy, scene_rects, loc_volumes,
             refine_role="scene",
             phase="scene",
+            relief_templates_by_uid=await self._relief_templates(world),
         )
+        await self._persist_grade_instances(world, result)
         log_pack_fine_terrain_phase_done(
             world.world_uid,
             "scene",
@@ -129,7 +141,9 @@ class FineTerrainRefineOrchestrator:
             tile_gx, tile_gy, [rect], loc_volumes,
             refine_role=refine_role,
             phase=refine_role,
+            relief_templates_by_uid=await self._relief_templates(world),
         )
+        await self._persist_grade_instances(world, result)
         return result.persist.succeeded
 
     async def schedule_tile_background(
@@ -258,7 +272,9 @@ class FineTerrainRefineOrchestrator:
             tile_gx, tile_gy, corridor, loc_volumes,
             refine_role="path",
             phase="path",
+            relief_templates_by_uid=await self._relief_templates(world),
         )
+        await self._persist_grade_instances(world, result)
         log_pack_fine_terrain_phase_done(
             world.world_uid,
             "path",
@@ -267,6 +283,34 @@ class FineTerrainRefineOrchestrator:
             started_at=phase_t0,
         )
         return result.wilderness_chunks_written
+
+    async def _relief_templates(self, world: World) -> dict[str, ReliefTemplate]:
+        cached = self._templates_by_world.get(world.world_uid)
+        if cached is not None:
+            return cached
+        out: dict[str, ReliefTemplate] = {}
+        if self._relief_library is not None:
+            from app.application.worldData.loadReliefTemplatesForWorld import (
+                load_relief_templates_for_world,
+            )
+
+            out = await load_relief_templates_for_world(self._relief_library, world)
+        self._templates_by_world[world.world_uid] = out
+        return out
+
+    async def _persist_grade_instances(
+        self,
+        world: World,
+        result: FineRefineResult,
+    ) -> None:
+        if self._relief_grade_repo is None or not result.grade_instances:
+            return
+        await persist_relief_grades(
+            self._relief_grade_repo,
+            world_uid=world.world_uid,
+            instances=list(result.grade_instances),
+            replace_world=False,
+        )
 
     @staticmethod
     def tile_for_anchor(world: World, anchor_x: int, anchor_y: int) -> tuple[int, int]:

@@ -2,6 +2,7 @@
 
 from app.application.worldData.generators.terrain.relief.bakeSeed import bake_seed
 from app.application.worldData.generators.terrain.relief.facing import (
+    CARDINAL_ORTHO_DELTAS,
     facing_wire,
     uphill_facing_toward,
 )
@@ -34,8 +35,12 @@ from app.application.worldData.generators.terrain.relief.sideGradeDecision impor
     format_sides_summary,
     plateau_hat_decision,
 )
+from app.application.worldData.generators.terrain.relief.volumeMaterialize import (
+    plan_seed_volume,
+)
 
 __all__ = [
+    "CARDINAL_ORTHO_DELTAS",
     "RadialGradeDecision",
     "RibbonGradeDecision",
     "RibbonGradeResult",
@@ -47,6 +52,7 @@ __all__ = [
     "format_sides_summary",
     "grade_from_template",
     "grade_ribbon_segments",
+    "plan_seed_volume",
     "plateau_hat_decision",
     "profile_side_fraction",
     "relief_dz",

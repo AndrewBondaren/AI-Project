@@ -1,7 +1,8 @@
 """Upsample L0 parent light categorical fields → fine meter map.
 
-Nearest only. See docs/tz_world_pack_storage.md § Terrain mask carry;
-docs/tz_pack_ascii_render.md PAR-G8; debt PAR-T-2/T-3.
+Nearest only. ``upsample_terrain_from_parent_light`` = terrain mask carry
+(``system_terrain`` only — docs/tz_world_pack_storage.md). Facing upsample
+is a separate contract. Grade uid — R36u detailed generate, not L0 carry.
 """
 
 from __future__ import annotations
@@ -83,17 +84,4 @@ def upsample_facing_from_parent_light(
         parent,
         policy=policy,
         read=lambda c: c.system_facing,
-    )
-
-
-def upsample_grade_uid_from_parent_light(
-    parent: ParentLightTile,
-    *,
-    policy: ParentLightRefinePolicy | None = None,
-) -> dict[tuple[int, int], str]:
-    """Resample L0 ``system_grade_uid`` → meter grid — categorical nearest (PAR-G8)."""
-    return _upsample_optional(
-        parent,
-        policy=policy,
-        read=lambda c: str(c.system_grade_uid) if c.system_grade_uid else None,
     )

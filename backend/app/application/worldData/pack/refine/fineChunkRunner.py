@@ -7,6 +7,7 @@ background jobs (see ``chunkSchedule``).
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 
 from app.application.worldData.persistResult import PersistResult
 from app.application.worldData.chunkComputePool import ChunkComputePool
@@ -41,6 +42,8 @@ from app.application.worldData.pack.refine.entryRingGeom import tile_local_chunk
 from app.application.worldData.pack.read.parentLightLoad import require_parent_light
 from app.application.worldData.pack.refine.fineRefineResult import FineRefineResult
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
+from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume, inside_location_volume
 from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
 from app.db.models.mapCell import MapCell
@@ -99,6 +102,7 @@ class FineChunkRunner:
         *,
         refine_role: ChunkRefineRole = "scene",
         phase: str | None = None,
+        relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
     ) -> FineRefineResult:
         """Generate + persist fine chunks; ``meter_surface_z`` for climate ladder."""
         phase_name = phase or refine_role
@@ -120,6 +124,21 @@ class FineChunkRunner:
         surface_state = self._terrain.build_tile_surface_state(
             world, locations, surface_ctx, tile_gx, tile_gy, parent_light=parent,
         )
+        grade_instances: tuple[ReliefGradeInstance, ...] = ()
+        if relief_templates_by_uid:
+            from app.application.worldData.pack.refine.detailedGradeGenerate import (
+                generate_detailed_grade,
+            )
+
+            grade = generate_detailed_grade(
+                world, surface_state,
+                relief_templates_by_uid=relief_templates_by_uid,
+            )
+            grade_instances = grade.grade_instances
+            if grade.surface_grade_uid:
+                surface_state = replace(
+                    surface_state, surface_grade_uid=grade.surface_grade_uid,
+                )
         surface_columns = (meter_bbox.x_max - meter_bbox.x_min + 1) * (
             meter_bbox.y_max - meter_bbox.y_min + 1
         )
@@ -266,5 +285,6 @@ class FineChunkRunner:
             wilderness_chunks_written=written,
             rect_count=len(rects),
             meter_surface_z=meter_surface_z,
+            grade_instances=grade_instances,
         )
 

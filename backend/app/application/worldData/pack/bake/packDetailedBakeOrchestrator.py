@@ -33,7 +33,11 @@ from app.application.worldData.pack.refine.meterChunkGeom import (
     tiles_covering_volume,
 )
 from app.application.worldData.persistResult import PersistResult
+from app.application.worldData.persistReliefGrades import persist_relief_grades
+from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
+from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.detailedBakeScope import (
     DetailedBakeRequest,
     DetailedBakeScopeKind,
@@ -44,6 +48,7 @@ from app.dataModel.worldPack.territoryVolume import TerritoryVolume
 from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository
 
 RectsForTile = Callable[[int, int], list[ColumnRect]]
 
@@ -64,6 +69,7 @@ class _FineAggregate:
     chunks_written: int = 0
     tiles_refined: int = 0
     meter_surface_z: dict[tuple[int, int], int] = field(default_factory=dict)
+    grade_instances: list[ReliefGradeInstance] = field(default_factory=list)
 
 
 class PackDetailedBakeOrchestrator:
@@ -76,12 +82,16 @@ class PackDetailedBakeOrchestrator:
         runner: FineChunkRunner | None = None,
         climate_bake: ClimatePackBakeOrchestrator | None = None,
         bake_defaults: PackBakeDefaults | None = None,
+        relief_library: ReliefTemplateLibraryService | None = None,
+        relief_grade_repo: IReliefGradeRepository | None = None,
     ) -> None:
         self._defaults = bake_defaults or PackBakeDefaults.canonical_defaults()
         self._runner = runner or FineChunkRunner(terrain)
         self._climate = climate_bake or ClimatePackBakeOrchestrator(
             bake_defaults=self._defaults,
         )
+        self._relief_library = relief_library
+        self._relief_grade_repo = relief_grade_repo
 
     async def bake(
         self,
@@ -92,12 +102,23 @@ class PackDetailedBakeOrchestrator:
         surface_ctx: SurfaceTerrainContext,
         request: DetailedBakeRequest,
     ) -> PackDetailedBakeResult:
+        relief_templates: dict[str, ReliefTemplate] = {}
+        if self._relief_library is not None:
+            from app.application.worldData.loadReliefTemplatesForWorld import (
+                load_relief_templates_for_world,
+            )
+
+            relief_templates = await load_relief_templates_for_world(
+                self._relief_library, world,
+            )
         if request.scope == "location":
             return await self._bake_location_scope(
                 world, locations, writer, mat_ctx, surface_ctx, request,
+                relief_templates=relief_templates,
             )
         return await self._bake_wilderness_scope(
             world, locations, writer, mat_ctx, surface_ctx, request,
+            relief_templates=relief_templates,
         )
 
     async def _bake_location_scope(
@@ -108,6 +129,8 @@ class PackDetailedBakeOrchestrator:
         mat_ctx: MaterializationContext,
         surface_ctx: SurfaceTerrainContext,
         request: DetailedBakeRequest,
+        *,
+        relief_templates: dict[str, ReliefTemplate],
     ) -> PackDetailedBakeResult:
         location_uid = request.location_uid
         assert location_uid is not None
@@ -131,6 +154,7 @@ class PackDetailedBakeOrchestrator:
             location_volumes=[volume],
             refine_role=refine_role_for_detailed_scope("location"),
             expected_chunks_for_status=None,
+            relief_templates_by_uid=relief_templates,
         )
 
         climate_fine_tiles = 0
@@ -146,6 +170,7 @@ class PackDetailedBakeOrchestrator:
 
         writer.recalc_manifest_counters()
         writer.save_manifest()
+        await self._persist_detailed_grades(world, aggregate)
         return PackDetailedBakeResult(
             scope="location",
             terrain=aggregate.persist,
@@ -163,6 +188,8 @@ class PackDetailedBakeOrchestrator:
         mat_ctx: MaterializationContext,
         surface_ctx: SurfaceTerrainContext,
         request: DetailedBakeRequest,
+        *,
+        relief_templates: dict[str, ReliefTemplate],
     ) -> PackDetailedBakeResult:
         tiles = self._wilderness_tiles(
             writer,
@@ -179,10 +206,12 @@ class PackDetailedBakeOrchestrator:
             location_volumes=volumes,
             refine_role=refine_role_for_detailed_scope("wilderness"),
             expected_chunks_for_status=lambda gx, gy: expected_meter_chunks(world, gx, gy),
+            relief_templates_by_uid=relief_templates,
         )
 
         writer.recalc_manifest_counters()
         writer.save_manifest()
+        await self._persist_detailed_grades(world, aggregate)
         return PackDetailedBakeResult(
             scope="wilderness",
             terrain=aggregate.persist,
@@ -190,6 +219,20 @@ class PackDetailedBakeOrchestrator:
             wilderness_chunks=aggregate.chunks_written,
             climate_fine_tiles=0,
             location_uid=None,
+        )
+
+    async def _persist_detailed_grades(
+        self,
+        world: World,
+        aggregate: _FineAggregate,
+    ) -> None:
+        if self._relief_grade_repo is None or not aggregate.grade_instances:
+            return
+        await persist_relief_grades(
+            self._relief_grade_repo,
+            world_uid=world.world_uid,
+            instances=aggregate.grade_instances,
+            replace_world=False,
         )
 
     def _wilderness_tiles(
@@ -237,6 +280,7 @@ class PackDetailedBakeOrchestrator:
         refine_role: ChunkRefineRole,
         expected_chunks_for_status: Callable[[int, int], int] | None,
         phase: str = "detailed",
+        relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
     ) -> _FineAggregate:
         tile_m = cell_size_m(world)
         reader = WorldPackReader(writer.paths)
@@ -257,6 +301,7 @@ class PackDetailedBakeOrchestrator:
                 gx, gy, rects, location_volumes,
                 refine_role=refine_role,
                 phase=phase,
+                relief_templates_by_uid=relief_templates_by_uid,
             )
             for key, z in refined.meter_surface_z.items():
                 prev = aggregate.meter_surface_z.get(key)
@@ -269,6 +314,7 @@ class PackDetailedBakeOrchestrator:
             )
             aggregate.chunks_written += refined.wilderness_chunks_written
             aggregate.tiles_refined += 1
+            aggregate.grade_instances.extend(refined.grade_instances)
             if expected_chunks_for_status is not None:
                 writer.recalc_wilderness_status(
                     gx, gy,

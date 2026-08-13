@@ -197,9 +197,11 @@ class TestWildernessTilePackRenderer(unittest.TestCase):
         self.assertIn(LEVEL_SURFACE, levels)
         self.assertIn(LEVEL_SURFACE_GRADE, levels)
         self.assertIn("→", levels[LEVEL_SURFACE_GRADE])
+        self.assertIn("f", levels[LEVEL_SURFACE_GRADE])  # forest underlay
         self.assertEqual(renderer.render_grade_at_z(1), "")
         grade3 = renderer.render_grade_at_z(3)
         self.assertIn("→", grade3)
+        self.assertIn("_", grade3)  # plains material at surface_z
         pairs = list(renderer.iter_grade_z_levels_aligned())
         self.assertEqual([z for z, _ in pairs], [3])
 

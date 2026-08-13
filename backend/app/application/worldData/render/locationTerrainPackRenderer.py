@@ -9,10 +9,10 @@ from app.application.worldData.render.fineTerrainAsciiKernel import (
     draw_int_grid,
     draw_symbol_grid,
     symbols_at_z,
-    symbols_grade_at_z,
+    symbols_at_z_with_grade,
     symbols_grade_by_surface_z,
-    symbols_grade_surface,
     symbols_surface_top,
+    symbols_surface_with_grade,
     values_cliff_delta,
     values_column_span,
     z_occupied,
@@ -86,16 +86,19 @@ class LocationTerrainPackRenderer:
         )
 
     def render_grade(self) -> str:
-        """Surface grade overlay — omit when no ``system_grade_uid`` (PAR-G4).
+        """Surface + grade composite — omit when no ``system_grade_uid`` (PAR-G4).
 
-        Legend is not inlined (PAR-T-6); dump/HTTP use grade legend SoT.
+        Legend is not inlined (PAR-T-6); dump/HTTP use map+grade legends.
         """
-        symbols = symbols_grade_surface(self._cols)
+        symbols = symbols_surface_with_grade(self._cols)
         if not symbols:
             return ""
         return self._draw(
             symbols,
-            title=f"location={self.location_uid}  (pack location_terrain, surface_grade)",
+            title=(
+                f"location={self.location_uid}  "
+                f"(pack location_terrain, surface_grade = surface+grade)"
+            ),
         )
 
     def render_grade_at_z(
@@ -104,15 +107,17 @@ class LocationTerrainPackRenderer:
         *,
         by_surface_z: Mapping[int, Mapping[tuple[int, int], str]] | None = None,
     ) -> str:
-        """Grade where column surface_z == ``z``; omit if empty."""
-        symbols = symbols_grade_at_z(self._cols, z, by_surface_z=by_surface_z)
+        """Material at ``z`` + grade where surface_z == ``z``; omit if no grade."""
+        symbols = symbols_at_z_with_grade(
+            self._cols, z, by_surface_z=by_surface_z,
+        )
         if not symbols:
             return ""
         return self._draw(
             symbols,
             title=(
                 f"location={self.location_uid} grade z={z}  "
-                f"(pack location_terrain; surface_z only)"
+                f"(pack location_terrain; material+grade, surface_z only)"
             ),
         )
 

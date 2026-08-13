@@ -9,11 +9,11 @@ from app.application.worldData.render.fineTerrainAsciiKernel import (
     draw_int_grid,
     draw_symbol_grid,
     symbols_at_z,
+    symbols_at_z_with_grade,
     symbols_by_occupied_z,
-    symbols_grade_at_z,
     symbols_grade_by_surface_z,
-    symbols_grade_surface,
     symbols_surface_top,
+    symbols_surface_with_grade,
     values_cliff_delta,
     values_column_span,
     z_occupied,
@@ -120,15 +120,15 @@ class WildernessTilePackRenderer:
         )
 
     def render_grade(self) -> str:
-        """Surface grade overlay — omit when no ``system_grade_uid`` (PAR-G4)."""
-        symbols = symbols_grade_surface(self._cols)
+        """Surface + grade composite — omit when no ``system_grade_uid`` (PAR-G4)."""
+        symbols = symbols_surface_with_grade(self._cols)
         if not symbols:
             return ""
         return self._draw(
             symbols,
             title=(
                 f"wilderness tile=({self.tile_gx},{self.tile_gy})  "
-                f"(pack wilderness_chunk mosaic, surface_grade)"
+                f"(pack wilderness_chunk mosaic, surface_grade = surface+grade)"
             ),
             bounds=self.mosaic_xy_bounds(),
         )
@@ -139,15 +139,17 @@ class WildernessTilePackRenderer:
         *,
         by_surface_z: Mapping[int, Mapping[tuple[int, int], str]] | None = None,
     ) -> str:
-        """Grade where column surface_z == ``z``; mosaic frame; omit if empty."""
-        symbols = symbols_grade_at_z(self._cols, z, by_surface_z=by_surface_z)
+        """Material at ``z`` + grade where surface_z == ``z``; mosaic frame; omit if no grade."""
+        symbols = symbols_at_z_with_grade(
+            self._cols, z, by_surface_z=by_surface_z,
+        )
         if not symbols:
             return ""
         return self._draw(
             symbols,
             title=(
                 f"wilderness tile=({self.tile_gx},{self.tile_gy}) grade z={z}  "
-                f"(pack wilderness_chunk mosaic; surface_z only)"
+                f"(pack wilderness_chunk mosaic; material+grade, surface_z only)"
             ),
             bounds=self.mosaic_xy_bounds(),
         )

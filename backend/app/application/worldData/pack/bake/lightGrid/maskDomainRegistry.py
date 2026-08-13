@@ -12,17 +12,12 @@ from app.application.worldData.pack.bake.lightGrid.contributors.climate import C
 from app.application.worldData.pack.bake.lightGrid.contributors.hydro import HydroContributor
 from app.application.worldData.pack.bake.lightGrid.contributors.landcover import LandcoverContributor
 from app.application.worldData.pack.bake.lightGrid.contributors.mountain import MountainContributor
-from app.application.worldData.pack.bake.lightGrid.contributors.openLand import OpenLandContributor
 from app.application.worldData.pack.bake.lightGrid.contributors.ravine import RavineContributor
 from app.application.worldData.pack.bake.lightGrid.contributors.relief import ReliefContributor
 from app.application.worldData.pack.bake.lightGrid.contributors.road import RoadContributor
-from app.application.worldData.pack.bake.lightGrid.contributors.roadShoulder import (
-    RoadShoulderContributor,
-)
 from app.application.worldData.pack.bake.lightGrid.contributors.settlement import (
     SettlementContributor,
 )
-from app.application.worldData.pack.bake.lightGrid.contributors.shore import ShoreContributor
 from app.dataModel.masks.enums.maskDomainId import (
     COMPOSE_CONTRIBUTOR_ORDER,
     MASK_DOMAIN_CONTRIBUTOR,
@@ -37,11 +32,8 @@ _CONTRIBUTOR_FACTORY: dict[LightContributorId, Callable[[], LightGridContributor
     LightContributorId.MOUNTAIN: MountainContributor,
     LightContributorId.RAVINE: RavineContributor,
     LightContributorId.HYDRO: HydroContributor,
-    LightContributorId.OPEN_LAND: OpenLandContributor,
-    LightContributorId.SHORE: ShoreContributor,
     LightContributorId.SETTLEMENT: SettlementContributor,
     LightContributorId.ROAD: RoadContributor,
-    LightContributorId.ROAD_SHOULDER: RoadShoulderContributor,
 }
 
 

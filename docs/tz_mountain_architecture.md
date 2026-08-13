@@ -427,12 +427,13 @@ HTTP: `GET …/map/render-wilderness-tile-grid` (`include_column_diagnostics` de
 
 Это **диагностика**, не SoT объёма — gap fill остаётся в terrain generator (`tz_terrain_generation.md`).
 
-**Прочие pack ASCII levels** (L0 map/height/**grade**, L2 location **grade**): [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) — не дублировать здесь.
+**Прочие pack ASCII levels** (L0 map/height **без** outdoor grade; L2 **surface_grade** / **grade_{z}**): [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) · writer **R36u** — не дублировать здесь.
 
 ## История
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-13 | Pack ASCII pointer: L0 без outdoor grade (**R36u**); L2 `surface_grade` / `grade_{z}` |
 | 2026-07-29 | Relief templates / outdoor grade pointer — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-07-27 | Scope: relief grade → [`tz_terrain_relief.md`](./tz_terrain_relief.md); PassBuilder не SoT grade |
 | 2026-07-25 | § Debug render: L2 `column_span` / `cliff_delta` / dense z — вскрыть thin fill vs steep tops |

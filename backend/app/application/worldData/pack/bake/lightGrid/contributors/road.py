@@ -1,6 +1,7 @@
 """Road contributor — ConnectionEdge → road terrain paint only (RELIEF-T-31).
 
-Shoulder grade = ``RoadShoulderContributor`` after ROAD in compose order.
+L0 outdoor shoulder grade removed (R36u-T-8). ``painted_road_edges`` still
+collected for detailed ``road_shoulder`` later (R36u-T-10).
 """
 
 from __future__ import annotations

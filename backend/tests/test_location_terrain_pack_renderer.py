@@ -107,12 +107,14 @@ class TestLocationTerrainPackRenderer(unittest.TestCase):
         grade = renderer.render_grade()
         self.assertIn("↑", grade)
         self.assertIn("┃", grade)
+        self.assertIn("f", grade)  # composite: non-grade forest underlay
         self.assertNotIn("grade:", grade)  # PAR-T-6: legend not in body
         levels = renderer.render_all_levels(include_column_diagnostics=False)
         self.assertIn(LEVEL_SURFACE_GRADE, levels)
         # surface_z == 1 for both grade columns → grade_1 only
         self.assertIn(grade_level_key(1), levels)
         self.assertIn("↑", levels[grade_level_key(1)])
+        self.assertIn("_", levels[grade_level_key(1)])  # material underlay at z
         at_z0 = renderer.render_grade_at_z(0)
         self.assertEqual(at_z0, "")
 

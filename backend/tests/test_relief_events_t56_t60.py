@@ -1,4 +1,7 @@
-"""Unit: RELIEF-T-56 event tokens + RELIEF-T-60/T-66 ribbon skip layers."""
+"""Unit: RELIEF-T-56 event tokens + RELIEF-T-60/T-66 ribbon skip layers.
+
+L0 apply silent-path tests removed with outdoor ribbon (R36u-T-8).
+"""
 
 from __future__ import annotations
 
@@ -25,17 +28,6 @@ from app.application.worldData.generators.terrain.relief.reliefEvents import (
     WHYS_RIBBON_SKIP_GRADE,
     WHYS_RIBBON_SKIP_MATERIALIZE,
 )
-from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
-from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
-from app.application.worldData.pack.bake.lightGrid.contributors.roadShoulderApply import (
-    apply_road_shoulder_grades,
-)
-from app.application.worldData.pack.bake.lightGrid.contributors.roadShoulderSample import (
-    sample_shoulder_cells,
-)
-from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
-from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
-from app.db.models.world import World
 
 
 class ReliefEventsTokensTest(unittest.TestCase):
@@ -54,6 +46,7 @@ class ReliefEventsTokensTest(unittest.TestCase):
         self.assertEqual(WHY_NO_REF_CELLS, "no_ref_cells")
         self.assertEqual(WHY_NO_UNIQUE_OUTWARD, "no_unique_outward")
         self.assertEqual(WHY_CLEARANCE_L_EFF, "clearance_L_eff")
+        self.assertEqual(WHY_EMPTY_SAMPLE, "empty_sample")
 
     def test_t66_why_sets_closed(self) -> None:
         self.assertEqual(
@@ -63,65 +56,6 @@ class ReliefEventsTokensTest(unittest.TestCase):
         self.assertEqual(WHYS_RIBBON_SKIP_GRADE, frozenset({"no_template_body"}))
         self.assertIn(WHY_CLEARANCE_L_EFF, WHYS_RIBBON_SKIP_MATERIALIZE)
         self.assertIn(WHY_NO_UNIQUE_OUTWARD, WHYS_RIBBON_SKIP_MATERIALIZE)
-
-
-class ReliefSilentPathLogsTest(unittest.TestCase):
-    def test_apply_early_exit_no_road_logged(self) -> None:
-        scale = LightGridScale.from_tile(tile_m=320, side=32)
-        compose = LightGridCompose(scale=scale)
-        world = World(
-            world_uid="w1", name="W", created_at="2026-01-01T00:00:00Z",
-        )
-        ctx = LightGridBakeContext(
-            world=world,
-            locations=[],
-            locations_index=LocationsIndexWire(locations=[]),
-            tiles=[(0, 0)],
-            scale=scale,
-            relief_templates_by_uid={"t": None},  # type: ignore[dict-item]
-        )
-        with self.assertLogs("app.relief", level="DEBUG") as cm:
-            out = apply_road_shoulder_grades(
-                compose, ctx, owner_uid="e1", road_cells=set(),
-            )
-        self.assertEqual(out, [])
-        blob = "\n".join(cm.output)
-        self.assertIn(EVENT_RIBBON_SKIP_APPLY, blob)
-        self.assertIn(WHY_NO_REF_CELLS, blob)
-
-    def test_apply_early_exit_no_templates_logged(self) -> None:
-        scale = LightGridScale.from_tile(tile_m=320, side=32)
-        compose = LightGridCompose(scale=scale)
-        world = World(
-            world_uid="w1", name="W", created_at="2026-01-01T00:00:00Z",
-        )
-        ctx = LightGridBakeContext(
-            world=world,
-            locations=[],
-            locations_index=LocationsIndexWire(locations=[]),
-            tiles=[(0, 0)],
-            scale=scale,
-            relief_templates_by_uid={},
-        )
-        with self.assertLogs("app.relief", level="DEBUG") as cm:
-            out = apply_road_shoulder_grades(
-                compose, ctx, owner_uid="e1", road_cells={(1, 1)},
-            )
-        self.assertEqual(out, [])
-        blob = "\n".join(cm.output)
-        self.assertIn(EVENT_RIBBON_SKIP_APPLY, blob)
-        self.assertIn(WHY_NO_TEMPLATES, blob)
-
-    def test_sample_empty_silent_t65(self) -> None:
-        scale = LightGridScale.from_tile(tile_m=320, side=32)
-        compose = LightGridCompose(scale=scale)
-        cell = compose.ensure(0, 0, 1, 1)
-        cell.system_terrain = "road"
-        cell.surface_z = 5
-        # T-65: sample does not log; apply owns WHY_EMPTY_SAMPLE
-        out = sample_shoulder_cells(compose, {(1, 1)}, tile_set={(0, 0)})
-        self.assertEqual(out, [])
-        self.assertEqual(WHY_EMPTY_SAMPLE, "empty_sample")
 
 
 if __name__ == "__main__":

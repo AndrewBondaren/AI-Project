@@ -118,7 +118,6 @@ class TerrainBatchOrchestrator:
         )
         from app.application.worldData.generators.terrain.passes.parentLightTerrain import (
             upsample_facing_from_parent_light,
-            upsample_grade_uid_from_parent_light,
             upsample_terrain_from_parent_light,
         )
         from app.application.worldData.generators.terrain.passes.parentLightUpsample import (
@@ -137,7 +136,6 @@ class TerrainBatchOrchestrator:
         fine_z = upsample_from_parent_light(parent_light, world, policy=policy)
         fine_terrain = upsample_terrain_from_parent_light(parent_light, world, policy=policy)
         fine_facing = upsample_facing_from_parent_light(parent_light, policy=policy)
-        fine_grade_uid = upsample_grade_uid_from_parent_light(parent_light, policy=policy)
         cell_m = parent_light.tile_m
         for (xm, ym), z in ctx.meter_z_overrides.items():
             if xm // cell_m == tile_gx and ym // cell_m == tile_gy:
@@ -160,7 +158,7 @@ class TerrainBatchOrchestrator:
             hydrology=tile_hydro or None,
             surface_terrain=fine_terrain,
             surface_facing=fine_facing or None,
-            surface_grade_uid=fine_grade_uid or None,
+            surface_grade_uid=None,
         )
 
     async def generate_chunk_cells(

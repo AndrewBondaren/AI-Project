@@ -30,11 +30,9 @@ class LightContributorId(StrEnum):
     MOUNTAIN = "mountain"
     RAVINE = "ravine"
     HYDRO = "hydro"
-    OPEN_LAND = "open_land"
-    SHORE = "shore"
     SETTLEMENT = "settlement"
     ROAD = "road"
-    ROAD_SHOULDER = "road_shoulder"
+    # open_land / shore / road_shoulder — not L0 contributors (R36u-T-8); detailed_bake only
 
 
 # Domains that compete on ``system_terrain`` — high → low (road wins over plains).
@@ -58,8 +56,7 @@ MASK_DOMAIN_CONTRIBUTOR: dict[MaskDomainId, LightContributorId] = {
 }
 
 # Single SoT for compose call order (Base → Context → Landcover → Structural → Hydro → Culture).
-# Relief ribbon grade: open_land → shore → road paint → road_shoulder
-# (priority road > shore > open_land; shoulder after paint).
+# Outdoor relief grade (open_land / shore / road_shoulder) — **R36u:** not on L0; detailed_bake only.
 COMPOSE_CONTRIBUTOR_ORDER: tuple[LightContributorId, ...] = (
     LightContributorId.RELIEF,
     LightContributorId.CLIMATE,
@@ -67,9 +64,6 @@ COMPOSE_CONTRIBUTOR_ORDER: tuple[LightContributorId, ...] = (
     LightContributorId.MOUNTAIN,
     LightContributorId.RAVINE,
     LightContributorId.HYDRO,
-    LightContributorId.OPEN_LAND,
-    LightContributorId.SHORE,
     LightContributorId.SETTLEMENT,
     LightContributorId.ROAD,
-    LightContributorId.ROAD_SHOULDER,
 )

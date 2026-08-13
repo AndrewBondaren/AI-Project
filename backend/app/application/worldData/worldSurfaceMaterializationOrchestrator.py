@@ -46,7 +46,11 @@ class WorldSurfaceMaterializationOrchestrator:
         detailed: PackDetailedBakeOrchestrator | None = None,
     ) -> None:
         self._pack = pack
-        self._detailed = detailed or PackDetailedBakeOrchestrator(pack.terrain)
+        self._detailed = detailed or PackDetailedBakeOrchestrator(
+            pack.terrain,
+            relief_library=pack.relief_library,
+            relief_grade_repo=pack.relief_grade_repo,
+        )
 
     async def bake_pack(
         self,

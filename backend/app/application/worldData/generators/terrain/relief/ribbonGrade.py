@@ -3,7 +3,7 @@
 Segmentize: ``ribbonSegmentize`` (RELIEF-T-32). This module = pick/grade only.
 Pure consumer: emits RibbonGradeDecision with raw canal knobs.
 Registry/policy resolve happens once in bake (RELIEF-T-51).
-Barrier stamp = bake ``ribbonBarrierApply`` (RELIEF-BAR-1); not this module.
+Barrier stamp (RELIEF-BAR-1) was L0 bake; outdoor ribbon removed (R36u-T-8).
 """
 
 from __future__ import annotations

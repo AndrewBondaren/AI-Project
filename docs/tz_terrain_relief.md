@@ -6,9 +6,32 @@ metadata:
   type: project
 ---
 
-> **Статус:** ownership **утверждён** · templates R33–R35 ✅ · **R36 core (§7–9/8c) ✅** · **canal R36p/q wire+bake ✅** · bake SRP **T-30/T-52 ✅** · **Wave B–D ✅** (open_land/shore + polish).  
-> **Next:** § [Порядок имплементации](#порядок-имплементации-anti-slice) → **Wave E** later (R36s / R36r / R36o / gameplay).  
-> **Связь:** SoT grade; **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT. · Agent pointer: [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md)
+> **Статус:** ownership **утверждён** · templates R33–R35 ✅ · **R36 core (§7–9/8c) ✅** · **canal R36p/q wire+bake ✅** · bake SRP **T-30/T-52 ✅** · **Wave B–D ✅** · **R36u** grade writer = **detailed_bake geometry** (L0 outdoor ribbon **removed**, R36u-T-8).  
+> **Next:** migrate generate off L0 ribbon → detailed geometry (**R36u**); Wave E later (R36s / R36r / R36o / gameplay).  
+> **Связь:** SoT grade; **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT. · ASCII consumer — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md). · Agent pointer: [`.cursor/plans/r36u-grade-detailed-migrate.md`](../.cursor/plans/r36u-grade-detailed-migrate.md)
+
+**Scope lock (R36u):** меняется **только outdoor relief grade** (`system_grade_uid`, SLOPE/SHEER geometry). **Не трогать** L0→L2 parent-light контракты ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md)):
+
+| Контракт | Поле | ≠ |
+|---|---|---|
+| **Terrain mask carry** | `system_terrain` nearest | hydro / z / facing / grade |
+| Hydro hard corridor | `hydrology_role` → fine | landcover stamp |
+| Facing upsample | `system_facing` nearest | terrain mask carry |
+| `surface_z` upsample | WP-PERF-22 height | terrain mask carry |
+
+`system_grade_uid` **не** mask carry и **не** nearest-carry с L0.
+
+### R36u — legacy path → detailed fix locus
+
+| Legacy (снять) | Target fix | Note |
+|---|---|---|
+| L0 `openLand` / `shore` / `roadShoulder` + `ribbonGradeApply` | [`pack/refine/detailedGradeGenerate.py`](../backend/app/application/worldData/pack/refine/detailedGradeGenerate.py) | grade ribbon, не mask |
+| `upsample_grade_uid_from_parent_light` | detailed generate → `TileSurfaceState.surface_grade_uid` | **не** terrain/facing carry; helper `@deprecated` |
+| L0 `world-grade` ASCII | omit ([`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) PAR-G5) | |
+| L2 `fineTerrainAsciiKernel` | consumer — без изменений | |
+| `road_shoulder` на detailed | **deferred (R36u-T-10)** | L0 writer снят; meter sample не в v1; context/templates/pick остаются |
+
+Полная таблица: [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) § Legacy L0 grade inventory.
 
 # Terrain relief grade (поддомен Terrain)
 
@@ -25,8 +48,12 @@ metadata:
 | `shore` | берег озера / реки / моря |
 | `road_shoulder` | **обочины** дороги (две стороны), когда есть Δz между полотном и соседним рельефом |
 
-**v1 bake consumers (shipped):** `mountain` (SideFill) · `road_shoulder` · `open_land` · `shore`.  
-Ribbon shared: `ribbonGradeApply` + `contextRibbonApply` / `ribbonSampleUtil`; intents → `ctx.ribbon_intents`; BAR-1 **once** after compose contributors.
+**Grade writer (R36u):** outdoor SLOPE/SHEER geometry создаётся в **геометрии `detailed_bake`** (FineTerrain / L2 refine). Relief — про **детали**, не про L0→L2 **grade** carry.  
+**v1 detailed contexts:** `open_land`, `shore`. **`road_shoulder` deferred (R36u-T-10)** — L0 writer снят; meter sample не портирован; context + templates + pick остаются в wire.  
+**Persist:** detailed / entry refine upsert `relief_grade_instances` (`replace_world=False`). L0 light/full **не** `replace_world=True` — иначе wipe detailed outdoor grades.  
+**L0 (light/full):** может красить высоты/маски (ravine z, mountain paint, terrain/hydro/facing …); **запрещено** materialize/stamp outdoor grade (`system_grade_uid` / Grade instance / ribbon grade apply как writer).  
+
+**Legacy (Wave B–D shipped, superseded by R36u-T-8):** L0 outdoor `open_land` / `shore` / `road_shoulder` contributors + `ribbonGradeApply` / BAR-1 intents — **deleted**. `painted_road_edges` remains for deferred T-10. Mountain SideFill ≠ this outdoor ribbon stack.
 
 | Владеет | Не владеет |
 |---|---|
@@ -100,7 +127,7 @@ Ribbon shared: `ribbonGradeApply` + `contextRibbonApply` / `ribbonSampleUtil`; i
 | R36k | **Pathfinding:** граф = **grid** (шаги клетка↔клетка по `surface_z` / walkability). **Slope/SHEER не отдельные ноды пути** — один **Grade object**; cost/block берётся с entity по `system_grade_uid` (один `angle_deg` / kind на весь объект). Не считать независимый `atan(Δz)` на каждом ребре, расходящийся с grade. Impl pathfinding — later; контракт — этот |
 | R36g | **Устарело:** facing-only stamp; **устарело:** дублировать L/angle/h на каждой клетке пандуса. Target: materialize R36i + **Grade instance** R36j |
 | R36h | **`h`/`dz` на клетке не хранить.** На клетке — **`system_grade_uid`** (omit если клетка не в grade). L/angle/h/kind/facing grade — на **сущности**. См. R36j |
-| R36i | **Materialize на всю `h=\|dz\|`:** SLOPE ramp / SHEER L×h solid. Без void. Затем создать Grade instance + проставить ссылки (R36j) |
+| R36i | **Materialize на всю `h=\|dz\|`:** SLOPE ramp / SHEER L×h solid. Без void. Затем создать Grade instance + проставить ссылки (R36j). Якоря верх/низ — **R36t** (не мутировать; canal-исключение при укорочении — R36p) |
 | R36j | **Grade = один составной объект** (аналог **одной горы** `MountainSpec`). Состоит из grid-клеток; `cell_refs[]` ↔ `system_grade_uid` подтверждают состав. Поля: `grade_uid`, `kind`, `height_cells`, `length_cells`, **`angle_deg` (одно место; omit SHEER)**, `facing` (omit SHEER), resolved canal flat columns из **`Canal`** (`EarthenCanal`\|`StructureCanal`) через `build_canal`/`draw_canal` — **тот же cut**, что на Intent.`canal`. **Запрещено:** несколько углов в одном Grade |
 | R36l | **Иерархия как у гор** ([`tz_mountain_architecture.md`](./tz_mountain_architecture.md): хребет ↔ ≥2 вершины). **Один** постоянный угол → один `ReliefGradeInstance`. **Ломаный / смена крутизны** → **`ReliefGradeSystem`** (аналог `MountainRangeSpec`): упорядоченный **`grade_instance_uids`** (≥2 → `ReliefGradeInstance.grade_uid`). **1 Grade** → система **не** создаётся. Клетка → **свой** Instance (`system_grade_uid`), не System. Persist: package + DB |
 | R36m | **Obstacle clearance (мир) + truncate/skip.** Длину grade до footprint задаёт **`worlds.relief_grade_obstacle_policy`** (R36n). Оба режима: footprint **не** затирать; `L_eff < 1` → **skip** (+ WARN). **Не** включает earthen (это R36p / knobs). **Устарело:** silent auto `earthen_canal` при collision без knobs и без `canal_obstacle_policy` |
@@ -110,6 +137,8 @@ Ribbon shared: `ribbonGradeApply` + `contextRibbonApply` / `ribbonSampleUtil`; i
 | R36q | **`worlds.canal_template_registry`.** Переиспользуемые canal-описания мира (не новый объект на каждом case). Entry: `system_type` + optional `earthen_canal` + optional `structure.structure_refs[]` (каждый ref ∈ `barrier_template_registry`). Grade knobs: `structure_canal` = `system_type`. Unknown ref → reject import / R21 warn+fallback на generate. См. § Canal template registry |
 | R36r | **Diagonal ribbon + width (candidate, later; зависит от R36s):** при intercardinal outward — materialize как **thick line on grid**: core ray вдоль outward (`L` = Chebyshev steps) + поперечный fill ширины `W` с **теми же** steps/θ → **один** Grade (R36j). Clearance — на core. **Не** voxel corner/shim / Minecraft stair shapes (mesh; стыки → R36o). Источник: [Murphy’s Modified Bresenham](http://www.zoo.co.uk/murphy/thickline/). **v1:** не impl (нет диагонального outward) |
 | R36s | **Facing scope — locked.** Wire/entity: `Facing` (`north`…`west` + `north_east`…`south_west`). **SLOPE:** uphill на Grade entity; **SHEER:** omit / `none`. **v1 (сейчас):** только **cardinal** (`CARDINAL_FACINGS`); outward = ortho `(±1,0)\|(0,±1)` из `CARDINAL_WALL_OUTWARD_DELTA` / bake `ribbonSampleUtil.CARDINAL_ORTHO_DELTAS`; resolve snap к cardinal (`uphill_facing_toward`). **Later (target):** полный **8-way** — Grade.`facing` ∈ cardinal ∪ intercardinal; outward delta `(±1,0)\|(0,±1)\|(±1,±1)`; длина шага = **Chebyshev 1** (диагональ ≠ √2) — [GoRogue Chebyshev](https://github.com/Chris3606/GoRogue/wiki/Measuring-Distance). Диагональный ribbon materialize → **R36r**. **Запрещено:** параллельный relief-facing enum / литералы сторон вне `Facing`. Stairs per-cell — по [`tz_locations.md`](./tz_locations.md); outdoor grade facing — на entity (C10) |
+| R36t | **Bake formation anchors (SLOPE\|SHEER) — locked.** При **формировании** грани на bake всегда есть **верхняя** и **нижняя** точка перепада (якоря сайта / measured `dz`). Grade materialize + stamp **только между** якорями (коридор грани), **не** заливка региона. **Строго запрещено мутировать** клетки верхней и нижней точки (высота, материал, `system_grade_uid`, facing cache — не трогать якоря). **Не** правило entity R36j (состав объекта); это контракт **bake-формирования** (writer = **detailed_bake geometry**, R36u). **Исключение:** **canal** при **укорочении** slope (`L_eff` < requested / не вмещается) — cut у укороченного конца по **R36p** (+ knobs XOR на нормальном path, R28/R36q); см. § Canal obstacle policy. Без canal-ветки якоря остаются неприкосновенны. **Запрещено:** трактовать бровку/дно как «весь объект = SHEER» только из‑за membership flood |
+| R36u | **Grade generate locus — locked.** Single-writer **геометрии** outdoor grade = фаза **создания геометрии `detailed_bake`** (FineTerrain column + Grade entity + refs). **Не** L0 light/full ribbon. **Не** «контракт L0→L2 propagate uid». **Запрещено:** stamp/`system_grade_uid` на L0 world-map cells как SoT grade; nearest-carry grade uid с parent light как источник membership (**PAR-G8 superseded**). L0 остаётся landcover/height/mask; detailed geometry — единственный writer SLOPE\|SHEER. Термины вроде «метровая сетка» **не** SoT — говорить **detailed_bake geometry / FineTerrain**. Anchors — R36t. ASCII — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) |
 
 ### Locked checklist (master, 2026-08-01)
 
@@ -140,6 +169,8 @@ Ribbon shared: `ribbonGradeApply` + `contextRibbonApply` / `ribbonSampleUtil`; i
 | C21 | **`canal_template_registry`** на мире; `structure_canal` / `canal_ref` = `system_type` entry (R36q) | locked (R36q) |
 | C22 | **Diagonal + W:** candidate = thick-line (Murphy) + Chebyshev; **не** corner/shim; стыки → R36o; только после R36s later | locked direction (R36r); v1 out of scope |
 | C23 | **Facing:** v1 = 4 cardinals; later = 8-way полный `Facing`; шаг diag = Chebyshev 1; wire = `Facing` only | locked (R36s); later impl |
+| C24 | **Bake anchors:** верх/низ точки перепада при формировании SLOPE\|SHEER; **запрет мутации** якорей; единственное исключение — **canal при укорочении** slope (R36p) | locked (R36t) |
+| C25 | **Grade writer = detailed_bake geometry** (не L0); нет L0→L2 grade-uid carry как SoT | locked (R36u) |
 
 ---
 
@@ -377,6 +408,8 @@ SideReliefPickPolicy = ObjectReliefPickPolicy
 | **Не вмещается** | `L_eff` < requested / skip-кандидат | `canal_obstacle_policy` |
 
 Политика **не читается**, пока grade вмещается.
+
+**Связь с R36t / C24:** canal-cut при укорочении — **единственное** разрешённое исключение из «не мутировать нижнюю/верхнюю точку» bake-формирования грани (якорь у укороченного конца может быть затронут cut’ом). Нормальный path (места хватает) якоря не трогает через canal policy (policy игнор).
 
 **Где:** `worlds.relief_pick_policy.canal_obstacle_policy`.
 
@@ -1047,6 +1080,24 @@ outward = ortho unit от дороги к seed обочины
 
 **Wire vs materialize (L=0):** explicit `slope_length_cells=0` → pre-clearance `geom_resolve` returns `L=0` (no `partition_height`, no silent `0→1`). `gradePass` sets `requested_length=0` and `geom=None`. Bake clearance / `geom_for_cleared_length` skip stamp when `L_eff<1`. Omit L → default 1. Helper `expand_shoulder_ring(width=0)→∅` is unit/ring utility — **not** bake SoT (sample uses ring-1 seeds; L comes from geom/clearance).
 
+#### Bake anchors — верх / низ (R36t)
+
+При формировании **SLOPE** или **SHEER** на bake:
+
+```text
+high = верхняя точка перепада (якорь)
+low  = нижняя точка перепада (якорь)
+grade corridor = клетки строго МЕЖДУ high и low вдоль outward (L колонок стройки)
+```
+
+| Правило | |
+|---|---|
+| Materialize / stamp | только corridor; **не** заливка региона |
+| Клетки `high` и `low` | **не мутировать** (z, terrain, `system_grade_uid`, facing) |
+| ≠ R36j | это bake-formation, не «состав Grade entity» |
+| Writer | **detailed_bake geometry** (R36u), не L0 |
+| **Исключение** | **canal** когда slope **укорачивается** (`L_eff` < requested / не вмещается) → cut у укороченного конца по **R36p** (и knobs XOR на нормальном canal path). Без этой ветки якоря неприкосновенны |
+
 #### SHEER — стройка отвеса (L = длина по XY)
 
 `L` из knobs (`slope_length_cells` или derived из angle **не** применяется: для SHEER Geom-B бессмысленен → нужен `slope_length_cells`, иначе default L=1).
@@ -1693,7 +1744,7 @@ templates → R36 → BAR-1 →  open_land + shore ✅               →  R36s 8
 | [`tz_locations.md`](./tz_locations.md) | facing stairs; **barrier_template_registry** для `structure_refs` |
 | [`tz_building_generator.md`](./tz_building_generator.md) | library + world registry + import образец |
 | [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | world bundle levels; relief registry/bodies в bundle |
-| [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) | pack ASCII: L0 `world-grade`; L2 location `levels.grade`; FineTerrain `system_grade_uid`→Instance (PAR-G7/G10); nearest+surface (G8/G9) |
+| [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) | pack ASCII: L0 map/height **без** outdoor grade (**R36u**); L2 `surface_grade` / `grade_{n}`; FineTerrain `system_grade_uid`→Instance (PAR-G7/G10); ~~PAR-G8~~ superseded |
 | [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | open IDs; backlog sync с Wave B–E |
 | [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md) | agent pointer на § Порядок |
 
@@ -1708,6 +1759,8 @@ templates → R36 → BAR-1 →  open_land + shore ✅               →  R36s 8
 | 2026-08-10 | **L=0 hybrid D:** `geom_resolve` honors explicit 0 (no partition / no bump); `gradePass` `requested_length=0` + `geom=None`; bake skip via clearance; `expand_shoulder_ring` ≠ bake SoT |
 | 2026-08-10 | **L=0 lock (T-38):** wire `slope_length_cells >= 0`; omit→1; explicit 0 = no outward columns / empty ring; materialize `L_eff≥1` when h≥1 (partition) — R22/R36b/e/C4/§8a sync |
 | 2026-08-10 | **P2 SOLID/DRY:** T-33…T-36, T-34A flat, T-39 — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) |
+| 2026-08-13 | **R36u-T-8:** L0 outdoor ribbon files + enum leftover + `upsample_grade_uid` removed; `painted_road_edges` kept for T-10 |
+| 2026-08-13 | **R36t / C24:** bake anchors верх/низ для SLOPE\|SHEER; запрет мутации якорей; исключение = canal при укорочении (R36p) |
 | 2026-08-07 | **reliefEvents rename SoT:** `EVENT_RESOLVE_FALLBACK` / `EVENT_RIBBON_BARRIER` / `REASON_SCHEDULE_HOLE_SAFE_SLOPE` / `WHY_HEIGHT_LT_1`; drop legacy `r21_*` / `road_shoulder_barrier` / `h_lt_1` aliases — § Warn + fallback (R21) |
 | 2026-08-06 | **RELIEF-T-31/T-32:** `ribbonSegmentize`; ROAD paint → `painted_road_edges` → `RoadShoulderContributor`; compose `… → road → road_shoulder` |
 | 2026-08-07 | **Grade `owner_uid`:** POJO/SQL/db `edge_uid`→`owner_uid`; drop FK to `connection_edges` (owner ≠ always edge); bake handoff aligned |

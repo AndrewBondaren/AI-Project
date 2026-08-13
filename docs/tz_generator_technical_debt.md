@@ -3,7 +3,7 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py` / `render_maps.py`, `worldBundleService.py`, relief library/import, pack render / parent-light refine.  
-**Обновлено:** 2026-08-12 — **PAR-T-1…T-8** ✅ (Facing pack wire T-4); pack ASCII L2 grade shipped.  
+**Обновлено:** 2026-08-13 — **R36u-T-1…T-9** ✅; **T-10 deferred**; **PAR-T-1…T-8** ✅.  
 **Связанные документы:**
 
 | Документ | Роль |
@@ -11,7 +11,7 @@
 | [tz_assembler_hierarchy.md](./tz_assembler_hierarchy.md) | Целевая архитектура assembler stack |
 | [tz_city_generation.md](./tz_city_generation.md) | Продуктовое ТЗ города |
 | [tz_terrain_relief.md](./tz_terrain_relief.md) | Relief grade + templates; R36/R36n/p/q; **RELIEF-BAR-1**; SOLID → **RELIEF-T-28…**; canal/bake → **RELIEF-T-42…T-63** |
-| [tz_pack_ascii_render.md](./tz_pack_ascii_render.md) | Pack ASCII SoT (**PAR-G\***); L2 location grade; debt **PAR-T-*** |
+| [tz_pack_ascii_render.md](./tz_pack_ascii_render.md) | Pack ASCII SoT (**PAR-G\***); L2 location grade; debt **PAR-T-*** · **R36u-T-*** |
 | [tz_locations.md](./tz_locations.md) | `barrier_template_registry`; perimeter barriers |
 | [tz_terrain_hydrology.md](./tz_terrain_hydrology.md) | Гидрология: моря, озёра, реки (target) |
 | [tz_climate.md](./tz_climate.md) | Продуктовое ТЗ climate (pole/local tiers) |
@@ -19,6 +19,8 @@
 | `.cursor/plans/settlement-assembler.md` | Phase-план settlement |
 | `.cursor/plans/coordinate-spaces.md` | Phase-план NC-1 |
 | `.cursor/plans/grade-detailed-location-render.md` | L2 location grade ASCII impl |
+| `.cursor/plans/r36u-grade-detailed-migrate.md` | R36u migrate L0 ribbon → detailed geometry |
+| `.cursor/plans/r36u-post-impl-debt.md` | R36u-T-1…T-10 post-impl polish |
 
 ---
 
@@ -1088,7 +1090,89 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 **Контекст:** 2026-08-12 — L2 location grade ASCII shipped ([`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) **PAR-G7…G10**; plan `grade-detailed-location-render`). Ревью: неявные контракты · dataModel · хардкоды · SRP.
 
-**Не долг (locked product):** generate grade только L0; detailed = nearest carry + surface stamp; FineTerrain column `system_grade_uid` → Instance; empty → omit `surface_grade` / `grade_{n}`; L2 dump `surface_grade.txt` + `z/grade_{n}.txt` (location **и** wilderness, PAR-G6).
+**Не долг (locked product):** grade writer = **detailed_bake geometry** ([`tz_terrain_relief.md`](./tz_terrain_relief.md) **R36u**); L0 **без** outdoor grade; ~~L0→L2 grade-uid nearest carry~~ superseded; FineTerrain column `system_grade_uid` → Instance; empty → omit `surface_grade` / `grade_{n}`; L2 dump `surface_grade.txt` + `z/grade_{n}.txt` (location **и** wilderness); anchors **R36t**. Legacy L0 ribbon grade generate = **migrate off** (не «accepted product»).
+
+### Legacy L0 grade — inventory (R36u migrate off)
+
+**Статус:** §A outdoor grade writers + §C upsample helper **removed** (R36u-T-8). Pure generators (§B) reuse on detailed. **Не трогать:** terrain mask carry (`system_terrain`), hydro hard corridor, facing upsample, `surface_z` upsample. Agent plan: [`.cursor/plans/r36u-grade-detailed-migrate.md`](../.cursor/plans/r36u-grade-detailed-migrate.md).
+
+#### A. L0 compose writers (stamp `system_grade_uid` на light) — **removed**
+
+| Звено | Path | Status |
+|---|---|---|
+| Compose order | `COMPOSE_CONTRIBUTOR_ORDER` | no open_land/shore/road_shoulder |
+| Enum members | `LightContributorId` | those three removed |
+| Contributors + apply + stamp + BAR-1 + `ribbonIntent` | `…/contributors/openLand*`, `shore*`, `roadShoulder*`, `ribbon*`, `paintBarrier` | **deleted** |
+| `painted_road_edges` | RoadContributor | **kept** for T-10 |
+
+#### B. Pure generators (reuse in detailed geometry)
+
+| Path | Роль | Target fix |
+|---|---|---|
+| `generators/terrain/relief/ribbonGrade.py` | pick/grade segments | caller = `detailedGradeGenerate` |
+| `generators/terrain/relief/gradePass.py` / `volumeMaterialize.py` / `gradeInstanceFactory.py` | geom + instance | same |
+
+#### C. L0→L2 **grade-uid** nearest carry (~~PAR-G8~~) — **removed**
+
+| Path | Status |
+|---|---|
+| `upsample_grade_uid_from_parent_light` | **deleted** |
+| `build_tile_surface_state` | `surface_grade_uid=None`; detailed fills bag |
+
+**Остаётся без изменений (не grade, не «mask carry» как зонтик):** `upsample_terrain_from_parent_light` (**terrain mask carry**), `upsample_facing_from_parent_light` (facing), hydro merge, `upsample_from_parent_light` (`surface_z`).
+
+#### D. L0 ASCII / dump `world-grade` (omit после R36u)
+
+| Path | Роль |
+|---|---|
+| `render/worldMapPackRenderer.py` | `render_light_grade_mosaic` / `render_tile_light_grade_grid` |
+| `render/packMapGridRender.py` | кладёт `ascii_grade` в payload |
+| `render/renderPayloads.py` | поле `ascii_grade` |
+| `render/mapSymbols.py` | grade symbols / legend (L0 path) |
+| `scripts/render_maps.py` | пишет `world-grade.txt` |
+| Tests | `tests/test_world_map_pack_renderer.py` (grade mosaic) |
+
+**Не legacy dump:** L2 `locationTerrainPackRenderer` / `wildernessTilePackRenderer` + `fineTerrainAsciiKernel` (`surface_grade` / `grade_{n}`) — **target** product.
+
+#### E. Wire / persist field (поле может остаться empty; writer L0 — нет)
+
+| Path | Note |
+|---|---|
+| `dataModel/worldPack/worldMapCellWire.py` | `system_grade_uid` — L0 blob field; после migrate = omit/empty |
+| Pack write from `LightGridCell.to_wire` | перестаёт наполнять grade с L0 |
+
+#### F. Tests, завязанные на L0 ribbon writer
+
+L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `test_relief_intent_t54_t64`). Sample coverage → `test_detailed_grade_generate`; compose-order → `test_relief_wave_d`; pure canal → `test_relief_canal_r36pq`.
+
+### R36u post-impl smells (R36u-T)
+
+**Контекст:** 2026-08-13 — migrate shipped ([`.cursor/plans/r36u-grade-detailed-migrate.md`](../.cursor/plans/r36u-grade-detailed-migrate.md)); ревью 6 осей. **Scope:** только outdoor grade. **Не трогать:** terrain mask carry / hydro corridor / facing / `surface_z`.
+
+**Agent pointer:** [`.cursor/plans/r36u-post-impl-debt.md`](../.cursor/plans/r36u-post-impl-debt.md).
+
+| ID | Severity | Status | P | Ось | Smell | Target |
+|---|---|---|---|---|---|---|
+| **R36u-T-1** | **high** | **resolved** | P0 | неявный контракт | `detailedGradeGenerate` зовёт `bake_seed` / `segmentize_by_terrain` / `grade_ribbon_segments` **без импорта**; empty-templates tests зелёные | **Fix:** импорты; `test_generate_stamps_with_templates` |
+| **R36u-T-2** | **high** | **resolved** | P1 | слои / DRY | L2 refine импортирует L0 `roadShoulderAdapters.plan_seed_volume` + `ribbonSampleUtil.CARDINAL_ORTHO_DELTAS` | **Fix:** `facing.CARDINAL_ORTHO_DELTAS` + `volumeMaterialize.plan_seed_volume`; L0 re-export |
+| **R36u-T-3** | **high** | **resolved** | P1 | неявный контракт | `DetailedGradeResult.grade_instances` строится, `apply_detailed_grade` берёт только uid-bag; `persist_relief_grades` остался на L0 | **Fix:** persist на detailed + entry (`replace_world=False`); L0 persist тоже без world-wipe |
+| **R36u-T-4** | **high** | **resolved** | P1 | неявный контракт | `FineChunkRunner` generate только `if relief_templates_by_uid`; entry/`FineTerrainRefineOrchestrator` templates не передаёт | **Fix:** preload `load_relief_templates_for_world` на FineTerrain + container |
+| **R36u-T-5** | medium | **resolved** | P2 | dataModel / хардкод | `_OPEN_LAND_TERRAINS = {plains, forest}` `.value` ×2 (L0 sample + meter) | **Fix:** `open_land_terrain_keys()` ← `WorldTerrainMasks` |
+| **R36u-T-6** | medium | **resolved** | P2 | SRP / typing | `apply_detailed_grade` на `TerrainBatchOrchestrator`; `relief_templates_by_uid: dict` + `model_validate` | **Fix:** generate в FineChunkRunner; `dict[str, ReliefTemplate]` |
+| **R36u-T-7** | medium | **resolved** | P2 | DRY | `sample_open_land_meter` / `sample_shore_meter` ≈ L0 `openLandSample` / `shoreSample`; `meter_seed_blocked` ≈ `landward_seed_blocked`; uid stamp дважды | **Fix:** `sample_downhill_land_sites` + `sample_landward_of_refs`; blocked-адаптеры разные (compose vs meter) |
+| **R36u-T-8** | medium | **resolved** | P2 | мёртвый код / dataModel | L0 ribbon files живы; `LightContributorId.OPEN_LAND/SHORE/ROAD_SHOULDER` в enum без factory; `upsample_grade_uid_from_parent_light` dead export | **Fix:** deleted L0 outdoor grade stack + enum members + upsample helper; tests on detailed/meter; `painted_road_edges` kept for T-10 |
+| **R36u-T-9** | medium | **resolved** | P2 | неявный контракт | R36t = `body[:-1]`; canal args `del`; один Grade instance на сегмент (`last_plan`) vs L0 per-seed; `center_m` = cell xy; blocked = `z is None` | **Fix:** corridor = wrote − ref_cells; instance per seed; `center_m` = cell+0.5; no canal args; **`meter_grade_cell_blocked`** (missing/graded/road/hydro/barrier) |
+| **R36u-T-10** | low | **deferred** | P3 | продукт / SRP | `road_shoulder` не на detailed path (TZ context есть) | **Deferred** в [`tz_terrain_relief.md`](./tz_terrain_relief.md) R36u; порт later |
+
+**Fix order:** ~~T-1 → T-2 → T-3/T-4 → T-5…T-9~~ ✅; ~~**T-8**~~ ✅; **T-10 deferred**. **Не трогать:** terrain mask carry (`system_terrain`); hydro corridor; facing upsample; `surface_z` upsample.
+
+**Не долг (уже locked):** L0 без outdoor grade writer; ~~PAR-G8 grade carry~~; L2 `surface_grade` / `grade_{n}` ASCII consumer.
+
+---
+
+## Pack ASCII / L2 grade carry — post-impl smells (PAR-T)
+
+**Контекст:** 2026-08-12 — L2 location grade ASCII shipped ([`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) **PAR-G7…G10**; plan `grade-detailed-location-render`). Ревью: неявные контракты · dataModel · хардкоды · SRP.
 
 | ID | Severity | Status | P | Ось | Smell | Target |
 |---|---|---|---|---|---|---|
@@ -1122,8 +1206,11 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-13 | **R36u-T-9 residual:** `meter_grade_cell_blocked` (missing/graded/road/open-water/barrier) replaces `z is None` clearance adapter |
+| 2026-08-13 | **R36u impl:** detailedGradeGenerate on FineChunkRunner; L0 grade contributors removed; grade carry stripped; L0 world-grade omit |
+| 2026-08-13 | **R36u inventory:** legacy L0 grade paths A–F (compose writers, pure ribbon, PAR-G8 carry, world-grade ASCII, wire, tests) |
 | 2026-08-12 | **PAR-T-4 resolved:** pack wire `system_facing: Facing \| None` (`WorldMapCellWire` / FineTerrain / LightGridCell); `coerce_facing_wire`; MapCell SQL remains str |
-| 2026-08-12 | **PAR-G6 lift:** L2 `surface_grade.txt` + `z/grade_{n}.txt` (location+wilderness); per-z = surface_z==n |
+| 2026-08-13 | **R36u / C25:** grade writer = detailed_bake geometry; L0 без outdoor grade; PAR-G8 carry superseded — sync pack ASCII + debt |
 | 2026-08-12 | **PAR-T-1…T-3,T-5…T-8 resolved:** surface-only facing+uid; `categorical_resample`; shared upsample; LEVEL_* from payloads; grade legend in dump only; typed TileSurfaceState; `_surface_carry_attrs`. **PAR-T-4** remains open |
 | 2026-08-12 | **PAR-T-1…T-8 open:** post-impl L2 location grade ASCII (facing≠uid agg; `terrain_resample` overload; triple upsample; Facing-as-str; LEVEL_* dump dup; grade legend double; TileSurfaceState bag; columnFill fat). SoT [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) |
 | 2026-08-07 | **Grade `owner_uid`:** dataModel + `0001` + rows; drop FK to connection_edges; factory/persist/PaintedRoadEdge/`apply_road_shoulder_grades` aligned |
