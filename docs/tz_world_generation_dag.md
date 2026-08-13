@@ -242,7 +242,7 @@ CRUD (`GET/POST/DELETE …/map`) — import/export для мастера и debu
 | `recalculate_climate` | post_llm | `recalculate(request)` | partial upsert | **`output_bbox` обязателен** — regional event |
 | `generate_z_slice` | pre/post_llm | `generate_z_slice` | `save_pass(terrain)` | одна колонка (local) |
 | `lazy_terrain` | pre_llm | `generate_minimal` | 1 cell | orphan repair |
-| `modify_terrain` | post_llm | `TerrainPatchGeneratorService.apply_patch` ⬜ | `persist_terrain_patch` ⬜ | **cataclysm**, **combat**, road bed |
+| `modify_terrain` | post_llm | `apply_patch` + grade helper (**R36v**, тот же что detailed) ⬜ | `persist_terrain_patch` + `persist_relief_grades` ⬜ | **cataclysm**, **combat**, road bed |
 | `excavate` | post_llm | patch `patch_kind=excavate` ⬜ | тот же persist | **player / NPC dig** |
 
 EventBus / `world_history` (`cataclysm`, `destruction`) → DAG нода собирает `TerrainPatchRequest` (center, radius, event_uid) → generate → persist. См. [project_data_storage_tz.md](./project_data_storage_tz.md).
@@ -453,6 +453,7 @@ Generator-side work **может** опережать ноды (как climate e
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-13 | **R36v:** `modify_terrain` после patch зовёт тот же grade helper — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-07 | § **Gate: DAG** — ноды только с мастером после G1–G4 (полный тест генераторов); TR-LAZY-LOAD / TR-PERF service-first |
 | 2026-06 | § script tests: агент не стартует backend — только пользователь |
 | 2026-06 | Impl DAG/nodes **отложен** — сессия с мастером; target-спека без обязательства к коду |

@@ -31,6 +31,19 @@ def tile_local_chunk_indices(
     )
 
 
+def wilderness_chunk_origin(
+    meter_bbox: ColumnRect,
+    cx: int,
+    cy: int,
+    chunk_size: int,
+) -> tuple[int, int]:
+    """World xy of chunk (0,0) — inverse of ``tile_local_chunk_indices`` (R36v-T-7)."""
+    return (
+        meter_bbox.x_min + int(cx) * chunk_size,
+        meter_bbox.y_min + int(cy) * chunk_size,
+    )
+
+
 def ring_reach_m(radius_m: float, chunk_size: int) -> float:
     """Include chunk half-extent so edge chunks near the ring still match."""
     return float(radius_m) + float(chunk_size)

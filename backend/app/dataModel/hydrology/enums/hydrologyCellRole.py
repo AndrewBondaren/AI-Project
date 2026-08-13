@@ -33,3 +33,7 @@ class HydrologyCellRole(StrEnum):
             HydrologyCellRole.INLAND_SEA,
             HydrologyCellRole.LAKE,
         }
+
+    def blocks_grade_seed(self) -> bool:
+        """Open water + river bed — grade seed/clearance must not enter (R36v-T-3)."""
+        return self.is_open_water_role() or self is HydrologyCellRole.RIVER_BED

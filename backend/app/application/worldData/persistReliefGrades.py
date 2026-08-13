@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.application.worldData.generators.terrain.relief.gradeInstanceFactory import (
     utc_now_iso,
 )
+from app.application.worldData.gradeInstanceMerge import apply_prior_cell_refs
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
 from app.db.models.reliefGradeInstance import ReliefGradeInstanceRow
@@ -63,9 +64,14 @@ async def persist_relief_grades(
     """Upsert grades for a world. ``replace_world`` clears prior rows first (re-bake)."""
     if replace_world:
         await repo.delete_instances_for_world(world_uid)
+    prior_refs: dict[str, object] = {}
+    if not replace_world:
+        for row in await repo.list_instances_for_world(world_uid):
+            prior_refs[row.grade_uid] = row.cell_refs
     created = utc_now_iso()
     for system in systems or ():
         await repo.upsert_system(system_to_row(system, created_at=created))
     for inst in instances:
+        inst = apply_prior_cell_refs(inst, prior_refs.get(inst.grade_uid))
         await repo.upsert_instance(instance_to_row(inst, created_at=created))
     return len(instances)

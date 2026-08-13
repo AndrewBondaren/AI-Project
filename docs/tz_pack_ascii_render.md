@@ -87,8 +87,8 @@ SoT символа: `mapSymbols.grade_symbol(system_grade_uid, system_facing)` +
 
 | ID | Контракт |
 |---|---|
-| **PAR-G1** | Single-writer **geometry** outdoor grade = **`detailed_bake` geometry** ([`tz_terrain_relief.md`](./tz_terrain_relief.md) **R36u**). **Не** L0 ribbon |
-| **PAR-G2** | Detailed **generate** grade (R36 materialize + entity + refs; anchors **R36t**). **Запрещено:** трактовать detailed как «только propagate L0 uid»; **запрещено** invent uid без bake-формирования грани |
+| **PAR-G1** | Single-writer **geometry** outdoor grade = **`detailed_bake` geometry** ([`tz_terrain_relief.md`](./tz_terrain_relief.md) **R36u** / **R36v**). **Не** L0 ribbon |
+| **PAR-G2** | Detailed **generate** grade в chunk pool (R36v; R36 materialize + entity + refs; anchors **R36t**). **Запрещено:** трактовать detailed как «только propagate L0 uid»; **запрещено** invent uid без bake-формирования грани; **запрещён** tile-wide serial scan как SoT |
 | **PAR-G3** | Membership = только `system_grade_uid` (omit если нет); h/L/angle на Grade entity (R24, R36h/j, C11) |
 | **PAR-G4** | Empty → нет `surface_grade` / нет `surface_grade.txt`; пустой z → нет `z/grade_{n}.txt` |
 | **PAR-G5** | L2 grade dump under detailed location/wilderness tile. L0 `world-grade` — **не** SoT (omit) |
@@ -156,6 +156,7 @@ Open product XOR по L2 grade ASCII — **нет**.
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-13 | **R36v:** PAR-G1/G2 — generate в chunk pool; tile-wide serial не SoT — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-08-13 | **R36u sync:** PAR-G1/G2/G5/G8 — grade writer = detailed_bake geometry; L0 grade ASCII omit; ~~nearest grade carry~~ superseded |
 | 2026-08-13 | **L2 grade composite:** `surface_grade` / `grade_{n}` = material + grade overlay (не sparse-only) |
 | 2026-08-12 | **PAR-G6 lift:** L2 dump `surface_grade.txt` + `z/grade_{n}.txt` (location+wilderness); per-z = surface_z==n |

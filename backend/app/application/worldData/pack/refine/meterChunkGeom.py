@@ -12,11 +12,31 @@ from app.application.worldData.generators.coordinates.worldTile import (
     meter_bbox_for_tile,
 )
 from app.application.worldData.generators.terrain.types import ColumnRect
+from app.application.worldData.pack.refine.columnBounds import (
+    expand_rect,
+    rect_contains as bounds_contains,
+)
 from app.application.worldData.generators.terrain.worldMapSettings import (
     terrain_chunk_columns,
 )
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
 from app.db.models.world import World
+
+
+def rect_contains(rect: ColumnRect, x: int, y: int) -> bool:
+    return bounds_contains(rect, x, y)
+
+
+def expand_column_rect(rect: ColumnRect, halo: int) -> ColumnRect:
+    expanded = expand_rect(rect, halo)
+    if expanded is rect:
+        return rect
+    return ColumnRect(
+        x_min=expanded.x_min,
+        x_max=expanded.x_max,
+        y_min=expanded.y_min,
+        y_max=expanded.y_max,
+    )
 
 
 def _rect_overlaps_volume(rect: ColumnRect, volume: TerritoryVolume) -> bool:

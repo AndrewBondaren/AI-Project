@@ -15,7 +15,7 @@ metadata:
 **Продуктовый контекст:** Идея 1 (light bake для корректной world map) и pipeline L0 — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § LOD bake / § **Bake modes**.  
 **Compose один:** `light_bake` и `full_bake` используют **тот же** L0 canvas pipeline; отличается только **набор macro-tiles** (location tiles vs весь `world_bounds`). Оба — **только L0**; `detailed_bake` / entry — вне этого ТЗ (L2). Job boundaries — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Bake modes.
 
-**Outdoor grade (R36u):** L0 **не** writer SLOPE/SHEER. Height/mask paint на light — ок; `system_grade_uid` / Grade instance / ribbon grade apply как SoT — **только** detailed_bake geometry ([`tz_terrain_relief.md`](./tz_terrain_relief.md)). Legacy L0 ribbon consumers в pipeline ниже — **migrate off**.
+**Outdoor grade (R36u / R36v):** L0 **не** writer SLOPE/SHEER. Height/mask paint на light — ок; grade generate — **только** detailed_bake / entry, per-chunk в `FineChunkRunner` pool ([`tz_terrain_relief.md`](./tz_terrain_relief.md)). L0 ribbon consumers (**5b** / `road_shoulder`) — **removed** (R36u-T-8), не «ещё в compose».
 
 **Не в scope этого ТЗ:**
 
@@ -1061,8 +1061,8 @@ Climate contributor пишет только `climate_zone_id` — вход дл�
 | 3 Landcover | `landcover` | `FORESTS`, `PLAINS` |
 | 4 Structural | `mountain` → `ravine` | `MOUNTAINS`, `RAVINES` |
 | 5 Hydro | `hydro` | `HYDROLOGY` |
-| 5b Ribbon (pre-culture) | `open_land` → `shore` | — **legacy** L0 grade (**R36u** migrate off; не MaskDomain) |
-| 6 Culture | `settlement` → `road` → `road_shoulder` | `SETTLEMENT`, `ROADS` (shoulder grade — **legacy** L0; **R36u** → detailed geometry) |
+| ~~5b Ribbon~~ | ~~`open_land` → `shore`~~ | **removed** (R36u-T-8); grade → detailed **R36v** |
+| 6 Culture | `settlement` → `road` | `SETTLEMENT`, `ROADS` (~~`road_shoulder`~~ **removed**; T-10 later on detailed) |
 | (later) Land-use | `farmland` | `FARMLAND` (новый MaskDomainId) |
 | (later) Flora | type refs | — flora TZ |
 
@@ -1415,7 +1415,7 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 | [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | L0 wire, WP-10, Идея 1/2, WP-PERF-31 |
 | [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) | declared river/coast, fine roles; **Ocean bathymetry / Depression forms** (R5b) |
 | [`tz_terrain_generation.md`](./tz_terrain_generation.md) | surface pass, coarse planning |
-| [`tz_terrain_relief.md`](./tz_terrain_relief.md) | **Relief grade** SoT (**R36u** writer = detailed_bake geometry; L0 не grade SoT); mountains/forests/`road_shoulder` = consumers |
+| [`tz_terrain_relief.md`](./tz_terrain_relief.md) | **Relief grade** SoT (**R36u** writer; **R36v** per-chunk pool); L0 не grade SoT |
 | [`tz_climate.md`](./tz_climate.md) | pole / zone sample |
 | [`tz_city_generation.md`](./tz_city_generation.md) | L1 skeletons vs L2 layout |
 
@@ -1425,7 +1425,8 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 
 | Дата | Изменение |
 |---|---|
-| 2026-08-13 | **R36u:** L0 не outdoor grade writer; ribbon 5b / shoulder — legacy migrate off; SoT → [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
+| 2026-08-13 | **R36v:** compose 5b / `road_shoulder` **removed** (не migrate-off); grade → detailed pool — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
+| 2026-08-13 | **R36u:** L0 не outdoor grade writer; ribbon 5b / shoulder — then migrate off; SoT → [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-07-29 | Relief: context `road` → `road_shoulder` (обочины) — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R20 |
 | 2026-07-29 | Pointer: relief templates / outdoor grade — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R9–R16 |
 | 2026-07-27 | Домен **relief** → [`tz_terrain_relief.md`](./tz_terrain_relief.md); § Mountain = consumer SideFill; shipped `MountainSideKind` = адаптер |

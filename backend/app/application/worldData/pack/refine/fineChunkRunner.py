@@ -38,12 +38,27 @@ from app.application.worldData.pack.read.locationTerritoryVolumes import (
 from app.application.worldData.pack.read.mapCellToFineTerrainWire import (
     cells_to_fine_terrain_chunk,
 )
-from app.application.worldData.pack.refine.entryRingGeom import tile_local_chunk_indices
+from app.application.worldData.gradeInstanceMerge import merge_grade_instances
+from app.application.worldData.pack.refine.detailedGradeGenerate import (
+    PlannedGradeSegment,
+    grade_halo_cells,
+    materialize_planned_for_rect,
+    plan_grade_for_rects,
+    sample_detailed_grade_rect,
+)
+from app.application.worldData.pack.refine.entryRingGeom import (
+    tile_local_chunk_indices,
+    wilderness_chunk_origin,
+)
 from app.application.worldData.pack.read.parentLightLoad import require_parent_light
 from app.application.worldData.pack.refine.fineRefineResult import FineRefineResult
-from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.application.worldData.terrainBatchOrchestrator import (
+    TerrainBatchOrchestrator,
+    TileSurfaceState,
+)
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
+from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume, inside_location_volume
 from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
 from app.db.models.mapCell import MapCell
@@ -68,6 +83,47 @@ def partition_chunk_cells(
         elif not inside_location_volume(cell.x, cell.y, cell.z, volumes):
             wilderness.append(cell)
     return wilderness, location_additions, loc_hits
+
+
+async def _plan_tile_grade(
+    world: World,
+    surface_state: TileSurfaceState,
+    rects: list[ColumnRect],
+    templates: dict[str, ReliefTemplate],
+    existing_uids: dict[tuple[int, int], str],
+    workers: int,
+) -> list[PlannedGradeSegment]:
+    """Sample (serial or pool) → stitch → plan. Same helpers as the facade."""
+    if not templates:
+        return []
+    if workers == 1 or len(rects) <= 1:
+        return plan_grade_for_rects(
+            world, surface_state, rects,
+            relief_templates_by_uid=templates,
+            existing_uids=existing_uids,
+        )
+    halo = grade_halo_cells(templates)
+    sample_pool = ChunkComputePool(
+        workers,
+        thread_name_prefix="pack-grade-sample",
+        log_diagnostics=True,
+    )
+    try:
+        groups = await sample_pool.map_sync(
+            rects,
+            lambda rect: sample_detailed_grade_rect(
+                world, surface_state, rect,
+                halo=halo, existing_uids=existing_uids,
+            ),
+        )
+    finally:
+        sample_pool.shutdown()
+    return plan_grade_for_rects(
+        world, surface_state, rects,
+        relief_templates_by_uid=templates,
+        existing_uids=existing_uids,
+        groups=groups,
+    )
 
 
 def location_for_cell(
@@ -124,21 +180,6 @@ class FineChunkRunner:
         surface_state = self._terrain.build_tile_surface_state(
             world, locations, surface_ctx, tile_gx, tile_gy, parent_light=parent,
         )
-        grade_instances: tuple[ReliefGradeInstance, ...] = ()
-        if relief_templates_by_uid:
-            from app.application.worldData.pack.refine.detailedGradeGenerate import (
-                generate_detailed_grade,
-            )
-
-            grade = generate_detailed_grade(
-                world, surface_state,
-                relief_templates_by_uid=relief_templates_by_uid,
-            )
-            grade_instances = grade.grade_instances
-            if grade.surface_grade_uid:
-                surface_state = replace(
-                    surface_state, surface_grade_uid=grade.surface_grade_uid,
-                )
         surface_columns = (meter_bbox.x_max - meter_bbox.x_min + 1) * (
             meter_bbox.y_max - meter_bbox.y_min + 1
         )
@@ -151,6 +192,13 @@ class FineChunkRunner:
             phase=phase_name,
             workers=workers,
             chunks_total=chunks_total,
+        )
+        templates = relief_templates_by_uid or {}
+        existing_uids = _existing_grade_uids_from_pack(
+            writer, tile_gx, tile_gy, meter_bbox, chunk_size,
+        )
+        planned: list[PlannedGradeSegment] = await _plan_tile_grade(
+            world, surface_state, rects, templates, existing_uids, workers,
         )
 
         location_cells: dict[str, list[MapCell]] = {}
@@ -168,9 +216,11 @@ class FineChunkRunner:
                 if prev is None or cell.z > prev:
                     meter_surface_z[key] = int(cell.z)
 
+        grade_acc: list[ReliefGradeInstance] = []
+
         def compute_indexed(
             pair: tuple[int, ColumnRect],
-        ) -> tuple[int, ColumnRect, list[MapCell], float]:
+        ) -> tuple[int, ColumnRect, list[MapCell], float, tuple[ReliefGradeInstance, ...]]:
             chunk_idx, rect = pair
             chunk_t0 = log_pack_wilderness_chunk_start(
                 world_uid,
@@ -183,17 +233,29 @@ class FineChunkRunner:
                 refine_role=refine_role,
                 pool_workers=workers,
             )
+            chunk_grades: tuple[ReliefGradeInstance, ...] = ()
+            chunk_state = surface_state
+            if planned:
+                part = materialize_planned_for_rect(
+                    world, surface_state, rect, planned,
+                    existing_uids=existing_uids,
+                )
+                chunk_grades = part.grade_instances
+                chunk_state = replace(
+                    surface_state, surface_grade_uid=part.surface_grade_uid,
+                )
             cells = self._terrain.generate_chunk_cells_sync(
                 world, locations, surface_ctx, tile_gx, tile_gy, rect,
-                surface_state=surface_state,
+                surface_state=chunk_state,
             )
-            return chunk_idx, rect, cells, chunk_t0
+            return chunk_idx, rect, cells, chunk_t0, chunk_grades
 
         async def persist_chunk(
             chunk_idx: int,
             rect: ColumnRect,
             cells: list[MapCell],
             chunk_t0: float,
+            chunk_grades: tuple[ReliefGradeInstance, ...] = (),
         ) -> None:
             nonlocal total_cells, written
             _note_surface_z(cells)
@@ -216,8 +278,11 @@ class FineChunkRunner:
                 pool_workers=workers,
             )
             if wilderness:
+                origin_x, origin_y = wilderness_chunk_origin(
+                    meter_bbox, cx, cy, chunk_size,
+                )
                 chunk = cells_to_fine_terrain_chunk(
-                    cx, cy, chunk_size, rect.x_min, rect.y_min, wilderness,
+                    cx, cy, chunk_size, origin_x, origin_y, wilderness,
                 )
                 writer.write_wilderness_chunk(
                     tile_gx, tile_gy, chunk,
@@ -241,11 +306,12 @@ class FineChunkRunner:
                 started_at=chunk_t0,
                 pool_workers=workers,
             )
+            grade_acc.extend(chunk_grades)
 
         if workers == 1 or chunks_total <= 1:
             for pair in indexed_rects:
-                chunk_idx, rect, cells, chunk_t0 = compute_indexed(pair)
-                await persist_chunk(chunk_idx, rect, cells, chunk_t0)
+                chunk_idx, rect, cells, chunk_t0, chunk_grades = compute_indexed(pair)
+                await persist_chunk(chunk_idx, rect, cells, chunk_t0, chunk_grades)
         else:
             pool = ChunkComputePool(
                 workers,
@@ -255,11 +321,16 @@ class FineChunkRunner:
             try:
                 async def on_chunk(
                     _pair: tuple[int, ColumnRect],
-                    result: tuple[int, ColumnRect, list[MapCell], float],
+                    result: tuple[
+                        int, ColumnRect, list[MapCell], float,
+                        tuple[ReliefGradeInstance, ...],
+                    ],
                 ) -> None:
-                    chunk_idx, rect, cells, chunk_t0 = result
+                    chunk_idx, rect, cells, chunk_t0, chunk_grades = result
                     async with write_lock:
-                        await persist_chunk(chunk_idx, rect, cells, chunk_t0)
+                        await persist_chunk(
+                            chunk_idx, rect, cells, chunk_t0, chunk_grades,
+                        )
 
                 await pool.map_sync_with_callback(indexed_rects, compute_indexed, on_chunk)
             finally:
@@ -280,6 +351,7 @@ class FineChunkRunner:
             total_cells += len(loc_cells)
         writer.recalc_manifest_counters()
         writer.save_manifest()
+        grade_instances = merge_grade_instances(grade_acc) if planned else ()
         return FineRefineResult(
             persist=PersistResult.from_counts(total_cells, total_cells),
             wilderness_chunks_written=written,
@@ -287,4 +359,35 @@ class FineChunkRunner:
             meter_surface_z=meter_surface_z,
             grade_instances=grade_instances,
         )
+
+
+def _existing_grade_uids_from_pack(
+    writer: WorldPackWriter,
+    tile_gx: int,
+    tile_gy: int,
+    meter_bbox: ColumnRect,
+    chunk_size: int,
+) -> dict[tuple[int, int], str]:
+    """Late-chunk inherit: uids already on wilderness columns (R36v)."""
+    tile = writer.manifest.tile_entry(tile_gx, tile_gy)
+    if tile is None or not tile.chunks:
+        return {}
+    reader = WorldPackReader(writer.paths)
+    out: dict[tuple[int, int], str] = {}
+    for ref in tile.chunks:
+        try:
+            chunk: FineTerrainChunkWire = reader.read_wilderness_chunk(
+                tile_gx, tile_gy, ref.cx, ref.cy,
+            )
+        except (OSError, ValueError, FileNotFoundError):
+            continue
+        origin_x, origin_y = wilderness_chunk_origin(
+            meter_bbox, int(ref.cx), int(ref.cy), chunk_size,
+        )
+        for col in chunk.columns:
+            uid = col.system_grade_uid
+            if not uid:
+                continue
+            out[(origin_x + int(col.lx), origin_y + int(col.ly))] = uid
+    return out
 

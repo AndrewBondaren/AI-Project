@@ -296,8 +296,8 @@ z_bottom = max(world.z_min, z_top - N_eff)
 **Поддомен Terrain** outdoor SLOPE / SHEER + facing + **шаблоны 1:1 buildings** (global `relief_templates` + world registry; `context` singular):  
 → [`tz_terrain_relief.md`](./tz_terrain_relief.md) (SoT ownership, storage, consumers).
 
-Кратко: grade — **не** MaskDomain и **не** `N_eff`. Column gap (этот документ § Зазоры) = *объём* колонки; relief = *проходимость грани*.
-Consumers: горы, open land (plains/forest), shore, roads.
+Кратко: grade — **не** MaskDomain и **не** `N_eff`. Column gap (этот документ § Зазоры) = *объём* колонки; relief = *проходимость грани*.  
+**Generate:** в `detailed_bake` / entry — per-chunk в `FineChunkRunner` pool ([`tz_terrain_relief.md`](./tz_terrain_relief.md) **R36v**). Runtime patch — тот же helper. Consumers: горы, open land, shore, roads (shoulder deferred T-10).
 
 ### Terrain ↔ ClimateData (разделение ответственности, физическая связь)
 
@@ -1598,6 +1598,8 @@ class TerrainPatchGeneratorService:
         """Pure. Возвращает **только изменённые** cells ⊆ bounds."""
 ```
 
+**Grade после patch (R36v):** смена `z` / terrain в bounds → тот же rect-scoped `generate_detailed_grade` (+ halo), stamp `system_grade_uid`, upsert `relief_grade_instances` (`replace_world=False`). **Не** отдельный bake mode и **не** L0 sample. SoT — [`tz_terrain_relief.md`](./tz_terrain_relief.md).
+
 **Контракт persist:**
 
 ```python
@@ -1618,7 +1620,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 
 | Scope | Generate | Persist | DAG |
 |---|---|---|---|
-| `terrain_patch` | `TerrainPatchGeneratorService.apply_patch` | `persist_terrain_patch` | `modify_terrain`, `excavate` |
+| `terrain_patch` | `apply_patch` + тот же grade helper (R36v) | `persist_terrain_patch` + `persist_relief_grades` | `modify_terrain`, `excavate` |
 
 #### Idempotency
 
@@ -1700,6 +1702,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-13 | **R36v pointer:** detailed/entry grade в chunk pool; `modify_terrain` зовёт тот же helper — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-07-29 | Relief: storage 1:1 buildings + `context` singular — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R11/R17/R18 |
 | 2026-07-29 | Pointer: outdoor grade + relief templates — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R9–R16 |
 | 2026-07-27 | Домен **relief** → [`tz_terrain_relief.md`](./tz_terrain_relief.md); здесь — указатель (не SoT grade) |

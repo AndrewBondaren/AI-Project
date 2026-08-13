@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.application.worldData.generators.terrain.relief.ribbonSiteSample import SampleCell
 from app.application.worldData.generators.terrain.relief.terrainMap import map_system_terrain
 
 
@@ -33,11 +34,11 @@ class RibbonSegment:
 def segmentize_by_terrain(
     *,
     owner_uid: str,
-    cells: list[tuple[tuple[int, int], str, int]],
+    cells: list[SampleCell] | list[tuple[tuple[int, int], str, int]],
 ) -> list[RibbonSegment]:
     """Split sample cells into segments on system_terrain change.
 
-    cells: ((x,y), system_terrain, dz) in stable walk order.
+    ``cells``: ``SampleCell`` (or compatible tuple) in stable walk order.
     """
     segments: list[RibbonSegment] = []
     if not cells:

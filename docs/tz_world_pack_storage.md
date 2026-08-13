@@ -247,7 +247,7 @@ load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
 | **Chunk partition** | WP-19 без изменений — не резать chunks по light cells / climate zones |
 | **Запрещено** | второй compose / declare rematerialize; `surface_biome_terrain(default_zone)` на pack refine path |
 
-**Outdoor grade uid:** **не** этот контракт. `system_grade_uid` **не** nearest-carry с L0 (**R36u** / ~~PAR-G8~~) — writer = `FineChunkRunner` + `detailedGradeGenerate` ([`tz_terrain_relief.md`](./tz_terrain_relief.md)).
+**Outdoor grade uid:** **не** этот контракт. `system_grade_uid` **не** nearest-carry с L0 (**R36u** / ~~PAR-G8~~). Writer = `FineChunkRunner` + rect-scoped `detailedGradeGenerate` **в том же chunk pool** (**R36v**) — [`tz_terrain_relief.md`](./tz_terrain_relief.md). **Не** tile-wide serial pre-pass; **не** L0 Δz-кандидаты.
 
 **Не смешивать имена (R36u lock):** «terrain mask carry» = **только** `system_terrain`. Hydro hard corridor, `system_facing` upsample и `surface_z` upsample — **соседние** parent-light контракты (WP-PERF-22 / facing), не mask carry; R36u их тоже не меняет.
 
@@ -743,7 +743,7 @@ flowchart TB
 | Модуль | Ответственность | Запреты |
 |---|---|---|
 | `FineTerrainRefineOrchestrator` | Thin facade: scene / path / rect / queued chunk; делегирует schedule и helpers | Нет `ChunkComputePool`; нет прямой записи blobs |
-| `FineChunkRunner` | `require_parent_light` → surface → generate → partition → wilderness / location_terrain + manifest | Нет enqueue в `ChunkRefineQueue` |
+| `FineChunkRunner` | `require_parent_light` → surface → **pool:** column fill + **grade (R36v, per rect)** → partition → wilderness / location_terrain + manifest | Нет enqueue в `ChunkRefineQueue`; нет serial tile-wide grade до pool |
 | `chunkSchedule` | Free functions: rings / path-ahead enqueue | Не пишет pack blobs; не generate cells |
 | `pathCorridorSelect` | `select_path_corridor_rects` → `ColumnRect[]` | Не persist |
 | `packMapHelpers.tile_for_anchor` / `entryRingGeom` | Coord / scene chunk indices | — |
@@ -1897,6 +1897,7 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-13 | **R36v:** FineChunkRunner grade per-rect in pool (не tile-wide serial) — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-08-13 | **R36u lock wording:** terrain mask carry = только `system_terrain`; hydro/facing/z не под этим именем |
 | 2026-07-30 | WP-24 ↔ **BUNDLE-2 SoT** [`tz_world_bundle.md`](./tz_world_bundle.md); sync skeleton/`relief_templates` в таблице «сейчас» |
 | 2026-07-20 | **WP-PERF-50 ✅:** light/full L0-only; `refine_scene` убран из bake path; entry = отдельная джоба |

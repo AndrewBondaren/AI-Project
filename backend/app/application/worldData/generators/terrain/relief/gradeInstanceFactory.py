@@ -49,6 +49,7 @@ def build_ribbon_grade_instance(
     structure_canal: str | None = None,
     template_uid: str | None = None,
     owner_uid: str | None = None,
+    grade_uid: str | None = None,
 ) -> ReliefGradeInstance:
     """One Grade per successfully stamped seed strip (constant θ)."""
     if not cell_refs:
@@ -56,7 +57,9 @@ def build_ribbon_grade_instance(
     kind = plan.kind
     face = None if kind is ReliefSideKind.SHEER else facing
     inst = ReliefGradeInstance(
-        grade_uid=make_grade_uid(world_uid=world_uid, site_id=site_id, seed=seed),
+        grade_uid=grade_uid or make_grade_uid(
+            world_uid=world_uid, site_id=site_id, seed=seed,
+        ),
         world_uid=world_uid,
         kind=kind,
         height_cells=plan.h,

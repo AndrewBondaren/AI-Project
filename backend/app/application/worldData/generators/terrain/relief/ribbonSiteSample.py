@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import NamedTuple
 
 from app.application.worldData.generators.terrain.relief.facing import CARDINAL_ORTHO_DELTAS
 from app.application.worldData.generators.terrain.relief.shoulderWidth import relief_dz
 
 Coord = tuple[int, int]
-SampleCell = tuple[Coord, str, int]
 NeighborSite = Callable[[Coord], tuple[str, int] | None]
+
+
+class SampleCell(NamedTuple):
+    """One ribbon seed: downhill/landward cell + terrain + measured Δz."""
+
+    xy: Coord
+    terrain: str
+    dz: int
 
 
 def sample_downhill_land_sites(
@@ -35,9 +43,9 @@ def sample_downhill_land_sites(
                 continue
             seen_seeds.add(seed)
             ref_cells.add((lx, ly))
-            samples.append((seed, terrain_lo, relief_dz(z_hi, z_lo)))
+            samples.append(SampleCell(seed, terrain_lo, relief_dz(z_hi, z_lo)))
 
-    samples.sort(key=lambda item: item[0])
+    samples.sort(key=lambda item: item.xy)
     return samples, ref_cells
 
 
@@ -63,7 +71,7 @@ def sample_landward_of_refs(
             terrain_lo, z_lo = site
             seen_seeds.add(seed)
             ref_cells.add((lx, ly))
-            samples.append((seed, terrain_lo, relief_dz(shore_z, z_lo)))
+            samples.append(SampleCell(seed, terrain_lo, relief_dz(shore_z, z_lo)))
 
-    samples.sort(key=lambda item: item[0])
+    samples.sort(key=lambda item: item.xy)
     return samples, ref_cells
