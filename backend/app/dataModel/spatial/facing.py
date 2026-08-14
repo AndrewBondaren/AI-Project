@@ -51,6 +51,10 @@ _COMPACT: dict[str, Facing] = {
     "SW": Facing.SOUTHWEST,
 }
 
+COMPACT_LETTER: dict[Facing, str] = {
+    facing: letter for letter, facing in _COMPACT.items()
+}
+
 
 def parse_facing(value: str | Facing | None) -> Facing | None:
     if value is None:

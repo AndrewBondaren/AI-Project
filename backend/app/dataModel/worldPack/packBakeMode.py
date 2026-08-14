@@ -9,3 +9,6 @@ PackBakeApiMode = Literal["light", "full", "detailed"]
 
 # Manifest last completed L0 mode (detailed does not write this)
 PackBakeMode = Literal["light", "full"]
+
+PACK_BAKE_LIGHT: PackBakeMode = "light"
+PACK_BAKE_FULL: PackBakeMode = "full"

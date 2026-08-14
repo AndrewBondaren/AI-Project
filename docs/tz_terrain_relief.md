@@ -6,11 +6,11 @@ metadata:
   type: project
 ---
 
-> **Статус:** ownership **утверждён** · templates R33–R35 ✅ · **R36 core (§7–9/8c) ✅** · **canal R36p/q wire+bake ✅** · bake SRP **T-30/T-52 ✅** · **Wave B–D** historical (L0 ribbon **removed**, R36u-T-8) · **R36u** writer = **detailed_bake geometry** · **R36v** generate = **per-chunk в `FineChunkRunner` pool** (не tile-wide serial).  
-> **Next:** Wave E later (R36s / R36r / R36o / gameplay); **T-10** `road_shoulder` deferred. **R36v / T-11** ✅. **R36v-T-1…T-13** ✅.  
-> **Связь:** SoT grade; **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT. · ASCII consumer — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md). · Agent pointer: [`.cursor/plans/r36u-grade-detailed-migrate.md`](../.cursor/plans/r36u-grade-detailed-migrate.md)
+> **Статус:** ownership **утверждён** · templates R33–R35 ✅ · **R36 geom/entity/clearance** ✅ (plan) · **canal R36p/q wire+resolve ✅** · **Wave B–D** historical (L0 ribbon **removed**, R36u-T-8) · **R36u** writer = **detailed_bake geometry** · **R36v** per-chunk pool · **R36w** каталог граней ✅. Шов `full_bake` · halo `grid_neighbor` · T-10 ✅.  
+> **Next:** **Post-R36w V1–V2** — apply volume z + canal **на detailed** ([план](../.cursor/plans/detailed-grade-volume-canal.md)). **Не** Wave E. L0 §8b/canal Intent — historical, не SoT writer.  
+> **Связь:** SoT grade; **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT. · ASCII — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md). · L2 — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2. · Agent: [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md)
 
-**Scope lock (R36u):** меняется **только outdoor relief grade** (`system_grade_uid`, SLOPE/SHEER geometry). **Не трогать** L0→L2 parent-light контракты ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md)):
+**Scope lock (R36u):** меняется **только outdoor relief grade** (`system_grade_uid`, SLOPE/SHEER geometry). **Не трогать** L0→L2 parent-light контракты ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2):
 
 | Контракт | Поле | ≠ |
 |---|---|---|
@@ -29,8 +29,8 @@ metadata:
 | `upsample_grade_uid_from_parent_light` | — | **deleted** (T-8); не deprecated; grade uid **не** с parent light |
 | L0 `world-grade` ASCII | omit ([`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) PAR-G5) | |
 | L2 `fineTerrainAsciiKernel` | consumer — без изменений | |
-| Tile-wide `generate_detailed_grade` до pool | per-rect в `FineChunkRunner` worker (**R36v**) | не новый оркестратор |
-| `road_shoulder` на detailed | **deferred (R36u-T-10)** | L0 writer снят; sample на detailed later; context/templates/pick остаются |
+| Tile-wide `generate_detailed_grade` до pool | per-rect в `FineChunkRunner` worker (**R36v** / стык **R36w**) | не новый оркестратор |
+| `road_shoulder` на detailed | **R36u-T-10** ✅ | sample + stamp; context = `ReliefContext.ROAD_SHOULDER`; `PaintedRoadEdge` в dataModel; тот же каталог / `PackJobUid` |
 
 Полная таблица: [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) § Legacy L0 grade inventory.
 
@@ -49,13 +49,13 @@ metadata:
 | `shore` | берег озера / реки / моря |
 | `road_shoulder` | **обочины** дороги (две стороны), когда есть Δz между полотном и соседним рельефом |
 
-**Grade writer (R36u):** outdoor SLOPE/SHEER geometry создаётся в **геометрии `detailed_bake`** (FineTerrain / L2 refine). Relief — про **детали**, не про L0→L2 **grade** carry.  
-**Generate (R36v):** тот же пайплайн `detailed_bake` / entry — **внутри chunk worker pool**, не serial pre-pass на весь тайл. Sample — только **реальные fine-грани** (rect + halo). Runtime patch мира — **тот же** helper (bounds + halo). **Запрещено:** L0 Δz как кандидаты; отдельный «grade bake» оркестратор.  
-**v1 detailed contexts:** `open_land`, `shore`. **`road_shoulder` deferred (R36u-T-10)** — L0 writer снят; sample на detailed later; context + templates + pick остаются в wire.  
+**Grade writer (R36u):** outdoor SLOPE/SHEER geometry создаётся в **геометрии `detailed_bake`** (FineTerrain / L2 refine). Исключение из L0-carry ([§ Идея 2](./tz_world_pack_storage.md)): grade **не** несётся с parent light; writer = detailed.  
+**Generate (R36v / R36w):** тот же пайплайн `detailed_bake` / entry — **внутри chunk worker**. Sample — только **реальные fine-грани** (rect + halo). Стык ленты — на **том же** воркере после sample (**R36w**), не serial barrier на все rect тайла. Runtime patch — **тот же** helper (bounds + halo). **Запрещено:** L0 Δz как кандидаты; отдельный «grade bake» оркестратор.  
+**v1 detailed contexts:** `open_land`, `shore`, `road_shoulder` (`ReliefContext`; T-10 ✅).  
 **Persist:** detailed / entry / patch upsert `relief_grade_instances` (`replace_world=False`). L0 light/full **не** `replace_world=True` — иначе wipe detailed outdoor grades.  
 **L0 (light/full):** может красить высоты/маски (ravine z, mountain paint, terrain/hydro/facing …); **запрещено** materialize/stamp outdoor grade (`system_grade_uid` / Grade instance / ribbon grade apply как writer).  
 
-**Legacy (Wave B–D shipped, superseded by R36u-T-8):** L0 outdoor `open_land` / `shore` / `road_shoulder` contributors + `ribbonGradeApply` / BAR-1 intents — **deleted**. `painted_road_edges` remains for deferred T-10. Mountain SideFill ≠ this outdoor ribbon stack.
+**Legacy (Wave B–D shipped, superseded by R36u-T-8):** L0 outdoor `open_land` / `shore` / `road_shoulder` contributors + `ribbonGradeApply` / BAR-1 intents — **deleted**. `PaintedRoadEdge` — dataModel handoff; detailed sample = meter `road_key` + Δz. Mountain SideFill ≠ this outdoor ribbon stack.
 
 | Владеет | Не владеет |
 |---|---|
@@ -129,7 +129,7 @@ metadata:
 | R36k | **Pathfinding:** граф = **grid** (шаги клетка↔клетка по `surface_z` / walkability). **Slope/SHEER не отдельные ноды пути** — один **Grade object**; cost/block берётся с entity по `system_grade_uid` (один `angle_deg` / kind на весь объект). Не считать независимый `atan(Δz)` на каждом ребре, расходящийся с grade. Impl pathfinding — later; контракт — этот |
 | R36g | **Устарело:** facing-only stamp; **устарело:** дублировать L/angle/h на каждой клетке пандуса. Target: materialize R36i + **Grade instance** R36j |
 | R36h | **`h`/`dz` на клетке не хранить.** На клетке — **`system_grade_uid`** (omit если клетка не в grade). L/angle/h/kind/facing grade — на **сущности**. См. R36j |
-| R36i | **Materialize на всю `h=\|dz\|`:** SLOPE ramp / SHEER L×h solid. Без void. Затем создать Grade instance + проставить ссылки (R36j). Якоря верх/низ — **R36t** (не мутировать; canal-исключение при укорочении — R36p) |
+| R36i | **Materialize на всю `h=\|dz\|`:** SLOPE ramp / SHEER L×h solid. Без void. Затем создать Grade instance + проставить ссылки (R36j). Якоря верх/низ — **R36t** (не мутировать; canal-исключение при укорочении — R36p). **`plan_seed_volume` ✅; apply `surface_z` на detailed heightmap = Post-R36w V1** (uid-only = C1, не контракт) |
 | R36j | **Grade = один составной объект** (аналог **одной горы** `MountainSpec`). Состоит из grid-клеток; `cell_refs[]` ↔ `system_grade_uid` подтверждают состав. Поля: `grade_uid`, `kind`, `height_cells`, `length_cells`, **`angle_deg` (одно место; omit SHEER)**, `facing` (omit SHEER), resolved canal flat columns из **`Canal`** (`EarthenCanal`\|`StructureCanal`) через `build_canal`/`draw_canal` — **тот же cut**, что на Intent.`canal`. **Запрещено:** несколько углов в одном Grade |
 | R36l | **Иерархия как у гор** ([`tz_mountain_architecture.md`](./tz_mountain_architecture.md): хребет ↔ ≥2 вершины). **Один** постоянный угол → один `ReliefGradeInstance`. **Ломаный / смена крутизны** → **`ReliefGradeSystem`** (аналог `MountainRangeSpec`): упорядоченный **`grade_instance_uids`** (≥2 → `ReliefGradeInstance.grade_uid`). **1 Grade** → система **не** создаётся. Клетка → **свой** Instance (`system_grade_uid`), не System. Persist: package + DB |
 | R36m | **Obstacle clearance (мир) + truncate/skip.** Длину grade до footprint задаёт **`worlds.relief_grade_obstacle_policy`** (R36n). Оба режима: footprint **не** затирать; `L_eff < 1` → **skip** (+ WARN). **Не** включает earthen (это R36p / knobs). **Устарело:** silent auto `earthen_canal` при collision без knobs и без `canal_obstacle_policy` |
@@ -140,8 +140,9 @@ metadata:
 | R36r | **Diagonal ribbon + width (candidate, later; зависит от R36s):** при intercardinal outward — materialize как **thick line on grid**: core ray вдоль outward (`L` = Chebyshev steps) + поперечный fill ширины `W` с **теми же** steps/θ → **один** Grade (R36j). Clearance — на core. **Не** voxel corner/shim / Minecraft stair shapes (mesh; стыки → R36o). Источник: [Murphy’s Modified Bresenham](http://www.zoo.co.uk/murphy/thickline/). **v1:** не impl (нет диагонального outward) |
 | R36s | **Facing scope — locked.** Wire/entity: `Facing` (`north`…`west` + `north_east`…`south_west`). **SLOPE:** uphill на Grade entity; **SHEER:** omit / `none`. **v1 (сейчас):** только **cardinal** (`CARDINAL_FACINGS`); outward = ortho `(±1,0)\|(0,±1)` из `CARDINAL_WALL_OUTWARD_DELTA` / `facing.CARDINAL_ORTHO_DELTAS`; resolve snap к cardinal (`uphill_facing_toward`). **Later (target):** полный **8-way** — Grade.`facing` ∈ cardinal ∪ intercardinal; outward delta `(±1,0)\|(0,±1)\|(±1,±1)`; длина шага = **Chebyshev 1** (диагональ ≠ √2) — [GoRogue Chebyshev](https://github.com/Chris3606/GoRogue/wiki/Measuring-Distance). Диагональный ribbon materialize → **R36r**. **Запрещено:** параллельный relief-facing enum / литералы сторон вне `Facing`. Stairs per-cell — по [`tz_locations.md`](./tz_locations.md); outdoor grade facing — на entity (C10) |
 | R36t | **Bake formation anchors (SLOPE\|SHEER) — locked.** При **формировании** грани на bake всегда есть **верхняя** и **нижняя** точка перепада (якоря сайта / measured `dz`). Grade materialize + stamp **только между** якорями (коридор грани), **не** заливка региона. **Строго запрещено мутировать** клетки верхней и нижней точки (высота, материал, `system_grade_uid`, facing cache — не трогать якоря). **Не** правило entity R36j (состав объекта); это контракт **bake-формирования** (writer = **detailed_bake geometry**, R36u). **Исключение:** **canal** при **укорочении** slope (`L_eff` < requested / не вмещается) — cut у укороченного конца по **R36p** (+ knobs XOR на нормальном path, R28/R36q); см. § Canal obstacle policy. Без canal-ветки якоря остаются неприкосновенны. **Запрещено:** трактовать бровку/дно как «весь объект = SHEER» только из‑за membership flood |
-| R36u | **Grade generate locus — locked.** Single-writer **геометрии** outdoor grade = фаза **создания геометрии `detailed_bake`** (FineTerrain column + Grade entity + refs). **Не** L0 light/full ribbon. **Не** «контракт L0→L2 propagate uid». **Запрещено:** stamp/`system_grade_uid` на L0 world-map cells как SoT grade; nearest-carry grade uid с parent light как источник membership (**PAR-G8 superseded**). L0 остаётся landcover/height/mask; detailed geometry — единственный writer SLOPE\|SHEER. Термины вроде «метровая сетка» **не** SoT — говорить **detailed_bake geometry / FineTerrain**. Anchors — R36t. ASCII — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md). **Как** крутить generate (pool / sample / patch) — **R36v** |
-| R36v | **Grade generate schedule — locked.** Outdoor grade **вшит** в существующий `detailed_bake` / entry refine (`FineChunkRunner`), **не** отдельный процесс. **Parallel (ядра):** sample и materialize+fill — в **том же** `ChunkComputePool`, что column fill; не serial pre-pass на весь macro-tile. **Sample:** только fine-грань (ortho Δz / shore) в rect; halo — **чтение** соседей (`max L`), не второй writer. **Запрещены** полный land-dict тайла и L0 light-Δz как кандидаты. **Стык чанков (обязательно решить):** seed принадлежит ровно одному rect (`seed ∈ rect`); contiguous семена через границу **сшиваются** в один сегмент → **один** `ReliefGradeInstance` / один `grade_uid` (R36j); чанки только штампуют тот же uid на своих клетках. **Запрещено:** два uid на одну ленту; double-stamp; «отрезать Grade по границе chunk». Сшивка — дешёвый serial шаг **O(seeds)**, не повторный обход тайла. **World mod:** тот же helper на `patch_bounds` + halo; если bounds кроет несколько rect — та же сшивка. Persist instances `replace_world=False`. **Бюджет:** tile-wide serial grade — reject; **5 мин** на grade одного тайла недопустимо. См. § Grade в detailed_bake |
+| R36u | **Grade generate locus — locked.** Исключение из [§ Идея 2](./tz_world_pack_storage.md) (L0-carry): outdoor grade **не** несётся с L0. Single-writer **геометрии** = фаза **создания геометрии `detailed_bake`** (FineTerrain column + Grade entity + refs). **Не** L0 light/full ribbon. **Не** «контракт L0→L2 propagate uid». **Запрещено:** stamp/`system_grade_uid` на L0 world-map cells как SoT grade; nearest-carry grade uid с parent light как источник membership (**PAR-G8 superseded**). L0 остаётся landcover/height/mask; detailed geometry — единственный writer SLOPE\|SHEER. Термины вроде «метровая сетка» **не** SoT — говорить **detailed_bake geometry / FineTerrain**. Anchors — R36t. ASCII — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md). **Как** крутить generate (pool / sample / patch) — **R36v**; **как стыковать чанки** — **R36w** |
+| R36v | **Grade generate schedule — locked.** Outdoor grade **вшит** в существующий `detailed_bake` / entry refine (`FineChunkRunner`), **не** отдельный процесс. **Parallel:** sample + стык + materialize+fill — **одно** задание воркера на `ColumnRect` в **том же** `ChunkComputePool`, что column fill. **Не** serial pre-pass на весь macro-tile. **Не** два пула с барьером «все sample → plan → все fill» (это interim R36v-T; target — R36w). **Sample:** только fine-грань (ortho Δz / shore) в rect; halo — **чтение** соседей (`max L`), не второй writer. **Запрещены** полный land-dict тайла и L0 light-Δz как кандидаты. **World mod:** тот же helper на `patch_bounds` + halo. Persist instances `replace_world=False`. **Бюджет:** tile-wide serial grade — reject; **5 мин** на grade одного тайла недопустимо. Стык ленты — **R36w**. См. § Grade в detailed_bake |
+| R36w | **Grade chunk stitch — locked (TZ + code ✅).** Стык = **уникальные грани chunk-сетки**, не first-lock-wins и не serial plan всех семян. На **старте** refine/`detailed_bake` по размеру тайла и `terrain_chunk_columns` строится каталог граней: общая ребро двух чанков — **одна** грань (east A ≡ west B). Каждой грани **заранее** выдаётся воспроизводимый `grade_uid` = hash(`world_seed` \| `tile_gx` \| `tile_gy` \| `face_key`) (R15). **`tile` / `chunk` / `tile_edge`** — uid джобов (очередь/лог), не дерево `tile→chunk` и не uid Grade/climate/hydro. Ключ чанка содержит координаты тайла (адресация). **Родители `face_key` в этом bake** = chunk job uid **этого** тайла (internal 2, rim 1): **гейт старта** (не все bake сразу; 1 = сосед не в вызове, процесс можно запускать) + clearance (`< 2` → void не C18). Шов мира (антагонисты AABB) — `full_bake` L0, не этот каталог. Граф ленты **ссылается на `face_key` uid**; воркер uid не invent’ит. Пустая грань — uid в каталоге есть, instance **не** создаётся. `seed ∈ rect` для интерьера. Порядок rect не SoT. **Пул = один task на `ColumnRect`**. Общая грань — один catalog uid; sample пишет **owner-чанк**, сосед только штампует. **Запрещено:** mint от порядка воркеров; два uid на одну общую грань; remap после persist; tile-wide sample barrier. См. § Grade в detailed_bake |
 
 ### Locked checklist (master, 2026-08-01)
 
@@ -149,12 +150,12 @@ metadata:
 
 | # | Вывод | Статус |
 |---|---|---|
-| C1 | Facing-only stamp без правки высот — **неверная** impl для ribbon SLOPE/SHEER | locked (R36g) |
+| C1 | Facing-only stamp без правки высот — **неверная** impl для ribbon SLOPE/SHEER. **Код 2026-08-14:** detailed uid-only = C1 до **V1** | locked (R36g); apply = Post-R36w V1 |
 | C2 | `h` = measured `\|dz\|` сайта; политики R32 — порог/knobs, не «градусы в JSON» | locked (R36a) |
 | C3 | Угол SLOPE: `θ = atan(h/L)` (куб. клетка: `h=1,L=1` → 45°). Geom-A/B bake; Geom-C UI only | locked (R36c–d) |
 | C4 | Wire XOR: `slope_length_cells` **или** `target_angle_deg`; L **`>= 0`** (omit→1); **`shoulder_width_cells` убрать** | locked (R36b) |
 | C5 | **Mode A\|B** (R32 bands) ≠ **Geom-A\|B\|C** (треугольник) | locked (R36c) |
-| C6 | Materialize закрывает **всю** дельту z (`sum(steps)==h` / solid × h); нет void | locked (R36i) |
+| C6 | Materialize закрывает **всю** дельту z (`sum(steps)==h` / solid × h); нет void. Plan считает z; apply на heightmap = **V1** | locked (R36i); apply = Post-R36w V1 |
 | C7 | **SLOPE:** L = длина пандуса XY; steps по z; facing uphill на **grade entity** | locked |
 | C8 | **SHEER:** L = длина стройки XY; solid × h; facing/angle на entity omit/`none` | locked (R36e) |
 | C9 | Позиция: `(x,y,surface_z)`; клетка — часть grade через **`system_grade_uid`** | locked (R36f/j) |
@@ -165,7 +166,7 @@ metadata:
 | C14 | Pathfinding = **grid**; cost/block slope ← **один** Grade object по uid | locked (R36k) |
 | C15 | **Один угол на один Grade** (как одна гора). Ломаный → **`ReliefGradeSystem` ≥2 Grade** (как хребет ≥2 вершины); 1 Grade → без системы | locked (R36l) |
 | C16 | Expand → obstacles: по **`relief_grade_obstacle_policy`**; `L_eff < 1` → skip; не overwrite; silent auto-canal без политики/knobs — запрещён | locked (R36m/n) |
-| C17 | **R28/R36q:** knobs XOR `earthen_canal` \| `structure_canal`→`canal_template_registry`; structure materials → `barrier_template_registry`. Clearance-path → R36p | locked (R28+R36p+R36q) |
+| C17 | **R28/R36q:** knobs XOR `earthen_canal` \| `structure_canal`→`canal_template_registry`; structure materials → `barrier_template_registry`. Clearance-path → R36p. Wire+resolve ✅; **detailed apply = V2** | locked (R28+R36p+R36q); apply = Post-R36w V2 |
 | C18 | Два режима мира: **`truncate_skip`** (default, ≥1 free между grade и объектом) \| **`allow_flush`** (последняя free OK) | locked (R36n) |
 | C19 | **Junction smooth** — опциональный модификатор стыка; ядро Grade остаётся прямой; v1 = `none` / не impl (R36o) | locked direction (R36o) |
 | C20 | **Нормальный canal:** knobs XOR. **Не вмещается:** `canal_obstacle_policy` `{to_canal_cut_enable, entities, canal_ref?}`; overlap false wins (R36p/q) | locked (R36p/q) |
@@ -173,48 +174,208 @@ metadata:
 | C22 | **Diagonal + W:** candidate = thick-line (Murphy) + Chebyshev; **не** corner/shim; стыки → R36o; только после R36s later | locked direction (R36r); v1 out of scope |
 | C23 | **Facing:** v1 = 4 cardinals; later = 8-way полный `Facing`; шаг diag = Chebyshev 1; wire = `Facing` only | locked (R36s); later impl |
 | C24 | **Bake anchors:** верх/низ точки перепада при формировании SLOPE\|SHEER; **запрет мутации** якорей; единственное исключение — **canal при укорочении** slope (R36p) | locked (R36t) |
-| C25 | **Grade writer = detailed_bake geometry** (не L0); нет L0→L2 grade-uid carry как SoT | locked (R36u) |
+| C25 | **Grade writer = detailed_bake geometry** (не L0); нет L0→L2 grade-uid carry как SoT. Исключение из [§ Идея 2](./tz_world_pack_storage.md) | locked (R36u) |
 | C26 | **Grade = pool (ядра)** + **сшивка через границу chunk** (один uid на ленту); sample только fine-грани; тот же helper на patch; **не** L0-кандидаты; **не** новый оркестратор | locked (R36v) |
+| C27 | **Стык = каталог граней**; uid заранее `world_seed`+tile+`face_key` (R15); граф ссылается; шов sample по тому же uid; не mint в воркере. Job uid: `tile` / `chunk` / `tile_edge` — ключи очереди, не дерево `tile→chunk`. **Родители грани в этом bake** = chunk job uid этого тайла (2 internal / 1 rim) — **гейт старта** (не все bake сразу) и clearance (`< 2` → void ≠ C18). **Шов мира** (антагонисты AABB) — **`full_bake` L0 на макро-тайлах**, не каталог `detailed_bake`. **Пул = `ColumnRect`**. **Два `detailed_bake` смежных (grid) тайлов** — не ждут друг друга; лента вдоль шва = один uid + upsert. Halo читает z `WorldBounds.grid_neighbor` (не `antagonist_tile`). `road_shoulder` — тот же каталог (`ReliefContext.ROAD_SHOULDER`). Не uid Grade/climate/hydro | locked (R36w) ✅ |
 
 ---
 
-## Grade в detailed_bake (R36v)
+## Grade в detailed_bake (R36v / R36w)
 
-**Не новый пайплайн.** Locus остаётся R36u. Меняется только *когда и по какому объёму* крутится generate.
+**Не новый пайплайн.** Locus остаётся R36u. R36v — *когда и по какому объёму*. R36w — *каталог граней chunk-сетки + заранее uid; граф только связывает их*.
+
+**Код на 2026-08-14:** каталог граней до пула; sample + uid-stamp + fill в том же `ColumnRect` task. `_plan_tile_grade` снят. Runner — тонкий оркестратор: `FineTileContext` + `prepare_fine_tile` + `compute_rect` + `FineChunkPersist`.  
+**Дыра vs R36i / C1:** `plan_seed_volume` считает `surface_z`; `MeterGradeSurface` **не** пишет z (uid-only). Apply z + canal на detailed — § **Post-R36w** / [план](../.cursor/plans/detailed-grade-volume-canal.md).
+
+### Расписание чанков (не SoT стыка)
+
+Один и тот же runner получает **разный набор и порядок** `ColumnRect`. Стык **не** вправе требовать юго-западную волну.
+
+| Режим | Откуда rects | Порядок |
+|---|---|---|
+| Offline `detailed` wilderness | все chunk макро-тайла | `iter_meter_chunks` (ряд) |
+| Offline `detailed` location | rects ∩ territory | как покрывают volume |
+| Entry P0 scene | кольцо scene volume от якоря (ноги / spawn / entry) | distance от anchor |
+| Фон колец | `schedule_tile_background` | distance; runtime часто **≤ 1** active chunk |
+| Path corridor | `select_path_corridor_rects` + path-ahead | полоса по heading; соседний тайл с якорем на границе |
+| Patch (⬜ DAG) | `patch_bounds` | bounds + halo |
+
+### Контракт R36w
+
+**Единица стыка — грань chunk-сетки, не «кто первый взял lock».**
+
+На старте `refine_rects` / `detailed_bake` (до пула) известны `map_cell_size_m`, `terrain_chunk_columns`, макро-тайл `(gx, gy)`. Из этого строится полный каталог:
+
+| Объект | Сколько | Uid |
+|---|---|---|
+| Макро-тайл `(gx, gy)` | 1 | **uid джоба L0** — wire [`PackJobUid.tile_uid`](../backend/app/dataModel/worldPack/packJobUid.py); seed [`pack_job_seed`](../backend/app/application/worldData/pack/bake/macroTileUid.py). **Не** джоба `detailed_bake` |
+| Чанк `(cx, cy)` | `n_cx × n_cy` | **uid джоба detailed** — [`PackJobUid.chunk_uid`](../backend/app/dataModel/worldPack/packJobUid.py). Persist unit — не SoT Grade. **Родитель `face_key`** на этом тайле |
+| **Уникальная грань** | общие рёбра + границы тайла | **заранее** `make_grade_uid` от ключа ниже — **SoT grade** |
+| **Ребро макро-тайла** `tile_edge` | 4 стороны | wire [`PackJobUid.tile_edge_uid`](../backend/app/dataModel/worldPack/packJobUid.py); owner/канон. сторона — [`detailedJobUid.py`](../backend/app/application/worldData/pack/refine/detailedJobUid.py). Не wrap AABB |
+
+Общая грань двух чанков **один раз** в каталоге: east `(cx,cy)` ≡ west `(cx+1,cy)`.
+
+**Ключ uid (воспроизводимый, R15):** wire SoT = [`PackJobUid`](../backend/app/dataModel/worldPack/packJobUid.py). Namespace seed = [`pack_job_seed`](../backend/app/application/worldData/pack/bake/macroTileUid.py) (interim = `world_uid` до колонки seed). **Не** climate `world_seed()` (int) и **не** relief `bake_seed` как SoT pack-ключей. Persist-колонка instance по-прежнему `world_uid`.
 
 ```text
-FineChunkRunner.refine_rects
-  build_tile_surface_state                 # serial (masks / z / hydro)
-  ChunkComputePool
-    per rect: sample fine-edge seeds       # seed ∈ rect; halo = read only
-  stitch seeds across rects                # serial O(seeds) → 1 segment → 1 uid
-  ChunkComputePool
-    per rect:
-      materialize assigned segments        # stamp тот же uid на своих клетках
-      generate_chunk_cells                 # grade → fill
-      persist_chunk                        # write_lock / checkpoint
-  persist_relief_grades(instances)         # replace_world=False
+world_seed | tile:{gx},{gy} | face:{V|H}|{cx}|{cy}
 ```
 
-**Конфликт чанков:** два worker’а не создают два Grade на одну ленту. Стык = сшивка семян, не «чей chunk — тот и instance». Halo не даёт права писать чужой rect.
+| `face_key` | Геометрия |
+|---|---|
+| `V\|{cx}\|cy` | вертикальный шов между `(cx,cy)` и `(cx+1,cy)`; `cx ∈ -1 … n_cx-1` (`-1` / `n_cx-1` — запад/восток тайла) |
+| `H\|{cx}\|cy` | горизонтальный шов между `(cx,cy)` и `(cx,cy+1)`; `cy ∈ -1 … n_cy-1` |
 
-**Поздний / частичный refine** (entry scene, один background-rect): семян соседнего чанка в батче может не быть. `grade_uid` **детерминирован** от ленты (context / site / seed — тот же factory, что re-bake upsert). Поздний чанк штампует **тот же** uid и **upsert** instance; **второй объект запрещён**.
+`make_grade_uid` для грани: `site_id` = `tile:{gx},{gy}|face:…`; в hash входит **`world_seed`**. Кортеж клетки `(x,y)` **не** якорь ленты (можно `(gx, gy)` / `(0,0)` — SoT = строка ключа). **Запрещён** uid от `site_id` первой клетки ленты / порядка воркеров.
+
+Сейчас `world_seed(world)` / `bake_seed` = f(`world_uid`) (interim, колонки seed нет). Когда появится seed мира ([`tz_json_validation.md`](./tz_json_validation.md) § world_seed) — тот же helper, без смены формулы ключа. Два мира с **одним** seed в одной БД: `grade_uid` сейчас **глобальный PK** → не опираться на совпадение seed между мирами.
+
+**Граница макро-тайлов:** один и тот же шов в мире не должен получить два uid. Owner = тайл с меньшим `(gx, gy)` (для вертикального межтайлового шва — западный тайл, ключ `V|{n_cx-1}|{cy}`). Сосед считает **тот же** ключ/owner, не свой `gx`.
+
+**Edge: два `detailed_bake`, одна лента (обязательный кейс / тест).** Хребет или склон **вдоль** ребра двух макро-тайлов — безшовная геометрия мира, технически **две** джобы (`scope=wilderness` по тайлу, location vs wilderness, entry vs offline). Джобы **не** ждут и **не** лочат друг друга. Сшивка = тот же catalog uid + persist `replace_world=False` (upsert `cell_refs`).
+
+| Кейс | Контракт | Тест |
+|---|---|---|
+| Δz **вдоль** шва, семена на колонках owner-грани (край vs шаг внутрь на **этом** тайле) | оба bake штампуют **один** `grade_uid`. Грань с **< 2 chunk-родителями** на этом тайле (rim: один `chunk` uid) — пустота за шагом **не** obstacle C18; внутреннее ребро (2 чанка) с дырой z — по-прежнему policy | два независимых generate/refine соседних `(gx,gy)` → одинаковый uid (`test_two_tile_bakes_along_seam_one_uid`) |
+| Δz **через** шов (верх на тайле A, низ на B) | uid грани тот же. Halo читает z grid-соседа через `WorldBounds.grid_neighbor` (`Facing`) — L0 parent light (и/или уже fine); **не** `antagonist_tile`; не ждать чужой detailed | `test_across_seam_halo_reads_neighbor_z` |
+| Дорога через шов | **полотно** — [`tz_structure_connections.md`](./tz_structure_connections.md) / L0 paint, не R36w. **Обочина** — `ReliefContext.ROAD_SHOULDER`, тот же каталог | `test_two_tile_road_shoulder_along_seam_one_uid` |
+
+Привязка семени к uid (клетка на нескольких гранях chunk-сетки): ось sample = ortho seed↔ref (`V` восток-запад / `H` север-юг). Порядок: **rim этой оси** (семя на колонке owner-грани соседнего тайла) → иначе **грань этой оси** (internal stitch; incidental rim другой оси не режет шов) → иначе любая rim → `min(face_key)`. Угол двух rim без однозначной оси — `min`. Unittest: `test_two_tile_bakes_along_seam_one_uid` (Δz на колонках шва, не на `y_min`/`y_max` тайла).
+
+**Uid джобов** (очередь / лог / pool task) — не identity Grade/climate/hydro и **не дерево** `tile → chunk → tile_edge` (нет FK, нет «сначала parent»). Считаются по формуле. Группировка «чанки этого тайла» / «грани этой стороны» — префикс ключа или геометрия.
+
+**Родители грани ≠ дерево джобов.** Два слоя, не смешивать:
+
+| Слой | Кто родители | Когда 2 | Роль |
+|---|---|---|---|
+| **Этот bake** (каталог тайла) | chunk job uid **этого** тайла на `face_key` | оба чанка в **этом** вызове | **гейт старта** + clearance. Не все bake одновременно — 1 = вторая сторона не в этой джобе, процесс **можно** запускать |
+| **Мир** (`full_bake` L0) | макро-тайлы; сосед = `WorldBounds.grid_neighbor`; край → `antagonist_tile` (`Facing`) | оба тайла шва в pack | шов мира на макро-тайлах. Identity = `PackJobUid.tile_uid`. **Не** `face_key`, не grade uid, не гейт detailed |
+
+Слой bake **остаётся**. **Запрещено** тащить шов мира (wrap/антагонисты) в каталог граней `detailed_bake` / `_owner_site`. Смежные по **сетке** тайлы (`gx` и `gx+1` внутри AABB, без wrap) — по-прежнему R36w.
+
+| Грань (этот bake) | Chunk-родители | Старт джобы | Clearance |
+|---|---|---|---|
+| Internal (два чанка тайла) | 2 | оба чанка в этом refine — стык внутри вызова | дыра z = obstacle / world policy |
+| Rim макро-тайла (`cx=-1` / `n_cx-1`, …) | 1 | соседний тайл **не** в этом bake — **стартовать всё равно** (uid с каталога; сосед догонит upsert) | шаг в пустоту **не** C18 |
+
+`chunk_parent_count < 2` → этот вызов не содержит вторую сторону: не блокер старта; flush void. Не очередь parent/child и не SoT Grade. Шов мира (`full_bake`) **не** подменяет этот счётчик.
+
+```text
+world_seed | tile:{gx},{gy}                         # L0 (full_bake / light)
+world_seed | tile:{gx},{gy} | chunk:{cx},{cy}       # detailed = тот же tile uid + suffix
+world_seed | tile_edge:{owner_gx},{owner_gy}|{N|E|S|W}
+```
+
+| Job uid | Что группирует | Не является |
+|---|---|---|
+| `tile` | L0 макро-тайл `(gx, gy)` на `full_bake` / light | джоба `detailed_bake`; SoT Grade / climate / hydro; pack blob `r.{gx}.{gy}` |
+| `chunk` | detailed `ColumnRect`; ключ = L0 `tile` uid + `chunk:{cx},{cy}`; родитель `face_key` (1 или 2) | SoT Grade; pack-path `c.{cx}.{cy}`; child в дереве джобов |
+| `tile_edge` | `face_key` одной стороны макро-тайла; owner + каноническая сторона (E/N) — [`detailedJobUid.py`](../backend/app/application/worldData/pack/refine/detailedJobUid.py) | `system_grade_uid`, climate field, hydro body; второй родитель rim-грани в этом bake |
+
+Общая грань двух чанков: **один** catalog `face_key` (SoT grade). Sample — owner-чанк; сосед только штампует. Ни один не владеет гранью как своим grade uid.
+
+**Не путать:** interior grade uid `…\|chunk:{cx},{cy}\|interior|{k}` — это **SoT сегмента** (изолированная лента внутри rect), не job uid чанка.
+
+Climate/hydro seam pass по `tile` / `tile_edge` / `chunk` job uid **не** входит в R36w (свои ТЗ, если мастер утвердит). Relief по ним климат не пишет.
+
+**Пул (скорость + один writer):** единица task = **`ColumnRect`** (`chunk` job uid), тот же `ChunkComputePool`, что column fill. Каталог граней и `tile_edge` — ключи/лог, **не** отдельные задания пула.
+
+Sample общей грани — **один** чанк-owner:
+
+| Грань | Owner sample | Сосед |
+|---|---|---|
+| `V\|{cx}\|{cy}` между `(cx,cy)` и `(cx+1,cy)` | чанк `(cx, cy)` | `(cx+1, cy)` штампует catalog uid |
+| `H\|{cx}\|{cy}` между `(cx,cy)` и `(cx,cy+1)` | чанк `(cx, cy)` | `(cx, cy+1)` штампует |
+| Owner-чанк **нет** в этом refine (частичный / только соседний тайл) | единственный смежный чанк в вызове семплирует (halo = parent light / уже запечённый сосед) | всё ещё один writer на грань в вызове |
+
+Halo — чтение. Два чанка в одном вызове **не** дублируют sample одной грани.
+
+**Отклонено:** pool task на каждую `face_key` (+ барьер «сначала грани, потом интерьеры») — больше очереди (~2× task на тайл), зависимости, второй путь при runtime ≤1 chunk.
+
+**Шов как job (межтайловый / у локаций):** грань (`face_key`) с заранее известным uid можно **семплировать** из owner-чанка (или единственного смежного в вызове), не дожидаясь интерьера соседнего тайла и не дожидаясь `detailed` соседней локации. `tile_edge` — ключ группы в логе, не extra task.
+
+| Шов | Каталог | Sample |
+|---|---|---|
+| Два чанка одного тайла | одна грань, один uid | sample — owner-чанк; сосед штампует |
+| Два макро-тайла **смежных по сетке** (`gx`,`gx+1` в AABB, не wrap) | owner-тайл + тот же `face_key` | sample из owner-чанка или единственного смежного в вызове; **до** полного refine второго тайла |
+| Край `world_bounds` / антагонисты | **не** R36w | шов мира — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) `full_bake` L0 |
+| Локация ∩ тайл / две локации на ребре тайла или чанка | **тот же** face uid (`world_seed`+tile+грань), не `location_uid` | sample шва; persist WP-19 (location_terrain vs wilderness) — **куда писать клетки**, не какой uid |
+| Граница двух локаций **внутри** чанка, не на грани сетки | не face-каталог | интерьер (`seed ∈ rect`) |
+
+**Нельзя:** второй uid «для локации» на той же грани; ждать полный `detailed` соседа, чтобы узнать uid шва; резать каталог по `location_uid`.
+
+**Граф** (узлы = уже выданные face uid; рёбра **не** создают uid):
+
+- узел активен, если на грани есть семена;
+- ребро, если две смежные грани имеют непрерывные семена (тот же terrain / измеренный Δz на общем углу или вдоль стыка);
+- компонента с семенами → **один** `ReliefGradeInstance`: канонический uid = uid грани с **минимальным** `face_key` в компоненте (детерминировано, не `min` чужих лент);
+- ломаный / смена kind внутри компоненты → `ReliefGradeSystem` (R36l), члены = face uid с разным decision;
+- пустая грань: узел каталога есть, instance нет.
+
+**Интерьер** (fine-грань целиком внутри rect, не на chunk-грани): `seed ∈ rect`. Если лента касается каталожной грани — stamp **канонического uid компоненты**. Если изолирована от всех граней чанка — uid = hash(`world_seed` \| `tile:{gx},{gy}` \| `chunk:{cx},{cy}` \| `interior|{k}`), `k` = индекс локального сегмента в стабильном порядке `min(xy)` — гонки между чанками нет.
+
+```text
+FineChunkRunner.refine_rects                    # оркестратор; не god-method
+  prepare_fine_tile → FineTileContext           # serial: parent, surface, halo, catalog, existing uids
+  ChunkComputePool                              # task = ColumnRect; не task на грань
+    compute_rect(ctx, rect)                     # module-level; не nested closure
+      sample seed ∈ rect; общая грань — только owner (иначе штамп)
+      связать семена с face uid из catalog      # без mint
+      materialize + generate_chunk_cells        # grade внутри того же task
+  FineChunkPersist.persist_rect                 # write lock; partition + wilderness; не generate
+  flush location_terrain
+  merge instances                               # persist_relief_grades — caller (facade), не runner
+```
+
+### FineChunkRunner слои (SRP)
+
+`refine_rects` **не** держит шесть фаз и вложенные closures. Grade **остаётся** в `ColumnRect` worker (R36v / R36w). **Не** новый grade orchestrator. **Не** serial barrier «все sample → plan → все fill». **Не** второй пул.
+
+| Слой | Контракт | Делает | Не делает |
+|---|---|---|---|
+| **`FineTileContext`** | frozen dataclass | явный prep → compute/persist: `surface_state`, `catalog`, `grade_halo`, `existing_uids`, `templates`, bbox, workers, logging fields | sample; persist |
+| **`prepare_fine_tile`** | один helper до пула | parent light, surface, halo + `refresh_tile_gaps`, catalog, existing uids (тот же `WorldPackReader`), workers | sample/stamp; pool |
+| **`compute_rect`** | `(ctx, rect) → ChunkComputeResult` | sample + plan + materialize + column fill **одного** rect | persist; mint uid |
+| **`FineChunkPersist`** | write lock здесь | partition, wilderness write, location flush, grade_acc, counters | generate; второй grade pipeline |
+| **`refine_rects`** | thin map | empty → prep → serial/pool `compute` → persist → `FineRefineResult` | тела фаз |
+
+Фасад `generate_detailed_grade` остаётся pack-IO-free (`halo_neighbors`). Persist **не** в `generators/`.
+
+Параллель: два чанка, общая грань — **один** catalog uid; sample один раз (owner). Lock на mint не нужен. Union-find компонент — после sample (можно инкрементально под lock только на рёбрах графа, не на геометрии).
+
+**Поздний / частичный refine:** каталог считается так же (полная сетка тайла из bbox + chunk_size), даже если в вызове один rect. Соседний тайл уже запечён → колонки на owner-грани несут тот же uid. Допечка — upsert, не второй объект.
 
 | Caller | Объём | Когда |
 |---|---|---|
-| **A** `FineChunkRunner` (wilderness / location `detailed_bake`, entry scene/path/background) | `ColumnRect` + halo | в worker, рядом с column fill |
-| **B** `TerrainPatchGeneratorService` / DAG `modify_terrain` (⬜) | `patch_bounds` + halo | после изменения z/terrain; не regen тайла |
-
-Оба зовут **один** rect-scoped `generate_detailed_grade` (pure). Нет L0 sample, нет отдельного `grade_bake` mode.
+| **A** `FineChunkRunner` (wilderness / location `detailed_bake`, entry scene/path/background) | `ColumnRect` + halo; uid с каталога граней тайла | в worker, рядом с column fill |
+| **B** `TerrainPatchGeneratorService` / DAG `modify_terrain` (⬜) | `patch_bounds` + halo; каталог по chunk-сетке, покрывающей bounds | после изменения z/terrain |
 
 | Можно | Нельзя |
 |---|---|
-| Halo = чтение `max L`; writer только `seed ∈ rect` | Кандидаты с L0 light Δz / nearest grade uid |
-| Сшивка в батче + детерминированный uid на поздний чанк (upsert, не второй объект) | Два uid на одну ленту; новый instance на допечку соседа; per-seed sheer |
-| Skip клетки без Δz / blocked (road, open water, already graded) | Полный `land` dict на 1000×1000 до первого chunk write |
-| DEBUG-сводка на тайл/rect (`instances=N`), не событие на каждый create | Serial grade, который блокирует pool и manifest `absent` на десятки минут |
+| Каталог граней + uid **до** пула; общая грань = один uid; sample = owner-чанк | Mint uid в воркере; два sample одной грани в одном вызове |
+| Sample шва между тайлами/локациями по catalog uid, не дожидаясь интерьера соседа | Второй uid от `location_uid`; ждать полный detailed соседа ради uid шва |
+| Граф ссылается на заранее выданные uid | Invent uid на ребре графа |
+| Halo = чтение `max L`; writer `seed ∈ rect` | L0 Δz-кандидаты; полный land-dict тайла до write |
+| Пустая грань → нет instance | Instance «на всякий случай» на все грани сетки |
+| DEBUG: face_key, catalog uid, `cpu_core` | Tile-wide sample barrier; remap после persist; pool task на каждую грань |
+| `FineTileContext` + `compute_rect` + persist; grade **внутри** compute | Новый grade orchestrator; второй пул; serial sample-then-fill; persist в generators |
 
-**Код:** `FineChunkRunner.refine_rects` — `_plan_tile_grade` → pool materialize+fill; late inherit = ровно один neighbor uid. **R36u-T-11** / **R36v-T-1…T-13** resolved.
+**Отклонено (не target):**
+
+| Вариант | Почему нет |
+|---|---|
+| Serial plan всех семян тайла (interim R36v-T) | простой ядер |
+| Новый grade orchestrator / второй пул / sample barrier на все rect | R36v: grade в том же `compute_rect`; persist не pipeline generate |
+| First-lock-wins mint (черновик E) | не R15; uid от гонки |
+| Стык в конце + remap | второй writer |
+| SW-волна как SoT порядка | кольца / путь / 1 chunk |
+| `tile` / `chunk` / `tile_edge` как дерево очереди (FK, «сначала parent») | адресация в ключе; группировка = префикс / геометрия. Счётчик chunk-родителей **грани** (1\|2) — гейт старта + clearance, не дерево джобов |
+| Wrap/антагонисты `world_bounds` в каталоге `detailed_bake` | шов мира = `full_bake` L0 на макро-тайлах; R36w только grid-смежные тайлы |
+| `tile` / `chunk` / `tile_edge` job uid как SoT Grade, climate или hydro | только **uid джобов**; SoT grade — `face_key` (+ interior `{k}`) |
+| Namespace uid от `world_uid` в обход `world_seed` | R15; сейчас seed = f(uid) interim |
+| Отдельный pool task на каждую `face_key` | очередь ~2×; барьер граней; лишний путь при 1 chunk |
+
+**Код сейчас:** R36w каталог до пула; один task = `ColumnRect`; слои — § FineChunkRunner слои. Interim `_plan_tile_grade` убран.
 
 ---
 
@@ -1180,6 +1341,8 @@ create Grade(kind=SLOPE, h, L, angle=θ, facing=uphill, cell_refs=[...])
 for each cell in ramp: cell.system_grade_uid = grade_uid  # omit keys if none
 ```
 
+**Код vs R36i (2026-08-14):** `plan_seed_volume` строит `columns[].surface_z` (`sum(steps)==h`). `MeterGradeSurface` / detailed materialize **штампуют uid, z не пишут**. Apply overlay в том же `ColumnRect` (не shared heightmap из pool) — § **Post-R36w V1**. `columnFillPass` читает overlay ∪ parent z. `n_eff` в V1 **не** пересчитывать.
+
 **`partition_height(h, L)` (канон):** базовый шаг `q = h // L`, остаток `r = h % L`; первые `r` шагов = `q+1`, остальные = `q` (все ≥ 1 при `h ≥ L`; если `h < L` — первые `h` шагов = 1, остальные клетки всё ещё в ring с тем же `θ`, но Δz=0 → либо clamp `L = min(L,h)` при resolve, **предпочтительно:** `L_eff = min(L, h)` чтобы не плодить плоские хвосты).
 
 **Предпочтение resolve:** `L_eff = min(resolved_L, h)` для Geom-A; для Geom-B сначала `L = ceil(h/tanθ)`, затем тот же clamp. Итог: каждый шаг пандуса несёт ≥1 z, пока `h` не исчерпан — **вся дельта z использована**.
@@ -1268,7 +1431,10 @@ allow_flush   → L_eff = 1 → grade на y=2 (flush к объекту)
 13. ✅ **Wave D polish** — L0 `contextRibbonApply` / `ribbon_intents` — **historical** (T-8)
 14. ✅ **R36u** writer = detailed_bake geometry; L0 outdoor ribbon deleted
 15. ✅ **R36v** per-chunk grade в `FineChunkRunner` pool (T-11); patch caller — тот же helper (DAG ⬜)
-16. → **Wave E** later (см. § Порядок)
+16. ✅ **R36w** каталог граней + uid до пула (не bag+lock); face-graph union-find — V4
+17. ⬜ **Post-R36w V1** apply volume z на detailed (R36i / C1) — [план](../.cursor/plans/detailed-grade-volume-canal.md)
+18. ⬜ **Post-R36w V2** canal на detailed (R28 / R36p) — тот же план; после V1
+19. → **Wave E** later (см. § Порядок)
 
 ### Open (не блокер checklist; при normalize/impl)
 
@@ -1362,7 +1528,7 @@ Defaults profile (mountain SideFill): SHEER `ε` = `sheer_band_light` (default 1
 | Уровень | Что писать |
 |---|---|
 | **INFO** | template_uid, context, sides/kind summary, identity; **`grade_system_create`** — `why` + `grade_instance_uids` / kinds / angles |
-| **DEBUG** (sample) | `kind`, `h`/`L`/`angle` (R36) или `t`/`Δz`/`fraction`, **`reason`**, **`facing`** или `facing=none`; **`grade_instance_create`** — базовые поля Instance; **`grade_system_members`** — детали частей |
+| **DEBUG** (sample) | `kind`, `h`/`L`/`angle` (R36) или `t`/`Δz`/`fraction`, **`reason`**, **`facing`** или `facing=none`; **`grade_instance_create`** — базовые поля Instance; **`grade_system_members`** — детали частей; **R36w:** `detailed_grade_sample_rect` / `detailed_grade_materialize_rect` / `grade_uid_inherit` + **`cpu_core`** / `worker_thread` |
 | **Запрещено** | silent grade без reason при диагностике; System из 1 Grade |
 
 ```text
@@ -1643,16 +1809,17 @@ generators/terrain/relief/
   ribbonSiteSample ✅   # shared downhill / landward (R36u-T-7)
 
 pack/refine/
-  detailedGradeGenerate / detailedGradeSample / detailedGradeMaterialize  # R36u; **R36v** → rect-scoped in pool
-  meterGradeSurface ✅
-  fineChunkRunner          # single insert point (R36v)
+  detailedGradeGenerate / detailedGradeSample / detailedGradeMaterialize  # R36u; **R36v** rect-scoped; **R36w** catalog uid ✅
+  detailedGradeCatalog     # R36w face catalog + job uid keys
+  meterGradeSurface        # uid stamp ✅; z overlay = V1
+  fineChunkRunner          # one pool: sample+materialize+fill per ColumnRect (**R36w**) ✅
 
 application/worldData/persistReliefGrades.py ✅
 
 # L0 outdoor grade stack — deleted (R36u-T-8):
 #   openLand* / shore* / roadShoulder* Apply/Sample, ribbonGradeApply,
 #   contextRibbonApply, ribbonIntent, paintBarrier, ribbon_intents
-# painted_road_edges kept (RoadContributor) for deferred T-10
+# painted_road_edges → dataModel PaintedRoadEdge (R36u-T-10)
 ```
 
 Wire: FineTerrain column `system_grade_uid` + Grade entity ✅.  
@@ -1664,12 +1831,14 @@ Grade/SQL `owner_uid` (no FK to connection_edges). L0 `ribbon_intents` — **gon
 ## Порядок имплементации (anti-slice)
 
 **SoT очереди.** Agent pointer: [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).  
-Debt IDs: [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md).
+Текущий план: [`.cursor/plans/detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md).  
+Debt IDs: [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) § R36i-T.
 
 ```text
-Wave A–C (shipped)   Wave D (historical / L0 removed T-8)   R36u ✅   R36v (now)        Wave E (later)
-templates → R36        open_land + shore on L0 — deleted     writer     per-chunk pool    R36s / R36r / R36o
-                       → detailedGradeGenerate               locus      + patch caller    R36f/k · UI R30
+Wave A–D (shipped / L0 historical)   R36u/v/w ✅     Post-R36w (current)      Wave E (later)
+templates → R36; L0 ribbon deleted   writer+pool     V1 volume z · V2 canal   R36s / R36r / R36o
+                                     catalog uid     V3 BAR-1 decision        R36f/k · UI R30
+                                                     V4 polish
 ```
 
 ### Wave A — shipped (не переоткрывать)
@@ -1688,7 +1857,7 @@ templates → R36        open_land + shore on L0 — deleted     writer     per-
 |---|---|---|
 | **7** | Geom knobs XOR (R36b); `shoulder_width_cells` removed | ✅ |
 | **8a** | `geomResolve` + `partition_height` + rich `RibbonGradeDecision` | ✅ |
-| **8b** | Volume materialize `road_shoulder` (anchor → plan → stamp) | ✅ |
+| **8b** | Volume materialize: `plan_seed_volume` (якорь → plan) | ✅ plan; **apply z на detailed = V1** |
 | **8c** | Grade entity + `system_grade_uid` + persist | ✅ |
 | **9** | R36n bake clearance (`L_eff` / skip+WARN) | ✅ |
 
@@ -1696,7 +1865,7 @@ templates → R36        open_land + shore on L0 — deleted     writer     per-
 
 | # | Шаг | Статус |
 |---|---|---|
-| **canal** | R36p/q: knobs XOR, `canal_template_registry`, policy only if не вмещается, Intent.`canal`, single resolve | ✅ |
+| **canal** | R36p/q: knobs XOR, registry, policy if не вмещается, `resolve_seed_canal` | ✅ wire+resolve; **detailed apply = V2** (L0 Intent historical) |
 | **T-30/T-52** | bake split: Sample / Materialize / Stamp / Intent + thin Apply | ✅ |
 
 ```text
@@ -1751,11 +1920,27 @@ L0 call site (`compose_light_grid` / `paintBarrier`) **removed** с outdoor ribb
 | Intents bag | `LightGridBakeContext.ribbon_intents` (не `road_shoulder_intents`) |
 | Materialize / stamp / anchor API | `ref_cells=` (road footprint остаётся `road_cells` только на road sample/apply boundary) |
 | Events | `EVENT_RIBBON_SKIP_APPLY` / `_GRADE` / `_MATERIALIZE` + why; `EVENT_RIBBON_GRADE_APPLY` / `EVENT_RIBBON_BARRIER` / `EVENT_RESOLVE_FALLBACK` — § Warn + fallback (R21) |
-| Owner uid | `ReliefContext.OPEN_LAND.value` / `.SHORE.value` |
+| Owner uid | `ReliefContext.OPEN_LAND.value` / `.SHORE.value` / `.ROAD_SHOULDER.value` |
 | BAR-1 | once in `compose_light_grid` after contributors |
 | Early-exit | только в `apply_ribbon_grades` (road Apply не дублирует) |
 
-**Residual:** L0 road-facade names — **deleted** с T-8. `painted_road_edges` + context `road_shoulder` остаются для **T-10**. Shared Grade wire: `owner_uid` ✅.
+**Residual:** L0 road-facade names — **deleted** с T-8. `PaintedRoadEdge` (dataModel) + `ReliefContext.ROAD_SHOULDER` sample на detailed — **T-10** ✅. Shared Grade wire: `owner_uid` ✅.
+
+### Post-R36w — current (volume z + canal на detailed)
+
+**План:** [`.cursor/plans/detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md).  
+Код шага не писать, пока мастер не скажет «делай» этот шаг. **Не** Wave E. **Не** переоткрывать R36u/v/w.
+
+Writer = `detailed_bake` geometry. `compute_rect` в pool: **не** мутировать общий `TileSurfaceState.heightmap`. Overlay `{xy: z}` на corridor cells этого rect (то же правило, что uid `rect_contains`). Crossing-chunk — существующий uid owner/neighbor, не второй writer.
+
+| # | Шаг | Done when |
+|---|---|---|
+| **V1** | Apply `plan.columns[].surface_z` на overlay **до** column fill; R36t: якоря high/low не трогать; `n_eff` оставить | `test_detailed_grade_generate`: ramp z ≠ parent cliff; `sum(steps)==h`; uid на коридоре |
+| **V2** | После V1: `resolve_seed_canal` + `draw_canal` на detailed коридоре; поля canal на instance; R36p cut только если `L_eff` < requested | knobs XOR при fit; якорь без canal-ветки цел |
+| **V3** | BAR-1: detailed fence consumer **или** TZ «later» (L0 `paintBarrier` снят) | явное решение здесь, не silent impl |
+| **V4** | `ReliefGradeSystem` если θ/kind ломается; union-find граней R36w; omit L0 `world-grade` ASCII | по отдельному «делай» |
+
+Patch helper (R36v caller B) / DAG / Wave E — **не** этот подраздел.
 
 ### Wave E — later (контракт locked, код не сейчас)
 
@@ -1799,8 +1984,9 @@ L0 call site (`compose_light_grid` / `paintBarrier`) **removed** с outdoor ribb
 | [`tz_building_generator.md`](./tz_building_generator.md) | library + world registry + import образец |
 | [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | world bundle levels; relief registry/bodies в bundle |
 | [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) | pack ASCII: L0 map/height **без** outdoor grade (**R36u**); L2 `surface_grade` / `grade_{n}`; FineTerrain `system_grade_uid`→Instance (PAR-G7/G10); ~~PAR-G8~~ superseded |
-| [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | open IDs; backlog sync с Wave B–E |
+| [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | open IDs; **R36i-T**; backlog Post-R36w **перед** Wave E |
 | [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md) | agent pointer на § Порядок |
+| [`.cursor/plans/detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md) | Post-R36w V1–V4; код по «делай» шага |
 
 ---
 
@@ -1808,6 +1994,11 @@ L0 call site (`compose_light_grid` / `paintBarrier`) **removed** с outdoor ribb
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-14 | **Post-R36w locked:** Next = V1 volume z + V2 canal на detailed ([план](../.cursor/plans/detailed-grade-volume-canal.md)); Wave E later. §8b/canal = plan/wire; apply ⬜. C1/C6/C17 code gap. R36w face-graph → V4 |
+| 2026-08-14 | **FineChunkRunner слои:** `FineTileContext` + `prepare_fine_tile` + `compute_rect` + `FineChunkPersist`; grade остаётся в `ColumnRect` worker; не новый оркестратор |
+| 2026-08-14 | **Шов мира:** антагонисты AABB (min x ↔ max x / min y ↔ max y) — `full_bake` L0 на макро-тайлах; **не** `detailed_bake` / не R36w `face_key`. Magma antipode ≠ этот шов |
+| 2026-08-14 | **R36w edge:** два `detailed_bake` **grid-смежных** тайлов, лента вдоль шва = один uid; bind: rim оси sample; job: не дерево `tile→chunk`; родители грани **в этом bake** = chunk uid (гейт старта + `< 2` → void ≠ C18); unittest `test_two_tile_bakes_along_seam_one_uid` |
+| 2026-08-14 | **R36w швы:** межтайловая/межлокационная грань — тот же catalog uid; sample шва без ожидания интерьера соседа; persist WP-19 ≠ uid |
 | 2026-08-13 | **R36v-T-8…T-13 resolved:** SampleCell; bag = rect cells; unique-neighbor inherit; Facing on corridor; `_plan_tile_grade`; `apply_prior_cell_refs` — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) |
 | 2026-08-13 | **R36v-T-1…T-7 resolved:** shared plan/materialize helpers; SeedCorridor; `blocks_grade_seed`; ColumnBounds; merge_cell_refs — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) |
 | 2026-08-13 | **R36v-T pointer:** post-impl smells T-1…T-7 — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) |

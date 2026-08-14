@@ -81,7 +81,7 @@ metadata:
 **Заполнение ячеек внутри extent** — progressive bake ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Bake modes):
 
 - `light_bake` — **все** macro-tiles с `named_locations` (тайлы с локациями);
-- `full_bake` — **весь** `world_bounds` (полное заполнение прямоугольника мира).
+- `full_bake` — **весь** `world_bounds` (полное заполнение прямоугольника мира). Край AABB без соседа смыкается с антагонистом — lookup [`WorldBounds.antagonist_tile`](../backend/app/dataModel/worldPack/worldBounds.py) (`Facing`, не литералы min/max). Шов **мира на макро-тайлах**. Не detailed grade; не magma antipode (§ Planet topology).
 
 Отдельного product bake stage «wilderness» **нет**. Дыры на world map после light — **незапечённые** клетки внутри прямоугольника, не другая форма мира. Render/ASCII frame предпочтительно = declared/`resolved` bounds — [`tz_map_light_bake.md`](./tz_map_light_bake.md).
 
@@ -297,7 +297,7 @@ z_bottom = max(world.z_min, z_top - N_eff)
 → [`tz_terrain_relief.md`](./tz_terrain_relief.md) (SoT ownership, storage, consumers).
 
 Кратко: grade — **не** MaskDomain и **не** `N_eff`. Column gap (этот документ § Зазоры) = *объём* колонки; relief = *проходимость грани*.  
-**Generate:** в `detailed_bake` / entry — per-chunk в `FineChunkRunner` pool ([`tz_terrain_relief.md`](./tz_terrain_relief.md) **R36v**). Runtime patch — тот же helper. Consumers: горы, open land, shore, roads (shoulder deferred T-10).
+**Generate:** в `detailed_bake` / entry — per-chunk в `FineChunkRunner` pool ([`tz_terrain_relief.md`](./tz_terrain_relief.md) **R36v**). Runtime patch — тот же helper. Consumers: горы, open land, shore, roads (`road_shoulder` T-10).
 
 ### Terrain ↔ ClimateData (разделение ответственности, физическая связь)
 
@@ -667,7 +667,7 @@ flowchart LR
 **Инварианты генераторов (все три режима):**
 
 1. Generators pure: materialize geometry/masks; persist — Pack writer / orchestrator ([`layer-boundaries.mdc`](../.cursor/rules/layer-boundaries.mdc)).
-2. L2 **не** invents world-map rivers/coast — только refine parent light ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2; hydrology — [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md)).
+2. L2 **не** invents world-map rivers/coast — только refine parent light ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2; hydrology — [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md)). Outdoor grade — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R36u.
 3. Base climate на pack-мире — только через bake; `POST generate-climate` → 422 ([`tz_climate.md`](./tz_climate.md) § World Pack climate).
 4. Product L0 process — только light → full; имена `wilderness_*` в pack I/O — storage legacy, не bake mode.
 5. **L2 ∉ light_bake / full_bake.** После light caller **может** стартовать entry job (scene + bg у spawn) — это другая джоба, не часть `pack/bake?mode=light`.
@@ -1702,7 +1702,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 
 | Дата | Изменение |
 |---|---|
-| 2026-08-13 | **R36v pointer:** detailed/entry grade в chunk pool; `modify_terrain` зовёт тот же helper — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
+| 2026-08-14 | **Шов мира:** `full_bake` L0 — край AABB ↔ антагонист на макро-тайлах; не detailed / не magma antipode |
 | 2026-07-29 | Relief: storage 1:1 buildings + `context` singular — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R11/R17/R18 |
 | 2026-07-29 | Pointer: outdoor grade + relief templates — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R9–R16 |
 | 2026-07-27 | Домен **relief** → [`tz_terrain_relief.md`](./tz_terrain_relief.md); здесь — указатель (не SoT grade) |

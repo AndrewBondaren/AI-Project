@@ -215,6 +215,7 @@ def log_pack_world_map_tile_done(
     cells: int,
     content_hash: str | None,
     elapsed_ms: float,
+    tile_uid: str,
     terrain_hist: dict[str, int] | None = None,
     hydro_hist: dict[str, int] | None = None,
     surface_z_hist: dict[str, int] | None = None,
@@ -222,13 +223,15 @@ def log_pack_world_map_tile_done(
     macro_surface_z: int | None = None,
 ) -> None:
     _info(
-        "pack world_map tile done | world=%s tile=%d/%d gx=%d gy=%d cells=%d "
-        "hash=%s elapsed_ms=%.1f terrain=%s hydro=%s z=%s macro_hydro=%s macro_z=%s",
+        "pack world_map tile done | world=%s tile=%d/%d gx=%d gy=%d tile_uid=%s "
+        "cells=%d hash=%s elapsed_ms=%.1f terrain=%s hydro=%s z=%s "
+        "macro_hydro=%s macro_z=%s",
         world_uid,
         tile_idx,
         tiles_total,
         gx,
         gy,
+        tile_uid,
         cells,
         (content_hash or "")[:12] or "-",
         elapsed_ms,
@@ -241,6 +244,7 @@ def log_pack_world_map_tile_done(
         world_uid=world_uid,
         tile_gx=gx,
         tile_gy=gy,
+        tile_uid=tile_uid,
         terrain_hist=terrain_hist,
         hydro_hist=hydro_hist,
     )

@@ -14,6 +14,7 @@ from app.application.worldData.generators.terrain.relief.facing import (
     facing_wire,
     uphill_facing_toward,
 )
+from app.application.worldData.generators.terrain.relief.reliefLog import relief_debug
 from app.dataModel.spatial.facing import Facing
 from app.application.worldData.generators.terrain.relief.gradeInstanceFactory import (
     build_ribbon_grade_instance,
@@ -25,6 +26,10 @@ from app.application.worldData.generators.terrain.relief.ribbonSeedResolve impor
     SeedClearanceSkip,
     resolve_seed_clearance,
 )
+from app.application.worldData.generators.terrain.relief.shoulderWidth import (
+    unique_outward,
+)
+from app.application.worldData.pack.refine.detailedGradeCatalog import TileFaceCatalog
 from app.application.worldData.generators.terrain.relief.volumeMaterialize import (
     RibbonVolumePlan,
     plan_seed_volume,
@@ -140,8 +145,25 @@ def inherit_segment_uid(
             if uid:
                 found.add(uid)
     if len(found) != 1:
+        relief_debug(
+            "grade_uid_inherit",
+            hit=False,
+            neighbor_count=len(found),
+            neighbor_uids=tuple(sorted(found)) or None,
+            seed_count=len(seeds),
+            seed=min(seeds) if seeds else None,
+        )
         return None
-    return next(iter(found))
+    uid = next(iter(found))
+    relief_debug(
+        "grade_uid_inherit",
+        hit=True,
+        grade_uid=uid,
+        neighbor_count=1,
+        seed_count=len(seeds),
+        seed=min(seeds),
+    )
+    return uid
 
 
 def resolve_segment_uid(
@@ -182,6 +204,7 @@ def corridor_for_seed(
     sign: int,
     road_key: str,
     barrier_keys: frozenset[str],
+    catalog: TileFaceCatalog | None = None,
 ) -> SeedCorridor | None:
     kind = result.decision.kind
     if kind is None:
@@ -194,6 +217,12 @@ def corridor_for_seed(
     )
     if not anchors:
         return None
+    outward = unique_outward(seed, anchors)
+    flush_void = (
+        catalog is not None
+        and outward is not None
+        and catalog.is_open_rim_step(seed, outward)
+    )
     clearance = resolve_seed_clearance(
         seed=seed,
         ref_cells=anchors,
@@ -202,6 +231,7 @@ def corridor_for_seed(
         cell_blocked=lambda c: meter_grade_cell_blocked(
             surface, c, road_key=road_key, barrier_keys=barrier_keys,
         ),
+        flush_void=flush_void,
     )
     if isinstance(clearance, SeedClearanceSkip):
         return None
@@ -270,6 +300,7 @@ def materialize_segment_meter(
     seeds: tuple[Coord, ...] | None = None,
     existing_uids: dict[Coord, str] | None = None,
     grade_uid: str | None = None,
+    catalog: TileFaceCatalog | None = None,
 ) -> list[ReliefGradeInstance]:
     """One Grade instance per segment (R36v); uid on R36t corridor only."""
     kind = result.decision.kind
@@ -303,6 +334,7 @@ def materialize_segment_meter(
             sign=sign,
             road_key=road_key,
             barrier_keys=barrier_keys,
+            catalog=catalog,
         )
         if piece is None:
             continue

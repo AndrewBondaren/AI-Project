@@ -2,6 +2,7 @@
 
 from app.dataModel.spatial.facing import (
     CARDINAL_FACINGS,
+    COMPACT_LETTER,
     EW_FACINGS,
     INTERCARDINAL_FACINGS,
     NS_FACINGS,
@@ -17,6 +18,7 @@ from app.dataModel.spatial.facing import (
 
 __all__ = [
     "CARDINAL_FACINGS",
+    "COMPACT_LETTER",
     "EW_FACINGS",
     "Facing",
     "INTERCARDINAL_FACINGS",

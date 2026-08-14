@@ -92,6 +92,28 @@ class EdgeRoadAnchorTest(unittest.TestCase):
         self.assertEqual(out2.L_eff, 1)
         self.assertEqual(out2.outward, (1, 0))
 
+    def test_clearance_oob_flush_under_truncate_skip(self) -> None:
+        from app.db.models.world import World
+
+        road = {(0, 0)}
+        w = World(
+            world_uid="w",
+            name="W",
+            created_at="2026-01-01T00:00:00Z",
+            relief_grade_obstacle_policy=ReliefGradeObstaclePolicy.TRUNCATE_SKIP.value,
+        )
+        out = resolve_seed_clearance(
+            seed=(1, 0),
+            ref_cells=road,
+            requested_length=1,
+            world=w,
+            cell_blocked=lambda c: c != (1, 0),
+            flush_void=True,
+        )
+        self.assertIsInstance(out, SeedClearance)
+        assert isinstance(out, SeedClearance)
+        self.assertEqual(out.L_eff, 1)
+
     def test_decision_carries_geom(self) -> None:
         tpl = ReliefTemplate.model_validate({
             "system_name": "s",

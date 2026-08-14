@@ -18,6 +18,8 @@ from app.dataModel.worldPack.mergeMapCells import (
 from app.dataModel.worldPack.packReadPolicy import PackReadPolicy
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume, inside_location_volume
 from app.dataModel.worldPack.territoryVolumePolicy import TerritoryVolumePolicy
+from app.dataModel.worldPack.paintedRoadEdge import PaintedRoadEdge
+from app.dataModel.worldPack.worldSeamCopy import WorldSeamCopy
 from app.dataModel.worldPack.worldBounds import WorldBounds
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
 from app.dataModel.worldPack.worldMapCellsPerTile import (
@@ -29,7 +31,13 @@ from app.dataModel.worldPack.worldMapCellsPerTile import (
 )
 from app.dataModel.worldPack.lightSettlementFootprint import LightSettlementFootprintPolicy
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults, resolve_light_tile_cap
-from app.dataModel.worldPack.packBakeMode import PackBakeApiMode, PackBakeMode
+from app.dataModel.worldPack.packJobUid import FaceGridAxis, PackJobSiteKind, PackJobUid
+from app.dataModel.worldPack.packBakeMode import (
+    PACK_BAKE_FULL,
+    PACK_BAKE_LIGHT,
+    PackBakeApiMode,
+    PackBakeMode,
+)
 from app.dataModel.worldPack.detailedBakeScope import (
     DetailedBakeRequest,
     DetailedBakeScopeKind,
@@ -83,9 +91,15 @@ __all__ = [
     "MapLayerKind",
     "MergedCellView",
     "LightFineTilePolicy",
+    "PACK_BAKE_FULL",
+    "PACK_BAKE_LIGHT",
     "PackBakeApiMode",
     "PackBakeDefaults",
     "PackBakeMode",
+    "PackJobSiteKind",
+    "PackJobUid",
+    "PaintedRoadEdge",
+    "FaceGridAxis",
     "PackCompleteness",
     "PackCompletenessSnapshot",
     "PackTilePlan",
@@ -97,6 +111,7 @@ __all__ = [
     "TerritoryVolumePolicy",
     "TileManifestEntry",
     "WildernessRefineStatus",
+    "WorldSeamCopy",
     "WorldBounds",
     "WorldMapCellWire",
     "WorldMapCellsPerTilePolicy",

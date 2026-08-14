@@ -11,6 +11,7 @@ from app.application.worldData.generators.terrain.relief.ribbonSiteSample import
     sample_downhill_land_sites,
     sample_landward_of_refs,
 )
+from app.application.worldData.generators.terrain.relief.shoulderWidth import has_relief_dz
 from app.application.worldData.pack.refine.columnBounds import (
     ColumnBounds,
     expand_rect,
@@ -150,5 +151,45 @@ def sample_shore_meter(
         return str(terrain_lo), int(z_lo)
 
     samples, refs = sample_landward_of_refs(shore_refs, neighbor_site=neighbor_site)
+    owned = _keep_owned_seeds(samples, rect)
+    return owned, _refs_for_owned_seeds(refs, owned)
+
+
+def sample_road_shoulder_meter(
+    surface: MeterGradeSurface,
+    *,
+    road_key: str,
+    world: World | None = None,
+    rect: ColumnBounds | None = None,
+    halo: int = 0,
+) -> tuple[list[SampleCell], set[Coord]]:
+    """Road cell = ref; adjacent non-road land with Δz = seed (both sides)."""
+    bounds = _sample_bounds(rect, halo)
+    cells = (
+        _iter_z_in_bounds(surface, bounds)
+        if bounds is not None
+        else surface.surface_z.items()
+    )
+    road_refs: list[tuple[Coord, int]] = []
+    for xy, z in cells:
+        if surface.terrain_at(xy) != road_key:
+            continue
+        road_refs.append((xy, int(z)))
+    if not road_refs:
+        return [], set()
+
+    def neighbor_site(seed: Coord) -> tuple[str, int] | None:
+        if seed not in surface.surface_z:
+            return None
+        if meter_seed_blocked(surface, seed, road_key=road_key):
+            return None
+        terrain_lo = surface.terrain_at(seed)
+        z_lo = surface.z_at(seed)
+        if not terrain_lo or z_lo is None:
+            return None
+        return str(terrain_lo), int(z_lo)
+
+    samples, refs = sample_landward_of_refs(road_refs, neighbor_site=neighbor_site)
+    samples = [item for item in samples if has_relief_dz(item.dz)]
     owned = _keep_owned_seeds(samples, rect)
     return owned, _refs_for_owned_seeds(refs, owned)

@@ -15,8 +15,29 @@ from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
+def world_bounds_from_world(
+    world: World,
+    locations: list[NamedLocation] | None = None,
+) -> WorldBounds | None:
+    """Declared ``world_bounds``, else resolved location AABB. No wrap invent."""
+    parsed = WorldBounds.try_parse(getattr(world, "world_bounds", None))
+    if parsed is not None:
+        return parsed
+    if not locations:
+        return None
+    bbox = grid_bbox_from_locations(world, locations)
+    if bbox is None:
+        return None
+    return WorldBounds(
+        x_min=bbox.x_min,
+        x_max=bbox.x_max,
+        y_min=bbox.y_min,
+        y_max=bbox.y_max,
+    )
+
+
 def _declared_grid_bbox(world: World) -> GridBBox | None:
-    bounds = WorldBounds.try_parse(world.world_bounds)
+    bounds = WorldBounds.try_parse(getattr(world, "world_bounds", None))
     if bounds is None:
         return None
     return GridBBox(

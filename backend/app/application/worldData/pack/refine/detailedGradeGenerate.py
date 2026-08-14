@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from app.application.jsonValidation import terrain_masks
@@ -14,21 +15,29 @@ from app.application.worldData.generators.terrain.relief.ribbonGrade import (
 from app.application.worldData.generators.terrain.relief.ribbonSegmentize import (
     segmentize_by_terrain,
 )
+from app.application.worldData.generators.terrain.relief.reliefLog import relief_debug
 from app.application.worldData.generators.terrain.relief.ribbonSiteSample import SampleCell
 from app.application.worldData.gradeInstanceMerge import merge_grade_instances
 from app.application.worldData.pack.refine.columnBounds import (
     ColumnBounds,
     rect_contains,
 )
+from app.application.worldData.pack.refine.detailedGradeCatalog import (
+    FaceKey,
+    TileFaceCatalog,
+    catalog_for_surface,
+    seed_ref_axis,
+)
 from app.application.worldData.pack.refine.detailedGradeMaterialize import (
     materialize_segment_meter,
-    resolve_segment_uid,
 )
 from app.application.worldData.pack.refine.detailedGradeResult import DetailedGradeResult
 from app.application.worldData.pack.refine.detailedGradeSample import (
     sample_open_land_meter,
+    sample_road_shoulder_meter,
     sample_shore_meter,
 )
+from app.application.worldData.pack.refine.gridNeighborHalo import overlay_halo_from_surface
 from app.application.worldData.pack.refine.meterGradeSurface import (
     Coord,
     MeterGradeSurface,
@@ -44,6 +53,7 @@ logger = logging.getLogger(__name__)
 _CONTEXT_SAMPLES = (
     (ReliefContext.OPEN_LAND, sample_open_land_meter),
     (ReliefContext.SHORE, sample_shore_meter),
+    (ReliefContext.ROAD_SHOULDER, sample_road_shoulder_meter),
 )
 
 
@@ -80,6 +90,7 @@ def sample_detailed_grade_rect(
     *,
     halo: int,
     existing_uids: dict[Coord, str] | None = None,
+    job_uid: str | None = None,
 ) -> list[DetailedGradeSeedBatch]:
     """Fine-edge seeds with ``seed ∈ rect``; halo is read-only (R36v)."""
     grid = MeterGradeSurface.from_tile_surface_state(
@@ -102,6 +113,19 @@ def sample_detailed_grade_rect(
                 ref_cells=frozenset(refs),
             ),
         )
+    relief_debug(
+        "detailed_grade_sample_rect",
+        world_uid=world.world_uid,
+        x_min=rect.x_min,
+        x_max=rect.x_max,
+        y_min=rect.y_min,
+        y_max=rect.y_max,
+        halo=halo,
+        seeds=sum(len(b.samples) for b in batches),
+        refs=sum(len(b.ref_cells) for b in batches),
+        contexts=",".join(b.context.value for b in batches) or None,
+        job_uid=job_uid,
+    )
     return batches
 
 
@@ -131,29 +155,25 @@ def merge_seed_batches(
     }
 
 
-def plan_detailed_grade(
+def plan_rect_grade(
     world: World,
-    merged: dict[ReliefContext, DetailedGradeSeedBatch],
+    batches: list[DetailedGradeSeedBatch],
+    catalog: TileFaceCatalog,
     *,
     relief_templates_by_uid: dict[str, ReliefTemplate],
-    existing_uids: dict[Coord, str] | None = None,
     surface_state: TileSurfaceState | None = None,
 ) -> list[PlannedGradeSegment]:
-    """Stitch seeds across rects → one segment / one planned grade (R36v)."""
+    """Bind seeds to catalog face uid (or interior|{k}); no mint (R36w)."""
+    if not relief_templates_by_uid or not batches:
+        return []
     world_seed = bake_seed(world)
-    grid = (
-        MeterGradeSurface.from_tile_surface_state(
-            surface_state, alias_heights=True,
-        )
-        if surface_state is not None
-        else None
-    )
     planned: list[PlannedGradeSegment] = []
-    for context, batch in merged.items():
+    interior_by_chunk: dict[tuple[int, int], list[PlannedGradeSegment]] = {}
+    for batch in batches:
         if not batch.samples:
             continue
         segments = segmentize_by_terrain(
-            owner_uid=context.value,
+            owner_uid=batch.context.value,
             cells=list(batch.samples),
         )
         results = grade_ribbon_segments(
@@ -161,32 +181,53 @@ def plan_detailed_grade(
             world_seed=world_seed,
             segments=segments,
             templates_by_uid=relief_templates_by_uid,
-            context=context,
+            context=batch.context,
         )
         for result in results:
             seeds = result.segment.cell_coords
             if not seeds:
                 continue
-            uid = resolve_segment_uid(
-                world_uid=world.world_uid,
-                site_id=result.segment.site_id,
-                seeds=seeds,
-                surface=grid,
-                existing_uids=existing_uids,
+            faces: list[FaceKey] = []
+            for xy in seeds:
+                faces.extend(catalog.faces_for_cell(xy[0], xy[1]))
+            uid = catalog.uid_for_faces(
+                faces, axis=seed_ref_axis(seeds, batch.ref_cells),
             )
-            planned.append(
+            if uid is not None:
+                planned.append(
+                    PlannedGradeSegment(
+                        context=batch.context,
+                        result=result,
+                        ref_cells=batch.ref_cells,
+                        grade_uid=uid,
+                    ),
+                )
+                continue
+            cx, cy = catalog.chunk_of(*min(seeds))
+            interior_by_chunk.setdefault((cx, cy), []).append(
                 PlannedGradeSegment(
-                    context=context,
+                    context=batch.context,
                     result=result,
                     ref_cells=batch.ref_cells,
-                    grade_uid=uid,
+                    grade_uid="",
+                ),
+            )
+    for (cx, cy), items in interior_by_chunk.items():
+        items.sort(key=lambda row: min(row.result.segment.cell_coords))
+        for k, item in enumerate(items):
+            planned.append(
+                PlannedGradeSegment(
+                    context=item.context,
+                    result=item.result,
+                    ref_cells=item.ref_cells,
+                    grade_uid=catalog.interior_uid(cx, cy, k),
                 ),
             )
     logger.info(
-        "detailed_grade_plan | world=%s segments=%d seeds=%d",
+        "detailed_grade_plan | world=%s segments=%d tile_uid=%s",
         world.world_uid,
         len(planned),
-        sum(len(b.samples) for b in merged.values()),
+        catalog.macro_tile_uid(),
     )
     return planned
 
@@ -196,28 +237,33 @@ def plan_grade_for_rects(
     surface_state: TileSurfaceState,
     rects: list[ColumnBounds],
     *,
+    catalog: TileFaceCatalog,
     relief_templates_by_uid: dict[str, ReliefTemplate],
     existing_uids: dict[Coord, str] | None = None,
     groups: list[list[DetailedGradeSeedBatch]] | None = None,
 ) -> list[PlannedGradeSegment]:
-    """Sample (unless ``groups``) → stitch → plan. Shared by runner and facade."""
+    """Sample each rect → bind catalog uid. Shared by runner and facade (R36w)."""
     if not relief_templates_by_uid:
         return []
+    halo = grade_halo_cells(relief_templates_by_uid)
+    planned: list[PlannedGradeSegment] = []
     if groups is None:
-        halo = grade_halo_cells(relief_templates_by_uid)
         groups = [
             sample_detailed_grade_rect(
                 world, surface_state, rect, halo=halo, existing_uids=existing_uids,
+                job_uid=catalog.job_uid_chunk(*catalog.chunk_of_rect(rect)),
             )
             for rect in rects
         ]
-    return plan_detailed_grade(
-        world,
-        merge_seed_batches(groups),
-        relief_templates_by_uid=relief_templates_by_uid,
-        existing_uids=existing_uids,
-        surface_state=surface_state,
-    )
+    for batches in groups:
+        planned.extend(
+            plan_rect_grade(
+                world, batches, catalog,
+                relief_templates_by_uid=relief_templates_by_uid,
+                surface_state=surface_state,
+            ),
+        )
+    return planned
 
 
 def materialize_planned_for_rect(
@@ -227,6 +273,7 @@ def materialize_planned_for_rect(
     planned: list[PlannedGradeSegment],
     *,
     existing_uids: dict[Coord, str] | None = None,
+    catalog: TileFaceCatalog | None = None,
 ) -> DetailedGradeResult:
     """Stamp uid + instances for seeds owned by ``rect``."""
     grid = MeterGradeSurface.from_tile_surface_state(
@@ -251,12 +298,24 @@ def materialize_planned_for_rect(
                 seeds=seeds,
                 existing_uids=existing_uids,
                 grade_uid=item.grade_uid,
+                catalog=catalog,
             ),
         )
     wrote = {
         xy: uid for xy, uid in grid.grade_uid.items()
         if rect_contains(rect, xy[0], xy[1])
     }
+    relief_debug(
+        "detailed_grade_materialize_rect",
+        world_uid=world.world_uid,
+        x_min=rect.x_min,
+        x_max=rect.x_max,
+        y_min=rect.y_min,
+        y_max=rect.y_max,
+        cells=len(wrote),
+        instances=len(instances),
+        uids=len({inst.grade_uid for inst in instances}),
+    )
     return DetailedGradeResult(
         surface_grade_uid=wrote,
         grade_instances=tuple(instances),
@@ -270,6 +329,7 @@ def materialize_grade_for_rects(
     planned: list[PlannedGradeSegment],
     *,
     existing_uids: dict[Coord, str] | None = None,
+    catalog: TileFaceCatalog | None = None,
 ) -> DetailedGradeResult:
     """Materialize each rect; result bag is cells in those rects only."""
     parts: list[ReliefGradeInstance] = []
@@ -277,6 +337,7 @@ def materialize_grade_for_rects(
     for rect in rects:
         part = materialize_planned_for_rect(
             world, surface_state, rect, planned, existing_uids=existing_uids,
+            catalog=catalog,
         )
         uids.update(part.surface_grade_uid)
         parts.extend(part.grade_instances)
@@ -290,11 +351,20 @@ def generate_detailed_grade(
     world: World,
     surface_state: TileSurfaceState,
     *,
+    tile_gx: int,
+    tile_gy: int,
     relief_templates_by_uid: dict[str, ReliefTemplate],
     rects: list[ColumnBounds] | None = None,
     existing_uids: dict[Coord, str] | None = None,
+    chunk_size: int | None = None,
+    halo_neighbors: Sequence[TileSurfaceState] | None = None,
 ) -> DetailedGradeResult:
-    """Facade: same helpers as FineChunkRunner (tests / patch bounds)."""
+    """Facade: same helpers as FineChunkRunner (tests / patch bounds).
+
+    ``halo_neighbors`` — already-built neighbor ``TileSurfaceState`` (grid-adjacent
+    meters). Same overlay as the runner's pack IO path; bbox of this tile is not
+    expanded.
+    """
     if not relief_templates_by_uid:
         logger.debug(
             "detailed_grade_skip | world=%s reason=no_templates",
@@ -303,20 +373,32 @@ def generate_detailed_grade(
         return DetailedGradeResult.empty()
 
     work_rects: list[ColumnBounds]
+    bbox = surface_state.heightmap.bbox
     if rects is None:
         from app.application.worldData.generators.terrain.types import ColumnRect
 
-        bbox = surface_state.heightmap.bbox
         work_rects = [ColumnRect(bbox.x_min, bbox.x_max, bbox.y_min, bbox.y_max)]
     else:
         work_rects = rects
+    if halo_neighbors:
+        halo = grade_halo_cells(relief_templates_by_uid)
+        for neighbor in halo_neighbors:
+            surface_state = overlay_halo_from_surface(
+                surface_state, neighbor, this_bbox=bbox, halo=halo,
+            )
+    catalog = catalog_for_surface(
+        world, surface_state.heightmap.bbox,
+        tile_gx=tile_gx, tile_gy=tile_gy, chunk_size=chunk_size,
+    )
     planned = plan_grade_for_rects(
         world, surface_state, work_rects,
         relief_templates_by_uid=relief_templates_by_uid,
         existing_uids=existing_uids,
+        catalog=catalog,
     )
     result = materialize_grade_for_rects(
         world, surface_state, work_rects, planned, existing_uids=existing_uids,
+        catalog=catalog,
     )
     logger.info(
         "detailed_grade_done | world=%s cells=%d instances=%d",

@@ -17,14 +17,22 @@ from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
 
 
-def make_grade_uid(*, world_uid: str, site_id: str, seed: tuple[int, int]) -> str:
-    """Deterministic uid for re-bake upsert."""
-    key = f"{world_uid}|{site_id}|{seed[0]},{seed[1]}"
+def _uid_digest(key: str) -> str:
     digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
     return (
         f"{digest[:8]}-{digest[8:12]}-{digest[12:16]}-"
         f"{digest[16:20]}-{digest[20:32]}"
     )
+
+
+def make_seeded_uid(*, world_seed: str, site_id: str) -> str:
+    """R36w catalog / interior uid — namespace ``world_seed``, not cell seed."""
+    return _uid_digest(f"{world_seed}|{site_id}")
+
+
+def make_grade_uid(*, world_uid: str, site_id: str, seed: tuple[int, int]) -> str:
+    """Deterministic uid for re-bake upsert (legacy mint; catalog uses ``make_seeded_uid``)."""
+    return _uid_digest(f"{world_uid}|{site_id}|{seed[0]},{seed[1]}")
 
 
 def make_grade_system_uid(*, world_uid: str, site_id: str) -> str:

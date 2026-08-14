@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 from app.application.worldData.pack.refine.detailedGradeGenerate import generate_detailed_grade
 from app.application.worldData.pack.refine.detailedGradeSample import (
     sample_open_land_meter,
+    sample_road_shoulder_meter,
     sample_shore_meter,
 )
 from app.application.worldData.pack.refine.meterGradeSurface import MeterGradeSurface
@@ -104,6 +105,28 @@ class DetailedGradeSampleTest(unittest.TestCase):
         self.assertNotIn((6, 5), seeds)
         self.assertIn((6, 5), refs)
 
+    def test_road_shoulder_land_beside_road(self) -> None:
+        surface = MeterGradeSurface(
+            surface_z={(1, 0): 5, (2, 0): 3},
+            surface_terrain={(1, 0): "road", (2, 0): "plains"},
+            hydrology=None,
+            surface_facing=None,
+        )
+        samples, refs = sample_road_shoulder_meter(surface, road_key="road")
+        self.assertEqual(samples, [((2, 0), "plains", 2)])
+        self.assertEqual(refs, {(1, 0)})
+
+    def test_road_shoulder_skips_flat(self) -> None:
+        surface = MeterGradeSurface(
+            surface_z={(1, 0): 5, (2, 0): 5},
+            surface_terrain={(1, 0): "road", (2, 0): "plains"},
+            hydrology=None,
+            surface_facing=None,
+        )
+        samples, refs = sample_road_shoulder_meter(surface, road_key="road")
+        self.assertEqual(samples, [])
+        self.assertEqual(refs, set())
+
 
 class DetailedGradeGenerateTest(unittest.TestCase):
     def test_empty_without_templates(self) -> None:
@@ -130,7 +153,9 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         w.terrain_masks = None
         w.terrain_registry = None
         w.relief_grade_obstacle_policy = None
-        result = generate_detailed_grade(w, state, relief_templates_by_uid={})
+        result = generate_detailed_grade(
+            w, state, relief_templates_by_uid={}, tile_gx=0, tile_gy=0,
+        )
         self.assertEqual(result.surface_grade_uid, {})
         self.assertEqual(result.grade_instances, ())
 
@@ -220,6 +245,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         )
         result = generate_detailed_grade(
             world, state, relief_templates_by_uid={uid: tpl},
+            tile_gx=0, tile_gy=0,
         )
         self.assertTrue(result.grade_instances)
         self.assertTrue(result.surface_grade_uid)
@@ -264,6 +290,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             relief_pick_policy={
                 "open_land": {"mode": "fixed", "default_template_uid": uid},
             },
+            terrain_chunk_columns=2,
         )
         surface_z = {
             (5, 5): 8, (6, 5): 6, (7, 5): 4, (8, 5): 4,
@@ -283,6 +310,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             world, state,
             relief_templates_by_uid={uid: tpl},
             rects=[left, right],
+            tile_gx=0, tile_gy=0,
         )
         self.assertTrue(result.grade_instances)
         uids = {inst.grade_uid for inst in result.grade_instances}
@@ -331,6 +359,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             relief_pick_policy={
                 "open_land": {"mode": "fixed", "default_template_uid": uid},
             },
+            terrain_chunk_columns=2,
         )
         surface_z = {
             (5, 5): 8, (6, 5): 6, (7, 5): 4, (8, 5): 4,
@@ -348,6 +377,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             world, state,
             relief_templates_by_uid={uid: tpl},
             rects=[ColumnRect(x_min=5, x_max=6, y_min=5, y_max=6)],
+            tile_gx=0, tile_gy=0,
         )
         self.assertTrue(first.grade_instances)
         known = first.grade_instances[0].grade_uid
@@ -356,6 +386,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             relief_templates_by_uid={uid: tpl},
             rects=[ColumnRect(x_min=7, x_max=7, y_min=5, y_max=6)],
             existing_uids=first.surface_grade_uid,
+            tile_gx=0, tile_gy=0,
         )
         self.assertTrue(late.grade_instances)
         self.assertEqual(late.grade_instances[0].grade_uid, known)
@@ -363,6 +394,412 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         for x, y in late.surface_grade_uid:
             self.assertTrue(late_rect.x_min <= x <= late_rect.x_max)
             self.assertTrue(late_rect.y_min <= y <= late_rect.y_max)
+
+    def test_two_tile_bakes_along_seam_one_uid(self) -> None:
+        """R36w edge: two independent bakes, Δz along the owner face → one uid.
+
+        Seeds sit on the shared vertical columns (toe on the rim, crest one
+        cell inward). Interior y so a corner cell's second rim face is not
+        the SoT. Open rim: face has < 2 chunk parents on this tile → void
+        beyond is not a C18 obstacle.
+        """
+        from app.application.worldData.generators.terrain.types import GridBBox, SurfaceHeightmap
+        from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+        from app.dataModel.terrain.relief import ReliefTemplate
+        from app.db.models.world import World
+
+        tpl = ReliefTemplate.model_validate({
+            "system_name": "open_step",
+            "display_name": "Open",
+            "context": "open_land",
+            "conditions": [{
+                "terrain": "plains",
+                "cases": [
+                    {"policy": "slope_down", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0},
+                    {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0},
+                    {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0},
+                ],
+            }],
+        })
+        uid = relief_template_uid("open_step")
+        world = World(
+            world_uid="w_seam",
+            name="W",
+            created_at="2026-01-01T00:00:00Z",
+            relief_template_registry=[{
+                "system_template_uid": uid,
+                "context": "open_land",
+                "display_template_name": "Open",
+            }],
+            relief_pick_policy={
+                "open_land": {"mode": "fixed", "default_template_uid": uid},
+            },
+            terrain_chunk_columns=2,
+        )
+        templates = {uid: tpl}
+
+        def _state(z: dict, x0: int, x1: int) -> TileSurfaceState:
+            ys = {xy[1] for xy in z}
+            bbox = GridBBox(x_min=x0, x_max=x1, y_min=min(ys), y_max=max(ys))
+            return TileSurfaceState(
+                heightmap=SurfaceHeightmap(
+                    world_uid="w_seam", bbox=bbox, surface_z=z,
+                ),
+                n_eff={xy: 1 for xy in z},
+                hydrology=None,
+                surface_terrain={xy: "plains" for xy in z},
+            )
+
+        west_z = {
+            (x, y): (6 if x == 3 else 8)
+            for x in range(4) for y in range(4)
+        }
+        east_z = {
+            (x, y): (6 if x == 4 else 8)
+            for x in range(4, 8) for y in range(4)
+        }
+        west = generate_detailed_grade(
+            world, _state(west_z, 0, 3),
+            relief_templates_by_uid=templates,
+            tile_gx=0, tile_gy=0, chunk_size=2,
+        )
+        east = generate_detailed_grade(
+            world, _state(east_z, 4, 7),
+            relief_templates_by_uid=templates,
+            tile_gx=1, tile_gy=0, chunk_size=2,
+        )
+        self.assertTrue(west.grade_instances)
+        self.assertTrue(east.grade_instances)
+        self.assertIn((3, 1), west.surface_grade_uid)
+        self.assertIn((4, 1), east.surface_grade_uid)
+        self.assertEqual(
+            west.surface_grade_uid[(3, 1)],
+            east.surface_grade_uid[(4, 1)],
+        )
+        self.assertIn((3, 2), west.surface_grade_uid)
+        self.assertIn((4, 2), east.surface_grade_uid)
+        self.assertEqual(
+            west.surface_grade_uid[(3, 2)],
+            east.surface_grade_uid[(4, 2)],
+        )
+
+    def test_across_seam_halo_reads_neighbor_z(self) -> None:
+        """Δz only across the grid seam: halo overlay binds the shared rim uid."""
+        from app.application.worldData.generators.terrain.types import GridBBox, SurfaceHeightmap
+        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+            FaceKey,
+            build_tile_face_catalog,
+        )
+        from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+        from app.dataModel.terrain.relief import ReliefTemplate
+        from app.db.models.world import World
+
+        tpl = ReliefTemplate.model_validate({
+            "system_name": "open_step",
+            "display_name": "Open",
+            "context": "open_land",
+            "conditions": [{
+                "terrain": "plains",
+                "cases": [
+                    {"policy": "slope_down", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0},
+                    {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0},
+                    {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0},
+                ],
+            }],
+        })
+        uid = relief_template_uid("open_step")
+        world = World(
+            world_uid="w_halo",
+            name="W",
+            created_at="2026-01-01T00:00:00Z",
+            relief_template_registry=[{
+                "system_template_uid": uid,
+                "context": "open_land",
+                "display_template_name": "Open",
+            }],
+            relief_pick_policy={
+                "open_land": {"mode": "fixed", "default_template_uid": uid},
+            },
+            terrain_chunk_columns=2,
+        )
+        templates = {uid: tpl}
+
+        def _state(z: dict, x0: int, x1: int) -> TileSurfaceState:
+            ys = {xy[1] for xy in z}
+            bbox = GridBBox(x_min=x0, x_max=x1, y_min=min(ys), y_max=max(ys))
+            return TileSurfaceState(
+                heightmap=SurfaceHeightmap(
+                    world_uid="w_halo", bbox=bbox, surface_z=z,
+                ),
+                n_eff={xy: 1 for xy in z},
+                hydrology=None,
+                surface_terrain={xy: "plains" for xy in z},
+            )
+
+        west_state = _state(
+            {(x, y): 8 for x in range(4) for y in range(4)}, 0, 3,
+        )
+        east_state = _state(
+            {(x, y): 6 for x in range(4, 8) for y in range(4)}, 4, 7,
+        )
+        bare = generate_detailed_grade(
+            world, east_state,
+            relief_templates_by_uid=templates,
+            tile_gx=1, tile_gy=0, chunk_size=2,
+        )
+        self.assertFalse(bare.surface_grade_uid)
+
+        east = generate_detailed_grade(
+            world, east_state,
+            relief_templates_by_uid=templates,
+            tile_gx=1, tile_gy=0, chunk_size=2,
+            halo_neighbors=(west_state,),
+        )
+        self.assertIn((4, 1), east.surface_grade_uid)
+        west_cat = build_tile_face_catalog(
+            world_seed="w_halo", tile_gx=0, tile_gy=0,
+            origin_x=0, origin_y=0, tile_w=4, tile_h=4, chunk_size=2,
+        )
+        east_cat = build_tile_face_catalog(
+            world_seed="w_halo", tile_gx=1, tile_gy=0,
+            origin_x=4, origin_y=0, tile_w=4, tile_h=4, chunk_size=2,
+        )
+        shared = west_cat.uid_for_face(FaceKey("V", 1, 0))
+        self.assertEqual(shared, east_cat.uid_for_face(FaceKey("V", -1, 0)))
+        self.assertEqual(east.surface_grade_uid[(4, 1)], shared)
+
+    def test_two_tile_road_shoulder_along_seam_one_uid(self) -> None:
+        from app.application.worldData.generators.terrain.types import GridBBox, SurfaceHeightmap
+        from app.application.worldData.reliefTemplateLibraryService import relief_template_uid
+        from app.dataModel.terrain.relief import ReliefTemplate
+        from app.dataModel.terrain.relief.enums import ReliefContext
+        from app.db.models.world import World
+
+        tpl = ReliefTemplate.model_validate({
+            "system_name": "intercity_shoulder",
+            "display_name": "Shoulder",
+            "context": ReliefContext.ROAD_SHOULDER.value,
+            "conditions": [{
+                "terrain": "plains",
+                "cases": [
+                    {"policy": "slope_down", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0},
+                    {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0},
+                    {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0},
+                ],
+            }],
+        })
+        uid = relief_template_uid("intercity_shoulder")
+        world = World(
+            world_uid="w_road_seam",
+            name="W",
+            created_at="2026-01-01T00:00:00Z",
+            relief_template_registry=[{
+                "system_template_uid": uid,
+                "context": ReliefContext.ROAD_SHOULDER.value,
+                "display_template_name": "Shoulder",
+            }],
+            relief_pick_policy={
+                ReliefContext.ROAD_SHOULDER.value: {
+                    "mode": "fixed", "default_template_uid": uid,
+                },
+            },
+            terrain_chunk_columns=2,
+        )
+        templates = {uid: tpl}
+
+        def _state(
+            z: dict, terrain: dict, x0: int, x1: int,
+        ) -> TileSurfaceState:
+            ys = {xy[1] for xy in z}
+            bbox = GridBBox(x_min=x0, x_max=x1, y_min=min(ys), y_max=max(ys))
+            return TileSurfaceState(
+                heightmap=SurfaceHeightmap(
+                    world_uid="w_road_seam", bbox=bbox, surface_z=z,
+                ),
+                n_eff={xy: 1 for xy in z},
+                hydrology=None,
+                surface_terrain=terrain,
+            )
+
+        west_z = {(x, y): 6 for x in range(4) for y in range(4)}
+        west_t = {(x, y): "plains" for x in range(4) for y in range(4)}
+        for x in range(3):
+            for y in range(4):
+                west_z[(x, y)] = 8
+                west_t[(x, y)] = "road"
+        east_z = {(x, y): 6 for x in range(4, 8) for y in range(4)}
+        east_t = {(x, y): "plains" for x in range(4, 8) for y in range(4)}
+        for x in range(5, 8):
+            for y in range(4):
+                east_z[(x, y)] = 8
+                east_t[(x, y)] = "road"
+        west = generate_detailed_grade(
+            world, _state(west_z, west_t, 0, 3),
+            relief_templates_by_uid=templates,
+            tile_gx=0, tile_gy=0, chunk_size=2,
+        )
+        east = generate_detailed_grade(
+            world, _state(east_z, east_t, 4, 7),
+            relief_templates_by_uid=templates,
+            tile_gx=1, tile_gy=0, chunk_size=2,
+        )
+        self.assertTrue(west.grade_instances)
+        self.assertTrue(east.grade_instances)
+        self.assertIn((3, 1), west.surface_grade_uid)
+        self.assertIn((4, 1), east.surface_grade_uid)
+        self.assertEqual(
+            west.surface_grade_uid[(3, 1)],
+            east.surface_grade_uid[(4, 1)],
+        )
+        self.assertEqual(
+            {inst.owner_uid for inst in west.grade_instances},
+            {ReliefContext.ROAD_SHOULDER.value},
+        )
+
+
+class DetailedGradeCatalogTest(unittest.TestCase):
+    def test_shared_face_uid_agrees_both_chunks(self) -> None:
+        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+            FaceKey,
+            build_tile_face_catalog,
+        )
+
+        cat = build_tile_face_catalog(
+            world_seed="s1",
+            tile_gx=0, tile_gy=0,
+            origin_x=0, origin_y=0,
+            tile_w=4, tile_h=2, chunk_size=2,
+        )
+        self.assertEqual(cat.n_cx, 2)
+        self.assertEqual(
+            cat.uid_for_face(FaceKey("V", 0, 0)),
+            cat.uid_for_face(FaceKey("V", 0, 0)),
+        )
+        self.assertIn(FaceKey("V", 0, 0), cat.faces_for_cell(1, 0))
+        self.assertIn(FaceKey("V", 0, 0), cat.faces_for_cell(2, 0))
+
+    def test_inter_tile_west_face_uses_owner_tile(self) -> None:
+        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+            FaceKey,
+            build_tile_face_catalog,
+        )
+
+        west = build_tile_face_catalog(
+            world_seed="s1", tile_gx=0, tile_gy=0,
+            origin_x=0, origin_y=0, tile_w=4, tile_h=2, chunk_size=2,
+        )
+        east = build_tile_face_catalog(
+            world_seed="s1", tile_gx=1, tile_gy=0,
+            origin_x=4, origin_y=0, tile_w=4, tile_h=2, chunk_size=2,
+        )
+        self.assertEqual(
+            west.uid_for_face(FaceKey("V", 1, 0)),
+            east.uid_for_face(FaceKey("V", -1, 0)),
+        )
+        self.assertEqual(
+            west.uid_for_faces(west.faces_for_cell(3, 0), axis="V"),
+            east.uid_for_faces(east.faces_for_cell(4, 0), axis="V"),
+        )
+
+    def test_uid_for_faces_prefers_tile_rim(self) -> None:
+        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+            FaceKey,
+            build_tile_face_catalog,
+        )
+
+        cat = build_tile_face_catalog(
+            world_seed="s1", tile_gx=0, tile_gy=0,
+            origin_x=0, origin_y=0, tile_w=4, tile_h=4, chunk_size=2,
+        )
+        faces = cat.faces_for_cell(3, 1)
+        self.assertIn(FaceKey("V", 1, 0), faces)
+        self.assertIn(FaceKey("H", 1, 0), faces)
+        self.assertTrue(cat.is_tile_rim_face(FaceKey("V", 1, 0)))
+        self.assertTrue(cat.is_internal_face(FaceKey("H", 1, 0)))
+        self.assertEqual(
+            cat.uid_for_faces(faces, axis="V"),
+            cat.uid_for_face(FaceKey("V", 1, 0)),
+        )
+
+    def test_uid_for_faces_axis_keeps_internal_stitch(self) -> None:
+        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+            FaceKey,
+            build_tile_face_catalog,
+        )
+
+        cat = build_tile_face_catalog(
+            world_seed="s1", tile_gx=0, tile_gy=0,
+            origin_x=5, origin_y=5, tile_w=4, tile_h=2, chunk_size=2,
+        )
+        faces = cat.faces_for_cell(6, 5)
+        self.assertIn(FaceKey("V", 0, 0), faces)
+        self.assertTrue(any(cat.is_tile_rim_face(f) for f in faces))
+        self.assertEqual(
+            cat.uid_for_faces(faces, axis="V"),
+            cat.uid_for_face(FaceKey("V", 0, 0)),
+        )
+
+    def test_chunk_parent_count_rim_vs_internal(self) -> None:
+        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+            FaceKey,
+            build_tile_face_catalog,
+        )
+
+        cat = build_tile_face_catalog(
+            world_seed="s1", tile_gx=0, tile_gy=0,
+            origin_x=0, origin_y=0, tile_w=4, tile_h=4, chunk_size=2,
+        )
+        internal = FaceKey("V", 0, 0)
+        rim = FaceKey("V", 1, 0)
+        self.assertEqual(cat.chunk_parent_count(internal), 2)
+        self.assertEqual(cat.chunk_parent_count(rim), 1)
+        self.assertEqual(
+            cat.chunk_parent_uids(rim),
+            (cat.job_uid_chunk(1, 0),),
+        )
+        self.assertTrue(cat.is_open_rim_step((3, 1), (1, 0)))
+        self.assertFalse(cat.is_open_rim_step((1, 1), (1, 0)))
+
+    def test_job_uids_tile_is_l0_chunk_is_suffix(self) -> None:
+        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+            build_tile_face_catalog,
+        )
+        from app.application.worldData.pack.refine.detailedJobUid import (
+            tile_edge_job_uid,
+        )
+        from app.dataModel.spatial.facing import COMPACT_LETTER, Facing
+        from app.dataModel.worldPack.packJobUid import PackJobUid
+
+        wire = PackJobUid.canonical_defaults()
+        cat = build_tile_face_catalog(
+            world_seed="seed-a", tile_gx=2, tile_gy=-1,
+            origin_x=0, origin_y=0, tile_w=2, tile_h=2, chunk_size=2,
+        )
+        tile_uid = wire.tile_uid(world_seed="seed-a", tile_gx=2, tile_gy=-1)
+        self.assertEqual(cat.macro_tile_uid(), tile_uid)
+        self.assertEqual(
+            cat.job_uid_chunk(0, 0),
+            wire.chunk_uid(
+                world_seed="seed-a", tile_gx=2, tile_gy=-1, cx=0, cy=0,
+            ),
+        )
+        east_of_west = tile_edge_job_uid(
+            world_seed="seed-a", tile_gx=2, tile_gy=-1, side=Facing.EAST,
+        )
+        west_of_east = tile_edge_job_uid(
+            world_seed="seed-a", tile_gx=3, tile_gy=-1, side=Facing.WEST,
+        )
+        self.assertEqual(cat.job_uid_tile_edge(Facing.EAST), east_of_west)
+        self.assertEqual(east_of_west, west_of_east)
+        self.assertEqual(
+            east_of_west,
+            wire.tile_edge_uid(
+                world_seed="seed-a",
+                owner_gx=2,
+                owner_gy=-1,
+                compact_side=COMPACT_LETTER[Facing.EAST],
+            ),
+        )
 
 
 class DetailedGradeMaterializeTest(unittest.TestCase):

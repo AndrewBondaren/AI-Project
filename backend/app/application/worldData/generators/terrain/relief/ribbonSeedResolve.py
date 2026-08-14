@@ -51,8 +51,14 @@ def resolve_seed_clearance(
     requested_length: int,
     world: Any,
     cell_blocked: CellBlockedFn,
+    flush_void: bool = False,
 ) -> SeedClearance | SeedClearanceSkip:
-    """Phase 1: outward + gap + world policy → ``L_eff`` or skip."""
+    """Phase 1: outward + gap + world policy → ``L_eff`` or skip.
+
+    ``flush_void``: stop cell is past a catalog face with < 2 chunk parents
+    (open rim of this tile). Not a C18 obstacle — use the free cells (R36w).
+    Internal missing column (2 chunk parents) still uses world policy.
+    """
     outward = unique_outward(seed, ref_cells)
     if outward is None:
         return SeedClearanceSkip(seed=seed, why=WHY_NO_UNIQUE_OUTWARD)
@@ -64,11 +70,14 @@ def resolve_seed_clearance(
 
     gap = measure_free_gap(start=seed, outward=outward, is_blocked=_blocked)
     requested = max(0, int(requested_length))
-    L_eff = outward_length(
-        world=world,
-        requested_length=requested,
-        free_gap=gap,
-    )
+    if flush_void:
+        L_eff = max(0, min(requested, gap))
+    else:
+        L_eff = outward_length(
+            world=world,
+            requested_length=requested,
+            free_gap=gap,
+        )
     if L_eff < 1:
         return SeedClearanceSkip(
             seed=seed,

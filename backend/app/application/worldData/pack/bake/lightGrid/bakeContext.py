@@ -14,7 +14,7 @@ from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
-from app.application.worldData.pack.bake.lightGrid.paintedRoadEdge import PaintedRoadEdge
+from app.dataModel.worldPack.paintedRoadEdge import PaintedRoadEdge
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 

@@ -6,7 +6,7 @@ import time
 from collections import Counter
 
 from app.application.jsonValidation import terrain_system_keys
-from app.dataModel.worldPack.packBakeMode import PackBakeMode
+from app.dataModel.worldPack.packBakeMode import PACK_BAKE_FULL, PACK_BAKE_LIGHT, PackBakeMode
 from app.application.worldData.generators.coordinates import cell_size_m
 from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
     is_hydrology_enabled,
@@ -18,10 +18,13 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
     SurfaceTerrainContext,
     prepare_surface_terrain_context,
 )
+from app.application.worldData.generators.terrain.passes.bbox import world_bounds_from_world
 from app.application.worldData.pack.bake.lightGrid.bake import compose_light_grid
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.coords import LightGridScale
+from app.application.worldData.pack.bake.lightGrid.worldSeam import apply_world_seam
 from app.application.worldData.pack.bake.locationsIndexBake import build_locations_index
+from app.application.worldData.pack.bake.macroTileUid import macro_tile_uid, pack_job_seed
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_surface_context,
     log_pack_world_map_bake_done,
@@ -86,7 +89,7 @@ class WorldMapBakeOrchestrator:
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
         hydrology_generator: HydrologyGeneratorService | None = None,
-        bake_mode: PackBakeMode = "light",
+        bake_mode: PackBakeMode = PACK_BAKE_LIGHT,
         relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
     ) -> int:
         world_uid = world.world_uid
@@ -138,6 +141,12 @@ class WorldMapBakeOrchestrator:
             relief_templates_by_uid=dict(relief_templates_by_uid or {}),
         )
         compose = compose_light_grid(bake_ctx)
+        if bake_mode == PACK_BAKE_FULL:
+            bounds = world_bounds_from_world(world, locations)
+            if bounds is not None:
+                apply_world_seam(
+                    compose, bounds, tiles, world_seed=pack_job_seed(world),
+                )
         self.last_relief_grade_instances = list(bake_ctx.relief_grade_instances)
 
         writer.sync_world_metadata(world, cells_per_side=side)
@@ -169,6 +178,9 @@ class WorldMapBakeOrchestrator:
                 surface_z_hist={str(k): v for k, v in surface_z_hist.items()},
                 macro_hydro_role=_hydro_cell_role_label(surface_ctx.coarse_hydro.get((gx, gy))),
                 macro_surface_z=int(surface_ctx.coarse_surface_z.get((gx, gy), 0)),
+                tile_uid=macro_tile_uid(
+                    world_seed=pack_job_seed(world), tile_gx=gx, tile_gy=gy,
+                ),
             )
         writer.manifest.bake_mode = bake_mode
         writer.recalc_manifest_counters()

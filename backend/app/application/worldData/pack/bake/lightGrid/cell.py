@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.worldSeamCopy import WorldSeamCopy
 
 
 @dataclass
@@ -35,6 +36,15 @@ class LightGridCell:
             system_facing=self.system_facing,
             system_grade_uid=self.system_grade_uid,
         )
+
+    def seam_copy(self) -> WorldSeamCopy:
+        return WorldSeamCopy(
+            surface_z=self.surface_z, system_terrain=self.system_terrain,
+        )
+
+    def apply_seam_copy(self, snap: WorldSeamCopy) -> None:
+        self.surface_z = snap.surface_z
+        self.system_terrain = snap.system_terrain
 
     @classmethod
     def from_wire_defaults(cls) -> LightGridCell:

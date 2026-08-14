@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.dataModel.spatial.facing import CARDINAL_WALL_OUTWARD_DELTA, Facing
 from app.dataModel.worldPack.worldMapCellsPerTile import light_m_for
 
 
@@ -18,6 +19,19 @@ class LightGridScale:
         side = max(1, int(side))
         tile_m = max(1, int(tile_m))
         return cls(tile_m=tile_m, side=side, light_m=light_m_for(tile_m, side))
+
+    def rim_tx_ty(self, facing: Facing) -> tuple[tuple[int, int], ...]:
+        """Local (tx, ty) along the tile rim facing outward ``facing``.
+
+        Index 0 / ``side-1`` from ``CARDINAL_WALL_OUTWARD_DELTA``, not world AABB.
+        """
+        dx, dy = CARDINAL_WALL_OUTWARD_DELTA[facing]
+        last = self.side - 1
+        if dx != 0:
+            tx = last if dx > 0 else 0
+            return tuple((tx, ty) for ty in range(self.side))
+        ty = last if dy > 0 else 0
+        return tuple((tx, ty) for tx in range(self.side))
 
 
 def meters_to_light(xm: int, ym: int, scale: LightGridScale) -> tuple[int, int]:

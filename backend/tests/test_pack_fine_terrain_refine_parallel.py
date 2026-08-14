@@ -62,7 +62,7 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
             "app.application.worldData.pack.refine.fineChunkRunner.ChunkComputePool",
             return_value=pool_instance,
         ) as pool_cls, patch(
-            "app.application.worldData.pack.refine.fineChunkRunner.require_parent_light",
+            "app.application.worldData.pack.refine.fineTilePrep.require_parent_light",
             return_value=MagicMock(gx=0, gy=0),
         ):
             refined = await runner.refine_rects(
@@ -101,7 +101,7 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
         with patch(
             "app.application.worldData.pack.refine.fineChunkRunner.ChunkComputePool",
         ) as pool_cls, patch(
-            "app.application.worldData.pack.refine.fineChunkRunner.require_parent_light",
+            "app.application.worldData.pack.refine.fineTilePrep.require_parent_light",
             return_value=MagicMock(gx=0, gy=0),
         ):
             refined = await runner.refine_rects(
@@ -132,7 +132,7 @@ class TestFineTerrainRefineParallel(unittest.IsolatedAsyncioTestCase):
         terrain, writer, rects, mat_ctx = self._setup()
         facade = FineTerrainRefineOrchestrator(terrain)
         with patch(
-            "app.application.worldData.pack.refine.fineChunkRunner.require_parent_light",
+            "app.application.worldData.pack.refine.fineTilePrep.require_parent_light",
             return_value=MagicMock(gx=0, gy=0),
         ):
             refined = await facade._refine_rects(

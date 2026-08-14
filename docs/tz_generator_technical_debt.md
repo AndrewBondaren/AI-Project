@@ -3,7 +3,7 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py` / `render_maps.py`, `worldBundleService.py`, relief library/import, pack render / parent-light refine.  
-**Обновлено:** 2026-08-13 — **R36u-T-1…T-9** ✅; **T-11 resolved (R36v)**; **T-10 deferred**; **R36v-T-1…T-13** ✅; **PAR-T-1…T-8** ✅.  
+**Обновлено:** 2026-08-14 — **Post-R36w** queued (V1 z / V2 canal) **перед** Wave E; **R36w** TZ + code ✅; **R36u-T-1…T-9** ✅; **T-11 resolved (R36v)**; **T-10** `road_shoulder` ✅; **R36v-T-1…T-13** ✅; **PAR-T-1…T-8** ✅.  
 **Связанные документы:**
 
 | Документ | Роль |
@@ -16,12 +16,14 @@
 | [tz_terrain_hydrology.md](./tz_terrain_hydrology.md) | Гидрология: моря, озёра, реки (target) |
 | [tz_climate.md](./tz_climate.md) | Продуктовое ТЗ climate (pole/local tiers) |
 | [tz_world_pack_storage.md](./tz_world_pack_storage.md) | World Pack; § WP-FIX-DEBT (в т.ч. WP-DELETE-1 → DEBT-10); terrain mask carry |
+| `.cursor/plans/full-bake-seam-halo-shoulder.md` | отдельные шаги: шов мира L0 · halo grid-соседа · T-10 |
 | `.cursor/plans/settlement-assembler.md` | Phase-план settlement |
 | `.cursor/plans/coordinate-spaces.md` | Phase-план NC-1 |
 | `.cursor/plans/grade-detailed-location-render.md` | L2 location grade ASCII impl |
 | `.cursor/plans/r36u-grade-detailed-migrate.md` | R36u migrate L0 ribbon → detailed geometry |
 | `.cursor/plans/r36u-post-impl-debt.md` | R36u-T-1…T-10 post-impl polish |
 | `.cursor/plans/r36v-grade-chunk-pool.md` | R36v pool sample → stitch → materialize; post-impl **R36v-T-*** |
+| `.cursor/plans/detailed-grade-volume-canal.md` | Post-R36w V1 volume z · V2 canal на detailed; **R36i-T** |
 
 ---
 
@@ -65,7 +67,7 @@
 | `planner/footprint.py` | 190+ | sizing + gates + coordinate facade + deprecated aliases |
 | `worldData/worldBundleService.py` | ~190 | validate/remap/tx + N section imports + **inline relief export** — см. **BUNDLE-2** (не god-class generators) |
 | `worldData/reliefTemplateLibraryService.py` | ~135 | CRUD + R29 FS + validate + **HTTPException** — см. **RELIEF-T-3** |
-| `pack/refine/fineChunkRunner.py` | ~390 | pool + persist; `_plan_tile_grade` → same helpers as facade (**R36v-T-1/T-12**) |
+| `pack/refine/fineChunkRunner.py` | ~390 | pool + persist; grade sample+materialize в том же compute task (**R36w**) |
 
 ---
 
@@ -1078,13 +1080,14 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 5. ~~**Wave C — RELIEF-BAR-1**~~ ✅ (`ribbonFence` + `ribbonBarrierApply`)
 6. ~~**Wave D —** `open_land` / `shore`~~ ✅ (`ribbonGradeApply` + contributors)
 7. ~~**Wave D polish**~~ ✅ (`contextRibbonApply` / `ribbonSampleUtil` / `ribbon_intents`+`ref_cells` / BAR-1 once)
-8. **Wave E —** R36s / R36r / R36o / Q4 / R36f/k / UI R30 (later)
-9. **Parallel eng (не gate waves):** ~~T-33…T-41, T-66~~ ✅; road-facade naming optional; fixtures `*_templates`  
+8. **Post-R36w —** V1 apply volume z · V2 canal на detailed ([план](../.cursor/plans/detailed-grade-volume-canal.md); § R36i-T). **Не** Wave E
+9. **Wave E —** R36s / R36r / R36o / Q4 / R36f/k / UI R30 (later; после V1–V2)
+10. **Parallel eng (не gate waves):** ~~T-33…T-41, T-66~~ ✅; road-facade naming optional; fixtures `*_templates`  
 ~~T-28 / T-29 / T-37~~ ✅ worldRow ← slices + import merge module + runtime merge-policy  
    ~~shared `RoadShoulderIntent`/`grade_road_shoulder_*`~~ ✅ → `RibbonIntent` / `grade_ribbon_segments`  
    ~~**T-31/T-32**~~ ✅  
    **PAR-T-1…T-8** ✅ — L2 grade ASCII post-impl ([§ Pack ASCII](#pack-ascii--l2-grade-carry--post-impl-smells-par-t))
-9. (optional) rename `MountainSideRecipeMode` wire A–D — breaking + migration
+11. (optional) rename `MountainSideRecipeMode` wire A–D — breaking + migration
 
 ---
 
@@ -1092,7 +1095,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 **Контекст:** 2026-08-12 — L2 location grade ASCII shipped ([`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) **PAR-G7…G10**; plan `grade-detailed-location-render`). Ревью: неявные контракты · dataModel · хардкоды · SRP.
 
-**Не долг (locked product):** grade writer = **detailed_bake geometry** ([`tz_terrain_relief.md`](./tz_terrain_relief.md) **R36u**); generate = **per-chunk в pool** (**R36v**, impl **T-11**); L0 **без** outdoor grade; ~~L0→L2 grade-uid nearest carry~~ superseded; FineTerrain column `system_grade_uid` → Instance; empty → omit `surface_grade` / `grade_{n}`; L2 dump `surface_grade.txt` + `z/grade_{n}.txt` (location **и** wilderness); anchors **R36t**. L0 ribbon writers **removed** (T-8).
+**Не долг (locked product):** grade writer = **detailed_bake geometry** ([`tz_terrain_relief.md`](./tz_terrain_relief.md) **R36u**; исключение из [§ Идея 2](./tz_world_pack_storage.md)); generate = **per-chunk в pool** (**R36v**, impl **T-11**); L0 **без** outdoor grade; ~~L0→L2 grade-uid nearest carry~~ superseded; FineTerrain column `system_grade_uid` → Instance; empty → omit `surface_grade` / `grade_{n}`; L2 dump `surface_grade.txt` + `z/grade_{n}.txt` (location **и** wilderness); anchors **R36t**. L0 ribbon writers **removed** (T-8).
 
 ### Legacy L0 grade — inventory (R36u migrate off)
 
@@ -1164,16 +1167,16 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 | **R36u-T-7** | medium | **resolved** | P2 | DRY | `sample_open_land_meter` / `sample_shore_meter` ≈ L0 `openLandSample` / `shoreSample`; `meter_seed_blocked` ≈ `landward_seed_blocked`; uid stamp дважды | **Fix:** `sample_downhill_land_sites` + `sample_landward_of_refs`; blocked-адаптеры разные (compose vs meter) |
 | **R36u-T-8** | medium | **resolved** | P2 | мёртвый код / dataModel | L0 ribbon files живы; `LightContributorId.OPEN_LAND/SHORE/ROAD_SHOULDER` в enum без factory; `upsample_grade_uid_from_parent_light` dead export | **Fix:** deleted L0 outdoor grade stack + enum members + upsample helper; tests on detailed/meter; `painted_road_edges` kept for T-10 |
 | **R36u-T-9** | medium | **resolved** | P2 | неявный контракт | R36t = `body[:-1]`; canal args `del`; один Grade instance на сегмент (`last_plan`) vs L0 per-seed; `center_m` = cell xy; blocked = `z is None` | **Fix:** corridor = wrote − ref_cells; instance per seed; `center_m` = cell+0.5; no canal args; **`meter_grade_cell_blocked`** (missing/graded/road/hydro/barrier) |
-| **R36u-T-10** | low | **deferred** | P3 | продукт / SRP | `road_shoulder` не на detailed path (TZ context есть) | **Deferred** в [`tz_terrain_relief.md`](./tz_terrain_relief.md) R36u; порт later |
+| **R36u-T-10** | low | **resolved** | P3 | продукт / SRP | `road_shoulder` не на detailed path (TZ context есть) | **Fix:** `ReliefContext.ROAD_SHOULDER` в `_CONTEXT_SAMPLES`; `PaintedRoadEdge` → dataModel; тот же `PackJobUid` / каталог |
 | **R36u-T-11** | **high** | **resolved** | P0 | perf / неявный контракт | `generate_detailed_grade` на **весь тайл** до `ChunkComputePool`; полный land-dict; per-seed instance spam | **Fix (R36v):** pool sample → stitch (один uid) → pool materialize+fill; late chunk inherit/upsert; без L0-кандидатов |
 
-**Fix order:** ~~T-1 → T-9~~ ✅; ~~**T-11**~~ ✅; **T-10 deferred**. **Не трогать:** terrain mask carry (`system_terrain`); hydro corridor; facing upsample; `surface_z` upsample.
+**Fix order:** ~~T-1 → T-9~~ ✅; ~~**T-11**~~ ✅; ~~**T-10**~~ ✅. **Не трогать:** terrain mask carry (`system_terrain`); hydro corridor; facing upsample; `surface_z` upsample.
 
 **Не долг (уже locked):** L0 без outdoor grade writer; ~~PAR-G8 grade carry~~; L2 `surface_grade` / `grade_{n}` ASCII consumer; **R36v контракт** (impl = T-11).
 
 ### R36v post-impl smells (R36v-T)
 
-**Контекст:** 2026-08-13 — T-11 shipped ([`.cursor/plans/r36v-grade-chunk-pool.md`](../.cursor/plans/r36v-grade-chunk-pool.md)); ревью 6 осей + `materialize_segment_meter`. **Scope:** только outdoor grade generate/persist на detailed. **Не трогать:** terrain mask carry / hydro corridor / facing / `surface_z`; T-10; DAG `modify_terrain`.
+**Контекст:** 2026-08-13 — T-11 shipped ([`.cursor/plans/r36v-grade-chunk-pool.md`](../.cursor/plans/r36v-grade-chunk-pool.md)); ревью 6 осей + `materialize_segment_meter`. **Scope:** только outdoor grade generate/persist на detailed. **Не трогать:** terrain mask carry / hydro corridor / facing / `surface_z`; DAG `modify_terrain`.
 
 **Не долг:** stamp → `columnFillPass.system_grade_uid` → pack column → SQL instance — **конвейер одного writer’а**, не dual-write геометрии. Три caller’а `persist_relief_grades(..., replace_world=False)` — один persist.
 
@@ -1193,9 +1196,46 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 | **R36v-T-12** | low | **resolved** | P3 | SRP | runner inline sample-pool + stitch | **Fix:** `_plan_tile_grade`; top-level imports из generate |
 | **R36v-T-13** | low | **resolved** | P3 | DRY | persist inline union `cell_refs` | **Fix:** `apply_prior_cell_refs`; facade omit `object_policy`/`occurrence_start`; lazy `ColumnRect` |
 
-**Fix order:** ~~T-1 → T-13~~ ✅. **Не трогать:** mask carry; T-10 `road_shoulder`; DAG node.
+**Fix order:** ~~T-1 → T-13~~ ✅. **Не трогать:** mask carry; DAG node.
 
-**Agent pointer:** [`.cursor/plans/r36v-grade-chunk-pool.md`](../.cursor/plans/r36v-grade-chunk-pool.md); SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) R36v.
+**Agent pointer:** [`.cursor/plans/r36v-grade-chunk-pool.md`](../.cursor/plans/r36v-grade-chunk-pool.md); SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) R36v / **R36w**.
+
+### R36w — worker stitch (resolved)
+
+**Контекст:** 2026-08-14 — [`tz_terrain_relief.md`](./tz_terrain_relief.md) **R36w** / C27. Каталог граней до пула; один `ColumnRect` task; uid от `world_seed`.
+
+| ID | Severity | Status | P | Ось | Smell | Target |
+|---|---|---|---|---|---|---|
+| **R36w-T-1** | **high** | **resolved** | P1 | schedule | два пула + barrier plan; lock-mint в воркере | Каталог + uid **до** пула; **один** pool task = `ColumnRect` |
+| **R36w-T-2** | medium | **resolved** | P2 | неявный контракт | uid от `world_uid`+клетка / порядка воркеров | `make_seeded_uid` от `world_seed\|tile\|face` |
+| **R36w-T-3** | medium | **resolved** | P2 | гонка / dual id | east A ≠ west B; межтайловый шов два uid | Канонический `face_key`; owner тайл в site_id |
+
+**Не трогать:** mask carry; DAG; L0 grade writer. **Не** remap после persist. **Не** SW-волна как SoT порядка.
+
+Шов `full_bake` / halo `grid_neighbor` / T-10 — [план](../.cursor/plans/full-bake-seam-halo-shoulder.md) ✅. Lookup только `WorldBounds` / `PackJobUid` / `Facing` / `ReliefContext`.
+
+### FineChunkRunner layers (resolved)
+
+**Контекст:** 2026-08-14 — `refine_rects` держал prep + nested compute/persist closures. SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) § FineChunkRunner слои.
+
+| ID | Severity | Status | P | Ось | Smell | Target |
+|---|---|---|---|---|---|---|
+| **FCR-T-1** | **high** | **resolved** | P1 | SRP | `refine_rects` шесть фаз + closures на ~15 locals; второй `WorldPackReader` на inherit | `FineTileContext`; `prepare_fine_tile`; `compute_rect` → `ChunkComputeResult`; `FineChunkPersist` (`write_lock` + location flush). Grade **внутри** compute. **Не** новый grade orchestrator; **не** второй пул |
+
+**Не трогать:** mask carry; DAG; R36w catalog-before-pool; halo = `grid_neighbor` only.
+
+### R36i-T — volume z / canal not applied on detailed (open)
+
+**Контекст:** 2026-08-14 — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R36i / C1 / C6 / R28 / R36p · § Post-R36w. `plan_seed_volume` считает `surface_z`; `MeterGradeSurface` — uid stamp, **no z mutation**. `resolve_seed_canal` не вызывается из `pack/refine`. Plan: [`.cursor/plans/detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md).
+
+| ID | Severity | Status | P | Ось | Smell | Target |
+|---|---|---|---|---|---|---|
+| **R36i-T-1** | **high** | **open** | P1 | неявный контракт | uid-only; voxels остаются parent cliff при Grade SLOPE 45° | Overlay `plan.columns[].surface_z` в `compute_rect`; fill из overlay ∪ parent; **не** shared heightmap из pool; якоря R36t |
+| **R36i-T-2** | **high** | **open** | P1 | call site | canal resolve/draw не в detailed materialize | После V1: `resolve_seed_canal` + `draw_canal`; поля canal на instance; cut только при `L_eff` < requested |
+| **R36i-T-3** | medium | **open** | P2 | call site | BAR-1: L0 `paintBarrier` снят; нет detailed fence | V3: consumer **или** TZ later — решение, не silent impl |
+| **R36i-T-4** | low | **open** | P3 | residual | `ReliefGradeSystem` unused; face-graph union-find не построен; L0 `world-grade` ASCII leftover | V4 по отдельному «делай» |
+
+**Fix order:** T-1 → T-2; T-3 решение; T-4 later. **Не трогать:** Wave E; DAG; mask carry; parent `surface_z` upsample; `refresh_tile_gaps` из worker на весь тайл.
 
 ---
 
@@ -1235,6 +1275,10 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-14 | **R36i-T-1…T-4 open:** volume z не applied; canal не из refine; BAR-1 call site; V4 polish. Backlog Post-R36w **перед** Wave E. План [`detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md) |
+| 2026-08-14 | **FCR-T-1 resolved:** FineChunkRunner = `FineTileContext` + prep + `compute_rect` + persist; grade в ColumnRect worker |
+| 2026-08-14 | **R36w edge test:** два bake смежных тайлов, семена на owner-грани → один uid (`test_two_tile_bakes_along_seam_one_uid`); bind: rim оси sample → грань оси; `< 2` chunk-родителей грани → void ≠ C18 |
+| 2026-08-14 | **R36w TZ:** каталог граней + заранее uid (`world`+tile+`face_key`); T-1…T-3 open; SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-08-13 | **R36v-T-8…T-13 resolved:** SampleCell NamedTuple; bag = rect cells; unique-neighbor inherit; Facing on corridor; `_plan_tile_grade`; `apply_prior_cell_refs` |
 | 2026-08-13 | **R36v-T-1…T-7 resolved:** plan/materialize helpers; SeedCorridor split; `blocks_grade_seed`; ColumnBounds; merge_cell_refs; unique inherit; halo/origin/alias_heights |
 | 2026-08-13 | **R36v-T-1…T-7 open:** post-impl ревью (god-method runner; materialize не разрезан; hydro литерал; duck-type rect; dual merge cell_refs; uid bag/inherit; хардкоды) |

@@ -70,6 +70,57 @@ class TestGridBboxFromLocations(unittest.TestCase):
         self.assertEqual(bbox.x_min, -2)
         self.assertEqual(bbox.x_max, 2)
 
+    def test_world_bounds_from_world_declared(self) -> None:
+        from app.application.worldData.generators.terrain.passes.bbox import (
+            world_bounds_from_world,
+        )
+
+        world = SimpleNamespace(
+            world_bounds={"x_min": 1, "x_max": 3, "y_min": 2, "y_max": 4},
+        )
+        bounds = world_bounds_from_world(world, [])
+        self.assertIsNotNone(bounds)
+        assert bounds is not None
+        self.assertEqual((bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max), (1, 3, 2, 4))
+
+
+class TestWorldBoundsNeighbors(unittest.TestCase):
+    def test_grid_neighbor_inside_not_wrap(self) -> None:
+        from app.dataModel.spatial.facing import Facing
+
+        b = WorldBounds(x_min=0, x_max=2, y_min=0, y_max=2)
+        self.assertEqual(b.grid_neighbor(1, 1, Facing.EAST), (2, 1))
+        self.assertIsNone(b.grid_neighbor(2, 1, Facing.EAST))
+        self.assertIsNone(b.antagonist_tile(1, 1, Facing.EAST))
+
+    def test_antagonist_on_aabb_rim(self) -> None:
+        from app.dataModel.spatial.facing import Facing
+
+        b = WorldBounds(x_min=-1, x_max=1, y_min=0, y_max=2)
+        self.assertEqual(b.antagonist_tile(1, 0, Facing.EAST), (-1, 0))
+        self.assertEqual(b.antagonist_tile(-1, 0, Facing.WEST), (1, 0))
+        self.assertEqual(b.antagonist_tile(0, 2, Facing.NORTH), (0, 0))
+        self.assertEqual(b.antagonist_tile(0, 0, Facing.SOUTH), (0, 2))
+        self.assertIsNone(b.grid_neighbor(1, 0, Facing.EAST))
+
+    def test_wrap_owner_is_lexicographic_min(self) -> None:
+        from app.dataModel.spatial.facing import Facing
+
+        b = WorldBounds(x_min=-1, x_max=1, y_min=0, y_max=2)
+        pair = b.wrap_owner_and_other(1, 0, Facing.EAST)
+        self.assertEqual(pair, ((-1, 0), (1, 0)))
+        assert pair is not None
+        owner, other = pair
+        self.assertEqual(b.facing_to_antagonist(owner, other), Facing.WEST)
+        self.assertIsNone(b.wrap_owner_and_other(0, 1, Facing.EAST))
+
+    def test_wrap_owner_skips_one_tile_wide(self) -> None:
+        from app.dataModel.spatial.facing import Facing
+
+        b = WorldBounds(x_min=3, x_max=3, y_min=0, y_max=0)
+        self.assertEqual(b.antagonist_tile(3, 0, Facing.WEST), (3, 0))
+        self.assertIsNone(b.wrap_owner_and_other(3, 0, Facing.WEST))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -64,6 +64,11 @@ def unique_outward(
     return None
 
 
+def has_relief_dz(dz: int) -> bool:
+    """True when measured Δz is a grade site (RELIEF-T-27 / T-10)."""
+    return int(dz) != 0
+
+
 def relief_dz(ref_z: int, adjacent_z: int) -> int:
     """Δz road/ref minus adjacent (RELIEF-T-27) — positive → slope_down toward adjacent."""
     return int(ref_z) - int(adjacent_z)

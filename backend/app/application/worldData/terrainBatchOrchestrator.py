@@ -9,7 +9,7 @@ See ``docs/tz_terrain_generation.md`` § multi-pass skeleton; WP-PERF-22 Parent 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from app.api.schemas.imports import ImportResult
 from app.application.worldData.generators.assemblers.climateAssembler.passes.poleResolvePass import (
@@ -47,6 +47,11 @@ class TileSurfaceState:
     surface_terrain: dict[tuple[int, int], str] | None = None
     surface_facing: dict[tuple[int, int], Facing] | None = None
     surface_grade_uid: dict[tuple[int, int], str] | None = None
+
+
+def refresh_tile_gaps(world: World, state: TileSurfaceState) -> TileSurfaceState:
+    """Recompute ``n_eff`` after halo meters were merged into the heightmap."""
+    return replace(state, n_eff=run_gap_analysis(world, state.heightmap))
 
 
 class TerrainBatchOrchestrator:

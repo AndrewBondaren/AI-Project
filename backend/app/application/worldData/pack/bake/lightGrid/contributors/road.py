@@ -19,7 +19,7 @@ from app.application.worldData.pack.bake.lightGrid.contributors.hydro.raster imp
     light_polyline_from_meters,
 )
 from app.application.worldData.pack.bake.lightGrid.paintTerrain import paint_system_terrain
-from app.application.worldData.pack.bake.lightGrid.paintedRoadEdge import PaintedRoadEdge
+from app.dataModel.worldPack.paintedRoadEdge import PaintedRoadEdge
 from app.dataModel.masks.enums.maskDomainId import LightContributorId
 from app.db.models.namedLocation import NamedLocation
 

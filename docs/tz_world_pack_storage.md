@@ -173,7 +173,7 @@ L2_tile = refine(
 
 | Аспект | Поведение |
 |---|---|
-| Рельеф | upsample L0 `surface_z` → fine `SurfaceHeightmap` + детерминированный high-freq noise; **macro-форма** (хребты, долины) не меняется |
+| Рельеф | upsample L0 `surface_z` → fine `SurfaceHeightmap` + детерминированный high-freq noise; **macro-форма** (хребты, долины) не меняется. Outdoor grade — не L0-carry: [`tz_terrain_relief.md`](./tz_terrain_relief.md) R36u |
 | Реки / море | `HydrologyGeneratorService` **в коридоре** L0 `hydrology_role`; fine bed уточняет, не смещает русло на карте |
 | Детерминизм | тот же seed + тот же L0 → тот же L2 hash (WP-7) |
 | Persist | L2 **chunks** в World Pack (`partial` → `complete` per tile), не SQLite wilderness |
@@ -247,7 +247,7 @@ load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
 | **Chunk partition** | WP-19 без изменений — не резать chunks по light cells / climate zones |
 | **Запрещено** | второй compose / declare rematerialize; `surface_biome_terrain(default_zone)` на pack refine path |
 
-**Outdoor grade uid:** **не** этот контракт. `system_grade_uid` **не** nearest-carry с L0 (**R36u** / ~~PAR-G8~~). Writer = `FineChunkRunner` + rect-scoped `detailedGradeGenerate` **в том же chunk pool** (**R36v**) — [`tz_terrain_relief.md`](./tz_terrain_relief.md). **Не** tile-wide serial pre-pass; **не** L0 Δz-кандидаты.
+**Outdoor grade uid:** **не** этот контракт. `system_grade_uid` **не** nearest-carry с L0 (**R36u** / ~~PAR-G8~~). Writer = `FineChunkRunner` + rect-scoped generate **в том же chunk pool** (**R36v**); стык ленты на воркере (**R36w**) — [`tz_terrain_relief.md`](./tz_terrain_relief.md). Job uid wire — [`PackJobUid`](../backend/app/dataModel/worldPack/packJobUid.py); **не** pack/entity uid и не дерево очереди `tile→chunk` (pack-path `c.{cx}.{cy}` ≠ chunk job uid). Родители **грани** = chunk uid этого тайла (1\|2) — там же, clearance. **Не** tile-wide serial pre-pass; **не** L0 Δz-кандидаты.
 
 **Не смешивать имена (R36u lock):** «terrain mask carry» = **только** `system_terrain`. Hydro hard corridor, `system_facing` upsample и `surface_z` upsample — **соседние** parent-light контракты (WP-PERF-22 / facing), не mask carry; R36u их тоже не меняет.
 
@@ -341,9 +341,11 @@ flowchart TB
 | Job | Делает | Не делает |
 |---|---|---|
 | **light_bake** | L0 на location∪hydro tiles; `locations_index`; climate coarse; finalize pack | L2 `location_terrain` / wilderness chunks; blocking `refine_from_entry` |
-| **full_bake** | L0 на весь `world_bounds` (добить дыры после light) | L2; entry refine |
-| **detailed_bake** | L2 offline: `scope=location` (одна `location_uid`) или `scope=wilderness` (tile topping от parent light); partition WP-19 | L0 world map bake; climate fine на wilderness (debt) |
+| **full_bake** | L0 на весь `world_bounds` (добить дыры после light); **шов мира** на крайних макро-тайлах (антагонисты AABB). Uid тайла: [`PackJobUid`](../backend/app/dataModel/worldPack/packJobUid.py) + [`pack_job_seed`](../backend/app/application/worldData/pack/bake/macroTileUid.py) | L2; entry refine |
+| **detailed_bake** | L2 offline: `scope=location` (одна `location_uid`) или `scope=wilderness` (tile topping от parent light); partition WP-19. Refine — § Идея 2; outdoor grade — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R36u | L0 world map bake; шов мира; climate fine на wilderness (debt) |
 | **entry / WP-13** | scene volume + background rings/path у spawn | часть `POST …/pack/bake?mode=light\|full` |
+
+**Шов мира (тор AABB, L0):** при `full_bake` крайние макро-тайлы bounds, у которых нет соседа в прямоугольнике, смыкаются с **антагонистом** и шов **ставится на макро-тайлах**. Lookup **только** [`WorldBounds`](../backend/app/dataModel/worldPack/worldBounds.py): `grid_neighbor` (внутри AABB) / `antagonist_tile` (wrap); сторона = [`Facing`](../backend/app/dataModel/spatial/facing.py) + `CARDINAL_WALL_OUTWARD_DELTA`. Идентичность тайла = [`PackJobUid.tile_uid`](../backend/app/dataModel/worldPack/packJobUid.py) + `pack_job_seed`. Это топология L0 world map, не `face_key` / не outdoor grade. **`detailed_bake` шов мира не считает и не пишет.** Смежность внутри AABB — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R36w. Не magma **antipode**. Impl — [`.cursor/plans/full-bake-seam-halo-shoulder.md`](../.cursor/plans/full-bake-seam-halo-shoulder.md) ✅.
 
 **После light (отдельный шаг процесса, не фаза bake):** caller **может** стартовать entry job (blocking scene у player entry point + enqueue фоновой инициализации) — это **старт другой джобы**, не продолжение `light_bake`. Full не обязан ждать entry; entry не обязан ждать full.
 
@@ -743,7 +745,7 @@ flowchart TB
 | Модуль | Ответственность | Запреты |
 |---|---|---|
 | `FineTerrainRefineOrchestrator` | Thin facade: scene / path / rect / queued chunk; делегирует schedule и helpers | Нет `ChunkComputePool`; нет прямой записи blobs |
-| `FineChunkRunner` | `require_parent_light` → surface → **pool:** column fill + **grade (R36v, per rect)** → partition → wilderness / location_terrain + manifest | Нет enqueue в `ChunkRefineQueue`; нет serial tile-wide grade до pool |
+| `FineChunkRunner` | thin: `prepare_fine_tile` → **pool** `compute_rect` (column fill + **grade R36v**, per rect) → `FineChunkPersist` | Нет enqueue в `ChunkRefineQueue`; нет serial tile-wide grade; нет второго grade pipeline |
 | `chunkSchedule` | Free functions: rings / path-ahead enqueue | Не пишет pack blobs; не generate cells |
 | `pathCorridorSelect` | `select_path_corridor_rects` → `ColumnRect[]` | Не persist |
 | `packMapHelpers.tile_for_anchor` / `entryRingGeom` | Coord / scene chunk indices | — |
@@ -1897,6 +1899,8 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-14 | **FineChunkRunner слои:** prep / `compute_rect` / persist; grade в том же `ColumnRect` task — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
+| 2026-08-14 | **Шов мира:** `full_bake` L0 смыкает край AABB с антагонистом на макро-тайлах; не L2 / не R36w — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-08-13 | **R36v:** FineChunkRunner grade per-rect in pool (не tile-wide serial) — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-08-13 | **R36u lock wording:** terrain mask carry = только `system_terrain`; hydro/facing/z не под этим именем |
 | 2026-07-30 | WP-24 ↔ **BUNDLE-2 SoT** [`tz_world_bundle.md`](./tz_world_bundle.md); sync skeleton/`relief_templates` в таблице «сейчас» |
