@@ -43,6 +43,11 @@ if str(REPO / "backend") not in sys.path:
     sys.path.insert(0, str(REPO / "backend"))
 
 from debug_api_helpers import BASE_URL, DebugApiError, _require_ok  # noqa: E402
+from debug_transcript import (  # noqa: E402
+    add_debug_progress_argument,
+    progress,
+    set_debug_progress,
+)
 from app.application.worldData.render.mapSymbols import render_grade_legend  # noqa: E402
 from app.application.worldData.render.renderPayloads import (  # noqa: E402
     LEVEL_CLIFF_DELTA,
@@ -238,10 +243,9 @@ def _write_wilderness_z_slices(
     if renderer is not None:
         source = "pack"
         frame = renderer.mosaic_xy_bounds()
-        print(
+        progress(
             f"  wilderness ({gx},{gy}): writing z-slice ASCII grids "
             f"(aligned frame={frame}) under z/",
-            flush=True,
         )
         for i, (z_val, body) in enumerate(
             renderer.iter_occupied_z_levels_aligned(),
@@ -255,12 +259,11 @@ def _write_wilderness_z_slices(
             _write(z_path, f"{body}\n\n--- legend ---\n{legend}\n")
             paths[str(int(z_val))] = str(z_path.relative_to(REPO))
             if i == 1 or i % 200 == 0:
-                print(f"    z-files {len(paths)} (last z={z_val})", flush=True)
-        print(f"    z-files done: {len(paths)}", flush=True)
-        print(
+                progress(f"    z-files {len(paths)} (last z={z_val})")
+        progress(f"    z-files done: {len(paths)}")
+        progress(
             f"  wilderness ({gx},{gy}): writing grade_z ASCII grids "
             f"(aligned frame={frame}) under z/grade_<n>.txt",
-            flush=True,
         )
         grade_legend = f"{legend.rstrip()}\n{render_grade_legend()}"
         grade_count = 0
@@ -272,11 +275,8 @@ def _write_wilderness_z_slices(
             grade_paths[str(int(z_val))] = str(g_path.relative_to(REPO))
             grade_count += 1
             if grade_count == 1 or grade_count % 200 == 0:
-                print(
-                    f"    grade_z-files {grade_count} (last z={z_val})",
-                    flush=True,
-                )
-        print(f"    grade_z-files done: {grade_count}", flush=True)
+                progress(f"    grade_z-files {grade_count} (last z={z_val})")
+        progress(f"    grade_z-files done: {grade_count}")
     else:
         occupied = sorted(occupied_filter)
         for z_val in occupied:
@@ -697,7 +697,9 @@ def main() -> None:
         default=BASE_URL,
         help=f"API base URL (default: {BASE_URL})",
     )
+    add_debug_progress_argument(parser)
     args = parser.parse_args()
+    set_debug_progress(args.debug)
 
     try:
         with httpx.Client(base_url=args.base_url, timeout=600.0) as client:

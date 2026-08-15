@@ -10,6 +10,10 @@ Does **not** wipe pack, re-import, or run entry/bg refine.
 - ``tiles/gx{G}_gy{Y}/tile-latest.log`` — тот же bake-poll **ещё** в per-tile файл
 - ``locations/{location_uid}/location-latest.log`` — то же для location
 
+Heartbeat (``[online]`` chunks, ``z-files`` / ``grade_z-files``): **всегда в файл**.
+В терминал — только ``--debug`` / ``DEBUG_PROGRESS=1``.
+SoT: ``debug_transcript.py`` (``tee_stdio`` / ``progress``).
+
 HTTP:
   ``POST …/map/pack/bake?mode=detailed&scope=location&location_uid=``
   ``POST …/map/pack/bake?mode=detailed&scope=wilderness&tile_gx=&tile_gy=``
@@ -33,7 +37,7 @@ import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator, TextIO
+from typing import Any, Iterator
 
 REPO = Path(__file__).resolve().parents[2]
 if str(REPO / "backend") not in sys.path:
@@ -48,49 +52,15 @@ from debug_api_helpers import (  # noqa: E402
     api_pack_bake,
 )
 from debug_surface_helpers import api_loading_progress  # noqa: E402
+from debug_transcript import (  # noqa: E402
+    add_debug_progress_argument,
+    progress,
+    set_debug_progress,
+    tee_stdio,
+)
 from render_maps import _print_detailed_summary, dump_detailed_renders  # noqa: E402
 
 _POLL_INTERVAL_S = float(os.environ.get("DETAILED_BAKE_POLL_S", "5"))
-
-
-class _TeeStream:
-    """Tee stdout/stderr into a log file; flush every write (online)."""
-
-    def __init__(self, primary: TextIO, log_file: TextIO) -> None:
-        self._primary = primary
-        self._log = log_file
-
-    def write(self, data: str) -> int:
-        self._primary.write(data)
-        self._log.write(data)
-        self._primary.flush()
-        self._log.flush()
-        return len(data)
-
-    def flush(self) -> None:
-        self._primary.flush()
-        self._log.flush()
-
-    def reconfigure(self, **kwargs: Any) -> None:  # noqa: ANN401
-        reconf = getattr(self._primary, "reconfigure", None)
-        if callable(reconf):
-            reconf(**kwargs)
-
-
-@contextmanager
-def _tee_stdio(log_path: Path) -> Iterator[Path]:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    log_file = log_path.open("w", encoding="utf-8", newline="\n")
-    old_out, old_err = sys.stdout, sys.stderr
-    sys.stdout = _TeeStream(old_out, log_file)  # type: ignore[assignment]
-    sys.stderr = _TeeStream(old_err, log_file)  # type: ignore[assignment]
-    try:
-        yield log_path
-    finally:
-        sys.stdout = old_out
-        sys.stderr = old_err
-        log_file.flush()
-        log_file.close()
 
 
 def _pack_dir(world_uid: str) -> Path:
@@ -112,7 +82,7 @@ def _location_dir(report_root: Path, location_uid: str) -> Path:
 
 
 def _append_global_line(_global_log: Path, line: str) -> None:
-    """Summary line → stdout; outer ``_tee_stdio`` also writes ``detailed-bake-latest.log``."""
+    """Summary line → stdout; outer ``tee_stdio`` also writes ``detailed-bake-latest.log``."""
     print(line, flush=True)
 
 
@@ -253,7 +223,7 @@ def _online_cell_progress(world_uid: str, gx: int, gy: int) -> Iterator[None]:
             if key == last:
                 continue
             last = key
-            print(_fmt_line(key[0], key[1]), flush=True)
+            progress(_fmt_line(key[0], key[1]))
 
     thread = threading.Thread(target=_loop, name=f"detailed-bake-poll-{gx}-{gy}", daemon=True)
     thread.start()
@@ -263,9 +233,8 @@ def _online_cell_progress(world_uid: str, gx: int, gy: int) -> Iterator[None]:
         stop.set()
         thread.join(timeout=_POLL_INTERVAL_S + 1.0)
         prog = _cell_progress(world_uid, gx, gy)
-        print(
+        progress(
             _fmt_line(int(prog["chunks"]), str(prog["status"]), suffix="(final poll)"),
-            flush=True,
         )
 
 
@@ -329,7 +298,7 @@ def _run_detailed_location(
     detail = "absent"
 
     try:
-        with _tee_stdio(tile_log):
+        with tee_stdio(tile_log):
             print(f"=== detailed_bake location {location_uid} start ===", flush=True)
             bake = api_pack_bake(
                 client,
@@ -436,7 +405,7 @@ def _run_detailed_wilderness_cell(
     detail = "absent"
 
     try:
-        with _tee_stdio(tile_log):
+        with tee_stdio(tile_log):
             print(f"=== detailed_bake wilderness cell=({gx},{gy}) start ===", flush=True)
             print(
                 f"[online] cell=({gx},{gy}) chunks={before['chunks']} "
@@ -557,7 +526,9 @@ def main() -> None:
         default=True,
         help="Dump L2 ASCII (location + wilderness mosaics) after bake (default: on)",
     )
+    add_debug_progress_argument(parser)
     args = parser.parse_args()
+    set_debug_progress(args.debug)
 
     if args.scope == "wilderness":
         if args.all_tiles and (args.gx is not None or args.gy is not None):
@@ -578,7 +549,7 @@ def main() -> None:
 
     # Entire run: terminal + detailed-bake-latest.log. Nested tile/location tee
     # keeps current stdout as primary → also lands in the global log.
-    with _tee_stdio(global_log):
+    with tee_stdio(global_log):
         print(
             f"# detailed_bake global transcript  world={world_uid}  started={stamp}",
             flush=True,

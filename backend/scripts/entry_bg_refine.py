@@ -26,10 +26,9 @@ import json
 import os
 import sys
 import time
-from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator, TextIO
+from typing import Any
 
 REPO = Path(__file__).resolve().parents[2]
 if str(REPO / "backend") not in sys.path:
@@ -42,46 +41,15 @@ from debug_api_helpers import (
     api_schedule_chunk_refine,
 )
 from debug_surface_helpers import api_loading_progress
+from debug_transcript import (
+    add_debug_progress_argument,
+    progress,
+    set_debug_progress,
+    tee_stdio,
+)
 from render_maps import _print_summary, dump_map_renders
 
 _DEFAULT_TIMEOUT_S = float(os.environ.get("DEBUG_API_TIMEOUT", "600"))
-
-
-class _TeeStream:
-    def __init__(self, primary: TextIO, log_file: TextIO) -> None:
-        self._primary = primary
-        self._log = log_file
-
-    def write(self, data: str) -> int:
-        self._primary.write(data)
-        self._log.write(data)
-        return len(data)
-
-    def flush(self) -> None:
-        self._primary.flush()
-        self._log.flush()
-
-    def reconfigure(self, **kwargs: Any) -> None:  # noqa: ANN401
-        reconf = getattr(self._primary, "reconfigure", None)
-        if callable(reconf):
-            reconf(**kwargs)
-
-
-@contextmanager
-def _tee_stdio(log_path: Path) -> Iterator[Path]:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    log_file = log_path.open("w", encoding="utf-8", newline="\n")
-    old_out, old_err = sys.stdout, sys.stderr
-    sys.stdout = _TeeStream(old_out, log_file)  # type: ignore[assignment]
-    sys.stderr = _TeeStream(old_err, log_file)  # type: ignore[assignment]
-    try:
-        yield log_path
-    finally:
-        sys.stdout = old_out
-        sys.stderr = old_err
-        log_file.flush()
-        log_file.close()
-        print(f"\nfull transcript saved: {log_path}", file=old_out, flush=True)
 
 
 def _report_dir(world_uid: str) -> Path:
@@ -159,7 +127,7 @@ def _poll_progress(
         snap = _progress_snapshot(api_loading_progress(client, world_uid))
         snap["t_s"] = round(now - t0, 2)
         samples.append(snap)
-        print(
+        progress(
             f"  poll t={snap['t_s']:.1f}s  "
             f"locations_pct={snap.get('locations_pct')}  "
             f"wilderness_pct={snap.get('wilderness_pct')}  "
@@ -210,7 +178,9 @@ def main() -> None:
         action=argparse.BooleanOptionalAction,
         default=True,
     )
+    add_debug_progress_argument(parser)
     args = parser.parse_args()
+    set_debug_progress(args.debug)
 
     world_uid = args.world_uid
     report_root = _report_dir(world_uid)
@@ -222,7 +192,7 @@ def main() -> None:
     print(f"report dir: {report_root}")
     print(f"transcript: {transcript}")
 
-    with _tee_stdio(transcript), api_client() as client:
+    with tee_stdio(transcript, announce_saved=True), api_client() as client:
         if not (_pack_dir(world_uid) / "manifest.json").is_file():
             raise SystemExit(
                 f"no pack manifest for {world_uid} — run light/full bake first"

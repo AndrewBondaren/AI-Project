@@ -28,10 +28,9 @@ import shutil
 import sys
 import tempfile
 import time
-from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterator, TextIO
+from typing import Any
 
 REPO = Path(__file__).resolve().parents[2]
 if str(REPO / "backend") not in sys.path:
@@ -44,52 +43,13 @@ from debug_surface_helpers import (
     api_loading_progress,
     api_pack_bake,
 )
+from debug_transcript import add_debug_progress_argument, set_debug_progress, tee_stdio
 from render_maps import _print_summary, dump_map_renders
 
 # Full bake can exceed the default 120s debug timeout.
 _DEFAULT_TIMEOUT_S = float(os.environ.get("DEBUG_API_TIMEOUT", "600"))
 
 TileKey = tuple[int, int]
-
-
-class _TeeStream:
-    """Mirror writes to terminal and a log file."""
-
-    def __init__(self, primary: TextIO, log_file: TextIO) -> None:
-        self._primary = primary
-        self._log = log_file
-
-    def write(self, data: str) -> int:
-        self._primary.write(data)
-        self._log.write(data)
-        return len(data)
-
-    def flush(self) -> None:
-        self._primary.flush()
-        self._log.flush()
-
-    def reconfigure(self, **kwargs: Any) -> None:  # noqa: ANN401
-        reconf = getattr(self._primary, "reconfigure", None)
-        if callable(reconf):
-            reconf(**kwargs)
-
-
-@contextmanager
-def _tee_stdio(log_path: Path) -> Iterator[Path]:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    log_file = log_path.open("w", encoding="utf-8", newline="\n")
-    old_out, old_err = sys.stdout, sys.stderr
-    sys.stdout = _TeeStream(old_out, log_file)  # type: ignore[assignment]
-    sys.stderr = _TeeStream(old_err, log_file)  # type: ignore[assignment]
-    try:
-        yield log_path
-    finally:
-        sys.stdout = old_out
-        sys.stderr = old_err
-        log_file.flush()
-        log_file.close()
-        # Always tell the real terminal where the full transcript lives.
-        print(f"\nfull transcript saved: {log_path}", file=old_out, flush=True)
 
 
 def _tile_labels(tiles: set[TileKey] | list[TileKey]) -> list[str]:
@@ -490,7 +450,9 @@ def main() -> None:
         action=argparse.BooleanOptionalAction,
         default=True,
     )
+    add_debug_progress_argument(parser)
     args = parser.parse_args()
+    set_debug_progress(args.debug)
 
     fixture = args.fixture.resolve()
     if not fixture.is_file():
@@ -510,7 +472,7 @@ def main() -> None:
     full_render_log = out_root / "full-bake-render-latest.log"
     full_render_stamped = out_root / f"full-bake-render-{stamp}.log"
 
-    with _tee_stdio(log_latest):
+    with tee_stdio(log_latest, announce_saved=True):
         print(f"report dir: {out_root}")
         print(f"transcript: {log_latest}")
 
