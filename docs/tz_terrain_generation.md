@@ -1564,6 +1564,8 @@ PK `(world_uid, x, y, z)` — точечные запросы; индекс по
 
 #### Локальная модификация (runtime — event / action driven)
 
+**Слой процесса (locked):** это **modification** поверх уже запечённого Pack, не четвёртый bake mode и не `POST pack/bake` на `complete` тайл. `full_bake` / `detailed_bake` пишут immutable snapshot; взрыв, раскопки, локальный климат, катаклизм в bounds — **Patch Store** (`terrain_delta` / `climate_delta`), merge WP-20. Перепечь pack = смена версии мира (мастер / генератор / seed), не ход игрока. SoT pack: [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Слой модификации мира.
+
 **Инвариант:** gameplay **не** вызывает `generate-surface` на весь мир. Меняются только ячейки в **`patch_bounds`** (bbox, radius, corridor polyline, z-band).
 
 | Триггер | Пример | `patch_kind` | Типичные bounds | DAG node (target) |
@@ -1702,6 +1704,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-16 | **Modification layer:** patch ≠ force-rebuild detailed/full; Pack snapshot, deltas в Patch Store |
 | 2026-08-14 | **Шов мира:** `full_bake` L0 — край AABB ↔ антагонист на макро-тайлах; не detailed / не magma antipode |
 | 2026-07-29 | Relief: storage 1:1 buildings + `context` singular — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R11/R17/R18 |
 | 2026-07-29 | Pointer: outdoor grade + relief templates — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R9–R16 |

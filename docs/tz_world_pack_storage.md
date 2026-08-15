@@ -344,6 +344,7 @@ flowchart TB
 | **full_bake** | L0 на весь `world_bounds` (добить дыры после light); **шов мира** на крайних макро-тайлах (антагонисты AABB). Uid тайла: [`PackJobUid`](../backend/app/dataModel/worldPack/packJobUid.py) + [`pack_job_seed`](../backend/app/application/worldData/pack/bake/macroTileUid.py) | L2; entry refine |
 | **detailed_bake** | L2 offline: `scope=location` (одна `location_uid`) или `scope=wilderness` (tile topping от parent light); partition WP-19. Refine — § Идея 2; outdoor grade — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R36u | L0 world map bake; шов мира; climate fine на wilderness (debt) |
 | **entry / WP-13** | scene volume + background rings/path у spawn | часть `POST …/pack/bake?mode=light\|full` |
+| **modification** (не bake job) | Patch Store: `terrain_delta` / `climate_delta` в `patch_bounds`; grade helper R36v | `POST pack/bake`; rewrite `complete` tile; четвёртый `mode=` |
 
 **Шов мира (тор AABB, L0):** при `full_bake` крайние макро-тайлы bounds, у которых нет соседа в прямоугольнике, смыкаются с **антагонистом** и шов **ставится на макро-тайлах**. Lookup **только** [`WorldBounds`](../backend/app/dataModel/worldPack/worldBounds.py): `grid_neighbor` (внутри AABB) / `antagonist_tile` (wrap); сторона = [`Facing`](../backend/app/dataModel/spatial/facing.py) + `CARDINAL_WALL_OUTWARD_DELTA`. Идентичность тайла = [`PackJobUid.tile_uid`](../backend/app/dataModel/worldPack/packJobUid.py) + `pack_job_seed`. Это топология L0 world map, не `face_key` / не outdoor grade. **`detailed_bake` шов мира не считает и не пишет.** Смежность внутри AABB — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R36w. Не magma **antipode**. Impl — [`.cursor/plans/full-bake-seam-halo-shoulder.md`](../.cursor/plans/full-bake-seam-halo-shoulder.md) ✅.
 
@@ -357,13 +358,39 @@ flowchart LR
   FB["full_bake L0 world_bounds"]
   DB["detailed_bake L2 scope location|wilderness"]
   EJ["entry / WP-13 L2 scene + bg"]
+  MOD["modification Patch Store"]
   LB -->|"resume / offline"| FB
   LB -.->|"отдельная джоба после light"| EJ
   FB -->|"per location / wilderness topping"| DB
   EJ --> DB
+  FB -.->|"overlay, не rewrite"| MOD
+  DB -.->|"overlay, не force-rebuild complete"| MOD
 ```
 
 **Инвариант процесса (мастер):** отдельного product bake mode «wilderness» **нет**. Полное заполнение прямоугольника мира L0 = `full_bake`. L2 wilderness topping = `detailed&scope=wilderness` (тот же product mode `detailed`, не третий bake mode).
+
+#### Слой модификации мира (не bake mode) — locked 2026-08-16
+
+Игровые изменения рельефа / природы / климата (взрыв, обвал, раскопки, локальный климат, катаклизм в bounds) — **не** `light`/`full`/`detailed` и **не** force-rebuild `complete` тайла.
+
+Pack (`world_map.zst`, wilderness chunks, `location_terrain`) = **immutable snapshot** bake. Дельта живёт в **Patch Store**; read = WP-20 (`patch` выше wilderness/L0).
+
+| Слой процесса | Что пишет | Когда |
+|---|---|---|
+| **full_bake** | L0 pack | мастер / init мира |
+| **detailed_bake** / entry | L2 pack (refine L0) | topping / сцена |
+| **modification** | `map_cell_patches` (`terrain_delta` / `climate_delta` / …) | ход: взрыв, природа, климат в `patch_bounds` |
+
+| Можно | Нельзя |
+|---|---|
+| `TerrainPatchRequest` + обязательный `patch_bounds` | `POST pack/bake` чтобы «взорвать» клетку |
+| тот же grade helper (R36v) на bounds+halo | новый bake mode `modify` / `force=true` на complete tile |
+| `world_history` / `event_uid` рядом с patch | whole-world `generate-surface` в gameplay |
+| мастерский **новый pack version** (смена генератора / seed, WP-7) | путать smoke-rebake генератора с взрывом в игре |
+
+Skip `complete` (WP-12) остаётся **resume** incomplete L2. Invalidate+перепечь pack — рычаг мастера/offline (версия мира), не runtime mod.
+
+SoT generate/persist patch: [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Локальная модификация. DAG: [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) `modify_terrain` ⬜.
 
 **Не путать:**
 
@@ -376,6 +403,7 @@ flowchart LR
 | `refine_scene` вшитый в `pack/bake?mode=light` | ✅ закрыто (WP-PERF-50): параметр убран из L0 bake; entry = отдельная джоба |
 | Имена файлов `wilderness_chunk` / layer `wilderness` | **storage/impl legacy** — см. § ниже; не путать с bake process |
 | Runtime rings | L2 дозаполнение у игрока; **не** замена `full_bake` L0 |
+| Взрыв / климат / природа = перепечь detailed/full | **modification layer** = Patch Store; pack не мутировать с хода |
 
 #### Offline package cases
 
@@ -607,7 +635,7 @@ Wilderness — **file-per-tile-chunk**, не file-per-whole-tile на gameplay p
 
 | # | Слой | Источник | Заметка |
 |---|---|---|---|
-| 0 | **patch** | `map_cell_patches` | gameplay deltas |
+| 0 | **patch** | `map_cell_patches` | **modification layer:** взрыв / природа / локальный климат; не rewrite pack |
 | 1 | **player scene** | scene volume вокруг `(map_x,map_y)` | highest pack layer; blocking P0 |
 | 2 | **player path** | chunks/tiles на path corridor впереди | prefetch; ниже scene, выше location |
 | 3 | **location** | `locations/l.{uid}.terrain` если `(x,y,z) ∈ territory_volume` | несколько uid на одном tile — по **z** |
@@ -1228,6 +1256,8 @@ Fine terrain **одной** `named_location` (file-per-location, WP-19).
 ---
 
 ## Patch Store (SQLite)
+
+**Процесс:** игровые правки terrain/climate после bake — слой **modification** (§ Слой модификации мира), не `pack/bake`.
 
 Таблица **`map_cell_patches`** — только отличия от pack:
 
@@ -1904,6 +1934,7 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-16 | **Слой модификации мира:** не bake mode; Pack immutable; gameplay deltas = Patch Store (WP-20); skip `complete` ≠ взрыв |
 | 2026-08-15 | **C29:** технический шов chunk/tile не продукт; климат/дороги/**локация·город**/шаг проходят ребро — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-08-14 | **FineChunkRunner слои:** prep / `compute_rect` / persist; grade в том же `ColumnRect` task — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-08-14 | **Шов мира:** `full_bake` L0 смыкает край AABB с антагонистом на макро-тайлах; не L2 / не R36w — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |

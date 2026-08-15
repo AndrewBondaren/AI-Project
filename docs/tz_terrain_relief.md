@@ -352,7 +352,7 @@ Stamp + fill **остаются** в `ColumnRect` worker. Sample + stitch — se
 | Caller | Объём | Когда |
 |---|---|---|
 | **A** `FineChunkRunner` (wilderness / location `detailed_bake`, entry scene/path/background) | `ColumnRect` + halo; uid со stitch (C28) / каталога | stamp+fill в worker |
-| **B** `TerrainPatchGeneratorService` / DAG `modify_terrain` (⬜) | `patch_bounds` + halo; каталог по chunk-сетке, покрывающей bounds | после изменения z/terrain |
+| **B** `TerrainPatchGeneratorService` / DAG `modify_terrain` (⬜) | `patch_bounds` + halo; каталог по chunk-сетке, покрывающей bounds | после изменения z/terrain; **не** `pack/bake`; persist = Patch Store |
 
 | Можно | Нельзя |
 |---|---|
@@ -2106,7 +2106,7 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 | [`tz_locations.md`](./tz_locations.md) | facing stairs; **barrier_template_registry**; локация на шве (**C29**) |
 | [`tz_city_generation.md`](./tz_city_generation.md) | `SettlementLayout` мировые координаты; город на шве (**C29**) |
 | [`tz_building_generator.md`](./tz_building_generator.md) | library + world registry + import образец |
-| [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | pack partition ≠ продукт; шов мира vs технический (**C29**) |
+| [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | pack partition ≠ продукт; шов мира vs технический (**C29**); **modification** = Patch Store, не force-rebuild detailed |
 | [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) | pack ASCII: L0 map/height **без** outdoor grade (**R36u**); L2 `surface_grade` / `grade_{n}`; FineTerrain `system_grade_uid`→Instance (PAR-G7/G10); ~~PAR-G8~~ superseded |
 | [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | open IDs; **R36i-T-2** fence; **T-3a** ASCII omit; **T-3b** graph ✅; **T-3c** System; **C29** шов; post-impl **R36i-T-4…T-15** ✅ |
 | [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md) | agent pointer на § Порядок |
@@ -2118,6 +2118,7 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-16 | **Modification ≠ bake:** patch caller B пишет Patch Store; не `pack/bake` на complete tile |
 | 2026-08-16 | **`ReliefContext.ravine` sampler:** `sample_ravine_meter` — bank=ref, mask=seed; не open_land downhill. Template `ravine_soft` (smoke_003) + pick |
 | 2026-08-16 | **`ReliefContext.ravine`:** низина = mask; world template `ravine_soft` (smoke_003) + pick; object override слот; detailed sampler later |
 | 2026-08-15 | **C28 T-3b shipped:** face-graph stitch; rim-canonical uid; sample до пула; `compute_rect` = stamp+fill. System = T-3c. Apply без изменений |

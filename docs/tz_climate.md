@@ -1145,6 +1145,8 @@ Read merge: **fine → coarse** field-wise; `climate_delta` (patch) выше о�
 
 **Offline cases:** light complete ⇒ coarse готов на P0; full complete ⇒ coarse покрывает все location tiles; full+all detailed ⇒ coarse + fine/`location_terrain` climate для каждой pin-локации. Partial → resume bake, не `generate-climate`.
 
+**Modification (не bake mode):** локальный климат / природа после `full`/`detailed` — `climate_delta` в Patch Store (`patch_bounds`), merge выше coarse/fine. **Не** `POST pack/bake` и **не** `generate-climate` на весь мир. SoT: [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Слой модификации мира.
+
 ### Impl cutover
 
 | # | Критерий | Статус |
@@ -1193,6 +1195,7 @@ python scripts/initialize_world.py --fixture ../fixtures/world_terrain_test.json
 
 | Дата | Версия | Изменение |
 |---|---|---|
+| 2026-08-16 | 2.6.1 | **Modification layer:** локальный климат = `climate_delta`, не перепечка light/full/detailed |
 | 2026-08-15 | 2.6.1 | **C14:** технический шов pack не climate wall; field непрерывен в XY. SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) C29 |
 | 2026-07-16 | Pack climate correct resolve: pole+local + z ladder; light `spawn_player` / full `none` / detailed fine+L2 z |
 | 2026-07-16 | Pack bake modes climate: light/full coarse ✅; detailed climate fine territory ⬜ |

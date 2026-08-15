@@ -257,6 +257,11 @@ def _write_wilderness_z_slices(
             if i == 1 or i % 200 == 0:
                 print(f"    z-files {len(paths)} (last z={z_val})", flush=True)
         print(f"    z-files done: {len(paths)}", flush=True)
+        print(
+            f"  wilderness ({gx},{gy}): writing grade_z ASCII grids "
+            f"(aligned frame={frame}) under z/grade_<n>.txt",
+            flush=True,
+        )
         grade_legend = f"{legend.rstrip()}\n{render_grade_legend()}"
         grade_count = 0
         for z_val, body in renderer.iter_grade_z_levels_aligned():
@@ -266,6 +271,11 @@ def _write_wilderness_z_slices(
             _write(g_path, f"{body}\n\n--- legend ---\n{grade_legend}\n")
             grade_paths[str(int(z_val))] = str(g_path.relative_to(REPO))
             grade_count += 1
+            if grade_count == 1 or grade_count % 200 == 0:
+                print(
+                    f"    grade_z-files {grade_count} (last z={z_val})",
+                    flush=True,
+                )
         print(f"    grade_z-files done: {grade_count}", flush=True)
     else:
         occupied = sorted(occupied_filter)

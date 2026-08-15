@@ -233,7 +233,7 @@ CRUD (`GET/POST/DELETE …/map`) — import/export для мастера и debu
 
 **Bootstrap** (materialization): S→O→C→CL на declared bbox / `full` init — широкий, но **не каждый ход**.
 
-**Runtime modification:** **только локальный patch** в `patch_bounds` — event-driven (катаклизм) или action-driven (бой, раскопки игрока/NPC, bed под дорогой). Whole-world `generate-surface` в gameplay **запрещён**.
+**Runtime modification:** **только локальный patch** в `patch_bounds` — event-driven (катаклизм) или action-driven (бой, раскопки игрока/NPC, bed под дорогой). Whole-world `generate-surface` в gameplay **запрещён**. **Не** bake mode и **не** перепечка `complete` detailed/full — слой Patch Store над Pack ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Слой модификации мира).
 
 | id | phase | Generate | Persist | Trigger |
 |---|---|---|---|---|
@@ -453,6 +453,7 @@ Generator-side work **может** опережать ноды (как climate e
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-16 | **Modification ≠ bake:** `modify_terrain` пишет Patch Store, не `pack/bake` |
 | 2026-08-13 | **R36v:** `modify_terrain` после patch зовёт тот же grade helper — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-07 | § **Gate: DAG** — ноды только с мастером после G1–G4 (полный тест генераторов); TR-LAZY-LOAD / TR-PERF service-first |
 | 2026-06 | § script tests: агент не стартует backend — только пользователь |
