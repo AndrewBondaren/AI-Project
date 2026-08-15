@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.application.worldData.generators.terrain.relief.reliefLog import relief_debug
+from app.application.worldData.generators.terrain.relief.log.log import relief_debug
 from app.dataModel.terrain.relief.enums import ReliefSlopePolicy
 from app.dataModel.terrain.relief.reliefDeltaSchedule import (
     ReliefDeltaInterval,

@@ -8,6 +8,8 @@ from pydantic import ValidationError
 
 from app.dataModel.terrain.relief import (
     MountainSideRecipe,
+    ReliefConditionTerrain,
+    ReliefContext,
     ReliefTemplate,
     ReliefTerrainCondition,
 )
@@ -29,6 +31,24 @@ class ReliefTemplatePojoTest(unittest.TestCase):
             }],
         })
         self.assertEqual(tpl.system_name, "intercity_shoulder")
+        self.assertTrue(tpl.conditions[0].is_mode_a)
+
+    def test_mode_a_ravine_ok(self) -> None:
+        tpl = ReliefTemplate.model_validate({
+            "system_name": "ravine_soft",
+            "display_name": "Ravine soft grade",
+            "context": ReliefContext.RAVINE,
+            "conditions": [{
+                "terrain": ReliefConditionTerrain.RAVINE,
+                "cases": [
+                    {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.6, "sheer_weight": 0.4},
+                    {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0},
+                    {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0},
+                ],
+            }],
+        })
+        self.assertEqual(tpl.context, ReliefContext.RAVINE)
+        self.assertEqual(tpl.conditions[0].terrain, ReliefConditionTerrain.RAVINE)
         self.assertTrue(tpl.conditions[0].is_mode_a)
 
     def test_weights_sum_reject(self) -> None:

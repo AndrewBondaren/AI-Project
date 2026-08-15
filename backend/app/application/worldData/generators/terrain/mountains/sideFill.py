@@ -16,15 +16,15 @@ from app.application.worldData.generators.terrain.mountains.formGeometry import 
 from app.application.worldData.generators.terrain.mountains.geom import (
     dist_point_to_segment_m,
 )
-from app.application.worldData.generators.terrain.relief.facing import uphill_facing_toward
-from app.application.worldData.generators.terrain.relief.profiles import (
+from app.application.worldData.generators.terrain.relief.geom.facing import uphill_facing_toward
+from app.application.worldData.generators.terrain.relief.geom.profiles import (
     profile_side_fraction,
     sheer_band_m,
     sheer_fraction_lateral,
     sheer_fraction_radial,
     slope_fraction,
 )
-from app.application.worldData.generators.terrain.relief.sideGradeDecision import (
+from app.application.worldData.generators.terrain.relief.mountain.sideGradeDecision import (
     RadialGradeDecision,
     decide_radial_grade,
     plateau_hat_decision,

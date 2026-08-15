@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.terrain.relief.gradeInstanceFactory import (
+from app.application.worldData.generators.terrain.relief.volume.gradeInstanceFactory import (
     utc_now_iso,
 )
 from app.application.worldData.gradeInstanceMerge import apply_prior_cell_refs

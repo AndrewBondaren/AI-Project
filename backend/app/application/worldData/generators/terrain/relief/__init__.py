@@ -1,41 +1,43 @@
 """Relief grade generators — tz_terrain_relief."""
 
-from app.application.worldData.generators.terrain.relief.bakeSeed import bake_seed
-from app.application.worldData.generators.terrain.relief.facing import (
+from app.application.worldData.generators.terrain.relief.geom.bakeSeed import bake_seed
+from app.application.worldData.generators.terrain.relief.geom.facing import (
     CARDINAL_ORTHO_DELTAS,
     facing_wire,
     uphill_facing_toward,
 )
-from app.application.worldData.generators.terrain.relief.gradePass import (
+from app.application.worldData.generators.terrain.relief.pick.gradePass import (
     RibbonGradeDecision,
     grade_from_template,
 )
-from app.application.worldData.generators.terrain.relief.profiles import (
+from app.application.worldData.generators.terrain.relief.geom.profiles import (
     profile_side_fraction,
     sheer_band_m,
     sheer_fraction_lateral,
     sheer_fraction_radial,
     slope_fraction,
 )
-from app.application.worldData.generators.terrain.relief.ribbonSegmentize import (
+from app.application.worldData.generators.terrain.relief.sample.ribbonSegmentize import (
     RibbonSegment,
     segmentize_by_terrain,
 )
-from app.application.worldData.generators.terrain.relief.ribbonGrade import (
+from app.application.worldData.generators.terrain.relief.pick.ribbonGrade import (
     RibbonGradeResult,
     grade_ribbon_segments,
 )
-from app.application.worldData.generators.terrain.relief.shoulderWidth import (
+from app.application.worldData.generators.terrain.relief.sample.shoulder import (
     expand_shoulder_ring,
+)
+from app.application.worldData.generators.terrain.relief.geom.outward import (
     relief_dz,
 )
-from app.application.worldData.generators.terrain.relief.sideGradeDecision import (
+from app.application.worldData.generators.terrain.relief.mountain.sideGradeDecision import (
     RadialGradeDecision,
     decide_radial_grade,
     format_sides_summary,
     plateau_hat_decision,
 )
-from app.application.worldData.generators.terrain.relief.volumeMaterialize import (
+from app.application.worldData.generators.terrain.relief.volume.volumeMaterialize import (
     plan_seed_volume,
 )
 

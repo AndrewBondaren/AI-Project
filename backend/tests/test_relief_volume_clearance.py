@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import unittest
 
-from app.application.worldData.generators.terrain.relief.freeGap import measure_free_gap
-from app.application.worldData.generators.terrain.relief.obstacleClearance import (
+from app.application.worldData.generators.terrain.relief.geom.freeGap import measure_free_gap
+from app.application.worldData.generators.terrain.relief.volume.obstacleClearance import (
     outward_length_for_policy,
 )
-from app.application.worldData.generators.terrain.relief.volumeMaterialize import (
+from app.application.worldData.generators.terrain.relief.volume.volumeMaterialize import (
     geom_for_cleared_length,
     plan_ribbon_volume,
     ribbon_sign_from_dz,

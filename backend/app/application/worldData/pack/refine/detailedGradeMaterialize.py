@@ -1,147 +1,59 @@
-"""Materialize relief grade uid on meter grid — R36u / R36t corridor only."""
+"""Assemble GradeFormation write-set — canal-cut + instance + uid. No surface z write."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-from app.application.jsonValidation import terrain_masks
-from app.application.worldData.generators.terrain.relief.edgeRoadAnchor import (
-    EdgeRoadAnchor,
-    edge_road_abutment,
+from app.application.jsonValidation import canal_templates, relief_pick_policy, terrain_masks
+from app.application.worldData.generators.terrain.relief.canal.attachments import (
+    knobs_extra_structure_refs,
+    project_canal_draw,
 )
-from app.application.worldData.generators.terrain.relief.facing import (
+from app.application.worldData.generators.terrain.relief.geom.facing import (
     CARDINAL_ORTHO_DELTAS,
     facing_wire,
     uphill_facing_toward,
 )
-from app.application.worldData.generators.terrain.relief.reliefLog import relief_debug
-from app.dataModel.spatial.facing import Facing
-from app.application.worldData.generators.terrain.relief.gradeInstanceFactory import (
+from app.application.worldData.generators.terrain.relief.volume.gradeInstanceFactory import (
     build_ribbon_grade_instance,
     make_grade_uid,
 )
-from app.application.worldData.generators.terrain.relief.ribbonGrade import RibbonGradeResult
-from app.application.worldData.generators.terrain.relief.ribbonSeedResolve import (
-    SeedClearance,
-    SeedClearanceSkip,
-    resolve_seed_clearance,
-)
-from app.application.worldData.generators.terrain.relief.shoulderWidth import (
-    unique_outward,
+from app.application.worldData.generators.terrain.relief.log.log import relief_debug
+from app.application.worldData.generators.terrain.relief.pick.ribbonGrade import RibbonGradeResult
+from app.application.worldData.generators.terrain.relief.canal.seedResolve import aggregate_canals
+from app.application.worldData.generators.terrain.relief.volume.volumeMaterialize import ribbon_sign_from_dz
+from app.application.worldData.pack.refine.detailedGradeCanalCut import (
+    canal_for_seed,
+    r36t_include_cut_end,
 )
 from app.application.worldData.pack.refine.detailedGradeCatalog import TileFaceCatalog
-from app.application.worldData.generators.terrain.relief.volumeMaterialize import (
-    RibbonVolumePlan,
-    plan_seed_volume,
-    ribbon_sign_from_dz,
+from app.application.worldData.pack.refine.detailedGradeCorridor import (
+    SeedCorridor,
+    r36t_corridor_cells,
+    volume_corridor_for_seed,
+)
+from app.application.worldData.pack.refine.detailedGradeResult import (
+    DetailedGradeResult,
+    GradeFormation,
 )
 from app.application.worldData.pack.refine.meterGradeSurface import (
     Coord,
     MeterGradeSurface,
-    meter_grade_cell_blocked,
 )
+from app.dataModel.spatial.facing import Facing
+from app.dataModel.terrain.relief.canal import Canal
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.db.models.world import World
 
 
-@dataclass(frozen=True, slots=True)
-class SeedCorridor:
-    """One seed's stamped corridor. Entity geom uses the last successful seed."""
-
-    seed: Coord
-    corridor: tuple[Coord, ...]
-    plan: RibbonVolumePlan
-    facing: Facing | None
-
-
-def r36t_corridor_cells(
-    wrote: tuple[Coord, ...],
-    ref_cells: set[Coord],
-) -> tuple[Coord, ...]:
-    """Stamp uid on grade columns; never on high anchors (ref). Low = one step past last wrote."""
-    return tuple(c for c in wrote if c not in ref_cells)
-
-
-def local_grade_anchors(
-    seed: Coord,
-    *,
-    ref_cells: set[Coord],
-    segment_seeds: set[Coord],
-    surface: MeterGradeSurface,
-) -> set[Coord]:
-    """Crests adjacent to ``seed``, else uphill cascade neighbor (R36v stitch)."""
-    sx, sy = seed
-    crests: set[Coord] = set()
-    cascade: set[Coord] = set()
-    z_seed = surface.z_at(seed)
-    for dx, dy in CARDINAL_ORTHO_DELTAS:
-        nb = (sx + dx, sy + dy)
-        if nb in ref_cells and nb not in segment_seeds:
-            crests.add(nb)
-            continue
-        if nb not in segment_seeds and nb not in ref_cells:
-            continue
-        z_nb = surface.z_at(nb)
-        if z_seed is not None and z_nb is not None and int(z_nb) > int(z_seed):
-            cascade.add(nb)
-    return crests or cascade
-
-
-def resolve_meter_anchor(
-    surface: MeterGradeSurface,
-    clearance: SeedClearance,
-    *,
-    ref_cells: set[Coord],
-) -> EdgeRoadAnchor | None:
-    abutment = edge_road_abutment(
-        clearance.seed, clearance.outward, ref_cells,
-    )
-    if abutment is None:
-        return None
-    z = surface.z_at(abutment)
-    if z is None:
-        return None
-    ax, ay = abutment
-    return EdgeRoadAnchor(
-        xy=abutment,
-        outward=clearance.outward,
-        z=int(z),
-        center_m=(ax + 0.5, ay + 0.5),
-    )
-
-
-def _meter_outward_columns(
-    seed: Coord,
-    outward: tuple[int, int],
-    *,
-    length: int,
-) -> tuple[Coord, ...]:
-    dx, dy = outward
-    sx, sy = seed
-    return tuple((sx + dx * k, sy + dy * k) for k in range(length))
-
-
-def stamp_instance_uids(
-    surface: MeterGradeSurface,
-    instance: ReliefGradeInstance,
-) -> None:
-    for xy in instance.cell_refs:
-        surface.stamp_grade(xy, instance.grade_uid)
-
-
 def inherit_segment_uid(
-    surface: MeterGradeSurface,
     seeds: tuple[Coord, ...],
-    *,
-    existing: dict[Coord, str] | None = None,
+    uids: dict[Coord, str],
 ) -> str | None:
     """Reuse uid already on the ribbon. Exactly one neighbor uid; else None."""
-    bag = existing or {}
     found: set[str] = set()
     for seed in seeds:
         for xy in (seed, *( (seed[0] + dx, seed[1] + dy) for dx, dy in CARDINAL_ORTHO_DELTAS )):
-            uid = bag.get(xy) or surface.grade_uid.get(xy)
+            uid = uids.get(xy)
             if uid:
                 found.add(uid)
     if len(found) != 1:
@@ -178,117 +90,70 @@ def resolve_segment_uid(
     """Explicit uid, else inherit, else mint — one SoT (R36v-T-6)."""
     if grade_uid:
         return grade_uid
-    grid = surface or MeterGradeSurface(
-        surface_z={},
-        surface_terrain={},
-        hydrology=None,
-        surface_facing=None,
-    )
-    inherited = inherit_segment_uid(grid, seeds, existing=existing_uids)
+    bag: dict[Coord, str] = dict(surface.grade_uid) if surface is not None else {}
+    if existing_uids:
+        bag.update(existing_uids)
+    inherited = inherit_segment_uid(seeds, bag)
     if inherited:
         return inherited
     return make_grade_uid(world_uid=world_uid, site_id=site_id, seed=min(seeds))
 
 
-def corridor_for_seed(
-    surface: MeterGradeSurface,
-    world: World,
+def _facing_for_corridor(
+    corridor: tuple[Coord, ...],
+    abutment: Coord,
+) -> Facing | None:
+    origin = corridor[0]
+    return uphill_facing_toward(
+        float(origin[0]), float(origin[1]),
+        float(abutment[0]), float(abutment[1]),
+    )
+
+
+def instance_for_formation(
     result: RibbonGradeResult,
-    seed: Coord,
-    *,
-    ref_cells: set[Coord],
-    segment_seeds: set[Coord],
-    crest_refs: set[Coord],
-    requested: int,
-    h: int,
-    sign: int,
-    road_key: str,
-    barrier_keys: frozenset[str],
-    catalog: TileFaceCatalog | None = None,
-) -> SeedCorridor | None:
-    kind = result.decision.kind
-    if kind is None:
-        return None
-    anchors = local_grade_anchors(
-        seed,
-        ref_cells=ref_cells,
-        segment_seeds=segment_seeds,
-        surface=surface,
-    )
-    if not anchors:
-        return None
-    outward = unique_outward(seed, anchors)
-    flush_void = (
-        catalog is not None
-        and outward is not None
-        and catalog.is_open_rim_step(seed, outward)
-    )
-    clearance = resolve_seed_clearance(
-        seed=seed,
-        ref_cells=anchors,
-        requested_length=requested,
-        world=world,
-        cell_blocked=lambda c: meter_grade_cell_blocked(
-            surface, c, road_key=road_key, barrier_keys=barrier_keys,
-        ),
-        flush_void=flush_void,
-    )
-    if isinstance(clearance, SeedClearanceSkip):
-        return None
-
-    anchor = resolve_meter_anchor(surface, clearance, ref_cells=anchors)
-    if anchor is None:
-        return None
-
-    plan = plan_seed_volume(
-        decision_geom=result.decision.geom,
-        h=h,
-        kind=kind,
-        L_eff=clearance.L_eff,
-        z_road=anchor.z,
-        sign=sign,
-    )
-    if plan is None or not plan.columns:
-        return None
-
-    wrote = _meter_outward_columns(
-        seed, anchor.outward, length=len(plan.columns),
-    )
-    corridor = r36t_corridor_cells(wrote, crest_refs)
-    if not corridor:
-        return None
-
-    facing = uphill_facing_toward(
-        float(corridor[0][0]), float(corridor[0][1]),
-        float(anchor.xy[0]), float(anchor.xy[1]),
-    )
-    return SeedCorridor(seed=seed, corridor=corridor, plan=plan, facing=facing)
-
-
-def commit_segment(
-    surface: MeterGradeSurface,
-    result: RibbonGradeResult,
+    formation: GradeFormation,
     *,
     world_uid: str,
-    plan: RibbonVolumePlan,
-    cell_refs: tuple[Coord, ...],
-    facing: Facing | None,
     seeds: tuple[Coord, ...],
-    grade_uid: str,
 ) -> ReliefGradeInstance:
-    inst = build_ribbon_grade_instance(
+    drawn = project_canal_draw(
+        formation.canal,
+        extra_structure_refs=knobs_extra_structure_refs(
+            earthen_canal=result.decision.earthen_canal,
+            structure_canal=result.decision.structure_canal,
+            structure_refs=result.decision.structure_refs,
+        ),
+    )
+    return build_ribbon_grade_instance(
         world_uid=world_uid,
         site_id=result.segment.site_id,
         seed=min(seeds),
-        plan=plan,
-        cell_refs=cell_refs,
-        facing=facing_wire(facing),
+        plan=formation.plan,
+        cell_refs=formation.corridor,
+        facing=facing_wire(formation.facing),
+        earthen_canal=drawn.earthen_canal,
+        structure_refs=drawn.structure_refs,
+        structure_canal=drawn.structure_canal,
         template_uid=result.template_uid,
         owner_uid=result.segment.owner_uid,
-        grade_uid=grade_uid,
+        grade_uid=formation.grade_uid,
     )
-    stamp_instance_uids(surface, inst)
-    return inst
+
+
+def _cut_corridor(
+    volume: SeedCorridor,
+    canal: Canal | None,
+    crest_refs: set[Coord],
+) -> tuple[Coord, ...] | None:
+    corridor = r36t_corridor_cells(
+        volume.wrote,
+        crest_refs,
+        include_cut_end=r36t_include_cut_end(
+            canal=canal, L_eff=volume.L_eff, requested=volume.requested,
+        ),
+    )
+    return corridor or None
 
 
 def materialize_segment_meter(
@@ -301,50 +166,72 @@ def materialize_segment_meter(
     existing_uids: dict[Coord, str] | None = None,
     grade_uid: str | None = None,
     catalog: TileFaceCatalog | None = None,
-) -> list[ReliefGradeInstance]:
-    """One Grade instance per segment (R36v); uid on R36t corridor only."""
+) -> DetailedGradeResult:
+    """One Grade per segment; returns the write-set (does not stamp the surface)."""
     kind = result.decision.kind
     if kind is None or result.decision.skipped:
-        return []
+        return DetailedGradeResult.empty()
     h = int(result.decision.h)
     requested = max(0, int(result.decision.requested_length))
     if h < 1:
-        return []
+        return DetailedGradeResult.empty()
 
     work_seeds = seeds if seeds is not None else result.segment.cell_coords
     if not work_seeds:
-        return []
+        return DetailedGradeResult.empty()
 
     segment_seeds = set(result.segment.cell_coords)
     crest_refs = {xy for xy in ref_cells if xy not in segment_seeds}
     sign = ribbon_sign_from_dz(int(result.segment.dz))
     road_key = terrain_masks(world).default_roads.system_terrain
     barrier_keys = WorldTerrainRegistry.canonical_barrier_terrain_keys()
+    policy_rules = tuple(relief_pick_policy(world).canal_obstacle_policy)
+    registry = canal_templates(world)
 
+    overlay: dict[Coord, int] = {}
     corridors: list[Coord] = []
-    last: SeedCorridor | None = None
+    canals: list[Canal] = []
+    canonical: SeedCorridor | None = None
+    facing: Facing | None = None
     for seed in work_seeds:
-        piece = corridor_for_seed(
-            surface, world, result, seed,
+        volume = volume_corridor_for_seed(
+            surface, world, seed,
             ref_cells=ref_cells,
             segment_seeds=segment_seeds,
-            crest_refs=crest_refs,
             requested=requested,
             h=h,
             sign=sign,
+            kind=kind,
+            decision_geom=result.decision.geom,
             road_key=road_key,
             barrier_keys=barrier_keys,
             catalog=catalog,
         )
-        if piece is None:
+        if volume is None:
             continue
-        corridors.extend(piece.corridor)
-        last = piece
+        canal = canal_for_seed(
+            result,
+            requested=volume.requested,
+            L_eff=volume.L_eff,
+            policy_rules=policy_rules,
+            registry=registry,
+        )
+        corridor = _cut_corridor(volume, canal, crest_refs)
+        if corridor is None:
+            continue
+        overlay.update(volume.overlay_for(corridor))
+        corridors.extend(corridor)
+        if canal is not None:
+            canals.append(canal)
+        if canonical is None or volume.plan.L > canonical.plan.L:
+            canonical = volume
+            facing = _facing_for_corridor(corridor, volume.abutment)
 
-    if last is None or not corridors:
-        return []
+    if canonical is None or not corridors:
+        return DetailedGradeResult.empty()
 
     unique_refs = tuple(dict.fromkeys(corridors))
+    allowed = set(unique_refs)
     uid = resolve_segment_uid(
         world_uid=world.world_uid,
         site_id=result.segment.site_id,
@@ -353,13 +240,15 @@ def materialize_segment_meter(
         existing_uids=existing_uids,
         grade_uid=grade_uid,
     )
-    inst = commit_segment(
-        surface, result,
-        world_uid=world.world_uid,
-        plan=last.plan,
-        cell_refs=unique_refs,
-        facing=last.facing,
-        seeds=work_seeds,
+    formation = GradeFormation(
+        plan=canonical.plan,
+        overlay={xy: z for xy, z in overlay.items() if xy in allowed},
+        corridor=unique_refs,
+        facing=facing,
+        canal=aggregate_canals(canals),
         grade_uid=uid,
     )
-    return [inst]
+    inst = instance_for_formation(
+        result, formation, world_uid=world.world_uid, seeds=work_seeds,
+    )
+    return formation.to_write_set(inst)

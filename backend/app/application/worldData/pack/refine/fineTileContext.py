@@ -9,6 +9,8 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
 )
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.pack.refine.detailedGradeCatalog import TileFaceCatalog
+from app.application.worldData.pack.refine.detailedGradePlan import PlannedGradeSegment
+from app.application.worldData.pack.refine.meterGradeSurface import Coord
 from app.application.worldData.terrainBatchOrchestrator import TileSurfaceState
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
@@ -17,8 +19,6 @@ from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
-
-Coord = tuple[int, int]
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +44,7 @@ class FineTileContext:
     chunks_total: int
     location_pairs: list[tuple[str, TerritoryVolume]]
     volumes: list[TerritoryVolume]
+    planned: tuple[PlannedGradeSegment, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)

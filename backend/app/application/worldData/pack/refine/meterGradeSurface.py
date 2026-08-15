@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from app.application.worldData.terrainBatchOrchestrator import TileSurfaceState
@@ -14,7 +15,11 @@ Coord = tuple[int, int]
 
 @dataclass
 class MeterGradeSurface:
-    """Fine-tile meter columns for relief sample + uid stamp (no z mutation).
+    """Fine-tile meter columns: **read** parent z + local uid bag.
+
+    Volume z writes belong on ``DetailedGradeResult.surface_z`` (GradeWriteSet),
+    never ``surface_z[xy] =`` on an aliased heightmap. Uid writes go through
+    ``apply_grade_uids`` from a write-set, not a factory.
 
     ``from_tile_surface_state(alias_heights=True)`` aliases z/terrain/hydro;
     ``grade_uid`` is always a new dict (R36v-T-7).
@@ -65,8 +70,10 @@ class MeterGradeSurface:
     def has_grade(self, xy: Coord) -> bool:
         return bool(self.grade_uid.get(xy))
 
-    def stamp_grade(self, xy: Coord, uid: str) -> None:
-        self.grade_uid[xy] = uid
+
+def apply_grade_uids(surface: MeterGradeSurface, uids: Mapping[Coord, str]) -> None:
+    """Local uid bag for later seeds/segments. Not a heightmap write."""
+    surface.grade_uid.update(uids)
 
 
 def _road_grade_or_hydro_blocked(

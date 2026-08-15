@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from app.application.worldData.generators.terrain.relief.reliefLog import relief_warning
+from app.application.worldData.generators.terrain.relief.log.log import relief_warning
 from app.application.worldData.reliefErrors import ReliefValidationError
 from app.application.worldData.reliefTemplateLibraryService import (
     ReliefTemplateLibraryService,
@@ -24,7 +24,7 @@ from app.application.jsonValidation.worldRow import (
     relief_template_registry,
     terrain,
 )
-from app.application.worldData.generators.terrain.relief.outlineCanalCollect import (
+from app.application.worldData.generators.terrain.relief.canal.outlineCollect import (
     collect_outline_structure_canal_refs,
     collect_outline_structure_refs,
 )

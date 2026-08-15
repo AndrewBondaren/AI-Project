@@ -4,21 +4,21 @@ from __future__ import annotations
 
 import unittest
 
-from app.application.worldData.generators.terrain.relief.edgeRoadAnchor import (
+from app.application.worldData.generators.terrain.relief.volume.edgeRoadAnchor import (
     edge_road_abutment,
 )
-from app.application.worldData.generators.terrain.relief.gradeObstacleLight import (
+from app.application.worldData.generators.terrain.relief.volume.gradeObstacleLight import (
     is_grade_obstacle_light,
 )
-from app.application.worldData.generators.terrain.relief.gradePass import (
+from app.application.worldData.generators.terrain.relief.pick.gradePass import (
     grade_from_template,
 )
-from app.application.worldData.generators.terrain.relief.ribbonSeedResolve import (
+from app.application.worldData.generators.terrain.relief.volume.ribbonSeedResolve import (
     SeedClearance,
     SeedClearanceSkip,
     resolve_seed_clearance,
 )
-from app.application.worldData.generators.terrain.relief.reliefEvents import (
+from app.application.worldData.generators.terrain.relief.log.events import (
     WHY_CLEARANCE_L_EFF,
 )
 from app.dataModel.terrain.relief import ReliefTemplate

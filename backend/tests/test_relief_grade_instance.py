@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import unittest
 
-from app.application.worldData.generators.terrain.relief.gradeInstanceFactory import (
+from app.application.worldData.generators.terrain.relief.volume.gradeInstanceFactory import (
     build_relief_grade_system,
     build_ribbon_grade_instance,
     make_grade_uid,
 )
-from app.application.worldData.generators.terrain.relief.volumeMaterialize import (
+from app.application.worldData.generators.terrain.relief.volume.volumeMaterialize import (
     RibbonColumnPlan,
     RibbonVolumePlan,
 )

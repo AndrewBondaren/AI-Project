@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from app.application.worldData.generators.terrain.relief.reliefEvents import (
+from app.application.worldData.generators.terrain.relief.log.events import (
     EVENT_RESOLVE_FALLBACK,
 )
 from app.dataModel.terrain.relief.canal import Canal, EarthenCanal, StructureCanal

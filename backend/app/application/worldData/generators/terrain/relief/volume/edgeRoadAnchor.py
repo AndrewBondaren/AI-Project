@@ -21,6 +21,11 @@ class EdgeRoadAnchor:
     center_m: tuple[float, float]
 
 
+def cell_center_m(xy: Coord) -> tuple[float, float]:
+    """Meter-cell center in cell space (half-cell, not a pack/light helper)."""
+    return (xy[0] + 0.5, xy[1] + 0.5)
+
+
 def edge_road_abutment(
     seed: Coord,
     outward: tuple[int, int],

@@ -26,7 +26,7 @@ from app.application.worldData.generators.terrain.mountains.sideGradeDecision im
     explain_side_grade_at_xy,
     format_sides_summary,
 )
-from app.application.worldData.generators.terrain.relief.facing import facing_wire
+from app.application.worldData.generators.terrain.relief.geom.facing import facing_wire
 from app.application.worldData.masks.footprint import LightCellRef, MaskFootprint
 from app.application.worldData.pack.bake.lightGrid.coords import (
     LightGridScale,

@@ -10,6 +10,8 @@ Pathfinding поднимается и опускается по уровням �
 собирается через `StructureAreaAssembler`. В граф попадает только как `ConnectionNode`  
 со ссылкой на `location_uid` площади.
 
+**Технический шов pack** (макро-тайл / chunk) **не** режет ребро. `ConnectionEdge` живёт в мировых координатах: полотно и pathfinding-иерархия пересекают границу тайла как один путь. Нарезка bake — не новый `system_connection_type` и не обрыв. Обочина Δz — relief `road_shoulder`, тот же catalog uid. Инвариант: [`tz_terrain_relief.md`](./tz_terrain_relief.md) **C29**. SHEER на travel-полотне запрещён (R20).
+
 ---
 
 ## 2. Типы рёбер

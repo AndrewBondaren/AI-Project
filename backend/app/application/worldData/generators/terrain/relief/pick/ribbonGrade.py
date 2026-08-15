@@ -14,20 +14,20 @@ from app.application.jsonValidation.worldRow import (
     relief_pick_policy,
     relief_template_registry,
 )
-from app.application.worldData.generators.terrain.relief.gradePass import (
+from app.application.worldData.generators.terrain.relief.pick.gradePass import (
     RibbonGradeDecision,
     grade_from_template,
 )
-from app.application.worldData.generators.terrain.relief.reliefEvents import (
+from app.application.worldData.generators.terrain.relief.log.events import (
     EVENT_RIBBON_GRADE_APPLY,
     EVENT_RIBBON_SKIP_GRADE,
     WHY_NO_TEMPLATE_BODY,
 )
-from app.application.worldData.generators.terrain.relief.reliefLog import relief_info
-from app.application.worldData.generators.terrain.relief.ribbonSegmentize import (
+from app.application.worldData.generators.terrain.relief.log.log import relief_info
+from app.application.worldData.generators.terrain.relief.sample.ribbonSegmentize import (
     RibbonSegment,
 )
-from app.application.worldData.generators.terrain.relief.templatePick import (
+from app.application.worldData.generators.terrain.relief.pick.templatePick import (
     pick_template,
     resolve_picked_template,
 )
@@ -60,7 +60,7 @@ def grade_ribbon_segments(
     occurrence_start: int = 0,
     context: ReliefContext = ReliefContext.ROAD_SHOULDER,
 ) -> list[RibbonGradeResult]:
-    """Grade ribbon segments for ``context`` (road_shoulder / open_land / shore)."""
+    """Grade ribbon segments for ``context`` (road_shoulder / open_land / shore / ravine)."""
     registry = relief_template_registry(world)
     world_policy = relief_pick_policy(world)
     results: list[RibbonGradeResult] = []

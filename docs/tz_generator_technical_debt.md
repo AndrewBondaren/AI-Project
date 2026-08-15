@@ -3,7 +3,7 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py` / `render_maps.py`, `worldBundleService.py`, relief library/import, pack render / parent-light refine.  
-**Обновлено:** 2026-08-14 — **Post-R36w** queued (V1 z / V2 canal) **перед** Wave E; **R36w** TZ + code ✅; **R36u-T-1…T-9** ✅; **T-11 resolved (R36v)**; **T-10** `road_shoulder` ✅; **R36v-T-1…T-13** ✅; **PAR-T-1…T-8** ✅.  
+**Обновлено:** 2026-08-15 — **C28 T-3b ✅** graph stitch (T-3c System later); **C29** шов технический; **R36i-T-13…T-15 resolved** (T-12 leftovers); **R36i-T-12 resolved**; **R36i-T-4…T-11 resolved**; **T-2** вне apply; **Post-R36w apply ✅**; **R36w** каталог ✅; **R36u-T-1…T-9** ✅; **T-11 resolved (R36v)**; **T-10** `road_shoulder` ✅; **R36v-T-1…T-13** ✅; **PAR-T-1…T-8** ✅.  
 **Связанные документы:**
 
 | Документ | Роль |
@@ -23,7 +23,7 @@
 | `.cursor/plans/r36u-grade-detailed-migrate.md` | R36u migrate L0 ribbon → detailed geometry |
 | `.cursor/plans/r36u-post-impl-debt.md` | R36u-T-1…T-10 post-impl polish |
 | `.cursor/plans/r36v-grade-chunk-pool.md` | R36v pool sample → stitch → materialize; post-impl **R36v-T-*** |
-| `.cursor/plans/detailed-grade-volume-canal.md` | Post-R36w V1 volume z · V2 canal на detailed; **R36i-T** |
+| `.cursor/plans/detailed-grade-volume-canal.md` | Post-R36w GradeFormation apply; **R36i-T**; post-impl **T-4…T-15** ✅ |
 
 ---
 
@@ -1080,13 +1080,19 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 5. ~~**Wave C — RELIEF-BAR-1**~~ ✅ (`ribbonFence` + `ribbonBarrierApply`)
 6. ~~**Wave D —** `open_land` / `shore`~~ ✅ (`ribbonGradeApply` + contributors)
 7. ~~**Wave D polish**~~ ✅ (`contextRibbonApply` / `ribbonSampleUtil` / `ribbon_intents`+`ref_cells` / BAR-1 once)
-8. **Post-R36w —** V1 apply volume z · V2 canal на detailed ([план](../.cursor/plans/detailed-grade-volume-canal.md); § R36i-T). **Не** Wave E
-9. **Wave E —** R36s / R36r / R36o / Q4 / R36f/k / UI R30 (later; после V1–V2)
+8. ~~**Post-R36w —** GradeFormation apply~~ ✅ ([план](../.cursor/plans/detailed-grade-volume-canal.md); § R36i-T)
+   ~~**Post-impl (не Wave E):** **R36i-T-4…T-11**~~ ✅ — § [R36i-T post-impl](#r36i-t--gradeformation-apply--post-impl-smells)
+   ~~**R36i-T-12**~~ ✅ — write-set `reconcile` (R36j uid ↔ `cell_refs`)
+   ~~**R36i-T-13…T-15**~~ ✅ — T-12 leftovers (`of` / drop-log / sorted refs)
+9. **Wave E —** R36s / R36r / R36o / Q4 / R36f/k / UI R30 (later; после GradeFormation apply)
 10. **Parallel eng (не gate waves):** ~~T-33…T-41, T-66~~ ✅; road-facade naming optional; fixtures `*_templates`  
 ~~T-28 / T-29 / T-37~~ ✅ worldRow ← slices + import merge module + runtime merge-policy  
    ~~shared `RoadShoulderIntent`/`grade_road_shoulder_*`~~ ✅ → `RibbonIntent` / `grade_ribbon_segments`  
    ~~**T-31/T-32**~~ ✅  
-   **PAR-T-1…T-8** ✅ — L2 grade ASCII post-impl ([§ Pack ASCII](#pack-ascii--l2-grade-carry--post-impl-smells-par-t))
+   **PAR-T-1…T-8** ✅ — L2 grade ASCII post-impl ([§ Pack ASCII](#pack-ascii--l2-grade-carry--post-impl-smells-par-t))  
+   ~~**R36i-T-4…T-11**~~ ✅ — GradeFormation post-impl ([§ R36i-T](#r36i-t--gradeformation-apply--post-impl-smells))  
+   ~~**R36i-T-12**~~ ✅ — write-set reconcile  
+   ~~**R36i-T-13…T-15**~~ ✅ — T-12 leftovers
 11. (optional) rename `MountainSideRecipeMode` wire A–D — breaking + migration
 
 ---
@@ -1224,18 +1230,105 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 **Не трогать:** mask carry; DAG; R36w catalog-before-pool; halo = `grid_neighbor` only.
 
-### R36i-T — volume z / canal not applied on detailed (open)
+### R36i-T — volume z / canal on detailed
 
-**Контекст:** 2026-08-14 — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R36i / C1 / C6 / R28 / R36p · § Post-R36w. `plan_seed_volume` считает `surface_z`; `MeterGradeSurface` — uid stamp, **no z mutation**. `resolve_seed_canal` не вызывается из `pack/refine`. Plan: [`.cursor/plans/detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md).
+**Контекст:** 2026-08-14 apply shipped — [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Post-R36w. Plan: [`.cursor/plans/detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md).
 
 | ID | Severity | Status | P | Ось | Smell | Target |
 |---|---|---|---|---|---|---|
-| **R36i-T-1** | **high** | **open** | P1 | неявный контракт | uid-only; voxels остаются parent cliff при Grade SLOPE 45° | Overlay `plan.columns[].surface_z` в `compute_rect`; fill из overlay ∪ parent; **не** shared heightmap из pool; якоря R36t |
-| **R36i-T-2** | **high** | **open** | P1 | call site | canal resolve/draw не в detailed materialize | После V1: `resolve_seed_canal` + `draw_canal`; поля canal на instance; cut только при `L_eff` < requested |
-| **R36i-T-3** | medium | **open** | P2 | call site | BAR-1: L0 `paintBarrier` снят; нет detailed fence | V3: consumer **или** TZ later — решение, не silent impl |
-| **R36i-T-4** | low | **open** | P3 | residual | `ReliefGradeSystem` unused; face-graph union-find не построен; L0 `world-grade` ASCII leftover | V4 по отдельному «делай» |
+| **R36i-T-1** | **high** | **resolved** | P1 | неявный контракт | uid-only; voxels = parent cliff при Grade SLOPE; canal не в apply | **Fix:** `GradeFormation` + `DetailedGradeResult.surface_z`; rect-local heightmap в `compute_rect`; `resolve_seed_canal` → factory; якоря R36t |
+| **R36i-T-2** | medium | **open** | P2 | call site | BAR-1: L0 `paintBarrier` снят; нет detailed fence | **Вне** apply и **вне** C28; later, не silent impl |
+| **R36i-T-3** | low | **split** | P3 | residual | был: System unused + face-graph + L0 ASCII | → **T-3a / T-3b / T-3c** |
+| **R36i-T-3a** | low | **accepted** | P3 | residual | L0 `world-grade` ASCII | PAR-G5 omit; не impl. Dump cleanup later, не архитектура |
+| **R36i-T-3b** | medium | **resolved** | P2 | topology | face-graph union-find; соседние грани с одним `(kind, outward, θ)` — разные instance | **Fix:** `detailedGradeGraph.stitch_planned_segments`; `plan_grade_for_rects` serial до пула; `ctx.planned`; `compute_rect` stamp+fill. Rim = `uid_for_faces`. Без System. SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Topology → entity → stamp |
+| **R36i-T-3c** | low | **open** | P3 | entity | `ReliefGradeSystem` unused (POJO+SQL есть) | после T-3b ✅; ≥2 прямых в компоненте; клетка → Instance |
 
-**Fix order:** T-1 → T-2; T-3 решение; T-4 later. **Не трогать:** Wave E; DAG; mask carry; parent `surface_z` upsample; `refresh_tile_gaps` из worker на весь тайл.
+**Fix order:** ~~T-1~~ ✅. ~~T-3a~~ omit. ~~**T-3b**~~ ✅. **T-3c.** T-2 не блокирует C28. **Не трогать:** Wave E; DAG; mask carry; parent `surface_z` upsample; `refresh_tile_gaps` из worker; voxel-ditch writer.
+
+### R36i-T — GradeFormation apply — post-impl smells
+
+**Контекст:** 2026-08-15 — ревью apply по осям: god-object · хардкоды · dataModel · смешанная ответственность · DRY. **Не** переоткрывать R36i-T-1 (z+canal+fill работают). **Не** Wave E.
+
+**Не долг (сделано правильно):** `resolve_seed_canal` / `project_canal_draw` / поля `ReliefGradeInstance`; `worldRow` `canal_templates` / `relief_pick_policy` / `terrain_masks`; `CARDINAL_ORTHO_DELTAS`; barrier keys с `WorldTerrainRegistry`; shared heightmap не мутировать; `n_eff` не пересчитывать. Overlay z **не** колонка `worlds` (pack write-set). `ReliefGradeInstance.facing: str` — locked POJO (не «нет dataModel»).
+
+| ID | Severity | Status | P | Ось | Smell | Target |
+|---|---|---|---|---|---|---|
+| **R36i-T-4** | **high** | **resolved** | P1 | неявный контракт / dataModel | Write-set разрезан: `GradeFormation` сразу unpack в `commit_segment`; overlay — соседний `dict`; `materialize_segment_meter` → `tuple[list, dict]` вместо `DetailedGradeResult`; entity `h/L/θ` = **`last.plan`**, overlay z = **все** seed plans | **Fix:** `GradeFormation` несёт overlay; `to_write_set`; materialize → `DetailedGradeResult`; entity plan = max `plan.L` (first on tie) |
+| **R36i-T-5** | medium | **resolved** | P2 | SRP / god | `corridor_for_seed` = anchors + clearance + volume + canal + wrote + R36t cut + facing | **Fix:** `volume_corridor_for_seed`; canal-cut отдельным шагом (`r36t_include_cut_end`) |
+| **R36i-T-6** | medium | **resolved** | P2 | SRP | `MeterGradeSurface`: docstring read z, факт `stamp_grade` пишет uid. `commit_segment` = factory **и** stamp | **Fix:** `instance_for_formation` без stamp; `apply_grade_uids` из write-set в `materialize_planned_for_rect` |
+| **R36i-T-7** | medium | **resolved** | P2 | DRY | `overlay.update` / `uids.update` last-wins vs `merge_grade_instances`; домен overlay=uid режется трижды | **Fix:** `DetailedGradeResult.merged_with` + `clipped_to_rect` |
+| **R36i-T-8** | medium | **resolved** | P2 | хардкод / неявный контракт | `wrote[i]` ↔ `plan.columns[i]`; `include_cut = canal is not None and L_eff < requested`; `registry or canonical_defaults()` | **Fix:** `CorridorColumn` / `columns_for_plan`; `r36t_include_cut_end`; registry только `canal_templates(world)` |
+| **R36i-T-9** | low | **resolved** | P3 | DRY | `Coord` копии в result/compute; nested rect heightmap; `_meter_outward_columns` | **Fix:** `Coord` из `meterGradeSurface`; `rect_contains` по parent keys; `outward_columns` |
+| **R36i-T-10** | low | **resolved** | P3 | хардкод | `center_m=(ax+0.5, ay+0.5)`; пустой `MeterGradeSurface` в `resolve_segment_uid`; `int(plan.columns[i].surface_z)` | **Fix:** `cell_center_m`; inherit по uid bag без empty surface; z с колонки плана |
+| **R36i-T-11** | low | **resolved** | P3 | god-module | `detailedGradeMaterialize.py` ~470 LOC | **Fix:** `detailedGradeCorridor` / `detailedGradeCanalCut` / write-set в `detailedGradeResult`; materialize — assemble |
+| **R36i-T-12** | **high** | **resolved** | P1 | неявный контракт / R36j | `merged_with`: uid/z last-wins, instance first-wins + union refs; `clipped_to_rect` не режет `cell_refs`. Fill и persist смотрят разные срезы. In-memory first-wins ≠ SQL upsert last-wins | **Fix:** `reconciled()`; merge/clip/`to_write_set` заканчиваются им; `merge_grade_instances` last-wins поля. Не переоткрывать T-7 |
+| **R36i-T-13** | medium | **resolved** | P2 | неявный контракт / SRP | Сырой ctor без сверки; `merged_with` union refs мёртв (reconcile переписывает); `h/L` vs `len(cell_refs)` не сказаны | **Fix:** `of()` всегда reconcile; merge = last-wins поля, состав из uid; docstring: h/L = formation, clip не жмёт L |
+| **R36i-T-14** | low | **resolved** | P3 | неявный контракт | Drop orphan uid / uid без z без лога | **Fix:** `relief_debug("grade_write_set_reconcile")` |
+| **R36i-T-15** | low | **resolved** | P3 | DRY / порядок | `cell_refs` sorted на write-set vs first-seen в merge; тройной overlay∩corridor; bag vs write-set на stamp | **Fix:** `merge_cell_refs` sorted; `to_write_set` → `of`; комментарий clearance bag ≠ clip |
+
+**Fix order:** ~~T-4 → T-8 → T-5 / T-6 → T-7; T-9 / T-10 / T-11~~ ✅. ~~**T-12**~~ ✅. ~~**T-13…T-15**~~ ✅. **Не трогать:** Wave E; DAG; mask carry; voxel-ditch; BAR-1 (T-2). Graph stitch — ~~T-3b~~ ✅. System — **T-3c**, не этот apply.
+
+**Agent pointer:** [`.cursor/plans/detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md); SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Post-R36w.
+
+### R36i-T-12 — write-set reconcile — shipped
+
+**Продукт:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) **R36j / C11**. **Код ✅ 2026-08-15.** `DetailedGradeResult.reconciled()`; `merged_with` / `clipped_to_rect` / `to_write_set` заканчиваются им; `merge_grade_instances` last-wins поля + union refs.
+
+**Запрещённый «вариант B»:** instance чанка держит полный коридор, колонки соседа «догонят». Висячие `cell_refs` без uid, если сосед ленту не материализует.
+
+#### Целевое состояние
+
+Домен **uid — единственный состав Grade** на данном write-set. Overlay и `cell_refs` из него. Полный объект на шове чанков/тайлов собирает **persist**, не один `ColumnRect`.
+
+После любого merge и любого clip, до fill/persist:
+
+1. `keys(surface_z) == keys(surface_grade_uid)`
+2. клетка `xy` с uid `g` ∈ `cell_refs` **только** instance `g`
+3. у instance нет клеток вне uid-домена и нет клеток, где uid другой
+4. instance без клеток — нет в результате (POJO `cell_refs` min_length=1)
+5. поля сущности (`kind`, `h`, `L`, `θ`, canal, facing) — **last-wins** по uid — тот же канон, что SQL upsert
+
+Внутри **одного** `GradeFormation` канон `h/L/θ` по-прежнему max `plan.L` (T-4). Между сегментами/чанками — last writer.
+
+`apply_grade_uids` на полный коридор (в т.ч. за rect) — **локальный bag** для clearance. Не источник `cell_refs`.
+
+| Слой | Состав |
+|---|---|
+| `ColumnRect` write-set | только клетки, которые этот rect поставил в uid |
+| SQL после upsert | union `cell_refs` writer с тем же catalog uid |
+
+#### Контракт `reconcile`
+
+Один метод на `DetailedGradeResult` (не второй filter в clip и не третий merge). `merged_with` и `clipped_to_rect` **заканчиваются** им.
+
+```text
+uid, z     → last-wins; clip: оставить xy ∈ rect, overlay ∩ эти ключи
+instances  → last-wins поля по uid (поздний instance затирает поля)
+reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный порядок: сортировка xy)
+             нет клеток → выкинуть instance
+             uid g без instance → выкинуть эти uid и их z (дырявый stamp)
+```
+
+Конфликт двух uid на одной клетке закрывается last uid на карте; reconcile забирает клетку у проигравшего. Отдельный «вычеркни из g1» не нужен.
+
+`to_write_set` уже согласован; для защиты тоже может звать `reconcile` (идемпотентно).
+
+#### Слои имплементации (не слайс «сначала только clip»)
+
+1. **`DetailedGradeResult.reconciled()`** — единственная сверка; без побочных stamp на `MeterGradeSurface`.
+2. **`merged_with` / `clipped_to_rect`** — карты как сейчас (last-wins / rect), затем `reconciled()`. Clip **не** копирует `grade_instances` as-is.
+3. **`merge_grade_instances`** — last-wins поля + union `cell_refs` (сейчас first-wins). Call sites только write-set acc: `detailedGradeResult`, `FineChunkPersist`. Согласовать с `apply_prior_cell_refs` (входящий = last). **Не** менять сигнатуру persist SQL.
+4. **Тесты** в `test_detailed_grade_generate.py`:
+   - clip: `cell_refs` ⊆ uid-домен rect; instance без клеток в rect исчезает;
+   - два uid на одной клетке: last uid, проигравший без этой клетки;
+   - тот же uid: last canal/θ, union клеток, затем reconcile по uid-карте;
+   - `reconcile` идемпотентен;
+   - ramp/canal/fill регрессия T-1 не ломается.
+5. **Не** трогать: `persistReliefGrades` (уже last fields + union); voxel-ditch; DAG; mask carry; `n_eff`; shared heightmap; T-2/T-3.
+
+**Не в T-12:** last z vs max-`L` при перекрытии семян **внутри** сегмента (T-4 канон плана).
+
+**Готово когда:** любой `DetailedGradeResult` после merge/clip удовлетворяет пунктам 1–5; `merge_grade_instances` last-wins; тесты выше зелёные.
 
 ---
 
@@ -1275,7 +1368,14 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 | Дата | Изменение |
 |---|---|
-| 2026-08-14 | **R36i-T-1…T-4 open:** volume z не applied; canal не из refine; BAR-1 call site; V4 polish. Backlog Post-R36w **перед** Wave E. План [`detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md) |
+| 2026-08-15 | **C28 T-3b resolved:** `stitch_planned_segments`; sample до пула; rim-canonical. T-3c System later. SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
+| 2026-08-15 | **C29:** шов технический (климат / дороги / шаг / локация·город); T-3b rim = механизм C29. SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
+| 2026-08-15 | **C28 TZ lock:** topology → entity → stamp; T-3 split (T-3a omit / T-3b graph / T-3c System). SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
+| 2026-08-15 | **R36i-T-13…T-15 resolved:** `of()`; merge без мёртвого union refs; h/L ≠ `len(cell_refs)`; debug drop; `merge_cell_refs` sorted; clearance bag комментарий |
+| 2026-08-15 | **R36i-T-12 resolved:** `reconciled()` на write-set; clip режет `cell_refs`; `merge_grade_instances` last-wins поля как upsert |
+| 2026-08-15 | **R36i-T-4…T-11 resolved:** write-set на `GradeFormation`/`DetailedGradeResult`; volume vs canal-cut; `apply_grade_uids`; `merged_with`+`clipped_to_rect`; `CorridorColumn`; `cell_center_m`; слои corridor/canalCut/result. T-2/T-3 remain |
+| 2026-08-15 | **R36i-T-4…T-11 open:** GradeFormation post-impl (write-set split; corridor god; MeterGradeSurface/commit SRP; dual merge; wrote[i]↔columns / cut bool / registry or; Coord/rect DRY; 0.5 + empty surface; god-module). T-1 остаётся ✅ |
+| 2026-08-14 | **R36i-T-1 resolved:** GradeFormation apply (z overlay + canal + uid); T-2/T-3 remain out of apply. План [`detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md) |
 | 2026-08-14 | **FCR-T-1 resolved:** FineChunkRunner = `FineTileContext` + prep + `compute_rect` + persist; grade в ColumnRect worker |
 | 2026-08-14 | **R36w edge test:** два bake смежных тайлов, семена на owner-грани → один uid (`test_two_tile_bakes_along_seam_one_uid`); bind: rim оси sample → грань оси; `< 2` chunk-родителей грани → void ≠ C18 |
 | 2026-08-14 | **R36w TZ:** каталог граней + заранее uid (`world`+tile+`face_key`); T-1…T-3 open; SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) |

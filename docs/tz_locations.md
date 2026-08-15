@@ -33,6 +33,8 @@ INDEX (world_uid, x, y)
 ```
 Весь мир — единое 3D-пространство. z=0 = уровень моря. Поверхностный terrain, подземелья, интерьеры — все в одной системе координат. **x = y = z = 1м на ячейку** — единая шкала без конвертаций. Этаж здания = 3 z-юнита (конвенция). LLM сырую матрицу не получает — только `named_locations`.
 
+**Технический шов pack** (макро-тайл / chunk / `ColumnRect`) **не** граница локации. Город или `named_location` **могут** сидеть на ребре двух тайлов или на грани чанка — это норма. Один `location_uid`, один `territory_volume` в мировых координатах; layout/улицы/здания не режутся по сетке bake. Pack: один `locations/l.{uid}.terrain.zst` на весь volume; wilderness mask на каждом пересечённом тайле (WP-19). Grade на шве — catalog `face_key`, не второй uid «для локации». SoT: [`tz_terrain_relief.md`](./tz_terrain_relief.md) **C29**. Две разные локации у ребра — их volumes (WP-21), не `face_key`.
+
 ### `system_terrain` vs `system_building_element`
 
 Два независимых слоя описания ячейки:

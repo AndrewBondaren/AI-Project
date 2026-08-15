@@ -38,7 +38,7 @@ metadata:
 | C3 | **`ClimateChangeEvent.kind = season_changed`** — calendar / world tick → `recalculate_climate` + `resolve_weather` |
 | C4 | Оттепель на горах → melt / v2 `flow_level` на **горных реках** ([`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md)); skeleton **не** regen |
 | C5 | `season_temp_offsets` — **runtime** (`effective_temperature`), eager map **не** переписывается при смене сезона |
-| C6 | **`SurfaceClimateField`** — горизонтальный **field cache** `(gx, gy)`: pole + tier blend (`resolve_surface_sample`); refresh при смене pole/anchor (+ influence pad), **не** каждый сезон; **≠** world snapshot |
+| C6 | **`SurfaceClimateField`** — горизонтальный **field cache** `(gx, gy)`: pole + tier blend (`resolve_surface_sample`); refresh при смене pole/anchor (+ influence pad), **не** каждый сезон; **≠** world snapshot; непрерывность через pack-шов — **C14** |
 | C7 | **Per-cell resolve** — `weather_at_elevation(zone, z)` на колонку; пишет `temperature_base`, `rainfall` на `map_cells`; near / materialization bbox |
 | C8 | **Climate LOD** — near → per-cell; medium/far → sample field cache + `location_weather`; far читает **persisted world state** ([`tz_world_snapshot.md`](./tz_world_snapshot.md)) |
 | C9 | **Partial recalc** — terrain/hydrology dirty rect → **только resolve колонок**; field cache без изменений, если anchors не двигались |
@@ -46,6 +46,7 @@ metadata:
 | C11 | **`season_changed` + LOD** — near: optional cell recalc (горы + `river_cells` bbox); far: C5 runtime + `location_weather`, **без** full-world upsert cells |
 | C12 | **LOD upgrade** — игрок входит в far rect → lazy promote: field-cache-only → per-cell batch в entering bbox |
 | C13 | **Field cache persist** — v1 in-memory на batch materialization; v2 — часть world snapshot blob или sparse derived store (CL-17); **не** отдельный модуль snapshot |
+| C14 | **Технический шов pack** (tile/chunk/`ColumnRect`) **не** climate wall. `SurfaceClimateField.sample` по разные стороны ребра — непрерывный XY field (полюса/якоря), не скачок от partition. Job uid ≠ identity field. SoT непрерывности — [`tz_terrain_relief.md`](./tz_terrain_relief.md) **C29**. Relief климат не пишет |
 
 > **Черновики, не утверждены:** routing в DAG-нодах (детали), § «Surface vs volume climate» (v2.4). § «Три процесса» — контракты утверждены (C1–C5, C6–C13); impl ⬜. Стык generators ↔ DAG — [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) (**черновик целиком**).
 
@@ -1192,6 +1193,7 @@ python scripts/initialize_world.py --fixture ../fixtures/world_terrain_test.json
 
 | Дата | Версия | Изменение |
 |---|---|---|
+| 2026-08-15 | 2.6.1 | **C14:** технический шов pack не climate wall; field непрерывен в XY. SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) C29 |
 | 2026-07-16 | Pack climate correct resolve: pole+local + z ladder; light `spawn_player` / full `none` / detailed fine+L2 z |
 | 2026-07-16 | Pack bake modes climate: light/full coarse ✅; detailed climate fine territory ⬜ |
 | 2026-07-15 | § World Pack climate | **Bake modes:** light / full / detailed; offline cases + resume |

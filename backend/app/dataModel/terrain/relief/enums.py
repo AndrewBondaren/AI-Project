@@ -19,6 +19,7 @@ class ReliefContext(StrEnum):
     OPEN_LAND = "open_land"
     SHORE = "shore"
     ROAD_SHOULDER = "road_shoulder"
+    RAVINE = "ravine"
 
 
 class ReliefConditionTerrain(StrEnum):

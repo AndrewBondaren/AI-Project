@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from app.application.worldData.generators.terrain.relief.canalAttachments import (
+from app.application.worldData.generators.terrain.relief.canal.attachments import (
     EVENT_CANAL_CUT_NO_CELLS,
     EVENT_RESOLVE_FALLBACK,
     FALLBACK_NO_CANAL,
@@ -18,11 +18,11 @@ from app.application.worldData.generators.terrain.relief.canalAttachments import
     canal_from_registry_ref,
     normalize_structure_canal_ref,
 )
-from app.application.worldData.generators.terrain.relief.canalObstacleResolve import (
+from app.application.worldData.generators.terrain.relief.canal.obstacleResolve import (
     canal_entity_from_terrain,
     resolve_canal_obstacle_cut,
 )
-from app.application.worldData.generators.terrain.relief.reliefLog import relief_warning
+from app.application.worldData.generators.terrain.relief.log.log import relief_warning
 from app.dataModel.terrain.relief.canal import Canal, EarthenCanal, StructureCanal
 from app.dataModel.terrain.relief.canalObstaclePolicy import CanalObstaclePolicyRule
 from app.dataModel.terrain.relief.worldCanalTemplateRegistry import (

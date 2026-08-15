@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.application.worldData.generators.terrain.relief.geomResolve import (
+from app.application.worldData.generators.terrain.relief.geom.geomResolve import (
     ResolvedGeom,
     geom_resolve,
 )

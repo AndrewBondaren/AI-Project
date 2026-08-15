@@ -1,0 +1,17 @@
+{
+  "system_name": "ravine_soft",
+  "display_name": "Ravine soft grade",
+  "context": "ravine",
+  "pack_name": "smoke_003",
+  "slope_length_cells": 2,
+  "conditions": [
+    {
+      "terrain": "ravine",
+      "cases": [
+        {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.6, "sheer_weight": 0.4, "slope_length_cells": 2},
+        {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
+        {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
+      ]
+    }
+  ]
+}

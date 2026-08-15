@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.application.worldData.generators.terrain.relief.gradeInstanceFactory import (
+from app.application.worldData.generators.terrain.relief.volume.gradeInstanceFactory import (
     make_seeded_uid,
 )
 from app.application.worldData.generators.terrain.worldMapSettings import (
@@ -27,7 +27,7 @@ from app.application.worldData.pack.refine.detailedJobUid import (
     interior_grade_site,
     tile_edge_job_uid,
 )
-from app.dataModel.spatial.facing import Facing
+from app.dataModel.spatial.facing import CARDINAL_WALL_OUTWARD_DELTA, Facing
 from app.dataModel.worldPack.packJobUid import FaceGridAxis, PackJobUid
 from app.db.models.world import World
 
@@ -45,6 +45,12 @@ class FaceKey:
 
     def wire(self) -> str:
         return PackJobUid.canonical_defaults().face_wire(self.axis, self.cx, self.cy)
+
+    def vertices(self) -> tuple[Coord, Coord]:
+        """Chunk-grid vertices (SW origin of chunk indices)."""
+        if self.axis == FaceGridAxis.V:
+            return ((self.cx + 1, self.cy), (self.cx + 1, self.cy + 1))
+        return ((self.cx, self.cy + 1), (self.cx + 1, self.cy + 1))
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,7 +100,7 @@ class TileFaceCatalog:
         self,
         faces: tuple[FaceKey, ...] | list[FaceKey],
         *,
-        axis: str | None = None,
+        axis: FaceGridAxis | str | None = None,
     ) -> str | None:
         """Bind a seed on several faces.
 
@@ -106,6 +112,8 @@ class TileFaceCatalog:
             return None
         unique = tuple(sorted(set(faces)))
         rim = tuple(f for f in unique if self.is_tile_rim_face(f))
+        if axis is not None:
+            axis = FaceGridAxis(axis)
         if axis in (FaceGridAxis.V, FaceGridAxis.H):
             rim_ax = tuple(f for f in rim if f.axis == axis)
             if rim_ax:
@@ -229,13 +237,17 @@ class TileFaceCatalog:
             found.append(FaceKey(FaceGridAxis.H, cx, cy - 1))
         return tuple(sorted(found))
 
+    def faces_for_cells(self, cells: tuple[Coord, ...] | list[Coord]) -> tuple[FaceKey, ...]:
+        found: set[FaceKey] = set()
+        for x, y in cells:
+            found.update(self.faces_for_cell(x, y))
+        return tuple(sorted(found))
+
     def uid_for_cells(self, cells: tuple[Coord, ...], *, cx: int, cy: int) -> str:
         """Catalog face uid (min face_key) or interior|{k placeholder 0} — k set by caller."""
-        faces: set[FaceKey] = set()
-        for xy in cells:
-            faces.update(self.faces_for_cell(xy[0], xy[1]))
+        faces = self.faces_for_cells(cells)
         if faces:
-            uid = self.uid_for_faces(tuple(faces))
+            uid = self.uid_for_faces(faces)
             if uid is not None:
                 return uid
         return self.interior_uid(cx, cy, 0)
@@ -244,11 +256,11 @@ class TileFaceCatalog:
 def seed_ref_axis(
     seeds: tuple[Coord, ...] | list[Coord],
     refs: set[Coord],
-) -> str | None:
+) -> FaceGridAxis | None:
     """Ortho seed↔ref axis (``V`` east-west, ``H`` north-south), or None."""
-    axes: set[str] = set()
+    axes: set[FaceGridAxis] = set()
     for sx, sy in seeds:
-        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        for dx, dy in CARDINAL_WALL_OUTWARD_DELTA.values():
             if (sx + dx, sy + dy) in refs:
                 axes.add(FaceGridAxis.V if dx != 0 else FaceGridAxis.H)
     if len(axes) == 1:

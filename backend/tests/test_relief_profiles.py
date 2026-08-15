@@ -2,7 +2,7 @@
 
 import unittest
 
-from app.application.worldData.generators.terrain.relief.profiles import (
+from app.application.worldData.generators.terrain.relief.geom.profiles import (
     profile_side_fraction,
     sheer_fraction_radial,
     slope_fraction,

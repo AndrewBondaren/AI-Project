@@ -1,11 +1,12 @@
 # ТЗ: Снимок состояния проекта
 
-**Версия:** 1.1  
-**Дата:** 2026-07-20  
+**Версия:** 1.2  
+**Дата:** 2026-08-15  
 **Тип:** living snapshot — фиксирует *фактическое* состояние кода, не целевую архитектуру.
 
 > Целевые спецификации по доменам — отдельные `docs/tz_*.md`.  
-> Этот документ — точка отсчёта «где мы сейчас» для мастера и агента.
+> Этот документ — точка отсчёта «где мы сейчас» для мастера и агента.  
+> **Глобальная хар-ка для внешней оценки (2026-08-15):** [`.cursor/plans/project-characterization-2026-08-15.md`](../.cursor/plans/project-characterization-2026-08-15.md) — самодостаточный бриф (git, bake, DAG, аналоги). При расхождении чисел со § ниже — бриф новее.
 
 ---
 
@@ -86,13 +87,14 @@ core/               → Container, config, logging
 | Locations | CRUD, import, `POST …/generate-settlement` |
 | Characters | CRUD, import, copy |
 | Races, Perks | CRUD + import per world |
-| Map | CRUD cells, `generate-surface/climate/ores/caves/z-slice` |
+| Map | Pack bake/refine/read/render (debug harness) |
 | Connections | nodes, edges, full graph |
 | Seed | import/export таблиц |
 | Settings | backend config |
 | Debug | `POST /worlds/{uid}/generate-structure` |
+| Relief templates | CRUD / import library |
 
-**Важно:** `map/generate-*` — **permanent debug harness** (`map.py` docstring). Production materialization — через engine DAG nodes, не через эти HTTP routes.
+**Важно:** `POST …/map/pack/bake` (`light\|full\|detailed`), `refine-from-entry`, render-* — **permanent debug harness** (`map.py` docstring). Legacy `generate-surface` / `materialize-stack` **удалены**. Production materialization — через engine DAG nodes (gate: [`tz_world_generation_dag.md`](./tz_world_generation_dag.md)); bake-job уже существует, caller пока HTTP.
 
 ---
 
@@ -224,7 +226,7 @@ SettlementAssembler          ✅ фазы A–F
 | `ClimateGeneratorService` | ✅ | pure climate math |
 | `ClimateOrchestratorService` | ✅ | full_surface, recalc, apply_climate_pass |
 | `StructureGeneratorService` | ✅ fat | rooms, passages, staircases — deterministic |
-| `HydrologyGeneratorService` | **stub** | пустой `HydrologyResult` |
+| `HydrologyGeneratorService` | ✅ generator | coastal sea, ocean, lakes, rivers, landforms; вызывается из pack bake; полнота vs TZ — caveat, не empty stub |
 
 ### 6.3 Terrain pipeline
 
@@ -314,7 +316,7 @@ Feature-slices: `session`, `chat`, `settings`. API base: `VITE_API_URL` (default
 
 ---
 
-## 10. Что работает end-to-end (2026-07-04)
+## 10. Что работает end-to-end (2026-08-15)
 
 | Контур | Статус |
 |--------|--------|
@@ -324,12 +326,13 @@ Feature-slices: `session`, `chat`, `settings`. API base: `VITE_API_URL` (default
 | World/character import | ✅ |
 | Intent detection LLM + repair | ✅ |
 | Scene gate (init / location select) | ✅ |
-| Lazy terrain anchor cell | ✅ |
-| Lazy settlement geometry (map_cells) | ✅ partial persist |
+| Lazy terrain / settlement (DAG nodes, map_cells path) | ✅ partial persist |
 | Terrain context → shared_context | ✅ |
-| Debug: map surface/climate, structure, settlement | ✅ |
+| **Pack bake** `light` / `full` / `detailed` (debug HTTP) | ✅ с оговорками (seam, WP-13, DAG не caller) |
+| Entry / chunk refine (debug HTTP) | ✅ |
+| Hydrology generator inside bake | ✅ не stub |
 | **Player narration turn** | ❌ осознанный блокер — нет `scene_narration` node (§5.5) |
-| Hydrology | ❌ stub |
+| Bake ← session start / DAG | ❌ gate |
 | Interior furnishing | ❌ не начато |
 | Большинство TaskType | ❌ enum only |
 
@@ -341,7 +344,7 @@ Feature-slices: `session`, `chat`, `settings`. API base: `VITE_API_URL` (default
 
 1. **`scene_narration` LLM-node** — осознанный блокер (§5.5, §12). `_OUTPUT_NODE` уже ждёт id; регистрация отложена до стабильного входа и gate DAG.
 2. **`lazy_settlement` → полный outdoor persist** — connections graph + building `NamedLocations` через `SettlementPersistService`.
-3. **Eager world surface** (опционально для wilderness) — `eager_terrain` сейчас только load; full `generate_surface` только debug HTTP / будущая engine node.
+3. **Pack L0 → сцена / LLM** — bake пишет pack; scene-ноды и narration ещё не читают тот же L0 как факты хода. `eager_terrain` по-прежнему load cells, не bake.
 
 ---
 
@@ -355,7 +358,7 @@ Feature-slices: `session`, `chat`, `settings`. API base: `VITE_API_URL` (default
 | World editor UI | `tz_frontend.md` | placeholder |
 | Perception nodes | `tz_perception.md` | не в DAG |
 | Crafting, economy sim | `tz_crafting.md`, `tz_economy.md` | не в engine |
-| Hydrology impl | `tz_terrain_hydrology.md` | stub |
+| Hydrology completeness vs TZ | `tz_terrain_hydrology.md` | generator live; bathymetry/stubs remain |
 | Автотесты engine/DAG | — | почти нет |
 
 ---
@@ -381,5 +384,6 @@ Feature-slices: `session`, `chat`, `settings`. API base: `VITE_API_URL` (default
 |--------|------|-----------|
 | 1.0 | 2026-07-04 | Первый снимок: API, engine, generators, JV, gaps |
 | 1.1 | 2026-07-20 | Убран приоритет vertical slice; `scene_narration` зафиксирован как осознанный блокер (§5.5, §11, §12) |
+| 1.2 | 2026-08-15 | Pack bake вместо legacy generate-surface; hydrology не stub; ссылка на глобальную хар-ку `.cursor/plans/project-characterization-2026-08-15.md` |
 
 **Правило обновления:** при закрытии осознанного блокера из §12 / изменении пробелов §11 — bump minor version и строка в §10–§12.

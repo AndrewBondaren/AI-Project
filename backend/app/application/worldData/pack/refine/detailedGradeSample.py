@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.terrain.relief.facing import CARDINAL_ORTHO_DELTAS
-from app.application.worldData.generators.terrain.relief.openLandTerrains import (
+from app.application.worldData.generators.terrain.relief.geom.facing import CARDINAL_ORTHO_DELTAS
+from app.application.worldData.generators.terrain.relief.sample.openLandTerrains import (
     open_land_terrain_keys,
 )
-from app.application.worldData.generators.terrain.relief.ribbonSiteSample import (
+from app.application.worldData.generators.terrain.relief.sample.ravineTerrain import (
+    ravine_terrain_key,
+)
+from app.application.worldData.generators.terrain.relief.sample.ribbonSiteSample import (
     SampleCell,
     sample_downhill_land_sites,
     sample_landward_of_refs,
 )
-from app.application.worldData.generators.terrain.relief.shoulderWidth import has_relief_dz
+from app.application.worldData.generators.terrain.relief.geom.outward import has_relief_dz
 from app.application.worldData.pack.refine.columnBounds import (
     ColumnBounds,
     expand_rect,
@@ -190,6 +193,58 @@ def sample_road_shoulder_meter(
         return str(terrain_lo), int(z_lo)
 
     samples, refs = sample_landward_of_refs(road_refs, neighbor_site=neighbor_site)
+    samples = [item for item in samples if has_relief_dz(item.dz)]
+    owned = _keep_owned_seeds(samples, rect)
+    return owned, _refs_for_owned_seeds(refs, owned)
+
+
+def sample_ravine_meter(
+    surface: MeterGradeSurface,
+    *,
+    road_key: str,
+    world: World | None = None,
+    rect: ColumnBounds | None = None,
+    halo: int = 0,
+) -> tuple[list[SampleCell], set[Coord]]:
+    """Bank (non-ravine) = ref; ortho ravine mask cell = seed.
+
+    Membership is the depression mask, not open_land downhill (floor seed).
+    Flat floor (no ortho bank / Δz=0) is not a site.
+    """
+    ravine_key = ravine_terrain_key(world)
+    bounds = _sample_bounds(rect, halo)
+    cells = (
+        _iter_z_in_bounds(surface, bounds)
+        if bounds is not None
+        else surface.surface_z.items()
+    )
+    bank_refs: list[tuple[Coord, int]] = []
+    for xy, z in cells:
+        terrain = surface.terrain_at(xy)
+        if terrain is None or terrain == ravine_key:
+            continue
+        sx, sy = xy
+        if not any(
+            surface.terrain_at((sx + dx, sy + dy)) == ravine_key
+            for dx, dy in CARDINAL_ORTHO_DELTAS
+        ):
+            continue
+        bank_refs.append((xy, int(z)))
+    if not bank_refs:
+        return [], set()
+    bank_refs.sort(key=lambda item: item[0])
+
+    def neighbor_site(seed: Coord) -> tuple[str, int] | None:
+        if surface.terrain_at(seed) != ravine_key:
+            return None
+        if meter_seed_blocked(surface, seed, road_key=road_key):
+            return None
+        z_lo = surface.z_at(seed)
+        if z_lo is None:
+            return None
+        return ravine_key, int(z_lo)
+
+    samples, refs = sample_landward_of_refs(bank_refs, neighbor_site=neighbor_site)
     samples = [item for item in samples if has_relief_dz(item.dz)]
     owned = _keep_owned_seeds(samples, rect)
     return owned, _refs_for_owned_seeds(refs, owned)

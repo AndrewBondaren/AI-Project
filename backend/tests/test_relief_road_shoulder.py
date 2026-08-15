@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import unittest
 
-from app.application.worldData.generators.terrain.relief.ribbonSegmentize import (
+from app.application.worldData.generators.terrain.relief.sample.ribbonSegmentize import (
     segmentize_by_terrain,
 )
-from app.application.worldData.generators.terrain.relief.ribbonGrade import (
+from app.application.worldData.generators.terrain.relief.pick.ribbonGrade import (
     grade_ribbon_segments,
 )
 from app.application.worldData.reliefTemplateLibraryService import relief_template_uid

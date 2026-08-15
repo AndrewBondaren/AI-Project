@@ -1,14 +1,14 @@
 """Split ribbon sample cells into contiguous terrain segments (RELIEF-T-32).
 
-Pure: no pick / grade / world registry. Used by road_shoulder / open_land / shore.
+Pure: no pick / grade / world registry. Used by road_shoulder / open_land / shore / ravine.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.application.worldData.generators.terrain.relief.ribbonSiteSample import SampleCell
-from app.application.worldData.generators.terrain.relief.terrainMap import map_system_terrain
+from app.application.worldData.generators.terrain.relief.sample.ribbonSiteSample import SampleCell
+from app.application.worldData.generators.terrain.relief.sample.terrainMap import map_system_terrain
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,7 +16,7 @@ class RibbonSegment:
     """One pick site: contiguous terrain run along a ribbon owner.
 
     ``owner_uid`` — connection edge uid (road) or context token (``open_land`` /
-    ``shore``), not always a graph edge.
+    ``shore`` / ``ravine``), not always a graph edge.
 
     ``site_id`` — stable pick/seed key:
     ``{owner_uid}|{terrain_key}|{anchor_x},{anchor_y}`` where anchor = first

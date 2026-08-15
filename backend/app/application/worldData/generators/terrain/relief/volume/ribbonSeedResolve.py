@@ -6,18 +6,18 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from app.application.worldData.generators.terrain.relief.freeGap import measure_free_gap
-from app.application.worldData.generators.terrain.relief.gradeObstacleLight import (
+from app.application.worldData.generators.terrain.relief.geom.freeGap import measure_free_gap
+from app.application.worldData.generators.terrain.relief.volume.gradeObstacleLight import (
     is_grade_obstacle_light,
 )
-from app.application.worldData.generators.terrain.relief.obstacleClearance import (
+from app.application.worldData.generators.terrain.relief.volume.obstacleClearance import (
     outward_length,
 )
-from app.application.worldData.generators.terrain.relief.reliefEvents import (
+from app.application.worldData.generators.terrain.relief.log.events import (
     WHY_CLEARANCE_L_EFF,
     WHY_NO_UNIQUE_OUTWARD,
 )
-from app.application.worldData.generators.terrain.relief.shoulderWidth import (
+from app.application.worldData.generators.terrain.relief.geom.outward import (
     unique_outward,
 )
 

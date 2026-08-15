@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import unittest
 
-from app.application.worldData.generators.terrain.relief import canalAttachments
-from app.application.worldData.generators.terrain.relief.reliefEvents import (
+from app.application.worldData.generators.terrain.relief.canal import attachments as canalAttachments
+from app.application.worldData.generators.terrain.relief.log.events import (
     EVENT_RESOLVE_FALLBACK,
     EVENT_RIBBON_BARRIER,
     EVENT_RIBBON_SKIP_APPLY,

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.application.worldData.generators.terrain.relief.facing import uphill_facing_toward
-from app.application.worldData.generators.terrain.relief.profiles import (
+from app.application.worldData.generators.terrain.relief.geom.facing import uphill_facing_toward
+from app.application.worldData.generators.terrain.relief.geom.profiles import (
     profile_side_fraction,
     sheer_band_m,
 )

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import unittest
 
-from app.application.worldData.generators.terrain.relief.shoulderWidth import (
+from app.application.worldData.generators.terrain.relief.sample.shoulder import (
     expand_shoulder_ring,
+)
+from app.application.worldData.generators.terrain.relief.geom.outward import (
     relief_dz,
 )
 

@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from app.application.worldData.generators.terrain.relief.gradePass import grade_from_template
+from app.application.worldData.generators.terrain.relief.pick.gradePass import grade_from_template
 from app.application.worldData.reliefErrors import ReliefValidationError
 from app.application.worldData.reliefTemplateLibraryService import (
     ReliefTemplateLibraryService,

@@ -6,11 +6,11 @@ import json
 import unittest
 from dataclasses import dataclass, fields
 
-from app.application.worldData.generators.terrain.relief.canalAttachments import (
+from app.application.worldData.generators.terrain.relief.canal.attachments import (
     EMPTY_DRAW,
     project_canal_draw,
 )
-from app.application.worldData.generators.terrain.relief.facing import (
+from app.application.worldData.generators.terrain.relief.geom.facing import (
     CARDINAL_ORTHO_DELTAS,
 )
 from app.dataModel.spatial.facing import CARDINAL_WALL_OUTWARD_DELTA, Facing

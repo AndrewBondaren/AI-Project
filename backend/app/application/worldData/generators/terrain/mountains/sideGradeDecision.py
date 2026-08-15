@@ -11,8 +11,8 @@ from app.application.worldData.generators.terrain.mountains.formGeometry import 
 from app.application.worldData.generators.terrain.mountains.sideFill import (
     side_fill_grade_at_xy,
 )
-from app.application.worldData.generators.terrain.relief.facing import uphill_facing_toward
-from app.application.worldData.generators.terrain.relief.sideGradeDecision import (
+from app.application.worldData.generators.terrain.relief.geom.facing import uphill_facing_toward
+from app.application.worldData.generators.terrain.relief.mountain.sideGradeDecision import (
     RadialGradeDecision,
     format_sides_summary,
 )

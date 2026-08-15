@@ -95,6 +95,16 @@ CARDINAL_WALL_OUTWARD_DELTA: dict[Facing, tuple[int, int]] = {
     Facing.EAST: (+1, 0),
     Facing.WEST: (-1, 0),
 }
+CARDINAL_DELTA_TO_FACING: dict[tuple[int, int], Facing] = {
+    delta: facing for facing, delta in CARDINAL_WALL_OUTWARD_DELTA.items()
+}
+
+
+def cardinal_facing_for_delta(delta: tuple[int, int] | None) -> Facing | None:
+    """Reverse of ``CARDINAL_WALL_OUTWARD_DELTA``; None if not a cardinal step."""
+    if delta is None:
+        return None
+    return CARDINAL_DELTA_TO_FACING.get((int(delta[0]), int(delta[1])))
 
 
 def opposite(facing: Facing) -> Facing:

@@ -5,11 +5,11 @@ from __future__ import annotations
 import hashlib
 from datetime import datetime, timezone
 
-from app.application.worldData.generators.terrain.relief.reliefLog import (
+from app.application.worldData.generators.terrain.relief.log.log import (
     relief_debug,
     relief_info,
 )
-from app.application.worldData.generators.terrain.relief.volumeMaterialize import (
+from app.application.worldData.generators.terrain.relief.volume.volumeMaterialize import (
     RibbonVolumePlan,
 )
 from app.dataModel.terrain.relief.enums import ReliefSideKind

@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import NamedTuple
 
-from app.application.worldData.generators.terrain.relief.facing import CARDINAL_ORTHO_DELTAS
-from app.application.worldData.generators.terrain.relief.shoulderWidth import relief_dz
+from app.application.worldData.generators.terrain.relief.geom.facing import CARDINAL_ORTHO_DELTAS
+from app.application.worldData.generators.terrain.relief.geom.outward import relief_dz
 
 Coord = tuple[int, int]
 NeighborSite = Callable[[Coord], tuple[str, int] | None]

@@ -13,11 +13,11 @@ from app.application.worldData.generators.terrain.mountains.geom import (
     dist_point_to_segment_m,
     nearest_point_on_polyline_m,
 )
-from app.application.worldData.generators.terrain.relief.facing import (
+from app.application.worldData.generators.terrain.relief.geom.facing import (
     facing_wire,
     uphill_facing_toward,
 )
-from app.application.worldData.generators.terrain.relief.profiles import (
+from app.application.worldData.generators.terrain.relief.geom.profiles import (
     profile_side_fraction,
     sheer_band_m,
     sheer_fraction_lateral,

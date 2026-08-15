@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.terrain.relief.kindRoll import kind_roll
-from app.application.worldData.generators.terrain.relief.reliefLog import relief_info
+from app.application.worldData.generators.terrain.relief.pick.kindRoll import kind_roll
+from app.application.worldData.generators.terrain.relief.log.log import relief_info
 from app.dataModel.terrain.relief.enums import MountainSideRecipeMode, ReliefContext, ReliefSideKind
 from app.dataModel.terrain.relief.mountainSideRecipe import MountainSideRecipe
 from app.dataModel.terrain.relief.specs import ReliefSideSpec

@@ -45,6 +45,9 @@ class WorldReliefPickPolicy(BaseModel):
     road_shoulder: DefaultOnWire[ReliefContextPickPolicy] = Field(
         default_factory=ReliefContextPickPolicy,
     )
+    ravine: DefaultOnWire[ReliefContextPickPolicy] = Field(
+        default_factory=ReliefContextPickPolicy,
+    )
     canal_obstacle_policy: DefaultOnWire[list[CanalObstaclePolicyRule]] = Field(
         default_factory=list,
     )
@@ -91,6 +94,7 @@ class ObjectReliefPickPolicy(BaseModel):
     open_land: DefaultOnWire[ReliefContextPickPolicy | None] = None
     shore: DefaultOnWire[ReliefContextPickPolicy | None] = None
     road_shoulder: DefaultOnWire[ReliefContextPickPolicy | None] = None
+    ravine: DefaultOnWire[ReliefContextPickPolicy | None] = None
 
     def for_context(self, context: str) -> ReliefContextPickPolicy | None:
         return getattr(self, context)

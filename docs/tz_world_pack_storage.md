@@ -347,6 +347,8 @@ flowchart TB
 
 **Шов мира (тор AABB, L0):** при `full_bake` крайние макро-тайлы bounds, у которых нет соседа в прямоугольнике, смыкаются с **антагонистом** и шов **ставится на макро-тайлах**. Lookup **только** [`WorldBounds`](../backend/app/dataModel/worldPack/worldBounds.py): `grid_neighbor` (внутри AABB) / `antagonist_tile` (wrap); сторона = [`Facing`](../backend/app/dataModel/spatial/facing.py) + `CARDINAL_WALL_OUTWARD_DELTA`. Идентичность тайла = [`PackJobUid.tile_uid`](../backend/app/dataModel/worldPack/packJobUid.py) + `pack_job_seed`. Это топология L0 world map, не `face_key` / не outdoor grade. **`detailed_bake` шов мира не считает и не пишет.** Смежность внутри AABB — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R36w. Не magma **antipode**. Impl — [`.cursor/plans/full-bake-seam-halo-shoulder.md`](../.cursor/plans/full-bake-seam-halo-shoulder.md) ✅.
 
+**Технический шов (chunk / tile rim / `ColumnRect`) — не продукт.** Нарезка джоб и pack-blob. Климат, полотно дороги, **локация/город** и шаг сетки **проходят** ребро как один мир ([`tz_terrain_relief.md`](./tz_terrain_relief.md) **C29**). `territory_volume` **может** пересекать макро-тайлы: один `locations/l.{uid}.terrain.zst`, wilderness mask на каждом пересечённом тайле. WP-19 — куда писать клетку, не стена и не второй `location_uid`. Шов мира (антагонисты) — другая топология; внутри AABB сосед = `grid_neighbor`.
+
 **После light (отдельный шаг процесса, не фаза bake):** caller **может** стартовать entry job (blocking scene у player entry point + enqueue фоновой инициализации) — это **старт другой джобы**, не продолжение `light_bake`. Full не обязан ждать entry; entry не обязан ждать full.
 
 ```mermaid
@@ -541,6 +543,8 @@ pole + world_seed
 
 **Гибрид location file + tile chunks** с mask/priority — под locations-first и WP-14. **На одном macro-tile** могут сосуществовать **разные локации на разных z-уровнях** (поверхностный город, подземелье ниже, верхний район на z>0) — отдельный `locations/l.{uid}.terrain.zst` на каждую `named_location`.
 
+**Одна локация на нескольких тайлах** — норма (**C29**): `territory_volume` пересекает `gx|gx+1` (или грань чанка). File-per-location **не** file-per-tile: клетки volume со всех тайлов → **тот же** `l.{uid}.terrain.zst`. Wilderness chunk каждого тайла mask’ит `inside_location`. Запрещено резать поселение по сетке bake или заводить второй uid «для половины за швом».
+
 **Смешивание файлов — безопасно**, если:
 
 1. **На read** — layer priority WP-20 по **(x,y,z)**.
@@ -570,7 +574,8 @@ flowchart TB
 
 | Поле | Смысл |
 |---|---|
-| `territory_volume` | AABB `(x0,y0,z0)…(x1,y1,z1)` в meter grid; из `territory_radius_m` / layout bbox + `map_z` anchor |
+| `territory_volume` | AABB `(x0,y0,z0)…(x1,y1,z1)` в meter grid; из `territory_radius_m` / layout bbox + `map_z` anchor. **Может** пересекать макро-тайлы / chunk faces (C29) |
+| **Span XY нескольких тайлов** | **норма:** один location file; wilderness mask на каждом tile ∩ volume |
 | **Overlap XY, разный Z** | **норма:** два location file на одном tile; wilderness заполняет **z-диапазоны вне** всех location volumes |
 | **Overlap XYZ** | validator warning; tie-break: выше `graph_level` / меньший `location_uid`; master разводит bbox |
 
@@ -1899,6 +1904,7 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-15 | **C29:** технический шов chunk/tile не продукт; климат/дороги/**локация·город**/шаг проходят ребро — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-08-14 | **FineChunkRunner слои:** prep / `compute_rect` / persist; grade в том же `ColumnRect` task — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-08-14 | **Шов мира:** `full_bake` L0 смыкает край AABB с антагонистом на макро-тайлах; не L2 / не R36w — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-08-13 | **R36v:** FineChunkRunner grade per-rect in pool (не tile-wide serial) — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |

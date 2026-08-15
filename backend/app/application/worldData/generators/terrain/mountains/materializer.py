@@ -12,7 +12,7 @@ from app.application.worldData.generators.terrain.mountains.collect import (
     merge_mountain_spec_sources,
     specs_from_geographic_locations,
 )
-from app.application.worldData.generators.terrain.relief.bakeSeed import bake_seed
+from app.application.worldData.generators.terrain.relief.geom.bakeSeed import bake_seed
 from app.application.worldData.generators.terrain.mountains.reliefSidesStamp import (
     stamp_entries_from_relief,
 )

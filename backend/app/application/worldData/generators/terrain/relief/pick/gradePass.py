@@ -4,25 +4,25 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.application.worldData.generators.terrain.relief.conditionNormalize import (
+from app.application.worldData.generators.terrain.relief.pick.conditionNormalize import (
     normalize_condition,
 )
-from app.application.worldData.generators.terrain.relief.geomResolve import (
+from app.application.worldData.generators.terrain.relief.geom.geomResolve import (
     ResolvedGeom,
     geom_resolve,
 )
-from app.application.worldData.generators.terrain.relief.kindRoll import kind_roll
-from app.application.worldData.generators.terrain.relief.reliefEvents import (
+from app.application.worldData.generators.terrain.relief.pick.kindRoll import kind_roll
+from app.application.worldData.generators.terrain.relief.log.events import (
     EVENT_GRADE_SKIP,
     EVENT_RESOLVE_FALLBACK,
     REASON_SCHEDULE_HOLE_SAFE_SLOPE,
     WHY_SCHEDULE_HOLE,
 )
-from app.application.worldData.generators.terrain.relief.reliefLog import (
+from app.application.worldData.generators.terrain.relief.log.log import (
     relief_info,
     relief_warning,
 )
-from app.application.worldData.generators.terrain.relief.slopeClassify import classify
+from app.application.worldData.generators.terrain.relief.pick.slopeClassify import classify
 from app.dataModel.terrain.relief.enums import ReliefSideKind, ReliefSlopePolicy
 from app.dataModel.terrain.relief.reliefGradeKnobs import ReliefGradeKnobs
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
@@ -43,7 +43,7 @@ def _attachment_defaults() -> tuple[bool | None, str | None, tuple[str, ...]]:
 
 @dataclass(frozen=True, slots=True)
 class RibbonGradeDecision:
-    """Ribbon/edge grade site (road_shoulder / open_land / shore) — RELIEF-T-1.
+    """Ribbon/edge grade site (road_shoulder / open_land / shore / ravine) — RELIEF-T-1.
 
     ``requested_length`` / ``geom`` are pre-clearance; bake shortens via §9.
     Canal knobs are raw (omit/`structure_canal` ref); resolve once at bake (T-51).

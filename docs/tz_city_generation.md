@@ -1,6 +1,6 @@
 # ТЗ: Генератор города
 
-**Обновлено:** §11 init modes + persist plan (2026-06); sync TZ ↔ код.
+**Обновлено:** §11 init modes + persist plan (2026-06); **C29** город на шве pack (2026-08-15).
 
 **Связанные документы:**
 
@@ -9,6 +9,8 @@
 | [tz_assembler_hierarchy.md](./tz_assembler_hierarchy.md) | Stack Settlement → District → Area → Structure |
 | [.cursor/plans/settlement-assembler.md](../.cursor/plans/settlement-assembler.md) | Фазы A–H impl, acceptance |
 | [tz_structure_connections.md](./tz_structure_connections.md) | Дороги settlement/district (§5) |
+| [tz_terrain_relief.md](./tz_terrain_relief.md) | **C29:** город на техническом шве pack — норма; layout не клип по тайлу |
+| [tz_world_pack_storage.md](./tz_world_pack_storage.md) | WP-19: один location file на volume, в т.ч. несколько тайлов |
 | [tz_generator_technical_debt.md](./tz_generator_technical_debt.md) | NC/MR smells settlement stack |
 
 ### Статус реализации (код vs это ТЗ)
@@ -39,6 +41,8 @@
 
 Генератор города строит наполнение поселения — здания, улицы, районы — из скелета города.  
 Скелет генерируется **при создании мира** для всех поселений сразу. Детали (интерьеры, планировки) — **lazy**, при первом посещении игроком.
+
+`SettlementLayout` — мировые `(x,y)` / meter geometry, **не** клип по макро-тайлу. Поселение на техническом шве pack (ребро двух тайлов / грань чанка) — **валидный** кейс: один settlement, улицы и районы пересекают ребро. Не сдвигать город с шва и не плодить второй скелет «на соседнем тайле». Pack/grade: [`tz_terrain_relief.md`](./tz_terrain_relief.md) **C29**, [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) WP-19.
 
 ---
 

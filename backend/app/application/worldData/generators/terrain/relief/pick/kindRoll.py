@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.terrain.relief.reliefLog import relief_debug
-from app.application.worldData.generators.terrain.relief.seededHash import seeded_u01
+from app.application.worldData.generators.terrain.relief.log.log import relief_debug
+from app.application.worldData.generators.terrain.relief.geom.seededHash import seeded_u01
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 
 

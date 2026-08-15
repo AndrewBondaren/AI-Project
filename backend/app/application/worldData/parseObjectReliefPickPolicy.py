@@ -5,7 +5,7 @@ Lives in application (not generators): typed boundary before bake consumers.
 
 from __future__ import annotations
 
-from app.application.worldData.generators.terrain.relief.reliefLog import relief_warning
+from app.application.worldData.generators.terrain.relief.log.log import relief_warning
 from app.dataModel.terrain.relief.worldReliefPickPolicy import ObjectReliefPickPolicy
 
 

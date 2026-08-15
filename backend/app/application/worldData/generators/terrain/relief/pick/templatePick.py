@@ -5,14 +5,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from app.application.worldData.generators.terrain.relief.reliefEvents import (
+from app.application.worldData.generators.terrain.relief.log.events import (
     EVENT_RESOLVE_FALLBACK,
 )
-from app.application.worldData.generators.terrain.relief.reliefLog import (
+from app.application.worldData.generators.terrain.relief.log.log import (
     relief_info,
     relief_warning,
 )
-from app.application.worldData.generators.terrain.relief.seededHash import seeded_index
+from app.application.worldData.generators.terrain.relief.geom.seededHash import seeded_index
 from app.dataModel.terrain.relief.enums import ReliefContext, ReliefPickMode, ReliefSideKind
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.terrain.relief.worldReliefPickPolicy import (

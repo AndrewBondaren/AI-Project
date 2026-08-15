@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.terrain.relief.mountainSideMaterialize import (
+from app.application.worldData.generators.terrain.relief.mountain.mountainSideMaterialize import (
     resolve_sides_with_declare,
 )
-from app.application.worldData.generators.terrain.relief.reliefEvents import (
+from app.application.worldData.generators.terrain.relief.log.events import (
     EVENT_RESOLVE_FALLBACK,
 )
-from app.application.worldData.generators.terrain.relief.reliefLog import relief_info, relief_warning
-from app.application.worldData.generators.terrain.relief.templatePick import (
+from app.application.worldData.generators.terrain.relief.log.log import relief_info, relief_warning
+from app.application.worldData.generators.terrain.relief.pick.templatePick import (
     pick_template,
     resolve_picked_template,
 )

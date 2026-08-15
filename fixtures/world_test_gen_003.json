@@ -368,6 +368,11 @@
         "system_template_uid": "1296ee22-f830-5a85-9a55-1f1b46afd3a3",
         "context": "road_shoulder",
         "display_template_name": "Road shoulder soft grade"
+      },
+      {
+        "system_template_uid": "67fdb229-267e-5996-bfb9-0ef15f18061c",
+        "context": "ravine",
+        "display_template_name": "Ravine soft grade"
       }
     ],
     "relief_pick_policy": {
@@ -382,6 +387,10 @@
       "road_shoulder": {
         "mode": "fixed",
         "default_template_uid": "1296ee22-f830-5a85-9a55-1f1b46afd3a3"
+      },
+      "ravine": {
+        "mode": "fixed",
+        "default_template_uid": "67fdb229-267e-5996-bfb9-0ef15f18061c"
       }
     }
   },
@@ -463,6 +472,23 @@
           "terrain": "forest",
           "cases": [
             {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.7, "sheer_weight": 0.3, "slope_length_cells": 2},
+            {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
+            {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
+          ]
+        }
+      ]
+    },
+    {
+      "system_name": "ravine_soft",
+      "display_name": "Ravine soft grade",
+      "context": "ravine",
+      "pack_name": "smoke_003",
+      "slope_length_cells": 2,
+      "conditions": [
+        {
+          "terrain": "ravine",
+          "cases": [
+            {"policy": "slope_down", "delta_z": 1, "slope_weight": 0.6, "sheer_weight": 0.4, "slope_length_cells": 2},
             {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0, "slope_length_cells": 2},
             {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0}
           ]

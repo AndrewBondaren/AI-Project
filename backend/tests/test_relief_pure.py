@@ -5,22 +5,22 @@ from __future__ import annotations
 import math
 import unittest
 
-from app.application.worldData.generators.terrain.relief.conditionNormalize import (
+from app.application.worldData.generators.terrain.relief.pick.conditionNormalize import (
     normalize_condition,
 )
-from app.application.worldData.generators.terrain.relief.kindRoll import kind_roll
-from app.application.worldData.generators.terrain.relief.mountainSideMaterialize import (
+from app.application.worldData.generators.terrain.relief.pick.kindRoll import kind_roll
+from app.application.worldData.generators.terrain.relief.mountain.mountainSideMaterialize import (
     resolve_sides_with_declare,
 )
-from app.application.worldData.generators.terrain.relief.slopeClassify import classify
-from app.application.worldData.generators.terrain.relief.templatePick import pick_template
-from app.application.worldData.generators.terrain.relief.geomResolve import (
+from app.application.worldData.generators.terrain.relief.pick.slopeClassify import classify
+from app.application.worldData.generators.terrain.relief.pick.templatePick import pick_template
+from app.application.worldData.generators.terrain.relief.geom.geomResolve import (
     angle_from_height_length,
     geom_resolve,
     length_from_target_angle,
     partition_height,
 )
-from app.application.worldData.generators.terrain.relief.obstacleClearance import (
+from app.application.worldData.generators.terrain.relief.volume.obstacleClearance import (
     outward_length_for_policy,
 )
 from app.dataModel.terrain.relief import (
@@ -32,7 +32,11 @@ from app.dataModel.terrain.relief import (
     WorldReliefPickPolicy,
     WorldReliefTemplateRegistry,
 )
-from app.dataModel.terrain.relief.enums import ReliefPickMode, ReliefSlopePolicy
+from app.dataModel.terrain.relief.enums import (
+    ReliefContext,
+    ReliefPickMode,
+    ReliefSlopePolicy,
+)
 from app.dataModel.terrain.relief.worldReliefGradeObstacle import (
     WorldReliefGradeObstacleScalars,
 )
@@ -97,6 +101,29 @@ class ReliefPureTest(unittest.TestCase):
             site_id="m1",
         )
         self.assertEqual(result.template_uid, "uid-b")
+        self.assertEqual(result.policy_level, "world")
+
+    def test_ravine_world_pick_fixed(self) -> None:
+        reg = WorldReliefTemplateRegistry.model_validate([
+            {
+                "system_template_uid": "uid-ravine",
+                "context": ReliefContext.RAVINE,
+            },
+        ])
+        policy = WorldReliefPickPolicy(
+            ravine=ReliefContextPickPolicy(
+                mode=ReliefPickMode.FIXED,
+                default_template_uid="uid-ravine",
+            ),
+        )
+        result = pick_template(
+            context=ReliefContext.RAVINE,
+            registry=reg,
+            world_policy=policy,
+            world_seed="seed",
+            site_id="rv1",
+        )
+        self.assertEqual(result.template_uid, "uid-ravine")
         self.assertEqual(result.policy_level, "world")
 
     def test_mountain_recipe_d_reproducible(self) -> None:

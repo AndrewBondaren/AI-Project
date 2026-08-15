@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import unittest
 
-from app.application.worldData.generators.terrain.relief.canalAttachments import (
+from app.application.worldData.generators.terrain.relief.canal.attachments import (
     aggregate_canals,
     build_canal,
     resolve_knobs_canal,
 )
-from app.application.worldData.generators.terrain.relief.canalObstacleResolve import (
+from app.application.worldData.generators.terrain.relief.canal.obstacleResolve import (
     canal_entity_from_terrain,
     resolve_canal_obstacle_cut,
 )
-from app.application.worldData.generators.terrain.relief.seedCanalResolve import (
+from app.application.worldData.generators.terrain.relief.canal.seedResolve import (
     resolve_seed_canal,
 )
 from app.dataModel.terrain.relief import (
