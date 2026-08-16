@@ -6,6 +6,7 @@ from app.application.worldData.render.locationTerrainPackRenderer import Locatio
 from app.application.worldData.render.renderPayloads import (
     LEVEL_SURFACE,
     LEVEL_SURFACE_GRADE,
+    LEVEL_SURFACE_Z,
     grade_level_key,
 )
 from app.dataModel.worldPack.fineTerrainChunkWire import (
@@ -70,6 +71,8 @@ class TestLocationTerrainPackRenderer(unittest.TestCase):
 
         levels = renderer.render_all_levels()
         self.assertIn(LEVEL_SURFACE, levels)
+        self.assertIn(LEVEL_SURFACE_Z, levels)
+        self.assertIn(" 5", levels[LEVEL_SURFACE_Z])  # forest column top z=5
         self.assertNotIn(LEVEL_SURFACE_GRADE, levels)  # PAR-G4: no uid → omit
         self.assertEqual(renderer.z_levels(), [0, 1, 2, 3, 4, 5])
 

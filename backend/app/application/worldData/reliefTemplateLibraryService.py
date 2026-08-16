@@ -13,6 +13,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from app.application.worldData.reliefErrors import ReliefNotFoundError, ReliefValidationError
+from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.db.models.reliefTemplate import ReliefTemplateRow
 from app.db.repositories.iReliefTemplateRepository import IReliefTemplateRepository
@@ -97,6 +98,7 @@ class ReliefTemplateLibraryService:
             )
             logger.warning("relief | library reject %s", msg)
             raise ReliefValidationError(msg)
+        warn_template_invalid_geom(outline, source_file=source_file)
         return await self.upsert_outline(outline, source_file=source_file)
 
     async def import_path(

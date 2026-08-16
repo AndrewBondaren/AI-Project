@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -12,6 +12,11 @@ from app.dataModel.constrainedField import constrained_field
 WEIGHT_SUM_EPS = 1e-6
 DEFAULT_SLOPE_LENGTH_CELLS = 1
 _REMOVED_SHOULDER_WIDTH = "shoulder_width_cells"
+# C31: invalid geom → WARN + Geom-B fallback (not reject).
+INVALID_GEOM_FALLBACK_ANGLE_DEG = 20.0
+GEOM_INVALID_BOTH = "geom_both"
+GEOM_INVALID_LENGTH = "geom_l_lt_1"
+GEOM_INVALID_ANGLE = "geom_angle"
 
 
 def weights_sum_ok(slope_weight: float, sheer_weight: float) -> bool:
@@ -49,23 +54,33 @@ def reject_removed_shoulder_width(data: Any) -> Any:
     return data
 
 
-def validate_geom_xor(
+def geom_invalid_reason(
     slope_length_cells: int | None,
     target_angle_deg: float | None,
-) -> None:
-    """Exactly one geom knob, or neither (→ default L). Both → reject (R36b)."""
+) -> str | None:
+    """C31: invalid geom is WARN+fallback, not reject. ``None`` = valid (incl. omit)."""
     has_l = slope_length_cells is not None
     has_a = target_angle_deg is not None
     if has_l and has_a:
-        raise ValueError(
-            "slope_length_cells XOR target_angle_deg — both set (R36b)"
-        )
-    if has_l and int(slope_length_cells) < 0:  # type: ignore[arg-type]
-        raise ValueError("slope_length_cells must be >= 0")
+        return GEOM_INVALID_BOTH
+    if has_l and int(slope_length_cells) < 1:  # type: ignore[arg-type]
+        return GEOM_INVALID_LENGTH
     if has_a:
         angle = float(target_angle_deg)  # type: ignore[arg-type]
         if angle <= 0.0 or angle >= 90.0:
-            raise ValueError("target_angle_deg must be in (0, 90) for SLOPE geom")
+            return GEOM_INVALID_ANGLE
+    return None
+
+
+def coerce_geom_knobs(
+    slope_length_cells: int | None,
+    target_angle_deg: float | None,
+) -> tuple[int | None, float | None, str | None]:
+    """Valid knobs unchanged. Invalid → omit L + fallback θ (C31)."""
+    reason = geom_invalid_reason(slope_length_cells, target_angle_deg)
+    if reason is None:
+        return slope_length_cells, target_angle_deg, None
+    return None, INVALID_GEOM_FALLBACK_ANGLE_DEG, reason
 
 
 def validate_canal_xor(
@@ -112,13 +127,15 @@ class ReliefGradeKnobs(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
+    INVALID_GEOM_FALLBACK_ANGLE_DEG: ClassVar[float] = INVALID_GEOM_FALLBACK_ANGLE_DEG
+
     slope_weight: StrictOnWire[float] = constrained_field(
         greater_equals=0.0, lesser_equals=1.0,
     )
     sheer_weight: StrictOnWire[float] = constrained_field(
         greater_equals=0.0, lesser_equals=1.0,
     )
-    # R36b Geom XOR — neither → default L at resolve time
+    # R36b Geom — neither → default L; invalid → generate coerce (C31)
     slope_length_cells: DefaultOnWire[int | None] = None
     target_angle_deg: DefaultOnWire[float | None] = None
     earthen_canal: DefaultOnWire[bool | None] = None
@@ -133,10 +150,27 @@ class ReliefGradeKnobs(BaseModel):
     @model_validator(mode="after")
     def _weights_and_geom(self) -> ReliefGradeKnobs:
         require_weights_sum(self.slope_weight, self.sheer_weight)
-        validate_geom_xor(self.slope_length_cells, self.target_angle_deg)
         validate_canal_xor(self.earthen_canal, self.structure_canal)
         validate_canal_flat_refs(self.structure_canal, self.structure_refs)
         return self
+
+    def geom_invalid_reason(self) -> str | None:
+        return geom_invalid_reason(self.slope_length_cells, self.target_angle_deg)
+
+    def coerced_geom(self) -> tuple[ReliefGradeKnobs, str | None]:
+        """Copy with invalid L/θ replaced by fallback θ (C31)."""
+        length, angle, reason = coerce_geom_knobs(
+            self.slope_length_cells, self.target_angle_deg,
+        )
+        if reason is None:
+            return self, None
+        return (
+            self.model_copy(update={
+                "slope_length_cells": length,
+                "target_angle_deg": angle,
+            }),
+            reason,
+        )
 
     def outward_length_cells(self) -> int:
         """Expand width when ``h`` unknown; Geom-B needs ``geom_resolve(h=…)``."""

@@ -20,6 +20,7 @@ EVENT_RIBBON_BARRIER = "ribbon_barrier"
 # ref → warn + soft fallback (generate continues). Not Mode D / not R34 skip.
 EVENT_RESOLVE_FALLBACK = "resolve_fallback"
 EVENT_GRADE_SKIP = "grade_skip"
+EVENT_INVALID_GEOM = "invalid_geom"
 
 # --- why / reason tokens (log field why= / reason=; Intent skip_why) ---
 # apply layer (EVENT_RIBBON_SKIP_APPLY)
@@ -41,6 +42,7 @@ WHY_EMPTY_STAMP = "empty_stamp"
 WHY_NOT_STAMPED = "not_stamped"
 # R21 / gradePass (EVENT_RESOLVE_FALLBACK — not ribbon_skip_*)
 WHY_SCHEDULE_HOLE = "schedule_hole"
+WHY_INVALID_GEOM = "invalid_geom"
 # BAR-1 (EVENT_RIBBON_BARRIER)
 WHY_UNKNOWN_BARRIER_REF = "unknown_barrier_ref"
 WHY_EMPTY_FENCE_FOOTPRINT = "empty_fence_footprint"
@@ -48,6 +50,9 @@ WHY_NO_BARRIER_REFS = "no_barrier_refs"
 
 # Schedule hole → safe SLOPE (TZ R21 / RELIEF-T-14), not silent skip.
 REASON_SCHEDULE_HOLE_SAFE_SLOPE = "schedule_hole_safe_slope"
+# R37 ontology envelope skip (facade; not classify slope_none)
+REASON_ONTOLOGY_PLATEAU = "ontology_plateau"
+REASON_ONTOLOGY_NO_FIT = "ontology_no_fit"
 
 # Closed why sets per skip layer (tests / docs)
 WHYS_RIBBON_SKIP_APPLY = frozenset({

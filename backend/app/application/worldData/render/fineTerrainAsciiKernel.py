@@ -4,6 +4,7 @@ Pure kernel: no pack I/O, no location_uid / tile gx knowledge.
 Adapters supply title, headers, and column key space.
 
 Diagnostics (expose L2 heightfield / thin-column gaps vs building-like walls):
+- ``surface_z`` — per-cell max world-z (FineTerrain top)
 - ``column_span`` — how many world-z the column occupies (1 ≈ only top / thin band)
 - ``cliff_delta`` — max |Δz_top| vs 4-neighbors (large = face should exist; often empty in pack)
 - dense ``z_occupied`` slices — every z covered by a run (not only endpoints)
@@ -215,6 +216,18 @@ def symbols_by_occupied_z(
     return out
 
 
+def values_surface_z(
+    cols: Mapping[tuple[int, int], FineTerrainColumnWire],
+) -> dict[tuple[int, int], int]:
+    """Per-column highest world-z (FineTerrain top / surface_z)."""
+    out: dict[tuple[int, int], int] = {}
+    for key, col in cols.items():
+        top = top_terrain(col)
+        if top is not None:
+            out[key] = int(top[0])
+    return out
+
+
 def values_column_span(
     cols: Mapping[tuple[int, int], FineTerrainColumnWire],
 ) -> dict[tuple[int, int], int]:
@@ -226,11 +239,7 @@ def values_cliff_delta(
     cols: Mapping[tuple[int, int], FineTerrainColumnWire],
 ) -> dict[tuple[int, int], int]:
     """Max |Δz_top| vs 4-neighbors. Large value + span≈1 ⇒ missing vertical face cells."""
-    tops: dict[tuple[int, int], int] = {}
-    for key, col in cols.items():
-        top = top_terrain(col)
-        if top is not None:
-            tops[key] = top[0]
+    tops = values_surface_z(cols)
     out: dict[tuple[int, int], int] = {}
     for (x, y), z_top in tops.items():
         best = 0

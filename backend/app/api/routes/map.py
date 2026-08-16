@@ -370,7 +370,8 @@ async def render_wilderness_tile_grid(
     include_column_diagnostics: bool = Query(
         default=True,
         description=(
-            "Include column_span + cliff_delta levels (thin fill vs steep neighbor tops)"
+            "Include column_span + cliff_delta levels (thin fill vs steep neighbor tops). "
+            "surface / surface_z always included when columns exist."
         ),
     ),
     container=Depends(get_container),

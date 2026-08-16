@@ -416,6 +416,7 @@ Form/SideFill/radius defaults — [`tz_map_light_bake.md`](./tz_map_light_bake.m
 
 | Level key | Смысл |
 |---|---|
+| `surface_z` | max world-z колонки (FineTerrain top); L2 analog L0 `height` |
 | `column_span` | сколько world-z занимает колонка (1 ≈ тонкий top/band) |
 | `cliff_delta` | max \|Δz_top\| к 4-соседям |
 | summary line | `thin_steep_gap_suspect` = span≤1 и delta≥2 |
@@ -433,6 +434,7 @@ HTTP: `GET …/map/render-wilderness-tile-grid` (`include_column_diagnostics` de
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-16 | L2 dump `surface_z`: per-cell max world-z |
 | 2026-08-13 | Pack ASCII pointer: L0 без outdoor grade (**R36u**); L2 `surface_grade` / `grade_{z}` |
 | 2026-07-29 | Relief templates / outdoor grade pointer — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-07-27 | Scope: relief grade → [`tz_terrain_relief.md`](./tz_terrain_relief.md); PassBuilder не SoT grade |

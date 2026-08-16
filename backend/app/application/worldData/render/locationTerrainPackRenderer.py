@@ -15,6 +15,7 @@ from app.application.worldData.render.fineTerrainAsciiKernel import (
     symbols_surface_with_grade,
     values_cliff_delta,
     values_column_span,
+    values_surface_z,
     z_occupied,
 )
 from app.application.worldData.render.mapSymbols import render_map_legend
@@ -23,6 +24,7 @@ from app.application.worldData.render.renderPayloads import (
     LEVEL_COLUMN_SPAN,
     LEVEL_SURFACE,
     LEVEL_SURFACE_GRADE,
+    LEVEL_SURFACE_Z,
     grade_level_key,
 )
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire
@@ -83,6 +85,25 @@ class LocationTerrainPackRenderer:
         return self._draw(
             symbols_surface_top(self._cols),
             title=f"location={self.location_uid}  (pack location_terrain, top z)",
+        )
+
+    def render_surface_z(self) -> str:
+        """Per-cell max world-z (FineTerrain top) — L2 analog of L0 ``height``."""
+        if not self._cols:
+            return ""
+        values = values_surface_z(self._cols)
+        if not values:
+            return ""
+        xs = [x for x, _ in values]
+        ys = [y for _, y in values]
+        return draw_int_grid(
+            values,
+            title=(
+                f"location={self.location_uid}  "
+                f"surface_z (column max world-z)"
+            ),
+            extra_headers=self._extra_headers(min(xs), min(ys), max(xs), max(ys)),
+            coord_prefix="local ",
         )
 
     def render_grade(self) -> str:
@@ -178,11 +199,14 @@ class LocationTerrainPackRenderer:
         return z_occupied(self._cols.values())
 
     def render_all_levels(self, *, include_column_diagnostics: bool = True) -> dict[str, str]:
-        """Keys: surface; surface_grade; dense z; grade_{z}; optional column diagnostics."""
+        """Keys: surface; surface_z; surface_grade; dense z; grade_{z}; optional column diagnostics."""
         out: dict[str, str] = {}
         surface = self.render_surface_top()
         if surface:
             out[LEVEL_SURFACE] = surface
+        height = self.render_surface_z()
+        if height:
+            out[LEVEL_SURFACE_Z] = height
         grade = self.render_grade()
         if grade:
             out[LEVEL_SURFACE_GRADE] = grade

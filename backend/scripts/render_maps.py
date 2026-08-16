@@ -11,7 +11,7 @@ Detailed L2 (after detailed_bake):
   - ``dump_detailed_renders`` → location_terrain + ``render-wilderness-tile-grid``
     Pack-read-only: each ``z/<n>.txt`` = cells already in FineTerrain runs (no generation);
     ``surface_grade.txt`` + ``z/grade_<n>.txt`` = relief overlay (surface_z == n).
-    Default: ``surface`` / ``surface_grade`` / ``column_span`` / ``cliff_delta``, then
+    Default: ``surface`` / ``surface_z`` / ``surface_grade`` / ``column_span`` / ``cliff_delta``, then
     one material + grade file per relevant world-z under ``…/z/``.
   - does **not** re-dump L0 mosaic
 
@@ -57,6 +57,7 @@ from app.application.worldData.render.renderPayloads import (  # noqa: E402
     LEVEL_LIGHT,
     LEVEL_SURFACE,
     LEVEL_SURFACE_GRADE,
+    LEVEL_SURFACE_Z,
     LEVEL_COLUMN_SPAN,
     grade_level_key,
 )
@@ -64,6 +65,7 @@ from app.application.worldData.render.renderPayloads import (  # noqa: E402
 # Base L2 dump keys (no dense z — those go under ``z/``).
 _L2_BUNDLE_LEVELS = frozenset({
     LEVEL_SURFACE,
+    LEVEL_SURFACE_Z,
     LEVEL_SURFACE_GRADE,
     LEVEL_COLUMN_SPAN,
     LEVEL_CLIFF_DELTA,
@@ -96,6 +98,8 @@ def _level_sort_key(key: str) -> tuple[int, int | str]:
     """Order: light/surface first, column diagnostics, height/grade, then numeric z."""
     if key in (LEVEL_LIGHT, LEVEL_SURFACE, "-1"):
         return (0, key)
+    if key == LEVEL_SURFACE_Z:
+        return (0, "z_surface_z")
     if key == LEVEL_SURFACE_GRADE:
         return (0, "z_surface_grade")
     if key == LEVEL_COLUMN_SPAN:

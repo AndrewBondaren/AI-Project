@@ -284,8 +284,8 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             },
         )
         surface_z = {
-            (5, 5): 8, (6, 5): 6, (7, 5): 6,
-            (5, 6): 8, (6, 6): 6,
+            (5, 5): 10, (6, 5): 6, (7, 5): 6,
+            (5, 6): 10, (6, 6): 6,
         }
         bbox = GridBBox(x_min=5, x_max=7, y_min=5, y_max=6)
         hm = SurfaceHeightmap(
@@ -417,8 +417,8 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             terrain_chunk_columns=2,
         )
         surface_z = {
-            (5, 5): 8, (6, 5): 6, (7, 5): 4, (8, 5): 4,
-            (5, 6): 8, (6, 6): 6, (7, 6): 4, (8, 6): 4,
+            (5, 5): 12, (6, 5): 8, (7, 5): 4, (8, 5): 4,
+            (5, 6): 12, (6, 6): 8, (7, 6): 4, (8, 6): 4,
         }
         bbox = GridBBox(x_min=5, x_max=8, y_min=5, y_max=6)
         hm = SurfaceHeightmap(world_uid="w_stitch", bbox=bbox, surface_z=surface_z)
@@ -486,8 +486,8 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             terrain_chunk_columns=2,
         )
         surface_z = {
-            (5, 5): 8, (6, 5): 6, (7, 5): 4, (8, 5): 4,
-            (5, 6): 8, (6, 6): 6, (7, 6): 4, (8, 6): 4,
+            (5, 5): 12, (6, 5): 8, (7, 5): 4, (8, 5): 4,
+            (5, 6): 12, (6, 6): 8, (7, 6): 4, (8, 6): 4,
         }
         bbox = GridBBox(x_min=5, x_max=8, y_min=5, y_max=6)
         hm = SurfaceHeightmap(world_uid="w_late", bbox=bbox, surface_z=surface_z)
@@ -575,11 +575,11 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             )
 
         west_z = {
-            (x, y): (6 if x == 3 else 8)
+            (x, y): (6 if x == 3 else 10)
             for x in range(4) for y in range(4)
         }
         east_z = {
-            (x, y): (6 if x == 4 else 8)
+            (x, y): (6 if x == 4 else 10)
             for x in range(4, 8) for y in range(4)
         }
         west = generate_detailed_grade(
@@ -661,7 +661,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             )
 
         west_state = _state(
-            {(x, y): 8 for x in range(4) for y in range(4)}, 0, 3,
+            {(x, y): 10 for x in range(4) for y in range(4)}, 0, 3,
         )
         east_state = _state(
             {(x, y): 6 for x in range(4, 8) for y in range(4)}, 4, 7,
@@ -981,7 +981,7 @@ class DetailedGradeCatalogTest(unittest.TestCase):
             },
             terrain_chunk_columns=2,
         )
-        z = {(x, y): (6 if x == 3 else 8) for x in range(4) for y in range(4)}
+        z = {(x, y): (6 if x == 3 else 10) for x in range(4) for y in range(4)}
         state = TileSurfaceState(
             heightmap=SurfaceHeightmap(
                 world_uid="w_stitch",
@@ -1119,7 +1119,7 @@ class DetailedGradeCatalogTest(unittest.TestCase):
         for x in range(4):
             for y in range(4):
                 high = x == 0 or y == 0
-                z[(x, y)] = 8 if high else 6
+                z[(x, y)] = 10 if high else 6
                 terrain[(x, y)] = "plains"
         state = TileSurfaceState(
             heightmap=SurfaceHeightmap(
@@ -1430,7 +1430,11 @@ class DetailedGradeMaterializeTest(unittest.TestCase):
 
 
 class GradeFormationApplyTest(unittest.TestCase):
-    """Post-R36w: one write-set (z overlay + canal + uid), rect-local fill."""
+    """Post-R36w: one write-set (z overlay + canal + uid), rect-local fill.
+
+    Ravine (pass-through R37) so volume/canal tests are not rewritten by the
+    open_land plains/forest envelope.
+    """
 
     def _ramp_tpl(self, *, length: int = 2, earthen: bool = False):
         from app.dataModel.terrain.relief import ReliefTemplate
@@ -1445,11 +1449,11 @@ class GradeFormationApplyTest(unittest.TestCase):
         if earthen:
             down["earthen_canal"] = True
         return ReliefTemplate.model_validate({
-            "system_name": "open_ramp",
-            "display_name": "Open ramp",
-            "context": "open_land",
+            "system_name": "ravine_ramp",
+            "display_name": "Ravine ramp",
+            "context": ReliefContext.RAVINE,
             "conditions": [{
-                "terrain": "plains",
+                "terrain": ReliefConditionTerrain.RAVINE,
                 "cases": [
                     down,
                     {
@@ -1475,9 +1479,11 @@ class GradeFormationApplyTest(unittest.TestCase):
         )
         from app.db.models.world import World
 
-        tuid = relief_template_uid("open_ramp")
+        tuid = relief_template_uid("ravine_ramp")
         pick: dict = {
-            "open_land": {"mode": "fixed", "default_template_uid": tuid},
+            ReliefContext.RAVINE.value: {
+                "mode": "fixed", "default_template_uid": tuid,
+            },
         }
         if canal_policy is not None:
             pick["canal_obstacle_policy"] = canal_policy
@@ -1487,8 +1493,8 @@ class GradeFormationApplyTest(unittest.TestCase):
             created_at="2026-01-01T00:00:00Z",
             relief_template_registry=[{
                 "system_template_uid": tuid,
-                "context": "open_land",
-                "display_template_name": "Open ramp",
+                "context": ReliefContext.RAVINE,
+                "display_template_name": "Ravine ramp",
             }],
             relief_pick_policy=pick,
         ), tuid
@@ -1499,11 +1505,12 @@ class GradeFormationApplyTest(unittest.TestCase):
             SurfaceHeightmap,
         )
 
-        # Crest x=4 z=10; parent cliff x>=5 at z=6 (Δz=4). Extra cells for gap.
+        # Crest x=4 plains z=10; ravine floor x>=5 at z=6 (Δz=4). Extra cells for gap.
         surface_z = {
             (4, 5): 10, (5, 5): 6, (6, 5): 6, (7, 5): 6, (8, 5): 6,
         }
-        terrain = {xy: "plains" for xy in surface_z}
+        terrain = {xy: _RAVINE for xy in surface_z}
+        terrain[(4, 5)] = _PLAINS
         if road_at is not None:
             terrain[road_at] = "road"
         bbox = GridBBox(x_min=4, x_max=8, y_min=5, y_max=5)
@@ -1523,7 +1530,7 @@ class GradeFormationApplyTest(unittest.TestCase):
 
         tpl = self._ramp_tpl(length=2)
         world, tuid = self._world("w_az", tpl)
-        self.assertEqual(tuid, relief_template_uid("open_ramp"))
+        self.assertEqual(tuid, relief_template_uid("ravine_ramp"))
         state = self._cliff_state("w_az")
         parent = dict(state.heightmap.surface_z)
         result = generate_detailed_grade(
@@ -1576,7 +1583,7 @@ class GradeFormationApplyTest(unittest.TestCase):
             "w_cut", tpl,
             canal_policy=[{
                 "to_canal_cut_enable": True,
-                "entities": ["plains"],
+                "entities": ["all"],
             }],
         )
         state = self._cliff_state("w_cut", road_at=(7, 5))

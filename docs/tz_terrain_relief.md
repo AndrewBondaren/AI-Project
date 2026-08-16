@@ -6,7 +6,7 @@ metadata:
   type: project
 ---
 
-> **Статус:** ownership **утверждён** · templates R33–R35 ✅ · **R36 geom/entity/clearance** ✅ (plan) · **canal R36p/q wire+resolve ✅** · **Wave B–D** historical (L0 ribbon **removed**, R36u-T-8) · **R36u** writer = **detailed_bake geometry** · **R36v** per-chunk pool · **R36w** каталог граней ✅. Шов `full_bake` · halo `grid_neighbor` · T-10 ✅.  
+> **Статус:** ownership **утверждён** · templates R33–R35 ✅ · **R36 geom/entity/clearance** ✅ (plan) · **canal R36p/q wire+resolve ✅** · **Wave B–D** historical (L0 ribbon **removed**, R36u-T-8) · **R36u** writer = **detailed_bake geometry** · **R36v** per-chunk pool · **R36w** каталог граней ✅ · **R37** ontology envelope ✅ (`grade_constrained`). Шов `full_bake` · halo `grid_neighbor` · T-10 ✅.  
 > **Next:** Wave E later (R36s / R36r / R36o / gameplay). **Post-R36w apply ✅.** **C28 T-3b** graph stitch ✅ (System = T-3c later). **C29** шов технический. BAR-1 (T-2) — вне. L0 `world-grade` ASCII — omit (PAR-G5).  
 > **Связь:** SoT grade; **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT. · ASCII — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md). · L2 — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2. · Agent: [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md)
 
@@ -67,6 +67,7 @@ metadata:
 | uphill **facing** (`Facing` enum; **v1** cardinal / **later** 8-way — R36s) | PassBuilder / MST / saddles |
 | **SLOPE geometry** — `h`/`L`/`θ` (R36); materialize объёма грани | gameplay climb resolver (читает angle) |
 | **Relief templates** + context pick + seeded noise | hydrology roles, flora types |
+| **Ontology envelope** (R37) — пол L/θ/плато по `ReliefConditionTerrain` | world JSON override конверта (v1 later); stamp facing cache |
 | контракт mid-band ↔ grade | column gap fill / `N_eff` (skeleton исполняет объём) |
 
 ---
@@ -103,7 +104,7 @@ metadata:
 | R19 | Pick policy **на каждый context**: `fixed` (default uid) \| `random` \| `round_robin` — см. § Pick policy |
 | R20 | `road_shoulder` = grade **обочин** при Δz дорога↔рельеф (2 стороны). **Не** layout/строительство полотна. Полотно `road` **не** получает SHEER (противоречит замыслу дороги) |
 | R21 | Пустой candidates / битый `fixed` uid / дыра schedule / unknown canal\|barrier ref → **warn + soft fallback** (общая политика resolve); не silent, не hard-fail generate. **Wire event:** `EVENT_RESOLVE_FALLBACK` = `"resolve_fallback"` (`reliefEvents.py`). Не путать с R34 skip |
-| R22 | **Длина наклона (slope)** обочины: omit → default **1** клетка (`slope_length_cells`); explicit **`0` allowed** (нет XY-колонок обочины / пустой ring — не silent clamp к 1). В поселениях обочина **optional**; см. R36. **`shoulder_width_cells` — убрать** (не alias, не wire) |
+| R22 | **Длина наклона (slope)** обочины: omit → default **1** клетка (`slope_length_cells`) — **валидно**. Explicit **`0` / невалидный geom** — не empty ring: **WARN + fallback 20°** (R36b), не silent clamp и не skip. В поселениях обочина **optional** = `slope_none` / нет site, **не** `L=0`. **`shoulder_width_cells` — убрать** (не alias, не wire) |
 | R23 | `round_robin` seq — на **pick site**; для `road_shoulder` site = **segment × slope policy**, не целый edge / left\|right мастера |
 | R24 | Persist grade = **сущность** SLOPE\|SHEER + **двусторонние ссылки** (R36h/j). На клетке — только ref (`system_grade_uid`, omit если нет) + при необходимости `system_facing` для совместимости stairs. **Не** дублировать h/L/angle на каждой клетке |
 | R25 | Шаблоны `road_shoulder`: **typed conditions**; left\|right выводит движок; мастер сторону не назначает |
@@ -124,10 +125,10 @@ metadata:
 |---|---|
 | R36 | **SLOPE** = прямоугольный треугольник **высота × длина → угол** (rise/run). Materialize закрывает **весь** измеренный `dz` (объём грани, не facing-only stamp). **SHEER** = отвес на всю `dz` (θ ≈ 90°, grade-проход нет). Политики (R32) — *когда* case/band и knobs; угол — *после* resolve геометрии. См. § SLOPE geometry (R36) |
 | R36a | **h (height)** в generate = **measured** `|dz|` сайта (дорога↔сосед / эквивалент consumer). Политика **не** задаёт высоту карты |
-| R36b | Wire knobs на case/band — **XOR Geom:** либо **`slope_length_cells`** (длина наклона L, **`>= 0`**), либо **`target_angle_deg`**; оба сразу → **reject**. Omit L → default **1**. Explicit **`0`** = нет наружных колонок / no wedge (`geom_resolve` → `L=0`, `requested_length=0`; bake clearance skips stamp). **`partition_height` только при L≥1** — не silent bump `0→1`. Третий параметр — derived. **`shoulder_width_cells` удалён** |
+| R36b | Wire knobs на case/band — **предпочтительно XOR Geom:** либо **`slope_length_cells`** (длина наклона L), либо **`target_angle_deg`**. Omit L → default **1** (валидно). **kind=SLOPE ⇒ L ≥ 1.** Невалидный geom (**не reject** import/generate): оба ключа; `L < 1` (в т.ч. explicit **0**); θ ∉ (0, 90) → **WARN** + fallback Geom-B **θ = 20°**, `L = min(ceil(h / tan 20°), free_gap)` (луч наружу, R36m). Устарело: explicit 0 = no-wedge / empty ring. Третий параметр — derived. **`shoulder_width_cells` удалён**. Частные случаи — § SLOPE geometry |
 | R36c | Три режима треугольника (клетка кубическая: `cell_xy_m == cell_z_m`): **Geom-A** `h+L→θ`; **Geom-B** `θ+h→L`; **Geom-C** `L+θ→h` — только UI (R30), **не** override карты. **Не путать** с **Mode A\|B** (R32: `delta_z` vs bands) — разные XOR |
 | R36d | Формулы: `θ = atan(h/L)`; `L = ceil(h / tan(θ))` (min 1); `h = L · tan(θ)`. Пример: `h=1`, `L=1` → **45°** |
-| R36e | **SHEER + длина:** `slope_length_cells` (L) = **как строим** отвес по XY (сколько колонок наружу от дороги) — параметр стройки, **не** угол и не «толщина дороги». **`L = 0`** → нет колонок. На каждой из L>0 колонок solid на **все h** z-клеток дельты. `facing=none`, angle N/A. Угол/`target_angle_deg` — только **SLOPE** |
+| R36e | **SHEER + длина:** отвес — **одна** XY-колонка (`L = 1`) на ribbon-фасаде (R37 `canonical_sheer_length_cells`). На смешанном case (`slope_weight` + `sheer_weight`) wire L/θ — **только SLOPE**; kind=SHEER **игнорирует** knobs L и ставит 1. Inner `geom_resolve` без фасада ещё читает knobs L. Solid на **все h**. `facing=none`, angle N/A |
 | R36f | Позиция персонажа = `(x,y,surface_z)`. Movement/LLM: клетка → `system_grade_uid` → сущность grade (`length_cells`, `angle_deg`, `kind`, …) |
 | R36k | **Pathfinding:** граф = **grid** (шаги клетка↔клетка по `surface_z` / walkability), **в том числе через технический шов чанка/тайла (C29)**. **Slope/SHEER не отдельные ноды пути** — один **Grade object**; cost/block берётся с entity по `system_grade_uid` (один `angle_deg` / kind на весь объект). Не считать независимый `atan(Δz)` на каждом ребре, расходящийся с grade. Шов pack **не** нода пути и не отказ шага. Impl pathfinding — later; контракт — этот |
 | R36g | **Устарело:** facing-only stamp; **устарело:** дублировать L/angle/h на каждой клетке пандуса. Target: materialize R36i + **Grade instance** R36j |
@@ -146,6 +147,7 @@ metadata:
 | R36u | **Grade generate locus — locked.** Исключение из [§ Идея 2](./tz_world_pack_storage.md) (L0-carry): outdoor grade **не** несётся с L0. Single-writer **геометрии** = фаза **создания геометрии `detailed_bake`** (FineTerrain column + Grade entity + refs). **Не** L0 light/full ribbon. **Не** «контракт L0→L2 propagate uid». **Запрещено:** stamp/`system_grade_uid` на L0 world-map cells как SoT grade; nearest-carry grade uid с parent light как источник membership (**PAR-G8 superseded**). L0 остаётся landcover/height/mask; detailed geometry — единственный writer SLOPE\|SHEER. Термины вроде «метровая сетка» **не** SoT — говорить **detailed_bake geometry / FineTerrain**. Anchors — R36t. ASCII — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md). **Как** крутить generate (pool / sample / patch) — **R36v**; **как стыковать чанки** — **R36w** |
 | R36v | **Grade generate schedule — locked.** Outdoor grade **вшит** в существующий `detailed_bake` / entry refine (`FineChunkRunner`), **не** отдельный процесс. **Пул:** stamp + fill — **одно** задание воркера на `ColumnRect` в **том же** `ChunkComputePool`, что column fill. **Граф (C28 T-3b ✅):** sample всех rect **этого вызова** + stitch (union-find + plan + entity) — **serial до пула** (как каталог; периметр дешёвый). **Не** tile-wide materialize. **Не** два пула. **Не** pool task на `face_key`. `compute_rect` = stamp+fill по `ctx.planned`. **T-3c** System later. **Sample:** только fine-грань (ortho Δz / shore) в rect; halo — **чтение** соседей (`max L`), не второй writer. **Запрещены** полный land-dict тайла и L0 light-Δz как кандидаты. **World mod:** тот же helper на `patch_bounds` + halo. Persist instances `replace_world=False`. **Бюджет:** tile-wide serial **materialize** — reject; **5 мин** на grade одного тайла недопустимо. Стык ленты — **R36w**. См. § Grade в detailed_bake |
 | R36w | **Grade chunk stitch — locked (каталог ✅; T-3b graph stitch ✅; T-3c System later).** Стык = **уникальные грани chunk-сетки**, не first-lock-wins и не serial **materialize** всех семян. На **старте** refine/`detailed_bake` по размеру тайла и `terrain_chunk_columns` строится каталог граней: общая ребро двух чанков — **одна** грань (east A ≡ west B). Каждой грани **заранее** выдаётся воспроизводимый `grade_uid` = hash(`world_seed` \| `tile_gx` \| `tile_gy` \| `face_key`) (R15). **`tile` / `chunk` / `tile_edge`** — uid джобов (очередь/лог), не дерево `tile→chunk` и не uid Grade/climate/hydro. Ключ чанка содержит координаты тайла (адресация). **Родители `face_key` в этом bake** = chunk job uid **этого** тайла (internal 2, rim 1): **гейт старта** (не все bake сразу; 1 = сосед не в вызове, процесс можно запускать) + clearance (`< 2` → void не C18). Шов мира (антагонисты AABB) — `full_bake` L0, не этот каталог. Граф ленты **ссылается на `face_key` uid**; ребро графа uid **не** минтит. Пустая грань — uid в каталоге есть, instance **не** создаётся. `seed ∈ rect` для интерьера. Порядок rect не SoT. **Пул = один task на `ColumnRect`** (stamp+fill). Общая грань — один catalog uid; sample пишет **owner-чанк**, сосед только штампует. **Запрещено:** mint от порядка воркеров; два uid на одну общую грань; remap после persist; pool task на `face_key`; tile-wide materialize. Sample всех rect вызова до stitch — **C28**, не запрет. См. § Grade в detailed_bake · § Topology → entity → stamp |
+| R37 | **Ontology envelope — locked.** Relief **дополняет** маску, не подменяет. Конверт онтологии (`ReliefConditionTerrain`) — **пол движка** в `dataModel` (`ReliefOntologyEnvelopes`); шаблон не может быть круче/короче пола, только мягче. Bake ribbon идёт через фасад `grade_constrained` → inner `grade_from_template` (classify / kindRoll / `geom_resolve` **как есть**). Volume / R36i inner **не** переписывать под равнину. Q5 supersede. См. § Ontology envelope |
 
 ### Locked checklist (master, 2026-08-01)
 
@@ -156,11 +158,11 @@ metadata:
 | C1 | Facing-only stamp без правки высот — **неверная** impl для ribbon SLOPE/SHEER | locked (R36g); apply = Post-R36w ✅ |
 | C2 | `h` = measured `\|dz\|` сайта; политики R32 — порог/knobs, не «градусы в JSON» | locked (R36a) |
 | C3 | Угол SLOPE: `θ = atan(h/L)` (куб. клетка: `h=1,L=1` → 45°). Geom-A/B bake; Geom-C UI only | locked (R36c–d) |
-| C4 | Wire XOR: `slope_length_cells` **или** `target_angle_deg`; L **`>= 0`** (omit→1); **`shoulder_width_cells` убрать** | locked (R36b) |
+| C4 | Wire: предпочтительно XOR `slope_length_cells` **или** `target_angle_deg`; omit→1; **SLOPE L ≥ 1**; невалидный geom → **WARN + θ=20° / луч**, не reject; **`shoulder_width_cells` убрать** | locked (R36b) |
 | C5 | **Mode A\|B** (R32 bands) ≠ **Geom-A\|B\|C** (треугольник) | locked (R36c) |
 | C6 | Materialize закрывает **всю** дельту z (`sum(steps)==h` / solid × h); нет void | locked (R36i); apply = Post-R36w ✅ |
 | C7 | **SLOPE:** L = длина пандуса XY; steps по z; facing uphill на **grade entity** | locked |
-| C8 | **SHEER:** L = длина стройки XY; solid × h; facing/angle на entity omit/`none` | locked (R36e) |
+| C8 | **SHEER:** L = 1 колонка XY (R37); solid × h; facing/angle на entity omit/`none` | locked (R36e/R37) |
 | C9 | Позиция: `(x,y,surface_z)`; клетка — часть grade через **`system_grade_uid`** | locked (R36f/j) |
 | C10 | `system_facing` stairs — per-cell как сейчас; outdoor grade facing — на **Grade entity** (клетка может кэшировать omit) | locked path |
 | C11 | Grade — **составной объект**; угол/`length`/`h` только на нём; клетка — только `system_grade_uid` (omit) | locked |
@@ -182,6 +184,8 @@ metadata:
 | C27 | **Стык = каталог граней**; uid заранее `world_seed`+tile+`face_key` (R15); граф ссылается; шов sample по тому же uid; не mint в воркере. Job uid: `tile` / `chunk` / `tile_edge` — ключи очереди, не дерево `tile→chunk`. **Родители грани в этом bake** = chunk job uid этого тайла (2 internal / 1 rim) — **гейт старта** (не все bake сразу) и clearance (`< 2` → void ≠ C18). **Шов мира** (антагонисты AABB) — **`full_bake` L0 на макро-тайлах**, не каталог `detailed_bake`. **Пул = `ColumnRect`**. **Два `detailed_bake` смежных (grid) тайлов** — не ждут друг друга; лента вдоль шва = один uid + upsert. Halo читает z `WorldBounds.grid_neighbor` (не `antagonist_tile`). `road_shoulder` — тот же каталог (`ReliefContext.ROAD_SHOULDER`). Не uid Grade/climate/hydro | locked (R36w) ✅ |
 | C28 | **Топология → entity → stamp** (как горы: graph → spec → paint). Каталог = identity ребра. Граф = непрерывные семена. Прямая `(kind, outward, θ)` = один Instance. Ломаный / смена kind\|θ\|outward в компоненте → System ≥2. Клетка → Instance, не System. Canonical uid: rim оси sample побеждает `min(face_key)` — **механизм C29**, не «шов как объект». Apply (z/canal/fill) не переписывать | locked (R36w graph); **T-3b ✅**; T-3c later |
 | C29 | **Шов технический.** `face_key` / chunk / tile rim / `ColumnRect` / job uid — нарезка работы и pack, **не** граница мира. Через шов непрерывны: климат, дороги, шаг (later), **локация / город** (territory может лежать на ребре). Запрещено делать из шва стену, обрыв поселения, второй `location_uid` «из‑за тайла», смену зоны или ноду пути | locked; writers локации/города не в relief |
+| C30 | **Конверт онтологии** (`ReliefConditionTerrain`) ≥ knobs шаблона. Фасад `grade_constrained`; inner `grade_from_template` без `if plains`. Plains: плато + длинный пологий SLOPE; короткий L=2 **запрещён** даже если так в JSON | locked (R37) |
+| C31 | **Смешанный case:** L/θ knobs → SLOPE; SHEER всегда L=1. Невалидный geom (0 / оба ключа / θ вне (0,90)) → не reject: WARN + 20° и L до первой клетки луча. `L_eff < 1` после луча → skip stamp (R36m), не abort шаблона | locked (R36b/e) |
 
 ---
 
@@ -741,6 +745,7 @@ else:
 | Schedule hole → safe SLOPE (не silent skip) | `REASON_SCHEDULE_HOLE_SAFE_SLOPE` + why `WHY_SCHEDULE_HOLE` | `schedule_hole_safe_slope` / `schedule_hole` |
 | Ribbon grade apply / BAR-1 | `EVENT_RIBBON_GRADE_APPLY` / `EVENT_RIBBON_BARRIER` | `ribbon_grade_apply` / `ribbon_barrier` |
 | Grade column height &lt; 1 | `WHY_HEIGHT_LT_1` | `height_lt_1` |
+| Невалидный geom knobs (R36b) | WARN generate / import не reject | `invalid_geom` (token при impl) |
 | Нет abutment / footprint cells | `WHY_NO_REF_CELLS` | `no_ref_cells` |
 
 **Ribbon skip (RELIEF-T-66)** — event = **слой**, `why=` = причина (всегда из `WHY_*`). Монотокен `ribbon_skip` **удалён**.
@@ -780,9 +785,9 @@ ReliefTemplate
   context: ReliefContext              # ровно один
   conditions: list[ReliefTerrainCondition] = []   # R26; для road_shoulder/open_land/shore
   # root defaults (если conditions пуст или case не переопределил):
-  # R36 Geom XOR на case/band (и root default): slope_length_cells XOR target_angle_deg
-  slope_length_cells: int | None = None  # omit → default 1; explicit 0 = no outward columns
-  # target_angle_deg: float             # XOR с slope_length_cells (R36b)
+  # R36 Geom: предпочтительно slope_length_cells XOR target_angle_deg
+  slope_length_cells: int | None = None  # omit → default 1 (валидно); 0 = невалидный geom (R36b)
+  # target_angle_deg: float             # XOR с slope_length_cells; оба / θ вне (0,90) → WARN+20°
   # ❌ shoulder_width_cells — removed; rename to slope_length_cells
   slope_weight / sheer_weight / sheer_band / noise …
   # Canal XOR on case/band (R28/R36q): earthen_canal? XOR structure_canal?
@@ -793,7 +798,8 @@ ReliefTemplate
   side_recipe?: MountainSideRecipe      # отсутствует / пустой = seeded random
 ```
 
-**Запрещено:** `contexts: [...]`; `side: left|right`; freeform condition strings; legacy `features: [canal|…]` без R28; **оба** `slope_length_cells` и `target_angle_deg` на одном case/band (R36b).  
+**Запрещено:** `contexts: [...]`; `side: left|right`; freeform condition strings; legacy `features: [canal|…]` без R28.  
+**Geom оба ключа / L < 1 / θ вне (0, 90):** не reject — WARN + fallback 20° (R36b).  
 **`context: mountain`:** непустые `conditions` (Mode A/B dz) → **reject** (другая геометрия — сектора form, не лента Δz).  
 **Не-mountain:** `side_recipe` задан → **reject**.
 
@@ -905,6 +911,65 @@ R21 по-прежнему: пустой pick / битый `fixed` uid / дыра
 
 `ReliefContext.open_land` = *когда* брать open_land-шаблон; таблица = *какой* блок `conditions` внутри.  
 `ReliefContext.ravine` = *когда* брать шаблон низины; `ReliefConditionTerrain.ravine` = блок на клетках маски `system_terrain=ravine`.
+
+### Ontology envelope (R37)
+
+Relief **дополняет** онтологию маски (`system_terrain` / `ReliefConditionTerrain`), **не** подменяет её. Volume по-прежнему пишет `surface_z` на рампе (R36i); меняется **кто** считается seed и **с какими L/θ/kind**. Knobs шаблона (`delta_z`, `L=2`, weights) **не** имеют права распилить plains-плато в пилу из ступенек 6–12 м.
+
+**Два слоя (не смешивать):**
+
+| Слой | Где | Что может |
+|---|---|---|
+| **Ontology envelope** | `dataModel` `ReliefOntologyEnvelopes` keyed by `ReliefConditionTerrain` | пол: плато / θ max / L min–max / sheer allowed |
+| **Template knobs** | library JSON `conditions[]` (R26) | только **внутри** конверта; мягче пола — да; круче/короче — нет |
+
+Не SoT: `open_land_soft.json`, литералы в `geom_resolve` / volume. World JSON override конверта — **later** (v1 = `canonical_defaults()`).
+
+```text
+system_terrain → ReliefConditionTerrain (R34)
+       ↓
+envelope = ontology[terrain]          # пол движка
+       ↓
+if context ∉ envelope.apply_in_contexts → pass-through (inner как есть)
+if |dz| ≤ plateau                     → skip (= slope_none); inner не звать
+knobs' = clamp(template, envelope)    # L/θ в пол; SLOPE не влезает → SHEER
+       ↓
+grade_from_template(template', …)     # classify → kindRoll → geom_resolve
+       ↓
+optional restore L > h on decision.geom   # только если envelope.allow_l_gt_h
+if kind == SHEER: L = 1                   # всегда; knobs L остаются для SLOPE
+       ↓
+volume materialize                    # без изменений
+```
+
+**Фасад:** `grade_constrained` в `pick/`. **Inner** `grade_from_template` не знает про равнину (без `if plains`). Вызов inner в обход фасада — ок для unit geom / unconstrained. Bake ribbon (`grade_ribbon_segments`) — **только** через фасад.
+
+**`geom_resolve` / `partition_height` / R36i inner не меняем.** После clamp plains L knobs = 20–30, сжатие `h=12,L=2 → 6+6` само не возникает. Inner по-прежнему `L_eff = min(L,h)` (без плоских хвостов на unconstrained path).
+
+**Исключение конверта vs R36i tails:** пологий SLOPE онтологии требует `L > h` (`θ = atan(h/L) ≤ θmax`). Inner срежет L до h → θ ≥ 45°. Если `allow_l_gt_h`, фасад **после** inner ставит на `RibbonGradeDecision.geom` `partition_height(h, L_envelope)` (шаги 0 на хвосте допустимы) и `requested_length = L_envelope`, чтобы `plan_seed_volume` reuse geom при совпадении L. Clearance, если укоротит L, по-прежнему re-resolve через R36i. Volume / `geom_resolve` код **не** трогать.
+
+**Plains (locked, `open_land` only):** `apply_in_contexts = (open_land)`. Клетка кубическая: `tan θ = h/L`.
+
+| | |
+|---|---|
+| Плато (шум upsample) | `abs(dz) ≤ plateau_z_band_factor × z_band`; `z_band` = `ParentLightRefinePolicy.z_band` (default 1) → **2** |
+| θ max | **20°** |
+| L | **20–30** м |
+| L knobs | `L = clamp(max(L_template, ceil(h / tan 20°), 20), …, 30)` |
+| влезает | `atan(h/L) ≤ 20°` → SLOPE (weights: slope=1; sheer только fallback) |
+| не влезает | SHEER (`L=1`), **не** сжимать в L=2 |
+| `allow_l_gt_h` | **true** |
+
+Примеры: h=4 → L=20, θ≈11°; h=10 → L=28, θ≈20°; h=12 при L=30 → ≈22° → SHEER.
+
+**Forest (locked, `open_land` only):** тот же пол SLOPE, что plains (θ≤20°, L 20–30, плато `2·z_band`, `allow_l_gt_h`). Отличие: **SHEER допустим**, если `|dz| ≥ sheer_min_abs_dz` (**4**) — тогда kindRoll может выбрать отвес; L SHEER всегда **1**. `|dz| < 4` (и выше плато) → только SLOPE. Не влезает в 20°/30 м → SHEER L=1.
+
+**SHEER L=1 (все ribbon через фасад):** `ReliefTerrainEnvelope.canonical_sheer_length_cells()`. Даже pass-through (`road_shoulder` / ravine / …). Inner без фасада не трогаем.
+
+**Прочие строки (v1):** `mountain` / `ravine` / `shore` = **pass-through** (не копия plains/forest). `road_shoulder` / `shore` / `ravine` **контексты** не берут open_land-конверт (`apply_in_contexts`).
+
+**Вне scope R37:** stamp `surface_facing` на `TileSurfaceState` (dump SLOPE как `┃`) — отдельный apply-баг, не онтология.
+
 #### Conditions mode XOR (R32)
 
 На **каждый** `ReliefConditionTerrain` — **ровно три** case (`slope_none` / `slope_down` / `slope_up`).
@@ -963,7 +1028,7 @@ Detect: все три case с `delta_z` и без `bands` → **A**; down/up с 
 }
 ```
 
-Geom knobs (`slope_length_cells` XOR `target_angle_deg`) — на case/band, не путать с Mode A\|B порогами `delta_z` (R36c).
+Geom knobs (`slope_length_cells` XOR `target_angle_deg`, предпочтительно) — на case/band, не путать с Mode A\|B порогами `delta_z` (R36c). Невалидный geom → R36b, не reject.
 
 ##### Mode B — bands (`delta_z_min` / optional `delta_z_max`)
 
@@ -978,7 +1043,7 @@ ReliefDeltaBand
   delta_z_min: int          # >= 1 (иначе reject)
   delta_z_max: int | null   # нет = без верхней границы
   slope_weight / sheer_weight  # R27
-  slope_length_cells XOR target_angle_deg  # R36b Geom
+  slope_length_cells XOR target_angle_deg  # R36b; оба/L<1/θ bad → WARN+20°
   …
 ```
 
@@ -1052,7 +1117,8 @@ Match inclusive; первый в списке; overlap → **reject**; дыра 
 ReliefDeltaBand                         # только Mode B (R32)
   delta_z_min: int                      # >= 1
   delta_z_max: int | None = None
-  # Geom XOR (R36b): slope_length_cells XOR target_angle_deg
+  # Geom (R36b): предпочтительно slope_length_cells XOR target_angle_deg
+  # невалидный geom → WARN + 20° / луч, не reject
   # + weights / earthen_canal / structure_refs …
   # ❌ no shoulder_width_cells
 
@@ -1084,7 +1150,7 @@ ReliefTemplate.conditions
 | **Mode A:** нет `delta_z` / down\|up с `delta_z < 1` / none с `delta_z < 0` | **reject** |
 | **Mode B:** down\|up `bands` пуст; none с непустым `bands`; `delta_z_min < 1`; overlap | **reject** |
 | weights sum ≠ 1 | **reject** (R27) |
-| на case/band **оба** `slope_length_cells` и `target_angle_deg` | **reject** (R36b Geom XOR) |
+| на case/band **оба** `slope_length_cells` и `target_angle_deg`; `L < 1`; θ ∉ (0, 90) | **не reject** — WARN + fallback θ=20° / луч (R36b) |
 | `structure_refs` unknown в мире | **reject** |
 | Имя файла ≠ `system_name` (R29) | **reject** |
 | `context: mountain` + непустые `conditions` | **reject** (R33) |
@@ -1153,9 +1219,14 @@ Wire Mode A|B **не** ветвит этот поток — только `normal
        # пусто → R21 warn + fallback (не abort)
 6. template = pick_by_policy(candidates, effective_pick[context], world_seed, site_id|seq)
        # fixed | random | round_robin (R19); seed — R15
-7. schedule = normalize(template.conditions[terrain])
+6a. envelope = ontology[terrain]            # R37; pass-through если unconstrained / context не в apply_in_contexts
+    if |dz| ≤ plateau → skip (как slope_none)
+    template' = clamp knobs to envelope     # L/θ пол; SLOPE overflow → SHEER weights
+7. schedule = normalize(template'.conditions[terrain])
        # Mode A|B wire → ReliefDeltaSchedule (I8); JSON не меняется
 8. decision = classify(dz, schedule)       # одна функция; none | knobs
+   inner = grade_from_template             # kindRoll + geom_resolve как есть
+   if envelope.allow_l_gt_h: restore L on geom if inner clipped
 9. if decision is none → skip stamp (нет grade-site)
    else:
      kind   = kindRoll(slope_weight, sheer_weight, hash(world_seed, context, template_uid, site_id))
@@ -1226,7 +1297,7 @@ road_shoulder > shore > mountain > ravine > open_land
 | **Сегменты** | split при смене corridor `terrain` |
 | **Стороны** | engine считает `dz`; classify через **schedule** (I8), не left/right мастера |
 | **Высота h** | measured `\|dz\|` (R36a) |
-| **Длина L / угол** | knobs Geom-A или Geom-B (R36b); omit → default `1`; explicit `0` = нет XY-колонок (ring empty) |
+| **Длина L / угол** | knobs Geom-A или Geom-B (R36b); omit → default `1`; невалидный geom → WARN + 20° / луч, не empty ring |
 | **Materialize** | закрыть весь `dz` по XY×Z; без void в клине (R36) |
 | **Поселения** | обочина optional (`slope_none`) |
 | **Conditions** | R26 + R32 XOR; attachments R28 |
@@ -1270,8 +1341,35 @@ h = L * tan(θ_rad)         # Geom-C / UI only
 | **Geom-B** | `h` (сайт) + `target_angle_deg` | `L = ceil(h/tan θ)` | generate (лимит крутизны) |
 | **Geom-C** | `slope_length_cells` + `target_angle_deg` | `h` | **только UI** (R30); не пишем высоту карты |
 
-Wire на одном case/band (и root default шаблона): **ровно один** из `{slope_length_cells, target_angle_deg}` (R36b).  
+Wire на одном case/band (и root default шаблона): **предпочтительно ровно один** из `{slope_length_cells, target_angle_deg}` (R36b). Оба / L < 1 / θ вне диапазона — **не reject**, см. частные случаи ниже.  
 **`shoulder_width_cells`:** убрать из POJO/wire/шаблонов; при имплементации §7 — rename на `slope_length_cells` (не держать alias / silent map).
+
+### Частные случаи geom (R36b / R36e) — locked
+
+Один case, одно поле L/θ. После kindRoll исходы **разные**. Веса (R27) по-прежнему **reject**, если сумма ≠ 1 — это не geom.
+
+| Случай | Результат |
+|---|---|
+| Смешанный case (`slope_weight` + `sheer_weight`) | L/θ knobs — **только SLOPE**. kind=SHEER **игнорирует** knobs L |
+| kind=**SLOPE** | **L ≥ 1**. Нуля как рампы нет |
+| kind=**SHEER** | **L = 1** всегда (`canonical_sheer_length_cells`). Фасад, все ribbon-контексты |
+| Omit L и omit θ | **валидно** → default L=1 (R22) |
+| Explicit `slope_length_cells: 0` | **невалидный geom**, не no-wedge / empty ring |
+| `L < 0` | **невалидный geom** |
+| Оба `slope_length_cells` и `target_angle_deg` | **невалидный geom** (не XOR-reject) |
+| `target_angle_deg` ∉ (0, 90) | **невалидный geom** |
+| Невалидный geom | **не reject** шаблон (import и generate). **WARN**. Fallback: θ = **20°**, `L_req = ceil(h / tan 20°)` (Geom-B, min 1). Луч: `L = min(L_req, free_gap)` — рамп **упирается** в первую блокирующую клетку, внутрь не заходит (R36m) |
+| После fallback `free_gap ≥ L_req` | SLOPE при θ = 20° (дальше может сработать конверт R37) |
+| `1 ≤ free_gap < L_req` | SLOPE с `L = free_gap`; фактический θ = `atan(h/L)` может быть **круче 20°** |
+| `free_gap < 1` (`L_eff < 1`) | **skip stamp** + WARN (R36m / `clearance_L_eff`). Не abort generate, не reject шаблона. SHEER тоже нужен 1 столбец — тот же skip |
+| Конверт R37 (plains/forest `open_land`) | После fallback `L_req` ещё clamp 20–30 / overflow→SHEER L=1, **затем** луч. Не отменяет упор в первую клетку |
+| Поселения, нет обочины | `slope_none` / нет site — **не** `L=0` |
+
+**Порядок:** detect invalid → WARN → `L_req` из 20° → (если applies) clamp R37 → kindRoll → SHEER форсит L=1 → clearance `min(requested, free_gap)`.
+
+**Import:** сырой JSON с невалидным geom **принимать** (WARN); формула луча — только generate (`h` и `free_gap` с сайта). Не silent. Token лога `invalid_geom` — при impl (`reliefEvents.py`).
+
+**Устарело (2026-08-10 T-38 / hybrid D):** explicit 0 = нет колонок; `geom=None` / `requested_length=0` как задуманный skip; XOR оба ключа → reject.
 
 ### Связь с политиками (R32)
 
@@ -1305,14 +1403,14 @@ Facing-only stamp без изменения высот/fill — **не** materia
 
 ```text
 h      = |dz|                         # R36a, целое ≥ 1
-L, θ   = resolve Geom-A|B             # R36b; wire L ≥ 0; materialize L_eff ≥ 1 when h ≥ 1
+L, θ   = resolve Geom-A|B             # R36b; SLOPE L ≥ 1; невалидный geom → 20° + луч
 kind   = SLOPE | SHEER
 z_road = surface_z полотна
 sign   = −1 если slope_down (наружу ниже); +1 если slope_up (наружу выше)
 outward = ortho unit от дороги к seed обочины
 ```
 
-**Wire vs materialize (L=0):** explicit `slope_length_cells=0` → pre-clearance `geom_resolve` returns `L=0` (no `partition_height`, no silent `0→1`). `gradePass` sets `requested_length=0` and `geom=None`. Bake clearance / `geom_for_cleared_length` skip stamp when `L_eff<1`. Omit L → default 1. Helper `expand_shoulder_ring(width=0)→∅` is unit/ring utility — **not** bake SoT (sample uses ring-1 seeds; L comes from geom/clearance).
+**Невалидный geom vs луч (R36b):** explicit `0` / оба ключа / θ вне (0, 90) → не skip и не reject: WARN + θ=20° + `L = min(ceil(h/tan 20°), free_gap)`. Omit L → default 1. `partition_height` только при L≥1. `L_eff < 1` после луча → skip stamp (R36m). Helper `expand_shoulder_ring(width=0)→∅` — unit/ring utility, **не** bake SoT и **не** способ выключить обочину.
 
 #### Bake anchors — верх / низ (R36t)
 
@@ -1332,24 +1430,23 @@ grade corridor = клетки строго МЕЖДУ high и low вдоль out
 | Writer | **detailed_bake geometry** (R36u), не L0 |
 | **Исключение** | **canal** когда slope **укорачивается** (`L_eff` < requested / не вмещается) → cut у укороченного конца по **R36p** (и knobs XOR на нормальном canal path). Без этой ветки якоря неприкосновенны |
 
-#### SHEER — стройка отвеса (L = длина по XY)
+#### SHEER — стройка отвеса (L = 1 колонка XY)
 
-`L` из knobs (`slope_length_cells` или derived из angle **не** применяется: для SHEER Geom-B бессмысленен → нужен `slope_length_cells`, иначе default L=1).
+Knobs `slope_length_cells` / `target_angle_deg` **не** задают длину отвеса (R36e). Фасад: `L = canonical_sheer_length_cells()` = **1**. Geom-B для SHEER бессмысленен. Inner без фасада ещё может прочитать knobs L — bake ribbon туда не ходит.
 
 ```text
-# L колонок наружу от дороги; на каждой — solid на все h по z
+# 1 колонка наружу от дороги; solid на все h по z
 z_top = max(z_road, z_road + sign*h)   # верх грани
 z_bot = min(z_road, z_road + sign*h)   # низ (surface за обрывом)
-for k in 1..L:
-  cell = seed + k * outward
-  for z in (z_bot+1 .. z_top):         # ровно h клеток solid по вертикали
-    solid(cell, z)
-# Grade entity (R36j): kind=SHEER, h, L, cell_refs; angle omit; facing omit/none
-for each face cell: system_grade_uid = grade_uid
+cell = seed + 1 * outward
+for z in (z_bot+1 .. z_top):         # ровно h клеток solid по вертикали
+  solid(cell, z)
+# Grade entity (R36j): kind=SHEER, h, L=1, cell_refs; angle omit; facing omit/none
+system_grade_uid = grade_uid
 ```
 
-Пример: road `(10,5) z=12`, `h=6`, `L=2`, outward +x →  
-`(11,5)` и `(12,5)`: solid на `z=7..12`; за гранью низ `z=6`.
+Пример: road `(10,5) z=12`, `h=6`, outward +x →  
+`(11,5)`: solid на `z=7..12`; за гранью низ `z=6`. `free_gap < 1` → skip (R36m).
 
 #### SLOPE — discrete ramp на всю h
 
@@ -1472,7 +1569,7 @@ allow_flush   → L_eff = 1 → grade на y=2 (flush к объекту)
 | Q2 | ~~L+angle on cell~~ | **locked R36j:** Grade entity + `system_grade_uid` на клетке; h/L/angle **не** на клетке |
 | Q3 | ~~Expand → building/road~~ | **locked R36m/n + R36p/q:** clearance = `L_eff`; knobs XOR canal; policy only if не вмещается; `canal_template_registry` |
 | Q4 | Mountain SideFill + R36 angle | later; v1 = `road_shoulder` |
-| Q5 | Max `L` / max θ clamp | later; v1 `L_eff = min(L,h)` для SLOPE; SHEER L без clamp к h |
+| Q5 | ~~Max `L` / max θ clamp~~ | **superseded R37:** clamp = ontology envelope (не later knob на inner). Inner R36i `L_eff = min(L,h)` остаётся; фасад restore L>h только если `allow_l_gt_h` |
 | Q6 | ~~Shoulder sample при dilate~~ | **locked Wave B1:** seeds = ortho exterior of `road_cells` (footprint edge); `dz` с abutment; stable sort; apply не принимает `ordered`. Не смешивать с `edgeRoadAnchor` |
 
 #### Bake ribbon anchor (locked direction, 2026-08-05)
@@ -1529,7 +1626,7 @@ Bake укорачивает через §9; при `L_eff == geom.L` — reuse `
 | Термин | Значение |
 |---|---|
 | **SLOPE** | Graded face на всю `h`; проходим вдоль facing; **angle** = `atan(h/L)` (R36) |
-| **SHEER** | Отвес: L колонок XY × solid на всю `h` по z; `facing=none`; grade-проход нет |
+| **SHEER** | Отвес: **1** колонка XY × solid на всю `h`; `facing=none`; knobs L не читает (R36e) |
 | **h / L / θ** | высота; **длина стройки** наружу (`slope_length_cells`); угол только у SLOPE |
 | **Facing** | SLOPE: uphill на Grade (`Facing`); SHEER: `none`. **v1** = cardinal only; **later** = 8-way (R36s). Клетка может кэшировать `system_facing` для stairs-совместимости (C10) |
 | **Outward** | Единичный шаг от abutment/seed вдоль facing: v1 ortho; later 8-way delta. Длина шага всегда **1 клетка** (Chebyshev) |
@@ -1628,6 +1725,7 @@ flowchart LR
 - ❌ Мастер задаёт left\|right / ручная сторона edge (R25)  
 - ❌ Один шаблон на весь длинный edge без segment split  
 - ❌ Freeform conditions / неполные 3 policy / два `terrain` duplicate (R26)  
+- ❌ Шаблон круче/короче ontology envelope (R37) — knobs не бьют пол `ReliefConditionTerrain`  
 - ❌ `ReliefSideRole` / cliff_edge|… — заменено на `ReliefSlopePolicy` + `delta_z`  
 - ❌ `features: ["canal"|"fence"|…]` в relief без R28 split (built должны быть `structure_refs`)  
 - ❌ Пресеты weights/`delta_z` в backend/generator (R30 — UI only)  
@@ -1643,12 +1741,12 @@ flowchart LR
 ```text
 context = …
 template = pick_by_policy(…)                    # R19/R31
-# road_shoulder / open_land / shore (ribbon + R36):
-schedule = normalize(condition)                 # I8; Mode A|B → schedule
-decision = classify(dz, schedule)               # + knobs (Geom XOR)
-grade = kindRoll                                # SLOPE | SHEER
+# road_shoulder / open_land / shore / ravine (ribbon + R36):
+decision = grade_constrained(template, terrain, dz, envelope)  # R37
+  # plateau skip | clamp knobs | grade_from_template | optional L restore
+schedule / classify / kindRoll / geom_resolve   # inner, без if plains
 if SLOPE:
-  resolve (h, L, θ); L_eff = min(L, h)          # Geom-A|B; R36i
+  resolve (h, L, θ); inner L_eff = min(L, h)    # Geom-A|B; R36i
   materialize ramp: partition_height → surface_z # sum(steps)==h, no void
   create Grade + cell.system_grade_uid          # R36j
 if SHEER:
@@ -1818,7 +1916,7 @@ dataModel/terrain/relief/
   specs.py / reliefRoleCase / reliefTerrainCondition / reliefTemplate ✅
   worldReliefTemplateRegistry / worldReliefPickPolicy ✅
   worldReliefGradeObstacle ✅   # R36n scalars
-  # R36b Geom XOR: slope_length_cells | target_angle_deg ✅; shoulder_width_cells removed
+  # R36b Geom: предпочтительно XOR L|θ; невалидный → WARN+20°; shoulder_width_cells removed
   reliefGradeInstance / reliefGradeSystem ✅
 
 db/
@@ -2118,6 +2216,8 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-16 | **R36b частные случаи:** смешанный case L→SLOPE, SHEER L=1; SLOPE L≥1; невалидный geom не reject — WARN + θ=20° и L до первой клетки луча; explicit 0 / XOR-reject устарели. C31 |
+| 2026-08-16 | **R37 ontology envelope:** `ReliefOntologyEnvelopes` + фасад `grade_constrained` вокруг `grade_from_template`; plains θ≤20° / L 20–30 / плато `2·z_band`; Q5 superseded |
 | 2026-08-16 | **Modification ≠ bake:** patch caller B пишет Patch Store; не `pack/bake` на complete tile |
 | 2026-08-16 | **`ReliefContext.ravine` sampler:** `sample_ravine_meter` — bank=ref, mask=seed; не open_land downhill. Template `ravine_soft` (smoke_003) + pick |
 | 2026-08-16 | **`ReliefContext.ravine`:** низина = mask; world template `ravine_soft` (smoke_003) + pick; object override слот; detailed sampler later |
@@ -2136,8 +2236,8 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 | 2026-08-13 | **R36v / C26:** grade generate = per-chunk в `FineChunkRunner` pool; sample только fine-грани (+ halo); тот же helper на `modify_terrain`; L0-кандидаты запрещены; Wave D / Target layout помечены superseded |
 | 2026-08-11 | **Pack ASCII SoT:** [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) — L0 grade locked; L2 location target; **PAR-G7** = FineTerrain `system_grade_uid` следствие R16+R24 |
 | 2026-08-10 | **RELIEF-T-66:** ribbon skip → `ribbon_skip_apply` \| `_grade` \| `_materialize` + closed `why` sets; drop monotoken `ribbon_skip`; clearance WHY → `WHY_NO_UNIQUE_OUTWARD` / `WHY_CLEARANCE_L_EFF` |
-| 2026-08-10 | **L=0 hybrid D:** `geom_resolve` honors explicit 0 (no partition / no bump); `gradePass` `requested_length=0` + `geom=None`; bake skip via clearance; `expand_shoulder_ring` ≠ bake SoT |
-| 2026-08-10 | **L=0 lock (T-38):** wire `slope_length_cells >= 0`; omit→1; explicit 0 = no outward columns / empty ring; materialize `L_eff≥1` when h≥1 (partition) — R22/R36b/e/C4/§8a sync |
+| 2026-08-10 | **L=0 hybrid D:** ~~explicit 0 = no wedge~~ — **superseded 2026-08-16 C31** (WARN + 20° / луч) |
+| 2026-08-10 | **L=0 lock (T-38):** ~~explicit 0 = empty ring~~ — **superseded 2026-08-16 C31** |
 | 2026-08-10 | **P2 SOLID/DRY:** T-33…T-36, T-34A flat, T-39 — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) |
 | 2026-08-13 | **R36u-T-8:** L0 outdoor ribbon files + enum leftover + `upsample_grade_uid` removed; `painted_road_edges` kept for T-10 |
 | 2026-08-13 | **R36t / C24:** bake anchors верх/низ для SLOPE\|SHEER; запрет мутации якорей; исключение = canal при укорочении (R36p) |

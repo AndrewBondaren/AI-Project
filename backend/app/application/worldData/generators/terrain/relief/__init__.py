@@ -6,6 +6,9 @@ from app.application.worldData.generators.terrain.relief.geom.facing import (
     facing_wire,
     uphill_facing_toward,
 )
+from app.application.worldData.generators.terrain.relief.pick.gradeConstrained import (
+    grade_constrained,
+)
 from app.application.worldData.generators.terrain.relief.pick.gradePass import (
     RibbonGradeDecision,
     grade_from_template,
@@ -52,6 +55,7 @@ __all__ = [
     "expand_shoulder_ring",
     "facing_wire",
     "format_sides_summary",
+    "grade_constrained",
     "grade_from_template",
     "grade_ribbon_segments",
     "plan_seed_volume",

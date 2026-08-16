@@ -14,9 +14,11 @@ from app.application.jsonValidation.worldRow import (
     relief_pick_policy,
     relief_template_registry,
 )
+from app.application.worldData.generators.terrain.relief.pick.gradeConstrained import (
+    grade_constrained,
+)
 from app.application.worldData.generators.terrain.relief.pick.gradePass import (
     RibbonGradeDecision,
-    grade_from_template,
 )
 from app.application.worldData.generators.terrain.relief.log.events import (
     EVENT_RIBBON_GRADE_APPLY,
@@ -86,7 +88,7 @@ def grade_ribbon_segments(
                 template_uid=pick.template_uid,
             )
             continue
-        decision = grade_from_template(
+        decision = grade_constrained(
             template=template,
             template_uid=pick.template_uid or template.system_name,
             terrain_key=segment.terrain_key,

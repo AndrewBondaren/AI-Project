@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from app.application.worldData.generators.terrain.relief.log.log import relief_warning
+from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
 from app.application.worldData.reliefErrors import ReliefValidationError
 from app.application.worldData.reliefTemplateLibraryService import (
     ReliefTemplateLibraryService,
@@ -54,6 +55,7 @@ class ReliefWorldImportService:
         imported_uids: list[str] = []
         for raw in outlines:
             outline = ReliefTemplate.model_validate(raw)
+            warn_template_invalid_geom(outline)
             self._validate_structure_refs(outline, barrier_keys)
             self._validate_structure_canal(outline, world)
             row = await self._library.upsert_outline(outline, source_file="bundle")
@@ -70,6 +72,7 @@ class ReliefWorldImportService:
     ) -> dict:
         row = await self._library.get_by_uid(template_uid)
         outline = ReliefTemplate.model_validate(row.data)
+        warn_template_invalid_geom(outline, template_uid=template_uid)
         world = await self._worlds.get_by_id(world_uid)
         barrier_keys = {
             e.system_type for e in barrier_templates(world).root

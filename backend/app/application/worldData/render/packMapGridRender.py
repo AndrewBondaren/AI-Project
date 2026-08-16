@@ -250,7 +250,7 @@ class PackMapGridRender:
     ) -> WildernessTileGridPayload:
         """L2 wilderness mosaic for one macro-tile (detailed-bake).
 
-        Default: surface + column_span / cliff_delta (expose thin fill vs steep tops).
+        Default: surface + surface_z + column_span / cliff_delta (expose thin fill vs steep tops).
         Pass ``z=`` for a slice, or ``include_z_slices=True`` for dense occupied z grids.
         """
         legend = WildernessTilePackRenderer.render_legend()

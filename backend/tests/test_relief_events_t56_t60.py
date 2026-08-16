@@ -9,6 +9,7 @@ import unittest
 
 from app.application.worldData.generators.terrain.relief.canal import attachments as canalAttachments
 from app.application.worldData.generators.terrain.relief.log.events import (
+    EVENT_INVALID_GEOM,
     EVENT_RESOLVE_FALLBACK,
     EVENT_RIBBON_BARRIER,
     EVENT_RIBBON_SKIP_APPLY,
@@ -18,6 +19,7 @@ from app.application.worldData.generators.terrain.relief.log.events import (
     WHY_CLEARANCE_L_EFF,
     WHY_EMPTY_SAMPLE,
     WHY_HEIGHT_LT_1,
+    WHY_INVALID_GEOM,
     WHY_NO_EDGE_ROAD_ANCHOR,
     WHY_NO_REF_CELLS,
     WHY_NO_TEMPLATES,
@@ -34,6 +36,8 @@ class ReliefEventsTokensTest(unittest.TestCase):
     def test_shared_resolve_fallback_reexported_from_canal(self) -> None:
         self.assertEqual(canalAttachments.EVENT_RESOLVE_FALLBACK, EVENT_RESOLVE_FALLBACK)
         self.assertEqual(EVENT_RESOLVE_FALLBACK, "resolve_fallback")
+        self.assertEqual(EVENT_INVALID_GEOM, "invalid_geom")
+        self.assertEqual(WHY_INVALID_GEOM, "invalid_geom")
         self.assertEqual(EVENT_RIBBON_BARRIER, "ribbon_barrier")
         self.assertEqual(WHY_SCHEDULE_HOLE, "schedule_hole")
         self.assertEqual(REASON_SCHEDULE_HOLE_SAFE_SLOPE, "schedule_hole_safe_slope")

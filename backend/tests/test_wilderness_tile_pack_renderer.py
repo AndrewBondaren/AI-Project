@@ -9,6 +9,7 @@ from app.application.worldData.render.fineTerrainAsciiKernel import (
     symbols_surface_top,
     top_terrain,
     values_cliff_delta,
+    values_surface_z,
     z_occupied,
 )
 from app.application.worldData.render.renderPayloads import (
@@ -16,6 +17,7 @@ from app.application.worldData.render.renderPayloads import (
     LEVEL_COLUMN_SPAN,
     LEVEL_SURFACE,
     LEVEL_SURFACE_GRADE,
+    LEVEL_SURFACE_Z,
 )
 from app.application.worldData.render.wildernessTilePackRenderer import WildernessTilePackRenderer
 from app.dataModel.worldPack.fineTerrainChunkWire import (
@@ -78,7 +80,7 @@ class TestWildernessTilePackRenderer(unittest.TestCase):
             include_z_slices=False,
             include_column_diagnostics=False,
         )
-        self.assertEqual(list(levels.keys()), [LEVEL_SURFACE])
+        self.assertEqual(list(levels.keys()), [LEVEL_SURFACE, LEVEL_SURFACE_Z])
 
         at_z2 = renderer.render_level(2)
         self.assertIn("z=2", at_z2)
@@ -95,6 +97,7 @@ class TestWildernessTilePackRenderer(unittest.TestCase):
             ],
         )
         self.assertEqual(top_terrain(col), (4, "forest"))
+        self.assertEqual(values_surface_z({(0, 0): col}), {(0, 0): 4})
         syms = symbols_surface_top({(0, 0): col})
         self.assertEqual(syms[(0, 0)], "f")
 
@@ -140,6 +143,7 @@ class TestWildernessTilePackRenderer(unittest.TestCase):
             include_column_diagnostics=True,
         )
         self.assertIn(LEVEL_SURFACE, levels)
+        self.assertIn(LEVEL_SURFACE_Z, levels)
         self.assertIn(LEVEL_COLUMN_SPAN, levels)
         self.assertIn(LEVEL_CLIFF_DELTA, levels)
         self.assertIn("thin_steep_gap_suspect=", levels[LEVEL_COLUMN_SPAN])

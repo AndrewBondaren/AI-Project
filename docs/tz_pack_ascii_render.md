@@ -48,7 +48,8 @@ metadata:
 
 | Key / файл | Статус | Содержимое |
 |---|---|---|
-| `surface` → `surface.txt` | ✅ | FineTerrain top / surface symbols |
+| `surface` → `surface.txt` | ✅ | FineTerrain top / surface **symbols** |
+| **`surface_z`** → **`surface_z.txt`** | ✅ | per-cell **max world-z** (FineTerrain top); L2 analog of L0 `height` |
 | `column_span` / `cliff_delta` | ✅ diag | см. [`tz_mountain_architecture.md`](./tz_mountain_architecture.md) § Debug render |
 | numeric z → `z/{n}.txt` | ✅ | material slice at world-z |
 | **`surface_grade`** → **`surface_grade.txt`** | ✅ | **composite:** `surface` terrain + `grade_symbol` поверх (где есть uid); omit если нет ни одной grade-клетки |
@@ -157,6 +158,7 @@ Open product XOR по L2 grade ASCII — **нет**.
 | Дата | Изменение |
 |---|---|
 | 2026-08-14 | **R36w pointer:** PAR-G2 — стык на воркере; generate всё ещё chunk pool — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
+| 2026-08-16 | L2 `surface_z` dump: per-cell max world-z (`surface_z.txt`) |
 | 2026-08-13 | **R36v:** PAR-G1/G2 — generate в chunk pool; tile-wide serial не SoT — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-08-13 | **R36u sync:** PAR-G1/G2/G5/G8 — grade writer = detailed_bake geometry; L0 grade ASCII omit; ~~nearest grade carry~~ superseded |
 | 2026-08-13 | **L2 grade composite:** `surface_grade` / `grade_{n}` = material + grade overlay (не sparse-only) |

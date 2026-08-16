@@ -3,9 +3,10 @@
 ``levels`` semantics
 --------------------
 - pack world tiles: ``{ LEVEL_LIGHT, LEVEL_HEIGHT, LEVEL_GRADE }``
-- pack location / wilderness: ``LEVEL_SURFACE`` (top z); ``LEVEL_SURFACE_GRADE`` (relief
-  overlay); optional dense ``\"<z>\"`` material slices + ``grade_{z}`` (only where
-  column surface_z == z); diagnostics ``LEVEL_COLUMN_SPAN`` / ``LEVEL_CLIFF_DELTA``;
+- pack location / wilderness: ``LEVEL_SURFACE`` (top symbols); ``LEVEL_SURFACE_Z``
+  (per-cell max world-z); ``LEVEL_SURFACE_GRADE`` (relief overlay); optional dense
+  ``\"<z>\"`` material slices + ``grade_{z}`` (only where column surface_z == z);
+  diagnostics ``LEVEL_COLUMN_SPAN`` / ``LEVEL_CLIFF_DELTA``;
   query ``?z=`` slices arbitrary world-z
 - legacy tiles: ``WorldTileGridRenderer`` surface key ``-1`` plus numeric z strings
 - ``indoor`` on pack location payloads is always False (shape-compat with legacy; structures
@@ -33,6 +34,7 @@ ReadMode = Literal[
 ]
 
 LEVEL_SURFACE = "surface"
+LEVEL_SURFACE_Z = "surface_z"
 LEVEL_SURFACE_GRADE = "surface_grade"
 LEVEL_COLUMN_SPAN = "column_span"
 LEVEL_CLIFF_DELTA = "cliff_delta"
