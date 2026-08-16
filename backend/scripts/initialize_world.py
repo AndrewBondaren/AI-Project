@@ -2,6 +2,7 @@
 
 Uses ``POST …/map/pack/bake`` (L0 only — Job boundaries).
 Entry/L2 is a **separate** job: ``--entry`` → ``POST …/map/refine-from-entry``.
+Transcript: ``.local/map-render/{uid}/initialize/`` via ``debug_transcript``.
 Requires running backend (``npm run backend``) — agents must not start it.
 
 Examples:
@@ -14,10 +15,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import shutil
 import sys
 import tempfile
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +40,14 @@ from debug_surface_helpers import (
     api_list_bootstrap_tiles,
     api_loading_progress,
     api_pack_bake,
+    sample_loading_progress_line,
+)
+from debug_transcript import (
+    add_debug_progress_argument,
+    progress,
+    progress_loop,
+    set_debug_progress,
+    tee_stdio,
 )
 from render_maps import _print_summary, dump_map_renders
 
@@ -200,15 +211,24 @@ def main() -> None:
         default=None,
         help="Entry job anchor meters (with --entry; else first location map_y)",
     )
+    add_debug_progress_argument(parser)
     args = parser.parse_args()
+    set_debug_progress(args.debug)
+    os.environ.setdefault("DEBUG_API_TIMEOUT", "600")
 
     fixture = args.fixture.resolve()
     if not fixture.is_file():
         raise SystemExit(f"fixture not found: {fixture}")
 
     world_uid = args.world_uid or _fixture_world_uid(fixture)
+    report_root = REPO / ".local" / "map-render" / world_uid / "initialize"
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    log_latest = report_root / "initialize-latest.log"
+    log_stamped = report_root / f"initialize-{stamp}.log"
 
-    with api_client() as client:
+    with tee_stdio(log_latest, announce_saved=True), api_client() as client:
+        print(f"report dir: {report_root}")
+        print(f"transcript: {log_latest}")
         if not args.skip_import:
             imp = _import_fixture(client, str(fixture))
             print("import:", {k: v for k, v in imp.items() if k not in ("rolled_back", "rollback_reason")})
@@ -231,12 +251,18 @@ def main() -> None:
 
         started_at = datetime.now().astimezone()
         t0 = time.perf_counter()
-        bake = api_pack_bake(
-            client,
-            world_uid,
-            mode=args.mode,
-            max_tiles=args.max_tiles if args.mode == "light" else None,
-        )
+        progress(f"[online] {args.mode}_bake starting")
+        with progress_loop(
+            lambda: sample_loading_progress_line(
+                world_uid, label=f"{args.mode}_bake", t0=t0,
+            ),
+        ):
+            bake = api_pack_bake(
+                client,
+                world_uid,
+                mode=args.mode,
+                max_tiles=args.max_tiles if args.mode == "light" else None,
+            )
         http_elapsed_s = time.perf_counter() - t0
         finished_at = datetime.now().astimezone()
 
@@ -275,6 +301,9 @@ def main() -> None:
                 mark_locations=args.mark_locations,
             )
             _print_summary(summary)
+
+    shutil.copyfile(log_latest, log_stamped)
+    print(f"stamped transcript: {log_stamped}")
 
 
 if __name__ == "__main__":

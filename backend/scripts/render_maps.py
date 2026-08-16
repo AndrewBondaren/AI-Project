@@ -47,6 +47,7 @@ from debug_transcript import (  # noqa: E402
     add_debug_progress_argument,
     progress,
     set_debug_progress,
+    tee_stdio,
 )
 from app.application.worldData.render.mapSymbols import render_grade_legend  # noqa: E402
 from app.application.worldData.render.renderPayloads import (  # noqa: E402
@@ -330,6 +331,7 @@ def dump_map_renders(
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_dir = out_root / stamp
 
+    progress("  L0 render: GET render-world-grid")
     r = client.get(
         f"/worlds/{world_uid}/map/render-world-grid",
         params={"mark_locations": mark_locations},
@@ -337,10 +339,12 @@ def dump_map_renders(
     _require_ok(r, "render-world-grid")
     world = r.json()
 
+    progress("  L0 render: GET render-location-grids")
     r = client.get(f"/worlds/{world_uid}/map/render-location-grids")
     _require_ok(r, "render-location-grids")
     locations_payload = r.json()
 
+    progress("  L0 render: GET render-world-tile-grids")
     r = client.get(f"/worlds/{world_uid}/map/render-world-tile-grids")
     _require_ok(r, "render-world-tile-grids")
     tiles_payload = r.json()
@@ -366,7 +370,11 @@ def dump_map_renders(
     loc_root = run_dir / "locations"
     location_uids = list(locations_payload.get("location_uids") or [])
     locations_meta: dict[str, object] = {}
-    for location_uid, entry in (locations_payload.get("locations") or {}).items():
+    loc_entries = locations_payload.get("locations") or {}
+    loc_total = len(loc_entries)
+    if loc_total:
+        progress(f"  L0 render: writing {loc_total} location ASCII")
+    for loc_i, (location_uid, entry) in enumerate(loc_entries.items(), start=1):
         levels: dict[str, str] = dict(entry.get("levels") or {})
         legend = entry.get("legend", "")
         meta = _write_level_bundle(
@@ -385,10 +393,16 @@ def dump_map_renders(
         meta["indoor"] = entry.get("indoor")
         meta["z_levels"] = entry.get("z_levels")
         locations_meta[location_uid] = meta
+        if loc_i == 1 or loc_i == loc_total or loc_i % 5 == 0:
+            progress(f"    L0 locations {loc_i}/{loc_total} (last {location_uid})")
 
     tiles_root = run_dir / "tiles"
     tile_index: dict[str, object] = {}
-    for tile_key, entry in (tiles_payload.get("tiles") or {}).items():
+    tile_entries = tiles_payload.get("tiles") or {}
+    tile_total = len(tile_entries)
+    if tile_total:
+        progress(f"  L0 render: writing {tile_total} tile ASCII")
+    for tile_i, (tile_key, entry) in enumerate(tile_entries.items(), start=1):
         levels = dict(entry.get("levels") or {})
         legend = entry.get("legend", "")
         tile_dir = tiles_root / tile_key
@@ -418,6 +432,8 @@ def dump_map_renders(
             "primary": str(top_path.relative_to(REPO)),
             "levels": extra,
         }
+        if tile_i == 1 or tile_i == tile_total or tile_i % 5 == 0:
+            progress(f"    L0 tiles {tile_i}/{tile_total} (last {tile_key})")
 
     index: dict[str, object] = {
         "world_uid": world_uid,
@@ -510,7 +526,11 @@ def dump_detailed_renders(
             locations_meta[location_uid] = meta
 
     wilderness_meta: dict[str, object] = {}
-    for gx, gy in wilderness_tiles:
+    wild_total = len(wilderness_tiles)
+    for wild_i, (gx, gy) in enumerate(wilderness_tiles, start=1):
+        progress(
+            f"  L2 render: wilderness ({gx},{gy}) {wild_i}/{wild_total}"
+        )
         # Dense z ASCII must not ride in one JSON — use occupied_z_levels + ?z= files.
         bulk_z = bool(include_z_slices) and not write_z_slice_files
         r = client.get(
@@ -701,18 +721,22 @@ def main() -> None:
     args = parser.parse_args()
     set_debug_progress(args.debug)
 
+    out_root = args.out or (REPO / ".local" / "map-render" / args.world_uid)
+    log_path = out_root / "render-maps-latest.log"
+
     try:
-        with httpx.Client(base_url=args.base_url, timeout=600.0) as client:
-            summary = dump_map_renders(
-                client,
-                args.world_uid,
-                out_root=args.out,
-                mark_locations=args.mark_locations,
-            )
+        with tee_stdio(log_path, announce_saved=True):
+            print(f"transcript: {log_path}", flush=True)
+            with httpx.Client(base_url=args.base_url, timeout=600.0) as client:
+                summary = dump_map_renders(
+                    client,
+                    args.world_uid,
+                    out_root=args.out,
+                    mark_locations=args.mark_locations,
+                )
+            _print_summary(summary)
     except DebugApiError as exc:
         raise SystemExit(str(exc)) from exc
-
-    _print_summary(summary)
 
 
 if __name__ == "__main__":

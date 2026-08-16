@@ -8,13 +8,15 @@ Use for long bake/render heartbeats so the process is watchable without
 flooding the terminal, and the full tick stream is not lost to scrollback.
 
 Consumers: ``detailed_bake``, ``light_and_full_bake``, ``entry_bg_refine``,
-``render_maps``.
+``render_maps``, ``initialize_world``.
 """
 from __future__ import annotations
 
 import argparse
 import os
 import sys
+import threading
+from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator, TextIO
@@ -89,6 +91,54 @@ def add_debug_progress_argument(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help=DEBUG_PROGRESS_HELP,
     )
+
+
+@contextmanager
+def progress_loop(
+    sample: Callable[[], str | None],
+    *,
+    interval_s: float | None = None,
+) -> Iterator[None]:
+    """Call ``sample()`` on an interval; each new line goes through ``progress()``.
+
+    Use around a blocking bake/HTTP so the transcript ticks while the caller waits.
+    """
+    interval = float(
+        interval_s
+        if interval_s is not None
+        else os.environ.get("DEBUG_PROGRESS_POLL_S", "5")
+    )
+    stop = threading.Event()
+    last: str | None = None
+
+    def _emit(line: str | None, *, suffix: str = "") -> None:
+        nonlocal last
+        if not line:
+            return
+        text = f"{line} {suffix}".rstrip() if suffix else line
+        if text == last:
+            return
+        last = text
+        progress(text)
+
+    def _loop() -> None:
+        while not stop.wait(interval):
+            try:
+                _emit(sample())
+            except Exception:
+                continue
+
+    thread = threading.Thread(target=_loop, name="script-progress-loop", daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join(timeout=interval + 1.0)
+        try:
+            _emit(sample(), suffix="(final)")
+        except Exception:
+            pass
 
 
 @contextmanager

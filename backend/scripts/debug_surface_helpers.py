@@ -9,6 +9,8 @@ Canonical ``api_pack_bake`` lives in ``debug_api_helpers`` (re-exported here).
 """
 from __future__ import annotations
 
+import time
+
 import httpx
 
 from debug_api_helpers import (
@@ -69,6 +71,21 @@ def api_loading_progress(client: httpx.Client, world_uid: str) -> dict:
     )
 
 
+def sample_loading_progress_line(world_uid: str, *, label: str, t0: float) -> str:
+    """One ``[online]`` heartbeat line from GET loading-progress (own HTTP client)."""
+    with api_client() as client:
+        snap = api_loading_progress(client, world_uid)
+    wm = snap.get("worldMapLoading") or snap.get("world_map") or {}
+    if not isinstance(wm, dict):
+        wm = {}
+    elapsed_s = time.perf_counter() - t0
+    return (
+        f"[online] {label} tiles_pct={wm.get('tiles_pct')} "
+        f"wilderness_pct={wm.get('wilderness_pct')} "
+        f"elapsed_s={elapsed_s:.2f}"
+    )
+
+
 __all__ = [
     "BASE_URL",
     "DebugApiError",
@@ -77,6 +94,7 @@ __all__ = [
     "api_list_bootstrap_tiles",
     "api_list_locations",
     "api_loading_progress",
+    "sample_loading_progress_line",
     "api_pack_bake",
     "api_refine_from_entry",
     "api_schedule_chunk_refine",

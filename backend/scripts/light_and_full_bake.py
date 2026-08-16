@@ -42,8 +42,15 @@ from debug_surface_helpers import (
     api_list_bootstrap_tiles,
     api_loading_progress,
     api_pack_bake,
+    sample_loading_progress_line,
 )
-from debug_transcript import add_debug_progress_argument, set_debug_progress, tee_stdio
+from debug_transcript import (
+    add_debug_progress_argument,
+    progress,
+    progress_loop,
+    set_debug_progress,
+    tee_stdio,
+)
 from render_maps import _print_summary, dump_map_renders
 
 # Full bake can exceed the default 120s debug timeout.
@@ -270,12 +277,18 @@ def _run_bake(
 ) -> dict[str, Any]:
     started_at = datetime.now().astimezone()
     t0 = time.perf_counter()
-    bake = api_pack_bake(
-        client,
-        world_uid,
-        mode=mode,  # type: ignore[arg-type]
-        max_tiles=max_tiles if mode == "light" else None,
-    )
+    progress(f"[online] {mode}_bake starting")
+    with progress_loop(
+        lambda: sample_loading_progress_line(
+            world_uid, label=f"{mode}_bake", t0=t0,
+        ),
+    ):
+        bake = api_pack_bake(
+            client,
+            world_uid,
+            mode=mode,  # type: ignore[arg-type]
+            max_tiles=max_tiles if mode == "light" else None,
+        )
     http_elapsed_s = time.perf_counter() - t0
     finished_at = datetime.now().astimezone()
     if not bake.get("loading_progress"):
