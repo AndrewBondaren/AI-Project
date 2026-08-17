@@ -5,6 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
+from app.dataModel.terrain.relief.enums import ReliefConditionTerrain
 
 
 class HydrologyShoreKind(StrEnum):
@@ -39,3 +40,12 @@ class HydrologyShoreKind(StrEnum):
         }:
             return cls.SEA
         return None
+
+    def condition_terrain(self) -> ReliefConditionTerrain:
+        """R34 shore class for this hydro category — not ``role`` as envelope key."""
+        return {
+            HydrologyShoreKind.RIVER: ReliefConditionTerrain.SHORE_RIVER,
+            HydrologyShoreKind.MOUNTAIN_RIVER: ReliefConditionTerrain.SHORE_MOUNTAIN_RIVER,
+            HydrologyShoreKind.LAKE: ReliefConditionTerrain.SHORE_LAKE,
+            HydrologyShoreKind.SEA: ReliefConditionTerrain.SHORE_SEA,
+        }[self]

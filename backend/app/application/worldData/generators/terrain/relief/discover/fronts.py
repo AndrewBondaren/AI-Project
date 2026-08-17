@@ -18,6 +18,7 @@ from app.application.worldData.generators.terrain.relief.discover.neighbors impo
 )
 from app.application.worldData.generators.terrain.relief.discover.plugins import (
     VertexBodyPlugin,
+    shore_condition_at,
 )
 from app.application.worldData.generators.terrain.relief.discover.types import (
     CapFront,
@@ -131,7 +132,7 @@ class FrontStage:
             for run in _consecutive_runs(rims, facing):
                 if not self._stamps_first_step(run, facing, first_dz, plugin):
                     continue
-                trace = self._walk_trace(run, facing, z_body, slot)
+                trace = self._walk_trace(run, facing, z_body, slot, plugin)
                 if self.cap_front is not None:
                     max_k = self.cap_front(plugin.context)
                     if max_k is None:
@@ -197,6 +198,12 @@ class FrontStage:
         downhill = (sx + dx, sy + dy)
         raw = self.surface.terrain_at(downhill) or self.surface.terrain_at((sx, sy))
         mapped = map_system_terrain(raw)
+        if mapped is None or not mapped.is_shore_class():
+            mapped = (
+                shore_condition_at(downhill, self.surface)
+                or shore_condition_at((sx, sy), self.surface)
+                or mapped
+            )
         table = self.envelopes or ReliefOntologyEnvelopes.canonical_defaults()
         env = (
             table.for_terrain(mapped)
@@ -211,6 +218,7 @@ class FrontStage:
         facing: Facing,
         z_body: int,
         slot: int,
+        plugin: VertexBodyPlugin,
     ) -> tuple[Coord, ...]:
         """Lockstep W×L until θ break, abutment, own body, or foreign occ/seam.
 
@@ -229,8 +237,20 @@ class FrontStage:
             for sx, sy in rim:
                 xy = (sx + dx * k, sy + dy * k)
                 z = cell_z(surface, xy)
-                if z is None or blocked(xy):
+                if z is None:
                     return tuple(cells)
+                if blocked(xy):
+                    role = surface.hydro_role_at(xy)
+                    hydro_block = (
+                        role is not None and role.blocks_grade_seed()
+                    )
+                    prev = (sx, sy) if k == 1 else (
+                        sx + dx * (k - 1), sy + dy * (k - 1)
+                    )
+                    if not hydro_block or not plugin.may_shoot(
+                        prev, xy, surface,
+                    ):
+                        return tuple(cells)
                 i = vertices.index(xy[0], xy[1])
                 if i is not None:
                     if vertices.at_grid[i] == slot:

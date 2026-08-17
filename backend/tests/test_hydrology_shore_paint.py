@@ -53,6 +53,10 @@ class ShoreCategoryPaintTest(unittest.TestCase):
         self.assertEqual(mtn_t, ReliefConditionTerrain.SHORE_MOUNTAIN_RIVER.value)
         self.assertEqual(river_m, "sand")
         self.assertEqual(mtn_m, "stone")
+        self.assertEqual(
+            HydrologyShoreKind.LAKE.condition_terrain(),
+            ReliefConditionTerrain.SHORE_LAKE,
+        )
 
     def test_does_not_read_legacy_default_shore(self) -> None:
         hydro = WorldHydrology().model_dump(mode="json")

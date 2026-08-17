@@ -62,10 +62,13 @@ class MeterGradeSurface:
         return self.surface_terrain.get(xy)
 
     def hydro_role_at(self, xy: Coord) -> HydrologyCellRole | None:
+        entry = self.hydro_at(xy)
+        return None if entry is None else entry.role
+
+    def hydro_at(self, xy: Coord) -> MapCellHydrology | None:
         if not self.hydrology:
             return None
-        entry = self.hydrology.get(xy)
-        return None if entry is None else entry.role
+        return self.hydrology.get(xy)
 
     def has_grade(self, xy: Coord) -> bool:
         return bool(self.grade_uid.get(xy))

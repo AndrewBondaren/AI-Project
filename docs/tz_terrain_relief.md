@@ -7,7 +7,7 @@ metadata:
 ---
 
 > **Статус:** ownership **утверждён** · templates R33–R35 ✅ · **R36 geom/entity/clearance** ✅ · **canal R36p/q ✅** · **R36u–w** writer/pool/каталог ✅ · **R37** envelope ✅ · **R41/R42/C39/C41 pipeline v2 = SoT** (меса 8, фронт W×L, `ReliefVertices`+`occ`+`seam`, bucket[z] остаток кромок, шов лучей, расписание A). **R38–R40 v1 — deprecated**. Шов чанков `full_bake` · halo `grid_neighbor` · T-10 ✅.  
-> **Код vs SoT:** `compute_rect` = discover+paint → один fill (R41 слои 0–4 + толстый ravine). Sample/stitch до пула — **deprecated**, не writer. **Очередь / не трогать:** § [Осталось — v2 vs L2 volume](#осталось--v2-vs-l2-volume-locked). IDs — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md). **R41-T-5…T-8** ✅. Слой 5: толстый ravine ✅; `shore` stub (геометрия тела). **Онтология берега locked:** `shore_river` / `shore_mountain_river` / `shore_lake` / `shore_sea`. Next = shore plugin **или** слой 6 T-3c — по команде мастера. Wave E / BAR-1 / DAG вне этой очереди. L0 `world-grade` ASCII omit (PAR-G5).  
+> **Код vs SoT:** `compute_rect` = discover+paint → один fill (R41 слои 0–4 + слой 5 ravine/shore). Sample/stitch до пула — **deprecated**, не writer. **Очередь / не трогать:** § [Осталось — v2 vs L2 volume](#осталось--v2-vs-l2-volume-locked). IDs — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md). **R41-T-5…T-8** ✅. Слой 5: толстый ravine ✅; онтология берега + hydro category paint ✅; `ShorePlugin` тело ✅. Next = слой 6 **T-3c** — по команде мастера ([команда агенту](../.cursor/plans/relief-pipeline-v2.md)). Wave E / BAR-1 / DAG вне этой очереди. L0 `world-grade` ASCII omit (PAR-G5).  
 > **Связь:** SoT grade; **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT. · ASCII — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md). · L2 — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2. · Agent: [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md) · v2 impl: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md)
 
 **Scope lock (R36u):** меняется **только outdoor relief grade** (`system_grade_uid`, SLOPE/SHEER geometry). **Не трогать** L0→L2 parent-light контракты ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2):
@@ -1022,9 +1022,9 @@ Deprecated sample `measure_terrain_descent` still stops on `z ≥` (R40). Live l
 | `shore_lake` | да (как река, без полосы угла) | **2** | да (без min h) | **да** — дно бассейна, не сырой carve. Свой класс, не `shore_river` |
 | `shore_sea` | θ ∈ **[20°, 70°]** | **5** | да, см. ниже | нет (shelf = hydro bands) |
 
-**Море + SHEER (locked):** если kind = SHEER — **либо** один отвес **h ≥ 5**, **либо** ступени: каждый sheer + **платформа ≥ 5** клеток. Не SHEER h=1–4. Writer террас — при impl plugin/volume; поля конверта `sheer_min_abs_dz=5`, `sheer_terrace_min_cells=5`.
+**Море + SHEER (locked):** если kind = SHEER — **либо** один отвес **h ≥ 5**, **либо** ступени: каждый sheer + **платформа ≥ 5** клеток. Не SHEER h=1–4. Discover leftover: `sheer_terrace_min_cells` на flood тела (не литерал). Stepped SHEER **volume** — later, не форк L2.
 
-**Река / озеро + дно:** hydro carve оставляет вертикальные воксели. Relief **обязан** покрыть профиль (берег + дно). Не «только бровка, пол — сырой carve». Река и озеро — **разные** `system_terrain` / hydro policy (`default_rivers.shore` vs `default_lakes.shore`); цифры конверта сейчас совпадают. Geom writer — ShorePlugin (ещё stub); инвариант уже SoT.
+**Река / озеро + дно:** hydro carve оставляет вертикальные воксели. Relief **обязан** покрыть профиль (берег + дно). Не «только бровка, пол — сырой carve». Река и озеро — **разные** `system_terrain` / hydro policy (`default_rivers.shore` vs `default_lakes.shore`); цифры конверта сейчас совпадают. Geom writer — `ShorePlugin` (`grades_channel_bed`); речные U15 bands hydro ещё не режет — не выдумывать `shore_river` клетки.
 
 Единый envelope-ключ `shore` — **снят**.
 
@@ -1192,7 +1192,8 @@ Deprecated sample `measure_terrain_descent` still stops on `z ≥` (R40). Live l
 | | Статус | Что |
 |---|---|---|
 | Слои 0–4 | ✅ live | типы, C39/R42/C41, paint adapter, `compute_rect` discover+paint → один fill, plugin `road_shoulder` |
-| Слой 5 ravine | ✅ | банк + same-z стены маски; kind = knobs шаблона; `shore` stub |
+| Слой 5 ravine | ✅ | банк + same-z стены маски; kind = knobs шаблона |
+| Слой 5 shore | онтология + paint ✅; **plugin тело ✅** | банк + полоса; дно iff `grades_channel_bed`; море не в open water; leftover terrace = `sheer_terrace_min_cells` |
 | P1 | ✅ | **R41-T-2…T-4:** apply=`DiscoveredFront`; cap до C41 = L_tpl; ravine flood = bank (не plains mesa) |
 | P2 | ✅ | **R41-T-5…T-8:** равная z = продолжение L; inherit только орто; `|dz|=1` = `stamp_min_abs_dz`; classify/stamp = коридор после C41 |
 | Каталог `face_key` | ✅ живой | identity шва чанков (R36w / C29), не discover семян |
@@ -1202,7 +1203,7 @@ Deprecated sample `measure_terrain_descent` still stops on `z ≥` (R40). Live l
 | # | Что | IDs / слой | Не делать |
 |---|---|---|---|
 | 1 | Полиш луча и L | **R41-T-5…T-8** ✅ | не возвращать pick в `FrontStage`; не ставить envelope floor как occupancy cap |
-| 2 | Тела plugin | слой 5: толстый ravine ✅; `shore` stub | не `sample_*`; не Priority-Flood; не `if context` в `core.py` |
+| 2 | Тела plugin | слой 5 ravine ✅; shore онтология+paint ✅; **ShorePlugin тело ✅** | не `sample_*`; не Priority-Flood; не `if context` в `core.py`; не хардкод 2/5/20/70 |
 | 3 | System row | **T-3c** / слой 6: ≥2 Instance одной вершины | uid System на клетке; строка при 1 фронте |
 | 4 | Срез v1 | слой 7: sample / `plan_grade_for_rects` / stitch / `FineTileContext.planned` | `warnings.warn` на bake, пока sample ещё в репо |
 | 5 | Полиш facade | **R41-T-9…T-12** | склеивать Rim/Front/Seam в один `core.py` |
@@ -1227,7 +1228,7 @@ Deprecated sample `measure_terrain_descent` still stops on `z ≥` (R40). Live l
 | `open_land` | 8-связные клетки той же целой z (меса); интерьер в теле, не сеет | Наружу с кромки (сосед ниже); не в тело. Внутренняя кромка ямы — внутрь; схождение → шов лучей (C41) |
 | `road_shoulder` | Связные клетки **полотна = одна вершина** | Обе обочины (R20); не в полотно и не вдоль дороги в следующий якорь. Прямая = 2 орто-фронта. **Поворот: 8-way**; внутренний угол — тот же **шов лучей** (C41), не отдельный if |
 | `ravine` | Банк (суша у маски) + same-z стены на `system_terrain=ravine`; интерьер террасы в теле, не сеет. Плоский пол без Δz — не site | В маску (ниже). Kind = knobs шаблона (SLOPE/SHEER) через `grade_constrained`, не plugin |
-| `shore` | Тот же каркас; геометрия тела — при impl (stub). Класс клетки — `shore_river` / `shore_lake` / `shore_sea` | TBD (лучи вниз); схождение — C41 |
+| `shore` | Банк (суша у полосы / воды) + same-z стены полосы (`shore_*` или `role=shore`); стены дна iff `grades_channel_bed`. Плоский берег без Δz — не site. Класс — `shore_river` / `shore_mountain_river` / `shore_lake` / `shore_sea` | В полосу; в дно/open water iff `grades_channel_bed` (река/озеро да, море нет). Схождение — C41 |
 
 ##### Членство (locked)
 
@@ -1797,7 +1798,7 @@ Hydro красит клетку берега ([`tz_terrain_hydrology.md`](./tz_t
 
 | | |
 |---|---|
-| **Где grade** | кромка суша ↔ полоса; у реки/горной реки/озера — **ещё дно** (канава / чаша). Плоский берег без Δz — не site. Геометрия тела plugin — при impl (stub) |
+| **Где grade** | кромка суша ↔ полоса; у реки/горной реки/озера — **ещё дно** (канава / чаша). Плоский берег без Δz — не site |
 | **Класс клетки** | `shore_river` / `shore_mountain_river` / `shore_lake` / `shore_sea` (R34) |
 | **Не** | один `system_terrain=shore`; подменять пол шириной `bands`; `hydrology_role` как ключ envelope |
 | **Conditions** | Mode A/B; блоки на четыре класса; нет `side_recipe` (R33) |
@@ -1806,7 +1807,7 @@ Hydro красит клетку берега ([`tz_terrain_hydrology.md`](./tz_t
 | **`mountain_river` (U17)** | тип **русла**; клетка берега = **`shore_mountain_river`** (θ 20–70°, L min 2) |
 | **`inland_sea`** | `shore_sea` |
 | **Canal entity** | `CanalObstacleEntity.shore` = любой shore_* |
-| **Generate** | `ShorePlugin` (stub); канава/террасы — SoT, writer later |
+| **Generate** | `ShorePlugin`: банк + полоса; дно iff envelope `grades_channel_bed`; leftover terrace iff `sheer_terrace_min_cells`. Stepped SHEER volume — later. `_CONTEXT_SAMPLES` / `sample_shore_meter` — deprecated |
 
 **Две оси (не путать с hydro bands):**
 
@@ -2494,7 +2495,7 @@ Grade/SQL `owner_uid` (no FK to connection_edges). L0 `ribbon_intents` — **gon
 
 ## Порядок имплементации (anti-slice)
 
-**SoT очереди сейчас:** § [Осталось — v2 vs L2 volume](#осталось--v2-vs-l2-volume-locked) (толстый ravine ✅; next = `shore` stub **или** слой 6 T-3c; **R41-T-5…T-8** ✅; L2 volume закрыт).  
+**SoT очереди сейчас:** § [Осталось — v2 vs L2 volume](#осталось--v2-vs-l2-volume-locked) (толстый ravine ✅; shore онтология+paint ✅; **ShorePlugin тело ✅**; next = слой 6 **T-3c** по команде; **R41-T-5…T-8** ✅; L2 volume закрыт). Команда: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md) § Команда следующему агенту.  
 **Agent pointer (история волн):** [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).  
 **Текущий impl v2:** [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md).  
 Post-R36w (shipped, **не** трогать apply): [`.cursor/plans/detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md).  
@@ -2755,7 +2756,7 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 
 | Дата | Изменение |
 |---|---|
-| 2026-08-17 | **`shore_lake` locked:** те же цифры, что `shore_river` (SLOPE/SHEER, L≥2, канава по дну); отдельный класс / hydro paint, не alias реки |
+| 2026-08-18 | **ShorePlugin тело ✅:** банк + полоса; дно iff `grades_channel_bed`; море не в open water; leftover terrace = `sheer_terrace_min_cells`. Не выдумывает `shore_river` клетки. Next = T-3c слой 6 |
 | 2026-08-17 | **Shore ontology цифры:** `shore_river` L≥2 + канава по дну; `shore_mountain_river` θ 20–70° L≥2 + канава; `shore_sea` θ 20–70° L≥5, SHEER h≥5 или террасы ≥5; `shore_lake` TBD. U17 → свой класс берега |
 | 2026-08-17 | **R41-T-5…T-8 resolved:** равная z = продолжение L; inherit только орто (C15/C29); `stamp_min_abs_dz` на envelope; classify/stamp = коридор после C41 |
 | 2026-08-17 | **Очередь locked:** § Осталось — v2 vs L2 volume. Volume закрыт; ~~T-5…T-8~~ ✅ → слой 5 shore/яма → T-3c → срез v1. Не форкать apply |

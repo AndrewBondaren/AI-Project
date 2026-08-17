@@ -22,6 +22,7 @@ from app.application.worldData.generators.terrain.relief.discover.neighbors impo
 )
 from app.application.worldData.generators.terrain.relief.discover.plugins import (
     plugins_for_keys,
+    shore_condition_at,
 )
 from app.application.worldData.generators.terrain.relief.discover.types import (
     Coord,
@@ -95,7 +96,16 @@ def _terrain_of(
         if front.corridor
         else None
     ) or surface.terrain_at(front.rim[0]) or ""
+    seed = front.corridor[0] if front.corridor else front.rim[0]
     mapped = map_system_terrain(raw)
+    if mapped is not None and mapped.is_shore_class():
+        return mapped.value, raw
+    shore = shore_condition_at(seed, surface)
+    if shore is not None and (
+        mapped is None
+        or surface.hydro_role_at(seed) is not None
+    ):
+        return shore.value, raw
     key = mapped.value if mapped is not None else raw
     return key, raw
 

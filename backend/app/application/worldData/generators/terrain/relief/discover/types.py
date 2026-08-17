@@ -16,6 +16,7 @@ from app.application.worldData.generators.terrain.relief.pick.gradePass import (
     RibbonGradeDecision,
 )
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
+from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.terrain.relief.enums import ReliefContext
 
@@ -31,6 +32,7 @@ class ReliefSurface(Protocol):
     def z_at(self, xy: Coord) -> int | None: ...
     def terrain_at(self, xy: Coord) -> str | None: ...
     def hydro_role_at(self, xy: Coord) -> HydrologyCellRole | None: ...
+    def hydro_at(self, xy: Coord) -> MapCellHydrology | None: ...
 
 
 def cell_z(surface: ReliefSurface, xy: Coord) -> int | None:

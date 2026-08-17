@@ -10,7 +10,9 @@ from app.application.worldData.generators.terrain.relief.discover.core import (
 from app.application.worldData.generators.terrain.relief.discover.plugins import (
     OpenLandPlugin,
     RoadShoulderPlugin,
+    ShorePlugin,
     plugins_for_keys,
+    shore_condition_at,
 )
 from app.application.worldData.generators.terrain.relief.discover.seam import SeamStage
 from app.application.worldData.generators.terrain.relief.discover.types import (
@@ -24,9 +26,16 @@ from app.application.worldData.generators.terrain.relief.sample.openLandTerrains
 from app.application.worldData.generators.terrain.relief.sample.ravineTerrain import (
     ravine_terrain_key,
 )
-from app.application.worldData.pack.refine.meterGradeSurface import MeterGradeSurface
+from app.application.worldData.pack.refine.meterGradeSurface import (
+    MeterGradeSurface,
+    meter_grade_cell_blocked,
+)
+from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
+from app.dataModel.hydrology.enums.hydrologyShoreKind import HydrologyShoreKind
+from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.terrain.relief.enums import ReliefConditionTerrain, ReliefContext
+from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.dataModel.terrain.relief.reliefGradeKnobs import DEFAULT_SLOPE_LENGTH_CELLS
 from app.dataModel.terrain.relief.reliefTerrainEnvelope import ReliefOntologyEnvelopes
 from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
@@ -41,6 +50,8 @@ _ENVELOPE_L_FLOOR = (
     .for_terrain(ReliefConditionTerrain.PLAINS)
     .length_from_min_cells()
 )
+_SHORE_SEA = ReliefConditionTerrain.SHORE_SEA.value
+_BARRIERS = WorldTerrainRegistry.canonical_barrier_terrain_keys()
 
 
 def _surface(z: dict[Coord, int], terrain: str = _PLAINS) -> MeterGradeSurface:
@@ -95,6 +106,47 @@ def _discover_ravine(
         ),
         cell_blocked=lambda _xy: False,
         cap_front=cap_front,
+    )
+
+
+def _discover_shore(
+    z: dict[Coord, int],
+    terrain: dict[Coord, str],
+    hydro: dict[Coord, MapCellHydrology] | None,
+    *,
+    cap_front=None,
+    envelopes=None,
+    cell_blocked=None,
+) -> tuple[ReliefVertices, tuple]:
+    xs = [x for x, _y in z]
+    ys = [y for _x, y in z]
+    surface = MeterGradeSurface(
+        surface_z=z,
+        surface_terrain=terrain,
+        hydrology=hydro,
+        surface_facing=None,
+    )
+    blocked = cell_blocked
+    if blocked is None:
+        blocked = lambda xy: meter_grade_cell_blocked(
+            surface, xy, road_key=_ROAD, barrier_keys=_BARRIERS,
+        )
+    return discover_fronts(
+        surface,
+        origin_x=min(xs),
+        origin_y=min(ys),
+        width=max(xs) - min(xs) + 1,
+        height=max(ys) - min(ys) + 1,
+        plugins=plugins_for_keys(
+            land_keys=_LAND,
+            road_key=_ROAD,
+            ravine_key=_RAVINE,
+            contexts=frozenset({ReliefContext.SHORE, ReliefContext.OPEN_LAND}),
+            envelopes=envelopes,
+        ),
+        cell_blocked=blocked,
+        cap_front=cap_front,
+        envelopes=envelopes,
     )
 
 
@@ -440,6 +492,7 @@ class ReliefDiscoverTest(unittest.TestCase):
             RavinePlugin,
         )
         self.assertFalse(hasattr(RavinePlugin, "allows_unit_stamp"))
+        self.assertFalse(hasattr(ShorePlugin, "allows_unit_stamp"))
         plains = ReliefOntologyEnvelopes.canonical_defaults().plains
         self.assertEqual(plains.stamp_min_abs_dz, 2)
         self.assertFalse(plains.stamps_first_step(1, ReliefContext.OPEN_LAND))
@@ -538,6 +591,245 @@ class ReliefDiscoverTest(unittest.TestCase):
             self.assertEqual(front.z_end, 6)
             self.assertEqual(front.z_body - front.z_end, 2)
             self.assertNotIn((2, 2), front.corridor)
+
+    def test_shore_river_grades_bed_without_inventing_cells(self) -> None:
+        """River U15 bands are not cut — bank + river_bed, not painted shore_river."""
+        z = {
+            (0, 1): 4, (1, 1): 4,
+            (0, 0): 2, (1, 0): 2,
+        }
+        terrain = {xy: _PLAINS for xy in z}
+        hydro = {
+            (0, 0): MapCellHydrology(role=HydrologyCellRole.RIVER_BED),
+            (1, 0): MapCellHydrology(role=HydrologyCellRole.RIVER_BED),
+        }
+        vertices, fronts = _discover_shore(z, terrain, hydro)
+        south = [f for f in fronts if f.context is ReliefContext.SHORE]
+        self.assertTrue(south)
+        covered = {xy for f in south for xy in f.corridor}
+        self.assertTrue({(0, 0), (1, 0)} <= covered)
+        self.assertEqual(terrain[(0, 1)], _PLAINS)
+        self.assertEqual(terrain[(0, 0)], _PLAINS)
+        self.assertNotEqual(
+            shore_condition_at((0, 0), MeterGradeSurface(
+                surface_z=z, surface_terrain=terrain, hydrology=hydro,
+                surface_facing=None,
+            )),
+            None,
+        )
+        self.assertEqual(
+            shore_condition_at((0, 0), MeterGradeSurface(
+                surface_z=z, surface_terrain=terrain, hydrology=hydro,
+                surface_facing=None,
+            )),
+            ReliefConditionTerrain.SHORE_RIVER,
+        )
+        bank = (0, 1)
+        bi = vertices.index(*bank)
+        self.assertNotEqual(vertices.at_grid[bi], 0)
+
+    def test_shore_mountain_river_kind_still_grades_bed(self) -> None:
+        z = {(0, 1): 5, (0, 0): 2}
+        terrain = {xy: _PLAINS for xy in z}
+        hydro = {
+            (0, 0): MapCellHydrology(
+                role=HydrologyCellRole.RIVER_BED,
+                shore_kind=HydrologyShoreKind.MOUNTAIN_RIVER,
+            ),
+        }
+        _vertices, fronts = _discover_shore(z, terrain, hydro)
+        south = [f for f in fronts if f.context is ReliefContext.SHORE]
+        self.assertTrue(south)
+        self.assertIn((0, 0), south[0].corridor)
+
+    def test_shore_equal_z_bed_continues_length(self) -> None:
+        z = {(0, 3): 5, (0, 2): 2, (0, 1): 2, (0, 0): 2}
+        terrain = {xy: _PLAINS for xy in z}
+        hydro = {
+            (0, 2): MapCellHydrology(role=HydrologyCellRole.RIVER_BED),
+            (0, 1): MapCellHydrology(role=HydrologyCellRole.RIVER_BED),
+            (0, 0): MapCellHydrology(role=HydrologyCellRole.RIVER_BED),
+        }
+        _vertices, fronts = _discover_shore(z, terrain, hydro)
+        south = [f for f in fronts if f.context is ReliefContext.SHORE]
+        self.assertTrue(south)
+        front = max(south, key=lambda f: f.path_length)
+        self.assertEqual(front.corridor, ((0, 2), (0, 1), (0, 0)))
+
+    def test_shore_bed_floor_without_drop_does_not_seed(self) -> None:
+        z: dict[Coord, int] = {}
+        terrain: dict[Coord, str] = {}
+        hydro: dict[Coord, MapCellHydrology] = {}
+        for x in range(5):
+            for y in range(5):
+                xy = (x, y)
+                if x == 0 or x == 4 or y == 0 or y == 4:
+                    z[xy] = 4
+                    terrain[xy] = _PLAINS
+                else:
+                    z[xy] = 2
+                    terrain[xy] = _PLAINS
+                    hydro[xy] = MapCellHydrology(role=HydrologyCellRole.RIVER_BED)
+        vertices, fronts = _discover_shore(
+            z, terrain, hydro, cap_front=lambda _ctx: 1,
+        )
+        floor = (2, 2)
+        i = vertices.index(*floor)
+        self.assertEqual(vertices.at_grid[i], 0)
+        shore_slots = {f.slot for f in fronts if f.context is ReliefContext.SHORE}
+        self.assertTrue(shore_slots)
+        for slot in shore_slots:
+            self.assertNotIn(floor, vertices.members[slot - 1])
+
+    def test_shore_bank_does_not_swallow_mesa(self) -> None:
+        z = {
+            (0, 3): 4, (1, 3): 4, (2, 3): 4, (3, 3): 4,
+            (0, 2): 4, (1, 2): 4, (2, 2): 4, (3, 2): 4,
+            (0, 1): 4, (1, 1): 4, (2, 1): 4, (3, 1): 2,
+            (0, 0): 2, (1, 0): 2, (2, 0): 2, (3, 0): 2,
+        }
+        terrain = {xy: _PLAINS for xy in z}
+        hydro = {
+            (3, 1): MapCellHydrology(role=HydrologyCellRole.RIVER_BED),
+            (2, 0): MapCellHydrology(role=HydrologyCellRole.RIVER_BED),
+            (3, 0): MapCellHydrology(role=HydrologyCellRole.RIVER_BED),
+        }
+        vertices, fronts = _discover_shore(z, terrain, hydro)
+        shore_slots = {f.slot for f in fronts if f.context is ReliefContext.SHORE}
+        open_slots = {f.slot for f in fronts if f.context is ReliefContext.OPEN_LAND}
+        self.assertTrue(shore_slots)
+        self.assertTrue(open_slots)
+        interior = (1, 2)
+        bank = (2, 1)
+        ii = vertices.index(*interior)
+        bi = vertices.index(*bank)
+        self.assertIn(vertices.at_grid[ii], open_slots)
+        self.assertNotIn(vertices.at_grid[ii], shore_slots)
+        self.assertIn(vertices.at_grid[bi], shore_slots)
+        self.assertNotIn(interior, vertices.members[vertices.at_grid[bi] - 1])
+
+    def test_shore_sea_shoots_strip_not_open_water(self) -> None:
+        z = {(0, 2): 6, (0, 1): 4, (0, 0): 1}
+        terrain = {
+            (0, 2): _PLAINS,
+            (0, 1): _SHORE_SEA,
+            (0, 0): _PLAINS,
+        }
+        hydro = {
+            (0, 1): MapCellHydrology.shore(HydrologyShoreKind.SEA),
+            (0, 0): MapCellHydrology(role=HydrologyCellRole.COASTAL_SEA),
+        }
+        _vertices, fronts = _discover_shore(z, terrain, hydro)
+        south = [f for f in fronts if f.context is ReliefContext.SHORE]
+        self.assertTrue(south)
+        covered = {xy for f in south for xy in f.corridor}
+        self.assertIn((0, 1), covered)
+        self.assertNotIn((0, 0), covered)
+
+    def test_shore_lake_grades_open_water(self) -> None:
+        z = {(0, 1): 4, (0, 0): 2}
+        terrain = {xy: _PLAINS for xy in z}
+        hydro = {(0, 0): MapCellHydrology(role=HydrologyCellRole.LAKE)}
+        _vertices, fronts = _discover_shore(z, terrain, hydro)
+        south = [f for f in fronts if f.context is ReliefContext.SHORE]
+        self.assertTrue(south)
+        self.assertIn((0, 0), south[0].corridor)
+
+    def test_shore_flat_without_drop_does_not_seed(self) -> None:
+        z = {(0, 1): 3, (0, 0): 3}
+        terrain = {(0, 1): _PLAINS, (0, 0): _SHORE_SEA}
+        hydro = {(0, 0): MapCellHydrology.shore(HydrologyShoreKind.SEA)}
+        vertices, fronts = _discover_shore(z, terrain, hydro)
+        shore_fronts = [f for f in fronts if f.context is ReliefContext.SHORE]
+        self.assertFalse(shore_fronts)
+        for xy in z:
+            i = vertices.index(*xy)
+            self.assertEqual(vertices.at_grid[i], 0)
+
+    def test_grades_channel_bed_false_does_not_enter_bed(self) -> None:
+        z = {(0, 1): 4, (0, 0): 2}
+        terrain = {xy: _PLAINS for xy in z}
+        hydro = {(0, 0): MapCellHydrology(role=HydrologyCellRole.RIVER_BED)}
+        base = ReliefOntologyEnvelopes.canonical_defaults()
+        envelopes = base.model_copy(
+            update={
+                "shore_river": base.shore_river.model_copy(
+                    update={"grades_channel_bed": False},
+                ),
+            },
+        )
+        _vertices, fronts = _discover_shore(z, terrain, hydro, envelopes=envelopes)
+        covered = {xy for f in fronts if f.context is ReliefContext.SHORE for xy in f.corridor}
+        self.assertNotIn((0, 0), covered)
+
+    def test_sea_terrace_min_reads_envelope_not_literal(self) -> None:
+        def _terrace(width: int, min_cells: int | None = None):
+            z: dict[Coord, int] = {}
+            terrain: dict[Coord, str] = {}
+            hydro: dict[Coord, MapCellHydrology] = {}
+            for x in range(width):
+                z[(x, 3)] = 8
+                terrain[(x, 3)] = _PLAINS
+                z[(x, 2)] = 5
+                terrain[(x, 2)] = _SHORE_SEA
+                hydro[(x, 2)] = MapCellHydrology.shore(HydrologyShoreKind.SEA)
+                z[(x, 1)] = 3
+                terrain[(x, 1)] = _SHORE_SEA
+                hydro[(x, 1)] = MapCellHydrology.shore(HydrologyShoreKind.SEA)
+                z[(x, 0)] = 0
+                terrain[(x, 0)] = _PLAINS
+                hydro[(x, 0)] = MapCellHydrology(role=HydrologyCellRole.COASTAL_SEA)
+            envelopes = None
+            if min_cells is not None:
+                base = ReliefOntologyEnvelopes.canonical_defaults()
+                envelopes = base.model_copy(
+                    update={
+                        "shore_sea": base.shore_sea.model_copy(
+                            update={"sheer_terrace_min_cells": min_cells},
+                        ),
+                    },
+                )
+            return _discover_shore(
+                z, terrain, hydro,
+                cap_front=lambda _ctx: 1,
+                envelopes=envelopes,
+            )
+
+        vertices5, _ = _terrace(5)
+        leftover = (2, 1)
+        self.assertNotEqual(vertices5.at_grid[vertices5.index(*leftover)], 0)
+        vertices3, _ = _terrace(3)
+        self.assertEqual(vertices3.at_grid[vertices3.index(1, 1)], 0)
+        vertices3_ok, _ = _terrace(3, min_cells=3)
+        self.assertNotEqual(vertices3_ok.at_grid[vertices3_ok.index(1, 1)], 0)
+
+    def test_shore_unit_dz_stamps_from_envelope(self) -> None:
+        z = {(0, 1): 3, (0, 0): 2}
+        terrain = {xy: _PLAINS for xy in z}
+        hydro = {(0, 0): MapCellHydrology(role=HydrologyCellRole.RIVER_BED)}
+        _vertices, fronts = _discover_shore(z, terrain, hydro)
+        south = [f for f in fronts if f.context is ReliefContext.SHORE]
+        self.assertTrue(south)
+        self.assertIn((0, 0), south[0].corridor)
+
+    def test_plugins_for_keys_registers_shore_body(self) -> None:
+        plugins = plugins_for_keys(
+            land_keys=_LAND,
+            road_key=_ROAD,
+            ravine_key=_RAVINE,
+            contexts=frozenset({ReliefContext.SHORE}),
+        )
+        self.assertEqual(len(plugins), 1)
+        self.assertIsInstance(plugins[0], ShorePlugin)
+        z = {(0, 1): 4, (0, 0): 2}
+        terrain = {xy: _PLAINS for xy in z}
+        hydro = {(0, 0): MapCellHydrology(role=HydrologyCellRole.RIVER_BED)}
+        surface = MeterGradeSurface(
+            surface_z=z, surface_terrain=terrain, hydrology=hydro,
+            surface_facing=None,
+        )
+        self.assertTrue(plugins[0].claims((0, 1), surface))
+        self.assertTrue(plugins[0].may_shoot((0, 1), (0, 0), surface))
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ from app.application.worldData.generators.terrain.relief.discover.plugins import
     ShorePlugin,
     VertexBodyPlugin,
     plugins_for_keys,
+    shore_condition_at,
 )
 from app.application.worldData.generators.terrain.relief.discover.types import (
     DiscoveredFront,
@@ -35,4 +36,5 @@ __all__ = [
     "discover_fronts",
     "plugins_for_keys",
     "seed_rim",
+    "shore_condition_at",
 ]

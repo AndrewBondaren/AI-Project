@@ -112,4 +112,6 @@ class RimStage:
             x, y = xy
             for dx, dy in EIGHT_DELTAS:
                 q.append((x + dx, y + dy))
+        if not plugin.accept_flood(body, surface):
+            return {}
         return body

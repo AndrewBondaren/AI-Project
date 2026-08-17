@@ -14,13 +14,6 @@ from app.dataModel.terrain.relief.enums import ReliefConditionTerrain
 
 _INFER_BFS_LIMIT = 256
 
-_KIND_TERRAIN: dict[HydrologyShoreKind, ReliefConditionTerrain] = {
-    HydrologyShoreKind.RIVER: ReliefConditionTerrain.SHORE_RIVER,
-    HydrologyShoreKind.MOUNTAIN_RIVER: ReliefConditionTerrain.SHORE_MOUNTAIN_RIVER,
-    HydrologyShoreKind.LAKE: ReliefConditionTerrain.SHORE_LAKE,
-    HydrologyShoreKind.SEA: ReliefConditionTerrain.SHORE_SEA,
-}
-
 _OPEN_SEA_ROLES = frozenset({
     HydrologyCellRole.COASTAL_SEA,
     HydrologyCellRole.OPEN_OCEAN,
@@ -53,7 +46,7 @@ def shore_terrain_material(
     kind: HydrologyShoreKind,
 ) -> tuple[str, str]:
     shore = shore_defaults_for(world, kind)
-    fallback = _KIND_TERRAIN[kind]
+    fallback = kind.condition_terrain()
     terrain = str(shore.system_terrain or "").strip()
     if not terrain or terrain == "shore":
         terrain = fallback.value

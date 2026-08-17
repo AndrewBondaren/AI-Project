@@ -3,7 +3,7 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py` / `render_maps.py`, `worldBundleService.py`, relief library/import, pack render / parent-light refine.  
-**Обновлено:** 2026-08-17 — очередь SoT: [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Осталось — v2 vs L2 volume (**L2 apply закрыт**; **R41-T-5…T-8** ✅; слой 5 ravine ✅; `shore` stub). **R41-T-2…T-4** P1 ✅. **T-3c** = слой 6. T-3b occupancy **deprecated** vs R41.  
+**Обновлено:** 2026-08-18 — очередь SoT: [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Осталось — v2 vs L2 volume (**L2 apply закрыт**; **R41-T-5…T-8** ✅; слой 5 ravine ✅; shore онтология+paint ✅; **ShorePlugin тело ✅**). **T-3c** = слой 6. T-3b occupancy **deprecated** vs R41. Команда агенту: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md).  
 **Связанные документы:**
 
 | Документ | Роль |
@@ -24,7 +24,7 @@
 | `.cursor/plans/r36u-post-impl-debt.md` | R36u-T-1…T-10 post-impl polish |
 | `.cursor/plans/r36v-grade-chunk-pool.md` | R36v pool sample → stitch → materialize; post-impl **R36v-T-*** |
 | `.cursor/plans/detailed-grade-volume-canal.md` | Post-R36w GradeFormation apply; **R36i-T**; post-impl **T-4…T-15** ✅ |
-| `.cursor/plans/relief-pipeline-v2.md` | R41 discover в worker; **R41-T-1…T-8** ✅; слой 5 ravine ✅; `shore` stub; **T-9…T-12** open; v1 sample/stitch deprecated |
+| `.cursor/plans/relief-pipeline-v2.md` | R41 discover в worker; **R41-T-1…T-8** ✅; слой 5 ravine ✅; shore онтология+paint ✅; **ShorePlugin тело ✅**; **T-9…T-12** open; v1 sample/stitch deprecated |
 
 ---
 
@@ -1254,9 +1254,9 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 | **R41-T-9** | medium | **open** | P2 | SRP | `discover_and_paint` = pick + uid + paint | тонкий facade; uid/pick отдельные шаги |
 | **R41-T-10** | low | **open** | P3 | DRY | `site_id` / `terrain_key` считаются в facade; `DiscoveredFront` живой (T-2) | один builder; остаток DRY |
 | **R41-T-11** | low | **open** | P3 | dataModel / хардкод | `_TRACE_CAP=64`; `site_id` строка; `owner_uid=context.value` | cap из envelope max; site через `PackJobUid`; owner не токен контекста |
-| **R41-T-12** | low | **open** | P3 | leftover | `FineTileContext.planned`; `Coord` alias; ShorePlugin-заглушка в реестре | слой 7 срез v1; alias не плодить; shore не регистрировать без тела |
+| **R41-T-12** | low | **open** | P3 | leftover | `FineTileContext.planned`; `Coord` alias | слой 7 срез v1; alias не плодить |
 
-**Fix order:** ~~T-1~~ ✅. ~~T-3a~~ omit. ~~**T-3b**~~ ✅ (v1 occupancy; **deprecated** vs R41). ~~**R41-T-1**~~ ✅ (discover в worker). ~~**R41-T-2 → T-3 → T-4**~~ ✅. ~~**T-5…T-8**~~ ✅. Слой 5 ravine ✅; `shore` stub. Next **shore** (когда мастер задаст тело) **или T-3c** (слой 6). T-9…T-12 с полишем. T-2 (BAR-1) не блокирует C28. **Не трогать:** Wave E; DAG; mask carry; parent `surface_z` upsample; `refresh_tile_gaps` из worker; voxel-ditch writer; Volume/`GradeFormation`; склеивать Rim/Front/Seam обратно в один `core.py`.
+**Fix order:** ~~T-1~~ ✅. ~~T-3a~~ omit. ~~**T-3b**~~ ✅ (v1 occupancy; **deprecated** vs R41). ~~**R41-T-1**~~ ✅ (discover в worker). ~~**R41-T-2 → T-3 → T-4**~~ ✅. ~~**T-5…T-8**~~ ✅. Слой 5 ravine ✅; shore онтология+hydro paint ✅; **ShorePlugin тело ✅**. Next **T-3c** (слой 6). T-9…T-12 с полишем. T-2 (BAR-1) не блокирует C28. **Не трогать:** Wave E; DAG; mask carry; parent `surface_z` upsample; `refresh_tile_gaps` из worker; voxel-ditch writer без plugin; Volume/`GradeFormation`; склеивать Rim/Front/Seam обратно в один `core.py`.
 
 **Agent pointer:** [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md). Очередь SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Осталось — v2 vs L2 volume. Volume не форкать.
 
@@ -1410,7 +1410,7 @@ Classify/`dz` pick смотрят дальний конец полного сл�
 |---|---|---|
 | **T-10** | `terrain_key` / `site_id` helpers в facade; `DiscoveredFront` живой (T-2) | один builder; остаток DRY |
 | **T-11** | `_TRACE_CAP = 64` не из `slope_length_max_cells`; `site_id = f"{context}\|x,y\|{facing}"` не `PackJobUid`; `RibbonSegment.owner_uid = context.value` | cap ≤ envelope/knobs; site compose из POJO; owner = реальный owner или omit |
-| **T-12** | `FineTileContext.planned` deprecated leftover; `Coord = tuple[int,int]` в types / meter / catalog / halo; `ShorePlugin` в `plugins_for_keys` при shore-шаблонах, `claims` всегда false; docstring `plugins_for_keys` пишет «road > ravine», код вставляет shore | слой 7 срез `planned`; не плодить alias; не регистрировать shore без тела; docstring = road > shore > ravine > open_land (mountain вне discover) |
+| **T-12** | `FineTileContext.planned` deprecated leftover; `Coord = tuple[int,int]` в types / meter / catalog / halo | слой 7 срез `planned`; не плодить alias |
 
 **Info, не отдельный ID:** `generate_detailed_grade` копит `existing_uids` по rect подряд; `FineChunkRunner` pool этого не делает (catalog + pack inherit). Разница caller’ов — SoT пула верный; тесты фасада строже live bake.
 
@@ -1539,7 +1539,8 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 | Дата | Изменение |
 |---|---|
-| 2026-08-17 | **Слой 5 ravine:** банк + same-z стены маски; пол без Δz не site; SHEER/SLOPE = knobs. `shore` stub |
+| 2026-08-18 | **ShorePlugin тело ✅** (банк + полоса; дно iff `grades_channel_bed`; terrace min с envelope). Next **T-3c**. Команда: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md) |
+| 2026-08-18 | **Shore онтология+paint ✅.** Команда агенту: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md) |
 | 2026-08-17 | **R41-T-5…T-8 resolved:** ТЗ `z >` (равная z = L); inherit только орто; `stamp_min_abs_dz`; classify/stamp = коридор после C41 |
 | 2026-08-17 | **Очередь SoT в ТЗ:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Осталось — v2 vs L2 volume (apply закрыт; ~~T-5…T-8~~ ✅ → слой 5) |
 | 2026-08-17 | **R41-T-2…T-4 resolved:** apply=`DiscoveredFront`; occupancy cap = L_tpl (envelope = halo); ravine flood = bank, open_land не глотает берег |
