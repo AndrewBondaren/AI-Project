@@ -12,6 +12,9 @@ from app.application.worldData.pack.refine.detailedGradeSample import (
     sample_road_shoulder_meter,
     sample_shore_meter,
 )
+from app.application.worldData.generators.terrain.relief.sample.ribbonSiteSample import (
+    SampleCell,
+)
 from app.application.worldData.pack.refine.meterGradeSurface import MeterGradeSurface
 from app.application.worldData.terrainBatchOrchestrator import TileSurfaceState
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
@@ -33,7 +36,7 @@ class DetailedGradeSampleTest(unittest.TestCase):
             surface_facing=None,
         )
         samples, refs = sample_open_land_meter(surface, road_key="road")
-        self.assertEqual(samples, [((2, 0), "plains", 2)])
+        self.assertEqual(samples, [SampleCell((2, 0), "plains", 2, 1)])
         self.assertEqual(refs, {(1, 0)})
 
     def test_open_land_skips_graded_and_road(self) -> None:
@@ -48,7 +51,7 @@ class DetailedGradeSampleTest(unittest.TestCase):
             grade_uid={(2, 0): "g1"},
         )
         samples, _ = sample_open_land_meter(surface, road_key="road")
-        seeds = {xy for xy, _, _ in samples}
+        seeds = {item.xy for item in samples}
         self.assertNotIn((2, 0), seeds)
         self.assertNotIn((4, 0), seeds)
 
@@ -65,7 +68,7 @@ class DetailedGradeSampleTest(unittest.TestCase):
             surface_facing=None,
         )
         samples, refs = sample_shore_meter(surface, road_key="road")
-        seeds = {xy for xy, _, _ in samples}
+        seeds = {item.xy for item in samples}
         self.assertIn((2, 0), seeds)
         self.assertIn((1, 0), refs)
         self.assertNotIn((0, 0), seeds)
@@ -85,7 +88,7 @@ class DetailedGradeSampleTest(unittest.TestCase):
         samples, refs = sample_open_land_meter(
             surface, road_key="road", rect=left, halo=1,
         )
-        seeds = {xy for xy, _, _ in samples}
+        seeds = {item.xy for item in samples}
         self.assertIn((2, 0), seeds)
         self.assertNotIn((3, 0), seeds)
         self.assertIn((1, 0), refs)
@@ -107,10 +110,47 @@ class DetailedGradeSampleTest(unittest.TestCase):
         samples, refs = sample_open_land_meter(
             surface, road_key="road", rect=late, halo=1,
         )
-        seeds = {xy for xy, _, _ in samples}
+        seeds = {item.xy for item in samples}
         self.assertIn((7, 5), seeds)
         self.assertNotIn((6, 5), seeds)
         self.assertIn((6, 5), refs)
+
+    def test_open_land_skips_unit_step_from_peak(self) -> None:
+        """4→3 is left as heightmap; mid-slope 3→2 is not a new origin."""
+        surface = MeterGradeSurface(
+            surface_z={(0, 0): 4, (1, 0): 3, (2, 0): 2},
+            surface_terrain={
+                (0, 0): "plains", (1, 0): "plains", (2, 0): "plains",
+            },
+            hydrology=None,
+            surface_facing=None,
+        )
+        samples, refs = sample_open_land_meter(surface, road_key="road")
+        self.assertEqual(samples, [])
+        self.assertEqual(refs, set())
+
+    def test_open_land_peaks_all_facings_stop_at_voxel(self) -> None:
+        """Two 4s are peaks; 4→2 east is one cell then 3 blocks (L=1, h=2)."""
+        surface = MeterGradeSurface(
+            surface_z={
+                (1, 1): 4, (2, 1): 4, (3, 1): 2, (4, 1): 3,
+                (2, 2): 3, (2, 0): 3,
+            },
+            surface_terrain={
+                (1, 1): "plains", (2, 1): "plains", (3, 1): "plains",
+                (4, 1): "plains", (2, 2): "plains", (2, 0): "plains",
+            },
+            hydrology=None,
+            surface_facing=None,
+        )
+        samples, refs = sample_open_land_meter(surface, road_key="road")
+        seeds = {item.xy: item for item in samples}
+        self.assertIn((3, 1), seeds)
+        self.assertEqual(seeds[(3, 1)].dz, 2)
+        self.assertEqual(seeds[(3, 1)].path_length, 1)
+        self.assertIn((2, 1), refs)
+        self.assertNotIn((1, 1), seeds)
+        self.assertNotIn((4, 1), seeds)
 
     def test_road_shoulder_land_beside_road(self) -> None:
         surface = MeterGradeSurface(
@@ -120,7 +160,7 @@ class DetailedGradeSampleTest(unittest.TestCase):
             surface_facing=None,
         )
         samples, refs = sample_road_shoulder_meter(surface, road_key="road")
-        self.assertEqual(samples, [((2, 0), "plains", 2)])
+        self.assertEqual(samples, [SampleCell((2, 0), "plains", 2)])
         self.assertEqual(refs, {(1, 0)})
 
     def test_road_shoulder_skips_flat(self) -> None:
@@ -142,7 +182,7 @@ class DetailedGradeSampleTest(unittest.TestCase):
             surface_facing=None,
         )
         samples, refs = sample_ravine_meter(surface, road_key="road")
-        self.assertEqual(samples, [((2, 0), _RAVINE, 2)])
+        self.assertEqual(samples, [SampleCell((2, 0), _RAVINE, 2)])
         self.assertEqual(refs, {(1, 0)})
 
     def test_ravine_does_not_seed_bank_or_floor(self) -> None:
@@ -158,7 +198,7 @@ class DetailedGradeSampleTest(unittest.TestCase):
             surface_facing=None,
         )
         samples, refs = sample_ravine_meter(surface, road_key="road")
-        seeds = {xy for xy, _, _ in samples}
+        seeds = {item.xy for item in samples}
         self.assertIn((1, 0), seeds)
         self.assertIn((3, 0), seeds)
         self.assertNotIn((2, 0), seeds)
@@ -178,7 +218,7 @@ class DetailedGradeSampleTest(unittest.TestCase):
             grade_uid={(4, 0): "g1"},
         )
         samples, refs = sample_ravine_meter(surface, road_key="road")
-        seeds = {xy for xy, _, _ in samples}
+        seeds = {item.xy for item in samples}
         self.assertNotIn((2, 0), seeds)
         self.assertNotIn((4, 0), seeds)
         self.assertEqual(refs, set())

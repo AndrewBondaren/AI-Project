@@ -11,8 +11,8 @@ from app.application.worldData.generators.terrain.relief.sample.ravineTerrain im
 )
 from app.application.worldData.generators.terrain.relief.sample.ribbonSiteSample import (
     SampleCell,
-    sample_downhill_land_sites,
     sample_landward_of_refs,
+    sample_peak_land_sites,
 )
 from app.application.worldData.generators.terrain.relief.geom.outward import has_relief_dz
 from app.application.worldData.pack.refine.columnBounds import (
@@ -107,11 +107,18 @@ def sample_open_land_meter(
         if meter_seed_blocked(surface, xy, road_key=road_key, ignore_grade=True):
             continue
         land[xy] = (str(terrain), int(z))
-    samples, refs = sample_downhill_land_sites(land)
-    samples = [
-        item for item in samples
-        if not meter_seed_blocked(surface, item.xy, road_key=road_key)
-    ]
+    graded = {
+        xy for xy in land
+        if (surface.grade_uid or {}).get(xy)
+    }
+    samples, refs = sample_peak_land_sites(
+        land,
+        z_at=surface.z_at,
+        crests_extra=graded,
+        seed_ok=lambda seed: not meter_seed_blocked(
+            surface, seed, road_key=road_key,
+        ),
+    )
     owned = _keep_owned_seeds(samples, rect)
     return owned, _refs_for_owned_seeds(refs, owned)
 

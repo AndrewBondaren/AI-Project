@@ -169,10 +169,20 @@ def plan_rect_grade(
     for batch in batches:
         if not batch.samples:
             continue
-        segments = segmentize_by_terrain(
-            owner_uid=batch.context.value,
-            cells=list(batch.samples),
-        )
+        if batch.context is ReliefContext.OPEN_LAND:
+            segments = []
+            for item in batch.samples:
+                segments.extend(
+                    segmentize_by_terrain(
+                        owner_uid=f"{batch.context.value}|{item.xy[0]},{item.xy[1]}",
+                        cells=[item],
+                    ),
+                )
+        else:
+            segments = segmentize_by_terrain(
+                owner_uid=batch.context.value,
+                cells=list(batch.samples),
+            )
         results = grade_ribbon_segments(
             world=world,
             world_seed=world_seed,

@@ -18,7 +18,6 @@ from app.application.worldData.generators.terrain.relief.log.events import (
     EVENT_GRADE_SKIP,
     EVENT_INVALID_GEOM,
     REASON_ONTOLOGY_NO_FIT,
-    REASON_ONTOLOGY_PLATEAU,
 )
 from app.application.worldData.generators.terrain.relief.log.log import relief_info, relief_warning
 from app.application.worldData.generators.terrain.relief.pick.gradePass import (
@@ -97,6 +96,7 @@ def _clamp_knob_payload(
     *,
     is_none_policy: bool,
     plateau: int,
+    length_cap: int | None = None,
 ) -> dict:
     out = dict(payload)
     if is_none_policy:
@@ -113,6 +113,7 @@ def _clamp_knob_payload(
         h,
         template_length=out.get("slope_length_cells"),
         template_angle_deg=out.get("target_angle_deg"),
+        length_cap=length_cap,
     )
     if length is None:
         return out
@@ -137,6 +138,7 @@ def _clamp_template(
     envelope: ReliefTerrainEnvelope,
     h: int,
     plateau: int,
+    length_cap: int | None = None,
 ) -> ReliefTemplate:
     new_conds = []
     for cond in template.conditions:
@@ -147,11 +149,13 @@ def _clamp_template(
             if case.is_mode_a:
                 dump = _clamp_knob_payload(
                     dump, envelope, h, is_none_policy=is_none, plateau=plateau,
+                    length_cap=length_cap,
                 )
             elif dump.get("bands"):
                 dump["bands"] = [
                     _clamp_knob_payload(
                         band, envelope, h, is_none_policy=False, plateau=plateau,
+                        length_cap=length_cap,
                     )
                     for band in dump["bands"]
                 ]
@@ -170,6 +174,7 @@ def _clamp_template(
         h,
         template_length=template.slope_length_cells,
         template_angle_deg=template.target_angle_deg,
+        length_cap=length_cap,
     )
     if root_l is not None:
         updates["slope_length_cells"] = root_l
@@ -246,6 +251,7 @@ def grade_constrained(
     site_id: str,
     envelopes: ReliefOntologyEnvelopes | None = None,
     z_band: int | None = None,
+    path_length: int | None = None,
 ) -> RibbonGradeDecision:
     """Clamp template knobs to ontology envelope, then ``grade_from_template``."""
     h = abs(int(dz))
@@ -272,21 +278,6 @@ def grade_constrained(
         )
 
     plateau = envelope.plateau_abs_dz(z)
-    if h <= plateau:
-        relief_info(
-            EVENT_GRADE_SKIP,
-            template_uid=template_uid,
-            terrain=terrain_key,
-            reason=REASON_ONTOLOGY_PLATEAU,
-            site_id=site_id,
-        )
-        return _skip(
-            template=template,
-            template_uid=template_uid,
-            h=h,
-            reason=REASON_ONTOLOGY_PLATEAU,
-        )
-
     tpl_l, tpl_a = _template_geom_knobs(template, terrain_key, dz)
     tpl_l, tpl_a, geom_why = coerce_geom_knobs(tpl_l, tpl_a)
     if geom_why is not None:
@@ -298,7 +289,10 @@ def grade_constrained(
             site_id=site_id,
         )
     wanted = envelope.slope_length_for(
-        h, template_length=tpl_l, template_angle_deg=tpl_a,
+        h,
+        template_length=tpl_l,
+        template_angle_deg=tpl_a,
+        length_cap=path_length,
     )
     if wanted is not None and envelope.slope_outcome(h, wanted) == "skip":
         relief_info(
@@ -315,7 +309,9 @@ def grade_constrained(
             reason=REASON_ONTOLOGY_NO_FIT,
         )
 
-    clamped = _clamp_template(template, envelope, h, plateau)
+    clamped = _clamp_template(
+        template, envelope, h, plateau, length_cap=path_length,
+    )
     decision = grade_from_template(
         template=clamped,
         template_uid=template_uid,

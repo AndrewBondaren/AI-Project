@@ -7,9 +7,6 @@ import unittest
 
 from pydantic import ValidationError
 
-from app.application.worldData.generators.terrain.relief.log.events import (
-    REASON_ONTOLOGY_PLATEAU,
-)
 from app.application.worldData.generators.terrain.relief.pick.gradeConstrained import (
     grade_constrained,
 )
@@ -17,12 +14,16 @@ from app.application.worldData.generators.terrain.relief.pick.gradePass import (
     grade_from_template,
 )
 from app.dataModel.terrain.relief.enums import ReliefContext, ReliefSideKind
+from app.dataModel.terrain.relief.reliefSlopeGeom import (
+    angle_from_height_length,
+    height_from_length_angle,
+    length_from_target_angle,
+)
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.terrain.relief.reliefTerrainEnvelope import (
     ReliefOntologyEnvelopes,
     ReliefTerrainEnvelope,
 )
-from app.dataModel.worldPack.parentLightRefinePolicy import ParentLightRefinePolicy
 
 
 def _open_land_plains(
@@ -108,11 +109,10 @@ def _open_land_forest(
 class ReliefOntologyEnvelopePojoTest(unittest.TestCase):
     def test_canonical_plains_locked_numbers(self) -> None:
         plains = ReliefOntologyEnvelopes.canonical_defaults().plains
-        z_band = ParentLightRefinePolicy.canonical_defaults().z_band
-        self.assertEqual(plains.plateau_abs_dz(z_band), 2 * z_band)
+        self.assertEqual(plains.plateau_z_band_factor, 0)
         self.assertEqual(plains.slope_max_angle_deg, 20.0)
         self.assertEqual(plains.slope_length_min_cells, 20)
-        self.assertEqual(plains.slope_length_max_cells, 30)
+        self.assertIsNone(plains.slope_length_max_cells)
         self.assertTrue(plains.sheer_allowed)
         self.assertTrue(plains.slope_preferred)
         self.assertTrue(plains.allow_l_gt_h)
@@ -145,12 +145,43 @@ class ReliefOntologyEnvelopePojoTest(unittest.TestCase):
             plains.slope_length_for(10, template_length=2), 28,
         )
         self.assertEqual(
-            plains.slope_length_for(12, template_length=2), 30,
+            plains.slope_length_for(12, template_length=2), 33,
         )
         self.assertTrue(plains.slope_fits(4, 20))
         self.assertTrue(plains.slope_fits(10, 28))
-        self.assertFalse(plains.slope_fits(12, 30))
-        self.assertEqual(plains.slope_outcome(12, 30), "sheer")
+        self.assertTrue(plains.slope_fits(12, 33))
+        self.assertEqual(plains.slope_outcome(12, 33), "slope")
+        self.assertEqual(
+            plains.slope_length_for(2, template_length=2, length_cap=1), 1,
+        )
+        self.assertEqual(plains.slope_outcome(2, 1), "sheer")
+
+    def test_geom_formulas_and_envelope_parts(self) -> None:
+        self.assertAlmostEqual(angle_from_height_length(1, 1), 45.0, places=5)
+        self.assertEqual(length_from_target_angle(10, 20.0), 28)
+        self.assertAlmostEqual(
+            height_from_length_angle(1, 45.0), 1.0, places=5,
+        )
+        plains = ReliefOntologyEnvelopes.canonical_defaults().plains
+        self.assertEqual(plains.length_from_min_cells(), 20)
+        self.assertEqual(plains.length_from_max_angle(4), 11)
+        self.assertEqual(plains.envelope_length_floor(4), 20)
+        self.assertEqual(plains.envelope_length_floor(10), 28)
+        self.assertEqual(
+            plains.length_from_template(4, template_length=2, fallback=20), 2,
+        )
+        self.assertEqual(
+            plains.length_from_template(
+                4, template_angle_deg=20.0, fallback=20,
+            ),
+            11,
+        )
+        self.assertEqual(plains.clamp_slope_length(40), 40)
+        self.assertAlmostEqual(
+            plains.slope_angle_deg(4, 20),
+            math.degrees(math.atan(4 / 20)),
+            places=5,
+        )
 
     def test_min_gt_max_reject(self) -> None:
         with self.assertRaises(ValidationError):
@@ -160,20 +191,61 @@ class ReliefOntologyEnvelopePojoTest(unittest.TestCase):
             )
 
 
+class TerrainDescentRayTest(unittest.TestCase):
+    def test_four_to_two_stops_at_rising_voxel(self) -> None:
+        from app.application.worldData.generators.terrain.relief.geom.terrainDescent import (
+            measure_terrain_descent,
+        )
+
+        z = {(1, 0): 4, (2, 0): 2, (3, 0): 3}
+
+        def z_at(xy: tuple[int, int]) -> int | None:
+            return z.get(xy)
+
+        length, z_end = measure_terrain_descent(
+            start=(2, 0),
+            outward=(1, 0),
+            z_peak=4,
+            z_at=z_at,
+        )
+        self.assertEqual(length, 1)
+        self.assertEqual(z_end, 2)
+        self.assertAlmostEqual(
+            angle_from_height_length(4 - z_end, length),
+            math.degrees(math.atan(2 / 1)),
+            places=5,
+        )
+
+
 class GradeConstrainedTest(unittest.TestCase):
-    def test_plateau_skip_within_two_z_band(self) -> None:
+    def test_unit_step_is_gentle_slope_without_ray_cap(self) -> None:
         tpl = _open_land_plains()
-        for dz in (1, 2, -2):
-            d = grade_constrained(
-                template=tpl,
-                template_uid="uid",
-                terrain_key="plains",
-                dz=dz,
-                world_seed="s",
-                site_id="site",
-            )
-            self.assertTrue(d.skipped, msg=dz)
-            self.assertEqual(d.reason, REASON_ONTOLOGY_PLATEAU)
+        d = grade_constrained(
+            template=tpl,
+            template_uid="uid",
+            terrain_key="plains",
+            dz=1,
+            world_seed="s",
+            site_id="site",
+        )
+        self.assertFalse(d.skipped)
+        self.assertEqual(d.kind, ReliefSideKind.SLOPE)
+        self.assertEqual(d.requested_length, 20)
+
+    def test_short_ray_h2_is_sheer(self) -> None:
+        tpl = _open_land_plains()
+        d = grade_constrained(
+            template=tpl,
+            template_uid="uid",
+            terrain_key="plains",
+            dz=2,
+            world_seed="s",
+            site_id="site",
+            path_length=1,
+        )
+        self.assertFalse(d.skipped)
+        self.assertEqual(d.kind, ReliefSideKind.SHEER)
+        self.assertEqual(d.requested_length, 1)
 
     def test_inner_still_compresses_without_facade(self) -> None:
         tpl = _open_land_plains(sheer_weight=0.0)
@@ -214,7 +286,7 @@ class GradeConstrainedTest(unittest.TestCase):
             places=5,
         )
 
-    def test_plains_h12_overflow_sheer(self) -> None:
+    def test_plains_h12_fits_long_slope(self) -> None:
         tpl = _open_land_plains()
         d = grade_constrained(
             template=tpl,
@@ -225,8 +297,8 @@ class GradeConstrainedTest(unittest.TestCase):
             site_id="site",
         )
         self.assertFalse(d.skipped)
-        self.assertEqual(d.kind, ReliefSideKind.SHEER)
-        self.assertEqual(d.requested_length, 1)
+        self.assertEqual(d.kind, ReliefSideKind.SLOPE)
+        self.assertEqual(d.requested_length, 33)
 
     def test_road_shoulder_plains_pass_through(self) -> None:
         tpl = _open_land_plains(context="road_shoulder", sheer_weight=0.0)
@@ -289,7 +361,7 @@ class GradeConstrainedTest(unittest.TestCase):
         self.assertEqual(d.geom.L, 1)
         self.assertEqual(d.geom.steps, ())
 
-    def test_forest_h12_overflow_sheer_l1(self) -> None:
+    def test_forest_h12_fits_long_slope(self) -> None:
         tpl = _open_land_forest(sheer_weight=0.0)
         d = grade_constrained(
             template=tpl,
@@ -300,8 +372,8 @@ class GradeConstrainedTest(unittest.TestCase):
             site_id="site",
         )
         self.assertFalse(d.skipped)
-        self.assertEqual(d.kind, ReliefSideKind.SHEER)
-        self.assertEqual(d.requested_length, 1)
+        self.assertEqual(d.kind, ReliefSideKind.SLOPE)
+        self.assertEqual(d.requested_length, 33)
 
     def test_gentler_template_keeps_longer_l(self) -> None:
         tpl = _open_land_plains(slope_length=30, sheer_weight=0.0)

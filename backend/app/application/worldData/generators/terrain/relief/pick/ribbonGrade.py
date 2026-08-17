@@ -95,6 +95,7 @@ def grade_ribbon_segments(
             dz=segment.dz,
             world_seed=world_seed,
             site_id=segment.site_id,
+            path_length=segment.path_length,
         )
         results.append(
             RibbonGradeResult(

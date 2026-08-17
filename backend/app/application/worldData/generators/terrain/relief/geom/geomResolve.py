@@ -6,7 +6,6 @@ Geom-C (L+θ→h) is UI-only — not here.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -15,6 +14,19 @@ from app.dataModel.terrain.relief.reliefGradeKnobs import (
     DEFAULT_SLOPE_LENGTH_CELLS,
     resolved_slope_length_cells,
 )
+from app.dataModel.terrain.relief.reliefSlopeGeom import (
+    angle_from_height_length,
+    length_from_target_angle,
+)
+
+__all__ = [
+    "GeomKnobs",
+    "ResolvedGeom",
+    "angle_from_height_length",
+    "geom_resolve",
+    "length_from_target_angle",
+    "partition_height",
+]
 
 
 class GeomKnobs(Protocol):
@@ -52,29 +64,6 @@ def partition_height(h: int, length: int) -> tuple[int, ...]:
         return tuple(0 for _ in range(L))
     q, r = divmod(h_i, L)
     return tuple((q + 1) if i < r else q for i in range(L))
-
-
-def length_from_target_angle(h: int, angle_deg: float) -> int:
-    """Geom-B: ``L = ceil(h / tan θ)``, minimum 1."""
-    h_i = max(0, int(h))
-    if h_i < 1:
-        return 1
-    theta = float(angle_deg)
-    if theta <= 0.0 or theta >= 90.0:
-        raise ValueError(f"target_angle_deg must be in (0, 90); got {theta}")
-    tan_t = math.tan(math.radians(theta))
-    if tan_t <= 0.0:
-        raise ValueError(f"tan(target_angle_deg) must be > 0; got θ={theta}")
-    return max(1, math.ceil(h_i / tan_t))
-
-
-def angle_from_height_length(h: int, length: int) -> float:
-    """Geom-A derived θ in degrees (cubic cell: h=1,L=1 → 45)."""
-    h_i = max(0, int(h))
-    L = max(1, int(length))
-    if h_i < 1:
-        return 0.0
-    return math.degrees(math.atan(h_i / L))
 
 
 def geom_resolve(

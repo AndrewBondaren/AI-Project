@@ -6,7 +6,6 @@ Not world JSON in v1 — ``canonical_defaults()`` is SoT.
 
 from __future__ import annotations
 
-import math
 from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -14,6 +13,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.dataModel.annotationPolicy import DefaultOnWire
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.terrain.relief.enums import ReliefConditionTerrain, ReliefContext
+from app.dataModel.terrain.relief.reliefSlopeGeom import (
+    angle_from_height_length,
+    length_from_target_angle,
+)
 
 _ANGLE_EPS_DEG = 1e-9
 _SHEER_LENGTH_CELLS = 1
@@ -26,10 +29,8 @@ def _open_land_grade_floor(
 ) -> ReliefTerrainEnvelope:
     """Shared plains/forest slope floor (R37). SHEER L is always 1."""
     return ReliefTerrainEnvelope(
-        plateau_z_band_factor=2,
         slope_max_angle_deg=20.0,
         slope_length_min_cells=20,
-        slope_length_max_cells=30,
         sheer_allowed=True,
         slope_preferred=slope_preferred,
         allow_l_gt_h=True,
@@ -39,7 +40,7 @@ def _open_land_grade_floor(
 
 
 def _plains_canonical() -> ReliefTerrainEnvelope:
-    """Plains: SLOPE preferred; SHEER only if the 20°/20–30 ramp does not fit."""
+    """Plains: SLOPE preferred; SHEER only if the 20° ramp does not fit the ray."""
     return _open_land_grade_floor(slope_preferred=True, sheer_min_abs_dz=0)
 
 
@@ -112,47 +113,103 @@ class ReliefTerrainEnvelope(BaseModel):
             return False
         return int(h) >= int(self.sheer_min_abs_dz)
 
+    def has_slope_length_constraints(self) -> bool:
+        return (
+            self.slope_max_angle_deg is not None
+            or self.slope_length_min_cells is not None
+            or self.slope_length_max_cells is not None
+        )
+
+    def length_from_min_cells(self) -> int:
+        """Envelope L floor from ``slope_length_min_cells`` (omit → 1)."""
+        if self.slope_length_min_cells:
+            return int(self.slope_length_min_cells)
+        return 1
+
+    def length_from_max_angle(self, h: int) -> int | None:
+        """Geom-B vs envelope ``θ_max``: ``L = ceil(h / tan θ_max)``."""
+        if self.slope_max_angle_deg is None:
+            return None
+        h_i = max(0, int(h))
+        if h_i < 1:
+            return 1
+        return length_from_target_angle(h_i, float(self.slope_max_angle_deg))
+
+    def envelope_length_floor(self, h: int) -> int:
+        """``max(L_min, ceil(h / tan θ_max))`` — plains: ``max(20, ceil(h / tan 20°))``."""
+        l_floor = self.length_from_min_cells()
+        from_angle = self.length_from_max_angle(h)
+        if from_angle is not None:
+            l_floor = max(l_floor, from_angle)
+        return l_floor
+
+    def length_from_template(
+        self,
+        h: int,
+        *,
+        template_length: int | None = None,
+        template_angle_deg: float | None = None,
+        fallback: int,
+    ) -> int:
+        """Template XOR: Geom-B ``θ`` → L, else Geom-A L, else envelope floor."""
+        h_i = max(0, int(h))
+        if template_angle_deg is not None and h_i >= 1:
+            try:
+                return length_from_target_angle(h_i, float(template_angle_deg))
+            except ValueError:
+                return fallback
+        if template_length is not None:
+            return max(0, int(template_length))
+        return fallback
+
+    def clamp_slope_length(self, length: int) -> int:
+        """Cap at ``slope_length_max_cells`` when set. Omit max = no cap."""
+        out = max(0, int(length))
+        if self.slope_length_max_cells is not None:
+            out = min(out, int(self.slope_length_max_cells))
+        return out
+
     def slope_length_for(
         self,
         h: int,
         *,
         template_length: int | None = None,
         template_angle_deg: float | None = None,
+        length_cap: int | None = None,
     ) -> int | None:
-        """Effective Geom-A L after envelope floor. ``None`` = keep template XOR."""
-        if (
-            self.slope_max_angle_deg is None
-            and self.slope_length_min_cells is None
-            and self.slope_length_max_cells is None
-        ):
+        """``L = min(max(L_template, L_floor), cap)``. ``None`` = keep template XOR."""
+        if not self.has_slope_length_constraints() and length_cap is None:
             return None
-        h_i = max(0, int(h))
-        l_floor = int(self.slope_length_min_cells) if self.slope_length_min_cells else 1
-        if self.slope_max_angle_deg is not None and h_i >= 1:
-            tan_t = math.tan(math.radians(float(self.slope_max_angle_deg)))
-            if tan_t > 0.0:
-                l_floor = max(l_floor, math.ceil(h_i / tan_t))
-        if template_angle_deg is not None and h_i >= 1:
-            tan_tpl = math.tan(math.radians(float(template_angle_deg)))
-            l_tpl = max(1, math.ceil(h_i / tan_tpl)) if tan_tpl > 0.0 else l_floor
-        elif template_length is not None:
-            l_tpl = max(0, int(template_length))
-        else:
-            l_tpl = l_floor
-        length = max(l_tpl, l_floor)
-        if self.slope_length_max_cells is not None:
-            length = min(length, int(self.slope_length_max_cells))
-        return max(0, length)
+        if not self.has_slope_length_constraints():
+            return max(0, int(length_cap)) if length_cap is not None else None
+        l_floor = self.envelope_length_floor(h)
+        l_tpl = self.length_from_template(
+            h,
+            template_length=template_length,
+            template_angle_deg=template_angle_deg,
+            fallback=l_floor,
+        )
+        length = self.clamp_slope_length(max(l_tpl, l_floor))
+        if length_cap is not None:
+            length = min(length, max(0, int(length_cap)))
+        return length
+
+    def slope_angle_deg(self, h: int, length: int) -> float:
+        """Geom-A: ``θ = atan(h / L)`` for a candidate ramp."""
+        return angle_from_height_length(h, length)
 
     def slope_fits(self, h: int, length: int) -> bool:
         if self.slope_max_angle_deg is None:
             return True
         h_i = max(0, int(h))
         l_i = int(length)
-        if h_i < 1 or l_i < 1:
+        if h_i < 1:
             return True
-        angle = math.degrees(math.atan(h_i / l_i))
-        return angle <= float(self.slope_max_angle_deg) + _ANGLE_EPS_DEG
+        if l_i < 1:
+            return False
+        return self.slope_angle_deg(h_i, l_i) <= (
+            float(self.slope_max_angle_deg) + _ANGLE_EPS_DEG
+        )
 
     def slope_outcome(self, h: int, length: int) -> str:
         """``slope`` | ``sheer`` | ``skip`` after envelope length is known."""
