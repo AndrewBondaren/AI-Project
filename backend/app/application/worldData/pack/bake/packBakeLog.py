@@ -17,11 +17,29 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from app.application.worldData.terrainParallelLog import current_cpu_core
+from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
+from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
 
 if TYPE_CHECKING:
     from app.application.worldData.generators.terrain.types import ColumnRect
 
 logger = logging.getLogger(__name__)
+
+# Hist bucket when ``system_terrain`` is missing on the wire — not a registry key.
+MISSING_SYSTEM_TERRAIN = "?"
+
+
+def terrain_hist_is_only_plains(terrain_hist: dict[str, int] | None) -> bool:
+    if terrain_hist is None:
+        return False
+    plains = WorldTerrainMasks.canonical_defaults().default_plains.system_terrain
+    return set(terrain_hist) <= {plains, MISSING_SYSTEM_TERRAIN}
+
+
+def hydro_hist_is_only_none(hydro_hist: dict[str, int] | None) -> bool:
+    if hydro_hist is None:
+        return False
+    return set(hydro_hist) <= {WorldMapHydrologyRole.NONE.name}
 
 
 def _rect_label(rect: ColumnRect) -> str:
@@ -248,8 +266,8 @@ def log_pack_world_map_tile_done(
         terrain_hist=terrain_hist,
         hydro_hist=hydro_hist,
     )
-    only_plains = terrain_hist is not None and set(terrain_hist) <= {"plains", "?"}
-    only_none_hydro = hydro_hist is not None and set(hydro_hist) <= {"NONE"}
+    only_plains = terrain_hist_is_only_plains(terrain_hist)
+    only_none_hydro = hydro_hist_is_only_none(hydro_hist)
     if cells > 0 and only_plains and only_none_hydro:
         logger.warning(
             "pack world_map tile flat | world=%s gx=%d gy=%d all plains+NONE "
@@ -293,8 +311,8 @@ def log_pack_world_map_bake_done(
         terrain_hist=terrain_hist,
         hydro_hist=hydro_hist,
     )
-    only_plains = terrain_hist is not None and set(terrain_hist) <= {"plains", "?"}
-    only_none_hydro = hydro_hist is not None and set(hydro_hist) <= {"NONE"}
+    only_plains = terrain_hist_is_only_plains(terrain_hist)
+    only_none_hydro = hydro_hist_is_only_none(hydro_hist)
     if total_cells > 0 and only_plains and only_none_hydro:
         logger.warning(
             "pack world_map bake all-flat | world=%s cells=%d — light map has no "

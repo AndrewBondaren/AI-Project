@@ -30,6 +30,7 @@ from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_world_map_bake_done,
     log_pack_world_map_bake_start,
     log_pack_world_map_tile_done,
+    MISSING_SYSTEM_TERRAIN,
 )
 from app.application.worldData.pack.bake.worldMapHydrology import world_map_hydro_role_from_cell
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
@@ -159,7 +160,7 @@ class WorldMapBakeOrchestrator:
             cells = compose.to_wire_tile(gx, gy)
             content_hash = writer.write_world_map_tile(gx, gy, cells, cells_per_side=side)
             total += len(cells)
-            terrain_hist = dict(Counter(c.system_terrain or "?" for c in cells))
+            terrain_hist = dict(Counter(c.system_terrain or MISSING_SYSTEM_TERRAIN for c in cells))
             hydro_hist = dict(Counter(c.hydrology_role.name for c in cells))
             surface_z_hist = dict(Counter(c.surface_z for c in cells))
             all_terrain.update(terrain_hist)

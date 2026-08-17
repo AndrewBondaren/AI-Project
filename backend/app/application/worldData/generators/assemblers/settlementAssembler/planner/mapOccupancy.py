@@ -2,11 +2,12 @@
 
 import logging
 
-from app.application.jsonValidation import terrain_system_keys
+from app.application.jsonValidation import terrain_masks, terrain_system_keys
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
     settlement_grid_rect,
 )
 from app.application.worldData.generators.coordinates import cell_size_m, world_meter_xy
+from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -15,10 +16,10 @@ logger = logging.getLogger(__name__)
 
 
 def _surface_terrain(world: World) -> str:
-    types = terrain_system_keys(world)
-    if "urban" in types:
-        return "urban"
-    return "plains"
+    urban = WorldTerrainRegistry.occupancy_terrain_key()
+    if urban in terrain_system_keys(world):
+        return urban
+    return terrain_masks(world).default_plains.system_terrain
 
 
 def plan_footprint_occupancy_cells(

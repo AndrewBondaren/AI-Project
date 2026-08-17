@@ -128,6 +128,16 @@ _ENGINE_INTERIOR_ENTRIES: tuple[TerrainRegistryEntry, ...] = (
     ),
 )
 
+# Settlement occupancy — not wilderness (tz_terrain_generation: urban ≠ terrain pass).
+_URBAN_ENTRY = TerrainRegistryEntry(
+    system_terrain="urban",
+    glossary_ref="terrain_urban",
+    terrain_category="solid",
+    travel_modifier=1.0,
+    danger_level="none",
+)
+_ENGINE_SETTLEMENT_ENTRIES: tuple[TerrainRegistryEntry, ...] = (_URBAN_ENTRY,)
+
 
 class WorldTerrainRegistry(RootModel[list[TerrainRegistryEntry]]):
     SCHEMA_ID: ClassVar[str] = "SCH-WORLD-TERRAIN"
@@ -142,8 +152,15 @@ class WorldTerrainRegistry(RootModel[list[TerrainRegistryEntry]]):
 
     @classmethod
     def canonical_engine(cls) -> WorldTerrainRegistry:
-        """Outdoor + interior types — tz_locations.md § terrain_registry."""
-        return cls(list(_CANONICAL_ENTRIES + _ENGINE_INTERIOR_ENTRIES))
+        """Outdoor + interior + settlement occupancy — tz_locations + occupancy."""
+        return cls(list(
+            _CANONICAL_ENTRIES + _ENGINE_INTERIOR_ENTRIES + _ENGINE_SETTLEMENT_ENTRIES
+        ))
+
+    @classmethod
+    def occupancy_terrain_key(cls) -> str:
+        """Settlement footprint ``system_terrain`` — not wilderness."""
+        return _URBAN_ENTRY.system_terrain
 
     def entry_for(self, system_terrain: str) -> TerrainRegistryEntry | None:
         for entry in self.root:

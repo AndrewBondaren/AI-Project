@@ -7,10 +7,14 @@ import logging
 from collections import Counter
 from dataclasses import dataclass
 
+from app.application.worldData.pack.bake.packBakeLog import (
+    MISSING_SYSTEM_TERRAIN,
+    hydro_hist_is_only_none,
+    terrain_hist_is_only_plains,
+)
 from app.application.worldData.pack.read.packMapHelpers import world_tile_size_m
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
-from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
@@ -61,7 +65,7 @@ class WildernessTileRenderSource:
 def _tile_cell_hists(
     cells: list[WorldMapCellWire],
 ) -> tuple[dict[str, int], dict[str, int]]:
-    terrain = Counter(c.system_terrain or "?" for c in cells)
+    terrain = Counter(c.system_terrain or MISSING_SYSTEM_TERRAIN for c in cells)
     hydro = Counter(c.hydrology_role.name for c in cells)
     return dict(terrain), dict(hydro)
 
@@ -109,8 +113,8 @@ class PackRenderReadFacade:
             terrain_hist, hydro_hist = _tile_cell_hists(cells)
             all_terrain.update(terrain_hist)
             all_hydro.update(hydro_hist)
-            only_plains = set(terrain_hist) <= {"plains", "?"}
-            only_none = set(hydro_hist) <= {WorldMapHydrologyRole.NONE.name}
+            only_plains = terrain_hist_is_only_plains(terrain_hist)
+            only_none = hydro_hist_is_only_none(hydro_hist)
             if cells and only_plains and only_none:
                 flat_tiles += 1
             by_xy = {(c.tx, c.ty): c for c in cells}
