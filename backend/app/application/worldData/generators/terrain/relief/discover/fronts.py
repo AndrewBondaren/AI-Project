@@ -28,7 +28,14 @@ from app.application.worldData.generators.terrain.relief.discover.types import (
     ReliefVertices,
     cell_z,
 )
+from app.application.worldData.generators.terrain.relief.sample.terrainMap import (
+    map_system_terrain,
+)
 from app.dataModel.spatial.facing import Facing
+from app.dataModel.terrain.relief.reliefTerrainEnvelope import (
+    ReliefOntologyEnvelopes,
+    ReliefTerrainEnvelope,
+)
 
 _TRACE_CAP = 64
 
@@ -106,6 +113,7 @@ class FrontStage:
     vertices: ReliefVertices
     cell_blocked: CellBlocked
     cap_front: CapFront | None = None
+    envelopes: ReliefOntologyEnvelopes | None = None
 
     def propose(
         self,
@@ -121,7 +129,7 @@ class FrontStage:
         pending: list[ProposedTrace] = []
         for (facing, first_dz), rims in grouped.items():
             for run in _consecutive_runs(rims, facing):
-                if not plugin.allows_unit_stamp() and abs(int(first_dz)) == 1:
+                if not self._stamps_first_step(run, facing, first_dz, plugin):
                     continue
                 trace = self._walk_trace(run, facing, z_body, slot)
                 if self.cap_front is not None:
@@ -176,6 +184,27 @@ class FrontStage:
                 shots.append(((x, y), facing, z_body - zn))
         return shots
 
+    def _stamps_first_step(
+        self,
+        run: tuple[Coord, ...],
+        facing: Facing,
+        first_dz: int,
+        plugin: VertexBodyPlugin,
+    ) -> bool:
+        """R37 first-step floor from envelope, not a plugin boolean (R41-T-7)."""
+        dx, dy = GRID_OUTWARD_DELTA[facing]
+        sx, sy = run[0]
+        downhill = (sx + dx, sy + dy)
+        raw = self.surface.terrain_at(downhill) or self.surface.terrain_at((sx, sy))
+        mapped = map_system_terrain(raw)
+        table = self.envelopes or ReliefOntologyEnvelopes.canonical_defaults()
+        env = (
+            table.for_terrain(mapped)
+            if mapped is not None
+            else ReliefTerrainEnvelope()
+        )
+        return env.stamps_first_step(abs(int(first_dz)), plugin.context)
+
     def _walk_trace(
         self,
         rim: tuple[Coord, ...],
@@ -183,7 +212,12 @@ class FrontStage:
         z_body: int,
         slot: int,
     ) -> tuple[Coord, ...]:
-        """Lockstep W×L until θ break, abutment, own body, or foreign occ/seam."""
+        """Lockstep W×L until θ break, abutment, own body, or foreign occ/seam.
+
+        Equal z continues L (ramp/ravine floor). Stop on a *rise*
+        ``z > z_body`` or ``z > z_prev`` (R41-T-5). First-step ``|dz|=1`` is
+        a separate envelope skip, not this predicate.
+        """
         dx, dy = GRID_OUTWARD_DELTA[facing]
         surface = self.surface
         vertices = self.vertices

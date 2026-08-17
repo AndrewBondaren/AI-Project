@@ -1,7 +1,9 @@
 """Vertex-body plugins — one construction, context = body (R41).
 
-``shore`` / thick ravine geometry stay TBD (plan layer 5). Ravine here is the
-same frame: bank = body, shoot into the mask. Road pavement = body (layer 4).
+Ravine: land bank + same-z mask walls; shoot into the mask. Flat floor is
+not a site. Kind (SLOPE/SHEER) is template knobs via ``grade_constrained``.
+``shore`` stays stub (geometry). Ontology classes: ``shore_river`` /
+``shore_mountain_river`` / ``shore_lake`` / ``shore_sea``.
 """
 
 from __future__ import annotations
@@ -32,8 +34,18 @@ class VertexBodyPlugin(Protocol):
     def may_shoot(self, src: Coord, dst: Coord, surface: ReliefSurface) -> bool:
         """Outward step from rim ``src`` onto ``dst`` (not into body)."""
 
-    def allows_unit_stamp(self) -> bool:
-        """False on open_land: plains/forest ``|dz|=1`` is not a Grade (R37)."""
+
+def _has_lower_cell(xy: Coord, surface: ReliefSurface) -> bool:
+    z = surface.z_at(xy)
+    if z is None:
+        return False
+    x, y = xy
+    height = int(z)
+    for dx, dy in EIGHT_DELTAS:
+        zn = surface.z_at((x + dx, y + dy))
+        if zn is not None and int(zn) < height:
+            return True
+    return False
 
 
 def _has_lower_terrain(
@@ -85,9 +97,6 @@ class OpenLandPlugin:
     def may_shoot(self, src: Coord, dst: Coord, surface: ReliefSurface) -> bool:
         return surface.z_at(dst) is not None
 
-    def allows_unit_stamp(self) -> bool:
-        return False
-
 
 class RoadShoulderPlugin:
     """Pavement = one vertex; shoot both shoulders, not along the road (R41)."""
@@ -107,12 +116,12 @@ class RoadShoulderPlugin:
         terrain = surface.terrain_at(dst)
         return terrain is not None and terrain != self._road
 
-    def allows_unit_stamp(self) -> bool:
-        return True
-
 
 class RavinePlugin:
-    """Bank (not the mask) = body; shoot into ravine terrain."""
+    """Land bank + ravine-mask walls; shoot into the mask. Floor without Δz is not a site.
+
+    Kind (SLOPE/SHEER) comes from template knobs via ``grade_constrained``, not here.
+    """
 
     context = ReliefContext.RAVINE
 
@@ -120,21 +129,30 @@ class RavinePlugin:
         self._ravine = str(ravine_key)
         self._road = str(road_key)
 
-    def claims(self, xy: Coord, surface: ReliefSurface) -> bool:
+    def _is_mask(self, xy: Coord, surface: ReliefSurface) -> bool:
+        return surface.terrain_at(xy) == self._ravine
+
+    def _is_bank(self, xy: Coord, surface: ReliefSurface) -> bool:
         terrain = surface.terrain_at(xy)
         if terrain is None or terrain == self._ravine or terrain == self._road:
             return False
         return _has_lower_terrain(xy, surface, self._ravine)
 
+    def claims(self, xy: Coord, surface: ReliefSurface) -> bool:
+        if self._is_mask(xy, surface):
+            return _has_lower_cell(xy, surface)
+        return self._is_bank(xy, surface)
+
     def flood_member(self, xy: Coord, z_body: int, surface: ReliefSurface) -> bool:
-        """Same as claims: bank at the mask, not the whole same-z landmass (R41-T-4)."""
-        return self.claims(xy, surface)
+        """Mask terrace (incl. interior); bank stays bank-only so plains mesa is not swallowed."""
+        if surface.terrain_at(xy) == self._road:
+            return False
+        if self._is_mask(xy, surface):
+            return True
+        return self._is_bank(xy, surface)
 
     def may_shoot(self, src: Coord, dst: Coord, surface: ReliefSurface) -> bool:
         return surface.terrain_at(dst) == self._ravine
-
-    def allows_unit_stamp(self) -> bool:
-        return True
 
 
 class ShorePlugin:
@@ -150,9 +168,6 @@ class ShorePlugin:
 
     def may_shoot(self, src: Coord, dst: Coord, surface: ReliefSurface) -> bool:
         return False
-
-    def allows_unit_stamp(self) -> bool:
-        return True
 
 
 def plugins_for_keys(

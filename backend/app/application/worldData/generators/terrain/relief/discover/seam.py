@@ -10,6 +10,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from app.application.worldData.generators.terrain.relief.discover.neighbors import (
+    cell_at_max_outward_k,
+    max_outward_k,
     step_k,
 )
 from app.application.worldData.generators.terrain.relief.discover.plugins import (
@@ -19,7 +21,9 @@ from app.application.worldData.generators.terrain.relief.discover.types import (
     Coord,
     FrontGeometry,
     ProposedTrace,
+    ReliefSurface,
     ReliefVertices,
+    cell_z,
 )
 from app.dataModel.spatial.facing import Facing
 
@@ -69,6 +73,7 @@ class SeamStage:
     """C41: commit proposed traces — seam first, then occ."""
 
     vertices: ReliefVertices
+    surface: ReliefSurface
 
     def commit(
         self,
@@ -93,6 +98,11 @@ class SeamStage:
             if not corridor:
                 continue
             bottom = seam_xy if hit_seam and seam_xy is not None else corridor[-1]
+            end_cell = cell_at_max_outward_k(corridor, item.rim, item.facing)
+            z_end = cell_z(self.surface, end_cell) if end_cell is not None else None
+            path_length = max_outward_k(corridor, item.rim, item.facing)
+            if z_end is None or path_length < 1:
+                continue
             fronts.append(
                 FrontGeometry(
                     slot=item.slot,
@@ -100,7 +110,8 @@ class SeamStage:
                     outward=item.facing,
                     first_dz=item.first_dz,
                     z_body=item.z_body,
-                    z_end=item.z_end,
+                    z_end=z_end,
+                    path_length=path_length,
                     rim=item.rim,
                     trace=item.trace,
                     corridor=corridor,

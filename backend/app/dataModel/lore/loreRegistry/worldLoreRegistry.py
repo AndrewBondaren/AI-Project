@@ -35,7 +35,23 @@ _CANONICAL_ENTRIES: dict[str, LoreRegistryEntry] = {
     ),
     "terrain_shore": LoreRegistryEntry(
         display_name="Берег",
-        description="Прибрежная полоса: shore + shallow deepening (U15).",
+        description="Legacy прибрежная полоса (не класс grade). U15: shore_river / lake / sea.",
+    ),
+    "terrain_shore_river": LoreRegistryEntry(
+        display_name="Берег реки",
+        description="Полоса равнинной реки (U15). Grade: shore_river.",
+    ),
+    "terrain_shore_mountain_river": LoreRegistryEntry(
+        display_name="Берег горной реки",
+        description="Полоса mountain_river (U17). Grade: shore_mountain_river.",
+    ),
+    "terrain_shore_lake": LoreRegistryEntry(
+        display_name="Берег озера",
+        description="Полоса озера (U15). Grade: shore_lake.",
+    ),
+    "terrain_shore_sea": LoreRegistryEntry(
+        display_name="Берег моря",
+        description="Полоса моря / океана / inland_sea (U15). Grade: shore_sea.",
     ),
     "geo_lake_moon": LoreRegistryEntry(
         display_name="Озеро Лунное",

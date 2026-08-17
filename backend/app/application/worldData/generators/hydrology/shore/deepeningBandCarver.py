@@ -11,6 +11,7 @@ from app.application.worldData.generators.hydrology.basins.seaLevelPolicy import
 from app.application.worldData.generators.hydrology.types import HydrologyBands
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
+from app.dataModel.hydrology.enums.hydrologyShoreKind import HydrologyShoreKind
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 
 
@@ -356,8 +357,8 @@ def carve_deepening_bands(
     ys: list[int] = []
 
     for cell in land_shore:
-        by_cell[cell] = MapCellHydrology(
-            role=HydrologyCellRole.SHORE,
+        by_cell[cell] = MapCellHydrology.shore(
+            HydrologyShoreKind.SEA,
             deepening_index=0,
         )
         xs.append(cell[0])
@@ -370,8 +371,8 @@ def carve_deepening_bands(
         if distance <= shelf_depth:
             deepening = distance
             heightmap.surface_z[cell] = max(level, level + (shelf_depth - deepening + 1))
-            by_cell[cell] = MapCellHydrology(
-                role=HydrologyCellRole.SHORE,
+            by_cell[cell] = MapCellHydrology.shore(
+                HydrologyShoreKind.SEA,
                 deepening_index=deepening,
             )
         else:

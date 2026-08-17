@@ -3,14 +3,14 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py` / `render_maps.py`, `worldBundleService.py`, relief library/import, pack render / parent-light refine.  
-**Обновлено:** 2026-08-17 — **R41-T-2…T-4** P1 ✅ (C40 apply=`DiscoveredFront`; cap = L_tpl без pick; ravine flood = bank). **R41-T-5…T-12** open. **R41-T-1** pipeline v2 impl ✅. T-3b occupancy **deprecated** vs R41. **C28 T-3b ✅**; **T-3c** = слой 6 v2.  
+**Обновлено:** 2026-08-17 — очередь SoT: [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Осталось — v2 vs L2 volume (**L2 apply закрыт**; **R41-T-5…T-8** ✅; слой 5 ravine ✅; `shore` stub). **R41-T-2…T-4** P1 ✅. **T-3c** = слой 6. T-3b occupancy **deprecated** vs R41.  
 **Связанные документы:**
 
 | Документ | Роль |
 |---|---|
 | [tz_assembler_hierarchy.md](./tz_assembler_hierarchy.md) | Целевая архитектура assembler stack |
 | [tz_city_generation.md](./tz_city_generation.md) | Продуктовое ТЗ города |
-| [tz_terrain_relief.md](./tz_terrain_relief.md) | Relief grade + templates; R36/R36n/p/q; **RELIEF-BAR-1**; SOLID → **RELIEF-T-28…**; canal/bake → **RELIEF-T-42…T-63** |
+| [tz_terrain_relief.md](./tz_terrain_relief.md) | Relief grade; **очередь SoT** § Осталось — v2 vs L2 volume; R41; **RELIEF-BAR-1**; canal/bake **RELIEF-T-42…T-63** |
 | [tz_pack_ascii_render.md](./tz_pack_ascii_render.md) | Pack ASCII SoT (**PAR-G\***); L2 location grade; debt **PAR-T-*** · **R36u-T-*** |
 | [tz_locations.md](./tz_locations.md) | `barrier_template_registry`; perimeter barriers |
 | [tz_terrain_hydrology.md](./tz_terrain_hydrology.md) | Гидрология: моря, озёра, реки (target) |
@@ -24,7 +24,7 @@
 | `.cursor/plans/r36u-post-impl-debt.md` | R36u-T-1…T-10 post-impl polish |
 | `.cursor/plans/r36v-grade-chunk-pool.md` | R36v pool sample → stitch → materialize; post-impl **R36v-T-*** |
 | `.cursor/plans/detailed-grade-volume-canal.md` | Post-R36w GradeFormation apply; **R36i-T**; post-impl **T-4…T-15** ✅ |
-| `.cursor/plans/relief-pipeline-v2.md` | R41 discover в worker; **R41-T-1** ✅; post-impl **R41-T-2…T-12**; v1 sample/stitch deprecated |
+| `.cursor/plans/relief-pipeline-v2.md` | R41 discover в worker; **R41-T-1…T-8** ✅; слой 5 ravine ✅; `shore` stub; **T-9…T-12** open; v1 sample/stitch deprecated |
 
 ---
 
@@ -1246,19 +1246,19 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 | **R41-T-1** | **high** | **resolved** | P1 | pipeline | sample пиков + stitch до пула; `compute_rect` stamp `planned` | **Fix:** `discover_and_paint` в `compute_rect` (слои 0–4). L2 apply не переписан. T-3c / срез v1 — слои 6–7 |
 | **R41-T-2** | **high** | **resolved** | P1 | неявный контракт / C40 | `GradePaintSpec` не единственный вход в L2 | **Fix:** `apply_grade_paint_spec(front, *, world, surface)` — `DiscoveredFront` собирает spec + identity. Подробно ниже |
 | **R41-T-3** | **high** | **resolved** | P1 | неявный контракт / SRP | pick в `cap_front`; `decided` + молча skip | **Fix:** `CapFront` = length-only (L_tpl); pick + constrain в facade после discover. Подробно ниже |
-| **R41-T-4** | **high** | **resolved** | P1 | SRP / plugin | `RavinePlugin.flood_member` шире `claims` | **Fix:** ravine flood = bank `claims`; open_land не затапливает берег. Подробно ниже |
-| **R41-T-5** | medium | **open** | P2 | неявный контракт / SoT | walk стоп `z >` vs ТЗ `z ≥` | либо поправить ТЗ (равная z = продолжение L), либо код |
-| **R41-T-6** | medium | **open** | P2 | неявный контракт | inherit uid 4-way, discover 8-way | inherit по `EIGHT_DELTAS` или явный канон «только орто» |
-| **R41-T-7** | medium | **open** | P2 | dataModel | R37 `\|dz\|=1` = boolean на plugin | политика на envelope / knobs, не `allows_unit_stamp` |
-| **R41-T-8** | medium | **open** | P2 | неявный контракт | три L: полный след / `requested_length` / `L_eff` | один канон длины для classify vs stamp |
+| **R41-T-4** | **high** | **resolved** | P1 | SRP / plugin | `RavinePlugin.flood_member` шире `claims` | **Fix:** bank flood = bank; mask flood = terrace. Open_land не затапливает берег. Слой 5 стены — ниже |
+| **R41-T-5** | medium | **resolved** | P2 | неявный контракт / SoT | walk стоп `z >` vs ТЗ `z ≥` | **Fix:** ТЗ = код: равная z продолжает L |
+| **R41-T-6** | medium | **resolved** | P2 | неявный контракт | inherit uid 4-way, discover 8-way | **Fix:** канон inherit только орто (C15/C29) |
+| **R41-T-7** | medium | **resolved** | P2 | dataModel | R37 `\|dz\|=1` = boolean на plugin | **Fix:** `stamp_min_abs_dz` на envelope |
+| **R41-T-8** | medium | **resolved** | P2 | неявный контракт | три L: полный след / `requested_length` / `L_eff` | **Fix:** classify/stamp = коридор после C41 |
 | **R41-T-9** | medium | **open** | P2 | SRP | `discover_and_paint` = pick + uid + paint | тонкий facade; uid/pick отдельные шаги |
 | **R41-T-10** | low | **open** | P3 | DRY | `site_id` / `terrain_key` считаются в facade; `DiscoveredFront` живой (T-2) | один builder; остаток DRY |
 | **R41-T-11** | low | **open** | P3 | dataModel / хардкод | `_TRACE_CAP=64`; `site_id` строка; `owner_uid=context.value` | cap из envelope max; site через `PackJobUid`; owner не токен контекста |
 | **R41-T-12** | low | **open** | P3 | leftover | `FineTileContext.planned`; `Coord` alias; ShorePlugin-заглушка в реестре | слой 7 срез v1; alias не плодить; shore не регистрировать без тела |
 
-**Fix order:** ~~T-1~~ ✅. ~~T-3a~~ omit. ~~**T-3b**~~ ✅ (v1 occupancy; **deprecated** vs R41). ~~**R41-T-1**~~ ✅ (discover в worker). ~~**R41-T-2 → T-3 → T-4**~~ ✅. Затем **T-5…T-8**. **T-3c** (слой 6 v2). T-9…T-12 с полишем. T-2 (BAR-1) не блокирует C28. **Не трогать:** Wave E; DAG; mask carry; parent `surface_z` upsample; `refresh_tile_gaps` из worker; voxel-ditch writer; Volume/`GradeFormation`; склеивать Rim/Front/Seam обратно в один `core.py`.
+**Fix order:** ~~T-1~~ ✅. ~~T-3a~~ omit. ~~**T-3b**~~ ✅ (v1 occupancy; **deprecated** vs R41). ~~**R41-T-1**~~ ✅ (discover в worker). ~~**R41-T-2 → T-3 → T-4**~~ ✅. ~~**T-5…T-8**~~ ✅. Слой 5 ravine ✅; `shore` stub. Next **shore** (когда мастер задаст тело) **или T-3c** (слой 6). T-9…T-12 с полишем. T-2 (BAR-1) не блокирует C28. **Не трогать:** Wave E; DAG; mask carry; parent `surface_z` upsample; `refresh_tile_gaps` из worker; voxel-ditch writer; Volume/`GradeFormation`; склеивать Rim/Front/Seam обратно в один `core.py`.
 
-**Agent pointer:** [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md). SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) **C40 / C39 / R37 / R41**.
+**Agent pointer:** [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md). Очередь SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Осталось — v2 vs L2 volume. Volume не форкать.
 
 ### R41-T — pipeline v2 post-impl smells
 
@@ -1318,7 +1318,9 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 **Target:** `flood_member` согласован с `claims`: берег у маски (и, если нужно, узкая полоса банка), **не** вся суша. Юнит: плато plains той же z рядом с ямой остаётся `OpenLandPlugin`. Не полный CC тайла. Не Priority-Flood пола ямы.
 
-**Fix (2026-08-17):** `RavinePlugin.flood_member` = `claims`. `OpenLandPlugin(..., ravine_key=)` не claims/flood клетки с нижним соседом-ravine, когда ravine в наборе plugin (`plugins_for_keys`). Иначе open_land сеет с западной кромки и 8-flood забирает берег раньше, чем ravine. Тест `test_ravine_bank_does_not_swallow_mesa`. Толстая геометрия ямы — слой 5.
+**Fix (2026-08-17):** `RavinePlugin.flood_member` для **банка** = `_is_bank` (не вся суша). `OpenLandPlugin(..., ravine_key=)` не claims/flood клетки с нижним соседом-ravine, когда ravine в наборе plugin (`plugins_for_keys`). Иначе open_land сеет с западной кромки и 8-flood забирает берег раньше, чем ravine. Тест `test_ravine_bank_does_not_swallow_mesa`.
+
+**Слой 5 (тот же день):** flood маски = same-z terrace (интерьер в теле, не сеет). `claims` маски = клетка ravine с соседом ниже (стены). Пол без Δz не site. Kind (SLOPE/SHEER) — knobs шаблона, не plugin. Тесты `test_ravine_thick_inner_wall_seeds_after_bank_cap`, `test_ravine_floor_without_drop_does_not_seed`. Не Priority-Flood пола. Не `if context` в `core.py`.
 
 **Готово когда:** тест «меса + ravine mask» — два слота / два контекста; flood ravine не содержит внутренность плато.
 
@@ -1336,6 +1338,10 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 **Target:** выбрать одно. Если равная z = продолжение коридора — поправить формулировку луча в ТЗ (не «открыть чашу `|dz|=1`»). Если SoT `≥` побеждает — вернуть стоп на равенстве и починить тесты рампы иначе (не широким flood). Не Priority-Flood.
 
+**Fix (2026-08-17):** ТЗ приведён к коду. Live lockstep стопит на **подъёме** `z > z_body` / `z > z_prev`; равная z = пол L (рампы / ravine). `|dz|=1` по-прежнему не stamp (T-7). Deprecated `measure_terrain_descent` оставляет `≥`. Тест `test_equal_z_continues_ray_length`. Не Priority-Flood. Не чаша на единице.
+
+**Готово когда:** ТЗ и `_walk_trace` не расходятся; юнит на плоском полу после спуска.
+
 ---
 
 #### R41-T-6 — inherit uid орто, discover 8-way
@@ -1348,6 +1354,10 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 **Target:** тот же neighbor set, что discover (`EIGHT_DELTAS`), **или** явная запись в ТЗ «inherit только орто (C29 ребро чанка орто)». Не first-lock-wins внутри вершины (C41).
 
+**Fix (2026-08-17):** канон **только орто**. Discover остаётся 8-way. Inherit по `CARDINAL_ORTHO_DELTAS`: C29 ребро чанка орто; диагональный сосед с uid — другой фронт (C15: 1 outward = 1 Instance) или угол чанка. 8-way inherit склеивал два outwards L-месы в один uid (`test_two_outwards_stay_two_instances`). Тест: орто наследует, диагональ — нет.
+
+**Готово когда:** два outwards = два Instance; диагональный uid не наследуется; ТЗ UID это пишет.
+
 ---
 
 #### R41-T-7 — R37 `|dz|=1` не на envelope
@@ -1359,6 +1369,10 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 **Факт:** `OpenLandPlugin.allows_unit_stamp() → False`; `FrontStage` skip при `abs(first_dz)==1`. Road/ravine/shore → `True`. Смена канона envelope не сдвинет skip.
 
 **Target:** политика на POJO (новое поле envelope **или** skip через `grade_constrained`/knobs, если это уже следует из cases `delta_z`). Plugin не дублирует литерал `1`. Не открывать продукт «чаша на единице».
+
+**Fix (2026-08-17):** `ReliefTerrainEnvelope.stamp_min_abs_dz` (plains/forest = 2, default 1). `FrontStage` читает `stamps_first_step` + `apply_in_contexts`; `allows_unit_stamp` снят с plugin. `grade_constrained` не skip на `h=1` (юнит «gentle SLOPE without ray cap» живой). Канон plains остаётся 2. Не чаша на единице.
+
+**Готово когда:** skip `|dz|=1` open_land без plugin boolean; road/ravine unit stamp; override stamp_min=1 сеет (wiring).
 
 ---
 
@@ -1373,6 +1387,10 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 Classify/`dz` pick смотрят дальний конец полного следа; штамп — усечённый коридор. SHEER L=1 на длинном обрыве может классифицироваться по полному Δz и красить одну клетку.
 
 **Target:** задокументировать канон (classify по полному downhill до упора; stamp по `min(L_tpl, corridor)`) **или** считать `dz`/`path_length` после truncate и после C41, одним местом. Не два fill.
+
+**Fix (2026-08-17):** один канон — коридор после C41. `SeamStage` ставит `FrontGeometry.path_length` = `max_outward_k(corridor)` и `z_end` на клетке этого k. Facade classify и paint `L_eff` читают этот span. Occupancy cap до C41 = L_tpl; halo = envelope floor. Clearance R36m может ещё укоротить stamp (L2). Не новый `plan_ribbon_volume`. Тест `test_classify_span_is_corridor_after_seam`.
+
+**Готово когда:** `h`/`L_ray` не с дальнего конца полного следа сквозь шов; paint L_eff = тот же max k.
 
 ---
 
@@ -1521,6 +1539,9 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-17 | **Слой 5 ravine:** банк + same-z стены маски; пол без Δz не site; SHEER/SLOPE = knobs. `shore` stub |
+| 2026-08-17 | **R41-T-5…T-8 resolved:** ТЗ `z >` (равная z = L); inherit только орто; `stamp_min_abs_dz`; classify/stamp = коридор после C41 |
+| 2026-08-17 | **Очередь SoT в ТЗ:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Осталось — v2 vs L2 volume (apply закрыт; ~~T-5…T-8~~ ✅ → слой 5) |
 | 2026-08-17 | **R41-T-2…T-4 resolved:** apply=`DiscoveredFront`; occupancy cap = L_tpl (envelope = halo); ravine flood = bank, open_land не глотает берег |
 | 2026-08-17 | **R41-T-2…T-12 open:** post-impl v2 (C40 spec≠L2-only; cap_front pick; ravine flood шире claims; walk `>` vs TZ `≥`; inherit 4 vs 8; R37 не на envelope; три L; fat facade; DRY/hardcode/leftover). SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) C40 |
 | 2026-08-17 | **R41-T-1:** v1 sample/stitch/`planned` deprecated vs R41; impl [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md). T-3b occupancy не SoT; каталог `face_key` живой |

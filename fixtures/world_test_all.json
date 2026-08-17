@@ -404,6 +404,46 @@
         "has_state": false,
         "default_state": null,
         "default_material": "sand"
+      },
+      {
+        "system_terrain": "shore_river",
+        "glossary_ref": "terrain_shore_river",
+        "terrain_category": "solid",
+        "travel_modifier": 1.8,
+        "danger_level": "low",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "sand"
+      },
+      {
+        "system_terrain": "shore_mountain_river",
+        "glossary_ref": "terrain_shore_mountain_river",
+        "terrain_category": "solid",
+        "travel_modifier": 2.0,
+        "danger_level": "medium",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "stone"
+      },
+      {
+        "system_terrain": "shore_lake",
+        "glossary_ref": "terrain_shore_lake",
+        "terrain_category": "solid",
+        "travel_modifier": 1.8,
+        "danger_level": "low",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "sand"
+      },
+      {
+        "system_terrain": "shore_sea",
+        "glossary_ref": "terrain_shore_sea",
+        "terrain_category": "solid",
+        "travel_modifier": 1.8,
+        "danger_level": "low",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "sand"
       }
     ],
     "city_size_registry": [

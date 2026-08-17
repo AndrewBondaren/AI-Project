@@ -49,7 +49,13 @@ def inherit_segment_uid(
     seeds: tuple[Coord, ...],
     uids: dict[Coord, str],
 ) -> str | None:
-    """Reuse uid already on the ribbon. Exactly one neighbor uid; else None."""
+    """Reuse uid already on the ribbon. Exactly one neighbor uid; else None.
+
+    Neighbor set is **cardinal only** (R41-T-6). Discover stays 8-way; inherit
+    matches C29 chunk edges (ortho). A diagonal neighbor with a uid is another
+    front (C15: one outward = one Instance) or a chunk corner — mint / catalog,
+    do not glue. Ambiguous (two uids) → None. Not first-lock-wins (C41).
+    """
     found: set[str] = set()
     for seed in seeds:
         for xy in (seed, *( (seed[0] + dx, seed[1] + dy) for dx, dy in CARDINAL_ORTHO_DELTAS )):

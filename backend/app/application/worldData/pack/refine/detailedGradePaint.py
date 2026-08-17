@@ -10,6 +10,7 @@ from app.application.worldData.generators.terrain.relief.canal.seedResolve impor
     aggregate_canals,
 )
 from app.application.worldData.generators.terrain.relief.discover.neighbors import (
+    max_outward_k,
     step_k,
 )
 from app.application.worldData.generators.terrain.relief.discover.types import (
@@ -62,11 +63,10 @@ def apply_grade_paint_spec(
     z_top = surface.z_at(spec.anchor_top)
     if z_top is None:
         return DetailedGradeResult.empty()
-    ks = [step_k(cell, front.rim, spec.outward) for cell in spec.corridor]
-    valid = [k for k in ks if k is not None]
-    if not valid:
+    L_eff = max_outward_k(spec.corridor, front.rim, spec.outward)
+    if L_eff < 1:
         return DetailedGradeResult.empty()
-    L_eff = max(valid)
+    ks = [step_k(cell, front.rim, spec.outward) for cell in spec.corridor]
     sign = ribbon_sign_from_dz(int(front.dz))
     plan = plan_seed_volume(
         decision_geom=decision.geom,

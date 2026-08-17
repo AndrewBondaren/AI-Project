@@ -25,6 +25,7 @@ from app.application.worldData.generators.terrain.relief.discover.types import (
     ReliefSurface,
     ReliefVertices,
 )
+from app.dataModel.terrain.relief.reliefTerrainEnvelope import ReliefOntologyEnvelopes
 
 __all__ = ["discover_fronts", "reconcile_members", "seed_rim"]
 
@@ -57,6 +58,7 @@ def discover_fronts(
     cell_blocked: CellBlocked,
     existing_uids: dict[Coord, str] | None = None,
     cap_front: CapFront | None = None,
+    envelopes: ReliefOntologyEnvelopes | None = None,
 ) -> tuple[ReliefVertices, tuple[FrontGeometry, ...]]:
     """C39 leftover rims → R42 traces → C41 seam/occ → C38 reconcile."""
     vertices = ReliefVertices.for_bounds(
@@ -72,8 +74,8 @@ def discover_fronts(
         return vertices, ()
 
     rim = RimStage(surface, vertices, plugins)
-    front = FrontStage(surface, vertices, cell_blocked, cap_front)
-    seam = SeamStage(vertices)
+    front = FrontStage(surface, vertices, cell_blocked, cap_front, envelopes)
+    seam = SeamStage(vertices, surface)
 
     fronts: list[FrontGeometry] = []
     for _z, cells in rim.buckets_high_to_low():

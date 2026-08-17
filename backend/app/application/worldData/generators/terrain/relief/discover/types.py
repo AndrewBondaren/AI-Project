@@ -142,7 +142,11 @@ class ProposedTrace:
 
 @dataclass(frozen=True, slots=True)
 class FrontGeometry:
-    """One lockstep front after C41, before L2 paint."""
+    """One lockstep front after C41, before L2 paint.
+
+    ``path_length`` / ``z_end`` are the C41 corridor span (R41-T-8): classify
+    and stamp share this L, not the pre-seam walk.
+    """
 
     slot: int
     context: ReliefContext
@@ -150,6 +154,7 @@ class FrontGeometry:
     first_dz: int
     z_body: int
     z_end: int
+    path_length: int
     rim: tuple[Coord, ...]
     trace: tuple[Coord, ...]
     corridor: tuple[Coord, ...]

@@ -1438,6 +1438,9 @@ class DetailedGradeMaterializeTest(unittest.TestCase):
             "g-one",
         )
         self.assertIsNone(
+            inherit_segment_uid(((2, 0),), {(1, 1): "g-diag"}),
+        )
+        self.assertIsNone(
             inherit_segment_uid(
                 ((2, 0),),
                 {(1, 0): "b-uid", (3, 0): "a-uid"},

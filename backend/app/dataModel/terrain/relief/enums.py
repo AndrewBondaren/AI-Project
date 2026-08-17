@@ -23,13 +23,28 @@ class ReliefContext(StrEnum):
 
 
 class ReliefConditionTerrain(StrEnum):
-    """Closed corridor/patch landcover class for conditions (R26/R34)."""
+    """Closed corridor/patch landcover class for conditions (R26/R34).
+
+    Shore is three water classes plus mountain-river (U17). Legacy wire
+    ``shore`` is not a member — skip grade (R34).
+    """
 
     MOUNTAIN = "mountain"
     PLAINS = "plains"
     FOREST = "forest"
     RAVINE = "ravine"
-    SHORE = "shore"
+    SHORE_RIVER = "shore_river"
+    SHORE_MOUNTAIN_RIVER = "shore_mountain_river"
+    SHORE_LAKE = "shore_lake"
+    SHORE_SEA = "shore_sea"
+
+    def is_shore_class(self) -> bool:
+        return self in {
+            ReliefConditionTerrain.SHORE_RIVER,
+            ReliefConditionTerrain.SHORE_MOUNTAIN_RIVER,
+            ReliefConditionTerrain.SHORE_LAKE,
+            ReliefConditionTerrain.SHORE_SEA,
+        }
 
 
 class ReliefSlopePolicy(StrEnum):

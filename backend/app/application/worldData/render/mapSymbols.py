@@ -21,6 +21,10 @@ TERRAIN_SYMBOLS: dict[str, str] = {
     "earth": "_",  # ordinary dirt / default material landcover if painted as terrain
     "forest": "f",
     "shore": "s",
+    "shore_river": "s",
+    "shore_mountain_river": "s",
+    "shore_lake": "s",
+    "shore_sea": "s",
     "urban": "u",
     "road": "r",
     "ravine": "v",

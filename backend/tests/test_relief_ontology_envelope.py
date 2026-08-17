@@ -117,6 +117,7 @@ class ReliefOntologyEnvelopePojoTest(unittest.TestCase):
         self.assertTrue(plains.slope_preferred)
         self.assertTrue(plains.allow_l_gt_h)
         self.assertEqual(plains.sheer_min_abs_dz, 0)
+        self.assertEqual(plains.stamp_min_abs_dz, 2)
         self.assertEqual(plains.apply_in_contexts, (ReliefContext.OPEN_LAND,))
         self.assertEqual(
             plains.canonical_sheer_length_cells(), 1,
@@ -132,9 +133,68 @@ class ReliefOntologyEnvelopePojoTest(unittest.TestCase):
         self.assertEqual(forest.plateau_z_band_factor, plains.plateau_z_band_factor)
         self.assertFalse(forest.slope_preferred)
         self.assertEqual(forest.sheer_min_abs_dz, 4)
+        self.assertEqual(forest.stamp_min_abs_dz, plains.stamp_min_abs_dz)
         self.assertTrue(forest.sheer_ok(4))
         self.assertFalse(forest.sheer_ok(3))
         self.assertEqual(forest.apply_in_contexts, (ReliefContext.OPEN_LAND,))
+
+    def test_pass_through_stamp_min_allows_unit(self) -> None:
+        ravine = ReliefOntologyEnvelopes.canonical_defaults().ravine
+        self.assertEqual(ravine.stamp_min_abs_dz, 1)
+        self.assertTrue(ravine.stamps_first_step(1, ReliefContext.RAVINE))
+        self.assertTrue(ravine.is_unconstrained())
+
+    def test_no_legacy_shore_condition_terrain(self) -> None:
+        from app.dataModel.terrain.relief.enums import ReliefConditionTerrain
+        self.assertFalse(hasattr(ReliefConditionTerrain, "SHORE"))
+        self.assertTrue(ReliefConditionTerrain.SHORE_SEA.is_shore_class())
+
+    def test_shore_river_floor(self) -> None:
+        river = ReliefOntologyEnvelopes.canonical_defaults().shore_river
+        self.assertFalse(river.is_unconstrained())
+        self.assertEqual(river.slope_length_min_cells, 2)
+        self.assertTrue(river.sheer_allowed)
+        self.assertTrue(river.grades_channel_bed)
+        self.assertIsNone(river.slope_min_angle_deg)
+        self.assertEqual(river.apply_in_contexts, (ReliefContext.SHORE,))
+        self.assertEqual(river.slope_length_for(3, template_length=1), 2)
+
+    def test_shore_mountain_river_angle_band(self) -> None:
+        mtn = ReliefOntologyEnvelopes.canonical_defaults().shore_mountain_river
+        self.assertEqual(mtn.slope_min_angle_deg, 20.0)
+        self.assertEqual(mtn.slope_max_angle_deg, 70.0)
+        self.assertEqual(mtn.slope_length_min_cells, 2)
+        self.assertTrue(mtn.grades_channel_bed)
+        self.assertTrue(mtn.slope_fits(4, 2))
+        self.assertFalse(mtn.slope_fits(1, 10))
+
+    def test_shore_sea_floor(self) -> None:
+        sea = ReliefOntologyEnvelopes.canonical_defaults().shore_sea
+        self.assertEqual(sea.slope_min_angle_deg, 20.0)
+        self.assertEqual(sea.slope_max_angle_deg, 70.0)
+        self.assertEqual(sea.slope_length_min_cells, 5)
+        self.assertEqual(sea.sheer_min_abs_dz, 5)
+        self.assertEqual(sea.sheer_terrace_min_cells, 5)
+        self.assertFalse(sea.grades_channel_bed)
+        self.assertTrue(sea.sheer_ok(5))
+        self.assertFalse(sea.sheer_ok(4))
+        self.assertEqual(sea.slope_length_for(4, template_length=2), 5)
+        self.assertTrue(sea.slope_fits(4, 5))
+
+    def test_shore_lake_floor_matches_river_numbers(self) -> None:
+        env = ReliefOntologyEnvelopes.canonical_defaults()
+        lake = env.shore_lake
+        river = env.shore_river
+        self.assertFalse(lake.is_unconstrained())
+        self.assertEqual(lake.slope_length_min_cells, 2)
+        self.assertTrue(lake.sheer_allowed)
+        self.assertTrue(lake.grades_channel_bed)
+        self.assertIsNone(lake.slope_min_angle_deg)
+        self.assertEqual(lake.apply_in_contexts, (ReliefContext.SHORE,))
+        self.assertEqual(lake.slope_length_for(3, template_length=1), 2)
+        self.assertEqual(lake.slope_length_min_cells, river.slope_length_min_cells)
+        self.assertIs(env.for_terrain("shore_lake"), lake)
+        self.assertIsNot(lake, river)
 
     def test_slope_length_for_plains_examples(self) -> None:
         plains = ReliefOntologyEnvelopes.canonical_defaults().plains
@@ -387,6 +447,134 @@ class GradeConstrainedTest(unittest.TestCase):
         )
         self.assertEqual(d.kind, ReliefSideKind.SLOPE)
         self.assertEqual(d.requested_length, 30)
+
+    def test_ravine_kind_follows_template_weights(self) -> None:
+        """Ravine envelope is pass-through; SHEER vs SLOPE is template knobs, not discover."""
+        def ravine_tpl(*, slope_weight: float, sheer_weight: float) -> ReliefTemplate:
+            return ReliefTemplate.model_validate({
+                "system_name": "ravine_soft",
+                "display_name": "Ravine",
+                "context": "ravine",
+                "slope_length_cells": 2,
+                "conditions": [{
+                    "terrain": "ravine",
+                    "cases": [
+                        {
+                            "policy": "slope_down",
+                            "delta_z": 1,
+                            "slope_weight": slope_weight,
+                            "sheer_weight": sheer_weight,
+                            "slope_length_cells": 2,
+                        },
+                        {
+                            "policy": "slope_up",
+                            "delta_z": 1,
+                            "slope_weight": 1.0,
+                            "sheer_weight": 0.0,
+                            "slope_length_cells": 2,
+                        },
+                        {
+                            "policy": "slope_none",
+                            "delta_z": 0,
+                            "slope_weight": 1.0,
+                            "sheer_weight": 0.0,
+                        },
+                    ],
+                }],
+            })
+
+        slope = grade_constrained(
+            template=ravine_tpl(slope_weight=1.0, sheer_weight=0.0),
+            template_uid="uid",
+            terrain_key="ravine",
+            dz=4,
+            world_seed="s",
+            site_id="site",
+        )
+        self.assertFalse(slope.skipped)
+        self.assertEqual(slope.kind, ReliefSideKind.SLOPE)
+        assert slope.geom is not None
+        self.assertEqual(slope.geom.L, 2)
+
+        sheer = grade_constrained(
+            template=ravine_tpl(slope_weight=0.0, sheer_weight=1.0),
+            template_uid="uid",
+            terrain_key="ravine",
+            dz=4,
+            world_seed="s",
+            site_id="site",
+        )
+        self.assertFalse(sheer.skipped)
+        self.assertEqual(sheer.kind, ReliefSideKind.SHEER)
+        self.assertEqual(sheer.requested_length, 1)
+        assert sheer.geom is not None
+        self.assertEqual(sheer.geom.L, 1)
+
+    def test_shore_sea_raises_short_knobs(self) -> None:
+        tpl = ReliefTemplate.model_validate({
+            "system_name": "shore_soft",
+            "display_name": "Shore",
+            "context": "shore",
+            "slope_length_cells": 2,
+            "conditions": [{
+                "terrain": "shore_sea",
+                "cases": [
+                    {
+                        "policy": "slope_down",
+                        "delta_z": 1,
+                        "slope_weight": 1.0,
+                        "sheer_weight": 0.0,
+                        "slope_length_cells": 2,
+                    },
+                    {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0},
+                    {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0},
+                ],
+            }],
+        })
+        d = grade_constrained(
+            template=tpl,
+            template_uid="uid",
+            terrain_key="shore_sea",
+            dz=4,
+            world_seed="s",
+            site_id="site",
+        )
+        self.assertFalse(d.skipped)
+        self.assertEqual(d.kind, ReliefSideKind.SLOPE)
+        self.assertGreaterEqual(d.requested_length, 5)
+
+    def test_shore_mountain_river_keeps_steep_l2(self) -> None:
+        tpl = ReliefTemplate.model_validate({
+            "system_name": "shore_soft",
+            "display_name": "Shore",
+            "context": "shore",
+            "slope_length_cells": 2,
+            "conditions": [{
+                "terrain": "shore_mountain_river",
+                "cases": [
+                    {
+                        "policy": "slope_down",
+                        "delta_z": 1,
+                        "slope_weight": 1.0,
+                        "sheer_weight": 0.0,
+                        "slope_length_cells": 2,
+                    },
+                    {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0},
+                    {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0},
+                ],
+            }],
+        })
+        d = grade_constrained(
+            template=tpl,
+            template_uid="uid",
+            terrain_key="shore_mountain_river",
+            dz=4,
+            world_seed="s",
+            site_id="site",
+        )
+        self.assertFalse(d.skipped)
+        self.assertEqual(d.kind, ReliefSideKind.SLOPE)
+        self.assertEqual(d.requested_length, 2)
 
 
 if __name__ == "__main__":

@@ -28,7 +28,7 @@ metadata:
 | U12 | **Подземные реки и озёра** — в **cave systems** (`generate-caves`), **не** surface hydrology; **своя экосистема** (volume climate, без surface rain/pole) |
 | U13 | **`materialize_named_locations`** в **шаблоне мира** (default **OFF**); при **ON** — отдельная **LLM-нода DAG** придумывает `display_name` из контекста; python-нода persist |
 | U14 | **Река — polyline как connection** (длина, ширина, повороты); **max turn ≤ 45°** между соседними сегментами — острые углы запрещены; planner/validator **smooth** |
-| U15 | **Берег + bands:** N из **`default_<category>.bands`** (1…99); shore — **`default_shore`**; local `hydrology_profile` → **warning** |
+| U15 | **Берег + bands:** N из **`default_<category>.bands`**; класс клетки — `shore_river` / `shore_mountain_river` / `shore_lake` / `shore_sea`. `default_rivers.mountain_shore` для U17. World-level `default_shore` — **deprecated** |
 | U16 | **Именование `default_*`:** baseline мира (`default_rivers`, `default_lakes`, …), переопределяемый локально; **`hydrology.enabled`** — global без префикса |
 | U17 | **`river` vs `mountain_river`:** разные **`system_connection_type`**; горная — **подтип** (круче, **пороги**); autoresolve **классифицирует по terrain** heightmap, не только по тегу истока |
 | U18 | **River pipeline layers:** `classify_river_segments` → `list[RiverSegment]` (pure); **`riverConnectionEmit`** → `ConnectionEdge`; persist — **вне** generators (`MapCellService` / orchestration) |
@@ -171,9 +171,31 @@ flowchart LR
 
 | Понятие | Смысл |
 |---|---|
-| **Берег (shore)** | Первая surface-ячейка на контакте с сушей. **`system_terrain` + `system_material`** — из **`world.hydrology.default_shore`** **или** override на edge / spec / `hydrology_profile` |
-| **Углубление (deepening band)** | Следующие **1…N** ячеек **от берега внутрь** воды: каждая band **ниже** `surface_z` предыдущей; семантика **всё ещё берег** (тот же terrain/material profile, role `HydrologyCellRole.shore` + `deepening_index`) |
+| **Берег (shore cell)** | Первая surface-ячейка на контакте с сушей. Role `HydrologyCellRole.SHORE`. **`system_terrain` + `system_material`** — из **`default_<category>.shore`**, не из одного world-level `default_shore` |
+| **Углубление (deepening band)** | Следующие **1…N** ячеек **от берега внутрь** воды: каждая band **ниже** `surface_z` предыдущей; семантика **всё ещё берег** (тот же terrain/material **этой категории**, role `shore` + `deepening_index`) |
 | **Открытая вода** | После последней band — `liquid_candidate`, `surface_z` at basin floor / `z_sea` (climate → `liquid_body`) |
+
+**Две оси U15 (не подменять):**
+
+| Ось | Что задаёт | Не задаёт |
+|---|---|---|
+| **`bands`** | сколько клеток углубления **в воду** | пол grade L/θ/kind |
+| **`shore.system_terrain`** | класс клетки берега для маски и **онтологии grade** (как plains vs forest) | ширину shelf |
+
+Речной берег 1–2 м по ontology **может** быть допустим; тот же knobs-профиль на море — **нет**. Это [`tz_terrain_relief.md`](./tz_terrain_relief.md) R34/R37 (`shore_river` / `shore_mountain_river` / `shore_lake` / `shore_sea`), не `bands.max`.
+
+**Класс `system_terrain` клетки берега (locked):**
+
+| Категория hydro | Ключ paint | `system_terrain` (R34) |
+|---|---|---|
+| Река `river` | `default_rivers.shore` | `shore_river` |
+| Река `mountain_river` (U17) | `default_rivers.mountain_shore` | `shore_mountain_river` |
+| Озеро (`default_lakes`) | `default_lakes.shore` | `shore_lake` (цифры grade как у реки; **не** `shore_river`) |
+| Море / океан / `inland_sea` | `default_seas.shore` | `shore_sea` |
+
+`mountain_river` — **`system_connection_type` русла** (круче bed, пороги, melt) **и** отдельный класс **берега** `shore_mountain_river` (θ 20–70°, L min 2). Не тот же envelope, что у равнинной реки.
+
+World-level **`hydrology.default_shore`** — **deprecated** (один terrain на все воды). Override: `hydrology_profile.shore` / edge metadata — `system_terrain` **обязан** быть одним из четырёх ключей; иначе reject. Warning, если override меняет terrain/material категории.
 
 **N по контексту (U15 + U16):** **`world.hydrology.default_<category>.bands`**. Validator: `1 ≤ min ≤ max ≤ 99`.
 
@@ -185,7 +207,7 @@ flowchart LR
 
 **Локальный override (U16):** на **`NamedLocation`**, `ConnectionEdge.metadata` или spec declare — поле `hydrology_profile.bands` (или `hydrology_override.bands`). Применяется **вместо** world default для **этой** фичи; orchestration layer пишет **`logger.warning`** (`hydrology bands overridden for <uid>`). Clamp к `[1, 99]`.
 
-**Override shore:** `hydrology_profile.shore` / `ConnectionEdge.metadata.shore` — аналогично, optional warning если меняет terrain/material мира.
+**Override shore:** `hydrology_profile.shore` / `ConnectionEdge.metadata.shore` — `system_terrain` ∈ {`shore_river`,`shore_mountain_river`,`shore_lake`,`shore_sea`}; warning если меняет terrain/material категории.
 
 **Классы (target):** `ShoreProfile`, `DeepeningBandCarver` — общий для `RiverBedCarver`, `LakeBasinGenerator`, `SeaBasinGenerator`; не дублировать логику disk/radius.
 
@@ -439,6 +461,8 @@ STUB:    (no Spec)  →  footprint = painted SEA/LAKE cells
 | **Кто** | planner, `classify_river_segments`, carver, `riverConnectionEmit` | climate / weather |
 
 **Инвариант (U17):** тип segment — **только через terrain** (`classify_river_segments`), не tag `kind: mountain` alone.
+
+**Берег grade:** segment `mountain_river` красит **`shore_mountain_river`**. Крутизна русла (U17) и пол берега (R37, θ 20–70°) — связанные, но разные оси.
 
 **Путь mountain segment:** steep bed + пороги; ниже foothill → edge type `river`.
 
@@ -758,7 +782,7 @@ def classify_river_segments(
 }
 ```
 
-`bands` и `shore` — из **`world.hydrology.default_rivers`** / **`default_shore`** + optional local override (U16).
+`bands` и `shore` — из **`world.hydrology.default_rivers`** (`bands` + `shore.system_terrain=shore_river`) + optional local override (U16). Не world-level `default_shore`.
 
 **Metadata:** `HydrologyResult.river_cells`, `shore_cells`, `river_segments: list[RiverSegment]`.
 
@@ -902,14 +926,12 @@ flowchart LR
 {
   "hydrology": {
     "enabled": true,
-    "default_shore": {
-      "system_terrain": "shore",
-      "system_material": "sand"
-    },
     "default_rivers": {
       "enabled": true,
       "autoresolve": true,
       "bands": { "min": 1, "max": 5 },
+      "shore": { "system_terrain": "shore_river", "system_material": "sand" },
+      "mountain_shore": { "system_terrain": "shore_mountain_river", "system_material": "stone" },
       "type_classify": {
         "mountain_min_source_z": null,
         "path_mountain_fraction": 0.5,
@@ -921,13 +943,15 @@ flowchart LR
     "default_lakes": {
       "enabled": true,
       "autoresolve": true,
-      "bands": { "min": 1, "max": 5 }
+      "bands": { "min": 1, "max": 5 },
+      "shore": { "system_terrain": "shore_lake", "system_material": "sand" }
     },
     "default_seas": {
       "enabled": true,
       "autoresolve_coastal_sea": true,
       "autoresolve_open_ocean": true,
-      "bands": { "min": 1, "max": 20 }
+      "bands": { "min": 1, "max": 20 },
+      "shore": { "system_terrain": "shore_sea", "system_material": "sand" }
     },
     "default_landforms": {
       "enabled": true,
@@ -956,7 +980,7 @@ flowchart LR
   "system_location_subtype": "lake",
   "hydrology_profile": {
     "bands": { "min": 2, "max": 12 },
-    "shore": { "system_terrain": "shore", "system_material": "gravel" }
+    "shore": { "system_terrain": "shore_lake", "system_material": "gravel" }
   }
 }
 ```
@@ -1099,6 +1123,9 @@ class HydrologyCategoryPolicy:
     enabled:    bool = True
     autoresolve: bool = True          # rivers / lakes / landforms
     bands:      tuple[int, int] = (1, 5)  # (min, max), validator 1..99
+    shore:      dict = field(default_factory=lambda: {
+        "system_terrain": "shore_river", "system_material": "sand",
+    })  # lakes → shore_lake; seas policy → shore_sea
 
 @dataclass
 class HydrologySeasPolicy:
@@ -1106,15 +1133,19 @@ class HydrologySeasPolicy:
     autoresolve_coastal_sea: bool = True
     autoresolve_open_ocean:  bool = True
     bands:                   tuple[int, int] = (1, 20)
+    shore:                   dict = field(default_factory=lambda: {
+        "system_terrain": "shore_sea", "system_material": "sand",
+    })
 
 @dataclass
 class HydrologyWorldPolicy:
     enabled:          bool = True          # global; not default_* — not overridable per feature
-    default_shore:    dict = field(default_factory=lambda: {
-        "system_terrain": "shore", "system_material": "sand",
-    })
+    # default_shore — deprecated; paint from default_<category>.shore
     default_rivers:   HydrologyCategoryPolicy = field(default_factory=HydrologyCategoryPolicy)
-    default_lakes:    HydrologyCategoryPolicy = field(default_factory=lambda: HydrologyCategoryPolicy(bands=(1, 5)))
+    default_lakes:    HydrologyCategoryPolicy = field(default_factory=lambda: HydrologyCategoryPolicy(
+        bands=(1, 5),
+        shore={"system_terrain": "shore_lake", "system_material": "sand"},
+    ))
     default_seas:     HydrologySeasPolicy = field(default_factory=HydrologySeasPolicy)
     default_landforms: HydrologyCategoryPolicy = field(
         default_factory=lambda: HydrologyCategoryPolicy(bands=(1, 1)),
@@ -1293,9 +1324,10 @@ Polyline declare → rasterize (**Bresenham**) по grid в bbox heightmap.
 
 ```json
 {
-  "liquid_candidate": true,
-  "role": "coastal_sea",
-  "deepening_index": null,
+  "liquid_candidate": false,
+  "role": "shore",
+  "deepening_index": 0,
+  "shore_kind": "lake | sea | river | mountain_river",
   "connection_edge_uid": "ce-sea-west-mid"
 }
 ```
@@ -1303,7 +1335,7 @@ Polyline declare → rasterize (**Bresenham**) по grid в bbox heightmap.
 | `role` | `liquid_candidate` (after HY) | Climate v1 |
 |---|---|---|
 | `coastal_sea`, `open_ocean`, `inland_sea`, `lake` | `true` (open water band) | hydrology или climate → `liquid_body`; climate — **фаза** |
-| `shore` | `false` | solid shore terrain |
+| `shore` | `false` | solid shore terrain; **`shore_kind`** → `default_<category>.shore` / `mountain_shore` (не `default_shore`) |
 | `river_bed` | optional metadata | hydrology уже **`liquid_body`**; climate — **состояние** (см. climate TZ) |
 
 Subsurface cells колонки **не** дублируют hydrology v1.
@@ -1500,7 +1532,9 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 
 | Дата | Изменение |
 |---|---|
-| 2026-07-16 | Pack bake modes hydro: light/full/detailed parent-light refine — impl status ✅ |
+| 2026-08-17 | **U15 paint:** column fill читает `default_rivers.shore` / `mountain_shore`, `default_lakes.shore`, `default_seas.shore`. `MapCellHydrology.shore_kind`. `default_shore` не красит. JV REF-W на четыре category.shore + closed-set R34 |
+| 2026-08-17 | **`shore_lake` grade:** как `shore_river` (L≥2, SHEER/SLOPE, дно бассейна); отдельный paint `default_lakes.shore` |
+| 2026-08-17 | **U15 shore class:** `shore_river` / `shore_mountain_river` / `shore_lake` / `shore_sea`. Bands ≠ ontology grade. `mountain_river` красит `mountain_shore`. `default_shore` deprecated |
 | 2026-07-19 | § **Ocean bathymetry / Depression forms** (scope A): Ellipse/Corridor Form + Kind + Spec; engine interface; U15 ≠ Depression |
 | 2026-07-19 | § **Interim stub shipped:** `stub_drop_fraction_of_span` + light R5b writer; mapping stub → target Depression pipeline (mountain-rise analog) |
 | 2026-07-15 | § **Pack bake modes — hydrology:** light / full / detailed; L2 не invents L0 rivers |

@@ -13,6 +13,7 @@ from app.application.jsonValidation.types import FieldPathError
 from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
 from app.dataModel.hydrology.worldHydrology import WorldHydrology
 from app.dataModel.materials.worldMaterialRegistry import WorldMaterialRegistry
+from app.dataModel.terrain.relief.enums import ReliefConditionTerrain
 
 
 @dataclass(frozen=True)
@@ -85,6 +86,49 @@ def _climate_scalar_checks(normalized: dict[str, Any], partial: bool) -> list[Re
     return checks
 
 
+def _nested_dict(root: dict[str, Any], path: tuple[str, ...]) -> dict[str, Any] | None:
+    cur: Any = root
+    for key in path:
+        if not isinstance(cur, dict):
+            return None
+        cur = cur.get(key)
+    return cur if isinstance(cur, dict) else None
+
+
+_CATEGORY_SHORE_PATHS: tuple[tuple[str, ...], ...] = (
+    ("default_rivers", "shore"),
+    ("default_rivers", "mountain_shore"),
+    ("default_lakes", "shore"),
+    ("default_seas", "shore"),
+)
+
+
+def _shore_ref_checks(
+    hydrology: dict[str, Any],
+    path: tuple[str, ...],
+) -> list[RefCheck]:
+    shore = _nested_dict(hydrology, path)
+    if shore is None:
+        return []
+    prefix = ("hydrology",) + path
+    return [
+        RefCheck(
+            ref_kind=RefKind.TERRAIN,
+            schema_id=WorldHydrology.SCHEMA_ID,
+            path=prefix + ("system_terrain",),
+            value_getter=lambda _data, blob=shore: blob.get("system_terrain"),
+            registry_present_key="terrain_registry",
+        ),
+        RefCheck(
+            ref_kind=RefKind.MATERIAL,
+            schema_id=WorldHydrology.SCHEMA_ID,
+            path=prefix + ("system_material",),
+            value_getter=lambda _data, blob=shore: blob.get("system_material"),
+            registry_present_key="material_registry",
+        ),
+    ]
+
+
 def _hydrology_checks(normalized: dict[str, Any], partial: bool) -> list[RefCheck]:
     if partial and "hydrology" not in normalized:
         return []
@@ -93,26 +137,47 @@ def _hydrology_checks(normalized: dict[str, Any], partial: bool) -> list[RefChec
     if not isinstance(hydrology, dict):
         return []
 
-    shore = hydrology.get("default_shore")
-    if not isinstance(shore, dict):
+    checks: list[RefCheck] = []
+    checks.extend(_shore_ref_checks(hydrology, ("default_shore",)))
+    for path in _CATEGORY_SHORE_PATHS:
+        checks.extend(_shore_ref_checks(hydrology, path))
+    return checks
+
+
+def _shore_class_errors(normalized: dict[str, Any], partial: bool) -> list[FieldPathError]:
+    """Category ``.shore.system_terrain`` must be an R34 shore class (not legacy ``shore``)."""
+    if partial and "hydrology" not in normalized:
+        return []
+    hydrology = normalized.get("hydrology")
+    if not isinstance(hydrology, dict):
         return []
 
-    return [
-        RefCheck(
-            ref_kind=RefKind.TERRAIN,
-            schema_id=WorldHydrology.SCHEMA_ID,
-            path=("hydrology", "default_shore", "system_terrain"),
-            value_getter=lambda _: shore.get("system_terrain"),
-            registry_present_key="terrain_registry",
-        ),
-        RefCheck(
-            ref_kind=RefKind.MATERIAL,
-            schema_id=WorldHydrology.SCHEMA_ID,
-            path=("hydrology", "default_shore", "system_material"),
-            value_getter=lambda _: shore.get("system_material"),
-            registry_present_key="material_registry",
-        ),
-    ]
+    errors: list[FieldPathError] = []
+    for path in _CATEGORY_SHORE_PATHS:
+        shore = _nested_dict(hydrology, path)
+        if shore is None:
+            continue
+        raw = shore.get("system_terrain")
+        if raw is None or raw == "":
+            continue
+        key = str(raw).strip()
+        try:
+            terrain = ReliefConditionTerrain(key)
+        except ValueError:
+            terrain = None
+        if terrain is None or not terrain.is_shore_class():
+            errors.append(
+                FieldPathError(
+                    path=("hydrology",) + path + ("system_terrain",),
+                    message=(
+                        "shore class must be shore_river / shore_mountain_river "
+                        f"/ shore_lake / shore_sea, got {key!r}"
+                    ),
+                    schema_id=WorldHydrology.SCHEMA_ID,
+                    code="SHORE_CLASS_UNKNOWN",
+                ),
+            )
+    return errors
 
 
 def _material_tier_checks(normalized: dict[str, Any], partial: bool) -> list[RefCheck]:
@@ -173,4 +238,5 @@ def validate_ref_w(
         )
         if issue is not None:
             errors.append(issue)
+    errors.extend(_shore_class_errors(normalized, partial))
     return errors

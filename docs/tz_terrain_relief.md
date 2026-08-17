@@ -7,7 +7,7 @@ metadata:
 ---
 
 > **Статус:** ownership **утверждён** · templates R33–R35 ✅ · **R36 geom/entity/clearance** ✅ · **canal R36p/q ✅** · **R36u–w** writer/pool/каталог ✅ · **R37** envelope ✅ · **R41/R42/C39/C41 pipeline v2 = SoT** (меса 8, фронт W×L, `ReliefVertices`+`occ`+`seam`, bucket[z] остаток кромок, шов лучей, расписание A). **R38–R40 v1 — deprecated**. Шов чанков `full_bake` · halo `grid_neighbor` · T-10 ✅.  
-> **Код vs SoT:** `compute_rect` = discover+paint → один fill (R41 слои 0–4). Sample/stitch до пула — **deprecated**, не writer. **Next:** **R41-T-5…T-8** — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md); затем T-3c System (слой 6), срез v1 (слой 7). Wave E later (R36r thick diag / R36o / gameplay). BAR-1 вне. L0 `world-grade` ASCII omit (PAR-G5).  
+> **Код vs SoT:** `compute_rect` = discover+paint → один fill (R41 слои 0–4 + толстый ravine). Sample/stitch до пула — **deprecated**, не writer. **Очередь / не трогать:** § [Осталось — v2 vs L2 volume](#осталось--v2-vs-l2-volume-locked). IDs — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md). **R41-T-5…T-8** ✅. Слой 5: толстый ravine ✅; `shore` stub (геометрия тела). **Онтология берега locked:** `shore_river` / `shore_mountain_river` / `shore_lake` / `shore_sea`. Next = shore plugin **или** слой 6 T-3c — по команде мастера. Wave E / BAR-1 / DAG вне этой очереди. L0 `world-grade` ASCII omit (PAR-G5).  
 > **Связь:** SoT grade; **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT. · ASCII — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md). · L2 — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2. · Agent: [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md) · v2 impl: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md)
 
 **Scope lock (R36u):** меняется **только outdoor relief grade** (`system_grade_uid`, SLOPE/SHEER geometry). **Не трогать** L0→L2 parent-light контракты ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2):
@@ -31,7 +31,7 @@ metadata:
 | L2 `fineTerrainAsciiKernel` | consumer — без изменений | |
 | Tile-wide `generate_detailed_grade` до pool | per-rect в `FineChunkRunner` worker (**R36v** / стык **R36w**) | не новый оркестратор |
 | `road_shoulder` на detailed | **R36u-T-10** ✅ | sample + stamp; context = `ReliefContext.ROAD_SHOULDER`; `PaintedRoadEdge` в dataModel; тот же каталог / `PackJobUid` |
-| `ravine` на detailed | ✅ | `sample_ravine_meter`; context = `ReliefContext.RAVINE`; mask cell = seed, bank = ref; не open_land downhill |
+| `ravine` на detailed | ✅ | discover `RavinePlugin`: банк + стены маски; стрельба в маску; kind = knobs шаблона (SLOPE/SHEER); пол без Δz не site |
 
 Полная таблица: [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) § Legacy L0 grade inventory.
 
@@ -47,7 +47,7 @@ metadata:
 |---|---|
 | `mountain` | грани massif / range |
 | `open_land` | plains / forest при Δz |
-| `shore` | берег озера / реки / моря |
+| `shore` | берег; класс клетки — `shore_river` / `shore_mountain_river` / `shore_lake` / `shore_sea` (как plains vs forest), не один `shore` |
 | `road_shoulder` | **обочины** дороги (две стороны), когда есть Δz между полотном и соседним рельефом |
 | `ravine` | **низина** (depression mask); grade стен/пола уже построенной высоты |
 
@@ -116,7 +116,7 @@ metadata:
 | R31 | `relief_pick_policy`: **мир** → **объект** → (для гор) **сторона**; более специфичный уровень перезаписывает; см. § Pick policy |
 | R32 | Условия terrain — **XOR двух режимов** (не смешивать): **(A)** `slope_none`/`slope_down`/`slope_up` + один `delta_z` **или** **(B)** bands `{delta_z_min, delta_z_max?}` на down/up; `delta_z_min >= 1` |
 | R33 | **Mountain preset** = `ReliefTemplate` с `context: mountain` в той же library/packs (R29). Тело — **side recipe** (не Mode A/B `conditions` дорог). XOR режимов раскладки сторон: **(A)** weights \| **(B)** pattern \| **(C)** fixed kind; **пусто / ничего не указано** → **seeded random** per side (R15). `MountainKind` ≠ preset (elevation/content). R30 не про это — UI-only для shoulder/`delta_z` чисел |
-| R34 | **G2:** `ReliefConditionTerrain` ↔ `system_terrain` — 1:1 по имени. Клетка вне таблицы / без condition → **skip grade**. **Запрещено** R21 «левый SLOPE» для unknown N+1. Два **независимых** пути каталога: (1) **import relief** — upsert missing keys из `conditions` (canonical, не затирать существующие); (2) **API настройки мира** — мастер/редактор правит любые N+1 (`PUT /worlds/…`). R21 — только битый pick/template/дыра schedule |
+| R34 | **G2:** `ReliefConditionTerrain` ↔ `system_terrain` — 1:1 по имени. Берег: `shore_river` \| `shore_mountain_river` \| `shore_lake` \| `shore_sea` (не один `shore`). Клетка вне таблицы / без condition → **skip grade**. **Запрещено** R21 «левый SLOPE» для unknown N+1. Два **независимых** пути каталога: (1) **import relief** — upsert missing keys из `conditions` (canonical, не затирать существующие); (2) **API настройки мира** — мастер/редактор правит любые N+1 (`PUT /worlds/…`). R21 — только битый pick/template/дыра schedule |
 | R35 | **G4 / bundle:** тела **relief**-шаблонов **не** в `world` JSON. В мире — `relief_template_registry` + `relief_pick_policy` (в т.ч. **`canal_obstacle_policy`**, R36p) + **`relief_grade_obstacle_policy`** (R36n) + **`canal_template_registry`** (R36q). Self-contained bundle: top-level **`relief_templates`** + pointers/policy (+ canal registry) внутри `world`. Import: upsert SQL library ← секция + registry/policy ← `world`. Имя ключа relief = `BundleSection.RELIEF_TEMPLATES` (`"relief_templates"`). API — тонкий слой |
 
 ### SLOPE geometry / materialize (2026-07-31)
@@ -189,7 +189,7 @@ metadata:
 | C27 | **Стык = каталог граней**; uid заранее `world_seed`+tile+`face_key` (R15); граф ссылается; шов sample по тому же uid; не mint в воркере. Job uid: `tile` / `chunk` / `tile_edge` — ключи очереди, не дерево `tile→chunk`. **Родители грани в этом bake** = chunk job uid этого тайла (2 internal / 1 rim) — **гейт старта** (не все bake сразу) и clearance (`< 2` → void ≠ C18). **Шов мира** (антагонисты AABB) — **`full_bake` L0 на макро-тайлах**, не каталог `detailed_bake`. **Пул = `ColumnRect`**. **Два `detailed_bake` смежных (grid) тайлов** — не ждут друг друга; лента вдоль шва = один uid + upsert. Halo читает z `WorldBounds.grid_neighbor` (не `antagonist_tile`). `road_shoulder` — тот же каталог (`ReliefContext.ROAD_SHOULDER`). Не uid Grade/climate/hydro | locked (R36w) ✅ |
 | C28 | **Каталог → discover → paint → fill.** Каталог `face_key` = identity ребра / job, uid **до** пула. Discover вершин/фронтов — в worker на heightmap, **не** serial sample-all семян до пула. Прямая `(kind, outward, θ)` = один Instance. ≥2 Instance одной вершины → System row. 1 Instance → System **не** пишем. Клетка → Instance, не System. Rim-canonical на шве — **C29**. Apply (z/canal/fill) не переписывать | locked (R36w catalog; R41 discover); T-3c System row при ≥2 |
 | C29 | **Шов технический.** `face_key` / chunk / tile rim / `ColumnRect` / job uid — нарезка работы и pack, **не** граница мира. Не путать с **швом лучей** (C41). Через шов непрерывны: климат, дороги, шаг (later), **локация / город** (territory может лежать на ребре). Запрещено делать из шва стену, обрыв поселения, второй `location_uid` «из‑за тайла», смену зоны или ноду пути | locked; writers локации/города не в relief |
-| C30 | **Конверт онтологии** (`ReliefConditionTerrain`) ≥ knobs шаблона. Фасад `grade_constrained`; inner без `if plains`. Plains `open_land`: `|dz|=1` без stamp; `|dz|≥2` луч до вокселя; θ≤20° → SLOPE, иначе SHEER L=1. Короткий L=2 knobs **запрещён** как потолок. Каркас — **C36 / R41**; покрытие остатка — **C39**; шов лучей — **C41**; ширина — **C37 / R42**; коллекция — **C38** | locked (R37) |
+| C30 | **Конверт онтологии** (`ReliefConditionTerrain`) ≥ knobs шаблона. Фасад `grade_constrained`; inner без `if plains`. Plains `open_land`: `|dz|=1` без stamp (`stamp_min_abs_dz=2`); `|dz|≥2` луч: равная z продолжает L, стоп на подъёме; θ≤20° → SLOPE, иначе SHEER L=1. Короткий L=2 knobs **запрещён** как потолок. Каркас — **C36 / R41**; покрытие остатка — **C39**; шов лучей — **C41**; ширина — **C37 / R42**; коллекция — **C38** | locked (R37) |
 | C31 | **Смешанный case:** L/θ knobs → SLOPE; SHEER всегда L=1. Невалидный geom (0 / оба ключа / θ вне (0,90)) → не reject: WARN + 20° и L до первой клетки луча. `L_eff < 1` после луча → skip stamp (R36m), не abort шаблона | locked (R36b/e) |
 | C32 | **Вершины не stencil сетки.** Layout + кромки спуска на готовом z. Кандидатные направления — 8. Второй полный обход volume (location bake) — reject. **SoT — C36 / R41.** Исторический R38 — запрет hunt пиков | locked (R41); R38 historical |
 | C33 | **Вершина = одна псевдосущность.** 8-связные клетки той же z **с кромкой спуска** не сеют 8×N. Лучи только наружу с кромки. Rim-run / фронт с одним outward и тем же первым dz — один Grade. **SoT — R41.** Исторический R39 4-neigh — снят | locked (R41) |
@@ -668,6 +668,7 @@ SideReliefPickPolicy = ObjectReliefPickPolicy
 **Где:** `worlds.relief_pick_policy.canal_obstacle_policy`.
 
 **`CanalObstacleEntity`:** `road` \| `mountain` \| `forest` \| `plains` \| `shore` \| `all`  
+`shore` здесь — **любой** из `shore_river` / `shore_lake` / `shore_sea` (не три entity).  
 (`road` ≠ `road_shoulder`; `plains` ≠ `open_land`)
 
 | Поле правила | Тип | Смысл |
@@ -799,7 +800,7 @@ else:
 | Context | Pick site (v1) |
 |---|---|
 | `road_shoulder` | **segment** × выбранная **slope policy** — не целый edge, не left/right мастера |
-| `shore` | один contiguous shore-run / band segment |
+| `shore` | один contiguous shore-run **одного** класса (`shore_river` xor `shore_lake` xor `shore_sea`) |
 | `mountain` | одна сторона Spec (`side` index) или один massif side |
 | `open_land` | один contiguous patch клеток с этим context |
 
@@ -899,7 +900,9 @@ Optional later (не v1 SoT): soft hint `preferred_template_uid` на category/o
 
 ```text
 ReliefConditionTerrain   # corridor landcover/mask class
-  = mountain | plains | forest | ravine | shore
+  = mountain | plains | forest | ravine
+    | shore_river | shore_mountain_river | shore_lake | shore_sea
+  # legacy wire `shore` — не ключ enum; skip grade (R34)
 
 ReliefSlopePolicy        # три политики на каждый terrain
   = slope_down | slope_up | slope_none
@@ -919,7 +922,11 @@ ReliefSlopePolicy        # три политики на каждый terrain
 | `forest` | `forest` |
 | `mountain` | `mountain` |
 | `ravine` | `ravine` |
-| `shore` | `shore` |
+| `shore_river` | `shore_river` |
+| `shore_mountain_river` | `shore_mountain_river` |
+| `shore_lake` | `shore_lake` |
+| `shore_sea` | `shore_sea` |
+| `shore` (legacy) | — **skip** grade-site; не alias |
 | `road` | — (обычно context `road_shoulder`; не open_land-key) |
 | `liquid_body`, `open_space`, indoor (`floor`/…) | — **skip** grade-site |
 | прочий N+1 (`swamp`, …) без строки выше | — **skip** grade-site |
@@ -938,8 +945,9 @@ Import — **добавление** с минимальным friction; API — 
 **Не** R21 «безопасный SLOPE» для unknown N+1 на клетке.  
 R21 по-прежнему: пустой pick / битый `fixed` uid / дыра schedule.
 
-`ReliefContext.open_land` = *когда* брать open_land-шаблон; таблица = *какой* блок `conditions` внутри.  
-`ReliefContext.ravine` = *когда* брать шаблон низины; `ReliefConditionTerrain.ravine` = блок на клетках маски `system_terrain=ravine`.
+`ReliefContext.open_land` = *когда* брать open_land-шаблон; таблица = *какой* блок `conditions` внутри (`plains` vs `forest`).  
+`ReliefContext.ravine` = *когда* брать шаблон низины; `ReliefConditionTerrain.ravine` = блок на клетках маски `system_terrain=ravine`.  
+`ReliefContext.shore` = *когда* брать шаблон берега; таблица = `shore_river` / `shore_mountain_river` / `shore_lake` / `shore_sea` на клетке (как plains vs forest). Не четыре `ReliefContext`. U17 `mountain_river` → **`shore_mountain_river`** (свой пол), не `shore_river`.
 
 ### Ontology envelope (R37)
 
@@ -949,7 +957,7 @@ Relief **дополняет** онтологию маски (`system_terrain` / 
 
 | Слой | Где | Что может |
 |---|---|---|
-| **Ontology envelope** | `dataModel` `ReliefOntologyEnvelopes` keyed by `ReliefConditionTerrain` | пол: θ max / L min / sheer allowed; *как* идти по лучу |
+| **Ontology envelope** | `dataModel` `ReliefOntologyEnvelopes` keyed by `ReliefConditionTerrain` | пол: θ max / L min / sheer allowed / `stamp_min_abs_dz`; *как* идти по лучу |
 | **Pipeline v2** | **R41** | вершина/кромка/фронт; `ReliefVertices`+`occ`+`seam`; bucket[z] остаток кромок (**C39**); шов лучей (**C41**); discover+paint → один fill |
 | **Ray width** | **R42** | фронт W×L lockstep; Murphy W>1 later; не веер |
 | **Sparse origins / mesa / ray (v1)** | **R38–R40** | **deprecated**; читать только как историю запретов (не stencil, не 8×N, не fill∥relief) |
@@ -988,8 +996,8 @@ volume materialize                    # без изменений
 
 | | |
 |---|---|
-| Первый шаг `|dz| = 1` (4→3) | **нет seed** — высота уже ок (45° на L=1) |
-| Первый шаг `|dz| ≥ 2` | луч до вокселя: стоп если клетка отсутствует, `z ≥ z_peak` или `z ≥ z_prev`, **упор** (R36m), **смена θ** (R41); клетка излома сеет только если предикат C39 |
+| Первый шаг `|dz| = 1` (4→3) | **нет stamp** (кромка C39 есть). Политика: `ReliefTerrainEnvelope.stamp_min_abs_dz` (plains/forest `open_land` = 2). Не boolean на plugin. Не «чаша на единице» |
+| Первый шаг `|dz| ≥ 2` | lockstep (R41): стоп если нет клетки, **упор** (R36m), **смена θ**, своё тело / чужой occ/seam; **подъём** `z > z_body` или `z > z_prev`. **Равная z = продолжение L** (пол рампы / ravine). Клетка излома сеет только если предикат C39 |
 | L_ray | число свободных клеток луча (включая seed); шаг = Chebyshev 1 (R36s) |
 | h | `z_crest − z_end` |
 | θ max | **20°** |
@@ -1001,11 +1009,28 @@ volume materialize                    # без изменений
 
 Примеры: h=4, луч длинный → L=20, θ≈11°; h=10 → L=28, θ≈20°; h=12 → L=33, θ≈20° → SLOPE. 4→2 при L_ray=1 → SHEER.
 
+Deprecated sample `measure_terrain_descent` still stops on `z ≥` (R40). Live lockstep is **R41** `z >` (equal z continues L).
+
 **Forest (locked, `open_land` only):** тот же пол SLOPE, что plains (θ≤20°, L min 20 без крышки, `allow_l_gt_h`). **Каркас — R41.** Отличие kind: **SHEER допустим**, если `|dz| ≥ sheer_min_abs_dz` (**4**) — тогда kindRoll может выбрать отвес; L SHEER всегда **1**. `|dz| < 4` (и луч позволяет 20°) → только SLOPE. Не влезает в 20° на L_ray → SHEER L=1.
+
+**Shore classes (locked, `shore` context only):** четыре строки конверта. Как plains vs forest: один контекст, разные полы. **Не** копировать plains (θ≤20°, L min 20).
+
+| Класс | SLOPE | L min (берег) | SHEER | Канава по дну |
+|---|---|---|---|---|
+| `shore_river` | да | **2** | да (без min h) | **да** — grade идёт по руслу, не оставлять голые воксели carve |
+| `shore_mountain_river` | θ ∈ **[20°, 70°]** | **2** | да | **да** (то же) |
+| `shore_lake` | да (как река, без полосы угла) | **2** | да (без min h) | **да** — дно бассейна, не сырой carve. Свой класс, не `shore_river` |
+| `shore_sea` | θ ∈ **[20°, 70°]** | **5** | да, см. ниже | нет (shelf = hydro bands) |
+
+**Море + SHEER (locked):** если kind = SHEER — **либо** один отвес **h ≥ 5**, **либо** ступени: каждый sheer + **платформа ≥ 5** клеток. Не SHEER h=1–4. Writer террас — при impl plugin/volume; поля конверта `sheer_min_abs_dz=5`, `sheer_terrace_min_cells=5`.
+
+**Река / озеро + дно:** hydro carve оставляет вертикальные воксели. Relief **обязан** покрыть профиль (берег + дно). Не «только бровка, пол — сырой carve». Река и озеро — **разные** `system_terrain` / hydro policy (`default_rivers.shore` vs `default_lakes.shore`); цифры конверта сейчас совпадают. Geom writer — ShorePlugin (ещё stub); инвариант уже SoT.
+
+Единый envelope-ключ `shore` — **снят**.
 
 **SHEER L=1 (все ribbon через фасад):** `ReliefTerrainEnvelope.canonical_sheer_length_cells()`. Даже pass-through (`road_shoulder` / ravine / …). Inner без фасада не трогаем.
 
-**Прочие строки (v1):** `mountain` / `ravine` / `shore` = **pass-through** (не копия plains/forest). `road_shoulder` / `shore` / `ravine` **контексты** не берут open_land-конверт (`apply_in_contexts`).
+**Прочие строки (v1):** `mountain` / `ravine` = **pass-through** (не копия plains/forest). `road_shoulder` / `ravine` **контексты** не берут open_land-конверт (`apply_in_contexts`). `shore` берёт **свои** четыре строки, не plains.
 
 **Вне scope R37:** stamp `surface_facing` на `TileSurfaceState` (dump SLOPE как `┃`) — отдельный apply-баг, не онтология.
 
@@ -1158,6 +1183,41 @@ volume materialize                    # без изменений
 
 Суть: готовый `heightmap` чанка → вершины с кромкой спуска → фронты (схождение режет **шов лучей**, C41) → Grade только в уникальном коридоре → **один** column fill (parent⊕overlay) → стык швов чанков по uid между **уже сформированными** чанками. Не рельеф тайла параллельно с чанками и не fill∥relief. **Расписание A locked** (не путать с caller A = `FineChunkRunner` vs patch).
 
+##### Осталось — v2 vs L2 volume (locked)
+
+Ориентир агенту и мастеру. Подробные smells — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) **R41-T** / **R36i-T**. Не слайс «сначала только plains».
+
+**L2 volume — закрыт.** Не форкать `plan_ribbon_volume` / `GradeFormation` / `DetailedGradeResult` / canal-cut / `reconciled()` / fill parent⊕overlay. Post-impl **R36i-T-4…T-15** ✅. Вход apply = `GradePaintSpec` (через `DiscoveredFront`). Канон L classify vs stamp — **R41-T-8** ✅ (коридор после C41; occupancy cap = L_tpl; halo = envelope floor). Не новый 1D plan.
+
+| | Статус | Что |
+|---|---|---|
+| Слои 0–4 | ✅ live | типы, C39/R42/C41, paint adapter, `compute_rect` discover+paint → один fill, plugin `road_shoulder` |
+| Слой 5 ravine | ✅ | банк + same-z стены маски; kind = knobs шаблона; `shore` stub |
+| P1 | ✅ | **R41-T-2…T-4:** apply=`DiscoveredFront`; cap до C41 = L_tpl; ravine flood = bank (не plains mesa) |
+| P2 | ✅ | **R41-T-5…T-8:** равная z = продолжение L; inherit только орто; `|dz|=1` = `stamp_min_abs_dz`; classify/stamp = коридор после C41 |
+| Каталог `face_key` | ✅ живой | identity шва чанков (R36w / C29), не discover семян |
+
+**Дальше — только pipeline v2** (не apply). **Команда агенту (копировать):** [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md) § Команда следующему агенту.
+
+| # | Что | IDs / слой | Не делать |
+|---|---|---|---|
+| 1 | Полиш луча и L | **R41-T-5…T-8** ✅ | не возвращать pick в `FrontStage`; не ставить envelope floor как occupancy cap |
+| 2 | Тела plugin | слой 5: толстый ravine ✅; `shore` stub | не `sample_*`; не Priority-Flood; не `if context` в `core.py` |
+| 3 | System row | **T-3c** / слой 6: ≥2 Instance одной вершины | uid System на клетке; строка при 1 фронте |
+| 4 | Срез v1 | слой 7: sample / `plan_grade_for_rects` / stitch / `FineTileContext.planned` | `warnings.warn` на bake, пока sample ещё в репо |
+| 5 | Полиш facade | **R41-T-9…T-12** | склеивать Rim/Front/Seam в один `core.py` |
+
+**Вне этой очереди (не volume-rewrite):**
+
+| Тема | Почему не здесь |
+|---|---|
+| BAR-1 detailed fence | **R36i-T-2** — вне apply и вне C28 |
+| Wave E: R36r thick diag / R36o / gameplay | later; тогда **расширение** volume, не замена |
+| DAG / schema `0002` / mask carry / parent `surface_z` upsample | другие контракты |
+| `|dz|=1` чаша | открытый продукт, не слой 5 |
+
+**Запрещено из «осталось» выводить:** второй пул; fill∥relief; два column fill; полный same-z CC тайла; stamp uid на тело вершины.
+
 ##### Одна конструкция, plugin тела
 
 Не «plains v2 + road v1». Вершина → кромка → фронты → `GradePaintSpec` → существующий L2 paint. Прямая дорога без поворотов — **частный случай** v2 (два орто-фронта), не второй пайплайн.
@@ -1166,7 +1226,8 @@ volume materialize                    # без изменений
 |---|---|---|
 | `open_land` | 8-связные клетки той же целой z (меса); интерьер в теле, не сеет | Наружу с кромки (сосед ниже); не в тело. Внутренняя кромка ямы — внутрь; схождение → шов лучей (C41) |
 | `road_shoulder` | Связные клетки **полотна = одна вершина** | Обе обочины (R20); не в полотно и не вдоль дороги в следующий якорь. Прямая = 2 орто-фронта. **Поворот: 8-way**; внутренний угол — тот же **шов лучей** (C41), не отдельный if |
-| `shore` / `ravine` | Тот же каркас; геометрия тела — при impl | К суше / в маску; схождение лучей — C41, не запрет перекрёста |
+| `ravine` | Банк (суша у маски) + same-z стены на `system_terrain=ravine`; интерьер террасы в теле, не сеет. Плоский пол без Δz — не site | В маску (ниже). Kind = knobs шаблона (SLOPE/SHEER) через `grade_constrained`, не plugin |
+| `shore` | Тот же каркас; геометрия тела — при impl (stub). Класс клетки — `shore_river` / `shore_lake` / `shore_sea` | TBD (лучи вниз); схождение — C41 |
 
 ##### Членство (locked)
 
@@ -1279,6 +1340,7 @@ Stamp `|dz|=1` на plains — нет (R37). Later SHEER-entity на едини�
 | Клетка `system_grade_uid` | всегда **Instance**, никогда System (R36l / C11) |
 | Тело вершины | **не** штамповать uid (якоря R36t) |
 | `Instance.grade_system_uid` | uuid вершины **только если** есть строка System |
+| Inherit uid | **только орто** (`CARDINAL_ORTHO_DELTAS`). Discover членство/выстрелы — 8-way. C29 ребро чанка орто; диагональный сосед с uid — другой фронт (C15) или угол чанка, не тот же ribbon. Не first-lock-wins (C41) |
 
 **Одна грань = один фронт = один Instance** (один θ, один `Facing`). У вершины может быть 1–8 фронтов. **1 фронт → строки `relief_grade_systems` нет.** SQL FK: `grade_system_uid` на Instance ссылается на `relief_grade_systems`; NULL допустим. **Не** писать uuid на Instance без строки System. Рабочий слот у холма с одной стороной есть; persist System — только при ≥2 Instance.
 
@@ -1307,10 +1369,26 @@ Day-1: орто W×L + диагональ W=1 Chebyshev `(±1,±1)` через �
 
 | Контекст | Envelope |
 |---|---|
-| `road_shoulder` / `shore` / `ravine` | **не** применяется; L_tpl + R36m `free_gap` |
+| `road_shoulder` / `ravine` | **не** применяется; L_tpl + R36m `free_gap` |
+| `shore` | по классу клетки: unconstrained ряд → как ravine (L_tpl); constrained (`shore_sea`, …) → пол строки, как open_land |
 | `open_land` plains/forest | `L = min(L_ray, max(L_tpl, ceil(h/tan 20°), 20))` — шаблон 2 **поднимается**, не «режется до 2» |
 
 Halo = `max(L_tpl, envelope floor)`, не JSON-2.
+
+##### Канон L (R41-T-8)
+
+Classify и stamp смотрят **один** коридор после C41. Occupancy cap до C41 остаётся **L_tpl**; envelope floor = **halo**. Не новый 1D `plan_ribbon_volume`.
+
+| Символ | Что |
+|---|---|
+| Occupancy cap до C41 | **L_tpl** (не envelope floor) |
+| Halo | `max(L_tpl, envelope floor)` — чтение, не cap |
+| `L_ray` / `path_length` | max k уникального коридора после шва |
+| `h` | `z_body − z` на клетке этого max k |
+| `requested_length` | knobs/envelope, clamped `L_ray` |
+| Stamp `L_eff` | тот же max k коридора; R36m clearance может ещё укоротить (L2) |
+
+Не классифицировать по полному следу до C41 (шов отрезал бы другой `h`).
 
 ##### Три такта
 
@@ -1344,7 +1422,7 @@ Halo = `max(L_tpl, envelope floor)`, не JSON-2.
 
 ##### Фронты
 
-До 8 сторон с кромки, только **вниз** и не в то же тело. У стороны свой θ до упора, шва лучей (C41) или пока z не сойдёт с рампы. **Ширина — R42**. Схождение следов одной вершины — шов, не четыре uid на клетку. Излом → новый Grade / кромка **если клетка ещё не покрыта** и не шов. Каскад сверху вниз по z. Stamp `|dz|=1` — **нет** (R37). Диагональный thick volume — R36r later; шаг = Chebyshev 1 (R36s).
+До 8 сторон с кромки, только **вниз** и не в то же тело. У стороны свой θ до упора, шва лучей (C41) или пока z не сойдёт с рампы. **Равная z вдоль луча = продолжение L** (пол рампы / ravine); стоп на **подъёме** `z > z_body` / `z > z_prev` (R41-T-5). **Ширина — R42**. Схождение следов одной вершины — шов, не четыре uid на клетку. Излом → новый Grade / кромка **если клетка ещё не покрыта** и не шов. Каскад сверху вниз по z. Stamp `|dz|=1` — **нет** (R37, `stamp_min_abs_dz`). Диагональный thick volume — R36r later; шаг = Chebyshev 1 (R36s).
 
 ##### v2 снимает из v1
 
@@ -1705,11 +1783,37 @@ road_shoulder > shore > mountain > ravine > open_land
 
 | | |
 |---|---|
-| **Где grade** | клетки `system_terrain=ravine` у берега (стены); плоский пол без Δz — не site |
-| **Не** | downhill-sample `open_land` (seed на дне ямы) |
-| **Conditions** | Mode A/B; первичный блок `terrain: ravine` (R26/R34); нет `side_recipe` (R33) |
+| **Где grade** | клетки `system_terrain=ravine` у берега и leftover-стены маски; плоский пол без Δz — не site |
+| **Не** | downhill-sample `open_land` (seed на дне ямы); kind в plugin |
+| **Conditions** | Mode A/B; первичный блок `terrain: ravine` (R26/R34); нет `side_recipe` (R33); SLOPE/SHEER = knobs шаблона |
 | **World → location** | мир: `relief_pick_policy.ravine`; частные правила локации — `ObjectReliefPickPolicy.ravine` (R31) |
-| **Generate** | `sample_ravine_meter` — bank = ref, mask cell = seed; `_CONTEXT_SAMPLES` |
+| **Generate** | `RavinePlugin`: банк + стены маски; стрельба в маску; `_CONTEXT_SAMPLES` / `sample_ravine_meter` — deprecated |
+
+### Context `shore`
+
+`shore` = **один** `ReliefContext` (pick / library). Класс берега = **`ReliefConditionTerrain`**, как plains vs forest у `open_land`. Не четыре контекста pick.
+
+Hydro красит клетку берега ([`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) U15). Relief **не** автор полосы: SLOPE/SHEER по knobs внутри конверта класса. Полы — § Ontology envelope (R37).
+
+| | |
+|---|---|
+| **Где grade** | кромка суша ↔ полоса; у реки/горной реки/озера — **ещё дно** (канава / чаша). Плоский берег без Δz — не site. Геометрия тела plugin — при impl (stub) |
+| **Класс клетки** | `shore_river` / `shore_mountain_river` / `shore_lake` / `shore_sea` (R34) |
+| **Не** | один `system_terrain=shore`; подменять пол шириной `bands`; `hydrology_role` как ключ envelope |
+| **Conditions** | Mode A/B; блоки на четыре класса; нет `side_recipe` (R33) |
+| **World → location** | `relief_pick_policy.shore` (один слот) |
+| **Pick site** | contiguous run **одного** класса |
+| **`mountain_river` (U17)** | тип **русла**; клетка берега = **`shore_mountain_river`** (θ 20–70°, L min 2) |
+| **`inland_sea`** | `shore_sea` |
+| **Canal entity** | `CanalObstacleEntity.shore` = любой shore_* |
+| **Generate** | `ShorePlugin` (stub); канава/террасы — SoT, writer later |
+
+**Две оси (не путать с hydro bands):**
+
+| Ось | Владеет | Пример |
+|---|---|---|
+| `bands` | hydrology U15 | сколько клеток **в воду** |
+| envelope + conditions | relief R37 / R26 | река/озеро L min 2; море L min 5 и θ 20–70° |
 
 ### Context `road_shoulder` (R20, R22, R23, R25–R28, R36)
 
@@ -2138,7 +2242,7 @@ flowchart LR
 | [`tz_terrain_generation.md`](./tz_terrain_generation.md) | `surface_z`, gap, column fill; **не** SoT grade |
 | [`tz_mountain_architecture.md`](./tz_mountain_architecture.md) | PassBuilder topology; grade — только через relief |
 | [`tz_map_light_bake.md`](./tz_map_light_bake.md) | MaskDomain paint (mountain/forest/plains/road); SideFill → relief |
-| [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) | shore / bands / liquid; **береговой grade** → relief template `shore` |
+| [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) | shore / bands / liquid; **класс клетки** `shore_river`/`shore_lake`/`shore_sea`; **береговой grade** → relief context `shore` |
 | [`tz_flora.md`](./tz_flora.md) | деревья / forest eligibility; landcover `forest` ≠ grade |
 | [`tz_structure_connections.md`](./tz_structure_connections.md) | полотно / lanes / sidewalk; **не** SoT `road_shoulder` grade |
 | [`tz_locations.md`](./tz_locations.md) | эталон facing (stairs); registry UX |
@@ -2390,10 +2494,11 @@ Grade/SQL `owner_uid` (no FK to connection_edges). L0 `ribbon_intents` — **gon
 
 ## Порядок имплементации (anti-slice)
 
-**SoT очереди.** Agent pointer: [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).  
-**Текущий impl:** pipeline v2 — [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md).  
-Post-R36w (shipped): [`.cursor/plans/detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md).  
-Debt IDs: [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) § R36i-T · **R41-T-1** ✅ · **R41-T-2…T-4** ✅ · **R41-T-5…T-12** open · post-impl **R36i-T-4…T-15** ✅.
+**SoT очереди сейчас:** § [Осталось — v2 vs L2 volume](#осталось--v2-vs-l2-volume-locked) (толстый ravine ✅; next = `shore` stub **или** слой 6 T-3c; **R41-T-5…T-8** ✅; L2 volume закрыт).  
+**Agent pointer (история волн):** [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).  
+**Текущий impl v2:** [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md).  
+Post-R36w (shipped, **не** трогать apply): [`.cursor/plans/detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md).  
+Debt IDs: [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) § R36i-T · **R41-T-1…T-8** ✅ · **R41-T-9…T-12** open · **T-3c** слой 6 · post-impl **R36i-T-4…T-15** ✅.
 
 ```text
 Wave A–D (shipped / L0 historical)   R36u/v/w ✅     Post-R36w ✅                    Wave E (later)
@@ -2498,7 +2603,7 @@ L0 call site (`compose_light_grid` / `paintBarrier`) **removed** с outdoor ribb
 
 **Вне apply (этот подраздел):** BAR-1 detailed fence (T-2); R36o; patch helper / DAG; Wave E. Граф + System — **C28** (соседний подраздел), не этот apply. L0 `world-grade` ASCII — omit (PAR-G5).
 
-**Post-impl (не Wave E):** [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) **R36i-T-4…T-15** ✅.
+**Post-impl (не Wave E):** [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) **R36i-T-4…T-15** ✅. **Осталось не в этом apply** — § [Осталось — v2 vs L2 volume](#осталось--v2-vs-l2-volume-locked).
 
 ### Topology → entity → stamp (C28) — каталог ✅; discover = R41; T-3c System row
 
@@ -2630,7 +2735,7 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 | [`tz_terrain_generation.md`](./tz_terrain_generation.md) | skeleton / `N_eff`; pointer; **patch → тот же grade helper (R36v)** |
 | [`tz_mountain_architecture.md`](./tz_mountain_architecture.md) | topology; не SideKind |
 | [`tz_map_light_bake.md`](./tz_map_light_bake.md) | mountains / forests / plains / roads paint |
-| [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) | shore / liquid; consumer `shore` |
+| [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) | shore / liquid; consumer `shore`; класс `shore_river`/`shore_lake`/`shore_sea` |
 | [`tz_flora.md`](./tz_flora.md) | forest flora; не grade |
 | [`tz_climate.md`](./tz_climate.md) | `SurfaceClimateField` через технический шов (**C29**); relief климат не пишет |
 | [`tz_structure_connections.md`](./tz_structure_connections.md) | полотно — мировые рёбра через шов (**C29**); не `road_shoulder` |
@@ -2639,7 +2744,7 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 | [`tz_building_generator.md`](./tz_building_generator.md) | library + world registry + import образец |
 | [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | pack partition ≠ продукт; шов мира vs технический (**C29**); **modification** = Patch Store; `detailed_bake` location — **R41** (не stencil volume); стык швов после чанков |
 | [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) | pack ASCII: L0 map/height **без** outdoor grade (**R36u**); L2 `surface_grade` / `grade_{n}`; FineTerrain `system_grade_uid`→Instance (PAR-G7/G10); ~~PAR-G8~~ superseded |
-| [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | open IDs; **R41-T-1** ✅; **R41-T-2…T-4** ✅; **T-5…T-12** open; **R36i-T-2** fence; **T-3a** ASCII omit; **T-3b** graph ✅ (occupancy deprecated); **T-3c** System; **C29** шов; post-impl **R36i-T-4…T-15** ✅ |
+| [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | IDs; очередь SoT — § Осталось — v2 vs L2 volume; **R41-T-1…T-8** ✅; **T-9…T-12** open; **T-3c** System; **R36i-T-2** fence; **R36i-T-4…T-15** ✅ |
 | [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md) | agent pointer на § Порядок |
 | [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md) | impl R41: типы → discover → paint adapter → worker A → plugins → T-3c → срез v1 |
 | [`.cursor/plans/detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md) | Post-R36w GradeFormation apply; код по «делай» архитектуру |
@@ -2650,7 +2755,11 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 
 | Дата | Изменение |
 |---|---|
-| 2026-08-17 | **R41-T-2…T-4 resolved:** apply=`DiscoveredFront`; occupancy cap = L_tpl; ravine flood = bank. **T-5…T-12** remain |
+| 2026-08-17 | **`shore_lake` locked:** те же цифры, что `shore_river` (SLOPE/SHEER, L≥2, канава по дну); отдельный класс / hydro paint, не alias реки |
+| 2026-08-17 | **Shore ontology цифры:** `shore_river` L≥2 + канава по дну; `shore_mountain_river` θ 20–70° L≥2 + канава; `shore_sea` θ 20–70° L≥5, SHEER h≥5 или террасы ≥5; `shore_lake` TBD. U17 → свой класс берега |
+| 2026-08-17 | **R41-T-5…T-8 resolved:** равная z = продолжение L; inherit только орто (C15/C29); `stamp_min_abs_dz` на envelope; classify/stamp = коридор после C41 |
+| 2026-08-17 | **Очередь locked:** § Осталось — v2 vs L2 volume. Volume закрыт; ~~T-5…T-8~~ ✅ → слой 5 shore/яма → T-3c → срез v1. Не форкать apply |
+| 2026-08-17 | **R41-T-2…T-4 resolved:** apply=`DiscoveredFront`; occupancy cap = L_tpl; ravine flood = bank. **T-5…T-8** later same day ✅ |
 | 2026-08-17 | **R41-T-2…T-12:** post-impl smells v2 в [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) (C40, cap_front, ravine flood, walk vs TZ, inherit 4/8, R37 plugin, три L) |
 | 2026-08-17 | **План impl v2** + **код v1 deprecated:** [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md). Sample/stitch/`planned` — не контракт; каталог и L2 apply живые. R41-T-1 |
 | 2026-08-17 | **C41 шов лучей:** фронты одной вершины могут сходиться; клетка ∈ ≥2 следов — ничей коридор (`seam`); не первый-занял. Дырка 1×1 → skip. Не путать с C29. `ReliefVertices.seam` |

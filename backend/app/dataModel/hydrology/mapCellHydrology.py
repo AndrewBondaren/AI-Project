@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from app.dataModel.annotationPolicy import DefaultOnWire
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
+from app.dataModel.hydrology.enums.hydrologyShoreKind import HydrologyShoreKind
 
 
 class MapCellHydrology(BaseModel):
@@ -26,6 +27,23 @@ class MapCellHydrology(BaseModel):
     role: DefaultOnWire[HydrologyCellRole | None] = None
     deepening_index: DefaultOnWire[int | None] = constrained_field(default=None, greater_equals=0)
     connection_edge_uid: DefaultOnWire[str | None] = None
+    shore_kind: DefaultOnWire[HydrologyShoreKind | None] = None
+
+    @classmethod
+    def shore(
+        cls,
+        kind: HydrologyShoreKind,
+        *,
+        deepening_index: int = 0,
+        connection_edge_uid: str | None = None,
+    ) -> MapCellHydrology:
+        """``role=shore`` cell with paint kind (U15)."""
+        return cls(
+            role=HydrologyCellRole.SHORE,
+            shore_kind=kind,
+            deepening_index=deepening_index,
+            connection_edge_uid=connection_edge_uid,
+        )
 
     @model_validator(mode="before")
     @classmethod
@@ -38,6 +56,9 @@ class MapCellHydrology(BaseModel):
             out["liquid_candidate"] = False
         elif role is not None and role.is_open_water_role():
             out["liquid_candidate"] = True
+        kind = HydrologyShoreKind.from_wire(out.get("shore_kind"))
+        if kind is not None:
+            out["shore_kind"] = kind
         return out
 
     def is_liquid_candidate(self) -> bool:

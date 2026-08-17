@@ -6,6 +6,7 @@ Not world JSON in v1 — ``canonical_defaults()`` is SoT.
 
 from __future__ import annotations
 
+import math
 from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -22,6 +23,11 @@ _ANGLE_EPS_DEG = 1e-9
 _SHEER_LENGTH_CELLS = 1
 
 
+_SHORE_SLOPE_MIN_DEG = 20.0
+_SHORE_SLOPE_MAX_DEG = 70.0
+_SHORE_CONTEXTS = (ReliefContext.SHORE,)
+
+
 def _open_land_grade_floor(
     *,
     slope_preferred: bool,
@@ -35,6 +41,7 @@ def _open_land_grade_floor(
         slope_preferred=slope_preferred,
         allow_l_gt_h=True,
         sheer_min_abs_dz=sheer_min_abs_dz,
+        stamp_min_abs_dz=2,
         apply_in_contexts=(ReliefContext.OPEN_LAND,),
     )
 
@@ -49,6 +56,55 @@ def _forest_canonical() -> ReliefTerrainEnvelope:
     return _open_land_grade_floor(slope_preferred=False, sheer_min_abs_dz=4)
 
 
+def _shore_river_canonical() -> ReliefTerrainEnvelope:
+    """Plains river: SLOPE/SHEER; L min 2; grade the channel bed."""
+    return ReliefTerrainEnvelope(
+        slope_length_min_cells=2,
+        sheer_allowed=True,
+        allow_l_gt_h=True,
+        grades_channel_bed=True,
+        apply_in_contexts=_SHORE_CONTEXTS,
+    )
+
+
+def _shore_mountain_river_canonical() -> ReliefTerrainEnvelope:
+    """Mountain river: SLOPE θ in [20°, 70°]; L min 2; grade the channel bed."""
+    return ReliefTerrainEnvelope(
+        slope_min_angle_deg=_SHORE_SLOPE_MIN_DEG,
+        slope_max_angle_deg=_SHORE_SLOPE_MAX_DEG,
+        slope_length_min_cells=2,
+        sheer_allowed=True,
+        allow_l_gt_h=True,
+        grades_channel_bed=True,
+        apply_in_contexts=_SHORE_CONTEXTS,
+    )
+
+
+def _shore_lake_canonical() -> ReliefTerrainEnvelope:
+    """Lake: same floor as plains river; own row — not ``shore_river``."""
+    return ReliefTerrainEnvelope(
+        slope_length_min_cells=2,
+        sheer_allowed=True,
+        allow_l_gt_h=True,
+        grades_channel_bed=True,
+        apply_in_contexts=_SHORE_CONTEXTS,
+    )
+
+
+def _shore_sea_canonical() -> ReliefTerrainEnvelope:
+    """Sea: SLOPE θ in [20°, 70°]; L min 5; SHEER h≥5 or terraces L≥5."""
+    return ReliefTerrainEnvelope(
+        slope_min_angle_deg=_SHORE_SLOPE_MIN_DEG,
+        slope_max_angle_deg=_SHORE_SLOPE_MAX_DEG,
+        slope_length_min_cells=5,
+        sheer_allowed=True,
+        sheer_min_abs_dz=5,
+        sheer_terrace_min_cells=5,
+        allow_l_gt_h=True,
+        apply_in_contexts=_SHORE_CONTEXTS,
+    )
+
+
 class ReliefTerrainEnvelope(BaseModel):
     """Floor for one landcover class. All-omit = pass-through (no extra clamp)."""
 
@@ -58,6 +114,7 @@ class ReliefTerrainEnvelope(BaseModel):
         default=0, greater_equals=0,
     )
     slope_max_angle_deg: DefaultOnWire[float | None] = None
+    slope_min_angle_deg: DefaultOnWire[float | None] = None
     slope_length_min_cells: DefaultOnWire[int | None] = None
     slope_length_max_cells: DefaultOnWire[int | None] = None
     sheer_allowed: DefaultOnWire[bool] = True
@@ -65,6 +122,11 @@ class ReliefTerrainEnvelope(BaseModel):
     allow_l_gt_h: DefaultOnWire[bool] = False
     sheer_min_abs_dz: DefaultOnWire[int] = constrained_field(
         default=0, greater_equals=0,
+    )
+    sheer_terrace_min_cells: DefaultOnWire[int | None] = None
+    grades_channel_bed: DefaultOnWire[bool] = False
+    stamp_min_abs_dz: DefaultOnWire[int] = constrained_field(
+        default=1, greater_equals=1,
     )
     apply_in_contexts: DefaultOnWire[tuple[ReliefContext, ...] | None] = None
 
@@ -82,17 +144,32 @@ class ReliefTerrainEnvelope(BaseModel):
             angle = float(self.slope_max_angle_deg)
             if angle <= 0.0 or angle >= 90.0:
                 raise ValueError("slope_max_angle_deg must be in (0, 90)")
+        if self.slope_min_angle_deg is not None:
+            angle = float(self.slope_min_angle_deg)
+            if angle <= 0.0 or angle >= 90.0:
+                raise ValueError("slope_min_angle_deg must be in (0, 90)")
+        if (
+            self.slope_min_angle_deg is not None
+            and self.slope_max_angle_deg is not None
+            and float(self.slope_min_angle_deg) > float(self.slope_max_angle_deg)
+        ):
+            raise ValueError("slope_min_angle_deg must be <= slope_max_angle_deg")
+        if self.sheer_terrace_min_cells is not None and int(self.sheer_terrace_min_cells) < 1:
+            raise ValueError("sheer_terrace_min_cells must be >= 1")
         return self
 
     def is_unconstrained(self) -> bool:
         return (
             int(self.plateau_z_band_factor) <= 0
             and self.slope_max_angle_deg is None
+            and self.slope_min_angle_deg is None
             and self.slope_length_min_cells is None
             and self.slope_length_max_cells is None
             and not self.slope_preferred
             and not self.allow_l_gt_h
             and int(self.sheer_min_abs_dz) <= 0
+            and self.sheer_terrace_min_cells is None
+            and not self.grades_channel_bed
         )
 
     def applies_to(self, context: ReliefContext) -> bool:
@@ -113,9 +190,21 @@ class ReliefTerrainEnvelope(BaseModel):
             return False
         return int(h) >= int(self.sheer_min_abs_dz)
 
+    def stamps_first_step(self, abs_dz: int, context: ReliefContext) -> bool:
+        """Discover may propose this first-step |dz| (R37 / R41-T-7).
+
+        Not a geom clamp: ``grade_constrained`` still classifies ``h=1`` as a
+        gentle SLOPE when called without a seed. Pass-through contexts
+        (``apply_in_contexts`` miss) do not inherit this floor.
+        """
+        if not self.applies_to(context):
+            return True
+        return int(abs_dz) >= int(self.stamp_min_abs_dz)
+
     def has_slope_length_constraints(self) -> bool:
         return (
             self.slope_max_angle_deg is not None
+            or self.slope_min_angle_deg is not None
             or self.slope_length_min_cells is not None
             or self.slope_length_max_cells is not None
         )
@@ -134,6 +223,18 @@ class ReliefTerrainEnvelope(BaseModel):
         if h_i < 1:
             return 1
         return length_from_target_angle(h_i, float(self.slope_max_angle_deg))
+
+    def length_from_min_angle(self, h: int) -> int | None:
+        """Max L so θ ≥ θ_min: ``L = floor(h / tan θ_min)``."""
+        if self.slope_min_angle_deg is None:
+            return None
+        h_i = max(0, int(h))
+        if h_i < 1:
+            return 1
+        tan_t = math.tan(math.radians(float(self.slope_min_angle_deg)))
+        if tan_t <= 0.0:
+            return None
+        return max(1, math.floor(h_i / tan_t))
 
     def envelope_length_floor(self, h: int) -> int:
         """``max(L_min, ceil(h / tan θ_max))`` — plains: ``max(20, ceil(h / tan 20°))``."""
@@ -190,26 +291,37 @@ class ReliefTerrainEnvelope(BaseModel):
             fallback=l_floor,
         )
         length = self.clamp_slope_length(max(l_tpl, l_floor))
+        l_ceil = self.length_from_min_angle(h)
+        if l_ceil is not None:
+            length = min(length, l_ceil)
         if length_cap is not None:
             length = min(length, max(0, int(length_cap)))
-        return length
+        return max(1, length)
 
     def slope_angle_deg(self, h: int, length: int) -> float:
         """Geom-A: ``θ = atan(h / L)`` for a candidate ramp."""
         return angle_from_height_length(h, length)
 
     def slope_fits(self, h: int, length: int) -> bool:
-        if self.slope_max_angle_deg is None:
-            return True
         h_i = max(0, int(h))
         l_i = int(length)
         if h_i < 1:
             return True
         if l_i < 1:
             return False
-        return self.slope_angle_deg(h_i, l_i) <= (
-            float(self.slope_max_angle_deg) + _ANGLE_EPS_DEG
-        )
+        if (
+            self.slope_length_min_cells is not None
+            and l_i < int(self.slope_length_min_cells)
+        ):
+            return False
+        theta = self.slope_angle_deg(h_i, l_i)
+        if self.slope_max_angle_deg is not None:
+            if theta > float(self.slope_max_angle_deg) + _ANGLE_EPS_DEG:
+                return False
+        if self.slope_min_angle_deg is not None:
+            if theta < float(self.slope_min_angle_deg) - _ANGLE_EPS_DEG:
+                return False
+        return True
 
     def slope_outcome(self, h: int, length: int) -> str:
         """``slope`` | ``sheer`` | ``skip`` after envelope length is known."""
@@ -245,8 +357,17 @@ class ReliefOntologyEnvelopes(BaseModel):
     ravine: DefaultOnWire[ReliefTerrainEnvelope] = Field(
         default_factory=ReliefTerrainEnvelope,
     )
-    shore: DefaultOnWire[ReliefTerrainEnvelope] = Field(
-        default_factory=ReliefTerrainEnvelope,
+    shore_river: DefaultOnWire[ReliefTerrainEnvelope] = Field(
+        default_factory=_shore_river_canonical,
+    )
+    shore_mountain_river: DefaultOnWire[ReliefTerrainEnvelope] = Field(
+        default_factory=_shore_mountain_river_canonical,
+    )
+    shore_lake: DefaultOnWire[ReliefTerrainEnvelope] = Field(
+        default_factory=_shore_lake_canonical,
+    )
+    shore_sea: DefaultOnWire[ReliefTerrainEnvelope] = Field(
+        default_factory=_shore_sea_canonical,
     )
 
     @classmethod

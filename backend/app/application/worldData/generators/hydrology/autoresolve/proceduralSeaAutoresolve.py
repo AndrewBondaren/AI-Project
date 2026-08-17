@@ -19,6 +19,7 @@ from app.application.worldData.generators.hydrology.basins.seaLevelPolicy import
 from app.application.worldData.generators.hydrology.types import HydrologyBands, HydrologyMasterInput
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
+from app.dataModel.hydrology.enums.hydrologyShoreKind import HydrologyShoreKind
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 
 
@@ -50,8 +51,8 @@ def _carve_water_candidates(
                 continue
             deepening = distance
             heightmap.surface_z[cell] = max(level, level + (shelf_depth - deepening + 1))
-            by_cell[cell] = MapCellHydrology(
-                role=HydrologyCellRole.SHORE,
+            by_cell[cell] = MapCellHydrology.shore(
+                HydrologyShoreKind.SEA,
                 deepening_index=deepening,
             )
         else:
@@ -122,8 +123,8 @@ def _autoresolve_from_map_boundary(
     for cell in land_shore:
         if cell in occupied:
             continue
-        by_cell[cell] = MapCellHydrology(
-            role=HydrologyCellRole.SHORE,
+        by_cell[cell] = MapCellHydrology.shore(
+            HydrologyShoreKind.SEA,
             deepening_index=0,
         )
 

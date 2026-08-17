@@ -2,6 +2,7 @@
 
 Catalog ``face_key`` is identity, not a seed graph. No pre-pool occupancy.
 Pick runs after discover (R41-T-3). Apply takes ``DiscoveredFront`` (R41-T-2).
+Classify ``path_length`` / ``dz`` come from the C41 corridor (R41-T-8).
 """
 
 from __future__ import annotations
@@ -18,7 +19,6 @@ from app.application.worldData.generators.terrain.relief.discover.core import (
 )
 from app.application.worldData.generators.terrain.relief.discover.neighbors import (
     GRID_OUTWARD_DELTA,
-    step_k,
 )
 from app.application.worldData.generators.terrain.relief.discover.plugins import (
     plugins_for_keys,
@@ -204,8 +204,7 @@ def discover_and_paint(
             continue
         terrain_key, system_terrain = _terrain_of(grid, front)
         site_id = _site_id(front)
-        ks = [step_k(cell, front.rim, front.outward) for cell in front.corridor]
-        path_length = max((k for k in ks if k is not None), default=0)
+        path_length = int(front.path_length)
         if path_length < 1:
             relief_debug(
                 "grade_front_skip",

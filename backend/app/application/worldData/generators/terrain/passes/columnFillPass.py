@@ -2,6 +2,7 @@ from app.application.jsonValidation import terrain_masks, terrain_scalars, terra
 from app.application.worldData.generators.terrain.passes.gapAnalysisPass import n_base
 from app.application.worldData.generators.hydrology.shore.shoreProfile import (
     apply_shore_surface,
+    infer_shore_kind,
     shore_terrain_material,
 )
 from app.application.worldData.generators.terrain.worldMapSettings import world_z_min
@@ -74,7 +75,6 @@ def run_column_fill(
     z_min       = world_z_min(world)
     magma_thick = _magma_thickness(world)
     use_magma   = magma_thick > 0 and bool(terrain_scalars(world).closed_planet_grid)
-    shore_terrain, shore_material = shore_terrain_material(world)
     default_zone = WorldClimateScalars.canonical_defaults().default_climate_zone
     masks = terrain_masks(world)
     plains_fallback = default_surface_terrain(world)
@@ -112,15 +112,22 @@ def run_column_fill(
                 material = None
                 if z == z_top and hydrology_entry is not None:
                     hydrology_wire = dump_cell_hydrology(hydrology_entry)
-                    terrain = apply_shore_surface(
-                        hydrology_entry.role,
-                        z,
-                        terrain_set,
-                        terrain,
-                        shore_terrain=shore_terrain,
-                    )
                     if hydrology_entry.role == HydrologyCellRole.SHORE:
-                        material = shore_material
+                        kind = hydrology_entry.shore_kind
+                        if kind is None and hydrology_by_cell is not None:
+                            kind = infer_shore_kind(key, hydrology_by_cell)
+                        if kind is not None:
+                            shore_terrain, shore_material = shore_terrain_material(
+                                world, kind,
+                            )
+                            terrain = apply_shore_surface(
+                                hydrology_entry.role,
+                                z,
+                                terrain_set,
+                                terrain,
+                                shore_terrain=shore_terrain,
+                            )
+                            material = shore_material
                     elif (
                         hydrology_entry.role == HydrologyCellRole.RIVER_BED
                         and "liquid_body" in terrain_set

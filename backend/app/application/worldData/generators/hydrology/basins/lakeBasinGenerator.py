@@ -21,6 +21,7 @@ from app.application.worldData.generators.hydrology.types import (
 )
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
+from app.dataModel.hydrology.enums.hydrologyShoreKind import HydrologyShoreKind
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 
 
@@ -170,19 +171,14 @@ def carve_lake_interior(
     floor_z = max(0, rim_z - shelf_depth - 1)
 
     by_cell: dict[tuple[int, int], MapCellHydrology] = {}
+    kind = HydrologyShoreKind.for_open_water_role(open_role) or HydrologyShoreKind.LAKE
     for cell in land_shore:
-        by_cell[cell] = MapCellHydrology(
-            role=HydrologyCellRole.SHORE,
-            deepening_index=0,
-        )
+        by_cell[cell] = MapCellHydrology.shore(kind, deepening_index=0)
 
     for cell, distance in interior_dist.items():
         if distance <= shelf_depth:
             heightmap.surface_z[cell] = max(floor_z, rim_z - distance)
-            by_cell[cell] = MapCellHydrology(
-                role=HydrologyCellRole.SHORE,
-                deepening_index=distance,
-            )
+            by_cell[cell] = MapCellHydrology.shore(kind, deepening_index=distance)
         else:
             heightmap.surface_z[cell] = floor_z
             by_cell[cell] = MapCellHydrology(role=open_role)

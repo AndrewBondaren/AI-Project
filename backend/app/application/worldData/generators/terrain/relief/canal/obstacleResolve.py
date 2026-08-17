@@ -26,7 +26,11 @@ _TERRAIN_TO_CANAL_ENTITY: dict[str, CanalObstacleEntity] = {
     ReliefConditionTerrain.MOUNTAIN.value: CanalObstacleEntity.MOUNTAIN,
     ReliefConditionTerrain.PLAINS.value: CanalObstacleEntity.PLAINS,
     ReliefConditionTerrain.FOREST.value: CanalObstacleEntity.FOREST,
-    ReliefConditionTerrain.SHORE.value: CanalObstacleEntity.SHORE,
+    ReliefConditionTerrain.SHORE_RIVER.value: CanalObstacleEntity.SHORE,
+    ReliefConditionTerrain.SHORE_MOUNTAIN_RIVER.value: CanalObstacleEntity.SHORE,
+    ReliefConditionTerrain.SHORE_LAKE.value: CanalObstacleEntity.SHORE,
+    ReliefConditionTerrain.SHORE_SEA.value: CanalObstacleEntity.SHORE,
+    "shore": CanalObstacleEntity.SHORE,
     CanalObstacleEntity.ROAD.value: CanalObstacleEntity.ROAD,
 }
 

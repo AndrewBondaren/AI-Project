@@ -74,6 +74,8 @@ Preset keys в fixtures (`temperate`, `water`) — **строки N1-W**, не �
 Полная таблица — git history v0.1 § Field Contract Registry.  
 Имплементация: `jsonValidation/index/` (✅ MVP), **после** `resolve` + normalize.
 
+**Hydrology shore (U15 v2):** REF-W на `default_shore` **и** `default_rivers.shore` / `mountain_shore` / `default_lakes.shore` / `default_seas.shore` (`system_terrain` → terrain_registry, `system_material` → material_registry). Category `.shore.system_terrain` — closed set `shore_river` \| `shore_mountain_river` \| `shore_lake` \| `shore_sea` (`SHORE_CLASS_UNKNOWN`). Legacy `default_shore.system_terrain=shore` остаётся REF-W only. Это не «весь jsonValidation v2» (JV-0 races/bundle ⬜).
+
 ### Wire enum parse
 
 `jsonValidation/wire.py` — `parse_enum()` / `WireEnumError` на границе **import** (ENUM-E).  

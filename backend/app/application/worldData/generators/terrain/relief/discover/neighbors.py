@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from app.dataModel.spatial.facing import (
     CARDINAL_WALL_OUTWARD_DELTA,
     Facing,
@@ -96,3 +98,33 @@ def truncate_trace(
         cell for cell in trace
         if (k := step_k(cell, rim, facing)) is not None and k <= cap
     )
+
+
+def max_outward_k(
+    cells: Sequence[tuple[int, int]],
+    rim: tuple[tuple[int, int], ...],
+    facing: Facing,
+) -> int:
+    """Max outward ``k`` in ``cells`` (C41 corridor / paint L). ``0`` if empty."""
+    best = 0
+    for cell in cells:
+        k = step_k(cell, rim, facing)
+        if k is not None and k > best:
+            best = k
+    return best
+
+
+def cell_at_max_outward_k(
+    cells: Sequence[tuple[int, int]],
+    rim: tuple[tuple[int, int], ...],
+    facing: Facing,
+) -> tuple[int, int] | None:
+    """Cell at the largest outward ``k`` (last on ties)."""
+    best_cell: tuple[int, int] | None = None
+    best_k = 0
+    for cell in cells:
+        k = step_k(cell, rim, facing)
+        if k is not None and (best_cell is None or k >= best_k):
+            best_k = k
+            best_cell = cell
+    return best_cell
