@@ -1,4 +1,8 @@
-"""Shared ribbon site sample — R36u-T-7 (meter + leftover L0)."""
+"""Shared ribbon site sample — R36u-T-7 (meter + leftover L0).
+
+Deprecated v1 occupancy (R38). SoT discover is R41
+(``.cursor/plans/relief-pipeline-v2.md``). Still the live bake path.
+"""
 
 from __future__ import annotations
 
@@ -35,7 +39,10 @@ def sample_downhill_land_sites(
     *,
     deltas: tuple[tuple[int, int], ...] = CARDINAL_ORTHO_DELTAS,
 ) -> tuple[list[SampleCell], set[Coord]]:
-    """Uphill land = ref; downhill ortho neighbor = seed."""
+    """Deprecated v1: uphill land = ref; downhill ortho neighbor = seed.
+
+    SoT: uncovered rims + occupancy (C39), not every downhill step.
+    """
     samples: list[SampleCell] = []
     ref_cells: set[Coord] = set()
     seen_seeds: set[Coord] = set()
@@ -81,10 +88,11 @@ def sample_peak_land_sites(
     seed_ok: Callable[[Coord], bool] | None = None,
     deltas: tuple[tuple[int, int], ...] = CARDINAL_ORTHO_DELTAS,
 ) -> tuple[list[SampleCell], set[Coord]]:
-    """Crest (local peak or cascade) × cardinal facing → one downhill seed.
+    """Deprecated v1: crest (local peak or cascade) × cardinal facing → seed.
 
-    ``|dz| < TERRAIN_RAY_MIN_ABS_DZ`` (4→3) is left as the heightmap.
-    ``|dz| >= 2``: L = terrain ray until a voxel blocks; ``h = z_crest − z_end``.
+    SoT: rim with descent (R41), not hunt local max (R38). ``|dz| <
+    TERRAIN_RAY_MIN_ABS_DZ`` (4→3) is left as the heightmap. ``|dz| >= 2``:
+    L = terrain ray until a voxel blocks; ``h = z_crest − z_end``.
     """
     lookup = z_at or (lambda cell: None if cell not in land else land[cell][1])
     extra = crests_extra or set()
@@ -132,7 +140,10 @@ def sample_landward_of_refs(
     neighbor_site: NeighborSite,
     deltas: tuple[tuple[int, int], ...] = CARDINAL_ORTHO_DELTAS,
 ) -> tuple[list[SampleCell], set[Coord]]:
-    """SHORE/abutment refs → landward ortho seeds via adapter ``neighbor_site``."""
+    """Deprecated v1: SHORE/abutment refs → landward ortho seeds.
+
+    SoT: context plugin on the vertex body (R41), not per-ref ortho seeds.
+    """
     samples: list[SampleCell] = []
     ref_cells: set[Coord] = set()
     seen_seeds: set[Coord] = set()

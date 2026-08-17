@@ -419,6 +419,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         )
 
     def test_two_rects_stitch_one_uid(self) -> None:
+        """Worker-discover: one uid on the first downhill; occ terrace does not seed (C39)."""
         from app.application.worldData.generators.terrain.types import (
             ColumnRect,
             GridBBox,
@@ -481,13 +482,15 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         self.assertEqual(len(uids), 1)
         stamped = set(result.surface_grade_uid)
         self.assertTrue({(6, 5), (6, 6)} & stamped)
-        self.assertTrue({(7, 5), (7, 6)} & stamped)
+        self.assertNotIn((5, 5), stamped)
+        self.assertNotIn((5, 6), stamped)
         self.assertEqual(
             {result.surface_grade_uid[xy] for xy in stamped},
             uids,
         )
 
     def test_late_chunk_reuses_existing_uid(self) -> None:
+        """Late rect does not rewrite the earlier corridor; inherit uid if it stamps."""
         from app.application.worldData.generators.terrain.types import (
             ColumnRect,
             GridBBox,
@@ -552,12 +555,13 @@ class DetailedGradeGenerateTest(unittest.TestCase):
             existing_uids=first.surface_grade_uid,
             tile_gx=0, tile_gy=0,
         )
-        self.assertTrue(late.grade_instances)
-        self.assertEqual(late.grade_instances[0].grade_uid, known)
         late_rect = ColumnRect(x_min=7, x_max=7, y_min=5, y_max=6)
         for x, y in late.surface_grade_uid:
             self.assertTrue(late_rect.x_min <= x <= late_rect.x_max)
             self.assertTrue(late_rect.y_min <= y <= late_rect.y_max)
+        self.assertNotIn((6, 5), late.surface_grade_uid)
+        if late.grade_instances:
+            self.assertEqual(late.grade_instances[0].grade_uid, known)
 
     def test_two_tile_bakes_along_seam_one_uid(self) -> None:
         """R36w edge: two independent bakes, Δz along the owner face → one uid.
@@ -1649,7 +1653,6 @@ class GradeFormationApplyTest(unittest.TestCase):
         )
         from app.application.worldData.pack.refine.detailedGradeGenerate import (
             grade_halo_cells,
-            plan_grade_for_rects,
         )
         from app.application.worldData.pack.refine.fineChunkCompute import (
             compute_rect,
@@ -1701,11 +1704,6 @@ class GradeFormationApplyTest(unittest.TestCase):
             world, state.heightmap.bbox, tile_gx=0, tile_gy=0,
         )
         templates = {tuid: tpl}
-        planned = plan_grade_for_rects(
-            world, state, [rect],
-            catalog=catalog,
-            relief_templates_by_uid=templates,
-        )
 
         class _Capture:
             def generate_chunk_cells_sync(self, *args, surface_state=None, **kwargs):
@@ -1733,7 +1731,6 @@ class GradeFormationApplyTest(unittest.TestCase):
             chunks_total=1,
             location_pairs=[],
             volumes=[],
-            planned=tuple(planned),
         )
         compute_rect(capture, ctx, (0, rect))
         self.assertIs(state.heightmap.surface_z, parent_map)
@@ -1744,7 +1741,7 @@ class GradeFormationApplyTest(unittest.TestCase):
             state.heightmap.surface_z,
         )
 
-    def test_compute_rect_templates_without_planned_raises(self) -> None:
+    def test_compute_rect_discovers_without_planned(self) -> None:
         from app.application.worldData.generators.terrain.types import ColumnRect
         from app.application.worldData.pack.refine.detailedGradeCatalog import (
             catalog_for_surface,
@@ -1758,11 +1755,19 @@ class GradeFormationApplyTest(unittest.TestCase):
         tpl = self._ramp_tpl(length=2)
         world, tuid = self._world("w_plan_miss", tpl)
         state = self._cliff_state("w_plan_miss")
+        parent = dict(state.heightmap.surface_z)
         rect = ColumnRect(x_min=4, x_max=8, y_min=5, y_max=5)
         catalog = catalog_for_surface(
             world, state.heightmap.bbox, tile_gx=0, tile_gy=0,
         )
         templates = {tuid: tpl}
+
+        class _Capture:
+            def generate_chunk_cells_sync(self, *args, surface_state=None, **kwargs):
+                self.captured = surface_state
+                return []
+
+        capture = _Capture()
         ctx = FineTileContext(
             world=world,
             locations=[],
@@ -1784,9 +1789,10 @@ class GradeFormationApplyTest(unittest.TestCase):
             location_pairs=[],
             volumes=[],
         )
-        with self.assertRaises(ValueError) as caught:
-            compute_rect(MagicMock(), ctx, (0, rect))
-        self.assertIn("planned is None", str(caught.exception))
+        result = compute_rect(capture, ctx, (0, rect))
+        self.assertEqual(state.heightmap.surface_z, parent)
+        self.assertTrue(result.chunk_grades)
+        self.assertEqual(capture.captured.heightmap.surface_z[(5, 5)], 8)
 
 
 if __name__ == "__main__":

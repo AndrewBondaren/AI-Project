@@ -1,4 +1,8 @@
-"""One ColumnRect worker: stamp planned grade then column fill (C28)."""
+"""One ColumnRect worker: discover+paint then one column fill (R41 / C28).
+
+Stamp-from-``ctx.planned`` is deprecated v1. SoT: discover on the ready
+heightmap, then one fill. Plan: ``.cursor/plans/relief-pipeline-v2.md``.
+"""
 
 from __future__ import annotations
 
@@ -7,9 +11,7 @@ from dataclasses import replace
 from app.application.worldData.generators.terrain.types import ColumnRect, SurfaceHeightmap
 from app.application.worldData.pack.bake.packBakeLog import log_pack_wilderness_chunk_start
 from app.application.worldData.pack.refine.columnBounds import rect_contains
-from app.application.worldData.pack.refine.detailedGradeGenerate import (
-    materialize_planned_for_rect,
-)
+from app.application.worldData.pack.refine.detailedGradeDiscover import discover_and_paint
 from app.application.worldData.pack.refine.fineTileContext import (
     ChunkComputeResult,
     FineTileContext,
@@ -43,7 +45,7 @@ def compute_rect(
     ctx: FineTileContext,
     pair: tuple[int, ColumnRect],
 ) -> ChunkComputeResult:
-    """Stamp + fill one ColumnRect. Sample/stitch already on ``ctx.planned`` (C28)."""
+    """Discover+paint on the ready heightmap, then one fill (R41)."""
     chunk_idx, rect = pair
     chunk_t0 = log_pack_wilderness_chunk_start(
         ctx.world_uid,
@@ -59,18 +61,17 @@ def compute_rect(
     chunk_grades: tuple[ReliefGradeInstance, ...] = ()
     chunk_state = ctx.surface_state
     if ctx.templates:
-        if ctx.planned is None:
-            raise ValueError(
-                "FineTileContext.templates set but planned is None "
-                "(sample/stitch must run before compute_rect)"
-            )
-        if ctx.planned:
-            part = materialize_planned_for_rect(
-                ctx.world, ctx.surface_state, rect, list(ctx.planned),
-                existing_uids=ctx.existing_uids,
-                catalog=ctx.catalog,
-            )
-            chunk_grades = part.grade_instances
+        part = discover_and_paint(
+            ctx.world,
+            ctx.surface_state,
+            rect,
+            halo=ctx.grade_halo,
+            catalog=ctx.catalog,
+            templates=ctx.templates,
+            existing_uids=ctx.existing_uids,
+        )
+        chunk_grades = part.grade_instances
+        if part.surface_z or part.surface_grade_uid:
             local_hm = rect_heightmap_from_overlay(
                 ctx.surface_state.heightmap, part.surface_z, rect,
             )

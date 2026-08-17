@@ -1,6 +1,8 @@
 """C28 face-graph stitch — topology then remap uid. Does not mint. No System (T-3c).
 
-SoT: ``tz_terrain_relief.md`` § Topology → entity → stamp · C29 rim-canonical.
+Deprecated v1 occupancy graph (seed union-find before the pool). Catalog
+``face_key`` identity remains SoT (R36w). Discover SoT is R41
+(``.cursor/plans/relief-pipeline-v2.md``).
 """
 
 from __future__ import annotations
@@ -163,10 +165,10 @@ def stitch_planned_segments(
     catalog: TileFaceCatalog,
     planned: list[PlannedGradeSegment],
 ) -> list[PlannedGradeSegment]:
-    """Remap face-touching segments: one uid per topology component × straight.
+    """Deprecated v1: remap face-touching segments to one uid per component × straight.
 
     Graph edges do not mint uid. Interior-only segments keep ``interior|{k}``.
-    Mixed kind/θ in one component stay separate instances (System is T-3c).
+    SoT stitch is after chunks, by catalog uid (R41), not this pre-pool UF.
     """
     if not planned:
         return planned

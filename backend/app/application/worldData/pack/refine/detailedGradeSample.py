@@ -1,4 +1,8 @@
-"""Sample relief ribbon sites on detailed geometry — R36u / R36v rect-scoped."""
+"""Sample relief ribbon sites on detailed geometry — R36u / R36v rect-scoped.
+
+Deprecated v1 occupancy. SoT discover is R41
+(``.cursor/plans/relief-pipeline-v2.md``).
+"""
 
 from __future__ import annotations
 
@@ -88,9 +92,10 @@ def sample_open_land_meter(
     rect: ColumnBounds | None = None,
     halo: int = 0,
 ) -> tuple[list[SampleCell], set[Coord]]:
-    """Uphill land = ref; downhill ortho neighbor = seed.
+    """Deprecated v1: uphill land = ref; downhill ortho neighbor = seed.
 
     ``rect`` + ``halo``: scan only bounds; emit seeds with ``seed ∈ rect`` (R36v).
+    SoT: open_land vertex rim (R41), not ``sample_peak_land_sites``.
     """
     land_terrains = open_land_terrain_keys(world)
     land: dict[Coord, tuple[str, int]] = {}
@@ -131,7 +136,10 @@ def sample_shore_meter(
     rect: ColumnBounds | None = None,
     halo: int = 0,
 ) -> tuple[list[SampleCell], set[Coord]]:
-    """SHORE hydro role = ref; landward ortho neighbor = seed."""
+    """Deprecated v1: SHORE hydro role = ref; landward ortho neighbor = seed.
+
+    SoT: shore plugin on the same R41 frame.
+    """
     if not surface.hydrology:
         return [], set()
 
@@ -173,7 +181,10 @@ def sample_road_shoulder_meter(
     rect: ColumnBounds | None = None,
     halo: int = 0,
 ) -> tuple[list[SampleCell], set[Coord]]:
-    """Road cell = ref; adjacent non-road land with Δz = seed (both sides)."""
+    """Deprecated v1: road cell = ref; adjacent non-road land with Δz = seed.
+
+    SoT: connected road cells = one vertex; both shoulders (R20 / R41).
+    """
     bounds = _sample_bounds(rect, halo)
     cells = (
         _iter_z_in_bounds(surface, bounds)
@@ -213,10 +224,10 @@ def sample_ravine_meter(
     rect: ColumnBounds | None = None,
     halo: int = 0,
 ) -> tuple[list[SampleCell], set[Coord]]:
-    """Bank (non-ravine) = ref; ortho ravine mask cell = seed.
+    """Deprecated v1: bank (non-ravine) = ref; ortho ravine mask cell = seed.
 
     Membership is the depression mask, not open_land downhill (floor seed).
-    Flat floor (no ortho bank / Δz=0) is not a site.
+    Flat floor (no ortho bank / Δz=0) is not a site. SoT: ravine plugin (R41).
     """
     ravine_key = ravine_terrain_key(world)
     bounds = _sample_bounds(rect, halo)

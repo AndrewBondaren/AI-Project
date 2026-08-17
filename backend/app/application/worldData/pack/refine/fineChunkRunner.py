@@ -6,7 +6,6 @@ Does not enqueue background jobs (see ``chunkSchedule``).
 
 from __future__ import annotations
 
-from dataclasses import replace
 from functools import partial
 
 from app.application.worldData.chunkComputePool import ChunkComputePool
@@ -21,7 +20,6 @@ from app.application.worldData.pack.refine.fineChunkPersist import FineChunkPers
 from app.application.worldData.pack.refine.fineRefineResult import FineRefineResult
 from app.application.worldData.pack.refine.fineTileContext import ChunkComputeResult
 from app.application.worldData.pack.refine.fineTilePrep import prepare_fine_tile
-from app.application.worldData.pack.refine.detailedGradeGenerate import plan_grade_for_rects
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
@@ -71,16 +69,6 @@ class FineChunkRunner:
             phase=phase,
             relief_templates_by_uid=relief_templates_by_uid,
         )
-        if ctx.templates:
-            planned = plan_grade_for_rects(
-                ctx.world,
-                ctx.surface_state,
-                rects,
-                catalog=ctx.catalog,
-                relief_templates_by_uid=ctx.templates,
-                existing_uids=ctx.existing_uids,
-            )
-            ctx = replace(ctx, planned=tuple(planned))
         persist = FineChunkPersist(ctx, writer)
         compute = partial(compute_rect, self._terrain, ctx)
         indexed_rects = list(enumerate(rects, start=1))

@@ -1,6 +1,7 @@
 """Planned grade occupancy types — shared by generate and face-graph stitch.
 
-Breaks the generate ↔ graph import cycle. SoT: ``tz_terrain_relief.md`` C28.
+Deprecated v1 occupancy bag. SoT front object is ``GradePaintSpec`` (C40).
+Breaks the generate ↔ graph import cycle. Catalog ``face_key`` is not this module.
 """
 
 from __future__ import annotations
@@ -25,6 +26,10 @@ class GradeStraightKey:
 
 @dataclass(frozen=True, slots=True)
 class PlannedGradeSegment:
+    """Deprecated v1 occupancy row (pre-pool sample/stitch).
+
+    SoT: ``GradePaintSpec`` in the worker (R41 / C40).
+    """
     context: ReliefContext
     result: RibbonGradeResult
     ref_cells: frozenset[Coord]

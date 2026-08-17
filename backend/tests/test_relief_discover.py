@@ -1,0 +1,334 @@
+"""Relief pipeline v2 discover — C39 / C41 / R42 unit geometry."""
+
+from __future__ import annotations
+
+import unittest
+
+from app.application.worldData.generators.terrain.relief.discover.core import (
+    discover_fronts,
+)
+from app.application.worldData.generators.terrain.relief.discover.plugins import (
+    OpenLandPlugin,
+    RoadShoulderPlugin,
+    plugins_for_keys,
+)
+from app.application.worldData.generators.terrain.relief.discover.types import (
+    Coord,
+    ReliefVertices,
+)
+from app.application.worldData.generators.terrain.relief.sample.openLandTerrains import (
+    open_land_terrain_keys,
+)
+from app.application.worldData.generators.terrain.relief.sample.ravineTerrain import (
+    ravine_terrain_key,
+)
+from app.application.worldData.pack.refine.meterGradeSurface import MeterGradeSurface
+from app.dataModel.spatial.facing import Facing
+from app.dataModel.terrain.relief.enums import ReliefConditionTerrain, ReliefContext
+from app.dataModel.terrain.relief.reliefGradeKnobs import DEFAULT_SLOPE_LENGTH_CELLS
+from app.dataModel.terrain.relief.reliefTerrainEnvelope import ReliefOntologyEnvelopes
+from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
+
+_MASKS = WorldTerrainMasks.canonical_defaults()
+_PLAINS = _MASKS.default_plains.system_terrain
+_ROAD = _MASKS.default_roads.system_terrain
+_RAVINE = ravine_terrain_key()
+_LAND = open_land_terrain_keys()
+_ENVELOPE_L_FLOOR = (
+    ReliefOntologyEnvelopes.canonical_defaults()
+    .for_terrain(ReliefConditionTerrain.PLAINS)
+    .length_from_min_cells()
+)
+
+
+def _surface(z: dict[Coord, int], terrain: str = _PLAINS) -> MeterGradeSurface:
+    return MeterGradeSurface(
+        surface_z=z,
+        surface_terrain={xy: terrain for xy in z},
+        hydrology=None,
+        surface_facing=None,
+    )
+
+
+def _discover(z: dict[Coord, int]) -> tuple[ReliefVertices, tuple]:
+    xs = [x for x, _y in z]
+    ys = [y for _x, y in z]
+    surface = _surface(z)
+    return discover_fronts(
+        surface,
+        origin_x=min(xs),
+        origin_y=min(ys),
+        width=max(xs) - min(xs) + 1,
+        height=max(ys) - min(ys) + 1,
+        plugins=(OpenLandPlugin(_LAND),),
+        cell_blocked=lambda _xy: False,
+    )
+
+
+class ReliefDiscoverTest(unittest.TestCase):
+    def test_import_types_not_persist(self) -> None:
+        from app.application.worldData.generators.terrain.relief.discover import (
+            GradePaintSpec,
+            ReliefVertices,
+        )
+        from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
+
+        self.assertFalse(hasattr(ReliefVertices, "model_fields"))
+        self.assertFalse(hasattr(GradePaintSpec, "model_fields"))
+        self.assertTrue(hasattr(ReliefGradeInstance, "model_fields"))
+
+    def test_mesa_8_connected_gy_901(self) -> None:
+        """Diagonal 4 on 901 col4 is the same vertex as the plateau (R41)."""
+        z = {
+            (0, 901): 4, (1, 901): 4, (2, 901): 4, (3, 901): 2, (4, 901): 4,
+            (0, 900): 4, (1, 900): 4, (2, 900): 4, (3, 900): 4, (4, 900): 3,
+        }
+        vertices, _fronts = _discover(z)
+        fours = [xy for xy, h in z.items() if h == 4]
+        slots = {vertices.at_grid[vertices.index(x, y)] for x, y in fours}
+        self.assertEqual(slots, {1})
+        self.assertIn((4, 901), vertices.members[0])
+        self.assertIn((0, 901), vertices.members[0])
+        self.assertNotIn((3, 901), vertices.members[0])
+
+    def test_front_w_times_l_cardinal(self) -> None:
+        z = {
+            (0, 1): 4, (1, 1): 4, (2, 1): 4,
+            (0, 0): 2, (1, 0): 2, (2, 0): 2,
+        }
+        _vertices, fronts = _discover(z)
+        south = [f for f in fronts if f.outward is Facing.SOUTH]
+        self.assertTrue(south)
+        front = max(south, key=lambda f: len(f.rim))
+        self.assertEqual(len(front.rim), 3)
+        self.assertEqual(front.outward, Facing.SOUTH)
+        self.assertGreaterEqual(len(front.corridor), 3)
+
+    def test_bowl_seam_not_first_come(self) -> None:
+        z = {}
+        for x in range(5):
+            for y in range(5):
+                interior = 1 <= x <= 3 and 1 <= y <= 3
+                z[(x, y)] = 2 if interior else 4
+        vertices, fronts = _discover(z)
+        center = (2, 2)
+        i = vertices.index(*center)
+        self.assertIsNotNone(i)
+        self.assertNotEqual(vertices.seam[i], 0)
+        self.assertEqual(vertices.occ[i], 0)
+        for front in fronts:
+            self.assertNotIn(center, front.corridor)
+
+    def test_one_by_one_hole_skips(self) -> None:
+        z = {
+            (0, 2): 4, (1, 2): 4, (2, 2): 4,
+            (0, 1): 4, (1, 1): 2, (2, 1): 4,
+            (0, 0): 4, (1, 0): 4, (2, 0): 4,
+        }
+        vertices, fronts = _discover(z)
+        hole = (1, 1)
+        i = vertices.index(*hole)
+        self.assertNotEqual(vertices.seam[i], 0)
+        self.assertEqual(fronts, ())
+        self.assertEqual(vertices.occ[i], 0)
+
+    def test_unit_dz_plains_does_not_stamp_occ(self) -> None:
+        z = {(0, 0): 4, (1, 0): 3, (2, 0): 2}
+        vertices, fronts = _discover(z)
+        self.assertEqual(fronts, ())
+        for xy in z:
+            i = vertices.index(*xy)
+            self.assertEqual(vertices.occ[i], 0)
+            self.assertEqual(vertices.seam[i], 0)
+
+    def test_lower_terrace_does_not_seed_under_occ(self) -> None:
+        z = {
+            (0, 2): 6, (1, 2): 6, (2, 2): 6,
+            (0, 1): 4, (1, 1): 4, (2, 1): 4,
+            (0, 0): 2, (1, 0): 2, (2, 0): 2,
+        }
+        vertices, fronts = _discover(z)
+        south = [f for f in fronts if f.outward is Facing.SOUTH]
+        self.assertTrue(south)
+        covered = {xy for f in south for xy in f.corridor}
+        self.assertTrue(covered)
+        terrace = {(0, 1), (1, 1), (2, 1)}
+        self.assertTrue(terrace & covered)
+        for xy in terrace & covered:
+            i = vertices.index(*xy)
+            self.assertNotEqual(vertices.occ[i], 0)
+            self.assertEqual(vertices.at_grid[i], 0)
+
+    def test_straight_road_two_ortho_fronts(self) -> None:
+        """Pavement = one vertex; shoot both shoulders, not along the road."""
+        z = {
+            (0, 2): 2, (1, 2): 2, (2, 2): 2,
+            (0, 1): 4, (1, 1): 4, (2, 1): 4,
+            (0, 0): 2, (1, 0): 2, (2, 0): 2,
+        }
+        terrain = {(x, y): (_ROAD if y == 1 else _PLAINS) for x, y in z}
+        surface = MeterGradeSurface(
+            surface_z=z,
+            surface_terrain=terrain,
+            hydrology=None,
+            surface_facing=None,
+        )
+        vertices, fronts = discover_fronts(
+            surface,
+            origin_x=0,
+            origin_y=0,
+            width=3,
+            height=3,
+            plugins=(RoadShoulderPlugin(_ROAD),),
+            cell_blocked=lambda _xy: False,
+        )
+        self.assertEqual(set(vertices.members[0]), {(0, 1), (1, 1), (2, 1)})
+        north = [f for f in fronts if f.outward is Facing.NORTH]
+        south = [f for f in fronts if f.outward is Facing.SOUTH]
+        self.assertEqual(len(north), 1)
+        self.assertEqual(len(south), 1)
+        self.assertEqual(len(north[0].rim), 3)
+        self.assertEqual(len(south[0].rim), 3)
+        along = [f for f in fronts if f.outward in (Facing.EAST, Facing.WEST)]
+        self.assertEqual(along, [])
+
+    def test_road_corner_does_not_double_inner_cell(self) -> None:
+        """Inner corner is C41 seam — one cell, not two Instances."""
+        z = {
+            (0, 2): 2, (1, 2): 4, (2, 2): 4,
+            (0, 1): 2, (1, 1): 4, (2, 1): 2,
+            (0, 0): 2, (1, 0): 2, (2, 0): 2,
+        }
+        pavement = {(1, 2), (2, 2), (1, 1)}
+        terrain = {xy: (_ROAD if xy in pavement else _PLAINS) for xy in z}
+        surface = MeterGradeSurface(
+            surface_z=z,
+            surface_terrain=terrain,
+            hydrology=None,
+            surface_facing=None,
+        )
+        vertices, fronts = discover_fronts(
+            surface,
+            origin_x=0,
+            origin_y=0,
+            width=3,
+            height=3,
+            plugins=(RoadShoulderPlugin(_ROAD),),
+            cell_blocked=lambda _xy: False,
+        )
+        self.assertEqual(set(vertices.members[0]), pavement)
+        inner = (2, 1)
+        i = vertices.index(*inner)
+        self.assertNotEqual(vertices.seam[i], 0)
+        self.assertEqual(vertices.occ[i], 0)
+        for front in fronts:
+            self.assertNotIn(inner, front.corridor)
+
+    def test_ravine_bank_does_not_swallow_mesa(self) -> None:
+        """Ravine body is the bank; plateau interior stays open_land (R41-T-4)."""
+        z = {
+            (0, 3): 4, (1, 3): 4, (2, 3): 4, (3, 3): 4,
+            (0, 2): 4, (1, 2): 4, (2, 2): 4, (3, 2): 4,
+            (0, 1): 4, (1, 1): 4, (2, 1): 4, (3, 1): 2,
+            (0, 0): 2, (1, 0): 2, (2, 0): 2, (3, 0): 2,
+        }
+        terrain = {xy: _PLAINS for xy in z}
+        terrain[(3, 1)] = _RAVINE
+        terrain[(2, 0)] = _RAVINE
+        terrain[(3, 0)] = _RAVINE
+        surface = MeterGradeSurface(
+            surface_z=z,
+            surface_terrain=terrain,
+            hydrology=None,
+            surface_facing=None,
+        )
+        vertices, fronts = discover_fronts(
+            surface,
+            origin_x=0,
+            origin_y=0,
+            width=4,
+            height=4,
+            plugins=plugins_for_keys(
+                land_keys=_LAND,
+                road_key=_ROAD,
+                ravine_key=_RAVINE,
+                contexts=frozenset({ReliefContext.RAVINE, ReliefContext.OPEN_LAND}),
+            ),
+            cell_blocked=lambda _xy: False,
+        )
+        ravine_slots = {f.slot for f in fronts if f.context is ReliefContext.RAVINE}
+        open_slots = {f.slot for f in fronts if f.context is ReliefContext.OPEN_LAND}
+        self.assertTrue(ravine_slots)
+        self.assertTrue(open_slots)
+        interior = (1, 2)
+        bank = (2, 1)
+        ii = vertices.index(*interior)
+        bi = vertices.index(*bank)
+        self.assertIn(vertices.at_grid[ii], open_slots)
+        self.assertNotIn(vertices.at_grid[ii], ravine_slots)
+        self.assertIn(vertices.at_grid[bi], ravine_slots)
+        self.assertNotIn(interior, vertices.members[vertices.at_grid[bi] - 1])
+
+    def test_envelope_sized_cap_seams_l_corner(self) -> None:
+        """Occupancy cap is L_tpl; envelope floor as k makes the inner L all-seam."""
+        z = {}
+        for x in range(4):
+            for y in range(4):
+                z[(x, y)] = 10 if x == 0 or y == 0 else 6
+        long_cap, short_cap = _ENVELOPE_L_FLOOR, DEFAULT_SLOPE_LENGTH_CELLS
+        _v20, fronts20 = discover_fronts(
+            _surface(z),
+            origin_x=0,
+            origin_y=0,
+            width=4,
+            height=4,
+            plugins=(OpenLandPlugin(_LAND),),
+            cell_blocked=lambda _xy: False,
+            cap_front=lambda _ctx: long_cap,
+        )
+        _v1, fronts1 = discover_fronts(
+            _surface(z),
+            origin_x=0,
+            origin_y=0,
+            width=4,
+            height=4,
+            plugins=(OpenLandPlugin(_LAND),),
+            cell_blocked=lambda _xy: False,
+            cap_front=lambda _ctx: short_cap,
+        )
+        self.assertEqual(fronts20, ())
+        outwards = {f.outward for f in fronts1}
+        self.assertGreaterEqual(len(fronts1), 2)
+        self.assertIn(Facing.NORTH, outwards)
+        self.assertIn(Facing.EAST, outwards)
+
+    def test_occupancy_cap_is_l_tpl_not_envelope_floor(self) -> None:
+        from app.application.worldData.pack.refine.detailedGradeHalo import (
+            grade_halo_cells,
+            length_cap_for_context,
+        )
+        from app.dataModel.terrain.relief import ReliefTemplate
+
+        tpl = ReliefTemplate.model_validate({
+            "system_name": "open_step",
+            "display_name": "Open",
+            "context": ReliefContext.OPEN_LAND.value,
+            "conditions": [{
+                "terrain": ReliefConditionTerrain.PLAINS.value,
+                "cases": [
+                    {"policy": "slope_down", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0},
+                    {"policy": "slope_up", "delta_z": 1, "slope_weight": 1.0, "sheer_weight": 0.0},
+                    {"policy": "slope_none", "delta_z": 0, "slope_weight": 1.0, "sheer_weight": 0.0},
+                ],
+            }],
+        })
+        templates = {"open_step": tpl}
+        self.assertEqual(
+            length_cap_for_context(ReliefContext.OPEN_LAND, templates),
+            DEFAULT_SLOPE_LENGTH_CELLS,
+        )
+        self.assertGreaterEqual(grade_halo_cells(templates), _ENVELOPE_L_FLOOR)
+
+
+if __name__ == "__main__":
+    unittest.main()

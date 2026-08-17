@@ -1,4 +1,7 @@
-"""Prep contract for FineChunkRunner — explicit, not a closure over refine_rects."""
+"""Prep contract for FineChunkRunner — explicit, not a closure over refine_rects.
+
+``planned`` is deprecated v1 occupancy. Catalog and heightmap prep are SoT.
+"""
 
 from __future__ import annotations
 
@@ -23,7 +26,10 @@ from app.db.models.world import World
 
 @dataclass(frozen=True, slots=True)
 class FineTileContext:
-    """Serial prep output. Compute and persist read this; they do not re-load parent/catalog."""
+    """Serial prep output. Compute and persist read this; they do not re-load parent/catalog.
+
+    ``planned`` is deprecated v1 occupancy. Catalog / heightmap remain SoT.
+    """
 
     world: World
     locations: list[NamedLocation]
@@ -44,6 +50,7 @@ class FineTileContext:
     chunks_total: int
     location_pairs: list[tuple[str, TerritoryVolume]]
     volumes: list[TerritoryVolume]
+    # Deprecated v1 occupancy (sample/stitch before the pool). SoT: R41 worker discover.
     planned: tuple[PlannedGradeSegment, ...] | None = None
 
 

@@ -1,4 +1,9 @@
-"""Outdoor grade generate on detailed_bake geometry — R36u / R36v."""
+"""Outdoor grade generate on detailed_bake geometry — R36u / R36v.
+
+Sample / ``plan_grade_for_rects`` / pre-pool occupancy are **deprecated v1**
+(R38–R40). SoT discover is R41 (``.cursor/plans/relief-pipeline-v2.md``).
+L2 ``materialize_*`` / catalog ``face_key`` are not deprecated.
+"""
 
 from __future__ import annotations
 
@@ -21,7 +26,9 @@ from app.application.worldData.pack.refine.detailedGradeCatalog import (
     TileFaceCatalog,
     catalog_for_surface,
 )
+from app.application.worldData.pack.refine.detailedGradeDiscover import discover_and_paint
 from app.application.worldData.pack.refine.detailedGradeGraph import stitch_planned_segments
+from app.application.worldData.pack.refine.detailedGradeHalo import grade_halo_cells
 from app.application.worldData.pack.refine.detailedGradeMaterialize import (
     materialize_segment_meter,
 )
@@ -66,17 +73,6 @@ class DetailedGradeSeedBatch:
     ref_cells: frozenset[Coord]
 
 
-def grade_halo_cells(templates: dict[str, ReliefTemplate]) -> int:
-    """Max outward L from template POJO (root + cases). Min 1 for ortho halo."""
-    halo = 1
-    for tpl in templates.values():
-        halo = max(halo, int(tpl.outward_length_cells()))
-        for cond in tpl.conditions:
-            for case in cond.cases:
-                halo = max(halo, int(case.outward_length_cells()))
-    return halo
-
-
 def sample_detailed_grade_rect(
     world: World,
     surface_state: TileSurfaceState,
@@ -86,7 +82,10 @@ def sample_detailed_grade_rect(
     existing_uids: dict[Coord, str] | None = None,
     job_uid: str | None = None,
 ) -> list[DetailedGradeSeedBatch]:
-    """Fine-edge seeds with ``seed ∈ rect``; halo is read-only (R36v)."""
+    """Deprecated v1: fine-edge seeds with ``seed ∈ rect``; halo read-only (R36v).
+
+    Not the live writer. ``compute_rect`` uses ``discover_and_paint`` (R41).
+    """
     grid = MeterGradeSurface.from_tile_surface_state(
         surface_state, alias_heights=True,
     )
@@ -157,9 +156,10 @@ def plan_rect_grade(
     relief_templates_by_uid: dict[str, ReliefTemplate],
     surface_state: TileSurfaceState | None = None,
 ) -> list[PlannedGradeSegment]:
-    """Per-rect occupancy. Face uid is bound at stitch (C28); interior|{k} here.
+    """Deprecated v1: per-rect occupancy. Face uid is bound at stitch (C28).
 
-    Mixed corridor outwards are split before interior numbering.
+    SoT: GradePaintSpec in the worker (R41). Mixed corridor outwards are split
+    before interior numbering.
     """
     if not relief_templates_by_uid or not batches:
         return []
@@ -241,7 +241,11 @@ def plan_grade_for_rects(
     existing_uids: dict[Coord, str] | None = None,
     groups: list[list[DetailedGradeSeedBatch]] | None = None,
 ) -> list[PlannedGradeSegment]:
-    """Sample each rect → occupancy → C28 stitch (face uid). Shared by runner and facade."""
+    """Deprecated v1: sample each rect → occupancy → C28 stitch (face uid).
+
+    SoT: discover in the ColumnRect worker (R41), not serial sample-all before
+    the pool. Plan: ``.cursor/plans/relief-pipeline-v2.md``.
+    """
     if not relief_templates_by_uid:
         return []
     halo = grade_halo_cells(relief_templates_by_uid)
@@ -274,7 +278,11 @@ def materialize_planned_for_rect(
     existing_uids: dict[Coord, str] | None = None,
     catalog: TileFaceCatalog | None = None,
 ) -> DetailedGradeResult:
-    """Uid + volume z overlay + instances for seeds owned by ``rect``."""
+    """Uid + volume z overlay + instances for seeds owned by ``rect``.
+
+    L2 apply is SoT (Post-R36w). The ``planned`` list is deprecated v1 occupancy;
+    v2 feeds the same apply from ``GradePaintSpec``.
+    """
     grid = MeterGradeSurface.from_tile_surface_state(
         surface_state, alias_heights=True,
     )
@@ -353,6 +361,8 @@ def generate_detailed_grade(
 ) -> DetailedGradeResult:
     """Facade: same helpers as FineChunkRunner (tests / patch bounds).
 
+    Discover+paint per rect (R41). ``plan_grade_for_rects`` is deprecated v1.
+
     ``halo_neighbors`` — already-built neighbor ``TileSurfaceState`` (grid-adjacent
     meters). Same overlay as the runner's pack IO path; bbox of this tile is not
     expanded.
@@ -382,21 +392,24 @@ def generate_detailed_grade(
         world, surface_state.heightmap.bbox,
         tile_gx=tile_gx, tile_gy=tile_gy, chunk_size=chunk_size,
     )
-    planned = plan_grade_for_rects(
-        world, surface_state, work_rects,
-        relief_templates_by_uid=relief_templates_by_uid,
-        existing_uids=existing_uids,
-        catalog=catalog,
-    )
-    result = materialize_grade_for_rects(
-        world, surface_state, work_rects, planned, existing_uids=existing_uids,
-        catalog=catalog,
-    )
+    halo = grade_halo_cells(relief_templates_by_uid)
+    acc = DetailedGradeResult.empty()
+    known = dict(existing_uids or {})
+    for rect in work_rects:
+        part = discover_and_paint(
+            world, surface_state, rect,
+            halo=halo,
+            catalog=catalog,
+            templates=relief_templates_by_uid,
+            existing_uids=known,
+        )
+        acc = acc.merged_with(part)
+        known.update(part.surface_grade_uid)
     logger.info(
         "detailed_grade_done | world=%s cells=%d overlay=%d instances=%d",
         world.world_uid,
-        len(result.surface_grade_uid),
-        len(result.surface_z),
-        len(result.grade_instances),
+        len(acc.surface_grade_uid),
+        len(acc.surface_z),
+        len(acc.grade_instances),
     )
-    return result
+    return acc
