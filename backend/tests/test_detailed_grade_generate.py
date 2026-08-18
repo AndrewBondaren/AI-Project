@@ -1540,6 +1540,8 @@ class GradeFormationApplyTest(unittest.TestCase):
         result = compute_rect(capture, ctx, (0, rect))
         self.assertEqual(state.heightmap.surface_z, parent)
         self.assertTrue(result.chunk_grades)
+        self.assertGreater(result.grade_s, 0.0)
+        self.assertGreaterEqual(result.materialize_s, 0.0)
         self.assertEqual(capture.captured.heightmap.surface_z[(5, 5)], 8)
 
 

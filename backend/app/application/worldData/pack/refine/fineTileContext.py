@@ -72,3 +72,5 @@ class ChunkComputeResult:
     chunk_t0: float
     chunk_grades: tuple[ReliefGradeInstance, ...]
     vertex_seams: tuple[VertexSlotSeam, ...] = ()
+    materialize_s: float = 0.0
+    grade_s: float = 0.0

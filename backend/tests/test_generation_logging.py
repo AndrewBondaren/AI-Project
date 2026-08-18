@@ -58,14 +58,42 @@ def test_generation_world_log_writes_detailed_files(tmp_path: Path) -> None:
     pack_log.setLevel(logging.DEBUG)
 
     with generation_world_log("world-terrain-test-001", mode="detailed", root=root) as run_path:
-        pack_log.info(
-            "pack relief_grades persist start | world=world-terrain-test-001 instances=2 systems=1 replace_world=False",
+        from app.application.worldData.pack.bake.packBakeLog import (
+            log_pack_detailed_bake_done,
+            log_pack_l2_formation_done,
+        )
+
+        log_pack_l2_formation_done(
+            "world-terrain-test-001",
+            phase="detailed",
+            chunks=1024,
+            materialize_s=12.5,
+            grade_s=80.25,
+            l2_s=42.0,
+            tile_gx=-2,
+            tile_gy=-2,
+            workers=8,
+        )
+        log_pack_detailed_bake_done(
+            "world-terrain-test-001",
+            scope="wilderness",
+            tiles=1,
+            chunks=1024,
+            materialize_s=12.5,
+            grade_s=80.25,
+            l2_s=42.0,
+            grade_persist_s=1.5,
         )
 
     assert run_path.is_file()
     latest = root / "world-terrain-test-001" / "bake-detailed-latest.log"
     assert latest.is_file()
     text = latest.read_text(encoding="utf-8")
-    assert "relief_grades persist start" in text
+    assert "pack l2 formation done" in text
+    assert "grade_s=80.25" in text
+    assert "materialize_s=12.50" in text
+    assert "l2_s=42.00" in text
+    assert "pack detailed_bake done" in text
+    assert "grade_persist_s=1.50" in text
     assert "bake-detailed-" in run_path.name
 

@@ -6,6 +6,7 @@ See docs/tz_world_pack_storage.md § Bake modes; .cursor/plans/detailed-bake-sme
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -24,6 +25,7 @@ from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volume_for_location,
     territory_volumes_by_location,
 )
+from app.application.worldData.pack.bake.packBakeLog import log_pack_detailed_bake_done
 from app.application.worldData.pack.read.parentLightLoad import require_parent_light
 from app.application.worldData.pack.refine.fineChunkRunner import FineChunkRunner
 from app.application.worldData.pack.refine.meterChunkGeom import (
@@ -73,6 +75,8 @@ class _FineAggregate:
     meter_surface_z: dict[tuple[int, int], int] = field(default_factory=dict)
     grade_instances: list[ReliefGradeInstance] = field(default_factory=list)
     grade_systems: list[ReliefGradeSystem] = field(default_factory=list)
+    materialize_s: float = 0.0
+    grade_s: float = 0.0
 
 
 class PackDetailedBakeOrchestrator:
@@ -164,6 +168,7 @@ class PackDetailedBakeOrchestrator:
         if not tiles:
             raise ValueError(f"location {location_uid}: no macro-tiles for territory")
 
+        l2_t0 = time.perf_counter()
         aggregate = await self._refine_tiles(
             world, locations, writer, mat_ctx, surface_ctx,
             tiles,
@@ -173,6 +178,7 @@ class PackDetailedBakeOrchestrator:
             expected_chunks_for_status=None,
             relief_templates_by_uid=relief_templates,
         )
+        l2_s = time.perf_counter() - l2_t0
 
         climate_fine_tiles = 0
         if self._defaults.detailed_include_climate_fine:
@@ -187,7 +193,17 @@ class PackDetailedBakeOrchestrator:
 
         writer.recalc_manifest_counters()
         writer.save_manifest()
-        await self._persist_detailed_grades(world, aggregate)
+        grade_persist_s = await self._persist_detailed_grades(world, aggregate)
+        log_pack_detailed_bake_done(
+            world.world_uid,
+            scope="location",
+            tiles=aggregate.tiles_refined,
+            chunks=aggregate.chunks_written,
+            materialize_s=aggregate.materialize_s,
+            grade_s=aggregate.grade_s,
+            l2_s=l2_s,
+            grade_persist_s=grade_persist_s,
+        )
         return PackDetailedBakeResult(
             scope="location",
             terrain=aggregate.persist,
@@ -216,6 +232,7 @@ class PackDetailedBakeOrchestrator:
         )
         volumes = [vol for _, vol in territory_volumes_by_location(world, locations)]
 
+        l2_t0 = time.perf_counter()
         aggregate = await self._refine_tiles(
             world, locations, writer, mat_ctx, surface_ctx,
             tiles,
@@ -225,10 +242,21 @@ class PackDetailedBakeOrchestrator:
             expected_chunks_for_status=lambda gx, gy: expected_meter_chunks(world, gx, gy),
             relief_templates_by_uid=relief_templates,
         )
+        l2_s = time.perf_counter() - l2_t0
 
         writer.recalc_manifest_counters()
         writer.save_manifest()
-        await self._persist_detailed_grades(world, aggregate)
+        grade_persist_s = await self._persist_detailed_grades(world, aggregate)
+        log_pack_detailed_bake_done(
+            world.world_uid,
+            scope="wilderness",
+            tiles=aggregate.tiles_refined,
+            chunks=aggregate.chunks_written,
+            materialize_s=aggregate.materialize_s,
+            grade_s=aggregate.grade_s,
+            l2_s=l2_s,
+            grade_persist_s=grade_persist_s,
+        )
         return PackDetailedBakeResult(
             scope="wilderness",
             terrain=aggregate.persist,
@@ -242,9 +270,10 @@ class PackDetailedBakeOrchestrator:
         self,
         world: World,
         aggregate: _FineAggregate,
-    ) -> None:
+    ) -> float:
+        persist_t0 = time.perf_counter()
         if self._relief_grade_repo is None or not aggregate.grade_instances:
-            return
+            return 0.0
         await persist_relief_grades(
             self._relief_grade_repo,
             world_uid=world.world_uid,
@@ -252,6 +281,7 @@ class PackDetailedBakeOrchestrator:
             systems=aggregate.grade_systems,
             replace_world=False,
         )
+        return time.perf_counter() - persist_t0
 
     def _wilderness_tiles(
         self,
@@ -334,6 +364,8 @@ class PackDetailedBakeOrchestrator:
             aggregate.tiles_refined += 1
             aggregate.grade_instances.extend(refined.grade_instances)
             aggregate.grade_systems.extend(refined.grade_systems)
+            aggregate.materialize_s += refined.materialize_s
+            aggregate.grade_s += refined.grade_s
             if expected_chunks_for_status is not None:
                 writer.recalc_wilderness_status(
                     gx, gy,

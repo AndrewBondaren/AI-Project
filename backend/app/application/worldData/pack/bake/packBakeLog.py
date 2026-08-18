@@ -491,19 +491,27 @@ def log_pack_fine_terrain_phase_done(
     cells_total: int,
     started_at: float,
     pool_workers: int | None = None,
+    materialize_s: float = 0.0,
+    grade_s: float = 0.0,
 ) -> None:
-    elapsed_ms = (time.perf_counter() - started_at) * 1000.0
+    elapsed_s = time.perf_counter() - started_at
     _info(
-        "pack fine_terrain phase done | world=%s phase=%s chunks_written=%d cells=%d elapsed_ms=%.1f",
+        "pack fine_terrain phase done | world=%s phase=%s chunks_written=%d cells=%d "
+        "elapsed_s=%.2f materialize_s=%.2f grade_s=%.2f",
         world_uid,
         phase,
         chunks_written,
         cells_total,
-        elapsed_ms,
+        elapsed_s,
+        materialize_s,
+        grade_s,
         activity="fine_terrain_phase_done",
         world_uid=world_uid,
         phase=phase,
         pool_workers=pool_workers,
+        elapsed_s=round(elapsed_s, 2),
+        materialize_s=round(materialize_s, 2),
+        grade_s=round(grade_s, 2),
     )
 
 
@@ -832,6 +840,99 @@ def log_pack_loading_progress(
     )
 
 
+def log_pack_l2_formation_done(
+    world_uid: str,
+    *,
+    phase: str,
+    chunks: int,
+    materialize_s: float,
+    grade_s: float,
+    l2_s: float,
+    tile_gx: int | None = None,
+    tile_gy: int | None = None,
+    tiles: int | None = None,
+    workers: int | None = None,
+    grade_persist_s: float | None = None,
+) -> None:
+    """Wall-clock L2 vs CPU-sum of fill (materialize) and discover+paint (grade).
+
+    ``materialize_s`` / ``grade_s`` are summed across chunks and can exceed ``l2_s``
+    when workers > 1. ``l2_s`` is wall of prep + generate + pack persist (not SQL).
+    """
+    tile_part = (
+        f" tile=({tile_gx},{tile_gy})"
+        if tile_gx is not None and tile_gy is not None
+        else ""
+    )
+    tiles_part = f" tiles={tiles}" if tiles is not None else ""
+    workers_part = f" workers={workers}" if workers is not None else ""
+    persist_part = (
+        f" grade_persist_s={grade_persist_s:.2f}" if grade_persist_s is not None else ""
+    )
+    _info(
+        "pack l2 formation done | world=%s phase=%s%s%s chunks=%d%s "
+        "materialize_s=%.2f grade_s=%.2f l2_s=%.2f%s",
+        world_uid,
+        phase,
+        tile_part,
+        tiles_part,
+        chunks,
+        workers_part,
+        materialize_s,
+        grade_s,
+        l2_s,
+        persist_part,
+        activity="l2_formation_done",
+        world_uid=world_uid,
+        phase=phase,
+        chunks=chunks,
+        materialize_s=round(materialize_s, 2),
+        grade_s=round(grade_s, 2),
+        l2_s=round(l2_s, 2),
+        tile_gx=tile_gx,
+        tile_gy=tile_gy,
+        tiles=tiles,
+        pool_workers=workers,
+        grade_persist_s=(
+            round(grade_persist_s, 2) if grade_persist_s is not None else None
+        ),
+    )
+
+
+def log_pack_detailed_bake_done(
+    world_uid: str,
+    *,
+    scope: str,
+    tiles: int,
+    chunks: int,
+    materialize_s: float,
+    grade_s: float,
+    l2_s: float,
+    grade_persist_s: float,
+) -> None:
+    _info(
+        "pack detailed_bake done | world=%s scope=%s tiles=%d chunks=%d "
+        "materialize_s=%.2f grade_s=%.2f grade_persist_s=%.2f l2_s=%.2f",
+        world_uid,
+        scope,
+        tiles,
+        chunks,
+        materialize_s,
+        grade_s,
+        grade_persist_s,
+        l2_s,
+        activity="detailed_bake_done",
+        world_uid=world_uid,
+        scope=scope,
+        tiles=tiles,
+        chunks=chunks,
+        materialize_s=round(materialize_s, 2),
+        grade_s=round(grade_s, 2),
+        grade_persist_s=round(grade_persist_s, 2),
+        l2_s=round(l2_s, 2),
+    )
+
+
 def log_pack_relief_grades_persist_start(
     world_uid: str,
     *,
@@ -886,17 +987,20 @@ def log_pack_relief_grades_persist_done(
     n_systems: int,
     started_at: float,
 ) -> None:
-    elapsed_ms = (time.perf_counter() - started_at) * 1000.0
+    elapsed_s = time.perf_counter() - started_at
     _info(
-        "pack relief_grades persist done | world=%s instances=%d systems=%d elapsed_ms=%.1f",
+        "pack relief_grades persist done | world=%s instances=%d systems=%d "
+        "elapsed_s=%.2f elapsed_ms=%.1f",
         world_uid,
         n_instances,
         n_systems,
-        elapsed_ms,
+        elapsed_s,
+        elapsed_s * 1000.0,
         activity="relief_grades_persist_done",
         world_uid=world_uid,
         n_instances=n_instances,
         n_systems=n_systems,
-        elapsed_ms=elapsed_ms,
+        elapsed_s=round(elapsed_s, 2),
+        elapsed_ms=elapsed_s * 1000.0,
     )
 

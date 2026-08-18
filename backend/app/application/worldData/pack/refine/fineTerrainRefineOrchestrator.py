@@ -116,6 +116,8 @@ class FineTerrainRefineOrchestrator:
             chunks_written=result.wilderness_chunks_written,
             cells_total=result.persist.succeeded,
             started_at=phase_t0,
+            materialize_s=result.materialize_s,
+            grade_s=result.grade_s,
         )
         return result.persist, result.wilderness_chunks_written, result.rect_count
 
@@ -281,6 +283,8 @@ class FineTerrainRefineOrchestrator:
             chunks_written=result.wilderness_chunks_written,
             cells_total=result.persist.succeeded,
             started_at=phase_t0,
+            materialize_s=result.materialize_s,
+            grade_s=result.grade_s,
         )
         return result.wilderness_chunks_written
 

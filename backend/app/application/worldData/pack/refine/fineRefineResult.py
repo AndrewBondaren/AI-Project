@@ -17,6 +17,8 @@ class FineRefineResult:
     meter_surface_z: dict[tuple[int, int], int] = field(default_factory=dict)
     grade_instances: tuple[ReliefGradeInstance, ...] = ()
     grade_systems: tuple[ReliefGradeSystem, ...] = ()
+    materialize_s: float = 0.0
+    grade_s: float = 0.0
 
     @classmethod
     def empty(cls) -> FineRefineResult:

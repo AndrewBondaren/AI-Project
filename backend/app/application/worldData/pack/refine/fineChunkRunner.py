@@ -6,6 +6,7 @@ Does not enqueue background jobs (see ``chunkSchedule``).
 
 from __future__ import annotations
 
+import time
 from functools import partial
 
 from app.application.worldData.chunkComputePool import ChunkComputePool
@@ -14,6 +15,7 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
 )
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.materializationContext import MaterializationContext
+from app.application.worldData.pack.bake.packBakeLog import log_pack_l2_formation_done
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.refine.fineChunkCompute import compute_rect
 from app.application.worldData.pack.refine.fineChunkPersist import FineChunkPersist
@@ -54,6 +56,7 @@ class FineChunkRunner:
         if not rects:
             return FineRefineResult.empty()
 
+        l2_t0 = time.perf_counter()
         ctx = prepare_fine_tile(
             self._terrain,
             world,
@@ -93,4 +96,16 @@ class FineChunkRunner:
             finally:
                 pool.shutdown()
 
-        return persist.finish()
+        result = persist.finish()
+        log_pack_l2_formation_done(
+            ctx.world_uid,
+            phase=ctx.phase_name,
+            chunks=ctx.chunks_total,
+            materialize_s=result.materialize_s,
+            grade_s=result.grade_s,
+            l2_s=time.perf_counter() - l2_t0,
+            tile_gx=ctx.tile_gx,
+            tile_gy=ctx.tile_gy,
+            workers=ctx.workers,
+        )
+        return result

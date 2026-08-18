@@ -6,6 +6,7 @@ Plan: ``.cursor/plans/relief-pipeline-v2.md``.
 
 from __future__ import annotations
 
+import time
 from dataclasses import replace
 
 from app.application.worldData.generators.terrain.types import ColumnRect, SurfaceHeightmap
@@ -61,7 +62,9 @@ def compute_rect(
     chunk_grades: tuple = ()
     vertex_seams: tuple[VertexSlotSeam, ...] = ()
     chunk_state = ctx.surface_state
+    grade_s = 0.0
     if ctx.templates:
+        grade_t0 = time.perf_counter()
         part, vertex_seams = discover_and_paint(
             ctx.world,
             ctx.surface_state,
@@ -71,6 +74,7 @@ def compute_rect(
             templates=ctx.templates,
             existing_uids=ctx.existing_uids,
         )
+        grade_s = time.perf_counter() - grade_t0
         chunk_grades = part.grade_instances
         if part.surface_z or part.surface_grade_uid:
             local_hm = rect_heightmap_from_overlay(
@@ -81,10 +85,12 @@ def compute_rect(
                 heightmap=local_hm,
                 surface_grade_uid=part.surface_grade_uid,
             )
+    mat_t0 = time.perf_counter()
     cells = terrain.generate_chunk_cells_sync(
         ctx.world, ctx.locations, ctx.surface_ctx, ctx.tile_gx, ctx.tile_gy, rect,
         surface_state=chunk_state,
     )
+    materialize_s = time.perf_counter() - mat_t0
     return ChunkComputeResult(
         chunk_idx=chunk_idx,
         rect=rect,
@@ -92,4 +98,6 @@ def compute_rect(
         chunk_t0=chunk_t0,
         chunk_grades=chunk_grades,
         vertex_seams=vertex_seams,
+        materialize_s=materialize_s,
+        grade_s=grade_s,
     )

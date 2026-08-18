@@ -76,11 +76,15 @@ class FineChunkPersist:
         self._seam_acc: list[tuple[ColumnRect, tuple[VertexSlotSeam, ...]]] = []
         self._total_cells = 0
         self._written = 0
+        self._materialize_s = 0.0
+        self._grade_s = 0.0
         self._lock = asyncio.Lock()
 
     def persist_rect(self, result: ChunkComputeResult) -> None:
         """Caller serializes (serial loop or ``persist_rect_locked``)."""
         ctx = self._ctx
+        self._materialize_s += result.materialize_s
+        self._grade_s += result.grade_s
         self._note_surface_z(result.cells)
         wilderness, loc_additions, loc_hits = partition_chunk_cells(
             result.cells, ctx.location_pairs, ctx.volumes,
@@ -178,6 +182,8 @@ class FineChunkPersist:
             meter_surface_z=self._meter_surface_z,
             grade_instances=grade_instances,
             grade_systems=grade_systems,
+            materialize_s=self._materialize_s,
+            grade_s=self._grade_s,
         )
 
     def _note_surface_z(self, cells: list[MapCell]) -> None:
