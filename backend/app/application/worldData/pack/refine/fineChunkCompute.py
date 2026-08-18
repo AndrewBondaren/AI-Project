@@ -15,10 +15,10 @@ from app.application.worldData.pack.refine.detailedGradeDiscover import discover
 from app.application.worldData.pack.refine.fineTileContext import (
     ChunkComputeResult,
     FineTileContext,
+    VertexSlotSeam,
 )
 from app.application.worldData.pack.refine.meterGradeSurface import Coord
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
-from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 
 
 def rect_heightmap_from_overlay(
@@ -58,10 +58,11 @@ def compute_rect(
         refine_role=ctx.refine_role,
         pool_workers=ctx.workers,
     )
-    chunk_grades: tuple[ReliefGradeInstance, ...] = ()
+    chunk_grades: tuple = ()
+    vertex_seams: tuple[VertexSlotSeam, ...] = ()
     chunk_state = ctx.surface_state
     if ctx.templates:
-        part = discover_and_paint(
+        part, vertex_seams = discover_and_paint(
             ctx.world,
             ctx.surface_state,
             rect,
@@ -90,4 +91,5 @@ def compute_rect(
         cells=cells,
         chunk_t0=chunk_t0,
         chunk_grades=chunk_grades,
+        vertex_seams=vertex_seams,
     )

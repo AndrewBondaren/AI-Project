@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 
 from app.application.worldData.gradeInstanceMerge import merge_grade_instances
+from app.application.worldData.gradeVertexSystem import emit_relief_grade_systems
+from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_location_terrain_persist,
     log_pack_wilderness_chunk_done,
@@ -22,9 +24,11 @@ from app.application.worldData.pack.refine.fineRefineResult import FineRefineRes
 from app.application.worldData.pack.refine.fineTileContext import (
     ChunkComputeResult,
     FineTileContext,
+    VertexSlotSeam,
 )
 from app.application.worldData.persistResult import PersistResult
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
+from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume, inside_location_volume
 from app.db.models.mapCell import MapCell
 
@@ -69,6 +73,7 @@ class FineChunkPersist:
         self._location_cells: dict[str, list[MapCell]] = {}
         self._meter_surface_z: dict[tuple[int, int], int] = {}
         self._grade_acc: list[ReliefGradeInstance] = []
+        self._seam_acc: list[tuple[ColumnRect, tuple[VertexSlotSeam, ...]]] = []
         self._total_cells = 0
         self._written = 0
         self._lock = asyncio.Lock()
@@ -125,6 +130,7 @@ class FineChunkPersist:
             pool_workers=ctx.workers,
         )
         self._grade_acc.extend(result.chunk_grades)
+        self._seam_acc.append((result.rect, result.vertex_seams))
 
     async def persist_rect_locked(self, result: ChunkComputeResult) -> None:
         async with self._lock:
@@ -157,12 +163,21 @@ class FineChunkPersist:
         grade_instances = (
             merge_grade_instances(self._grade_acc) if self._grade_acc else ()
         )
+        grade_systems: tuple[ReliefGradeSystem, ...] = ()
+        if grade_instances:
+            # T-3c after C29 catalog merge. Does not change z/fill.
+            grade_instances, grade_systems = emit_relief_grade_systems(
+                grade_instances,
+                traces=self._seam_acc,
+                catalog=ctx.catalog,
+            )
         return FineRefineResult(
             persist=PersistResult.from_counts(self._total_cells, self._total_cells),
             wilderness_chunks_written=self._written,
             rect_count=ctx.chunks_total,
             meter_surface_z=self._meter_surface_z,
             grade_instances=grade_instances,
+            grade_systems=grade_systems,
         )
 
     def _note_surface_z(self, cells: list[MapCell]) -> None:

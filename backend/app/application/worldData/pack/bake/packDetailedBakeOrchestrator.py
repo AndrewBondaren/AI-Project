@@ -37,6 +37,7 @@ from app.application.worldData.persistReliefGrades import persist_relief_grades
 from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
+from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.detailedBakeScope import (
     DetailedBakeRequest,
@@ -70,6 +71,7 @@ class _FineAggregate:
     tiles_refined: int = 0
     meter_surface_z: dict[tuple[int, int], int] = field(default_factory=dict)
     grade_instances: list[ReliefGradeInstance] = field(default_factory=list)
+    grade_systems: list[ReliefGradeSystem] = field(default_factory=list)
 
 
 class PackDetailedBakeOrchestrator:
@@ -232,6 +234,7 @@ class PackDetailedBakeOrchestrator:
             self._relief_grade_repo,
             world_uid=world.world_uid,
             instances=aggregate.grade_instances,
+            systems=aggregate.grade_systems,
             replace_world=False,
         )
 
@@ -315,6 +318,7 @@ class PackDetailedBakeOrchestrator:
             aggregate.chunks_written += refined.wilderness_chunks_written
             aggregate.tiles_refined += 1
             aggregate.grade_instances.extend(refined.grade_instances)
+            aggregate.grade_systems.extend(refined.grade_systems)
             if expected_chunks_for_status is not None:
                 writer.recalc_wilderness_status(
                     gx, gy,

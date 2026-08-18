@@ -3,6 +3,7 @@
 Catalog ``face_key`` is identity, not a seed graph. No pre-pool occupancy.
 Pick runs after discover (R41-T-3). Apply takes ``DiscoveredFront`` (R41-T-2).
 Classify ``path_length`` / ``dz`` come from the C41 corridor (R41-T-8).
+T-3c fingerprint is returned beside the write-set; System emit is post-chunk.
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from app.application.worldData.generators.terrain.relief.discover.types import (
     DiscoveredFront,
     FrontGeometry,
     GradePaintSpec,
+    ReliefVertices,
 )
 from app.application.worldData.generators.terrain.relief.geom.bakeSeed import bake_seed
 from app.application.worldData.generators.terrain.relief.geom.outward import relief_dz
@@ -64,6 +66,7 @@ from app.application.worldData.pack.refine.detailedGradeMaterialize import (
 )
 from app.application.worldData.pack.refine.detailedGradePaint import apply_grade_paint_spec
 from app.application.worldData.pack.refine.detailedGradeResult import DetailedGradeResult
+from app.application.worldData.pack.refine.fineTileContext import VertexSlotSeam
 from app.application.worldData.pack.refine.meterGradeSurface import (
     MeterGradeSurface,
     apply_grade_uids,
@@ -146,6 +149,39 @@ def _uid_for_front(
     )
 
 
+def build_vertex_slot_seams(
+    vertices: ReliefVertices,
+    painted_uids: dict[int, list[str]],
+    rect: ColumnBounds,
+) -> tuple[VertexSlotSeam, ...]:
+    """Body cells on the owned rect rim + painted Instance uids per slot (T-3c)."""
+    seams: list[VertexSlotSeam] = []
+    x_lo, x_hi = int(rect.x_min), int(rect.x_max)
+    y_lo, y_hi = int(rect.y_min), int(rect.y_max)
+    for slot in sorted(painted_uids):
+        uids = tuple(sorted({uid for uid in painted_uids[slot] if uid}))
+        if not uids:
+            continue
+        members = (
+            vertices.members[slot - 1]
+            if 0 < slot <= len(vertices.members)
+            else {}
+        )
+        edge: list[tuple[int, int, int]] = []
+        for (x, y), z in members.items():
+            xi, yi = int(x), int(y)
+            if xi < x_lo or xi > x_hi or yi < y_lo or yi > y_hi:
+                continue
+            if xi == x_lo or xi == x_hi or yi == y_lo or yi == y_hi:
+                edge.append((xi, yi, int(z)))
+        seams.append(VertexSlotSeam(
+            slot=int(slot),
+            grade_uids=uids,
+            edge_body=tuple(sorted(edge)),
+        ))
+    return tuple(seams)
+
+
 def discover_and_paint(
     world: World,
     surface_state: TileSurfaceState,
@@ -155,10 +191,10 @@ def discover_and_paint(
     catalog: TileFaceCatalog | None,
     templates: dict[str, ReliefTemplate],
     existing_uids: dict[Coord, str] | None = None,
-) -> DetailedGradeResult:
+) -> tuple[DetailedGradeResult, tuple[VertexSlotSeam, ...]]:
     """Discover vertices/fronts on the ready heightmap, then one L2 write-set."""
     if not templates:
-        return DetailedGradeResult.empty()
+        return DetailedGradeResult.empty(), ()
 
     grid = MeterGradeSurface.from_tile_surface_state(
         surface_state, alias_heights=True,
@@ -187,7 +223,7 @@ def discover_and_paint(
         return length_cap_for_context(context, templates)
 
     grid_rect = expand_rect(rect, max(0, int(halo)))
-    _vertices, fronts = discover_fronts(
+    vertices, fronts = discover_fronts(
         grid,
         origin_x=grid_rect.x_min,
         origin_y=grid_rect.y_min,
@@ -205,6 +241,7 @@ def discover_and_paint(
     pick_seq = 0
     acc = DetailedGradeResult.empty()
     interior_seq: dict[tuple[int, int], int] = defaultdict(int)
+    painted_uids: dict[int, list[str]] = defaultdict(list)
     for front in fronts:
         owned = tuple(
             xy for xy in front.corridor
@@ -287,7 +324,10 @@ def discover_and_paint(
         )
         part = apply_grade_paint_spec(painted, world=world, surface=grid)
         clipped = part.clipped_to_rect(rect)
+        if not clipped.grade_instances:
+            continue
         acc = acc.merged_with(clipped)
         apply_grade_uids(grid, clipped.surface_grade_uid)
         known.update(clipped.surface_grade_uid)
-    return acc
+        painted_uids[int(front.slot)].append(uid)
+    return acc, build_vertex_slot_seams(vertices, painted_uids, rect)

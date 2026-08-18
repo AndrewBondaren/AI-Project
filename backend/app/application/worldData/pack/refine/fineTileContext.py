@@ -55,6 +55,20 @@ class FineTileContext:
 
 
 @dataclass(frozen=True, slots=True)
+class VertexSlotSeam:
+    """T-3c bake fingerprint for one painted vertex slot (not persist-POJO).
+
+    ``grade_uids`` = Instance uids of fronts that painted this slot.
+    ``edge_body`` = body cells ``(x, y, z)`` on the owned rect rim (C29 sides).
+    Slot is local to the chunk; System uid is not known in the worker.
+    """
+
+    slot: int
+    grade_uids: tuple[str, ...]
+    edge_body: tuple[tuple[int, int, int], ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ChunkComputeResult:
     """One ColumnRect worker output — grade already materialized into cells' surface."""
 
@@ -63,3 +77,4 @@ class ChunkComputeResult:
     cells: list[MapCell]
     chunk_t0: float
     chunk_grades: tuple[ReliefGradeInstance, ...]
+    vertex_seams: tuple[VertexSlotSeam, ...] = ()

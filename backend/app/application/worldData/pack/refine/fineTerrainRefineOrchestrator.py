@@ -309,6 +309,7 @@ class FineTerrainRefineOrchestrator:
             self._relief_grade_repo,
             world_uid=world.world_uid,
             instances=list(result.grade_instances),
+            systems=list(result.grade_systems),
             replace_world=False,
         )
 

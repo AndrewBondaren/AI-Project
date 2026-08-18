@@ -7,7 +7,7 @@ metadata:
 ---
 
 > **Статус:** ownership **утверждён** · templates R33–R35 ✅ · **R36 geom/entity/clearance** ✅ · **canal R36p/q ✅** · **R36u–w** writer/pool/каталог ✅ · **R37** envelope ✅ · **R41/R42/C39/C41 pipeline v2 = SoT** (меса 8, фронт W×L, `ReliefVertices`+`occ`+`seam`, bucket[z] остаток кромок, шов лучей, расписание A). **R38–R40 v1 — deprecated**. Шов чанков `full_bake` · halo `grid_neighbor` · T-10 ✅.  
-> **Код vs SoT:** `compute_rect` = discover+paint → один fill (R41 слои 0–4 + слой 5 ravine/shore). Sample/stitch до пула — **deprecated**, не writer. **Очередь / не трогать:** § [Осталось — v2 vs L2 volume](#осталось--v2-vs-l2-volume-locked). IDs — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md). **R41-T-5…T-8** ✅. Слой 5: толстый ravine ✅; онтология берега + hydro category paint ✅; `ShorePlugin` тело ✅. Next = слой 6 **T-3c** — по команде мастера ([команда агенту](../.cursor/plans/relief-pipeline-v2.md)). Wave E / BAR-1 / DAG вне этой очереди. L0 `world-grade` ASCII omit (PAR-G5).  
+> **Код vs SoT:** `compute_rect` = discover+paint → один fill; после чанков catalog merge + **T-3c System** (слои 0–6). Sample/stitch до пула — **deprecated**, не writer. **Очередь / не трогать:** § [Осталось — v2 vs L2 volume](#осталось--v2-vs-l2-volume-locked). IDs — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md). **R41-T-5…T-8** ✅. Слой 5 ravine/shore ✅. **T-3c слой 6 ✅**. Next = слой 7 срез v1 — [план](../.cursor/plans/relief-pipeline-v2.md). Wave E / BAR-1 / DAG вне этой очереди. L0 `world-grade` ASCII omit (PAR-G5).  
 > **Связь:** SoT grade; **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT. · ASCII — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md). · L2 — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2. · Agent: [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md) · v2 impl: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md)
 
 **Scope lock (R36u):** меняется **только outdoor relief grade** (`system_grade_uid`, SLOPE/SHEER geometry). **Не трогать** L0→L2 parent-light контракты ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2):
@@ -135,7 +135,7 @@ metadata:
 | R36h | **`h`/`dz` на клетке не хранить.** На клетке — **`system_grade_uid`** (omit если клетка не в grade). L/angle/h/kind/facing grade — на **сущности**. См. R36j |
 | R36i | **Materialize на всю `h=\|dz\|`:** SLOPE ramp / SHEER L×h solid. Без void. Затем создать Grade instance + проставить ссылки (R36j). Якоря верх/низ — **R36t** (не мутировать; canal-исключение при укорочении — R36p). **Apply = Post-R36w `GradeWriteSet` ✅** |
 | R36j | **Grade = один составной объект** (аналог **одной горы** `MountainSpec`). Состоит из grid-клеток; `cell_refs[]` ↔ `system_grade_uid` подтверждают состав. Поля: `grade_uid`, `kind`, `height_cells`, `length_cells`, **`angle_deg` (одно место; omit SHEER)**, `facing` (omit SHEER), resolved canal flat columns из **`Canal`** (`EarthenCanal`\|`StructureCanal`) через `build_canal`/`draw_canal` — **тот же cut**, что на Intent.`canal`. **Запрещено:** несколько углов в одном Grade |
-| R36l | **Иерархия как у гор** ([`tz_mountain_architecture.md`](./tz_mountain_architecture.md): хребет ↔ ≥2 вершины). **Один** постоянный угол / **один фронт (сторона)** → один `ReliefGradeInstance`. Несколько сторон одной вершины или излом θ → **`ReliefGradeSystem`** (`grade_instance_uids` ≥ 2). **1 грань (один луч/фронт)** → строку `relief_grade_systems` **не** пишем (FK: `Instance.grade_system_uid` тогда NULL). Рабочий slot вершины на bake ≠ строка БД. Клетка → **Instance** (`system_grade_uid`), не System. Persist: package + DB |
+| R36l | **Иерархия как у гор** ([`tz_mountain_architecture.md`](./tz_mountain_architecture.md): хребет ↔ ≥2 вершины). **Один** постоянный угол / **один фронт (сторона)** → один `ReliefGradeInstance`. Несколько сторон одной вершины или излом θ → **`ReliefGradeSystem`** (`grade_instance_uids` ≥ 2). **1 грань (один луч/фронт)** → строку `relief_grade_systems` **не** пишем (FK: `Instance.grade_system_uid` тогда NULL). Рабочий slot вершины на bake ≠ строка БД. Клетка → **Instance** (`system_grade_uid`), не System. Через чанк та же вершина — матч **тела** на C29, не catalog uid. Persist: package + DB |
 | R36m | **Obstacle clearance (мир) + truncate/skip.** Длину grade до footprint задаёт **`worlds.relief_grade_obstacle_policy`** (R36n). Оба режима: footprint **не** затирать; `L_eff < 1` → **skip** (+ WARN). **Не** включает earthen (это R36p / knobs). **Устарело:** silent auto `earthen_canal` при collision без knobs и без `canal_obstacle_policy` |
 | R36n | **Wire (мир):** `relief_grade_obstacle_policy`: **`truncate_skip`** \| **`allow_flush`**. Default = **`truncate_skip`**. Не на object/side (v1). Generate читает setting и ветвится; без silent fallback на другой режим. См. § Obstacle policy |
 | R36o | **Junction smooth (later):** модификатор сглаживания **стыка** прямой Grade с другим объектом (road / platform / соседний Grade / barrier footprint). **Не** меняет инвариант «один Grade = одна прямая / один θ». Не profile `smoothstep` (SideFill). Не `ReliefGradeSystem` (ломаный = ≥2 прямых). Не obstacle policy (clearance режет `L`). Wire-эскиз на knobs/grade: `junction_smooth`: **`none`** (default) \| **`chamfer`** \| **`fillet`**; опц. `junction_smooth_cells` ≥ 1 при режиме ≠ none. Materialize: после ядра ramp/sheer — переходные колонки на стыке. **v1 R36:** не impl |
@@ -151,7 +151,7 @@ metadata:
 | R38 | **Sparse origins — deprecated (v1).** Исторический запрет второго stencil «все локальные max» и 8×N с клетки **остаётся** (бюджет R36v). **SoT вершин/кромок — R41** (кромка = спуск в 8; не hunt пиков). Не читать этот пункт как 4-связность или fill→relief. См. § Sparse origins (historical) |
 | R39 | **Mesa union — deprecated (v1, 4-связность).** Идея «тело ≠ Grade; лучи только с кромки наружу» **остаётся**. **SoT членства — R41: 8-связное** то же целое z при наличии кромки спуска. Диагональный `4` к плато той же z — та же вершина. Не читать «диагональ не членство». См. § Mesa union (historical) · § Relief pipeline v2 |
 | R40 | **Ray walk / fill→relief — deprecated (v1).** Запреты fill∥relief, второго пула, рельефа тайла параллельно с чанками — **остаются**. Порядок writer высот **не** «column fill затем discover»: z уже в `heightmap` (prep). **SoT — R41:** discover+paint → один fill. Стоп θ / каскад террас / не мутировать якоря — R41 + R36t. См. § Ray walk (historical) |
-| R41 | **Relief pipeline v2 — locked (SoT).** Одна конструкция: вершина → кромка → фронты → `GradePaintSpec` → L2 paint. Контекст = тело вершины. Членство 8-связное при rim; клетка — **не больше одной** вершины (`at_grid`). `ReliefVertices` + **`occ`** + **`seam`**. Покрытие: фронт вниз пока θ; остаток = незатопленные кромки (**C39**). Фронты одной вершины **могут сходиться**; клетка в ≥2 следах — **шов лучей**, ничей коридор (**C41**). Не «непересекающиеся фронты» и не первый-занял. **1 фронт = 1 Instance;** System row при ≥2. Каталог до пула; discover+paint → один fill; стык после чанков. Stamp `|dz|=1` нет (R37). Ширина — **R42**. См. § Relief pipeline v2 · § Ray width |
+| R41 | **Relief pipeline v2 — locked (SoT).** Одна конструкция: вершина → кромка → фронты → `GradePaintSpec` → L2 paint. Контекст = тело вершины. Членство 8-связное при rim; клетка — **не больше одной** вершины (`at_grid`). `ReliefVertices` + **`occ`** + **`seam`**. Покрытие: фронт вниз пока θ; остаток = незатопленные кромки (**C39**). Фронты одной вершины **могут сходиться**; клетка в ≥2 следах — **шов лучей**, ничей коридор (**C41**). Не «непересекающиеся фронты» и не первый-занял. **1 фронт = 1 Instance;** System row при ≥2. Каталог до пула; discover+paint → один fill; стык после чанков: прямая = catalog, вершина = T-3c на C29. Stamp `|dz|=1` нет (R37). Ширина — **R42**. См. § Relief pipeline v2 · § Ray width |
 | R42 | **Ray width — lockstep front — locked.** Луч = **фронт**, не нитка в 1 клетку. `W` = сплошной run кромки с одним `Facing` и одним первым спуском. Весь фронт шагает наружу **вместе** (Chebyshev 1). Орто: прямоугольник `W × L`. Диагональ **day-1:** нитка W=1 Chebyshev; thick fill — [Murphy](http://www.zoo.co.uk/murphy/thickline/) **R36r later**. **Не** веер. Разный dz/θ вдоль `W` → резать Grade (C15). Опц. сужение `W` (Murphy taper) later — не захват чужой низины. Не dilation/GIS-buffer, не per-cell stairs. См. § Ray width |
 
 ### Locked checklist (master, 2026-08-01)
@@ -185,17 +185,17 @@ metadata:
 | C23 | **Facing:** discover 8-way (`Facing`); шаг diag = Chebyshev 1; volume day-1 = орто W×L + нитка W=1 Chebyshev; thick diag → R36r; wire = `Facing` only | locked (R36s) |
 | C24 | **Bake anchors:** верх/низ точки перепада при формировании SLOPE\|SHEER; **запрет мутации** якорей; единственное исключение — **canal при укорочении** slope (R36p) | locked (R36t) |
 | C25 | **Grade writer = detailed_bake geometry** (не L0); нет L0→L2 grade-uid carry как SoT. Исключение из [§ Идея 2](./tz_world_pack_storage.md) | locked (R36u) |
-| C26 | **Grade = pool (ядра)** + **сшивка после чанков**. Каталог uid до пула — **C28**. Discover+paint в worker на готовом heightmap, затем **один** fill — **R41**. Тот же helper на patch. **Не** L0-кандидаты; **не** новый оркестратор; не fill∥relief; не второй пул; не sample-all до пула | locked (R36v/R41) |
+| C26 | **Grade = pool (ядра)** + **сшивка после чанков**. Каталог uid до пула — **C28**. Discover+paint в worker на готовом heightmap, затем **один** fill — **R41**. После чанков **два** стыка на C29, не один: **прямая** = catalog uid; **вершина** = T-3c (тело 8 через ребро, UF слотов **этого** refine). Не полный same-z CC тайла. Тот же helper на patch. **Не** L0-кандидаты; **не** новый оркестратор; не fill∥relief; не второй пул; не sample-all до пула | locked (R36v/R41) |
 | C27 | **Стык = каталог граней**; uid заранее `world_seed`+tile+`face_key` (R15); граф ссылается; шов sample по тому же uid; не mint в воркере. Job uid: `tile` / `chunk` / `tile_edge` — ключи очереди, не дерево `tile→chunk`. **Родители грани в этом bake** = chunk job uid этого тайла (2 internal / 1 rim) — **гейт старта** (не все bake сразу) и clearance (`< 2` → void ≠ C18). **Шов мира** (антагонисты AABB) — **`full_bake` L0 на макро-тайлах**, не каталог `detailed_bake`. **Пул = `ColumnRect`**. **Два `detailed_bake` смежных (grid) тайлов** — не ждут друг друга; лента вдоль шва = один uid + upsert. Halo читает z `WorldBounds.grid_neighbor` (не `antagonist_tile`). `road_shoulder` — тот же каталог (`ReliefContext.ROAD_SHOULDER`). Не uid Grade/climate/hydro | locked (R36w) ✅ |
-| C28 | **Каталог → discover → paint → fill.** Каталог `face_key` = identity ребра / job, uid **до** пула. Discover вершин/фронтов — в worker на heightmap, **не** serial sample-all семян до пула. Прямая `(kind, outward, θ)` = один Instance. ≥2 Instance одной вершины → System row. 1 Instance → System **не** пишем. Клетка → Instance, не System. Rim-canonical на шве — **C29**. Apply (z/canal/fill) не переписывать | locked (R36w catalog; R41 discover); T-3c System row при ≥2 |
-| C29 | **Шов технический.** `face_key` / chunk / tile rim / `ColumnRect` / job uid — нарезка работы и pack, **не** граница мира. Не путать с **швом лучей** (C41). Через шов непрерывны: климат, дороги, шаг (later), **локация / город** (territory может лежать на ребре). Запрещено делать из шва стену, обрыв поселения, второй `location_uid` «из‑за тайла», смену зоны или ноду пути | locked; writers локации/города не в relief |
+| C28 | **Каталог → discover → paint → fill.** Каталог `face_key` = identity ребра / job, uid **до** пула. Discover вершин/фронтов — в worker на heightmap, **не** serial sample-all семян до пула. Прямая `(kind, outward, θ)` = один Instance. ≥2 Instance **одной вершины** → System row (**T-3c**): intra-chunk = `slot`; через чанк = тело на C29, **не** `face_key` = вершина. 1 Instance → System **не** пишем. Клетка → Instance, не System. Rim-canonical прямой — **C29**. Apply (z/canal/fill) не переписывать | locked (R36w catalog; R41 discover); T-3c System — § T-3c на шве чанков |
+| C29 | **Шов технический.** `face_key` / chunk / tile rim / `ColumnRect` / job uid — нарезка работы и pack, **не** граница мира. Не путать с **швом лучей** (C41). Через шов непрерывны: климат, дороги, шаг (later), **локация / город**. **Два стыка Grade на одном ребре:** catalog uid = **одна прямая**; T-3c = **одно тело** вершины (same-z, 8 через ребро) — § T-3c на шве чанков. Запрещено делать из шва стену, обрыв поселения, второй `location_uid` «из‑за тайла», смену зоны или ноду пути | locked; writers локации/города не в relief |
 | C30 | **Конверт онтологии** (`ReliefConditionTerrain`) ≥ knobs шаблона. Фасад `grade_constrained`; inner без `if plains`. Plains `open_land`: `|dz|=1` без stamp (`stamp_min_abs_dz=2`); `|dz|≥2` луч: равная z продолжает L, стоп на подъёме; θ≤20° → SLOPE, иначе SHEER L=1. Короткий L=2 knobs **запрещён** как потолок. Каркас — **C36 / R41**; покрытие остатка — **C39**; шов лучей — **C41**; ширина — **C37 / R42**; коллекция — **C38** | locked (R37) |
 | C31 | **Смешанный case:** L/θ knobs → SLOPE; SHEER всегда L=1. Невалидный geom (0 / оба ключа / θ вне (0,90)) → не reject: WARN + 20° и L до первой клетки луча. `L_eff < 1` после луча → skip stamp (R36m), не abort шаблона | locked (R36b/e) |
 | C32 | **Вершины не stencil сетки.** Layout + кромки спуска на готовом z. Кандидатные направления — 8. Второй полный обход volume (location bake) — reject. **SoT — C36 / R41.** Исторический R38 — запрет hunt пиков | locked (R41); R38 historical |
 | C33 | **Вершина = одна псевдосущность.** 8-связные клетки той же z **с кромкой спуска** не сеют 8×N. Лучи только наружу с кромки. Rim-run / фронт с одним outward и тем же первым dz — один Grade. **SoT — R41.** Исторический R39 4-neigh — снят | locked (R41) |
 | C34 | **Фронт = один θ до упора, смены угла или шва лучей (C41).** Швы чанков — `grade_uid` (R36w). Нижняя терраса — вершина **только если не покрыта** коридором сверху (C39). Излом θ → новый Grade (C15). `|dz|=1` не stamp. **SoT — R41** | locked (R41) |
 | C35 | **Расписание A locked:** discover+paint → один fill. Heightmap готов в prep. Не fill∥relief. Не второй пул. Не два column fill. **Кто меняет z колонки после paint — тот же обновляет relief** (или пишет z до paint). См. **R41** | locked (R41) |
-| C36 | **Relief pipeline v2.** Одна конструкция. Каталог uid → discover+paint → один fill → стык после чанков. **Покрытие:** фронт вниз пока θ; донашивание только непокрытых кромок, не каждая клетка. Ширина — **C37**. Коллекция — **C38**. Остаток — **C39**. Шов лучей — **C41**. См. **R41** | locked (R41) |
+| C36 | **Relief pipeline v2.** Одна конструкция. Каталог uid → discover+paint → один fill → стык после чанков (**прямая** = catalog; **вершина** = T-3c на C29). **Покрытие:** фронт вниз пока θ; донашивание только непокрытых кромок, не каждая клетка. Ширина — **C37**. Коллекция — **C38**. Остаток — **C39**. Шов лучей — **C41**. См. **R41** | locked (R41) |
 | C37 | **Луч = фронт W×L.** Lockstep по Chebyshev; орто = прямоугольник; диагональ day-1 = нитка W=1; Murphy W>1 — R36r. Не веер, не dilation, не stairs по клетке. Разный dz вдоль W → резать. См. **R42** | locked (R42) |
 | C38 | **`ReliefVertices` — индекс, не persist.** `at_grid` / `occ` / `seam` / `members` dict / `uids`. **Не** хранить `ReliefGradeInstance` в слоте и **не** добавлять bake-поля на POJO. Поля фронта — **C40**. Reconcile: выкинуть клетку в чужом `occ` | locked (R41) |
 | C39 | **Незатопленные кромки — bucket[z] + `occ` + `seam`, не поиск дыр.** Сетка = `ColumnRect`+halo. `occ` = коридор фронта; `at_grid` = слот вершины; `seam` = шов лучей (C41). Ведра по целой z, сверху вниз. Seed только если `occ==0` ∧ `at_grid==0` ∧ `seam==0` ∧ есть 8-сосед ниже с `occ==0` ∧ `seam==0`. 8-flood тела — **от этой кромки**. Не полный CC same-z; не Priority-Flood ямы; не heap на клетку; не второй обход тайла. Пол рампы и шов лучей не сеют. См. **R41** § Покрытие | locked (R41) |
@@ -210,7 +210,7 @@ metadata:
 
 **Код на 2026-08-17:** каталог граней до пула; `compute_rect` = discover+paint → один fill (R41). `plan_grade_for_rects` / `ctx.planned` — **deprecated**, не writer. Каталог `face_key` и L2 apply **не** deprecated.  
 **Post-R36w apply ✅:** `MeterGradeSurface` read-only z; write-set = `DetailedGradeResult.surface_z` + uid + instances. Fill = rect-local heightmap.  
-**T-3c:** слой 6 плана v2 — emit `ReliefGradeSystem` при ≥2 Instance одной вершины.
+**T-3c:** слой 6 плана v2 ✅ — emit `ReliefGradeSystem` при ≥2 Instance одной вершины. Intra-chunk = `slot`; через чанки = матч тел на C29 + UF **этого** refine. Не catalog uid = вершина. § T-3c на шве чанков.
 
 #### Код и контракты v1 — deprecated
 
@@ -221,7 +221,7 @@ Live writer — слой 3 плана v2 (`discover_and_paint` в `compute_rect`
 | `sample_peak_land_sites` / `sample_downhill_land_sites` / `sample_landward_of_refs` | кромка C39 + plugin тела |
 | `sample_open_land_meter` / `sample_shore_meter` / `sample_road_shoulder_meter` / `sample_ravine_meter` | discover в worker |
 | `sample_detailed_grade_rect` / `plan_grade_for_rects` / `plan_rect_grade` | `discover_and_paint` в `compute_rect` |
-| `stitch_planned_segments` (UF семян до пула) | стык **после** чанков по catalog uid |
+| `stitch_planned_segments` (UF семян до пула) | стык **после** чанков: прямая = catalog uid; вершина = T-3c на C29 |
 | `PlannedGradeSegment` / `FineTileContext.planned` | `GradePaintSpec` (C40) |
 | `compute_rect` stamp `ctx.planned` | discover+paint на heightmap → один fill |
 
@@ -272,7 +272,7 @@ world_seed | tile:{gx},{gy} | face:{V|H}|{cx}|{cy}
 
 **Граница макро-тайлов:** один и тот же шов в мире не должен получить два uid. Owner = тайл с меньшим `(gx, gy)` (для вертикального межтайлового шва — западный тайл, ключ `V|{n_cx-1}|{cy}`). Сосед считает **тот же** ключ/owner, не свой `gx`.
 
-**Edge: два `detailed_bake`, одна лента (обязательный кейс / тест).** Хребет или склон **вдоль** ребра двух макро-тайлов — безшовная геометрия мира, технически **две** джобы (`scope=wilderness` по тайлу, location vs wilderness, entry vs offline). Джобы **не** ждут и **не** лочат друг друга. Сшивка = тот же catalog uid + persist `replace_world=False` (upsert `cell_refs`).
+**Edge: два `detailed_bake`, одна лента (обязательный кейс / тест).** Хребет или склон **вдоль** ребра двух макро-тайлов — безшовная геометрия мира, технически **две** джобы (`scope=wilderness` по тайлу, location vs wilderness, entry vs offline). Джобы **не** ждут и **не** лочат друг друга. Сшивка **прямой** = тот же catalog uid + persist `replace_world=False` (upsert `cell_refs`). System через этот макро-шов — **не слой 6** (T-3c = чанки **этого** refine).
 
 | Кейс | Контракт | Тест |
 |---|---|---|
@@ -344,7 +344,7 @@ Halo — чтение. Два чанка в одном вызове **не** д�
 
 **Нельзя:** второй uid «для локации» на той же грани; ждать полный `detailed` соседа, чтобы узнать uid шва; резать каталог по `location_uid`.
 
-**Граф** (узлы = уже выданные face uid; рёбра **не** создают uid) — **C28 T-3b ✅**. Черновик «компонента = один Instance + min(face_key)» **superseded**: компонента = топология склона; прямые режутся отдельно; rim-canonical — **C29** (один объект мира на двух джобах), не продукт «шов». System ≥2 прямых — **T-3c**. Полный контракт — § Topology → entity → stamp.
+**Граф** (узлы = уже выданные face uid; рёбра **не** создают uid) — **C28 T-3b ✅**. Черновик «компонента = один Instance + min(face_key)» **superseded**: компонента = топология склона; прямые режутся отдельно; rim-canonical — **C29** (один объект мира на двух джобах), не продукт «шов». System ≥2 прямых **одной вершины** — **T-3c** (тело на C29, не catalog = вершина). Полный контракт — § Topology → entity → stamp · § T-3c на шве чанков.
 
 **Интерьер** (fine-грань целиком внутри rect, не на chunk-грани): `seed ∈ rect`. Если лента касается каталожной грани — stamp **канонического uid компоненты**. Если изолирована от всех граней чанка — uid = hash(`world_seed` \| `tile:{gx},{gy}` \| `chunk:{cx},{cy}` \| `interior|{k}`), `k` = индекс локального сегмента в стабильном порядке `min(xy)` — гонки между чанками нет.
 
@@ -356,10 +356,11 @@ FineChunkRunner.refine_rects                    # оркестратор; не g
     compute_rect(ctx, rect)                     # 1) discover+paint на heightmap  2) один fill parent⊕overlay
   FineChunkPersist.persist_rect                 # write lock; partition + wilderness; не generate
   flush location_terrain
-  merge instances + persist systems             # System row только при ≥2 Instance одной вершины
+  merge instances                               # C29: один catalog uid → один Instance (upsert cell_refs)
+  T-3c на швах + persist systems                # slot intra-chunk; тело на C29; UF тайла; System iff ≥2
 ```
 
-**Код сейчас:** discover+paint в `compute_rect`; runner без `plan_grade_for_rects`. System (T-3c) не emit. Sample/stitch в репо — deprecated.
+**Код сейчас:** discover+paint в `compute_rect`; runner без `plan_grade_for_rects`. **T-3c:** `FineChunkPersist.finish` → `emit_relief_grade_systems` после `merge_grade_instances`; persist `instances`+`systems`. Sample/stitch в репо — deprecated.
 
 ### FineChunkRunner слои (SRP)
 
@@ -378,7 +379,7 @@ Stamp + fill **остаются** в `ColumnRect` worker, **последоват
 
 Фасад `generate_detailed_grade` остаётся pack-IO-free (`halo_neighbors`). Persist **не** в `generators/`.
 
-Параллель: два чанка, общая грань — **один** catalog uid; discover один раз (owner). Lock на mint не нужен. Стык рельефа — **после** чанков (R41); не union-find семян до пула.
+Параллель: два чанка, общая грань — **один** catalog uid (одна **прямая**); discover один раз (owner). Lock на mint не нужен. Стык рельефа — **после** чанков (R41): catalog = прямая; T-3c = тело вершины на том же C29. Не union-find семян до пула. Не полный same-z CC тайла.
 
 **Поздний / частичный refine:** каталог считается так же (полная сетка тайла из bbox + chunk_size), даже если в вызове один rect. Соседний тайл уже запечён → колонки на owner-грани несут тот же uid. Допечка — upsert, не второй объект.
 
@@ -419,7 +420,7 @@ Stamp + fill **остаются** в `ColumnRect` worker, **последоват
 | Второй `location_uid` / второй city skeleton из‑за границы тайла | C29: поселение в мировых координатах |
 | Сдвигать город, чтобы не попасть на шов | шов технический, не продукт |
 
-**Код сейчас:** R36w каталог (живой); `compute_rect` = discover+paint → один fill (R41). T-3b stitch/`ctx.planned` — **deprecated**, не writer. T-3c — слой 6 плана v2. `_plan_tile_grade` убран.
+**Код сейчас:** R36w каталог (живой); `compute_rect` = discover+paint → один fill (R41). T-3b stitch/`ctx.planned` — **deprecated**, не writer. **T-3c слой 6 ✅.** `_plan_tile_grade` убран.
 
 ---
 
@@ -1181,7 +1182,7 @@ Deprecated sample `measure_terrain_descent` still stops on `z ≥` (R40). Live l
 
 **SoT** каркаса, членства, uid и расписания (2026-08-17). R38–R40 — **deprecated**; расхождения — **этот** пункт побеждает. Конверт θ/L/kind — **R37**. Каталог `face_key` — **R36w**. Якоря не мутировать — **R36t**. L2 volume (`plan_ribbon_volume` / `GradeFormation`) **не** переписывать: вход = `GradePaintSpec`.
 
-Суть: готовый `heightmap` чанка → вершины с кромкой спуска → фронты (схождение режет **шов лучей**, C41) → Grade только в уникальном коридоре → **один** column fill (parent⊕overlay) → стык швов чанков по uid между **уже сформированными** чанками. Не рельеф тайла параллельно с чанками и не fill∥relief. **Расписание A locked** (не путать с caller A = `FineChunkRunner` vs patch).
+Суть: готовый `heightmap` чанка → вершины с кромкой спуска → фронты (схождение режет **шов лучей**, C41) → Grade только в уникальном коридоре → **один** column fill (parent⊕overlay) → стык **уже сформированных** чанков: catalog uid = одна прямая; T-3c = одно тело вершины на колонке C29. Не рельеф тайла параллельно с чанками и не fill∥relief. **Расписание A locked** (не путать с caller A = `FineChunkRunner` vs patch). Не путать post-chunk C29 с `SeamStage` (C41).
 
 ##### Осталось — v2 vs L2 volume (locked)
 
@@ -1198,13 +1199,13 @@ Deprecated sample `measure_terrain_descent` still stops on `z ≥` (R40). Live l
 | P2 | ✅ | **R41-T-5…T-8:** равная z = продолжение L; inherit только орто; `|dz|=1` = `stamp_min_abs_dz`; classify/stamp = коридор после C41 |
 | Каталог `face_key` | ✅ живой | identity шва чанков (R36w / C29), не discover семян |
 
-**Дальше — только pipeline v2** (не apply). **Команда агенту (копировать):** [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md) § Команда следующему агенту.
+**Дальше — только pipeline v2** (не apply). **T-3c ✅.** Next слой 7: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md).
 
 | # | Что | IDs / слой | Не делать |
 |---|---|---|---|
 | 1 | Полиш луча и L | **R41-T-5…T-8** ✅ | не возвращать pick в `FrontStage`; не ставить envelope floor как occupancy cap |
 | 2 | Тела plugin | слой 5 ravine ✅; shore онтология+paint ✅; **ShorePlugin тело ✅** | не `sample_*`; не Priority-Flood; не `if context` в `core.py`; не хардкод 2/5/20/70 |
-| 3 | System row | **T-3c** / слой 6: ≥2 Instance одной вершины | uid System на клетке; строка при 1 фронте |
+| 3 | System row | **T-3c** / слой 6 ✅: ≥2 Instance одной вершины; intra-chunk = `slot`; через чанки = тело на C29 + UF этого refine | uid System на клетке; строка при 1 фронте; второй C39; C41; `face_key` = вершина; ждать соседний `detailed_bake` |
 | 4 | Срез v1 | слой 7: sample / `plan_grade_for_rects` / stitch / `FineTileContext.planned` | `warnings.warn` на bake, пока sample ещё в репо |
 | 5 | Полиш facade | **R41-T-9…T-12** | склеивать Rim/Front/Seam в один `core.py` |
 
@@ -1217,7 +1218,7 @@ Deprecated sample `measure_terrain_descent` still stops on `z ≥` (R40). Live l
 | DAG / schema `0002` / mask carry / parent `surface_z` upsample | другие контракты |
 | `|dz|=1` чаша | открытый продукт, не слой 5 |
 
-**Запрещено из «осталось» выводить:** второй пул; fill∥relief; два column fill; полный same-z CC тайла; stamp uid на тело вершины.
+**Запрещено из «осталось» выводить:** второй пул; fill∥relief; два column fill; полный same-z CC тайла; stamp uid на тело вершины; попарный emit System на каждом ребре без UF тайла; повторный discover на шве.
 
 ##### Одна конструкция, plugin тела
 
@@ -1431,7 +1432,7 @@ Classify и stamp смотрят **один** коридор после C41. Occ
 |---|---|
 | Вершина ≈ пик / `|dz|≥2` как единственный критерий кромки | Кромка = спуск в 8 соседях; не max тайла |
 | Меса 4-связная; диагональ не членство | Тело **8-связное** той же z при rim |
-| Sample семян до пула; стык = каталог | Каталог = ключ шва; discover в worker; **стык после чанков** |
+| Sample семян до пула; стык = каталог | Каталог = ключ **прямой**; discover в worker; **стык после чанков** (прямая = catalog; вершина = T-3c на C29) |
 | «Fill колонок затем relief» | **A locked:** heightmap готов → paint → **один** fill. Кто потом меняет z колонки — тот обновляет relief |
 | «все ступени = Grade» | Фронт покрывает склон; **остаток** = непокрытые кромки (C39) |
 | `|dz|=1` «не вершина» | `|dz|=1` вниз — кромка; **stamp** нет (R37); later entity — только C39 |
@@ -2495,11 +2496,11 @@ Grade/SQL `owner_uid` (no FK to connection_edges). L0 `ribbon_intents` — **gon
 
 ## Порядок имплементации (anti-slice)
 
-**SoT очереди сейчас:** § [Осталось — v2 vs L2 volume](#осталось--v2-vs-l2-volume-locked) (толстый ravine ✅; shore онтология+paint ✅; **ShorePlugin тело ✅**; next = слой 6 **T-3c** по команде; **R41-T-5…T-8** ✅; L2 volume закрыт). Команда: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md) § Команда следующему агенту.  
+**SoT очереди сейчас:** § [Осталось — v2 vs L2 volume](#осталось--v2-vs-l2-volume-locked) (толстый ravine ✅; shore онтология+paint ✅; **ShorePlugin тело ✅**; **T-3c слой 6 ✅**; next = слой 7 срез v1; **R41-T-5…T-8** ✅; L2 volume закрыт). План: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md).  
 **Agent pointer (история волн):** [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).  
 **Текущий impl v2:** [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md).  
 Post-R36w (shipped, **не** трогать apply): [`.cursor/plans/detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md).  
-Debt IDs: [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) § R36i-T · **R41-T-1…T-8** ✅ · **R41-T-9…T-12** open · **T-3c** слой 6 · post-impl **R36i-T-4…T-15** ✅.
+Debt IDs: [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) § R36i-T · **R41-T-1…T-8** ✅ · **R41-T-9…T-12** open · **T-3c** слой 6 ✅ · post-impl **R36i-T-4…T-15** ✅.
 
 ```text
 Wave A–D (shipped / L0 historical)   R36u/v/w ✅     Post-R36w ✅                    Wave E (later)
@@ -2610,13 +2611,15 @@ L0 call site (`compose_light_grid` / `paintBarrier`) **removed** с outdoor ribb
 
 **Аналог гор:** graph → `MountainRangeSpec` → paint. Здесь: каталог швов → discover в worker → Instance(±System) → `GradePaintSpec` → GradeFormation apply. **Apply не переписывать** (z / canal / fill / T-12). **Не** T-2 fence. **Не** R36o.
 
-Долг: [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) ~~**R36i-T-3b**~~ ✅ → **T-3c** (System row при ≥2 Instance). **T-3a** L0 ASCII = omit.
+Долг: [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) ~~**R36i-T-3b**~~ ✅ → ~~**T-3c**~~ ✅ (System row при ≥2 Instance). **T-3a** L0 ASCII = omit.
 
 ```text
 каталог face uid                    # identity ребра / job; уже есть (R36w); до пула
   → pool compute_rect               # discover вершин/фронтов на heightmap (R41)
   → GradePaintSpec → stamp          # текущий apply + один fill по uid фронта
-  → после чанков                    # стык швов; T-3c: ≥2 Instance одной вершины → System row
+  → после чанков                    # (1) catalog: одна прямая = один Instance
+                                    # (2) T-3c: intra-chunk slot; тело на C29; UF тайла
+                                    #     ≥2 Instance одной вершины → System row
 ```
 
 Каталог — **serial** на тайле до пула. Worker = discover+paint + fill. **Не** serial sample-all семян до пула. **Не** новый класс оркестратора. **Не** второй пул. **Не** task на грань.
@@ -2633,7 +2636,7 @@ L0 call site (`compose_light_grid` / `paintBarrier`) **removed** с outdoor ribb
 
 | Домен | Через шов (инвариант) | Запрещено на шве | Кто пишет |
 |---|---|---|---|
-| **Grade** | одна прямая = один Instance (rim-canonical + upsert `cell_refs`); uid **не** от `location_uid` | два uid на одну прямую из‑за границы джобы или «uid для локации» | relief (C28) |
+| **Grade** | одна **прямая** = один Instance (rim-canonical + upsert `cell_refs`); одна **вершина** через шов = T-3c (тело на колонке, не второй `face_key`); uid **не** от `location_uid` | два uid на одну прямую из‑за границы джобы или «uid для локации»; `face_key` = слот вершины | relief (C28 / T-3c) |
 | **Дороги** | одно `ConnectionEdge` (мировые координаты); полотно едет через ребро; обочина — тот же catalog, `ROAD_SHOULDER` | резать ребро по тайлу; SHEER на travel-полотне (R20) | [`tz_structure_connections.md`](./tz_structure_connections.md) / L0 paint; обочина — relief |
 | **Климат** | `SurfaceClimateField` непрерывен в XY: sample по разные стороны ребра отличается только полюсами/якорями, не partition | tile/chunk как climate wall; job uid = identity field | [`tz_climate.md`](./tz_climate.md) — **не** relief |
 | **Локация / город** | один `location_uid`, один `territory_volume`, один layout; улицы/здания/периметр продолжаются через ребро | второй uid «потому что другой тайл»; обрезать layout по `ColumnRect`; дыра wilderness внутри volume на соседнем тайле | [`tz_locations.md`](./tz_locations.md) · [`tz_city_generation.md`](./tz_city_generation.md); persist WP-19 |
@@ -2646,6 +2649,37 @@ L0 call site (`compose_light_grid` / `paintBarrier`) **removed** с outdoor ribb
 Relief **не** имплементирует climate / полотно / settlement layout / pathfinding. C28 rim-uid и один `face_key` — чтобы эти домены **могли** пройти шов. Артефакт Grade на ребре чанка, из‑за которого климат/дорога/город/шаг ломаются — баг C29.
 
 Halo читает z соседа (`grid_neighbor`) как продолжение мира, не как чужой уровень. WP-19 (wilderness vs `location_terrain`) — **куда писать клетку** (`l.{uid}.terrain` vs chunk тайла). Локация на двух тайлах → **один** location file, mask wilderness на **каждом** пересечённом тайле. Не разрыв инварианта.
+
+#### T-3c на шве чанков (locked)
+
+**Зачем.** Каталог `face_key` клеит **одну прямую** (один Instance на ребре, rim-canonical, upsert `cell_refs`). Несколько сторон **одной вершины** — другой объект: `ReliefGradeSystem`. Юг месы в чанке A и восток в B связаны **телом плато на колонке шва**, не пересечением коридоров и не тем, что два фронта взяли один `face_key`.
+
+Это уточнение «стыка после чанков» (C26 / C36 / R41), не новый шов и не второй пайплайн. Код — слой 6 ✅; этот пункт — SoT.
+
+**Два стыка на одном C29 ребре (не смешивать)**
+
+| Стык | Что | Когда | Не это |
+|---|---|---|---|
+| Каталог `face_key` | одна прямая `(kind, outward, θ)` → один Instance | uid до пула; paint по uid; после чанков — upsert `cell_refs` | две стороны одной месы; System row |
+| T-3c на колонке шва | слоты, чьё **тело** 8-связно через ребро при той же целой z → одна вершина | после `compute_rect` **этого** refine | повторный discover; C41; catalog uid = вершина |
+
+**Intra-chunk.** Два+ фронта одной вершины внутри одного `ColumnRect`: `at_grid` / `slot` уже одна вершина. Шов C29 **не** нужен. Post-pass группирует по slot, затем склеивает с матчами на рёбрах.
+
+**Через два чанка.** На внутреннем `V|{cx}|{cy}` / `H|{cx}|{cy}` (оба чанка в этом вызове): у каждого воркера — клетки тела (`members` / `at_grid`) на **своей** стороне ребра. Матч: та же целая z и **8-сосед через шов** (угол — R41, не только орто). Не требовать, чтобы одна колонка входила в оба `ColumnRect`. Это **одно тело**. Union слотов и их Instance.
+
+Противоположные фронты (юг в A, восток в B): если это одна меса, тело **пересекает** шов A|B. Матч — клетки тела **на колонке этого шва**, не overlap `cell_refs` коридоров. Если тела не касаются через ребро — это две вершины (два холма одной высоты), не System.
+
+**Транзитивность.** Меса на трёх чанках: шов A–B и шов B–C — **не** два System. Совпадения по всем внутренним рёбрам **этого refine** склеить union-find слотов, затем emit: компонента с ≥2 Instance → **одна** строка `ReliefGradeSystem`. Не persist System на каждом ребре по отдельности. Не emit System в воркере до UF тайла.
+
+**Отпечаток воркера.** До post-pass воркер оставляет тонкий след на owned ребре: клетки тела (и кромки) на линии шва + какие Instance принадлежат слоту. Это bake-контракт (`ChunkComputeResult` / аналог), **не** колонка SQL, **не** поля persist-POJO (`occ` / slot / фронт — C38), **не** uid на клетке тела (R36t).
+
+**Порядок.** После fill чанков (System не трогает z). После `merge_grade_instances` (C29 same-straight). `grade_instance_uids` упорядочены. Клетка → Instance, никогда System. 1 фронт → строки нет (`grade_system_uid` NULL).
+
+**Два `detailed_bake` смежных тайлов.** Джобы **не** ждут (C29). Стык прямой = тот же catalog uid + upsert Instance. **System через макро-шов двух тайлов — не слой 6** (later). Слой 6 = чанки **этого** refine.
+
+**Запрещено:** второй C39 / 8-flood макро-тайла / полный same-z CC; повтор `SeamStage` (C41); stamp uid на тело; расширять persist-POJO; второй пул; fill∥relief; ждать соседний `detailed_bake` ради System; считать catalog uid слотом вершины.
+
+**Имена.** `SeamStage` / `ReliefVertices.seam` = шов **лучей** (C41). Post-chunk pass = стык на **техническом** шве (C29). Не называть T-3c «шов лучей».
 
 #### Топология (граф)
 
@@ -2669,7 +2703,7 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 | В компоненте | Entity |
 |---|---|
 | Одна прямая / один фронт | один `ReliefGradeInstance`; **без** строки System |
-| ≥2 прямых (смена kind / θ / outward; несколько сторон вершины) | N Instance + один `ReliefGradeSystem`; `grade_instance_uids` упорядочены |
+| ≥2 прямых (смена kind / θ / outward; несколько сторон вершины) | N Instance + один `ReliefGradeSystem`; `grade_instance_uids` упорядочены. Стороны в разных чанках — слоты склеивает T-3c на C29, не catalog |
 | 1 Grade | система **не** создаётся (R36l). Рабочий слот вершины на bake ≠ строка БД |
 
 Клетка несёт `system_grade_uid` → **Instance**, никогда System. `ReliefGradeInstance.grade_system_uid` заполняется только у членов системы.
@@ -2688,7 +2722,7 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 #### Порядок имплементации
 
 1. ~~**T-3b**~~ ✅ — граф + сшивка одного `(kind, outward, θ)` (анти-спам; rim-canonical = C29).
-2. **T-3c** — System, когда stitch видит ≥2 прямых.
+2. ~~**T-3c**~~ ✅ — System при ≥2 Instance **одной вершины**: intra-chunk по `slot`; через чанки — матч тел на C29 + UF по этому refine. Не «каталог увидел две прямые». Не слой 6 через макро-шов двух `detailed_bake`.
 3. T-2 / climate writer / settlement layout / pathfinding impl / Wave E / DAG — не этот трек (C29 для них — контракт, не код здесь).
 
 #### Не путать
@@ -2700,6 +2734,8 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 | Serial sample+stitch вызова | Tile-wide materialize; ждать bake соседа |
 | Rim-canonical | `min(face_key)` всей компоненты вслепую |
 | Технический шов (C29) | Шов мира (антагонисты); climate/road/`location_uid` = job uid; две половины города |
+| Catalog uid на C29 | Слот вершины / System (T-3c — тело на колонке шва) |
+| T-3c post-chunk на C29 | `SeamStage` / шов лучей (C41); второй C39 тайла |
 
 ### Wave E — later (контракт locked, код не сейчас)
 
@@ -2743,9 +2779,9 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 | [`tz_locations.md`](./tz_locations.md) | facing stairs; **barrier_template_registry**; локация на шве (**C29**); вершины layout — **R41** (не hunt пиков) |
 | [`tz_city_generation.md`](./tz_city_generation.md) | `SettlementLayout` мировые координаты; город на шве (**C29**); террасы/улицы — тело вершины **R41** при rim |
 | [`tz_building_generator.md`](./tz_building_generator.md) | library + world registry + import образец |
-| [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | pack partition ≠ продукт; шов мира vs технический (**C29**); **modification** = Patch Store; `detailed_bake` location — **R41** (не stencil volume); стык швов после чанков |
+| [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | pack partition ≠ продукт; шов мира vs технический (**C29**); **modification** = Patch Store; `detailed_bake` location — **R41** (не stencil volume); стык после чанков: прямая = catalog, вершина = T-3c |
 | [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) | pack ASCII: L0 map/height **без** outdoor grade (**R36u**); L2 `surface_grade` / `grade_{n}`; FineTerrain `system_grade_uid`→Instance (PAR-G7/G10); ~~PAR-G8~~ superseded |
-| [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | IDs; очередь SoT — § Осталось — v2 vs L2 volume; **R41-T-1…T-8** ✅; **T-9…T-12** open; **T-3c** System; **R36i-T-2** fence; **R36i-T-4…T-15** ✅ |
+| [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | IDs; очередь SoT — § Осталось — v2 vs L2 volume; **R41-T-1…T-8** ✅; **T-9…T-12** open; **T-3c** слой 6 ✅; **R36i-T-2** fence; **R36i-T-4…T-15** ✅ |
 | [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md) | agent pointer на § Порядок |
 | [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md) | impl R41: типы → discover → paint adapter → worker A → plugins → T-3c → срез v1 |
 | [`.cursor/plans/detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md) | Post-R36w GradeFormation apply; код по «делай» архитектуру |
@@ -2756,6 +2792,8 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-18 | **T-3c слой 6 ✅:** `VertexSlotSeam` на `ChunkComputeResult`; `emit_relief_grade_systems` после `merge_grade_instances`; persist `systems`; 1 фронт → нет строки; клетка → Instance; UF этого refine. Макро-шов двух bake не impl |
+| 2026-08-18 | **T-3c шов locked:** на C29 два стыка — catalog = прямая (Instance); T-3c = тело вершины (same-z 8 через колонку) + UF слотов этого refine. Intra-chunk = slot. Не C41, не второй C39, не catalog = вершина. Макро-шов двух `detailed_bake` — не слой 6. § T-3c на шве чанков |
 | 2026-08-18 | **ShorePlugin тело ✅:** банк + полоса; дно iff `grades_channel_bed`; море не в open water; leftover terrace = `sheer_terrace_min_cells`. Не выдумывает `shore_river` клетки. Next = T-3c слой 6 |
 | 2026-08-17 | **Shore ontology цифры:** `shore_river` L≥2 + канава по дну; `shore_mountain_river` θ 20–70° L≥2 + канава; `shore_sea` θ 20–70° L≥5, SHEER h≥5 или террасы ≥5; `shore_lake` TBD. U17 → свой класс берега |
 | 2026-08-17 | **R41-T-5…T-8 resolved:** равная z = продолжение L; inherit только орто (C15/C29); `stamp_min_abs_dz` на envelope; classify/stamp = коридор после C41 |
