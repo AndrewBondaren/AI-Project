@@ -830,3 +830,73 @@ def log_pack_loading_progress(
         activity="loading_progress",
         **fields,
     )
+
+
+def log_pack_relief_grades_persist_start(
+    world_uid: str,
+    *,
+    n_instances: int,
+    n_systems: int,
+    replace_world: bool,
+) -> float:
+    _info(
+        "pack relief_grades persist start | world=%s instances=%d systems=%d replace_world=%s",
+        world_uid,
+        n_instances,
+        n_systems,
+        replace_world,
+        activity="relief_grades_persist_start",
+        world_uid=world_uid,
+        n_instances=n_instances,
+        n_systems=n_systems,
+        replace_world=replace_world,
+    )
+    return time.perf_counter()
+
+
+def log_pack_relief_grades_persist_progress(
+    world_uid: str,
+    *,
+    kind: str,
+    done: int,
+    total: int,
+    started_at: float,
+) -> None:
+    elapsed_ms = (time.perf_counter() - started_at) * 1000.0
+    _info(
+        "pack relief_grades persist progress | world=%s kind=%s done=%d/%d elapsed_ms=%.1f",
+        world_uid,
+        kind,
+        done,
+        total,
+        elapsed_ms,
+        activity="relief_grades_persist_progress",
+        world_uid=world_uid,
+        persist_kind=kind,
+        done=done,
+        total=total,
+        elapsed_ms=elapsed_ms,
+    )
+
+
+def log_pack_relief_grades_persist_done(
+    world_uid: str,
+    *,
+    n_instances: int,
+    n_systems: int,
+    started_at: float,
+) -> None:
+    elapsed_ms = (time.perf_counter() - started_at) * 1000.0
+    _info(
+        "pack relief_grades persist done | world=%s instances=%d systems=%d elapsed_ms=%.1f",
+        world_uid,
+        n_instances,
+        n_systems,
+        elapsed_ms,
+        activity="relief_grades_persist_done",
+        world_uid=world_uid,
+        n_instances=n_instances,
+        n_systems=n_systems,
+        elapsed_ms=elapsed_ms,
+    )
+

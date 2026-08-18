@@ -36,6 +36,7 @@ from app.application.worldData.persistResult import PersistResult
 from app.application.worldData.persistReliefGrades import persist_relief_grades
 from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
+from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
@@ -96,6 +97,20 @@ class PackDetailedBakeOrchestrator:
         self._relief_grade_repo = relief_grade_repo
 
     async def bake(
+        self,
+        world: World,
+        locations: list[NamedLocation],
+        writer: WorldPackWriter,
+        mat_ctx: MaterializationContext,
+        surface_ctx: SurfaceTerrainContext,
+        request: DetailedBakeRequest,
+    ) -> PackDetailedBakeResult:
+        with generation_world_log(world.world_uid, mode="detailed"):
+            return await self._bake_in_log_scope(
+                world, locations, writer, mat_ctx, surface_ctx, request,
+            )
+
+    async def _bake_in_log_scope(
         self,
         world: World,
         locations: list[NamedLocation],

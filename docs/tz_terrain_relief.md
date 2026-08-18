@@ -7,7 +7,7 @@ metadata:
 ---
 
 > **Статус:** ownership **утверждён** · templates R33–R35 ✅ · **R36 geom/entity/clearance** ✅ · **canal R36p/q ✅** · **R36u–w** writer/pool/каталог ✅ · **R37** envelope ✅ · **R41/R42/C39/C41 pipeline v2 = SoT** (меса 8, фронт W×L, `ReliefVertices`+`occ`+`seam`, bucket[z] остаток кромок, шов лучей, расписание A). **R38–R40 v1 — deprecated**. Шов чанков `full_bake` · halo `grid_neighbor` · T-10 ✅.  
-> **Код vs SoT:** `compute_rect` = discover+paint → один fill; после чанков catalog merge + **T-3c System** (слои 0–7). Occupancy v1 **срезан** (слой 7). **Очередь / не трогать:** § [Осталось — v2 vs L2 volume](#осталось--v2-vs-l2-volume-locked). IDs — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md). **R41-T-1…T-12** ✅. Слой 5 ravine/shore ✅. **T-3c слой 6 ✅**. **Слой 7 срез v1 ✅**. Очередь v2 полиш закрыта — [план](../.cursor/plans/relief-pipeline-v2.md). Wave E / BAR-1 / DAG вне этой очереди. L0 `world-grade` ASCII omit (PAR-G5).  
+> **Код vs SoT:** `compute_rect` = discover+paint → один fill; после чанков catalog merge + **T-3c System** (слои 0–7). Occupancy v1 **срезан** (слой 7). **Очередь / не трогать:** § [Осталось — v2 vs L2 volume](#осталось--v2-vs-l2-volume-locked). IDs — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md). **R41-T-1…T-12** ✅. Слой 5 ravine/shore ✅. **T-3c слой 6 ✅**. **Слой 7 срез v1 ✅**. Очередь v2 полиш закрыта — [план](../.cursor/plans/relief-pipeline-v2.md). **R43** SQL catalog persist **✅**. Wave E / BAR-1 / DAG вне этой очереди. L0 `world-grade` ASCII omit (PAR-G5).  
 > **Связь:** SoT grade; **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT. · ASCII — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md). · L2 — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2. · Agent: [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md) · v2 impl: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md)
 
 **Scope lock (R36u):** меняется **только outdoor relief grade** (`system_grade_uid`, SLOPE/SHEER geometry). **Не трогать** L0→L2 parent-light контракты ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2):
@@ -55,7 +55,7 @@ metadata:
 **Generate (R36v / R36w / R41):** тот же пайплайн `detailed_bake` / entry — **внутри chunk worker**. Каталог `face_key` — serial **до** пула. Discover вершин/фронтов и paint — **в воркере** на готовом `heightmap` (не sample-all до пула). Стык рельефа по uid — **после** сформированных чанков. Runtime patch — **тот же** helper (bounds + halo). **Запрещено:** L0 Δz как кандидаты; отдельный «grade bake» оркестратор.  
 **Контексты generate (T-10 ✅):** `open_land`, `shore`, `road_shoulder`, `ravine`. Discover — **R41** (одна конструкция, plugin тела вершины).  
 **Template+pick:** `ravine` (`ReliefContext.RAVINE`; низина = mask). `mountain` — library/pick; SideFill Q4 later.  
-**Persist:** detailed / entry / patch upsert `relief_grade_instances` (`replace_world=False`). L0 light/full **не** `replace_world=True` — иначе wipe detailed outdoor grades.  
+**Persist:** detailed / entry / patch upsert `relief_grade_instances` (`replace_world=False`). L0 light/full **не** `replace_world=True` — иначе wipe detailed outdoor grades. **Как** писать SQL — **R43** (bake-writer: одна txn + `executemany`, не commit на строку). Семантика upsert / merge `cell_refs` / T-3c systems — без смены.  
 **L0 (light/full):** может красить высоты/маски (ravine z, mountain paint, terrain/hydro/facing …); **запрещено** materialize/stamp outdoor grade (`system_grade_uid` / Grade instance / ribbon grade apply как writer).  
 
 **Legacy (Wave B–D shipped, superseded by R36u-T-8):** L0 outdoor `open_land` / `shore` / `road_shoulder` contributors + `ribbonGradeApply` / BAR-1 intents — **deleted**. `PaintedRoadEdge` — dataModel handoff; detailed sample = meter `road_key` + Δz. Mountain SideFill ≠ this outdoor ribbon stack.
@@ -135,7 +135,7 @@ metadata:
 | R36h | **`h`/`dz` на клетке не хранить.** На клетке — **`system_grade_uid`** (omit если клетка не в grade). L/angle/h/kind/facing grade — на **сущности**. См. R36j |
 | R36i | **Materialize на всю `h=\|dz\|`:** SLOPE ramp / SHEER L×h solid. Без void. Затем создать Grade instance + проставить ссылки (R36j). Якоря верх/низ — **R36t** (не мутировать; canal-исключение при укорочении — R36p). **Apply = Post-R36w `GradeWriteSet` ✅** |
 | R36j | **Grade = один составной объект** (аналог **одной горы** `MountainSpec`). Состоит из grid-клеток; `cell_refs[]` ↔ `system_grade_uid` подтверждают состав. Поля: `grade_uid`, `kind`, `height_cells`, `length_cells`, **`angle_deg` (одно место; omit SHEER)**, `facing` (omit SHEER), resolved canal flat columns из **`Canal`** (`EarthenCanal`\|`StructureCanal`) через `build_canal`/`draw_canal` — **тот же cut**, что на Intent.`canal`. **Запрещено:** несколько углов в одном Grade |
-| R36l | **Иерархия как у гор** ([`tz_mountain_architecture.md`](./tz_mountain_architecture.md): хребет ↔ ≥2 вершины). **Один** постоянный угол / **один фронт (сторона)** → один `ReliefGradeInstance`. Несколько сторон одной вершины или излом θ → **`ReliefGradeSystem`** (`grade_instance_uids` ≥ 2). **1 грань (один луч/фронт)** → строку `relief_grade_systems` **не** пишем (FK: `Instance.grade_system_uid` тогда NULL). Рабочий slot вершины на bake ≠ строка БД. Клетка → **Instance** (`system_grade_uid`), не System. Через чанк та же вершина — матч **тела** на C29, не catalog uid. Persist: package + DB |
+| R36l | **Иерархия как у гор** ([`tz_mountain_architecture.md`](./tz_mountain_architecture.md): хребет ↔ ≥2 вершины). **Один** постоянный угол / **один фронт (сторона)** → один `ReliefGradeInstance`. Несколько сторон одной вершины или излом θ → **`ReliefGradeSystem`** (`grade_instance_uids` ≥ 2). **1 грань (один луч/фронт)** → строку `relief_grade_systems` **не** пишем (FK: `Instance.grade_system_uid` тогда NULL). Рабочий slot вершины на bake ≠ строка БД. Клетка → **Instance** (`system_grade_uid`), не System. Через чанк та же вершина — матч **тела** на C29, не catalog uid. Persist: package + DB; **SQL catalog writer — R43** |
 | R36m | **Obstacle clearance (мир) + truncate/skip.** Длину grade до footprint задаёт **`worlds.relief_grade_obstacle_policy`** (R36n). Оба режима: footprint **не** затирать; `L_eff < 1` → **skip** (+ WARN). **Не** включает earthen (это R36p / knobs). **Устарело:** silent auto `earthen_canal` при collision без knobs и без `canal_obstacle_policy` |
 | R36n | **Wire (мир):** `relief_grade_obstacle_policy`: **`truncate_skip`** \| **`allow_flush`**. Default = **`truncate_skip`**. Не на object/side (v1). Generate читает setting и ветвится; без silent fallback на другой режим. См. § Obstacle policy |
 | R36o | **Junction smooth (later):** модификатор сглаживания **стыка** прямой Grade с другим объектом (road / platform / соседний Grade / barrier footprint). **Не** меняет инвариант «один Grade = одна прямая / один θ». Не profile `smoothstep` (SideFill). Не `ReliefGradeSystem` (ломаный = ≥2 прямых). Не obstacle policy (clearance режет `L`). Wire-эскиз на knobs/grade: `junction_smooth`: **`none`** (default) \| **`chamfer`** \| **`fillet`**; опц. `junction_smooth_cells` ≥ 1 при режиме ≠ none. Materialize: после ядра ramp/sheer — переходные колонки на стыке. **v1 R36:** не impl |
@@ -145,7 +145,7 @@ metadata:
 | R36s | **Facing scope — locked.** Wire/entity: `Facing` (cardinal + intercardinal). **SLOPE:** uphill на Grade; **SHEER:** omit / `none`. **Discover v2:** 8 кандидатов с кромки. **Volume day-1:** орто W×L + нитка W=1 Chebyshev `(±1,±1)` на повороте (тот же `outward_columns`). Толстый диагональный фронт → **R36r** later. Шаг = Chebyshev 1 — [GoRogue](https://github.com/Chris3606/GoRogue/wiki/Measuring-Distance). **Запрещено:** параллельный facing enum. Stairs — [`tz_locations.md`](./tz_locations.md); outdoor facing — на entity (C10) |
 | R36t | **Bake formation anchors (SLOPE\|SHEER) — locked.** При **формировании** грани на bake всегда есть **верхняя** и **нижняя** точка перепада (якоря сайта / measured `dz`). Grade materialize + stamp **только между** якорями (коридор грани), **не** заливка региона. **Строго запрещено мутировать** клетки верхней и нижней точки (высота, материал, `system_grade_uid`, facing cache — не трогать якоря). **Не** правило entity R36j (состав объекта); это контракт **bake-формирования** (writer = **detailed_bake geometry**, R36u). **Исключение:** **canal** при **укорочении** slope (`L_eff` < requested / не вмещается) — cut у укороченного конца по **R36p** (+ knobs XOR на нормальном path, R28/R36q); см. § Canal obstacle policy. Без canal-ветки якоря остаются неприкосновенны. **Запрещено:** трактовать бровку/дно как «весь объект = SHEER» только из‑за membership flood. Вершины/низины известны по готовому `heightmap` до paint — **R41** |
 | R36u | **Grade generate locus — locked.** Исключение из [§ Идея 2](./tz_world_pack_storage.md) (L0-carry): outdoor grade **не** несётся с L0. Single-writer **геометрии** = фаза **создания геометрии `detailed_bake`** (FineTerrain column + Grade entity + refs). **Не** L0 light/full ribbon. **Не** «контракт L0→L2 propagate uid». **Запрещено:** stamp/`system_grade_uid` на L0 world-map cells как SoT grade; nearest-carry grade uid с parent light как источник membership (**PAR-G8 superseded**). L0 остаётся landcover/height/mask; detailed geometry — единственный writer SLOPE\|SHEER. Термины вроде «метровая сетка» **не** SoT — говорить **detailed_bake geometry / FineTerrain**. Anchors — R36t. ASCII — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md). **Как** крутить generate (pool / sample / patch) — **R36v**; **как стыковать чанки** — **R36w** |
-| R36v | **Grade generate schedule — locked (v2 = R41, расписание A).** Outdoor grade **вшит** в `detailed_bake` / `FineChunkRunner`, не отдельный процесс. **Пул:** одно задание на `ColumnRect` в том же `ChunkComputePool`. **Каталог `face_key` / job uid — serial до пула** (R36w). Discover/paint **не** pre-pool sample. **z:** `TileSurfaceState.heightmap` готов в prep (`generate_chunk_cells_sync` z **не** пишет). **На ядре (A):** discover+paint на этом z → **один** column fill (parent⊕overlay). Не два fill. Не fill∥relief. Не второй пул. Не рельеф тайла параллельно с чанками. Не tile-wide materialize. Не pool task на `face_key`. Halo = чтение `max(L_tpl, envelope floor)`. **Контракт z после paint:** column fill не меняет `surface_z`. Если будущий writer **меняет z колонки после paint** — **он** обновляет relief (или пишет z **до** paint). Relief не подписывается на чужие мутации z; это не повод на два fill. **Код:** sample до пула + stamp+fill — **долг**. World mod: тот же helper. Persist `replace_world=False`. Бюджет: tile-wide serial materialize — reject. См. § Grade в detailed_bake · § Relief pipeline v2 |
+| R36v | **Grade generate schedule — locked (v2 = R41, расписание A).** Outdoor grade **вшит** в `detailed_bake` / `FineChunkRunner`, не отдельный процесс. **Пул:** одно задание на `ColumnRect` в том же `ChunkComputePool`. **Каталог `face_key` / job uid — serial до пула** (R36w). Discover/paint **не** pre-pool sample. **z:** `TileSurfaceState.heightmap` готов в prep (`generate_chunk_cells_sync` z **не** пишет). **На ядре (A):** discover+paint на этом z → **один** column fill (parent⊕overlay). Не два fill. Не fill∥relief. Не второй пул. Не рельеф тайла параллельно с чанками. Не tile-wide materialize. Не pool task на `face_key`. Halo = чтение `max(L_tpl, envelope floor)`. **Контракт z после paint:** column fill не меняет `surface_z`. Если будущий writer **меняет z колонки после paint** — **он** обновляет relief (или пишет z **до** paint). Relief не подписывается на чужие мутации z; это не повод на два fill. **Код:** sample до пула + stamp+fill — **долг**. World mod: тот же helper. Persist `replace_world=False` (**как** SQL — **R43**). Бюджет: tile-wide serial materialize — reject. См. § Grade в detailed_bake · § Relief pipeline v2 |
 | R36w | **Grade chunk stitch — locked (каталог `face_key` ✅; seed-graph T-3b = deprecated v1 vs R41).** Стык = **уникальные грани chunk-сетки**, не first-lock-wins и не serial **materialize** всех семян. На **старте** refine/`detailed_bake` по размеру тайла и `terrain_chunk_columns` строится каталог граней: общая ребро двух чанков — **одна** грань (east A ≡ west B). Каждой грани **заранее** выдаётся воспроизводимый `grade_uid` = hash(`world_seed` \| `tile_gx` \| `tile_gy` \| `face_key`) (R15). **`tile` / `chunk` / `tile_edge`** — uid джобов (очередь/лог), не дерево `tile→chunk` и не uid Grade/climate/hydro. Ключ чанка содержит координаты тайла (адресация). **Родители `face_key` в этом bake** = chunk job uid **этого** тайла (internal 2, rim 1): **гейт старта** (не все bake сразу; 1 = сосед не в вызове, процесс можно запускать) + clearance (`< 2` → void не C18). Шов мира (антагонисты AABB) — `full_bake` L0, не этот каталог. Граф ленты **ссылается на `face_key` uid**; ребро графа uid **не** минтит. Пустая грань — uid в каталоге есть, instance **не** создаётся. `seed ∈ rect` для интерьера. Порядок rect не SoT. **Пул = один task на `ColumnRect`** (discover+paint, **затем один** fill, то же ядро — R41). Общая грань — один catalog uid; discover пишет **owner-чанк**, сосед только штампует. **Запрещено:** mint от порядка воркеров; два uid на одну общую грань; remap после persist; pool task на `face_key`; tile-wide materialize. Каталог до пула — **C28**; discover в воркере — **R41**. См. § Grade в detailed_bake · § Topology → entity → stamp |
 | R37 | **Ontology envelope — locked.** Relief **дополняет** маску, не подменяет. Конверт (`ReliefConditionTerrain`) — пол в `dataModel` (`ReliefOntologyEnvelopes`); шаблон не круче/короче пола. Bake → `grade_constrained` → inner `grade_from_template`. Volume / R36i inner **не** переписывать под равнину. Q5 supersede. **Каркас discover/фронтов — R41.** Ширина — **R42**. Исторический v1 (origins/mesa/ray) — R38–R40, **не SoT**. См. § Ontology envelope |
 | R38 | **Sparse origins — deprecated (v1).** Исторический запрет второго stencil «все локальные max» и 8×N с клетки **остаётся** (бюджет R36v). **SoT вершин/кромок — R41** (кромка = спуск в 8; не hunt пиков). Не читать этот пункт как 4-связность или fill→relief. См. § Sparse origins (historical) |
@@ -153,6 +153,12 @@ metadata:
 | R40 | **Ray walk / fill→relief — deprecated (v1).** Запреты fill∥relief, второго пула, рельефа тайла параллельно с чанками — **остаются**. Порядок writer высот **не** «column fill затем discover»: z уже в `heightmap` (prep). **SoT — R41:** discover+paint → один fill. Стоп θ / каскад террас / не мутировать якоря — R41 + R36t. См. § Ray walk (historical) |
 | R41 | **Relief pipeline v2 — locked (SoT).** Одна конструкция: вершина → кромка → фронты → `GradePaintSpec` → L2 paint. Контекст = тело вершины. Членство 8-связное при rim; клетка — **не больше одной** вершины (`at_grid`). `ReliefVertices` + **`occ`** + **`seam`**. Покрытие: фронт вниз пока θ; остаток = незатопленные кромки (**C39**). Фронты одной вершины **могут сходиться**; клетка в ≥2 следах — **шов лучей**, ничей коридор (**C41**). Не «непересекающиеся фронты» и не первый-занял. **1 фронт = 1 Instance;** System row при ≥2. Каталог до пула; discover+paint → один fill; стык после чанков: прямая = catalog, вершина = T-3c на C29. Stamp `|dz|=1` нет (R37). Ширина — **R42**. См. § Relief pipeline v2 · § Ray width |
 | R42 | **Ray width — lockstep front — locked.** Луч = **фронт**, не нитка в 1 клетку. `W` = сплошной run кромки с одним `Facing` и одним первым спуском. Весь фронт шагает наружу **вместе** (Chebyshev 1). Орто: прямоугольник `W × L`. Диагональ **day-1:** нитка W=1 Chebyshev; thick fill — [Murphy](http://www.zoo.co.uk/murphy/thickline/) **R36r later**. **Не** веер. Разный dz/θ вдоль `W` → резать Grade (C15). Опц. сужение `W` (Murphy taper) later — не захват чужой низины. Не dilation/GIS-buffer, не per-cell stairs. См. § Ray width |
+
+### SQL catalog persist (2026-08-18)
+
+| # | Решение |
+|---|---|
+| R43 | **SQL catalog = bake-writer, не CRUD-цикл — locked.** Один application-caller: `persist_relief_grades`. Геометрия по-прежнему pack column + `system_grade_uid` (R36u); SQL — каталог Instance/System, **не** dual-write сетки. **Как** [`tz_terrain_generation.md`](./tz_terrain_generation.md) TR-PERF-1 (`map_cells`): одна `Database.transaction()` на persist-pass, `executemany` пачками ~5000. **Не** N×`execute`+`commit` на строку. Prior merge — `list_instances_by_uids(world, uids_from_bag)`; **`list_instances_for_world` на этом пути запрещён**. Поштучный `upsert_instance` / `upsert_system` остаётся для patch/DAG (единицы строк; без обёртки — по-прежнему commit). Heartbeat: `packBakeLog` start/progress/done. Detailed: `generation_world_log(..., mode="detailed")`. Семантика `replace_world=False` / merge `cell_refs` / T-3c systems — без смены. Occupancy v1 не возвращать. Schema `0001` / DAG / discover/paint не трогать. **Не** бюджет «20–40 мин/tile» (мёртвый режим tile, WP-27 его нет). См. § SQL catalog persist |
 
 ### Locked checklist (master, 2026-08-01)
 
@@ -201,6 +207,58 @@ metadata:
 | C39 | **Незатопленные кромки — bucket[z] + `occ` + `seam`, не поиск дыр.** Сетка = `ColumnRect`+halo. `occ` = коридор фронта; `at_grid` = слот вершины; `seam` = шов лучей (C41). Ведра по целой z, сверху вниз. Seed только если `occ==0` ∧ `at_grid==0` ∧ `seam==0` ∧ есть 8-сосед ниже с `occ==0` ∧ `seam==0`. 8-flood тела — **от этой кромки**. Не полный CC same-z; не Priority-Flood ямы; не heap на клетку; не второй обход тайла. Пол рампы и шов лучей не сеют. См. **R41** § Покрытие | locked (R41) |
 | C40 | **`GradePaintSpec` — единственное место bake-полей фронта.** Вход в L2. kind/h/L/θ/canal — из `RibbonGradeDecision` / knobs **POJO**, без параллельных default. Instance создаётся в apply из `ReliefGradeInstance`. Запрещено копировать `height_cells`/`length_cells` вторым литералом. См. **R41** § GradePaintSpec | locked (R41) |
 | C41 | **Шов лучей (не первый-занял).** Клетка — не больше одной вершины. Фронты **одной** вершины могут сходиться (чаша, внутренний угол дороги). До записи `occ`: предложить все следы; клетка ∈ ≥2 следов → `seam` (ничей коридор, якорь низа / конец L, не в `cell_refs`). Коридор = уникальные клетки следа, не сквозь шов. Пустой коридор → skip фронта (R36m). Чужой `occ`/`seam` (другие вершины) — упор, не шов этой вершины. Не 4 Instance на одной клетке. Не путать с техническим швом чанков (C29). См. **R41** § Шов лучей | locked (R41) |
+| C42 | **SQL каталог грейдов — bake-writer.** Одна txn + `executemany` (~5000). Prior только по uid входящего bag. Heartbeat `packBakeLog`; detailed → `bake-detailed-*.log`. Не OLTP commit на строку. Не dump мира перед merge. Семантика upsert / `replace_world=False` / merge `cell_refs` / T-3c systems — без смены. Три caller’а — один `persist_relief_grades`. Поштучный upsert без обёртки коммитит (patch). | locked (R43) |
+
+---
+
+## SQL catalog persist (R43)
+
+**Не оптимизация detailed generate.** После `chunks=complete` HTTP ещё минуты писал каталог грейдов так, как ТЗ **запретило** для `map_cells` (TR-PERF-1/2: `executemany` + одна транзакция). Тот же writer стоит на entry (WP-14) и на L0, если есть instances. Продуктовый бюджет spawn/перехода — секунды–десятки секунд; OLTP `INSERT OR REPLACE` + `commit()` на каждую из ~32k строк (Windows ~30 мс/fsync) — **не** допустимый persist.
+
+**Инварианты (уже locked, не переоткрывать):** один application-caller `persist_relief_grades`; геометрия — pack column + `system_grade_uid`; SQL — каталог Instance/System, не dual-write сетки; schema `0001` не трогать; DAG/ноды не трогать; discover/paint не переоткрывать; occupancy v1 не возвращать; stamp → pack column не менять.
+
+### Слои
+
+| Слой | Контракт |
+|---|---|
+| `IReliefGradeRepository` | `upsert_instances(rows)` / `upsert_systems(rows)` — `[]` = no-op. `list_instances_by_uids(world_uid, uids)` — `[]` = `[]`. `persist_session()` = `Database.transaction()`. Поштучные `upsert_*` остаются для patch/DAG |
+| SQLite | Одна `persist_session` на persist-pass (systems + instances + optional wipe = **один COMMIT**). Внутри — `executemany` пачками ~5000 (порядок TR-PERF-1). **Не** копировать `mapCellBulkSql`; отдельный bulk helper. `delete_instances_for_world` коммитит **только если нет** `_in_transaction`. `IN (uids)` резать по ~400 (лимит переменных SQLite) |
+| `persist_relief_grades` | Собрал rows → merge prior → `persist_session` → bulk systems (FK), затем bulk instances. Оркестраторы SQL не пишут. `packBakeLog`: start (`n_instances`, `n_systems`, `replace_world`), progress на границе пачки (`done/total`, `elapsed_ms`), done (`counts`, `elapsed_ms`) |
+| `PackDetailedBakeOrchestrator.bake` | `generation_world_log(world_uid, mode="detailed")` — паритет с light/full/entry. Файл: `logs/generation/{uid}/bake-detailed-{stamp}.log` + `bake-detailed-latest.log`. **Не** дублировать обёртку в HTTP (`map.py`) |
+
+`list_instances_for_world` остаётся на протоколе (debug/админ). **На пути persist — запрещён.** Пустой bag / первый bake — ноль чтения.
+
+Поштучный `upsert_*` без `persist_session` **должен** коммитить — патч не ждёт bake-txn.
+
+### Caller’ы (один helper)
+
+| Caller | Когда | `replace_world` |
+|---|---|---|
+| `PackDetailedBakeOrchestrator` | offline L2, после чанков | `False` |
+| `FineTerrainRefineOrchestrator` | entry / WP-13 | `False` |
+| `PackMaterializationOrchestrator` | L0 light/full, если есть instances | `False` (**не** `True` — wipe detailed outdoor) |
+
+### Наблюдаемость
+
+Не print, не поллер `detailed_bake.py`. Logger `packBakeLog` уже в allowlist `generation_world_log` → uvicorn и файл, когда scope открыт.
+
+Ритм как у чанков: не 32k строк, а пачка / несколько секунд. После `complete` в манифесте в логе должно быть видно `grades persist 0/N → … → done ~секунды`, а не тишина. `app.relief grade_system_create` — emit в памяти, **не** заменяет persist-heartbeat.
+
+Entry/light/full уже внутри `generation_world_log` — те же start/progress/done попадут в `bake-entry|light|full-*.log` без новых обёрток.
+
+### Ожидание / не обещать
+
+Каталог на том же 1 км тайле (~25k instance) — **секунды, не 17 мин**. Не обещать «как чанки» (другой носитель). Обещать: не OLTP per-row.
+
+### Не входит в R43
+
+Сколько Instance «правильно» на 1 км / max `cell_refs` — продуктовый вопрос discover, не writer. Чистка мёртвой таблицы «режим tile, 20–40 мин» в [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) — doc-hygiene. Wave E, BAR-1, DAG, `|dz|=1` bowl, schema `0002`, второй пул, Volume/GradeFormation.
+
+### Порядок имплементации (один объект)
+
+Протокол repo → sqlite bulk+txn + get-by-uids → тонкий `persist_relief_grades` + `packBakeLog` → `generation_world_log` на detailed. **Не** «сначала только логи» и не «сначала только txn» в разных PR: без лога снова тишина, без bulk снова минуты.
+
+Код ✅. Приёмка: N≫1 upsert = один COMMIT; поштучный upsert без обёртки коммитит; 10 новых uid → не `list_instances_for_world`; detailed log = start/progress/done + `elapsed_ms`; T-3c / persist-тесты зелёные; `map_cells` bulk не трогать.
 
 ---
 
@@ -360,7 +418,7 @@ FineChunkRunner.refine_rects                    # оркестратор; не g
   T-3c на швах + persist systems                # slot intra-chunk; тело на C29; UF тайла; System iff ≥2
 ```
 
-**Код сейчас:** discover+paint в `compute_rect`; occupancy v1 срезан (слой 7). **T-3c:** `FineChunkPersist.finish` → `emit_relief_grade_systems` после `merge_grade_instances`; persist `instances`+`systems`.
+**Код сейчас:** discover+paint в `compute_rect`; occupancy v1 срезан (слой 7). **T-3c:** `FineChunkPersist.finish` → `emit_relief_grade_systems` после `merge_grade_instances`; persist `instances`+`systems` через `persist_relief_grades` (**R43**, не per-row CRUD).
 
 ### FineChunkRunner слои (SRP)
 
@@ -374,7 +432,7 @@ Stamp + fill **остаются** в `ColumnRect` worker, **последоват
 | **`prepare_fine_tile`** | один helper до пула | parent light, surface, halo + `refresh_tile_gaps`, catalog, existing uids (тот же `WorldPackReader`), workers | discover/stamp; pool |
 | **каталог** | serial до пула: **только `face_key` / job uid** (C28) | identity граней; uid шва заморожен | materialize; fill; discover по z (это **в worker**, R41); persist; mint; System row |
 | **`compute_rect`** | `(ctx, rect) → ChunkComputeResult` | **сначала** discover+paint на heightmap, **потом** один column fill (parent⊕overlay) | persist; mint uid; второй пул; второй fill overlay |
-| **`FineChunkPersist`** | write lock здесь | partition, wilderness write, location flush, grade_acc, counters | generate; второй grade pipeline |
+| **`FineChunkPersist`** | write lock здесь | partition, wilderness write, location flush, grade_acc, counters | generate; второй grade pipeline; per-row SQL catalog (SQL — **R43** после чанков) |
 | **`refine_rects`** | thin map | empty → prep → catalog → serial/pool `compute` → persist → `FineRefineResult` | тела фаз |
 
 Фасад `generate_detailed_grade` остаётся pack-IO-free (`halo_neighbors`). Persist **не** в `generators/`.
@@ -2479,7 +2537,7 @@ pack/refine/
   meterGradeSurface        # READ z; write-set = DetailedGradeResult.surface_z ✅
   fineChunkRunner          # one pool: discover+paint+fill per ColumnRect (**R41**) ✅
 
-application/worldData/persistReliefGrades.py ✅
+application/worldData/persistReliefGrades.py  # единственный caller SQL catalog; **R43** bake-writer ✅
 
 # L0 outdoor grade stack — deleted (R36u-T-8):
 #   openLand* / shore* / roadShoulder* Apply/Sample, ribbonGradeApply,
@@ -2768,7 +2826,7 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 
 | Документ | Связь |
 |---|---|
-| [`tz_terrain_generation.md`](./tz_terrain_generation.md) | skeleton / `N_eff`; pointer; **patch → тот же grade helper (R36v)** |
+| [`tz_terrain_generation.md`](./tz_terrain_generation.md) | skeleton / `N_eff`; pointer; **patch → тот же grade helper (R36v)**; SQL bulk эталон — TR-PERF-1 (**R43** = тот же приём на каталог грейдов, не `map_cells`) |
 | [`tz_mountain_architecture.md`](./tz_mountain_architecture.md) | topology; не SideKind |
 | [`tz_map_light_bake.md`](./tz_map_light_bake.md) | mountains / forests / plains / roads paint |
 | [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) | shore / liquid; consumer `shore`; класс `shore_river`/`shore_lake`/`shore_sea` |
@@ -2791,6 +2849,7 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-18 | **R43 / C42 SQL catalog persist ✅:** bake-writer (одна txn + `executemany` ~5000), prior по uid bag, heartbeat `packBakeLog`, detailed → `generation_world_log`. Не OLTP commit на строку. Семантика upsert без смены. § SQL catalog persist |
 | 2026-08-18 | **R41-T-9…T-12 ✅:** оркестратор discover/pick/uid/paint; identity builder; walk cap envelope/knobs; site `PackJobUid`; owner omit. Очередь v2 закрыта |
 | 2026-08-18 | **Слой 7 срез v1 ✅:** удалены sample/stitch/`PlannedGradeSegment`/`FineTileContext.planned`; `generate_detailed_grade` = discover+paint. Next **R41-T-9…T-12** |
 | 2026-08-18 | **T-3c слой 6 ✅:** `VertexSlotSeam` на `ChunkComputeResult`; `emit_relief_grade_systems` после `merge_grade_instances`; persist `systems`; 1 фронт → нет строки; клетка → Instance; UF этого refine. Макро-шов двух bake не impl |

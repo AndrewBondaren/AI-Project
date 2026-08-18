@@ -49,3 +49,23 @@ def test_generation_world_log_isolates_worlds(tmp_path: Path) -> None:
     b_text = (root / "world-b" / "bake-light-latest.log").read_text(encoding="utf-8")
     assert "only-a" in a_text and "only-b" not in a_text
     assert "only-b" in b_text and "only-a" not in b_text
+
+
+def test_generation_world_log_writes_detailed_files(tmp_path: Path) -> None:
+    root = tmp_path / "generation"
+    logging.getLogger().setLevel(logging.DEBUG)
+    pack_log = logging.getLogger("app.application.worldData.pack.bake.packBakeLog")
+    pack_log.setLevel(logging.DEBUG)
+
+    with generation_world_log("world-terrain-test-001", mode="detailed", root=root) as run_path:
+        pack_log.info(
+            "pack relief_grades persist start | world=world-terrain-test-001 instances=2 systems=1 replace_world=False",
+        )
+
+    assert run_path.is_file()
+    latest = root / "world-terrain-test-001" / "bake-detailed-latest.log"
+    assert latest.is_file()
+    text = latest.read_text(encoding="utf-8")
+    assert "relief_grades persist start" in text
+    assert "bake-detailed-" in run_path.name
+
