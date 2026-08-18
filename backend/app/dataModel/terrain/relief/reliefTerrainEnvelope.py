@@ -270,6 +270,12 @@ class ReliefTerrainEnvelope(BaseModel):
             out = min(out, int(self.slope_length_max_cells))
         return out
 
+    def slope_walk_cap_cells(self) -> int | None:
+        """Hard lockstep walk bound from ``slope_length_max_cells``. Omit = no envelope cap."""
+        if self.slope_length_max_cells is None:
+            return None
+        return max(1, int(self.slope_length_max_cells))
+
     def slope_length_for(
         self,
         h: int,

@@ -177,3 +177,4 @@ class DiscoveredFront:
     terrain_key: str
     system_terrain: str
     dz: int
+    owner_uid: str | None = None

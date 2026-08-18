@@ -1,13 +1,14 @@
-"""Split ribbon sample cells into contiguous terrain segments (RELIEF-T-32).
+"""Split ribbon cells into contiguous terrain segments (RELIEF-T-32).
 
-Pure: no pick / grade / world registry. Used by road_shoulder / open_land / shore / ravine.
+Pure: no pick / grade / world registry. Used by road_shoulder pick tests and
+``grade_ribbon_segments`` (not occupancy sample).
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
-from app.application.worldData.generators.terrain.relief.sample.ribbonSiteSample import SampleCell
 from app.application.worldData.generators.terrain.relief.sample.terrainMap import map_system_terrain
 
 
@@ -15,15 +16,15 @@ from app.application.worldData.generators.terrain.relief.sample.terrainMap impor
 class RibbonSegment:
     """One pick site: contiguous terrain run along a ribbon owner.
 
-    ``owner_uid`` — connection edge uid (road) or context token (``open_land`` /
-    ``shore`` / ``ravine``), not always a graph edge.
+    ``owner_uid`` — connection edge uid (road). Omit when the front has no graph
+    owner. Not a ``ReliefContext`` token.
 
     ``site_id`` — stable pick/seed key:
     ``{owner_uid}|{terrain_key}|{anchor_x},{anchor_y}`` where anchor = first
     cell of the run in walk order (not stamp geometry).
     """
 
-    owner_uid: str
+    owner_uid: str | None
     terrain_key: str  # ReliefConditionTerrain value
     system_terrain: str
     dz: int
@@ -35,11 +36,11 @@ class RibbonSegment:
 def segmentize_by_terrain(
     *,
     owner_uid: str,
-    cells: list[SampleCell] | list[tuple[tuple[int, int], str, int]],
+    cells: Sequence[tuple[tuple[int, int], str, int] | tuple[tuple[int, int], str, int, int]],
 ) -> list[RibbonSegment]:
-    """Split sample cells into segments on system_terrain change.
+    """Split cells into segments on system_terrain change.
 
-    ``cells``: ``SampleCell`` (or compatible tuple) in stable walk order.
+    ``cells``: ``((x, y), terrain, dz)`` or ``(..., path_length)`` in walk order.
     """
     segments: list[RibbonSegment] = []
     if not cells:

@@ -38,7 +38,18 @@ from app.dataModel.terrain.relief.reliefTerrainEnvelope import (
     ReliefTerrainEnvelope,
 )
 
-_TRACE_CAP = 64
+
+def _walk_cap(envelope: ReliefTerrainEnvelope, occupancy: int | None) -> int | None:
+    """Hard walk bound: min(envelope max, occupancy knobs). None = until natural stop."""
+    caps: list[int] = []
+    env_max = envelope.slope_walk_cap_cells()
+    if env_max is not None:
+        caps.append(env_max)
+    if occupancy is not None:
+        caps.append(int(occupancy))
+    if not caps:
+        return None
+    return max(1, min(caps))
 
 
 def _diagonal_covered_by_ortho(
@@ -130,14 +141,20 @@ class FrontStage:
         pending: list[ProposedTrace] = []
         for (facing, first_dz), rims in grouped.items():
             for run in _consecutive_runs(rims, facing):
-                if not self._stamps_first_step(run, facing, first_dz, plugin):
+                env = self._envelope_for_run(run, facing)
+                if not env.stamps_first_step(abs(int(first_dz)), plugin.context):
                     continue
-                trace = self._walk_trace(run, facing, z_body, slot, plugin)
+                occupancy: int | None = None
                 if self.cap_front is not None:
-                    max_k = self.cap_front(plugin.context)
-                    if max_k is None:
+                    occupancy = self.cap_front(plugin.context)
+                    if occupancy is None:
                         continue
-                    trace = truncate_trace(trace, run, facing, max_k)
+                trace = self._walk_trace(
+                    run, facing, z_body, slot, plugin,
+                    walk_cap=_walk_cap(env, occupancy),
+                )
+                if occupancy is not None:
+                    trace = truncate_trace(trace, run, facing, occupancy)
                 if not trace:
                     continue
                 z_end = cell_z(self.surface, trace[-1])
@@ -185,14 +202,12 @@ class FrontStage:
                 shots.append(((x, y), facing, z_body - zn))
         return shots
 
-    def _stamps_first_step(
+    def _envelope_for_run(
         self,
         run: tuple[Coord, ...],
         facing: Facing,
-        first_dz: int,
-        plugin: VertexBodyPlugin,
-    ) -> bool:
-        """R37 first-step floor from envelope, not a plugin boolean (R41-T-7)."""
+    ) -> ReliefTerrainEnvelope:
+        """Envelope of the first downhill cell (R37 / R41-T-7 / R41-T-11)."""
         dx, dy = GRID_OUTWARD_DELTA[facing]
         sx, sy = run[0]
         downhill = (sx + dx, sy + dy)
@@ -205,12 +220,11 @@ class FrontStage:
                 or mapped
             )
         table = self.envelopes or ReliefOntologyEnvelopes.canonical_defaults()
-        env = (
+        return (
             table.for_terrain(mapped)
             if mapped is not None
             else ReliefTerrainEnvelope()
         )
-        return env.stamps_first_step(abs(int(first_dz)), plugin.context)
 
     def _walk_trace(
         self,
@@ -219,19 +233,27 @@ class FrontStage:
         z_body: int,
         slot: int,
         plugin: VertexBodyPlugin,
+        *,
+        walk_cap: int | None,
     ) -> tuple[Coord, ...]:
         """Lockstep W×L until θ break, abutment, own body, or foreign occ/seam.
 
         Equal z continues L (ramp/ravine floor). Stop on a *rise*
         ``z > z_body`` or ``z > z_prev`` (R41-T-5). First-step ``|dz|=1`` is
         a separate envelope skip, not this predicate.
+        Walk cap is envelope ``slope_length_max_cells`` and/or occupancy knobs
+        (R41-T-11), not a module literal. ``None`` = until the heightmap ends.
         """
         dx, dy = GRID_OUTWARD_DELTA[facing]
         surface = self.surface
         vertices = self.vertices
         blocked = self.cell_blocked
         cells: list[Coord] = []
-        for k in range(1, _TRACE_CAP + 1):
+        k = 0
+        while True:
+            k += 1
+            if walk_cap is not None and k > walk_cap:
+                return tuple(cells)
             strip: list[Coord] = []
             zs: list[int] = []
             for sx, sy in rim:
@@ -269,4 +291,3 @@ class FrontStage:
             if len(set(zs)) > 1:
                 return tuple(cells)
             cells.extend(strip)
-        return tuple(cells)

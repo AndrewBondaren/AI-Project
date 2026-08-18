@@ -6,15 +6,6 @@ import unittest
 from unittest.mock import MagicMock
 
 from app.application.worldData.pack.refine.detailedGradeGenerate import generate_detailed_grade
-from app.application.worldData.pack.refine.detailedGradeSample import (
-    sample_open_land_meter,
-    sample_ravine_meter,
-    sample_road_shoulder_meter,
-    sample_shore_meter,
-)
-from app.application.worldData.generators.terrain.relief.sample.ribbonSiteSample import (
-    SampleCell,
-)
 from app.application.worldData.pack.refine.meterGradeSurface import MeterGradeSurface
 from app.application.worldData.terrainBatchOrchestrator import TileSurfaceState
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
@@ -25,203 +16,6 @@ from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
 _MASKS = WorldTerrainMasks.canonical_defaults()
 _PLAINS = _MASKS.default_plains.system_terrain
 _RAVINE = _MASKS.default_ravines.system_terrain
-
-
-class DetailedGradeSampleTest(unittest.TestCase):
-    def test_open_land_meter_downhill_seed(self) -> None:
-        surface = MeterGradeSurface(
-            surface_z={(1, 0): 5, (2, 0): 3},
-            surface_terrain={(1, 0): "plains", (2, 0): "plains"},
-            hydrology=None,
-            surface_facing=None,
-        )
-        samples, refs = sample_open_land_meter(surface, road_key="road")
-        self.assertEqual(samples, [SampleCell((2, 0), "plains", 2, 1)])
-        self.assertEqual(refs, {(1, 0)})
-
-    def test_open_land_skips_graded_and_road(self) -> None:
-        surface = MeterGradeSurface(
-            surface_z={(1, 0): 5, (2, 0): 3, (3, 0): 4, (4, 0): 2},
-            surface_terrain={
-                (1, 0): "plains", (2, 0): "plains",
-                (3, 0): "road", (4, 0): "plains",
-            },
-            hydrology=None,
-            surface_facing=None,
-            grade_uid={(2, 0): "g1"},
-        )
-        samples, _ = sample_open_land_meter(surface, road_key="road")
-        seeds = {item.xy for item in samples}
-        self.assertNotIn((2, 0), seeds)
-        self.assertNotIn((4, 0), seeds)
-
-    def test_shore_landward_of_shore_role(self) -> None:
-        surface = MeterGradeSurface(
-            surface_z={(1, 0): 2, (2, 0): 4, (0, 0): 0},
-            surface_terrain={
-                (1, 0): "shore", (2, 0): "plains", (0, 0): "liquid_body",
-            },
-            hydrology={
-                (1, 0): MapCellHydrology(role=HydrologyCellRole.SHORE),
-                (0, 0): MapCellHydrology(role=HydrologyCellRole.LAKE),
-            },
-            surface_facing=None,
-        )
-        samples, refs = sample_shore_meter(surface, road_key="road")
-        seeds = {item.xy for item in samples}
-        self.assertIn((2, 0), seeds)
-        self.assertIn((1, 0), refs)
-        self.assertNotIn((0, 0), seeds)
-
-    def test_open_land_rect_owns_seed_only(self) -> None:
-        from app.application.worldData.generators.terrain.types import ColumnRect
-
-        surface = MeterGradeSurface(
-            surface_z={(1, 0): 5, (2, 0): 3, (3, 0): 1},
-            surface_terrain={
-                (1, 0): "plains", (2, 0): "plains", (3, 0): "plains",
-            },
-            hydrology=None,
-            surface_facing=None,
-        )
-        left = ColumnRect(x_min=1, x_max=2, y_min=0, y_max=0)
-        samples, refs = sample_open_land_meter(
-            surface, road_key="road", rect=left, halo=1,
-        )
-        seeds = {item.xy for item in samples}
-        self.assertIn((2, 0), seeds)
-        self.assertNotIn((3, 0), seeds)
-        self.assertIn((1, 0), refs)
-        self.assertNotIn((2, 0), refs)
-
-    def test_open_land_reads_graded_halo(self) -> None:
-        from app.application.worldData.generators.terrain.types import ColumnRect
-
-        surface = MeterGradeSurface(
-            surface_z={(5, 5): 8, (6, 5): 6, (7, 5): 4},
-            surface_terrain={
-                (5, 5): "plains", (6, 5): "plains", (7, 5): "plains",
-            },
-            hydrology=None,
-            surface_facing=None,
-            grade_uid={(6, 5): "g-left"},
-        )
-        late = ColumnRect(x_min=7, x_max=7, y_min=5, y_max=5)
-        samples, refs = sample_open_land_meter(
-            surface, road_key="road", rect=late, halo=1,
-        )
-        seeds = {item.xy for item in samples}
-        self.assertIn((7, 5), seeds)
-        self.assertNotIn((6, 5), seeds)
-        self.assertIn((6, 5), refs)
-
-    def test_open_land_skips_unit_step_from_peak(self) -> None:
-        """4→3 is left as heightmap; mid-slope 3→2 is not a new origin."""
-        surface = MeterGradeSurface(
-            surface_z={(0, 0): 4, (1, 0): 3, (2, 0): 2},
-            surface_terrain={
-                (0, 0): "plains", (1, 0): "plains", (2, 0): "plains",
-            },
-            hydrology=None,
-            surface_facing=None,
-        )
-        samples, refs = sample_open_land_meter(surface, road_key="road")
-        self.assertEqual(samples, [])
-        self.assertEqual(refs, set())
-
-    def test_open_land_peaks_all_facings_stop_at_voxel(self) -> None:
-        """Two 4s are peaks; 4→2 east is one cell then 3 blocks (L=1, h=2)."""
-        surface = MeterGradeSurface(
-            surface_z={
-                (1, 1): 4, (2, 1): 4, (3, 1): 2, (4, 1): 3,
-                (2, 2): 3, (2, 0): 3,
-            },
-            surface_terrain={
-                (1, 1): "plains", (2, 1): "plains", (3, 1): "plains",
-                (4, 1): "plains", (2, 2): "plains", (2, 0): "plains",
-            },
-            hydrology=None,
-            surface_facing=None,
-        )
-        samples, refs = sample_open_land_meter(surface, road_key="road")
-        seeds = {item.xy: item for item in samples}
-        self.assertIn((3, 1), seeds)
-        self.assertEqual(seeds[(3, 1)].dz, 2)
-        self.assertEqual(seeds[(3, 1)].path_length, 1)
-        self.assertIn((2, 1), refs)
-        self.assertNotIn((1, 1), seeds)
-        self.assertNotIn((4, 1), seeds)
-
-    def test_road_shoulder_land_beside_road(self) -> None:
-        surface = MeterGradeSurface(
-            surface_z={(1, 0): 5, (2, 0): 3},
-            surface_terrain={(1, 0): "road", (2, 0): "plains"},
-            hydrology=None,
-            surface_facing=None,
-        )
-        samples, refs = sample_road_shoulder_meter(surface, road_key="road")
-        self.assertEqual(samples, [SampleCell((2, 0), "plains", 2)])
-        self.assertEqual(refs, {(1, 0)})
-
-    def test_road_shoulder_skips_flat(self) -> None:
-        surface = MeterGradeSurface(
-            surface_z={(1, 0): 5, (2, 0): 5},
-            surface_terrain={(1, 0): "road", (2, 0): "plains"},
-            hydrology=None,
-            surface_facing=None,
-        )
-        samples, refs = sample_road_shoulder_meter(surface, road_key="road")
-        self.assertEqual(samples, [])
-        self.assertEqual(refs, set())
-
-    def test_ravine_meter_seed_on_mask(self) -> None:
-        surface = MeterGradeSurface(
-            surface_z={(1, 0): 5, (2, 0): 3},
-            surface_terrain={(1, 0): _PLAINS, (2, 0): _RAVINE},
-            hydrology=None,
-            surface_facing=None,
-        )
-        samples, refs = sample_ravine_meter(surface, road_key="road")
-        self.assertEqual(samples, [SampleCell((2, 0), _RAVINE, 2)])
-        self.assertEqual(refs, {(1, 0)})
-
-    def test_ravine_does_not_seed_bank_or_floor(self) -> None:
-        surface = MeterGradeSurface(
-            surface_z={
-                (0, 0): 5, (1, 0): 3, (2, 0): 3, (3, 0): 3, (4, 0): 5,
-            },
-            surface_terrain={
-                (0, 0): _PLAINS, (1, 0): _RAVINE, (2, 0): _RAVINE,
-                (3, 0): _RAVINE, (4, 0): _PLAINS,
-            },
-            hydrology=None,
-            surface_facing=None,
-        )
-        samples, refs = sample_ravine_meter(surface, road_key="road")
-        seeds = {item.xy for item in samples}
-        self.assertIn((1, 0), seeds)
-        self.assertIn((3, 0), seeds)
-        self.assertNotIn((2, 0), seeds)
-        self.assertNotIn((0, 0), seeds)
-        self.assertNotIn((4, 0), seeds)
-        self.assertEqual(refs, {(0, 0), (4, 0)})
-
-    def test_ravine_skips_flat_and_graded(self) -> None:
-        surface = MeterGradeSurface(
-            surface_z={(1, 0): 5, (2, 0): 5, (3, 0): 5, (4, 0): 3},
-            surface_terrain={
-                (1, 0): _PLAINS, (2, 0): _RAVINE,
-                (3, 0): _PLAINS, (4, 0): _RAVINE,
-            },
-            hydrology=None,
-            surface_facing=None,
-            grade_uid={(4, 0): "g1"},
-        )
-        samples, refs = sample_ravine_meter(surface, road_key="road")
-        seeds = {item.xy for item in samples}
-        self.assertNotIn((2, 0), seeds)
-        self.assertNotIn((4, 0), seeds)
-        self.assertEqual(refs, set())
 
 
 class DetailedGradeGenerateTest(unittest.TestCase):
@@ -349,6 +143,22 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         self.assertTrue(stamped)
         self.assertNotIn((5, 5), stamped)
         self.assertNotIn((5, 6), stamped)
+        self.assertTrue(all(inst.owner_uid is None for inst in result.grade_instances))
+        from app.application.worldData.pack.refine.detailedJobUid import (
+            front_grade_site,
+        )
+        from app.dataModel.worldPack.packJobUid import PackJobUid
+        wire = PackJobUid.canonical_defaults()
+        for inst in result.grade_instances:
+            self.assertIsNotNone(inst.site_id)
+            parts = inst.site_id.split(wire.sep)
+            self.assertEqual(len(parts), 3)
+            self.assertEqual(parts[0], ReliefContext.OPEN_LAND.value)
+            ax, ay = (int(p) for p in parts[1].split(","))
+            self.assertEqual(
+                inst.site_id,
+                front_grade_site(parts[0], ax, ay, parts[2]),
+            )
 
     def test_generate_stamps_ravine_mask(self) -> None:
         from app.application.worldData.generators.terrain.types import GridBBox, SurfaceHeightmap
@@ -415,7 +225,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         self.assertNotIn((5, 5), result.surface_grade_uid)
         self.assertEqual(
             {inst.owner_uid for inst in result.grade_instances},
-            {ReliefContext.RAVINE.value},
+            {None},
         )
 
     def test_two_rects_stitch_one_uid(self) -> None:
@@ -821,7 +631,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         )
         self.assertEqual(
             {inst.owner_uid for inst in west.grade_instances},
-            {ReliefContext.ROAD_SHOULDER.value},
+            {None},
         )
 
 
@@ -972,17 +782,15 @@ class DetailedGradeCatalogTest(unittest.TestCase):
 
     def test_faces_share_vertex_adjacent_rims(self) -> None:
         from app.application.worldData.pack.refine.detailedGradeCatalog import FaceKey
-        from app.application.worldData.pack.refine.detailedGradeGraph import (
-            face_vertices,
-            faces_share_vertex,
-        )
 
         north = FaceKey("V", 1, 1)
         south = FaceKey("V", 1, 0)
-        self.assertIn((2, 1), face_vertices(north))
-        self.assertIn((2, 1), face_vertices(south))
-        self.assertTrue(faces_share_vertex(north, south))
-        self.assertFalse(faces_share_vertex(FaceKey("V", 0, 0), FaceKey("V", 1, 1)))
+        self.assertIn((2, 1), north.vertices())
+        self.assertIn((2, 1), south.vertices())
+        self.assertTrue(set(north.vertices()) & set(south.vertices()))
+        self.assertFalse(
+            set(FaceKey("V", 0, 0).vertices()) & set(FaceKey("V", 1, 1).vertices()),
+        )
 
     def test_per_chunk_rects_same_straight_one_uid(self) -> None:
         """C28: two chunk rects along one east rim → one Instance (anti-spam)."""
@@ -1055,69 +863,6 @@ class DetailedGradeCatalogTest(unittest.TestCase):
         uid = next(iter(uids))
         self.assertNotIn("location", uid)
         self.assertNotIn("location_uid", uid)
-
-    def test_split_mixed_outward_two_facings(self) -> None:
-        from app.application.worldData.generators.terrain.relief.geom.geomResolve import (
-            ResolvedGeom,
-        )
-        from app.application.worldData.generators.terrain.relief.pick.gradePass import (
-            RibbonGradeDecision,
-        )
-        from app.application.worldData.generators.terrain.relief.pick.ribbonGrade import (
-            RibbonGradeResult,
-        )
-        from app.application.worldData.generators.terrain.relief.sample.ribbonSegmentize import (
-            RibbonSegment,
-        )
-        from app.application.worldData.pack.refine.detailedGradePlan import (
-            PlannedGradeSegment,
-            split_mixed_outward,
-            straight_key,
-        )
-        from app.dataModel.spatial.facing import Facing
-        from app.dataModel.terrain.relief.enums import (
-            ReliefContext,
-            ReliefSideKind,
-            ReliefSlopePolicy,
-        )
-
-        segment = RibbonSegment(
-            owner_uid="open_land",
-            terrain_key="plains",
-            system_terrain="plains",
-            dz=1,
-            site_id="s",
-            cell_coords=((2, 1), (1, 2)),
-        )
-        decision = RibbonGradeDecision(
-            template_uid="t",
-            policy=ReliefSlopePolicy.SLOPE_DOWN,
-            kind=ReliefSideKind.SLOPE,
-            requested_length=1,
-            h=1,
-            geom=ResolvedGeom(
-                kind=ReliefSideKind.SLOPE, h=1, L=1, angle_deg=45.0, steps=(1,),
-            ),
-            earthen_canal=None,
-            structure_refs=(),
-            reason="test",
-        )
-        item = PlannedGradeSegment(
-            context=ReliefContext.OPEN_LAND,
-            result=RibbonGradeResult(
-                segment=segment, decision=decision, template_uid="t",
-            ),
-            ref_cells=frozenset({(1, 1)}),
-            grade_uid="",
-        )
-        parts = split_mixed_outward(item)
-        self.assertEqual(len(parts), 2)
-        self.assertEqual(
-            {straight_key(part).outward for part in parts},
-            {Facing.EAST, Facing.NORTH},
-        )
-        east = next(p for p in parts if straight_key(p).outward is Facing.EAST)
-        self.assertIs(straight_key(east).kind, ReliefSideKind.SLOPE)
 
     def test_two_outwards_stay_two_instances(self) -> None:
         """C28: L-shaped high ground → two corridor outwards → two Instances."""
@@ -1654,7 +1399,7 @@ class GradeFormationApplyTest(unittest.TestCase):
         from app.application.worldData.pack.refine.detailedGradeCatalog import (
             catalog_for_surface,
         )
-        from app.application.worldData.pack.refine.detailedGradeGenerate import (
+        from app.application.worldData.pack.refine.detailedGradeHalo import (
             grade_halo_cells,
         )
         from app.application.worldData.pack.refine.fineChunkCompute import (
@@ -1749,7 +1494,7 @@ class GradeFormationApplyTest(unittest.TestCase):
         from app.application.worldData.pack.refine.detailedGradeCatalog import (
             catalog_for_surface,
         )
-        from app.application.worldData.pack.refine.detailedGradeGenerate import (
+        from app.application.worldData.pack.refine.detailedGradeHalo import (
             grade_halo_cells,
         )
         from app.application.worldData.pack.refine.fineChunkCompute import compute_rect
@@ -1796,6 +1541,102 @@ class GradeFormationApplyTest(unittest.TestCase):
         self.assertEqual(state.heightmap.surface_z, parent)
         self.assertTrue(result.chunk_grades)
         self.assertEqual(capture.captured.heightmap.surface_z[(5, 5)], 8)
+
+
+class DiscoverAndPaintPolishTest(unittest.TestCase):
+    def test_discover_and_paint_is_orchestrator_not_god(self) -> None:
+        import inspect
+
+        from app.application.worldData.pack.refine import detailedGradeDiscover as m
+        from app.application.worldData.pack.refine.detailedGradePaint import (
+            apply_grade_paint_spec,
+        )
+
+        src = inspect.getsource(m.discover_and_paint)
+        self.assertIn("discover_fronts", src)
+        self.assertIn("pick_front_grade", src)
+        self.assertIn("uid_for_front", src)
+        self.assertIn("apply_grade_paint_spec", src)
+        self.assertNotIn("pick_template(", src)
+        self.assertNotIn("grade_constrained(", src)
+        self.assertNotIn("make_grade_uid(", src)
+        paint_src = inspect.getsource(apply_grade_paint_spec)
+        self.assertIn("front.owner_uid", paint_src)
+        self.assertNotIn("front.context.value", paint_src)
+
+    def test_identity_builder_is_single_site_and_terrain(self) -> None:
+        from app.application.worldData.generators.terrain.relief.discover.types import (
+            FrontGeometry,
+        )
+        from app.application.worldData.pack.refine.detailedGradeFrontIdentity import (
+            discovered_front_from,
+            front_bake_identity,
+        )
+        from app.application.worldData.pack.refine.detailedJobUid import (
+            front_grade_site,
+        )
+        from app.application.worldData.pack.refine.meterGradeSurface import (
+            MeterGradeSurface,
+        )
+        from app.dataModel.spatial.facing import Facing
+        from app.application.worldData.generators.terrain.relief.pick.gradePass import (
+            RibbonGradeDecision,
+        )
+
+        front = FrontGeometry(
+            slot=1,
+            context=ReliefContext.OPEN_LAND,
+            outward=Facing.EAST,
+            first_dz=2,
+            z_body=8,
+            z_end=6,
+            path_length=1,
+            rim=((5, 5),),
+            trace=((6, 5),),
+            corridor=((6, 5),),
+            anchor_bottom=(6, 5),
+            hit_seam=False,
+        )
+        surface = MeterGradeSurface(
+            surface_z={(5, 5): 8, (6, 5): 6},
+            surface_terrain={(5, 5): _PLAINS, (6, 5): _PLAINS},
+            hydrology=None,
+            surface_facing=None,
+        )
+        identity = front_bake_identity(surface, front)
+        self.assertEqual(
+            identity.site_id,
+            front_grade_site(
+                ReliefContext.OPEN_LAND.value, 5, 5, Facing.EAST.value,
+            ),
+        )
+        self.assertEqual(identity.terrain_key, _PLAINS)
+        self.assertIsNone(identity.owner_uid)
+        decision = RibbonGradeDecision.skipped_site(
+            template_uid="t",
+            reason="unit",
+            h=1,
+            requested_length=1,
+            earthen_canal=None,
+            structure_refs=(),
+            structure_canal=None,
+        )
+        painted = discovered_front_from(
+            front, identity, grade_uid="g", decision=decision, template_uid="t",
+        )
+        self.assertEqual(painted.site_id, identity.site_id)
+        self.assertEqual(painted.terrain_key, identity.terrain_key)
+        self.assertEqual(painted.dz, identity.dz)
+        self.assertIsNone(painted.owner_uid)
+
+    def test_fine_tile_context_has_no_planned(self) -> None:
+        from dataclasses import fields
+
+        from app.application.worldData.pack.refine.fineTileContext import (
+            FineTileContext,
+        )
+
+        self.assertNotIn("planned", {f.name for f in fields(FineTileContext)})
 
 
 if __name__ == "__main__":

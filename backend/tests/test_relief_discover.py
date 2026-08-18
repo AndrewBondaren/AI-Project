@@ -485,6 +485,38 @@ class ReliefDiscoverTest(unittest.TestCase):
         self.assertEqual(front.path_length, 3)
         self.assertEqual(front.z_end, 4)
 
+    def test_walk_cap_uses_envelope_max_not_literal(self) -> None:
+        """R41-T-11: lockstep bound is slope_length_max_cells, not _TRACE_CAP=64."""
+        z = {(0, y): (8 if y == 6 else 4) for y in range(7)}
+        plains = ReliefOntologyEnvelopes.canonical_defaults().plains.model_copy(
+            update={"slope_length_max_cells": 2},
+        )
+        envelopes = ReliefOntologyEnvelopes.canonical_defaults().model_copy(
+            update={"plains": plains},
+        )
+        surface = _surface(z)
+        _vertices, fronts = discover_fronts(
+            surface,
+            origin_x=0,
+            origin_y=0,
+            width=1,
+            height=7,
+            plugins=(OpenLandPlugin(_LAND),),
+            cell_blocked=lambda _xy: False,
+            envelopes=envelopes,
+        )
+        south = [f for f in fronts if f.outward is Facing.SOUTH]
+        self.assertTrue(south)
+        self.assertEqual(max(f.path_length for f in south), 2)
+
+    def test_omit_envelope_max_walks_full_heightmap_floor(self) -> None:
+        """No envelope max and no occupancy cap → walk until the heightmap ends."""
+        z = {(0, y): (8 if y == 6 else 4) for y in range(7)}
+        _vertices, fronts = _discover(z)
+        south = [f for f in fronts if f.outward is Facing.SOUTH]
+        self.assertTrue(south)
+        self.assertEqual(max(f.path_length for f in south), 6)
+
     def test_unit_dz_policy_is_envelope_not_plugin(self) -> None:
         self.assertFalse(hasattr(OpenLandPlugin, "allows_unit_stamp"))
         self.assertFalse(hasattr(OpenLandPlugin(_LAND), "allows_unit_stamp"))
@@ -830,6 +862,21 @@ class ReliefDiscoverTest(unittest.TestCase):
         )
         self.assertTrue(plugins[0].claims((0, 1), surface))
         self.assertTrue(plugins[0].may_shoot((0, 1), (0, 0), surface))
+
+
+class ReliefDiscoverPolishTest(unittest.TestCase):
+    def test_fronts_has_no_pick_and_no_trace_cap_literal(self) -> None:
+        import inspect
+
+        from app.application.worldData.generators.terrain.relief.discover import (
+            fronts as fronts_mod,
+        )
+
+        src = inspect.getsource(fronts_mod)
+        self.assertNotIn("pick_template", src)
+        self.assertNotIn("templatePick", src)
+        self.assertNotIn("_TRACE_CAP", src)
+        self.assertIn("slope_walk_cap_cells", src)
 
 
 if __name__ == "__main__":

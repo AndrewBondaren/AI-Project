@@ -98,22 +98,6 @@ def _road_grade_or_hydro_blocked(
     return role is not None and role.blocks_grade_seed()
 
 
-def meter_seed_blocked(
-    surface: MeterGradeSurface,
-    xy: Coord,
-    *,
-    road_key: str,
-    ignore_grade: bool = False,
-) -> bool:
-    """Hard blocks for a seed cell. ``ignore_grade`` keeps stamped halo in land."""
-    terrain = surface.terrain_at(xy)
-    if not terrain:
-        return True
-    return _road_grade_or_hydro_blocked(
-        surface, xy, road_key=road_key, ignore_grade=ignore_grade,
-    )
-
-
 def meter_grade_cell_blocked(
     surface: MeterGradeSurface,
     xy: Coord,

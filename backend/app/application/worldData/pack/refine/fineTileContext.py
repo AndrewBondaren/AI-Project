@@ -1,6 +1,6 @@
 """Prep contract for FineChunkRunner — explicit, not a closure over refine_rects.
 
-``planned`` is deprecated v1 occupancy. Catalog and heightmap prep are SoT.
+Catalog and heightmap prep are SoT. Discover runs in the worker (R41).
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
 )
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.pack.refine.detailedGradeCatalog import TileFaceCatalog
-from app.application.worldData.pack.refine.detailedGradePlan import PlannedGradeSegment
 from app.application.worldData.pack.refine.meterGradeSurface import Coord
 from app.application.worldData.terrainBatchOrchestrator import TileSurfaceState
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
@@ -26,10 +25,7 @@ from app.db.models.world import World
 
 @dataclass(frozen=True, slots=True)
 class FineTileContext:
-    """Serial prep output. Compute and persist read this; they do not re-load parent/catalog.
-
-    ``planned`` is deprecated v1 occupancy. Catalog / heightmap remain SoT.
-    """
+    """Serial prep output. Compute and persist read this; they do not re-load parent/catalog."""
 
     world: World
     locations: list[NamedLocation]
@@ -50,8 +46,6 @@ class FineTileContext:
     chunks_total: int
     location_pairs: list[tuple[str, TerritoryVolume]]
     volumes: list[TerritoryVolume]
-    # Deprecated v1 occupancy (sample/stitch before the pool). SoT: R41 worker discover.
-    planned: tuple[PlannedGradeSegment, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)

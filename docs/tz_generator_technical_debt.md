@@ -3,7 +3,7 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py` / `render_maps.py`, `worldBundleService.py`, relief library/import, pack render / parent-light refine.  
-**Обновлено:** 2026-08-18 — очередь SoT: [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Осталось — v2 vs L2 volume (**L2 apply закрыт**; **R41-T-5…T-8** ✅; слой 5 ravine/shore ✅; **T-3c слой 6 ✅**). Next = слой 7 срез v1. T-3b occupancy **deprecated** vs R41. План: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md).  
+**Обновлено:** 2026-08-18 — очередь SoT: [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Осталось — v2 vs L2 volume (**L2 apply закрыт**; **R41-T-1…T-12** ✅; слой 5 ravine/shore ✅; **T-3c слой 6 ✅**; **слой 7 срез v1 ✅**). Очередь v2 полиш закрыта. Occupancy T-3b **удалён**. План: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md).  
 **Связанные документы:**
 
 | Документ | Роль |
@@ -24,7 +24,7 @@
 | `.cursor/plans/r36u-post-impl-debt.md` | R36u-T-1…T-10 post-impl polish |
 | `.cursor/plans/r36v-grade-chunk-pool.md` | R36v pool sample → stitch → materialize; post-impl **R36v-T-*** |
 | `.cursor/plans/detailed-grade-volume-canal.md` | Post-R36w GradeFormation apply; **R36i-T**; post-impl **T-4…T-15** ✅ |
-| `.cursor/plans/relief-pipeline-v2.md` | R41 discover в worker; **R41-T-1…T-8** ✅; слой 5 ravine ✅; shore онтология+paint ✅; **ShorePlugin тело ✅**; **T-9…T-12** open; v1 sample/stitch deprecated |
+| `.cursor/plans/relief-pipeline-v2.md` | R41 discover в worker; **R41-T-1…T-12** ✅; слой 5 ravine ✅; shore онтология+paint ✅; **ShorePlugin тело ✅**; v1 sample/stitch срезан |
 
 ---
 
@@ -1241,9 +1241,9 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 | **R36i-T-2** | medium | **open** | P2 | call site | BAR-1: L0 `paintBarrier` снят; нет detailed fence | **Вне** apply и **вне** C28; later, не silent impl |
 | **R36i-T-3** | low | **split** | P3 | residual | был: System unused + face-graph + L0 ASCII | → **T-3a / T-3b / T-3c** |
 | **R36i-T-3a** | low | **accepted** | P3 | residual | L0 `world-grade` ASCII | PAR-G5 omit; не impl. Dump cleanup later, не архитектура |
-| **R36i-T-3b** | medium | **resolved** | P2 | topology | face-graph union-find; соседние грани с одним `(kind, outward, θ)` — разные instance | **Fix (v1 occupancy, now deprecated vs R41):** `stitch_planned_segments`; `plan_grade_for_rects` до пула; `ctx.planned`. Каталог `face_key` живой. Discover SoT — R41; impl [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md) |
+| **R36i-T-3b** | medium | **resolved** | P2 | topology | face-graph union-find; соседние грани с одним `(kind, outward, θ)` — разные instance | **Fix (v1 occupancy, срезан слой 7):** было `stitch_planned_segments` / `plan_grade_for_rects` / `ctx.planned`. Каталог `face_key` живой. Discover SoT — R41 |
 | **R36i-T-3c** | low | **resolved** | P3 | entity | `ReliefGradeSystem` unused (POJO+SQL есть) | **Fix:** слой 6 — `VertexSlotSeam` на `ChunkComputeResult`; `emit_relief_grade_systems` после `merge_grade_instances` (slot intra-chunk; тело 8 на C29; UF этого refine). 1 фронт → нет строки; клетка → Instance. Макро-шов двух bake не impl. SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) § T-3c на шве чанков |
-| **R41-T-1** | **high** | **resolved** | P1 | pipeline | sample пиков + stitch до пула; `compute_rect` stamp `planned` | **Fix:** `discover_and_paint` в `compute_rect` (слои 0–4). L2 apply не переписан. **T-3c ✅.** Срез v1 — слой 7 |
+| **R41-T-1** | **high** | **resolved** | P1 | pipeline | sample пиков + stitch до пула; `compute_rect` stamp `planned` | **Fix:** `discover_and_paint` в `compute_rect` (слои 0–4). L2 apply не переписан. **T-3c ✅.** **Слой 7 ✅** (occupancy v1 удалён) |
 | **R41-T-2** | **high** | **resolved** | P1 | неявный контракт / C40 | `GradePaintSpec` не единственный вход в L2 | **Fix:** `apply_grade_paint_spec(front, *, world, surface)` — `DiscoveredFront` собирает spec + identity. Подробно ниже |
 | **R41-T-3** | **high** | **resolved** | P1 | неявный контракт / SRP | pick в `cap_front`; `decided` + молча skip | **Fix:** `CapFront` = length-only (L_tpl); pick + constrain в facade после discover. Подробно ниже |
 | **R41-T-4** | **high** | **resolved** | P1 | SRP / plugin | `RavinePlugin.flood_member` шире `claims` | **Fix:** bank flood = bank; mask flood = terrace. Open_land не затапливает берег. Слой 5 стены — ниже |
@@ -1251,12 +1251,12 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 | **R41-T-6** | medium | **resolved** | P2 | неявный контракт | inherit uid 4-way, discover 8-way | **Fix:** канон inherit только орто (C15/C29) |
 | **R41-T-7** | medium | **resolved** | P2 | dataModel | R37 `\|dz\|=1` = boolean на plugin | **Fix:** `stamp_min_abs_dz` на envelope |
 | **R41-T-8** | medium | **resolved** | P2 | неявный контракт | три L: полный след / `requested_length` / `L_eff` | **Fix:** classify/stamp = коридор после C41 |
-| **R41-T-9** | medium | **open** | P2 | SRP | `discover_and_paint` = pick + uid + paint | тонкий facade; uid/pick отдельные шаги |
-| **R41-T-10** | low | **open** | P3 | DRY | `site_id` / `terrain_key` считаются в facade; `DiscoveredFront` живой (T-2) | один builder; остаток DRY |
-| **R41-T-11** | low | **open** | P3 | dataModel / хардкод | `_TRACE_CAP=64`; `site_id` строка; `owner_uid=context.value` | cap из envelope max; site через `PackJobUid`; owner не токен контекста |
-| **R41-T-12** | low | **open** | P3 | leftover | `FineTileContext.planned`; `Coord` alias | слой 7 срез v1; alias не плодить |
+| **R41-T-9** | medium | **resolved** | P2 | SRP | `discover_and_paint` = pick + uid + paint | **Fix:** оркестратор вызывает discover / pick / uid / paint. Подробно ниже |
+| **R41-T-10** | low | **resolved** | P3 | DRY | `site_id` / `terrain_key` считаются в facade; `DiscoveredFront` живой (T-2) | **Fix:** `front_bake_identity` + `discovered_front_from` |
+| **R41-T-11** | low | **resolved** | P3 | dataModel / хардкод | `_TRACE_CAP=64`; `site_id` строка; `owner_uid=context.value` | **Fix:** walk cap = envelope max ∩ knobs; site `PackJobUid`; owner omit |
+| **R41-T-12** | low | **resolved** | P3 | leftover | `Coord` alias в types / meter / catalog / halo | **Fix:** `planned` слой 7 ✅; новые модули без `Coord` alias; существующие не склеивали |
 
-**Fix order:** ~~T-1~~ ✅. ~~T-3a~~ omit. ~~**T-3b**~~ ✅ (v1 occupancy; **deprecated** vs R41). ~~**R41-T-1**~~ ✅ (discover в worker). ~~**R41-T-2 → T-3 → T-4**~~ ✅. ~~**T-5…T-8**~~ ✅. Слой 5 ravine/shore ✅. ~~**T-3c**~~ ✅ (слой 6). Next слой 7 срез v1. T-9…T-12 с полишем. T-2 (BAR-1) не блокирует C28. **Не трогать:** Wave E; DAG; mask carry; parent `surface_z` upsample; `refresh_tile_gaps` из worker; voxel-ditch writer без plugin; Volume/`GradeFormation`; склеивать Rim/Front/Seam обратно в один `core.py`.
+**Fix order:** ~~T-1~~ ✅. ~~T-3a~~ omit. ~~**T-3b**~~ ✅ (occupancy срезан слой 7). ~~**R41-T-1**~~ ✅ (discover в worker). ~~**R41-T-2 → T-3 → T-4**~~ ✅. ~~**T-5…T-8**~~ ✅. Слой 5 ravine/shore ✅. ~~**T-3c**~~ ✅ (слой 6). ~~**слой 7**~~ ✅. ~~**T-9…T-12**~~ ✅ полиш. T-2 (BAR-1) не блокирует C28. **Не трогать:** Wave E; DAG; mask carry; parent `surface_z` upsample; `refresh_tile_gaps` из worker; voxel-ditch writer без plugin; Volume/`GradeFormation`; склеивать Rim/Front/Seam обратно в один `core.py`.
 
 **Agent pointer:** [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md). Очередь SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Осталось — v2 vs L2 volume. Volume не форкать.
 
@@ -1402,6 +1402,10 @@ Classify/`dz` pick смотрят дальний конец полного сл�
 
 **Target:** оркестратор вызывает (1) discover (2) pick/decision на `FrontGeometry` (3) uid (4) `apply_grade_paint_spec`. Не второй пул, не новый FineChunkRunner.
 
+**Fix (2026-08-18):** `discover_and_paint` — оркестратор. (2) `pick_front_grade` (3) `uid_for_front` (4) `apply_grade_paint_spec`. Сигнатура для `compute_rect` та же. `fronts.py` без pick (T-3). Не второй пул, не новый FineChunkRunner.
+
+**Готово когда:** pick+uid+paint не одним телом; `compute_rect` / generate / T-3c тесты зелёные.
+
 ---
 
 #### R41-T-10…T-12 — low
@@ -1410,7 +1414,14 @@ Classify/`dz` pick смотрят дальний конец полного сл�
 |---|---|---|
 | **T-10** | `terrain_key` / `site_id` helpers в facade; `DiscoveredFront` живой (T-2) | один builder; остаток DRY |
 | **T-11** | `_TRACE_CAP = 64` не из `slope_length_max_cells`; `site_id = f"{context}\|x,y\|{facing}"` не `PackJobUid`; `RibbonSegment.owner_uid = context.value` | cap ≤ envelope/knobs; site compose из POJO; owner = реальный owner или omit |
-| **T-12** | `FineTileContext.planned` deprecated leftover; `Coord = tuple[int,int]` в types / meter / catalog / halo | слой 7 срез `planned`; не плодить alias |
+| **T-12** | `FineTileContext.planned` ✅ слой 7; `Coord = tuple[int,int]` в types / meter / catalog / halo | не плодить alias |
+
+**Fix (2026-08-18):**
+- **T-10:** `front_bake_identity` / `discovered_front_from` — один builder. Paint читает поля front, не считает `terrain_key`/`site_id` снова.
+- **T-11:** `ReliefTerrainEnvelope.slope_walk_cap_cells`; walk = min(envelope max, occupancy knobs); omit max + нет knobs → до конца heightmap. `PackJobUid.grade_front_site` / `front_grade_site`. `RibbonSegment.owner_uid` = реальный owner или omit (не `context.value`). Нет нового hash-домена / `PackJobSiteKind`.
+- **T-12:** `planned` срезан слой 7. Новые модули identity/pick/uid **не** объявляют `Coord = tuple[int,int]`. Alias в types / meter / catalog / halo не склеивали (не нужно для T-9).
+
+**Готово когда:** site_id = compose POJO; owner не токен контекста; `_TRACE_CAP` нет; новые модули без Coord alias.
 
 **Info, не отдельный ID:** `generate_detailed_grade` копит `existing_uids` по rect подряд; `FineChunkRunner` pool этого не делает (catalog + pack inherit). Разница caller’ов — SoT пула верный; тесты фасада строже live bake.
 
@@ -1539,6 +1550,8 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-18 | **R41-T-9…T-12 ✅:** тонкий `discover_and_paint`; identity builder; walk cap envelope/knobs; site `PackJobUid`; owner omit; новые модули без `Coord` alias |
+| 2026-08-18 | **Слой 7 срез v1 ✅:** sample/stitch/`planned` удалены. Next **R41-T-9…T-12** |
 | 2026-08-18 | **T-3c слой 6 ✅:** `emit_relief_grade_systems` после merge; persist `systems`; intra-chunk = slot; C29 тело 8 + UF refine. Next слой 7 |
 | 2026-08-18 | **T-3c шов locked** в [`tz_terrain_relief.md`](./tz_terrain_relief.md) § T-3c на шве чанков (catalog ≠ вершина; UF тайла; макро-шов двух bake — не слой 6) |
 | 2026-08-18 | **ShorePlugin тело ✅** (банк + полоса; дно iff `grades_channel_bed`; terrace min с envelope). Next **T-3c**. Команда: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md) |

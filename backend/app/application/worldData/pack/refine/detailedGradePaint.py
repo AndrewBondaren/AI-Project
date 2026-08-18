@@ -90,7 +90,7 @@ def apply_grade_paint_spec(
         return DetailedGradeResult.empty()
 
     segment = RibbonSegment(
-        owner_uid=front.context.value,
+        owner_uid=front.owner_uid,
         terrain_key=front.terrain_key,
         system_terrain=front.system_terrain,
         dz=int(front.dz),

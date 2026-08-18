@@ -1,7 +1,7 @@
 """One ColumnRect worker: discover+paint then one column fill (R41 / C28).
 
-Stamp-from-``ctx.planned`` is deprecated v1. SoT: discover on the ready
-heightmap, then one fill. Plan: ``.cursor/plans/relief-pipeline-v2.md``.
+Discover on the ready heightmap, then one fill.
+Plan: ``.cursor/plans/relief-pipeline-v2.md``.
 """
 
 from __future__ import annotations

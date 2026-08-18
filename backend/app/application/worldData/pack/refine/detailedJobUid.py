@@ -50,6 +50,11 @@ def face_grade_site(tile_gx: int, tile_gy: int, face_wire: str) -> str:
     return PackJobUid.canonical_defaults().face_site(tile_gx, tile_gy, face_wire)
 
 
+def front_grade_site(context: str, x: int, y: int, facing: str) -> str:
+    """Discovered-front pick site — ``PackJobUid.grade_front_site``, not a raw f-string."""
+    return PackJobUid.canonical_defaults().grade_front_site(context, x, y, facing)
+
+
 def parse_tile_edge_side(side: str | Facing) -> Facing:
     facing = side if isinstance(side, Facing) else parse_facing(side)
     if facing is None or facing not in CARDINAL_FACINGS:

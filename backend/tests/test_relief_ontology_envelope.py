@@ -113,6 +113,7 @@ class ReliefOntologyEnvelopePojoTest(unittest.TestCase):
         self.assertEqual(plains.slope_max_angle_deg, 20.0)
         self.assertEqual(plains.slope_length_min_cells, 20)
         self.assertIsNone(plains.slope_length_max_cells)
+        self.assertIsNone(plains.slope_walk_cap_cells())
         self.assertTrue(plains.sheer_allowed)
         self.assertTrue(plains.slope_preferred)
         self.assertTrue(plains.allow_l_gt_h)
@@ -237,6 +238,8 @@ class ReliefOntologyEnvelopePojoTest(unittest.TestCase):
             11,
         )
         self.assertEqual(plains.clamp_slope_length(40), 40)
+        capped = ReliefTerrainEnvelope(slope_length_max_cells=7)
+        self.assertEqual(capped.slope_walk_cap_cells(), 7)
         self.assertAlmostEqual(
             plains.slope_angle_deg(4, 20),
             math.degrees(math.atan(4 / 20)),

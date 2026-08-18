@@ -110,3 +110,10 @@ class PackJobUid(BaseModel):
             self.tile_site(tile_gx, tile_gy),
             f"{PackJobSiteKind.FACE.value}:{face_wire}",
         )
+
+    def grade_front_site(self, context: str, x: int, y: int, facing: str) -> str:
+        """Pick/seed site for one discovered front. Same sep/coords as other sites.
+
+        Not a new ``PackJobSiteKind`` / hash domain — compose only.
+        """
+        return self.join(context, self.coords(x, y), facing)
