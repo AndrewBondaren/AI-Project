@@ -222,8 +222,8 @@ metadata:
 | Слой | Контракт |
 |---|---|
 | `IReliefGradeRepository` | `upsert_instances(rows)` / `upsert_systems(rows)` — `[]` = no-op. `list_instances_by_uids(world_uid, uids)` — `[]` = `[]`. `persist_session()` = `Database.transaction()`. Поштучные `upsert_*` остаются для patch/DAG |
-| SQLite | Одна `persist_session` на persist-pass (systems + instances + optional wipe = **один COMMIT**). Внутри — `executemany` пачками ~5000 (порядок TR-PERF-1). **Не** копировать `mapCellBulkSql`; отдельный bulk helper. `delete_instances_for_world` коммитит **только если нет** `_in_transaction`. `IN (uids)` резать по ~400 (лимит переменных SQLite) |
-| `persist_relief_grades` | Собрал rows → merge prior → `persist_session` → bulk systems (FK), затем bulk instances. Оркестраторы SQL не пишут. `packBakeLog`: start (`n_instances`, `n_systems`, `replace_world`), progress на границе пачки (`done/total`, `elapsed_ms`), done (`counts`, `elapsed_ms`) |
+| SQLite | Одна `persist_session` на persist-pass (systems + instances + optional wipe = **один COMMIT**). Внутри — `app.db.bulkSql.executemany_rows` (пачка `EXECUTEMANY_BATCH_SIZE`, тот же helper что map_cells). `delete_instances_for_world` коммитит **только если нет** `_in_transaction`. `IN (uids)` резать через `iter_batches` по ~400 (лимит переменных SQLite) |
+| `persist_relief_grades` | Собрал rows → merge prior → `persist_session` → bulk systems (FK), затем bulk instances. Оркестраторы SQL не пишут. Heartbeat режет тем же `iter_batches` / `EXECUTEMANY_BATCH_SIZE`. `packBakeLog`: start (`n_instances`, `n_systems`, `replace_world`), progress на границе пачки (`done/total`, `elapsed_ms`), done (`counts`, `elapsed_ms`) |
 | `PackDetailedBakeOrchestrator.bake` | `generation_world_log(world_uid, mode="detailed")` — паритет с light/full/entry. Файл: `logs/generation/{uid}/bake-detailed-{stamp}.log` + `bake-detailed-latest.log`. **Не** дублировать обёртку в HTTP (`map.py`) |
 
 `list_instances_for_world` остаётся на протоколе (debug/админ). **На пути persist — запрещён.** Пустой bag / первый bake — ноль чтения.
@@ -2849,6 +2849,7 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-18 | **R43 bulk helper:** один `app.db.bulkSql` (`EXECUTEMANY_BATCH_SIZE` + `executemany_rows` + `iter_batches`); map_cells / grades / persist heartbeat — consumers. Не два литерала 5000 |
 | 2026-08-18 | **R43 / C42 SQL catalog persist ✅:** bake-writer (одна txn + `executemany` ~5000), prior по uid bag, heartbeat `packBakeLog`, detailed → `generation_world_log`. Не OLTP commit на строку. Семантика upsert без смены. § SQL catalog persist |
 | 2026-08-18 | **R41-T-9…T-12 ✅:** оркестратор discover/pick/uid/paint; identity builder; walk cap envelope/knobs; site `PackJobUid`; owner omit. Очередь v2 закрыта |
 | 2026-08-18 | **Слой 7 срез v1 ✅:** удалены sample/stitch/`PlannedGradeSegment`/`FineTileContext.planned`; `generate_detailed_grade` = discover+paint. Next **R41-T-9…T-12** |

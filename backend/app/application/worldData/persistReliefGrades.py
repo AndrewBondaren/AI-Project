@@ -15,12 +15,10 @@ from app.application.worldData.pack.bake.packBakeLog import (
 )
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
+from app.db.bulkSql import iter_batches
 from app.db.models.reliefGradeInstance import ReliefGradeInstanceRow
 from app.db.models.reliefGradeSystem import ReliefGradeSystemRow
 from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository
-
-# Heartbeat / sqlite executemany order — same ~5000 as TR-PERF-1 (R43).
-UPSERT_BATCH_SIZE = 5000
 
 _BulkUpsert = Callable[..., Awaitable[None]]
 
@@ -141,13 +139,14 @@ async def _bulk_with_progress(
     total = len(rows)
     if total == 0:
         return
-    for offset in range(0, total, UPSERT_BATCH_SIZE):
-        batch = rows[offset : offset + UPSERT_BATCH_SIZE]
+    done = 0
+    for batch in iter_batches(rows):
         await upsert(batch)
+        done += len(batch)
         log_pack_relief_grades_persist_progress(
             world_uid,
             kind=kind,
-            done=min(offset + len(batch), total),
+            done=done,
             total=total,
             started_at=started_at,
         )

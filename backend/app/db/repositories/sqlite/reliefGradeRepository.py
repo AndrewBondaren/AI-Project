@@ -5,16 +5,16 @@ from __future__ import annotations
 from collections.abc import Sequence
 from contextlib import asynccontextmanager
 
+from app.db.bulkSql import executemany_rows, iter_batches
 from app.db.database import Database, _in_transaction
 from app.db.mapper import to_row
 from app.db.models.reliefGradeInstance import ReliefGradeInstanceRow
 from app.db.models.reliefGradeSystem import ReliefGradeSystemRow
 from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository
 from app.db.repositories.sqlite.base import BaseRepository
-from app.db.repositories.sqlite.reliefGradeBulkSql import (
-    UID_IN_BATCH_SIZE,
-    executemany_rows,
-)
+
+# SQLite bind limit for IN (?), not executemany batch (see bulkSql).
+UID_IN_BATCH_SIZE = 400
 
 
 class SqliteReliefGradeRepository(IReliefGradeRepository):
@@ -67,8 +67,7 @@ class SqliteReliefGradeRepository(IReliefGradeRepository):
         if not unique:
             return []
         out: list[ReliefGradeInstanceRow] = []
-        for offset in range(0, len(unique), UID_IN_BATCH_SIZE):
-            chunk = unique[offset : offset + UID_IN_BATCH_SIZE]
+        for chunk in iter_batches(unique, size=UID_IN_BATCH_SIZE):
             placeholders = ",".join("?" * len(chunk))
             rows = await self._instances.fetch_all(
                 where=f"world_uid = ? AND grade_uid IN ({placeholders})",
@@ -85,11 +84,11 @@ class SqliteReliefGradeRepository(IReliefGradeRepository):
 
     async def delete_instances_for_world(self, world_uid: str) -> None:
         await self._db.conn.execute(
-            "DELETE FROM relief_grade_instances WHERE world_uid = ?",
+            f"DELETE FROM {ReliefGradeInstanceRow.__table__} WHERE world_uid = ?",
             [world_uid],
         )
         await self._db.conn.execute(
-            "DELETE FROM relief_grade_systems WHERE world_uid = ?",
+            f"DELETE FROM {ReliefGradeSystemRow.__table__} WHERE world_uid = ?",
             [world_uid],
         )
         if not _in_transaction.get():
