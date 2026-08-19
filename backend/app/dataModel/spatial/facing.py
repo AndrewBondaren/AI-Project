@@ -99,6 +99,18 @@ CARDINAL_DELTA_TO_FACING: dict[tuple[int, int], Facing] = {
     delta: facing for facing, delta in CARDINAL_WALL_OUTWARD_DELTA.items()
 }
 
+# Chebyshev-1 step from a cell along ``Facing`` (R36s). Cardinals = wall SoT.
+GRID_OUTWARD_DELTA: dict[Facing, tuple[int, int]] = {
+    **CARDINAL_WALL_OUTWARD_DELTA,
+    Facing.NORTHEAST: (1, 1),
+    Facing.NORTHWEST: (-1, 1),
+    Facing.SOUTHEAST: (1, -1),
+    Facing.SOUTHWEST: (-1, -1),
+}
+GRID_DELTA_TO_FACING: dict[tuple[int, int], Facing] = {
+    delta: facing for facing, delta in GRID_OUTWARD_DELTA.items()
+}
+
 
 def cardinal_facing_for_delta(delta: tuple[int, int] | None) -> Facing | None:
     """Reverse of ``CARDINAL_WALL_OUTWARD_DELTA``; None if not a cardinal step."""

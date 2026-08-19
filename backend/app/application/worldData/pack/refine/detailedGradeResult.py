@@ -16,6 +16,7 @@ from app.application.worldData.pack.refine.columnBounds import (
 from app.application.worldData.pack.refine.meterGradeSurface import Coord
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.terrain.relief.canal import Canal
+from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay, merge_grade_rim_rays
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 
 
@@ -37,6 +38,7 @@ class DetailedGradeResult:
     surface_grade_uid: dict[Coord, str] = field(default_factory=dict)
     surface_z: dict[Coord, int] = field(default_factory=dict)
     grade_instances: tuple[ReliefGradeInstance, ...] = ()
+    rim_rays: tuple[GradeRimRay, ...] = ()
 
     @classmethod
     def empty(cls) -> DetailedGradeResult:
@@ -49,12 +51,14 @@ class DetailedGradeResult:
         surface_grade_uid: Mapping[Coord, str] | None = None,
         surface_z: Mapping[Coord, int] | None = None,
         grade_instances: Iterable[ReliefGradeInstance] = (),
+        rim_rays: Iterable[GradeRimRay] = (),
     ) -> DetailedGradeResult:
         """Public write-set: always R36j-reconciled."""
         return cls(
             surface_grade_uid=dict(surface_grade_uid or {}),
             surface_z=dict(surface_z or {}),
             grade_instances=tuple(grade_instances),
+            rim_rays=tuple(rim_rays),
         ).reconciled()
 
     def reconciled(self) -> DetailedGradeResult:
@@ -95,6 +99,7 @@ class DetailedGradeResult:
             surface_grade_uid=uids,
             surface_z=overlay,
             grade_instances=tuple(instances),
+            rim_rays=self.rim_rays,
         )
 
     def merged_with(self, other: DetailedGradeResult) -> DetailedGradeResult:
@@ -109,6 +114,7 @@ class DetailedGradeResult:
             surface_grade_uid=uids,
             surface_z=overlay,
             grade_instances=tuple(by_uid.values()),
+            rim_rays=merge_grade_rim_rays(self.rim_rays, other.rim_rays),
         ).reconciled()
 
     def clipped_to_rect(self, rect: ColumnBounds) -> DetailedGradeResult:
@@ -122,6 +128,7 @@ class DetailedGradeResult:
             surface_grade_uid=uids,
             surface_z={xy: z for xy, z in self.surface_z.items() if xy in uids},
             grade_instances=self.grade_instances,
+            rim_rays=self.rim_rays,
         ).reconciled()
 
 

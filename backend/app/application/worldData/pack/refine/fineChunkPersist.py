@@ -27,6 +27,7 @@ from app.application.worldData.pack.refine.fineTileContext import (
     VertexSlotSeam,
 )
 from app.application.worldData.persistResult import PersistResult
+from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay, merge_grade_rim_rays
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume, inside_location_volume
@@ -73,6 +74,7 @@ class FineChunkPersist:
         self._location_cells: dict[str, list[MapCell]] = {}
         self._meter_surface_z: dict[tuple[int, int], int] = {}
         self._grade_acc: list[ReliefGradeInstance] = []
+        self._ray_acc: list[GradeRimRay] = []
         self._seam_acc: list[tuple[ColumnRect, tuple[VertexSlotSeam, ...]]] = []
         self._total_cells = 0
         self._written = 0
@@ -134,6 +136,7 @@ class FineChunkPersist:
             pool_workers=ctx.workers,
         )
         self._grade_acc.extend(result.chunk_grades)
+        self._ray_acc.extend(result.rim_rays)
         self._seam_acc.append((result.rect, result.vertex_seams))
 
     async def persist_rect_locked(self, result: ChunkComputeResult) -> None:
@@ -162,6 +165,7 @@ class FineChunkPersist:
                 location_uid, chunk, territory_volume=volume,
             )
             self._total_cells += len(loc_cells)
+        self._write_grade_ray_sidecars()
         self._writer.recalc_manifest_counters()
         self._writer.save_manifest()
         grade_instances = (
@@ -182,6 +186,7 @@ class FineChunkPersist:
             meter_surface_z=self._meter_surface_z,
             grade_instances=grade_instances,
             grade_systems=grade_systems,
+            rim_rays=merge_grade_rim_rays(self._ray_acc),
             materialize_s=self._materialize_s,
             grade_s=self._grade_s,
         )
@@ -192,3 +197,25 @@ class FineChunkPersist:
             prev = self._meter_surface_z.get(key)
             if prev is None or cell.z > prev:
                 self._meter_surface_z[key] = int(cell.z)
+
+    def _write_grade_ray_sidecars(self) -> None:
+        if not self._ray_acc:
+            return
+        ctx = self._ctx
+        wilderness: list[GradeRimRay] = []
+        by_loc: dict[str, list[GradeRimRay]] = {}
+        for ray in merge_grade_rim_rays(self._ray_acc):
+            z = self._meter_surface_z.get((ray.x, ray.y))
+            hit = (
+                location_for_cell(ray.x, ray.y, z, ctx.location_pairs)
+                if z is not None
+                else None
+            )
+            if hit is not None:
+                by_loc.setdefault(hit[0], []).append(ray)
+            else:
+                wilderness.append(ray)
+        if wilderness:
+            self._writer.merge_grade_rays_tile(ctx.tile_gx, ctx.tile_gy, wilderness)
+        for location_uid, rays in by_loc.items():
+            self._writer.merge_grade_rays_location(location_uid, rays)

@@ -14,12 +14,20 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 
-from app.application.worldData.render.gridAxes import format_grid_header, format_x_axis_ruler
+from app.application.worldData.render.gridAxes import (
+    format_grid_header,
+    format_x_axis_ruler,
+    format_y_gutter,
+)
+from app.application.worldData.render.gradeRayDump import (
+    GradeRayIndex,
+    draw_grade_ray_grid,
+)
 from app.application.worldData.render.mapSymbols import (
     format_height_cell,
-    grade_symbol,
     height_cell_width,
     join_height_row,
+    paired_height_cell_width,
     symbol_for_role_or_terrain,
 )
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainColumnWire, FineTerrainZRun
@@ -99,74 +107,97 @@ def symbols_surface_top(
     return out
 
 
-def symbols_grade_surface(
+def columns_have_grade_uid(
     cols: Mapping[tuple[int, int], FineTerrainColumnWire],
-) -> dict[tuple[int, int], str]:
-    """Grade overlay tokens only (uid cells); no terrain fill."""
-    out: dict[tuple[int, int], str] = {}
-    for key, col in cols.items():
-        if not col.system_grade_uid:
-            continue
-        out[key] = grade_symbol(
-            system_grade_uid=col.system_grade_uid,
-            system_facing=col.system_facing,
-        )
-    return out
+) -> bool:
+    return any(col.system_grade_uid for col in cols.values())
 
 
-def composite_symbol_maps(
-    base: Mapping[tuple[int, int], str],
-    overlay: Mapping[tuple[int, int], str],
-) -> dict[tuple[int, int], str]:
-    """``overlay`` wins on shared keys; used for surface/z + grade dump composites."""
-    out = dict(base)
-    out.update(overlay)
-    return out
-
-
-def symbols_surface_with_grade(
+def paired_width_from_columns(
     cols: Mapping[tuple[int, int], FineTerrainColumnWire],
-) -> dict[tuple[int, int], str]:
-    """Surface terrain with grade on top; empty dict if no grade cells (PAR-G4)."""
-    grade = symbols_grade_surface(cols)
-    if not grade:
-        return {}
-    return composite_symbol_maps(symbols_surface_top(cols), grade)
+) -> int:
+    return paired_height_cell_width(values_surface_z(cols).values())
 
 
-def symbols_grade_by_surface_z(
+def should_dump_grade(
     cols: Mapping[tuple[int, int], FineTerrainColumnWire],
-) -> dict[int, dict[tuple[int, int], str]]:
-    """Single-pass SoT: surface/top z → grade symbols (PAR-G9; for ``z/grade_{n}``)."""
-    out: dict[int, dict[tuple[int, int], str]] = {}
-    for key, col in cols.items():
-        if not col.system_grade_uid:
-            continue
-        top = top_terrain(col)
-        if top is None:
-            continue
-        z = int(top[0])
-        bucket = out.get(z)
-        if bucket is None:
-            bucket = {}
-            out[z] = bucket
-        bucket[key] = grade_symbol(
-            system_grade_uid=col.system_grade_uid,
-            system_facing=col.system_facing,
-        )
-    return out
+    rays: GradeRayIndex,
+) -> bool:
+    """Write ``surface_grade`` if leftover rays or any uid (consume TZ)."""
+    return rays.has_any() or columns_have_grade_uid(cols)
 
 
-def symbols_grade_at_z(
+def _keys_at_surface_z(
     cols: Mapping[tuple[int, int], FineTerrainColumnWire],
     z: int,
+) -> set[tuple[int, int]]:
+    want = int(z)
+    return {xy for xy, sz in values_surface_z(cols).items() if int(sz) == want}
+
+
+def should_dump_grade_at_z(
+    cols: Mapping[tuple[int, int], FineTerrainColumnWire],
+    rays: GradeRayIndex,
+    z: int,
+) -> bool:
+    keys = _keys_at_surface_z(cols, z)
+    if any(cols[xy].system_grade_uid for xy in keys if xy in cols):
+        return True
+    return any(xy in keys for xy in rays.cells())
+
+
+def draw_grade_consume_grid(
+    cols: Mapping[tuple[int, int], FineTerrainColumnWire],
+    rays: GradeRayIndex,
     *,
-    by_surface_z: Mapping[int, Mapping[tuple[int, int], str]] | None = None,
-) -> dict[tuple[int, int], str]:
-    """Grade at world-z — thin read of ``symbols_grade_by_surface_z`` bucket."""
-    table = by_surface_z if by_surface_z is not None else symbols_grade_by_surface_z(cols)
-    bucket = table.get(int(z))
-    return dict(bucket) if bucket else {}
+    title: str,
+    extra_headers: list[str] | None = None,
+    coord_prefix: str = "",
+    bounds: tuple[int, int, int, int] | None = None,
+    surface_z: int | None = None,
+) -> str:
+    """Single L2 grade dump: 3×3 consume cell. ``surface_z`` filters PAR-G9."""
+    if surface_z is None:
+        if not should_dump_grade(cols, rays):
+            return ""
+        centers = symbols_surface_top(cols)
+        view = rays
+    else:
+        if not should_dump_grade_at_z(cols, rays, surface_z):
+            return ""
+        keys = _keys_at_surface_z(cols, surface_z)
+        material = symbols_at_z(cols, surface_z)
+        centers = {xy: material[xy] for xy in keys if xy in material}
+        view = rays.restricted_to(keys)
+    if bounds is None and cols:
+        xs = [x for x, _ in cols]
+        ys = [y for _, y in cols]
+        bounds = (min(xs), max(xs), min(ys), max(ys))
+    return draw_grade_ray_grid(
+        centers,
+        view,
+        title=title,
+        width=paired_width_from_columns(cols),
+        extra_headers=extra_headers,
+        coord_prefix=coord_prefix,
+        bounds=bounds,
+    )
+
+
+def grade_consume_z_levels(
+    cols: Mapping[tuple[int, int], FineTerrainColumnWire],
+    rays: GradeRayIndex,
+) -> list[int]:
+    """World-z values that have uid or a rim ray on that surface."""
+    zs = values_surface_z(cols)
+    out: set[int] = set()
+    for xy, col in cols.items():
+        if col.system_grade_uid and xy in zs:
+            out.add(int(zs[xy]))
+    for xy in rays.cells():
+        if xy in zs:
+            out.add(int(zs[xy]))
+    return sorted(out)
 
 
 def symbols_at_z(
@@ -179,19 +210,6 @@ def symbols_at_z(
         if terrain is not None:
             out[key] = symbol_for_role_or_terrain(system_terrain=terrain)
     return out
-
-
-def symbols_at_z_with_grade(
-    cols: Mapping[tuple[int, int], FineTerrainColumnWire],
-    z: int,
-    *,
-    by_surface_z: Mapping[int, Mapping[tuple[int, int], str]] | None = None,
-) -> dict[tuple[int, int], str]:
-    """Material at ``z`` with grade overlay where ``surface_z == z``; empty if no grade."""
-    grade = symbols_grade_at_z(cols, z, by_surface_z=by_surface_z)
-    if not grade:
-        return {}
-    return composite_symbol_maps(symbols_at_z(cols, z), grade)
 
 
 def symbols_by_occupied_z(
@@ -305,7 +323,7 @@ def draw_symbol_grid(
     lines.extend(format_x_axis_ruler(x0, x1))
     for y in range(y1, y0 - 1, -1):
         row = "".join(symbols.get((x, y), " ") for x in range(x0, x1 + 1))
-        lines.append(f"{y:4d} |{row}|")
+        lines.append(f"{format_y_gutter(y)}{row}|")
     lines.extend(format_x_axis_ruler(x0, x1))
     return "\n".join(lines)
 
@@ -348,6 +366,7 @@ def draw_int_grid(
     title: str,
     extra_headers: list[str] | None = None,
     coord_prefix: str = "",
+    width: int | None = None,
 ) -> str:
     """Fixed-width decimal grid (same pad rules as L0 ``ascii_height``)."""
     if not values:
@@ -356,15 +375,15 @@ def draw_int_grid(
     ys = [y for _, y in values]
     x0, x1 = min(xs), max(xs)
     y0, y1 = min(ys), max(ys)
-    width = height_cell_width(values.values())
+    field_w = int(width) if width is not None else height_cell_width(values.values())
     lines = [title]
     if extra_headers:
         lines.extend(extra_headers)
     lines.append(format_grid_header(x0, x1, y0, y1, cell_size_m=1, prefix=coord_prefix))
     for y in range(y1, y0 - 1, -1):
         cells = [
-            format_height_cell(values.get((x, y)), width=width)
+            format_height_cell(values.get((x, y)), width=field_w)
             for x in range(x0, x1 + 1)
         ]
-        lines.append(f"{y:4d} |{join_height_row(cells)}|")
+        lines.append(f"{format_y_gutter(y)}{join_height_row(cells)}|")
     return "\n".join(lines)

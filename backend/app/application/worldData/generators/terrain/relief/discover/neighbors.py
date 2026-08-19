@@ -6,17 +6,10 @@ from collections.abc import Sequence
 
 from app.dataModel.spatial.facing import (
     CARDINAL_WALL_OUTWARD_DELTA,
+    GRID_DELTA_TO_FACING,
+    GRID_OUTWARD_DELTA,
     Facing,
 )
-
-# Single 8-way map. Cardinals come from wall SoT; diagonals are relief Facing.
-GRID_OUTWARD_DELTA: dict[Facing, tuple[int, int]] = {
-    **CARDINAL_WALL_OUTWARD_DELTA,
-    Facing.NORTHEAST: (1, 1),
-    Facing.NORTHWEST: (-1, 1),
-    Facing.SOUTHEAST: (1, -1),
-    Facing.SOUTHWEST: (-1, -1),
-}
 
 # Chebyshev 1 neighbor order: cardinals (E,W,N,S) then diagonals.
 EIGHT_FACINGS: tuple[Facing, ...] = (
@@ -36,9 +29,7 @@ FACING_BIT: dict[Facing, int] = {
     facing: 1 << i for i, facing in enumerate(EIGHT_FACINGS)
 }
 
-DELTA_TO_FACING: dict[tuple[int, int], Facing] = {
-    delta: facing for facing, delta in GRID_OUTWARD_DELTA.items()
-}
+DELTA_TO_FACING: dict[tuple[int, int], Facing] = GRID_DELTA_TO_FACING
 
 CARDINAL_DELTAS: frozenset[tuple[int, int]] = frozenset(
     CARDINAL_WALL_OUTWARD_DELTA.values()

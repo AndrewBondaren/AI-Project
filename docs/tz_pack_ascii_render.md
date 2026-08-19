@@ -6,9 +6,9 @@ metadata:
   type: project
 ---
 
-> **Статус:** SoT **pack ASCII render**. **PAR-G\*** locked · **R36u** grade writer = detailed_bake geometry · open product Q — нет.  
-> **Generate vs render:** рендер **не** materialize terrain/grade; только читает pack wire / FineTerrain.  
-> **Grade domain SoT:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) (**R36u** / **R36t**). **Pack storage:** [`tz_world_pack_storage.md`](./tz_world_pack_storage.md).
+> **Статус:** SoT **pack ASCII render** (файлы, L0/L2 keys, wire membership). **PAR-G\*** locked · **R36u** grade writer = detailed_bake geometry. Глиф клетки outdoor grade (3×3, выравнивание с `surface_z`) — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md); код: `gradeRayDump` + sidecar `grade_rays.json`.  
+> **Generate vs render:** рендер **не** materialize terrain/grade; membership читает pack wire / FineTerrain; **8-ray** дамп читает discover leftover (не колонку).  
+> **Grade generate SoT:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) (**R36u** / **R36t**). **Consume / 3×3:** [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md). **Pack storage:** [`tz_world_pack_storage.md`](./tz_world_pack_storage.md).
 
 # Pack ASCII / grid render
 
@@ -52,7 +52,7 @@ metadata:
 | **`surface_z`** → **`surface_z.txt`** | ✅ | per-cell **max world-z** (FineTerrain top); L2 analog of L0 `height` |
 | `column_span` / `cliff_delta` | ✅ diag | см. [`tz_mountain_architecture.md`](./tz_mountain_architecture.md) § Debug render |
 | numeric z → `z/{n}.txt` | ✅ | material slice at world-z |
-| **`surface_grade`** → **`surface_grade.txt`** | ✅ | **composite:** `surface` terrain + `grade_symbol` поверх (где есть uid); omit если нет ни одной grade-клетки |
+| **`surface_grade`** → **`surface_grade.txt`** | ✅ путь; глиф — consume TZ | **3×3** (центр всегда + до 8 исходящих лучей), поле **W** как `surface_z`, **3 строки / gy**. Источник краёв — sidecar leftover, не колонка. Omit если нет лучей и нет uid |
 | **`grade_{n}`** → **`z/grade_{n}.txt`** | ✅ | **composite:** material at z + grade только где `surface_z == n`; omit если на этом z нет grade |
 
 **Locked (мастер):**
@@ -66,19 +66,17 @@ metadata:
 
 ---
 
-## Grade ASCII — символы
+## Grade ASCII — клетка
 
-SoT символа: `mapSymbols.grade_symbol(system_grade_uid, system_facing)` + `facingArrows.FACING_ARROW`.
+**SoT раскладки клетки (outdoor L2):** [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) — центр всегда, 8 краёв = исходящие лучи с rim, выравнивание X/Y с `surface_z`.
 
-| Условие | Символ |
-|---|---|
-| нет `system_grade_uid` | не клетка grade (space / omit из crop) |
-| uid + facing ∈ Facing | стрелка uphill |
-| uid + SHEER / facing omit | `┃` (sheer) |
+Стрелки / `┃`: `facingArrows.FACING_ARROW` и тот же sheer-глиф, **в слоте Facing луча**, не одним символом на всю клетку.
 
-**Запрещено:** рисовать «grade» только по `system_facing` без uid (ломает R36h/C11: клетка в grade ↔ uid).
+**Код L2:** `render/gradeRayDump.py` (слот из `GRID_OUTWARD_DELTA`, глиф из `ReliefSideKind` + `Facing`). L0 mosaic по-прежнему `grade_symbol` (uid overlay) — не 8-ray.
 
-Доменные поля h/L/θ на ASCII **не** дублировать — только ref + facing cache (см. relief C10/C11).
+**Запрещено:** рисовать «grade» только по `system_facing` без uid (C11: клетка **в** grade ↔ uid). Это про membership occupancy, не про 8 слотов rim.
+
+Доменные поля h/L/θ на ASCII **не** дублировать — occupancy по-прежнему uid + facing cache (C10/C11). 8 лучей — leftover discover, не колонка.
 
 ---
 
@@ -91,13 +89,13 @@ SoT символа: `mapSymbols.grade_symbol(system_grade_uid, system_facing)` +
 | **PAR-G1** | Single-writer **geometry** outdoor grade = **`detailed_bake` geometry** ([`tz_terrain_relief.md`](./tz_terrain_relief.md) **R36u** / **R36v**). **Не** L0 ribbon |
 | **PAR-G2** | Detailed **generate** grade в chunk pool (R36v / стык **R36w**; R36 materialize + entity + refs; anchors **R36t**). **Запрещено:** трактовать detailed как «только propagate L0 uid»; **запрещено** invent uid без bake-формирования грани; **запрещён** tile-wide serial scan как SoT |
 | **PAR-G3** | Membership = только `system_grade_uid` (omit если нет); h/L/angle на Grade entity (R24, R36h/j, C11) |
-| **PAR-G4** | Empty → нет `surface_grade` / нет `surface_grade.txt`; пустой z → нет `z/grade_{n}.txt` |
+| **PAR-G4** | Empty omit. Outdoor 8-ray: пусто = нет claimed лучей **и** нет uid ([`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md)); ~~omit только по uid~~ не SoT (rim без stamp). Per-z: нет файла, если на этом z нечего показать |
 | **PAR-G5** | L2 grade dump under detailed location/wilderness tile. L0 `world-grade` — **не** SoT (omit) |
 | **PAR-G6** | Wilderness L2 grade ASCII **in scope**: `surface_grade.txt` + `z/grade_{n}.txt` (тот же consumer, что location) |
 | **PAR-G7** | **FineTerrain column wire** несёт оба кэша колонки, по relief: `system_facing` (**R16**) и `system_grade_uid` (клеточный ref **R24** / R36h на pack-колонке; omit если нет). Не дублировать entity-поля. Stairs facing — per-cell ([`tz_locations.md`](./tz_locations.md)); outdoor facing SoT — Grade entity (**C10**), колонка = cache |
 | **PAR-G8** | ~~L0→L2 `system_grade_uid` categorical nearest carry~~ — **superseded (R36u)**. Grade uid **не** несут с parent light. (Carry других categorical полей terrain/mask — вне grade SoT; не использовать как membership grade.) |
 | **PAR-G9** | Stamp + агрегация колонки: `system_grade_uid` **и** `system_facing` только с **surface** (`z == surface_z` / top cell). **Запрещено:** majority по z-стеку. Wire: `_column_surface_attrs` |
-| **PAR-G10** | **`system_grade_uid` = ref на `ReliefGradeInstance` (SLOPE\|SHEER)**, если grade есть; иначе omit (R24, R36h/j, R36f, C9/C11). Не «ASCII-токен». Pack ASCII — **consumer** того же ref (символ по uid+facing cache). Entity fields (kind/h/L/θ) на wire **не** копировать. Climb / LLM resolve entity — Wave E later ([`tz_terrain_relief.md`](./tz_terrain_relief.md)) |
+| **PAR-G10** | **`system_grade_uid` = ref на `ReliefGradeInstance` (SLOPE\|SHEER)**, если grade есть; иначе omit (R24, R36h/j, R36f, C9/C11). Не «ASCII-токен». Occupancy membership — consumer этого ref. Раскладка 3×3 / 8 лучей — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) (leftover, не колонка). Entity fields (kind/h/L/θ) на wire **не** копировать. Climb / LLM — Wave E later |
 
 Разделение (уже SoT relief — не open):
 
@@ -146,6 +144,7 @@ Open product XOR по L2 grade ASCII — **нет**.
 | Документ | Что остаётся там |
 |---|---|
 | [`tz_terrain_relief.md`](./tz_terrain_relief.md) | generate (**R36u** detailed geometry), Grade entity, templates, R36 / **R36t** |
+| [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | клетка 3×3, слои leftover/wire/SQL, LLM uid→Instance→System |
 | [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | FineTerrain blob layout; categorical carry **не** для grade uid |
 | [`tz_map_light_bake.md`](./tz_map_light_bake.md) | L0 paint/bake frame (MLB); **без** outdoor grade writer |
 | [`tz_mountain_architecture.md`](./tz_mountain_architecture.md) | L2 column_span / cliff_delta diagnostics |
@@ -157,6 +156,7 @@ Open product XOR по L2 grade ASCII — **нет**.
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-19 | **L2 3×3 dump:** leftover rim rays (`GradeRimRay` sidecar) + `gradeRayDump` — центр поверхность, края Facing×kind; W как `surface_z` |
 | 2026-08-14 | **R36w pointer:** PAR-G2 — стык на воркере; generate всё ещё chunk pool — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-08-16 | L2 `surface_z` dump: per-cell max world-z (`surface_z.txt`) |
 | 2026-08-13 | **R36v:** PAR-G1/G2 — generate в chunk pool; tile-wide serial не SoT — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |

@@ -10,7 +10,7 @@ Pack path (default after light bake):
 Detailed L2 (after detailed_bake):
   - ``dump_detailed_renders`` → location_terrain + ``render-wilderness-tile-grid``
     Pack-read-only: each ``z/<n>.txt`` = cells already in FineTerrain runs (no generation);
-    ``surface_grade.txt`` + ``z/grade_<n>.txt`` = relief overlay (surface_z == n).
+    ``surface_grade.txt`` + ``z/grade_<n>.txt`` = 3×3 rim-ray consume dump (not occupancy overlay).
     Default: ``surface`` / ``surface_z`` / ``surface_grade`` / ``column_span`` / ``cliff_delta``, then
     one material + grade file per relevant world-z under ``…/z/``.
   - does **not** re-dump L0 mosaic
@@ -195,6 +195,7 @@ def _wilderness_pack_renderer(world_uid: str, gx: int, gy: int):
     """Load FineTerrain chunks for one macro-tile from on-disk pack (dump helper)."""
     from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
     from app.application.worldData.pack.io.worldPackReader import WorldPackReader
+    from app.application.worldData.render.gradeRayDump import GradeRayIndex
     from app.application.worldData.render.wildernessTilePackRenderer import (
         WildernessTilePackRenderer,
     )
@@ -219,6 +220,7 @@ def _wilderness_pack_renderer(world_uid: str, gx: int, gy: int):
         tile_gx=gx,
         tile_gy=gy,
         tile_size_m=tile_size_m,
+        ray_index=GradeRayIndex(reader.read_grade_rays_tile(gx, gy)),
     )
 
 

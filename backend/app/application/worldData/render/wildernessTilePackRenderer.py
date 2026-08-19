@@ -2,23 +2,22 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-
 from app.application.worldData.render.fineTerrainAsciiKernel import (
     column_diagnostics_summary,
+    draw_grade_consume_grid,
     draw_int_grid,
     draw_symbol_grid,
+    grade_consume_z_levels,
+    paired_width_from_columns,
     symbols_at_z,
-    symbols_at_z_with_grade,
     symbols_by_occupied_z,
-    symbols_grade_by_surface_z,
     symbols_surface_top,
-    symbols_surface_with_grade,
     values_cliff_delta,
     values_column_span,
     values_surface_z,
     z_occupied,
 )
+from app.application.worldData.render.gradeRayDump import GradeRayIndex
 from app.application.worldData.render.mapSymbols import render_map_legend
 from app.application.worldData.render.renderPayloads import (
     LEVEL_CLIFF_DELTA,
@@ -40,6 +39,7 @@ class WildernessTilePackRenderer:
         tile_gx: int,
         tile_gy: int,
         tile_size_m: int,
+        ray_index: GradeRayIndex | None = None,
     ) -> None:
         self.tile_gx = tile_gx
         self.tile_gy = tile_gy
@@ -51,6 +51,9 @@ class WildernessTilePackRenderer:
                 tx = chunk.cx * cc + col.lx
                 ty = chunk.cy * cc + col.ly
                 self._cols[(tx, ty)] = col
+        origin_x = int(tile_gx) * int(tile_size_m)
+        origin_y = int(tile_gy) * int(tile_size_m)
+        self._rays = (ray_index or GradeRayIndex()).relative_to(origin_x, origin_y)
 
     @staticmethod
     def render_legend() -> str:
@@ -138,48 +141,54 @@ class WildernessTilePackRenderer:
             ),
             extra_headers=self._extra_headers(min(xs), min(ys), max(xs), max(ys)),
             coord_prefix="tile-local ",
+            width=paired_width_from_columns(self._cols),
         )
 
     def render_grade(self) -> str:
-        """Surface + grade composite — omit when no ``system_grade_uid`` (PAR-G4)."""
-        symbols = symbols_surface_with_grade(self._cols)
-        if not symbols:
+        """3×3 consume dump — omit when no leftover rays and no uid."""
+        if not self._cols:
             return ""
-        return self._draw(
-            symbols,
+        frame = self.mosaic_xy_bounds()
+        if frame is None:
+            return ""
+        x0, x1, y0, y1 = frame
+        return draw_grade_consume_grid(
+            self._cols,
+            self._rays,
             title=(
                 f"wilderness tile=({self.tile_gx},{self.tile_gy})  "
-                f"(pack wilderness_chunk mosaic, surface_grade = surface+grade)"
+                f"(pack wilderness_chunk mosaic, surface_grade 3x3 rim rays)"
             ),
-            bounds=self.mosaic_xy_bounds(),
+            extra_headers=self._extra_headers(x0, y0, x1, y1),
+            coord_prefix="tile-local ",
+            bounds=frame,
         )
 
-    def render_grade_at_z(
-        self,
-        z: int,
-        *,
-        by_surface_z: Mapping[int, Mapping[tuple[int, int], str]] | None = None,
-    ) -> str:
-        """Material at ``z`` + grade where surface_z == ``z``; mosaic frame; omit if no grade."""
-        symbols = symbols_at_z_with_grade(
-            self._cols, z, by_surface_z=by_surface_z,
-        )
-        if not symbols:
+    def render_grade_at_z(self, z: int) -> str:
+        """3×3 consume dump for cells whose surface_z == ``z``; mosaic frame."""
+        if not self._cols:
             return ""
-        return self._draw(
-            symbols,
+        frame = self.mosaic_xy_bounds()
+        if frame is None:
+            return ""
+        x0, x1, y0, y1 = frame
+        return draw_grade_consume_grid(
+            self._cols,
+            self._rays,
             title=(
                 f"wilderness tile=({self.tile_gx},{self.tile_gy}) grade z={z}  "
-                f"(pack wilderness_chunk mosaic; material+grade, surface_z only)"
+                f"(pack wilderness_chunk mosaic; 3x3, surface_z only)"
             ),
-            bounds=self.mosaic_xy_bounds(),
+            extra_headers=self._extra_headers(x0, y0, x1, y1),
+            coord_prefix="tile-local ",
+            bounds=frame,
+            surface_z=int(z),
         )
 
     def iter_grade_z_levels_aligned(self):
-        """Yield ``(z, ascii)`` grade overlays on mosaic frame (non-empty only)."""
-        by_z = symbols_grade_by_surface_z(self._cols)
-        for z in sorted(by_z):
-            text = self.render_grade_at_z(int(z), by_surface_z=by_z)
+        """Yield ``(z, ascii)`` grade consume dumps on mosaic frame."""
+        for z in grade_consume_z_levels(self._cols, self._rays):
+            text = self.render_grade_at_z(int(z))
             if text.strip():
                 yield int(z), text
 

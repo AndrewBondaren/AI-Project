@@ -67,6 +67,13 @@ class WorldPackPaths:
     def wilderness_chunk_path(self, gx: int, gy: int, cx: int, cy: int) -> Path:
         return self.tiles_dir / f"r.{gx}.{gy}.c.{cx}.{cy}.zst"
 
+    def grade_rays_tile_path(self, gx: int, gy: int) -> Path:
+        """Debug leftover rays for one macro-tile (not a FineTerrain blob)."""
+        return self.tiles_dir / f"r.{gx}.{gy}.grade_rays.json"
+
+    def grade_rays_location_path(self, location_uid: str) -> Path:
+        return self.locations_dir / f"l.{location_uid}.grade_rays.json"
+
     def location_terrain_path(self, location_uid: str) -> Path:
         return self.locations_dir / f"l.{location_uid}.terrain.zst"
 

@@ -19,7 +19,11 @@ from app.application.worldData.render.renderPayloads import (
     LEVEL_SURFACE_GRADE,
     LEVEL_SURFACE_Z,
 )
+from app.application.worldData.render.gradeRayDump import GradeRayIndex
 from app.application.worldData.render.wildernessTilePackRenderer import WildernessTilePackRenderer
+from app.dataModel.spatial.facing import Facing
+from app.dataModel.terrain.relief.enums import ReliefSideKind
+from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay
 from app.dataModel.worldPack.fineTerrainChunkWire import (
     FineTerrainChunkWire,
     FineTerrainColumnWire,
@@ -193,6 +197,11 @@ class TestWildernessTilePackRenderer(unittest.TestCase):
         ]
         renderer = WildernessTilePackRenderer(
             chunks, tile_gx=1, tile_gy=2, tile_size_m=1000,
+            ray_index=GradeRayIndex((
+                GradeRimRay(
+                    x=1000, y=2000, facing=Facing.EAST, kind=ReliefSideKind.SLOPE,
+                ),
+            )),
         )
         levels = renderer.render_all_levels(
             include_z_slices=False,
@@ -201,11 +210,17 @@ class TestWildernessTilePackRenderer(unittest.TestCase):
         self.assertIn(LEVEL_SURFACE, levels)
         self.assertIn(LEVEL_SURFACE_GRADE, levels)
         self.assertIn("→", levels[LEVEL_SURFACE_GRADE])
-        self.assertIn("f", levels[LEVEL_SURFACE_GRADE])  # forest underlay
+        self.assertIn("f", levels[LEVEL_SURFACE_GRADE])  # forest center
+        mid = [
+            ln for ln in levels[LEVEL_SURFACE_GRADE].splitlines()
+            if ln.startswith("   0 |")
+        ]
+        self.assertEqual(len(mid), 1)
+        self.assertIn("→", mid[0])
         self.assertEqual(renderer.render_grade_at_z(1), "")
         grade3 = renderer.render_grade_at_z(3)
         self.assertIn("→", grade3)
-        self.assertIn("_", grade3)  # plains material at surface_z
+        self.assertIn("_", grade3)
         pairs = list(renderer.iter_grade_z_levels_aligned())
         self.assertEqual([z for z, _ in pairs], [3])
 

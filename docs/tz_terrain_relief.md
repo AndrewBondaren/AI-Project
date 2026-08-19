@@ -8,7 +8,7 @@ metadata:
 
 > **Статус:** ownership **утверждён** · templates R33–R35 ✅ · **R36 geom/entity/clearance** ✅ · **canal R36p/q ✅** · **R36u–w** writer/pool/каталог ✅ · **R37** envelope ✅ · **R41/R42/C39/C41 pipeline v2 = SoT** (меса 8, фронт W×L, `ReliefVertices`+`occ`+`seam`, bucket[z] остаток кромок, шов лучей, расписание A). **R38–R40 v1 — deprecated**. Шов чанков `full_bake` · halo `grid_neighbor` · T-10 ✅.  
 > **Код vs SoT:** `compute_rect` = discover+paint → один fill; после чанков catalog merge + **T-3c System** (слои 0–7). Occupancy v1 **срезан** (слой 7). **Очередь / не трогать:** § [Осталось — v2 vs L2 volume](#осталось--v2-vs-l2-volume-locked). IDs — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md). **R41-T-1…T-12** ✅. Слой 5 ravine/shore ✅. **T-3c слой 6 ✅**. **Слой 7 срез v1 ✅**. Очередь v2 полиш закрыта — [план](../.cursor/plans/relief-pipeline-v2.md). **R43** SQL catalog persist **✅**. Wave E / BAR-1 / DAG вне этой очереди. L0 `world-grade` ASCII omit (PAR-G5).  
-> **Связь:** SoT grade; **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT. · ASCII — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md). · L2 — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2. · Agent: [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md) · v2 impl: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md)
+> **Связь:** SoT grade generate; **consume** (клетка→Instance→System, L2 3×3 дамп) — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md); **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT. · файлы пака L0/L2 — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md). · L2 storage — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2. · Agent: [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md) · v2 impl: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md)
 
 **Scope lock (R36u):** меняется **только outdoor relief grade** (`system_grade_uid`, SLOPE/SHEER geometry). **Не трогать** L0→L2 parent-light контракты ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2):
 
@@ -28,7 +28,7 @@ metadata:
 | L0 `openLand` / `shore` / `roadShoulder` + `ribbonGradeApply` | [`pack/refine/detailedGradeGenerate.py`](../backend/app/application/worldData/pack/refine/detailedGradeGenerate.py) | grade ribbon, не mask; **deleted** (T-8) |
 | `upsample_grade_uid_from_parent_light` | — | **deleted** (T-8); не deprecated; grade uid **не** с parent light |
 | L0 `world-grade` ASCII | omit ([`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) PAR-G5) | |
-| L2 `fineTerrainAsciiKernel` | consumer — без изменений | |
+| L2 `fineTerrainAsciiKernel` | consumer; глиф клетки grade — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) (`gradeRayDump` 3×3) | |
 | Tile-wide `generate_detailed_grade` до pool | per-rect в `FineChunkRunner` worker (**R36v** / стык **R36w**) | не новый оркестратор |
 | `road_shoulder` на detailed | **R36u-T-10** ✅ | sample + stamp; context = `ReliefContext.ROAD_SHOULDER`; `PaintedRoadEdge` в dataModel; тот же каталог / `PackJobUid` |
 | `ravine` на detailed | ✅ | discover `RavinePlugin`: банк + стены маски; стрельба в маску; kind = knobs шаблона (SLOPE/SHEER); пол без Δz не site |
@@ -2842,7 +2842,8 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 | [`tz_city_generation.md`](./tz_city_generation.md) | `SettlementLayout` мировые координаты; город на шве (**C29**); террасы/улицы — тело вершины **R41** при rim |
 | [`tz_building_generator.md`](./tz_building_generator.md) | library + world registry + import образец |
 | [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | pack partition ≠ продукт; шов мира vs технический (**C29**); **modification** = Patch Store; `detailed_bake` location — **R41** (не stencil volume); стык после чанков: прямая = catalog, вершина = T-3c |
-| [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) | pack ASCII: L0 map/height **без** outdoor grade (**R36u**); L2 `surface_grade` / `grade_{n}`; FineTerrain `system_grade_uid`→Instance (PAR-G7/G10); ~~PAR-G8~~ superseded |
+| [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | **поддомен consume:** SQL/wire слои, LLM-цепочка uid→Instance→System, L2 клетка **3×3** (центр + 8 лучей, выравнивание с `surface_z`) |
+| [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) | pack ASCII: L0 map/height **без** outdoor grade (**R36u**); пути `surface_grade` / `grade_{n}`; FineTerrain uid→Instance (PAR-G7/G10); глиф 3×3 — consume TZ; ~~PAR-G8~~ superseded |
 | [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | IDs; очередь SoT — § Осталось — v2 vs L2 volume; **R41-T-1…T-12** ✅; **T-3c** слой 6 ✅; **R36i-T-2** fence; **R36i-T-4…T-15** ✅ |
 | [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md) | agent pointer на § Порядок |
 | [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md) | impl R41: типы → discover → paint adapter → worker A → plugins → T-3c → срез v1 |
@@ -2854,6 +2855,7 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-19 | **Consume TZ:** [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) — хранение vs leftover; LLM uid→Instance→System; debug-клетка **3×3** (центр всегда, 8 исходящих лучей с rim, поле W как `surface_z`, 3 строки на `gy`) |
 | 2026-08-19 | **C41 cross-vertex:** низина принимает лучи **разных** вершин и **разных** Facing; повтор `(клетка, Facing)` запрещён. Яма не `occ` первого пика. Finalize после каскада. Seed C39: сосед-шов низины не блокирует |
 | 2026-08-19 | **C41 / R41-T-5:** луч = `(кромка, Facing)`; низина не один склон; open_land стоп на равной z; ravine / `grades_channel_bed` по-прежнему продолжают L; пик может 8 сторон, диагональ не бьёт в орто-посадку соседа. Дырка 1×1 — skip |
 | 2026-08-19 | **R37 plains:** θ max **45°**, `stamp_min_abs_dz=1`; короткий луч `h=1,L=1` → SLOPE 45°; `>45°` → SHEER. L min 20 только если луч позволяет (не veto L<20). Forest без смены (θ≤20°, stamp 2). Чаша 4×луча в `3` — по-прежнему C41 skip |

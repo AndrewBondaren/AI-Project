@@ -6,6 +6,7 @@ from collections.abc import Iterable
 
 from app.application.worldData.facingArrows import FACING_ARROW
 from app.dataModel.spatial.facing import Facing
+from app.dataModel.terrain.relief.enums import ReliefSideKind
 
 ROLE_SYMBOLS: dict[str, str] = {
     "coastal_sea": "~",
@@ -42,6 +43,21 @@ LOCATION_PIN_SYMBOL = "@"
 
 # Missing height cell: spaces of the same width as numeric cells (caller sets width).
 HEIGHT_MISSING_FILL = " "
+
+
+# 3×3 grade cell inner width (tz_terrain_relief_consume).
+GRADE_CELL_INNER_WIDTH = 3
+
+
+def paired_height_cell_width(zs: Iterable[int]) -> int:
+    """``surface_z`` + grade-ray dump share this W (max of height pad and 3)."""
+    return max(height_cell_width(zs), GRADE_CELL_INNER_WIDTH)
+
+
+def format_glyph_field(token: str, *, width: int) -> str:
+    """Right-align a 3-glyph 3×3 row in the same field as ``format_height_cell``."""
+    w = max(GRADE_CELL_INNER_WIDTH, int(width))
+    return f"{token:>{w}s}"
 
 
 def height_token(surface_z: int) -> str:
@@ -129,6 +145,14 @@ def facing_arrow(facing: Facing | str | None) -> str | None:
     return FACING_ARROW.get(key)
 
 
+def grade_ray_glyph(kind: ReliefSideKind, facing: Facing) -> str:
+    """Edge slot for one outgoing ray — SLOPE arrow, SHEER bar."""
+    if kind is ReliefSideKind.SHEER:
+        return GRADE_SHEER_SYMBOL
+    arrow = facing_arrow(facing)
+    return arrow if arrow is not None else GRADE_SHEER_SYMBOL
+
+
 def grade_symbol(
     *,
     system_grade_uid: str | None,
@@ -146,6 +170,7 @@ def grade_symbol(
 def render_grade_legend() -> str:
     parts = " ".join(f"{sym}={f.value}" for f, sym in FACING_ARROW.items())
     return (
-        f"grade: {parts}; {GRADE_SHEER_SYMBOL}=sheer/no facing; "
-        f"(space)=not in grade (no system_grade_uid)"
+        f"grade 3x3: center=surface; edges=outgoing rim rays "
+        f"(SLOPE {parts}; {GRADE_SHEER_SYMBOL}=sheer); "
+        f"empty edge=no ray; not occupancy overlay"
     )

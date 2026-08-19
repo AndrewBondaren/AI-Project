@@ -9,6 +9,7 @@ Catalog ``face_key`` is identity, not a seed graph. No pre-pool occupancy.
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import replace
 
 from app.application.jsonValidation import (
     relief_pick_policy,
@@ -49,6 +50,7 @@ from app.application.worldData.pack.refine.detailedGradeHalo import length_cap_f
 from app.application.worldData.pack.refine.detailedGradePaint import apply_grade_paint_spec
 from app.application.worldData.pack.refine.detailedGradeResult import DetailedGradeResult
 from app.application.worldData.pack.refine.fineTileContext import VertexSlotSeam
+from app.application.worldData.pack.refine.gradeRimRays import rim_rays_from_front
 from app.application.worldData.pack.refine.meterGradeSurface import (
     MeterGradeSurface,
     apply_grade_uids,
@@ -200,7 +202,9 @@ def discover_and_paint(
         clipped = part.clipped_to_rect(rect)
         if not clipped.grade_instances:
             continue
-        acc = acc.merged_with(clipped)
+        acc = acc.merged_with(
+            replace(clipped, rim_rays=rim_rays_from_front(painted)),
+        )
         apply_grade_uids(grid, clipped.surface_grade_uid)
         known.update(clipped.surface_grade_uid)
         painted_uids[int(front.slot)].append(uid)

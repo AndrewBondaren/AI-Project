@@ -130,6 +130,16 @@ class WorldPackReader:
     def chunk_exists(self, gx: int, gy: int, cx: int, cy: int) -> bool:
         return self._paths.wilderness_chunk_path(gx, gy, cx, cy).is_file()
 
+    def read_grade_rays_tile(self, gx: int, gy: int):
+        from app.application.worldData.pack.io.gradeRaySidecar import load_grade_ray_sidecar
+
+        return load_grade_ray_sidecar(self._paths.grade_rays_tile_path(gx, gy))
+
+    def read_grade_rays_location(self, location_uid: str):
+        from app.application.worldData.pack.io.gradeRaySidecar import load_grade_ray_sidecar
+
+        return load_grade_ray_sidecar(self._paths.grade_rays_location_path(location_uid))
+
     def _load_wilderness_chunk(self, gx: int, gy: int, cx: int, cy: int) -> FineTerrainChunkWire:
         path = self._paths.wilderness_chunk_path(gx, gy, cx, cy)
         kind, payload = self._decode_file(path)

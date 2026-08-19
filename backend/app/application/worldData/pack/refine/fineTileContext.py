@@ -14,6 +14,7 @@ from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.pack.refine.detailedGradeCatalog import TileFaceCatalog
 from app.application.worldData.pack.refine.meterGradeSurface import Coord
 from app.application.worldData.terrainBatchOrchestrator import TileSurfaceState
+from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
@@ -72,5 +73,6 @@ class ChunkComputeResult:
     chunk_t0: float
     chunk_grades: tuple[ReliefGradeInstance, ...]
     vertex_seams: tuple[VertexSlotSeam, ...] = ()
+    rim_rays: tuple[GradeRimRay, ...] = ()
     materialize_s: float = 0.0
     grade_s: float = 0.0

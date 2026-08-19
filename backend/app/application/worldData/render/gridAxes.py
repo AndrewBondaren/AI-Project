@@ -25,10 +25,18 @@ def format_grid_header(
 
 
 # Matches ``f"{y:4d} |"`` gutter used by ``draw_symbol_grid`` / ``draw_int_grid``.
-_ROW_GUTTER = 6
+ROW_GUTTER = 6
+_ROW_GUTTER = ROW_GUTTER  # backward alias
 
 
-def format_x_axis_ruler(x0: int, x1: int, *, gutter: int = _ROW_GUTTER) -> list[str]:
+def format_y_gutter(y: int | None) -> str:
+    """Left gutter for one dump row. ``None`` → blank gy (3×3 sub-rows)."""
+    if y is None:
+        return f"{'':4s} |"
+    return f"{int(y):4d} |"
+
+
+def format_x_axis_ruler(x0: int, x1: int, *, gutter: int = ROW_GUTTER) -> list[str]:
     """X ticks aligned 1:1 with 1-char cells (tens labels + ones digits)."""
     if x1 < x0:
         return []

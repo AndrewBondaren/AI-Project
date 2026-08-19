@@ -2,22 +2,21 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-
 from app.application.worldData.render.fineTerrainAsciiKernel import (
     column_diagnostics_summary,
+    draw_grade_consume_grid,
     draw_int_grid,
     draw_symbol_grid,
+    grade_consume_z_levels,
+    paired_width_from_columns,
     symbols_at_z,
-    symbols_at_z_with_grade,
-    symbols_grade_by_surface_z,
     symbols_surface_top,
-    symbols_surface_with_grade,
     values_cliff_delta,
     values_column_span,
     values_surface_z,
     z_occupied,
 )
+from app.application.worldData.render.gradeRayDump import GradeRayIndex
 from app.application.worldData.render.mapSymbols import render_map_legend
 from app.application.worldData.render.renderPayloads import (
     LEVEL_CLIFF_DELTA,
@@ -40,6 +39,7 @@ class LocationTerrainPackRenderer:
         *,
         volume: TerritoryVolume,
         location_uid: str,
+        ray_index: GradeRayIndex | None = None,
     ) -> None:
         self._chunk = chunk
         self._volume = volume
@@ -47,6 +47,14 @@ class LocationTerrainPackRenderer:
         self._cols: dict[tuple[int, int], FineTerrainColumnWire] = {
             (c.lx, c.ly): c for c in chunk.columns
         }
+        self._rays = (ray_index or GradeRayIndex()).relative_to(volume.x0, volume.y0)
+
+    def _col_bounds(self) -> tuple[int, int, int, int] | None:
+        if not self._cols:
+            return None
+        xs = [x for x, _ in self._cols]
+        ys = [y for _, y in self._cols]
+        return min(xs), max(xs), min(ys), max(ys)
 
     @staticmethod
     def render_legend() -> str:
@@ -104,42 +112,47 @@ class LocationTerrainPackRenderer:
             ),
             extra_headers=self._extra_headers(min(xs), min(ys), max(xs), max(ys)),
             coord_prefix="local ",
+            width=paired_width_from_columns(self._cols),
         )
 
     def render_grade(self) -> str:
-        """Surface + grade composite — omit when no ``system_grade_uid`` (PAR-G4).
+        """3×3 consume dump — omit when no leftover rays and no uid.
 
         Legend is not inlined (PAR-T-6); dump/HTTP use map+grade legends.
         """
-        symbols = symbols_surface_with_grade(self._cols)
-        if not symbols:
+        frame = self._col_bounds()
+        if frame is None:
             return ""
-        return self._draw(
-            symbols,
+        x0, x1, y0, y1 = frame
+        return draw_grade_consume_grid(
+            self._cols,
+            self._rays,
             title=(
                 f"location={self.location_uid}  "
-                f"(pack location_terrain, surface_grade = surface+grade)"
+                f"(pack location_terrain, surface_grade 3x3 rim rays)"
             ),
+            extra_headers=self._extra_headers(x0, y0, x1, y1),
+            coord_prefix="local ",
+            bounds=frame,
         )
 
-    def render_grade_at_z(
-        self,
-        z: int,
-        *,
-        by_surface_z: Mapping[int, Mapping[tuple[int, int], str]] | None = None,
-    ) -> str:
-        """Material at ``z`` + grade where surface_z == ``z``; omit if no grade."""
-        symbols = symbols_at_z_with_grade(
-            self._cols, z, by_surface_z=by_surface_z,
-        )
-        if not symbols:
+    def render_grade_at_z(self, z: int) -> str:
+        """3×3 consume dump for cells whose surface_z == ``z``."""
+        frame = self._col_bounds()
+        if frame is None:
             return ""
-        return self._draw(
-            symbols,
+        x0, x1, y0, y1 = frame
+        return draw_grade_consume_grid(
+            self._cols,
+            self._rays,
             title=(
                 f"location={self.location_uid} grade z={z}  "
-                f"(pack location_terrain; material+grade, surface_z only)"
+                f"(pack location_terrain; 3x3, surface_z only)"
             ),
+            extra_headers=self._extra_headers(x0, y0, x1, y1),
+            coord_prefix="local ",
+            bounds=frame,
+            surface_z=int(z),
         )
 
     def render_level(self, z: int) -> str:
@@ -221,9 +234,8 @@ class LocationTerrainPackRenderer:
             text = self.render_level(z)
             if text.strip():
                 out[str(z)] = text
-        by_grade_z = symbols_grade_by_surface_z(self._cols)
-        for z in sorted(by_grade_z):
-            text = self.render_grade_at_z(int(z), by_surface_z=by_grade_z)
+        for z in grade_consume_z_levels(self._cols, self._rays):
+            text = self.render_grade_at_z(int(z))
             if text.strip():
                 out[grade_level_key(int(z))] = text
         return out

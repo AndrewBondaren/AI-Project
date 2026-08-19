@@ -61,6 +61,7 @@ def compute_rect(
     )
     chunk_grades: tuple = ()
     vertex_seams: tuple[VertexSlotSeam, ...] = ()
+    rim_rays: tuple = ()
     chunk_state = ctx.surface_state
     grade_s = 0.0
     if ctx.templates:
@@ -76,6 +77,7 @@ def compute_rect(
         )
         grade_s = time.perf_counter() - grade_t0
         chunk_grades = part.grade_instances
+        rim_rays = part.rim_rays
         if part.surface_z or part.surface_grade_uid:
             local_hm = rect_heightmap_from_overlay(
                 ctx.surface_state.heightmap, part.surface_z, rect,
@@ -98,6 +100,7 @@ def compute_rect(
         chunk_t0=chunk_t0,
         chunk_grades=chunk_grades,
         vertex_seams=vertex_seams,
+        rim_rays=rim_rays,
         materialize_s=materialize_s,
         grade_s=grade_s,
     )

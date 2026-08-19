@@ -192,6 +192,16 @@ class WorldPackWriter:
         )
         return content_hash
 
+    def merge_grade_rays_tile(self, gx: int, gy: int, rays) -> None:
+        from app.application.worldData.pack.io.gradeRaySidecar import merge_grade_ray_sidecar
+
+        merge_grade_ray_sidecar(self._paths.grade_rays_tile_path(gx, gy), rays)
+
+    def merge_grade_rays_location(self, location_uid: str, rays) -> None:
+        from app.application.worldData.pack.io.gradeRaySidecar import merge_grade_ray_sidecar
+
+        merge_grade_ray_sidecar(self._paths.grade_rays_location_path(location_uid), rays)
+
     def write_location_terrain(
         self,
         location_uid: str,

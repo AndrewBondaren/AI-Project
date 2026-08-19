@@ -14,6 +14,7 @@ from app.application.worldData.pack.bake.packBakeLog import (
 )
 from app.application.worldData.pack.read.packMapHelpers import world_tile_size_m
 from app.application.worldData.pack.read.packReadContext import PackReadContext
+from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
@@ -47,6 +48,7 @@ class LocationTerrainRenderSource:
     location_uid: str
     volume: TerritoryVolume
     chunk: FineTerrainChunkWire
+    rays: tuple[GradeRimRay, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -60,6 +62,7 @@ class WildernessTileRenderSource:
     chunks_listed: int
     chunks_loaded: int
     wilderness_refine_status: str | None
+    rays: tuple[GradeRimRay, ...] = ()
 
 
 def _tile_cell_hists(
@@ -191,6 +194,7 @@ class PackRenderReadFacade:
             location_uid=location_uid,
             volume=entry.territory_volume,
             chunk=chunk,
+            rays=reader.read_grade_rays_location(location_uid),
         )
 
     def location_uids_with_terrain(self, world: World) -> list[str]:
@@ -238,4 +242,5 @@ class PackRenderReadFacade:
             chunks_listed=len(listed),
             chunks_loaded=len(chunks),
             wilderness_refine_status=status,
+            rays=reader.read_grade_rays_tile(gx, gy),
         )
