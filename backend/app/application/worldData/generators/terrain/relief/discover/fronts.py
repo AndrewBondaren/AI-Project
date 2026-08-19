@@ -1,6 +1,7 @@
 """R42 lockstep fronts: rim shots, W-runs, W×L walk.
 
-Proposes traces only. Does not mark seam or occ (C41).
+One rim cell × one Facing → one ray. (cell, Facing) is unique across
+vertices. Proposes traces only. Does not mark seam or occ (C41).
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from app.application.worldData.generators.terrain.relief.discover.neighbors impo
     GRID_OUTWARD_DELTA,
     facing_for_delta,
     is_cardinal,
+    step_k,
     truncate_trace,
 )
 from app.application.worldData.generators.terrain.relief.discover.plugins import (
@@ -33,6 +35,7 @@ from app.application.worldData.generators.terrain.relief.sample.terrainMap impor
     map_system_terrain,
 )
 from app.dataModel.spatial.facing import Facing
+from app.dataModel.terrain.relief.enums import ReliefContext
 from app.dataModel.terrain.relief.reliefTerrainEnvelope import (
     ReliefOntologyEnvelopes,
     ReliefTerrainEnvelope,
@@ -52,24 +55,29 @@ def _walk_cap(envelope: ReliefTerrainEnvelope, occupancy: int | None) -> int | N
     return max(1, min(caps))
 
 
-def _diagonal_covered_by_ortho(
+def _diagonal_lands_on_ortho_target(
     dx: int,
     dy: int,
-    x: int,
-    y: int,
+    src: Coord,
     z_body: int,
     surface: ReliefSurface,
     body: dict[Coord, int],
 ) -> bool:
-    """NE/NW/SE/SW only if that quadrant has no ortho downhill (R42 / R41)."""
+    """Skip a diagonal if its landing is already an ortho downhill of another rim cell.
+
+    A peak may look all 8 ways: own ortho and diagonal go to different cells.
+    A mesa south face must not also fire SE into the neighbor's south landing
+    (that would seam the ortho front).
+    """
     if dx == 0 or dy == 0:
         return False
+    dest = (src[0] + dx, src[1] + dy)
+    zn = cell_z(surface, dest)
+    if zn is None or zn >= z_body:
+        return False
     for odx, ody in ((dx, 0), (0, dy)):
-        nb = (x + odx, y + ody)
-        if nb in body:
-            continue
-        zn = cell_z(surface, nb)
-        if zn is not None and zn < z_body:
+        ortho_src = (dest[0] - odx, dest[1] - ody)
+        if ortho_src in body and ortho_src != src:
             return True
     return False
 
@@ -152,10 +160,17 @@ class FrontStage:
                 trace = self._walk_trace(
                     run, facing, z_body, slot, plugin,
                     walk_cap=_walk_cap(env, occupancy),
+                    continue_equal_z=self._continue_equal_z(plugin, env),
                 )
                 if occupancy is not None:
                     trace = truncate_trace(trace, run, facing, occupancy)
                 if not trace:
+                    continue
+                landings = tuple(
+                    cell for cell in trace
+                    if step_k(cell, run, facing) == 1
+                )
+                if not self.vertices.claim_facings(landings, facing):
                     continue
                 z_end = cell_z(self.surface, trace[-1])
                 if z_end is None:
@@ -181,6 +196,7 @@ class FrontStage:
         surface = self.surface
         vertices = self.vertices
         shots: list[tuple[Coord, Facing, int]] = []
+        seen: set[tuple[Coord, Facing]] = set()
         for (x, y), z_body in body.items():
             for dx, dy in EIGHT_DELTAS:
                 nb = (x + dx, y + dy)
@@ -189,16 +205,22 @@ class FrontStage:
                 zn = cell_z(surface, nb)
                 if zn is None or zn >= z_body:
                     continue
-                if _diagonal_covered_by_ortho(dx, dy, x, y, z_body, surface, body):
+                if _diagonal_lands_on_ortho_target(
+                    dx, dy, (x, y), z_body, surface, body,
+                ):
                     continue
                 facing = facing_for_delta((dx, dy))
                 if facing is None:
                     continue
+                key = ((x, y), facing)
+                if key in seen:
+                    continue
                 if not plugin.may_shoot((x, y), nb, surface):
                     continue
                 ni = vertices.index(nb[0], nb[1])
-                if ni is not None and (vertices.occ[ni] != 0 or vertices.seam[ni] != 0):
+                if ni is not None and vertices.occ[ni] != 0:
                     continue
+                seen.add(key)
                 shots.append(((x, y), facing, z_body - zn))
         return shots
 
@@ -226,6 +248,16 @@ class FrontStage:
             else ReliefTerrainEnvelope()
         )
 
+    def _continue_equal_z(
+        self,
+        plugin: VertexBodyPlugin,
+        envelope: ReliefTerrainEnvelope,
+    ) -> bool:
+        """Ravine / channel bed: flat floor is L. Open-land basin is not."""
+        if plugin.context is ReliefContext.RAVINE:
+            return True
+        return bool(envelope.grades_channel_bed)
+
     def _walk_trace(
         self,
         rim: tuple[Coord, ...],
@@ -235,14 +267,15 @@ class FrontStage:
         plugin: VertexBodyPlugin,
         *,
         walk_cap: int | None,
+        continue_equal_z: bool,
     ) -> tuple[Coord, ...]:
         """Lockstep W×L until θ break, abutment, own body, or foreign occ/seam.
 
-        Equal z continues L (ramp/ravine floor). Stop on a *rise*
-        ``z > z_body`` or ``z > z_prev`` (R41-T-5). First-step ``|dz|=1`` is
-        a separate envelope skip, not this predicate.
-        Walk cap is envelope ``slope_length_max_cells`` and/or occupancy knobs
-        (R41-T-11), not a module literal. ``None`` = until the heightmap ends.
+        Rise ``z > z_body`` / ``z > z_prev`` always stops (R41-T-5). Equal z
+        continues L only for ravine / channel bed; open-land basin floor is
+        not this front's corridor. First-step ``|dz|=1`` is an envelope skip,
+        not this predicate. Walk cap is envelope max and/or occupancy knobs
+        (R41-T-11). ``None`` = until the heightmap (or equal-z) stop.
         """
         dx, dy = GRID_OUTWARD_DELTA[facing]
         surface = self.surface
@@ -256,6 +289,7 @@ class FrontStage:
                 return tuple(cells)
             strip: list[Coord] = []
             zs: list[int] = []
+            hit_seam_k1 = False
             for sx, sy in rim:
                 xy = (sx + dx * k, sy + dy * k)
                 z = cell_z(surface, xy)
@@ -277,8 +311,12 @@ class FrontStage:
                 if i is not None:
                     if vertices.at_grid[i] == slot:
                         return tuple(cells)
-                    if vertices.occ[i] != 0 or vertices.seam[i] != 0:
+                    if vertices.occ[i] != 0:
                         return tuple(cells)
+                    if vertices.seam[i] != 0:
+                        if k > 1:
+                            return tuple(cells)
+                        hit_seam_k1 = True
                 if z > z_body:
                     return tuple(cells)
                 if k > 1:
@@ -286,8 +324,12 @@ class FrontStage:
                     zp = cell_z(surface, prev)
                     if zp is None or z > zp:
                         return tuple(cells)
+                    if z == zp and not continue_equal_z:
+                        return tuple(cells)
                 strip.append(xy)
                 zs.append(z)
             if len(set(zs)) > 1:
                 return tuple(cells)
             cells.extend(strip)
+            if hit_seam_k1:
+                return tuple(cells)

@@ -42,6 +42,7 @@ from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
 
 _MASKS = WorldTerrainMasks.canonical_defaults()
 _PLAINS = _MASKS.default_plains.system_terrain
+_FOREST = _MASKS.default_forests.system_terrain
 _ROAD = _MASKS.default_roads.system_terrain
 _RAVINE = ravine_terrain_key()
 _LAND = open_land_terrain_keys()
@@ -189,7 +190,39 @@ class ReliefDiscoverTest(unittest.TestCase):
         self.assertEqual(front.outward, Facing.SOUTH)
         self.assertGreaterEqual(len(front.corridor), 3)
 
-    def test_bowl_seam_not_first_come(self) -> None:
+    def test_isolated_peak_shoots_eight_facings(self) -> None:
+        """One rim cell may look all 8 ways; each Facing is one ray."""
+        z = {
+            (0, 2): 2, (1, 2): 2, (2, 2): 2,
+            (0, 1): 2, (1, 1): 4, (2, 1): 2,
+            (0, 0): 2, (1, 0): 2, (2, 0): 2,
+        }
+        _vertices, fronts = _discover(z)
+        self.assertEqual({f.outward for f in fronts}, set(Facing))
+        self.assertEqual(len(fronts), 8)
+        occupied = {xy for f in fronts for xy in f.corridor}
+        self.assertEqual(len(occupied), 8)
+        self.assertNotIn((1, 1), occupied)
+
+    def test_mesa_south_does_not_fire_diagonal_into_ortho(self) -> None:
+        """SE from a west rim cell must not land on the neighbor's south cell."""
+        z = {
+            (0, 1): 4, (1, 1): 4, (2, 1): 4,
+            (0, 0): 2, (1, 0): 2, (2, 0): 2,
+        }
+        _vertices, fronts = _discover(z)
+        south = [f for f in fronts if f.outward is Facing.SOUTH]
+        self.assertEqual(len(south), 1)
+        self.assertEqual(set(south[0].corridor), {(0, 0), (1, 0), (2, 0)})
+        diagonal = [
+            f for f in fronts
+            if f.outward in (Facing.SOUTHEAST, Facing.SOUTHWEST)
+        ]
+        for front in diagonal:
+            self.assertFalse(set(front.corridor) & {(0, 0), (1, 0), (2, 0)})
+
+    def test_bowl_sides_keep_unique_cells(self) -> None:
+        """A basin is not one slope: four sides stamp unique mid-edges; center is free."""
         z = {}
         for x in range(5):
             for y in range(5):
@@ -199,10 +232,21 @@ class ReliefDiscoverTest(unittest.TestCase):
         center = (2, 2)
         i = vertices.index(*center)
         self.assertIsNotNone(i)
-        self.assertNotEqual(vertices.seam[i], 0)
+        self.assertEqual(vertices.seam[i], 0)
         self.assertEqual(vertices.occ[i], 0)
         for front in fronts:
             self.assertNotIn(center, front.corridor)
+        outwards = {f.outward for f in fronts}
+        self.assertGreaterEqual(
+            outwards & {Facing.NORTH, Facing.SOUTH, Facing.EAST, Facing.WEST},
+            {Facing.NORTH, Facing.SOUTH, Facing.EAST, Facing.WEST},
+        )
+        occupied = {xy for f in fronts for xy in f.corridor}
+        self.assertTrue({(2, 3), (2, 1), (1, 2), (3, 2)} <= occupied)
+        for corner in ((1, 3), (3, 3), (1, 1), (3, 1)):
+            ci = vertices.index(*corner)
+            self.assertNotEqual(vertices.seam[ci], 0)
+            self.assertEqual(vertices.occ[ci], 0)
 
     def test_one_by_one_hole_skips(self) -> None:
         z = {
@@ -217,14 +261,35 @@ class ReliefDiscoverTest(unittest.TestCase):
         self.assertEqual(fronts, ())
         self.assertEqual(vertices.occ[i], 0)
 
-    def test_unit_dz_plains_does_not_stamp_occ(self) -> None:
+    def test_mixed_heights_share_pit_across_vertices(self) -> None:
+        """6 / 4 / 3 may all shoot into 2; the pit is seam, not first-wins occ."""
+        z = {
+            (0, 2): 4, (1, 2): 6, (2, 2): 3,
+            (0, 1): 4, (1, 1): 2, (2, 1): 3,
+            (0, 0): 3, (1, 0): 4, (2, 0): 3,
+        }
+        vertices, fronts = _discover(z)
+        pit = (1, 1)
+        i = vertices.index(*pit)
+        self.assertIsNotNone(i)
+        self.assertNotEqual(vertices.seam[i], 0)
+        self.assertEqual(vertices.occ[i], 0)
+        for front in fronts:
+            self.assertNotIn(pit, front.corridor)
+        peak_slot = vertices.at_grid[vertices.index(1, 2)]
+        self.assertNotEqual(peak_slot, 0)
+        self.assertGreaterEqual(len(vertices.members), 2)
+
+    def test_unit_dz_plains_stamps_slope_corridor(self) -> None:
         z = {(0, 0): 4, (1, 0): 3, (2, 0): 2}
         vertices, fronts = _discover(z)
-        self.assertEqual(fronts, ())
-        for xy in z:
+        east = [f for f in fronts if f.outward is Facing.EAST]
+        self.assertTrue(east)
+        corridor = {xy for f in east for xy in f.corridor}
+        self.assertTrue(corridor)
+        for xy in corridor:
             i = vertices.index(*xy)
-            self.assertEqual(vertices.occ[i], 0)
-            self.assertEqual(vertices.seam[i], 0)
+            self.assertNotEqual(vertices.occ[i], 0)
 
     def test_lower_terrace_does_not_seed_under_occ(self) -> None:
         z = {
@@ -409,8 +474,8 @@ class ReliefDiscoverTest(unittest.TestCase):
         covered = {xy for f in south for xy in f.corridor}
         self.assertTrue({(0, 0), (1, 0)} <= covered)
 
-    def test_envelope_sized_cap_seams_l_corner(self) -> None:
-        """Occupancy cap is L_tpl; envelope floor as k makes the inner L all-seam."""
+    def test_envelope_cap_does_not_swallow_inner_l(self) -> None:
+        """Equal-z stop on open_land: long cap is not an all-seam inner L."""
         z = {}
         for x in range(4):
             for y in range(4):
@@ -436,11 +501,11 @@ class ReliefDiscoverTest(unittest.TestCase):
             cell_blocked=lambda _xy: False,
             cap_front=lambda _ctx: short_cap,
         )
-        self.assertEqual(fronts20, ())
-        outwards = {f.outward for f in fronts1}
-        self.assertGreaterEqual(len(fronts1), 2)
-        self.assertIn(Facing.NORTH, outwards)
-        self.assertIn(Facing.EAST, outwards)
+        for fronts in (fronts20, fronts1):
+            outwards = {f.outward for f in fronts}
+            self.assertGreaterEqual(len(fronts), 2)
+            self.assertIn(Facing.NORTH, outwards)
+            self.assertIn(Facing.EAST, outwards)
 
     def test_occupancy_cap_is_l_tpl_not_envelope_floor(self) -> None:
         from app.application.worldData.pack.refine.detailedGradeHalo import (
@@ -469,8 +534,8 @@ class ReliefDiscoverTest(unittest.TestCase):
         )
         self.assertGreaterEqual(grade_halo_cells(templates), _ENVELOPE_L_FLOOR)
 
-    def test_equal_z_continues_ray_length(self) -> None:
-        """Flat floor after the drop is L, not a stop (R41-T-5)."""
+    def test_open_land_stops_on_basin_floor(self) -> None:
+        """Flat floor after the drop is the depression, not this slope's L."""
         z = {
             (0, 3): 6,
             (0, 2): 4,
@@ -481,13 +546,34 @@ class ReliefDiscoverTest(unittest.TestCase):
         south = [f for f in fronts if f.outward is Facing.SOUTH]
         self.assertTrue(south)
         front = max(south, key=lambda f: f.path_length)
+        self.assertEqual(front.corridor, ((0, 2),))
+        self.assertEqual(front.path_length, 1)
+        self.assertEqual(front.z_end, 4)
+
+    def test_ravine_equal_z_continues_channel(self) -> None:
+        """Ravine channel floor stays L (R41-T-5 for ravine / bed)."""
+        z = {
+            (0, 3): 6,
+            (0, 2): 4,
+            (0, 1): 4,
+            (0, 0): 4,
+        }
+        terrain = {
+            (0, 3): _PLAINS,
+            (0, 2): _RAVINE,
+            (0, 1): _RAVINE,
+            (0, 0): _RAVINE,
+        }
+        _vertices, fronts = _discover_ravine(z, terrain)
+        ravine = [f for f in fronts if f.context is ReliefContext.RAVINE]
+        self.assertTrue(ravine)
+        front = max(ravine, key=lambda f: f.path_length)
         self.assertEqual(front.corridor, ((0, 2), (0, 1), (0, 0)))
         self.assertEqual(front.path_length, 3)
-        self.assertEqual(front.z_end, 4)
 
     def test_walk_cap_uses_envelope_max_not_literal(self) -> None:
         """R41-T-11: lockstep bound is slope_length_max_cells, not _TRACE_CAP=64."""
-        z = {(0, y): (8 if y == 6 else 4) for y in range(7)}
+        z = {(0, y): 2 + y for y in range(7)}
         plains = ReliefOntologyEnvelopes.canonical_defaults().plains.model_copy(
             update={"slope_length_max_cells": 2},
         )
@@ -509,9 +595,9 @@ class ReliefDiscoverTest(unittest.TestCase):
         self.assertTrue(south)
         self.assertEqual(max(f.path_length for f in south), 2)
 
-    def test_omit_envelope_max_walks_full_heightmap_floor(self) -> None:
-        """No envelope max and no occupancy cap → walk until the heightmap ends."""
-        z = {(0, y): (8 if y == 6 else 4) for y in range(7)}
+    def test_descending_open_land_walks_until_heightmap_or_flat(self) -> None:
+        """No envelope max: descending steps keep going; a flat floor still stops."""
+        z = {(0, y): 2 + y for y in range(7)}
         _vertices, fronts = _discover(z)
         south = [f for f in fronts if f.outward is Facing.SOUTH]
         self.assertTrue(south)
@@ -526,35 +612,47 @@ class ReliefDiscoverTest(unittest.TestCase):
         self.assertFalse(hasattr(RavinePlugin, "allows_unit_stamp"))
         self.assertFalse(hasattr(ShorePlugin, "allows_unit_stamp"))
         plains = ReliefOntologyEnvelopes.canonical_defaults().plains
-        self.assertEqual(plains.stamp_min_abs_dz, 2)
-        self.assertFalse(plains.stamps_first_step(1, ReliefContext.OPEN_LAND))
+        self.assertEqual(plains.stamp_min_abs_dz, 1)
+        self.assertTrue(plains.stamps_first_step(1, ReliefContext.OPEN_LAND))
         self.assertTrue(plains.stamps_first_step(2, ReliefContext.OPEN_LAND))
         self.assertTrue(
             plains.stamps_first_step(1, ReliefContext.ROAD_SHOULDER),
         )
 
-    def test_envelope_stamp_min_one_allows_unit_open_land(self) -> None:
-        """Override proves skip is POJO policy; canonical plains stays 2."""
+    def test_canonical_plains_stamps_unit_open_land(self) -> None:
         z = {(0, 0): 4, (1, 0): 3}
-        base = ReliefOntologyEnvelopes.canonical_defaults()
-        envelopes = base.model_copy(
-            update={"plains": base.plains.model_copy(update={"stamp_min_abs_dz": 1})},
-        )
-        xs = [x for x, _y in z]
-        ys = [y for _x, y in z]
         _vertices, fronts = discover_fronts(
             _surface(z),
-            origin_x=min(xs),
-            origin_y=min(ys),
-            width=max(xs) - min(xs) + 1,
-            height=max(ys) - min(ys) + 1,
+            origin_x=0,
+            origin_y=0,
+            width=2,
+            height=1,
             plugins=(OpenLandPlugin(_LAND),),
             cell_blocked=lambda _xy: False,
-            envelopes=envelopes,
         )
         east = [f for f in fronts if f.outward is Facing.EAST]
         self.assertTrue(east)
         self.assertIn((1, 0), east[0].corridor)
+
+    def test_forest_stamp_min_still_skips_unit(self) -> None:
+        z = {(0, 0): 4, (1, 0): 3}
+        forest = {(0, 0): _FOREST, (1, 0): _FOREST}
+        surface = MeterGradeSurface(
+            surface_z=z,
+            surface_terrain=forest,
+            hydrology=None,
+            surface_facing=None,
+        )
+        _vertices, fronts = discover_fronts(
+            surface,
+            origin_x=0,
+            origin_y=0,
+            width=2,
+            height=1,
+            plugins=(OpenLandPlugin(_LAND),),
+            cell_blocked=lambda _xy: False,
+        )
+        self.assertEqual(fronts, ())
 
     def test_road_unit_dz_stamps_shoulder(self) -> None:
         z = {

@@ -110,7 +110,7 @@ class ReliefOntologyEnvelopePojoTest(unittest.TestCase):
     def test_canonical_plains_locked_numbers(self) -> None:
         plains = ReliefOntologyEnvelopes.canonical_defaults().plains
         self.assertEqual(plains.plateau_z_band_factor, 0)
-        self.assertEqual(plains.slope_max_angle_deg, 20.0)
+        self.assertEqual(plains.slope_max_angle_deg, 45.0)
         self.assertEqual(plains.slope_length_min_cells, 20)
         self.assertIsNone(plains.slope_length_max_cells)
         self.assertIsNone(plains.slope_walk_cap_cells())
@@ -118,7 +118,7 @@ class ReliefOntologyEnvelopePojoTest(unittest.TestCase):
         self.assertTrue(plains.slope_preferred)
         self.assertTrue(plains.allow_l_gt_h)
         self.assertEqual(plains.sheer_min_abs_dz, 0)
-        self.assertEqual(plains.stamp_min_abs_dz, 2)
+        self.assertEqual(plains.stamp_min_abs_dz, 1)
         self.assertEqual(plains.apply_in_contexts, (ReliefContext.OPEN_LAND,))
         self.assertEqual(
             plains.canonical_sheer_length_cells(), 1,
@@ -128,13 +128,13 @@ class ReliefOntologyEnvelopePojoTest(unittest.TestCase):
         forest = ReliefOntologyEnvelopes.canonical_defaults().forest
         plains = ReliefOntologyEnvelopes.canonical_defaults().plains
         self.assertFalse(forest.is_unconstrained())
-        self.assertEqual(forest.slope_max_angle_deg, plains.slope_max_angle_deg)
+        self.assertEqual(forest.slope_max_angle_deg, 20.0)
         self.assertEqual(forest.slope_length_min_cells, plains.slope_length_min_cells)
         self.assertEqual(forest.slope_length_max_cells, plains.slope_length_max_cells)
         self.assertEqual(forest.plateau_z_band_factor, plains.plateau_z_band_factor)
         self.assertFalse(forest.slope_preferred)
         self.assertEqual(forest.sheer_min_abs_dz, 4)
-        self.assertEqual(forest.stamp_min_abs_dz, plains.stamp_min_abs_dz)
+        self.assertEqual(forest.stamp_min_abs_dz, 2)
         self.assertTrue(forest.sheer_ok(4))
         self.assertFalse(forest.sheer_ok(3))
         self.assertEqual(forest.apply_in_contexts, (ReliefContext.OPEN_LAND,))
@@ -203,15 +203,17 @@ class ReliefOntologyEnvelopePojoTest(unittest.TestCase):
             plains.slope_length_for(4, template_length=2), 20,
         )
         self.assertEqual(
-            plains.slope_length_for(10, template_length=2), 28,
+            plains.slope_length_for(10, template_length=2), 20,
         )
         self.assertEqual(
-            plains.slope_length_for(12, template_length=2), 33,
+            plains.slope_length_for(12, template_length=2), 20,
         )
         self.assertTrue(plains.slope_fits(4, 20))
-        self.assertTrue(plains.slope_fits(10, 28))
-        self.assertTrue(plains.slope_fits(12, 33))
-        self.assertEqual(plains.slope_outcome(12, 33), "slope")
+        self.assertTrue(plains.slope_fits(1, 1))
+        self.assertTrue(plains.slope_fits(10, 20))
+        self.assertTrue(plains.slope_fits(12, 20))
+        self.assertEqual(plains.slope_outcome(12, 20), "slope")
+        self.assertEqual(plains.slope_outcome(1, 1), "slope")
         self.assertEqual(
             plains.slope_length_for(2, template_length=2, length_cap=1), 1,
         )
@@ -219,15 +221,17 @@ class ReliefOntologyEnvelopePojoTest(unittest.TestCase):
 
     def test_geom_formulas_and_envelope_parts(self) -> None:
         self.assertAlmostEqual(angle_from_height_length(1, 1), 45.0, places=5)
+        self.assertEqual(length_from_target_angle(1, 45.0), 1)
+        self.assertEqual(length_from_target_angle(4, 45.0), 4)
         self.assertEqual(length_from_target_angle(10, 20.0), 28)
         self.assertAlmostEqual(
             height_from_length_angle(1, 45.0), 1.0, places=5,
         )
         plains = ReliefOntologyEnvelopes.canonical_defaults().plains
         self.assertEqual(plains.length_from_min_cells(), 20)
-        self.assertEqual(plains.length_from_max_angle(4), 11)
+        self.assertEqual(plains.length_from_max_angle(4), 4)
         self.assertEqual(plains.envelope_length_floor(4), 20)
-        self.assertEqual(plains.envelope_length_floor(10), 28)
+        self.assertEqual(plains.envelope_length_floor(10), 20)
         self.assertEqual(
             plains.length_from_template(4, template_length=2, fallback=20), 2,
         )
@@ -295,6 +299,23 @@ class GradeConstrainedTest(unittest.TestCase):
         self.assertEqual(d.kind, ReliefSideKind.SLOPE)
         self.assertEqual(d.requested_length, 20)
 
+    def test_short_ray_h1_is_slope_45(self) -> None:
+        tpl = _open_land_plains()
+        d = grade_constrained(
+            template=tpl,
+            template_uid="uid",
+            terrain_key="plains",
+            dz=1,
+            world_seed="s",
+            site_id="site",
+            path_length=1,
+        )
+        self.assertFalse(d.skipped)
+        self.assertEqual(d.kind, ReliefSideKind.SLOPE)
+        self.assertEqual(d.requested_length, 1)
+        assert d.geom is not None
+        self.assertAlmostEqual(d.geom.angle_deg or 0.0, 45.0, places=5)
+
     def test_short_ray_h2_is_sheer(self) -> None:
         tpl = _open_land_plains()
         d = grade_constrained(
@@ -361,7 +382,7 @@ class GradeConstrainedTest(unittest.TestCase):
         )
         self.assertFalse(d.skipped)
         self.assertEqual(d.kind, ReliefSideKind.SLOPE)
-        self.assertEqual(d.requested_length, 33)
+        self.assertEqual(d.requested_length, 20)
 
     def test_road_shoulder_plains_pass_through(self) -> None:
         tpl = _open_land_plains(context="road_shoulder", sheer_weight=0.0)

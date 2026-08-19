@@ -8,7 +8,7 @@ SoT: ``docs/tz_terrain_relief.md`` R41.
 from __future__ import annotations
 
 from array import array
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -60,7 +60,7 @@ class GradePaintSpec:
 
 @dataclass(slots=True)
 class ReliefVertices:
-    """Bake index: slots / occupancy / ray-seam. Local ``lx,ly`` on rect+halo."""
+    """Bake index: slots / occupancy / ray-seam / facing claims. Local ``lx,ly``."""
 
     origin_x: int
     origin_y: int
@@ -69,6 +69,7 @@ class ReliefVertices:
     at_grid: array
     occ: array
     seam: array
+    facing_bits: array
     members: list[dict[Coord, int]] = field(default_factory=list)
     uids: list[str] = field(default_factory=list)
 
@@ -91,6 +92,7 @@ class ReliefVertices:
             at_grid=array("i", zeros),
             occ=array("i", zeros),
             seam=array("i", zeros),
+            facing_bits=array("B", [0]) * n,
         )
 
     def index(self, x: int, y: int) -> int | None:
@@ -127,6 +129,31 @@ class ReliefVertices:
         i = self.index(xy[0], xy[1])
         if i is not None and self.occ[i] == 0:
             self.occ[i] = FOREIGN_MARK
+
+    def claim_facings(self, cells: Sequence[Coord], facing: Facing) -> bool:
+        """Claim ``facing`` on each cell. False if that facing is already taken."""
+        from app.application.worldData.generators.terrain.relief.discover.neighbors import (
+            FACING_BIT,
+        )
+
+        bit = FACING_BIT[facing]
+        idxs: list[int] = []
+        for xy in cells:
+            i = self.index(xy[0], xy[1])
+            if i is None:
+                continue
+            if self.facing_bits[i] & bit:
+                return False
+            idxs.append(i)
+        for i in idxs:
+            self.facing_bits[i] |= bit
+        return True
+
+    def facing_count(self, xy: Coord) -> int:
+        i = self.index(xy[0], xy[1])
+        if i is None:
+            return 0
+        return int(self.facing_bits[i]).bit_count()
 
 
 @dataclass(frozen=True, slots=True)

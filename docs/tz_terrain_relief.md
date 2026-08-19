@@ -151,7 +151,7 @@ metadata:
 | R38 | **Sparse origins — deprecated (v1).** Исторический запрет второго stencil «все локальные max» и 8×N с клетки **остаётся** (бюджет R36v). **SoT вершин/кромок — R41** (кромка = спуск в 8; не hunt пиков). Не читать этот пункт как 4-связность или fill→relief. См. § Sparse origins (historical) |
 | R39 | **Mesa union — deprecated (v1, 4-связность).** Идея «тело ≠ Grade; лучи только с кромки наружу» **остаётся**. **SoT членства — R41: 8-связное** то же целое z при наличии кромки спуска. Диагональный `4` к плато той же z — та же вершина. Не читать «диагональ не членство». См. § Mesa union (historical) · § Relief pipeline v2 |
 | R40 | **Ray walk / fill→relief — deprecated (v1).** Запреты fill∥relief, второго пула, рельефа тайла параллельно с чанками — **остаются**. Порядок writer высот **не** «column fill затем discover»: z уже в `heightmap` (prep). **SoT — R41:** discover+paint → один fill. Стоп θ / каскад террас / не мутировать якоря — R41 + R36t. См. § Ray walk (historical) |
-| R41 | **Relief pipeline v2 — locked (SoT).** Одна конструкция: вершина → кромка → фронты → `GradePaintSpec` → L2 paint. Контекст = тело вершины. Членство 8-связное при rim; клетка — **не больше одной** вершины (`at_grid`). `ReliefVertices` + **`occ`** + **`seam`**. Покрытие: фронт вниз пока θ; остаток = незатопленные кромки (**C39**). Фронты одной вершины **могут сходиться**; клетка в ≥2 следах — **шов лучей**, ничей коридор (**C41**). Не «непересекающиеся фронты» и не первый-занял. **1 фронт = 1 Instance;** System row при ≥2. Каталог до пула; discover+paint → один fill; стык после чанков: прямая = catalog, вершина = T-3c на C29. Stamp `|dz|=1` нет (R37). Ширина — **R42**. См. § Relief pipeline v2 · § Ray width |
+| R41 | **Relief pipeline v2 — locked (SoT).** Одна конструкция: вершина → кромка → фронты → `GradePaintSpec` → L2 paint. Контекст = тело вершины. Членство 8-связное при rim; клетка — **не больше одной** вершины (`at_grid`). `ReliefVertices` + **`occ`** + **`seam`**. Покрытие: фронт вниз пока θ; остаток = незатопленные кромки (**C39**). Луч = `(кромка, Facing)`; `(клетка, Facing)` уникален между вершинами; низина не один склон и не first-wins (**C41**). Не «непересекающиеся фронты». **1 фронт = 1 Instance;** System row при ≥2. Каталог до пула; discover+paint → один fill; стык после чанков: прямая = catalog, вершина = T-3c на C29. Stamp `|dz|=1` — plains да / forest нет (R37 `stamp_min_abs_dz`). Ширина — **R42**. См. § Relief pipeline v2 · § Ray width |
 | R42 | **Ray width — lockstep front — locked.** Луч = **фронт**, не нитка в 1 клетку. `W` = сплошной run кромки с одним `Facing` и одним первым спуском. Весь фронт шагает наружу **вместе** (Chebyshev 1). Орто: прямоугольник `W × L`. Диагональ **day-1:** нитка W=1 Chebyshev; thick fill — [Murphy](http://www.zoo.co.uk/murphy/thickline/) **R36r later**. **Не** веер. Разный dz/θ вдоль `W` → резать Grade (C15). Опц. сужение `W` (Murphy taper) later — не захват чужой низины. Не dilation/GIS-buffer, не per-cell stairs. См. § Ray width |
 
 ### SQL catalog persist (2026-08-18)
@@ -195,18 +195,18 @@ metadata:
 | C27 | **Стык = каталог граней**; uid заранее `world_seed`+tile+`face_key` (R15); граф ссылается; шов sample по тому же uid; не mint в воркере. Job uid: `tile` / `chunk` / `tile_edge` — ключи очереди, не дерево `tile→chunk`. **Родители грани в этом bake** = chunk job uid этого тайла (2 internal / 1 rim) — **гейт старта** (не все bake сразу) и clearance (`< 2` → void ≠ C18). **Шов мира** (антагонисты AABB) — **`full_bake` L0 на макро-тайлах**, не каталог `detailed_bake`. **Пул = `ColumnRect`**. **Два `detailed_bake` смежных (grid) тайлов** — не ждут друг друга; лента вдоль шва = один uid + upsert. Halo читает z `WorldBounds.grid_neighbor` (не `antagonist_tile`). `road_shoulder` — тот же каталог (`ReliefContext.ROAD_SHOULDER`). Не uid Grade/climate/hydro | locked (R36w) ✅ |
 | C28 | **Каталог → discover → paint → fill.** Каталог `face_key` = identity ребра / job, uid **до** пула. Discover вершин/фронтов — в worker на heightmap, **не** serial sample-all семян до пула. Прямая `(kind, outward, θ)` = один Instance. ≥2 Instance **одной вершины** → System row (**T-3c**): intra-chunk = `slot`; через чанк = тело на C29, **не** `face_key` = вершина. 1 Instance → System **не** пишем. Клетка → Instance, не System. Rim-canonical прямой — **C29**. Apply (z/canal/fill) не переписывать | locked (R36w catalog; R41 discover); T-3c System — § T-3c на шве чанков |
 | C29 | **Шов технический.** `face_key` / chunk / tile rim / `ColumnRect` / job uid — нарезка работы и pack, **не** граница мира. Не путать с **швом лучей** (C41). Через шов непрерывны: климат, дороги, шаг (later), **локация / город**. **Два стыка Grade на одном ребре:** catalog uid = **одна прямая**; T-3c = **одно тело** вершины (same-z, 8 через ребро) — § T-3c на шве чанков. Запрещено делать из шва стену, обрыв поселения, второй `location_uid` «из‑за тайла», смену зоны или ноду пути | locked; writers локации/города не в relief |
-| C30 | **Конверт онтологии** (`ReliefConditionTerrain`) ≥ knobs шаблона. Фасад `grade_constrained`; inner без `if plains`. Plains `open_land`: `|dz|=1` без stamp (`stamp_min_abs_dz=2`); `|dz|≥2` луч: равная z продолжает L, стоп на подъёме; θ≤20° → SLOPE, иначе SHEER L=1. Короткий L=2 knobs **запрещён** как потолок. Каркас — **C36 / R41**; покрытие остатка — **C39**; шов лучей — **C41**; ширина — **C37 / R42**; коллекция — **C38** | locked (R37) |
+| C30 | **Конверт онтологии** (`ReliefConditionTerrain`) ≥ knobs шаблона. Фасад `grade_constrained`; inner без `if plains`. Plains `open_land`: `stamp_min_abs_dz=1`; длинный луч: L min 20; θ≤**45°** → SLOPE, иначе SHEER L=1. Forest: `stamp_min_abs_dz=2`, θ≤20°, SHEER при `|dz|≥4`. Короткий L=2 knobs **запрещён** как потолок длинного луча. Каркас — **C36 / R41**; покрытие остатка — **C39**; шов лучей — **C41**; ширина — **C37 / R42**; коллекция — **C38** | locked (R37) |
 | C31 | **Смешанный case:** L/θ knobs → SLOPE; SHEER всегда L=1. Невалидный geom (0 / оба ключа / θ вне (0,90)) → не reject: WARN + 20° и L до первой клетки луча. `L_eff < 1` после луча → skip stamp (R36m), не abort шаблона | locked (R36b/e) |
 | C32 | **Вершины не stencil сетки.** Layout + кромки спуска на готовом z. Кандидатные направления — 8. Второй полный обход volume (location bake) — reject. **SoT — C36 / R41.** Исторический R38 — запрет hunt пиков | locked (R41); R38 historical |
-| C33 | **Вершина = одна псевдосущность.** 8-связные клетки той же z **с кромкой спуска** не сеют 8×N. Лучи только наружу с кромки. Rim-run / фронт с одним outward и тем же первым dz — один Grade. **SoT — R41.** Исторический R39 4-neigh — снят | locked (R41) |
-| C34 | **Фронт = один θ до упора, смены угла или шва лучей (C41).** Швы чанков — `grade_uid` (R36w). Нижняя терраса — вершина **только если не покрыта** коридором сверху (C39). Излом θ → новый Grade (C15). `|dz|=1` не stamp. **SoT — R41** | locked (R41) |
+| C33 | **Вершина = одна псевдосущность.** 8-связные клетки той же z **с кромкой спуска** не сеют 8×N. Лучи только наружу с кромки. Rim-run / фронт с одним outward и тем же первым dz — один Grade. Повтор `(клетка, Facing)` между вершинами запрещён (C41). **SoT — R41.** Исторический R39 4-neigh — снят | locked (R41) |
+| C34 | **Фронт = один θ до упора, смены угла или шва лучей (C41).** Швы чанков — `grade_uid` (R36w). Нижняя терраса — вершина **только если не покрыта** коридором сверху (C39). Open_land не продолжает L по полу низины. Излом θ → новый Grade (C15). `|dz|=1` stamp — plains да / forest нет (R37). **SoT — R41** | locked (R41) |
 | C35 | **Расписание A locked:** discover+paint → один fill. Heightmap готов в prep. Не fill∥relief. Не второй пул. Не два column fill. **Кто меняет z колонки после paint — тот же обновляет relief** (или пишет z до paint). См. **R41** | locked (R41) |
 | C36 | **Relief pipeline v2.** Одна конструкция. Каталог uid → discover+paint → один fill → стык после чанков (**прямая** = catalog; **вершина** = T-3c на C29). **Покрытие:** фронт вниз пока θ; донашивание только непокрытых кромок, не каждая клетка. Ширина — **C37**. Коллекция — **C38**. Остаток — **C39**. Шов лучей — **C41**. См. **R41** | locked (R41) |
 | C37 | **Луч = фронт W×L.** Lockstep по Chebyshev; орто = прямоугольник; диагональ day-1 = нитка W=1; Murphy W>1 — R36r. Не веер, не dilation, не stairs по клетке. Разный dz вдоль W → резать. См. **R42** | locked (R42) |
 | C38 | **`ReliefVertices` — индекс, не persist.** `at_grid` / `occ` / `seam` / `members` dict / `uids`. **Не** хранить `ReliefGradeInstance` в слоте и **не** добавлять bake-поля на POJO. Поля фронта — **C40**. Reconcile: выкинуть клетку в чужом `occ` | locked (R41) |
-| C39 | **Незатопленные кромки — bucket[z] + `occ` + `seam`, не поиск дыр.** Сетка = `ColumnRect`+halo. `occ` = коридор фронта; `at_grid` = слот вершины; `seam` = шов лучей (C41). Ведра по целой z, сверху вниз. Seed только если `occ==0` ∧ `at_grid==0` ∧ `seam==0` ∧ есть 8-сосед ниже с `occ==0` ∧ `seam==0`. 8-flood тела — **от этой кромки**. Не полный CC same-z; не Priority-Flood ямы; не heap на клетку; не второй обход тайла. Пол рампы и шов лучей не сеют. См. **R41** § Покрытие | locked (R41) |
+| C39 | **Незатопленные кромки — bucket[z] + `occ` + `seam`, не поиск дыр.** Сетка = `ColumnRect`+halo. `occ` = коридор фронта; `at_grid` = слот вершины; `seam` = шов лучей (C41). Ведра по целой z, сверху вниз. Seed только если `occ==0` ∧ `at_grid==0` ∧ `seam==0` ∧ есть 8-сосед ниже с `occ==0` (сосед-**шов низины** не блокирует: несколько вершин могут стрелять в яму). 8-flood тела — **от этой кромки**. Не полный CC same-z; не Priority-Flood ямы; не heap на клетку; не второй обход тайла. Пол рампы и шов лучей не сеют. См. **R41** § Покрытие | locked (R41) |
 | C40 | **`GradePaintSpec` — единственное место bake-полей фронта.** Вход в L2. kind/h/L/θ/canal — из `RibbonGradeDecision` / knobs **POJO**, без параллельных default. Instance создаётся в apply из `ReliefGradeInstance`. Запрещено копировать `height_cells`/`length_cells` вторым литералом. См. **R41** § GradePaintSpec | locked (R41) |
-| C41 | **Шов лучей (не первый-занял).** Клетка — не больше одной вершины. Фронты **одной** вершины могут сходиться (чаша, внутренний угол дороги). До записи `occ`: предложить все следы; клетка ∈ ≥2 следов → `seam` (ничей коридор, якорь низа / конец L, не в `cell_refs`). Коридор = уникальные клетки следа, не сквозь шов. Пустой коридор → skip фронта (R36m). Чужой `occ`/`seam` (другие вершины) — упор, не шов этой вершины. Не 4 Instance на одной клетке. Не путать с техническим швом чанков (C29). См. **R41** § Шов лучей | locked (R41) |
+| C41 | **Шов лучей (не первый-занял).** Луч уникален по `(кромка, Facing)` на вершине и по `(клетка, Facing)` между вершинами. Несколько вершин могут стрелять в одну низину разными сторонами; повтор того же Facing в клетку — нет. Клетка ∈ ≥2 следов **одного** Facing → шов (шерсть). Клетка ∈ следов **разных** Facing (в т.ч. разных вершин) → якорь низа, ничей `occ`. Коридор = уникальные клетки следа. Пустой коридор → skip (дырка 1×1). Не 4 Instance на клетке. Не путать с C29. См. **R41** § Шов лучей | locked (R41) |
 | C42 | **SQL каталог грейдов — bake-writer.** Одна txn + `executemany` (~5000). Prior только по uid входящего bag. Heartbeat `packBakeLog`; detailed → `bake-detailed-*.log`. Не OLTP commit на строку. Не dump мира перед merge. Семантика upsert / `replace_world=False` / merge `cell_refs` / T-3c systems — без смены. Три caller’а — один `persist_relief_grades`. Поштучный upsert без обёртки коммитит (patch). | locked (R43) |
 
 ---
@@ -1047,7 +1047,7 @@ volume materialize                    # без изменений
 
 **Фасад:** `grade_constrained` в `pick/`. **Inner** `grade_from_template` не знает про равнину (без `if plains`). Вызов inner в обход фасада — ок для unit geom / unconstrained. Bake ribbon (`grade_ribbon_segments`) — **только** через фасад.
 
-**`geom_resolve` / `partition_height` / R36i inner не меняем.** После clamp plains L knobs ≥ `ceil(h/tan 20°)` и ≥ 20, если луч длиннее; иначе L = L_ray. Inner по-прежнему `L_eff = min(L,h)` (без плоских хвостов на unconstrained path).
+**`geom_resolve` / `partition_height` / R36i inner не меняем.** После clamp plains L knobs ≥ `ceil(h/tan 45°)` и ≥ 20, если луч длиннее; иначе L = L_ray. Inner по-прежнему `L_eff = min(L,h)` (без плоских хвостов на unconstrained path).
 
 **Исключение конверта vs R36i tails:** пологий SLOPE онтологии требует `L > h` (`θ = atan(h/L) ≤ θmax`). Inner срежет L до h → θ ≥ 45°. Если `allow_l_gt_h`, фасад **после** inner ставит на `RibbonGradeDecision.geom` `partition_height(h, L_envelope)` (шаги 0 на хвосте допустимы) и `requested_length = L_envelope`, чтобы `plan_seed_volume` reuse geom при совпадении L. Clearance, если укоротит L, по-прежнему re-resolve через R36i. Volume / `geom_resolve` код **не** трогать.
 
@@ -1055,24 +1055,24 @@ volume materialize                    # без изменений
 
 | | |
 |---|---|
-| Первый шаг `|dz| = 1` (4→3) | **нет stamp** (кромка C39 есть). Политика: `ReliefTerrainEnvelope.stamp_min_abs_dz` (plains/forest `open_land` = 2). Не boolean на plugin. Не «чаша на единице» |
-| Первый шаг `|dz| ≥ 2` | lockstep (R41): стоп если нет клетки, **упор** (R36m), **смена θ**, своё тело / чужой occ/seam; **подъём** `z > z_body` или `z > z_prev`. **Равная z = продолжение L** (пол рампы / ravine). Клетка излома сеет только если предикат C39 |
+| Первый шаг `|dz| = 1` (4→3 / 3→2) | **stamp** (`stamp_min_abs_dz=1`). Кромка C39. Не boolean на plugin. Дырка `4 3 4` (одна клетка) — skip C41. Чаша шире — стороны на уникальных клетках кольца, пол низины не `occ` |
+| Первый шаг `|dz| ≥ 2` | lockstep (R41): стоп если нет клетки, **упор** (R36m), **смена θ**, своё тело / чужой occ/seam; **подъём** `z > z_body` или `z > z_prev`. **Равная z = продолжение L** только ravine / `grades_channel_bed`; open_land пол низины — стоп. Клетка излома сеет только если предикат C39 |
 | L_ray | число свободных клеток луча (включая seed); шаг = Chebyshev 1 (R36s) |
 | h | `z_crest − z_end` |
-| θ max | **20°** |
-| L min | **20**, если луч позволяет; **без L max** |
-| L knobs | `L = min(L_ray, max(L_template, ceil(h / tan 20°), 20))` |
-| влезает | `atan(h/L) ≤ 20°` → SLOPE |
+| θ max | **45°** (было 20°). θ < 20° на длинном луче **по-прежнему SLOPE** (L min 20). Новая полоса — короткие ступени **20°–45°** |
+| L min | **20**, если луч позволяет; **без L max**. Короткий луч: L = L_ray, классификация по θ (не veto L < 20 → SHEER) |
+| L knobs | `L = min(L_ray, max(L_tpl, ceil(h / tan 45°), 20))` |
+| влезает | `atan(h/L) ≤ 45°` → SLOPE |
 | не влезает (напр. 4→2, L=1, ≈63°) | SHEER (`L=1`) |
 | `allow_l_gt_h` | **true** |
 
-Примеры: h=4, луч длинный → L=20, θ≈11°; h=10 → L=28, θ≈20°; h=12 → L=33, θ≈20° → SLOPE. 4→2 при L_ray=1 → SHEER.
+Примеры: h=4, луч длинный → L=20, θ≈11°; h=10 → L=20, θ≈27°; h=1, L_ray=1 → SLOPE 45°. 4→2 при L_ray=1 → SHEER.
 
 Deprecated sample `measure_terrain_descent` still stops on `z ≥` (R40). Live lockstep is **R41** `z >` (equal z continues L).
 
-**Forest (locked, `open_land` only):** тот же пол SLOPE, что plains (θ≤20°, L min 20 без крышки, `allow_l_gt_h`). **Каркас — R41.** Отличие kind: **SHEER допустим**, если `|dz| ≥ sheer_min_abs_dz` (**4**) — тогда kindRoll может выбрать отвес; L SHEER всегда **1**. `|dz| < 4` (и луч позволяет 20°) → только SLOPE. Не влезает в 20° на L_ray → SHEER L=1.
+**Forest (locked, `open_land` only):** θ≤**20°**, L min 20 без крышки, `allow_l_gt_h`, `stamp_min_abs_dz=2` (единица **не** stamp — не как plains). **Каркас — R41.** Отличие kind: **SHEER допустим**, если `|dz| ≥ sheer_min_abs_dz` (**4**) — тогда kindRoll может выбрать отвес; L SHEER всегда **1**. `|dz| < 4` (и луч позволяет 20°) → только SLOPE. Не влезает в 20° на L_ray → SHEER L=1.
 
-**Shore classes (locked, `shore` context only):** четыре строки конверта. Как plains vs forest: один контекст, разные полы. **Не** копировать plains (θ≤20°, L min 20).
+**Shore classes (locked, `shore` context only):** четыре строки конверта. Как plains vs forest: один контекст, разные полы. **Не** копировать plains (θ≤45°, L min 20).
 
 | Класс | SLOPE | L min (берег) | SHEER | Канава по дну |
 |---|---|---|---|---|
@@ -1254,7 +1254,7 @@ Deprecated sample `measure_terrain_descent` still stops on `z ≥` (R40). Live l
 | Слой 5 ravine | ✅ | банк + same-z стены маски; kind = knobs шаблона |
 | Слой 5 shore | онтология + paint ✅; **plugin тело ✅** | банк + полоса; дно iff `grades_channel_bed`; море не в open water; leftover terrace = `sheer_terrace_min_cells` |
 | P1 | ✅ | **R41-T-2…T-4:** apply=`DiscoveredFront`; cap до C41 = L_tpl; ravine flood = bank (не plains mesa) |
-| P2 | ✅ | **R41-T-5…T-8:** равная z = продолжение L; inherit только орто; `|dz|=1` = `stamp_min_abs_dz`; classify/stamp = коридор после C41 |
+| P2 | ✅ | **R41-T-5…T-8:** равная z = L **только** ravine / `grades_channel_bed`; open_land пол низины — стоп; inherit только орто; `|dz|=1` = `stamp_min_abs_dz`; classify/stamp = коридор после C41 |
 | Каталог `face_key` | ✅ живой | identity шва чанков (R36w / C29), не discover семян |
 
 **Дальше — только pipeline v2** (не apply). **T-3c ✅. Слой 7 ✅. R41-T-9…T-12 ✅.** Очередь v2 закрыта: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md).
@@ -1274,7 +1274,8 @@ Deprecated sample `measure_terrain_descent` still stops on `z ≥` (R40). Live l
 | BAR-1 detailed fence | **R36i-T-2** — вне apply и вне C28 |
 | Wave E: R36r thick diag / R36o / gameplay | later; тогда **расширение** volume, не замена |
 | DAG / schema `0002` / mask carry / parent `surface_z` upsample | другие контракты |
-| `|dz|=1` чаша | открытый продукт, не слой 5 |
+| `|dz|=1` чаша 1×1 | locked skip C41; открытый продукт «четыре рампы» — **R41-T-15** (не слой 5) |
+| Равная z / C41 полиш | **R41-T-13…T-16** — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) |
 
 **Запрещено из «осталось» выводить:** второй пул; fill∥relief; два column fill; полный same-z CC тайла; stamp uid на тело вершины; попарный emit System на каждом ребре без UF тайла; повторный discover на шве.
 
@@ -1302,17 +1303,18 @@ ReliefVertices
   at_grid: array[int]           # w*h; 0 empty; иначе 1-based slot вершины
   occ:     array[int]           # w*h; 0 free; иначе занят коридором фронта (не тело бровки)
   seam:    array[int]           # w*h; 0 нет; иначе шов лучей (C41; не коридор, не тело)
+  facing_bits: array[uint8]     # w*h; бит на Facing; claim (клетка, Facing) между вершинами
   members: list[dict[(x,y), z]] # slot-1 → клетки тела; dict, не list
   uids:    list[str]            # slot-1 → grade_system_uid (пусто, пока нет System row)
 ```
 
-**Запрещено на hot path:** `dict[(x,y), uuid]`; list клеток в `members`; uuid в сетке. `idx_of` — только если uuid уже есть до persist. **Не** класть `ReliefGradeInstance` / `ReliefGradeSystem` в `members`. **Не** расширять persist-POJO полями `occ` / `seam` / slot / фронт.
+**Запрещено на hot path:** `dict[(x,y), uuid]`; list клеток в `members`; uuid в сетке. `idx_of` — только если uuid уже есть до persist. **Не** хранить `ReliefGradeInstance` / `ReliefGradeSystem` в `members`. **Не** расширять persist-POJO полями `occ` / `seam` / `facing_bits` / slot / фронт.
 
 **Слои (не смешивать)**
 
 | Слой | Тип | Зачем |
 |---|---|---|
-| Индекс bake | `ReliefVertices` (application dataclass, **не** `dataModel`) | слоты, `occ`, `seam`, тело `dict[(x,y), z]` |
+| Индекс bake | `ReliefVertices` (application dataclass, **не** `dataModel`) | слоты, `occ`, `seam`, `facing_bits`, тело `dict[(x,y), z]` |
 | Объект построения фронта | **`GradePaintSpec`** (тоже application; поля — **этот** пункт, C40) | единственный вход в L2 |
 | Persist / wire | `ReliefGradeInstance` / `ReliefGradeSystem` (`dataModel`) | SQL + клетка `system_grade_uid` |
 
@@ -1330,13 +1332,13 @@ ReliefVertices
 |---|---|---|
 | `at_grid` | клетка не в вершине | слот вершины (бровка/тело; uid на тело не штампуем — R36t) |
 | `occ` | не коридор | клетка **коридора** фронта (затоплена склоном) |
-| `seam` | нет шва лучей | клетка встречи ≥2 следов одной вершины (C41); не коридор |
+| `seam` | нет шва лучей | клетка встречи ≥2 следов / ≥2 Facing (C41, в т.ч. разных вершин); не коридор |
 
 Тело вершины **не** ставит `occ` и **не** ставит `seam`. Пол/якорь низа **не** сеет; шов лучей в `occ` не попадает.
 
 **Предикат seed (незатопленная кромка):**
 
-`occ[i]==0` ∧ `at_grid[i]==0` ∧ `seam[i]==0` ∧ ∃ 8-сосед `n`: `z[n] < z[i]` ∧ `occ[n]==0` ∧ `seam[n]==0`
+`occ[i]==0` ∧ `at_grid[i]==0` ∧ `seam[i]==0` ∧ ∃ 8-сосед `n`: `z[n] < z[i]` ∧ `occ[n]==0`
 
 **Алгоритм (SoT, не Priority-Flood ямы):**
 
@@ -1350,35 +1352,36 @@ ReliefVertices
 
 **Запрещено:** полный 8-CC всех same-z, потом вычесть коридор; Priority-Flood / Barnes fill низин; heap/`priority_queue` на каждую клетку как SoT; второй обход макро-тайла; Instance на каждую ступень; сеять с пола рампы **или со шва лучей**; писать `occ` фронта до того, как предложены все следы этой вершины (это был бы первый-занял).
 
-Stamp `|dz|=1` на plains — нет (R37). Later SHEER-entity на единице — **только** клетки, прошедшие предикат после каскада, не все `|dz|=1` рёбра.
+Stamp `|dz|=1` на plains — **да** (`stamp_min_abs_dz=1`). Forest — нет (`=2`). Дырка `4` вокруг одной `3` — skip **C41** (пустой коридор). Чаша шире: стороны штампуют уникальные клетки кольца; пол низины не `occ`.
 
 ##### Шов лучей (locked, C41)
 
 Не путать с техническим швом чанков/тайлов (**C29** / R36w `face_key`).
 
-Клетка принадлежит **не больше чем одной** вершине (`at_grid`). Клетка коридора — **не больше чем одному** фронту (`occ`). Это не запрет сходиться лучам: фронты **одной** вершины могут целиться в одни клетки (чаша, внутренний угол дороги).
+Клетка принадлежит **не больше чем одной** вершине (`at_grid`). Клетка коридора — **не больше чем одному** фронту (`occ`). Луч с кромки — **не больше одного на `(клетка кромки, Facing)`**. Между вершинами — **не больше одного на `(клетка посадки, Facing)`**: вторая вершина не стреляет той же стороной в ту же клетку. Это не запрет сходиться лучам с **разных** сторон: низина может принимать склоны с N и с E **от разных вершин**; центр ничей.
 
-**Не** «непересекающиеся фронты». **Не** первый-занял (кто раньше написал `occ` — тот съел центр).
+**Не** «непересекающиеся фронты». **Не** первый-занял (кто раньше написал `occ` — тот съел низину). **Не** «одной низине — один склон».
 
 **Алгоритм (на одну вершину, до записи `occ`):**
 
-1. У каждого фронта — предложенный след: lockstep W×L (R42), стоп = тело этой вершины, излом θ, упор (R36m), чужой `occ` или чужой `seam` **других** вершин.
-2. Клетка, которая лежит в **≥2** следах **этой** вершины → `seam`. Ничей коридор. Не в `cell_refs`. Якорь низа (R36t) для фронтов, которые здесь встречаются; z/uid не мутировать.
-3. Коридор фронта = клетки его следа **минус шов**. Вдоль L не идти **сквозь** шов (префикс колонки до первой клетки шва). Дырка шва в ширине W не режет фронт на несколько Instance (C15): один θ, один `Facing`, `cell_refs` = уникальные клетки.
+1. У каждого фронта — предложенный след: lockstep W×L (R42), стоп = тело этой вершины, излом θ, упор (R36m), чужой `occ` **других** вершин, **или** (open_land / обочина) плоский шаг `z == z_prev`. Чужой `seam` низины на первом шаге — якорь, не запрет выстрела.
+2. Клетка в ≥2 следах **одного** `Facing` → `seam` (параллельная шерсть). Клетка в следах **разных** `Facing` этой вершины → тоже `seam`: якорь низа (R36t), не `occ`, не в `cell_refs`.
+3. Коридор фронта = клетки его следа **минус шов**. Вдоль L не идти **сквозь** шов (префикс колонки до первой клетки шва). Дырка шва в ширине W не режет фронт на несколько Instance (C15): один θ, один `Facing`, `cell_refs` = уникальные клетки. Локальный мин в уникальном коридоре **не** `occ` до finalize (иначе нижняя вершина не выстрелит).
 4. Пустой коридор → skip этого фронта (`L_eff < 1`, R36m). Не создавать Instance.
-5. Затем уникальные коридоры → `occ`.
+5. Затем уникальные **не**-мин коридоры → `occ`.
+6. **После всех вершин (finalize):** клетка в ≥2 коридорах или с ≥2 claimed Facing → шов, вычесть из коридоров, пустой фронт drop; оставшийся уникальный мин → `occ` (одиночный L=1 plains).
 
-Чужой `occ`/`seam` (каскад сверху) — обычный упор следа, не шаг 2.
+Чужой `occ` (каскад сверху, интерьер склона) — обычный упор следа. Чужой `seam` низины seed не режет (C39).
 
 ```text
 4 4 4 4 4
-4 a a a 4
+4 . a . 4
 4 a · a 4
-4 a a a 4
+4 . a . 4
 4 4 4 4 4
 ```
 
-`a` — уникальный коридор (по одному фронту); `·` — шов лучей. Чаша из секторов, центр не в четырёх Instance.
+`a` — уникальный коридор стороны (open_land не идёт по полу `2`); `·` — шов разных Facing (угол кольца). Центр низины не `occ` и не `seam` (луч до него не дошёл). Не четыре uid на клетку.
 
 ```text
 4 4 4
@@ -1386,7 +1389,7 @@ Stamp `|dz|=1` на plains — нет (R37). Later SHEER-entity на едини�
 4 4 4
 ```
 
-Четыре следа, единственная `3` ∈ всех четырёх → шов, четыре пустых коридора → skip. Между кромкой и швом нет клетки. Это **не** чаша из четырёх рамп и **не** повод отдать `3` первому лучу. Stamp `|dz|=1` по-прежнему R37 (открытый продукт «чаша на единице» — не этот пункт).
+Четыре (и до восьми) следов, единственная `3` ∈ всех → шов, пустые коридоры → skip. Между кромкой и якорем нет клетки. Это **не** повод отдать `3` первому лучу и **не** «один склон на низину». Plains stamp `|dz|=1` на **одиночном** ребре это не отменяет.
 
 **Запрещено:** четыре `cell_refs` на одну клетку; класть пол/шов в `members` верхней месы; сеять вершину со шва (как с пола рампы); первый-занял внутри вершины; путать шов лучей с C29.
 
@@ -1431,7 +1434,8 @@ Day-1: орто W×L + диагональ W=1 Chebyshev `(±1,±1)` через �
 |---|---|
 | `road_shoulder` / `ravine` | **не** применяется; L_tpl + R36m `free_gap` |
 | `shore` | по классу клетки: unconstrained ряд → как ravine (L_tpl); constrained (`shore_sea`, …) → пол строки, как open_land |
-| `open_land` plains/forest | `L = min(L_ray, max(L_tpl, ceil(h/tan 20°), 20))` — шаблон 2 **поднимается**, не «режется до 2» |
+| `open_land` plains | `L = min(L_ray, max(L_tpl, ceil(h/tan 45°), 20))` — шаблон 2 **поднимается** на длинном луче, не «режется до 2»; короткий луч: L=L_ray, θ≤45° → SLOPE |
+| `open_land` forest | `L = min(L_ray, max(L_tpl, ceil(h/tan 20°), 20))` |
 
 Halo = `max(L_tpl, envelope floor)`, не JSON-2.
 
@@ -1482,7 +1486,7 @@ Classify и stamp смотрят **один** коридор после C41. Occ
 
 ##### Фронты
 
-До 8 сторон с кромки, только **вниз** и не в то же тело. У стороны свой θ до упора, шва лучей (C41) или пока z не сойдёт с рампы. **Равная z вдоль луча = продолжение L** (пол рампы / ravine); стоп на **подъёме** `z > z_body` / `z > z_prev` (R41-T-5). **Ширина — R42**. Схождение следов одной вершины — шов, не четыре uid на клетку. Излом → новый Grade / кромка **если клетка ещё не покрыта** и не шов. Каскад сверху вниз по z. Stamp `|dz|=1` — **нет** (R37, `stamp_min_abs_dz`). Диагональный thick volume — R36r later; шаг = Chebyshev 1 (R36s).
+До 8 сторон с кромки, только **вниз** и не в то же тело. **Одна клетка кромки × один `Facing` = один луч** (пик может смотреть все 8; меса не стреляет диагональ в орто-посадку соседа). Между вершинами `(клетка посадки, Facing)` уникален. У стороны свой θ до упора, шва лучей (C41) или пока z не сойдёт с рампы. **Равная z вдоль луча = продолжение L** только для ravine и берега с `grades_channel_bed`. Open_land / обочина: плоский пол низины **не** коридор — стоп при `z == z_prev` (k>1). Стоп на **подъёме** `z > z_body` / `z > z_prev` (R41-T-5). **Ширина — R42**. Схождение следов: один Facing → шов-шерсть; разные Facing (и с разных вершин) → якорь низины, не first-wins. Излом → новый Grade / кромка **если клетка ещё не покрыта** и не шов. Каскад сверху вниз по z. Stamp `|dz|=1` на plains — **да** (R37, `stamp_min_abs_dz=1`); forest — нет (`=2`). Диагональный thick volume — R36r later; шаг = Chebyshev 1 (R36s).
 
 ##### v2 снимает из v1
 
@@ -1493,10 +1497,10 @@ Classify и stamp смотрят **один** коридор после C41. Occ
 | Sample семян до пула; стык = каталог | Каталог = ключ **прямой**; discover в worker; **стык после чанков** (прямая = catalog; вершина = T-3c на C29) |
 | «Fill колонок затем relief» | **A locked:** heightmap готов → paint → **один** fill. Кто потом меняет z колонки — тот обновляет relief |
 | «все ступени = Grade» | Фронт покрывает склон; **остаток** = непокрытые кромки (C39) |
-| `|dz|=1` «не вершина» | `|dz|=1` вниз — кромка; **stamp** нет (R37); later entity — только C39 |
+| `|dz|=1` «не вершина» | `|dz|=1` вниз — кромка; plains **stamp** (R37 `stamp_min_abs_dz=1`); forest — нет (`=2`); дырка 1×1 — skip C41; чаша со сторонами — уникальные клетки кольца, не один склон на низину |
 | Дорога = отдельный ribbon v1 | Полотно = одна вершина; поворот 8-way; внутренний угол = шов лучей (C41) |
 
-**Запрещено:** fill∥relief; второй пул на рельеф; рельеф тайла целиком параллельно с чанками; 8 ниток с каждой клетки / `4→4`; заливка низин (не Priority-Flood); второй stencil «все пики»; Grade на каждую ступень/клетку с Δz (покрытие = фронт + остаток кромок, C39); первый-занял внутри вершины / четыре Instance на одну клетку (C41); стык шва чанков до готового соседа выдуманным uid; uid System на клетке; stamp uid на тело вершины; два column fill overlay; менять z колонки после paint **без** обновления relief (обязанность того writer’а).
+**Запрещено:** fill∥relief; второй пул на рельеф; рельеф тайла целиком параллельно с чанками; 8 ниток **ширины** с каждой клетки / `4→4` (R42 W, не запрет 8 **направлений**); заливка низин (не Priority-Flood; open_land не захватывает пол равной z); второй stencil «все пики»; Grade на каждую ступень/клетку с Δz (покрытие = фронт + остаток кромок, C39); первый-занял внутри вершины / четыре Instance на одну клетку (C41); стык шва чанков до готового соседа выдуманным uid; uid System на клетке; stamp uid на тело вершины; два column fill overlay; менять z колонки после paint **без** обновления relief (обязанность того writer’а).
 
 **Код:** `compute_rect` = discover+paint → один fill (R41). Occupancy v1 срезан (слой 7). План: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md).
 
@@ -1535,11 +1539,11 @@ L →              .  .  .
 
 **Не веер:** если внизу земля шире кромки — не захватывать (низина / чужая терраса). Опц. **сужение** `W`, если край полосы упёрся, а середина ещё идёт (Murphy taper) — не расширение.
 
-Угол месы: север и восток — два фронта. NE — третья сторона, если спуск только диагональный.
+Угол месы: север и восток — два фронта. Пик 1×1 может смотреть все 8. Диагональ **не** садится на клетку, которая уже орто-спуск **другой** клетки того же тела (иначе шов съест орто-фронт).
 
 Stamp `|dz|=1`: фронт-кромка есть, объём грани нет (R37).
 
-**Запрещено:** 8 ниток с каждой клетки кромки; веер; dilation/buffer как SoT ширины; менять якоря кромки и низа.
+**Запрещено:** 8 ниток **как модель ширины** (вместо R42 W); веер в низину; dilation/buffer как SoT ширины; менять якоря кромки и низа. До 8 **направлений** с одной клетки кромки — да.
 
 #### Conditions mode XOR (R32)
 
@@ -1957,9 +1961,10 @@ Wire на одном case/band (и root default шаблона): **предпо�
 | `target_angle_deg` ∉ (0, 90) | **невалидный geom** |
 | Невалидный geom | **не reject** шаблон (import и generate). **WARN**. Fallback: θ = **20°**, `L_req = ceil(h / tan 20°)` (Geom-B, min 1). Луч: `L = min(L_req, free_gap)` — рамп **упирается** в первую блокирующую клетку, внутрь не заходит (R36m) |
 | После fallback `free_gap ≥ L_req` | SLOPE при θ = 20° (дальше может сработать конверт R37) |
-| `1 ≤ free_gap < L_req` | obstacle clearance (R36m): укоротить L; **open_land R37** после луча: `atan(h/L) > 20°` → SHEER L=1, не оставлять крутой SLOPE |
+| `1 ≤ free_gap < L_req` | obstacle clearance (R36m): укоротить L; **open_land R37** после луча: plains `atan(h/L) > 45°` → SHEER L=1; forest `> 20°` → SHEER L=1 |
 | `free_gap < 1` (`L_eff < 1`) | **skip stamp** + WARN (R36m / `clearance_L_eff`). Не abort generate, не reject шаблона. SHEER тоже нужен 1 столбец — тот же skip |
-| Конверт R37 (plains/forest `open_land`) | Discover: кромка × фронт (R41), не пики × facing. Pick: `L = min(L_ray, max(L_tpl, ceil(h/tan 20°), 20))`; overflow угла → SHEER L=1. R36m obstacle — отдельно, после |
+| Конверт R37 (plains `open_land`) | Discover: кромка × фронт (R41). Pick: `L = min(L_ray, max(L_tpl, ceil(h/tan 45°), 20))`; `atan(h/L) > 45°` → SHEER L=1. R36m obstacle — отдельно, после |
+| Конверт R37 (forest `open_land`) | как раньше: `ceil(h/tan 20°)` / L min 20; overflow 20° → SHEER L=1 |
 | Поселения, нет обочины | `slope_none` / нет site — **не** `L=0` |
 
 **Порядок:** detect invalid → WARN → `L_req` из 20° → (если applies) clamp R37 → kindRoll → SHEER форсит L=1 → clearance `min(requested, free_gap)`.
@@ -2849,6 +2854,9 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-19 | **C41 cross-vertex:** низина принимает лучи **разных** вершин и **разных** Facing; повтор `(клетка, Facing)` запрещён. Яма не `occ` первого пика. Finalize после каскада. Seed C39: сосед-шов низины не блокирует |
+| 2026-08-19 | **C41 / R41-T-5:** луч = `(кромка, Facing)`; низина не один склон; open_land стоп на равной z; ravine / `grades_channel_bed` по-прежнему продолжают L; пик может 8 сторон, диагональ не бьёт в орто-посадку соседа. Дырка 1×1 — skip |
+| 2026-08-19 | **R37 plains:** θ max **45°**, `stamp_min_abs_dz=1`; короткий луч `h=1,L=1` → SLOPE 45°; `>45°` → SHEER. L min 20 только если луч позволяет (не veto L<20). Forest без смены (θ≤20°, stamp 2). Чаша 4×луча в `3` — по-прежнему C41 skip |
 | 2026-08-18 | **R43 bulk helper:** один `app.db.bulkSql` (`EXECUTEMANY_BATCH_SIZE` + `executemany_rows` + `iter_batches`); map_cells / grades / persist heartbeat — consumers. Не два литерала 5000 |
 | 2026-08-18 | **R43 / C42 SQL catalog persist ✅:** bake-writer (одна txn + `executemany` ~5000), prior по uid bag, heartbeat `packBakeLog`, detailed → `generation_world_log`. Не OLTP commit на строку. Семантика upsert без смены. § SQL catalog persist |
 | 2026-08-18 | **R41-T-9…T-12 ✅:** оркестратор discover/pick/uid/paint; identity builder; walk cap envelope/knobs; site `PackJobUid`; owner omit. Очередь v2 закрыта |

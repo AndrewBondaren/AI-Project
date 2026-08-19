@@ -28,7 +28,11 @@ def seed_rim(
     surface: ReliefSurface,
     vertices: ReliefVertices,
 ) -> bool:
-    """C39 uncovered rim: free cell with a free 8-neighbor downhill."""
+    """C39 uncovered rim: free cell with a free 8-neighbor downhill.
+
+    A shared-pit ``seam`` neighbor still counts: several vertices may shoot
+    into the depression. Occupied corridor (``occ``) does not.
+    """
     i = vertices.index(xy[0], xy[1])
     if i is None:
         return False
@@ -46,7 +50,7 @@ def seed_rim(
         ni = vertices.index(nb[0], nb[1])
         if ni is None:
             return True
-        if vertices.occ[ni] == 0 and vertices.seam[ni] == 0:
+        if vertices.occ[ni] == 0:
             return True
     return False
 

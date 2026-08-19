@@ -32,6 +32,9 @@ EIGHT_FACINGS: tuple[Facing, ...] = (
 EIGHT_DELTAS: tuple[tuple[int, int], ...] = tuple(
     GRID_OUTWARD_DELTA[facing] for facing in EIGHT_FACINGS
 )
+FACING_BIT: dict[Facing, int] = {
+    facing: 1 << i for i, facing in enumerate(EIGHT_FACINGS)
+}
 
 DELTA_TO_FACING: dict[tuple[int, int], Facing] = {
     delta: facing for facing, delta in GRID_OUTWARD_DELTA.items()
@@ -44,6 +47,23 @@ CARDINAL_DELTAS: frozenset[tuple[int, int]] = frozenset(
 
 def facing_for_delta(delta: tuple[int, int]) -> Facing | None:
     return DELTA_TO_FACING.get((int(delta[0]), int(delta[1])))
+
+
+def is_local_min(surface, xy: tuple[int, int]) -> bool:
+    """True if no 8-neighbor is strictly lower (C41 shared-pit / R36t bottom)."""
+    from app.application.worldData.generators.terrain.relief.discover.types import (
+        cell_z,
+    )
+
+    z = cell_z(surface, xy)
+    if z is None:
+        return False
+    x, y = xy
+    for dx, dy in EIGHT_DELTAS:
+        zn = cell_z(surface, (x + dx, y + dy))
+        if zn is not None and zn < z:
+            return False
+    return True
 
 
 def is_cardinal(facing: Facing) -> bool:

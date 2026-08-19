@@ -16,6 +16,7 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
 )
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.materializationContext import MaterializationContext
+from app.application.worldData.pack.bake.packBakeLog import log_pack_detailed_bake_done
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import (
     ClimatePackBakeOrchestrator,
 )
@@ -25,7 +26,6 @@ from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volume_for_location,
     territory_volumes_by_location,
 )
-from app.application.worldData.pack.bake.packBakeLog import log_pack_detailed_bake_done
 from app.application.worldData.pack.read.parentLightLoad import require_parent_light
 from app.application.worldData.pack.refine.fineChunkRunner import FineChunkRunner
 from app.application.worldData.pack.refine.meterChunkGeom import (
@@ -271,9 +271,9 @@ class PackDetailedBakeOrchestrator:
         world: World,
         aggregate: _FineAggregate,
     ) -> float:
-        persist_t0 = time.perf_counter()
         if self._relief_grade_repo is None or not aggregate.grade_instances:
             return 0.0
+        persist_t0 = time.perf_counter()
         await persist_relief_grades(
             self._relief_grade_repo,
             world_uid=world.world_uid,

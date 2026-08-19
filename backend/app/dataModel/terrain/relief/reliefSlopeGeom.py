@@ -18,6 +18,10 @@ def angle_from_height_length(h: int, length: int) -> float:
     return math.degrees(math.atan(h_i / L))
 
 
+# IEEE ``tan(45°)`` is slightly < 1, so naive ``ceil(h/tan)`` would bump L.
+_GEOM_B_CEIL_EPS = 1e-9
+
+
 def length_from_target_angle(h: int, angle_deg: float) -> int:
     """Geom-B: ``L = ceil(h / tan θ)``, minimum 1."""
     h_i = max(0, int(h))
@@ -29,7 +33,7 @@ def length_from_target_angle(h: int, angle_deg: float) -> int:
     tan_t = math.tan(math.radians(theta))
     if tan_t <= 0.0:
         raise ValueError(f"tan(target_angle_deg) must be > 0; got θ={theta}")
-    return max(1, math.ceil(h_i / tan_t))
+    return max(1, math.ceil(h_i / tan_t - _GEOM_B_CEIL_EPS))
 
 
 def height_from_length_angle(length: int, angle_deg: float) -> float:

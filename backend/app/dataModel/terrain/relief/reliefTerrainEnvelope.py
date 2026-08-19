@@ -22,6 +22,9 @@ from app.dataModel.terrain.relief.reliefSlopeGeom import (
 _ANGLE_EPS_DEG = 1e-9
 _SHEER_LENGTH_CELLS = 1
 
+_OPEN_LAND_SLOPE_MIN_CELLS = 20
+_PLAINS_SLOPE_MAX_DEG = 45.0
+_FOREST_SLOPE_MAX_DEG = 20.0
 
 _SHORE_SLOPE_MIN_DEG = 20.0
 _SHORE_SLOPE_MAX_DEG = 70.0
@@ -32,28 +35,44 @@ def _open_land_grade_floor(
     *,
     slope_preferred: bool,
     sheer_min_abs_dz: int,
+    slope_max_angle_deg: float,
+    stamp_min_abs_dz: int,
 ) -> ReliefTerrainEnvelope:
-    """Shared plains/forest slope floor (R37). SHEER L is always 1."""
+    """Shared plains/forest construction floor (R37). SHEER L is always 1.
+
+    ``slope_length_min_cells`` applies when the ray is long enough. Fitness of a
+    short ray is θ vs ``slope_max_angle_deg``, not L < L_min → SHEER.
+    """
     return ReliefTerrainEnvelope(
-        slope_max_angle_deg=20.0,
-        slope_length_min_cells=20,
+        slope_max_angle_deg=slope_max_angle_deg,
+        slope_length_min_cells=_OPEN_LAND_SLOPE_MIN_CELLS,
         sheer_allowed=True,
         slope_preferred=slope_preferred,
         allow_l_gt_h=True,
         sheer_min_abs_dz=sheer_min_abs_dz,
-        stamp_min_abs_dz=2,
+        stamp_min_abs_dz=stamp_min_abs_dz,
         apply_in_contexts=(ReliefContext.OPEN_LAND,),
     )
 
 
 def _plains_canonical() -> ReliefTerrainEnvelope:
-    """Plains: SLOPE preferred; SHEER only if the 20° ramp does not fit the ray."""
-    return _open_land_grade_floor(slope_preferred=True, sheer_min_abs_dz=0)
+    """Plains: SLOPE θ ≤ 45°; SHEER only if the ray is steeper than 45°."""
+    return _open_land_grade_floor(
+        slope_preferred=True,
+        sheer_min_abs_dz=0,
+        slope_max_angle_deg=_PLAINS_SLOPE_MAX_DEG,
+        stamp_min_abs_dz=1,
+    )
 
 
 def _forest_canonical() -> ReliefTerrainEnvelope:
-    """Forest: same ramp floor; SHEER allowed when ``|dz| >= 4`` (L=1)."""
-    return _open_land_grade_floor(slope_preferred=False, sheer_min_abs_dz=4)
+    """Forest: θ ≤ 20°; SHEER allowed when ``|dz| >= 4`` (L=1)."""
+    return _open_land_grade_floor(
+        slope_preferred=False,
+        sheer_min_abs_dz=4,
+        slope_max_angle_deg=_FOREST_SLOPE_MAX_DEG,
+        stamp_min_abs_dz=2,
+    )
 
 
 def _shore_river_canonical() -> ReliefTerrainEnvelope:
@@ -237,7 +256,7 @@ class ReliefTerrainEnvelope(BaseModel):
         return max(1, math.floor(h_i / tan_t))
 
     def envelope_length_floor(self, h: int) -> int:
-        """``max(L_min, ceil(h / tan θ_max))`` — plains: ``max(20, ceil(h / tan 20°))``."""
+        """``max(L_min, ceil(h / tan θ_max))`` when constructing a long-ray ramp."""
         l_floor = self.length_from_min_cells()
         from_angle = self.length_from_max_angle(h)
         if from_angle is not None:
@@ -309,16 +328,12 @@ class ReliefTerrainEnvelope(BaseModel):
         return angle_from_height_length(h, length)
 
     def slope_fits(self, h: int, length: int) -> bool:
+        """θ band only. ``slope_length_min_cells`` is a construction floor, not a veto."""
         h_i = max(0, int(h))
         l_i = int(length)
         if h_i < 1:
             return True
         if l_i < 1:
-            return False
-        if (
-            self.slope_length_min_cells is not None
-            and l_i < int(self.slope_length_min_cells)
-        ):
             return False
         theta = self.slope_angle_deg(h_i, l_i)
         if self.slope_max_angle_deg is not None:

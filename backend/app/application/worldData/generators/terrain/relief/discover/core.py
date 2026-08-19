@@ -91,5 +91,6 @@ def discover_fronts(
             slot = vertices.add_vertex(body)
             traces = front.propose(slot, body, plugin)
             fronts.extend(seam.commit(traces, plugin))
+    fronts = list(seam.finalize(fronts))
     reconcile_members(vertices)
     return vertices, tuple(fronts)
