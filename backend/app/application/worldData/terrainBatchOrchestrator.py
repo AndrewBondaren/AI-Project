@@ -117,10 +117,14 @@ class TerrainBatchOrchestrator:
         parent_light: ParentLightTile,
         refine_policy: ParentLightRefinePolicy | None = None,
     ) -> TileSurfaceState:
-        """L2 surface from baked L0 parent light (WP-PERF-22) — not coarse stamp."""
+        """L2 surface: upsample + terrain carry + hills + hydro + gap (before chunk pool)."""
+        from app.application.jsonValidation import terrain_masks
+        from app.application.worldData.generators.climate.math import world_seed
         from app.application.worldData.generators.hydrology.shore.parentLightHydroCorridor import (
+            hydro_mask_from_parent,
             merge_hydro_hard_corridor,
         )
+        from app.application.worldData.generators.terrain.hills import place_hills
         from app.application.worldData.generators.terrain.passes.parentLightTerrain import (
             upsample_facing_from_parent_light,
             upsample_terrain_from_parent_light,
@@ -130,6 +134,10 @@ class TerrainBatchOrchestrator:
             upsample_from_parent_light,
         )
         from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+        from app.application.worldData.generators.terrain.worldMapSettings import (
+            world_z_max,
+            world_z_min,
+        )
 
         if parent_light.gx != tile_gx or parent_light.gy != tile_gy:
             raise ValueError(
@@ -148,6 +156,21 @@ class TerrainBatchOrchestrator:
                 lo = base - policy.z_band
                 hi = base + policy.z_band
                 fine_z[(xm, ym)] = max(lo, min(hi, int(z)))
+
+        l0_hydro = hydro_mask_from_parent(parent_light)
+        masks = terrain_masks(world)
+        place_hills(
+            fine_z,
+            fine_terrain,
+            l0_hydro,
+            plains_key=masks.default_plains.system_terrain,
+            forest_key=masks.default_forests.system_terrain,
+            plains_hills=masks.default_plains.hills,
+            forest_hills=masks.default_forests.hills,
+            seed=world_seed(world),
+            z_min=world_z_min(world),
+            z_max=world_z_max(world),
+        )
 
         meter_bbox = meter_bbox_for_parent(parent_light)
         heightmap = SurfaceHeightmap(

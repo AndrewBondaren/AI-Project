@@ -17,6 +17,8 @@ from app.dataModel.terrainMasks.mountain import (
     StarForm,
     mountain_kind_profile,
 )
+from app.dataModel.terrainMasks.hillPolicy import HillPolicy
+from app.dataModel.terrainMasks.hillShape import HillShape
 from app.dataModel.terrainMasks.worldTerrainMasks import (
     ForestsCategoryPolicy,
     MountainsCategoryPolicy,
@@ -28,6 +30,8 @@ from app.dataModel.terrainMasks.worldTerrainMasks import (
 
 __all__ = [
     "ForestsCategoryPolicy",
+    "HillPolicy",
+    "HillShape",
     "MountainDeclareEntry",
     "MountainForm",
     "MountainFormBySides",

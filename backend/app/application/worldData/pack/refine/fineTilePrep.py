@@ -55,7 +55,7 @@ def prepare_fine_tile(
     phase: str | None = None,
     relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
 ) -> FineTileContext:
-    """Everything before the pool: parent light, halo, catalog, inherit uids."""
+    """Prep before the pool: parent light, upsample + hills + hydro, halo, catalog."""
     phase_name = phase or refine_role
     chunk_size = terrain_chunk_columns(world)
     cell_m = cell_size_m(world)

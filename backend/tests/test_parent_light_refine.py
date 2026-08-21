@@ -167,6 +167,8 @@ class TestUpsampleAndCorridor(unittest.TestCase):
         w.seed = 1
         w.z_min = -2
         w.z_max = 8
+        w.terrain_masks = None
+        w.terrain_scalars = None
         ctx = SurfaceTerrainContext(
             pole_field=MagicMock(),
             local_field=ClimateAnchorField(()),
@@ -265,6 +267,7 @@ class TestTerrainMaskCarry(unittest.TestCase):
         w.z_max = 20
         w.terrain_registry = None
         w.terrain_scalars = None
+        w.terrain_masks = None
         ctx = SurfaceTerrainContext(
             pole_field=MagicMock(),
             local_field=ClimateAnchorField(()),

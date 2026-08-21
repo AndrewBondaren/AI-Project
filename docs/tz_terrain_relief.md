@@ -18,8 +18,9 @@ metadata:
 | Hydro hard corridor | `hydrology_role` → fine | landcover stamp |
 | Facing upsample | `system_facing` nearest | terrain mask carry |
 | `surface_z` upsample | WP-PERF-22 height | terrain mask carry |
+| **L2 open-land hills** | `Δz` helper на plains/forest leftover | mask domain / L0 / Grade uid |
 
-`system_grade_uid` **не** mask carry и **не** nearest-carry с L0.
+`system_grade_uid` **не** mask carry и **не** nearest-carry с L0. Холмы пишут только высоту **до** discover (R36v); не `ReliefContext`.
 
 ### R36u — legacy path → detailed fix locus
 
@@ -2855,6 +2856,7 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-20 | **L2 hills:** не grade / не L0; helper + consumers plains/forest — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § L2 open-land hills. Discover читает z после холмов |
 | 2026-08-19 | **Consume TZ:** [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) — хранение vs leftover; LLM uid→Instance→System; debug-клетка **3×3** (центр всегда, 8 исходящих лучей с rim, поле W как `surface_z`, 3 строки на `gy`) |
 | 2026-08-19 | **C41 cross-vertex:** низина принимает лучи **разных** вершин и **разных** Facing; повтор `(клетка, Facing)` запрещён. Яма не `occ` первого пика. Finalize после каскада. Seed C39: сосед-шов низины не блокирует |
 | 2026-08-19 | **C41 / R41-T-5:** луч = `(кромка, Facing)`; низина не один склон; open_land стоп на равной z; ravine / `grades_channel_bed` по-прежнему продолжают L; пик может 8 сторон, диагональ не бьёт в орто-посадку соседа. Дырка 1×1 — skip |

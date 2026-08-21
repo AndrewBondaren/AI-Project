@@ -17,9 +17,11 @@ metadata:
 
 **Outdoor grade (R36u / R36v):** L0 **не** writer SLOPE/SHEER. Height/mask paint на light — ок; grade generate — **только** detailed_bake / entry, per-chunk в `FineChunkRunner` pool ([`tz_terrain_relief.md`](./tz_terrain_relief.md)). L0 ribbon consumers (**5b** / `road_shoulder`) — **removed** (R36u-T-8), не «ещё в compose».
 
+**Open-land hills:** L0 **не** writer холмов. Холм = L2 helper; consumers `plains` / `forest` — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § L2 open-land hills. Не `MaskDomainId`. Landcover на light пишет только `system_terrain`.
+
 **Не в scope этого ТЗ:**
 
-- L2 refine / wilderness chunks / location terrain blobs ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2, WP-13; **module layout** — § «L2 refine module layout»);
+- L2 refine / wilderness chunks / location terrain blobs / **open-land hills** ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2, § L2 open-land hills, WP-13; **module layout** — § «L2 refine module layout»);
 - Pack completeness classifier / resume (WP-28) — pack TZ;
 - Patch Store / merge priority WP-20;
 - DAG wiring;
@@ -226,7 +228,7 @@ flowchart TB
 | 5 | **Declare** (optional) + **autoresolve** (default) + **opt-out** (`enabled: false`) — три режима на каждый домен |
 | 6 | Declare **не перезаписывается** global autoresolve (как реки U27) |
 | 7 | `terrain_registry` = каталог ключей (`mountain`, `forest`…); **включение маски** = policy `enabled`, не «ключ есть в registry» |
-| 8 | Новый mask domain = PR: `MaskDomainId` + merge/phase slot + policy/declare POJO + contributor — **не** свободный plugin из world JSON |
+| 8 | Новый mask domain = PR: `MaskDomainId` + merge/phase slot + policy/declare POJO + contributor — **не** свободный plugin из world JSON. **Холмы ≠ mask domain** (L2 helper, § pack storage) |
 
 ### Корни JSON (не один mega-blob)
 
@@ -522,8 +524,8 @@ NamedLocation(geographic.mountain) → disk paint  # interim; убрать
 | Поддомен | `system_terrain` | Declare SoT (`declared_*[]`) | Autoresolve (enabled, даже без declare) |
 |---|---|---|---|
 | **mountains** | `mountain` (+ summit по kind) | `declared_mountains[]`: `MountainSpec` \| `MountainRangeSpec` | placement → Spec → § Mountain engine |
-| **forests** | `forest` | `declared_forests[]`: `ForestSpec` | region + [`tz_flora`](./tz_flora.md) → paint forest |
-| **plains** | `plains` | `declared_plains[]`: `PlainSpec` (region footprint) | фон суши, где нет выше по rank |
+| **forests** | `forest` | `declared_forests[]`: `ForestSpec` | region + [`tz_flora`](./tz_flora.md) → paint forest. Hill knobs на `default_forests` — L2; локация перекрывает мир |
+| **plains** | `plains` | `declared_plains[]`: `PlainSpec` (region footprint) | фон суши. Hill knobs на `default_plains` — L2; локация перекрывает мир |
 | **ravines** | `ravine` | `declared_ravines[]`: `RavineSpec` (path / polygon) | депрессии → RavineSpec |
 | **roads** | `road` | geometry = structure edges; enable в `default_roads` | без edges маска пуста; `enabled: false` запрещает paint |
 | **settlement** (mask) | pin / optional terrain later | `SettlementSpec` (или declared list) | pins → Spec → footprint; не L2 assembler |
@@ -1243,7 +1245,7 @@ Fixture-пример: [`fixtures/world_test_gen_noloc.json`](../fixtures/world_t
 |---|---|---|
 | **relief** | `surface_z` | per `(tx,ty)`; coarse + pole typical + noise |
 | **climate** | `climate_zone_id` | pole (+ local) в центре light cell |
-| **landcover** | `system_terrain` plains/forest | climate + `terrain_masks` forest/plains policy; **не** гора; **не** biome keys (`tundra`/`volcanic`) |
+| **landcover** | `system_terrain` plains/forest | climate + `terrain_masks` forest/plains policy; **не** гора; **не** biome keys (`tundra`/`volcanic`); **не** холмы (L2) |
 | **flora** | `system_tree` / bush / grass / plant | FloraGenerator ∩ climate (**после** climate + landcover); [`tz_flora`](./tz_flora.md) |
 | **mountain** | `system_terrain=mountain` | declare + autoresolve (`default_mountains`); empty declare ≠ off |
 | **ravine** | `system_terrain=ravine` | `default_ravines` + autoresolve; не затирает hydro |
@@ -1266,7 +1268,7 @@ Fixture-пример: [`fixtures/world_test_gen_noloc.json`](../fixtures/world_t
 
 | Поле | Правило |
 |---|---|
-| `surface_z` | relief (база) → mountain поднимает по § Mountain elevation (≤ `z_max`) |
+| `surface_z` | relief (база) → mountain поднимает по § Mountain elevation (≤ `z_max`). **Нет** L0 холмов |
 | `system_terrain` | road > ravine > mountain > forest > plains; hydro не затирает terrain; road/ravine не затирают SEA/LAKE/RIVER |
 | `hydrology_*` | hydro; priority в dataModel |
 | `location_pin` | settlement |
@@ -1412,7 +1414,7 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 
 | Документ | Связь |
 |---|---|
-| [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | L0 wire, WP-10, Идея 1/2, WP-PERF-31 |
+| [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | L0 wire, WP-10, Идея 1/2, WP-PERF-31; **L2 hills helper** (не этот документ) |
 | [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) | declared river/coast, fine roles; **Ocean bathymetry / Depression forms** (R5b) |
 | [`tz_terrain_generation.md`](./tz_terrain_generation.md) | surface pass, coarse planning |
 | [`tz_terrain_relief.md`](./tz_terrain_relief.md) | **Relief grade** SoT (**R36u** writer; **R36v** per-chunk pool); L0 не grade SoT |
@@ -1425,6 +1427,7 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-20 | **Open-land hills:** L0 не writer; не `MaskDomainId`; SoT → pack storage § L2 open-land hills. Мир = `default_*.hills`; локация `hills` перекрывает; POJO = fallback import |
 | 2026-08-13 | **R36v:** compose 5b / `road_shoulder` **removed** (не migrate-off); grade → detailed pool — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-08-13 | **R36u:** L0 не outdoor grade writer; ribbon 5b / shoulder — then migrate off; SoT → [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-07-29 | Relief: context `road` → `road_shoulder` (обочины) — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R20 |

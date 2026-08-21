@@ -258,7 +258,14 @@
         }
       ]
     },
-    "terrain_masks": {},
+    "terrain_masks": {
+      "default_plains": {
+        "hills": { "min_spacing": 500, "radius": 40, "height": 2, "shapes": [] }
+      },
+      "default_forests": {
+        "hills": { "min_spacing": 500, "radius": 25, "height": 2, "shapes": [] }
+      }
+    },
     "caves": {
       "hydrology": {
         "enabled": true,

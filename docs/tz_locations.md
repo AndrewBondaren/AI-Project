@@ -160,7 +160,10 @@ named_locations (
   map_x, map_y, map_z,            -- nullable int; глобальные координаты локации на карте мира
   system_template_uid,            -- nullable FK → building_templates; из какого шаблона сгенерировано здание
   parent_wall_material,           -- nullable ref → material_registry; материал стен здания (наследуется из шаблона)
-  parent_floor_material           -- nullable ref → material_registry; материал полов здания
+  parent_floor_material,          -- nullable ref → material_registry; материал полов здания
+  hills                           -- nullable JSON; IgnoreOnWire. Patch холмов: {plains?, forest?} тех же ключей POJO.
+                                  -- Нет ключа = мир. Перекрывает world.terrain_masks.default_plains|forests.
+                                  -- SoT: tz_world_pack_storage § L2 open-land hills. L2 only; schema 0001 при impl.
 )
 -- __update_exclude__ = {"world_uid"} — world_uid неизменяем при update
 -- Инвариант: is_public=true AND is_forbidden=true — невалидная комбинация; движок логирует WARNING
@@ -289,6 +292,26 @@ room         (depth 5) — indoor: комната внутри building; leaf, �
 ---
 
 ## Terrain
+
+### Open-land hills (L2, overlay локации)
+
+Не mask domain. Helper + consumers — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § L2 open-land hills.
+
+**Resolve (locked):** POJO `canonical_defaults` → настройки мира (`terrain_masks.default_plains` / `default_forests`) → **настройки локации перекрывают мир**.
+
+`named_locations.hills` — `IgnoreOnWire` JSON. **Не** тот же объект, что `default_plains.hills`: на локации это карта `{plains?, forest?}`, внутри — те же ключи POJO (`min_spacing`, `radius`, `height`, `shapes`). Ключа нет → не автозаполняем. Частичный объект: только указанные поля. Цепочка parent, если у ребёнка ключа нет.
+
+Пример (только то, что мастер хочет сменить):
+
+```json
+"hills": {
+  "plains": { "min_spacing": 2000 }
+}
+```
+
+Применяется к meter-клеткам **внутри объёма** этой локации (и потомков, пока свой overlay не задан). Indoor без outdoor volume — no-op.
+
+---
 
 ### `worlds.danger_level_registry` (N+1)
 

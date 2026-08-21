@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import unittest
 
 from app.application.worldData.masks.resolveForestPlains import resolve_forest_plains
@@ -16,6 +17,7 @@ from app.dataModel.masks.enums.maskDomainId import (
     MaskDomainId,
 )
 from app.dataModel.terrainMasks import WorldTerrainMasks
+from app.dataModel.terrainMasks.hillShape import HillShape
 
 
 class TestTerrainMasks(unittest.TestCase):
@@ -101,6 +103,32 @@ class TestTerrainMasks(unittest.TestCase):
             tuple(c.name for c in contributors),
             tuple(cid.value for cid in COMPOSE_CONTRIBUTOR_ORDER),
         )
+
+    def test_consumer_owns_hills_not_mask_domain(self) -> None:
+        self.assertFalse(hasattr(MaskDomainId, "HILLS"))
+        plains = self.masks.default_plains.hills
+        forest = self.masks.default_forests.hills
+        self.assertEqual(
+            (plains.min_spacing, plains.radius, plains.height, plains.shapes),
+            (500, 40, 2, ()),
+        )
+        self.assertEqual(
+            (forest.min_spacing, forest.radius, forest.height, forest.shapes),
+            (500, 25, 2, ()),
+        )
+        self.assertEqual(plains.resolved_shapes(), HillShape.catalog())
+
+    def test_world_template_hills_match_pojo(self) -> None:
+        from pathlib import Path
+
+        path = Path(__file__).resolve().parents[2] / "fixtures" / "world_template.json"
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        hills = raw["world"]["terrain_masks"]
+        plains = self.masks.default_plains.hills
+        forest = self.masks.default_forests.hills
+        self.assertEqual(hills["default_plains"]["hills"], plains.model_dump(mode="json"))
+        self.assertEqual(hills["default_forests"]["hills"], forest.model_dump(mode="json"))
+
 
 
 if __name__ == "__main__":

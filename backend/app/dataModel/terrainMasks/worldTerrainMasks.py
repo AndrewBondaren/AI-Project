@@ -26,6 +26,7 @@ from app.dataModel.terrainMasks.mountain.specs import (
     default_sides_for_count,
     form_side_count,
 )
+from app.dataModel.terrainMasks.hillPolicy import HillPolicy
 
 
 def _terrain_key(system_terrain: str) -> str:
@@ -95,12 +96,18 @@ class ForestsCategoryPolicy(MaskCategoryPolicy):
 
     system_terrain: DefaultOnWire[str] = Field(default_factory=lambda: _terrain_key("forest"))
     forest_min_rainfall: DefaultOnWire[int] = Field(default=45, ge=0)
+    hills: DefaultOnWire[HillPolicy] = Field(
+        default_factory=HillPolicy.canonical_forest,
+    )
 
 
 class PlainsCategoryPolicy(MaskCategoryPolicy):
     """Background land where higher-rank masks absent."""
 
     system_terrain: DefaultOnWire[str] = Field(default_factory=lambda: _terrain_key("plains"))
+    hills: DefaultOnWire[HillPolicy] = Field(
+        default_factory=HillPolicy.canonical_plains,
+    )
 
 
 class RavinesCategoryPolicy(MaskCategoryPolicy):

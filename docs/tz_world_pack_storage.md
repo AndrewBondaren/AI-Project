@@ -211,8 +211,8 @@ load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
 | **Input** | L0 `surface_z` per light cell `(tx, ty)` из `ParentLightTile` |
 | **Output** | Fine `SurfaceHeightmap` (meter grid) |
 | **Base** | Resample light→meter (nearest или bilinear — knobs на POJO; default **bilinear**) |
-| **Detail** | Детерминированный band-limited noise от `world_seed` + light cell; **не** новый macro-рельеф |
-| **Z-band** | Итоговый fine `z` остаётся в **± `z_band`** от resampled L0 формы; default **`z_band = 1`** (целое world-z) |
+| **Detail** | Детерминированный band-limited noise от `world_seed` + light cell; **не** новый macro-рельеф (хребты/долины L0). **Не** микрорельеф plains/forest — § **L2 open-land hills** |
+| **Z-band** | После upsample (до холмов) fine `z` в **± `z_band`** от resampled L0 формы; default **`z_band = 1`**. Clamp **не** действует на `Δz` холма |
 | **Запрещено** | `build_fine_surface_tile` только из одного coarse macro-z как SoT формы tile |
 
 **Hydro corridor:**
@@ -228,6 +228,103 @@ load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
 **Cache / I/O knobs (не алгоритм):** capacity / TTL при необходимости — `PackReadPolicy` или поле рядом с refine в `PackBakeDefaults`; не смешивать с upsample/hydro Field в одном «god» defaults без разделения ответственности.
 
 **Антипаттерн (запрещено):** независимый `run_surface_pass` на fine grid без L0 → река на карте и в сцене в разных местах.
+
+#### L2 open-land hills (locked 2026-08-20)
+
+Холм — **утилита / pure helper**. Не mask domain, не L0 contributor, не ReliefContext / не writer `system_grade_uid`.
+
+**Только L2** (meter grid на `detailed_bake` / entry refine). L0 light compose **не** ставит холмы и **не** солит равнину/лес под них ([`tz_map_light_bake.md`](./tz_map_light_bake.md)).
+
+| Роль | Делает | Не делает |
+|---|---|---|
+| **Helper «холм»** | Построить **один** холм по spec: кольца/`Δz` с шагом 1 | Частоту, `system_terrain`, world JSON, clip |
+| **Consumer** | `plains` и `forest` — **независимо**; каждый задаёт частоту, размер, геометрию | Реализацию колец |
+
+**Вход helper:** origin (world meters) + geom spec (`radius`, `height`, `shape`, ось) + `host_cells`.  
+**Выход:** карта `Δz` на подмножестве host **или reject целиком**.
+
+**Вместимость (жёстко):** стопа ⊆ host consumer. Host = meter cells с nearest-carry `system_terrain` consumer **и** без L0 hydro-роли (река/море/озеро/берег). Любая клетка вне (гора, овраг, дорога, чужой landcover, L0 hydro, край текущего L2 surface — tile или location volume) → **весь холм skip**, без обрезки. Частота не втискивает форму, которая не влезает. Граница plains/forest: холм не сидит на двух доменах; каждый consumer вызывает helper сам.
+
+**Шум consumer = посадка холмов с `min_spacing`**, не `cell_z_noise` `amplitude=1` на каждую метровую клетку. Одиночный `±1` — тот же helper с минимальным geom, если consumer так задал смесь; не второй канал белого шума.
+
+**Политика knobs — consumer, не домен холмов.** Helper не читает JSON. Wire **совпадает** с POJO `HillPolicy`. Живёт на `PlainsCategoryPolicy.hills` / `ForestsCategoryPolicy.hills` — [`hillPolicy.py`](../backend/app/dataModel/terrainMasks/hillPolicy.py). Нет `MaskDomainId.HILLS`.
+
+`HillPolicy` (встроена в `default_plains` / `default_forests` как `hills`; тот же объект на локации):
+
+| Поле | Смысл | Единица |
+|---|---|---|
+| `min_spacing` | минимальная дистанция между центрами холмов (шум consumer) | метры |
+| `radius` | размер **всей** стопы (bounding); целиком ⊆ host | метры |
+| `height` | ступени по 1 от пола (пик / пики) | world-z |
+| `shapes` | палитра фигур; повтор = вес | массив enum |
+
+```json
+"hills": { "min_spacing": 500, "radius": 40, "height": 2, "shapes": [] }
+```
+
+**`shapes` (locked):** массив wire-токенов `HillShape`. Выбор **на каждый холм** (не один на мир): индекс = hash(`world_uid`, origin) по палитре. Ориентация овала / двойной формы — 2 оси сетки (X или Y), тот же hash, **не** wire.
+
+| Wire | Пул |
+|---|---|
+| `[]` / ключ опущен | весь каталог (рандом от `world_uid` + origin) |
+| `["circle"]` | только круги |
+| `["circle", "oval"]` | смесь; дубликаты разрешены как вес |
+
+Каталог (закрыт, без «и т.д.»):
+
+| `shape` | Стопа | Формула (`R=radius`, `H=height`, origin `O`, `dx,dy` от центра доли) |
+|---|---|---|
+| `circle` | диск | `dx²+dy² ≤ R²`; `dist=isqrt(dx²+dy²)`; `Δz = H - min(H-1, (dist·H)//R)` |
+| `oval` | эллипс 2:1 | ось X: `dx² + 4 dy² ≤ R²`; ось Y: `4 dx² + dy² ≤ R²`; `dist=isqrt(…)`; `Δz` как у круга. `R<2` → `circle` |
+| `double_circle` | два диска (арахис) | `s=max(1, R//3)`, `r=R-s`; центры `O±s` по оси; доля = `circle` радиуса `r`; `Δz = max` двух долей. `r<1` → `circle` |
+| `double_oval` | два эллипса | те же `s,r` и центры; доля = `oval` радиуса `r` вдоль той же оси; `Δz = max`. `r<1` или `R<2` → `circle` |
+
+Вместимость: любая клетка **объединения** вне host → skip целиком (как раньше).
+
+```text
+клетка ∈ объём локации L:
+  L.hills.{plains|forest}            # IgnoreOnWire, частичный patch тех же ключей
+    → parent_location_uid …
+      → world.terrain_masks.default_plains.hills | default_forests.hills
+        → POJO canonical_plains() / canonical_forest()
+```
+
+**Мир — полный template** (числа = POJO defaults; опущенный ключ на import → POJO). `terrain_masks: {}` допустим — то же, что этот блок после normalize:
+
+```json
+"terrain_masks": {
+  "default_plains": {
+    "hills": { "min_spacing": 500, "radius": 40, "height": 2, "shapes": [] }
+  },
+  "default_forests": {
+    "hills": { "min_spacing": 500, "radius": 25, "height": 2, "shapes": [] }
+  }
+}
+```
+
+**Локация — только patch** (нет ключа → мир; не копировать весь `terrain_masks`):
+
+```json
+"hills": {
+  "plains": { "min_spacing": 2000 }
+}
+```
+
+| Слой | Где | Правило |
+|---|---|---|
+| **POJO** | `HillPolicy` на **consumer** plains/forest (`hills`) | единственный литерал default; generator **не** дублирует; не mask domain |
+| **Мир** | `default_plains.hills` / `default_forests.hills` | мастер; omit → POJO |
+| **Локация** | `hills.plains` / `hills.forest` | **перекрывает мир**; частичный patch. Shape ≠ `default_plains.hills` |
+
+Частичный patch: только `min_spacing` → `radius` / `height` / `shapes` с мира/POJO. Consumer читает resolved policy; helper частоту не видит. Ребёнок с ключом бьёт родителя.
+
+**Запрещено:** другие ключи на wire холмов; `shapes` не массив (скаляр `"circle"`); `hills: { min_spacing }` на корне локации (без `plains`/`forest`); список override на `terrain_masks` вместо поля локации; литералы в generator; L0 читает `hills` локации; параллельный dict в `world_template`, расходящийся с POJO.
+
+**Порядок L2** (tile/location prep, **до** chunk pool / grade): upsample `surface_z` (`z_band` к L0) → nearest `system_terrain` → **hills** → hydro corridor → gap → column fill → outdoor grade discover ([`tz_terrain_relief.md`](./tz_terrain_relief.md) R36v: z готов). Холм **до** hydro, чтобы русло видело форму. Raster холмов — **на всём текущем L2 surface** (не per-chunk: иначе кромка чанка режет стопу).
+
+**`system_terrain` не меняется.** Discover `open_land` видит получившийся z: plains `stamp_min_abs_dz=1`, forest `=2` (R37) без смены конверта.
+
+**Запрещено:** `MaskDomainId` для холмов; L0 light-cell холмы; clamp холма в `z_band`; белый `±1` как SoT равнины/леса; один холм на стыке plains+forest; обрезать стопу по маске.
 
 #### Terrain mask carry (`system_terrain`) — ✅ закрыто 2026-07-23 (было WP-PERF-22-OPEN-1)
 
@@ -778,7 +875,7 @@ flowchart TB
 | Модуль | Ответственность | Запреты |
 |---|---|---|
 | `FineTerrainRefineOrchestrator` | Thin facade: scene / path / rect / queued chunk; делегирует schedule и helpers | Нет `ChunkComputePool`; нет прямой записи blobs |
-| `FineChunkRunner` | thin: `prepare_fine_tile` → **pool** `compute_rect` (column fill + **grade R36v**, per rect) → `FineChunkPersist` | Нет enqueue в `ChunkRefineQueue`; нет serial tile-wide grade; нет второго grade pipeline |
+| `FineChunkRunner` | thin: `prepare_fine_tile` (upsample + **hills** + hydro) → **pool** `compute_rect` (column fill + **grade R36v**, per rect) → `FineChunkPersist` | Нет enqueue в `ChunkRefineQueue`; нет serial tile-wide grade; нет L0 холмов; нет второго grade pipeline |
 | `chunkSchedule` | Free functions: rings / path-ahead enqueue | Не пишет pack blobs; не generate cells |
 | `pathCorridorSelect` | `select_path_corridor_rects` → `ColumnRect[]` | Не persist |
 | `packMapHelpers.tile_for_anchor` / `entryRingGeom` | Coord / scene chunk indices | — |
@@ -808,19 +905,21 @@ flowchart TB
 flowchart LR
   Disk[world_map.zst]
   Load[load_parent_light\ncache or disk]
-  UP[Upsample + detail noise\ndeterministic sub-seed]
+  UP[Upsample + z_band\nvs L0 form]
+  Hills[Open-land hills helper\nplains / forest consumers]
   HY[Hydrology Pass 1.5\nconstrained to L0 hydro mask]
   GA[Gap analysis]
   P2[Column fill]
   PACK[terrain.zst]
 
-  Disk --> Load --> UP --> HY --> GA --> P2 --> PACK
+  Disk --> Load --> UP --> Hills --> HY --> GA --> P2 --> PACK
 ```
 
 | Шаг | Контракт |
 |---|---|
 | **Load parent** | `load_parent_light(gx,gy)` = process cache **или** decode `world_map.zst`; ключ cache `(world_uid,gx,gy)`; вход UP/HY **только** из wire (см. § Parent light SoT) |
-| **Upsample** | L0 `surface_z` → fine heightmap: resample + band-limited noise; fine z в **±1** world-z от L0 формы (POJO `z_band`); **не** менять хребты/долины на macro-масштабе — § Parent light refine contracts |
+| **Upsample** | L0 `surface_z` → fine heightmap: resample + band-limited noise; fine z в **± `z_band`** от L0 формы **до** холмов — § Parent light refine contracts |
+| **Hills** | Только L2; helper + consumers plains/forest — § **L2 open-land hills** |
 | **Hydro constrain** | **Hard corridor:** реки/море L2 только в L0 `hydrology_role` (+ width→meters); bridge `to_fine_role()`; вне маски — нет bed |
 | **Declared override** | master declared river/coast **сильнее** autoresolve; L0 уже отражает declare |
 | **Gap + fill** | как [`tz_terrain_generation.md`](./tz_terrain_generation.md) |
@@ -1919,8 +2018,9 @@ flowchart LR
 
 | Документ | Связь |
 |---|---|
-| [`tz_map_light_bake.md`](./tz_map_light_bake.md) | L0 LightGridCompose — контракты укладки маски world map |
+| [`tz_map_light_bake.md`](./tz_map_light_bake.md) | L0 LightGridCompose — контракты укладки маски world map; **не** writer холмов |
 | [`tz_terrain_generation.md`](./tz_terrain_generation.md) | multi-pass skeleton, TR-LAZY-LOAD, hydrology pass order |
+| [`tz_terrain_relief.md`](./tz_terrain_relief.md) | outdoor grade **после** L2 hills (z готов); холм ≠ Grade |
 | [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) | Pass 1.5, liquid_candidate |
 | [`tz_climate.md`](./tz_climate.md) | SurfaceClimateField, Climate LOD |
 | [`tz_city_generation.md`](./tz_city_generation.md) | CitySkeleton L1 vs layout L2 lazy |
@@ -1934,6 +2034,8 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-21 | **L2 hills shapes:** палитра `shapes[]` на POJO; пусто = каталог (`circle`/`oval`/`double_circle`/`double_oval`); выбор hash(`world_uid`, origin). Формулы — § L2 open-land hills |
+| 2026-08-20 | **L2 open-land hills:** helper (не mask domain); только L2; consumer plains/forest; стопа в host; `z_band` не режет холм. **Wire = POJO:** `min_spacing`, `radius`, `height` (метры / world-z). Мир `default_*.hills` → локация `hills.{plains\|forest}` перекрывает |
 | 2026-08-16 | **Слой модификации мира:** не bake mode; Pack immutable; gameplay deltas = Patch Store (WP-20); skip `complete` ≠ взрыв |
 | 2026-08-15 | **C29:** технический шов chunk/tile не продукт; климат/дороги/**локация·город**/шаг проходят ребро — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-08-14 | **FineChunkRunner слои:** prep / `compute_rect` / persist; grade в том же `ColumnRect` task — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |

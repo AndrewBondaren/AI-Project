@@ -1371,6 +1371,8 @@ noise = (h % (2 * amplitude + 1)) - amplitude  # amplitude=1
 z = clamp(base_z + noise, z_min, z_max)
 ```
 
+**Pack L2 plains/forest:** этот белый `±1` на клетку **не** SoT микрорельефа. Холмы — L2 helper; частота = шум consumer (`default_plains` / `default_forests`) — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § L2 open-land hills. Coarse/L0 planning может сохранить pole+noise; leftover равнина после гор на detailed — через helper, не через `amplitude=1` на метр.
+
 ### Terrain от z (skeleton — solid only)
 
 | z (relative / band) | terrain (приоритет) |
@@ -1704,6 +1706,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-20 | **Pack L2 hills:** белый `cell_z_noise ±1` не SoT plains/forest; helper + consumer frequency — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) |
 | 2026-08-16 | **Modification layer:** patch ≠ force-rebuild detailed/full; Pack snapshot, deltas в Patch Store |
 | 2026-08-14 | **Шов мира:** `full_bake` L0 — край AABB ↔ антагонист на макро-тайлах; не detailed / не magma antipode |
 | 2026-07-29 | Relief: storage 1:1 buildings + `context` singular — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R11/R17/R18 |
