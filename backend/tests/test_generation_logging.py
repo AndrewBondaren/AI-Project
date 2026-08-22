@@ -97,3 +97,24 @@ def test_generation_world_log_writes_detailed_files(tmp_path: Path) -> None:
     assert "grade_persist_s=1.50" in text
     assert "bake-detailed-" in run_path.name
 
+
+def test_generation_world_log_captures_dump_render_logger(tmp_path: Path) -> None:
+    root = tmp_path / "generation"
+    logging.getLogger().setLevel(logging.DEBUG)
+    dump_log = logging.getLogger("app.application.worldData.render.dumpLog")
+    dump_log.setLevel(logging.DEBUG)
+
+    with generation_world_log("world-terrain-test-001", mode="dump", root=root) as run_path:
+        dump_log.info(
+            "dump grade_z tick",
+            extra={"activity": "dump_grade_z", "n": 12},
+        )
+
+    assert run_path.is_file()
+    latest = root / "world-terrain-test-001" / "bake-dump-latest.log"
+    assert latest.is_file()
+    text = latest.read_text(encoding="utf-8")
+    assert "dump grade_z tick" in text
+    assert "bake-dump-" in run_path.name
+    assert "request_end" not in text
+

@@ -8,7 +8,8 @@ Separate from detailed_bake / light|full L0. Verifies:
 
 Assumes world already has L0 parent light. Does **not** wipe pack.
 
-Reports → ``.local/map-render/{uid}/entry-bg/``
+Reports → JSON under ``.local/map-render/{uid}/entry-bg/``.
+Ticks → app logger + ``bake-dump-*.log``.
 
 Requires a running backend (``npm run backend``) — agents must not start it.
 
@@ -34,6 +35,12 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO / "backend") not in sys.path:
     sys.path.insert(0, str(REPO / "backend"))
 
+from app.application.worldData.render.dumpLog import (
+    add_debug_logging_argument,
+    log_dump,
+)
+from app.core.generationLogging import generation_world_log
+from app.core.loggingConfig import ensure_script_logging
 from debug_api_helpers import (
     api_client,
     api_list_locations,
@@ -41,12 +48,6 @@ from debug_api_helpers import (
     api_schedule_chunk_refine,
 )
 from debug_surface_helpers import api_loading_progress
-from debug_transcript import (
-    add_debug_progress_argument,
-    progress,
-    set_debug_progress,
-    tee_stdio,
-)
 from render_maps import _print_summary, dump_map_renders
 
 _DEFAULT_TIMEOUT_S = float(os.environ.get("DEBUG_API_TIMEOUT", "600"))
@@ -127,11 +128,12 @@ def _poll_progress(
         snap = _progress_snapshot(api_loading_progress(client, world_uid))
         snap["t_s"] = round(now - t0, 2)
         samples.append(snap)
-        progress(
+        log_dump(
             f"  poll t={snap['t_s']:.1f}s  "
             f"locations_pct={snap.get('locations_pct')}  "
             f"wilderness_pct={snap.get('wilderness_pct')}  "
-            f"locations_detailed={snap.get('locations_detailed')}"
+            f"locations_detailed={snap.get('locations_detailed')}",
+            activity="script_poll",
         )
         if now >= deadline:
             break
@@ -178,21 +180,17 @@ def main() -> None:
         action=argparse.BooleanOptionalAction,
         default=True,
     )
-    add_debug_progress_argument(parser)
+    add_debug_logging_argument(parser)
     args = parser.parse_args()
-    set_debug_progress(args.debug)
+    ensure_script_logging(debug=args.debug)
 
     world_uid = args.world_uid
     report_root = _report_dir(world_uid)
     report_root.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    transcript = report_root / "entry-bg-latest.log"
-    stamped_log = report_root / f"entry-bg-{stamp}.log"
 
-    print(f"report dir: {report_root}")
-    print(f"transcript: {transcript}")
-
-    with tee_stdio(transcript, announce_saved=True), api_client() as client:
+    with generation_world_log(world_uid, mode="dump"), api_client() as client:
+        log_dump(f"report dir: {report_root}", activity="script")
         if not (_pack_dir(world_uid) / "manifest.json").is_file():
             raise SystemExit(
                 f"no pack manifest for {world_uid} — run light/full bake first"
@@ -205,25 +203,29 @@ def main() -> None:
             anchor_y=args.anchor_y,
             location_uid=args.location_uid,
         )
-        print(f"anchor=({ax},{ay}) location_uid={loc_uid}")
+        log_dump(
+            f"anchor=({ax},{ay}) location_uid={loc_uid}",
+            activity="script",
+        )
 
         before = _progress_snapshot(api_loading_progress(client, world_uid))
-        print(f"progress before: {before}")
+        log_dump(f"progress before: {before}", activity="script")
 
         entry_resp: dict[str, Any] | None = None
         schedule_resp: dict[str, Any] | None = None
 
         if args.schedule_only:
-            print("\n=== schedule-chunk-refine only ===")
+            log_dump("schedule-chunk-refine only", activity="script")
             t0 = time.perf_counter()
             schedule_resp = api_schedule_chunk_refine(client, world_uid, x=ax, y=ay)
-            print(
+            log_dump(
                 f"schedule: {time.perf_counter() - t0:.2f}s  "
                 f"enqueued={schedule_resp.get('enqueued')}  "
-                f"queue={schedule_resp.get('refine_queue_depth')}"
+                f"queue={schedule_resp.get('refine_queue_depth')}",
+                activity="script",
             )
         else:
-            print("\n=== refine-from-entry ===")
+            log_dump("refine-from-entry", activity="script")
             t0 = time.perf_counter()
             entry_resp = api_refine_from_entry(
                 client,
@@ -233,26 +235,31 @@ def main() -> None:
                 location_uid=loc_uid,
                 schedule_bg=args.schedule_bg,
             )
-            print(
+            log_dump(
                 f"entry: {time.perf_counter() - t0:.2f}s  "
                 f"chunks_done={entry_resp.get('chunks_done')}  "
                 f"queue={entry_resp.get('refine_queue_depth')}  "
                 f"scheduled_enqueued={entry_resp.get('scheduled_enqueued')}  "
-                f"schedule_bg={entry_resp.get('schedule_bg')}"
+                f"schedule_bg={entry_resp.get('schedule_bg')}",
+                activity="script",
             )
             if args.extra_schedule:
-                print("\n=== extra schedule-chunk-refine ===")
+                log_dump("extra schedule-chunk-refine", activity="script")
                 t1 = time.perf_counter()
                 schedule_resp = api_schedule_chunk_refine(
                     client, world_uid, x=ax, y=ay,
                 )
-                print(
+                log_dump(
                     f"schedule: {time.perf_counter() - t1:.2f}s  "
                     f"enqueued={schedule_resp.get('enqueued')}  "
-                    f"queue={schedule_resp.get('refine_queue_depth')}"
+                    f"queue={schedule_resp.get('refine_queue_depth')}",
+                    activity="script",
                 )
 
-        print(f"\n=== poll loading-progress ({args.poll_seconds}s) ===")
+        log_dump(
+            f"poll loading-progress ({args.poll_seconds}s)",
+            activity="script",
+        )
         samples = _poll_progress(
             client,
             world_uid,
@@ -278,10 +285,10 @@ def main() -> None:
         payload = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
         json_latest.write_text(payload, encoding="utf-8")
         json_stamped.write_text(payload, encoding="utf-8")
-        print(f"\nJSON report: {json_latest}")
+        log_dump(f"JSON report: {json_latest}", activity="script")
 
         if args.render:
-            print("\n=== map render after entry/bg ===")
+            log_dump("map render after entry/bg", activity="script")
             summary = dump_map_renders(
                 client,
                 world_uid,
@@ -293,9 +300,6 @@ def main() -> None:
             payload = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
             json_latest.write_text(payload, encoding="utf-8")
             json_stamped.write_text(payload, encoding="utf-8")
-
-        stamped_log.write_text(transcript.read_text(encoding="utf-8"), encoding="utf-8")
-        print(f"stamped transcript: {stamped_log}")
 
 
 if __name__ == "__main__":

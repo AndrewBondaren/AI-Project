@@ -1,4 +1,4 @@
-"""Per-world generation logs under ``logs/generation/{world_uid}/``.
+"""Per-world generation logs under ``backend/logs/generation/{world_uid}/``.
 
 Separated from ``logs/app.log`` / console so bake diagnostics (surface
 context, world_map sampling, tile flat) survive terminal scrollback.
@@ -34,6 +34,7 @@ _GENERATION_PREFIXES: tuple[str, ...] = (
     "app.application.worldData.terrainParallelLog",
     "app.application.worldData.loadingProgress",
     "app.application.worldData.worldSurfaceMaterializationOrchestrator",
+    "app.application.worldData.render",
     "app.core.generationLogging",
     "app.relief",
 )
@@ -41,9 +42,15 @@ _GENERATION_PREFIXES: tuple[str, ...] = (
 _log = logging.getLogger(__name__)
 
 
-def generation_log_dir(world_uid: str, *, root: str | Path = "logs/generation") -> Path:
-    """``logs/generation/{world_uid}/`` (cwd-relative; normally ``backend/``)."""
-    return Path(root) / world_uid
+def default_generation_log_root() -> Path:
+    """``backend/logs/generation`` regardless of process cwd."""
+    return Path(__file__).resolve().parents[2] / "logs" / "generation"
+
+
+def generation_log_dir(world_uid: str, *, root: str | Path | None = None) -> Path:
+    """``{root}/{world_uid}/`` — default ``backend/logs/generation/{world_uid}/``."""
+    base = Path(root) if root is not None else default_generation_log_root()
+    return base / world_uid
 
 
 def _stamp_utc() -> str:
@@ -70,7 +77,7 @@ def generation_world_log(
     world_uid: str,
     *,
     mode: str,
-    root: str | Path = "logs/generation",
+    root: str | Path | None = None,
     level: int = logging.DEBUG,
 ) -> Iterator[Path]:
     """Attach a JSON file handler for one generation run; detach on exit.

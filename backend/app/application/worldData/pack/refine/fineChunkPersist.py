@@ -27,7 +27,14 @@ from app.application.worldData.pack.refine.fineTileContext import (
     VertexSlotSeam,
 )
 from app.application.worldData.persistResult import PersistResult
-from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay, merge_grade_rim_rays
+from app.application.worldData.generators.terrain.relief.validate.gradeCellRays import (
+    validate_grade_cell_empty_rays,
+)
+from app.dataModel.terrain.relief.gradeRimRay import (
+    GradeRimRay,
+    merge_grade_rim_rays,
+    pack_rim_slot_rays,
+)
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume, inside_location_volume
@@ -165,7 +172,13 @@ class FineChunkPersist:
                 location_uid, chunk, territory_volume=volume,
             )
             self._total_cells += len(loc_cells)
-        self._write_grade_ray_sidecars()
+        cells = set(self._meter_surface_z)
+        slots = pack_rim_slot_rays(
+            merge_grade_rim_rays(self._ray_acc),
+            cells=cells,
+        )
+        self._write_grade_ray_sidecars(slots)
+        validate_grade_cell_empty_rays(cells, slots)
         self._writer.recalc_manifest_counters()
         self._writer.save_manifest()
         grade_instances = (
@@ -186,7 +199,7 @@ class FineChunkPersist:
             meter_surface_z=self._meter_surface_z,
             grade_instances=grade_instances,
             grade_systems=grade_systems,
-            rim_rays=merge_grade_rim_rays(self._ray_acc),
+            rim_rays=slots,
             materialize_s=self._materialize_s,
             grade_s=self._grade_s,
         )
@@ -198,13 +211,13 @@ class FineChunkPersist:
             if prev is None or cell.z > prev:
                 self._meter_surface_z[key] = int(cell.z)
 
-    def _write_grade_ray_sidecars(self) -> None:
-        if not self._ray_acc:
+    def _write_grade_ray_sidecars(self, slots: tuple[GradeRimRay, ...]) -> None:
+        if not slots:
             return
         ctx = self._ctx
         wilderness: list[GradeRimRay] = []
         by_loc: dict[str, list[GradeRimRay]] = {}
-        for ray in merge_grade_rim_rays(self._ray_acc):
+        for ray in slots:
             z = self._meter_surface_z.get((ray.x, ray.y))
             hit = (
                 location_for_cell(ray.x, ray.y, z, ctx.location_pairs)

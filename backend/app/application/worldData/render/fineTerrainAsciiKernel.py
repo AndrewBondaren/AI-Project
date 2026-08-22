@@ -135,6 +135,27 @@ def _keys_at_surface_z(
     return {xy for xy, sz in values_surface_z(cols).items() if int(sz) == want}
 
 
+def crop_bounds_around_keys(
+    keys: Iterable[tuple[int, int]],
+    mosaic: tuple[int, int, int, int],
+    *,
+    halo: int = 1,
+) -> tuple[int, int, int, int] | None:
+    """Inclusive bbox of ``keys`` expanded by ``halo``, clamped to mosaic."""
+    cells = list(keys)
+    if not cells:
+        return None
+    mx0, mx1, my0, my1 = mosaic
+    xs = [x for x, _ in cells]
+    ys = [y for _, y in cells]
+    return (
+        max(mx0, min(xs) - halo),
+        min(mx1, max(xs) + halo),
+        max(my0, min(ys) - halo),
+        min(my1, max(ys) + halo),
+    )
+
+
 def should_dump_grade_at_z(
     cols: Mapping[tuple[int, int], FineTerrainColumnWire],
     rays: GradeRayIndex,

@@ -11,10 +11,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from app.application.worldData.generators.terrain.relief.discover.neighbors import (
-    EIGHT_DELTAS,
     GRID_OUTWARD_DELTA,
-    facing_for_delta,
     is_cardinal,
+    iter_body_eight_views,
     step_k,
     truncate_trace,
 )
@@ -197,31 +196,28 @@ class FrontStage:
         vertices = self.vertices
         shots: list[tuple[Coord, Facing, int]] = []
         seen: set[tuple[Coord, Facing]] = set()
-        for (x, y), z_body in body.items():
-            for dx, dy in EIGHT_DELTAS:
-                nb = (x + dx, y + dy)
-                if nb in body:
-                    continue
-                zn = cell_z(surface, nb)
-                if zn is None or zn >= z_body:
-                    continue
-                if _diagonal_lands_on_ortho_target(
-                    dx, dy, (x, y), z_body, surface, body,
-                ):
-                    continue
-                facing = facing_for_delta((dx, dy))
-                if facing is None:
-                    continue
-                key = ((x, y), facing)
-                if key in seen:
-                    continue
-                if not plugin.may_shoot((x, y), nb, surface):
-                    continue
-                ni = vertices.index(nb[0], nb[1])
-                if ni is not None and vertices.occ[ni] != 0:
-                    continue
-                seen.add(key)
-                shots.append(((x, y), facing, z_body - zn))
+        for src, facing, nb, z_body, zn in iter_body_eight_views(
+            body, lambda xy: cell_z(surface, xy),
+        ):
+            if nb in body:
+                continue
+            if zn >= z_body:
+                continue
+            dx, dy = nb[0] - src[0], nb[1] - src[1]
+            if _diagonal_lands_on_ortho_target(
+                dx, dy, src, z_body, surface, body,
+            ):
+                continue
+            key = (src, facing)
+            if key in seen:
+                continue
+            if not plugin.may_shoot(src, nb, surface):
+                continue
+            ni = vertices.index(nb[0], nb[1])
+            if ni is not None and vertices.occ[ni] != 0:
+                continue
+            seen.add(key)
+            shots.append((src, facing, z_body - zn))
         return shots
 
     def _envelope_for_run(

@@ -1,4 +1,4 @@
-"""Relief logging helpers — tz_terrain_relief R8 + R21/R34 WARNING."""
+"""Relief logging helpers — tz_terrain_relief R8 + R21/R34 WARNING + R44 ERROR."""
 
 from __future__ import annotations
 
@@ -32,6 +32,11 @@ def relief_info(event: str, **fields: Any) -> None:
 def relief_warning(event: str, **fields: Any) -> None:
     worker = _worker_fields()
     logger.warning("relief | %s | %s", event, _fmt(fields), extra=_extra(event, worker))
+
+
+def relief_error(event: str, **fields: Any) -> None:
+    worker = _worker_fields()
+    logger.error("relief | %s | %s", event, _fmt(fields), extra=_extra(event, worker))
 
 
 def relief_debug(event: str, **fields: Any) -> None:

@@ -173,6 +173,14 @@ class TestWildernessTilePackRenderer(unittest.TestCase):
         self.assertEqual(len(row1[0]), len(row2[0]))
         self.assertIn("tile-local grid gx: 0..1", occupied_ascii[2])
 
+        sparse = dict(renderer.iter_occupied_z_sparse())
+        self.assertEqual(sorted(sparse), [1, 2, 3])
+        self.assertIn("format=sparse_xy", sparse[2])
+        self.assertIn("0\t0\tm", sparse[2])
+        self.assertNotIn("1\t0\t", sparse[2])
+        self.assertIn("0\t0\tm", sparse[1])
+        self.assertIn("1\t0\t_", sparse[1])
+
     def test_surface_grade_and_grade_at_z(self) -> None:
         chunks = [
             FineTerrainChunkWire(
@@ -223,6 +231,38 @@ class TestWildernessTilePackRenderer(unittest.TestCase):
         self.assertIn("_", grade3)
         pairs = list(renderer.iter_grade_z_levels_aligned())
         self.assertEqual([z for z, _ in pairs], [3])
+
+
+    def test_grade_at_z_crop_empty_shrinks_frame(self) -> None:
+        columns = [
+            FineTerrainColumnWire(
+                lx=0,
+                ly=0,
+                runs=[FineTerrainZRun(z0=0, z1=5, system_terrain="plains")],
+                system_grade_uid="g1",
+                system_facing="east",
+            ),
+        ]
+        columns.extend(
+            FineTerrainColumnWire(
+                lx=x,
+                ly=0,
+                runs=[FineTerrainZRun(z0=0, z1=1, system_terrain="forest")],
+            )
+            for x in range(1, 8)
+        )
+        chunks = [
+            FineTerrainChunkWire(cx=0, cy=0, chunk_columns=8, columns=columns),
+        ]
+        renderer = WildernessTilePackRenderer(
+            chunks, tile_gx=0, tile_gy=0, tile_size_m=1000,
+        )
+        mosaic = renderer.render_grade_at_z(5)
+        cropped = renderer.render_grade_at_z(5, crop_empty=True)
+        self.assertIn("_", cropped)
+        self.assertLess(len(cropped), len(mosaic))
+        self.assertIn("tile-local grid gx: 0..1", cropped)
+        self.assertIn("tile-local grid gx: 0..7", mosaic)
 
 
 if __name__ == "__main__":

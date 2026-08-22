@@ -1,6 +1,7 @@
-"""L2 outdoor grade ASCII — one 3×3 cell (center + 8 outgoing rim rays).
+"""L2 outdoor grade ASCII — one 3×3 cell (center + 8 pack slots).
 
-SoT: ``docs/tz_terrain_relief_consume.md``. Does not read column ``system_facing``.
+SoT: ``docs/tz_terrain_relief_consume.md``. Reads pack rays only (sender or
+receiver). Does not call ``opposite`` and does not read column ``system_facing``.
 Slot positions come from ``GRID_OUTWARD_DELTA`` (Facing); glyphs from
 ``grade_ray_glyph`` (ReliefSideKind + Facing).
 """

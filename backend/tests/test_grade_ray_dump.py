@@ -96,6 +96,26 @@ class TestGradeRayDump(unittest.TestCase):
         self.assertIn("_", mid[0])
         self.assertNotIn(GRADE_SHEER_SYMBOL, mid[0])
 
+    def test_draw_paints_sender_and_receiver_slots(self) -> None:
+        cols = {
+            (0, 1): FineTerrainColumnWire(
+                lx=0, ly=1,
+                runs=[FineTerrainZRun(z0=0, z1=10, system_terrain="plains")],
+            ),
+            (0, 0): FineTerrainColumnWire(
+                lx=0, ly=0,
+                runs=[FineTerrainZRun(z0=0, z1=4, system_terrain="plains")],
+            ),
+        }
+        sender = GradeRimRay(x=0, y=1, facing=Facing.SOUTH, kind=ReliefSideKind.SHEER)
+        recv = GradeRimRay(x=0, y=0, facing=Facing.NORTH, kind=ReliefSideKind.SHEER)
+        body = draw_grade_consume_grid(
+            cols,
+            GradeRayIndex((sender, recv)),
+            title="t",
+        )
+        self.assertEqual(body.count(GRADE_SHEER_SYMBOL), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

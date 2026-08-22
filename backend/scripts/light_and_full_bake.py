@@ -7,7 +7,8 @@ Unlike ``initialize_world.py`` (single mode), this script:
 1. imports fixture if world missing (clean DB); else reuses skeleton uid
 2. wipes local pack + clears map patches
 3. runs ``mode=light``, then ``mode=full`` without re-import
-4. writes **full transcript + JSON report** under ``.local/map-render/…``
+4. writes JSON report + L0 ASCII under ``.local/map-render/…``; ticks go to
+   ``backend/logs/app.log`` and ``logs/generation/{uid}/bake-dump-*.log``.
 
 **Workaround WP-DELETE-1** ([``tz_generator_technical_debt.md``](../../docs/tz_generator_technical_debt.md)):
 do **not** call ``DELETE /worlds/{uid}`` — FK fail leaves a half-deleted world.
@@ -37,19 +38,21 @@ if str(REPO / "backend") not in sys.path:
     sys.path.insert(0, str(REPO / "backend"))
 
 from app.application.worldData.pack.import_.importLevels import filter_bundle_for_export
+from app.application.worldData.render.dumpLog import (
+    add_debug_logging_argument,
+    heartbeat_loop,
+    log_dump,
+    log_dump_kv,
+    log_dump_warning,
+)
+from app.core.generationLogging import generation_world_log
+from app.core.loggingConfig import ensure_script_logging
 from debug_api_helpers import DebugApiError, _require_ok, api_clear_map, api_client
 from debug_surface_helpers import (
     api_list_bootstrap_tiles,
     api_loading_progress,
     api_pack_bake,
     sample_loading_progress_line,
-)
-from debug_transcript import (
-    add_debug_progress_argument,
-    progress,
-    progress_loop,
-    set_debug_progress,
-    tee_stdio,
 )
 from render_maps import _print_summary, dump_map_renders
 
@@ -154,14 +157,10 @@ def _sorted_tiles(tiles: set[TileKey] | list[TileKey]) -> list[TileKey]:
     return sorted(tiles, key=lambda t: (t[1], t[0]))
 
 
-def _print_tile_list(title: str, tiles: set[TileKey] | list[TileKey]) -> None:
+def _log_tile_list(title: str, tiles: set[TileKey] | list[TileKey]) -> None:
     ordered = _sorted_tiles(tiles)
-    print(f"{title} ({len(ordered)}):")
-    if not ordered:
-        print("  (none)")
-        return
-    for gx, gy in ordered:
-        print(f"  {_tile_label(gx, gy)}")
+    labels = ", ".join(_tile_label(gx, gy) for gx, gy in ordered) or "(none)"
+    log_dump(f"{title} ({len(ordered)}): {labels}", activity="script")
 
 
 def _tiles_from_plan(plan: dict) -> set[TileKey]:
@@ -219,18 +218,23 @@ def _snapshot_pack(world_uid: str) -> dict[str, Any]:
 
 
 def _print_stage_inventory(stage: str, snap: dict[str, Any]) -> None:
-    print(f"\n=== CREATED ON {stage} (disk inventory) ===")
-    print(f"manifest bake_mode     {snap.get('bake_mode')}")
-    print(f"climate_coarse.zst     {snap.get('has_climate_coarse')}")
-    print(f"locations_index.json   {snap.get('has_locations_index')}")
-    print(f"world_map_cells        {snap.get('world_map_cells')}")
-    print(f"L0 macro-tiles         {len(snap.get('tiles') or ())}")
-    for blob in snap.get("tile_blobs") or []:
-        status = "ok" if blob["blob_exists"] else "MISSING"
-        print(
-            f"  {blob['label']:<12}  {status:<7}  "
-            f"{blob['blob_bytes']:>8} B  {blob.get('world_map_path') or '-'}"
-        )
+    missing = [
+        str(blob["label"])
+        for blob in (snap.get("tile_blobs") or [])
+        if not blob["blob_exists"]
+    ]
+    log_dump_kv(
+        f"CREATED ON {stage} (disk inventory)",
+        {
+            "bake_mode": snap.get("bake_mode"),
+            "climate_coarse": snap.get("has_climate_coarse"),
+            "locations_index": snap.get("has_locations_index"),
+            "world_map_cells": snap.get("world_map_cells"),
+            "l0_macro_tiles": len(snap.get("tiles") or ()),
+            "missing_blobs": ",".join(missing) if missing else "-",
+        },
+        activity="script",
+    )
 
 
 def _bake_metrics(
@@ -262,10 +266,7 @@ def _bake_metrics(
 
 
 def _print_metrics(title: str, metrics: dict[str, Any]) -> None:
-    print(f"\n=== {title} ===")
-    width = max(len(str(k)) for k in metrics)
-    for key, value in metrics.items():
-        print(f"{key:<{width}}  {value}")
+    log_dump_kv(title, metrics, activity="script")
 
 
 def _run_bake(
@@ -277,11 +278,12 @@ def _run_bake(
 ) -> dict[str, Any]:
     started_at = datetime.now().astimezone()
     t0 = time.perf_counter()
-    progress(f"[online] {mode}_bake starting")
-    with progress_loop(
+    log_dump(f"[online] {mode}_bake starting", activity="script")
+    with heartbeat_loop(
         lambda: sample_loading_progress_line(
             world_uid, label=f"{mode}_bake", t0=t0,
         ),
+        activity="script_poll",
     ):
         bake = api_pack_bake(
             client,
@@ -308,7 +310,7 @@ def _wipe_local_pack(world_uid: str) -> None:
     pack_root = REPO / "db" / "worlds" / world_uid
     if pack_root.is_dir():
         shutil.rmtree(pack_root, ignore_errors=True)
-        print(f"wiped local pack dir: {pack_root}")
+        log_dump(f"wiped local pack dir: {pack_root}", activity="script")
 
 
 def _write_stage_render_log(
@@ -374,47 +376,60 @@ def _print_delta_report(
     removed = light_tiles - full_tiles  # should be empty
     planned_full_only = planned_full - planned_light
 
-    print("\n" + "=" * 60)
-    print("LIGHT_BAKE vs FULL_BAKE — what was created")
-    print("=" * 60)
-    print(f"world_uid: {world_uid}")
-    print(f"pack dir:  {_pack_dir(world_uid)}")
+    log_dump(
+        f"LIGHT_BAKE vs FULL_BAKE world_uid={world_uid} pack_dir={_pack_dir(world_uid)}",
+        activity="script",
+    )
+    _log_tile_list("planned light_bake tiles", planned_light)
+    _log_tile_list("planned full_bake tiles", planned_full)
+    _log_tile_list("planned only on full (delta)", planned_full_only)
 
-    print("\n--- PLAN (before bake) ---")
-    _print_tile_list("planned light_bake tiles", planned_light)
-    _print_tile_list("planned full_bake tiles", planned_full)
-    _print_tile_list("planned only on full (delta)", planned_full_only)
+    log_dump_kv(
+        "AFTER light_bake (on disk)",
+        {
+            "bake_mode": after_light.get("bake_mode"),
+            "climate_coarse": after_light.get("has_climate_coarse"),
+            "locations_index": after_light.get("has_locations_index"),
+        },
+        activity="script",
+    )
+    _log_tile_list("L0 tiles created by light_bake", light_tiles)
 
-    print("\n--- AFTER light_bake (on disk) ---")
-    print(f"bake_mode:           {after_light.get('bake_mode')}")
-    print(f"climate_coarse:      {after_light.get('has_climate_coarse')}")
-    print(f"locations_index:     {after_light.get('has_locations_index')}")
-    _print_tile_list("L0 tiles created by light_bake", light_tiles)
-
-    print("\n--- AFTER full_bake (on disk) ---")
-    print(f"bake_mode:           {after_full.get('bake_mode')}")
-    print(f"climate_coarse:      {after_full.get('has_climate_coarse')}")
-    print(f"locations_index:     {after_full.get('has_locations_index')}")
-    _print_tile_list("L0 tiles present after full_bake", full_tiles)
-    _print_tile_list("L0 tiles ADDED by full_bake", added)
+    log_dump_kv(
+        "AFTER full_bake (on disk)",
+        {
+            "bake_mode": after_full.get("bake_mode"),
+            "climate_coarse": after_full.get("has_climate_coarse"),
+            "locations_index": after_full.get("has_locations_index"),
+        },
+        activity="script",
+    )
+    _log_tile_list("L0 tiles present after full_bake", full_tiles)
+    _log_tile_list("L0 tiles ADDED by full_bake", added)
     if removed:
-        _print_tile_list("L0 tiles lost after full (unexpected)", removed)
+        _log_tile_list("L0 tiles lost after full (unexpected)", removed)
 
-    print("\n--- SUMMARY ---")
-    print(f"light_bake created:  {len(light_tiles)} tile(s)")
-    print(f"full_bake added:     {len(added)} tile(s)")
-    print(f"full_bake total:     {len(full_tiles)} tile(s)")
+    log_dump(
+        f"SUMMARY light_created={len(light_tiles)} full_added={len(added)} "
+        f"full_total={len(full_tiles)}",
+        activity="script",
+    )
     if light_tiles and not light_tiles <= full_tiles:
-        print("WARNING: some light tiles missing after full — check bake/overwrite")
+        log_dump_warning(
+            "some light tiles missing after full — check bake/overwrite",
+            activity="script",
+        )
     if planned_light and light_tiles != planned_light:
-        print(
+        log_dump(
             f"NOTE: light disk tiles ({len(light_tiles)}) != planned light "
-            f"({len(planned_light)})"
+            f"({len(planned_light)})",
+            activity="script",
         )
     if planned_full and full_tiles != planned_full:
-        print(
+        log_dump(
             f"NOTE: full disk tiles ({len(full_tiles)}) != planned full "
-            f"({len(planned_full)})"
+            f"({len(planned_full)})",
+            activity="script",
         )
 
 
@@ -463,9 +478,9 @@ def main() -> None:
         action=argparse.BooleanOptionalAction,
         default=True,
     )
-    add_debug_progress_argument(parser)
+    add_debug_logging_argument(parser)
     args = parser.parse_args()
-    set_debug_progress(args.debug)
+    ensure_script_logging(debug=args.debug)
 
     fixture = args.fixture.resolve()
     if not fixture.is_file():
@@ -476,8 +491,6 @@ def main() -> None:
         REPO / ".local" / "map-render" / world_uid / "light-and-full"
     )
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    log_latest = out_root / "light-and-full-latest.log"
-    log_stamped = out_root / f"light-and-full-{stamp}.log"
     json_latest = out_root / "light-and-full-latest.json"
     json_stamped = out_root / f"light-and-full-{stamp}.json"
     light_render_log = out_root / "light-bake-render-latest.log"
@@ -485,80 +498,80 @@ def main() -> None:
     full_render_log = out_root / "full-bake-render-latest.log"
     full_render_stamped = out_root / f"full-bake-render-{stamp}.log"
 
-    with tee_stdio(log_latest, announce_saved=True):
-        print(f"report dir: {out_root}")
-        print(f"transcript: {log_latest}")
+    with api_client() as client:
+        client.timeout = _DEFAULT_TIMEOUT_S
 
-        with api_client() as client:
-            client.timeout = _DEFAULT_TIMEOUT_S
-
-            # WP-DELETE-1 workaround: never DELETE /worlds/{uid} (FK → 500 / half-delete).
-            print(
-                "WP-DELETE-1 workaround: skip DELETE world; "
-                "reset = wipe pack dir + clear map patches only"
-            )
-            _wipe_local_pack(world_uid)
-            existing = client.get(f"/worlds/{world_uid}")
-            if args.reuse:
-                if existing.status_code != 200:
-                    raise SystemExit(
-                        f"--reuse: world '{world_uid}' not found "
-                        f"(HTTP {existing.status_code})",
-                    )
-                print(f"reuse skeleton world: {world_uid}")
-            elif existing.status_code == 200:
-                print(
-                    f"world '{world_uid}' already exists — reuse skeleton "
-                    f"(re-import would remap to a new UUID)"
+        log_dump(
+            "WP-DELETE-1 workaround: skip DELETE world; "
+            "reset = wipe pack dir + clear map patches only",
+            activity="script",
+        )
+        _wipe_local_pack(world_uid)
+        existing = client.get(f"/worlds/{world_uid}")
+        if args.reuse:
+            if existing.status_code != 200:
+                raise SystemExit(
+                    f"--reuse: world '{world_uid}' not found "
+                    f"(HTTP {existing.status_code})",
                 )
-            else:
-                before = {
+            log_dump(f"reuse skeleton world: {world_uid}", activity="script")
+        elif existing.status_code == 200:
+            log_dump(
+                f"world '{world_uid}' already exists — reuse skeleton "
+                f"(re-import would remap to a new UUID)",
+                activity="script",
+            )
+        else:
+            before = {
+                w.get("world_uid")
+                for w in (client.get("/worlds").json() or [])
+                if isinstance(w, dict)
+            }
+            log_dump(f"import fixture → {world_uid}", activity="script")
+            imp = _import_fixture(client, str(fixture))
+            log_dump(
+                "import: "
+                + str({
+                    k: v for k, v in imp.items()
+                    if k not in ("rolled_back", "rollback_reason")
+                }),
+                activity="script",
+            )
+            r = client.get(f"/worlds/{world_uid}")
+            if r.status_code != 200:
+                after = {
                     w.get("world_uid")
                     for w in (client.get("/worlds").json() or [])
                     if isinstance(w, dict)
                 }
-                print(f"import fixture → {world_uid}")
-                imp = _import_fixture(client, str(fixture))
-                print(
-                    "import:",
-                    {
-                        k: v for k, v in imp.items()
-                        if k not in ("rolled_back", "rollback_reason")
-                    },
-                )
-                r = client.get(f"/worlds/{world_uid}")
-                if r.status_code != 200:
-                    after = {
-                        w.get("world_uid")
-                        for w in (client.get("/worlds").json() or [])
-                        if isinstance(w, dict)
-                    }
-                    created = sorted(uid for uid in (after - before) if uid)
-                    if len(created) == 1:
-                        world_uid = created[0]
-                        print(
-                            f"NOTE: import remapped uid → {world_uid} "
-                            f"(fixture uid missing after import)"
-                        )
-                        out_root = args.render_out or (
-                            REPO / ".local" / "map-render" / world_uid / "light-and-full"
-                        )
-                        log_latest = out_root / "light-and-full-latest.log"
-                        json_latest = out_root / "light-and-full-latest.json"
-                        json_stamped = out_root / f"light-and-full-{stamp}.json"
-                        light_render_log = out_root / "light-bake-render-latest.log"
-                        light_render_stamped = out_root / f"light-bake-render-{stamp}.log"
-                        full_render_log = out_root / "full-bake-render-latest.log"
-                        full_render_stamped = out_root / f"full-bake-render-{stamp}.log"
-                    else:
-                        raise SystemExit(
-                            f"after import, world '{world_uid}' missing "
-                            f"(HTTP {r.status_code}); new uids={created!r} — "
-                            f"pass --world-uid explicitly",
-                        )
-            api_clear_map(client, world_uid)
-            print(f"cleared map patches: {world_uid}")
+                created = sorted(uid for uid in (after - before) if uid)
+                if len(created) == 1:
+                    world_uid = created[0]
+                    log_dump(
+                        f"NOTE: import remapped uid → {world_uid} "
+                        f"(fixture uid missing after import)",
+                        activity="script",
+                    )
+                    out_root = args.render_out or (
+                        REPO / ".local" / "map-render" / world_uid / "light-and-full"
+                    )
+                    json_latest = out_root / "light-and-full-latest.json"
+                    json_stamped = out_root / f"light-and-full-{stamp}.json"
+                    light_render_log = out_root / "light-bake-render-latest.log"
+                    light_render_stamped = out_root / f"light-bake-render-{stamp}.log"
+                    full_render_log = out_root / "full-bake-render-latest.log"
+                    full_render_stamped = out_root / f"full-bake-render-{stamp}.log"
+                else:
+                    raise SystemExit(
+                        f"after import, world '{world_uid}' missing "
+                        f"(HTTP {r.status_code}); new uids={created!r} — "
+                        f"pass --world-uid explicitly",
+                    )
+        api_clear_map(client, world_uid)
+        log_dump(f"cleared map patches: {world_uid}", activity="script")
 
+        with generation_world_log(world_uid, mode="dump"):
+            log_dump(f"report dir: {out_root}", activity="script")
             light_plan = api_list_bootstrap_tiles(
                 client, world_uid, max_tiles=args.max_tiles, scope="light",
             )
@@ -568,26 +581,30 @@ def main() -> None:
             planned_light = _tiles_from_plan(light_plan)
             planned_full = _tiles_from_plan(full_plan)
 
-            print("\n=== PLAN before bake ===")
-            print(
-                f"light scope: tile_count={light_plan.get('tile_count')} "
-                f"max_tiles={light_plan.get('max_tiles')} capped={light_plan.get('capped')}"
+            log_dump(
+                f"PLAN light tile_count={light_plan.get('tile_count')} "
+                f"max_tiles={light_plan.get('max_tiles')} capped={light_plan.get('capped')}",
+                activity="script",
             )
-            _print_tile_list("planned light_bake", planned_light)
-            print(
-                f"full scope:  tile_count={full_plan.get('tile_count')} "
-                f"max_tiles={full_plan.get('max_tiles')} capped={full_plan.get('capped')}"
+            _log_tile_list("planned light_bake", planned_light)
+            log_dump(
+                f"PLAN full tile_count={full_plan.get('tile_count')} "
+                f"max_tiles={full_plan.get('max_tiles')} capped={full_plan.get('capped')}",
+                activity="script",
             )
-            _print_tile_list("planned full_bake", planned_full)
-            _print_tile_list("delta planned (full − light)", planned_full - planned_light)
+            _log_tile_list("planned full_bake", planned_full)
+            _log_tile_list("delta planned (full − light)", planned_full - planned_light)
 
-            print(f"\n--- light_bake → full_bake  world_uid={world_uid} ---")
+            log_dump(
+                f"light_bake → full_bake world_uid={world_uid}",
+                activity="script",
+            )
             _run_bake(client, world_uid, mode="light", max_tiles=args.max_tiles)
             after_light = _snapshot_pack(world_uid)
             _print_stage_inventory("light_bake", after_light)
 
             if args.render:
-                print("\n=== map render after light ===")
+                log_dump("map render after light", activity="script")
                 light_summary = dump_map_renders(
                     client,
                     world_uid,
@@ -602,7 +619,10 @@ def main() -> None:
                     summary=light_summary,
                 )
                 shutil.copyfile(light_render_log, light_render_stamped)
-                print(f"light bake render log: {light_render_log}")
+                log_dump(
+                    f"light bake render log: {light_render_log}",
+                    activity="script",
+                )
 
             _run_bake(client, world_uid, mode="full", max_tiles=None)
             after_full = _snapshot_pack(world_uid)
@@ -626,11 +646,11 @@ def main() -> None:
                 after_full=after_full,
             )
             shutil.copyfile(json_latest, json_stamped)
-            print(f"\nJSON report: {json_latest}")
-            print(f"JSON stamped: {json_stamped}")
+            log_dump(f"JSON report: {json_latest}", activity="script")
+            log_dump(f"JSON stamped: {json_stamped}", activity="script")
 
             if args.render:
-                print("\n=== map render after full ===")
+                log_dump("map render after full", activity="script")
                 full_summary = dump_map_renders(
                     client,
                     world_uid,
@@ -645,14 +665,11 @@ def main() -> None:
                     summary=full_summary,
                 )
                 shutil.copyfile(full_render_log, full_render_stamped)
-                print(f"full bake render log: {full_render_log}")
-                print(f"render root: {out_root}")
-
-        # Stamp a copy of the full transcript after tee closes its handle…
-        # (copy while still open would race; do after context — see below)
-
-    shutil.copyfile(log_latest, log_stamped)
-    print(f"stamped transcript: {log_stamped}")
+                log_dump(
+                    f"full bake render log: {full_render_log}",
+                    activity="script",
+                )
+                log_dump(f"render root: {out_root}", activity="script")
 
 
 if __name__ == "__main__":

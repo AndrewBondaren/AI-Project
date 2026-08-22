@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 
 from app.dataModel.spatial.facing import (
     CARDINAL_WALL_OUTWARD_DELTA,
@@ -34,6 +34,26 @@ DELTA_TO_FACING: dict[tuple[int, int], Facing] = GRID_DELTA_TO_FACING
 CARDINAL_DELTAS: frozenset[tuple[int, int]] = frozenset(
     CARDINAL_WALL_OUTWARD_DELTA.values()
 )
+
+
+def iter_body_eight_views(
+    body: Mapping[tuple[int, int], int],
+    z_at: Callable[[tuple[int, int]], int | None],
+) -> Iterator[tuple[tuple[int, int], Facing, tuple[int, int], int, int]]:
+    """Vertex body × 8: ``(src, facing, neighbor, z_src, z_nb)`` when neighbor z exists.
+
+    Same 8-look leftover rim shots use. Caller filters which views fire.
+    """
+    for (x, y), z_body in body.items():
+        src = (int(x), int(y))
+        z_src = int(z_body)
+        for facing in EIGHT_FACINGS:
+            dx, dy = GRID_OUTWARD_DELTA[facing]
+            nb = (src[0] + dx, src[1] + dy)
+            zn = z_at(nb)
+            if zn is None:
+                continue
+            yield src, facing, nb, z_src, int(zn)
 
 
 def facing_for_delta(delta: tuple[int, int]) -> Facing | None:

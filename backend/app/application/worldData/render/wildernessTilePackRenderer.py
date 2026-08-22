@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from app.application.worldData.render.fineTerrainAsciiKernel import (
     column_diagnostics_summary,
+    crop_bounds_around_keys,
     draw_grade_consume_grid,
     draw_int_grid,
     draw_symbol_grid,
+    format_sparse_symbol_cells,
     grade_consume_z_levels,
     paired_width_from_columns,
     symbols_at_z,
@@ -27,6 +29,14 @@ from app.application.worldData.render.renderPayloads import (
     LEVEL_SURFACE_Z,
 )
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire
+
+
+def _z_in_window(z: int, z_min: int | None, z_max: int | None) -> bool:
+    if z_min is not None and int(z) < int(z_min):
+        return False
+    if z_max is not None and int(z) > int(z_max):
+        return False
+    return True
 
 
 class WildernessTilePackRenderer:
@@ -164,13 +174,26 @@ class WildernessTilePackRenderer:
             bounds=frame,
         )
 
-    def render_grade_at_z(self, z: int) -> str:
-        """3×3 consume dump for cells whose surface_z == ``z``; mosaic frame."""
+    def render_grade_at_z(self, z: int, *, crop_empty: bool = False) -> str:
+        """3×3 consume dump for cells whose surface_z == ``z``.
+
+        ``crop_empty`` shrinks the frame to those cells (+1 halo) so dump files
+        are not a full-tile 3×3 of spaces. HTTP / aligned inspect keep default.
+        """
         if not self._cols:
             return ""
         frame = self.mosaic_xy_bounds()
         if frame is None:
             return ""
+        if crop_empty:
+            keys = {
+                xy for xy, sz in values_surface_z(self._cols).items()
+                if int(sz) == int(z)
+            }
+            cropped = crop_bounds_around_keys(keys, frame)
+            if cropped is None:
+                return ""
+            frame = cropped
         x0, x1, y0, y1 = frame
         return draw_grade_consume_grid(
             self._cols,
@@ -185,12 +208,21 @@ class WildernessTilePackRenderer:
             surface_z=int(z),
         )
 
-    def iter_grade_z_levels_aligned(self):
-        """Yield ``(z, ascii)`` grade consume dumps on mosaic frame."""
+    def iter_grade_z_levels_aligned(
+        self,
+        *,
+        crop_empty: bool = False,
+        z_min: int | None = None,
+        z_max: int | None = None,
+    ):
+        """Yield ``(z, ascii)`` grade consume dumps. Optional inclusive z window."""
         for z in grade_consume_z_levels(self._cols, self._rays):
-            text = self.render_grade_at_z(int(z))
+            zi = int(z)
+            if not _z_in_window(zi, z_min, z_max):
+                continue
+            text = self.render_grade_at_z(zi, crop_empty=crop_empty)
             if text.strip():
-                yield int(z), text
+                yield zi, text
 
     def render_level(self, z: int) -> str:
         """Horizontal slice at world-z — mosaic frame; missing cells are spaces."""
@@ -243,6 +275,42 @@ class WildernessTilePackRenderer:
                     f"(pack wilderness_chunk mosaic; cells present in FineTerrain only)"
                 ),
                 bounds=frame,
+            )
+            if text.strip():
+                yield int(z), text
+
+    def iter_occupied_z_sparse(
+        self,
+        *,
+        z_min: int | None = None,
+        z_max: int | None = None,
+    ):
+        """Yield ``(z, sparse_xy text)`` — dump encoding, not a full mosaic grid.
+
+        Each file lists only cells present at that world-z. Avoids writing a
+        1000×1000 space-padded ASCII grid per occupied z (mountain tiles).
+        Optional inclusive z window skips encoding outside the dump clip.
+        """
+        frame = self.mosaic_xy_bounds()
+        extra = None
+        if frame is not None:
+            x0, x1, y0, y1 = frame
+            extra = self._extra_headers(x0, y0, x1, y1)
+        by_z = symbols_by_occupied_z(self._cols)
+        for z in sorted(by_z):
+            if not _z_in_window(int(z), z_min, z_max):
+                by_z.pop(z)
+                continue
+            cells = by_z.pop(z)
+            if not cells:
+                continue
+            text = format_sparse_symbol_cells(
+                cells,
+                title=(
+                    f"wilderness tile=({self.tile_gx},{self.tile_gy}) z={z}  "
+                    f"(pack wilderness_chunk mosaic; sparse_xy)"
+                ),
+                extra_headers=extra,
             )
             if text.strip():
                 yield int(z), text

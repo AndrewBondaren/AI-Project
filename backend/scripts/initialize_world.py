@@ -2,7 +2,8 @@
 
 Uses ``POST …/map/pack/bake`` (L0 only — Job boundaries).
 Entry/L2 is a **separate** job: ``--entry`` → ``POST …/map/refine-from-entry``.
-Transcript: ``.local/map-render/{uid}/initialize/`` via ``debug_transcript``.
+Logs: app stack (``backend/logs/app.log`` + ``generation/{uid}/bake-dump-*.log``).
+ASCII dumps: ``.local/map-render/{uid}/``.
 Requires running backend (``npm run backend``) — agents must not start it.
 
 Examples:
@@ -16,11 +17,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import sys
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +29,14 @@ if str(REPO / "backend") not in sys.path:
     sys.path.insert(0, str(REPO / "backend"))
 
 from app.application.worldData.pack.import_.importLevels import filter_bundle_for_export
+from app.application.worldData.render.dumpLog import (
+    add_debug_logging_argument,
+    heartbeat_loop,
+    log_dump,
+    log_dump_kv,
+)
+from app.core.generationLogging import generation_world_log
+from app.core.loggingConfig import ensure_script_logging
 from debug_api_helpers import (
     DebugApiError,
     _require_ok,
@@ -41,13 +49,6 @@ from debug_surface_helpers import (
     api_loading_progress,
     api_pack_bake,
     sample_loading_progress_line,
-)
-from debug_transcript import (
-    add_debug_progress_argument,
-    progress,
-    progress_loop,
-    set_debug_progress,
-    tee_stdio,
 )
 from render_maps import _print_summary, dump_map_renders
 
@@ -143,10 +144,7 @@ def _build_pack_bake_metrics(
 
 
 def _print_metrics(title: str, metrics: dict[str, Any]) -> None:
-    print(f"\n=== {title} ===")
-    width = max(len(str(k)) for k in metrics)
-    for key, value in metrics.items():
-        print(f"{key:<{width}}  {value}")
+    log_dump_kv(title, metrics, activity="script")
 
 
 def main() -> None:
@@ -211,9 +209,9 @@ def main() -> None:
         default=None,
         help="Entry job anchor meters (with --entry; else first location map_y)",
     )
-    add_debug_progress_argument(parser)
+    add_debug_logging_argument(parser)
     args = parser.parse_args()
-    set_debug_progress(args.debug)
+    ensure_script_logging(debug=args.debug)
     os.environ.setdefault("DEBUG_API_TIMEOUT", "600")
 
     fixture = args.fixture.resolve()
@@ -222,40 +220,46 @@ def main() -> None:
 
     world_uid = args.world_uid or _fixture_world_uid(fixture)
     report_root = REPO / ".local" / "map-render" / world_uid / "initialize"
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    log_latest = report_root / "initialize-latest.log"
-    log_stamped = report_root / f"initialize-{stamp}.log"
 
-    with tee_stdio(log_latest, announce_saved=True), api_client() as client:
-        print(f"report dir: {report_root}")
-        print(f"transcript: {log_latest}")
+    with generation_world_log(world_uid, mode="dump"), api_client() as client:
+        log_dump(f"report dir: {report_root}", activity="script")
         if not args.skip_import:
             imp = _import_fixture(client, str(fixture))
-            print("import:", {k: v for k, v in imp.items() if k not in ("rolled_back", "rollback_reason")})
+            log_dump(
+                "import: "
+                + str({
+                    k: v for k, v in imp.items()
+                    if k not in ("rolled_back", "rollback_reason")
+                }),
+                activity="script",
+            )
 
         if not args.skip_clear:
             api_clear_map(client, world_uid)
-            print(f"cleared map patches: {world_uid}")
-            print(
+            log_dump(f"cleared map patches: {world_uid}", activity="script")
+            log_dump(
                 "note: pack dir on disk is not deleted — rebake overwrites tiles; "
                 "wipe pack folder manually for a clean slate",
+                activity="script",
             )
 
         preview = api_list_bootstrap_tiles(client, world_uid, max_tiles=args.max_tiles)
-        print(
+        log_dump(
             f"bootstrap tiles (preview): {preview.get('tile_count')} "
-            f"max_tiles={preview.get('max_tiles')}"
+            f"max_tiles={preview.get('max_tiles')}",
+            activity="script",
         )
         for tile in preview.get("tiles") or []:
-            print(f"  Gx{tile['gx']}_Gy{tile['gy']}")
+            log_dump(f"  Gx{tile['gx']}_Gy{tile['gy']}", activity="script")
 
         started_at = datetime.now().astimezone()
         t0 = time.perf_counter()
-        progress(f"[online] {args.mode}_bake starting")
-        with progress_loop(
+        log_dump(f"[online] {args.mode}_bake starting", activity="script")
+        with heartbeat_loop(
             lambda: sample_loading_progress_line(
                 world_uid, label=f"{args.mode}_bake", t0=t0,
             ),
+            activity="script_poll",
         ):
             bake = api_pack_bake(
                 client,
@@ -283,17 +287,24 @@ def main() -> None:
             ax, ay = _resolve_entry_anchor(
                 client, world_uid, anchor_x=args.anchor_x, anchor_y=args.anchor_y,
             )
-            print(f"\n=== entry job (separate from bake) anchor=({ax},{ay}) ===")
+            log_dump(
+                f"entry job (separate from bake) anchor=({ax},{ay})",
+                activity="script",
+            )
             t1 = time.perf_counter()
             entry = api_refine_from_entry(client, world_uid, x=ax, y=ay)
-            print(
+            log_dump(
                 f"refine-from-entry: {time.perf_counter() - t1:.2f}s "
                 f"chunks_done={entry.get('chunks_done')} "
-                f"queue={entry.get('refine_queue_depth')}"
+                f"queue={entry.get('refine_queue_depth')}",
+                activity="script",
             )
 
         if args.render:
-            print("\n=== map render (L0; L2 only if --entry ran) ===")
+            log_dump(
+                "map render (L0; L2 only if --entry ran)",
+                activity="script",
+            )
             summary = dump_map_renders(
                 client,
                 world_uid,
@@ -301,9 +312,6 @@ def main() -> None:
                 mark_locations=args.mark_locations,
             )
             _print_summary(summary)
-
-    shutil.copyfile(log_latest, log_stamped)
-    print(f"stamped transcript: {log_stamped}")
 
 
 if __name__ == "__main__":

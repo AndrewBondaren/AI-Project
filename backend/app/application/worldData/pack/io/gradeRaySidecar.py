@@ -1,4 +1,4 @@
-"""Debug grade-ray sidecar I/O — leftover consume, not a pack zstd blob.
+"""Pack grade-ray file I/O — sender + receiver slots, not a FineTerrain blob.
 
 SoT: ``docs/tz_terrain_relief_consume.md``. Wire = ``GradeRaySidecar``.
 """

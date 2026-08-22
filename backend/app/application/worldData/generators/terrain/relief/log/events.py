@@ -21,6 +21,8 @@ EVENT_RIBBON_BARRIER = "ribbon_barrier"
 EVENT_RESOLVE_FALLBACK = "resolve_fallback"
 EVENT_GRADE_SKIP = "grade_skip"
 EVENT_INVALID_GEOM = "invalid_geom"
+# R44 / C43: empty Facing slot on a surface cell (does not abort generate)
+EVENT_GRADE_CELL_EMPTY_RAY = "grade_cell_empty_ray"
 
 # --- why / reason tokens (log field why= / reason=; Intent skip_why) ---
 # apply layer (EVENT_RIBBON_SKIP_APPLY)

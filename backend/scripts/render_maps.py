@@ -9,10 +9,9 @@ Pack path (default after light bake):
 
 Detailed L2 (after detailed_bake):
   - ``dump_detailed_renders`` → location_terrain + ``render-wilderness-tile-grid``
-    Pack-read-only: each ``z/<n>.txt`` = cells already in FineTerrain runs (no generation);
-    ``surface_grade.txt`` + ``z/grade_<n>.txt`` = 3×3 rim-ray consume dump (not occupancy overlay).
-    Default: ``surface`` / ``surface_z`` / ``surface_grade`` / ``column_span`` / ``cliff_delta``, then
-    one material + grade file per relevant world-z under ``…/z/``.
+    Pack-read-only: each ``z/<n>.txt`` = sparse_xy cells already in FineTerrain
+    runs (no generation); ``surface_grade.txt`` always. Per-z ``z/grade_<n>.txt``
+    is opt-in (``write_grade_z_files`` / ``--grade-z``) — hundreds of files, slow.
   - does **not** re-dump L0 mosaic
 
 Legacy path still works via the same endpoints (MapCell-backed levels).
@@ -43,13 +42,16 @@ if str(REPO / "backend") not in sys.path:
     sys.path.insert(0, str(REPO / "backend"))
 
 from debug_api_helpers import BASE_URL, DebugApiError, _require_ok  # noqa: E402
-from debug_transcript import (  # noqa: E402
-    add_debug_progress_argument,
-    progress,
-    set_debug_progress,
-    tee_stdio,
+from app.application.worldData.render.dumpLog import (  # noqa: E402
+    DumpProgress,
+    add_debug_logging_argument,
+    heartbeat_loop,
+    heartbeat_s,
+    log_dump,
 )
 from app.application.worldData.render.mapSymbols import render_grade_legend  # noqa: E402
+from app.core.generationLogging import generation_world_log  # noqa: E402
+from app.core.loggingConfig import ensure_script_logging  # noqa: E402
 from app.application.worldData.render.renderPayloads import (  # noqa: E402
     LEVEL_CLIFF_DELTA,
     LEVEL_GRADE,
@@ -87,6 +89,66 @@ def _parse_grade_z_key(key: str) -> int | None:
     if not rest.lstrip("-").isdigit():
         return None
     return int(rest)
+
+
+def parse_z_range(spec: str) -> tuple[int, int]:
+    """Inclusive world-z dump window. ``N`` or ``N:M`` (colon; negatives ok)."""
+    text = str(spec).strip()
+    if not text:
+        raise ValueError("empty z-range")
+    if ":" in text:
+        left, right = text.split(":", 1)
+        lo = int(left.strip())
+        hi = int(right.strip())
+        if lo > hi:
+            lo, hi = hi, lo
+        return lo, hi
+    z = int(text)
+    return z, z
+
+
+def argparse_z_range(spec: str) -> tuple[int, int]:
+    try:
+        return parse_z_range(spec)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"expected N or N:M (colon), got {spec!r}"
+        ) from exc
+
+
+def _z_in_dump_range(z: int, z_min: int | None, z_max: int | None) -> bool:
+    if z_min is not None and int(z) < int(z_min):
+        return False
+    if z_max is not None and int(z) > int(z_max):
+        return False
+    return True
+
+
+def _clip_z_levels(
+    levels: list[int],
+    z_min: int | None,
+    z_max: int | None,
+) -> list[int]:
+    return [int(z) for z in levels if _z_in_dump_range(int(z), z_min, z_max)]
+
+
+def _filter_levels_by_z_range(
+    levels: dict[str, str],
+    z_min: int | None,
+    z_max: int | None,
+) -> dict[str, str]:
+    if z_min is None and z_max is None:
+        return levels
+    out: dict[str, str] = {}
+    for key, grid in levels.items():
+        k = str(key)
+        if _is_numeric_z_key(k) and not _z_in_dump_range(int(k), z_min, z_max):
+            continue
+        grade_z = _parse_grade_z_key(k)
+        if grade_z is not None and not _z_in_dump_range(grade_z, z_min, z_max):
+            continue
+        out[k] = grid
+    return out
 
 
 def _write(path: Path, content: str) -> None:
@@ -233,57 +295,100 @@ def _write_wilderness_z_slices(
     occupied_z_levels: list[int],
     tile_dir: Path,
     legend: str,
+    write_grade_z_files: bool = False,
+    z_min: int | None = None,
+    z_max: int | None = None,
 ) -> dict[str, str]:
-    """Write ``z/<n>.txt`` + ``z/grade_<n>.txt`` for occupied / grade surface-z.
+    """Write ``z/<n>.txt`` and optionally ``z/grade_<n>.txt``.
 
-    Pack path: one tile load + single-pass symbols → ASCII grid on the **shared
-    mosaic frame** (empty cell = space; same x/y axes on every z — no shift).
-    HTTP ``?z=`` fallback when pack is unavailable (material only; grade via pack).
+    Pack dump: sparse_xy material slices (not a full mosaic of spaces per z).
+    Per-z grade is opt-in — crop to surface_z==n. HTTP ``?z=`` fallback when pack
+    is missing (material only). ``z_min``/``z_max`` clip inclusive world-z.
     """
     z_dir = tile_dir / "z"
     paths: dict[str, str] = {}
     grade_paths: dict[str, str] = {}
-    occupied_filter = {int(z) for z in occupied_z_levels}
+    occupied_filter = {
+        int(z)
+        for z in occupied_z_levels
+        if _z_in_dump_range(int(z), z_min, z_max)
+    }
     renderer = _wilderness_pack_renderer(world_uid, gx, gy)
     source = "http"
     slice_format = "ascii_aligned"
+    z_range_label = (
+        f"{z_min}:{z_max}"
+        if z_min is not None or z_max is not None
+        else "all"
+    )
     if renderer is not None:
         source = "pack"
+        slice_format = "sparse_xy"
         frame = renderer.mosaic_xy_bounds()
-        progress(
-            f"  wilderness ({gx},{gy}): writing z-slice ASCII grids "
-            f"(aligned frame={frame}) under z/",
+        log_dump(
+            f"wilderness ({gx},{gy}): writing z-slice sparse files "
+            f"(mosaic={frame}) z_range={z_range_label} under z/",
+            activity="dump_z",
+            tile_gx=gx,
+            tile_gy=gy,
+            z_min=z_min,
+            z_max=z_max,
         )
-        for i, (z_val, body) in enumerate(
-            renderer.iter_occupied_z_levels_aligned(),
-            start=1,
-        ):
-            if occupied_filter and int(z_val) not in occupied_filter:
-                continue
-            if not body.strip():
-                continue
-            z_path = z_dir / f"{int(z_val)}.txt"
-            _write(z_path, f"{body}\n\n--- legend ---\n{legend}\n")
-            paths[str(int(z_val))] = str(z_path.relative_to(REPO))
-            if i == 1 or i % 200 == 0:
-                progress(f"    z-files {len(paths)} (last z={z_val})")
-        progress(f"    z-files done: {len(paths)}")
-        progress(
-            f"  wilderness ({gx},{gy}): writing grade_z ASCII grids "
-            f"(aligned frame={frame}) under z/grade_<n>.txt",
-        )
-        grade_legend = f"{legend.rstrip()}\n{render_grade_legend()}"
-        grade_count = 0
-        for z_val, body in renderer.iter_grade_z_levels_aligned():
-            if not body.strip():
-                continue
-            g_path = z_dir / f"grade_{int(z_val)}.txt"
-            _write(g_path, f"{body}\n\n--- legend ---\n{grade_legend}\n")
-            grade_paths[str(int(z_val))] = str(g_path.relative_to(REPO))
-            grade_count += 1
-            if grade_count == 1 or grade_count % 200 == 0:
-                progress(f"    grade_z-files {grade_count} (last z={z_val})")
-        progress(f"    grade_z-files done: {grade_count}")
+        zp = DumpProgress("z-files", every_n=50, activity="dump_z")
+        zp.start()
+        with heartbeat_loop(zp.snapshot_line, interval_s=heartbeat_s(), activity="dump_z"):
+            for z_val, body in renderer.iter_occupied_z_sparse(z_min=z_min, z_max=z_max):
+                if not _z_in_dump_range(int(z_val), z_min, z_max):
+                    continue
+                if occupied_filter and int(z_val) not in occupied_filter:
+                    continue
+                if not body.strip():
+                    continue
+                z_path = z_dir / f"{int(z_val)}.txt"
+                _write(z_path, f"{body}\n\n--- legend ---\n{legend}\n")
+                paths[str(int(z_val))] = str(z_path.relative_to(REPO))
+                zp.tick(len(paths), f"(last z={z_val})")
+        zp.done()
+        if write_grade_z_files:
+            log_dump(
+                f"wilderness ({gx},{gy}): writing grade_z ASCII "
+                f"(crop to surface_z) z_range={z_range_label} under z/grade_<n>.txt",
+                activity="dump_grade_z",
+                tile_gx=gx,
+                tile_gy=gy,
+                z_min=z_min,
+                z_max=z_max,
+            )
+            grade_legend = f"{legend.rstrip()}\n{render_grade_legend()}"
+            gp = DumpProgress("grade_z-files", every_n=1, activity="dump_grade_z")
+            gp.start()
+            with heartbeat_loop(
+                gp.snapshot_line,
+                interval_s=heartbeat_s(),
+                activity="dump_grade_z",
+            ):
+                for z_val, body in renderer.iter_grade_z_levels_aligned(
+                    crop_empty=True,
+                    z_min=z_min,
+                    z_max=z_max,
+                ):
+                    if not _z_in_dump_range(int(z_val), z_min, z_max):
+                        continue
+                    if not body.strip():
+                        continue
+                    g_path = z_dir / f"grade_{int(z_val)}.txt"
+                    _write(g_path, f"{body}\n\n--- legend ---\n{grade_legend}\n")
+                    grade_paths[str(int(z_val))] = str(g_path.relative_to(REPO))
+                    gp.tick(len(grade_paths), f"(last z={z_val})")
+            gp.done()
+        else:
+            log_dump(
+                f"wilderness ({gx},{gy}): grade_z omit "
+                f"(pass --grade-z to write z/grade_<n>.txt)",
+                activity="dump_grade_z",
+                tile_gx=gx,
+                tile_gy=gy,
+            )
     else:
         occupied = sorted(occupied_filter)
         for z_val in occupied:
@@ -302,6 +407,7 @@ def _write_wilderness_z_slices(
             paths[str(int(z_val))] = str(z_path.relative_to(REPO))
     index_lines = [
         f"tile=({gx},{gy})",
+        f"z_range={z_range_label}",
         f"occupied_z_count={len(paths)}",
         f"files_written={len(paths)}",
         f"grade_z_files={len(grade_paths)}",
@@ -337,7 +443,7 @@ def dump_map_renders(
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_dir = out_root / stamp
 
-    progress("  L0 render: GET render-world-grid")
+    log_dump("L0 render: GET render-world-grid", activity="dump_l0")
     r = client.get(
         f"/worlds/{world_uid}/map/render-world-grid",
         params={"mark_locations": mark_locations},
@@ -345,12 +451,12 @@ def dump_map_renders(
     _require_ok(r, "render-world-grid")
     world = r.json()
 
-    progress("  L0 render: GET render-location-grids")
+    log_dump("L0 render: GET render-location-grids", activity="dump_l0")
     r = client.get(f"/worlds/{world_uid}/map/render-location-grids")
     _require_ok(r, "render-location-grids")
     locations_payload = r.json()
 
-    progress("  L0 render: GET render-world-tile-grids")
+    log_dump("L0 render: GET render-world-tile-grids", activity="dump_l0")
     r = client.get(f"/worlds/{world_uid}/map/render-world-tile-grids")
     _require_ok(r, "render-world-tile-grids")
     tiles_payload = r.json()
@@ -379,7 +485,10 @@ def dump_map_renders(
     loc_entries = locations_payload.get("locations") or {}
     loc_total = len(loc_entries)
     if loc_total:
-        progress(f"  L0 render: writing {loc_total} location ASCII")
+        log_dump(
+            f"L0 render: writing {loc_total} location ASCII",
+            activity="dump_l0",
+        )
     for loc_i, (location_uid, entry) in enumerate(loc_entries.items(), start=1):
         levels: dict[str, str] = dict(entry.get("levels") or {})
         legend = entry.get("legend", "")
@@ -400,14 +509,20 @@ def dump_map_renders(
         meta["z_levels"] = entry.get("z_levels")
         locations_meta[location_uid] = meta
         if loc_i == 1 or loc_i == loc_total or loc_i % 5 == 0:
-            progress(f"    L0 locations {loc_i}/{loc_total} (last {location_uid})")
+            log_dump(
+                f"L0 locations {loc_i}/{loc_total} (last {location_uid})",
+                activity="dump_l0",
+            )
 
     tiles_root = run_dir / "tiles"
     tile_index: dict[str, object] = {}
     tile_entries = tiles_payload.get("tiles") or {}
     tile_total = len(tile_entries)
     if tile_total:
-        progress(f"  L0 render: writing {tile_total} tile ASCII")
+        log_dump(
+            f"L0 render: writing {tile_total} tile ASCII",
+            activity="dump_l0",
+        )
     for tile_i, (tile_key, entry) in enumerate(tile_entries.items(), start=1):
         levels = dict(entry.get("levels") or {})
         legend = entry.get("legend", "")
@@ -439,7 +554,10 @@ def dump_map_renders(
             "levels": extra,
         }
         if tile_i == 1 or tile_i == tile_total or tile_i % 5 == 0:
-            progress(f"    L0 tiles {tile_i}/{tile_total} (last {tile_key})")
+            log_dump(
+                f"L0 tiles {tile_i}/{tile_total} (last {tile_key})",
+                activity="dump_l0",
+            )
 
     index: dict[str, object] = {
         "world_uid": world_uid,
@@ -487,6 +605,9 @@ def dump_detailed_renders(
     location_uids: list[str] | None = None,
     include_z_slices: bool = False,
     write_z_slice_files: bool = True,
+    write_grade_z_files: bool = False,
+    z_min: int | None = None,
+    z_max: int | None = None,
 ) -> dict[str, Any]:
     """Dump L2 detailed ASCII only — location_terrain + wilderness tile mosaics.
 
@@ -494,7 +615,9 @@ def dump_detailed_renders(
     runs (empty cell at z ⇒ blank). Does not call L0 ``render-world-grid``.
 
     Wilderness default: base call without dense ASCII in JSON; each occupied world-z
-    is fetched with ``?z=`` and written to ``wilderness/.../z/<n>.txt``.
+    is written to ``wilderness/.../z/<n>.txt``. Per-z ``grade_{n}`` is off unless
+    ``write_grade_z_files`` (slow). ``surface_grade.txt`` is always written.
+    ``z_min``/``z_max`` clip per-z files (inclusive); surface layers are not cropped.
     """
     out_root = out_root or (
         REPO / ".local" / "map-render" / world_uid / "detailed-bake" / "after-detailed"
@@ -516,6 +639,13 @@ def dump_detailed_renders(
             if entry is None:
                 continue
             levels = dict(entry.get("levels") or {})
+            if not write_grade_z_files:
+                levels = {
+                    k: v
+                    for k, v in levels.items()
+                    if _parse_grade_z_key(str(k)) is None
+                }
+            levels = _filter_levels_by_z_range(levels, z_min, z_max)
             meta = _write_level_bundle(
                 run_dir / "locations" / location_uid,
                 header_lines=[
@@ -534,8 +664,11 @@ def dump_detailed_renders(
     wilderness_meta: dict[str, object] = {}
     wild_total = len(wilderness_tiles)
     for wild_i, (gx, gy) in enumerate(wilderness_tiles, start=1):
-        progress(
-            f"  L2 render: wilderness ({gx},{gy}) {wild_i}/{wild_total}"
+        log_dump(
+            f"L2 render: wilderness ({gx},{gy}) {wild_i}/{wild_total}",
+            activity="dump_l2",
+            tile_gx=gx,
+            tile_gy=gy,
         )
         # Dense z ASCII must not ride in one JSON — use occupied_z_levels + ?z= files.
         bulk_z = bool(include_z_slices) and not write_z_slice_files
@@ -573,6 +706,7 @@ def dump_detailed_renders(
             except (TypeError, ValueError):
                 continue
         occupied = sorted(set(occupied))
+        occupied = _clip_z_levels(occupied, z_min, z_max)
         meta = _write_level_bundle(
             tile_dir,
             header_lines=[
@@ -598,6 +732,9 @@ def dump_detailed_renders(
                 occupied_z_levels=occupied,
                 tile_dir=tile_dir,
                 legend=legend,
+                write_grade_z_files=write_grade_z_files,
+                z_min=z_min,
+                z_max=z_max,
             )
             if z_slice_paths and not occupied:
                 occupied = sorted(
@@ -608,6 +745,7 @@ def dump_detailed_renders(
                 (tile_dir / "z-levels-index.txt").relative_to(REPO)
             )
             meta["occupied_z_levels"] = occupied
+            meta["write_grade_z_files"] = write_grade_z_files
         meta.update(
             {
                 "tile_gx": gx,
@@ -619,6 +757,14 @@ def dump_detailed_renders(
                 "wilderness_refine_status": payload.get("wilderness_refine_status"),
                 "occupied_z_levels": occupied,
                 "z_slice_file_count": len(z_slice_paths),
+                "grade_z_file_count": sum(
+                    1
+                    for k in z_slice_paths
+                    if _parse_grade_z_key(str(k)) is not None
+                ),
+                "write_grade_z_files": write_grade_z_files,
+                "z_min": z_min,
+                "z_max": z_max,
             }
         )
         wilderness_meta[tile_key] = meta
@@ -627,6 +773,9 @@ def dump_detailed_renders(
         "world_uid": world_uid,
         "stamp": stamp,
         "kind": "detailed_l2",
+        "write_grade_z_files": write_grade_z_files,
+        "z_min": z_min,
+        "z_max": z_max,
         "location_uids": list(locations_meta.keys()),
         "locations": locations_meta,
         "wilderness_tiles": wilderness_meta,
@@ -662,43 +811,74 @@ def dump_detailed_renders(
             for m in wilderness_meta.values()
             if isinstance(m, dict)
         ),
+        "wilderness_grade_z_file_count": sum(
+            int(m.get("grade_z_file_count") or 0)
+            for m in wilderness_meta.values()
+            if isinstance(m, dict)
+        ),
+        "write_grade_z_files": write_grade_z_files,
+        "z_min": z_min,
+        "z_max": z_max,
     }
 
 
 def _print_summary(summary: dict[str, Any]) -> None:
-    print(f"world-map: {summary['world_map']}")
+    log_dump(f"world-map: {summary['world_map']}", activity="dump_summary")
     if summary.get("world_height"):
-        print(f"world-height: {summary['world_height']}")
-    print(f"tiles (L0 light / fine): {summary['tile_count']}")
-    print(
+        log_dump(f"world-height: {summary['world_height']}", activity="dump_summary")
+    log_dump(
+        f"tiles (L0 light / fine): {summary['tile_count']}",
+        activity="dump_summary",
+    )
+    log_dump(
         f"locations L2 terrain: {summary['location_terrain_count']} "
-        f"(pins in index: {summary['location_pin_count']})"
+        f"(pins in index: {summary['location_pin_count']})",
+        activity="dump_summary",
     )
     if summary["location_terrain_count"] == 0:
-        print(
+        log_dump(
             "note: no location_terrain blobs yet — light bake is L0 only; "
-            "L2 appears after entry refine / location bake"
+            "L2 appears after entry refine / location bake",
+            activity="dump_summary",
         )
-    print(
+    log_dump(
         f"read_path={summary.get('read_path')} "
         f"world={summary.get('world_read_mode')} "
-        f"locations={summary.get('locations_read_mode')}"
+        f"locations={summary.get('locations_read_mode')}",
+        activity="dump_summary",
     )
-    print(f"index: {summary['index']}")
+    log_dump(f"index: {summary['index']}", activity="dump_summary")
 
 
 def _print_detailed_summary(summary: dict[str, Any]) -> None:
-    print(f"detailed L2 locations: {summary['location_terrain_count']}")
-    print(
+    log_dump(
+        f"detailed L2 locations: {summary['location_terrain_count']}",
+        activity="dump_summary",
+    )
+    log_dump(
         f"detailed L2 wilderness tiles: {summary['wilderness_tile_count']} "
-        f"(with grid: {summary['wilderness_tiles_with_grid']})"
+        f"(with grid: {summary['wilderness_tiles_with_grid']})",
+        activity="dump_summary",
     )
     z_files = int(summary.get("wilderness_z_slice_file_count") or 0)
     if z_files:
-        print(f"wilderness z-slice files: {z_files}")
-    print(f"run_dir: {summary['run_dir']}")
-    print(f"latest: {summary.get('latest')}")
-    print(f"index: {summary['index']}")
+        log_dump(f"wilderness z-slice files: {z_files}", activity="dump_summary")
+    if summary.get("z_min") is not None or summary.get("z_max") is not None:
+        log_dump(
+            f"wilderness z-range: {summary.get('z_min')}:{summary.get('z_max')}",
+            activity="dump_summary",
+        )
+    grade_z = int(summary.get("wilderness_grade_z_file_count") or 0)
+    if summary.get("write_grade_z_files"):
+        log_dump(f"wilderness grade_z files: {grade_z}", activity="dump_summary")
+    else:
+        log_dump(
+            "wilderness grade_z omitted (pass --grade-z)",
+            activity="dump_summary",
+        )
+    log_dump(f"run_dir: {summary['run_dir']}", activity="dump_summary")
+    log_dump(f"latest: {summary.get('latest')}", activity="dump_summary")
+    log_dump(f"index: {summary['index']}", activity="dump_summary")
 
 
 def main() -> None:
@@ -723,16 +903,12 @@ def main() -> None:
         default=BASE_URL,
         help=f"API base URL (default: {BASE_URL})",
     )
-    add_debug_progress_argument(parser)
+    add_debug_logging_argument(parser)
     args = parser.parse_args()
-    set_debug_progress(args.debug)
-
-    out_root = args.out or (REPO / ".local" / "map-render" / args.world_uid)
-    log_path = out_root / "render-maps-latest.log"
+    ensure_script_logging(debug=args.debug)
 
     try:
-        with tee_stdio(log_path, announce_saved=True):
-            print(f"transcript: {log_path}", flush=True)
+        with generation_world_log(args.world_uid, mode="dump"):
             with httpx.Client(base_url=args.base_url, timeout=600.0) as client:
                 summary = dump_map_renders(
                     client,

@@ -40,6 +40,26 @@ class JsonLogFormatter(logging.Formatter):
 _JsonFormatter = JsonLogFormatter
 
 
+def backend_logs_dir() -> Path:
+    """``backend/logs`` regardless of process cwd."""
+    return Path(__file__).resolve().parents[2] / "logs"
+
+
+def ensure_script_logging(*, debug: bool = False) -> None:
+    """Attach the app console + ``app.log`` handlers for smoke scripts.
+
+    Scripts run from the repo root; without this they would write ``logs/app.log``
+    next to cwd instead of ``backend/logs/app.log``. If handlers already exist
+    (tests / nested calls), only the root level is updated.
+    """
+    level = logging.DEBUG if debug else logging.INFO
+    root = logging.getLogger()
+    if not root.handlers:
+        setup_logging(log_file=str(backend_logs_dir() / "app.log"), level=level)
+        return
+    root.setLevel(level)
+
+
 def setup_logging(
     log_file: str = "logs/app.log",
     level: int = logging.INFO,
