@@ -6,9 +6,9 @@ metadata:
   type: project
 ---
 
-> **Статус:** SoT **pack ASCII render** (файлы, L0/L2 keys, wire membership). **PAR-G\*** locked · **R36u** grade writer = detailed_bake geometry. Глиф клетки outdoor grade (3×3, выравнивание с `surface_z`) — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md); код: `gradeRayDump` читает pack `grade_rays.json` (оба конца ребра).  
-> **Generate vs render:** рендер **не** materialize terrain/grade и **не** считает `opposite`/соседа; membership — pack wire / FineTerrain; **8-ray** — слоты pack (отправитель и получатель), не колонка.  
-> **Grade generate SoT:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) (**R36u** / **R36t**). **Consume / 3×3:** [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md). **Pack storage:** [`tz_world_pack_storage.md`](./tz_world_pack_storage.md).
+> **Статус:** SoT **pack ASCII render** (файлы, L0/L2 keys, wire membership). **PAR-G\*** locked · **R36u** grade writer = detailed_bake geometry. Глиф клетки outdoor grade (3×3, выравнивание с `surface_z`) — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md); код: `gradeRayDump` читает leftover pack **и** рисует сцепление `+` на `surface_grade`.  
+> **Generate vs render:** рендер **не** materialize terrain/grade и **не** считает leftover-`opposite`; membership — pack wire / FineTerrain; **8 слотов** — leftover pack (отправитель и получатель) **или** сцепление той же `surface_z` (`+` только `surface_grade`).  
+> **Grade generate SoT:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) (**R36u** / **R36t**). **Consume / 3×3:** [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md). **Pack storage:** [`tz_world_pack_storage.md`](./tz_world_pack_storage.md). **Dump sink:** [`tz_logging.md`](./tz_logging.md) `render/dumpLog`.
 
 # Pack ASCII / grid render
 
@@ -26,7 +26,7 @@ metadata:
 
 Код (ориентиры): `render/worldMapPackRenderer.py`, `locationTerrainPackRenderer.py`, `wildernessTilePackRenderer.py`, `fineTerrainAsciiKernel.py`, `mapSymbols.py`, `facingArrows.py`, `renderPayloads.py`; dump — `scripts/render_maps.py` / `dump_detailed_renders`.
 
-**Антипаттерн:** «рендер чинит мир» (gap fill, invent `system_grade_uid`, повторный ribbon apply на L0). **Dump без строки ≥5 с** — crit: `dumpLog` + heartbeat (`DEBUG_PROGRESS_POLL_S`, default 5) через `loggingConfig` / `generation_world_log(mode="dump")`. Не `print` / не script-tee.
+**Антипаттерн:** «рендер чинит мир» (gap fill, invent `system_grade_uid`, повторный ribbon apply на L0). **Dump без строки ≥5 с** — crit: `dumpLog` + heartbeat (`DEBUG_PROGRESS_POLL_S`, default 5) через `loggingConfig` / `generation_world_log(mode="dump")`. Не `print` / не script-tee. Sink: [`tz_logging.md`](./tz_logging.md) консьюмер `render` / `dumpLog` (процесс **script**, не `app.log` uvicorn).
 
 ---
 
@@ -52,7 +52,7 @@ metadata:
 | **`surface_z`** → **`surface_z.txt`** | ✅ | per-cell **max world-z** (FineTerrain top); L2 analog of L0 `height` |
 | `column_span` / `cliff_delta` | ✅ diag | см. [`tz_mountain_architecture.md`](./tz_mountain_architecture.md) § Debug render |
 | numeric z → `z/{n}.txt` | ✅ | material slice at world-z. **Dump files:** `sparse_xy` (only occupied cells) — not a full mosaic of spaces per z. HTTP `?z=` remains aligned ASCII. **Dump clip:** `--z-range N[:M]` (inclusive, colon) |
-| **`surface_grade`** → **`surface_grade.txt`** | ✅ путь; глиф — consume TZ | **3×3** (центр всегда + до 8 слотов pack: отправитель **или** получатель), поле **W** как `surface_z`, **3 строки / gy**. Источник краёв — pack `grade_rays.json`, не колонка и не `opposite` в рендере. Omit если нет концов ребра и нет uid |
+| **`surface_grade`** → **`surface_grade.txt`** | ✅ путь; глиф — consume TZ | **3×3** (центр всегда + до 8 слотов: leftover pack **или** сцепление `+` той же `surface_z`), поле **W** как `surface_z`, **3 строки / gy**. Leftover — pack `grade_rays.json`. `+` из сравнения z, не sidecar. Omit если нет концов ребра и нет uid |
 | **`grade_{n}`** → **`z/grade_{n}.txt`** | ✅ слой; **dump opt-in** | **composite:** material at z + grade только где `surface_z == n`; omit если на этом z нет grade. **Dump:** только с `--grade-z` (иначе слишком много файлов / wall). Crop frame (+1 halo). HTTP / `surface_grade` без флага |
 
 **Locked (мастер):**
@@ -68,11 +68,11 @@ metadata:
 
 ## Grade ASCII — клетка
 
-**SoT раскладки клетки (outdoor L2):** [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) — центр всегда, 8 краёв = концы ребра pack (отправитель / получатель), выравнивание X/Y с `surface_z`. Рендер не выводит получателя.
+**SoT раскладки клетки (outdoor L2):** [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) — центр всегда, 8 краёв = leftover pack **или** сцепление `+` (только `surface_grade`), выравнивание X/Y с `surface_z`. Рендер не invent leftover через `opposite`.
 
-Стрелки / `┃`: `facingArrows.FACING_ARROW` и тот же sheer-глиф, **в слоте Facing луча**, не одним символом на всю клетку.
+Стрелки / `┃` / `+`: leftover — `facingArrows.FACING_ARROW` и sheer-глиф **в слоте Facing луча**; сцепление — `+`. Не одним символом на всю клетку.
 
-**Код L2:** `render/gradeRayDump.py` (слот из `GRID_OUTWARD_DELTA`, глиф из `ReliefSideKind` + `Facing`). L0 mosaic по-прежнему `grade_symbol` (uid overlay) — не 8-ray.
+**Код L2:** `render/gradeRayDump.py` (слот из `GRID_OUTWARD_DELTA`, leftover из `ReliefSideKind` + `Facing`, `+` из equal-z). L0 mosaic по-прежнему `grade_symbol` (uid overlay) — не 8-ray.
 
 **Запрещено:** рисовать «grade» только по `system_facing` без uid (C11: клетка **в** grade ↔ uid). Это про membership occupancy, не про 8 слотов rim.
 
@@ -156,6 +156,7 @@ Open product XOR по L2 grade ASCII — **нет**.
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-23 | **Сцепление `+`:** equal-z на `surface_grade`; leftover pack только downhill/outward — consume TZ |
 | 2026-08-22 | **Grade rim edge in pack:** ASCII only reads sender+receiver slots; `opposite` not in render — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) |
 | 2026-08-22 | **Dump `--z-range N[:M]`:** clip per-z files (colon, inclusive); `surface_grade` полный |
 | 2026-08-22 | **Dump `--grade-z`:** per-z `grade_{n}` opt-in (default off); `surface_grade.txt` всегда |

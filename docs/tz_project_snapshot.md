@@ -374,6 +374,7 @@ Feature-slices: `session`, `chat`, `settings`. API base: `VITE_API_URL` (default
 | [`tz_climate.md`](./tz_climate.md) | pole/local tiers |
 | [`tz_json_validation.md`](./tz_json_validation.md) | import validator |
 | [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | smells registry |
+| [`tz_logging.md`](./tz_logging.md) | файлы логов: домен/сервис; не общий `app.log` |
 | `.cursor/rules/project-context.mdc` | правила для агента |
 
 ---

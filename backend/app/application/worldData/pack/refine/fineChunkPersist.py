@@ -8,6 +8,13 @@ from app.application.worldData.gradeInstanceMerge import merge_grade_instances
 from app.application.worldData.gradeVertexSystem import emit_relief_grade_systems
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.pack.bake.packBakeLog import (
+    log_pack_grade_ray_sidecar_done,
+    log_pack_grade_ray_sidecar_start,
+    log_pack_grade_ray_validate_done,
+    log_pack_grade_ray_validate_progress,
+    log_pack_grade_ray_validate_start,
+    log_pack_grade_systems_emit_done,
+    log_pack_grade_systems_emit_start,
     log_pack_location_terrain_persist,
     log_pack_wilderness_chunk_done,
     log_pack_wilderness_chunk_persist,
@@ -38,6 +45,7 @@ from app.dataModel.terrain.relief.gradeRimRay import (
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume, inside_location_volume
+from app.db.bulkSql import EXECUTEMANY_BATCH_SIZE
 from app.db.models.mapCell import MapCell
 
 
@@ -177,8 +185,40 @@ class FineChunkPersist:
             merge_grade_rim_rays(self._ray_acc),
             cells=cells,
         )
+        sidecar_t0 = log_pack_grade_ray_sidecar_start(
+            ctx.world_uid, n_rays=len(slots),
+        )
         self._write_grade_ray_sidecars(slots)
-        validate_grade_cell_empty_rays(cells, slots)
+        log_pack_grade_ray_sidecar_done(
+            ctx.world_uid, n_rays=len(slots), started_at=sidecar_t0,
+        )
+        n_cells = len(cells)
+        validate_t0 = log_pack_grade_ray_validate_start(
+            ctx.world_uid, n_cells=n_cells,
+        )
+
+        def _validate_progress(done: int, empty: int) -> None:
+            log_pack_grade_ray_validate_progress(
+                ctx.world_uid,
+                done=done,
+                total=n_cells,
+                empty=empty,
+                started_at=validate_t0,
+            )
+
+        n_empty = validate_grade_cell_empty_rays(
+            cells,
+            slots,
+            z_at=self._meter_surface_z,
+            on_progress=_validate_progress,
+            progress_every=EXECUTEMANY_BATCH_SIZE,
+        )
+        log_pack_grade_ray_validate_done(
+            ctx.world_uid,
+            n_cells=n_cells,
+            empty=n_empty,
+            started_at=validate_t0,
+        )
         self._writer.recalc_manifest_counters()
         self._writer.save_manifest()
         grade_instances = (
@@ -186,11 +226,20 @@ class FineChunkPersist:
         )
         grade_systems: tuple[ReliefGradeSystem, ...] = ()
         if grade_instances:
+            emit_t0 = log_pack_grade_systems_emit_start(
+                ctx.world_uid, n_instances=len(grade_instances),
+            )
             # T-3c after C29 catalog merge. Does not change z/fill.
             grade_instances, grade_systems = emit_relief_grade_systems(
                 grade_instances,
                 traces=self._seam_acc,
                 catalog=ctx.catalog,
+            )
+            log_pack_grade_systems_emit_done(
+                ctx.world_uid,
+                n_instances=len(grade_instances),
+                n_systems=len(grade_systems),
+                started_at=emit_t0,
             )
         return FineRefineResult(
             persist=PersistResult.from_counts(self._total_cells, self._total_cells),

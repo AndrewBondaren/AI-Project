@@ -12,6 +12,7 @@ from app.application.worldData.render.gradeRayDump import (
 )
 from app.application.worldData.render.mapSymbols import (
     GRADE_CELL_INNER_WIDTH,
+    GRADE_COUPLE_SYMBOL,
     GRADE_SHEER_SYMBOL,
     format_glyph_field,
     format_height_cell,
@@ -53,6 +54,16 @@ class TestGradeRayDump(unittest.TestCase):
             {Facing.EAST: ReliefSideKind.SLOPE},
         )
         self.assertEqual(mid, " _→")
+
+    def test_couple_plus_and_pack_ray_wins(self) -> None:
+        top, mid, bot = compose_grade_cell(
+            "_",
+            {Facing.SOUTH: ReliefSideKind.SHEER},
+            couples=(Facing.SOUTH, Facing.EAST),
+        )
+        self.assertEqual(top, "   ")
+        self.assertEqual(mid, f" _{GRADE_COUPLE_SYMBOL}")
+        self.assertEqual(bot, f" {GRADE_SHEER_SYMBOL} ")
 
     def test_glyph_field_matches_height_pad(self) -> None:
         width = paired_height_cell_width([4, 6, 3])
@@ -115,6 +126,39 @@ class TestGradeRayDump(unittest.TestCase):
             title="t",
         )
         self.assertEqual(body.count(GRADE_SHEER_SYMBOL), 2)
+
+    def test_draw_couple_plus_on_equal_z_surface(self) -> None:
+        cols = {
+            (0, 0): FineTerrainColumnWire(
+                lx=0, ly=0,
+                runs=[FineTerrainZRun(z0=0, z1=4, system_terrain="plains")],
+                system_grade_uid="g1",
+            ),
+            (1, 0): FineTerrainColumnWire(
+                lx=1, ly=0,
+                runs=[FineTerrainZRun(z0=0, z1=4, system_terrain="plains")],
+            ),
+        }
+        body = draw_grade_consume_grid(cols, GradeRayIndex(), title="t")
+        self.assertIn(GRADE_COUPLE_SYMBOL, body)
+        self.assertNotIn(GRADE_SHEER_SYMBOL, body)
+
+    def test_z_slice_omits_coupling(self) -> None:
+        cols = {
+            (0, 0): FineTerrainColumnWire(
+                lx=0, ly=0,
+                runs=[FineTerrainZRun(z0=0, z1=4, system_terrain="plains")],
+                system_grade_uid="g1",
+            ),
+            (1, 0): FineTerrainColumnWire(
+                lx=1, ly=0,
+                runs=[FineTerrainZRun(z0=0, z1=4, system_terrain="plains")],
+            ),
+        }
+        body = draw_grade_consume_grid(
+            cols, GradeRayIndex(), title="t", surface_z=4,
+        )
+        self.assertNotIn(GRADE_COUPLE_SYMBOL, body)
 
 
 if __name__ == "__main__":

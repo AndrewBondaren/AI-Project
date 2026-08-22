@@ -1,5 +1,5 @@
 from app.core.appSettings import app_settings
-from app.core.loggingConfig import setup_logging
+from app.core.loggingConfig import set_logging_level
 from app.core.logLevel import to_logging_level
 
 
@@ -22,4 +22,4 @@ class SettingsService:
         if self._CONNECTION_KEYS & kwargs.keys():
             self._container.invalidate_clients()
         if "log_level" in kwargs:
-            setup_logging(level=to_logging_level(app_settings.log_level))
+            set_logging_level(to_logging_level(app_settings.log_level))

@@ -379,6 +379,8 @@ Generate **не бросает исключение** на типичных ды
 
 ## Логирование (v2.2.2)
 
+Sink файла — [`tz_logging.md`](./tz_logging.md) консьюмер `climate` / `climateLog`.
+
 Общий helper: [`loggingHelpers.py`](backend/app/application/worldData/generators/climate/loggingHelpers.py) — `warn_once`, `debug_once` (dedupe per world).
 
 ### Pass summaries (INFO)
@@ -1236,3 +1238,4 @@ python scripts/initialize_world.py --fixture ../fixtures/world_terrain_test.json
 - [`tz_engine_flow.md`](./tz_engine_flow.md) — engine phases (pass loop, patches)
 - [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) — CL-* registry
 - [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) — pack climate blobs, merge fine→coarse, WP-18 / WP-PERF-32
+- [`tz_logging.md`](./tz_logging.md) — sink `climate/climateLog`

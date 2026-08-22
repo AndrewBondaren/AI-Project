@@ -1004,3 +1004,140 @@ def log_pack_relief_grades_persist_done(
         elapsed_ms=elapsed_s * 1000.0,
     )
 
+
+def log_pack_grade_ray_sidecar_start(world_uid: str, *, n_rays: int) -> float:
+    _info(
+        "pack grade_ray sidecar start | world=%s rays=%d",
+        world_uid,
+        n_rays,
+        activity="grade_ray_sidecar_start",
+        world_uid=world_uid,
+        n_rays=n_rays,
+    )
+    return time.perf_counter()
+
+
+def log_pack_grade_ray_sidecar_done(
+    world_uid: str,
+    *,
+    n_rays: int,
+    started_at: float,
+) -> None:
+    elapsed_s = time.perf_counter() - started_at
+    _info(
+        "pack grade_ray sidecar done | world=%s rays=%d "
+        "elapsed_s=%.2f elapsed_ms=%.1f",
+        world_uid,
+        n_rays,
+        elapsed_s,
+        elapsed_s * 1000.0,
+        activity="grade_ray_sidecar_done",
+        world_uid=world_uid,
+        n_rays=n_rays,
+        elapsed_s=round(elapsed_s, 2),
+        elapsed_ms=elapsed_s * 1000.0,
+    )
+
+
+def log_pack_grade_ray_validate_start(world_uid: str, *, n_cells: int) -> float:
+    _info(
+        "pack grade_ray validate start | world=%s cells=%d",
+        world_uid,
+        n_cells,
+        activity="grade_ray_validate_start",
+        world_uid=world_uid,
+        n_cells=n_cells,
+    )
+    return time.perf_counter()
+
+
+def log_pack_grade_ray_validate_progress(
+    world_uid: str,
+    *,
+    done: int,
+    total: int,
+    empty: int,
+    started_at: float,
+) -> None:
+    elapsed_ms = (time.perf_counter() - started_at) * 1000.0
+    _info(
+        "pack grade_ray validate progress | world=%s done=%d/%d empty=%d elapsed_ms=%.1f",
+        world_uid,
+        done,
+        total,
+        empty,
+        elapsed_ms,
+        activity="grade_ray_validate_progress",
+        world_uid=world_uid,
+        done=done,
+        total=total,
+        empty=empty,
+        elapsed_ms=elapsed_ms,
+    )
+
+
+def log_pack_grade_ray_validate_done(
+    world_uid: str,
+    *,
+    n_cells: int,
+    empty: int,
+    started_at: float,
+) -> None:
+    elapsed_s = time.perf_counter() - started_at
+    _info(
+        "pack grade_ray validate done | world=%s cells=%d empty=%d "
+        "elapsed_s=%.2f elapsed_ms=%.1f",
+        world_uid,
+        n_cells,
+        empty,
+        elapsed_s,
+        elapsed_s * 1000.0,
+        activity="grade_ray_validate_done",
+        world_uid=world_uid,
+        n_cells=n_cells,
+        empty=empty,
+        elapsed_s=round(elapsed_s, 2),
+        elapsed_ms=elapsed_s * 1000.0,
+    )
+
+
+def log_pack_grade_systems_emit_start(
+    world_uid: str,
+    *,
+    n_instances: int,
+) -> float:
+    _info(
+        "pack grade_systems emit start | world=%s instances=%d",
+        world_uid,
+        n_instances,
+        activity="grade_systems_emit_start",
+        world_uid=world_uid,
+        n_instances=n_instances,
+    )
+    return time.perf_counter()
+
+
+def log_pack_grade_systems_emit_done(
+    world_uid: str,
+    *,
+    n_instances: int,
+    n_systems: int,
+    started_at: float,
+) -> None:
+    elapsed_s = time.perf_counter() - started_at
+    _info(
+        "pack grade_systems emit done | world=%s instances=%d systems=%d "
+        "elapsed_s=%.2f elapsed_ms=%.1f",
+        world_uid,
+        n_instances,
+        n_systems,
+        elapsed_s,
+        elapsed_s * 1000.0,
+        activity="grade_systems_emit_done",
+        world_uid=world_uid,
+        n_instances=n_instances,
+        n_systems=n_systems,
+        elapsed_s=round(elapsed_s, 2),
+        elapsed_ms=elapsed_s * 1000.0,
+    )
+

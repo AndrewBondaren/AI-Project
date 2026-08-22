@@ -202,6 +202,7 @@ def draw_grade_consume_grid(
         extra_headers=extra_headers,
         coord_prefix=coord_prefix,
         bounds=bounds,
+        surface_heights=None if surface_z is not None else values_surface_z(cols),
     )
 
 

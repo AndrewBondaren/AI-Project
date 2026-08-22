@@ -37,6 +37,7 @@ metadata:
 | [`tz_engine_flow.md`](./tz_engine_flow.md) | Pass loop, repair, PatchApplier — **механика движка** |
 | [`tz_engine_node_context.md`](./tz_engine_node_context.md) | `TerrainContext`, `StructureContext` — типизированный state |
 | Domain TZ | climate, terrain, building, city, roads, connections |
+| [`tz_logging.md`](./tz_logging.md) | sinks; скрипты = консьюмер `script/{stem}`, bake на сервере |
 
 **Не цель:** дублировать алгоритмы pole/tier, layout комнат, gridLayout дорог — см. domain TZ.
 

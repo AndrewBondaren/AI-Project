@@ -905,7 +905,7 @@ def main() -> None:
     )
     add_debug_logging_argument(parser)
     args = parser.parse_args()
-    ensure_script_logging(debug=args.debug)
+    ensure_script_logging(service="renderMaps", debug=args.debug)
 
     try:
         with generation_world_log(args.world_uid, mode="dump"):

@@ -1,9 +1,10 @@
-"""L2 outdoor grade ASCII — one 3×3 cell (center + 8 pack slots).
+"""L2 outdoor grade ASCII — one 3×3 cell (center + 8 slots).
 
-SoT: ``docs/tz_terrain_relief_consume.md``. Reads pack rays only (sender or
-receiver). Does not call ``opposite`` and does not read column ``system_facing``.
-Slot positions come from ``GRID_OUTWARD_DELTA`` (Facing); glyphs from
-``grade_ray_glyph`` (ReliefSideKind + Facing).
+SoT: ``docs/tz_terrain_relief_consume.md``. Pack leftover (sender or receiver)
+wins the slot. Equal-z neighbor → coupling ``+`` (compare ``surface_z`` only;
+does not call ``opposite`` or invent leftover). Does not read column
+``system_facing``. Slot positions: ``GRID_OUTWARD_DELTA``; leftover glyphs:
+``grade_ray_glyph``.
 """
 
 from __future__ import annotations
@@ -16,13 +17,17 @@ from app.application.worldData.render.gridAxes import (
 )
 from app.application.worldData.render.mapSymbols import (
     GRADE_CELL_INNER_WIDTH,
+    GRADE_COUPLE_SYMBOL,
     format_glyph_field,
     grade_ray_glyph,
     join_height_row,
 )
 from app.dataModel.spatial.facing import Facing, GRID_OUTWARD_DELTA
 from app.dataModel.terrain.relief.enums import ReliefSideKind
-from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay, merge_grade_rim_rays
+from app.dataModel.terrain.relief.gradeRimRay import (
+    GradeRimRay,
+    unified_surface_facings,
+)
 
 
 class GradeRayIndex:
@@ -82,11 +87,18 @@ def facing_cell_slot(facing: Facing) -> tuple[int, int]:
 def compose_grade_cell(
     center: str,
     rays: Mapping[Facing, ReliefSideKind],
+    *,
+    couples: Iterable[Facing] = (),
 ) -> tuple[str, str, str]:
-    """Three 3-glyph rows (N strip, mid, S strip). Center always occupied."""
+    """Three 3-glyph rows (N strip, mid, S strip). Pack leftover wins over ``+``."""
     grid = [[" ", " ", " "] for _ in range(GRADE_CELL_INNER_WIDTH)]
     glyph = center[:1] if center else " "
     grid[1][1] = glyph if glyph else " "
+    for facing in couples:
+        row, col = facing_cell_slot(facing)
+        if row == 1 and col == 1:
+            continue
+        grid[row][col] = GRADE_COUPLE_SYMBOL
     for facing, kind in rays.items():
         row, col = facing_cell_slot(facing)
         if row == 1 and col == 1:
@@ -104,8 +116,13 @@ def draw_grade_ray_grid(
     extra_headers: list[str] | None = None,
     coord_prefix: str = "",
     bounds: tuple[int, int, int, int] | None = None,
+    surface_heights: Mapping[tuple[int, int], int] | None = None,
 ) -> str:
-    """3 text rows per gy; field W + space-separated cells — same pitch as ``surface_z``."""
+    """3 text rows per gy; field W + space-separated cells — same pitch as ``surface_z``.
+
+    ``surface_heights``: coupling on equal-z neighbors (main ``surface_grade``).
+    Omit on z-slices so wall layers stay pack-leftover only.
+    """
     if bounds is not None:
         x0, x1, y0, y1 = bounds
     elif centers:
@@ -122,13 +139,18 @@ def draw_grade_ray_grid(
         lines.extend(extra_headers)
     lines.append(format_grid_header(x0, x1, y0, y1, cell_size_m=1, prefix=coord_prefix))
     field_w = max(GRADE_CELL_INNER_WIDTH, int(width))
+    heights = surface_heights
     for y in range(y1, y0 - 1, -1):
         bands = ([], [], [])
         for x in range(x0, x1 + 1):
             key = (x, y)
+            couples = (
+                unified_surface_facings(key, heights) if heights is not None else ()
+            )
             top, mid, bot = compose_grade_cell(
                 centers.get(key, " "),
                 rays.rays_at(key),
+                couples=couples,
             )
             bands[0].append(format_glyph_field(top, width=field_w))
             bands[1].append(format_glyph_field(mid, width=field_w))

@@ -8,7 +8,7 @@ metadata:
 
 > **Статус:** ownership **утверждён** · templates R33–R35 ✅ · **R36 geom/entity/clearance** ✅ · **canal R36p/q ✅** · **R36u–w** writer/pool/каталог ✅ · **R37** envelope ✅ · **R41/R42/C39/C41 pipeline v2 = SoT** (меса 8, фронт W×L, `ReliefVertices`+`occ`+`seam`, bucket[z] остаток кромок, шов лучей, расписание A). **R38–R40 v1 — deprecated**. Шов чанков `full_bake` · halo `grid_neighbor` · T-10 ✅.  
 > **Код vs SoT:** `compute_rect` = discover+paint → один fill; после чанков catalog merge + **T-3c System** (слои 0–7). Occupancy v1 **срезан** (слой 7). **Очередь / не трогать:** § [Осталось — v2 vs L2 volume](#осталось--v2-vs-l2-volume-locked). IDs — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md). **R41-T-1…T-12** ✅. Слой 5 ravine/shore ✅. **T-3c слой 6 ✅**. **Слой 7 срез v1 ✅**. Очередь v2 полиш закрыта — [план](../.cursor/plans/relief-pipeline-v2.md). **R43** SQL catalog persist **✅**. Wave E / BAR-1 / DAG вне этой очереди. L0 `world-grade` ASCII omit (PAR-G5).  
-> **Связь:** SoT grade generate; **consume** (клетка→Instance→System, L2 3×3 дамп) — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md); **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT. · файлы пака L0/L2 — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md). · L2 storage — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2. · Agent: [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md) · v2 impl: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md)
+> **Связь:** SoT grade generate; **consume** (клетка→Instance→System, L2 3×3 дамп) — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md); **поддомен Terrain** — [`tz_terrain_generation.md`](./tz_terrain_generation.md); **не** MaskDomain SoT. · файлы пака L0/L2 — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md). · L2 storage — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2. · **логи (sink):** [`tz_logging.md`](./tz_logging.md) консьюмеры `relief/reliefLog`, `relief/gradeCellRays`. · Agent: [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md) · v2 impl: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md)
 
 **Scope lock (R36u):** меняется **только outdoor relief grade** (`system_grade_uid`, SLOPE/SHEER geometry). **Не трогать** L0→L2 parent-light контракты ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2):
 
@@ -154,7 +154,7 @@ metadata:
 | R40 | **Ray walk / fill→relief — deprecated (v1).** Запреты fill∥relief, второго пула, рельефа тайла параллельно с чанками — **остаются**. Порядок writer высот **не** «column fill затем discover»: z уже в `heightmap` (prep). **SoT — R41:** discover+paint → один fill. Стоп θ / каскад террас / не мутировать якоря — R41 + R36t. См. § Ray walk (historical) |
 | R41 | **Relief pipeline v2 — locked (SoT).** Одна конструкция: вершина → кромка → фронты → `GradePaintSpec` → L2 paint. Контекст = тело вершины. Членство 8-связное при rim; клетка — **не больше одной** вершины (`at_grid`). `ReliefVertices` + **`occ`** + **`seam`**. Покрытие: фронт вниз пока θ; остаток = незатопленные кромки (**C39**). Луч = `(кромка, Facing)`; `(клетка, Facing)` уникален между вершинами; низина не один склон и не first-wins (**C41**). Не «непересекающиеся фронты». **1 фронт = 1 Instance;** System row при ≥2. Каталог до пула; discover+paint → один fill; стык после чанков: прямая = catalog, вершина = T-3c на C29. Stamp `|dz|=1` — plains да / forest нет (R37 `stamp_min_abs_dz`). Ширина — **R42**. См. § Relief pipeline v2 · § Ray width |
 | R42 | **Ray width — lockstep front — locked.** Луч = **фронт**, не нитка в 1 клетку. `W` = сплошной run кромки с одним `Facing` и одним первым спуском. Весь фронт шагает наружу **вместе** (Chebyshev 1). Орто: прямоугольник `W × L`. Диагональ **day-1:** нитка W=1 Chebyshev; thick fill — [Murphy](http://www.zoo.co.uk/murphy/thickline/) **R36r later**. **Не** веер. Разный dz/θ вдоль `W` → резать Grade (C15). Опц. сужение `W` (Murphy taper) later — не захват чужой низины. Не dilation/GIS-buffer, не per-cell stairs. См. § Ray width |
-| R44 | **Постгенерационный валидатор клеток рельефа — locked.** Образец: валидаторы структуры здания (log ERROR, не исключение, геометрия остаётся). Проверка 1: пустой луч на **любой** из 8 сторон surface-клетки rect → некорректна. Лог только `relief_error` (тот же хелпер R8). Generate **не** abort. Контракт слотов — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md). **C43** |
+| R44 | **Постгенерационный валидатор клеток рельефа — locked.** Образец: валидаторы структуры здания (log ERROR, не исключение, геометрия остаётся). Проверка 1: на каждом из 8 Facing surface-клетки — pack leftover **или** сцепление той же `surface_z` **или** нет соседа. Сосед другой z без leftover → некорректна. Лог только `relief_error` (тот же хелпер R8). Generate **не** abort. Контракт слотов — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md). **C43** |
 
 ### SQL catalog persist (2026-08-18)
 
@@ -208,9 +208,9 @@ metadata:
 | C38 | **`ReliefVertices` — индекс, не persist.** `at_grid` / `occ` / `seam` / `members` dict / `uids`. **Не** хранить `ReliefGradeInstance` в слоте и **не** добавлять bake-поля на POJO. Поля фронта — **C40**. Reconcile: выкинуть клетку в чужом `occ` | locked (R41) |
 | C39 | **Незатопленные кромки — bucket[z] + `occ` + `seam`, не поиск дыр.** Сетка = `ColumnRect`+halo. `occ` = коридор фронта; `at_grid` = слот вершины; `seam` = шов лучей (C41). Ведра по целой z, сверху вниз. Seed только если `occ==0` ∧ `at_grid==0` ∧ `seam==0` ∧ есть 8-сосед ниже с `occ==0` (сосед-**шов низины** не блокирует: несколько вершин могут стрелять в яму). 8-flood тела — **от этой кромки**. Не полный CC same-z; не Priority-Flood ямы; не heap на клетку; не второй обход тайла. Пол рампы и шов лучей не сеют. См. **R41** § Покрытие | locked (R41) |
 | C40 | **`GradePaintSpec` — единственное место bake-полей фронта.** Вход в L2. kind/h/L/θ/canal — из `RibbonGradeDecision` / knobs **POJO**, без параллельных default. Instance создаётся в apply из `ReliefGradeInstance`. Запрещено копировать `height_cells`/`length_cells` вторым литералом. См. **R41** § GradePaintSpec | locked (R41) |
-| C41 | **Шов лучей (не первый-занял).** Луч уникален по `(кромка, Facing)` на вершине и по `(клетка, Facing)` между вершинами. Несколько вершин могут стрелять в одну низину разными сторонами; повтор того же Facing в клетку — нет. Клетка ∈ ≥2 следов **одного** Facing → шов (шерсть). Клетка ∈ следов **разных** Facing (в т.ч. разных вершин) → якорь низа, ничей `occ`. Коридор = уникальные клетки следа. Пустой коридор → skip (дырка 1×1). Не 4 Instance на клетке. Не путать с C29. **Pack-слоты** (не Instance): 8-взгляд тела + шаг фронта (rim∪коридор × outward и W); получатель persist. Не второй обход тайла. [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | locked (R41) |
+| C41 | **Шов лучей (не первый-занял).** Луч уникален по `(кромка, Facing)` на вершине и по `(клетка, Facing)` между вершинами. Несколько вершин могут стрелять в одну низину разными сторонами; повтор того же Facing в клетку — нет. Клетка ∈ ≥2 следов **одного** Facing → шов (шерсть). Клетка ∈ следов **разных** Facing (в т.ч. разных вершин) → якорь низа, ничей `occ`. Коридор = уникальные клетки следа. Пустой коридор → skip (дырка 1×1). Не 4 Instance на клетке. Не путать с C29. **Pack leftover** (не Instance): 8-взгляд тела **только downhill** + шаг фронта (rim∪коридор × outward). Равная z — сцепление единой поверхности, не pack-луч. Получатель persist. Не второй обход тайла. [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | locked (R41) |
 | C42 | **SQL каталог грейдов — bake-writer.** Одна txn + `executemany` (~5000). Prior только по uid входящего bag. Heartbeat `packBakeLog`; detailed → `bake-detailed-*.log`. Не OLTP commit на строку. Не dump мира перед merge. Семантика upsert / `replace_world=False` / merge `cell_refs` / T-3c systems — без смены. Три caller’а — один `persist_relief_grades`. Поштучный upsert без обёртки коммитит (patch). | locked (R43) |
-| C43 | **Постгенерационный валидатор 8 лучей.** После записи pack-ребра: пустой любой из 8 Facing на surface-клетке rect → клетка некорректна. **ERROR** через `relief_error` (`relief/log/log.py`), event `grade_cell_empty_ray`. **Не abort** generate (как structure headroom/staircase). Не чинит лучи. SoT проверки — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | locked |
+| C43 | **Постгенерационный валидатор 8 слотов.** После записи pack-ребра: на каждом Facing — leftover pack, сцепление той же z, или нет соседа. Сосед другой z без leftover → клетка некорректна. **ERROR** через `relief_error` (`relief/log/log.py`), event `grade_cell_empty_ray`. **Не abort** generate (как structure headroom/staircase). Не чинит лучи. SoT проверки — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | locked |
 
 ---
 
@@ -245,7 +245,7 @@ metadata:
 
 Не print, не поллер `detailed_bake.py`. Logger `packBakeLog` уже в allowlist `generation_world_log` → uvicorn и файл, когда scope открыт.
 
-Ритм как у чанков: не 32k строк, а пачка / несколько секунд. После `complete` в манифесте в логе должно быть видно `grades persist 0/N → … → done ~секунды`, а не тишина. `app.relief grade_system_create` — emit в памяти, **не** заменяет persist-heartbeat.
+Ритм как у чанков: не 32k строк, а пачка / несколько секунд. После `complete` в манифесте в логе должно быть видно `grades persist 0/N → … → done ~секунды`, а не тишина. Finish тайла (после чанков): `packBakeLog` **sidecar start/done**, **grade_ray validate 0/N → done** (`empty=`), **grade_systems emit start/done**. `app.relief grade_system_create` — DEBUG emit в памяти, **не** на консоль и **не** заменяет эти heartbeat. R44 ERROR — файл `gradeCellRays` + транскрипт, не stdout.
 
 Entry/light/full уже внутри `generation_world_log` — те же start/progress/done попадут в `bake-entry|light|full-*.log` без новых обёрток.
 
@@ -2255,11 +2255,13 @@ Defaults profile (mountain SideFill): SHEER `ε` = `sheer_band_light` (default 1
 
 ## Logging (R8)
 
+Sink файлов — [`tz_logging.md`](./tz_logging.md): консьюмеры [`relief` / `reliefLog`](./tz_logging.md#каталог-консьюмеров) (этот раздел) и [`relief` / `gradeCellRays`](./tz_logging.md#каталог-консьюмеров) (R44 / consume). Не общий `app.log`.
+
 | Уровень | Что писать |
 |---|---|
-| **INFO** | template_uid, context, sides/kind summary, identity; **`grade_system_create`** — `why` + `grade_instance_uids` / kinds / angles |
-| **ERROR** | постгенерационный валидатор (**R44** / **C43**): `relief_error` + `grade_cell_empty_ray`; generate не abort |
-| **DEBUG** (sample) | `kind`, `h`/`L`/`angle` (R36) или `t`/`Δz`/`fraction`, **`reason`**, **`facing`** или `facing=none`; **`grade_instance_create`** — базовые поля Instance; **`grade_system_members`** — детали частей; **R36w:** `detailed_grade_sample_rect` / `detailed_grade_materialize_rect` / `grade_uid_inherit` + **`cpu_core`** / `worker_thread` |
+| **INFO** | template_uid, context, sides/kind summary, identity; heartbeat консоли — `packBakeLog` (chunk / sidecar / validate / T-3c emit), не per-system |
+| **ERROR** | постгенерационный валидатор (**R44** / **C43**): `relief_error` + `grade_cell_empty_ray`; generate не abort. Файл `gradeCellRays` + транскрипт; **не** консоль (шторм). Счётчик `empty=` — в heartbeat validate |
+| **DEBUG** (sample) | `kind`, `h`/`L`/`angle` (R36) или `t`/`Δz`/`fraction`, **`reason`**, **`facing`** или `facing=none`; **`grade_instance_create`** — базовые поля Instance; **`grade_system_create`** — `why` + uid/kinds/angles; **`grade_system_members`** — детали частей; **R36w:** `detailed_grade_sample_rect` / `detailed_grade_materialize_rect` / `grade_uid_inherit` + **`cpu_core`** / `worker_thread` |
 | **Запрещено** | silent grade без reason при диагностике; System из 1 Grade; ERROR валидатора в обход `relief_error` |
 
 ```text
@@ -2846,6 +2848,7 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 | [`tz_city_generation.md`](./tz_city_generation.md) | `SettlementLayout` мировые координаты; город на шве (**C29**); террасы/улицы — тело вершины **R41** при rim |
 | [`tz_building_generator.md`](./tz_building_generator.md) | library + world registry + import образец |
 | [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | pack partition ≠ продукт; шов мира vs технический (**C29**); **modification** = Patch Store; `detailed_bake` location — **R41** (не stencil volume); стык после чанков: прямая = catalog, вершина = T-3c |
+| [`tz_logging.md`](./tz_logging.md) | sinks: `relief/reliefLog`, `relief/gradeCellRays`; не общий `app.log` |
 | [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | **поддомен consume:** pack-ребро отправитель/получатель, валидатор 8 лучей (**R44**), SQL/wire, LLM uid→Instance→System, L2 клетка **3×3** |
 | [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) | pack ASCII: L0 map/height **без** outdoor grade (**R36u**); пути `surface_grade` / `grade_{n}`; FineTerrain uid→Instance (PAR-G7/G10); глиф 3×3 — consume TZ; ~~PAR-G8~~ superseded |
 | [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | IDs; очередь SoT — § Осталось — v2 vs L2 volume; **R41-T-1…T-12** ✅; **T-3c** слой 6 ✅; **R36i-T-2** fence; **R36i-T-4…T-15** ✅ |
@@ -2859,6 +2862,8 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-23 | **Консоль bake:** sidecar / R44 validate heartbeat / T-3c emit на `packBakeLog`; `grade_system_create` DEBUG; R44 ERROR не stdout — [`tz_logging.md`](./tz_logging.md) L7/L8 |
+| 2026-08-23 | **Сцепление единой поверхности:** равная z не pack leftover; валидатор R44 / dump `+` — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) |
 | 2026-08-22 | **Pack-слоты:** тело вершины × 8 + шаг lockstep; не второй обход тайла. Валидатор 8 лучей без смены — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) |
 | 2026-08-22 | **R44 / C43:** валидатор 8 лучей после pack-ребра; пустой Facing → `relief_error`, generate не abort — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) |
 | 2026-08-22 | **Pack rim edge:** C41-claim = отправитель; persist пишет получателя (`opposite`); ASCII только читает — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) |

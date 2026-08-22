@@ -1883,7 +1883,7 @@ flowchart TB
 
 **Контекст:** `initialize_world.py --fixture world_terrain_test.json` → `POST /map/pack/bake?mode=light&max_tiles=16` для `world-terrain-test-001`.
 
-**Логи bake (per-world):** `backend/logs/generation/{world_uid}/bake-light-latest.log` (+ stamped `bake-light-{UTC}.log`). Общий runtime: `backend/logs/app.log` / терминал `npm run dev`. Sink: `app.core.generationLogging` — allowlist включает `app.application.worldData.pack` / `generators` / `render` (ASCII dump ticks via `dumpLog`, `mode=dump` → `bake-dump-*.log`) **и** `app.relief` (relief/canal/`road_shoulder_skip` via `reliefLog`).
+**Логи bake (per-world):** транскрипт `backend/logs/generation/{world_uid}/bake-light-latest.log` (+ stamped). Потоки консьюмеров — [`tz_logging.md`](./tz_logging.md) (`pack/packBakeLog`, не общий `app.log`). Sink allowlist: `app.core.generationLogging` — pack / generators / render (`dumpLog`, `mode=dump` → `bake-dump-*.log`) **и** `app.relief` (`reliefLog` / R44 `gradeCellRays`).
 
 | Метрика | Значение | WP-A1 |
 |---|---|---|
@@ -2029,6 +2029,7 @@ flowchart LR
 
 | Документ | Связь |
 |---|---|
+| [`tz_logging.md`](./tz_logging.md) | sinks: `{domain}/{service}.log`; транскрипт `generation/{uid}`; консьюмеры `pack/*` |
 | [`tz_map_light_bake.md`](./tz_map_light_bake.md) | L0 LightGridCompose — контракты укладки маски world map; **не** writer холмов |
 | [`tz_terrain_generation.md`](./tz_terrain_generation.md) | multi-pass skeleton, TR-LAZY-LOAD, hydrology pass order |
 | [`tz_terrain_relief.md`](./tz_terrain_relief.md) | outdoor grade **после** L2 hills (z готов); холм ≠ Grade |

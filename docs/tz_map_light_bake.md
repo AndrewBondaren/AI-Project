@@ -1377,7 +1377,7 @@ L2 `refine_chunk` читает parent light **только** через `load_pa
 
 ## Логи и диагностика
 
-Per-world generation log: `backend/logs/generation/{world_uid}/` ([`generationLogging`](../backend/app/core/generationLogging.py)).
+Sink: [`tz_logging.md`](./tz_logging.md) — консьюмер `pack` / `packBakeLog`; транскрипт `backend/logs/generation/{world_uid}/` ([`generationLogging`](../backend/app/core/generationLogging.py)). Не общий `app.log` на скрипт и uvicorn.
 
 Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack storage § именование):
 
@@ -1420,6 +1420,7 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 | [`tz_terrain_relief.md`](./tz_terrain_relief.md) | **Relief grade** SoT (**R36u** writer; **R36v** per-chunk pool); L0 не grade SoT |
 | [`tz_climate.md`](./tz_climate.md) | pole / zone sample |
 | [`tz_city_generation.md`](./tz_city_generation.md) | L1 skeletons vs L2 layout |
+| [`tz_logging.md`](./tz_logging.md) | sink `pack/packBakeLog`; транскрипт generation/{uid} |
 
 ---
 

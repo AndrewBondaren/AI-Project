@@ -1745,6 +1745,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 - `tz_locations.md` — named_location fields
 - `tz_generator_technical_debt.md` — NC-1, smells
 - [`tz_terrain_relief.md`](./tz_terrain_relief.md) — **поддомен Terrain** outdoor SLOPE/SHEER/facing + library/registry (горы/shore/open_land/`road_shoulder` = consumers)
+- [`tz_logging.md`](./tz_logging.md) — sinks; консьюмер `terrain/terrainParallelLog`
 - [`tz_map_light_bake.md`](./tz_map_light_bake.md) — L0 light-grid compose; горы consumer SideFill
 - [`tz_mountain_architecture.md`](./tz_mountain_architecture.md) — PassBuilder topology (не Relief grade)
 - [`tz_locations.md`](./tz_locations.md) — `system_facing` / staircase chain (аналог uphill facing)

@@ -23,7 +23,7 @@ from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay, merge_grade_ri
 
 
 def rim_rays_from_front(front: DiscoveredFront) -> tuple[GradeRimRay, ...]:
-    """Lockstep senders: rim ∪ corridor × outward, plus equal-z width W."""
+    """Lockstep leftover senders: rim ∪ corridor × outward only."""
     decision = front.spec.decision
     kind = decision.kind
     if kind is None or decision.skipped:

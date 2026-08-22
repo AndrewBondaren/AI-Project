@@ -2,13 +2,13 @@
 
 SoT: ``docs/tz_terrain_relief_consume.md``. C41 identity = sender ``(cell, Facing)``.
 Receiver is persist, not a second claim and not render ``opposite``.
-``kind`` chooses the edge glyph (SLOPE arrow / SHEER bar). Default ``SLOPE``
-when the slot is not a painted leftover front (equal-z body / no Instance).
+``kind`` chooses the leftover glyph (SLOPE arrow / SHEER bar). Equal-z neighbor
+is unified-surface coupling (not a pack ray) — validator/render, not this POJO.
 """
 
 from __future__ import annotations
 
-from collections.abc import Collection, Iterable
+from collections.abc import Collection, Iterable, Mapping
 from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -65,6 +65,26 @@ def receiver_rim_ray(sender: GradeRimRay) -> GradeRimRay:
         facing=opposite(sender.facing),
         kind=sender.kind,
     )
+
+
+def unified_surface_facings(
+    xy: tuple[int, int],
+    z_at: Mapping[tuple[int, int], int],
+) -> frozenset[Facing]:
+    """Facings whose neighbor exists in ``z_at`` at the same surface z (coupling)."""
+    x, y = int(xy[0]), int(xy[1])
+    z = z_at.get((x, y))
+    if z is None:
+        return frozenset()
+    z = int(z)
+    out: list[Facing] = []
+    for facing in Facing:
+        dx, dy = GRID_OUTWARD_DELTA[facing]
+        nb = (x + dx, y + dy)
+        zn = z_at.get(nb)
+        if zn is not None and int(zn) == z:
+            out.append(facing)
+    return frozenset(out)
 
 
 def pack_rim_slot_rays(

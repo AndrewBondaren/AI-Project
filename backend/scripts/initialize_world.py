@@ -2,7 +2,8 @@
 
 Uses ``POST …/map/pack/bake`` (L0 only — Job boundaries).
 Entry/L2 is a **separate** job: ``--entry`` → ``POST …/map/refine-from-entry``.
-Logs: app stack (``backend/logs/app.log`` + ``generation/{uid}/bake-dump-*.log``).
+Logs: ``backend/logs/script/initializeWorld.log``, ``logs/render/dumpLog.log``,
+and ``generation/{uid}/bake-dump-*.log``.
 ASCII dumps: ``.local/map-render/{uid}/``.
 Requires running backend (``npm run backend``) — agents must not start it.
 
@@ -211,7 +212,7 @@ def main() -> None:
     )
     add_debug_logging_argument(parser)
     args = parser.parse_args()
-    ensure_script_logging(debug=args.debug)
+    ensure_script_logging(service="initializeWorld", debug=args.debug)
     os.environ.setdefault("DEBUG_API_TIMEOUT", "600")
 
     fixture = args.fixture.resolve()

@@ -9,7 +9,8 @@ Separate from detailed_bake / light|full L0. Verifies:
 Assumes world already has L0 parent light. Does **not** wipe pack.
 
 Reports → JSON under ``.local/map-render/{uid}/entry-bg/``.
-Ticks → app logger + ``bake-dump-*.log``.
+Ticks → ``logs/script/entryBgRefine.log``, ``logs/render/dumpLog.log``,
+and ``bake-dump-*.log``.
 
 Requires a running backend (``npm run backend``) — agents must not start it.
 
@@ -182,7 +183,7 @@ def main() -> None:
     )
     add_debug_logging_argument(parser)
     args = parser.parse_args()
-    ensure_script_logging(debug=args.debug)
+    ensure_script_logging(service="entryBgRefine", debug=args.debug)
 
     world_uid = args.world_uid
     report_root = _report_dir(world_uid)

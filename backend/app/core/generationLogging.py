@@ -1,7 +1,8 @@
 """Per-world generation logs under ``backend/logs/generation/{world_uid}/``.
 
-Separated from ``logs/app.log`` / console so bake diagnostics (surface
-context, world_map sampling, tile flat) survive terminal scrollback.
+Transcript of one bake/dump run — not a rotating ``{domain}/{service}`` sink
+(see ``docs/tz_logging.md``). Separated from console so bake diagnostics
+(surface context, world_map sampling, tile flat) survive terminal scrollback.
 
 Usage::
 

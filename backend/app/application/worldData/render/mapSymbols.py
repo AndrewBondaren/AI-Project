@@ -34,6 +34,7 @@ TERRAIN_SYMBOLS: dict[str, str] = {
 
 # Grade cell without facing (SHEER) — vertical face, not a compass.
 GRADE_SHEER_SYMBOL = "┃"
+GRADE_COUPLE_SYMBOL = "+"
 GRADE_EMPTY_SYMBOL = " "
 
 # Unknown terrain/role: blank cell — never first-letter of key (collides: ravine→r, road→r).
@@ -171,6 +172,7 @@ def render_grade_legend() -> str:
     parts = " ".join(f"{sym}={f.value}" for f, sym in FACING_ARROW.items())
     return (
         f"grade 3x3: center=surface; edges=outgoing rim rays "
-        f"(SLOPE {parts}; {GRADE_SHEER_SYMBOL}=sheer); "
-        f"empty edge=no ray; not occupancy overlay"
+        f"(SLOPE {parts}; {GRADE_SHEER_SYMBOL}=sheer; "
+        f"{GRADE_COUPLE_SYMBOL}=unified surface); "
+        f"empty edge=missing leftover; not occupancy overlay"
     )

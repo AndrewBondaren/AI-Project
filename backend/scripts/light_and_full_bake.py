@@ -8,7 +8,8 @@ Unlike ``initialize_world.py`` (single mode), this script:
 2. wipes local pack + clears map patches
 3. runs ``mode=light``, then ``mode=full`` without re-import
 4. writes JSON report + L0 ASCII under ``.local/map-render/…``; ticks go to
-   ``backend/logs/app.log`` and ``logs/generation/{uid}/bake-dump-*.log``.
+   ``backend/logs/script/lightAndFullBake.log``, ``logs/render/dumpLog.log``,
+   and ``logs/generation/{uid}/bake-dump-*.log``.
 
 **Workaround WP-DELETE-1** ([``tz_generator_technical_debt.md``](../../docs/tz_generator_technical_debt.md)):
 do **not** call ``DELETE /worlds/{uid}`` — FK fail leaves a half-deleted world.
@@ -480,7 +481,7 @@ def main() -> None:
     )
     add_debug_logging_argument(parser)
     args = parser.parse_args()
-    ensure_script_logging(debug=args.debug)
+    ensure_script_logging(service="lightAndFullBake", debug=args.debug)
 
     fixture = args.fixture.resolve()
     if not fixture.is_file():

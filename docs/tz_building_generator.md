@@ -720,7 +720,7 @@ clearance = world.default_passage_height
         если cells[(x, y, z+dz)] существует и не является passable → log ERROR
 ```
 
-Passable для headroom: `archway`, `void`. Всё остальное блокирует просвет. Валидатор логирует ошибку, не бросает исключение — лестница сохраняется, но нарушение фиксируется в логах.
+Passable для headroom: `archway`, `void`. Всё остальное блокирует просвет. Валидатор логирует ошибку, не бросает исключение — лестница сохраняется, но нарушение фиксируется в логах. Sink: [`tz_logging.md`](./tz_logging.md) консьюмер `structure` / `headroom` (образец режима R44: ERROR, не abort).
 
 ---
 

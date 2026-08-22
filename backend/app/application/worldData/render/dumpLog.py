@@ -1,6 +1,7 @@
 """ASCII dump / smoke-script ticks — application logging stack.
 
-SoT: ``app.core.loggingConfig`` (console + ``backend/logs/app.log``) and
+SoT: ``docs/tz_logging.md`` consumer ``render`` / ``dumpLog``
+(``backend/logs/render/dumpLog.log``, script process) and transcript
 ``generation_world_log(mode="dump")`` → ``backend/logs/generation/{uid}/bake-dump-*.log``.
 
 Not ``print``, not a script-local tee. Heartbeat ≤5 s (``DEBUG_PROGRESS_POLL_S``).

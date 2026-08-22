@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 
 from app.application.worldData.generators.terrain.relief.log.log import (
     relief_debug,
-    relief_info,
 )
 from app.application.worldData.generators.terrain.relief.volume.volumeMaterialize import (
     RibbonVolumePlan,
@@ -129,8 +128,8 @@ def build_relief_grade_system(
         owner_uid=owner_uid,
         display_name=display_name,
     )
-    # INFO: rare structural event — why system exists + membership
-    relief_info(
+    # DEBUG: per-system emit — INFO on console blocked the bake (stdout pipe).
+    relief_debug(
         "grade_system_create",
         grade_system_uid=system.grade_system_uid,
         world_uid=world_uid,

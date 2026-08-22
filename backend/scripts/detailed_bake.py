@@ -3,7 +3,8 @@
 Assumes the world already has L0 parent light (after light_and_full_bake / full).
 Does **not** wipe pack, re-import, or run entry/bg refine.
 
-**Logs:** app stack only — ``backend/logs/app.log`` + console JSON, and
+**Logs:** ``backend/logs/script/detailedBake.log`` + console JSON,
+``backend/logs/render/dumpLog.log`` (ASCII dump), and
 ``backend/logs/generation/{uid}/bake-dump-*.log`` (``generation_world_log(mode="dump")``).
 ASCII artifacts stay under ``.local/map-render/``. Heartbeat ≤5 s via ``dumpLog``.
 
@@ -525,7 +526,7 @@ def main() -> None:
     )
     add_debug_logging_argument(parser)
     args = parser.parse_args()
-    ensure_script_logging(debug=args.debug)
+    ensure_script_logging(service="detailedBake", debug=args.debug)
 
     if args.scope == "wilderness":
         if args.all_tiles and (args.gx is not None or args.gy is not None):
