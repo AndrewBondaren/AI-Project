@@ -726,16 +726,16 @@ wilderness_chunk.cells = refine_chunk(...)
 
 Wilderness — **file-per-tile-chunk**, не file-per-whole-tile на gameplay path (partial tile). Offline `r.{gx}.{gy}.terrain.zst` merged — только bake `tile|full`.
 
-#### Grade rim edges (pack, not FineTerrain)
+#### Grade 8-slots (pack, not FineTerrain)
 
-Outdoor 8-ray **не** колонка и **не** leftover в памяти generate. После `detailed_bake` — файлы pack: отправитель (C41) + получатель (`opposite`). SoT: [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) слой 2.
+Outdoor 8 слотов **не** колонка и **не** bake `occ`/`seam`. После `detailed_bake` — файлы pack: **все** SLOPE/SHEER фронтов (отправитель + получатель) **и** COUPLE same-z во вселенной R44. Не «остаток». Не тело×8 как SLOPE/SHEER. SoT: [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) слой 2.
 
 | Слой | Файл | Зерно |
 |---|---|---|
-| Wilderness tile | `tiles/r.{gx}.{gy}.grade_rays.json` | ребро: sender + receiver + kind |
+| Wilderness tile | `tiles/r.{gx}.{gy}.grade_rays.json` | слот `(x, y, facing, kind)`; kind ∈ {SLOPE, SHEER, COUPLE} |
 | Location L2 | `locations/l.{uid}.grade_rays.json` | то же; клетка ∈ location volume |
 
-Рендер ASCII **не** считает получателя. Не SQL catalog (R43) и не `.zst` chunk.
+Рендер ASCII **не** invent слот (`opposite`, сравнение z). Не SQL catalog (R43) и не `.zst` chunk.
 
 #### Layer priority (WP-20, утверждено)
 
@@ -2046,6 +2046,8 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-23 | **grade_rays = 8 слотов:** SLOPE/SHEER всех фронтов + COUPLE; не leftover-only — consume TZ |
+| 2026-08-23 | **grade_rays = фронт:** sender+receiver только с реальных фронтов (не тело×8) — consume TZ |
 | 2026-08-22 | **Grade rim edges pack:** `tiles/r.{gx}.{gy}.grade_rays.json` / `locations/l.{uid}.grade_rays.json` — отправитель + получатель; не FineTerrain column — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) |
 | 2026-08-21 | **L2 hills shapes:** палитра `shapes[]` на POJO; пусто = каталог (`circle`/`oval`/`double_circle`/`double_oval`); выбор hash(`world_uid`, origin). Формулы — § L2 open-land hills |
 | 2026-08-20 | **L2 open-land hills:** helper (не mask domain); только L2; consumer plains/forest; стопа в host; `z_band` не режет холм. **Wire = POJO:** `min_spacing`, `radius`, `height` (метры / world-z). Мир `default_*.hills` → локация `hills.{plains\|forest}` перекрывает |

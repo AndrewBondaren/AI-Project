@@ -147,7 +147,9 @@ def facing_arrow(facing: Facing | str | None) -> str | None:
 
 
 def grade_ray_glyph(kind: ReliefSideKind, facing: Facing) -> str:
-    """Edge slot for one outgoing ray — SLOPE arrow, SHEER bar."""
+    """Edge slot from pack kind — SLOPE arrow, SHEER bar, COUPLE plus."""
+    if kind is ReliefSideKind.COUPLE:
+        return GRADE_COUPLE_SYMBOL
     if kind is ReliefSideKind.SHEER:
         return GRADE_SHEER_SYMBOL
     arrow = facing_arrow(facing)

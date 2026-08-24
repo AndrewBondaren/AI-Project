@@ -4,9 +4,17 @@ from __future__ import annotations
 
 import unittest
 
+from app.application.worldData.generators.terrain.relief.discover.apron import (
+    enclosed_one_cell_pit,
+    is_q2_seed,
+    is_q3_seed,
+    is_slope_corridor_cell,
+    resolve_q3_parent,
+)
 from app.application.worldData.generators.terrain.relief.discover.core import (
     discover_fronts,
 )
+from app.application.worldData.generators.terrain.relief.discover.rim import seed_rim
 from app.application.worldData.generators.terrain.relief.discover.plugins import (
     OpenLandPlugin,
     RoadShoulderPlugin,
@@ -16,6 +24,7 @@ from app.application.worldData.generators.terrain.relief.discover.plugins import
 )
 from app.application.worldData.generators.terrain.relief.discover.seam import SeamStage
 from app.application.worldData.generators.terrain.relief.discover.types import (
+    FOREIGN_MARK,
     Coord,
     ProposedTrace,
     ReliefVertices,
@@ -53,6 +62,17 @@ _ENVELOPE_L_FLOOR = (
 )
 _SHORE_SEA = ReliefConditionTerrain.SHORE_SEA.value
 _BARRIERS = WorldTerrainRegistry.canonical_barrier_terrain_keys()
+
+
+def _vertices_for(z: dict[Coord, int]) -> ReliefVertices:
+    xs = [x for x, _y in z]
+    ys = [y for _x, y in z]
+    return ReliefVertices.for_bounds(
+        origin_x=min(xs),
+        origin_y=min(ys),
+        width=max(xs) - min(xs) + 1,
+        height=max(ys) - min(ys) + 1,
+    )
 
 
 def _surface(z: dict[Coord, int], terrain: str = _PLAINS) -> MeterGradeSurface:
@@ -260,6 +280,7 @@ class ReliefDiscoverTest(unittest.TestCase):
         self.assertNotEqual(vertices.seam[i], 0)
         self.assertEqual(fronts, ())
         self.assertEqual(vertices.occ[i], 0)
+        self.assertEqual(vertices.at_grid[i], 0)
 
     def test_mixed_heights_share_pit_across_vertices(self) -> None:
         """6 / 4 / 3 may all shoot into 2; the pit is seam, not first-wins occ."""
@@ -291,23 +312,242 @@ class ReliefDiscoverTest(unittest.TestCase):
             i = vertices.index(*xy)
             self.assertNotEqual(vertices.occ[i], 0)
 
-    def test_lower_terrace_does_not_seed_under_occ(self) -> None:
+    def test_lower_terrace_seeds_when_upper_drop_is_sheer(self) -> None:
+        """Plains |dz|=2 is sheer: the terrace is a vertex, not a slope corridor."""
         z = {
             (0, 2): 6, (1, 2): 6, (2, 2): 6,
             (0, 1): 4, (1, 1): 4, (2, 1): 4,
             (0, 0): 2, (1, 0): 2, (2, 0): 2,
         }
         vertices, fronts = _discover(z)
+        mesa_slot = vertices.at_grid[vertices.index(1, 2)]
+        terrace = {(0, 1), (1, 1), (2, 1)}
+        for xy in terrace:
+            i = vertices.index(*xy)
+            slot = vertices.at_grid[i]
+            self.assertNotEqual(slot, 0)
+            self.assertNotEqual(slot, mesa_slot)
+            self.assertEqual(vertices.occ[i], 0)
         south = [f for f in fronts if f.outward is Facing.SOUTH]
         self.assertTrue(south)
-        covered = {xy for f in south for xy in f.corridor}
-        self.assertTrue(covered)
-        terrace = {(0, 1), (1, 1), (2, 1)}
-        self.assertTrue(terrace & covered)
-        for xy in terrace & covered:
-            i = vertices.index(*xy)
-            self.assertNotEqual(vertices.occ[i], 0)
-            self.assertEqual(vertices.at_grid[i], 0)
+
+    def test_uncovered_east_landing_is_q2_vertex_with_parent_sheer(self) -> None:
+        """Mesa z=8; south |dz|=1 slope; east z=6 is Q2 landing, parent SHEER."""
+        z = {
+            (0, 1): 8, (1, 1): 8, (2, 1): 8,
+            (0, 0): 7, (1, 0): 7, (2, 0): 7,
+            (3, 1): 6,
+        }
+        vertices, fronts = _discover(z)
+        landing = (3, 1)
+        i = vertices.index(*landing)
+        self.assertIsNotNone(i)
+        landing_slot = vertices.at_grid[i]
+        mesa_slot = vertices.at_grid[vertices.index(1, 1)]
+        self.assertNotEqual(landing_slot, 0)
+        self.assertNotEqual(landing_slot, mesa_slot)
+        self.assertEqual(vertices.occ[i], 0)
+        east = [
+            f for f in fronts
+            if f.outward is Facing.EAST and f.slot == mesa_slot
+        ]
+        self.assertTrue(east)
+        self.assertIn(landing, east[0].corridor)
+        self.assertEqual(east[0].first_dz, 2)
+
+    def test_q3_same_z_side_of_slope_corridor_is_new_vertex(self) -> None:
+        """|dz|=1 plains corridor; same-z cell south of occ, not 8-adj to the body."""
+        z = {
+            (0, 2): 4, (1, 2): 4, (2, 2): 4,
+            (0, 1): 3, (1, 1): 3, (2, 1): 3,
+            (1, 0): 3,
+        }
+        vertices, _fronts = _discover(z)
+        side = (1, 0)
+        i = vertices.index(*side)
+        mesa_slot = vertices.at_grid[vertices.index(1, 2)]
+        side_slot = vertices.at_grid[i]
+        self.assertNotEqual(side_slot, 0)
+        self.assertNotEqual(side_slot, mesa_slot)
+        self.assertEqual(vertices.occ[i], 0)
+        corridor = vertices.index(1, 1)
+        self.assertNotEqual(vertices.occ[corridor], 0)
+        self.assertEqual(vertices.q3_parent.get(side_slot), mesa_slot)
+
+    def test_q3_loop_drains_disconnected_sides(self) -> None:
+        """Two same-z sides of one corridor, not 8-linked through free cells, both Q3."""
+        z = {
+            (1, 2): 4, (2, 2): 4, (3, 2): 4,
+            (1, 1): 3, (2, 1): 3, (3, 1): 3,
+            (0, 0): 3, (4, 0): 3,
+        }
+        vertices, _fronts = _discover(z)
+        mesa_slot = vertices.at_grid[vertices.index(2, 2)]
+        west = vertices.at_grid[vertices.index(0, 0)]
+        east = vertices.at_grid[vertices.index(4, 0)]
+        self.assertNotEqual(west, 0)
+        self.assertNotEqual(east, 0)
+        self.assertNotEqual(west, mesa_slot)
+        self.assertNotEqual(east, mesa_slot)
+        self.assertNotEqual(west, east)
+        self.assertEqual(vertices.q3_parent.get(west), mesa_slot)
+        self.assertEqual(vertices.q3_parent.get(east), mesa_slot)
+        surface = _surface(z)
+        self.assertFalse(
+            is_q3_seed(
+                (0, 0), surface, vertices, parent_sheers=lambda _a, _b: False,
+            ),
+        )
+        self.assertFalse(
+            is_q3_seed(
+                (4, 0), surface, vertices, parent_sheers=lambda _a, _b: False,
+            ),
+        )
+
+    def test_q1_cell_is_not_q3_predicate(self) -> None:
+        """C39 seed is not Q3 even with a same-z occ neighbor."""
+        z = {
+            (1, 1): 4, (1, 0): 3, (2, 1): 4,
+        }
+        surface = _surface(z)
+        vertices = _vertices_for(z)
+        vertices.mark_occ((2, 1), 1)
+        self.assertTrue(seed_rim((1, 1), surface, vertices))
+        self.assertFalse(
+            is_q3_seed(
+                (1, 1), surface, vertices, parent_sheers=lambda _a, _b: False,
+            ),
+        )
+
+    def test_q2_landing_is_not_q3_predicate(self) -> None:
+        """SHEER landing against a body is Q2, not Q3."""
+        z = {
+            (1, 1): 8, (2, 1): 6, (1, 0): 7,
+        }
+        surface = _surface(z)
+        vertices = _vertices_for(z)
+        vertices.add_vertex({(1, 1): 8})
+        self.assertTrue(
+            is_q2_seed(
+                (2, 1), surface, vertices, parent_sheers=lambda _a, _b: True,
+            ),
+        )
+        self.assertFalse(
+            is_q3_seed(
+                (2, 1), surface, vertices, parent_sheers=lambda _a, _b: True,
+            ),
+        )
+
+    def test_resolve_q3_parent_min_dz_then_smaller_slot(self) -> None:
+        z = {
+            (0, 1): 8, (1, 1): 3, (2, 1): 5,
+            (1, 0): 3,
+        }
+        surface = _surface(z)
+        vertices = _vertices_for(z)
+        high = vertices.add_vertex({(0, 1): 8})
+        near = vertices.add_vertex({(2, 1): 5})
+        vertices.mark_occ((1, 1), near)
+        parent = resolve_q3_parent((1, 0), surface, vertices)
+        self.assertEqual(parent, near)
+        self.assertNotEqual(parent, high)
+
+    def test_resolve_q3_parent_tie_smaller_slot(self) -> None:
+        z = {
+            (0, 1): 5, (1, 1): 3, (2, 1): 5,
+            (1, 0): 3,
+        }
+        surface = _surface(z)
+        vertices = _vertices_for(z)
+        left = vertices.add_vertex({(0, 1): 5})
+        right = vertices.add_vertex({(2, 1): 5})
+        vertices.mark_occ((0, 0), 0)
+        vertices.mark_occ((1, 1), left)
+        # also treat (2,0) as corridor of right via live slot; (1,1) occ=left
+        parent = resolve_q3_parent(
+            (1, 0),
+            surface,
+            vertices,
+            in_slope_corridor=lambda xy: xy in {(1, 1), (2, 0)},
+            corridor_slot=lambda xy: right if xy == (2, 0) else None,
+        )
+        self.assertEqual(parent, left)
+        self.assertLess(left, right)
+
+    def test_resolve_q3_parent_skips_foreign(self) -> None:
+        z = {(1, 1): 3, (1, 0): 3}
+        surface = _surface(z)
+        vertices = _vertices_for(z)
+        vertices.mark_foreign((1, 1))
+        self.assertIsNone(resolve_q3_parent((1, 0), surface, vertices))
+
+    def test_q3_predicate_sees_live_slope_corridor_when_occ_delayed(self) -> None:
+        """C41 leaves |dz|=1 landings unmarked; Q3 still reads committed SLOPE."""
+        z = {
+            (1, 2): 4, (1, 1): 3, (1, 0): 3,
+        }
+        surface = _surface(z)
+        vertices = _vertices_for(z)
+        vertices.add_vertex({(1, 2): 4})
+        never = lambda _a, _b: False
+        corridor = {(1, 1)}
+        self.assertFalse(
+            is_q3_seed((1, 0), surface, vertices, parent_sheers=never),
+        )
+        self.assertTrue(
+            is_q3_seed(
+                (1, 0),
+                surface,
+                vertices,
+                parent_sheers=never,
+                in_slope_corridor=corridor.__contains__,
+            ),
+        )
+        self.assertFalse(
+            is_q3_seed(
+                (1, 1),
+                surface,
+                vertices,
+                parent_sheers=never,
+                in_slope_corridor=corridor.__contains__,
+            ),
+        )
+
+    def test_slope_corridor_cell_is_occ_or_live_trace(self) -> None:
+        z = {(0, 0): 3, (1, 0): 3, (2, 0): 3}
+        vertices = _vertices_for(z)
+        vertices.mark_occ((0, 0), 1)
+        vertices.mark_foreign((2, 0))
+        self.assertTrue(is_slope_corridor_cell((0, 0), vertices))
+        self.assertFalse(is_slope_corridor_cell((1, 0), vertices))
+        self.assertFalse(is_slope_corridor_cell((2, 0), vertices))
+        self.assertEqual(vertices.occ[vertices.index(2, 0)], FOREIGN_MARK)
+        self.assertTrue(
+            is_slope_corridor_cell(
+                (1, 0), vertices, in_slope_trace=lambda xy: xy == (1, 0),
+            ),
+        )
+
+    def test_one_by_one_pit_is_not_q2_or_q3(self) -> None:
+        z = {
+            (0, 2): 4, (1, 2): 4, (2, 2): 4,
+            (0, 1): 4, (1, 1): 2, (2, 1): 4,
+            (0, 0): 4, (1, 0): 4, (2, 0): 4,
+        }
+        surface = _surface(z)
+        vertices = _vertices_for(z)
+        ring = {xy: 4 for xy in z if xy != (1, 1)}
+        vertices.add_vertex(ring)
+        hole = (1, 1)
+        self.assertTrue(enclosed_one_cell_pit(hole, surface, vertices))
+        never = lambda _a, _b: True
+        self.assertFalse(is_q2_seed(hole, surface, vertices, parent_sheers=never))
+        self.assertFalse(is_q3_seed(hole, surface, vertices, parent_sheers=never))
+        vertices, fronts = _discover(z)
+        i = vertices.index(*hole)
+        self.assertNotEqual(vertices.seam[i], 0)
+        self.assertEqual(fronts, ())
+        self.assertEqual(vertices.at_grid[i], 0)
 
     def test_straight_road_two_ortho_fronts(self) -> None:
         """Pavement = one vertex; shoot both shoulders, not along the road."""
@@ -925,13 +1165,14 @@ class ReliefDiscoverTest(unittest.TestCase):
                 envelopes=envelopes,
             )
 
+        # Bank |dz|=3 is skip (not slope/sheer), so the first terrace y=2 is leftover C39.
         vertices5, _ = _terrace(5)
-        leftover = (2, 1)
+        leftover = (2, 2)
         self.assertNotEqual(vertices5.at_grid[vertices5.index(*leftover)], 0)
         vertices3, _ = _terrace(3)
-        self.assertEqual(vertices3.at_grid[vertices3.index(1, 1)], 0)
+        self.assertEqual(vertices3.at_grid[vertices3.index(1, 2)], 0)
         vertices3_ok, _ = _terrace(3, min_cells=3)
-        self.assertNotEqual(vertices3_ok.at_grid[vertices3_ok.index(1, 1)], 0)
+        self.assertNotEqual(vertices3_ok.at_grid[vertices3_ok.index(1, 2)], 0)
 
     def test_shore_unit_dz_stamps_from_envelope(self) -> None:
         z = {(0, 1): 3, (0, 0): 2}

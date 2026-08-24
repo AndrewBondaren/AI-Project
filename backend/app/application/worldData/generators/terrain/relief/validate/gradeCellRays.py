@@ -60,6 +60,24 @@ def _slot_closed(
     return False
 
 
+def grade_ray_universe(
+    rays: Iterable[GradeRimRay],
+    z_at: Mapping[tuple[int, int], int],
+) -> tuple[tuple[int, int], ...]:
+    """R44 universe: ray cells plus 8-halo that exist in ``z_at``. Not all plains."""
+    cells: set[tuple[int, int]] = set()
+    for ray in rays:
+        cx, cy = int(ray.x), int(ray.y)
+        origin = (cx, cy)
+        if origin in z_at:
+            cells.add(origin)
+        for dx, dy in GRID_OUTWARD_DELTA.values():
+            nb = (cx + dx, cy + dy)
+            if nb in z_at:
+                cells.add(nb)
+    return tuple(sorted(cells))
+
+
 def validate_grade_cell_empty_rays(
     cells: Iterable[tuple[int, int]],
     rays: Iterable[GradeRimRay],

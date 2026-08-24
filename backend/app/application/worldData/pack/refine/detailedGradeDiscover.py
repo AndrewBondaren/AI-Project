@@ -51,7 +51,6 @@ from app.application.worldData.pack.refine.detailedGradePaint import apply_grade
 from app.application.worldData.pack.refine.detailedGradeResult import DetailedGradeResult
 from app.application.worldData.pack.refine.fineTileContext import VertexSlotSeam
 from app.application.worldData.pack.refine.gradeRimRays import (
-    pack_rays_from_vertex_bodies,
     rim_rays_from_front,
 )
 from app.application.worldData.pack.refine.meterGradeSurface import (
@@ -60,8 +59,7 @@ from app.application.worldData.pack.refine.meterGradeSurface import (
     meter_grade_cell_blocked,
 )
 from app.application.worldData.terrainBatchOrchestrator import TileSurfaceState
-from app.dataModel.spatial.facing import Facing
-from app.dataModel.terrain.relief.enums import ReliefContext, ReliefSideKind
+from app.dataModel.terrain.relief.enums import ReliefContext
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.db.models.world import World
@@ -92,10 +90,14 @@ def build_vertex_slot_seams(
                 continue
             if xi == x_lo or xi == x_hi or yi == y_lo or yi == y_hi:
                 edge.append((xi, yi, int(z)))
+        parent = vertices.q3_parent.get(int(slot))
         seams.append(VertexSlotSeam(
             slot=int(slot),
             grade_uids=uids,
             edge_body=tuple(sorted(edge)),
+            q3_parent_slot=(
+                int(parent) if parent is not None and int(parent) >= 1 else None
+            ),
         ))
     return tuple(seams)
 
@@ -160,7 +162,6 @@ def discover_and_paint(
     acc = DetailedGradeResult.empty()
     interior_seq: dict[tuple[int, int], int] = defaultdict(int)
     painted_uids: dict[int, list[str]] = defaultdict(list)
-    facing_kind: dict[tuple[int, Facing], ReliefSideKind] = {}
     for front in fronts:
         owned = tuple(
             xy for xy in front.corridor
@@ -203,9 +204,6 @@ def discover_and_paint(
             decision=picked.decision,
             template_uid=picked.template_uid,
         )
-        kind = painted.spec.decision.kind
-        if kind is not None and not painted.spec.decision.skipped:
-            facing_kind[(int(front.slot), painted.spec.outward)] = kind
         part = apply_grade_paint_spec(painted, world=world, surface=grid)
         clipped = part.clipped_to_rect(rect)
         if not clipped.grade_instances:
@@ -216,7 +214,4 @@ def discover_and_paint(
         apply_grade_uids(grid, clipped.surface_grade_uid)
         known.update(clipped.surface_grade_uid)
         painted_uids[int(front.slot)].append(uid)
-    acc = DetailedGradeResult(
-        rim_rays=pack_rays_from_vertex_bodies(vertices, grid.z_at, facing_kind),
-    ).merged_with(acc)
     return acc, build_vertex_slot_seams(vertices, painted_uids, rect)

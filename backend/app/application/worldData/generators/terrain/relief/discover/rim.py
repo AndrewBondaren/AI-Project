@@ -33,10 +33,7 @@ def seed_rim(
     A shared-pit ``seam`` neighbor still counts: several vertices may shoot
     into the depression. Occupied corridor (``occ``) does not.
     """
-    i = vertices.index(xy[0], xy[1])
-    if i is None:
-        return False
-    if vertices.occ[i] != 0 or vertices.at_grid[i] != 0 or vertices.seam[i] != 0:
+    if not vertices.is_free(xy):
         return False
     z = cell_z(surface, xy)
     if z is None:
@@ -106,6 +103,8 @@ class RimStage:
             if vertices.occ[i] != 0 or vertices.seam[i] != 0:
                 continue
             if vertices.at_grid[i] != 0:
+                continue
+            if vertices.facing_bits[i] != 0:
                 continue
             z = cell_z(surface, xy)
             if z != z_body:

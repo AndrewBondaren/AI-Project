@@ -13,6 +13,7 @@ from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_relief_grades_persist_progress,
     log_pack_relief_grades_persist_start,
 )
+from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
 from app.db.bulkSql import iter_batches
@@ -60,6 +61,45 @@ def system_to_row(
         created_at=created_at or utc_now_iso(),
         owner_uid=system.owner_uid,
         display_name=system.display_name,
+    )
+
+
+def _xy_pairs(raw: object) -> list[tuple[int, int]]:
+    pairs: list[tuple[int, int]] = []
+    for item in raw or ():
+        pairs.append((int(item[0]), int(item[1])))
+    return pairs
+
+
+def instance_from_row(row: ReliefGradeInstanceRow) -> ReliefGradeInstance:
+    """SQL row → POJO. Inverse of ``instance_to_row`` (membership FK included)."""
+    return ReliefGradeInstance(
+        grade_uid=row.grade_uid,
+        world_uid=row.world_uid,
+        kind=ReliefSideKind(row.kind),
+        height_cells=int(row.height_cells),
+        length_cells=int(row.length_cells),
+        cell_refs=_xy_pairs(row.cell_refs),
+        angle_deg=row.angle_deg,
+        facing=row.facing,
+        earthen_canal=bool(row.earthen_canal),
+        structure_refs=list(row.structure_refs or []),
+        structure_canal=row.structure_canal,
+        template_uid=row.template_uid,
+        owner_uid=row.owner_uid,
+        site_id=row.site_id,
+        grade_system_uid=row.grade_system_uid,
+    )
+
+
+def system_from_row(row: ReliefGradeSystemRow) -> ReliefGradeSystem:
+    """SQL row → POJO. Inverse of ``system_to_row``."""
+    return ReliefGradeSystem(
+        grade_system_uid=row.grade_system_uid,
+        world_uid=row.world_uid,
+        grade_instance_uids=[str(uid) for uid in (row.grade_instance_uids or [])],
+        owner_uid=row.owner_uid,
+        display_name=row.display_name,
     )
 
 

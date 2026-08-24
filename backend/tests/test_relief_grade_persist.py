@@ -11,7 +11,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
 
+from app.application.worldData.gradeCatalog import load_grade_membership
+from app.application.worldData.gradeVertexSystem import emit_relief_grade_systems
 from app.application.worldData.persistReliefGrades import persist_relief_grades
+from app.application.worldData.generators.terrain.types import ColumnRect
+from app.application.worldData.pack.refine.fineTileContext import VertexSlotSeam
 from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
@@ -99,6 +103,9 @@ class _TrackingRepo:
 
     async def list_instances_by_uids(self, world_uid: str, uids) -> list[ReliefGradeInstanceRow]:
         self.list_uid_calls.append(list(uids))
+        return []
+
+    async def list_systems_by_uids(self, world_uid: str, uids) -> list[ReliefGradeSystemRow]:
         return []
 
     async def list_instances_for_world(self, world_uid: str) -> list[ReliefGradeInstanceRow]:
@@ -276,6 +283,110 @@ class SqliteReliefGradePersistTest(IsolatedAsyncioTestCase):
         self.assertTrue(any("elapsed_ms=" in m for m in msgs))
         self.assertTrue(any("instances=3" in m for m in msgs))
 
+    async def test_membership_roundtrip_instance_fk_and_system_row(self) -> None:
+        system = _system("ga", "gb")
+        ga = _sheer("ga", [(0, 0)]).model_copy(
+            update={"grade_system_uid": system.grade_system_uid},
+        )
+        gb = _sheer("gb", [(1, 0)]).model_copy(
+            update={"grade_system_uid": system.grade_system_uid},
+        )
+        await persist_relief_grades(
+            self._repo,
+            world_uid=_WORLD,
+            instances=[ga, gb],
+            systems=[system],
+            replace_world=False,
+        )
+        inst, loaded = await load_grade_membership(
+            self._repo, world_uid=_WORLD, instance_uid="ga",
+        )
+        self.assertIsNotNone(inst)
+        self.assertIsNotNone(loaded)
+        assert inst is not None and loaded is not None
+        self.assertEqual(inst.grade_system_uid, system.grade_system_uid)
+        self.assertEqual(loaded.grade_system_uid, system.grade_system_uid)
+        self.assertEqual(set(loaded.grade_instance_uids), {"ga", "gb"})
+        other, same = await load_grade_membership(
+            self._repo, world_uid=_WORLD, instance_uid="gb",
+        )
+        self.assertEqual(other.grade_system_uid, inst.grade_system_uid)
+        self.assertEqual(same.grade_system_uid, loaded.grade_system_uid)
+
+    async def test_lone_instance_has_no_system(self) -> None:
+        lone = _sheer("g-lone", [(2, 2)])
+        await persist_relief_grades(
+            self._repo, world_uid=_WORLD, instances=[lone], replace_world=False,
+        )
+        inst, system = await load_grade_membership(
+            self._repo, world_uid=_WORLD, instance_uid="g-lone",
+        )
+        self.assertIsNotNone(inst)
+        self.assertIsNone(system)
+        assert inst is not None
+        self.assertIsNone(inst.grade_system_uid)
+
+    async def test_emit_then_persist_then_membership(self) -> None:
+        ga = _sheer("ga", [(1, 0)])
+        gb = _sheer("gb", [(0, 1)])
+        rect = ColumnRect(0, 3, 0, 3)
+        traces = [(rect, (VertexSlotSeam(
+            slot=1, grade_uids=("ga", "gb"), edge_body=((0, 3, 6),),
+        ),))]
+        instances, systems = emit_relief_grade_systems((ga, gb), traces, None)
+        self.assertEqual(len(systems), 1)
+        await persist_relief_grades(
+            self._repo,
+            world_uid=_WORLD,
+            instances=list(instances),
+            systems=list(systems),
+            replace_world=False,
+        )
+        inst, loaded = await load_grade_membership(
+            self._repo, world_uid=_WORLD, instance_uid="ga",
+        )
+        self.assertIsNotNone(inst)
+        self.assertIsNotNone(loaded)
+        self.assertEqual(inst.grade_system_uid, systems[0].grade_system_uid)
+        self.assertEqual(loaded.grade_system_uid, systems[0].grade_system_uid)
+
+
+
+    async def test_q3_emit_then_persist_then_membership(self) -> None:
+        parent = _sheer("gp", [(1, 0)])
+        child = _sheer("gc", [(2, 0)])
+        rect = ColumnRect(0, 3, 0, 3)
+        traces = [(rect, (
+            VertexSlotSeam(slot=1, grade_uids=("gp",), edge_body=((0, 3, 6),)),
+            VertexSlotSeam(
+                slot=2, grade_uids=("gc",), edge_body=((0, 0, 3),),
+                q3_parent_slot=1,
+            ),
+        ))]
+        instances, systems = emit_relief_grade_systems(
+            (parent, child), traces, None,
+        )
+        self.assertEqual(len(systems), 1)
+        await persist_relief_grades(
+            self._repo,
+            world_uid=_WORLD,
+            instances=list(instances),
+            systems=list(systems),
+            replace_world=False,
+        )
+        child_inst, loaded = await load_grade_membership(
+            self._repo, world_uid=_WORLD, instance_uid="gc",
+        )
+        self.assertIsNotNone(child_inst)
+        self.assertIsNotNone(loaded)
+        self.assertEqual(child_inst.grade_system_uid, systems[0].grade_system_uid)
+        self.assertEqual(loaded.grade_system_uid, systems[0].grade_system_uid)
+        self.assertEqual(set(loaded.grade_instance_uids), {"gp", "gc"})
+        parent_inst, same = await load_grade_membership(
+            self._repo, world_uid=_WORLD, instance_uid="gp",
+        )
+        self.assertEqual(parent_inst.grade_system_uid, child_inst.grade_system_uid)
+        self.assertEqual(same.grade_system_uid, loaded.grade_system_uid)
 
 if __name__ == "__main__":
     unittest.main()

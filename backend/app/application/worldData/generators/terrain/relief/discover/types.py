@@ -22,7 +22,8 @@ from app.dataModel.terrain.relief.enums import ReliefContext
 
 Coord = tuple[int, int]
 
-# occ/seam: 0 free; negative = foreign (existing uid / other chunk).
+# occ/seam: FREE_MARK free; negative = foreign (existing uid / other chunk).
+FREE_MARK = 0
 FOREIGN_MARK = -1
 
 
@@ -72,6 +73,7 @@ class ReliefVertices:
     facing_bits: array
     members: list[dict[Coord, int]] = field(default_factory=list)
     uids: list[str] = field(default_factory=list)
+    q3_parent: dict[int, int] = field(default_factory=dict)
 
     @classmethod
     def for_bounds(
@@ -127,7 +129,7 @@ class ReliefVertices:
     def mark_foreign(self, xy: Coord) -> None:
         """Existing corridor (other chunk / prior uid) — not a slot of this rect."""
         i = self.index(xy[0], xy[1])
-        if i is not None and self.occ[i] == 0:
+        if i is not None and self.occ[i] == FREE_MARK:
             self.occ[i] = FOREIGN_MARK
 
     def claim_facings(self, cells: Sequence[Coord], facing: Facing) -> bool:
@@ -154,6 +156,16 @@ class ReliefVertices:
         if i is None:
             return 0
         return int(self.facing_bits[i]).bit_count()
+
+    def is_free(self, xy: Coord) -> bool:
+        i = self.index(xy[0], xy[1])
+        if i is None:
+            return False
+        return (
+            self.occ[i] == FREE_MARK
+            and self.at_grid[i] == FREE_MARK
+            and self.seam[i] == FREE_MARK
+        )
 
 
 @dataclass(frozen=True, slots=True)

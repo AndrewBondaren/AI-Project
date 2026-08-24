@@ -15,6 +15,10 @@ from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
 
+UID_PART_SEP = "|"
+WHY_Q3_ATTACH = "q3_attach"
+WHY_T3C_SAME_VERTEX = "t3c_same_vertex"
+
 
 def _uid_digest(key: str) -> str:
     digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
@@ -26,16 +30,18 @@ def _uid_digest(key: str) -> str:
 
 def make_seeded_uid(*, world_seed: str, site_id: str) -> str:
     """R36w catalog / interior uid — namespace ``world_seed``, not cell seed."""
-    return _uid_digest(f"{world_seed}|{site_id}")
+    return _uid_digest(UID_PART_SEP.join((world_seed, site_id)))
 
 
 def make_grade_uid(*, world_uid: str, site_id: str, seed: tuple[int, int]) -> str:
     """Deterministic uid for re-bake upsert (legacy mint; catalog uses ``make_seeded_uid``)."""
-    return _uid_digest(f"{world_uid}|{site_id}|{seed[0]},{seed[1]}")
+    return _uid_digest(
+        UID_PART_SEP.join((world_uid, site_id, f"{seed[0]},{seed[1]}"))
+    )
 
 
 def make_grade_system_uid(*, world_uid: str, site_id: str) -> str:
-    key = f"{world_uid}|grade_system|{site_id}"
+    key = UID_PART_SEP.join((world_uid, "grade_system", site_id))
     digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
     return (
         f"{digest[:8]}-{digest[8:12]}-{digest[12:16]}-"

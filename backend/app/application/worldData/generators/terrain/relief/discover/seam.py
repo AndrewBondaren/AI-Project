@@ -164,6 +164,9 @@ class SeamStage:
             for cell in corridor:
                 if is_local_min(self.surface, cell):
                     continue
+                i = self.vertices.index(cell[0], cell[1])
+                if i is not None and self.vertices.at_grid[i] != 0:
+                    continue
                 self.vertices.mark_occ(cell, item.slot)
         return tuple(fronts)
 
@@ -223,7 +226,6 @@ class SeamStage:
                 ),
             )
             for cell in corridor:
-                i = verts.index(cell[0], cell[1])
-                if i is not None and verts.occ[i] == 0 and verts.seam[i] == 0:
+                if verts.is_free(cell):
                     verts.mark_occ(cell, front.slot)
         return tuple(out)

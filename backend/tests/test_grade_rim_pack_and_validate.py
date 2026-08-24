@@ -6,13 +6,11 @@ import unittest
 from unittest.mock import patch
 
 from app.application.worldData.generators.terrain.relief.discover.packSenders import (
-    body_pack_senders,
     walk_pack_senders,
 )
 from app.application.worldData.generators.terrain.relief.discover.types import (
     DiscoveredFront,
     GradePaintSpec,
-    ReliefVertices,
 )
 from app.application.worldData.generators.terrain.relief.log.events import (
     EVENT_GRADE_CELL_EMPTY_RAY,
@@ -21,10 +19,10 @@ from app.application.worldData.generators.terrain.relief.pick.gradePass import (
     RibbonGradeDecision,
 )
 from app.application.worldData.generators.terrain.relief.validate.gradeCellRays import (
+    grade_ray_universe,
     validate_grade_cell_empty_rays,
 )
 from app.application.worldData.pack.refine.gradeRimRays import (
-    pack_rays_from_vertex_bodies,
     rim_rays_from_front,
 )
 from app.dataModel.spatial.facing import Facing, GRID_OUTWARD_DELTA, opposite
@@ -113,7 +111,7 @@ class TestPackRimSlotRays(unittest.TestCase):
         self.assertEqual(by[(10, 923, Facing.NORTH)].kind, ReliefSideKind.SHEER)
 
 
-class TestWalkAndBodyPackSenders(unittest.TestCase):
+class TestWalkPackSenders(unittest.TestCase):
     def test_walk_emits_corridor_not_only_rim(self) -> None:
         keys = walk_pack_senders(((10, 925),), ((10, 924),), Facing.SOUTH)
         self.assertIn(((10, 925), Facing.SOUTH), keys)
@@ -131,33 +129,6 @@ class TestWalkAndBodyPackSenders(unittest.TestCase):
         by = {(r.x, r.y, r.facing): r for r in rays}
         self.assertEqual(by[(10, 924, Facing.SOUTH)].kind, ReliefSideKind.SHEER)
         self.assertIn((10, 925, Facing.SOUTH), by)
-
-    def test_body_downhill_south_toward_923(self) -> None:
-        z = {(10, 924): 142, (10, 923): 122}
-        keys = body_pack_senders({(10, 924): 142}, z.get)
-        self.assertIn(((10, 924), Facing.SOUTH), keys)
-        self.assertNotIn(((10, 924), Facing.NORTH), keys)
-
-    def test_body_equal_z_is_not_pack_sender(self) -> None:
-        body = {(0, 0): 5, (1, 0): 5}
-        z = {**body}
-        keys = set(body_pack_senders(body, z.get))
-        self.assertEqual(keys, set())
-
-    def test_vertex_bodies_use_painted_kind_then_model_default(self) -> None:
-        verts = ReliefVertices.for_bounds(origin_x=0, origin_y=920, width=3, height=8)
-        verts.add_vertex({(1, 924): 142})
-        z = {(1, 924): 142, (1, 923): 122, (2, 924): 141}
-        rays = pack_rays_from_vertex_bodies(
-            verts,
-            z.get,
-            {(1, Facing.SOUTH): ReliefSideKind.SHEER},
-        )
-        by = {(r.x, r.y, r.facing): r for r in rays}
-        self.assertEqual(by[(1, 924, Facing.SOUTH)].kind, ReliefSideKind.SHEER)
-        omitted = GradeRimRay(x=0, y=0, facing=Facing.EAST)
-        self.assertEqual(omitted.kind, ReliefSideKind.SLOPE)
-        self.assertEqual(by[(1, 924, Facing.EAST)].kind, omitted.kind)
 
 
 class TestGradeCellEmptyRayValidator(unittest.TestCase):
@@ -242,6 +213,17 @@ class TestGradeCellEmptyRayValidator(unittest.TestCase):
         )
         self.assertEqual(n_empty, 1)
         self.assertEqual(ticks, [(1, 1)])
+
+    def test_ray_universe_excludes_far_plains(self) -> None:
+        rays = (
+            GradeRimRay(x=0, y=0, facing=Facing.EAST, kind=ReliefSideKind.SLOPE),
+        )
+        z = {(0, 0): 8, (1, 0): 6, (50, 50): 4, (51, 50): 3}
+        uni = set(grade_ray_universe(rays, z))
+        self.assertIn((0, 0), uni)
+        self.assertIn((1, 0), uni)
+        self.assertNotIn((50, 50), uni)
+        self.assertNotIn((51, 50), uni)
 
 
 if __name__ == "__main__":

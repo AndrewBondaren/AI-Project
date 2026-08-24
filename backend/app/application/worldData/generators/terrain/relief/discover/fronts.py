@@ -140,6 +140,38 @@ class FrontStage:
         body: dict[Coord, int],
         plugin: VertexBodyPlugin,
     ) -> tuple[ProposedTrace, ...]:
+        return self._propose_kind(slot, body, plugin, want="slope")
+
+    def propose_sheers(
+        self,
+        slot: int,
+        body: dict[Coord, int],
+        plugin: VertexBodyPlugin,
+    ) -> tuple[ProposedTrace, ...]:
+        """L=1 SHEER traces into a lower vertex (or 1×1 pit) when θ fails."""
+        return self._propose_kind(slot, body, plugin, want="sheer")
+
+    def first_step_outcome(
+        self,
+        rim: Coord,
+        facing: Facing,
+        plugin: VertexBodyPlugin,
+        first_dz: int,
+    ) -> str:
+        """Envelope class of one downhill step: ``slope`` / ``sheer`` / ``skip``."""
+        env = self._envelope_for_run((rim,), facing)
+        if not env.stamps_first_step(abs(int(first_dz)), plugin.context):
+            return "skip"
+        return env.slope_outcome(abs(int(first_dz)), 1)
+
+    def _propose_kind(
+        self,
+        slot: int,
+        body: dict[Coord, int],
+        plugin: VertexBodyPlugin,
+        *,
+        want: str,
+    ) -> tuple[ProposedTrace, ...]:
         z_body = next(iter(body.values()))
         grouped: dict[tuple[Facing, int], list[Coord]] = defaultdict(list)
         for rim, facing, first_dz in self._rim_shots(body, plugin):
@@ -151,14 +183,17 @@ class FrontStage:
                 env = self._envelope_for_run(run, facing)
                 if not env.stamps_first_step(abs(int(first_dz)), plugin.context):
                     continue
+                if env.slope_outcome(abs(int(first_dz)), 1) != want:
+                    continue
                 occupancy: int | None = None
                 if self.cap_front is not None:
                     occupancy = self.cap_front(plugin.context)
                     if occupancy is None:
                         continue
+                walk_cap = 1 if want == "sheer" else _walk_cap(env, occupancy)
                 trace = self._walk_trace(
                     run, facing, z_body, slot, plugin,
-                    walk_cap=_walk_cap(env, occupancy),
+                    walk_cap=walk_cap,
                     continue_equal_z=self._continue_equal_z(plugin, env),
                 )
                 if occupancy is not None:

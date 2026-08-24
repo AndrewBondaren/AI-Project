@@ -164,7 +164,8 @@ def should_dump_grade_at_z(
     keys = _keys_at_surface_z(cols, z)
     if any(cols[xy].system_grade_uid for xy in keys if xy in cols):
         return True
-    return any(xy in keys for xy in rays.cells())
+    leftover = rays.without_couple()
+    return any(xy in keys for xy in leftover.cells())
 
 
 def draw_grade_consume_grid(
@@ -189,7 +190,7 @@ def draw_grade_consume_grid(
         keys = _keys_at_surface_z(cols, surface_z)
         material = symbols_at_z(cols, surface_z)
         centers = {xy: material[xy] for xy in keys if xy in material}
-        view = rays.restricted_to(keys)
+        view = rays.restricted_to(keys).without_couple()
     if bounds is None and cols:
         xs = [x for x, _ in cols]
         ys = [y for _, y in cols]
@@ -202,7 +203,6 @@ def draw_grade_consume_grid(
         extra_headers=extra_headers,
         coord_prefix=coord_prefix,
         bounds=bounds,
-        surface_heights=None if surface_z is not None else values_surface_z(cols),
     )
 
 
@@ -216,7 +216,7 @@ def grade_consume_z_levels(
     for xy, col in cols.items():
         if col.system_grade_uid and xy in zs:
             out.add(int(zs[xy]))
-    for xy in rays.cells():
+    for xy in rays.without_couple().cells():
         if xy in zs:
             out.add(int(zs[xy]))
     return sorted(out)

@@ -58,8 +58,10 @@ class TestGradeRayDump(unittest.TestCase):
     def test_couple_plus_and_pack_ray_wins(self) -> None:
         top, mid, bot = compose_grade_cell(
             "_",
-            {Facing.SOUTH: ReliefSideKind.SHEER},
-            couples=(Facing.SOUTH, Facing.EAST),
+            {
+                Facing.SOUTH: ReliefSideKind.SHEER,
+                Facing.EAST: ReliefSideKind.COUPLE,
+            },
         )
         self.assertEqual(top, "   ")
         self.assertEqual(mid, f" _{GRADE_COUPLE_SYMBOL}")
@@ -127,7 +129,7 @@ class TestGradeRayDump(unittest.TestCase):
         )
         self.assertEqual(body.count(GRADE_SHEER_SYMBOL), 2)
 
-    def test_draw_couple_plus_on_equal_z_surface(self) -> None:
+    def test_draw_equal_z_does_not_invent_plus(self) -> None:
         cols = {
             (0, 0): FineTerrainColumnWire(
                 lx=0, ly=0,
@@ -140,10 +142,9 @@ class TestGradeRayDump(unittest.TestCase):
             ),
         }
         body = draw_grade_consume_grid(cols, GradeRayIndex(), title="t")
-        self.assertIn(GRADE_COUPLE_SYMBOL, body)
-        self.assertNotIn(GRADE_SHEER_SYMBOL, body)
+        self.assertNotIn(GRADE_COUPLE_SYMBOL, body)
 
-    def test_z_slice_omits_coupling(self) -> None:
+    def test_draw_plus_from_pack_couple(self) -> None:
         cols = {
             (0, 0): FineTerrainColumnWire(
                 lx=0, ly=0,
@@ -155,8 +156,32 @@ class TestGradeRayDump(unittest.TestCase):
                 runs=[FineTerrainZRun(z0=0, z1=4, system_terrain="plains")],
             ),
         }
+        rays = GradeRayIndex((
+            GradeRimRay(x=0, y=0, facing=Facing.EAST, kind=ReliefSideKind.COUPLE),
+            GradeRimRay(x=1, y=0, facing=Facing.WEST, kind=ReliefSideKind.COUPLE),
+        ))
+        body = draw_grade_consume_grid(cols, rays, title="t")
+        self.assertIn(GRADE_COUPLE_SYMBOL, body)
+        self.assertNotIn(GRADE_SHEER_SYMBOL, body)
+
+    def test_z_slice_omits_pack_couple(self) -> None:
+        cols = {
+            (0, 0): FineTerrainColumnWire(
+                lx=0, ly=0,
+                runs=[FineTerrainZRun(z0=0, z1=4, system_terrain="plains")],
+                system_grade_uid="g1",
+            ),
+            (1, 0): FineTerrainColumnWire(
+                lx=1, ly=0,
+                runs=[FineTerrainZRun(z0=0, z1=4, system_terrain="plains")],
+            ),
+        }
+        rays = GradeRayIndex((
+            GradeRimRay(x=0, y=0, facing=Facing.EAST, kind=ReliefSideKind.COUPLE),
+            GradeRimRay(x=1, y=0, facing=Facing.WEST, kind=ReliefSideKind.COUPLE),
+        ))
         body = draw_grade_consume_grid(
-            cols, GradeRayIndex(), title="t", surface_z=4,
+            cols, rays, title="t", surface_z=4,
         )
         self.assertNotIn(GRADE_COUPLE_SYMBOL, body)
 

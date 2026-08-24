@@ -12,6 +12,9 @@ from collections import defaultdict
 from collections.abc import Sequence
 
 from app.application.worldData.generators.terrain.relief.volume.gradeInstanceFactory import (
+    UID_PART_SEP,
+    WHY_Q3_ATTACH,
+    WHY_T3C_SAME_VERTEX,
     build_relief_grade_system,
 )
 from app.application.worldData.pack.refine.columnBounds import ColumnBounds
@@ -104,6 +107,21 @@ def emit_relief_grade_systems(
                     if _bodies_touch_8(left_cells, right_cells):
                         uf.union(left, right)
 
+    q3_keys: set[SlotKey] = set()
+    for rect, seams in traces:
+        cx, cy = _chunk_xy(catalog, rect)
+        for seam in seams:
+            parent_slot = seam.q3_parent_slot
+            if parent_slot is None:
+                continue
+            child = (cx, cy, int(seam.slot))
+            parent = (cx, cy, int(parent_slot))
+            if child not in slot_uids or parent not in slot_uids:
+                continue
+            uf.union(child, parent)
+            q3_keys.add(child)
+            q3_keys.add(parent)
+
     groups: dict[SlotKey, list[SlotKey]] = defaultdict(list)
     for key in slot_uids:
         groups[uf.find(key)].append(key)
@@ -128,12 +146,16 @@ def emit_relief_grade_systems(
         seen_uid_sets.add(uid_key)
         grades = [merged[uid] for uid in unique]
         world_uid = grades[0].world_uid
-        site_id = "|".join(unique)
+        site_id = UID_PART_SEP.join(unique)
         system = build_relief_grade_system(
             world_uid=world_uid,
             site_id=site_id,
             grades=grades,
-            why="t3c_same_vertex",
+            why=(
+                WHY_Q3_ATTACH
+                if any(key in q3_keys for key in members)
+                else WHY_T3C_SAME_VERTEX
+            ),
         )
         systems.append(system)
         for uid in unique:

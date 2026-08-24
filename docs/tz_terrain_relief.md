@@ -18,7 +18,7 @@ metadata:
 | Hydro hard corridor | `hydrology_role` → fine | landcover stamp |
 | Facing upsample | `system_facing` nearest | terrain mask carry |
 | `surface_z` upsample | WP-PERF-22 height | terrain mask carry |
-| **L2 open-land hills** | `Δz` helper на plains/forest leftover | mask domain / L0 / Grade uid |
+| **L2 open-land hills** | `Δz` helper на plains/forest вне маски холмов (не grade leftover pack) | mask domain / L0 / Grade uid |
 
 `system_grade_uid` **не** mask carry и **не** nearest-carry с L0. Холмы пишут только высоту **до** discover (R36v); не `ReliefContext`.
 
@@ -136,7 +136,7 @@ metadata:
 | R36h | **`h`/`dz` на клетке не хранить.** На клетке — **`system_grade_uid`** (omit если клетка не в grade). L/angle/h/kind/facing grade — на **сущности**. См. R36j |
 | R36i | **Materialize на всю `h=\|dz\|`:** SLOPE ramp / SHEER L×h solid. Без void. Затем создать Grade instance + проставить ссылки (R36j). Якоря верх/низ — **R36t** (не мутировать; canal-исключение при укорочении — R36p). **Apply = Post-R36w `GradeWriteSet` ✅** |
 | R36j | **Grade = один составной объект** (аналог **одной горы** `MountainSpec`). Состоит из grid-клеток; `cell_refs[]` ↔ `system_grade_uid` подтверждают состав. Поля: `grade_uid`, `kind`, `height_cells`, `length_cells`, **`angle_deg` (одно место; omit SHEER)**, `facing` (omit SHEER), resolved canal flat columns из **`Canal`** (`EarthenCanal`\|`StructureCanal`) через `build_canal`/`draw_canal` — **тот же cut**, что на Intent.`canal`. **Запрещено:** несколько углов в одном Grade |
-| R36l | **Иерархия как у гор** ([`tz_mountain_architecture.md`](./tz_mountain_architecture.md): хребет ↔ ≥2 вершины). **Один** постоянный угол / **один фронт (сторона)** → один `ReliefGradeInstance`. Несколько сторон одной вершины или излом θ → **`ReliefGradeSystem`** (`grade_instance_uids` ≥ 2). **1 грань (один луч/фронт)** → строку `relief_grade_systems` **не** пишем (FK: `Instance.grade_system_uid` тогда NULL). Рабочий slot вершины на bake ≠ строка БД. Клетка → **Instance** (`system_grade_uid`), не System. Через чанк та же вершина — матч **тела** на C29, не catalog uid. Persist: package + DB; **SQL catalog writer — R43** |
+| R36l | **Иерархия как у гор** ([`tz_mountain_architecture.md`](./tz_mountain_architecture.md): хребет ↔ ≥2 вершины). **Один** постоянный угол / **один фронт (сторона)** → один `ReliefGradeInstance`. Несколько сторон одной вершины или излом θ → **`ReliefGradeSystem`** (`grade_instance_uids` ≥ 2). **1 грань (один луч/фронт)** → строку `relief_grade_systems` **не** пишем (FK: `Instance.grade_system_uid` тогда NULL), **кроме** attach Q3: бок коридора обязан войти в System ближайшего по |Δz| тела (даже если у родителя был один фронт) — § R41 очереди. Рабочий slot вершины на bake ≠ строка БД. Клетка → **Instance** (`system_grade_uid`), не System. Через чанк та же вершина — матч **тела** на C29, не catalog uid. Persist: package + DB; **SQL catalog writer — R43** |
 | R36m | **Obstacle clearance (мир) + truncate/skip.** Длину grade до footprint задаёт **`worlds.relief_grade_obstacle_policy`** (R36n). Оба режима: footprint **не** затирать; `L_eff < 1` → **skip** (+ WARN). **Не** включает earthen (это R36p / knobs). **Устарело:** silent auto `earthen_canal` при collision без knobs и без `canal_obstacle_policy` |
 | R36n | **Wire (мир):** `relief_grade_obstacle_policy`: **`truncate_skip`** \| **`allow_flush`**. Default = **`truncate_skip`**. Не на object/side (v1). Generate читает setting и ветвится; без silent fallback на другой режим. См. § Obstacle policy |
 | R36o | **Junction smooth (later):** модификатор сглаживания **стыка** прямой Grade с другим объектом (road / platform / соседний Grade / barrier footprint). **Не** меняет инвариант «один Grade = одна прямая / один θ». Не profile `smoothstep` (SideFill). Не `ReliefGradeSystem` (ломаный = ≥2 прямых). Не obstacle policy (clearance режет `L`). Wire-эскиз на knobs/grade: `junction_smooth`: **`none`** (default) \| **`chamfer`** \| **`fillet`**; опц. `junction_smooth_cells` ≥ 1 при режиме ≠ none. Materialize: после ядра ramp/sheer — переходные колонки на стыке. **v1 R36:** не impl |
@@ -152,9 +152,9 @@ metadata:
 | R38 | **Sparse origins — deprecated (v1).** Исторический запрет второго stencil «все локальные max» и 8×N с клетки **остаётся** (бюджет R36v). **SoT вершин/кромок — R41** (кромка = спуск в 8; не hunt пиков). Не читать этот пункт как 4-связность или fill→relief. См. § Sparse origins (historical) |
 | R39 | **Mesa union — deprecated (v1, 4-связность).** Идея «тело ≠ Grade; лучи только с кромки наружу» **остаётся**. **SoT членства — R41: 8-связное** то же целое z при наличии кромки спуска. Диагональный `4` к плато той же z — та же вершина. Не читать «диагональ не членство». См. § Mesa union (historical) · § Relief pipeline v2 |
 | R40 | **Ray walk / fill→relief — deprecated (v1).** Запреты fill∥relief, второго пула, рельефа тайла параллельно с чанками — **остаются**. Порядок writer высот **не** «column fill затем discover»: z уже в `heightmap` (prep). **SoT — R41:** discover+paint → один fill. Стоп θ / каскад террас / не мутировать якоря — R41 + R36t. См. § Ray walk (historical) |
-| R41 | **Relief pipeline v2 — locked (SoT).** Одна конструкция: вершина → кромка → фронты → `GradePaintSpec` → L2 paint. Контекст = тело вершины. Членство 8-связное при rim; клетка — **не больше одной** вершины (`at_grid`). `ReliefVertices` + **`occ`** + **`seam`**. Покрытие: фронт вниз пока θ; остаток = незатопленные кромки (**C39**). Луч = `(кромка, Facing)`; `(клетка, Facing)` уникален между вершинами; низина не один склон и не first-wins (**C41**). Не «непересекающиеся фронты». **1 фронт = 1 Instance;** System row при ≥2. Каталог до пула; discover+paint → один fill; стык после чанков: прямая = catalog, вершина = T-3c на C29. Stamp `|dz|=1` — plains да / forest нет (R37 `stamp_min_abs_dz`). Ширина — **R42**. См. § Relief pipeline v2 · § Ray width |
+| R41 | **Relief pipeline v2 — locked (SoT).** Одна конструкция: вершина → кромка → фронты → `GradePaintSpec` → L2 paint. Контекст = тело вершины. Членство 8-связное при rim; клетка — **не больше одной** вершины (`at_grid`). `ReliefVertices` + **`occ`** + **`seam`**. **Один станок** после seed (8-flood + фронты + шов + pack). **Три очереди seed, не смешивать** (порядок 1→2→3): **Q1 C39** пики; **Q2** посадка sheer к телу; **Q3** бок коридора SLOPE (след фронта) — свой слот/станок, **не** orphan Grade: Instance входит в System ближайшего по |Δz| тела. Фронт вниз пока θ (SLOPE); иначе **SHEER** к посадке; та же z = pack **COUPLE**. Не тело×8 как SLOPE/SHEER. Pack sidecar = **все** лучи фронтов по 8 сторонам + COUPLE во вселенной R44, не «остаток». Луч = `(кромка, Facing)`; `(клетка, Facing)` уникален (**C41**). **1 фронт = 1 Instance;** System row при ≥2 **или** Q3-attach (бок в System ближайшего тела, не T-3c). Каталог до пула; discover+paint → один fill; стык после чанков: прямая = catalog, вершина = T-3c на C29. Stamp `|dz|=1` — plains да / forest нет (R37 `stamp_min_abs_dz`). Ширина — **R42**. См. § Relief pipeline v2 · § Ray width |
 | R42 | **Ray width — lockstep front — locked.** Луч = **фронт**, не нитка в 1 клетку. `W` = сплошной run кромки с одним `Facing` и одним первым спуском. Весь фронт шагает наружу **вместе** (Chebyshev 1). Орто: прямоугольник `W × L`. Диагональ **day-1:** нитка W=1 Chebyshev; thick fill — [Murphy](http://www.zoo.co.uk/murphy/thickline/) **R36r later**. **Не** веер. Разный dz/θ вдоль `W` → резать Grade (C15). Опц. сужение `W` (Murphy taper) later — не захват чужой низины. Не dilation/GIS-buffer, не per-cell stairs. См. § Ray width |
-| R44 | **Постгенерационный валидатор клеток рельефа — locked.** Образец: валидаторы структуры здания (log ERROR, не исключение, геометрия остаётся). Проверка 1: на каждом из 8 Facing surface-клетки — pack leftover **или** сцепление той же `surface_z` **или** нет соседа. Сосед другой z без leftover → некорректна. Лог только `relief_error` (тот же хелпер R8). Generate **не** abort. Контракт слотов — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md). **C43** |
+| R44 | **Постгенерационный валидатор клеток рельефа — locked.** Образец: валидаторы структуры здания (log ERROR, не исключение, геометрия остаётся). Вселенная = клетки pack-луча фронта + 8-halo (зона вершин/коридоров/обрывов), **не** все 1e6 равнин тайла. Слот закрыт: в sidecar есть SLOPE / SHEER / **COUPLE** **или** нет соседа. Сосед другой z без SLOPE/SHEER → некорректна. Та же z без COUPLE в pack → тоже пустой слот (не закрывать из z). Лог только `relief_error` (тот же хелпер R8). Generate **не** abort. Валидатор **не** дописывает слоты. Контракт — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md). **C43** |
 
 ### SQL catalog persist (2026-08-18)
 
@@ -182,7 +182,7 @@ metadata:
 | C12 | Длина сегмента вдоль дороги ≠ `length_cells` grade (наружу) | locked |
 | C13 | LLM/игрок ← сущность Grade (`length_cells`, `angle_deg`), не скан клеток | locked |
 | C14 | Pathfinding = **grid**; cost/block slope ← **один** Grade object по uid | locked (R36k) |
-| C15 | **Один угол / один фронт = один Grade (Instance).** Несколько сторон вершины или излом → System ≥2 Instance. **1 фронт** → строку `relief_grade_systems` **не** пишем (`Instance.grade_system_uid` NULL). Клетка → Instance, не System. Рабочий slot вершины ≠ строка БД | locked (R36l) |
+| C15 | **Один угол / один фронт = один Grade (Instance).** Несколько сторон вершины или излом → System ≥2 Instance. **1 фронт** → строку `relief_grade_systems` **не** пишем (`Instance.grade_system_uid` NULL), **кроме** Q3-attach (§ R41 очереди). Клетка → Instance, не System. Рабочий slot вершины ≠ строка БД | locked (R36l) |
 | C16 | Expand → obstacles: по **`relief_grade_obstacle_policy`**; `L_eff < 1` → skip; не overwrite; silent auto-canal без политики/knobs — запрещён | locked (R36m/n) |
 | C17 | **R28/R36q:** knobs XOR `earthen_canal` \| `structure_canal`→`canal_template_registry`; structure materials → `barrier_template_registry`. Clearance-path → R36p. Wire+resolve ✅; detailed apply = поля Grade в том же Formation | locked (R28+R36p+R36q); apply = Post-R36w ✅ |
 | C18 | Два режима мира: **`truncate_skip`** (default, ≥1 free между grade и объектом) \| **`allow_flush`** (последняя free OK) | locked (R36n) |
@@ -195,7 +195,7 @@ metadata:
 | C25 | **Grade writer = detailed_bake geometry** (не L0); нет L0→L2 grade-uid carry как SoT. Исключение из [§ Идея 2](./tz_world_pack_storage.md) | locked (R36u) |
 | C26 | **Grade = pool (ядра)** + **сшивка после чанков**. Каталог uid до пула — **C28**. Discover+paint в worker на готовом heightmap, затем **один** fill — **R41**. После чанков **два** стыка на C29, не один: **прямая** = catalog uid; **вершина** = T-3c (тело 8 через ребро, UF слотов **этого** refine). Не полный same-z CC тайла. Тот же helper на patch. **Не** L0-кандидаты; **не** новый оркестратор; не fill∥relief; не второй пул; не sample-all до пула | locked (R36v/R41) |
 | C27 | **Стык = каталог граней**; uid заранее `world_seed`+tile+`face_key` (R15); граф ссылается; шов sample по тому же uid; не mint в воркере. Job uid: `tile` / `chunk` / `tile_edge` — ключи очереди, не дерево `tile→chunk`. **Родители грани в этом bake** = chunk job uid этого тайла (2 internal / 1 rim) — **гейт старта** (не все bake сразу) и clearance (`< 2` → void ≠ C18). **Шов мира** (антагонисты AABB) — **`full_bake` L0 на макро-тайлах**, не каталог `detailed_bake`. **Пул = `ColumnRect`**. **Два `detailed_bake` смежных (grid) тайлов** — не ждут друг друга; лента вдоль шва = один uid + upsert. Halo читает z `WorldBounds.grid_neighbor` (не `antagonist_tile`). `road_shoulder` — тот же каталог (`ReliefContext.ROAD_SHOULDER`). Не uid Grade/climate/hydro | locked (R36w) ✅ |
-| C28 | **Каталог → discover → paint → fill.** Каталог `face_key` = identity ребра / job, uid **до** пула. Discover вершин/фронтов — в worker на heightmap, **не** serial sample-all семян до пула. Прямая `(kind, outward, θ)` = один Instance. ≥2 Instance **одной вершины** → System row (**T-3c**): intra-chunk = `slot`; через чанк = тело на C29, **не** `face_key` = вершина. 1 Instance → System **не** пишем. Клетка → Instance, не System. Rim-canonical прямой — **C29**. Apply (z/canal/fill) не переписывать | locked (R36w catalog; R41 discover); T-3c System — § T-3c на шве чанков |
+| C28 | **Каталог → discover → paint → fill.** Каталог `face_key` = identity ребра / job, uid **до** пула. Discover вершин/фронтов — в worker на heightmap, **не** serial sample-all семян до пула. Прямая `(kind, outward, θ)` = один Instance. ≥2 Instance **одной вершины** → System row (**T-3c**): intra-chunk = `slot`; через чанк = тело на C29, **не** `face_key` = вершина. 1 Instance → System **не** пишем, **кроме** attach Q3 к ближайшему Grade (§ R41 очереди). Клетка → Instance, не System. Rim-canonical прямой — **C29**. Apply (z/canal/fill) не переписывать | locked (R36w catalog; R41 discover); T-3c System — § T-3c на шве чанков |
 | C29 | **Шов технический.** `face_key` / chunk / tile rim / `ColumnRect` / job uid — нарезка работы и pack, **не** граница мира. Не путать с **швом лучей** (C41). Через шов непрерывны: климат, дороги, шаг (later), **локация / город**. **Два стыка Grade на одном ребре:** catalog uid = **одна прямая**; T-3c = **одно тело** вершины (same-z, 8 через ребро) — § T-3c на шве чанков. Запрещено делать из шва стену, обрыв поселения, второй `location_uid` «из‑за тайла», смену зоны или ноду пути | locked; writers локации/города не в relief |
 | C30 | **Конверт онтологии** (`ReliefConditionTerrain`) ≥ knobs шаблона. Фасад `grade_constrained`; inner без `if plains`. Plains `open_land`: `stamp_min_abs_dz=1`; длинный луч: L min 20; θ≤**45°** → SLOPE, иначе SHEER L=1. Forest: `stamp_min_abs_dz=2`, θ≤20°, SHEER при `|dz|≥4`. Короткий L=2 knobs **запрещён** как потолок длинного луча. Каркас — **C36 / R41**; покрытие остатка — **C39**; шов лучей — **C41**; ширина — **C37 / R42**; коллекция — **C38** | locked (R37) |
 | C31 | **Смешанный case:** L/θ knobs → SLOPE; SHEER всегда L=1. Невалидный geom (0 / оба ключа / θ вне (0,90)) → не reject: WARN + 20° и L до первой клетки луча. `L_eff < 1` после луча → skip stamp (R36m), не abort шаблона | locked (R36b/e) |
@@ -206,11 +206,11 @@ metadata:
 | C36 | **Relief pipeline v2.** Одна конструкция. Каталог uid → discover+paint → один fill → стык после чанков (**прямая** = catalog; **вершина** = T-3c на C29). **Покрытие:** фронт вниз пока θ; донашивание только непокрытых кромок, не каждая клетка. Ширина — **C37**. Коллекция — **C38**. Остаток — **C39**. Шов лучей — **C41**. См. **R41** | locked (R41) |
 | C37 | **Луч = фронт W×L.** Lockstep по Chebyshev; орто = прямоугольник; диагональ day-1 = нитка W=1; Murphy W>1 — R36r. Не веер, не dilation, не stairs по клетке. Разный dz вдоль W → резать. См. **R42** | locked (R42) |
 | C38 | **`ReliefVertices` — индекс, не persist.** `at_grid` / `occ` / `seam` / `members` dict / `uids`. **Не** хранить `ReliefGradeInstance` в слоте и **не** добавлять bake-поля на POJO. Поля фронта — **C40**. Reconcile: выкинуть клетку в чужом `occ` | locked (R41) |
-| C39 | **Незатопленные кромки — bucket[z] + `occ` + `seam`, не поиск дыр.** Сетка = `ColumnRect`+halo. `occ` = коридор фронта; `at_grid` = слот вершины; `seam` = шов лучей (C41). Ведра по целой z, сверху вниз. Seed только если `occ==0` ∧ `at_grid==0` ∧ `seam==0` ∧ есть 8-сосед ниже с `occ==0` (сосед-**шов низины** не блокирует: несколько вершин могут стрелять в яму). 8-flood тела — **от этой кромки**. Не полный CC same-z; не Priority-Flood ямы; не heap на клетку; не второй обход тайла. Пол рампы и шов лучей не сеют. См. **R41** § Покрытие | locked (R41) |
+| C39 | **Незатопленные кромки — bucket[z] + `occ` + `seam`, не поиск дыр.** Сетка = `ColumnRect`+halo. `occ` = коридор фронта; `at_grid` = слот вершины; `seam` = шов лучей (C41). Ведра по целой z, сверху вниз. Seed только если `occ==0` ∧ `at_grid==0` ∧ `seam==0` ∧ есть 8-сосед ниже с `occ==0` (сосед-**шов низины** не блокирует: несколько вершин могут стрелять в яму). 8-flood тела — **от этой кромки**. Не полный CC same-z; не Priority-Flood ямы; не heap на клетку; не второй обход тайла. Пол рампы и шов лучей не сеют. **Не leftover pack** (не тело×8). C39 = **очередь Q1** (независимые пики). Q2/Q3 — другие seed, тот же flood; **не** OR с C39 в одном проходе. См. **R41** § Покрытие | locked (R41) |
 | C40 | **`GradePaintSpec` — единственное место bake-полей фронта.** Вход в L2. kind/h/L/θ/canal — из `RibbonGradeDecision` / knobs **POJO**, без параллельных default. Instance создаётся в apply из `ReliefGradeInstance`. Запрещено копировать `height_cells`/`length_cells` вторым литералом. См. **R41** § GradePaintSpec | locked (R41) |
-| C41 | **Шов лучей (не первый-занял).** Луч уникален по `(кромка, Facing)` на вершине и по `(клетка, Facing)` между вершинами. Несколько вершин могут стрелять в одну низину разными сторонами; повтор того же Facing в клетку — нет. Клетка ∈ ≥2 следов **одного** Facing → шов (шерсть). Клетка ∈ следов **разных** Facing (в т.ч. разных вершин) → якорь низа, ничей `occ`. Коридор = уникальные клетки следа. Пустой коридор → skip (дырка 1×1). Не 4 Instance на клетке. Не путать с C29. **Pack leftover** (не Instance): 8-взгляд тела **только downhill** + шаг фронта (rim∪коридор × outward). Равная z — сцепление единой поверхности, не pack-луч. Получатель persist. Не второй обход тайла. [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | locked (R41) |
+| C41 | **Шов лучей (не первый-занял).** Луч уникален по `(кромка, Facing)` на вершине и по `(клетка, Facing)` между вершинами. Несколько вершин могут стрелять в одну низину разными сторонами; повтор того же Facing в клетку — нет. Клетка ∈ ≥2 следов **одного** Facing → шов (шерсть). Клетка ∈ следов **разных** Facing (в т.ч. разных вершин) → якорь низа, ничей `occ`. Коридор = уникальные клетки следа. Пустой коридор → skip (дырка 1×1). Не 4 Instance на клетке. Не путать с C29. **Pack** (не Instance): **все** лучи фронтов (rim∪коридор × outward + получатель), в т.ч. SHEER к посадке Q2; плюс **COUPLE** same-z во вселенной R44. Не тело×8 как SLOPE/SHEER. Не «остаточные» лучи. SLOPE/SHEER побеждает COUPLE. Получатель persist. Не второй обход тайла. [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | locked (R41) |
 | C42 | **SQL каталог грейдов — bake-writer.** Одна txn + `executemany` (~5000). Prior только по uid входящего bag. Heartbeat `packBakeLog`; detailed → `bake-detailed-*.log`. Не OLTP commit на строку. Не dump мира перед merge. Семантика upsert / `replace_world=False` / merge `cell_refs` / T-3c systems — без смены. Три caller’а — один `persist_relief_grades`. Поштучный upsert без обёртки коммитит (patch). | locked (R43) |
-| C43 | **Постгенерационный валидатор 8 слотов.** После записи pack-ребра: на каждом Facing — leftover pack, сцепление той же z, или нет соседа. Сосед другой z без leftover → клетка некорректна. **ERROR** через `relief_error` (`relief/log/log.py`), event `grade_cell_empty_ray`. **Не abort** generate (как structure headroom/staircase). Не чинит лучи. SoT проверки — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | locked |
+| C43 | **Постгенерационный валидатор 8 слотов.** После записи sidecar. Вселенная = луч фронта + 8-halo, не вся равнина тайла. На каждом Facing — pack-слот SLOPE / SHEER / COUPLE или нет соседа. Сосед другой z без SLOPE/SHEER → клетка некорректна. Та же z без COUPLE в pack → ERROR (не invent из z). **ERROR** через `relief_error` (`relief/log/log.py`), event `grade_cell_empty_ray`. **Не abort** generate (как structure headroom/staircase). Не чинит и не дописывает слоты. SoT — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | locked |
 
 ---
 
@@ -218,7 +218,7 @@ metadata:
 
 **Не оптимизация detailed generate.** После `chunks=complete` HTTP ещё минуты писал каталог грейдов так, как ТЗ **запретило** для `map_cells` (TR-PERF-1/2: `executemany` + одна транзакция). Тот же writer стоит на entry (WP-14) и на L0, если есть instances. Продуктовый бюджет spawn/перехода — секунды–десятки секунд; OLTP `INSERT OR REPLACE` + `commit()` на каждую из ~32k строк (Windows ~30 мс/fsync) — **не** допустимый persist.
 
-**Инварианты (уже locked, не переоткрывать):** один application-caller `persist_relief_grades`; геометрия — pack column + `system_grade_uid`; SQL — каталог Instance/System, не dual-write сетки; schema `0001` не трогать; DAG/ноды не трогать; discover/paint не переоткрывать; occupancy v1 не возвращать; stamp → pack column не менять.
+**Инварианты (уже locked, не переоткрывать):** один application-caller `persist_relief_grades`; геометрия — pack column + `system_grade_uid`; SQL — каталог Instance/System, не dual-write сетки; schema `0001` не трогать; DAG/ноды не трогать; discover/paint не переоткрывать; occupancy v1 не возвращать; stamp → pack column не менять. **Q3-attach** пишет в **те же** `relief_grade_systems` / `Instance.grade_system_uid` (emit после T-3c UF) — § R41 очереди; не новая schema и не поле persist-POJO.
 
 ### Слои
 
@@ -255,7 +255,7 @@ Entry/light/full уже внутри `generation_world_log` — те же start/
 
 ### Не входит в R43
 
-Сколько Instance «правильно» на 1 км / max `cell_refs` — продуктовый вопрос discover, не writer. Чистка мёртвой таблицы «режим tile, 20–40 мин» в [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) — doc-hygiene. Wave E, BAR-1, DAG, `|dz|=1` bowl, schema `0002`, второй пул, Volume/GradeFormation.
+Сколько Instance «правильно» на 1 км / max `cell_refs` — продуктовый вопрос discover, не writer. Чистка мёртвой таблицы «режим tile, 20–40 мин» в [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) — doc-hygiene. Wave E, BAR-1, DAG, `|dz|=1` bowl, второй пул, Volume/GradeFormation. SQL schema — только [`0001_initial.sql`](../backend/app/db/migrations/0001_initial.sql); **`0002_*.sql` запрещены** ([`.cursor/plans/schema-migrations-policy.md`](../.cursor/plans/schema-migrations-policy.md)).
 
 ### Порядок имплементации (один объект)
 
@@ -476,7 +476,7 @@ Stamp + fill **остаются** в `ColumnRect` worker, **последоват
 | Отдельный pool task на каждую `face_key` | очередь ~2×; барьер граней; лишний путь при 1 chunk |
 | Компонента графа = один Instance при разном kind/θ | ломает R36j / R36l; System как раз для этого |
 | Canonical = `min(face_key)` даже когда в прямой есть tile-rim | ломает шов двух тайлов (сосед штампует rim uid) |
-| System из 1 прямой; клетка → `grade_system_uid` | R36l |
+| System из 1 прямой; клетка → `grade_system_uid` | R36l (исключение: Q3-attach — § R41 очереди; клетка всё равно → Instance) |
 | Stamp face uid сейчас, remap uid на persist | второй writer; T-12 врёт |
 | Второй `location_uid` / второй city skeleton из‑за границы тайла | C29: поселение в мировых координатах |
 | Сдвигать город, чтобы не попасть на шов | шов технический, не продукт |
@@ -1036,7 +1036,9 @@ if context ∉ envelope.apply_in_contexts → pass-through (inner как ест�
 # worker (R41 / C39), heightmap уже готов:
 bucket[z] сверху вниз; seed = незатопленная кромка (occ==0, at_grid==0)
 8-flood тела от кромки; фронт вниз пока θ; коридор → occ
-# остаток = тот же предикат (излом / уступ), не каждая клетка
+# очереди seed раздельно (R41): Q1 C39 → Q2 посадка sheer → Q3 бок коридора; станок тот же
+# Q3: свой слот; Instance в System ближайшего по |Δz| тела (не orphan)
+# не OR трёх предикатов в одном проходе
 # стоп: упор (R37/R36m) или смена θ (R41) или шаг в то же тело / occ
 knobs' = clamp(template, envelope, L_ray)
        ↓
@@ -1276,7 +1278,7 @@ Deprecated sample `measure_terrain_descent` still stops on `z ≥` (R40). Live l
 |---|---|
 | BAR-1 detailed fence | **R36i-T-2** — вне apply и вне C28 |
 | Wave E: R36r thick diag / R36o / gameplay | later; тогда **расширение** volume, не замена |
-| DAG / schema `0002` / mask carry / parent `surface_z` upsample | другие контракты |
+| DAG / mask carry / parent `surface_z` upsample | другие контракты; SQL schema только `0001_initial.sql`, **не** `0002_*.sql` |
 | `|dz|=1` чаша 1×1 | locked skip C41; открытый продукт «четыре рампы» — **R41-T-15** (не слой 5) |
 | Равная z / C41 полиш | **R41-T-13…T-16** — [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) |
 
@@ -1351,9 +1353,61 @@ ReliefVertices
 4. Фронты с кромки вниз, пока держится θ (R42). **Сначала все следы вершины**, затем шов лучей (C41), затем коридор → `occ`. Излом / упор / шов → этот Grade кончается; новая кромка только если предикат ещё истинен.
 5. Ниже по z занятые коридором отваливаются на `occ` — не Instance.
 
-После каскада список хвостов (излом, боковой уступ, выбоина вне рампы) = тот же предикат линейно по rect+halo, не второй stencil тайла.
+После каскада список хвостов (излом, боковой уступ, выбоина вне рампы) = тот же предикат линейно по rect+halo, не второй stencil тайла. Это **C39** (новые независимые пики), не leftover pack.
 
-**Запрещено:** полный 8-CC всех same-z, потом вычесть коридор; Priority-Flood / Barnes fill низин; heap/`priority_queue` на каждую клетку как SoT; второй обход макро-тайла; Instance на каждую ступень; сеять с пола рампы **или со шва лучей**; писать `occ` фронта до того, как предложены все следы этой вершины (это был бы первый-занял).
+##### Три очереди seed + общий станок (locked, R41)
+
+Тот же `ReliefVertices` (новые **слоты**, не второй dataclass и не leftover-глифы).
+
+**Общий станок** (после любого seed, не копировать): `plugin_for` → `RimStage.flood` (8, та же z) → `add_vertex` → `FrontStage.propose` SLOPE → `SeamStage.commit` → `propose_sheers` / `finalize` → pack: **все** `rim ∪ corridor × outward` (+ получатель) **и** COUPLE same-z во вселенной R44. Envelope / template (`slope_outcome`, knobs) и C41 — те же. Равная z = pack **COUPLE**, не invent в dump. Клетка коридора SLOPE (след фронта после `commit`; `occ`, если C41 уже поставил) **не** тело новой вершины.
+
+**Три очереди — разные seed, не смешивать.** Не `OR` предикатов в одном проходе. Порядок **Q1 → Q2 → Q3**. Клетка, уже `at_grid`/`occ`/`seam`, в следующую очередь не входит. Flood очереди может занять same-z клетку, которую другая очередь ещё не сеяла — это занятость, не смешение seed.
+
+| Очередь | Seed (только этот предикат) | Не есть |
+|---|---|---|
+| **Q1** | **C39**: свободно + 8-сосед **ниже** с `occ==0` | посадка без своего спуска; бок рампы |
+| **Q2** | свободно; 8-сосед **тела** вершины; `z` ниже; первый шаг родителя = **sheer**; не 1×1 яма C41 | C39-пик; 8 только к коридору без тела |
+| **Q3** | свободно; 8-сосед **коридора SLOPE** (та же z); не 1×1 яма C41 | C39-пик; посадка только к телу (это Q2); пол рампы (клетка следа) |
+
+Во время Q1–Q3 коридор SLOPE = клетки закоммиченного SLOPE-фронта. `occ` на клетке есть, если это не локальный мин (C41 пишет мин на finalize). Сосед Q3 — эта клетка коридора. Сам пол рампы не seed, даже при `occ==0` (`|dz|=1` plains). Не ждать марку `occ`, чтобы увидеть бок.
+
+**Q3 и идентичность Grade (бой / LLM) — locked.** Бок — **новый слот** и тот же станок (тело на своей z, свои фронты). Это **не** orphan Grade и не leftover «тело×8». После станка Instance Q3 входят в **`ReliefGradeSystem` ближайшего по высоте** уже существующего Grade:
+
+1. Кандидаты — вершины, у которых закоммиченный SLOPE-коридор 8-соседствует с seed (тот склон, чей бок сеем).
+2. Выбор: min `|z_тела − z_seed|`. Ничья — вершина этого соседнего коридора (детерминированный меньший slot).
+3. Если у выбранной вершины ещё нет System (один фронт, `grade_system_uid` NULL) — **создать** System: Instance родителя + Instance Q3. Исключение из «1 фронт → нет строки System» (R36l / T-3c): только этот attach.
+4. Клетка по-прежнему → **Instance** (`system_grade_uid`), не System. Бой: cost/block с Instance этой клетки. LLM: Instance → System — один объект склона, не зазор «другой холм».
+5. Не T-3c: тела разной z, не шов чанка. Не вписывать клетки бока в `members` родителя другой z.
+
+**Q3-attach → persist (locked).** Это **тот же** каталог Instance/System (R43). Не новая таблица, не новая колонка, не `0002_*.sql`, не dual-write сетки.
+
+| Слой | Что лежит | Что не лежит |
+|---|---|---|
+| Discover / bake | `child_slot → parent_slot` (ближайший \|Δz\| владелец соседнего SLOPE-коридора) | persist-POJO; pack; FineTerrain |
+| След воркера | то же семейство, что T-3c (`VertexSlotSeam` / аналог): slot + uid Instance слота + тело на ребре **и** `q3_parent_slot` у слота Q3 | колонка SQL; `occ` / slot / фронт на Instance (C38) |
+| SQL | `relief_grade_systems` + `Instance.grade_system_uid` у **всех** членов компоненты | parent_slot; флаг «это Q3»; uid System на клетке |
+| Клетка / pack | `system_grade_uid` = **Instance** как сейчас (R36l / C11) | uid System |
+
+**Порядок emit (один post-pass, не второй пайплайн):** после fill чанков; после `merge_grade_instances` (C29 same-straight).
+
+1. T-3c: union-find слотов по **same-z телу** на внутренних C29 — без изменений.
+2. Q3-attach: union ключа слота Q3 с ключом **parent в том же чанке**. Не матч тела, не same-z. Если parent уже в компоненте T-3c (меса на нескольких чанках) — транзитивность: Q3 входит в ту же System.
+3. Компонента с ≥2 uid Instance → **одна** строка `ReliefGradeSystem`; mint uid System **здесь** (как T-3c: hash world + упорядоченные uid), не в discover.
+4. `persist_relief_grades`: bulk systems, затем instances, та же txn (R43). Семантика `replace_world=False` / merge `cell_refs` — без смены.
+
+Если у parent нет нарисованных Instance (нет следа слота) — union невозможен; Q3 остаётся 1 фронт без System, пока у него самого нет ≥2 Instance. Q3-от-Q3: цепочка child→parent в том же emit, если у каждого есть след.
+
+**Запрещено:** колонка `q3_parent` / slot в SQL; stamp `grade_system_uid` на клетку; mint System в воркере до UF; persist bake-слота; смешивать `members` разной z; второй caller persist; менять schema `0001`.
+
+Q3 крутить, пока есть seed (новые коридоры). Q1 после Q2/Q3 не подмешивать в тот же скан.
+
+**Край этого L2.** Пустой pack-слот без соседа **в этом** `ColumnRect` — OK (не invent луч в void). Когда соседний L2 есть — стык C29 / later world-seam, не этот bake.
+
+**Обрыв (все очереди):** downhill, `slope_outcome = sheer` → **SHEER**, `outward` к слоту посадки. Instance — фронт **родителя**. На `at_grid ≠ 0` не ставить `occ` (R36t).
+
+Группировка внутри очереди (8-flood) даёт меньше **фронтов** / Instance, не короче L pack.
+
+**Запрещено:** полный 8-CC всех same-z, потом вычесть коридор; Priority-Flood / Barnes fill низин; heap/`priority_queue` на каждую клетку как SoT; второй обход макро-тайла; Instance на каждую ступень; сеять с пола рампы **или со шва лучей**; писать `occ` фронта до всех следов вершины; тело × 8 как SLOPE/SHEER; писать в pack только «остаток» лучей; считать COUPLE из z в рендере/валидаторе; **второй flood/walk/propose** на очередь; **один `is_seed` = C39∨посадка∨бок**.
 
 Stamp `|dz|=1` на plains — **да** (`stamp_min_abs_dz=1`). Forest — нет (`=2`). Дырка `4` вокруг одной `3` — skip **C41** (пустой коридор). Чаша шире: стороны штампуют уникальные клетки кольца; пол низины не `occ`.
 
@@ -1369,7 +1423,7 @@ Stamp `|dz|=1` на plains — **да** (`stamp_min_abs_dz=1`). Forest — не�
 
 1. У каждого фронта — предложенный след: lockstep W×L (R42), стоп = тело этой вершины, излом θ, упор (R36m), чужой `occ` **других** вершин, **или** (open_land / обочина) плоский шаг `z == z_prev`. Чужой `seam` низины на первом шаге — якорь, не запрет выстрела.
 2. Клетка в ≥2 следах **одного** `Facing` → `seam` (параллельная шерсть). Клетка в следах **разных** `Facing` этой вершины → тоже `seam`: якорь низа (R36t), не `occ`, не в `cell_refs`.
-3. Коридор фронта = клетки его следа **минус шов**. Вдоль L не идти **сквозь** шов (префикс колонки до первой клетки шва). Дырка шва в ширине W не режет фронт на несколько Instance (C15): один θ, один `Facing`, `cell_refs` = уникальные клетки. Локальный мин в уникальном коридоре **не** `occ` до finalize (иначе нижняя вершина не выстрелит).
+3. Коридор фронта = клетки его следа **минус шов**. Вдоль L не идти **сквозь** шов (префикс колонки до первой клетки шва). Дырка шва в ширине W не режет фронт на несколько Instance (C15): один θ, один `Facing`, `cell_refs` = уникальные клетки. Локальный мин в уникальном коридоре **не** `occ` до finalize (иначе нижняя вершина не выстрелит). Q3 во время очередей читает этот след, не ждёт марку `occ`.
 4. Пустой коридор → skip этого фронта (`L_eff < 1`, R36m). Не создавать Instance.
 5. Затем уникальные **не**-мин коридоры → `occ`.
 6. **После всех вершин (finalize):** клетка в ≥2 коридорах или с ≥2 claimed Facing → шов, вычесть из коридоров, пустой фронт drop; оставшийся уникальный мин → `occ` (одиночный L=1 plains).
@@ -1408,7 +1462,7 @@ Stamp `|dz|=1` на plains — **да** (`stamp_min_abs_dz=1`). Forest — не�
 | `Instance.grade_system_uid` | uuid вершины **только если** есть строка System |
 | Inherit uid | **только орто** (`CARDINAL_ORTHO_DELTAS`). Discover членство/выстрелы — 8-way. C29 ребро чанка орто; диагональный сосед с uid — другой фронт (C15) или угол чанка, не тот же ribbon. Не first-lock-wins (C41) |
 
-**Одна грань = один фронт = один Instance** (один θ, один `Facing`). У вершины может быть 1–8 фронтов. **1 фронт → строки `relief_grade_systems` нет.** SQL FK: `grade_system_uid` на Instance ссылается на `relief_grade_systems`; NULL допустим. **Не** писать uuid на Instance без строки System. Рабочий слот у холма с одной стороной есть; persist System — только при ≥2 Instance.
+**Одна грань = один фронт = один Instance** (один θ, один `Facing`). У вершины может быть 1–8 фронтов. **1 фронт → строки `relief_grade_systems` нет**, **кроме** Q3-attach: бок и родитель входят в один System даже если у каждого по одному фронту (§ R41 очереди). SQL FK: `grade_system_uid` на Instance ссылается на `relief_grade_systems`; NULL допустим, пока нет строки. **Не** писать uuid на Instance без строки System. Рабочий слот у холма с одной стороной есть; persist System — при ≥2 Instance **или** Q3-attach.
 
 ##### `GradePaintSpec` (шов L2) — поля locked (C40)
 
@@ -2739,9 +2793,9 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 
 **Транзитивность.** Меса на трёх чанках: шов A–B и шов B–C — **не** два System. Совпадения по всем внутренним рёбрам **этого refine** склеить union-find слотов, затем emit: компонента с ≥2 Instance → **одна** строка `ReliefGradeSystem`. Не persist System на каждом ребре по отдельности. Не emit System в воркере до UF тайла.
 
-**Отпечаток воркера.** До post-pass воркер оставляет тонкий след на owned ребре: клетки тела (и кромки) на линии шва + какие Instance принадлежат слоту. Это bake-контракт (`ChunkComputeResult` / аналог), **не** колонка SQL, **не** поля persist-POJO (`occ` / slot / фронт — C38), **не** uid на клетке тела (R36t).
+**Отпечаток воркера.** До post-pass воркер оставляет тонкий след на owned ребре: клетки тела (и кромки) на линии шва + какие Instance принадлежат слоту. На слоте Q3 — ещё `q3_parent_slot` (тот же bake-след, не SQL). Это bake-контракт (`ChunkComputeResult` / аналог), **не** колонка SQL, **не** поля persist-POJO (`occ` / slot / фронт — C38), **не** uid на клетке тела (R36t).
 
-**Порядок.** После fill чанков (System не трогает z). После `merge_grade_instances` (C29 same-straight). `grade_instance_uids` упорядочены. Клетка → Instance, никогда System. 1 фронт → строки нет (`grade_system_uid` NULL).
+**Порядок.** После fill чанков (System не трогает z). После `merge_grade_instances` (C29 same-straight). `grade_instance_uids` упорядочены. Клетка → Instance, никогда System. 1 фронт → строки нет (`grade_system_uid` NULL), **кроме** Q3-attach внутри rect (не этот шов): бок входит в System ближайшего тела — § R41 очереди. T-3c не подменяет Q3-attach.
 
 **Два `detailed_bake` смежных тайлов.** Джобы **не** ждут (C29). Стык прямой = тот же catalog uid + upsert Instance. **System через макро-шов двух тайлов — не слой 6** (later). Слой 6 = чанки **этого** refine.
 
@@ -2770,9 +2824,9 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 
 | В компоненте | Entity |
 |---|---|
-| Одна прямая / один фронт | один `ReliefGradeInstance`; **без** строки System |
-| ≥2 прямых (смена kind / θ / outward; несколько сторон вершины) | N Instance + один `ReliefGradeSystem`; `grade_instance_uids` упорядочены. Стороны в разных чанках — слоты склеивает T-3c на C29, не catalog |
-| 1 Grade | система **не** создаётся (R36l). Рабочий слот вершины на bake ≠ строка БД |
+| Одна прямая / один фронт | один `ReliefGradeInstance`; **без** строки System, **кроме** Q3-attach (§ R41 очереди) |
+| ≥2 прямых (смена kind / θ / outward; несколько сторон вершины) | N Instance + один `ReliefGradeSystem`; `grade_instance_uids` упорядочены. Стороны в разных чанках — слоты склеивает T-3c на C29, не catalog. Q3-attach — не этот ряд: тела разной z, intra-rect |
+| 1 Grade | система **не** создаётся (R36l), **кроме** Q3-attach. Рабочий слот вершины на bake ≠ строка БД |
 
 Клетка несёт `system_grade_uid` → **Instance**, никогда System. `ReliefGradeInstance.grade_system_uid` заполняется только у членов системы.
 
@@ -2850,7 +2904,7 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 | [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | pack partition ≠ продукт; шов мира vs технический (**C29**); **modification** = Patch Store; `detailed_bake` location — **R41** (не stencil volume); стык после чанков: прямая = catalog, вершина = T-3c |
 | [`tz_logging.md`](./tz_logging.md) | sinks: `relief/reliefLog`, `relief/gradeCellRays`; не общий `app.log` |
 | [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | **поддомен consume:** pack-ребро отправитель/получатель, валидатор 8 лучей (**R44**), SQL/wire, LLM uid→Instance→System, L2 клетка **3×3** |
-| [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) | pack ASCII: L0 map/height **без** outdoor grade (**R36u**); пути `surface_grade` / `grade_{n}`; FineTerrain uid→Instance (PAR-G7/G10); глиф 3×3 — consume TZ; ~~PAR-G8~~ superseded |
+| [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) | pack ASCII **debug для разработчика** (не мастер мира, не игрок, не DAG): L0 map/height **без** outdoor grade (**R36u**); пути `surface_grade` / `grade_{n}`; FineTerrain uid→Instance (PAR-G7/G10); глиф 3×3 — consume TZ; ~~PAR-G8~~ superseded |
 | [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | IDs; очередь SoT — § Осталось — v2 vs L2 volume; **R41-T-1…T-12** ✅; **T-3c** слой 6 ✅; **R36i-T-2** fence; **R36i-T-4…T-15** ✅ |
 | [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md) | agent pointer на § Порядок |
 | [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md) | impl R41: типы → discover → paint adapter → worker A → plugins → T-3c → срез v1 |
@@ -2862,8 +2916,15 @@ Halo читает z соседа (`grid_neighbor`) как продолжение
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-23 | **Schema:** только `0001_initial.sql`; `0002_*.sql` запрещены — не later-тикет. Политика [`.cursor/plans/schema-migrations-policy.md`](../.cursor/plans/schema-migrations-policy.md) |
+| 2026-08-23 | **Dump ASCII = debug разработчика:** не мастер мира, не игрок, не DAG — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) |
+| 2026-08-23 | **Pack 8 слотов:** sidecar = все SLOPE/SHEER фронтов + COUPLE same-z (не leftover-only, не `+` из z) — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) |
+| 2026-08-23 | **Q3-attach persist:** те же SQL Instance/System (R43). Bake-след `child_slot→parent_slot` / `q3_parent_slot` на T-3c fingerprint — не колонка БД. Emit: T-3c UF, затем union Q3 с parent того же чанка; mint System в post-pass. Клетка → Instance. Schema `0001` без смены. |
+| 2026-08-23 | **Q3 ∈ ближайший Grade:** бок — свой слот/станок; Instance в System min\|Δz\| тела соседнего SLOPE-коридора (не orphan, не T-3c, не members другой z). Бой = Instance; LLM = Instance→System |
+| 2026-08-23 | **Q3 коридор = след SLOPE:** сосед Q3 — закоммиченный коридор фронта (`occ`, если C41 уже поставил). Локальный мин `|dz|=1` до finalize без `occ`; пол рампы не seed |
+| 2026-08-23 | **Три очереди, один станок:** Q1 C39 / Q2 посадка sheer / Q3 бок коридора — seed не OR. Flood/фронты/шов/pack общие. Меньше фронтов, не короче L pack. SHEER к посадке; pack лучи фронтов не тело×8 — consume TZ |
 | 2026-08-23 | **Консоль bake:** sidecar / R44 validate heartbeat / T-3c emit на `packBakeLog`; `grade_system_create` DEBUG; R44 ERROR не stdout — [`tz_logging.md`](./tz_logging.md) L7/L8 |
-| 2026-08-23 | **Сцепление единой поверхности:** равная z не pack leftover; валидатор R44 / dump `+` — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) |
+| 2026-08-23 | **Сцепление (superseded same-day):** сначала equal-z не pack; затем COUPLE в sidecar — строка «Pack 8 слотов» |
 | 2026-08-22 | **Pack-слоты:** тело вершины × 8 + шаг lockstep; не второй обход тайла. Валидатор 8 лучей без смены — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) |
 | 2026-08-22 | **R44 / C43:** валидатор 8 лучей после pack-ребра; пустой Facing → `relief_error`, generate не abort — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) |
 | 2026-08-22 | **Pack rim edge:** C41-claim = отправитель; persist пишет получателя (`opposite`); ASCII только читает — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) |

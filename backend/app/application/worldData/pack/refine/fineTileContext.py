@@ -56,11 +56,13 @@ class VertexSlotSeam:
     ``grade_uids`` = Instance uids of fronts that painted this slot.
     ``edge_body`` = body cells ``(x, y, z)`` on the owned rect rim (C29 sides).
     Slot is local to the chunk; System uid is not known in the worker.
+    `q3_parent_slot` is bake-only (same chunk); None unless this slot is Q3.
     """
 
     slot: int
     grade_uids: tuple[str, ...]
     edge_body: tuple[tuple[int, int, int], ...]
+    q3_parent_slot: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -260,6 +260,86 @@ class EmitGradeSystemsTest(unittest.TestCase):
         self.assertIsNone(instances[0].grade_system_uid)
 
 
+
+    def test_q3_attach_one_front_parent_makes_system(self) -> None:
+        parent = _sheer("gp", [(1, 0)])
+        child = _sheer("gc", [(2, 0)])
+        catalog = _catalog(tile_w=4, tile_h=4, chunk_size=4)
+        rect = ColumnRect(0, 3, 0, 3)
+        traces = [(rect, (
+            _seam(1, ("gp",), ((0, 3, 6),)),
+            VertexSlotSeam(
+                slot=2, grade_uids=("gc",), edge_body=((0, 0, 3),),
+                q3_parent_slot=1,
+            ),
+        ))]
+        instances, systems = emit_relief_grade_systems(
+            (parent, child), traces, catalog,
+        )
+        self.assertEqual(len(systems), 1)
+        self.assertEqual(set(systems[0].grade_instance_uids), {"gp", "gc"})
+        by_uid = {inst.grade_uid: inst for inst in instances}
+        self.assertEqual(by_uid["gp"].grade_system_uid, systems[0].grade_system_uid)
+        self.assertEqual(by_uid["gc"].grade_system_uid, systems[0].grade_system_uid)
+
+    def test_q3_without_parent_trace_has_no_system(self) -> None:
+        child = _sheer("gc", [(2, 0)])
+        catalog = _catalog(tile_w=4, tile_h=4, chunk_size=4)
+        rect = ColumnRect(0, 3, 0, 3)
+        traces = [(rect, (_seam(2, ("gc",), ((0, 0, 3),)),))]
+        instances, systems = emit_relief_grade_systems((child,), traces, catalog)
+        self.assertEqual(systems, ())
+        self.assertIsNone(instances[0].grade_system_uid)
+
+    def test_q3_joins_t3c_system_transitively(self) -> None:
+        south = _sheer("south", [(1, 0)])
+        east = _sheer("east", [(6, 2)])
+        side = _sheer("side", [(0, 1)])
+        catalog = _catalog(tile_w=8, tile_h=4, chunk_size=4)
+        rect_a = ColumnRect(0, 3, 0, 3)
+        rect_b = ColumnRect(4, 7, 0, 3)
+        traces = [
+            (rect_a, (
+                _seam(1, ("south",), ((3, 2, 6), (3, 3, 6))),
+                VertexSlotSeam(
+                    slot=2, grade_uids=("side",), edge_body=((0, 0, 3),),
+                    q3_parent_slot=1,
+                ),
+            )),
+            (rect_b, (_seam(1, ("east",), ((4, 2, 6), (4, 3, 6))),)),
+        ]
+        instances, systems = emit_relief_grade_systems(
+            (south, east, side), traces, catalog,
+        )
+        self.assertEqual(len(systems), 1)
+        self.assertEqual(set(systems[0].grade_instance_uids), {"south", "east", "side"})
+        uid = systems[0].grade_system_uid
+        self.assertTrue(all(inst.grade_system_uid == uid for inst in instances))
+
+    def test_q3_chain_unions_in_one_pass(self) -> None:
+        a = _sheer("ga", [(1, 0)])
+        b = _sheer("gb", [(2, 0)])
+        c = _sheer("gc", [(3, 0)])
+        catalog = _catalog(tile_w=4, tile_h=4, chunk_size=4)
+        rect = ColumnRect(0, 3, 0, 3)
+        traces = [(rect, (
+            _seam(1, ("ga",), ((0, 3, 6),)),
+            VertexSlotSeam(
+                slot=2, grade_uids=("gb",), edge_body=((0, 1, 4),),
+                q3_parent_slot=1,
+            ),
+            VertexSlotSeam(
+                slot=3, grade_uids=("gc",), edge_body=((0, 0, 3),),
+                q3_parent_slot=2,
+            ),
+        ))]
+        _instances, systems = emit_relief_grade_systems(
+            (a, b, c), traces, catalog,
+        )
+        self.assertEqual(len(systems), 1)
+        self.assertEqual(set(systems[0].grade_instance_uids), {"ga", "gb", "gc"})
+
+
 class DiscoverPaintT3cTest(unittest.TestCase):
     def test_mesa_two_fronts_one_rect_system_and_cell_uid(self) -> None:
         tuid, tpl = _open_template()

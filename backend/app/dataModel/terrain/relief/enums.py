@@ -6,10 +6,15 @@ from enum import StrEnum
 
 
 class ReliefSideKind(StrEnum):
-    """Graded face vs vertical face — not landcover / system_terrain."""
+    """Pack slot / Instance face kind.
+
+    SLOPE and SHEER are Instance faces. COUPLE is pack-only (same-z neighbor);
+    not an Instance and not a template side.
+    """
 
     SHEER = "sheer"
     SLOPE = "slope"
+    COUPLE = "couple"
 
 
 class ReliefContext(StrEnum):

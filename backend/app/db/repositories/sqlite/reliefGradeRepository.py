@@ -76,6 +76,24 @@ class SqliteReliefGradeRepository(IReliefGradeRepository):
             out.extend(rows)
         return out
 
+    async def list_systems_by_uids(
+        self,
+        world_uid: str,
+        uids: Sequence[str],
+    ) -> list[ReliefGradeSystemRow]:
+        unique = list(dict.fromkeys(uids))
+        if not unique:
+            return []
+        out: list[ReliefGradeSystemRow] = []
+        for chunk in iter_batches(unique, size=UID_IN_BATCH_SIZE):
+            placeholders = ",".join("?" * len(chunk))
+            rows = await self._systems.fetch_all(
+                where=f"world_uid = ? AND grade_system_uid IN ({placeholders})",
+                params=[world_uid, *chunk],
+            )
+            out.extend(rows)
+        return out
+
     async def list_instances_for_world(self, world_uid: str) -> list[ReliefGradeInstanceRow]:
         return await self._instances.fetch_all(
             where="world_uid = ?",

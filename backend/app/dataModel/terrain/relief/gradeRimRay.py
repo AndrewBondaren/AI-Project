@@ -1,9 +1,9 @@
-"""Grade rim edge slots in pack — sender (C41) + receiver (opposite).
+"""Grade rim edge slots in pack — sender (C41) + receiver (opposite) + COUPLE.
 
 SoT: ``docs/tz_terrain_relief_consume.md``. C41 identity = sender ``(cell, Facing)``.
 Receiver is persist, not a second claim and not render ``opposite``.
-``kind`` chooses the leftover glyph (SLOPE arrow / SHEER bar). Equal-z neighbor
-is unified-surface coupling (not a pack ray) — validator/render, not this POJO.
+``kind`` is the pack slot: SLOPE / SHEER leftover, or COUPLE (same-z). Dump and
+validator read slots; they do not invent ``+`` from ``surface_z``.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ class GradeRimRay(BaseModel):
     facing: Facing
     kind: ReliefSideKind = Field(
         default=ReliefSideKind.SLOPE,
-        description="Glyph; omit when no painted front — not an Instance kind.",
+        description="Pack slot: SLOPE/SHEER leftover or COUPLE. Instance kind is SLOPE/SHEER only.",
     )
 
     @property

@@ -65,7 +65,7 @@ backend/logs/{domain}/{service}.log
 | `pack` | `fineChunkPersist` | `logs/pack/fineChunkPersist.log` | server | persist chunk / sidecar; **не** подмена R44 | [`fineChunkPersist.py`](../backend/app/application/worldData/pack/refine/fineChunkPersist.py) |
 | `relief` | `reliefLog` | `logs/relief/reliefLog.log` | server | R8 INFO/DEBUG/WARNING generate | [`relief/log/log.py`](../backend/app/application/worldData/generators/terrain/relief/log/log.py) · [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Logging (R8) |
 | `relief` | `gradeCellRays` | `logs/relief/gradeCellRays.log` | server | R44 `grade_cell_empty_ray` (`slots` / `open` 3×3) | [`gradeCellRays.py`](../backend/app/application/worldData/generators/terrain/relief/validate/gradeCellRays.py) · [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) |
-| `render` | `dumpLog` | `logs/render/dumpLog.log` | **script** | ASCII dump ticks, heartbeat ≤5 с | [`dumpLog.py`](../backend/app/application/worldData/render/dumpLog.py) · [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) |
+| `render` | `dumpLog` | `logs/render/dumpLog.log` | **script** | debug ASCII dump **для разработчика** (не мастер мира, не игрок, не DAG); ticks, heartbeat ≤5 с | [`dumpLog.py`](../backend/app/application/worldData/render/dumpLog.py) · [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) |
 | `terrain` | `terrainParallelLog` | `logs/terrain/terrainParallelLog.log` | server | parallel column / worker ticks | [`terrainParallelLog.py`](../backend/app/application/worldData/terrainParallelLog.py) · [`tz_terrain_generation.md`](./tz_terrain_generation.md) |
 | `climate` | `climateLog` | `logs/climate/climateLog.log` | server | pass INFO, `warn_once` / `debug_once` | [`loggingHelpers.py`](../backend/app/application/worldData/generators/climate/loggingHelpers.py) · [`tz_climate.md`](./tz_climate.md) § Логирование |
 | `structure` | `headroom` | `logs/structure/headroom.log` | server | post-gen ERROR, не abort | [`tz_building_generator.md`](./tz_building_generator.md) § Headroom (образец R44) |
@@ -138,6 +138,7 @@ backend/logs/{domain}/{service}.log
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-23 | **Dump ASCII = debug разработчика** (не мастер мира, не игрок, не DAG) — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md), [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md). |
 | 2026-08-22 | SoT sinks: `{domain}/{service}.log`; один писатель на файл; каталог консьюмеров; скрипт ≠ серверный `app.log`. |
 | 2026-08-22 | unmatched server → `core`/`runtime` (не `app.log`). |
 | 2026-08-23 | **L7/L8:** консоль не блокирует bake (drop-queue); storm R44 / T-3c — файл; heartbeat sidecar/validate/emit — `packBakeLog` на консоль. |

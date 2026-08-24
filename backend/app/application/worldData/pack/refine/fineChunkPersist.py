@@ -35,6 +35,7 @@ from app.application.worldData.pack.refine.fineTileContext import (
 )
 from app.application.worldData.persistResult import PersistResult
 from app.application.worldData.generators.terrain.relief.validate.gradeCellRays import (
+    grade_ray_universe,
     validate_grade_cell_empty_rays,
 )
 from app.dataModel.terrain.relief.gradeRimRay import (
@@ -192,7 +193,8 @@ class FineChunkPersist:
         log_pack_grade_ray_sidecar_done(
             ctx.world_uid, n_rays=len(slots), started_at=sidecar_t0,
         )
-        n_cells = len(cells)
+        universe = grade_ray_universe(slots, self._meter_surface_z)
+        n_cells = len(universe)
         validate_t0 = log_pack_grade_ray_validate_start(
             ctx.world_uid, n_cells=n_cells,
         )
@@ -207,7 +209,7 @@ class FineChunkPersist:
             )
 
         n_empty = validate_grade_cell_empty_rays(
-            cells,
+            universe,
             slots,
             z_at=self._meter_surface_z,
             on_progress=_validate_progress,
