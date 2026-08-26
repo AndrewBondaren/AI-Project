@@ -1019,14 +1019,14 @@ def log_pack_relief_grades_persist_done(
     )
 
 
-def log_pack_grade_ray_sidecar_start(world_uid: str, *, n_rays: int) -> float:
+def log_pack_grade_ray_sidecar_start(world_uid: str, *, n_cells: int) -> float:
     _info(
-        "pack grade_ray sidecar start | world=%s rays=%d",
+        "pack grade_ray sidecar start | world=%s cells=%d",
         world_uid,
-        n_rays,
+        n_cells,
         activity="grade_ray_sidecar_start",
         world_uid=world_uid,
-        n_rays=n_rays,
+        n_cells=n_cells,
     )
     return time.perf_counter()
 
@@ -1034,20 +1034,20 @@ def log_pack_grade_ray_sidecar_start(world_uid: str, *, n_rays: int) -> float:
 def log_pack_grade_ray_sidecar_done(
     world_uid: str,
     *,
-    n_rays: int,
+    n_cells: int,
     started_at: float,
 ) -> None:
     elapsed_s = time.perf_counter() - started_at
     _info(
-        "pack grade_ray sidecar done | world=%s rays=%d "
+        "pack grade_ray sidecar done | world=%s cells=%d "
         "elapsed_s=%.2f elapsed_ms=%.1f",
         world_uid,
-        n_rays,
+        n_cells,
         elapsed_s,
         elapsed_s * 1000.0,
         activity="grade_ray_sidecar_done",
         world_uid=world_uid,
-        n_rays=n_rays,
+        n_cells=n_cells,
         elapsed_s=round(elapsed_s, 2),
         elapsed_ms=elapsed_s * 1000.0,
     )

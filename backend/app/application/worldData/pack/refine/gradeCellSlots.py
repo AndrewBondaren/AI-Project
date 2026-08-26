@@ -1,4 +1,4 @@
-"""Pack occupancy slots from ``z_height_map`` pairs — tz_terrain_relief § Правила стрелок.
+"""Walk occupancy → 8 codes. Pair rules: ``dataModel.terrain.relief.gradeLeftoverPair``.
 
 Not mill leftover, not ``slope_outcome`` 45°. Glyphs are dump-only.
 """
@@ -7,39 +7,8 @@ from __future__ import annotations
 
 from collections.abc import Collection, Mapping
 
-from app.dataModel.terrain.relief.gradeSlot import (
-    GRADE_SLOT_COUNT,
-    GradeCellSlots,
-    GradeCouple,
-    GradeOctant,
-    GradeSeam,
-    GradeSheer,
-    neighbor_cell,
-)
-from app.dataModel.terrain.relief.reliefSlopeGeom import angle_from_height_length
-
-# Leftover L=1 vs mill envelope 45°. SoT generate § Угол: SHEER [80, 90).
-_LEFTOVER_SHEER_MIN_DEG = 80.0
-
-
-def leftover_pair_code(abs_dz: int, flow: GradeOctant) -> int:
-    theta = angle_from_height_length(int(abs_dz), 1)
-    if theta >= _LEFTOVER_SHEER_MIN_DEG:
-        return int(GradeSheer.SHEER)
-    return int(flow)
-
-
-def slot_code_for_neighbor(z_cell: int, z_neighbor: int | None, position: int) -> int:
-    if z_neighbor is None:
-        return int(GradeSeam.SEAM)
-    zc = int(z_cell)
-    zn = int(z_neighbor)
-    if zn == zc:
-        return int(GradeCouple.COUPLE)
-    flow = GradeOctant(int(position))
-    if zc < zn:
-        flow = flow.opposite()
-    return leftover_pair_code(abs(zc - zn), flow)
+from app.dataModel.terrain.relief.gradeLeftoverPair import slot_code_for_neighbor
+from app.dataModel.terrain.relief.gradeSlot import GRADE_SLOT_COUNT, GradeCellSlots, neighbor_cell
 
 
 def pack_cell_slots(

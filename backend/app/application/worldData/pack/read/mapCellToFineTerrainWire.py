@@ -6,6 +6,10 @@ from app.dataModel.spatial.facing import Facing, parse_facing
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire, FineTerrainZRun
 from app.db.models.mapCell import MapCell
 
+# Location flush is one FineTerrain blob; chunk index is always origin.
+LOCATION_TERRAIN_CHUNK_CX = 0
+LOCATION_TERRAIN_CHUNK_CY = 0
+
 
 def _compress_z_runs(cells: list[MapCell]) -> list[FineTerrainZRun]:
     if not cells:

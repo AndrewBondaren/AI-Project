@@ -320,12 +320,15 @@ def draw_symbol_grid(
     extra_headers: list[str] | None = None,
     coord_prefix: str = "",
     bounds: tuple[int, int, int, int] | None = None,
+    cell_size_m: int | None = 1,
+    x_rulers: bool = True,
 ) -> str:
     """Draw ASCII from (x,y)→symbol. Missing cells → space (aligned frame).
 
     ``bounds=(x0,x1,y0,y1)`` fixes the frame (use mosaic / max extent so every
     z-slice shares the same axes and does not shift when sparse).
     Without bounds, frame is the content bbox of ``symbols``.
+    ``x_rulers`` default True (L2). L0 mask/height pass False.
     """
     if bounds is not None:
         x0, x1, y0, y1 = bounds
@@ -341,12 +344,16 @@ def draw_symbol_grid(
     lines = [title]
     if extra_headers:
         lines.extend(extra_headers)
-    lines.append(format_grid_header(x0, x1, y0, y1, cell_size_m=1, prefix=coord_prefix))
-    lines.extend(format_x_axis_ruler(x0, x1))
+    lines.append(
+        format_grid_header(x0, x1, y0, y1, cell_size_m=cell_size_m, prefix=coord_prefix),
+    )
+    if x_rulers:
+        lines.extend(format_x_axis_ruler(x0, x1))
     for y in range(y1, y0 - 1, -1):
         row = "".join(symbols.get((x, y), " ") for x in range(x0, x1 + 1))
         lines.append(f"{format_y_gutter(y)}{row}|")
-    lines.extend(format_x_axis_ruler(x0, x1))
+    if x_rulers:
+        lines.extend(format_x_axis_ruler(x0, x1))
     return "\n".join(lines)
 
 
@@ -389,19 +396,28 @@ def draw_int_grid(
     extra_headers: list[str] | None = None,
     coord_prefix: str = "",
     width: int | None = None,
+    bounds: tuple[int, int, int, int] | None = None,
+    cell_size_m: int | None = 1,
 ) -> str:
     """Fixed-width decimal grid (same pad rules as L0 ``ascii_height``)."""
-    if not values:
+    if bounds is not None:
+        x0, x1, y0, y1 = bounds
+    elif values:
+        xs = [x for x, _ in values]
+        ys = [y for _, y in values]
+        x0, x1 = min(xs), max(xs)
+        y0, y1 = min(ys), max(ys)
+    else:
         return ""
-    xs = [x for x, _ in values]
-    ys = [y for _, y in values]
-    x0, x1 = min(xs), max(xs)
-    y0, y1 = min(ys), max(ys)
+    if x1 < x0 or y1 < y0:
+        return ""
     field_w = int(width) if width is not None else height_cell_width(values.values())
     lines = [title]
     if extra_headers:
         lines.extend(extra_headers)
-    lines.append(format_grid_header(x0, x1, y0, y1, cell_size_m=1, prefix=coord_prefix))
+    lines.append(
+        format_grid_header(x0, x1, y0, y1, cell_size_m=cell_size_m, prefix=coord_prefix),
+    )
     for y in range(y1, y0 - 1, -1):
         cells = [
             format_height_cell(values.get((x, y)), width=field_w)

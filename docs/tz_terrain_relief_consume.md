@@ -2,7 +2,7 @@
 
 **Статус:** SoT поддомена **после bake**. Генерация (очереди, стрелки, шаблоны/pick, canal/obstacle, SQL catalog) — [`tz_terrain_relief.md`](tz_terrain_relief.md). Bake R36u–w / envelope подробно — архив [`tz_terrain_relief_v1_superseded.md`](tz_terrain_relief_v1_superseded.md). Этот файл — **что лежит** и **как это читать**. LLM и карта — uid→Instance→System. **Dump ASCII — debug для разработчика**, не мастер мира, не игрок, не DAG. Не дублирует walk. **8 слотов клетки** — pack-коды [`tz_terrain_relief.md`](tz_terrain_relief.md) § Pack-слот, не свойство ASCII и не derive из z.
 
-**Родитель generate:** [`tz_terrain_relief.md`](tz_terrain_relief.md). ASCII-оси/файлы пака: [`tz_pack_ascii_render.md`](tz_pack_ascii_render.md) — глиф клетки grade **здесь**, не односимвольный overlay PAR-G. Sink ERROR слотов: [`tz_logging.md`](tz_logging.md) консьюмер `relief` / `gradeCellRays`. Обход `leftover_plus_halo` / R44 в коде — **interim**, не конечный валидатор.
+**Родитель generate:** [`tz_terrain_relief.md`](tz_terrain_relief.md). Техдолг кода: [`tz_terrain_relief_technical_debt.md`](tz_terrain_relief_technical_debt.md). ASCII-оси/файлы пака: [`tz_pack_ascii_render.md`](tz_pack_ascii_render.md) — глиф клетки grade **здесь**, не односимвольный overlay PAR-G. Sink ERROR слотов: [`tz_logging.md`](tz_logging.md) консьюмер `relief` / `gradeCellRays`. Persist occupancy — [`gradeCellSlotValidate.py`](../backend/app/application/worldData/generators/terrain/relief/validate/gradeCellSlotValidate.py). Обход `leftover_plus_halo` / R44 в [`gradeCellRays.py`](../backend/app/application/worldData/generators/terrain/relief/validate/gradeCellRays.py) — **interim**, не конечный валидатор.
 
 ---
 
@@ -311,7 +311,7 @@ L0: grade omit (PAR-G5) — без изменений.
 |---|---|
 | 2026-08-25 | **Q3 не очередь seed:** mill SoT = Q1/Q2 — **R41-T-18**. Снос кода `is_q3_seed` — **R41-T-19**. Бок-attach persist остаётся. |
 | 2026-08-25 | **`+` same-z — не dump:** COUPLE пишет generate в sidecar; ASCII только глиф по kind. Пустой край плато = нет слота в JSON. T-17 = persist + валидатор не закрывает из z; dump `+` = smoke. |
-| 2026-08-26 | **Тело sidecar:** `SCH-GRADE-CELL-SLOTS`, `{x,y,slots[8]}`. Старый `rays[]` не SoT. |
+| 2026-08-27 | Persist occupancy-validator: `gradeCellSlotValidate`; R44 leftover — `gradeCellRays`. |
 | 2026-08-26 | **Generate SoT** сжат в [`tz_terrain_relief.md`](tz_terrain_relief.md); bake R36/R43 — архив v1. `leftover_plus_halo` / R44 — interim кода, не конечный валидатор. |
 | 2026-08-26 | **R41-T-25 open:** алгоритм полного fill 8 слотов; не игнор восьмёрки. T-17 = COUPLE + валидатор не из z, не occupancy. |
 | 2026-08-23 | **Dump ASCII = debug разработчика:** не мастер мира, не игрок, не DAG. |

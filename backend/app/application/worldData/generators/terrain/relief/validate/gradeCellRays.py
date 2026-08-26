@@ -1,7 +1,8 @@
-"""R44 / C43: empty Facing slot on a surface cell.
+"""R44 / C43: empty Facing slot on a surface cell (legacy ``rays[]``).
 
-SoT: ``docs/tz_terrain_relief_consume.md``. Does not invent leftover rays or abort.
-Equal-z without a pack COUPLE slot is empty (ERROR). Does not close from z.
+SoT consume validator for ``slots[8]`` is ``gradeCellSlotValidate``.
+This module keeps leftover+halo / close-from-z for locked tests.
+Does not invent leftover rays or abort.
 """
 
 from __future__ import annotations
@@ -12,39 +13,11 @@ from app.application.worldData.generators.terrain.relief.log.events import (
     EVENT_GRADE_CELL_EMPTY_RAY,
 )
 from app.application.worldData.generators.terrain.relief.log.log import relief_error
-from app.dataModel.spatial.facing import COMPACT_LETTER, Facing, GRID_OUTWARD_DELTA
+from app.application.worldData.generators.terrain.relief.validate.emptySlotDiagram import (
+    open_slot_diagram,
+)
+from app.dataModel.spatial.facing import Facing, GRID_OUTWARD_DELTA
 from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay, leftover_pack_kind
-from app.dataModel.terrain.relief.gradeSlot import (
-    GRADE_SLOT_COUNT,
-    GradeCellSlots,
-    GradeOctant,
-    facing_from_octant,
-)
-
-# Same 3×3 as tz_terrain_relief_consume ASCII (center is the terrain cell, always closed).
-_CELL_SLOTS: tuple[tuple[Facing | None, ...], ...] = (
-    (Facing.NORTHWEST, Facing.NORTH, Facing.NORTHEAST),
-    (Facing.WEST, None, Facing.EAST),
-    (Facing.SOUTHWEST, Facing.SOUTH, Facing.SOUTHEAST),
-)
-
-
-def _open_slots(missing: set[Facing]) -> tuple[str, str]:
-    """`.` = unclosed edge; ``#`` = closed edge or center. ``open`` = compact letters."""
-
-    def glyph(slot: Facing | None) -> str:
-        if slot is None:
-            return "#"
-        return "." if slot in missing else "#"
-
-    diagram = " ".join("".join(glyph(slot) for slot in row) for row in _CELL_SLOTS)
-    open_ids = ",".join(
-        COMPACT_LETTER[slot]
-        for row in _CELL_SLOTS
-        for slot in row
-        if slot is not None and slot in missing
-    )
-    return diagram, open_ids
 
 
 def _slot_closed(
@@ -118,54 +91,7 @@ def validate_grade_cell_empty_rays(
         if missing_set:
             n_empty += 1
             missing = tuple(facing.value for facing in Facing if facing in missing_set)
-            slots, open_ids = _open_slots(missing_set)
-            relief_error(
-                EVENT_GRADE_CELL_EMPTY_RAY,
-                x=key[0],
-                y=key[1],
-                empty_facings=missing,
-                slots=slots,
-                open=open_ids,
-            )
-        if on_progress is not None and tick and n_seen % tick == 0:
-            on_progress(n_seen, n_empty)
-    if on_progress is not None and n_seen and (tick == 0 or n_seen % tick != 0):
-        on_progress(n_seen, n_empty)
-    return n_empty
-
-
-def validate_grade_cell_slots(
-    occupancy: Iterable[tuple[int, int]],
-    packed: Iterable[GradeCellSlots],
-    *,
-    z_height_map: Mapping[tuple[int, int], int],
-    on_progress: Callable[[int, int], None] | None = None,
-    progress_every: int = 0,
-) -> int:
-    """ERROR if an occupancy cell in the heightmap has no complete 8-code row.
-
-    Does not invent SEAM/COUPLE from z. Generate continues. ``on_progress`` is
-    the packBakeLog heartbeat, not a second ERROR logger.
-    """
-    by_cell = {cell.cell: cell for cell in packed}
-    n_seen = 0
-    n_empty = 0
-    tick = max(0, int(progress_every))
-    all_facings = {
-        facing_from_octant(GradeOctant(position))
-        for position in range(GRADE_SLOT_COUNT)
-    }
-    for xy in occupancy:
-        key = (int(xy[0]), int(xy[1]))
-        if key not in z_height_map:
-            continue
-        n_seen += 1
-        cell = by_cell.get(key)
-        missing_set = all_facings if cell is None else set()
-        if missing_set:
-            n_empty += 1
-            missing = tuple(facing.value for facing in Facing if facing in missing_set)
-            slots, open_ids = _open_slots(missing_set)
+            slots, open_ids = open_slot_diagram(missing_set)
             relief_error(
                 EVENT_GRADE_CELL_EMPTY_RAY,
                 x=key[0],

@@ -14,6 +14,7 @@ metadata:
 |---|---|
 | Этот файл | mill Q1/Q2, pack-слоты, стрелки, шаблоны/pick, canal/obstacle, SQL DDL + R43 |
 | [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | dump 3×3, sidecar paths, LLM-чтение |
+| [`tz_terrain_relief_technical_debt.md`](./tz_terrain_relief_technical_debt.md) | техдолг **кода** (dual sidecar, жирные классы, хардкоды). Не generate SoT |
 | [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) | архив: R36 bake (u–w), R37 envelope подробно, L2 volume, C29, примеры JSON pick |
 
 **Не трогать:** L0→L2 parent-light ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2); DAG; Occupancy v1; `0002_*.sql`.
@@ -55,7 +56,7 @@ Dump и контракт 3×3 — consume. Envelope длинного mill-луч
 | (0, 80) | **SLOPE** (Instance) | dump: глиф `GradeOctant` (поток) |
 | [80, 90) | **SHEER** (Instance + pack `GradeSheer`) | `┃` |
 
-Писать **честный** θ на Instance. Не omit угол у SHEER. Не называть SHEER всё, что круче 45°.
+Писать **честный** θ на Instance. Не omit угол у SHEER. Не называть SHEER всё, что круче 45°. Код leftover-пары L=1: `LEFTOVER_SHEER_MIN_DEG` / `LEFTOVER_PAIR_LENGTH_CELLS` в `gradeLeftoverPair` — **не** конверт plains 45°.
 
 **Нависание (θ ≥ 90, в т.ч. > 90)** — не слот leftover открытой клетки. Это **онтология отдельных объектов** (нависающий обрыв, пещера): углы там могут быть нависающими. Объект наследует поведение родителя (местность, на которой сидит). Не смешивать с mill/pack этого файла. Схема пещеры/обрыва **не** в этом ТЗ.
 
@@ -440,7 +441,7 @@ Mill: один SOUTH, Q2 вниз, не тело×8. Pack: клетка заня
 - Узкий dump прямой склон = только outward + `+`.
 - Пещера / нависающий обрыв: отдельный объект, inherit родителя, нависающие θ — не leftover pack.
 
-Код `downhill_leftover_rim_rays` / `leftover_plus_halo` / R44 — не конечный SoT.
+- Запахи кода (dual `rays[]`/`slots[8]`, хардкоды, жирные классы) — [`tz_terrain_relief_technical_debt.md`](./tz_terrain_relief_technical_debt.md).
 
 ---
 
@@ -448,6 +449,6 @@ Mill: один SOUTH, Q2 вниз, не тело×8. Pack: клетка заня
 
 | Дата | Изменение |
 |---|---|
-| 2026-08-26 | **Sidecar тело:** клетка `{x,y,slots[8]}` int; не массив лучей. Consume § Тело sidecar. |
+| 2026-08-27 | **Leftover L=1 в коде:** `LEFTOVER_SHEER_MIN_DEG` / `LEFTOVER_PAIR_LENGTH_CELLS` (`gradeLeftoverPair`), не конверт 45°. |
 | 2026-08-26 | **θ местности:** (0, 90), **90° нет**; SHEER **[80, 90)**; нависание — отдельные объекты (как холм), inherit родителя, не leftover pack. |
 | 2026-08-26 | **SoT generate сжат:** очереди Q1/Q2, итерация leftover, правила стрелок, эталоны ямы/W×L/каскад. Bake R36/R43 — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). Алгоритм и валидатор — следующая разработка. |

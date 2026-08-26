@@ -25,7 +25,7 @@ metadata:
 
 **Scope (R36u):** L0→L2 **mask** carry (terrain / hydro / facing) — unchanged ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md)). Меняется только **relief grade** writer + omit L0 grade ASCII.
 
-Код (ориентиры): `render/worldMapPackRenderer.py`, `locationTerrainPackRenderer.py`, `wildernessTilePackRenderer.py`, `fineTerrainAsciiKernel.py`, `mapSymbols.py`, `facingArrows.py`, `renderPayloads.py`; dump — `scripts/render_maps.py` / `dump_detailed_renders`.
+Код (ориентиры): `render/worldMapPackRenderer.py` (фасад L0 mask+height), `lightMosaic.py` / `lightMosaicFrame.py` / `lightMapPins.py` / `lightMapCells.py`, `worldMapMacroRender.py`, `worldMapGradeOverlay.py` (L0 grade omit), `locationTerrainPackRenderer.py`, `wildernessTilePackRenderer.py`, `fineTerrainAsciiKernel.py`, `mapSymbols.py`, `facingArrows.py`, `renderPayloads.py`; dump — `scripts/render_maps.py` / `dump_detailed_renders`.
 
 **Антипаттерн:** «рендер чинит мир» (gap fill, invent `system_grade_uid`, повторный ribbon apply на L0); выносить сцепление или онтологию grade в dump / DAG. **Dump без строки ≥5 с** — crit: `dumpLog` + heartbeat (`DEBUG_PROGRESS_POLL_S`, default 5) через `loggingConfig` / `generation_world_log(mode="dump")`. Не `print` / не script-tee. Sink: [`tz_logging.md`](./tz_logging.md) консьюмер `render` / `dumpLog` (процесс **script**, не `app.log` uvicorn).
 
@@ -160,7 +160,7 @@ Open product XOR по L2 grade ASCII — **нет**.
 
 | Дата | Изменение |
 |---|---|
-| 2026-08-26 | **Sidecar `slots[8]`:** dump читает `SCH-GRADE-CELL-SLOTS` — consume § Тело sidecar |
+| 2026-08-27 | **L0 renderer split:** фасад mask+height; grade overlay leftover — [`tz_terrain_relief_technical_debt.md`](./tz_terrain_relief_technical_debt.md) **RELIEF-TD-6**. |
 | 2026-08-23 | **Pack 8 слотов:** sidecar SLOPE/SHEER/COUPLE; dump не invent `+` из z — consume TZ |
 | 2026-08-23 | **grade_rays = фронт:** pack лучи фронта (не тело×8) — consume TZ |
 | 2026-08-23 | **Сцепление `+` (superseded same-day):** сначала equal-z на dump; затем COUPLE в sidecar — строка «Pack 8 слотов». |

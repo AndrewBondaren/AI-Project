@@ -22,6 +22,10 @@ from app.dataModel.terrain.relief.reliefDeltaSchedule import (
     ReliefDeltaInterval,
     ReliefDeltaSchedule,
 )
+from app.dataModel.terrain.relief.gradeLeftoverPair import (
+    LEFTOVER_PAIR_LENGTH_CELLS,
+    LEFTOVER_SHEER_MIN_DEG,
+)
 from app.dataModel.terrain.relief.gradeRimRay import GradeRaySidecar, GradeRimRay
 from app.dataModel.terrain.relief.gradeSlot import (
     GradeCellSlots,
@@ -70,6 +74,8 @@ __all__ = [
     "GradeCellSlots",
     "GradeCouple",
     "GradeOctant",
+    "LEFTOVER_PAIR_LENGTH_CELLS",
+    "LEFTOVER_SHEER_MIN_DEG",
     "GradeRaySidecar",
     "GradeRimRay",
     "GradeSeam",

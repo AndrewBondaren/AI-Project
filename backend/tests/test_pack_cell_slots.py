@@ -5,17 +5,29 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from app.application.worldData.generators.terrain.relief.validate.gradeCellRays import (
+from pydantic import ValidationError
+
+from app.application.worldData.generators.terrain.relief.validate.gradeCellSlotValidate import (
     validate_grade_cell_slots,
 )
 from app.application.worldData.pack.refine.gradeCellSlots import pack_cell_slots
+from app.dataModel.spatial.facing import Facing, OPPOSITE
+from app.dataModel.terrain.relief.gradeLeftoverPair import (
+    LEFTOVER_PAIR_LENGTH_CELLS,
+    LEFTOVER_SHEER_MIN_DEG,
+    leftover_pair_theta,
+)
 from app.dataModel.terrain.relief.gradeSlot import (
+    GRADE_SLOT_SCHEMA_ID,
     GradeCouple,
     GradeOctant,
     GradeSeam,
     GradeSheer,
+    GradeSlotSidecar,
+    decode_grade_slot_code,
+    facing_from_octant,
+    octant_from_facing,
 )
-from app.dataModel.terrain.relief.reliefSlopeGeom import angle_from_height_length
 
 
 def _by_cell(z: dict[tuple[int, int], int]) -> dict[tuple[int, int], tuple[int, ...]]:
@@ -51,8 +63,9 @@ class TestPackCellSlotsPit(unittest.TestCase):
             ),
         )
         self.assertEqual(slots[(1, 2)][6], int(GradeOctant.SOUTH))
-        theta = angle_from_height_length(2, 1)
-        self.assertLess(theta, 80.0)
+        theta = leftover_pair_theta(2)
+        self.assertLess(theta, LEFTOVER_SHEER_MIN_DEG)
+        self.assertEqual(LEFTOVER_PAIR_LENGTH_CELLS, 1)
         self.assertNotIn(int(GradeSheer.SHEER), slots[(1, 1)])
 
     def test_pool_east_flow_same_on_both_ends(self) -> None:
@@ -75,17 +88,39 @@ class TestValidateGradeCellSlots(unittest.TestCase):
         z = {(0, 0): 4, (1, 0): 4}
         packed = pack_cell_slots(z)
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+            "app.application.worldData.generators.terrain.relief.validate.gradeCellSlotValidate.relief_error",
         ) as err:
             n_empty = validate_grade_cell_slots(z, packed, z_height_map=z)
         err.assert_not_called()
         self.assertEqual(n_empty, 0)
         with patch(
-            "app.application.worldData.generators.terrain.relief.validate.gradeCellRays.relief_error",
+            "app.application.worldData.generators.terrain.relief.validate.gradeCellSlotValidate.relief_error",
         ) as err:
             n_empty = validate_grade_cell_slots(z, packed[:1], z_height_map=z)
         self.assertEqual(err.call_count, 1)
         self.assertEqual(n_empty, 1)
+
+
+class TestGradeSlotWire(unittest.TestCase):
+    def test_octant_opposite_matches_facing(self) -> None:
+        for facing in Facing:
+            octant = octant_from_facing(facing)
+            self.assertEqual(octant.opposite(), octant_from_facing(OPPOSITE[facing]))
+            self.assertEqual(facing_from_octant(octant), facing)
+
+    def test_decode_uses_enum_members(self) -> None:
+        self.assertIs(decode_grade_slot_code(GradeOctant.EAST), GradeOctant.EAST)
+        self.assertIs(decode_grade_slot_code(GradeSeam.SEAM), GradeSeam.SEAM)
+        self.assertIs(decode_grade_slot_code(GradeSheer.SHEER), GradeSheer.SHEER)
+        self.assertIs(decode_grade_slot_code(GradeCouple.COUPLE), GradeCouple.COUPLE)
+        with self.assertRaises(ValueError):
+            decode_grade_slot_code(11)
+
+    def test_sidecar_schema_id_is_sot_constant(self) -> None:
+        body = GradeSlotSidecar()
+        self.assertEqual(body.schema_id, GRADE_SLOT_SCHEMA_ID)
+        with self.assertRaises(ValidationError):
+            GradeSlotSidecar(schema_id="SCH-GRADE-RAY-SIDECAR")
 
 
 if __name__ == "__main__":

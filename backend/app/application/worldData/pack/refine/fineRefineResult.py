@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 
 from app.application.worldData.generators.terrain.relief.discover.timings import (
     GradePipelineTimings,
@@ -21,7 +21,8 @@ class FineRefineResult:
     meter_surface_z: dict[tuple[int, int], int] = field(default_factory=dict)
     grade_instances: tuple[ReliefGradeInstance, ...] = ()
     grade_systems: tuple[ReliefGradeSystem, ...] = ()
-    rim_rays: tuple[GradeRimRay, ...] = ()
+    # Mill leftover ``GradeRimRay`` acc — not SCH-GRADE-CELL-SLOTS.
+    mill_rim_rays: tuple[GradeRimRay, ...] = ()
     materialize_s: float = 0.0
     grade_s: float = 0.0
     pipeline_s: GradePipelineTimings = field(default_factory=GradePipelineTimings)

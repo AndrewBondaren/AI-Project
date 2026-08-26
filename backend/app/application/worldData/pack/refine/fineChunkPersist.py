@@ -25,6 +25,8 @@ from app.application.worldData.pack.bake.packBakeLog import (
 )
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.mapCellToFineTerrainWire import (
+    LOCATION_TERRAIN_CHUNK_CX,
+    LOCATION_TERRAIN_CHUNK_CY,
     cells_to_fine_terrain_chunk,
 )
 from app.application.worldData.pack.refine.entryRingGeom import (
@@ -38,7 +40,7 @@ from app.application.worldData.pack.refine.fineTileContext import (
     VertexSlotSeam,
 )
 from app.application.worldData.persistResult import PersistResult
-from app.application.worldData.generators.terrain.relief.validate.gradeCellRays import (
+from app.application.worldData.generators.terrain.relief.validate.gradeCellSlotValidate import (
     validate_grade_cell_slots,
 )
 from app.application.worldData.pack.refine.gradeCellSlots import pack_cell_slots
@@ -83,7 +85,10 @@ def location_for_cell(
 
 
 class FineChunkPersist:
-    """Single-writer pack side of refine_rects. Generate stays in compute_rect."""
+    """Single-writer pack side of refine_rects. Generate stays in compute_rect.
+
+    Slot sidecar is ``_persist_grade_cell_slots``. T-3c SQL catalog stays in ``finish``.
+    """
 
     def __init__(self, ctx: FineTileContext, writer: WorldPackWriter) -> None:
         self._ctx = ctx
@@ -91,7 +96,7 @@ class FineChunkPersist:
         self._location_cells: dict[str, list[MapCell]] = {}
         self._meter_surface_z: dict[tuple[int, int], int] = {}
         self._grade_acc: list[ReliefGradeInstance] = []
-        self._ray_acc: list[GradeRimRay] = []
+        self._mill_rim_acc: list[GradeRimRay] = []
         self._seam_acc: list[tuple[ColumnRect, tuple[VertexSlotSeam, ...]]] = []
         self._total_cells = 0
         self._written = 0
@@ -155,7 +160,7 @@ class FineChunkPersist:
             pool_workers=ctx.workers,
         )
         self._grade_acc.extend(result.chunk_grades)
-        self._ray_acc.extend(result.rim_rays)
+        self._mill_rim_acc.extend(result.rim_rays)
         self._seam_acc.append((result.rect, result.vertex_seams))
 
     async def persist_rect_locked(self, result: ChunkComputeResult) -> None:
@@ -178,50 +183,19 @@ class FineChunkPersist:
                 pool_workers=ctx.workers,
             )
             chunk = cells_to_fine_terrain_chunk(
-                0, 0, ctx.chunk_size, volume.x0, volume.y0, loc_cells,
+                LOCATION_TERRAIN_CHUNK_CX,
+                LOCATION_TERRAIN_CHUNK_CY,
+                ctx.chunk_size,
+                volume.x0,
+                volume.y0,
+                loc_cells,
             )
             self._writer.write_location_terrain(
                 location_uid, chunk, territory_volume=volume,
             )
             self._total_cells += len(loc_cells)
         occupancy = set(self._meter_surface_z)
-        packed = pack_cell_slots(self._meter_surface_z, cells=occupancy)
-        sidecar_t0 = log_pack_grade_ray_sidecar_start(
-            ctx.world_uid, n_rays=len(packed),
-        )
-        self._write_grade_cell_sidecars(packed)
-        sidecar_s = time.perf_counter() - sidecar_t0
-        log_pack_grade_ray_sidecar_done(
-            ctx.world_uid, n_rays=len(packed), started_at=sidecar_t0,
-        )
-        n_cells = len(occupancy)
-        validate_t0 = log_pack_grade_ray_validate_start(
-            ctx.world_uid, n_cells=n_cells,
-        )
-
-        def _validate_progress(done: int, empty: int) -> None:
-            log_pack_grade_ray_validate_progress(
-                ctx.world_uid,
-                done=done,
-                total=n_cells,
-                empty=empty,
-                started_at=validate_t0,
-            )
-
-        n_empty = validate_grade_cell_slots(
-            occupancy,
-            packed,
-            z_height_map=self._meter_surface_z,
-            on_progress=_validate_progress,
-            progress_every=EXECUTEMANY_BATCH_SIZE,
-        )
-        validate_s = time.perf_counter() - validate_t0
-        log_pack_grade_ray_validate_done(
-            ctx.world_uid,
-            n_cells=n_cells,
-            empty=n_empty,
-            started_at=validate_t0,
-        )
+        sidecar_s, validate_s = self._persist_grade_cell_slots(occupancy)
         self._writer.recalc_manifest_counters()
         self._writer.save_manifest()
         grade_instances = (
@@ -258,11 +232,56 @@ class FineChunkPersist:
             meter_surface_z=self._meter_surface_z,
             grade_instances=grade_instances,
             grade_systems=grade_systems,
-            rim_rays=tuple(self._ray_acc),
+            mill_rim_rays=tuple(self._mill_rim_acc),
             materialize_s=self._materialize_s,
             grade_s=self._grade_s,
             pipeline_s=pipeline,
         )
+
+    def _persist_grade_cell_slots(
+        self,
+        occupancy: set[tuple[int, int]],
+    ) -> tuple[float, float]:
+        """Pack sidecar + occupancy validator. SQL catalog is ``finish``."""
+        ctx = self._ctx
+        packed = pack_cell_slots(self._meter_surface_z, cells=occupancy)
+        n_cells = len(packed)
+        sidecar_t0 = log_pack_grade_ray_sidecar_start(
+            ctx.world_uid, n_cells=n_cells,
+        )
+        self._write_grade_cell_sidecars(packed)
+        sidecar_s = time.perf_counter() - sidecar_t0
+        log_pack_grade_ray_sidecar_done(
+            ctx.world_uid, n_cells=n_cells, started_at=sidecar_t0,
+        )
+        validate_t0 = log_pack_grade_ray_validate_start(
+            ctx.world_uid, n_cells=len(occupancy),
+        )
+
+        def _validate_progress(done: int, empty: int) -> None:
+            log_pack_grade_ray_validate_progress(
+                ctx.world_uid,
+                done=done,
+                total=len(occupancy),
+                empty=empty,
+                started_at=validate_t0,
+            )
+
+        n_empty = validate_grade_cell_slots(
+            occupancy,
+            packed,
+            z_height_map=self._meter_surface_z,
+            on_progress=_validate_progress,
+            progress_every=EXECUTEMANY_BATCH_SIZE,
+        )
+        validate_s = time.perf_counter() - validate_t0
+        log_pack_grade_ray_validate_done(
+            ctx.world_uid,
+            n_cells=len(occupancy),
+            empty=n_empty,
+            started_at=validate_t0,
+        )
+        return sidecar_s, validate_s
 
     def _note_surface_z(self, cells: list[MapCell]) -> None:
         for cell in cells:
