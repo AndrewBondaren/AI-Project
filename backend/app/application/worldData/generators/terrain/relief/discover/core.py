@@ -1,31 +1,35 @@
-"""Discover orchestrator — Q1 C39, Q2 SHEER landing, Q3 SLOPE-corridor side.
+"""Discover orchestrator — leftover walk, mill schedule, sheer traces, C38.
 
-One mill after each seed. Stages own geometry. Does not write z/uid or fill columns.
+Stages own geometry. Does not write z/uid or fill columns.
 SoT: ``docs/tz_terrain_relief.md`` R41.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+import time
+from collections.abc import Sequence
+from dataclasses import dataclass
 
-from app.application.worldData.generators.terrain.relief.discover.apron import (
-    is_q2_seed,
-    is_q3_seed,
-    is_slope_corridor_cell,
-    resolve_q3_parent,
-)
 from app.application.worldData.generators.terrain.relief.discover.fronts import FrontStage
-from app.application.worldData.generators.terrain.relief.discover.neighbors import (
-    facing_for_delta,
+from app.application.worldData.generators.terrain.relief.discover.millBuckets import (
+    BucketRef,
+    MillBuckets,
+)
+from app.application.worldData.generators.terrain.relief.discover.millSchedule import (
+    run_mill_schedule,
 )
 from app.application.worldData.generators.terrain.relief.discover.plugins import (
     VertexBodyPlugin,
 )
 from app.application.worldData.generators.terrain.relief.discover.rim import (
     RimStage,
+    iter_rect_z_cells,
     seed_rim,
 )
 from app.application.worldData.generators.terrain.relief.discover.seam import SeamStage
+from app.application.worldData.generators.terrain.relief.discover.timings import (
+    GradePipelineTimings,
+)
 from app.application.worldData.generators.terrain.relief.discover.types import (
     CapFront,
     CellBlocked,
@@ -33,12 +37,20 @@ from app.application.worldData.generators.terrain.relief.discover.types import (
     FrontGeometry,
     ReliefSurface,
     ReliefVertices,
-    cell_z,
 )
-from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.reliefTerrainEnvelope import ReliefOntologyEnvelopes
 
-__all__ = ["discover_fronts", "reconcile_members", "seed_rim"]
+__all__ = ["DiscoverResult", "discover_fronts", "reconcile_members", "seed_rim"]
+
+
+@dataclass(frozen=True, slots=True)
+class DiscoverResult:
+    """Vertices, committed fronts, bake side-attach, mill CPU-sum."""
+
+    vertices: ReliefVertices
+    fronts: tuple[FrontGeometry, ...]
+    side_parent: dict[int, int]
+    mill: GradePipelineTimings
 
 
 def reconcile_members(vertices: ReliefVertices) -> None:
@@ -58,67 +70,6 @@ def reconcile_members(vertices: ReliefVertices) -> None:
             members.pop(xy, None)
 
 
-def _seed_one(
-    *,
-    rim: RimStage,
-    front: FrontStage,
-    seam: SeamStage,
-    vertices: ReliefVertices,
-    xy: Coord,
-    fronts: list[FrontGeometry],
-) -> int | None:
-    plugin = rim.plugin_for(xy)
-    if plugin is None:
-        return None
-    body = rim.flood(xy, plugin)
-    def _in_trace(cell: Coord) -> bool:
-        return any(cell in item.corridor for item in fronts)
-    body = {
-        cell: z for cell, z in body.items()
-        if not is_slope_corridor_cell(cell, vertices, in_slope_trace=_in_trace)
-    }
-    if not body:
-        return None
-    slot = vertices.add_vertex(body)
-    traces = front.propose(slot, body, plugin)
-    fronts.extend(seam.commit(traces, plugin))
-    return slot
-
-
-def _drain(
-    *,
-    rim: RimStage,
-    front: FrontStage,
-    seam: SeamStage,
-    vertices: ReliefVertices,
-    fronts: list[FrontGeometry],
-    is_seed: Callable[[Coord], bool],
-    loop: bool,
-    on_seeded: Callable[[int, Coord], None] | None = None,
-) -> None:
-    """High→low scan; ``loop`` repeats while a pass adds a vertex (Q3)."""
-
-    def _pass() -> bool:
-        n_before = len(vertices.members)
-        for _z, cells in rim.buckets_high_to_low():
-            for xy in cells:
-                if not is_seed(xy):
-                    continue
-                slot = _seed_one(
-                    rim=rim, front=front, seam=seam, vertices=vertices,
-                    xy=xy, fronts=fronts,
-                )
-                if slot is not None and on_seeded is not None:
-                    on_seeded(slot, xy)
-        return len(vertices.members) > n_before
-
-    if loop:
-        while _pass():
-            pass
-        return
-    _pass()
-
-
 def discover_fronts(
     surface: ReliefSurface,
     *,
@@ -131,8 +82,9 @@ def discover_fronts(
     existing_uids: dict[Coord, str] | None = None,
     cap_front: CapFront | None = None,
     envelopes: ReliefOntologyEnvelopes | None = None,
-) -> tuple[ReliefVertices, tuple[FrontGeometry, ...]]:
-    """Q1 C39 → Q2 SHEER apron → Q3 SLOPE-side loop → SHEER traces → C41 → C38."""
+) -> DiscoverResult:
+    """One leftover walk; mill schedule; SHEER traces; C41; C38."""
+    t0 = time.perf_counter()
     vertices = ReliefVertices.for_bounds(
         origin_x=int(origin_x),
         origin_y=int(origin_y),
@@ -143,67 +95,33 @@ def discover_fronts(
         for xy in existing_uids:
             vertices.mark_foreign(xy)
     if not plugins:
-        return vertices, ()
+        setup_s = time.perf_counter() - t0
+        return DiscoverResult(
+            vertices,
+            (),
+            {},
+            GradePipelineTimings(mill_setup_s=setup_s, mill_s=setup_s),
+        )
 
     rim = RimStage(surface, vertices, plugins)
     front = FrontStage(surface, vertices, cell_blocked, cap_front, envelopes)
     seam = SeamStage(vertices, surface)
     fronts: list[FrontGeometry] = []
+    buckets = MillBuckets()
+    for xy, z in iter_rect_z_cells(surface, vertices):
+        buckets.insert(BucketRef.leftover(z), xy)
 
-    def _parent_sheers(parent: Coord, landing: Coord) -> bool:
-        plugin = rim.plugin_for(parent)
-        if plugin is None:
-            return False
-        if not plugin.may_shoot(parent, landing, surface):
-            return False
-        facing = facing_for_delta(
-            (landing[0] - parent[0], landing[1] - parent[1]),
-        )
-        if facing is None:
-            return False
-        pz = cell_z(surface, parent)
-        lz = cell_z(surface, landing)
-        if pz is None or lz is None:
-            return False
-        return front.first_step_outcome(parent, facing, plugin, pz - lz) == ReliefSideKind.SHEER
-
-    def _q2(xy: Coord) -> bool:
-        return is_q2_seed(xy, surface, vertices, parent_sheers=_parent_sheers)
-
-    def _in_slope_trace(nb: Coord) -> bool:
-        return any(nb in item.corridor for item in fronts)
-
-    def _q3(xy: Coord) -> bool:
-        return is_q3_seed(
-            xy,
-            surface,
-            vertices,
-            parent_sheers=_parent_sheers,
-            in_slope_corridor=_in_slope_trace,
-        )
-
-    def _live_corridor_slot(cell: Coord) -> int | None:
-        for item in fronts:
-            if cell in item.corridor:
-                return int(item.slot)
-        return None
-
-    def _record_q3(slot: int, xy: Coord) -> None:
-        parent = resolve_q3_parent(
-            xy,
-            surface,
-            vertices,
-            in_slope_corridor=_in_slope_trace,
-            corridor_slot=_live_corridor_slot,
-        )
-        if parent is None or parent == slot:
-            return
-        vertices.q3_parent[slot] = parent
-
-    mill = dict(rim=rim, front=front, seam=seam, vertices=vertices, fronts=fronts)
-    _drain(**mill, is_seed=rim.is_seed, loop=False)
-    _drain(**mill, is_seed=_q2, loop=False)
-    _drain(**mill, is_seed=_q3, loop=True, on_seeded=_record_q3)
+    mill_setup_s = time.perf_counter() - t0
+    mill_pass = run_mill_schedule(
+        rim=rim,
+        front=front,
+        seam=seam,
+        vertices=vertices,
+        surface=surface,
+        buckets=buckets,
+        fronts=fronts,
+    )
+    t = time.perf_counter()
     for slot, body in enumerate(vertices.members, start=1):
         if not body:
             continue
@@ -212,6 +130,29 @@ def discover_fronts(
             continue
         traces = front.propose_sheers(slot, body, plugin)
         fronts.extend(seam.commit(traces, plugin))
+    mill_sheer_s = time.perf_counter() - t
+    t = time.perf_counter()
     fronts = list(seam.finalize(fronts))
+    mill_seam_s = time.perf_counter() - t
+    t = time.perf_counter()
     reconcile_members(vertices)
-    return vertices, tuple(fronts)
+    mill_reconcile_s = time.perf_counter() - t
+    mill_s = (
+        mill_setup_s + mill_pass.q1_s + mill_pass.q2_s
+        + mill_sheer_s + mill_seam_s + mill_reconcile_s
+    )
+    mill = GradePipelineTimings(
+        q1_s=mill_pass.q1_s,
+        q2_s=mill_pass.q2_s,
+        mill_setup_s=mill_setup_s,
+        mill_sheer_s=mill_sheer_s,
+        mill_seam_s=mill_seam_s,
+        mill_reconcile_s=mill_reconcile_s,
+        mill_s=mill_s,
+    )
+    return DiscoverResult(
+        vertices,
+        tuple(fronts),
+        dict(mill_pass.side_parent),
+        mill,
+    )

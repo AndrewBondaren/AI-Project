@@ -16,6 +16,10 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any
 
+from app.application.worldData.generators.terrain.relief.discover.timings import (
+    GradePipelineTimings,
+)
+
 from app.application.worldData.terrainParallelLog import current_cpu_core
 from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
 from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
@@ -853,6 +857,7 @@ def log_pack_l2_formation_done(
     tiles: int | None = None,
     workers: int | None = None,
     grade_persist_s: float | None = None,
+    pipeline: GradePipelineTimings | None = None,
 ) -> None:
     """Wall-clock L2 vs CPU-sum of fill (materialize) and discover+paint (grade).
 
@@ -869,9 +874,11 @@ def log_pack_l2_formation_done(
     persist_part = (
         f" grade_persist_s={grade_persist_s:.2f}" if grade_persist_s is not None else ""
     )
+    mill_part = pipeline.log_suffix() if pipeline is not None else ""
+    mill_fields = pipeline.mill_log_fields() if pipeline is not None else {}
     _info(
         "pack l2 formation done | world=%s phase=%s%s%s chunks=%d%s "
-        "materialize_s=%.2f grade_s=%.2f l2_s=%.2f%s",
+        "materialize_s=%.2f grade_s=%.2f l2_s=%.2f%s%s",
         world_uid,
         phase,
         tile_part,
@@ -882,6 +889,7 @@ def log_pack_l2_formation_done(
         grade_s,
         l2_s,
         persist_part,
+        mill_part,
         activity="l2_formation_done",
         world_uid=world_uid,
         phase=phase,
@@ -896,6 +904,7 @@ def log_pack_l2_formation_done(
         grade_persist_s=(
             round(grade_persist_s, 2) if grade_persist_s is not None else None
         ),
+        **mill_fields,
     )
 
 
@@ -909,10 +918,13 @@ def log_pack_detailed_bake_done(
     grade_s: float,
     l2_s: float,
     grade_persist_s: float,
+    pipeline: GradePipelineTimings | None = None,
 ) -> None:
+    mill_part = pipeline.log_suffix() if pipeline is not None else ""
+    mill_fields = pipeline.mill_log_fields() if pipeline is not None else {}
     _info(
         "pack detailed_bake done | world=%s scope=%s tiles=%d chunks=%d "
-        "materialize_s=%.2f grade_s=%.2f grade_persist_s=%.2f l2_s=%.2f",
+        "materialize_s=%.2f grade_s=%.2f grade_persist_s=%.2f l2_s=%.2f%s",
         world_uid,
         scope,
         tiles,
@@ -921,6 +933,7 @@ def log_pack_detailed_bake_done(
         grade_s,
         grade_persist_s,
         l2_s,
+        mill_part,
         activity="detailed_bake_done",
         world_uid=world_uid,
         scope=scope,
@@ -930,6 +943,7 @@ def log_pack_detailed_bake_done(
         grade_s=round(grade_s, 2),
         grade_persist_s=round(grade_persist_s, 2),
         l2_s=round(l2_s, 2),
+        **mill_fields,
     )
 
 

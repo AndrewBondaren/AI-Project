@@ -8,6 +8,8 @@ with different Facings; a second ray with the same Facing into the same
 cell is rejected at claim. A cell in ≥2 traces of the same Facing is
 parallel fur (seam). A cell in traces of different Facings — including
 across vertices after finalize — is a shared bottom (seam, not occ).
+One ``seam[]`` holds both; C39 does not seed either. Split fields only
+if a consumer needs the bottom-anchor alone.
 """
 
 from __future__ import annotations

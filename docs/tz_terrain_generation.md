@@ -294,10 +294,10 @@ z_bottom = max(world.z_min, z_top - N_eff)
 ### Relief grade (поддомен Terrain — указатель)
 
 **Поддомен Terrain** outdoor SLOPE / SHEER + facing + **шаблоны 1:1 buildings** (global `relief_templates` + world registry; `context` singular):  
-→ [`tz_terrain_relief.md`](./tz_terrain_relief.md) (SoT ownership, storage, consumers).
+→ [`tz_terrain_relief.md`](./tz_terrain_relief.md) (SoT generate: очереди, стрелки). Bake R36v / SQL / шаблоны — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md).
 
 Кратко: grade — **не** MaskDomain и **не** `N_eff`. Column gap (этот документ § Зазоры) = *объём* колонки; relief = *проходимость грани*.  
-**Generate:** в `detailed_bake` / entry — per-chunk в `FineChunkRunner` pool ([`tz_terrain_relief.md`](./tz_terrain_relief.md) **R36v**). Runtime patch — тот же helper. Consumers: горы, open land, shore, roads (`road_shoulder` T-10).
+**Generate:** в `detailed_bake` / entry — per-chunk в `FineChunkRunner` pool ([`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **R36v**). Runtime patch — тот же helper. Consumers: горы, open land, shore, roads (`road_shoulder` T-10).
 
 ### Terrain ↔ ClimateData (разделение ответственности, физическая связь)
 
@@ -667,7 +667,7 @@ flowchart LR
 **Инварианты генераторов (все три режима):**
 
 1. Generators pure: materialize geometry/masks; persist — Pack writer / orchestrator ([`layer-boundaries.mdc`](../.cursor/rules/layer-boundaries.mdc)).
-2. L2 **не** invents world-map rivers/coast — только refine parent light ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2; hydrology — [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md)). Outdoor grade — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R36u.
+2. L2 **не** invents world-map rivers/coast — только refine parent light ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2; hydrology — [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md)). Outdoor grade generate — [`tz_terrain_relief.md`](./tz_terrain_relief.md); подробности bake **R36u** — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md).
 3. Base climate на pack-мире — только через bake; `POST generate-climate` → 422 ([`tz_climate.md`](./tz_climate.md) § World Pack climate).
 4. Product L0 process — только light → full; имена `wilderness_*` в pack I/O — storage legacy, не bake mode.
 5. **L2 ∉ light_bake / full_bake.** После light caller **может** стартовать entry job (scene + bg у spawn) — это другая джоба, не часть `pack/bake?mode=light`.
@@ -1602,7 +1602,7 @@ class TerrainPatchGeneratorService:
         """Pure. Возвращает **только изменённые** cells ⊆ bounds."""
 ```
 
-**Grade после patch (R36v):** смена `z` / terrain в bounds → тот же rect-scoped `generate_detailed_grade` (+ halo), stamp `system_grade_uid`, upsert `relief_grade_instances` (`replace_world=False`). **Не** отдельный bake mode и **не** L0 sample. SoT — [`tz_terrain_relief.md`](./tz_terrain_relief.md).
+**Grade после patch (R36v):** смена `z` / terrain в bounds → тот же rect-scoped `generate_detailed_grade` (+ halo), stamp `system_grade_uid`, upsert `relief_grade_instances` (`replace_world=False`). **Не** отдельный bake mode и **не** L0 sample. Generate SoT — [`tz_terrain_relief.md`](./tz_terrain_relief.md); подробности bake — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md).
 
 **Контракт persist:**
 
@@ -1744,7 +1744,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 - `tz_city_generation.md` — settlement, occupancy, urban
 - `tz_locations.md` — named_location fields
 - `tz_generator_technical_debt.md` — NC-1, smells
-- [`tz_terrain_relief.md`](./tz_terrain_relief.md) — **поддомен Terrain** outdoor SLOPE/SHEER/facing + library/registry (горы/shore/open_land/`road_shoulder` = consumers)
+- [`tz_terrain_relief.md`](./tz_terrain_relief.md) — generate SoT (очереди, стрелки). Bake R36 / шаблоны — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) (горы/shore/open_land/`road_shoulder` = consumers)
 - [`tz_logging.md`](./tz_logging.md) — sinks; консьюмер `terrain/terrainParallelLog`
 - [`tz_map_light_bake.md`](./tz_map_light_bake.md) — L0 light-grid compose; горы consumer SideFill
 - [`tz_mountain_architecture.md`](./tz_mountain_architecture.md) — PassBuilder topology (не Relief grade)

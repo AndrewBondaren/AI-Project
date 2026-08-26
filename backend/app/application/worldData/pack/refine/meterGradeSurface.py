@@ -55,7 +55,7 @@ class MeterGradeSurface:
             grade_uid=dict(state.surface_grade_uid or {}),
         )
 
-    def z_at(self, xy: Coord) -> int | None:
+    def z_height_map(self, xy: Coord) -> int | None:
         return self.surface_z.get(xy)
 
     def terrain_at(self, xy: Coord) -> str | None:
@@ -106,7 +106,7 @@ def meter_grade_cell_blocked(
     barrier_keys: frozenset[str],
 ) -> bool:
     """Clearance adapter for meter ribbon (R36m / R36u-T-9 residual)."""
-    if surface.z_at(xy) is None:
+    if surface.z_height_map(xy) is None:
         return True
     return _road_grade_or_hydro_blocked(
         surface, xy, road_key=road_key, barrier_keys=barrier_keys,

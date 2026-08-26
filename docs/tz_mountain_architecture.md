@@ -16,7 +16,7 @@ metadata:
 
 - MaskDomain materialize lifecycle / light compose canvas — [`tz_map_light_bake.md`](./tz_map_light_bake.md);
 - FormGeometry / FormRaster / SideFill алгоритмы сторон — там же § Mountain (engine);
-- **SLOPE / SHEER / uphill facing / relief templates** — домен [`tz_terrain_relief.md`](./tz_terrain_relief.md); горы = consumer (context `mountain`); PassBuilder не SoT grade;
+- **SLOPE / SHEER / uphill facing / relief templates** — generate [`tz_terrain_relief.md`](./tz_terrain_relief.md); шаблоны/R36 — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md); горы = consumer (context `mountain`); PassBuilder не SoT grade;
 - DAG-ноды (`application/engine/nodes/`);
 - ravine / cliff MaskDomain; slope noise (U8); summit material overlays (U10) — слоты ниже, не PassBuilder;
 - план агента (чеклисты PR) — `.cursor/plans/` (ссылка на этот документ).

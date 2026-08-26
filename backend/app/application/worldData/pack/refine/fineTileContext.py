@@ -5,8 +5,11 @@ Catalog and heightmap prep are SoT. Discover runs in the worker (R41).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from app.application.worldData.generators.terrain.relief.discover.timings import (
+    GradePipelineTimings,
+)
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
 )
@@ -56,13 +59,14 @@ class VertexSlotSeam:
     ``grade_uids`` = Instance uids of fronts that painted this slot.
     ``edge_body`` = body cells ``(x, y, z)`` on the owned rect rim (C29 sides).
     Slot is local to the chunk; System uid is not known in the worker.
-    `q3_parent_slot` is bake-only (same chunk); None unless this slot is Q3.
+    `side_parent_slot` is bake-only (same chunk); None unless this slot is a Q2 side
+    **and** the slot painted (fingerprint iterates painted uids only).
     """
 
     slot: int
     grade_uids: tuple[str, ...]
     edge_body: tuple[tuple[int, int, int], ...]
-    q3_parent_slot: int | None = None
+    side_parent_slot: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,3 +82,4 @@ class ChunkComputeResult:
     rim_rays: tuple[GradeRimRay, ...] = ()
     materialize_s: float = 0.0
     grade_s: float = 0.0
+    pipeline_s: GradePipelineTimings = field(default_factory=GradePipelineTimings)

@@ -35,6 +35,11 @@ class PackBakeResult:
                 "wilderness_chunks": self.detailed.wilderness_chunks,
                 "climate_fine_tiles": self.detailed.climate_fine_tiles,
             }
+            gp = self.detailed.pipeline_s.as_dict()
+            gp["l2_s"] = round(self.detailed.l2_s, 3)
+            gp["grade_persist_s"] = round(self.detailed.grade_persist_s, 3)
+            payload.update(gp)
+            payload["grade_pipeline"] = gp
             if self.detailed.location_uid is not None:
                 payload["location_uid"] = self.detailed.location_uid
         elif self.detailed is not None:

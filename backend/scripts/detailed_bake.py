@@ -54,6 +54,9 @@ from app.application.worldData.render.dumpLog import (  # noqa: E402
     log_dump,
     log_dump_warning,
 )
+from app.application.worldData.generators.terrain.relief.discover.timings import (  # noqa: E402
+    GradePipelineTimings,
+)
 from app.core.generationLogging import generation_world_log  # noqa: E402
 from app.core.loggingConfig import ensure_script_logging  # noqa: E402
 from render_maps import (  # noqa: E402
@@ -120,6 +123,40 @@ def _format_location_global_summary(
         f"location={location_uid} cells={cells} detail={detail} "
         f"elapsed_s={elapsed_s:.2f}"
     )
+
+
+_BAKE_ONLY_KEYS = ("grade_persist_s", "l2_s")
+_PIPELINE_KEYS = GradePipelineTimings.wire_keys() + _BAKE_ONLY_KEYS
+
+
+def _grade_pipeline_from_bake(bake: dict[str, Any]) -> dict[str, float]:
+    raw = bake.get("grade_pipeline")
+    src = raw if isinstance(raw, dict) else bake
+    out: dict[str, float] = {}
+    for key in _PIPELINE_KEYS:
+        val = src.get(key, bake.get(key))
+        if val is None:
+            continue
+        try:
+            out[key] = round(float(val), 3)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _log_grade_pipeline(bake: dict[str, Any], *, activity: str) -> dict[str, float]:
+    pipeline = _grade_pipeline_from_bake(bake)
+    if not pipeline:
+        log_dump("grade pipeline timings absent from bake response", activity=activity)
+        return pipeline
+    parts = " ".join(f"{key}={value:.2f}" for key, value in pipeline.items())
+    log_dump(
+        "grade pipeline "
+        f"{parts} (q/mill/paint/grade/materialize are CPU-sum over chunks; l2_s is wall)",
+        activity=activity,
+        **pipeline,
+    )
+    return pipeline
 
 
 def _read_locations_index_uids(world_uid: str) -> list[str]:
@@ -258,6 +295,7 @@ def _run_detailed_location(
     bake: dict[str, Any] = {}
     cells = 0
     detail = "absent"
+    pipeline: dict[str, float] = {}
 
     try:
         log_dump(
@@ -292,6 +330,7 @@ def _run_detailed_location(
             location_uid=location_uid,
             elapsed_s=round(elapsed_s, 2),
         )
+        pipeline = _log_grade_pipeline(bake, activity="detailed_bake")
         for key in (
             "tiles_refined",
             "wilderness_chunks",
@@ -327,6 +366,7 @@ def _run_detailed_location(
                     "elapsed_s": round(elapsed_s, 2),
                     "error": error,
                     "started_at": started_at.isoformat(timespec="seconds"),
+                    "grade_pipeline": pipeline,
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -345,6 +385,7 @@ def _run_detailed_location(
         "terrain_succeeded": terrain.get("succeeded") or bake.get("succeeded"),
         "terrain_failed": terrain.get("failed") or bake.get("failed") or bake.get("terrain_failed"),
         "climate_fine_tiles": bake.get("climate_fine_tiles"),
+        "grade_pipeline": pipeline,
     }
 
 
@@ -368,6 +409,7 @@ def _run_detailed_wilderness_cell(
     after = before
     cells = 0
     detail = "absent"
+    pipeline: dict[str, float] = {}
 
     def _poll_line() -> str:
         prog = _cell_progress(world_uid, gx, gy)
@@ -422,6 +464,7 @@ def _run_detailed_wilderness_cell(
             tile_gy=gy,
             elapsed_s=round(elapsed_s, 2),
         )
+        pipeline = _log_grade_pipeline(bake, activity="detailed_bake")
     except DebugApiError as exc:
         error = str(exc)
         after = _cell_progress(world_uid, gx, gy)
@@ -453,6 +496,7 @@ def _run_detailed_wilderness_cell(
                     "chunks_after": after["chunks"],
                     "error": error,
                     "started_at": started_at.isoformat(timespec="seconds"),
+                    "grade_pipeline": pipeline,
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -472,6 +516,7 @@ def _run_detailed_wilderness_cell(
         "chunks_after": after["chunks"],
         "wilderness_chunks": bake.get("wilderness_chunks"),
         "tiles_refined": bake.get("tiles_refined"),
+        "grade_pipeline": pipeline,
     }
 
 

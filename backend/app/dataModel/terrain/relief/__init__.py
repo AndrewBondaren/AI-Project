@@ -23,6 +23,14 @@ from app.dataModel.terrain.relief.reliefDeltaSchedule import (
     ReliefDeltaSchedule,
 )
 from app.dataModel.terrain.relief.gradeRimRay import GradeRaySidecar, GradeRimRay
+from app.dataModel.terrain.relief.gradeSlot import (
+    GradeCellSlots,
+    GradeCouple,
+    GradeOctant,
+    GradeSeam,
+    GradeSheer,
+    GradeSlotSidecar,
+)
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeKnobs import ReliefGradeKnobs
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
@@ -59,8 +67,14 @@ __all__ = [
     "CanalStructureSpec",
     "CanalTemplateEntry",
     "EarthenCanal",
+    "GradeCellSlots",
+    "GradeCouple",
+    "GradeOctant",
     "GradeRaySidecar",
     "GradeRimRay",
+    "GradeSeam",
+    "GradeSheer",
+    "GradeSlotSidecar",
     "MountainSideRecipe",
     "MountainSideRecipeMode",
     "ObjectReliefPickPolicy",

@@ -173,7 +173,7 @@ L2_tile = refine(
 
 | Аспект | Поведение |
 |---|---|
-| Рельеф | upsample L0 `surface_z` → fine `SurfaceHeightmap` + детерминированный high-freq noise; **macro-форма** (хребты, долины) не меняется. Outdoor grade — не L0-carry: [`tz_terrain_relief.md`](./tz_terrain_relief.md) R36u |
+| Рельеф | upsample L0 `surface_z` → fine `SurfaceHeightmap` + детерминированный high-freq noise; **macro-форма** (хребты, долины) не меняется. Outdoor grade — не L0-carry: generate [`tz_terrain_relief.md`](./tz_terrain_relief.md); **R36u** — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) |
 | Реки / море | `HydrologyGeneratorService` **в коридоре** L0 `hydrology_role`; fine bed уточняет, не смещает русло на карте |
 | Детерминизм | тот же seed + тот же L0 → тот же L2 hash (WP-7) |
 | Persist | L2 **chunks** в World Pack (`partial` → `complete` per tile), не SQLite wilderness |
@@ -320,7 +320,7 @@ load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
 
 **Запрещено:** другие ключи на wire холмов; `shapes` не массив (скаляр `"circle"`); `hills: { min_spacing }` на корне локации (без `plains`/`forest`); список override на `terrain_masks` вместо поля локации; литералы в generator; L0 читает `hills` локации; параллельный dict в `world_template`, расходящийся с POJO.
 
-**Порядок L2** (tile/location prep, **до** chunk pool / grade): upsample `surface_z` (`z_band` к L0) → nearest `system_terrain` → **hills** → hydro corridor → gap → column fill → outdoor grade discover ([`tz_terrain_relief.md`](./tz_terrain_relief.md) R36v: z готов). Холм **до** hydro, чтобы русло видело форму. Raster холмов — **на всём текущем L2 surface** (не per-chunk: иначе кромка чанка режет стопу).
+**Порядок L2** (tile/location prep, **до** chunk pool / grade): upsample `surface_z` (`z_band` к L0) → nearest `system_terrain` → **hills** → hydro corridor → gap → column fill → outdoor grade discover ([`tz_terrain_relief.md`](./tz_terrain_relief.md); z готов — архив **R36v** [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md)). Холм **до** hydro, чтобы русло видело форму. Raster холмов — **на всём текущем L2 surface** (не per-chunk: иначе кромка чанка режет стопу).
 
 **`system_terrain` не меняется.** Discover `open_land` видит получившийся z: plains `stamp_min_abs_dz=1`, forest `=2` (R37) без смены конверта.
 
@@ -344,7 +344,7 @@ load_parent_light(gx,gy) → cache.get OR read_zst → cache.put
 | **Chunk partition** | WP-19 без изменений — не резать chunks по light cells / climate zones |
 | **Запрещено** | второй compose / declare rematerialize; `surface_biome_terrain(default_zone)` на pack refine path |
 
-**Outdoor grade uid:** **не** этот контракт. `system_grade_uid` **не** nearest-carry с L0 (**R36u** / ~~PAR-G8~~). Writer = `FineChunkRunner` + rect-scoped generate **в том же chunk pool** (**R36v**); стык ленты на воркере (**R36w**) — [`tz_terrain_relief.md`](./tz_terrain_relief.md). Job uid wire — [`PackJobUid`](../backend/app/dataModel/worldPack/packJobUid.py); **не** pack/entity uid и не дерево очереди `tile→chunk` (pack-path `c.{cx}.{cy}` ≠ chunk job uid). Родители **грани** = chunk uid этого тайла (1\|2) — там же, clearance. **Не** tile-wide serial pre-pass; **не** L0 Δz-кандидаты.
+**Outdoor grade uid:** **не** этот контракт. `system_grade_uid` **не** nearest-carry с L0 (**R36u** / ~~PAR-G8~~). Writer = `FineChunkRunner` + rect-scoped generate **в том же chunk pool** (**R36v**); стык ленты на воркере (**R36w**) — подробности bake [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). Job uid wire — [`PackJobUid`](../backend/app/dataModel/worldPack/packJobUid.py); **не** pack/entity uid и не дерево очереди `tile→chunk` (pack-path `c.{cx}.{cy}` ≠ chunk job uid). Родители **грани** = chunk uid этого тайла (1\|2) — там же, clearance. **Не** tile-wide serial pre-pass; **не** L0 Δz-кандидаты.
 
 **Не смешивать имена (R36u lock):** «terrain mask carry» = **только** `system_terrain`. Hydro hard corridor, `system_facing` upsample и `surface_z` upsample — **соседние** parent-light контракты (WP-PERF-22 / facing), не mask carry; R36u их тоже не меняет.
 
@@ -439,13 +439,13 @@ flowchart TB
 |---|---|---|
 | **light_bake** | L0 на location∪hydro tiles; `locations_index`; climate coarse; finalize pack | L2 `location_terrain` / wilderness chunks; blocking `refine_from_entry` |
 | **full_bake** | L0 на весь `world_bounds` (добить дыры после light); **шов мира** на крайних макро-тайлах (антагонисты AABB). Uid тайла: [`PackJobUid`](../backend/app/dataModel/worldPack/packJobUid.py) + [`pack_job_seed`](../backend/app/application/worldData/pack/bake/macroTileUid.py) | L2; entry refine |
-| **detailed_bake** | L2 offline: `scope=location` (одна `location_uid`) или `scope=wilderness` (tile topping от parent light); partition WP-19. Refine — § Идея 2; outdoor grade — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R36u | L0 world map bake; шов мира; climate fine на wilderness (debt) |
+| **detailed_bake** | L2 offline: `scope=location` (одна `location_uid`) или `scope=wilderness` (tile topping от parent light); partition WP-19. Refine — § Идея 2; outdoor grade generate — [`tz_terrain_relief.md`](./tz_terrain_relief.md); bake **R36u** — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) | L0 world map bake; шов мира; climate fine на wilderness (debt) |
 | **entry / WP-13** | scene volume + background rings/path у spawn | часть `POST …/pack/bake?mode=light\|full` |
 | **modification** (не bake job) | Patch Store: `terrain_delta` / `climate_delta` в `patch_bounds`; grade helper R36v | `POST pack/bake`; rewrite `complete` tile; четвёртый `mode=` |
 
-**Шов мира (тор AABB, L0):** при `full_bake` крайние макро-тайлы bounds, у которых нет соседа в прямоугольнике, смыкаются с **антагонистом** и шов **ставится на макро-тайлах**. Lookup **только** [`WorldBounds`](../backend/app/dataModel/worldPack/worldBounds.py): `grid_neighbor` (внутри AABB) / `antagonist_tile` (wrap); сторона = [`Facing`](../backend/app/dataModel/spatial/facing.py) + `CARDINAL_WALL_OUTWARD_DELTA`. Идентичность тайла = [`PackJobUid.tile_uid`](../backend/app/dataModel/worldPack/packJobUid.py) + `pack_job_seed`. Это топология L0 world map, не `face_key` / не outdoor grade. **`detailed_bake` шов мира не считает и не пишет.** Смежность внутри AABB — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R36w. Не magma **antipode**. Impl — [`.cursor/plans/full-bake-seam-halo-shoulder.md`](../.cursor/plans/full-bake-seam-halo-shoulder.md) ✅.
+**Шов мира (тор AABB, L0):** при `full_bake` крайние макро-тайлы bounds, у которых нет соседа в прямоугольнике, смыкаются с **антагонистом** и шов **ставится на макро-тайлах**. Lookup **только** [`WorldBounds`](../backend/app/dataModel/worldPack/worldBounds.py): `grid_neighbor` (внутри AABB) / `antagonist_tile` (wrap); сторона = [`Facing`](../backend/app/dataModel/spatial/facing.py) + `CARDINAL_WALL_OUTWARD_DELTA`. Идентичность тайла = [`PackJobUid.tile_uid`](../backend/app/dataModel/worldPack/packJobUid.py) + `pack_job_seed`. Это топология L0 world map, не `face_key` / не outdoor grade. **`detailed_bake` шов мира не считает и не пишет.** Смежность внутри AABB — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **R36w**. Не magma **antipode**. Impl — [`.cursor/plans/full-bake-seam-halo-shoulder.md`](../.cursor/plans/full-bake-seam-halo-shoulder.md) ✅.
 
-**Технический шов (chunk / tile rim / `ColumnRect`) — не продукт.** Нарезка джоб и pack-blob. Климат, полотно дороги, **локация/город** и шаг сетки **проходят** ребро как один мир ([`tz_terrain_relief.md`](./tz_terrain_relief.md) **C29**). `territory_volume` **может** пересекать макро-тайлы: один `locations/l.{uid}.terrain.zst`, wilderness mask на каждом пересечённом тайле. WP-19 — куда писать клетку, не стена и не второй `location_uid`. Шов мира (антагонисты) — другая топология; внутри AABB сосед = `grid_neighbor`.
+**Технический шов (chunk / tile rim / `ColumnRect`) — не продукт.** Нарезка джоб и pack-blob. Климат, полотно дороги, **локация/город** и шаг сетки **проходят** ребро как один мир ([`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **C29**). `territory_volume` **может** пересекать макро-тайлы: один `locations/l.{uid}.terrain.zst`, wilderness mask на каждом пересечённом тайле. WP-19 — куда писать клетку, не стена и не второй `location_uid`. Шов мира (антагонисты) — другая топология; внутри AABB сосед = `grid_neighbor`.
 
 **После light (отдельный шаг процесса, не фаза bake):** caller **может** стартовать entry job (blocking scene у player entry point + enqueue фоновой инициализации) — это **старт другой джобы**, не продолжение `light_bake`. Full не обязан ждать entry; entry не обязан ждать full.
 
@@ -583,7 +583,7 @@ light_m  = map_cell_size_m // side            # физический шаг ligh
 
 **Зачем:** стабильный бюджет blob/UI (`1024` cells/tile); динамический `map_cell_size_m` без формулы `3000↔32` / clamp 8…48.
 
-**Consumers (ASCII / grid):** pack render default = **light-mask mosaic** `32×32` per tile (WP-10 ✅). Macro one-symbol-per-tile (`render_macro`) — debug-only, не SoT world map. Frame — [`tz_map_light_bake.md`](./tz_map_light_bake.md) MLB-12. **SoT уровней ASCII** (L0 map/height **без** outdoor grade; L2 `surface_grade` / `grade_{n}`): [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) · grade writer — [`tz_terrain_relief.md`](./tz_terrain_relief.md) **R36u**.
+**Consumers (ASCII / grid):** pack render default = **light-mask mosaic** `32×32` per tile (WP-10 ✅). Macro one-symbol-per-tile (`render_macro`) — debug-only, не SoT world map. Frame — [`tz_map_light_bake.md`](./tz_map_light_bake.md) MLB-12. **SoT уровней ASCII** (L0 map/height **без** outdoor grade; L2 `surface_grade` / `grade_{n}`): [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) · grade writer — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **R36u**.
 
 #### Приоритет L0 bake (утверждено мастером, WP-15 / WP-27)
 
@@ -728,14 +728,14 @@ Wilderness — **file-per-tile-chunk**, не file-per-whole-tile на gameplay p
 
 #### Grade 8-slots (pack, not FineTerrain)
 
-Outdoor 8 слотов **не** колонка и **не** bake `occ`/`seam`. После `detailed_bake` — файлы pack: **все** SLOPE/SHEER фронтов (отправитель + получатель) **и** COUPLE same-z во вселенной R44. Не «остаток». Не тело×8 как SLOPE/SHEER. SoT: [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) слой 2.
+Outdoor 8 слотов **не** колонка и **не** bake `occ`/`seam`. После `detailed_bake` — sidecar: 8 **int-кодов** на клетку ([`tz_terrain_relief.md`](./tz_terrain_relief.md) § Pack-слот). Не Unicode, не mill `Facing`. Не тело×8 Instance. SoT чтения: [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) слой 2.
 
 | Слой | Файл | Зерно |
 |---|---|---|
-| Wilderness tile | `tiles/r.{gx}.{gy}.grade_rays.json` | слот `(x, y, facing, kind)`; kind ∈ {SLOPE, SHEER, COUPLE} |
+| Wilderness tile | `tiles/r.{gx}.{gy}.grade_rays.json` | `SCH-GRADE-CELL-SLOTS`: `{x, y, slots[8]}` int |
 | Location L2 | `locations/l.{uid}.grade_rays.json` | то же; клетка ∈ location volume |
 
-Рендер ASCII **не** invent слот (`opposite`, сравнение z). Не SQL catalog (R43) и не `.zst` chunk.
+Рендер ASCII **не** invent слот. Не SQL catalog (R43) и не `.zst` chunk. Тело — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) § Тело sidecar. Старый `rays[]` не SoT.
 
 #### Layer priority (WP-20, утверждено)
 
@@ -1657,7 +1657,7 @@ sequenceDiagram
 |---|---|
 | `POST /worlds/import` | [`WorldBundleService.import_bundle`](../backend/app/application/worldData/worldBundleService.py) — транзакция, rollback при ошибке; `?level=registry\|skeleton` |
 | Секции bundle | ключи — [`BundleSection`](../backend/app/dataModel/worldBundle/bundleSections.py); `world` **обязателен**; skeleton: races/perks/states/locations/connections/**`relief_templates`**; `map_cells` reject |
-| Relief templates (R35) | pointers/policy в `world`; полные тела — top-level **`relief_templates`** — [`tz_terrain_relief.md`](./tz_terrain_relief.md) R35; код: `BundleSection.RELIEF_TEMPLATES` + `bundle/reliefSection.py` ✅ |
+| Relief templates (R35) | pointers/policy в `world`; полные тела — top-level **`relief_templates`** — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) R35; код: `BundleSection.RELIEF_TEMPLATES` + `bundle/reliefSection.py` ✅ |
 | Дубликат `world_uid` | auto-remap → `имя vN` (`bundleRemapService`, BUNDLE-1) |
 | `GET /worlds/{uid}/export` | filter by `level` (skeleton/registry); legacy `map_cells` **не** в allowlist |
 | По-секционно | `POST …/locations/import`, `races/import`, … — уже **частичный** импорт (не замена facade) |
@@ -2032,7 +2032,7 @@ flowchart LR
 | [`tz_logging.md`](./tz_logging.md) | sinks: `{domain}/{service}.log`; транскрипт `generation/{uid}`; консьюмеры `pack/*` |
 | [`tz_map_light_bake.md`](./tz_map_light_bake.md) | L0 LightGridCompose — контракты укладки маски world map; **не** writer холмов |
 | [`tz_terrain_generation.md`](./tz_terrain_generation.md) | multi-pass skeleton, TR-LAZY-LOAD, hydrology pass order |
-| [`tz_terrain_relief.md`](./tz_terrain_relief.md) | outdoor grade **после** L2 hills (z готов); холм ≠ Grade |
+| [`tz_terrain_relief.md`](./tz_terrain_relief.md) | outdoor grade generate (очереди, стрелки); холм ≠ Grade. Bake R36 — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) |
 | [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) | Pass 1.5, liquid_candidate |
 | [`tz_climate.md`](./tz_climate.md) | SurfaceClimateField, Climate LOD |
 | [`tz_city_generation.md`](./tz_city_generation.md) | CitySkeleton L1 vs layout L2 lazy |
@@ -2046,7 +2046,7 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
-| 2026-08-23 | **grade_rays = 8 слотов:** SLOPE/SHEER всех фронтов + COUPLE; не leftover-only — consume TZ |
+| 2026-08-26 | **grade_rays тело:** `SCH-GRADE-CELL-SLOTS` `{x,y,slots[8]}` — consume § Тело sidecar |
 | 2026-08-23 | **grade_rays = фронт:** sender+receiver только с реальных фронтов (не тело×8) — consume TZ |
 | 2026-08-22 | **Grade rim edges pack:** `tiles/r.{gx}.{gy}.grade_rays.json` / `locations/l.{uid}.grade_rays.json` — отправитель + получатель; не FineTerrain column — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) |
 | 2026-08-21 | **L2 hills shapes:** палитра `shapes[]` на POJO; пусто = каталог (`circle`/`oval`/`double_circle`/`double_oval`); выбор hash(`world_uid`, origin). Формулы — § L2 open-land hills |

@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 Coord = tuple[int, int]
-ZAt = Callable[[Coord], int | None]
+ZHeightMap = Callable[[Coord], int | None]
 
 # First-step |dz| <= this stays as the heightmap (4→3 at L=1 is 45°, ok).
 TERRAIN_RAY_MIN_ABS_DZ = 2
@@ -20,7 +20,7 @@ def measure_terrain_descent(
     start: Coord,
     outward: tuple[int, int],
     z_peak: int,
-    z_at: ZAt,
+    z_height_map: ZHeightMap,
     max_scan: int = 64,
 ) -> tuple[int, int]:
     """Walk ``start`` along ``outward`` until a voxel blocks.
@@ -37,7 +37,7 @@ def measure_terrain_descent(
     length = 0
     z_end = peak
     for _ in range(max(0, int(max_scan))):
-        z = z_at((x, y))
+        z = z_height_map((x, y))
         if z is None or int(z) >= peak or int(z) >= z_prev:
             break
         length += 1

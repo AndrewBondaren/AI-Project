@@ -107,5 +107,6 @@ class FineChunkRunner:
             tile_gx=ctx.tile_gx,
             tile_gy=ctx.tile_gy,
             workers=ctx.workers,
+            pipeline=result.pipeline_s,
         )
         return result

@@ -124,6 +124,11 @@ def _shore_sea_canonical() -> ReliefTerrainEnvelope:
     )
 
 
+def _ravine_canonical() -> ReliefTerrainEnvelope:
+    """Ravine: equal-z floor continues L (same walk flag as channel bed). Geom pass-through."""
+    return ReliefTerrainEnvelope(grades_channel_bed=True)
+
+
 class ReliefTerrainEnvelope(BaseModel):
     """Floor for one landcover class. All-omit = pass-through (no extra clamp)."""
 
@@ -188,7 +193,6 @@ class ReliefTerrainEnvelope(BaseModel):
             and not self.allow_l_gt_h
             and int(self.sheer_min_abs_dz) <= 0
             and self.sheer_terrace_min_cells is None
-            and not self.grades_channel_bed
         )
 
     def applies_to(self, context: ReliefContext) -> bool:
@@ -303,7 +307,13 @@ class ReliefTerrainEnvelope(BaseModel):
         template_angle_deg: float | None = None,
         length_cap: int | None = None,
     ) -> int | None:
-        """``L = min(max(L_template, L_floor), cap)``. ``None`` = keep template XOR."""
+        """Construct L: ``min(max(L_template, L_floor including L_min), cap)``.
+
+        ``None`` = keep template XOR. ``L_min`` is a construction floor here,
+        not a ``slope_fits`` veto. Stamp call sites pass ``length_cap`` /
+        ``path_length``; omit = classify/construct without a ray (plains
+        ``dz=1`` may request L=20).
+        """
         if not self.has_slope_length_constraints() and length_cap is None:
             return None
         if not self.has_slope_length_constraints():
@@ -376,7 +386,7 @@ class ReliefOntologyEnvelopes(BaseModel):
         default_factory=ReliefTerrainEnvelope,
     )
     ravine: DefaultOnWire[ReliefTerrainEnvelope] = Field(
-        default_factory=ReliefTerrainEnvelope,
+        default_factory=_ravine_canonical,
     )
     shore_river: DefaultOnWire[ReliefTerrainEnvelope] = Field(
         default_factory=_shore_river_canonical,

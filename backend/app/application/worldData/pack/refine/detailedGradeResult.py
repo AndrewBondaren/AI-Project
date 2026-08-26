@@ -103,7 +103,7 @@ class DetailedGradeResult:
         )
 
     def merged_with(self, other: DetailedGradeResult) -> DetailedGradeResult:
-        """Uid/z last-wins; instance fields last-wins; membership from uid."""
+        """Uid/z last-wins; instance fields last-wins; rim_rays first-wins; membership from uid."""
         uids = dict(self.surface_grade_uid)
         uids.update(other.surface_grade_uid)
         overlay = dict(self.surface_z)

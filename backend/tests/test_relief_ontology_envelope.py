@@ -143,6 +143,7 @@ class ReliefOntologyEnvelopePojoTest(unittest.TestCase):
         ravine = ReliefOntologyEnvelopes.canonical_defaults().ravine
         self.assertEqual(ravine.stamp_min_abs_dz, 1)
         self.assertTrue(ravine.stamps_first_step(1, ReliefContext.RAVINE))
+        self.assertTrue(ravine.grades_channel_bed)
         self.assertTrue(ravine.is_unconstrained())
 
     def test_no_legacy_shore_condition_terrain(self) -> None:
@@ -198,6 +199,7 @@ class ReliefOntologyEnvelopePojoTest(unittest.TestCase):
         self.assertIsNot(lake, river)
 
     def test_slope_length_for_plains_examples(self) -> None:
+        """Construct L uses L_min; ``slope_fits`` is θ-only (L=1 still fits)."""
         plains = ReliefOntologyEnvelopes.canonical_defaults().plains
         self.assertEqual(
             plains.slope_length_for(4, template_length=2), 20,
@@ -266,14 +268,14 @@ class TerrainDescentRayTest(unittest.TestCase):
 
         z = {(1, 0): 4, (2, 0): 2, (3, 0): 3}
 
-        def z_at(xy: tuple[int, int]) -> int | None:
+        def z_height_map(xy: tuple[int, int]) -> int | None:
             return z.get(xy)
 
         length, z_end = measure_terrain_descent(
             start=(2, 0),
             outward=(1, 0),
             z_peak=4,
-            z_at=z_at,
+            z_height_map=z_height_map,
         )
         self.assertEqual(length, 1)
         self.assertEqual(z_end, 2)

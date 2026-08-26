@@ -113,7 +113,7 @@ def local_grade_anchors(
     sx, sy = seed
     crests: set[Coord] = set()
     cascade: set[Coord] = set()
-    z_seed = surface.z_at(seed)
+    z_seed = surface.z_height_map(seed)
     for dx, dy in CARDINAL_ORTHO_DELTAS:
         nb = (sx + dx, sy + dy)
         if nb in ref_cells and nb not in segment_seeds:
@@ -121,7 +121,7 @@ def local_grade_anchors(
             continue
         if nb not in segment_seeds and nb not in ref_cells:
             continue
-        z_nb = surface.z_at(nb)
+        z_nb = surface.z_height_map(nb)
         if z_seed is not None and z_nb is not None and int(z_nb) > int(z_seed):
             cascade.add(nb)
     return crests or cascade
@@ -138,7 +138,7 @@ def resolve_meter_anchor(
     )
     if abutment is None:
         return None
-    z = surface.z_at(abutment)
+    z = surface.z_height_map(abutment)
     if z is None:
         return None
     return EdgeRoadAnchor(

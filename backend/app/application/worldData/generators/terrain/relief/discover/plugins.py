@@ -112,13 +112,13 @@ def shore_condition_at(
 
 
 def _has_lower_cell(xy: Coord, surface: ReliefSurface) -> bool:
-    z = surface.z_at(xy)
+    z = surface.z_height_map(xy)
     if z is None:
         return False
     x, y = xy
     height = int(z)
     for dx, dy in EIGHT_DELTAS:
-        zn = surface.z_at((x + dx, y + dy))
+        zn = surface.z_height_map((x + dx, y + dy))
         if zn is not None and int(zn) < height:
             return True
     return False
@@ -129,13 +129,13 @@ def _has_lower_match(
     surface: ReliefSurface,
     pred: Callable[[Coord, ReliefSurface], bool],
 ) -> bool:
-    z = surface.z_at(xy)
+    z = surface.z_height_map(xy)
     if z is None:
         return False
     x, y = xy
     for dx, dy in EIGHT_DELTAS:
         nb = (x + dx, y + dy)
-        zn = surface.z_at(nb)
+        zn = surface.z_height_map(nb)
         if zn is None or int(zn) >= int(z):
             continue
         if pred(nb, surface):
@@ -204,7 +204,7 @@ class OpenLandPlugin:
         return self.claims(xy, surface)
 
     def may_shoot(self, src: Coord, dst: Coord, surface: ReliefSurface) -> bool:
-        if surface.z_at(dst) is None:
+        if surface.z_height_map(dst) is None:
             return False
         if _is_open_water_or_bed(dst, surface):
             return False

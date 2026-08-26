@@ -34,7 +34,6 @@ from app.application.worldData.generators.terrain.relief.sample.terrainMap impor
     map_system_terrain,
 )
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.terrain.relief.enums import ReliefContext
 from app.dataModel.terrain.relief.reliefTerrainEnvelope import (
     ReliefOntologyEnvelopes,
     ReliefTerrainEnvelope,
@@ -79,6 +78,12 @@ def _diagonal_lands_on_ortho_target(
         if ortho_src in body and ortho_src != src:
             return True
     return False
+
+
+def _k1_landings(run: Sequence[Coord], facing: Facing) -> tuple[Coord, ...]:
+    """First downhill cell of each rim column (claim uniqueness, not the walk)."""
+    dx, dy = GRID_OUTWARD_DELTA[facing]
+    return tuple((int(sx) + dx, int(sy) + dy) for sx, sy in run)
 
 
 def _consecutive_runs(
@@ -140,6 +145,7 @@ class FrontStage:
         body: dict[Coord, int],
         plugin: VertexBodyPlugin,
     ) -> tuple[ProposedTrace, ...]:
+        """SLOPE lockstep: only after occupied landings and first-step envelope ≠ SLOPE."""
         return self._propose_kind(slot, body, plugin, want="slope")
 
     def propose_sheers(
@@ -174,7 +180,7 @@ class FrontStage:
     ) -> tuple[ProposedTrace, ...]:
         z_body = next(iter(body.values()))
         grouped: dict[tuple[Facing, int], list[Coord]] = defaultdict(list)
-        for rim, facing, first_dz in self._rim_shots(body, plugin):
+        for rim, facing, first_dz in self._rim_shots(body, plugin, want=want):
             grouped[(facing, first_dz)].append(rim)
 
         pending: list[ProposedTrace] = []
@@ -185,6 +191,9 @@ class FrontStage:
                     continue
                 if env.slope_outcome(abs(int(first_dz)), 1) != want:
                     continue
+                landings = _k1_landings(run, facing)
+                if not self.vertices.facings_free(landings, facing):
+                    continue
                 occupancy: int | None = None
                 if self.cap_front is not None:
                     occupancy = self.cap_front(plugin.context)
@@ -194,7 +203,7 @@ class FrontStage:
                 trace = self._walk_trace(
                     run, facing, z_body, slot, plugin,
                     walk_cap=walk_cap,
-                    continue_equal_z=self._continue_equal_z(plugin, env),
+                    continue_equal_z=bool(env.grades_channel_bed),
                 )
                 if occupancy is not None:
                     trace = truncate_trace(trace, run, facing, occupancy)
@@ -226,7 +235,14 @@ class FrontStage:
         self,
         body: dict[Coord, int],
         plugin: VertexBodyPlugin,
+        *,
+        want: str,
     ) -> list[tuple[Coord, Facing, int]]:
+        """8-views: drop occupied landings and shots whose first step is not ``want``.
+
+        SLOPE walks (L>1) never start from a claimed ``(landing, Facing)`` or a
+        first step whose envelope class is not SLOPE (``slope_outcome(|dz|, 1)``).
+        """
         surface = self.surface
         vertices = self.vertices
         shots: list[tuple[Coord, Facing, int]] = []
@@ -251,8 +267,13 @@ class FrontStage:
             ni = vertices.index(nb[0], nb[1])
             if ni is not None and vertices.occ[ni] != 0:
                 continue
+            if vertices.facing_taken(nb, facing):
+                continue
+            first_dz = z_body - zn
+            if self.first_step_outcome(src, facing, plugin, first_dz) != want:
+                continue
             seen.add(key)
-            shots.append((src, facing, z_body - zn))
+            shots.append((src, facing, first_dz))
         return shots
 
     def _envelope_for_run(
@@ -278,16 +299,6 @@ class FrontStage:
             if mapped is not None
             else ReliefTerrainEnvelope()
         )
-
-    def _continue_equal_z(
-        self,
-        plugin: VertexBodyPlugin,
-        envelope: ReliefTerrainEnvelope,
-    ) -> bool:
-        """Ravine / channel bed: flat floor is L. Open-land basin is not."""
-        if plugin.context is ReliefContext.RAVINE:
-            return True
-        return bool(envelope.grades_channel_bed)
 
     def _walk_trace(
         self,

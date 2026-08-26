@@ -7,14 +7,31 @@ import unittest
 from app.application.worldData.generators.terrain.relief.discover.apron import (
     enclosed_one_cell_pit,
     is_q2_seed,
-    is_q3_seed,
+    is_side_seed,
     is_slope_corridor_cell,
-    resolve_q3_parent,
+    resolve_side_parent,
 )
 from app.application.worldData.generators.terrain.relief.discover.core import (
+    DiscoverResult,
     discover_fronts,
 )
-from app.application.worldData.generators.terrain.relief.discover.rim import seed_rim
+from app.application.worldData.generators.terrain.relief.discover.fronts import FrontStage
+from app.application.worldData.generators.terrain.relief.discover.millBuckets import (
+    BucketRef,
+    MillBuckets,
+    Q2Kind,
+    UNSET_SLOT,
+)
+from app.application.worldData.generators.terrain.relief.discover.millCorridor import (
+    corridor_from_cells,
+)
+from app.application.worldData.generators.terrain.relief.discover.millSchedule import (
+    is_q2_side_event,
+)
+from app.application.worldData.generators.terrain.relief.discover.rim import (
+    iter_rect_z_cells,
+    seed_rim,
+)
 from app.application.worldData.generators.terrain.relief.discover.plugins import (
     OpenLandPlugin,
     RoadShoulderPlugin,
@@ -84,7 +101,15 @@ def _surface(z: dict[Coord, int], terrain: str = _PLAINS) -> MeterGradeSurface:
     )
 
 
-def _discover(z: dict[Coord, int]) -> tuple[ReliefVertices, tuple]:
+def _geom(result: DiscoverResult) -> tuple[ReliefVertices, tuple]:
+    return result.vertices, result.fronts
+
+
+def _run_discover(*args, **kwargs) -> tuple[ReliefVertices, tuple]:
+    return _geom(discover_fronts(*args, **kwargs))
+
+
+def _discover_result(z: dict[Coord, int]) -> DiscoverResult:
     xs = [x for x, _y in z]
     ys = [y for _x, y in z]
     surface = _surface(z)
@@ -99,11 +124,16 @@ def _discover(z: dict[Coord, int]) -> tuple[ReliefVertices, tuple]:
     )
 
 
+def _discover(z: dict[Coord, int]) -> tuple[ReliefVertices, tuple]:
+    return _geom(_discover_result(z))
+
+
 def _discover_ravine(
     z: dict[Coord, int],
     terrain: dict[Coord, str],
     *,
     cap_front=None,
+    envelopes=None,
 ) -> tuple[ReliefVertices, tuple]:
     xs = [x for x, _y in z]
     ys = [y for _x, y in z]
@@ -113,7 +143,7 @@ def _discover_ravine(
         hydrology=None,
         surface_facing=None,
     )
-    return discover_fronts(
+    return _geom(discover_fronts(
         surface,
         origin_x=min(xs),
         origin_y=min(ys),
@@ -127,7 +157,8 @@ def _discover_ravine(
         ),
         cell_blocked=lambda _xy: False,
         cap_front=cap_front,
-    )
+        envelopes=envelopes,
+    ))
 
 
 def _discover_shore(
@@ -152,7 +183,7 @@ def _discover_shore(
         blocked = lambda xy: meter_grade_cell_blocked(
             surface, xy, road_key=_ROAD, barrier_keys=_BARRIERS,
         )
-    return discover_fronts(
+    return _geom(discover_fronts(
         surface,
         origin_x=min(xs),
         origin_y=min(ys),
@@ -168,7 +199,7 @@ def _discover_shore(
         cell_blocked=blocked,
         cap_front=cap_front,
         envelopes=envelopes,
-    )
+    ))
 
 
 class ReliefDiscoverTest(unittest.TestCase):
@@ -182,6 +213,100 @@ class ReliefDiscoverTest(unittest.TestCase):
         self.assertFalse(hasattr(ReliefVertices, "model_fields"))
         self.assertFalse(hasattr(GradePaintSpec, "model_fields"))
         self.assertTrue(hasattr(ReliefGradeInstance, "model_fields"))
+
+    def test_mill_stage_s_has_q_and_total(self) -> None:
+        z = {
+            (0, 1): 4, (1, 1): 4, (2, 1): 4,
+            (0, 0): 2, (1, 0): 2, (2, 0): 2,
+        }
+        mill = _discover_result(z).mill
+        payload = mill.as_dict()
+        for key in (
+            "q1_s",
+            "q2_s",
+            "mill_setup_s",
+            "mill_sheer_s",
+            "mill_seam_s",
+            "mill_reconcile_s",
+            "mill_s",
+        ):
+            self.assertIn(key, payload)
+            self.assertGreaterEqual(payload[key], 0.0)
+        self.assertNotIn("q3_s", payload)
+        self.assertFalse(hasattr(mill, "q3_s"))
+        self.assertGreaterEqual(mill.mill_s, mill.q_total_s)
+        empty = discover_fronts(
+            _surface({(0, 0): 1}),
+            origin_x=0,
+            origin_y=0,
+            width=1,
+            height=1,
+            plugins=(),
+            cell_blocked=lambda _xy: False,
+        )
+        self.assertEqual(empty.mill.mill_s, empty.mill.mill_setup_s)
+        self.assertEqual(empty.mill.q1_s, 0.0)
+        self.assertEqual(empty.fronts, ())
+        self.assertEqual(empty.side_parent, {})
+
+    def test_discover_fronts_one_walk_no_grid_drain(self) -> None:
+        import inspect
+
+        from app.application.worldData.generators.terrain.relief.discover.core import (
+            discover_fronts as mill,
+        )
+        from app.application.worldData.generators.terrain.relief.discover.millSchedule import (
+            run_mill_schedule,
+        )
+        from app.application.worldData.generators.terrain.relief.discover.rim import RimStage
+
+        src = inspect.getsource(mill)
+        self.assertIn("run_mill_schedule", src)
+        self.assertIn("iter_rect_z_cells", src)
+        self.assertNotIn("fill_leftover", src)
+        self.assertNotIn("buckets_high_to_low", src)
+        self.assertNotIn("def _drain", src)
+        sched = inspect.getsource(run_mill_schedule)
+        self.assertNotIn("fill_leftover", sched)
+        self.assertNotIn("def _drain", sched)
+        self.assertIn("max_leftover_z", sched)
+        self.assertFalse(hasattr(RimStage, "buckets_high_to_low"))
+        self.assertFalse(hasattr(RimStage, "fill_leftover"))
+
+    def test_z_top_mills_q2_before_lower_leftover(self) -> None:
+        """Q2 SHEER landing (not C39) mills before leftover C39 at a lower z."""
+        z = {
+            (0, 1): 8, (1, 1): 8, (2, 1): 8,
+            (0, 0): 7, (1, 0): 7, (2, 0): 7,
+            (3, 1): 6,
+            (10, 2): 4, (10, 1): 2,
+        }
+        order: list[tuple[int, Coord]] = []
+
+        class _OrderPlugin(OpenLandPlugin):
+            def accept_flood(self, body, surface):
+                ok = super().accept_flood(body, surface)
+                if ok and body:
+                    z_body = int(next(iter(body.values())))
+                    order.append((z_body, min(body)))
+                return ok
+
+        surface = _surface(z)
+        discover_fronts(
+            surface,
+            origin_x=0,
+            origin_y=0,
+            width=11,
+            height=3,
+            plugins=(_OrderPlugin(_LAND),),
+            cell_blocked=lambda _xy: False,
+        )
+        zs = [item[0] for item in order]
+        self.assertGreaterEqual(len(zs), 3)
+        self.assertEqual(zs[0], 8)
+        self.assertIn(6, zs)
+        self.assertIn(4, zs)
+        self.assertLess(zs.index(6), zs.index(4))
 
     def test_mesa_8_connected_gy_901(self) -> None:
         """Diagonal 4 on 901 col4 is the same vertex as the plateau (R41)."""
@@ -209,6 +334,38 @@ class ReliefDiscoverTest(unittest.TestCase):
         self.assertEqual(len(front.rim), 3)
         self.assertEqual(front.outward, Facing.SOUTH)
         self.assertGreaterEqual(len(front.corridor), 3)
+
+    def test_claimed_landing_skips_slope_walk(self) -> None:
+        """Occupied (landing, Facing) is dropped before lockstep SLOPE."""
+        z = {(0, 1): 4, (0, 0): 3}
+        surface = _surface(z)
+        vertices = ReliefVertices.for_bounds(
+            origin_x=0, origin_y=0, width=1, height=2,
+        )
+        body = {(0, 1): 4}
+        slot = vertices.add_vertex(body)
+        self.assertTrue(vertices.claim_facings(((0, 0),), Facing.SOUTH))
+        traces = FrontStage(surface, vertices, lambda _xy: False).propose(
+            slot, body, OpenLandPlugin(_LAND),
+        )
+        self.assertEqual(traces, ())
+
+    def test_steep_first_step_is_not_a_slope_walk(self) -> None:
+        """First-step envelope class is SHEER → no long SLOPE ray."""
+        z = {(0, 1): 4, (0, 0): 2}
+        surface = _surface(z)
+        vertices = ReliefVertices.for_bounds(
+            origin_x=0, origin_y=0, width=1, height=2,
+        )
+        body = {(0, 1): 4}
+        slot = vertices.add_vertex(body)
+        stage = FrontStage(surface, vertices, lambda _xy: False)
+        plugin = OpenLandPlugin(_LAND)
+        self.assertEqual(stage.propose(slot, body, plugin), ())
+        sheers = stage.propose_sheers(slot, body, plugin)
+        self.assertEqual(len(sheers), 1)
+        self.assertEqual(sheers[0].first_dz, 2)
+        self.assertEqual(sheers[0].trace, ((0, 0),))
 
     def test_isolated_peak_shoots_eight_facings(self) -> None:
         """One rim cell may look all 8 ways; each Facing is one ray."""
@@ -311,6 +468,8 @@ class ReliefDiscoverTest(unittest.TestCase):
         for xy in corridor:
             i = vertices.index(*xy)
             self.assertNotEqual(vertices.occ[i], 0)
+            self.assertEqual(vertices.at_grid[i], 0)
+        self.assertNotEqual(vertices.at_grid[vertices.index(0, 0)], 0)
 
     def test_lower_terrace_seeds_when_upper_drop_is_sheer(self) -> None:
         """Plains |dz|=2 is sheer: the terrace is a vertex, not a slope corridor."""
@@ -355,14 +514,15 @@ class ReliefDiscoverTest(unittest.TestCase):
         self.assertIn(landing, east[0].corridor)
         self.assertEqual(east[0].first_dz, 2)
 
-    def test_q3_same_z_side_of_slope_corridor_is_new_vertex(self) -> None:
+    def test_q2_same_z_side_of_slope_corridor_is_new_vertex(self) -> None:
         """|dz|=1 plains corridor; same-z cell south of occ, not 8-adj to the body."""
         z = {
             (0, 2): 4, (1, 2): 4, (2, 2): 4,
             (0, 1): 3, (1, 1): 3, (2, 1): 3,
             (1, 0): 3,
         }
-        vertices, _fronts = _discover(z)
+        got = _discover_result(z)
+        vertices = got.vertices
         side = (1, 0)
         i = vertices.index(*side)
         mesa_slot = vertices.at_grid[vertices.index(1, 2)]
@@ -372,16 +532,17 @@ class ReliefDiscoverTest(unittest.TestCase):
         self.assertEqual(vertices.occ[i], 0)
         corridor = vertices.index(1, 1)
         self.assertNotEqual(vertices.occ[corridor], 0)
-        self.assertEqual(vertices.q3_parent.get(side_slot), mesa_slot)
+        self.assertEqual(got.side_parent.get(side_slot), mesa_slot)
 
-    def test_q3_loop_drains_disconnected_sides(self) -> None:
-        """Two same-z sides of one corridor, not 8-linked through free cells, both Q3."""
+    def test_q2_drains_disconnected_sides(self) -> None:
+        """Two same-z sides of one corridor, not 8-linked through free cells, both Q2."""
         z = {
             (1, 2): 4, (2, 2): 4, (3, 2): 4,
             (1, 1): 3, (2, 1): 3, (3, 1): 3,
             (0, 0): 3, (4, 0): 3,
         }
-        vertices, _fronts = _discover(z)
+        got = _discover_result(z)
+        vertices = got.vertices
         mesa_slot = vertices.at_grid[vertices.index(2, 2)]
         west = vertices.at_grid[vertices.index(0, 0)]
         east = vertices.at_grid[vertices.index(4, 0)]
@@ -390,55 +551,49 @@ class ReliefDiscoverTest(unittest.TestCase):
         self.assertNotEqual(west, mesa_slot)
         self.assertNotEqual(east, mesa_slot)
         self.assertNotEqual(west, east)
-        self.assertEqual(vertices.q3_parent.get(west), mesa_slot)
-        self.assertEqual(vertices.q3_parent.get(east), mesa_slot)
+        self.assertEqual(got.side_parent.get(west), mesa_slot)
+        self.assertEqual(got.side_parent.get(east), mesa_slot)
         surface = _surface(z)
-        self.assertFalse(
-            is_q3_seed(
-                (0, 0), surface, vertices, parent_sheers=lambda _a, _b: False,
-            ),
-        )
-        self.assertFalse(
-            is_q3_seed(
-                (4, 0), surface, vertices, parent_sheers=lambda _a, _b: False,
-            ),
-        )
+        self.assertFalse(is_side_seed((0, 0), surface, vertices))
+        self.assertFalse(is_side_seed((4, 0), surface, vertices))
 
-    def test_q1_cell_is_not_q3_predicate(self) -> None:
-        """C39 seed is not Q3 even with a same-z occ neighbor."""
+    def test_q1_cell_is_not_side_predicate(self) -> None:
+        """C39 leftover can be same-z of occ; scheduler still skips it as Q2 side."""
         z = {
             (1, 1): 4, (1, 0): 3, (2, 1): 4,
         }
         surface = _surface(z)
         vertices = _vertices_for(z)
         vertices.mark_occ((2, 1), 1)
+        never = lambda _a, _b: False
         self.assertTrue(seed_rim((1, 1), surface, vertices))
+        self.assertTrue(is_side_seed((1, 1), surface, vertices))
         self.assertFalse(
-            is_q3_seed(
-                (1, 1), surface, vertices, parent_sheers=lambda _a, _b: False,
+            is_q2_side_event(
+                (1, 1), surface, vertices, parent_sheers=never, live=None,
             ),
         )
 
-    def test_q2_landing_is_not_q3_predicate(self) -> None:
-        """SHEER landing against a body is Q2, not Q3."""
+    def test_q2_landing_is_not_side_predicate(self) -> None:
+        """SHEER landing against a body is Q2 landing, not a corridor side."""
         z = {
             (1, 1): 8, (2, 1): 6, (1, 0): 7,
         }
         surface = _surface(z)
         vertices = _vertices_for(z)
         vertices.add_vertex({(1, 1): 8})
+        always = lambda _a, _b: True
         self.assertTrue(
-            is_q2_seed(
-                (2, 1), surface, vertices, parent_sheers=lambda _a, _b: True,
-            ),
+            is_q2_seed((2, 1), surface, vertices, parent_sheers=always),
         )
+        self.assertFalse(is_side_seed((2, 1), surface, vertices))
         self.assertFalse(
-            is_q3_seed(
-                (2, 1), surface, vertices, parent_sheers=lambda _a, _b: True,
+            is_q2_side_event(
+                (2, 1), surface, vertices, parent_sheers=always, live=None,
             ),
         )
 
-    def test_resolve_q3_parent_min_dz_then_smaller_slot(self) -> None:
+    def test_resolve_side_parent_min_dz_then_smaller_slot(self) -> None:
         z = {
             (0, 1): 8, (1, 1): 3, (2, 1): 5,
             (1, 0): 3,
@@ -448,11 +603,11 @@ class ReliefDiscoverTest(unittest.TestCase):
         high = vertices.add_vertex({(0, 1): 8})
         near = vertices.add_vertex({(2, 1): 5})
         vertices.mark_occ((1, 1), near)
-        parent = resolve_q3_parent((1, 0), surface, vertices)
+        parent = resolve_side_parent((1, 0), surface, vertices)
         self.assertEqual(parent, near)
         self.assertNotEqual(parent, high)
 
-    def test_resolve_q3_parent_tie_smaller_slot(self) -> None:
+    def test_resolve_side_parent_tie_smaller_slot(self) -> None:
         z = {
             (0, 1): 5, (1, 1): 3, (2, 1): 5,
             (1, 0): 3,
@@ -463,26 +618,24 @@ class ReliefDiscoverTest(unittest.TestCase):
         right = vertices.add_vertex({(2, 1): 5})
         vertices.mark_occ((0, 0), 0)
         vertices.mark_occ((1, 1), left)
-        # also treat (2,0) as corridor of right via live slot; (1,1) occ=left
-        parent = resolve_q3_parent(
+        parent = resolve_side_parent(
             (1, 0),
             surface,
             vertices,
-            in_slope_corridor=lambda xy: xy in {(1, 1), (2, 0)},
-            corridor_slot=lambda xy: right if xy == (2, 0) else None,
+            live=corridor_from_cells({(1, 1), (2, 0)}, {(2, 0): right}),
         )
         self.assertEqual(parent, left)
         self.assertLess(left, right)
 
-    def test_resolve_q3_parent_skips_foreign(self) -> None:
+    def test_resolve_side_parent_skips_foreign(self) -> None:
         z = {(1, 1): 3, (1, 0): 3}
         surface = _surface(z)
         vertices = _vertices_for(z)
         vertices.mark_foreign((1, 1))
-        self.assertIsNone(resolve_q3_parent((1, 0), surface, vertices))
+        self.assertIsNone(resolve_side_parent((1, 0), surface, vertices))
 
-    def test_q3_predicate_sees_live_slope_corridor_when_occ_delayed(self) -> None:
-        """C41 leaves |dz|=1 landings unmarked; Q3 still reads committed SLOPE."""
+    def test_side_predicate_sees_live_slope_corridor_when_occ_delayed(self) -> None:
+        """C41 leaves |dz|=1 landings unmarked; Q2 side still reads committed SLOPE."""
         z = {
             (1, 2): 4, (1, 1): 3, (1, 0): 3,
         }
@@ -490,26 +643,13 @@ class ReliefDiscoverTest(unittest.TestCase):
         vertices = _vertices_for(z)
         vertices.add_vertex({(1, 2): 4})
         never = lambda _a, _b: False
-        corridor = {(1, 1)}
-        self.assertFalse(
-            is_q3_seed((1, 0), surface, vertices, parent_sheers=never),
-        )
+        live = corridor_from_cells({(1, 1)})
+        self.assertFalse(is_side_seed((1, 0), surface, vertices))
+        self.assertTrue(is_side_seed((1, 0), surface, vertices, live=live))
+        self.assertFalse(is_side_seed((1, 1), surface, vertices, live=live))
         self.assertTrue(
-            is_q3_seed(
-                (1, 0),
-                surface,
-                vertices,
-                parent_sheers=never,
-                in_slope_corridor=corridor.__contains__,
-            ),
-        )
-        self.assertFalse(
-            is_q3_seed(
-                (1, 1),
-                surface,
-                vertices,
-                parent_sheers=never,
-                in_slope_corridor=corridor.__contains__,
+            is_q2_side_event(
+                (1, 0), surface, vertices, parent_sheers=never, live=live,
             ),
         )
 
@@ -524,11 +664,11 @@ class ReliefDiscoverTest(unittest.TestCase):
         self.assertEqual(vertices.occ[vertices.index(2, 0)], FOREIGN_MARK)
         self.assertTrue(
             is_slope_corridor_cell(
-                (1, 0), vertices, in_slope_trace=lambda xy: xy == (1, 0),
+                (1, 0), vertices, live=corridor_from_cells({(1, 0)}),
             ),
         )
 
-    def test_one_by_one_pit_is_not_q2_or_q3(self) -> None:
+    def test_one_by_one_pit_is_not_q2_or_side(self) -> None:
         z = {
             (0, 2): 4, (1, 2): 4, (2, 2): 4,
             (0, 1): 4, (1, 1): 2, (2, 1): 4,
@@ -542,7 +682,7 @@ class ReliefDiscoverTest(unittest.TestCase):
         self.assertTrue(enclosed_one_cell_pit(hole, surface, vertices))
         never = lambda _a, _b: True
         self.assertFalse(is_q2_seed(hole, surface, vertices, parent_sheers=never))
-        self.assertFalse(is_q3_seed(hole, surface, vertices, parent_sheers=never))
+        self.assertFalse(is_side_seed(hole, surface, vertices))
         vertices, fronts = _discover(z)
         i = vertices.index(*hole)
         self.assertNotEqual(vertices.seam[i], 0)
@@ -563,7 +703,7 @@ class ReliefDiscoverTest(unittest.TestCase):
             hydrology=None,
             surface_facing=None,
         )
-        vertices, fronts = discover_fronts(
+        vertices, fronts = _run_discover(
             surface,
             origin_x=0,
             origin_y=0,
@@ -597,7 +737,7 @@ class ReliefDiscoverTest(unittest.TestCase):
             hydrology=None,
             surface_facing=None,
         )
-        vertices, fronts = discover_fronts(
+        vertices, fronts = _run_discover(
             surface,
             origin_x=0,
             origin_y=0,
@@ -714,6 +854,47 @@ class ReliefDiscoverTest(unittest.TestCase):
         covered = {xy for f in south for xy in f.corridor}
         self.assertTrue({(0, 0), (1, 0)} <= covered)
 
+    def test_ravine_equal_z_floor_continues_from_envelope(self) -> None:
+        z = {
+            (0, 2): 4,
+            (0, 1): 2,
+            (0, 0): 2,
+        }
+        terrain = {
+            (0, 2): _PLAINS,
+            (0, 1): _RAVINE,
+            (0, 0): _RAVINE,
+        }
+        _vertices, fronts = _discover_ravine(z, terrain)
+        south = [f for f in fronts if f.context is ReliefContext.RAVINE]
+        covered = {xy for f in south for xy in f.corridor}
+        self.assertTrue({(0, 1), (0, 0)} <= covered)
+
+    def test_ravine_grades_channel_bed_false_stops_equal_z(self) -> None:
+        z = {
+            (0, 2): 4,
+            (0, 1): 2,
+            (0, 0): 2,
+        }
+        terrain = {
+            (0, 2): _PLAINS,
+            (0, 1): _RAVINE,
+            (0, 0): _RAVINE,
+        }
+        base = ReliefOntologyEnvelopes.canonical_defaults()
+        envelopes = base.model_copy(
+            update={
+                "ravine": base.ravine.model_copy(
+                    update={"grades_channel_bed": False},
+                ),
+            },
+        )
+        _vertices, fronts = _discover_ravine(z, terrain, envelopes=envelopes)
+        south = [f for f in fronts if f.context is ReliefContext.RAVINE]
+        covered = {xy for f in south for xy in f.corridor}
+        self.assertIn((0, 1), covered)
+        self.assertNotIn((0, 0), covered)
+
     def test_envelope_cap_does_not_swallow_inner_l(self) -> None:
         """Equal-z stop on open_land: long cap is not an all-seam inner L."""
         z = {}
@@ -721,7 +902,7 @@ class ReliefDiscoverTest(unittest.TestCase):
             for y in range(4):
                 z[(x, y)] = 10 if x == 0 or y == 0 else 6
         long_cap, short_cap = _ENVELOPE_L_FLOOR, DEFAULT_SLOPE_LENGTH_CELLS
-        _v20, fronts20 = discover_fronts(
+        _v20, fronts20 = _run_discover(
             _surface(z),
             origin_x=0,
             origin_y=0,
@@ -731,7 +912,7 @@ class ReliefDiscoverTest(unittest.TestCase):
             cell_blocked=lambda _xy: False,
             cap_front=lambda _ctx: long_cap,
         )
-        _v1, fronts1 = discover_fronts(
+        _v1, fronts1 = _run_discover(
             _surface(z),
             origin_x=0,
             origin_y=0,
@@ -821,7 +1002,7 @@ class ReliefDiscoverTest(unittest.TestCase):
             update={"plains": plains},
         )
         surface = _surface(z)
-        _vertices, fronts = discover_fronts(
+        _vertices, fronts = _run_discover(
             surface,
             origin_x=0,
             origin_y=0,
@@ -861,7 +1042,7 @@ class ReliefDiscoverTest(unittest.TestCase):
 
     def test_canonical_plains_stamps_unit_open_land(self) -> None:
         z = {(0, 0): 4, (1, 0): 3}
-        _vertices, fronts = discover_fronts(
+        _vertices, fronts = _run_discover(
             _surface(z),
             origin_x=0,
             origin_y=0,
@@ -883,7 +1064,7 @@ class ReliefDiscoverTest(unittest.TestCase):
             hydrology=None,
             surface_facing=None,
         )
-        _vertices, fronts = discover_fronts(
+        _vertices, fronts = _run_discover(
             surface,
             origin_x=0,
             origin_y=0,
@@ -906,7 +1087,7 @@ class ReliefDiscoverTest(unittest.TestCase):
             hydrology=None,
             surface_facing=None,
         )
-        _vertices, fronts = discover_fronts(
+        _vertices, fronts = _run_discover(
             surface,
             origin_x=0,
             origin_y=0,
@@ -1201,6 +1382,63 @@ class ReliefDiscoverTest(unittest.TestCase):
         )
         self.assertTrue(plugins[0].claims((0, 1), surface))
         self.assertTrue(plugins[0].may_shoot((0, 1), (0, 0), surface))
+
+
+class MillBucketsTest(unittest.TestCase):
+    def test_insert_rejects_second_bucket(self) -> None:
+        buckets = MillBuckets()
+        leftover = BucketRef.leftover(4)
+        self.assertTrue(buckets.insert(leftover, (0, 0)))
+        self.assertFalse(
+            buckets.insert(BucketRef.q2(4, 1), (0, 0), kind=Q2Kind.LANDING),
+        )
+        self.assertEqual(buckets.cell_to_bucket[(0, 0)], leftover)
+        self.assertEqual(leftover.slot, UNSET_SLOT)
+
+    def test_leftover_walk_is_on_rim_not_buckets(self) -> None:
+        z = {(0, 0): 4, (1, 0): 3, (0, 1): 4}
+        surface = _surface(z)
+        vertices = _vertices_for(z)
+        buckets = MillBuckets()
+        cells = list(iter_rect_z_cells(surface, vertices))
+        for xy, height in cells:
+            self.assertTrue(buckets.insert(BucketRef.leftover(height), xy))
+        for xy, height in cells:
+            self.assertFalse(buckets.insert(BucketRef.leftover(height), xy))
+        self.assertEqual(set(buckets.leftover_z(4)), {(0, 0), (0, 1)})
+        self.assertEqual(set(buckets.leftover_z(3)), {(1, 0)})
+        self.assertEqual(buckets.max_leftover_z(), 4)
+        self.assertTrue(buckets.move(BucketRef.claimed(4, 1), (0, 0)))
+        self.assertFalse(buckets.is_leftover((0, 0), 4))
+        self.assertEqual(buckets.max_leftover_z(), 4)
+        buckets.drop_leftover_z(4)
+        self.assertEqual(buckets.max_leftover_z(), 3)
+
+
+class GradePipelineTimingsTest(unittest.TestCase):
+    def test_q_total_and_log_fields(self) -> None:
+        from app.application.worldData.generators.terrain.relief.discover.timings import (
+            GradePipelineTimings,
+        )
+
+        mill = GradePipelineTimings(q1_s=1.0, q2_s=2.0, mill_s=7.0)
+        self.assertEqual(mill.q_total_s, 3.0)
+        self.assertFalse(hasattr(mill, "q3_s"))
+        self.assertFalse(hasattr(GradePipelineTimings, "from_mill"))
+        summed = mill.added(GradePipelineTimings(q1_s=0.5, paint_s=1.25))
+        self.assertEqual(summed.q1_s, 1.5)
+        self.assertEqual(summed.q_total_s, 3.5)
+        self.assertEqual(summed.paint_s, 1.25)
+        payload = summed.as_dict()
+        self.assertEqual(payload["q_total_s"], 3.5)
+        self.assertNotIn("q3_s", payload)
+        fields = summed.mill_log_fields()
+        self.assertNotIn("grade_s", fields)
+        self.assertNotIn("materialize_s", fields)
+        self.assertIn("q1_s", fields)
+        self.assertIn("paint_s", fields)
+        self.assertNotIn("q3_s", fields)
+        self.assertIn("q_total_s", GradePipelineTimings.wire_keys())
 
 
 class ReliefDiscoverPolishTest(unittest.TestCase):

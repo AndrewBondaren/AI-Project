@@ -14,6 +14,9 @@ from app.application.worldData.generators.coordinates import cell_size_m
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
 )
+from app.application.worldData.generators.terrain.relief.discover.timings import (
+    GradePipelineTimings,
+)
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.materializationContext import MaterializationContext
 from app.application.worldData.pack.bake.packBakeLog import log_pack_detailed_bake_done
@@ -65,6 +68,9 @@ class PackDetailedBakeResult:
     wilderness_chunks: int = 0
     climate_fine_tiles: int = 0
     location_uid: str | None = None
+    l2_s: float = 0.0
+    grade_persist_s: float = 0.0
+    pipeline_s: GradePipelineTimings = field(default_factory=GradePipelineTimings)
 
 
 @dataclass
@@ -77,6 +83,7 @@ class _FineAggregate:
     grade_systems: list[ReliefGradeSystem] = field(default_factory=list)
     materialize_s: float = 0.0
     grade_s: float = 0.0
+    pipeline_s: GradePipelineTimings = field(default_factory=GradePipelineTimings)
 
 
 class PackDetailedBakeOrchestrator:
@@ -203,6 +210,7 @@ class PackDetailedBakeOrchestrator:
             grade_s=aggregate.grade_s,
             l2_s=l2_s,
             grade_persist_s=grade_persist_s,
+            pipeline=aggregate.pipeline_s,
         )
         return PackDetailedBakeResult(
             scope="location",
@@ -211,6 +219,9 @@ class PackDetailedBakeOrchestrator:
             wilderness_chunks=aggregate.chunks_written,
             climate_fine_tiles=climate_fine_tiles,
             location_uid=location_uid,
+            l2_s=l2_s,
+            grade_persist_s=grade_persist_s,
+            pipeline_s=aggregate.pipeline_s,
         )
 
     async def _bake_wilderness_scope(
@@ -256,6 +267,7 @@ class PackDetailedBakeOrchestrator:
             grade_s=aggregate.grade_s,
             l2_s=l2_s,
             grade_persist_s=grade_persist_s,
+            pipeline=aggregate.pipeline_s,
         )
         return PackDetailedBakeResult(
             scope="wilderness",
@@ -264,6 +276,9 @@ class PackDetailedBakeOrchestrator:
             wilderness_chunks=aggregate.chunks_written,
             climate_fine_tiles=0,
             location_uid=None,
+            l2_s=l2_s,
+            grade_persist_s=grade_persist_s,
+            pipeline_s=aggregate.pipeline_s,
         )
 
     async def _persist_detailed_grades(
@@ -366,6 +381,7 @@ class PackDetailedBakeOrchestrator:
             aggregate.grade_systems.extend(refined.grade_systems)
             aggregate.materialize_s += refined.materialize_s
             aggregate.grade_s += refined.grade_s
+            aggregate.pipeline_s = aggregate.pipeline_s.added(refined.pipeline_s)
             if expected_chunks_for_status is not None:
                 writer.recalc_wilderness_status(
                     gx, gy,

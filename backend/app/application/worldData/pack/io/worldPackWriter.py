@@ -202,6 +202,16 @@ class WorldPackWriter:
 
         merge_grade_ray_sidecar(self._paths.grade_rays_location_path(location_uid), rays)
 
+    def merge_grade_cell_slots_tile(self, gx: int, gy: int, cells) -> None:
+        from app.application.worldData.pack.io.gradeSlotSidecar import merge_grade_slot_sidecar
+
+        merge_grade_slot_sidecar(self._paths.grade_rays_tile_path(gx, gy), cells)
+
+    def merge_grade_cell_slots_location(self, location_uid: str, cells) -> None:
+        from app.application.worldData.pack.io.gradeSlotSidecar import merge_grade_slot_sidecar
+
+        merge_grade_slot_sidecar(self._paths.grade_rays_location_path(location_uid), cells)
+
     def write_location_terrain(
         self,
         location_uid: str,

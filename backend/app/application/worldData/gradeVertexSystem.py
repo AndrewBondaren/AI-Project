@@ -13,7 +13,7 @@ from collections.abc import Sequence
 
 from app.application.worldData.generators.terrain.relief.volume.gradeInstanceFactory import (
     UID_PART_SEP,
-    WHY_Q3_ATTACH,
+    WHY_SIDE_ATTACH,
     WHY_T3C_SAME_VERTEX,
     build_relief_grade_system,
 )
@@ -107,11 +107,11 @@ def emit_relief_grade_systems(
                     if _bodies_touch_8(left_cells, right_cells):
                         uf.union(left, right)
 
-    q3_keys: set[SlotKey] = set()
+    side_keys: set[SlotKey] = set()
     for rect, seams in traces:
         cx, cy = _chunk_xy(catalog, rect)
         for seam in seams:
-            parent_slot = seam.q3_parent_slot
+            parent_slot = seam.side_parent_slot
             if parent_slot is None:
                 continue
             child = (cx, cy, int(seam.slot))
@@ -119,8 +119,8 @@ def emit_relief_grade_systems(
             if child not in slot_uids or parent not in slot_uids:
                 continue
             uf.union(child, parent)
-            q3_keys.add(child)
-            q3_keys.add(parent)
+            side_keys.add(child)
+            side_keys.add(parent)
 
     groups: dict[SlotKey, list[SlotKey]] = defaultdict(list)
     for key in slot_uids:
@@ -152,8 +152,8 @@ def emit_relief_grade_systems(
             site_id=site_id,
             grades=grades,
             why=(
-                WHY_Q3_ATTACH
-                if any(key in q3_keys for key in members)
+                WHY_SIDE_ATTACH
+                if any(key in side_keys for key in members)
                 else WHY_T3C_SAME_VERTEX
             ),
         )

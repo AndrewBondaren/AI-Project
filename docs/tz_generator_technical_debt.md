@@ -3,14 +3,14 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py` / `render_maps.py`, `worldBundleService.py`, relief library/import, pack render / parent-light refine.  
-**Обновлено:** 2026-08-19 — **R41-T-13…T-16 open** (равная z ямы не на envelope; один `seam[]`; L=1 vs R36t; `slope_fits` vs L_min). Очередь v2 полиш **R41-T-1…T-12** ✅. SoT: [`tz_terrain_relief.md`](./tz_terrain_relief.md). План: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md).  
+**Обновлено:** 2026-08-26 — SoT generate: [`tz_terrain_relief.md`](./tz_terrain_relief.md) (очереди, стрелки). Bake R36/R43 — архив [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). **R41-T-25** алгоритм+валидатор+тесты **open** (следующая разработка с мастером). **R41-T-17** leftover→COUPLE + валидатор не из z ✅ (не конечный occupancy). **R41-T-18** / **T-19** mill Q1/Q2 ✅. Полиш mill **R41-T-20…T-23** ✅. Rename heightmap **R41-T-24** (`z_height_map`) ✅. **R41-T-13…T-16** ✅. Очередь v2 полиш **R41-T-1…T-12** ✅. Consume dump: [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md).  
 **Связанные документы:**
 
 | Документ | Роль |
 |---|---|
 | [tz_assembler_hierarchy.md](./tz_assembler_hierarchy.md) | Целевая архитектура assembler stack |
 | [tz_city_generation.md](./tz_city_generation.md) | Продуктовое ТЗ города |
-| [tz_terrain_relief.md](./tz_terrain_relief.md) | Relief grade; **очередь SoT** § Осталось — v2 vs L2 volume; R41; **RELIEF-BAR-1**; canal/bake **RELIEF-T-42…T-63** |
+| [tz_terrain_relief.md](./tz_terrain_relief.md) | Relief generate SoT (Q1/Q2, стрелки, шаблоны, canal/obstacle, SQL catalog). Bake R36u–w — архив v1 |
 | [tz_pack_ascii_render.md](./tz_pack_ascii_render.md) | Pack ASCII SoT (**PAR-G\***); L2 location grade; debt **PAR-T-*** · **R36u-T-*** |
 | [tz_locations.md](./tz_locations.md) | `barrier_template_registry`; perimeter barriers |
 | [tz_terrain_hydrology.md](./tz_terrain_hydrology.md) | Гидрология: моря, озёра, реки (target) |
@@ -69,6 +69,7 @@
 | `worldData/worldBundleService.py` | ~190 | validate/remap/tx + N section imports + **inline relief export** — см. **BUNDLE-2** (не god-class generators) |
 | `worldData/reliefTemplateLibraryService.py` | ~135 | CRUD + R29 FS + validate + **HTTPException** — см. **RELIEF-T-3** |
 | `pack/refine/fineChunkRunner.py` | ~390 | pool + persist; grade sample+materialize в том же compute task (**R36w**) |
+| `relief/discover/core.py` | ~160 | тонкий фасад: leftover walk + `run_mill_schedule` + sheer/C38 — **R41-T-20** ✅ |
 
 ---
 
@@ -403,6 +404,10 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 
 | ID | Действие | Status |
 |---|---|---|
+| **R41-T-25** | Pack: алгоритм **полного** заполнения 8 слотов (каскад mill ≠ тело×8; не игнор восьмёрки) | **open** |
+| **R41-T-17** | Pack 8 слотов: leftover-only → SLOPE/SHEER + COUPLE; first-wins на слоте | **resolved** |
+| **R41-T-18** | Seed: вёдра Q1 leftover/claimed + Q2 `(z_q1, uid)`; сетка один раз | **resolved** |
+| **R41-T-19** | Снос mill-очереди Q3 (`is_q3_seed`, `q3_s`, `q3_parent`); бок-attach persist оставить | **resolved** |
 | ~~NC-1b~~ | ✅ `tz_terrain_generation.md` rework | resolved |
 | NC-1a | Persist contract / optional `coordinate_space` column | open |
 | LC-1..LC-4 | Neutral packages | open |
@@ -425,7 +430,8 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | **DR-6, DBG-2** | `terrain_registry_set`; split `debug_settlement.py` | open |
 | ~~**TR-3**~~ | Generation defaults → `worldMapSettings.py` | **resolved** |
 | **TR-6** | Layer upsert matrix | open |
-| **R41-T-13, T-15** | Ravine equal-z на envelope; L=1 vs якорь R36t | open |
+| **R41-T-13, T-15** | Ravine equal-z на envelope; L=1 vs якорь R36t | **resolved** |
+| **R41-T-20…T-23** | Полиш mill: планировщик / typed report / enum вёдер / SRP vertices+apron | **resolved** |
 
 ### P3 — когда будет время
 
@@ -438,7 +444,8 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | **CL-5, CL-6, CL-8, CL-9** | validator; pole contract; legacy deprecate; CGS split | open |
 | **CL-2a, CL-2c..CL-2e** | tierResolve edge cases (см. § CL) | open / accepted |
 | **TR-4, TR-5, TR-7** | z-slice full recompute; `generate_minimal`; dual persist API | open |
-| **R41-T-14, T-16** | один `seam[]`; `slope_fits` vs L_min | open |
+| **R41-T-14, T-16** | один `seam[]`; `slope_fits` vs L_min | **resolved** |
+| **R41-T-24** | `z_at` → `z_height_map` (relief heightmap, не T-17) | **resolved** |
 | **DR-7, MAP-1, MAP-2, CL-16** | lazy cell helper; map.py boilerplate; location_uid attribution | open |
 
 ---
@@ -1104,7 +1111,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 **Контекст:** 2026-08-12 — L2 location grade ASCII shipped ([`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) **PAR-G7…G10**; plan `grade-detailed-location-render`). Ревью: неявные контракты · dataModel · хардкоды · SRP.
 
-**Не долг (locked product):** grade writer = **detailed_bake geometry** ([`tz_terrain_relief.md`](./tz_terrain_relief.md) **R36u**; исключение из [§ Идея 2](./tz_world_pack_storage.md)); generate = **per-chunk в pool** (**R36v**, impl **T-11**); L0 **без** outdoor grade; ~~L0→L2 grade-uid nearest carry~~ superseded; FineTerrain column `system_grade_uid` → Instance; empty → omit `surface_grade` / `grade_{n}`; L2 dump `surface_grade.txt` + `z/grade_{n}.txt` (location **и** wilderness); anchors **R36t**. L0 ribbon writers **removed** (T-8).
+**Не долг (locked product):** grade writer = **detailed_bake geometry** ([`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **R36u**; исключение из [§ Идея 2](./tz_world_pack_storage.md)); generate = **per-chunk в pool** (**R36v**, impl **T-11**); L0 **без** outdoor grade; ~~L0→L2 grade-uid nearest carry~~ superseded; FineTerrain column `system_grade_uid` → Instance; empty → omit `surface_grade` / `grade_{n}`; L2 dump `surface_grade.txt` + `z/grade_{n}.txt` (location **и** wilderness); anchors **R36t**. L0 ribbon writers **removed** (T-8). Generate mill/pack SoT — [`tz_terrain_relief.md`](./tz_terrain_relief.md).
 
 ### Legacy L0 grade — inventory (R36u migrate off)
 
@@ -1207,11 +1214,11 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 **Fix order:** ~~T-1 → T-13~~ ✅. **Не трогать:** mask carry; DAG node.
 
-**Agent pointer:** [`.cursor/plans/r36v-grade-chunk-pool.md`](../.cursor/plans/r36v-grade-chunk-pool.md); SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) R36v / **R36w**.
+**Agent pointer:** [`.cursor/plans/r36v-grade-chunk-pool.md`](../.cursor/plans/r36v-grade-chunk-pool.md); bake SoT [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) R36v / **R36w**.
 
 ### R36w — worker stitch (resolved)
 
-**Контекст:** 2026-08-14 — [`tz_terrain_relief.md`](./tz_terrain_relief.md) **R36w** / C27. Каталог граней до пула; один `ColumnRect` task; uid от `world_seed`.
+**Контекст:** 2026-08-14 — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **R36w** / C27. Каталог граней до пула; один `ColumnRect` task; uid от `world_seed`.
 
 | ID | Severity | Status | P | Ось | Smell | Target |
 |---|---|---|---|---|---|---|
@@ -1225,7 +1232,7 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 ### FineChunkRunner layers (resolved)
 
-**Контекст:** 2026-08-14 — `refine_rects` держал prep + nested compute/persist closures. SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) § FineChunkRunner слои.
+**Контекст:** 2026-08-14 — `refine_rects` держал prep + nested compute/persist closures. SoT [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) § FineChunkRunner слои.
 
 | ID | Severity | Status | P | Ось | Smell | Target |
 |---|---|---|---|---|---|---|
@@ -1257,12 +1264,21 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 | **R41-T-10** | low | **resolved** | P3 | DRY | `site_id` / `terrain_key` считаются в facade; `DiscoveredFront` живой (T-2) | **Fix:** `front_bake_identity` + `discovered_front_from` |
 | **R41-T-11** | low | **resolved** | P3 | dataModel / хардкод | `_TRACE_CAP=64`; `site_id` строка; `owner_uid=context.value` | **Fix:** walk cap = envelope max ∩ knobs; site `PackJobUid`; owner omit |
 | **R41-T-12** | low | **resolved** | P3 | leftover | `Coord` alias в types / meter / catalog / halo | **Fix:** `planned` слой 7 ✅; новые модули без `Coord` alias; существующие не склеивали |
-| **R41-T-13** | medium | **open** | P2 | dataModel / хардкод | равная z: ravine = `if context` в `FrontStage`; shore = `envelope.grades_channel_bed` | поле на envelope; FrontStage только читает |
-| **R41-T-14** | low | **open** | P3 | неявный контракт | C41 «шерсть» и «якорь низины» — один `seam[]` | оставить один флаг (C39 одинаков) **или** два смысла в типе |
-| **R41-T-15** | medium | **open** | P2 | неявный контракт / R36t | одиночный L=1 пишет uid на нижнюю клетку; ТЗ якорь низа не мутировать | согласовать ТЗ и stamp **или** явный exception L=1 |
-| **R41-T-16** | low | **open** | P3 | неявный контракт | `slope_fits` = только θ; `L_min` только в `slope_length_for`; без `path_length` unit dz → L=20 | один канон в facade / docstring call sites |
+| **R41-T-25** | **high** | **open** | P1 | неявный контракт / consume | нет **алгоритма** полного occupancy 8 слотов; дыры на каскаде; interim `downhill_leftover` или игнор восьмёрки → dump `_` | **Target:** сначала полный fill (COUPLE + leftover каскада); mill без тела×8; узкий skip диагонали прямой W×L — **после** алгоритма, не вместо |
+| **R41-T-17** | **high** | **resolved** | P1 | неявный контракт / consume | sidecar = leftover `rim∪corridor×outward`; same-z вид mill skip без записи; валидатор закрывает `+` из z | **Fix:** `couple_rim_rays` на leftover + 8-halo; merge first-wins; валидатор только pack / нет соседа |
+| **R41-T-18** | **high** | **resolved** | P1 | pipeline / seed | impl: `millBuckets` + цикл `z_top`; приёмка мастера | канон § Две очереди; снос Q3 — **T-19**; полиш — **T-20…T-23** |
+| **R41-T-19** | **high** | **resolved** | P1 | leftover mill | impl: нет `is_q3_seed` / `q3_s` / `q3_parent*`; бок = Q2 + `side_parent` | grep mill пуст; attach бока жив |
+| **R41-T-20** | **high** | **resolved** | P2 | god-функция / SRP | `discover_fronts` = расписание + mill-события + attach + timings + sheer/C38 | **Fix:** `millSchedule.run_mill_schedule`; фасад leftover + sheer/C38 |
+| **R41-T-21** | **high** | **resolved** | P2 | неявный контракт | `mill_stage_s` dict; ключ ведра `(z,uid)` без семьи; `q2_kind is None` = Q1; live corridor callback; третий вид Q2 | **Fix:** `DiscoverResult`; `BucketRef`; `MillOrigin`; `LiveCorridors`; SoT «сосед следа» = `is_side_seed` |
+| **R41-T-22** | **medium** | **resolved** | P2 | хардкод | `"q1"`/`"landing"`; ключи timings в 4 местах; `UNSET_UID=0`; мёртвый `log_name`; `walks` | **Fix:** `MillFamily`/`Q2Kind`/`UNSET_SLOT`; `wire_keys()`; снят `from_mill`/`log_name`/`walks` |
+| **R41-T-23** | **medium** | **resolved** | P2 | SRP / смешение | `ReliefVertices` несёт `side_parent` + timings; `fill_leftover` ходит по сетке; `is_side_seed` знает C39/посадку | **Fix:** attach+timings на `DiscoverResult`; walk `iter_rect_z_cells`; `is_q2_side_event` в scheduler |
+| **R41-T-24** | low | **resolved** | P3 | naming | `z_at` читается как «z клетки», не как heightmap bake; «нет в z_at» ≠ z=0 | **Fix:** `z_height_map` метод/Mapping/Callable/`ZHeightMap`; consume TZ; `surface_z_at` / `terrain_z_at` не трогали |
+| **R41-T-13** | medium | **resolved** | P2 | dataModel / хардкод | равная z: ravine = `if context` в `FrontStage`; shore = `envelope.grades_channel_bed` | **Fix:** ravine `grades_channel_bed=True`; `FrontStage` только envelope; `is_unconstrained` не включает walk-флаг |
+| **R41-T-14** | low | **resolved** | P3 | неявный контракт | C41 «шерсть» и «якорь низины» — один `seam[]` | один флаг + docstring; C39 одинаков |
+| **R41-T-15** | medium | **resolved** | P2 | неявный контракт / R36t | одиночный L=1 пишет uid на нижнюю клетку; ТЗ якорь низа не мутировать | **Fix:** TZ exception L=1 = первая downhill; дырка 1×1 skip C41 |
+| **R41-T-16** | low | **resolved** | P3 | неявный контракт | `slope_fits` = только θ; `L_min` только в `slope_length_for`; без `path_length` unit dz → L=20 | docstring facade + stamp call sites с `path_length` |
 
-**Fix order:** ~~T-1…T-12~~ ✅ (v2 полиш). **Открыто:** **T-13…T-16**. T-2 (BAR-1) не блокирует C28. **Не трогать:** Wave E; DAG; mask carry; parent `surface_z` upsample; `refresh_tile_gaps` из worker; voxel-ditch writer без plugin; Volume/`GradeFormation`; склеивать Rim/Front/Seam обратно в один `core.py`; Occupancy v1.
+**Fix order:** **T-25** первым (полный pack occupancy). ~~T-1…T-12~~ ✅. ~~**T-17**~~ ✅ (COUPLE + валидатор не из z — не заменяет T-25). ~~**T-18**~~ ✅. ~~**T-19**~~ ✅. ~~**T-20…T-23**~~ ✅. ~~**T-24**~~ ✅. ~~**T-13…T-16**~~ ✅. T-2 (BAR-1) не блокирует C28. **Не трогать:** Wave E; DAG; mask carry; parent `surface_z` upsample; `refresh_tile_gaps` из worker; voxel-ditch writer без plugin; Volume/`GradeFormation`; склеивать Rim/Front/Seam обратно в один `core.py`; Occupancy v1.
 
 **Agent pointer:** [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md). Очередь SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Осталось — v2 vs L2 volume. Volume не форкать.
 
@@ -1270,7 +1286,248 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 **Контекст:** 2026-08-17 — слои 0–4 в коде (`RimStage` / `FrontStage` / `SeamStage` / plugins / `discover_and_paint` в `compute_rect`). Ревью по осям: неявный контракт · dataModel · SRP · DRY. **Не** переоткрывать R41-T-1 (writer уже discover+paint). **Не** Wave E. **Не** склеивать стадии обратно в `core.py`.
 
-**Не долг (сделано правильно):** стадии C39→R42→C41 как классы; `ReliefVertices` / `GradePaintSpec` не persist-POJO; маски с `WorldTerrainMasks`; барьеры с `WorldTerrainRegistry`; knobs через `grade_constrained` / `RibbonGradeDecision`; halo с `ReliefOntologyEnvelopes.canonical_defaults()` (в POJO SoT v1); L2 volume не форк; один fill после paint; DAG/schema не трогали.
+**Не долг (сделано правильно):** стадии C39→R42→C41 как классы; `ReliefVertices` / `GradePaintSpec` не persist-POJO; маски с `WorldTerrainMasks`; барьеры с `WorldTerrainRegistry`; knobs через `grade_constrained` / `RibbonGradeDecision`; halo с `ReliefOntologyEnvelopes.canonical_defaults()` (в POJO SoT v1); L2 volume не форк; один fill после paint; DAG/schema не трогали. **T-17 ✅** закрыл leftover-only vs COUPLE и валидатор-из-z — **не** алгоритм полного occupancy (**T-25** open). **Mill T-18/T-19 ✅:** ведра не на `ReliefVertices`; `_seed_one` не копировали на очередь; предикаты посадки/бока не слиты в один `is_seed`; Rim/Front/Seam не склеены. **T-20…T-23 ✅:** цикл `z_top` в `millSchedule`; `DiscoverResult`; enum вёдер.
+
+---
+
+#### R41-T-17 — pack leftover-only vs 8 слотов + COUPLE
+
+**Ось:** неявный контракт / consume. **Status:** `resolved`. **P:** P1.
+
+**SoT (как реализовывать — не этот registry, а ТЗ):**
+
+| Что | Где |
+|---|---|
+| 8 слотов клетки, kind SLOPE / SHEER / COUPLE; не leftover-only; generate пишет, dump/валидатор только читают | [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) § «Pack — 8 слотов клетки» |
+| Sidecar = слоты по правилам пары (оба конца leftover или COUPLE; omit без соседа); равная z = COUPLE, не invent в dump | [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Правила стрелок |
+| Валидатор не закрывает слот из сравнения z; пустой слот при соседе = ERROR | consume § валидатор; **R44** / **C43** |
+| Вершина (live Q1 / target vertex queue): 8 видов с тела; в себя / same-z не leftover — это `+` | R41 «Не тело×8 как SLOPE/SHEER»; `_rim_shots` уже skip `nb in body` / `zn >= z_body` — **слот всё равно писать** |
+| Следующие очереди (live Q2/Q3 / target derivatives): тот же 8-взгляд; занятый `(клетка, Facing)` не переписывать (first-wins) | mill `claim_facings` уже first-wins на leftover — pack `merge_grade_rim_rays` сейчас **last-wins**; имена очередей — **T-18** |
+
+**Факт (было):** `walk_pack_senders` / `rim_rays_from_front` — только `rim ∪ corridor × outward`. Same-z вид mill отбрасывает, в sidecar не кладёт. `ReliefSideKind.COUPLE` generate не писал. Валидатор `unified_surface_facings` закрывал same-z из z.
+
+**Fix (2026-08-25):** `couple_rim_rays` на leftover + 8-halo; persist `finish` пишет leftover затем COUPLE; `merge_grade_rim_rays` first-wins; `leftover_plus_halo` не считает COUPLE; валидатор закрывает только pack-слотом или отсутствием соседа в `z_height_map`. Dump не трогали. Consume: слот first-wins.
+
+**Почему баг:** consume/R41 locked с 2026-08-23; код после `packSenders` (22–24 авг) уехал в leftover-only. Валидатор врёт «закрыто из z». Dump честно пустой (читает sidecar) — это не долг ASCII.
+
+**Target:** generate пишет 8 слотов по consume TZ (leftover downhill + получатель + COUPLE оба конца same-z на leftover + 8-halo). Первый проход вершины заполняет; производные / следующие пояса только свободные слоты. Dump **не** трогать (уже только читает). Валидатор не invent закрытие из z. Не тело×8 Instance. Не второй обход тайла «добить восьмёрку» без станка. Не Occupancy v1.
+
+**Готово когда:** sidecar содержит COUPLE (работа generate). Dump `surface_grade` с `+` на same-z — **smoke**, что слот записан, не отдельная задача рендера. R44 `empty=` не шторм на плато; валидатор не вызывает `unified_surface_facings` как закрытие слота; merge pack first-wins (или эквивалент «не затирать»). Имя карты высот — **T-24** ✅ (`z_height_map`). **Полный occupancy 8 слотов (каскад без дыр, без игнора восьмёрки) — не этот ID → R41-T-25.**
+
+---
+
+#### R41-T-25 — алгоритм полного заполнения 8 слотов pack
+
+**Ось:** неявный контракт / consume. **Status:** `open`. **P:** P1. **Severity:** high (критический).
+
+**SoT стрелок / слоёв mill vs pack / тело sidecar:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Pack-слот; [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) § Тело sidecar (`SCH-GRADE-CELL-SLOTS`). **Алгоритм заполнения, новый валидатор и golden-тесты — следующая разработка с мастером**, не этот документ закрывает код.
+
+**Порядок:** сначала **алгоритм полного заполнения** по правилам пары (оба конца Octant/SHEER или COUPLE; нет соседа → **`SEAM` явно**). Узкий вид «прямой склон = только outward + `+`» — **после**, не вместо. Не закрывать дыры игнором восьмёрки.
+
+**Слои (не смешивать):**
+
+| | Mill (Instance) | Pack (слот клетки) |
+|---|---|---|
+| Каскад в одну сторону | одна прямая, Q2 вниз, не тело×8 | клетка всё равно **занята** с 8 сторон |
+| Same-z | не leftover | **COUPLE** `+` оба конца |
+| Outward фронта | один `Facing` Instance | leftover + получатель + остальные стороны по правилам пары |
+| Дырка 1×1 | skip Instance (C41) | слоты по правилам пары, не «нет leftover → нет обхода» |
+
+**Факт:** T-17 дал COUPLE + валидатор не из z. Mill каскад leftover-only на outward. На живом склоне пустые края. Код `downhill_leftover_rim_rays` / `leftover_plus_halo` / R44 — **interim**, не SoT.
+
+**Запрещено:** тело×8 Instance; валидатор skip «потому что склон прямой»; закрывать слот из сравнения z; invent `+` в dump; Occupancy v1.
+
+**Target (когда сядем за код):** generate пишет 8 кодов по [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Pack-слот / Правила стрелок (`GradeOctant` 0…7 = поток SLOPE, `SEAM=8`, `SHEER=9`, `COUPLE=10`; не один enum; глифы только dump). θ честный `atan(h/L)`; местность (0, 90); SHEER **[80, 90)**. Новый валидатор читает коды (нет кода = ERROR, не «закрыто из z»). Эталоны ямы / W×L / каскад — в том же ТЗ. `slope_outcome(L=1)` 45° и `downhill_leftover_rim_rays` — не SoT. Locked-файл [`backend/tests/test_relief_r41_t25_locked_cases.py`](../backend/tests/test_relief_r41_t25_locked_cases.py) без правки карт до явной просьбы.
+
+---
+
+#### R41-T-18 — вёдра Q1 / Q2; очереди Q3 нет
+
+**Ось:** pipeline / seed. **Status:** `resolved`. **P:** P1.
+
+**SoT канон** — [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Две очереди seed. Подробности вёдер — архив [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). Этот ID — impl-тикет, не второй текст алгоритма.
+
+**Факт:** `millBuckets` + `millSchedule.run_mill_schedule`; leftover walk `iter_rect_z_cells`; цикл `z_top`; Q2 `(z_q1, slot)`.
+
+**Fix (2026-08-25):** сверка с § Две очереди seed — код = канон (один walk; Q2 из событий станка; нет третьей очереди seed).
+
+**Почему баг:** покрытие heightmap не следовало из трёх проходов по сетке. Повторный walk rect за каждый drain — лишняя стоимость.
+
+**Target:** канон ТЗ. Станок после seed не копировать. Не `OR` предикатов в одном drain.
+
+**Готово когда:** код = § Две очереди в ТЗ (один walk; ключи `{z}_{uid}`; Q2 с `z_q1`; индекс без дубля; `z_top` = один leftover z; луч до упора). Снос `is_q3_seed` — **T-19**. Полиш god-функции/контрактов — **T-20…T-23** ✅.
+
+---
+
+#### R41-T-19 — удалить mill-очередь Q3
+
+**Ось:** leftover mill. **Status:** `resolved`. **P:** P1.
+
+**SoT очередей** — [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Две очереди seed. Этот ID — **удалить третью очередь seed из кода**, не снять attach.
+
+**Факт:** `is_q3_seed` / `q3_s` / `q3_parent*` сняты из `application/`. Бок = Q2 `is_side_seed` + bake `side_parent` / `side_parent_slot`. Grep mill/discover `is_q3_seed` пуст.
+
+**Target:**
+
+- Mill: нет `_drain(..., is_seed=_q3)`. Бок коридора сеется только как Q2 (T-18).
+- Удалить `is_q3_seed`. Parent бока считать в mill Q2 (тот же min\|Δz\|), писать в bake-поле **без имени Q3** (`side_parent` / `side_parent_slot`).
+- Убрать `q3_s` из mill timings и bake JSON.
+- Тесты discover: третья очередь / `is_q3_seed` — нет; бок = Q2 + attach.
+- Тесты T-3c attach: поведение то же, имена без `q3_*`.
+
+**Не делать:** снять бок-attach (System); колонку SQL; `0002_*.sql`; Occupancy v1; вернуть drain Q3 «на всякий случай».
+
+**Готово когда:** grep mill/discover/tests `is_q3_seed` / `q3_s` / `q3_parent` пуст; attach бока жив; schema `0001` без смены. Полиш слоёв после rename — **T-20…T-23** ✅.
+
+---
+
+#### R41-T-20 — `discover_fronts` god-функция
+
+**Ось:** god-функция / SRP. **Status:** `resolved`. **P:** P2.
+
+**Fix (2026-08-25):** `millSchedule.run_mill_schedule` держит `z_top` / enqueue / drain / `_seed_one` / attach. `discover_fronts` — leftover `iter_rect_z_cells` → schedule → sheer / finalize / C38. Rim/Front/Seam отдельные.
+
+**Связь:** ревью mill Q1/Q2 (2026-08-25). Канон очередей — [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Две очереди seed. Этот ID — вынести планировщик, не менять канон `z_top` / один walk / Q2 из mill.
+
+**Факт:** `discover/core.py` `discover_fronts` (~190 строк тела, модуль ~295). Один вызов закрывает:
+
+| Слой | Что делает сейчас внутри фасада |
+|---|---|
+| leftover | `MillBuckets.fill_leftover` |
+| расписание | цикл `z_top` → C39 leftover → drain Q2 (посадки, потом бока) → `drop_leftover_z` |
+| mill-события | `_enqueue_q2`: 8-соседи тела → `is_q2_seed`; 8-соседи нового SLOPE-коридора → `is_side_seed` |
+| станок | `_seed_one` (plugin → flood → `add_vertex` → `propose` → `commit`) — это **оставить** одним |
+| bake-attach | `_record_side` → `vertices.side_parent` |
+| телеметрия | литералы `mill_stage_s` dict |
+| хвост discover | `propose_sheers` / `seam.finalize` / `reconcile_members` |
+
+Восемь closures (`_parent_sheers`, `_in_slope_trace`, `_live_corridor_slot`, `_record_side`, `_claim_body`, `_enqueue_q2`, `_mill`, плюс вложенный drain) делят мутабельные `fronts` / `buckets` / `vertices`. Это не god-**класс**; это god-**функция**. `MillBuckets` сам по себе узкий (индекс + leftover/Q2).
+
+**Почему баг:** смена расписания, attach или таймингов правится в том же теле, что sheer/C38. Неявное состояние closures легко сломать при третьем виде Q2 (**T-21**). **T-9** уже вынес жир из `discover_and_paint`; жир уехал вниз в `discover_fronts`.
+
+**Target:**
+
+1. Модуль планировщика рядом с `millBuckets` (не раздувать `types.py`, не склеивать Rim/Front/Seam в `core.py`).
+2. `discover_fronts` тонкий: walk leftover → `run_schedule` → sheer/finalize/C38.
+3. `_seed_one` не копировать на очередь. Не второй пул. Не Occupancy v1. Не `OR` C39∨посадка∨бок в одном `is_seed`.
+
+**Не делать:** вернуть три `_drain` по сетке; класть ведра на `ReliefVertices`; менять DAG/schema.
+
+**Готово когда:** цикл `z_top` / enqueue / drain не в теле фасада; юниты discover + T-3c persist зелёные; Rim/Front/Seam по-прежнему отдельные стадии.
+
+---
+
+#### R41-T-21 — неявные контракты mill Q1/Q2
+
+**Ось:** неявный контракт. **Status:** `resolved`. **P:** P2.
+
+**Fix (2026-08-25):** выход `DiscoverResult` (`vertices`, `fronts`, `side_parent`, `mill: GradePipelineTimings`). `BucketRef` = семья + z + bake slot (`UNSET_SLOT`). `MillOrigin` вместо `kind=None`. Live corridor — `LiveCorridors` / `CorridorLive`. «Непокрытый сосед следа» в ТЗ = `is_side_seed`. `VertexSlotSeam.side_parent_slot` только у покрашенных слотов. `from_mill(dict)` снят.
+
+**SoT:** § Две очереди seed — ключи leftover `(z, unset)` / claimed `(z, uid)` / Q2 `(z_q1, uid)`; клетка ∈ одно ведро; предикаты раздельно; третий вид Q2 = «непокрытый сосед следа».
+
+**Факт — таблица контрактов, которых нет в типе:**
+
+| Контракт | Как живёт в коде | Слом |
+|---|---|---|
+| Отчёт mill | `ReliefVertices.mill_stage_s: dict[str, float]` | `GradePipelineTimings.from_mill` / `detailedGradeDiscover` / `_PIPELINE_KEYS` в `detailed_bake.py` читают те же строки. Нет ключа → `0.0`. Пустой `plugins` отдаёт другой набор (`mill_setup_s`/`mill_s` only) |
+| Ключ ведра | `BucketKey = tuple[int, int]` = `(z, uid)` | claimed Q1 и Q2 могут быть одним кортежем `(z_top, slot)`. Различает только строка `FAMILY_Q1`/`FAMILY_Q2` (**T-22**). `move` не в ту семью typecheck не ловит |
+| `uid` в ключе | 1-based **slot** `ReliefVertices`, не SQL uid (`uids` пустые до T-3c) | SoT «bake-uid = слот» нигде не названо у `move(..., (z, slot))` |
+| `q2_kind: str \| None` | `None` = mill leftover Q1; `"side"` пишет `side_parent`; `"landing"` не пишет | булев «это Q2» спрятан в optional string |
+| Виды Q2 | drain: `if kind == LANDING: … else: is_side_seed` | `else` считает видов ровно два. Третий TZ-вид («непокрытый сосед следа») молча не существует: enqueue только посадка с тела + бок с коридора |
+| Живой коридор | `occ` на `\|dz\|=1` — на finalize; apron берёт `in_slope_trace` / `corridor_slot` | «коридор = occ ∨ live trace» = optional callback из closures **T-20**. Забыл callback → бок на отложенном `occ` не сеется |
+| Срез фронтов mill | `fronts[n_fronts:]` после `_seed_one` | «новые фронты этого seed» = append в тот же list. Побочный append ломает enqueue |
+| Двойной фильтр Q2 | enqueue проверяет предикат; drain проверяет снова и `discard`; `is_side_seed` внутри зовёт `is_q2_seed` и `seed_rim` | «не OR» закодирован трижды. Расхождение enqueue vs drain vs apron → дыра или вечный discard |
+| Attach → System | `build_vertex_slot_seams` идёт по `painted_uids`; `side_parent` на непокрашенном слоте в `VertexSlotSeam` не попадает | fingerprint молчит; UF в `gradeVertexSystem` не видит child (было так у `q3_parent`, контракт не записан) |
+
+**Почему баг:** канон ТЗ есть; wire mill — словари и кортежи. Смена ключа timings или третьего вида Q2 не ломает typecheck. Третий вид Q2 в SoT vs два предиката в `apron.py` — либо дыра покрытия, либо недописанный SoT.
+
+**Target:**
+
+1. Выход discover — `GradePipelineTimings` (или поле этого типа), не `dict[str, float]`. `from_mill` не парсит свободные ключи.
+2. Named bucket ref: семья + `(z, uid)` в одном типе; `uid` слота явно (не «просто int»).
+3. Q2 kind — enum/`Literal` закрытый; mill Q1 не через `kind=None`.
+4. Третий вид Q2: **либо** отдельный kind + предикат + enqueue с соседей следа, **либо** одна строка в [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Две очереди, что «непокрытый сосед следа» = `is_side_seed` (same-z бок коридора). Не оставлять висящим.
+5. Live corridor: один объект/метод «клетка коридора SLOPE сейчас», не пара optional callback.
+6. Docstring/`VertexSlotSeam`: attach в fingerprint только если слот покрасился; это не снятие бок-attach.
+
+**Не делать:** третий **очередь** seed; снять бок-attach; `0002_*.sql`; Occupancy v1; OR всех предикатов в одном drain.
+
+**Готово когда:** timings без параллельного dict; ключ ведра не голый `(int,int)` + строка сбоку; третий вид Q2 закрыт (код или ТЗ); live corridor не optional «если передали».
+
+---
+
+#### R41-T-22 — хардкоды mill (family / kind / timings keys)
+
+**Ось:** хардкод. **Status:** `resolved`. **P:** P2.
+
+**Fix (2026-08-25):** `MillFamily` / `Q2Kind` / `Q2_DRAIN_ORDER`; `UNSET_SLOT`; `GradePipelineTimings.wire_keys()` + bake-only `grade_persist_s`/`l2_s`; `mill_log_fields` = `as_dict` минус `grade_s`/`materialize_s`; `log_name` / `walks` сняты; `enclosed_one_cell_pit` сравнивает `FREE_MARK`.
+
+**Факт:**
+
+| Литерал | Где | Риск |
+|---|---|---|
+| `"q1"` / `"q2"` | `millBuckets.FAMILY_*`, сравнения в `insert`/`move`/`q2_for`/`max_leftover_z` | опечатка семьи не ловится |
+| `"landing"` / `"side"` | `Q2_LANDING` / `Q2_SIDE`; `_Q2_KINDS` в `core.py`; `q2_kind ==` | порядок drain = кортеж строк в фасаде |
+| `UNSET_UID = 0` | leftover key `(z, 0)` | 0 = «нет uid»; слот 0 не существует — знание локальное |
+| `"q1_s"`, `"q2_s"`, `"mill_sheer_s"`, … | `core.py` запись `mill_stage_s`; `GradePipelineTimings.from_mill` / `mill_log_fields`; `detailed_bake._PIPELINE_KEYS` | четыре копии wire; забытый ключ = 0 |
+| `log_name(z, uid) → f"{z}_{uid}"` | `millBuckets.py` | мёртвый код; SoT имя лога никто не зовёт |
+| `MillBuckets.walks` | +1 в `fill_leftover` | счётчик для теста в продовом типе |
+| `at_grid[ni] == 0` | `apron.enclosed_one_cell_pit` | рядом `FREE_MARK`; не новый в T-18, тот же модуль предиката |
+
+`WHY_SIDE_ATTACH = "side_attach"` — именованная константа, **не** этот smell.
+
+Алгоритмические `EIGHT_DELTAS` / 1-based slot — не хардкод политики.
+
+**Почему баг:** контракт очередей и JSON mill — строки. Enum/`Literal` + один список полей timings убирают четвёртую копию.
+
+**Target:** `enum` или `Literal` для семьи и Q2 kind; leftover unset не голый `0` без имени типа; `GradePipelineTimings` — единственный перечень ключей mill (script bake читает dataclass/`as_dict`, не свой `_PIPELINE_KEYS` mill-части). Удалить `log_name`, если лог не пишется; `walks` не публичный продовый счётчик (тест через один вызов `fill_leftover` / inspect, не поле).
+
+**Не делать:** литералы knobs/`stamp_min_abs_dz` в mill; второй набор default’ов параллельно POJO.
+
+**Готово когда:** grep mill `FAMILY_Q1 = "q1"` / `"landing"` вне enum нет; timings keys не копипаст в `detailed_bake` кроме чтения `as_dict`; мёртвый `log_name` снят или реально логирует.
+
+---
+
+#### R41-T-23 — смешение ответственности mill / vertices / apron
+
+**Ось:** SRP / смешение. **Status:** `resolved`. **P:** P2.
+
+**Fix (2026-08-25):** `ReliefVertices` без `side_parent` / `mill_stage_s`. `build_vertex_slot_seams(..., side_parent=)`. Leftover walk — `rim.iter_rect_z_cells`; buckets только insert/move. `is_side_seed` = геометрия; C39/посадка — `is_q2_side_event` в scheduler. Hydro `blocks_grade_seed` на посадке и на боку.
+
+**Факт — кто что несёт после T-18/T-19:**
+
+| Тип / модуль | Своя зона | Чужое |
+|---|---|---|
+| `discover_fronts` | фасад discover | расписание очередей + writer `side_parent` + CPU-отчёт + sheer/C38 (**T-20**) |
+| `ReliefVertices` | слоты / `occ` / `seam` / facing / `members` | `side_parent` (bake-след fingerprint, persist-смысл) **и** `mill_stage_s` (телеметрия orchestrator’а). План T-18: ведра **не** сюда — соблюдено; persist/timings остались |
+| `MillBuckets.fill_leftover` | индекс очередей | линейный walk `origin/width/height` + `surface.z`. Раньше walk был `RimStage.buckets_high_to_low`. Теперь rim не ходит, очередь знает сетку |
+| `is_side_seed` | бок same-z SLOPE-коридора | исключает C39 (`seed_rim`) и посадку (`is_q2_seed`); hydro `blocks_grade_seed` есть здесь и **нет** в `is_q2_seed` |
+| `GradePipelineTimings` | typed CPU-sum | заполняется **после** парсинга dict с `vertices`, не на выходе mill |
+
+**Почему баг:** индекс геометрии — не очередь, не JSON mill, не fingerprint T-3c. Предикат бока — не арбитр «какая очередь выиграла». Walk heightmap — не метод множества вёдер (один раз — да; владелец walk — вопрос границы).
+
+**Target:**
+
+1. `side_parent` не поле `ReliefVertices`: рядом с fingerprint (уже есть `VertexSlotSeam.side_parent_slot`) или узкий mill-out объект, который `build_vertex_slot_seams` читает явно.
+2. Timings не на `vertices`: возврат/поле оркестратора, `from_mill(dict)` снять (**T-21**).
+3. Walk leftover: либо `RimStage`/helper «клетки rect с z», `MillBuckets` только `insert`; либо явно задокументировать, что buckets — ещё и один walk (сейчас молча).
+4. `is_side_seed`: геометрия бока; «не C39 / не посадка» — у планировщика при enqueue (предикаты раздельно, не вложенный вызов чужой очереди). Hydro block — один канон для посадки и бока, не асимметрия.
+
+**Не делать:** ведра обратно на `ReliefVertices`; склеивать Rim/Front/Seam; снять бок-attach persist; колонка SQL parent.
+
+**Готово когда:** grep `ReliefVertices.side_parent` / `mill_stage_s` пуст или поле только geometry; `is_side_seed` не вызывает `is_q2_seed`/`seed_rim`; walk сетки не спрятан как побочный смысл очереди.
+
+---
+
+#### R41-T-24 — `z_at` → `z_height_map`
+
+**Ось:** naming. **Status:** `resolved`. **P:** P3.
+
+**Fix (2026-08-25):** канон `z_height_map` — метод `ReliefSurface` / `MeterGradeSurface`, Mapping в `gradeCellRays` / `unified_surface_facings` / persist, Callable `iter_body_eight_views` / `measure_terrain_descent`, alias `ZHeightMap`. Consume: «нет в `z_height_map`». `ParentLightTile.surface_z_at` и city `terrain_z_at` не трогали. Поведение omit / R44 / T-17 без изменений.
+
+**Почему баг:** `z_at` читалось как «высота этой клетки» или «z отсутствует». «Нет в карте» значит **нет ключа** в heightmap bake (край тайла / мира / дыра в гриде), не `z == 0`.
+
+**Готово когда:** grep relief `z_at` (discover / validate / pack refine meter / `gradeRimRay` / тесты pack-лучей / consume) пуст; поведение то же.
 
 ---
 
@@ -1437,11 +1694,13 @@ Classify/`dz` pick смотрят дальний конец полного сл�
 
 #### R41-T-13 — равная z ямы не на envelope
 
-**Ось:** dataModel / хардкод. **Status:** `open`. **P:** P2.
+**Ось:** dataModel / хардкод. **Status:** `resolved`. **P:** P2.
 
 **SoT:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) R41-T-5 / C34 — равная z продолжает L только ravine и берег с `grades_channel_bed`. Open_land / обочина стопят при `z == z_prev` (k>1).
 
-**Факт:** `FrontStage._continue_equal_z`: `if plugin.context is ReliefContext.RAVINE: return True`, иначе `envelope.grades_channel_bed`. Канонический ravine envelope — `ReliefTerrainEnvelope()` (`is_unconstrained`, `grades_channel_bed=False`). Смена поля на ravine-строке конверта walk не сдвинет.
+**Факт (было):** `FrontStage._continue_equal_z`: `if plugin.context is ReliefContext.RAVINE`. Канон ravine — пустой envelope, `grades_channel_bed=False`.
+
+**Fix (2026-08-25):** ravine `_ravine_canonical()` = `grades_channel_bed=True`. Walk = `bool(env.grades_channel_bed)`. `is_unconstrained` не включает walk-флаг (geom pass-through). Override `False` стопит equal-z. `fronts.py` без `ReliefContext`.
 
 **Почему баг:** два источника политики. Shore читает POJO; яма — литерал контекста в discover. `dataModel-no-hardcode`: правило класса земли должно жить на envelope.
 
@@ -1453,43 +1712,37 @@ Classify/`dz` pick смотрят дальний конец полного сл�
 
 #### R41-T-14 — один `seam[]` на два смысла C41
 
-**Ось:** неявный контракт. **Status:** `open`. **P:** P3.
+**Ось:** неявный контракт. **Status:** `resolved`. **P:** P3.
 
 **Факт:** `SeamStage` считает same-facing overlap и multi-facing shared anchor отдельно, пишет оба в `vertices.seam`. Occupancy = клетка ∈ ≥2 следов (как до ключа Facing). C39 не сеет с `seam≠0` в обоих случаях.
 
 **Почему smell:** ТЗ различает шерсть и якорь низины; массив один. Debug/ASCII/`is_seed` не отличить. Пока C39 одинаков — не блокер.
 
-**Target:** оставить один флаг + docstring **или** два поля, если появится потребитель, которому нужен только якорь. Не два Instance на клетку. Не первый-занял.
-
-**Готово когда:** либо тип различает смыслы, либо ТЗ явно «один `seam`, оба случая».
+**Fix (2026-08-25):** один `seam[]` locked. Docstring `ReliefVertices` / `SeamStage` + C41 в ТЗ: шерсть и якорь низа — один флаг; C39 не сеет оба. Два поля — later.
 
 ---
 
 #### R41-T-15 — L=1 stamp vs якорь низа R36t
 
-**Ось:** неявный контракт / R36t. **Status:** `open`. **P:** P2.
+**Ось:** неявный контракт / R36t. **Status:** `resolved`. **P:** P2.
 
 **Факт:** одиночный `4→3` (L=1) кладёт нижнюю клетку в коридор и `occ` (`test_canonical_plains_stamps_unit_open_land`). R36t: не мутировать верхнюю и нижнюю точку перепада. Дырка `4` вокруг одной `3` — skip (пустой коридор после шва) — **locked SoT**, не этот ID. Смешанное кольцо `6/4/3` вокруг `2` — **C41 finalize** (яма шов, не `occ` пика); не этот ID.
 
 **Почему smell:** stamp одиночного L=1 и формулировка якорей расходятся. Чаша 1×1 не красится; изолированное ребро красится на «якоре низа».
 
-**Target:** в ТЗ явный exception «L=1 corridor = первая downhill, это не запрет R36t» **или** не писать uid на нижнюю клетку и выбрать другую клетку/`cell_refs` (не uid на тело вершины). Не четыре uid на одну `3`. Не открывать Occupancy v1.
-
-**Готово когда:** R36t и unit-stamp L=1 не противоречат; юнит одиночного ребра и дырки 1×1 зелёные.
+**Fix (2026-08-25):** TZ R36t exception: L=1 corridor = первая downhill; stamp uid на неё разрешён. Дырка 1×1 / кольцо на общую `3` — C41 skip, не этот exception. Верхняя кромка без uid (C11). Юнит `test_canonical_plains_stamps_unit_open_land` остаётся.
 
 ---
 
 #### R41-T-16 — `slope_fits` vs `L_min`
 
-**Ось:** неявный контракт. **Status:** `open`. **P:** P3.
+**Ось:** неявный контракт. **Status:** `resolved`. **P:** P3.
 
 **Факт:** `slope_fits` — только θ-band (`L_min` не veto). `slope_length_for` поднимает L до `max(L_tpl, ceil(h/tan θmax), L_min)`. `grade_constrained` без `path_length` на plains `dz=1` запрашивает L=20. Discover после стопа равной z даёт короткий луч — live bake спасает cap.
 
 **Почему smell:** unit без ray cap и bake с cap — разное L на том же envelope. Call site легко вызвать inner без `path_length`.
 
-**Target:** один канон в docstring facade: classify без луча ≠ stamp; **или** `grade_constrained` без cap не применять L_min к короткому θ-fit. Не дублировать 20/45 вне POJO.
-
-**Готово когда:** call sites `grade_constrained` либо всегда с `path_length`, либо unit явно документирует L=20 без луча.
+**Fix (2026-08-25):** docstring `slope_length_for` / `grade_constrained`: classify без луча ≠ stamp. Stamp (`ribbonGrade`, `detailedGradeFrontPick`) передаёт `path_length`. Unit без cap документирует L=20. `slope_fits` остаётся θ-only (`plains.slope_fits(1, 1)`).
 
 ---
 
@@ -1616,6 +1869,12 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-25 | **R41-T-17 ✅:** leftover + COUPLE; first-wins; валидатор не invent из z. **T-18/T-19 ✅** mill Q1/Q2, нет `is_q3_seed`. **T-13 ✅** equal-z = envelope. **T-14** один `seam[]`. **T-15 ✅** L=1 TZ exception. **T-16** θ vs L_min в docstring |
+| 2026-08-25 | **R41-T-20…T-23 ✅:** `millSchedule`; `DiscoverResult`; `BucketRef`/`MillFamily`/`Q2Kind`; `LiveCorridors`; timings без `from_mill`; leftover walk на rim; `is_side_seed` геометрия. T-18/T-19 ✅; T-13…T-16 ✅ |
+| 2026-08-25 | **R41-T-19 open P1 третьим:** снос mill Q3 (`is_q3_seed`, `q3_s`, `q3_parent`); бок-attach persist оставить; rename bake-полей. После T-18 |
+| 2026-08-25 | **R41-T-18 SoT:** вёдра Q1 leftover/claimed + Q2 `(z_q1, uid)`; один walk сетки; `z_top` = один leftover z; луч до упора; без отдельного clear очереди. После T-17 |
+| 2026-08-25 | **T-17 уточнение:** dump `+` на same-z = smoke generate, не задача ASCII. Чинить persist COUPLE + валидатор не закрывать из z |
+| 2026-08-25 | **R41-T-17 open P1 первым:** pack leftover-only vs 8 слотов + COUPLE (consume TZ / R41 C41). Валидатор invent закрытие из z. Чинить до T-13…T-16 |
 | 2026-08-19 | **R41-T-13…T-16 open:** равная z ямы не на envelope (`if RAVINE`); один `seam[]` на шерсть+якорь; L=1 vs R36t; `slope_fits` vs L_min. T-5 остаток → T-13. Не Occupancy v1, не DAG |
 | 2026-08-18 | **R41-T-9…T-12 ✅:** тонкий `discover_and_paint`; identity builder; walk cap envelope/knobs; site `PackJobUid`; owner omit; новые модули без `Coord` alias |
 | 2026-08-18 | **Слой 7 срез v1 ✅:** sample/stitch/`planned` удалены. Next **R41-T-9…T-12** |

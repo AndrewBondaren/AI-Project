@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
+from app.application.worldData.generators.terrain.relief.discover.timings import (
+    GradePipelineTimings,
+)
 from app.application.worldData.persistResult import PersistResult
 from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
@@ -21,6 +24,7 @@ class FineRefineResult:
     rim_rays: tuple[GradeRimRay, ...] = ()
     materialize_s: float = 0.0
     grade_s: float = 0.0
+    pipeline_s: GradePipelineTimings = field(default_factory=GradePipelineTimings)
 
     @classmethod
     def empty(cls) -> FineRefineResult:

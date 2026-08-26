@@ -38,7 +38,7 @@ CARDINAL_DELTAS: frozenset[tuple[int, int]] = frozenset(
 
 def iter_body_eight_views(
     body: Mapping[tuple[int, int], int],
-    z_at: Callable[[tuple[int, int]], int | None],
+    z_height_map: Callable[[tuple[int, int]], int | None],
 ) -> Iterator[tuple[tuple[int, int], Facing, tuple[int, int], int, int]]:
     """Vertex body × 8: ``(src, facing, neighbor, z_src, z_nb)`` when neighbor z exists.
 
@@ -50,7 +50,7 @@ def iter_body_eight_views(
         for facing in EIGHT_FACINGS:
             dx, dy = GRID_OUTWARD_DELTA[facing]
             nb = (src[0] + dx, src[1] + dy)
-            zn = z_at(nb)
+            zn = z_height_map(nb)
             if zn is None:
                 continue
             yield src, facing, nb, z_src, int(zn)

@@ -6,10 +6,10 @@ metadata:
   type: project
 ---
 
-> **Статус:** SoT **pack ASCII render** (файлы, L0/L2 keys, wire membership). **PAR-G\*** locked · **R36u** grade writer = detailed_bake geometry. Глиф клетки outdoor grade (3×3, выравнивание с `surface_z`) — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md); код: `gradeRayDump` читает sidecar `grade_rays.json` (SLOPE / SHEER / COUPLE).  
-> **Generate vs render:** рендер **не** materialize terrain/grade и **не** invent слот через `opposite` / сравнение z; membership — pack wire / FineTerrain; **8 слотов** — pack sidecar (все лучи фронтов + COUPLE same-z; не тело×8 как SLOPE/SHEER). `+` только из kind COUPLE.  
+> **Статус:** SoT **pack ASCII render** (файлы, L0/L2 keys, wire membership). **PAR-G\*** locked · **R36u** grade writer = detailed_bake geometry. Глиф клетки outdoor grade (3×3, выравнивание с `surface_z`) — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md); dump читает `slots[8]` (`SCH-GRADE-CELL-SLOTS`), не `rays[]`.  
+> **Generate vs render:** рендер **не** materialize terrain/grade и **не** invent слот через `opposite` / сравнение z; membership — pack wire / FineTerrain; **8 кодов** — consume § Тело sidecar. `+` только из `COUPLE`.  
 > **Dump:** debug ASCII **для разработчика** (не мастер мира, не игрок, не DAG). Sink: [`tz_logging.md`](./tz_logging.md) `render/dumpLog`.  
-> **Grade generate SoT:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) (**R36u** / **R36t**). **Consume / 3×3:** [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md). **Pack storage:** [`tz_world_pack_storage.md`](./tz_world_pack_storage.md).
+> **Grade generate SoT:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) (очереди, стрелки). Bake **R36u** / **R36t** — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). **Consume / 3×3:** [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md). **Pack storage:** [`tz_world_pack_storage.md`](./tz_world_pack_storage.md).
 
 # Pack ASCII / grid render
 
@@ -53,7 +53,7 @@ metadata:
 | **`surface_z`** → **`surface_z.txt`** | ✅ | per-cell **max world-z** (FineTerrain top); L2 analog of L0 `height` |
 | `column_span` / `cliff_delta` | ✅ diag | см. [`tz_mountain_architecture.md`](./tz_mountain_architecture.md) § Debug render |
 | numeric z → `z/{n}.txt` | ✅ | material slice at world-z. **Dump files:** `sparse_xy` (only occupied cells) — not a full mosaic of spaces per z. HTTP `?z=` remains aligned ASCII. **Dump clip:** `--z-range N[:M]` (inclusive, colon) |
-| **`surface_grade`** → **`surface_grade.txt`** | ✅ путь; глиф — consume TZ | **3×3** (центр всегда + до 8 слотов pack: SLOPE / SHEER / COUPLE `+`), поле **W** как `surface_z`, **3 строки / gy**. Слоты — `grade_rays.json`. `+` = kind COUPLE, не сравнение z. Omit если нет слотов pack и нет uid |
+| **`surface_grade`** → **`surface_grade.txt`** | ✅ путь; глиф — consume TZ | **3×3**, поле **W** как `surface_z`, **3 строки / gy**. Слоты — `grade_rays.json` § Тело sidecar. `+` = `COUPLE`. Omit если нет клеток sidecar и нет uid |
 | **`grade_{n}`** → **`z/grade_{n}.txt`** | ✅ слой; **dump opt-in** | **composite:** material at z + grade только где `surface_z == n`; omit если на этом z нет grade. **Dump:** только с `--grade-z` (иначе слишком много файлов / wall). Crop frame (+1 halo). HTTP / `surface_grade` без флага |
 
 **Locked (мастер):**
@@ -87,7 +87,7 @@ metadata:
 
 | ID | Контракт |
 |---|---|
-| **PAR-G1** | Single-writer **geometry** outdoor grade = **`detailed_bake` geometry** ([`tz_terrain_relief.md`](./tz_terrain_relief.md) **R36u** / **R36v**). **Не** L0 ribbon |
+| **PAR-G1** | Single-writer **geometry** outdoor grade = **`detailed_bake` geometry** ([`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **R36u** / **R36v**). **Не** L0 ribbon |
 | **PAR-G2** | Detailed **generate** grade в chunk pool (R36v / стык **R36w**; R36 materialize + entity + refs; anchors **R36t**). **Запрещено:** трактовать detailed как «только propagate L0 uid»; **запрещено** invent uid без bake-формирования грани; **запрещён** tile-wide serial scan как SoT |
 | **PAR-G3** | Membership = только `system_grade_uid` (omit если нет); h/L/angle на Grade entity (R24, R36h/j, C11) |
 | **PAR-G4** | Empty omit. Outdoor 8-ray: пусто = нет слотов в pack **и** нет uid ([`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md)); ~~omit только по uid~~ не SoT (rim без stamp). Per-z: нет файла, если на этом z нечего показать |
@@ -146,7 +146,8 @@ Open product XOR по L2 grade ASCII — **нет**.
 
 | Документ | Что остаётся там |
 |---|---|
-| [`tz_terrain_relief.md`](./tz_terrain_relief.md) | generate (**R36u** detailed geometry), Grade entity, templates, R36 / **R36t** |
+| [`tz_terrain_relief.md`](./tz_terrain_relief.md) | generate SoT (очереди, стрелки) |
+| [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) | bake **R36u** / Grade entity / templates / **R36t** |
 | [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | клетка 3×3, pack 8 слотов (SLOPE / SHEER / COUPLE), wire/SQL, LLM uid→Instance→System |
 | [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | FineTerrain blob layout; categorical carry **не** для grade uid |
 | [`tz_map_light_bake.md`](./tz_map_light_bake.md) | L0 paint/bake frame (MLB); **без** outdoor grade writer |
@@ -159,7 +160,7 @@ Open product XOR по L2 grade ASCII — **нет**.
 
 | Дата | Изменение |
 |---|---|
-| 2026-08-23 | **Dump = debug ASCII разработчика:** не мастер мира, не игрок, не DAG; COUPLE в pack, dump только читает. |
+| 2026-08-26 | **Sidecar `slots[8]`:** dump читает `SCH-GRADE-CELL-SLOTS` — consume § Тело sidecar |
 | 2026-08-23 | **Pack 8 слотов:** sidecar SLOPE/SHEER/COUPLE; dump не invent `+` из z — consume TZ |
 | 2026-08-23 | **grade_rays = фронт:** pack лучи фронта (не тело×8) — consume TZ |
 | 2026-08-23 | **Сцепление `+` (superseded same-day):** сначала equal-z на dump; затем COUPLE в sidecar — строка «Pack 8 слотов». |

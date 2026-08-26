@@ -253,7 +253,13 @@ def grade_constrained(
     z_band: int | None = None,
     path_length: int | None = None,
 ) -> RibbonGradeDecision:
-    """Clamp template knobs to ontology envelope, then ``grade_from_template``."""
+    """Clamp template knobs to ontology envelope, then ``grade_from_template``.
+
+    Stamp callers pass ``path_length`` (corridor / ribbon cap). Omit
+    ``path_length`` = classify/construct without a ray: ``slope_length_for``
+    may still apply ``L_min`` (plains unit ``dz=1`` → L=20). ``slope_fits``
+    is θ-band only and does not veto short L.
+    """
     h = abs(int(dz))
     table = envelopes or ReliefOntologyEnvelopes.canonical_defaults()
     mapped = map_system_terrain(terrain_key)

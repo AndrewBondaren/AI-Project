@@ -1,4 +1,4 @@
-﻿---
+---
 name: tz-locations
 description: "ТЗ по системе локаций — два уровня карты, иерархия, terrain, климат, ресурсы, состояния, engine flow, фронтенд"
 metadata: 
@@ -33,7 +33,7 @@ INDEX (world_uid, x, y)
 ```
 Весь мир — единое 3D-пространство. z=0 = уровень моря. Поверхностный terrain, подземелья, интерьеры — все в одной системе координат. **x = y = z = 1м на ячейку** — единая шкала без конвертаций. Этаж здания = 3 z-юнита (конвенция). LLM сырую матрицу не получает — только `named_locations`.
 
-**Технический шов pack** (макро-тайл / chunk / `ColumnRect`) **не** граница локации. Город или `named_location` **могут** сидеть на ребре двух тайлов или на грани чанка — это норма. Один `location_uid`, один `territory_volume` в мировых координатах; layout/улицы/здания не режутся по сетке bake. Pack: один `locations/l.{uid}.terrain.zst` на весь volume; wilderness mask на каждом пересечённом тайле (WP-19). Grade на шве — catalog `face_key`, не второй uid «для локации». SoT: [`tz_terrain_relief.md`](./tz_terrain_relief.md) **C29**. Две разные локации у ребра — их volumes (WP-21), не `face_key`.
+**Технический шов pack** (макро-тайл / chunk / `ColumnRect`) **не** граница локации. Город или `named_location` **могут** сидеть на ребре двух тайлов или на грани чанка — это норма. Один `location_uid`, один `territory_volume` в мировых координатах; layout/улицы/здания не режутся по сетке bake. Pack: один `locations/l.{uid}.terrain.zst` на весь volume; wilderness mask на каждом пересечённом тайле (WP-19). Grade на шве — catalog `face_key`, не второй uid «для локации». SoT: [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **C29**. Две разные локации у ребра — их volumes (WP-21), не `face_key`.
 
 ### `system_terrain` vs `system_building_element`
 
@@ -905,7 +905,7 @@ price = tier.base_value × location.economic_modifier × supply_demand_modifier 
 
 Городские стены и стены крепостей — `barrier_template_registry`, не часть ни одного здания; размещаются на уровне settlement/territory.
 
-**Связь с relief:** шаблоны обочин ([`tz_terrain_relief.md`](./tz_terrain_relief.md) R28) могут нести `structure_refs: [system_type, …]`. Stamp вдоль ribbon — bake `ribbonBarrierApply` (**RELIEF-BAR-1 ✅**), не в relief generators.
+**Связь с relief:** шаблоны обочин ([`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) R28) могут нести `structure_refs: [system_type, …]`. Stamp вдоль ribbon — bake `ribbonBarrierApply` (**RELIEF-BAR-1 ✅**), не в relief generators.
 
 ---
 

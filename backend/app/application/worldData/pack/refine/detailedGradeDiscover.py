@@ -9,7 +9,9 @@ Catalog ``face_key`` is identity, not a seed graph. No pre-pool occupancy.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import replace
+import time
 
 from app.application.jsonValidation import (
     relief_pick_policy,
@@ -18,6 +20,9 @@ from app.application.jsonValidation import (
 )
 from app.application.worldData.generators.terrain.relief.discover.core import (
     discover_fronts,
+)
+from app.application.worldData.generators.terrain.relief.discover.timings import (
+    GradePipelineTimings,
 )
 from app.application.worldData.generators.terrain.relief.discover.plugins import (
     plugins_for_keys,
@@ -69,8 +74,14 @@ def build_vertex_slot_seams(
     vertices: ReliefVertices,
     painted_uids: dict[int, list[str]],
     rect: ColumnBounds,
+    side_parent: Mapping[int, int] | None = None,
 ) -> tuple[VertexSlotSeam, ...]:
-    """Body cells on the owned rect rim + painted Instance uids per slot (T-3c)."""
+    """Body cells on the owned rect rim + painted Instance uids per slot (T-3c).
+
+    ``side_parent_slot`` is recorded only for slots that painted (this iterates
+    ``painted_uids``). Unpainted mill sides are not in the T-3c fingerprint.
+    """
+    parents = side_parent or {}
     seams: list[VertexSlotSeam] = []
     x_lo, x_hi = int(rect.x_min), int(rect.x_max)
     y_lo, y_hi = int(rect.y_min), int(rect.y_max)
@@ -90,12 +101,12 @@ def build_vertex_slot_seams(
                 continue
             if xi == x_lo or xi == x_hi or yi == y_lo or yi == y_hi:
                 edge.append((xi, yi, int(z)))
-        parent = vertices.q3_parent.get(int(slot))
+        parent = parents.get(int(slot))
         seams.append(VertexSlotSeam(
             slot=int(slot),
             grade_uids=uids,
             edge_body=tuple(sorted(edge)),
-            q3_parent_slot=(
+            side_parent_slot=(
                 int(parent) if parent is not None and int(parent) >= 1 else None
             ),
         ))
@@ -111,11 +122,12 @@ def discover_and_paint(
     catalog: TileFaceCatalog | None,
     templates: dict[str, ReliefTemplate],
     existing_uids: dict[Coord, str] | None = None,
-) -> tuple[DetailedGradeResult, tuple[VertexSlotSeam, ...]]:
+) -> tuple[DetailedGradeResult, tuple[VertexSlotSeam, ...], GradePipelineTimings]:
     """Discover vertices/fronts on the ready heightmap, then one L2 write-set."""
     if not templates:
-        return DetailedGradeResult.empty(), ()
+        return DetailedGradeResult.empty(), (), GradePipelineTimings()
 
+    t0 = time.perf_counter()
     grid = MeterGradeSurface.from_tile_surface_state(
         surface_state, alias_heights=True,
     )
@@ -143,7 +155,8 @@ def discover_and_paint(
         return length_cap_for_context(context, templates)
 
     grid_rect = expand_rect(rect, max(0, int(halo)))
-    vertices, fronts = discover_fronts(
+    grade_setup_s = time.perf_counter() - t0
+    discovered = discover_fronts(
         grid,
         origin_x=grid_rect.x_min,
         origin_y=grid_rect.y_min,
@@ -154,6 +167,8 @@ def discover_and_paint(
         existing_uids=known,
         cap_front=cap_front,
     )
+    vertices = discovered.vertices
+    fronts = discovered.fronts
 
     world_seed = bake_seed(world)
     registry = relief_template_registry(world)
@@ -162,6 +177,7 @@ def discover_and_paint(
     acc = DetailedGradeResult.empty()
     interior_seq: dict[tuple[int, int], int] = defaultdict(int)
     painted_uids: dict[int, list[str]] = defaultdict(list)
+    paint_t0 = time.perf_counter()
     for front in fronts:
         owned = tuple(
             xy for xy in front.corridor
@@ -214,4 +230,17 @@ def discover_and_paint(
         apply_grade_uids(grid, clipped.surface_grade_uid)
         known.update(clipped.surface_grade_uid)
         painted_uids[int(front.slot)].append(uid)
-    return acc, build_vertex_slot_seams(vertices, painted_uids, rect)
+    paint_s = time.perf_counter() - paint_t0
+    seams_t0 = time.perf_counter()
+    seams = build_vertex_slot_seams(
+        vertices, painted_uids, rect, side_parent=discovered.side_parent,
+    )
+    seams_s = time.perf_counter() - seams_t0
+    timings = replace(
+        discovered.mill,
+        grade_setup_s=grade_setup_s,
+        paint_s=paint_s,
+        seams_s=seams_s,
+        grade_s=time.perf_counter() - t0,
+    )
+    return acc, seams, timings

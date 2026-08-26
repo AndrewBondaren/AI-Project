@@ -60,7 +60,7 @@ def apply_grade_paint_spec(
     if not spec.corridor:
         return DetailedGradeResult.empty()
 
-    z_top = surface.z_at(spec.anchor_top)
+    z_top = surface.z_height_map(spec.anchor_top)
     if z_top is None:
         return DetailedGradeResult.empty()
     L_eff = max_outward_k(spec.corridor, front.rim, spec.outward)

@@ -46,7 +46,7 @@ metadata:
 | C11 | **`season_changed` + LOD** — near: optional cell recalc (горы + `river_cells` bbox); far: C5 runtime + `location_weather`, **без** full-world upsert cells |
 | C12 | **LOD upgrade** — игрок входит в far rect → lazy promote: field-cache-only → per-cell batch в entering bbox |
 | C13 | **Field cache persist** — v1 in-memory на batch materialization; v2 — часть world snapshot blob или sparse derived store (CL-17); **не** отдельный модуль snapshot |
-| C14 | **Технический шов pack** (tile/chunk/`ColumnRect`) **не** climate wall. `SurfaceClimateField.sample` по разные стороны ребра — непрерывный XY field (полюса/якоря), не скачок от partition. Job uid ≠ identity field. SoT непрерывности — [`tz_terrain_relief.md`](./tz_terrain_relief.md) **C29**. Relief климат не пишет |
+| C14 | **Технический шов pack** (tile/chunk/`ColumnRect`) **не** climate wall. `SurfaceClimateField.sample` по разные стороны ребра — непрерывный XY field (полюса/якоря), не скачок от partition. Job uid ≠ identity field. SoT непрерывности — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **C29**. Relief климат не пишет |
 
 > **Черновики, не утверждены:** routing в DAG-нодах (детали), § «Surface vs volume climate» (v2.4). § «Три процесса» — контракты утверждены (C1–C5, C6–C13); impl ⬜. Стык generators ↔ DAG — [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) (**черновик целиком**).
 

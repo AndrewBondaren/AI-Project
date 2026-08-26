@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 from app.application.worldData.gradeInstanceMerge import merge_grade_instances
 from app.application.worldData.gradeVertexSystem import emit_relief_grade_systems
+from app.application.worldData.generators.terrain.relief.discover.timings import (
+    GradePipelineTimings,
+)
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_grade_ray_sidecar_done,
@@ -35,14 +39,11 @@ from app.application.worldData.pack.refine.fineTileContext import (
 )
 from app.application.worldData.persistResult import PersistResult
 from app.application.worldData.generators.terrain.relief.validate.gradeCellRays import (
-    grade_ray_universe,
-    validate_grade_cell_empty_rays,
+    validate_grade_cell_slots,
 )
-from app.dataModel.terrain.relief.gradeRimRay import (
-    GradeRimRay,
-    merge_grade_rim_rays,
-    pack_rim_slot_rays,
-)
+from app.application.worldData.pack.refine.gradeCellSlots import pack_cell_slots
+from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay
+from app.dataModel.terrain.relief.gradeSlot import GradeCellSlots
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume, inside_location_volume
@@ -96,6 +97,7 @@ class FineChunkPersist:
         self._written = 0
         self._materialize_s = 0.0
         self._grade_s = 0.0
+        self._pipeline_s = GradePipelineTimings()
         self._lock = asyncio.Lock()
 
     def persist_rect(self, result: ChunkComputeResult) -> None:
@@ -103,6 +105,7 @@ class FineChunkPersist:
         ctx = self._ctx
         self._materialize_s += result.materialize_s
         self._grade_s += result.grade_s
+        self._pipeline_s = self._pipeline_s.added(result.pipeline_s)
         self._note_surface_z(result.cells)
         wilderness, loc_additions, loc_hits = partition_chunk_cells(
             result.cells, ctx.location_pairs, ctx.volumes,
@@ -181,20 +184,17 @@ class FineChunkPersist:
                 location_uid, chunk, territory_volume=volume,
             )
             self._total_cells += len(loc_cells)
-        cells = set(self._meter_surface_z)
-        slots = pack_rim_slot_rays(
-            merge_grade_rim_rays(self._ray_acc),
-            cells=cells,
-        )
+        occupancy = set(self._meter_surface_z)
+        packed = pack_cell_slots(self._meter_surface_z, cells=occupancy)
         sidecar_t0 = log_pack_grade_ray_sidecar_start(
-            ctx.world_uid, n_rays=len(slots),
+            ctx.world_uid, n_rays=len(packed),
         )
-        self._write_grade_ray_sidecars(slots)
+        self._write_grade_cell_sidecars(packed)
+        sidecar_s = time.perf_counter() - sidecar_t0
         log_pack_grade_ray_sidecar_done(
-            ctx.world_uid, n_rays=len(slots), started_at=sidecar_t0,
+            ctx.world_uid, n_rays=len(packed), started_at=sidecar_t0,
         )
-        universe = grade_ray_universe(slots, self._meter_surface_z)
-        n_cells = len(universe)
+        n_cells = len(occupancy)
         validate_t0 = log_pack_grade_ray_validate_start(
             ctx.world_uid, n_cells=n_cells,
         )
@@ -208,13 +208,14 @@ class FineChunkPersist:
                 started_at=validate_t0,
             )
 
-        n_empty = validate_grade_cell_empty_rays(
-            universe,
-            slots,
-            z_at=self._meter_surface_z,
+        n_empty = validate_grade_cell_slots(
+            occupancy,
+            packed,
+            z_height_map=self._meter_surface_z,
             on_progress=_validate_progress,
             progress_every=EXECUTEMANY_BATCH_SIZE,
         )
+        validate_s = time.perf_counter() - validate_t0
         log_pack_grade_ray_validate_done(
             ctx.world_uid,
             n_cells=n_cells,
@@ -227,6 +228,7 @@ class FineChunkPersist:
             merge_grade_instances(self._grade_acc) if self._grade_acc else ()
         )
         grade_systems: tuple[ReliefGradeSystem, ...] = ()
+        emit_s = 0.0
         if grade_instances:
             emit_t0 = log_pack_grade_systems_emit_start(
                 ctx.world_uid, n_instances=len(grade_instances),
@@ -237,12 +239,18 @@ class FineChunkPersist:
                 traces=self._seam_acc,
                 catalog=ctx.catalog,
             )
+            emit_s = time.perf_counter() - emit_t0
             log_pack_grade_systems_emit_done(
                 ctx.world_uid,
                 n_instances=len(grade_instances),
                 n_systems=len(grade_systems),
                 started_at=emit_t0,
             )
+        pipeline = self._pipeline_s.with_wall(
+            sidecar_s=sidecar_s,
+            validate_s=validate_s,
+            systems_emit_s=emit_s,
+        )
         return FineRefineResult(
             persist=PersistResult.from_counts(self._total_cells, self._total_cells),
             wilderness_chunks_written=self._written,
@@ -250,9 +258,10 @@ class FineChunkPersist:
             meter_surface_z=self._meter_surface_z,
             grade_instances=grade_instances,
             grade_systems=grade_systems,
-            rim_rays=slots,
+            rim_rays=tuple(self._ray_acc),
             materialize_s=self._materialize_s,
             grade_s=self._grade_s,
+            pipeline_s=pipeline,
         )
 
     def _note_surface_z(self, cells: list[MapCell]) -> None:
@@ -262,24 +271,26 @@ class FineChunkPersist:
             if prev is None or cell.z > prev:
                 self._meter_surface_z[key] = int(cell.z)
 
-    def _write_grade_ray_sidecars(self, slots: tuple[GradeRimRay, ...]) -> None:
-        if not slots:
+    def _write_grade_cell_sidecars(self, packed: tuple[GradeCellSlots, ...]) -> None:
+        if not packed:
             return
         ctx = self._ctx
-        wilderness: list[GradeRimRay] = []
-        by_loc: dict[str, list[GradeRimRay]] = {}
-        for ray in slots:
-            z = self._meter_surface_z.get((ray.x, ray.y))
+        wilderness: list[GradeCellSlots] = []
+        by_loc: dict[str, list[GradeCellSlots]] = {}
+        for cell in packed:
+            z = self._meter_surface_z.get(cell.cell)
             hit = (
-                location_for_cell(ray.x, ray.y, z, ctx.location_pairs)
+                location_for_cell(cell.x, cell.y, z, ctx.location_pairs)
                 if z is not None
                 else None
             )
             if hit is not None:
-                by_loc.setdefault(hit[0], []).append(ray)
+                by_loc.setdefault(hit[0], []).append(cell)
             else:
-                wilderness.append(ray)
+                wilderness.append(cell)
         if wilderness:
-            self._writer.merge_grade_rays_tile(ctx.tile_gx, ctx.tile_gy, wilderness)
-        for location_uid, rays in by_loc.items():
-            self._writer.merge_grade_rays_location(location_uid, rays)
+            self._writer.merge_grade_cell_slots_tile(
+                ctx.tile_gx, ctx.tile_gy, wilderness,
+            )
+        for location_uid, cells in by_loc.items():
+            self._writer.merge_grade_cell_slots_location(location_uid, cells)

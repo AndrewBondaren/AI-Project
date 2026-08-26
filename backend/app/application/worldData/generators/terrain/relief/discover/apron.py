@@ -1,18 +1,20 @@
-"""Q2 SHEER-landing and Q3 SLOPE-corridor side seeds — not C39 leftover rims.
+"""Q2 SHEER-landing and SLOPE-corridor side geometry — not queue arbitration.
 
-SoT: ``docs/tz_terrain_relief.md`` R41. One mill in ``core``; predicates stay split.
+Scheduler decides leftover vs landing vs side. SoT: ``docs/tz_terrain_relief.md`` R41.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 
+from app.application.worldData.generators.terrain.relief.discover.millCorridor import (
+    CorridorLive,
+)
 from app.application.worldData.generators.terrain.relief.discover.neighbors import (
     EIGHT_DELTAS,
     facing_for_delta,
     is_local_min,
 )
-from app.application.worldData.generators.terrain.relief.discover.rim import seed_rim
 from app.application.worldData.generators.terrain.relief.discover.types import (
     FOREIGN_MARK,
     FREE_MARK,
@@ -23,16 +25,20 @@ from app.application.worldData.generators.terrain.relief.discover.types import (
 )
 
 ParentSheers = Callable[[Coord, Coord], bool]
-SlopeTrace = Callable[[Coord], bool]
+
+
+def _hydro_blocks_seed(surface: ReliefSurface, xy: Coord) -> bool:
+    role = surface.hydro_role_at(xy)
+    return role is not None and role.blocks_grade_seed()
 
 
 def is_slope_corridor_cell(
     xy: Coord,
     vertices: ReliefVertices,
     *,
-    in_slope_trace: SlopeTrace | None = None,
+    live: CorridorLive | None = None,
 ) -> bool:
-    """True if ``xy`` is a committed SLOPE corridor cell during Q1–Q3.
+    """True if ``xy`` is a committed SLOPE corridor cell during Q1/Q2.
 
     ``occ`` if C41 already marked it; else the live front trace (local-min
     |dz|=1 landings stay unmarked until finalize).
@@ -42,8 +48,8 @@ def is_slope_corridor_cell(
         occ = vertices.occ[i]
         if occ != FREE_MARK and occ != FOREIGN_MARK:
             return True
-    if in_slope_trace is not None:
-        return in_slope_trace(xy)
+    if live is not None:
+        return live.is_corridor(xy)
     return False
 
 
@@ -69,7 +75,7 @@ def enclosed_one_cell_pit(
         ni = vertices.index(nb[0], nb[1])
         if ni is None:
             return False
-        if vertices.at_grid[ni] == 0:
+        if vertices.at_grid[ni] == FREE_MARK:
             return False
         saw_parent = True
     return saw_parent
@@ -82,11 +88,14 @@ def is_q2_seed(
     *,
     parent_sheers: ParentSheers,
 ) -> bool:
-    """Q2: free, 8-adjacent to a body, lower z, parent first step SHEER, not C41 1×1.
+    """Q2 landing: free, 8-adjacent to a body, lower z, parent first step SHEER.
 
     Live ``at_grid``, not a frozen pass-1 slot set. SLOPE landings stay corridors.
+    Hydro ``blocks_grade_seed`` matches side geometry.
     """
     if not _is_free(vertices, xy):
+        return False
+    if _hydro_blocks_seed(surface, xy):
         return False
     z = cell_z(surface, xy)
     if z is None:
@@ -98,7 +107,7 @@ def is_q2_seed(
         ni = vertices.index(nb[0], nb[1])
         if ni is None:
             continue
-        if vertices.at_grid[ni] == 0:
+        if vertices.at_grid[ni] == FREE_MARK:
             continue
         pz = cell_z(surface, nb)
         if pz is None or pz <= z:
@@ -116,44 +125,38 @@ def is_q2_seed(
     return True
 
 
-def is_q3_seed(
+def is_side_seed(
     xy: Coord,
     surface: ReliefSurface,
     vertices: ReliefVertices,
     *,
-    parent_sheers: ParentSheers,
-    in_slope_corridor: SlopeTrace | None = None,
+    live: CorridorLive | None = None,
 ) -> bool:
-    """Q3: free, 8-adjacent to a same-z SLOPE corridor, not Q1/Q2, not 1×1.
+    """Same-z neighbor of a SLOPE corridor: free, not the floor, not a 1×1 pit.
 
-    Corridor is ``is_slope_corridor_cell`` (occ and/or live SLOPE trace).
-    Ramp floor itself is not a seed. Downhill of the corridor is more L.
+    Queue policy (not C39 leftover, not SHEER landing) lives in the mill scheduler.
     """
     if not _is_free(vertices, xy):
         return False
-    role = surface.hydro_role_at(xy)
-    if role is not None and role.blocks_grade_seed():
-        return False
-    if seed_rim(xy, surface, vertices):
-        return False
-    if is_q2_seed(xy, surface, vertices, parent_sheers=parent_sheers):
+    if _hydro_blocks_seed(surface, xy):
         return False
     if enclosed_one_cell_pit(xy, surface, vertices):
         return False
-    if is_slope_corridor_cell(xy, vertices, in_slope_trace=in_slope_corridor):
+    if is_slope_corridor_cell(xy, vertices, live=live):
         return False
     for _nb in iter_same_z_slope_corridor_neighbors(
-        xy, surface, vertices, in_slope_trace=in_slope_corridor,
+        xy, surface, vertices, live=live,
     ):
         return True
     return False
+
 
 def iter_same_z_slope_corridor_neighbors(
     xy: Coord,
     surface: ReliefSurface,
     vertices: ReliefVertices,
     *,
-    in_slope_trace: SlopeTrace | None = None,
+    live: CorridorLive | None = None,
 ) -> Iterator[Coord]:
     z = cell_z(surface, xy)
     if z is None:
@@ -164,9 +167,7 @@ def iter_same_z_slope_corridor_neighbors(
         ni = vertices.index(nb[0], nb[1])
         if ni is None:
             continue
-        if not is_slope_corridor_cell(
-            nb, vertices, in_slope_trace=in_slope_trace,
-        ):
+        if not is_slope_corridor_cell(nb, vertices, live=live):
             continue
         zn = cell_z(surface, nb)
         if zn is None or zn != z:
@@ -177,41 +178,40 @@ def iter_same_z_slope_corridor_neighbors(
 def _corridor_owner_slot(
     xy: Coord,
     vertices: ReliefVertices,
-    corridor_slot: Callable[[Coord], int | None] | None,
+    live: CorridorLive | None,
 ) -> int | None:
     i = vertices.index(xy[0], xy[1])
     if i is not None:
         occ = vertices.occ[i]
         if occ > 0:
             return int(occ)
-    if corridor_slot is None:
+    if live is None:
         return None
-    slot = corridor_slot(xy)
+    slot = live.owner_slot(xy)
     if slot is None or int(slot) < 1:
         return None
     return int(slot)
 
 
-def resolve_q3_parent(
+def resolve_side_parent(
     xy: Coord,
     surface: ReliefSurface,
     vertices: ReliefVertices,
     *,
-    in_slope_corridor: SlopeTrace | None = None,
-    corridor_slot: Callable[[Coord], int | None] | None = None,
+    live: CorridorLive | None = None,
 ) -> int | None:
     """Nearest-height SLOPE-corridor owner slot beside ``xy``, or None.
 
-    Same corridor as ``is_q3_seed``. Tie = smaller slot. FOREIGN is skipped.
+    Same corridor as ``is_side_seed``. Tie = smaller slot. FOREIGN is skipped.
     """
     z_seed = cell_z(surface, xy)
     if z_seed is None:
         return None
     best: tuple[int, int] | None = None
     for nb in iter_same_z_slope_corridor_neighbors(
-        xy, surface, vertices, in_slope_trace=in_slope_corridor,
+        xy, surface, vertices, live=live,
     ):
-        slot = _corridor_owner_slot(nb, vertices, corridor_slot)
+        slot = _corridor_owner_slot(nb, vertices, live)
         if slot is None or slot > len(vertices.members):
             continue
         body = vertices.members[slot - 1]

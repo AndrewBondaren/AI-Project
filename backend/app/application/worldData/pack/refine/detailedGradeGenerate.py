@@ -70,7 +70,7 @@ def generate_detailed_grade(
     acc = DetailedGradeResult.empty()
     known = dict(existing_uids or {})
     for rect in work_rects:
-        part, _seams = discover_and_paint(
+        part, _seams, _pipeline = discover_and_paint(
             world, surface_state, rect,
             halo=halo,
             catalog=catalog,

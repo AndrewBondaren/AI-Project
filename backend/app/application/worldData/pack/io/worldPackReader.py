@@ -140,6 +140,16 @@ class WorldPackReader:
 
         return load_grade_ray_sidecar(self._paths.grade_rays_location_path(location_uid))
 
+    def read_grade_cell_slots_tile(self, gx: int, gy: int):
+        from app.application.worldData.pack.io.gradeSlotSidecar import load_grade_slot_sidecar
+
+        return load_grade_slot_sidecar(self._paths.grade_rays_tile_path(gx, gy))
+
+    def read_grade_cell_slots_location(self, location_uid: str):
+        from app.application.worldData.pack.io.gradeSlotSidecar import load_grade_slot_sidecar
+
+        return load_grade_slot_sidecar(self._paths.grade_rays_location_path(location_uid))
+
     def _load_wilderness_chunk(self, gx: int, gy: int, cx: int, cy: int) -> FineTerrainChunkWire:
         path = self._paths.wilderness_chunk_path(gx, gy, cx, cy)
         kind, payload = self._decode_file(path)

@@ -30,14 +30,14 @@ FOREIGN_MARK = -1
 class ReliefSurface(Protocol):
     """Read-only height/terrain for discover. ``MeterGradeSurface`` satisfies this."""
 
-    def z_at(self, xy: Coord) -> int | None: ...
+    def z_height_map(self, xy: Coord) -> int | None: ...
     def terrain_at(self, xy: Coord) -> str | None: ...
     def hydro_role_at(self, xy: Coord) -> HydrologyCellRole | None: ...
     def hydro_at(self, xy: Coord) -> MapCellHydrology | None: ...
 
 
 def cell_z(surface: ReliefSurface, xy: Coord) -> int | None:
-    z = surface.z_at(xy)
+    z = surface.z_height_map(xy)
     return None if z is None else int(z)
 
 
@@ -61,7 +61,11 @@ class GradePaintSpec:
 
 @dataclass(slots=True)
 class ReliefVertices:
-    """Bake index: slots / occupancy / ray-seam / facing claims. Local ``lx,ly``."""
+    """Bake index: slots / occupancy / ray-seam / facing claims. Local ``lx,ly``.
+
+    ``seam`` is one C41 flag for both fur (same Facing overlap) and shared
+    bottom (different Facings). C39 skips ``seam≠0`` in both cases.
+    """
 
     origin_x: int
     origin_y: int
@@ -73,7 +77,6 @@ class ReliefVertices:
     facing_bits: array
     members: list[dict[Coord, int]] = field(default_factory=list)
     uids: list[str] = field(default_factory=list)
-    q3_parent: dict[int, int] = field(default_factory=dict)
 
     @classmethod
     def for_bounds(
@@ -132,23 +135,34 @@ class ReliefVertices:
         if i is not None and self.occ[i] == FREE_MARK:
             self.occ[i] = FOREIGN_MARK
 
+    def facing_taken(self, xy: Coord, facing: Facing) -> bool:
+        """True if ``facing`` is already claimed on ``xy``. Out of rect is free."""
+        from app.application.worldData.generators.terrain.relief.discover.neighbors import (
+            FACING_BIT,
+        )
+
+        i = self.index(xy[0], xy[1])
+        if i is None:
+            return False
+        return bool(self.facing_bits[i] & FACING_BIT[facing])
+
+    def facings_free(self, cells: Sequence[Coord], facing: Facing) -> bool:
+        """True if no in-rect cell already holds ``facing``."""
+        return not any(self.facing_taken(xy, facing) for xy in cells)
+
     def claim_facings(self, cells: Sequence[Coord], facing: Facing) -> bool:
         """Claim ``facing`` on each cell. False if that facing is already taken."""
         from app.application.worldData.generators.terrain.relief.discover.neighbors import (
             FACING_BIT,
         )
 
+        if not self.facings_free(cells, facing):
+            return False
         bit = FACING_BIT[facing]
-        idxs: list[int] = []
         for xy in cells:
             i = self.index(xy[0], xy[1])
-            if i is None:
-                continue
-            if self.facing_bits[i] & bit:
-                return False
-            idxs.append(i)
-        for i in idxs:
-            self.facing_bits[i] |= bit
+            if i is not None:
+                self.facing_bits[i] |= bit
         return True
 
     def facing_count(self, xy: Coord) -> int:

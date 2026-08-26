@@ -9,6 +9,9 @@ from __future__ import annotations
 import time
 from dataclasses import replace
 
+from app.application.worldData.generators.terrain.relief.discover.timings import (
+    GradePipelineTimings,
+)
 from app.application.worldData.generators.terrain.types import ColumnRect, SurfaceHeightmap
 from app.application.worldData.pack.bake.packBakeLog import log_pack_wilderness_chunk_start
 from app.application.worldData.pack.refine.columnBounds import rect_contains
@@ -64,9 +67,10 @@ def compute_rect(
     rim_rays: tuple = ()
     chunk_state = ctx.surface_state
     grade_s = 0.0
+    pipeline = GradePipelineTimings()
     if ctx.templates:
         grade_t0 = time.perf_counter()
-        part, vertex_seams = discover_and_paint(
+        part, vertex_seams, pipeline = discover_and_paint(
             ctx.world,
             ctx.surface_state,
             rect,
@@ -93,6 +97,7 @@ def compute_rect(
         surface_state=chunk_state,
     )
     materialize_s = time.perf_counter() - mat_t0
+    pipeline = replace(pipeline, grade_s=grade_s, materialize_s=materialize_s)
     return ChunkComputeResult(
         chunk_idx=chunk_idx,
         rect=rect,
@@ -103,4 +108,5 @@ def compute_rect(
         rim_rays=rim_rays,
         materialize_s=materialize_s,
         grade_s=grade_s,
+        pipeline_s=pipeline,
     )

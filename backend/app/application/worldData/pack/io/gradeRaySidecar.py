@@ -30,6 +30,7 @@ def write_grade_ray_sidecar(path: Path, rays: Iterable[GradeRimRay]) -> None:
 
 
 def merge_grade_ray_sidecar(path: Path, rays: Iterable[GradeRimRay]) -> tuple[GradeRimRay, ...]:
-    merged = merge_grade_rim_rays(load_grade_ray_sidecar(path), rays)
+    """This bake first-wins on collisions; existing file fills empty keys."""
+    merged = merge_grade_rim_rays(tuple(rays), load_grade_ray_sidecar(path))
     write_grade_ray_sidecar(path, merged)
     return merged

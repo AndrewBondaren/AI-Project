@@ -352,7 +352,7 @@ class SqliteReliefGradePersistTest(IsolatedAsyncioTestCase):
 
 
 
-    async def test_q3_emit_then_persist_then_membership(self) -> None:
+    async def test_side_emit_then_persist_then_membership(self) -> None:
         parent = _sheer("gp", [(1, 0)])
         child = _sheer("gc", [(2, 0)])
         rect = ColumnRect(0, 3, 0, 3)
@@ -360,7 +360,7 @@ class SqliteReliefGradePersistTest(IsolatedAsyncioTestCase):
             VertexSlotSeam(slot=1, grade_uids=("gp",), edge_body=((0, 3, 6),)),
             VertexSlotSeam(
                 slot=2, grade_uids=("gc",), edge_body=((0, 0, 3),),
-                q3_parent_slot=1,
+                side_parent_slot=1,
             ),
         ))]
         instances, systems = emit_relief_grade_systems(

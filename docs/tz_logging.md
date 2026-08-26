@@ -27,7 +27,7 @@ backend/logs/{domain}/{service}.log
 
 | Это | Не это |
 |---|---|
-| Консьюмер **логов** (кто эмитит в фасад) | Consumer **pack ASCII** / mask / hills ([`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md), [`tz_terrain_relief.md`](./tz_terrain_relief.md)) |
+| Консьюмер **логов** (кто эмитит в фасад) | Consumer **pack ASCII** / mask / hills ([`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md); generate [`tz_terrain_relief.md`](./tz_terrain_relief.md); bake — архив v1) |
 | Файл `{domain}/{service}` | Общий `app.log` на все процессы |
 | Транскрипт прогона bake | Замена доменного файла |
 
@@ -60,10 +60,10 @@ backend/logs/{domain}/{service}.log
 | Домен | Сервис | Файл (target) | Процесс | События (SoT) | Код (ориентир) |
 |---|---|---|---|---|---|
 | `http` | `api` | `logs/http/api.log` | server | `request_start` / `request_end` | [`logMiddleware.py`](../backend/app/core/logMiddleware.py) |
-| `pack` | `packBakeLog` | `logs/pack/packBakeLog.log` | server | heartbeat light/full/detailed, chunk done, **sidecar / R44 validate 0/N / T-3c emit start-done** (консоль). Не замена R44 ERROR | [`packBakeLog.py`](../backend/app/application/worldData/pack/bake/packBakeLog.py) · [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) · [`tz_map_light_bake.md`](./tz_map_light_bake.md) · [`tz_terrain_relief.md`](./tz_terrain_relief.md) § SQL catalog persist |
-| `pack` | `packDetailedBake` | `logs/pack/packDetailedBake.log` | server | detailed scope / refine tiles | [`packDetailedBakeOrchestrator.py`](../backend/app/application/worldData/pack/bake/packDetailedBakeOrchestrator.py) · [`tz_terrain_relief.md`](./tz_terrain_relief.md) (R36v/w) |
+| `pack` | `packBakeLog` | `logs/pack/packBakeLog.log` | server | heartbeat light/full/detailed, chunk done, **sidecar / R44 validate 0/N / T-3c emit start-done** (консоль). Не замена R44 ERROR | [`packBakeLog.py`](../backend/app/application/worldData/pack/bake/packBakeLog.py) · [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) · [`tz_map_light_bake.md`](./tz_map_light_bake.md) · SQL persist — [`tz_terrain_relief.md`](./tz_terrain_relief.md) § SQL catalog |
+| `pack` | `packDetailedBake` | `logs/pack/packDetailedBake.log` | server | detailed scope / refine tiles | [`packDetailedBakeOrchestrator.py`](../backend/app/application/worldData/pack/bake/packDetailedBakeOrchestrator.py) · [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) (R36v/w) |
 | `pack` | `fineChunkPersist` | `logs/pack/fineChunkPersist.log` | server | persist chunk / sidecar; **не** подмена R44 | [`fineChunkPersist.py`](../backend/app/application/worldData/pack/refine/fineChunkPersist.py) |
-| `relief` | `reliefLog` | `logs/relief/reliefLog.log` | server | R8 INFO/DEBUG/WARNING generate | [`relief/log/log.py`](../backend/app/application/worldData/generators/terrain/relief/log/log.py) · [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Logging (R8) |
+| `relief` | `reliefLog` | `logs/relief/reliefLog.log` | server | R8 INFO/DEBUG/WARNING generate | [`relief/log/log.py`](../backend/app/application/worldData/generators/terrain/relief/log/log.py) · [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) § Logging (R8) |
 | `relief` | `gradeCellRays` | `logs/relief/gradeCellRays.log` | server | R44 `grade_cell_empty_ray` (`slots` / `open` 3×3) | [`gradeCellRays.py`](../backend/app/application/worldData/generators/terrain/relief/validate/gradeCellRays.py) · [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) |
 | `render` | `dumpLog` | `logs/render/dumpLog.log` | **script** | debug ASCII dump **для разработчика** (не мастер мира, не игрок, не DAG); ticks, heartbeat ≤5 с | [`dumpLog.py`](../backend/app/application/worldData/render/dumpLog.py) · [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) |
 | `terrain` | `terrainParallelLog` | `logs/terrain/terrainParallelLog.log` | server | parallel column / worker ticks | [`terrainParallelLog.py`](../backend/app/application/worldData/terrainParallelLog.py) · [`tz_terrain_generation.md`](./tz_terrain_generation.md) |
@@ -121,8 +121,9 @@ backend/logs/{domain}/{service}.log
 
 | Документ | Консьюмеры / зачем |
 |---|---|
-| [`tz_terrain_relief.md`](./tz_terrain_relief.md) | `relief` / `reliefLog` (R8); detailed bake |
-| [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | `relief` / `gradeCellRays` (R44) |
+| [`tz_terrain_relief.md`](./tz_terrain_relief.md) | generate SoT; SQL catalog / `packBakeLog` persist; sink `reliefLog` — архив v1 R8 |
+| [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) | detailed bake / R8 |
+| [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | `relief` / `gradeCellRays` (ERROR слотов; код R44 interim) |
 | [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) | `render` / `dumpLog` |
 | [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | `pack` / транскрипт `generation/{uid}` |
 | [`tz_map_light_bake.md`](./tz_map_light_bake.md) | `pack` / `packBakeLog` (light compose) |

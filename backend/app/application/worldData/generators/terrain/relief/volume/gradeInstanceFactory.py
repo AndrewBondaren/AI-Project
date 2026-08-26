@@ -16,7 +16,7 @@ from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
 
 UID_PART_SEP = "|"
-WHY_Q3_ATTACH = "q3_attach"
+WHY_SIDE_ATTACH = "side_attach"
 WHY_T3C_SAME_VERTEX = "t3c_same_vertex"
 
 

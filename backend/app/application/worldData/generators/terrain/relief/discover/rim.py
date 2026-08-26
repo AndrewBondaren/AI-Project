@@ -5,8 +5,8 @@ Does not walk fronts or write occ/seam. Plugin decides body membership.
 
 from __future__ import annotations
 
-from collections import defaultdict, deque
-from collections.abc import Sequence
+from collections import deque
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 
 from app.application.worldData.generators.terrain.relief.discover.neighbors import (
@@ -21,6 +21,22 @@ from app.application.worldData.generators.terrain.relief.discover.types import (
     ReliefVertices,
     cell_z,
 )
+
+
+def iter_rect_z_cells(
+    surface: ReliefSurface,
+    vertices: ReliefVertices,
+) -> Iterator[tuple[Coord, int]]:
+    """Cells in the bake rect that have a height. Leftover walk lives here, not on buckets."""
+    ox = vertices.origin_x
+    oy = vertices.origin_y
+    for ly in range(vertices.height):
+        for lx in range(vertices.width):
+            xy = (ox + lx, oy + ly)
+            z = cell_z(surface, xy)
+            if z is None:
+                continue
+            yield xy, z
 
 
 def seed_rim(
@@ -59,19 +75,6 @@ class RimStage:
     surface: ReliefSurface
     vertices: ReliefVertices
     plugins: Sequence[VertexBodyPlugin]
-
-    def buckets_high_to_low(self) -> list[tuple[int, list[Coord]]]:
-        buckets: dict[int, list[Coord]] = defaultdict(list)
-        verts = self.vertices
-        surface = self.surface
-        for ly in range(verts.height):
-            for lx in range(verts.width):
-                xy = (verts.origin_x + lx, verts.origin_y + ly)
-                z = cell_z(surface, xy)
-                if z is None:
-                    continue
-                buckets[z].append(xy)
-        return [(z, buckets[z]) for z in sorted(buckets, reverse=True)]
 
     def is_seed(self, xy: Coord) -> bool:
         return seed_rim(xy, self.surface, self.vertices)

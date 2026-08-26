@@ -3,7 +3,7 @@
 Cell ``system_grade_uid`` is always an Instance uid (R36l / C11). Membership
 in a System is ``Instance.grade_system_uid`` when a catalog row exists
 (T-3c or Q3-attach).
-Bake slot / ``occ`` / Q3 parent are not stored.
+Bake slot / ``occ`` / side parent are not stored.
 
 Write path: ``emit_relief_grade_systems`` then ``persist_relief_grades``.
 """

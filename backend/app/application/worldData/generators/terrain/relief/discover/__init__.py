@@ -4,6 +4,7 @@ Application types, not persist. L2 volume stays in pack/refine paint.
 """
 
 from app.application.worldData.generators.terrain.relief.discover.core import (
+    DiscoverResult,
     discover_fronts,
     seed_rim,
 )
@@ -24,6 +25,7 @@ from app.application.worldData.generators.terrain.relief.discover.types import (
 )
 
 __all__ = [
+    "DiscoverResult",
     "DiscoveredFront",
     "FrontGeometry",
     "GradePaintSpec",

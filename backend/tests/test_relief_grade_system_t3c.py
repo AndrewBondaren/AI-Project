@@ -261,7 +261,7 @@ class EmitGradeSystemsTest(unittest.TestCase):
 
 
 
-    def test_q3_attach_one_front_parent_makes_system(self) -> None:
+    def test_side_attach_one_front_parent_makes_system(self) -> None:
         parent = _sheer("gp", [(1, 0)])
         child = _sheer("gc", [(2, 0)])
         catalog = _catalog(tile_w=4, tile_h=4, chunk_size=4)
@@ -270,7 +270,7 @@ class EmitGradeSystemsTest(unittest.TestCase):
             _seam(1, ("gp",), ((0, 3, 6),)),
             VertexSlotSeam(
                 slot=2, grade_uids=("gc",), edge_body=((0, 0, 3),),
-                q3_parent_slot=1,
+                side_parent_slot=1,
             ),
         ))]
         instances, systems = emit_relief_grade_systems(
@@ -282,7 +282,7 @@ class EmitGradeSystemsTest(unittest.TestCase):
         self.assertEqual(by_uid["gp"].grade_system_uid, systems[0].grade_system_uid)
         self.assertEqual(by_uid["gc"].grade_system_uid, systems[0].grade_system_uid)
 
-    def test_q3_without_parent_trace_has_no_system(self) -> None:
+    def test_side_without_parent_trace_has_no_system(self) -> None:
         child = _sheer("gc", [(2, 0)])
         catalog = _catalog(tile_w=4, tile_h=4, chunk_size=4)
         rect = ColumnRect(0, 3, 0, 3)
@@ -291,7 +291,7 @@ class EmitGradeSystemsTest(unittest.TestCase):
         self.assertEqual(systems, ())
         self.assertIsNone(instances[0].grade_system_uid)
 
-    def test_q3_joins_t3c_system_transitively(self) -> None:
+    def test_side_joins_t3c_system_transitively(self) -> None:
         south = _sheer("south", [(1, 0)])
         east = _sheer("east", [(6, 2)])
         side = _sheer("side", [(0, 1)])
@@ -303,7 +303,7 @@ class EmitGradeSystemsTest(unittest.TestCase):
                 _seam(1, ("south",), ((3, 2, 6), (3, 3, 6))),
                 VertexSlotSeam(
                     slot=2, grade_uids=("side",), edge_body=((0, 0, 3),),
-                    q3_parent_slot=1,
+                    side_parent_slot=1,
                 ),
             )),
             (rect_b, (_seam(1, ("east",), ((4, 2, 6), (4, 3, 6))),)),
@@ -316,7 +316,7 @@ class EmitGradeSystemsTest(unittest.TestCase):
         uid = systems[0].grade_system_uid
         self.assertTrue(all(inst.grade_system_uid == uid for inst in instances))
 
-    def test_q3_chain_unions_in_one_pass(self) -> None:
+    def test_side_chain_unions_in_one_pass(self) -> None:
         a = _sheer("ga", [(1, 0)])
         b = _sheer("gb", [(2, 0)])
         c = _sheer("gc", [(3, 0)])
@@ -326,11 +326,11 @@ class EmitGradeSystemsTest(unittest.TestCase):
             _seam(1, ("ga",), ((0, 3, 6),)),
             VertexSlotSeam(
                 slot=2, grade_uids=("gb",), edge_body=((0, 1, 4),),
-                q3_parent_slot=1,
+                side_parent_slot=1,
             ),
             VertexSlotSeam(
                 slot=3, grade_uids=("gc",), edge_body=((0, 0, 3),),
-                q3_parent_slot=2,
+                side_parent_slot=2,
             ),
         ))]
         _instances, systems = emit_relief_grade_systems(
@@ -353,7 +353,7 @@ class DiscoverPaintT3cTest(unittest.TestCase):
                 terrain[(x, y)] = _PLAINS
         rect = ColumnRect(0, 3, 0, 3)
         catalog = _catalog(tile_w=4, tile_h=4, chunk_size=4)
-        write, seams = discover_and_paint(
+        write, seams, _pipeline = discover_and_paint(
             world, _state(world.world_uid, z, terrain), rect,
             halo=2, catalog=catalog, templates={tuid: tpl},
         )
@@ -383,7 +383,7 @@ class DiscoverPaintT3cTest(unittest.TestCase):
         terrain = {xy: _PLAINS for xy in z}
         rect = ColumnRect(0, 1, 0, 2)
         catalog = _catalog(tile_w=2, tile_h=3, chunk_size=4)
-        write, seams = discover_and_paint(
+        write, seams, _pipeline = discover_and_paint(
             world, _state(world.world_uid, z, terrain), rect,
             halo=2, catalog=catalog, templates={tuid: tpl},
         )
@@ -408,7 +408,7 @@ class DiscoverPaintT3cTest(unittest.TestCase):
         terrain = {(x, y): (_ROAD if y == 1 else _PLAINS) for x, y in z}
         rect = ColumnRect(0, 2, 0, 2)
         catalog = _catalog(tile_w=3, tile_h=3, chunk_size=4)
-        write, seams = discover_and_paint(
+        write, seams, _pipeline = discover_and_paint(
             world, _state(world.world_uid, z, terrain), rect,
             halo=2, catalog=catalog, templates={tuid: tpl},
         )
