@@ -1,14 +1,14 @@
 """L2 outdoor grade ASCII — one 3×3 cell (center + 8 slots).
 
-SoT: ``docs/tz_terrain_relief_consume.md``. Pack slots only: SLOPE / SHEER leftover
-or COUPLE ``+``. Dump does not invent ``+`` from ``surface_z`` and does not call
-``opposite``. Does not read column ``system_facing``. Slot positions:
-``GRID_OUTWARD_DELTA``; glyphs: ``grade_ray_glyph``.
+SoT: ``docs/tz_terrain_relief_consume.md``. Pack slots only. Dump does not
+invent ``+`` from ``surface_z`` and does not call ``opposite``. Does not read
+column ``system_facing``. Glyphs: ``grade_slot_glyph`` (production) /
+``grade_ray_glyph`` (legacy ``GradeRimRay`` tests).
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 
 from app.application.worldData.render.gridAxes import (
     format_grid_header,
@@ -18,11 +18,20 @@ from app.application.worldData.render.mapSymbols import (
     GRADE_CELL_INNER_WIDTH,
     format_glyph_field,
     grade_ray_glyph,
+    grade_slot_glyph,
     join_height_row,
 )
 from app.dataModel.spatial.facing import Facing, GRID_OUTWARD_DELTA
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay
+from app.dataModel.terrain.relief.gradeSlot import (
+    GRADE_SLOT_COUNT,
+    GradeCellSlots,
+    GradeCouple,
+    GradeOctant,
+    GradeSeam,
+    facing_from_octant,
+)
 
 
 class GradeRayIndex:
@@ -79,6 +88,73 @@ class GradeRayIndex:
         )
 
 
+class GradeSlotIndex:
+    """Sidecar ``slots[8]`` keyed by cell. Glyphs from codes, not edge Facing."""
+
+    def __init__(self, cells: Iterable[GradeCellSlots] = ()) -> None:
+        self._by_cell: dict[tuple[int, int], tuple[int | None, ...]] = {}
+        for cell in cells:
+            self._by_cell[cell.cell] = tuple(int(code) for code in cell.slots)
+
+    def _with_rows(
+        self,
+        rows: dict[tuple[int, int], tuple[int | None, ...]],
+    ) -> GradeSlotIndex:
+        out = GradeSlotIndex()
+        out._by_cell = rows
+        return out
+
+    def slots_at(self, xy: tuple[int, int]) -> tuple[int | None, ...] | None:
+        return self._by_cell.get((int(xy[0]), int(xy[1])))
+
+    def has_any(self) -> bool:
+        return bool(self._by_cell)
+
+    def cells(self) -> Iterable[tuple[int, int]]:
+        return self._by_cell.keys()
+
+    def relative_to(self, origin_x: int, origin_y: int) -> GradeSlotIndex:
+        ox, oy = int(origin_x), int(origin_y)
+        return self._with_rows({
+            (x - ox, y - oy): slots
+            for (x, y), slots in self._by_cell.items()
+        })
+
+    def restricted_to(self, cells: Iterable[tuple[int, int]]) -> GradeSlotIndex:
+        allowed = {(int(x), int(y)) for x, y in cells}
+        return self._with_rows({
+            xy: slots for xy, slots in self._by_cell.items() if xy in allowed
+        })
+
+    def without_couple(self) -> GradeSlotIndex:
+        """``grade_{n}`` slices: Octant/SHEER only (consume: no COUPLE wall)."""
+        couple = int(GradeCouple.COUPLE)
+        seam = int(GradeSeam.SEAM)
+        rows: dict[tuple[int, int], tuple[int | None, ...]] = {}
+        for xy, slots in self._by_cell.items():
+            mapped = tuple(
+                None if code is None or int(code) in {couple, seam} else int(code)
+                for code in slots
+            )
+            if any(code is not None for code in mapped):
+                rows[xy] = mapped
+        return self._with_rows(rows)
+
+
+def pick_grade_consume_index(
+    *,
+    slot_index: GradeSlotIndex | None,
+    ray_index: GradeRayIndex | None,
+    origin_x: int,
+    origin_y: int,
+) -> GradeRayIndex | GradeSlotIndex:
+    """Prefer sidecar slots. Empty slots → legacy ``GradeRimRay`` (unit tests)."""
+    slots = (slot_index or GradeSlotIndex()).relative_to(origin_x, origin_y)
+    if slots.has_any():
+        return slots
+    return (ray_index or GradeRayIndex()).relative_to(origin_x, origin_y)
+
+
 def facing_cell_slot(facing: Facing) -> tuple[int, int]:
     """3×3 ``(row, col)`` for outward ``Facing``. North (+y) is row 0; center is (1,1)."""
     dx, dy = GRID_OUTWARD_DELTA[facing]
@@ -101,9 +177,32 @@ def compose_grade_cell(
     return ("".join(grid[0]), "".join(grid[1]), "".join(grid[2]))
 
 
+def compose_grade_cell_from_slots(
+    center: str,
+    slots: Sequence[int | None] | None,
+) -> tuple[str, str, str]:
+    """Three 3-glyph rows. Glyph from code at dump-edge position. No ``opposite``."""
+    grid = [[" ", " ", " "] for _ in range(GRADE_CELL_INNER_WIDTH)]
+    glyph = center[:1] if center else " "
+    grid[1][1] = glyph if glyph else " "
+    if not slots:
+        return ("".join(grid[0]), "".join(grid[1]), "".join(grid[2]))
+    for position in range(GRADE_SLOT_COUNT):
+        if position >= len(slots):
+            break
+        code = slots[position]
+        if code is None:
+            continue
+        row, col = facing_cell_slot(facing_from_octant(GradeOctant(position)))
+        if row == 1 and col == 1:
+            continue
+        grid[row][col] = grade_slot_glyph(int(code))
+    return ("".join(grid[0]), "".join(grid[1]), "".join(grid[2]))
+
+
 def draw_grade_ray_grid(
     centers: Mapping[tuple[int, int], str],
-    rays: GradeRayIndex,
+    rays: GradeRayIndex | GradeSlotIndex,
     *,
     title: str,
     width: int,
@@ -135,10 +234,16 @@ def draw_grade_ray_grid(
         bands = ([], [], [])
         for x in range(x0, x1 + 1):
             key = (x, y)
-            top, mid, bot = compose_grade_cell(
-                centers.get(key, " "),
-                rays.rays_at(key),
-            )
+            if isinstance(rays, GradeSlotIndex):
+                top, mid, bot = compose_grade_cell_from_slots(
+                    centers.get(key, " "),
+                    rays.slots_at(key),
+                )
+            else:
+                top, mid, bot = compose_grade_cell(
+                    centers.get(key, " "),
+                    rays.rays_at(key),
+                )
             bands[0].append(format_glyph_field(top, width=field_w))
             bands[1].append(format_glyph_field(mid, width=field_w))
             bands[2].append(format_glyph_field(bot, width=field_w))

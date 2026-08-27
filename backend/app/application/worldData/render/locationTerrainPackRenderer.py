@@ -16,7 +16,11 @@ from app.application.worldData.render.fineTerrainAsciiKernel import (
     values_surface_z,
     z_occupied,
 )
-from app.application.worldData.render.gradeRayDump import GradeRayIndex
+from app.application.worldData.render.gradeRayDump import (
+    GradeRayIndex,
+    GradeSlotIndex,
+    pick_grade_consume_index,
+)
 from app.application.worldData.render.mapSymbols import render_map_legend
 from app.application.worldData.render.renderPayloads import (
     LEVEL_CLIFF_DELTA,
@@ -40,6 +44,7 @@ class LocationTerrainPackRenderer:
         volume: TerritoryVolume,
         location_uid: str,
         ray_index: GradeRayIndex | None = None,
+        slot_index: GradeSlotIndex | None = None,
     ) -> None:
         self._chunk = chunk
         self._volume = volume
@@ -47,7 +52,12 @@ class LocationTerrainPackRenderer:
         self._cols: dict[tuple[int, int], FineTerrainColumnWire] = {
             (c.lx, c.ly): c for c in chunk.columns
         }
-        self._rays = (ray_index or GradeRayIndex()).relative_to(volume.x0, volume.y0)
+        self._grade = pick_grade_consume_index(
+            slot_index=slot_index,
+            ray_index=ray_index,
+            origin_x=volume.x0,
+            origin_y=volume.y0,
+        )
 
     def _col_bounds(self) -> tuple[int, int, int, int] | None:
         if not self._cols:
@@ -126,7 +136,7 @@ class LocationTerrainPackRenderer:
         x0, x1, y0, y1 = frame
         return draw_grade_consume_grid(
             self._cols,
-            self._rays,
+            self._grade,
             title=(
                 f"location={self.location_uid}  "
                 f"(pack location_terrain, surface_grade 3x3 rim rays)"
@@ -144,7 +154,7 @@ class LocationTerrainPackRenderer:
         x0, x1, y0, y1 = frame
         return draw_grade_consume_grid(
             self._cols,
-            self._rays,
+            self._grade,
             title=(
                 f"location={self.location_uid} grade z={z}  "
                 f"(pack location_terrain; 3x3, surface_z only)"
@@ -234,7 +244,7 @@ class LocationTerrainPackRenderer:
             text = self.render_level(z)
             if text.strip():
                 out[str(z)] = text
-        for z in grade_consume_z_levels(self._cols, self._rays):
+        for z in grade_consume_z_levels(self._cols, self._grade):
             text = self.render_grade_at_z(int(z))
             if text.strip():
                 out[grade_level_key(int(z))] = text

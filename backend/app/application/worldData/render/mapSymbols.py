@@ -7,6 +7,14 @@ from collections.abc import Iterable
 from app.application.worldData.facingArrows import FACING_ARROW
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.terrain.relief.enums import ReliefSideKind
+from app.dataModel.terrain.relief.gradeSlot import (
+    GradeCouple,
+    GradeOctant,
+    GradeSeam,
+    GradeSheer,
+    decode_grade_slot_code,
+    facing_from_octant,
+)
 
 ROLE_SYMBOLS: dict[str, str] = {
     "coastal_sea": "~",
@@ -35,6 +43,7 @@ TERRAIN_SYMBOLS: dict[str, str] = {
 # Grade cell without facing (SHEER) — vertical face, not a compass.
 GRADE_SHEER_SYMBOL = "┃"
 GRADE_COUPLE_SYMBOL = "+"
+GRADE_SEAM_SYMBOL = "."
 GRADE_EMPTY_SYMBOL = " "
 
 # Unknown terrain/role: blank cell — never first-letter of key (collides: ravine→r, road→r).
@@ -156,6 +165,20 @@ def grade_ray_glyph(kind: ReliefSideKind, facing: Facing) -> str:
     return arrow if arrow is not None else GRADE_SHEER_SYMBOL
 
 
+def grade_slot_glyph(code: int) -> str:
+    """Dump glyph from sidecar wire code — consume § Debug ASCII. Not generate."""
+    decoded = decode_grade_slot_code(int(code))
+    if isinstance(decoded, GradeSeam):
+        return GRADE_SEAM_SYMBOL
+    if isinstance(decoded, GradeSheer):
+        return GRADE_SHEER_SYMBOL
+    if isinstance(decoded, GradeCouple):
+        return GRADE_COUPLE_SYMBOL
+    octant = decoded if isinstance(decoded, GradeOctant) else GradeOctant(int(code))
+    arrow = facing_arrow(facing_from_octant(octant))
+    return arrow if arrow is not None else GRADE_SHEER_SYMBOL
+
+
 def grade_symbol(
     *,
     system_grade_uid: str | None,
@@ -173,8 +196,8 @@ def grade_symbol(
 def render_grade_legend() -> str:
     parts = " ".join(f"{sym}={f.value}" for f, sym in FACING_ARROW.items())
     return (
-        f"grade 3x3: center=surface; edges=outgoing rim rays "
-        f"(SLOPE {parts}; {GRADE_SHEER_SYMBOL}=sheer; "
-        f"{GRADE_COUPLE_SYMBOL}=unified surface); "
-        f"empty edge=missing leftover; not occupancy overlay"
+        f"grade 3x3: center=surface; edges=sidecar slots[8] "
+        f"(Octant {parts}; {GRADE_SHEER_SYMBOL}=sheer; "
+        f"{GRADE_COUPLE_SYMBOL}=couple; {GRADE_SEAM_SYMBOL}=seam); "
+        f"no row=empty edge; not occupancy overlay"
     )

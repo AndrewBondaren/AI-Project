@@ -7,7 +7,7 @@ from app.application.worldData.pack.read.packRenderReadFacade import (
     PackRenderReadFacade,
     PackWorldMapRenderSource,
 )
-from app.application.worldData.render.gradeRayDump import GradeRayIndex
+from app.application.worldData.render.gradeRayDump import GradeSlotIndex
 from app.application.worldData.render.locationTerrainPackRenderer import LocationTerrainPackRenderer
 from app.application.worldData.render.renderPayloads import (
     LEVEL_GRADE,
@@ -173,7 +173,7 @@ class PackMapGridRender:
                 loc_source.chunk,
                 volume=loc_source.volume,
                 location_uid=loc_source.location_uid,
-                ray_index=GradeRayIndex(loc_source.rays),
+                slot_index=GradeSlotIndex(loc_source.slots),
             )
             levels = renderer.render_all_levels()
             locations[location_uid] = LocationEntryPayload(
@@ -220,7 +220,7 @@ class PackMapGridRender:
             loc_source.chunk,
             volume=loc_source.volume,
             location_uid=loc_source.location_uid,
-            ray_index=GradeRayIndex(loc_source.rays),
+            slot_index=GradeSlotIndex(loc_source.slots),
         )
         if z is not None:
             return LocationGridPayload(
@@ -272,7 +272,7 @@ class PackMapGridRender:
             tile_gx=source.gx,
             tile_gy=source.gy,
             tile_size_m=source.tile_size_m,
-            ray_index=GradeRayIndex(source.rays),
+            slot_index=GradeSlotIndex(source.slots),
         )
         occupied = list(renderer.z_levels())
         if z is not None:

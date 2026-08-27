@@ -19,7 +19,11 @@ from app.application.worldData.render.fineTerrainAsciiKernel import (
     values_surface_z,
     z_occupied,
 )
-from app.application.worldData.render.gradeRayDump import GradeRayIndex
+from app.application.worldData.render.gradeRayDump import (
+    GradeRayIndex,
+    GradeSlotIndex,
+    pick_grade_consume_index,
+)
 from app.application.worldData.render.mapSymbols import render_map_legend
 from app.application.worldData.render.renderPayloads import (
     LEVEL_CLIFF_DELTA,
@@ -50,6 +54,7 @@ class WildernessTilePackRenderer:
         tile_gy: int,
         tile_size_m: int,
         ray_index: GradeRayIndex | None = None,
+        slot_index: GradeSlotIndex | None = None,
     ) -> None:
         self.tile_gx = tile_gx
         self.tile_gy = tile_gy
@@ -63,7 +68,12 @@ class WildernessTilePackRenderer:
                 self._cols[(tx, ty)] = col
         origin_x = int(tile_gx) * int(tile_size_m)
         origin_y = int(tile_gy) * int(tile_size_m)
-        self._rays = (ray_index or GradeRayIndex()).relative_to(origin_x, origin_y)
+        self._grade = pick_grade_consume_index(
+            slot_index=slot_index,
+            ray_index=ray_index,
+            origin_x=origin_x,
+            origin_y=origin_y,
+        )
 
     @staticmethod
     def render_legend() -> str:
@@ -164,7 +174,7 @@ class WildernessTilePackRenderer:
         x0, x1, y0, y1 = frame
         return draw_grade_consume_grid(
             self._cols,
-            self._rays,
+            self._grade,
             title=(
                 f"wilderness tile=({self.tile_gx},{self.tile_gy})  "
                 f"(pack wilderness_chunk mosaic, surface_grade 3x3 rim rays)"
@@ -197,7 +207,7 @@ class WildernessTilePackRenderer:
         x0, x1, y0, y1 = frame
         return draw_grade_consume_grid(
             self._cols,
-            self._rays,
+            self._grade,
             title=(
                 f"wilderness tile=({self.tile_gx},{self.tile_gy}) grade z={z}  "
                 f"(pack wilderness_chunk mosaic; 3x3, surface_z only)"
@@ -216,7 +226,7 @@ class WildernessTilePackRenderer:
         z_max: int | None = None,
     ):
         """Yield ``(z, ascii)`` grade consume dumps. Optional inclusive z window."""
-        for z in grade_consume_z_levels(self._cols, self._rays):
+        for z in grade_consume_z_levels(self._cols, self._grade):
             zi = int(z)
             if not _z_in_window(zi, z_min, z_max):
                 continue

@@ -13,7 +13,7 @@ metadata:
 **Очередь IDs generate (T-25 occupancy):** [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) **R41-T-25**. Этот файл — **запахи кода** после посадки pack-слотов (2026-08-26), не дубль алгоритма заполнения.  
 **План агента (не SoT):** [`.cursor/plans/relief-pack-slot-contract-t25.md`](../.cursor/plans/relief-pack-slot-contract-t25.md).
 
-**Срез кода:** persist пишет `SCH-GRADE-CELL-SLOTS`; dump ещё читает `rays[]`. Locked-тесты `test_relief_r41_t25_locked_cases.py` не менять без просьбы мастера.
+**Срез кода:** persist пишет `SCH-GRADE-CELL-SLOTS`; dump читает `slots[8]`. Locked-тесты `test_relief_r41_t25_locked_cases.py` не менять без просьбы мастера.
 
 ---
 
@@ -21,7 +21,7 @@ metadata:
 
 | # | ID | Что | Status |
 |---|---|---|---|
-| 1 | **RELIEF-TD-1** | Dump/read на `slots[8]`; persist-путь без `rays[]` | open |
+| 1 | **RELIEF-TD-1** | Dump/read на `slots[8]`; persist-путь без `rays[]` | **done** 2026-08-27 |
 | 2 | **RELIEF-TD-2** | Старый валидатор R44 не звать с generate; не закрывать слот из z | open |
 | 3 | **RELIEF-TD-3** | Порог leftover SHEER 80° и L=1 — именованные SoT-константы, не рядом с envelope 45° | **done** 2026-08-27 |
 | 4 | **RELIEF-TD-4** | Срез `downhill_leftover` / `leftover_plus_halo` / pretty `GradeRaySidecar` с persist (оставить, пока locked-тесты) | open |
@@ -65,12 +65,12 @@ metadata:
 | Слой | Старый `GradeRimRay` / `rays[]` | Новый `slots[8]` |
 |---|---|---|
 | Persist | не пишет | пишет |
-| Dump / `PackRenderReadFacade` | `read_grade_rays_*` | не читает |
+| Dump / `PackRenderReadFacade` | `read_grade_rays_*` (locked/тесты) | `read_grade_cell_slots_*` |
 | Mill discover | копит `rim_rays` | не источник sidecar |
 | Валидатор | `validate_grade_cell_empty_rays` + `leftover_plus_halo` (`gradeCellRays`, locked/тесты) | `validate_grade_cell_slots` (`gradeCellSlotValidate`; persist только `DEBUG_GRADE_SLOT_VALIDATE=1`) |
 | I/O | `gradeRaySidecar` + `merge_grade_rays_*` | `gradeSlotSidecar` + `merge_grade_cell_slots_*` |
 
-Bake пишет SoT; dump рисует пустые края. Reader/Writer держат обе пары методов.
+Bake и dump — `slots[8]`. Reader/Writer ещё держат `rays[]` для locked-тестов (**RELIEF-TD-4**). Старый sidecar без `SCH-GRADE-CELL-SLOTS` dump не рисует края (не dual-read).
 
 ### Прочее
 
@@ -150,6 +150,6 @@ Sidecar heartbeat: `n_cells`. Location flush: `LOCATION_TERRAIN_CHUNK_CX/CY`.
 
 | Дата | Изменение |
 |---|---|
-| 2026-08-27 | **TD-6 renderer:** сплит `WorldMapPackRenderer` (~458→~207). `packBakeLog` ещё open. |
+| 2026-08-27 | **TD-1:** dump/read `slots[8]` (`GradeSlotIndex`); persist уже писал sidecar. |
 | 2026-08-27 | **TD-3 + смешение:** константы leftover в `gradeLeftoverPair`; occupancy-validator отделён от R44; `mill_rim_rays`; `n_cells`. |
 | 2026-08-26 | Первый срез: dual `rays[]`/`slots[8]`, `FineChunkPersist`, классы >400, хардкоды 80°/L=1/45°. |

@@ -2,7 +2,7 @@
 
 SoT: ``docs/tz_terrain_relief_consume.md`` § Тело sidecar.
 Persist writes this body. Files without this ``schema_id`` (old ``rays[]``) load
-as empty. Dump still reads ``gradeRaySidecar`` / ``rays[]`` — RELIEF-TD-1.
+as empty. Dump reads this body (``GradeSlotIndex``).
 """
 
 from __future__ import annotations

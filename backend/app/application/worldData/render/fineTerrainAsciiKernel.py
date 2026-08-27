@@ -21,6 +21,7 @@ from app.application.worldData.render.gridAxes import (
 )
 from app.application.worldData.render.gradeRayDump import (
     GradeRayIndex,
+    GradeSlotIndex,
     draw_grade_ray_grid,
 )
 from app.application.worldData.render.mapSymbols import (
@@ -31,6 +32,8 @@ from app.application.worldData.render.mapSymbols import (
     symbol_for_role_or_terrain,
 )
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainColumnWire, FineTerrainZRun
+
+GradeConsumeIndex = GradeRayIndex | GradeSlotIndex
 
 # 4-neighborhood for cliff-face Δz (tile-local / local keys).
 _NEIGHBORS = ((1, 0), (-1, 0), (0, 1), (0, -1))
@@ -121,7 +124,7 @@ def paired_width_from_columns(
 
 def should_dump_grade(
     cols: Mapping[tuple[int, int], FineTerrainColumnWire],
-    rays: GradeRayIndex,
+    rays: GradeConsumeIndex,
 ) -> bool:
     """Write ``surface_grade`` if leftover rays or any uid (consume TZ)."""
     return rays.has_any() or columns_have_grade_uid(cols)
@@ -158,7 +161,7 @@ def crop_bounds_around_keys(
 
 def should_dump_grade_at_z(
     cols: Mapping[tuple[int, int], FineTerrainColumnWire],
-    rays: GradeRayIndex,
+    rays: GradeConsumeIndex,
     z: int,
 ) -> bool:
     keys = _keys_at_surface_z(cols, z)
@@ -170,7 +173,7 @@ def should_dump_grade_at_z(
 
 def draw_grade_consume_grid(
     cols: Mapping[tuple[int, int], FineTerrainColumnWire],
-    rays: GradeRayIndex,
+    rays: GradeConsumeIndex,
     *,
     title: str,
     extra_headers: list[str] | None = None,
@@ -208,7 +211,7 @@ def draw_grade_consume_grid(
 
 def grade_consume_z_levels(
     cols: Mapping[tuple[int, int], FineTerrainColumnWire],
-    rays: GradeRayIndex,
+    rays: GradeConsumeIndex,
 ) -> list[int]:
     """World-z values that have uid or a rim ray on that surface."""
     zs = values_surface_z(cols)

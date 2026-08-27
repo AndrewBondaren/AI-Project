@@ -8,7 +8,7 @@ metadata:
 
 # Terrain relief grade — generate
 
-**Статус:** SoT **generate** (очереди, mill/pack, шаблоны/pick, canal/obstacle, SQL catalog). Writer sidecar (`pack_cell_slots` → `SCH-GRADE-CELL-SLOTS`) **есть**. Persist occupancy-validator (`validate_grade_cell_slots`) — **только dev** (`DEBUG_GRADE_SLOT_VALIDATE=1`); product bake не обходит. Не закрыт **набор клеток** обхода на тайле ([`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) **R41-T-25**). Dump читает `slots[8]` — consume SoT; код dump ещё на `rays[]` — [`tz_terrain_relief_technical_debt.md`](./tz_terrain_relief_technical_debt.md) **RELIEF-TD-1**.
+**Статус:** SoT **generate** (очереди, mill/pack, шаблоны/pick, canal/obstacle, SQL catalog). Writer sidecar (`pack_cell_slots` → `SCH-GRADE-CELL-SLOTS`) **есть**. Dump читает `slots[8]`. Persist occupancy-validator (`validate_grade_cell_slots`) — **только dev** (`DEBUG_GRADE_SLOT_VALIDATE=1`); product bake не обходит. Не закрыт **набор клеток** обхода на тайле ([`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) **R41-T-25**). Старый `rays[]` I/O жив для locked-тестов — [`tz_terrain_relief_technical_debt.md`](./tz_terrain_relief_technical_debt.md) **RELIEF-TD-4**.
 
 | Документ | Роль |
 |---|---|
@@ -449,7 +449,7 @@ Mill: один SOUTH, Q2 вниз, не тело×8. Pack: клетка заня
 
 | Дата | Изменение |
 |---|---|
-| 2026-08-27 | **Шапка:** writer sidecar + persist occupancy-validator есть; открыты набор клеток (**R41-T-25**) и dump `slots[8]` (**RELIEF-TD-1**). |
+| 2026-08-27 | **Dump `slots[8]`:** consume ASCII читает sidecar коды (**RELIEF-TD-1**). Occupancy набора клеток — **R41-T-25**. |
 | 2026-08-27 | **Leftover L=1 в коде:** `LEFTOVER_SHEER_MIN_DEG` / `LEFTOVER_PAIR_LENGTH_CELLS` (`gradeLeftoverPair`), не конверт 45°. |
 | 2026-08-26 | **θ местности:** (0, 90), **90° нет**; SHEER **[80, 90)**; нависание — отдельные объекты (как холм), inherit родителя, не leftover pack. |
 | 2026-08-26 | **SoT generate сжат:** очереди Q1/Q2, итерация leftover, правила стрелок, эталоны ямы/W×L/каскад. Bake R36/R43 — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). Алгоритм и валидатор — следующая разработка. |

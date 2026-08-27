@@ -257,7 +257,7 @@ def _wilderness_pack_renderer(world_uid: str, gx: int, gy: int):
     """Load FineTerrain chunks for one macro-tile from on-disk pack (dump helper)."""
     from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
     from app.application.worldData.pack.io.worldPackReader import WorldPackReader
-    from app.application.worldData.render.gradeRayDump import GradeRayIndex
+    from app.application.worldData.render.gradeRayDump import GradeSlotIndex
     from app.application.worldData.render.wildernessTilePackRenderer import (
         WildernessTilePackRenderer,
     )
@@ -282,7 +282,7 @@ def _wilderness_pack_renderer(world_uid: str, gx: int, gy: int):
         tile_gx=gx,
         tile_gy=gy,
         tile_size_m=tile_size_m,
-        ray_index=GradeRayIndex(reader.read_grade_rays_tile(gx, gy)),
+        slot_index=GradeSlotIndex(reader.read_grade_cell_slots_tile(gx, gy)),
     )
 
 
