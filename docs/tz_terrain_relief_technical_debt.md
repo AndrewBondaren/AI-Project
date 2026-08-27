@@ -67,7 +67,7 @@ metadata:
 | Persist | не пишет | пишет |
 | Dump / `PackRenderReadFacade` | `read_grade_rays_*` | не читает |
 | Mill discover | копит `rim_rays` | не источник sidecar |
-| Валидатор | `validate_grade_cell_empty_rays` + `leftover_plus_halo` (`gradeCellRays`, locked/тесты) | `validate_grade_cell_slots` (`gradeCellSlotValidate`, persist) |
+| Валидатор | `validate_grade_cell_empty_rays` + `leftover_plus_halo` (`gradeCellRays`, locked/тесты) | `validate_grade_cell_slots` (`gradeCellSlotValidate`; persist только `DEBUG_GRADE_SLOT_VALIDATE=1`) |
 | I/O | `gradeRaySidecar` + `merge_grade_rays_*` | `gradeSlotSidecar` + `merge_grade_cell_slots_*` |
 
 Bake пишет SoT; dump рисует пустые края. Reader/Writer держат обе пары методов.

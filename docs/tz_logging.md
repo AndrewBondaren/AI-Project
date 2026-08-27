@@ -42,7 +42,7 @@ backend/logs/{domain}/{service}.log
 | L5 | `print` / script-tee / второй logger на то же событие — запрещены (как consume R44, PAR dump). |
 | L6 | Формат файла — JSON-строка на запись (тот же `JsonLogFormatter`). |
 | L7 | **Консоль не блокирует эмиттера.** Stdout — `QueueHandler` с drop при переполнении. Bake-поток не ждёт pipe (`npm run dev` / Cursor). |
-| L8 | Шторм не на stdout. **R44** ERROR — файл `gradeCellRays` + транскрипт. **`grade_system_create` / `grade_system_members`** — DEBUG (файл при debug). Консоль — heartbeat `packBakeLog` (sidecar / validate `0/N` / T-3c emit). |
+| L8 | Шторм не на stdout. **R44** ERROR — файл `gradeCellRays` + транскрипт. **`grade_system_create` / `grade_system_members`** — DEBUG (файл при debug). Консоль — heartbeat `packBakeLog` (sidecar / validate `0/N` при `DEBUG_GRADE_SLOT_VALIDATE` / T-3c emit). |
 
 ## Два слоя
 

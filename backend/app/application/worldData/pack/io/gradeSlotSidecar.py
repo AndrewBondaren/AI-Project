@@ -1,8 +1,8 @@
 """Pack grade cell-slot sidecar I/O — ``SCH-GRADE-CELL-SLOTS``.
 
 SoT: ``docs/tz_terrain_relief_consume.md`` § Тело sidecar.
-Old ``rays[]`` files are not read. Persist dump still uses ``gradeRaySidecar``
-until the writer slice switches.
+Persist writes this body. Files without this ``schema_id`` (old ``rays[]``) load
+as empty. Dump still reads ``gradeRaySidecar`` / ``rays[]`` — RELIEF-TD-1.
 """
 
 from __future__ import annotations

@@ -1,10 +1,12 @@
 """Occupancy 8-code row — SoT consume validator. Does not close from z.
 
 R44 leftover+halo / invent-from-z lives in ``gradeCellRays`` (locked tests).
+Persist calls this only when ``DEBUG_GRADE_SLOT_VALIDATE`` is on (dev).
 """
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable, Iterable, Mapping
 
 from app.application.worldData.generators.terrain.relief.log.events import (
@@ -21,6 +23,14 @@ from app.dataModel.terrain.relief.gradeSlot import (
     GradeOctant,
     facing_from_octant,
 )
+
+# Process env — not world JSON. Unset / empty = off (product bake).
+DEBUG_GRADE_SLOT_VALIDATE_ENV = "DEBUG_GRADE_SLOT_VALIDATE"
+
+
+def grade_slot_validate_enabled() -> bool:
+    raw = os.environ.get(DEBUG_GRADE_SLOT_VALIDATE_ENV, "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
 
 
 def validate_grade_cell_slots(

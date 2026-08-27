@@ -1054,6 +1054,7 @@ def log_pack_grade_ray_sidecar_done(
 
 
 def log_pack_grade_ray_validate_start(world_uid: str, *, n_cells: int) -> float:
+    """Heartbeat — persist only if ``DEBUG_GRADE_SLOT_VALIDATE`` is on."""
     _info(
         "pack grade_ray validate start | world=%s cells=%d",
         world_uid,

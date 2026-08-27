@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import unittest
 from unittest.mock import patch
 
@@ -121,6 +122,22 @@ class TestGradeSlotWire(unittest.TestCase):
         self.assertEqual(body.schema_id, GRADE_SLOT_SCHEMA_ID)
         with self.assertRaises(ValidationError):
             GradeSlotSidecar(schema_id="SCH-GRADE-RAY-SIDECAR")
+
+
+class TestGradeSlotValidateGate(unittest.TestCase):
+    def test_env_off_by_default_on_for_dev_flag(self) -> None:
+        from app.application.worldData.generators.terrain.relief.validate.gradeCellSlotValidate import (
+            DEBUG_GRADE_SLOT_VALIDATE_ENV,
+            grade_slot_validate_enabled,
+        )
+
+        with patch.dict("os.environ", {}, clear=False):
+            os.environ.pop(DEBUG_GRADE_SLOT_VALIDATE_ENV, None)
+            self.assertFalse(grade_slot_validate_enabled())
+        with patch.dict("os.environ", {DEBUG_GRADE_SLOT_VALIDATE_ENV: "1"}):
+            self.assertTrue(grade_slot_validate_enabled())
+        with patch.dict("os.environ", {DEBUG_GRADE_SLOT_VALIDATE_ENV: "0"}):
+            self.assertFalse(grade_slot_validate_enabled())
 
 
 if __name__ == "__main__":

@@ -41,6 +41,7 @@ from app.application.worldData.pack.refine.fineTileContext import (
 )
 from app.application.worldData.persistResult import PersistResult
 from app.application.worldData.generators.terrain.relief.validate.gradeCellSlotValidate import (
+    grade_slot_validate_enabled,
     validate_grade_cell_slots,
 )
 from app.application.worldData.pack.refine.gradeCellSlots import pack_cell_slots
@@ -242,7 +243,10 @@ class FineChunkPersist:
         self,
         occupancy: set[tuple[int, int]],
     ) -> tuple[float, float]:
-        """Pack sidecar + occupancy validator. SQL catalog is ``finish``."""
+        """Pack sidecar + occupancy validator. SQL catalog is ``finish``.
+
+        Validator runs only when ``DEBUG_GRADE_SLOT_VALIDATE`` is on (dev).
+        """
         ctx = self._ctx
         packed = pack_cell_slots(self._meter_surface_z, cells=occupancy)
         n_cells = len(packed)
@@ -254,6 +258,8 @@ class FineChunkPersist:
         log_pack_grade_ray_sidecar_done(
             ctx.world_uid, n_cells=n_cells, started_at=sidecar_t0,
         )
+        if not grade_slot_validate_enabled():
+            return sidecar_s, 0.0
         validate_t0 = log_pack_grade_ray_validate_start(
             ctx.world_uid, n_cells=len(occupancy),
         )
