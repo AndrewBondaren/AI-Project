@@ -20,6 +20,7 @@ from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
+from app.dataModel.terrain.relief.reliefSlopeGeom import angle_from_height_length
 from app.db.database import Database
 from app.db.models.reliefGradeInstance import ReliefGradeInstanceRow
 from app.db.models.reliefGradeSystem import ReliefGradeSystemRow
@@ -64,6 +65,7 @@ def _sheer(uid: str, cells: list[tuple[int, int]], *, world: str = _WORLD) -> Re
         height_cells=2,
         length_cells=1,
         cell_refs=cells,
+        angle_deg=angle_from_height_length(2, 1),
     )
 
 

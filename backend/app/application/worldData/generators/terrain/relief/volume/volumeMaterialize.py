@@ -74,7 +74,7 @@ def plan_ribbon_volume(
         z_top = max(z0, z0 + s * h_i)
         cols = tuple(RibbonColumnPlan(k=k, surface_z=z_top) for k in range(1, L + 1))
         return RibbonVolumePlan(
-            kind=kind, h=h_i, L=L, angle_deg=None, sign=s, columns=cols,
+            kind=kind, h=h_i, L=L, angle_deg=geom.angle_deg, sign=s, columns=cols,
         )
 
     steps = geom.steps

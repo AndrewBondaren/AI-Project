@@ -40,10 +40,10 @@ class ReliefGradeInstance(BaseModel):
     grade_system_uid: DefaultOnWire[str | None] = None
 
     @model_validator(mode="after")
-    def _sheer_omits_angle_facing(self) -> ReliefGradeInstance:
+    def _kind_angle_facing(self) -> ReliefGradeInstance:
         if self.kind is ReliefSideKind.SHEER:
-            if self.angle_deg is not None:
-                raise ValueError("SHEER grade must omit angle_deg (R36e)")
+            if self.angle_deg is None:
+                raise ValueError("SHEER grade requires honest angle_deg")
             if self.facing is not None and self.facing != "none":
                 raise ValueError("SHEER grade facing must be omit or 'none'")
         elif self.kind is ReliefSideKind.SLOPE and self.angle_deg is None:

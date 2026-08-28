@@ -14,6 +14,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.dataModel.annotationPolicy import DefaultOnWire
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.terrain.relief.enums import ReliefConditionTerrain, ReliefContext
+from app.dataModel.terrain.relief.gradeLeftoverPair import (
+    LEFTOVER_SHEER_MIN_DEG,
+    theta_is_sheer,
+)
 from app.dataModel.terrain.relief.reliefSlopeGeom import (
     angle_from_height_length,
     length_from_target_angle,
@@ -23,8 +27,8 @@ _ANGLE_EPS_DEG = 1e-9
 _SHEER_LENGTH_CELLS = 1
 
 _OPEN_LAND_SLOPE_MIN_CELLS = 20
-_PLAINS_SLOPE_MAX_DEG = 45.0
-_FOREST_SLOPE_MAX_DEG = 20.0
+# Honest land SHEER floor [80, 90) — same number as leftover L=1 pair.
+_OPEN_LAND_SLOPE_MAX_DEG = LEFTOVER_SHEER_MIN_DEG
 
 _SHORE_SLOPE_MIN_DEG = 20.0
 _SHORE_SLOPE_MAX_DEG = 70.0
@@ -56,21 +60,21 @@ def _open_land_grade_floor(
 
 
 def _plains_canonical() -> ReliefTerrainEnvelope:
-    """Plains: SLOPE θ ≤ 45°; SHEER only if the ray is steeper than 45°."""
+    """Plains: SLOPE θ < 80°; SHEER if the ray is steeper than the leftover floor."""
     return _open_land_grade_floor(
         slope_preferred=True,
         sheer_min_abs_dz=0,
-        slope_max_angle_deg=_PLAINS_SLOPE_MAX_DEG,
+        slope_max_angle_deg=_OPEN_LAND_SLOPE_MAX_DEG,
         stamp_min_abs_dz=1,
     )
 
 
 def _forest_canonical() -> ReliefTerrainEnvelope:
-    """Forest: θ ≤ 20°; SHEER allowed when ``|dz| >= 4`` (L=1)."""
+    """Forest: same θ_max 80° as plains; SHEER still allowed when ``|dz| >= 4``."""
     return _open_land_grade_floor(
         slope_preferred=False,
         sheer_min_abs_dz=4,
-        slope_max_angle_deg=_FOREST_SLOPE_MAX_DEG,
+        slope_max_angle_deg=_OPEN_LAND_SLOPE_MAX_DEG,
         stamp_min_abs_dz=2,
     )
 
@@ -347,7 +351,13 @@ class ReliefTerrainEnvelope(BaseModel):
             return False
         theta = self.slope_angle_deg(h_i, l_i)
         if self.slope_max_angle_deg is not None:
-            if theta > float(self.slope_max_angle_deg) + _ANGLE_EPS_DEG:
+            max_deg = float(self.slope_max_angle_deg)
+            # Open-land θ_max is leftover SHEER floor: [max, 90) is not SLOPE.
+            # Shore max is an inclusive SLOPE cap (archive R37).
+            if math.isclose(max_deg, LEFTOVER_SHEER_MIN_DEG, abs_tol=_ANGLE_EPS_DEG):
+                if theta_is_sheer(theta, floor_deg=max_deg):
+                    return False
+            elif theta > max_deg + _ANGLE_EPS_DEG:
                 return False
         if self.slope_min_angle_deg is not None:
             if theta < float(self.slope_min_angle_deg) - _ANGLE_EPS_DEG:

@@ -1015,6 +1015,7 @@ class DetailedGradeMaterializeTest(unittest.TestCase):
         )
         from app.dataModel.terrain.relief.enums import ReliefSideKind
         from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
+        from app.dataModel.terrain.relief.reliefSlopeGeom import angle_from_height_length
 
         def sheer(
             uid: str,
@@ -1032,6 +1033,7 @@ class DetailedGradeMaterializeTest(unittest.TestCase):
                 length_cells=length,
                 cell_refs=refs,
                 earthen_canal=earthen,
+                angle_deg=angle_from_height_length(height, length),
             )
 
         same_uid = DetailedGradeResult(
@@ -1199,6 +1201,7 @@ class DetailedGradeMaterializeTest(unittest.TestCase):
         )
         from app.dataModel.terrain.relief.enums import ReliefSideKind
         from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
+        from app.dataModel.terrain.relief.reliefSlopeGeom import angle_from_height_length
 
         self.assertEqual(
             merge_cell_refs([[1, 0], [2, 0]], ((2, 0), (3, 0))),
@@ -1215,6 +1218,7 @@ class DetailedGradeMaterializeTest(unittest.TestCase):
             height_cells=1,
             length_cells=1,
             cell_refs=[(2, 0)],
+            angle_deg=angle_from_height_length(1, 1),
         )
         merged = apply_prior_cell_refs(inst, [[1, 0], [2, 0]])
         self.assertEqual(list(merged.cell_refs), [(1, 0), (2, 0)])

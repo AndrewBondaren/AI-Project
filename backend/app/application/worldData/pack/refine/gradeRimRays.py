@@ -1,7 +1,7 @@
-"""Outgoing pack senders from a painted front.
+"""Mill leftover senders from a painted front.
 
-Walk senders only — leftover consume slots, not SQL. Not body × 8.
-SoT: ``docs/tz_terrain_relief_consume.md``.
+Walk senders only — C41 mill trace, not sidecar. Sidecar persist is
+``pack_cell_slots``. Not body × 8.
 """
 
 from __future__ import annotations
@@ -14,16 +14,7 @@ from app.application.worldData.generators.terrain.relief.discover.packSenders im
 from app.application.worldData.generators.terrain.relief.discover.types import (
     DiscoveredFront,
 )
-from app.application.worldData.generators.terrain.relief.validate.gradeCellRays import (
-    leftover_plus_halo,
-)
-from app.dataModel.terrain.relief.gradeRimRay import (
-    GradeRimRay,
-    couple_rim_rays,
-    downhill_leftover_rim_rays,
-    merge_grade_rim_rays,
-    pack_rim_slot_rays,
-)
+from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay
 
 
 def rim_rays_from_front(front: DiscoveredFront) -> tuple[GradeRimRay, ...]:
@@ -47,18 +38,9 @@ def pack_slots_for_persist(
     *,
     cells: Collection[tuple[int, int]] | None = None,
 ) -> tuple[tuple[GradeRimRay, ...], tuple[tuple[int, int], ...]]:
-    """Leftover + downhill fill + COUPLE. Halo from mill leftover, not COUPLE."""
-    allowed = set(cells) if cells is not None else {
-        (int(x), int(y)) for x, y in z_height_map
-    }
-    leftover = pack_rim_slot_rays(senders, cells=allowed)
-    halo = leftover_plus_halo(leftover, z_height_map)
-    filled = merge_grade_rim_rays(
-        leftover,
-        downhill_leftover_rim_rays(leftover, z_height_map),
+    """Locked-test leftover pack. Not FineChunkPersist. Lazy import keeps mill clean."""
+    from app.application.worldData.generators.terrain.relief.validate.gradeRimPackLegacy import (
+        pack_slots_for_persist as _legacy,
     )
-    slots = merge_grade_rim_rays(
-        filled,
-        couple_rim_rays(halo, filled, z_height_map),
-    )
-    return slots, halo
+
+    return _legacy(senders, z_height_map, cells=cells)

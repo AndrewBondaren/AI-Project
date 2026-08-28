@@ -335,7 +335,11 @@ class ReliefPureTest(unittest.TestCase):
         )
         self.assertEqual(g.h, 6)
         self.assertEqual(g.L, 2)
-        self.assertIsNone(g.angle_deg)
+        self.assertAlmostEqual(
+            g.angle_deg or 0.0,
+            math.degrees(math.atan(6 / 2)),
+            places=5,
+        )
         self.assertEqual(g.steps, ())
         # Geom-B ignored for SHEER
         g2 = geom_resolve(
@@ -355,7 +359,11 @@ class ReliefPureTest(unittest.TestCase):
                 )
                 self.assertEqual(gs.L, L, msg=f"SHEER h={h} L={L}")
                 self.assertEqual(gs.h, h)
-                self.assertIsNone(gs.angle_deg)
+                self.assertAlmostEqual(
+                    gs.angle_deg or 0.0,
+                    math.degrees(math.atan(h / L)),
+                    places=5,
+                )
                 self.assertEqual(gs.steps, ())
 
 

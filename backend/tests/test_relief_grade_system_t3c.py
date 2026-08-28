@@ -21,6 +21,7 @@ from app.application.worldData.generators.climate.climatePoleField import GridBB
 from app.application.worldData.generators.terrain.types import ColumnRect, SurfaceHeightmap
 from app.dataModel.terrain.relief.enums import ReliefConditionTerrain, ReliefContext, ReliefSideKind
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
+from app.dataModel.terrain.relief.reliefSlopeGeom import angle_from_height_length
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
 from app.db.models.world import World
@@ -38,6 +39,7 @@ def _sheer(uid: str, cells: list[tuple[int, int]], world: str = "w") -> ReliefGr
         height_cells=2,
         length_cells=1,
         cell_refs=cells,
+        angle_deg=angle_from_height_length(2, 1),
     )
 
 

@@ -12,6 +12,7 @@ from dataclasses import replace
 from app.application.worldData.generators.terrain.relief.geom.geomResolve import (
     ResolvedGeom,
     angle_from_height_length,
+    geom_resolve,
     partition_height,
 )
 from app.application.worldData.generators.terrain.relief.log.events import (
@@ -229,14 +230,13 @@ def _force_sheer_length(decision: RibbonGradeDecision) -> RibbonGradeDecision:
         geom is not None
         and int(geom.L) == length
         and int(decision.requested_length) == length
+        and geom.angle_deg is not None
     ):
         return decision
-    restored = ResolvedGeom(
-        kind=ReliefSideKind.SHEER,
+    restored = geom_resolve(
         h=decision.h,
-        L=length,
-        angle_deg=None,
-        steps=(),
+        kind=ReliefSideKind.SHEER,
+        slope_length_cells=length,
     )
     return replace(decision, geom=restored, requested_length=length)
 

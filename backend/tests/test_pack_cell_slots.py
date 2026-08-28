@@ -15,7 +15,7 @@ from app.application.worldData.pack.refine.gradeCellSlots import pack_cell_slots
 from app.dataModel.spatial.facing import Facing, OPPOSITE
 from app.dataModel.terrain.relief.gradeLeftoverPair import (
     LEFTOVER_PAIR_LENGTH_CELLS,
-    LEFTOVER_SHEER_MIN_DEG,
+    leftover_pair_is_sheer,
     leftover_pair_theta,
 )
 from app.dataModel.terrain.relief.gradeSlot import (
@@ -29,6 +29,7 @@ from app.dataModel.terrain.relief.gradeSlot import (
     facing_from_octant,
     octant_from_facing,
 )
+from app.dataModel.terrain.relief.reliefTerrainEnvelope import ReliefOntologyEnvelopes
 
 
 def _by_cell(z: dict[tuple[int, int], int]) -> dict[tuple[int, int], tuple[int, ...]]:
@@ -65,7 +66,8 @@ class TestPackCellSlotsPit(unittest.TestCase):
         )
         self.assertEqual(slots[(1, 2)][6], int(GradeOctant.SOUTH))
         theta = leftover_pair_theta(2)
-        self.assertLess(theta, LEFTOVER_SHEER_MIN_DEG)
+        plains = ReliefOntologyEnvelopes.canonical_defaults().plains
+        self.assertLess(theta, float(plains.slope_max_angle_deg))
         self.assertEqual(LEFTOVER_PAIR_LENGTH_CELLS, 1)
         self.assertNotIn(int(GradeSheer.SHEER), slots[(1, 1)])
 
@@ -77,8 +79,21 @@ class TestPackCellSlotsPit(unittest.TestCase):
         self.assertEqual(slots[(1, 2)][3], east)
         self.assertEqual(slots[(0, 2)][0], int(GradeSeam.SEAM))
 
-    def test_l1_dz6_is_sheer_not_octant(self) -> None:
-        z = {(0, 0): 6, (1, 0): 0}
+    def test_l1_envelope_sheer_dz_is_sheer_slot(self) -> None:
+        plains = ReliefOntologyEnvelopes.canonical_defaults().plains
+        last_slope = None
+        first_sheer = None
+        for h in range(1, 32):
+            if plains.slope_outcome(h, 1) == "slope":
+                last_slope = h
+            elif plains.slope_outcome(h, 1) == "sheer" and first_sheer is None:
+                first_sheer = h
+                break
+        self.assertIsNotNone(last_slope)
+        self.assertIsNotNone(first_sheer)
+        self.assertFalse(leftover_pair_is_sheer(int(last_slope)))
+        self.assertTrue(leftover_pair_is_sheer(int(first_sheer)))
+        z = {(0, 0): int(first_sheer), (1, 0): 0}
         slots = _by_cell(z)
         self.assertEqual(slots[(0, 0)][4], int(GradeSheer.SHEER))
         self.assertEqual(slots[(1, 0)][3], int(GradeSheer.SHEER))

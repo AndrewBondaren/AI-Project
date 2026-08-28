@@ -43,7 +43,7 @@ class ResolvedGeom:
     kind: ReliefSideKind
     h: int
     L: int
-    angle_deg: float | None  # None for SHEER
+    angle_deg: float | None  # None only when L < 1 (no triangle)
     steps: tuple[int, ...]  # SLOPE: sum == h; SHEER: empty
 
 
@@ -79,8 +79,8 @@ def geom_resolve(
     SLOPE: Geom-A (h+L→θ) or Geom-B (θ+h→L); then ``L_eff = min(L, h)``;
     ``steps = partition_height(h, L_eff)`` with ``sum(steps) == h``.
 
-    SHEER: angle N/A; L from ``slope_length_cells`` (default 1) — Geom-B ignored;
-    no height partition (volume fill is L columns × h solid — §8b).
+    SHEER: honest ``θ = atan(h/L)``; L from ``slope_length_cells`` (default 1) —
+    Geom-B ignored; no height partition (volume fill is L columns × h solid — §8b).
 
     Explicit ``slope_length_cells=0`` → ``L=0``, empty ``steps`` (no wedge; no
     silent bump to 1). Omit L → default 1. ``partition_height`` only when L≥1.
@@ -103,7 +103,7 @@ def geom_resolve(
             kind=kind,
             h=h_i,
             L=L,
-            angle_deg=None,
+            angle_deg=angle_from_height_length(h_i, L),
             steps=(),
         )
 

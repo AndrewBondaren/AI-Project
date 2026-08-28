@@ -77,6 +77,11 @@ _ENVELOPE_L_FLOOR = (
     .for_terrain(ReliefConditionTerrain.PLAINS)
     .length_from_min_cells()
 )
+_PLAINS_ENV = ReliefOntologyEnvelopes.canonical_defaults().plains
+_L1_SHEER_DZ = next(
+    h for h in range(1, 32)
+    if _PLAINS_ENV.slope_outcome(h, 1) == "sheer"
+)
 _SHORE_SEA = ReliefConditionTerrain.SHORE_SEA.value
 _BARRIERS = WorldTerrainRegistry.canonical_barrier_terrain_keys()
 
@@ -275,10 +280,11 @@ class ReliefDiscoverTest(unittest.TestCase):
 
     def test_z_top_mills_q2_before_lower_leftover(self) -> None:
         """Q2 SHEER landing (not C39) mills before leftover C39 at a lower z."""
+        mesa = 2 + _L1_SHEER_DZ
         z = {
-            (0, 1): 8, (1, 1): 8, (2, 1): 8,
-            (0, 0): 7, (1, 0): 7, (2, 0): 7,
-            (3, 1): 6,
+            (0, 1): mesa, (1, 1): mesa, (2, 1): mesa,
+            (0, 0): mesa - 1, (1, 0): mesa - 1, (2, 0): mesa - 1,
+            (3, 1): 2,
             (10, 2): 4, (10, 1): 2,
         }
         order: list[tuple[int, Coord]] = []
@@ -303,10 +309,10 @@ class ReliefDiscoverTest(unittest.TestCase):
         )
         zs = [item[0] for item in order]
         self.assertGreaterEqual(len(zs), 3)
-        self.assertEqual(zs[0], 8)
-        self.assertIn(6, zs)
+        self.assertEqual(zs[0], mesa)
+        self.assertIn(2, zs)
         self.assertIn(4, zs)
-        self.assertLess(zs.index(6), zs.index(4))
+        self.assertLess(zs.index(2), zs.index(4))
 
     def test_mesa_8_connected_gy_901(self) -> None:
         """Diagonal 4 on 901 col4 is the same vertex as the plateau (R41)."""
@@ -351,20 +357,20 @@ class ReliefDiscoverTest(unittest.TestCase):
         self.assertEqual(traces, ())
 
     def test_steep_first_step_is_not_a_slope_walk(self) -> None:
-        """First-step envelope class is SHEER → no long SLOPE ray."""
-        z = {(0, 1): 4, (0, 0): 2}
+        """First-step envelope class is SHEER (POJO θ_max at L=1) → no long SLOPE ray."""
+        z = {(0, 1): _L1_SHEER_DZ, (0, 0): 0}
         surface = _surface(z)
         vertices = ReliefVertices.for_bounds(
             origin_x=0, origin_y=0, width=1, height=2,
         )
-        body = {(0, 1): 4}
+        body = {(0, 1): _L1_SHEER_DZ}
         slot = vertices.add_vertex(body)
         stage = FrontStage(surface, vertices, lambda _xy: False)
         plugin = OpenLandPlugin(_LAND)
         self.assertEqual(stage.propose(slot, body, plugin), ())
         sheers = stage.propose_sheers(slot, body, plugin)
         self.assertEqual(len(sheers), 1)
-        self.assertEqual(sheers[0].first_dz, 2)
+        self.assertEqual(sheers[0].first_dz, _L1_SHEER_DZ)
         self.assertEqual(sheers[0].trace, ((0, 0),))
 
     def test_isolated_peak_shoots_eight_facings(self) -> None:
@@ -472,11 +478,12 @@ class ReliefDiscoverTest(unittest.TestCase):
         self.assertNotEqual(vertices.at_grid[vertices.index(0, 0)], 0)
 
     def test_lower_terrace_seeds_when_upper_drop_is_sheer(self) -> None:
-        """Plains |dz|=2 is sheer: the terrace is a vertex, not a slope corridor."""
+        """Envelope L=1 SHEER: the terrace is a vertex, not a slope corridor."""
+        step = _L1_SHEER_DZ
         z = {
-            (0, 2): 6, (1, 2): 6, (2, 2): 6,
-            (0, 1): 4, (1, 1): 4, (2, 1): 4,
-            (0, 0): 2, (1, 0): 2, (2, 0): 2,
+            (0, 2): 2 * step, (1, 2): 2 * step, (2, 2): 2 * step,
+            (0, 1): step, (1, 1): step, (2, 1): step,
+            (0, 0): 0, (1, 0): 0, (2, 0): 0,
         }
         vertices, fronts = _discover(z)
         mesa_slot = vertices.at_grid[vertices.index(1, 2)]
@@ -491,11 +498,12 @@ class ReliefDiscoverTest(unittest.TestCase):
         self.assertTrue(south)
 
     def test_uncovered_east_landing_is_q2_vertex_with_parent_sheer(self) -> None:
-        """Mesa z=8; south |dz|=1 slope; east z=6 is Q2 landing, parent SHEER."""
+        """Mesa; south |dz|=1 slope; east drop is envelope L=1 SHEER → Q2 landing."""
+        mesa = 2 + _L1_SHEER_DZ
         z = {
-            (0, 1): 8, (1, 1): 8, (2, 1): 8,
-            (0, 0): 7, (1, 0): 7, (2, 0): 7,
-            (3, 1): 6,
+            (0, 1): mesa, (1, 1): mesa, (2, 1): mesa,
+            (0, 0): mesa - 1, (1, 0): mesa - 1, (2, 0): mesa - 1,
+            (3, 1): 2,
         }
         vertices, fronts = _discover(z)
         landing = (3, 1)
@@ -512,7 +520,7 @@ class ReliefDiscoverTest(unittest.TestCase):
         ]
         self.assertTrue(east)
         self.assertIn(landing, east[0].corridor)
-        self.assertEqual(east[0].first_dz, 2)
+        self.assertEqual(east[0].first_dz, _L1_SHEER_DZ)
 
     def test_q2_same_z_side_of_slope_corridor_is_new_vertex(self) -> None:
         """|dz|=1 plains corridor; same-z cell south of occ, not 8-adj to the body."""

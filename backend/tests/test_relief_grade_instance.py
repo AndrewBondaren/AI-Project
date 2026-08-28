@@ -16,6 +16,7 @@ from app.application.worldData.generators.terrain.relief.volume.volumeMaterializ
 from app.application.worldData.persistReliefGrades import instance_to_row
 from app.dataModel.terrain.relief import ReliefGradeInstance, ReliefGradeSystem
 from app.dataModel.terrain.relief.enums import ReliefSideKind
+from app.dataModel.terrain.relief.reliefSlopeGeom import angle_from_height_length
 from pydantic import ValidationError
 
 
@@ -68,7 +69,7 @@ class ReliefGradeInstanceTest(unittest.TestCase):
         self.assertEqual(row.structure_canal, "lined_cut")
         self.assertTrue(row.earthen_canal)
 
-    def test_sheer_rejects_angle(self) -> None:
+    def test_sheer_requires_honest_angle_omits_facing(self) -> None:
         with self.assertRaises(ValidationError):
             ReliefGradeInstance(
                 grade_uid="g",
@@ -77,7 +78,29 @@ class ReliefGradeInstanceTest(unittest.TestCase):
                 height_cells=3,
                 length_cells=1,
                 cell_refs=[(0, 0)],
-                angle_deg=45.0,
+            )
+        theta = angle_from_height_length(6, 1)
+        inst = ReliefGradeInstance(
+            grade_uid="g",
+            world_uid="w",
+            kind=ReliefSideKind.SHEER,
+            height_cells=6,
+            length_cells=1,
+            cell_refs=[(0, 0)],
+            angle_deg=theta,
+        )
+        self.assertAlmostEqual(inst.angle_deg or 0.0, theta)
+        self.assertIsNone(inst.facing)
+        with self.assertRaises(ValidationError):
+            ReliefGradeInstance(
+                grade_uid="g",
+                world_uid="w",
+                kind=ReliefSideKind.SHEER,
+                height_cells=6,
+                length_cells=1,
+                cell_refs=[(0, 0)],
+                angle_deg=theta,
+                facing="south",
             )
 
     def test_system_requires_two(self) -> None:

@@ -26,7 +26,7 @@ from app.dataModel.terrain.relief.gradeLeftoverPair import (
     LEFTOVER_PAIR_LENGTH_CELLS,
     LEFTOVER_SHEER_MIN_DEG,
 )
-from app.dataModel.terrain.relief.gradeRimRay import GradeRaySidecar, GradeRimRay
+from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay
 from app.dataModel.terrain.relief.gradeSlot import (
     GradeCellSlots,
     GradeCouple,
@@ -76,7 +76,6 @@ __all__ = [
     "GradeOctant",
     "LEFTOVER_PAIR_LENGTH_CELLS",
     "LEFTOVER_SHEER_MIN_DEG",
-    "GradeRaySidecar",
     "GradeRimRay",
     "GradeSeam",
     "GradeSheer",

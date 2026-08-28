@@ -8,6 +8,8 @@ from app.application.worldData.generators.terrain.relief.discover.timings import
     GradePipelineTimings,
 )
 from app.application.worldData.persistResult import PersistResult
+from app.application.worldData.generators.terrain.types import ColumnRect
+from app.application.worldData.pack.refine.fineTileContext import VertexSlotSeam
 from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
@@ -23,6 +25,7 @@ class FineRefineResult:
     grade_systems: tuple[ReliefGradeSystem, ...] = ()
     # Mill leftover ``GradeRimRay`` acc — not SCH-GRADE-CELL-SLOTS.
     mill_rim_rays: tuple[GradeRimRay, ...] = ()
+    vertex_seams: tuple[tuple[ColumnRect, tuple[VertexSlotSeam, ...]], ...] = ()
     materialize_s: float = 0.0
     grade_s: float = 0.0
     pipeline_s: GradePipelineTimings = field(default_factory=GradePipelineTimings)

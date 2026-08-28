@@ -7,6 +7,7 @@ Does not enqueue background jobs (see ``chunkSchedule``).
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 from functools import partial
 
 from app.application.worldData.chunkComputePool import ChunkComputePool
@@ -19,6 +20,7 @@ from app.application.worldData.pack.bake.packBakeLog import log_pack_l2_formatio
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.refine.fineChunkCompute import compute_rect
 from app.application.worldData.pack.refine.fineChunkPersist import FineChunkPersist
+from app.application.worldData.pack.refine.fineGradeCatalog import emit_fine_grade_catalog
 from app.application.worldData.pack.refine.fineRefineResult import FineRefineResult
 from app.application.worldData.pack.refine.fineTileContext import ChunkComputeResult
 from app.application.worldData.pack.refine.fineTilePrep import prepare_fine_tile
@@ -96,7 +98,19 @@ class FineChunkRunner:
             finally:
                 pool.shutdown()
 
-        result = persist.finish()
+        pack = persist.finish()
+        instances, systems, emit_s = emit_fine_grade_catalog(
+            pack.grade_instances,
+            pack.vertex_seams,
+            ctx.catalog,
+            world_uid=ctx.world_uid,
+        )
+        result = replace(
+            pack,
+            grade_instances=instances,
+            grade_systems=systems,
+            pipeline_s=replace(pack.pipeline_s, systems_emit_s=emit_s),
+        )
         log_pack_l2_formation_done(
             ctx.world_uid,
             phase=ctx.phase_name,

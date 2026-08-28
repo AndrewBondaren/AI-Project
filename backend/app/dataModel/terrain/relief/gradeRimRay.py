@@ -1,9 +1,8 @@
-"""Grade rim edge slots in pack — sender (C41) + receiver (opposite) + COUPLE.
+"""Mill leftover ``GradeRimRay`` (C41 sender) + locked-test leftover pack helpers.
 
-SoT: ``docs/tz_terrain_relief_consume.md``. C41 identity = sender ``(cell, Facing)``.
-Receiver is persist, not a second claim and not render ``opposite``.
-``kind`` is the pack slot: SLOPE / SHEER leftover, or COUPLE (same-z). Dump and
-validator read slots; they do not invent ``+`` from ``surface_z``.
+Sidecar wire is ``GradeCellSlots`` / ``SCH-GRADE-CELL-SLOTS``, not ``rays[]``.
+``downhill_leftover_rim_rays`` / ``couple_rim_rays`` / ``pack_rim_slot_rays`` are
+locked-test leftover pack — not FineChunkPersist.
 """
 
 from __future__ import annotations
@@ -36,16 +35,6 @@ class GradeRimRay(BaseModel):
     @property
     def cell(self) -> tuple[int, int]:
         return (int(self.x), int(self.y))
-
-
-class GradeRaySidecar(BaseModel):
-    """Pack file (tile or location): slot rays. Not FineTerrain, not catalog SQL."""
-
-    SCHEMA_ID: ClassVar[str] = "SCH-GRADE-RAY-SIDECAR"
-
-    model_config = ConfigDict(extra="ignore", frozen=True)
-
-    rays: tuple[GradeRimRay, ...] = Field(default_factory=tuple)
 
 
 def merge_grade_rim_rays(*groups: Iterable[GradeRimRay]) -> tuple[GradeRimRay, ...]:

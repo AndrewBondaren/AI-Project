@@ -1,7 +1,8 @@
 """Leftover L=1 pair θ — tz_terrain_relief § Угол.
 
-Not mill envelope plains 45° (``reliefTerrainEnvelope``). Pack occupancy
-walk stays in ``pack/refine/gradeCellSlots``; this module is the pair rule.
+``LEFTOVER_SHEER_MIN_DEG`` is also mill open_land ``slope_max_angle_deg``.
+This module is the pair rule only (no mill L_min 20 / stamp floors).
+Pack occupancy walk stays in ``pack/refine/gradeCellSlots``.
 """
 
 from __future__ import annotations
@@ -23,8 +24,17 @@ def leftover_pair_theta(abs_dz: int) -> float:
     return angle_from_height_length(int(abs_dz), LEFTOVER_PAIR_LENGTH_CELLS)
 
 
+def theta_is_sheer(
+    theta_deg: float,
+    *,
+    floor_deg: float = LEFTOVER_SHEER_MIN_DEG,
+) -> bool:
+    """TZ § Угол: SHEER is ``[floor, 90)`` — ``theta >= floor``."""
+    return float(theta_deg) >= float(floor_deg)
+
+
 def leftover_pair_is_sheer(abs_dz: int) -> bool:
-    return leftover_pair_theta(abs_dz) >= LEFTOVER_SHEER_MIN_DEG
+    return theta_is_sheer(leftover_pair_theta(abs_dz))
 
 
 def leftover_pair_code(abs_dz: int, flow: GradeOctant) -> int:

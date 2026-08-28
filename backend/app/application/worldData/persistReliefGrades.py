@@ -16,6 +16,7 @@ from app.application.worldData.pack.bake.packBakeLog import (
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
+from app.dataModel.terrain.relief.reliefSlopeGeom import angle_from_height_length
 from app.db.bulkSql import iter_batches
 from app.db.models.reliefGradeInstance import ReliefGradeInstanceRow
 from app.db.models.reliefGradeSystem import ReliefGradeSystemRow
@@ -73,14 +74,20 @@ def _xy_pairs(raw: object) -> list[tuple[int, int]]:
 
 def instance_from_row(row: ReliefGradeInstanceRow) -> ReliefGradeInstance:
     """SQL row → POJO. Inverse of ``instance_to_row`` (membership FK included)."""
+    kind = ReliefSideKind(row.kind)
+    angle = row.angle_deg
+    if kind is ReliefSideKind.SHEER and angle is None:
+        angle = angle_from_height_length(
+            int(row.height_cells), int(row.length_cells),
+        )
     return ReliefGradeInstance(
         grade_uid=row.grade_uid,
         world_uid=row.world_uid,
-        kind=ReliefSideKind(row.kind),
+        kind=kind,
         height_cells=int(row.height_cells),
         length_cells=int(row.length_cells),
         cell_refs=_xy_pairs(row.cell_refs),
-        angle_deg=row.angle_deg,
+        angle_deg=angle,
         facing=row.facing,
         earthen_canal=bool(row.earthen_canal),
         structure_refs=list(row.structure_refs or []),

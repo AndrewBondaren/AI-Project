@@ -1,6 +1,20 @@
-from dataclasses import dataclass
+from __future__ import annotations
 
-from app.application.worldData.generators.climate.climatePoleField import GridBBox
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.application.worldData.generators.climate.climatePoleField import GridBBox
+
+
+def __getattr__(name: str):
+    """Lazy ``GridBBox`` re-export — avoids climate↔types import cycle."""
+    if name == "GridBBox":
+        from app.application.worldData.generators.climate.climatePoleField import (
+            GridBBox as grid_bbox,
+        )
+        return grid_bbox
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 @dataclass(frozen=True)

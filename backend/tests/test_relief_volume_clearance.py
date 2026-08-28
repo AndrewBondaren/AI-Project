@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import unittest
 
 from app.application.worldData.generators.terrain.relief.geom.freeGap import measure_free_gap
@@ -74,7 +75,11 @@ class VolumeMaterializeTest(unittest.TestCase):
         plan = plan_ribbon_volume(z_road=12, h=6, sign=-1, geom=geom)
         self.assertEqual(len(plan.columns), 2)
         self.assertEqual(plan.columns[0].surface_z, 12)
-        self.assertIsNone(plan.angle_deg)
+        self.assertAlmostEqual(
+            plan.angle_deg or 0.0,
+            math.degrees(math.atan(6 / 2)),
+            places=5,
+        )
 
     def test_sign_from_dz(self) -> None:
         self.assertEqual(ribbon_sign_from_dz(2), -1)

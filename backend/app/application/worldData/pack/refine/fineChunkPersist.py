@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 import time
 
-from app.application.worldData.gradeInstanceMerge import merge_grade_instances
-from app.application.worldData.gradeVertexSystem import emit_relief_grade_systems
 from app.application.worldData.generators.terrain.relief.discover.timings import (
     GradePipelineTimings,
 )
@@ -17,8 +15,6 @@ from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_grade_ray_validate_done,
     log_pack_grade_ray_validate_progress,
     log_pack_grade_ray_validate_start,
-    log_pack_grade_systems_emit_done,
-    log_pack_grade_systems_emit_start,
     log_pack_location_terrain_persist,
     log_pack_wilderness_chunk_done,
     log_pack_wilderness_chunk_persist,
@@ -48,7 +44,6 @@ from app.application.worldData.pack.refine.gradeCellSlots import pack_cell_slots
 from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay
 from app.dataModel.terrain.relief.gradeSlot import GradeCellSlots
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
-from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume, inside_location_volume
 from app.db.bulkSql import EXECUTEMANY_BATCH_SIZE
 from app.db.models.mapCell import MapCell
@@ -88,7 +83,8 @@ def location_for_cell(
 class FineChunkPersist:
     """Single-writer pack side of refine_rects. Generate stays in compute_rect.
 
-    Slot sidecar is ``_persist_grade_cell_slots``. T-3c SQL catalog stays in ``finish``.
+    ``finish`` writes pack files only (location zst, slot sidecar, manifest).
+    T-3c catalog emit is ``emit_fine_grade_catalog`` on the runner.
     """
 
     def __init__(self, ctx: FineTileContext, writer: WorldPackWriter) -> None:
@@ -199,41 +195,18 @@ class FineChunkPersist:
         sidecar_s, validate_s = self._persist_grade_cell_slots(occupancy)
         self._writer.recalc_manifest_counters()
         self._writer.save_manifest()
-        grade_instances = (
-            merge_grade_instances(self._grade_acc) if self._grade_acc else ()
-        )
-        grade_systems: tuple[ReliefGradeSystem, ...] = ()
-        emit_s = 0.0
-        if grade_instances:
-            emit_t0 = log_pack_grade_systems_emit_start(
-                ctx.world_uid, n_instances=len(grade_instances),
-            )
-            # T-3c after C29 catalog merge. Does not change z/fill.
-            grade_instances, grade_systems = emit_relief_grade_systems(
-                grade_instances,
-                traces=self._seam_acc,
-                catalog=ctx.catalog,
-            )
-            emit_s = time.perf_counter() - emit_t0
-            log_pack_grade_systems_emit_done(
-                ctx.world_uid,
-                n_instances=len(grade_instances),
-                n_systems=len(grade_systems),
-                started_at=emit_t0,
-            )
         pipeline = self._pipeline_s.with_wall(
             sidecar_s=sidecar_s,
             validate_s=validate_s,
-            systems_emit_s=emit_s,
         )
         return FineRefineResult(
             persist=PersistResult.from_counts(self._total_cells, self._total_cells),
             wilderness_chunks_written=self._written,
             rect_count=ctx.chunks_total,
             meter_surface_z=self._meter_surface_z,
-            grade_instances=grade_instances,
-            grade_systems=grade_systems,
+            grade_instances=tuple(self._grade_acc),
             mill_rim_rays=tuple(self._mill_rim_acc),
+            vertex_seams=tuple(self._seam_acc),
             materialize_s=self._materialize_s,
             grade_s=self._grade_s,
             pipeline_s=pipeline,
@@ -243,7 +216,7 @@ class FineChunkPersist:
         self,
         occupancy: set[tuple[int, int]],
     ) -> tuple[float, float]:
-        """Pack sidecar + occupancy validator. SQL catalog is ``finish``.
+        """Pack sidecar + occupancy validator. Catalog emit is the runner.
 
         Validator runs only when ``DEBUG_GRADE_SLOT_VALIDATE`` is on (dev).
         """

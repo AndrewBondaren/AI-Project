@@ -8,13 +8,13 @@ metadata:
 
 # Terrain relief grade — generate
 
-**Статус:** SoT **generate** (очереди, mill/pack, шаблоны/pick, canal/obstacle, SQL catalog). Writer sidecar (`pack_cell_slots` → `SCH-GRADE-CELL-SLOTS`) **есть**. Dump читает `slots[8]`. Persist occupancy-validator (`validate_grade_cell_slots`) — **только dev** (`DEBUG_GRADE_SLOT_VALIDATE=1`); product bake не обходит. Не закрыт **набор клеток** обхода на тайле ([`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) **R41-T-25**). Старый `rays[]` I/O жив для locked-тестов — [`tz_terrain_relief_technical_debt.md`](./tz_terrain_relief_technical_debt.md) **RELIEF-TD-4**.
+**Статус:** SoT **generate** (очереди, mill/pack, шаблоны/pick, canal/obstacle, SQL catalog). Writer sidecar (`pack_cell_slots` → `SCH-GRADE-CELL-SLOTS`) **есть**. Dump читает `slots[8]`. Persist occupancy-validator (`validate_grade_cell_slots`) — **только dev** (`DEBUG_GRADE_SLOT_VALIDATE=1`); product bake не обходит. Не закрыт **набор клеток** обхода на тайле ([`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) **R41-T-25**). Leftover-pack (`downhill` / `leftover_plus_halo`) живёт для locked-тестов — [`tz_terrain_relief_technical_debt.md`](./tz_terrain_relief_technical_debt.md) **RELIEF-TD-4**.
 
 | Документ | Роль |
 |---|---|
 | Этот файл | mill Q1/Q2, pack-слоты, стрелки, шаблоны/pick, canal/obstacle, SQL DDL + R43 |
 | [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | dump 3×3, sidecar paths, LLM-чтение |
-| [`tz_terrain_relief_technical_debt.md`](./tz_terrain_relief_technical_debt.md) | техдолг **кода** (dual sidecar, жирные классы, хардкоды). Не generate SoT |
+| [`tz_terrain_relief_technical_debt.md`](./tz_terrain_relief_technical_debt.md) | техдолг **кода** (leftover-pack для locked, жирные классы). Не generate SoT |
 | [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) | архив: R36 bake (u–w), R37 envelope подробно, L2 volume, C29, примеры JSON pick |
 
 **Не трогать:** L0→L2 parent-light ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2); DAG; Occupancy v1; `0002_*.sql`.
@@ -39,7 +39,7 @@ flowchart LR
 | **Dump** | глиф из кода: луч / `.` / `┃` / `+` | invent слот из z; пустой край как норму |
 | **Валидатор** | ERROR в лог, generate не abort | дописывать слоты; закрывать из z |
 
-Dump и контракт 3×3 — consume. Envelope длинного mill-луча (plains θ≤45°, L min 20) — архив **R37**; knobs шаблона не круче/короче пола. **Не** применять порог 45° к leftover-паре L=1 как «иначе SHEER».
+Dump и контракт 3×3 — consume. Envelope длинного mill-луча (plains/forest θ≤80°, L min 20) — архив **R37** L_min; knobs шаблона не круче/короче пола. Kind на коротком луче — тот же порог 80°, что leftover L=1. **Не** путать L_min 20 с leftover-парой.
 
 ---
 
@@ -56,7 +56,7 @@ Dump и контракт 3×3 — consume. Envelope длинного mill-луч
 | (0, 80) | **SLOPE** (Instance) | dump: глиф `GradeOctant` (поток) |
 | [80, 90) | **SHEER** (Instance + pack `GradeSheer`) | `┃` |
 
-Писать **честный** θ на Instance. Не omit угол у SHEER. Не называть SHEER всё, что круче 45°. Код leftover-пары L=1: `LEFTOVER_SHEER_MIN_DEG` / `LEFTOVER_PAIR_LENGTH_CELLS` в `gradeLeftoverPair` — **не** конверт plains 45°.
+Писать **честный** θ на Instance. Не omit угол у SHEER. Не называть SHEER всё, что круче 45°. Код порога 80°: `LEFTOVER_SHEER_MIN_DEG` (`gradeLeftoverPair`) — leftover-пара L=1 и mill open_land (plains/forest) `slope_max_angle_deg`. Leftover-пара **не** берёт mill L_min 20.
 
 **Нависание (θ ≥ 90, в т.ч. > 90)** — не слот leftover открытой клетки. Это **онтология отдельных объектов** (нависающий обрыв, пещера): углы там могут быть нависающими. Объект наследует поведение родителя (местность, на которой сидит). Не смешивать с mill/pack этого файла. Схема пещеры/обрыва **не** в этом ТЗ.
 
@@ -68,7 +68,7 @@ Dump и контракт 3×3 — consume. Envelope длинного mill-луч
 
 Мастер **не** красит SHEER/SLOPE по клеткам (архив **R10**). Настройки — шаблон + pick. Точечный `sides[].kind` — только сторона горы (сектор form), не клетка карты.
 
-**Два слоя (не смешивать с leftover pack § Угол):** mill Instance / ribbon читает **шаблон + конверт**. Kind leftover-пары L=1 — по θ, не по `|Δz|` и не по `slope_outcome` 45°. **Δz сам не выбирает** SHEER vs SLOPE для mill (**R14**): knobs + seeded noise (**R15**).
+**Два слоя (не смешивать с leftover pack § Угол):** mill Instance / ribbon читает **шаблон + конверт** (open_land θ_max = 80°). Kind leftover-пары L=1 — по θ, не по сырому `|Δz|`. **Δz сам не выбирает** SHEER vs SLOPE для mill (**R14**): knobs + seeded noise (**R15**).
 
 ### Библиотека и мир
 
@@ -250,7 +250,7 @@ CREATE TABLE IF NOT EXISTS relief_grade_instances (
 
 Зерно: Instance = один θ, один Facing, SLOPE **или** SHEER. System = ≥2 Instance (T-3c одно тело **или** бок-attach Q2). 1 фронт → строки System **нет** (`grade_system_uid` NULL), **кроме** бок-attach. Клетка → Instance, не System. Нет таблицы очереди Q3.
 
-`angle_deg` / `facing` в 0001 исторически NULL для SHEER. Generate SoT § Угол: писать честный θ и для SHEER [80, 90); смена колонки — только правка 0001 по явной просьбе.
+`angle_deg` — честный θ и у SHEER ([80, 90) на местности). `facing` у SHEER по-прежнему omit / `none` (не octant). Колонка `REAL` nullable только для пустых/skip строк, не «SHEER ⇒ NULL».
 
 Удаление шаблона из library: RESTRICT, если мир ссылается через registry.
 
@@ -342,11 +342,11 @@ Heartbeat: `packBakeLog` start/progress/done. Detailed: `generation_world_log(..
 | другая z, θ ∈ (0, 80) | **`GradeOctant.<поток>`** оба конца; поток **один** (к нижней клетке) |
 | другая z, θ ∈ [80, 90) | **`GradeSheer.SHEER`** оба конца |
 
-Kind leftover (Octant vs Sheer) — по **θ** шага L=1 (§ Угол), не по сырому `|Δz|` и не по порогу plains 45°. Примеры L=1: `|dz|=1` → 45° → Octant; `|dz|=2` → ≈63.4° → Octant.
+Kind leftover (Octant vs Sheer) — по **θ** шага L=1 (§ Угол), не по сырому `|Δz|`. Примеры L=1: `|dz|=1` → 45° → Octant; `|dz|=2` → ≈63.4° → Octant; `|dz|=6` → ≈80.5° → Sheer.
 
 Луч/SHEER побеждает COUPLE на той же `(клетка, позиция)`. First-wins: занятый слот не затирают.
 
-Dump читает код → глиф; градусы не печатает. Сравнивать z в рендере **запрещено**. Код `slope_outcome(|Δz|, L=1)` с порогом 45° → SHEER — **не** SoT pack. Шов края ≠ шов лучей C41.
+Dump читает код → глиф; градусы не печатает. Сравнивать z в рендере **запрещено**. Leftover pack читает `leftover_pair_is_sheer`, не mill `slope_outcome` (L_min / stamp). Шов края ≠ шов лучей C41.
 
 ---
 
@@ -393,19 +393,19 @@ Dump читает код → глиф; градусы не печатает. С�
 
      .  .  .          .  .  .          .  .  .
      .  4  →          →  3  →          →  2  .
-     .  +  ↘          ↗  +  ↘          ↗  +  .
+     .  +  ↘         ↗  +  ↘          ↗  +  .
 
 
      (0,1)=4          (1,1)=3          (2,1)=2
 
      .  +  ↗          ↘  +  ↗          ↘  +  .
-     .  4  →          →  3  →          →  2  .
+     .  4  →           →  3  →          →  2  .
      .  +  ↘          ↗  +  ↘          ↗  +  .
 
 
      (0,0)=4          (1,0)=3          (2,0)=2
 
-     .  +  ↗          ↘  +  ↗          ↘  +  .
+     .  +  ↗          ↘  +  ↗         ↘  +  .
      .  4  →          →  3  →          →  2  .
      .  .  .          .  .  .          .  .  .
 ```
@@ -419,6 +419,34 @@ Mill: один EAST с кромки, не 8 Instance. Pack: эталон — § 
 ### Каскад вниз
 
 Mill: один SOUTH, Q2 вниз, не тело×8. Pack: клетка занята с 8 сторон по правилам пары (как пул выше, ось может быть SOUTH).
+
+### Смешанные высоты 3×3
+
+Север вверх. Только эти 9 клеток; край — **шов** `.`. Не яма и не один EAST/SOUTH: разные `|dz|` на соседних рёбрах. Pack: те же правила пары, в т.ч. SHEER при θ∈[80, 90) на L=1 (`|dz|≥6`).
+
+```
+     (0,2)=10          (1,2)=2          (2,2)=6
+
+     .  .  .          .  .  .          .  .  .
+     .  10 ┃          ┃  2  ←          ←  6  .
+     .  +  ┃          ┃  ↑  ↖          ↙  ↓  .
+
+
+     (0,1)=10          (1,1)=4          (2,1)=5
+
+     .  +  ┃          ┃  ↑  ↙          ↖  ↓  .
+     .  10 ┃          ┃  4  ←          ←  5  .
+     .  ↑  ┃          ┃  ↓  ┃          ↙  ┃  .
+
+
+     (0,0)=11          (1,0)=1          (2,0)=-2
+
+     .  ↑  ┃          ┃  ↓  ↙          ┃  ┃  .
+     .  11 ┃          ┃  1  →          →  -2  .
+     .  .  .          .  .  .          .  .  .
+```
+
+`(0,2)|(1,2)` 10|2 → SHEER `┃` на обоих концах (поток на восток). `(0,2)|(0,1)` 10|10 → `+`. `(2,2)|(2,1)` 6|5 → SOUTH `↓` на обоих концах. `(1,0)|(2,0)` 1|-2 → EAST `→` на обоих концах.
 
 ---
 
@@ -441,7 +469,7 @@ Mill: один SOUTH, Q2 вниз, не тело×8. Pack: клетка заня
 - Узкий dump прямой склон = только outward + `+`.
 - Пещера / нависающий обрыв: отдельный объект, inherit родителя, нависающие θ — не leftover pack.
 
-- Запахи кода (dual `rays[]`/`slots[8]`, хардкоды, жирные классы) — [`tz_terrain_relief_technical_debt.md`](./tz_terrain_relief_technical_debt.md).
+- Запахи кода (leftover-pack в дереве для locked, жирные классы) — [`tz_terrain_relief_technical_debt.md`](./tz_terrain_relief_technical_debt.md).
 
 ---
 
@@ -449,6 +477,8 @@ Mill: один SOUTH, Q2 вниз, не тело×8. Pack: клетка заня
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-28 | **SHEER θ + mill `[80, 90)`:** Instance пишет честный `atan(h/L)`; mill `slope_fits` на open_land `θ_max=80` как leftover (`>= 80` → не SLOPE). |
+| 2026-08-28 | **Эталон смешанных высот 3×3** (§ Карты-эталоны): pack-пары на разнобой z, не mill-яма/один луч. |
 | 2026-08-27 | **Dump `slots[8]`:** consume ASCII читает sidecar коды (**RELIEF-TD-1**). Occupancy набора клеток — **R41-T-25**. |
 | 2026-08-27 | **Leftover L=1 в коде:** `LEFTOVER_SHEER_MIN_DEG` / `LEFTOVER_PAIR_LENGTH_CELLS` (`gradeLeftoverPair`), не конверт 45°. |
 | 2026-08-26 | **θ местности:** (0, 90), **90° нет**; SHEER **[80, 90)**; нависание — отдельные объекты (как холм), inherit родителя, не leftover pack. |

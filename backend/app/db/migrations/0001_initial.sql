@@ -1217,7 +1217,7 @@ CREATE TABLE IF NOT EXISTS relief_grade_instances (
     length_cells     INTEGER NOT NULL,
     cell_refs        TEXT NOT NULL,          -- JSON [[lx,ly], ...] light-grid
     created_at       TEXT NOT NULL,
-    angle_deg        REAL,                   -- NULL for SHEER
+    angle_deg        REAL,                   -- honest θ SLOPE and SHEER
     facing           TEXT,                   -- NULL / none for SHEER
     earthen_canal    INTEGER NOT NULL DEFAULT 0,
     structure_refs   TEXT,                   -- JSON ["barrier_ref", ...] (BAR-1)
