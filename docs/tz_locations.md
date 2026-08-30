@@ -199,8 +199,8 @@ region       (depth 0) — корень, не показывается игро�
 territory    (depth 1)
 settlement   (depth 2)
 district     (depth 3) — outdoor: городские кварталы, площади, рынки
-building     (depth 4) — indoor: строение; leaf-сцена здесь если нет rooms; типичный home персонажа
-room         (depth 5) — indoor: комната внутри building; leaf, здесь создаётся сцена
+building     (depth 4) — indoor: строение; leaf иерархии если нет rooms; якорь `SessionScene.location_uid`, не объём сцены
+room         (depth 5) — indoor: комната внутри building; leaf иерархии; типичный якорь, если rooms есть
 ```
 
 Глубина не хранится. Вычисляется через `WITH RECURSIVE` CTE по `parent_location_uid` on-demand — всегда точно, нет проблемы синхронизации.
@@ -213,7 +213,7 @@ room         (depth 5) — indoor: комната внутри building; leaf, �
 | `building` | Таверна, Арсенал, Особняк | `false` | нет (если есть rooms) | `building_template_registry` |
 | `room` | Общий зал, Кухня, Подвал | `false` | **да** | `room_type_registry` внутри building |
 
-Строение без внутренних комнат (`room`) — `building` сам является leaf-локацией и сценой.
+Строение без внутренних комнат (`room`) — `building` сам является leaf в дереве. **Якорь** `SessionScene.location_uid` = этот leaf; **объём сцены** (карта вокруг игрока, события за окном) — не этот uid. SoT: [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) **C18**.
 
 ### `worlds.location_type_registry` (N+1)
 
@@ -574,7 +574,8 @@ location_entry_points (
   entry_uid,
   location_uid,                -- FK → named_locations; к какой локации относится вход
   x, y, z,                    -- координата ячейки в map_cells (физическая позиция входа)
-  leads_to_level_uid,          -- nullable FK → location_levels; на каком уровне оказываемся; null = ground floor
+  leads_to_level_uid,          -- nullable FK → location_levels; куда попадаем; null = входной этаж (z_offset=0), не surface terrain
+  entry_role,                  -- 'front' | 'service'; SoT: tz_settlement_outdoor C20. Колонки в SQL ещё нет — при impl
   display_name,                -- "Северные ворота", "Пролом в стене"
   entry_difficulty_override,   -- nullable int 0–100
   guard_level_override,        -- nullable int 0–100
@@ -594,12 +595,14 @@ effective_guard_level      = entry_point.guard_level_override      ?? location.g
 - `entry_difficulty` — физическое препятствие: стены, засов, узкий лаз; action-путь: climbing, lockpick
 - `guard_level` — охраняемость: стража, ловушки, барьер; action-путь: stealth, social, combat
 - `effective = 0` → обычное передвижение без action
-- `leads_to_level_uid = null` → ground floor локации (location_levels с минимальным z ≥ terrain z входа)
+- `leads_to_level_uid = null` → входной этаж здания (`z_offset=0` / [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) **C17**). **Не** `min(z) ≥ terrain` у клетки входа — вход может быть под землёй.
+- `entry_role`: `front` (парадный, ≥1 на здание) / `service` (чёрный, ≥0). Default путь — объявленные входы, предпочтение `front`. Ad-hoc не запрещён (**C20**).
 
 **Pathfinding:**
 - К локации → ближайший `is_discovered AND is_accessible` entry point → A* цель по (x, y, z)
 - Несколько известных entry points → движок передаёт все варианты с difficulty/guard_level; выбор за игроком/NPC
 - Нет известных entry points → A* по центроиду ячеек локации; z = среднее z всех ячеек (outdoor territory)
+- Ad-hoc (перелезть стену, окно другого этажа) — не обязан быть в этой таблице заранее. Клетка + action; см. [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) O3. После успеха можно **добавить** entry.
 
 ---
 
@@ -650,7 +653,7 @@ location_levels (
   is_accessible   -- bool; управляется движком
 )
 ```
-- `z` глобальный в метрах: здание на terrain z=100м → ground floor level.z=100, второй этаж z=103, подвал z=97 (этаж = 3 z-юнита = 3м)
+- `z` абсолютный в том же масштабе, что `map_cells.z`. Входной этаж (`z_offset=0`) = `building.map_z` улицы/двора этого поселения, **не** обязательно wilderness surface. Пример надземного дома: terrain 100 → входной этаж `z=100`, второй `103`, подвал `97`. Подземный город: улица на 28 → входной этаж тоже 28, даже если над ним скала/другой город.
 - Размер уровня (ширина/высота) implicit из принадлежащих ему `map_cells` ячеек
 - Локация без `location_levels` → только нарратив, без позиционирования
 
@@ -1152,6 +1155,8 @@ Indoor-локации (`is_outdoor: false`) не имеют weather-записи
 
 ## SessionScene — состояние сцены
 
+`location_uid` / `level_uid` — **якорь** (где персонаж числится в дереве и на каком этаже), не bounding box карты и не радиус событий. Карта: здание **добавляется**, соседство **остаётся**. События: радиус от игрока (величина наружу) — отдельное ТЗ. Не телепорт на участок. SoT: [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) **C18**.
+
 ```sql
 session_scenes (
   session_id,       -- FK → game_sessions; 1:1
@@ -1253,9 +1258,9 @@ can_start(location, player):
     LLM получает transit_description для описания прохода в контексте движения
     ```
   - `is_transit = false` → определить `level_uid`:
-    - leaf = **building** → ground floor: `location_levels WHERE location_uid=building AND z = min(z) ≥ terrain_z`
+    - leaf = **building** → этаж входа: `z_offset=0` / `entry_point.leads_to_level_uid` (**не** `min(z) ≥ terrain` — подземный вход). SoT: [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) **C17**
     - leaf = **room** → `location_levels WHERE location_uid=parent_building AND z = room_cells.z`
-    - upsert `SessionScene` с `location_uid` + `level_uid`; `scene.description = display_description ?? system_description ?? ""`
+    - upsert `SessionScene` с `location_uid` + `level_uid` (**якорь**, не выгрузка улицы; **C18**); `scene.description = display_description ?? system_description ?? ""`
     → `{ type: "scene_ready", location: {uid, name, description} }`
 
 **Транзитная локация** (`is_transit=true`): существует в БД (ячейки, объекты, описание), но движок никогда не создаёт `SessionScene` на ней. LLM описывает её как часть перехода ("поднимаетесь по ступеням и входите в..."), не как отдельную сцену.

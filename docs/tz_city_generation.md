@@ -11,6 +11,7 @@
 | [tz_structure_connections.md](./tz_structure_connections.md) | Дороги settlement/district (§5) |
 | [tz_terrain_relief.md](./tz_terrain_relief.md) | **C29:** город на техническом шве pack — норма; layout не клип по тайлу |
 | [tz_world_pack_storage.md](./tz_world_pack_storage.md) | WP-19: один location file на volume, в т.ч. несколько тайлов |
+| [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) | **SoT** persist/оркестрация outdoor на pack (граф участков, эталон vs патч). Не дублировать сюда |
 | [tz_generator_technical_debt.md](./tz_generator_technical_debt.md) | NC/MR smells settlement stack |
 
 ### Статус реализации (код vs это ТЗ)
@@ -25,7 +26,7 @@
 | Фаза 1 skeleton validate | import / world create | ⬜ partial |
 | `dominant_material` post-assemble + DAG → LLM | layout / DAG | ✅ resolver; ⬜ DAG wire |
 | Phase G organic footprint | `planner/footprint.py` v1 square | ⬜ v2 |
-| Persist layout → connections + building `NamedLocation` в БД | `layoutCells` → map_cells only | ⬜ **след. цикл** — §11 |
+| Persist layout → connections + building `NamedLocation` в БД | `layoutCells` → map_cells only | ⬜ SoT: [tz_settlement_outdoor.md](./tz_settlement_outdoor.md); §11.5 generate scopes |
 | `world_generation.init_mode` (`config.toml` + API) | — | ⬜ spec ✅ §11 |
 
 **Имена в коде (не путать с legacy в других TZ):**
@@ -499,6 +500,8 @@ Runtime **нет**; target — [`tz_world_snapshot.md`](./tz_world_snapshot.md).
 
 ### 11.5 DoD — persist cycle (без snapshot gate)
 
+**Куда писать эталон (pack city structure, SQL-дерево, не map_cells / не патчи):** [tz_settlement_outdoor.md](./tz_settlement_outdoor.md). Ниже — generate scopes и рост; target persist клеток как OLTP **superseded**.
+
 **Контракт:** отдельный `SettlementPersistService` (+ `ConnectionPersistService` для графа) — **не** генератор, **не** DAG, **не** LLM.  
 Debug API и DAG вызывают **одни и те же методы** (аналог `MapCellService.save_terrain_batch` ↔ `POST …/generate-surface` ↔ `lazy_terrain`).  
 DAG подключается **в обход HTTP** — напрямую к service/repos через `context` / `Container`.
@@ -583,6 +586,7 @@ DAG может materialize **разные уровни** в разных нод�
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-30 | Persist/оркестрация outdoor на pack → [tz_settlement_outdoor.md](./tz_settlement_outdoor.md); §11.5 map_cells как эталон superseded |
 | 2026-06 | §11.5 — persist cycle: ссылки на tz_world_generation_dag, tz_structure_connections §5.1, tz_construction, growth/world routes, terrain modification |
 | 2026-06 | Sync TZ ↔ код: `SettlementGeneratorService`, `StructureGeneratorService`, `map_cell_size_m`, статус фаз A–F, §10 |
 | 2026-06 | `tz_assembler_hierarchy.md` §7.5 — `map_cell_size_m` вместо `map_settings.global_cell_size_m` |

@@ -2041,6 +2041,7 @@ flowchart LR
 | [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) | Pass 1.5, liquid_candidate |
 | [`tz_climate.md`](./tz_climate.md) | SurfaceClimateField, Climate LOD |
 | [`tz_city_generation.md`](./tz_city_generation.md) | CitySkeleton L1 vs layout L2 lazy |
+| [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) | Outdoor city layer на pack (граф участков); не `location_terrain`; authored ≠ Patch Store |
 | [`project_data_storage_tz.md`](./project_data_storage_tz.md) | schema patch store |
 | [`tz_world_snapshot.md`](./tz_world_snapshot.md) | pack_hash в snapshot |
 | [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | техдолг; § **WP-DELETE-1** ↔ WP-FIX-DEBT-10 |
@@ -2052,6 +2053,7 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-30 | Outdoor city structure на pack: [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) — не location_terrain, authored ≠ patches |
 | 2026-08-30 | **Бюджет mill:** не спекулятивно; несколько чанков на сцене ок; полный мир — bake ГМ. APP-PERF-R1 = тайл целиком. |
 | 2026-08-30 | **On-demand grade = chunk re-refine:** `refine_queued_chunk` / `POST …/refine-chunk` + `GradePipelineStages`; тот же `FineChunkRunner` (R41), не отдельный bake. Entry/queue остаются `stages=off()`. |
 | 2026-08-30 | **Mill/paint не gameplay:** entry/runtime без mill/paint; `detailed_bake` `grade_mill`/`grade_paint` default **off** (явный on = APP-PERF-R1). |

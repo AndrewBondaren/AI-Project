@@ -135,8 +135,8 @@ level_z = level.z_height ?? max(room_z for room in level.rooms)
 | `max_overhang` | int | optional | Макс. выступ за границы ground floor footprint в ячейках. Default: `0`. Разрешён только для `room_type: "balcony"`. Без `has_column`: не более 2. С `has_column`: не более 4 |
 | `has_column` | bool | optional | Балкон опирается на колонны. Увеличивает лимит `max_overhang` до 4. Генератор размещает ячейки `column` на ground floor под выступающими углами балкона |
 | `economic_tier` | string | optional | Переопределяет экономический уровень для этой комнаты. Если не задан — берётся из шаблона |
-| `entry_point` | object | optional | Объявляет главный вход здания на этой комнате. Только одна комната в шаблоне |
-| `back_entry_point` | object | optional | Объявляет чёрный вход здания на этой комнате. Только одна комната в шаблоне |
+| `entry_point` | object | optional | Главный (парадный) вход. Только одна комната в шаблоне v1. Persist: `entry_role=front`. Здание без front — ошибка (**C20**) |
+| `back_entry_point` | object | optional | Чёрный вход. Только одна комната. 0 допустимо. Persist: `entry_role=service` |
 | `wall_openings` | array | optional | Отверстия в стенах комнаты: окна, бойницы, люки, иллюминаторы и др. (см. раздел 3.10) |
 | `underground_fallback` | bool | optional | Если комнату невозможно разместить на текущем уровне — перенести на уровень ниже. Default: `false`. Уместно для складских, подсобных, кладовых, котельных |
 | `shape_params` | object | conditional | Параметры специфичные для формы. Обязателен для `l_shape` и `t_shape`. Игнорируется для остальных |
