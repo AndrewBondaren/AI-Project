@@ -68,5 +68,16 @@ class TestScheduleTileBackgroundRings(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(enqueued, len(pending))
 
 
+class TestRefineQueuedChunkIndex(unittest.IsolatedAsyncioTestCase):
+    async def test_rejects_out_of_range_chunk(self) -> None:
+        world = _world()
+        orch = FineTerrainRefineOrchestrator(MagicMock())
+        with self.assertRaises(ValueError):
+            await orch.refine_queued_chunk(
+                world, [], MagicMock(), MagicMock(), MagicMock(),
+                0, 0, 999, 999,
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

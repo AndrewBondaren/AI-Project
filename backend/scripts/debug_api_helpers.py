@@ -102,6 +102,8 @@ def api_pack_bake(
     scope: str | None = None,
     tile_gx: int | None = None,
     tile_gy: int | None = None,
+    grade_mill: bool | None = None,
+    grade_paint: bool | None = None,
     anchor_x: int | None = None,
     anchor_y: int | None = None,
 ) -> dict:
@@ -111,7 +113,7 @@ def api_pack_bake(
     wilderness single cell: ``tile_gx``+``tile_gy``.
     Entry/bg refine is separate — ``api_refine_from_entry``.
     """
-    params: dict[str, str | int] = {"mode": mode}
+    params: dict[str, str | int | bool] = {"mode": mode}
     if mode == "light":
         # 0 = uncapped product default; positive = debug-only slice
         params["max_tiles"] = 0 if max_tiles is None else int(max_tiles)
@@ -125,6 +127,10 @@ def api_pack_bake(
         params["tile_gx"] = int(tile_gx)
     if tile_gy is not None:
         params["tile_gy"] = int(tile_gy)
+    if grade_mill is not None:
+        params["grade_mill"] = grade_mill
+    if grade_paint is not None:
+        params["grade_paint"] = grade_paint
     if anchor_x is not None:
         params["anchor_x"] = anchor_x
     if anchor_y is not None:
@@ -177,6 +183,38 @@ def api_refine_from_entry(
     if not isinstance(data, dict):
         raise DebugApiError(
             f"refine-from-entry {world_uid}: expected object, got {type(data)}"
+        )
+    return data
+
+
+def api_refine_chunk(
+    client: httpx.Client,
+    world_uid: str,
+    *,
+    gx: int,
+    gy: int,
+    cx: int,
+    cy: int,
+    grade_mill: bool | None = None,
+    grade_paint: bool | None = None,
+) -> dict:
+    """One wilderness chunk re-refine — ``POST …/map/refine-chunk``."""
+    params: dict[str, str | int | bool] = {
+        "gx": int(gx),
+        "gy": int(gy),
+        "cx": int(cx),
+        "cy": int(cy),
+    }
+    if grade_mill is not None:
+        params["grade_mill"] = grade_mill
+    if grade_paint is not None:
+        params["grade_paint"] = grade_paint
+    r = client.post(f"/worlds/{world_uid}/map/refine-chunk", params=params)
+    _require_ok(r, f"POST refine-chunk {world_uid} ({gx},{gy}) c.({cx},{cy})")
+    data = r.json()
+    if not isinstance(data, dict):
+        raise DebugApiError(
+            f"refine-chunk {world_uid}: expected object, got {type(data)}"
         )
     return data
 

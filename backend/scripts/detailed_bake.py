@@ -12,11 +12,16 @@ HTTP:
   ``POST …/map/pack/bake?mode=detailed&scope=location&location_uid=``
   ``POST …/map/pack/bake?mode=detailed&scope=wilderness&tile_gx=&tile_gy=``
 
+  Optional ``grade_mill`` / ``grade_paint`` (default off). ``--grade-mill --grade-paint``
+  runs discover+paint; otherwise L2 column fill from parent-light only.
+
 Requires a running backend (``npm run backend``) — agents must not start it.
 
 Examples:
   python backend/scripts/detailed_bake.py --world-uid world-test-003 \\
       --scope wilderness --gx -2 --gy -2
+  python backend/scripts/detailed_bake.py --world-uid world-test-003 \\
+      --scope wilderness --gx -2 --gy -2 --grade-mill --grade-paint
   python backend/scripts/detailed_bake.py --world-uid world-test-003 \\
       --scope wilderness --gx -2 --gy -2 --z-range 920:930
   python backend/scripts/detailed_bake.py --world-uid world-test-003 \\
@@ -284,6 +289,8 @@ def _run_detailed_location(
     location_uid: str,
     *,
     report_root: Path,
+    grade_mill: bool = False,
+    grade_paint: bool = False,
 ) -> dict[str, Any]:
     loc_dir = _location_dir(report_root, location_uid)
     loc_dir.mkdir(parents=True, exist_ok=True)
@@ -309,6 +316,8 @@ def _run_detailed_location(
             mode="detailed",
             scope="location",
             location_uid=location_uid,
+            grade_mill=grade_mill,
+            grade_paint=grade_paint,
         )
         if not bake.get("loading_progress"):
             bake = {
@@ -396,6 +405,8 @@ def _run_detailed_wilderness_cell(
     gy: int,
     *,
     report_root: Path,
+    grade_mill: bool = False,
+    grade_paint: bool = False,
 ) -> dict[str, Any]:
     cell_dir = _tile_dir(report_root, gx, gy)
     cell_dir.mkdir(parents=True, exist_ok=True)
@@ -445,6 +456,8 @@ def _run_detailed_wilderness_cell(
                 scope="wilderness",
                 tile_gx=gx,
                 tile_gy=gy,
+                grade_mill=grade_mill,
+                grade_paint=grade_paint,
             )
         after = _cell_progress(world_uid, gx, gy)
         if not bake.get("loading_progress"):
@@ -548,6 +561,18 @@ def main() -> None:
         help="with --all-tiles: cap cells (0=all incomplete)",
     )
     parser.add_argument(
+        "--grade-mill",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Discover outdoor grade fronts (default: off). Needs --grade-paint to stamp",
+    )
+    parser.add_argument(
+        "--grade-paint",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Paint grade into L2 heightmap (default: off; requires mill)",
+    )
+    parser.add_argument(
         "--render",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -571,6 +596,8 @@ def main() -> None:
     )
     add_debug_logging_argument(parser)
     args = parser.parse_args()
+    if not args.grade_mill:
+        args.grade_paint = False
     ensure_script_logging(service="detailedBake", debug=args.debug)
 
     if args.scope == "wilderness":
@@ -650,6 +677,8 @@ def main() -> None:
                                 gx,
                                 gy,
                                 report_root=report_root,
+                                grade_mill=args.grade_mill,
+                                grade_paint=args.grade_paint,
                             )
                         )
                     except DebugApiError as exc:
@@ -679,6 +708,8 @@ def main() -> None:
                                 world_uid,
                                 uid,
                                 report_root=report_root,
+                                grade_mill=args.grade_mill,
+                                grade_paint=args.grade_paint,
                             )
                         )
                     except DebugApiError as exc:

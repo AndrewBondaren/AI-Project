@@ -28,6 +28,7 @@ from app.dataModel.worldPack.detailedBakeScope import (
     DetailedBakeScopeKind,
     resolve_detailed_bake_request,
 )
+from app.dataModel.worldPack.packBakeDefaults import resolve_detailed_grade_stages
 from app.dataModel.worldPack.packBakeMode import PackBakeApiMode
 from app.dataModel.worldPack.packTilePlan import PackTilePlanScope
 from app.db.models.connectionEdge import ConnectionEdge
@@ -67,6 +68,8 @@ class WorldSurfaceMaterializationOrchestrator:
         detailed_request: DetailedBakeRequest | None = None,
         tile_gx: int | None = None,
         tile_gy: int | None = None,
+        grade_mill: bool | None = None,
+        grade_paint: bool | None = None,
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
         hydrology_generator: HydrologyGeneratorService | None = None,
@@ -103,13 +106,23 @@ class WorldSurfaceMaterializationOrchestrator:
                 report=report,
             )
         if mode == "detailed":
-            request = detailed_request or resolve_detailed_bake_request(
-                scope=detailed_scope,
-                location_uid=location_uid,
-                max_tiles=max_tiles or 0,
-                tile_gx=tile_gx,
-                tile_gy=tile_gy,
-            )
+            if detailed_request is None:
+                stages = resolve_detailed_grade_stages(
+                    grade_mill,
+                    grade_paint,
+                    defaults=self._detailed._defaults,
+                )
+                request = resolve_detailed_bake_request(
+                    scope=detailed_scope,
+                    location_uid=location_uid,
+                    max_tiles=max_tiles or 0,
+                    tile_gx=tile_gx,
+                    tile_gy=tile_gy,
+                    grade_mill=stages.mill,
+                    grade_paint=stages.paint,
+                )
+            else:
+                request = detailed_request
             detailed = await self.materialize_pack_detailed(
                 world, locations, ctx, pack_writer, request,
                 nodes=nodes, edges=edges,

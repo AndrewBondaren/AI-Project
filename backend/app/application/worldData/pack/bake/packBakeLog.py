@@ -908,6 +908,27 @@ def log_pack_l2_formation_done(
     )
 
 
+def log_pack_detailed_bake_start(
+    world_uid: str,
+    *,
+    scope: str,
+    grade_mill: bool,
+    grade_paint: bool,
+) -> None:
+    _info(
+        "pack detailed_bake start | world=%s scope=%s grade_mill=%s grade_paint=%s",
+        world_uid,
+        scope,
+        grade_mill,
+        grade_paint,
+        activity="detailed_bake_start",
+        world_uid=world_uid,
+        scope=scope,
+        grade_mill=grade_mill,
+        grade_paint=grade_paint,
+    )
+
+
 def log_pack_detailed_bake_done(
     world_uid: str,
     *,
@@ -919,16 +940,21 @@ def log_pack_detailed_bake_done(
     l2_s: float,
     grade_persist_s: float,
     pipeline: GradePipelineTimings | None = None,
+    grade_mill: bool = False,
+    grade_paint: bool = False,
 ) -> None:
     mill_part = pipeline.log_suffix() if pipeline is not None else ""
     mill_fields = pipeline.mill_log_fields() if pipeline is not None else {}
     _info(
         "pack detailed_bake done | world=%s scope=%s tiles=%d chunks=%d "
+        "grade_mill=%s grade_paint=%s "
         "materialize_s=%.2f grade_s=%.2f grade_persist_s=%.2f l2_s=%.2f%s",
         world_uid,
         scope,
         tiles,
         chunks,
+        grade_mill,
+        grade_paint,
         materialize_s,
         grade_s,
         grade_persist_s,
@@ -939,6 +965,8 @@ def log_pack_detailed_bake_done(
         scope=scope,
         tiles=tiles,
         chunks=chunks,
+        grade_mill=grade_mill,
+        grade_paint=grade_paint,
         materialize_s=round(materialize_s, 2),
         grade_s=round(grade_s, 2),
         grade_persist_s=round(grade_persist_s, 2),

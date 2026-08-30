@@ -16,6 +16,7 @@ metadata:
 | [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | dump 3×3, sidecar paths, LLM-чтение |
 | [`tz_terrain_relief_technical_debt.md`](./tz_terrain_relief_technical_debt.md) | техдолг **кода** (leftover-pack для locked, жирные классы). Не generate SoT |
 | [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) | архив: R36 bake (u–w), R37 envelope подробно, L2 volume, C29, примеры JSON pick |
+| [`tz_application_performance.md`](./tz_application_performance.md) | измерения bake (wall / CPU-sum); не алгоритм mill |
 
 **Не трогать:** L0→L2 parent-light ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § Идея 2); DAG; Occupancy v1; `0002_*.sql`.
 
@@ -256,7 +257,7 @@ CREATE TABLE IF NOT EXISTS relief_grade_instances (
 
 ### Persist (bake-writer)
 
-Один application-caller: `persist_relief_grades`. Три оркестратора (`detailed_bake` / entry / L0 если есть instances) — `replace_world=False` (**не** `True` на light/full: иначе wipe detailed). Оркестраторы SQL сами не пишут.
+Один application-caller: `persist_relief_grades`. Три оркестратора (`detailed_bake` / entry / L0 если есть instances) — `replace_world=False` (**не** `True` на light/full: иначе wipe detailed). Оркестраторы SQL сами не пишут. Mill/paint **не** на gameplay entry/runtime (игрок не ждёт): L2 = column fill от parent-light. Caller mill/paint — `FineTerrainRefineOrchestrator.refine_queued_chunk(stages=full())` (debug `POST …/refine-chunk`) или opt-in `detailed_bake` `grade_mill`/`grade_paint` (product **off**; paint без mill принудительно off). **Не** `refine-from-entry` и не отдельный GradeBakeOrchestrator. Алгоритм mill/paint в этом файле не меняется. Pack wilderness + `grade_rays` sidecar пишет `FineChunkPersist` на том же `ColumnRect` (R41: mill→paint→один fill→pack).
 
 | Слой | Контракт |
 |---|---|
@@ -477,6 +478,8 @@ Mill: один SOUTH, Q2 вниз, не тело×8. Pack: клетка заня
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-30 | **Caller mill/paint:** `refine_queued_chunk(stages=…)` / bake opt-in; не entry. On-demand = тот же `FineChunkRunner` chunk. |
+| 2026-08-30 | **Mill/paint не gameplay:** entry/runtime без mill/paint; `detailed_bake` только явный `grade_mill`/`grade_paint` (default **off**). APP-PERF-R1 — [`tz_application_performance.md`](./tz_application_performance.md). |
 | 2026-08-28 | **SHEER θ + mill `[80, 90)`:** Instance пишет честный `atan(h/L)`; mill `slope_fits` на open_land `θ_max=80` как leftover (`>= 80` → не SLOPE). |
 | 2026-08-28 | **Эталон смешанных высот 3×3** (§ Карты-эталоны): pack-пары на разнобой z, не mill-яма/один луч. |
 | 2026-08-27 | **Dump `slots[8]`:** consume ASCII читает sidecar коды (**RELIEF-TD-1**). Occupancy набора клеток — **R41-T-25**. |

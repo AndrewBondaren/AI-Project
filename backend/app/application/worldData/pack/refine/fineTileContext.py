@@ -20,6 +20,7 @@ from app.application.worldData.terrainBatchOrchestrator import TileSurfaceState
 from app.dataModel.terrain.relief.gradeRimRay import GradeRimRay
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
+from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
 from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
 from app.db.models.mapCell import MapCell
@@ -42,7 +43,7 @@ class FineTileContext:
     templates: dict[str, ReliefTemplate]
     grade_halo: int
     existing_uids: dict[Coord, str]
-    catalog: TileFaceCatalog
+    catalog: TileFaceCatalog | None
     workers: int
     refine_role: ChunkRefineRole
     phase_name: str
@@ -50,6 +51,7 @@ class FineTileContext:
     chunks_total: int
     location_pairs: list[tuple[str, TerritoryVolume]]
     volumes: list[TerritoryVolume]
+    stages: GradePipelineStages = field(default_factory=GradePipelineStages.off)
 
 
 @dataclass(frozen=True, slots=True)

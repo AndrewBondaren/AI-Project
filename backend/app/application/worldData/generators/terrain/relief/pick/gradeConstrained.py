@@ -118,19 +118,13 @@ def _clamp_knob_payload(
     )
     if length is None:
         return out
-    outcome = envelope.slope_outcome(h, length)
-    sheer_l = ReliefTerrainEnvelope.canonical_sheer_length_cells()
-    if outcome == "slope":
-        out["slope_length_cells"] = length
-        out["target_angle_deg"] = None
-        override = envelope.weights_for_fitted_slope(h)
-        if override is not None:
-            out["slope_weight"], out["sheer_weight"] = override
-    elif outcome == "sheer":
-        out["slope_weight"] = 0.0
-        out["sheer_weight"] = 1.0
-        out["slope_length_cells"] = sheer_l
-        out["target_angle_deg"] = None
+    decided = envelope.kind_decision(h, length)
+    if decided.outcome == "skip":
+        return out
+    out["slope_length_cells"] = decided.length_cells
+    out["target_angle_deg"] = None
+    if decided.weights is not None:
+        out["slope_weight"], out["sheer_weight"] = decided.weights
     return out
 
 
@@ -300,7 +294,7 @@ def grade_constrained(
         template_angle_deg=tpl_a,
         length_cap=path_length,
     )
-    if wanted is not None and envelope.slope_outcome(h, wanted) == "skip":
+    if wanted is not None and envelope.kind_decision(h, wanted).outcome == "skip":
         relief_info(
             EVENT_GRADE_SKIP,
             template_uid=template_uid,

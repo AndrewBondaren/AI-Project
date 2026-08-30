@@ -6,8 +6,10 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
 from app.dataModel.worldPack.packBakeDefaults import (
     PackBakeDefaults,
+    resolve_detailed_grade_stages,
     resolve_light_tile_cap,
 )
 from app.dataModel.worldPack.packTilePlan import PackTileRef
@@ -33,6 +35,82 @@ class TestResolveLightTileCap(unittest.TestCase):
     def test_custom_defaults_positive(self):
         defs = PackBakeDefaults(max_tiles_light=8)
         self.assertEqual(resolve_light_tile_cap(None, defaults=defs), 8)
+
+
+class TestGradePipelineStages(unittest.TestCase):
+    def test_off_and_full(self):
+        self.assertEqual(GradePipelineStages.off(), GradePipelineStages(mill=False, paint=False))
+        self.assertEqual(GradePipelineStages.full(), GradePipelineStages(mill=True, paint=True))
+
+    def test_paint_without_mill_coerced(self):
+        self.assertEqual(
+            GradePipelineStages(mill=False, paint=True),
+            GradePipelineStages(mill=False, paint=False),
+        )
+
+
+class TestResolveDetailedGradeStages(unittest.TestCase):
+    def test_omit_uses_product_off(self):
+        self.assertEqual(resolve_detailed_grade_stages(None, None), GradePipelineStages.off())
+
+    def test_mill_off_coerces_paint_off(self):
+        self.assertEqual(
+            resolve_detailed_grade_stages(False, True),
+            GradePipelineStages.off(),
+        )
+
+    def test_mill_on_paint_off(self):
+        self.assertEqual(
+            resolve_detailed_grade_stages(True, False),
+            GradePipelineStages(mill=True, paint=False),
+        )
+
+    def test_explicit_both_on(self):
+        self.assertEqual(resolve_detailed_grade_stages(True, True), GradePipelineStages.full())
+
+    def test_mill_on_paint_omitted_stays_off(self):
+        self.assertEqual(
+            resolve_detailed_grade_stages(True, None),
+            GradePipelineStages(mill=True, paint=False),
+        )
+
+    def test_custom_defaults_both_on(self):
+        defs = PackBakeDefaults(detailed_grade_mill=True, detailed_grade_paint=True)
+        self.assertEqual(
+            resolve_detailed_grade_stages(None, None, defaults=defs),
+            GradePipelineStages.full(),
+        )
+
+
+class TestDetailedBakeRequestGradeStages(unittest.TestCase):
+    def test_paint_without_mill_coerced_off(self):
+        from app.dataModel.worldPack.detailedBakeScope import DetailedBakeRequest
+
+        req = DetailedBakeRequest(
+            scope="wilderness",
+            tile_gx=0,
+            tile_gy=0,
+            grade_mill=False,
+            grade_paint=True,
+        )
+        self.assertFalse(req.grade_mill)
+        self.assertFalse(req.grade_paint)
+        self.assertEqual(req.stages, GradePipelineStages.off())
+
+    def test_location_coerce_same(self):
+        from app.dataModel.worldPack.detailedBakeScope import (
+            resolve_detailed_bake_request,
+        )
+
+        req = resolve_detailed_bake_request(
+            scope="location",
+            location_uid="loc-1",
+            grade_mill=False,
+            grade_paint=True,
+        )
+        self.assertFalse(req.grade_mill)
+        self.assertFalse(req.grade_paint)
+        self.assertEqual(req.stages, GradePipelineStages.off())
 
 
 class TestPackTilePlannerScopes(unittest.TestCase):

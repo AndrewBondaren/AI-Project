@@ -68,7 +68,7 @@ def compute_rect(
     chunk_state = ctx.surface_state
     grade_s = 0.0
     pipeline = GradePipelineTimings()
-    if ctx.templates:
+    if ctx.templates and ctx.stages.mill:
         grade_t0 = time.perf_counter()
         part, vertex_seams, pipeline = discover_and_paint(
             ctx.world,
@@ -78,6 +78,8 @@ def compute_rect(
             catalog=ctx.catalog,
             templates=ctx.templates,
             existing_uids=ctx.existing_uids,
+            run_mill=ctx.stages.mill,
+            run_paint=ctx.stages.paint,
         )
         grade_s = time.perf_counter() - grade_t0
         chunk_grades = part.grade_instances

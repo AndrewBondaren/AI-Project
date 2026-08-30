@@ -6,6 +6,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
 from app.dataModel.worldPack.lightFineTilePolicy import LightFineTilePolicy
 
 
@@ -30,6 +31,9 @@ class PackBakeDefaults(BaseModel):
     light_fine_tile_policy: LightFineTilePolicy = "spawn_player"
     # full_bake default: defer denser climate to detailed / runtime.
     full_fine_tile_policy: LightFineTilePolicy = "none"
+    # Outdoor grade mill/paint: off unless the caller opts in (player launch must not wait).
+    detailed_grade_mill: bool = False
+    detailed_grade_paint: bool = False
 
     @classmethod
     def canonical_defaults(cls) -> PackBakeDefaults:
@@ -57,3 +61,16 @@ def resolve_light_tile_cap(
     if int(max_tiles) <= 0:
         return None
     return int(max_tiles)
+
+
+def resolve_detailed_grade_stages(
+    mill: bool | None,
+    paint: bool | None,
+    *,
+    defaults: PackBakeDefaults | None = None,
+) -> GradePipelineStages:
+    """Resolve mill/paint. Omit → PackBakeDefaults (product off). Paint without mill is coerced off."""
+    defs = defaults or PackBakeDefaults.canonical_defaults()
+    run_mill = defs.detailed_grade_mill if mill is None else bool(mill)
+    run_paint = defs.detailed_grade_paint if paint is None else bool(paint)
+    return GradePipelineStages(mill=run_mill, paint=run_paint)

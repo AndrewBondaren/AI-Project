@@ -21,6 +21,7 @@ from debug_api_helpers import (
     api_list_locations,
     api_pack_bake,
     api_refine_from_entry,
+    api_refine_chunk,
     api_schedule_chunk_refine,
 )
 
@@ -97,5 +98,6 @@ __all__ = [
     "sample_loading_progress_line",
     "api_pack_bake",
     "api_refine_from_entry",
+    "api_refine_chunk",
     "api_schedule_chunk_refine",
 ]

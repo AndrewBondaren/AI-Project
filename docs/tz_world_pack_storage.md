@@ -429,7 +429,7 @@ flowchart TB
 |---|---|---|---|
 | **light_bake** | `light` | **только L0** + climate coarse | **Все** macro-tiles с `named_locations` **∪ declared hydro** (тайлы локаций + declare endpoints) |
 | **full_bake** | `full` | **только L0** + climate coarse | **Тот же** L0 pipeline на **весь** `world_bounds` (AABB квадрат/прямоугольник) |
-| **detailed_bake** | `detailed` + `scope` (+ `location_uid` при `scope=location`) | **L2** | `scope=location` → `location_terrain` (+ climate fine territory); `scope=wilderness` → wilderness chunks по L0 tiles (optional offline topping) |
+| **detailed_bake** | `detailed` + `scope` (+ `location_uid` при `scope=location`) | **L2** | `scope=location` → `location_terrain` (+ climate fine territory); `scope=wilderness` → wilderness chunks по L0 tiles (optional offline topping). Mill/paint grade: query `grade_mill`/`grade_paint` (default **off**; paint без mill → paint off) |
 
 #### Job boundaries (утверждено мастером 2026-07-20)
 
@@ -439,8 +439,9 @@ flowchart TB
 |---|---|---|
 | **light_bake** | L0 на location∪hydro tiles; `locations_index`; climate coarse; finalize pack | L2 `location_terrain` / wilderness chunks; blocking `refine_from_entry` |
 | **full_bake** | L0 на весь `world_bounds` (добить дыры после light); **шов мира** на крайних макро-тайлах (антагонисты AABB). Uid тайла: [`PackJobUid`](../backend/app/dataModel/worldPack/packJobUid.py) + [`pack_job_seed`](../backend/app/application/worldData/pack/bake/macroTileUid.py) | L2; entry refine |
-| **detailed_bake** | L2 offline: `scope=location` (одна `location_uid`) или `scope=wilderness` (tile topping от parent light); partition WP-19. Refine — § Идея 2; outdoor grade generate — [`tz_terrain_relief.md`](./tz_terrain_relief.md); bake **R36u** — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) | L0 world map bake; шов мира; climate fine на wilderness (debt) |
-| **entry / WP-13** | scene volume + background rings/path у spawn | часть `POST …/pack/bake?mode=light\|full` |
+| **detailed_bake** | L2 offline: `scope=location` (одна `location_uid`) или `scope=wilderness` (tile topping от parent light); partition WP-19. Refine — § Идея 2; outdoor grade generate — [`tz_terrain_relief.md`](./tz_terrain_relief.md); bake **R36u** — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). Mill/paint **не** в этом job по умолчанию — только `grade_mill`/`grade_paint=true` (остаётся L2 fill от parent-light) | L0 world map bake; шов мира; climate fine на wilderness (debt) |
+| **entry / WP-13** | scene volume + background rings/path у spawn. **Без** mill/paint (игрок не ждёт grade generate) | часть `POST …/pack/bake?mode=light\|full`; mill/paint |
+| **on-demand grade (не bake)** | `refine_queued_chunk(stages=full())` / `POST …/refine-chunk` — тот же `FineChunkRunner` mill→paint→один fill→pack (R41). Повтор на залитом L2 = re-refine (overwrite pack + SQL upsert, `replace_world=False`) | отдельный GradeBakeOrchestrator; `generate_detailed_grade` + ручная запись pack; mill на `refine-from-entry`; `detailed_bake` `max_tiles=1` как «один чанк» |
 | **modification** (не bake job) | Patch Store: `terrain_delta` / `climate_delta` в `patch_bounds`; grade helper R36v | `POST pack/bake`; rewrite `complete` tile; четвёртый `mode=` |
 
 **Шов мира (тор AABB, L0):** при `full_bake` крайние макро-тайлы bounds, у которых нет соседа в прямоугольнике, смыкаются с **антагонистом** и шов **ставится на макро-тайлах**. Lookup **только** [`WorldBounds`](../backend/app/dataModel/worldPack/worldBounds.py): `grid_neighbor` (внутри AABB) / `antagonist_tile` (wrap); сторона = [`Facing`](../backend/app/dataModel/spatial/facing.py) + `CARDINAL_WALL_OUTWARD_DELTA`. Идентичность тайла = [`PackJobUid.tile_uid`](../backend/app/dataModel/worldPack/packJobUid.py) + `pack_job_seed`. Это топология L0 world map, не `face_key` / не outdoor grade. **`detailed_bake` шов мира не считает и не пишет.** Смежность внутри AABB — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **R36w**. Не magma **antipode**. Impl — [`.cursor/plans/full-bake-seam-halo-shoulder.md`](../.cursor/plans/full-bake-seam-halo-shoulder.md) ✅.
@@ -840,7 +841,7 @@ flowchart TB
 
 **Чтение до готовности chunk:** `MapCellQueryFacade` → merge(**L2 chunk if present**, else **L0 upsample** sample, patches). Gameplay **не блокируется** на весь tile.
 
-**Cross-ref:** scene volume defaults — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § TR-LAZY-LOAD; POJO [`SceneVolumePolicy`](../backend/app/dataModel/terrain/sceneVolumePolicy.py) (`scene_xy_radius`, `scene_z_above`, `background_expand_radius_m` for WP-PERF-10 rings). Read: `get_scene_volume`. Blocking entry: `refine_from_entry`. Background rings/path-ahead: `schedule_chunk_refine`.
+**Cross-ref:** scene volume defaults — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § TR-LAZY-LOAD; POJO [`SceneVolumePolicy`](../backend/app/dataModel/terrain/sceneVolumePolicy.py) (`scene_xy_radius`, `scene_z_above`, `background_expand_radius_m` for WP-PERF-10 rings). Read: `get_scene_volume`. Blocking entry: `refine_from_entry`. Background rings/path-ahead: `schedule_chunk_refine`. On-demand outdoor grade: тот же `FineChunkRunner` chunk (`refine_queued_chunk` / `POST …/refine-chunk` + `GradePipelineStages`), **не** отдельный bake и не mill на entry.
 
 #### WP-13 — статус impl и открытый backlog
 
@@ -854,7 +855,7 @@ flowchart TB
 | Path corridor rect select | `pathCorridorSelect.select_path_corridor_rects` |
 | Виды якоря (лейблы) | `AnchorKind`: `session_start` \| `tile_cross` \| `location_entry` |
 | Light bake spawn | `kind=session_start` + schedule |
-| Debug HTTP | `POST …/refine-from-entry`, `POST …/schedule-chunk-refine` |
+| Debug HTTP | `POST …/refine-from-entry`, `POST …/schedule-chunk-refine`, `POST …/refine-chunk` |
 | WP-PERF-10 rings (не full-tile enqueue) | ✅ `background_expand_radius_m` |
 | Read ≠ write | § Read path / Entry load — два потока |
 
@@ -886,12 +887,12 @@ flowchart TB
 | Модуль | Ответственность | Запреты |
 |---|---|---|
 | `FineTerrainRefineOrchestrator` | Thin facade: scene / path / rect / queued chunk; делегирует schedule и helpers | Нет `ChunkComputePool`; нет прямой записи blobs |
-| `FineChunkRunner` | thin: `prepare_fine_tile` (upsample + **hills** + hydro) → **pool** `compute_rect` (column fill + **grade R36v**, per rect) → `FineChunkPersist` | Нет enqueue в `ChunkRefineQueue`; нет serial tile-wide grade; нет L0 холмов; нет второго grade pipeline |
+| `FineChunkRunner` | thin: `prepare_fine_tile` (upsample + **hills** + hydro) → **pool** `compute_rect` (column fill + **grade R36v**, per rect) → `FineChunkPersist`. Стадии mill/paint — [`GradePipelineStages`](../backend/app/dataModel/worldPack/gradePipelineStages.py) | Нет enqueue в `ChunkRefineQueue`; нет serial tile-wide grade; нет L0 холмов; нет второго grade pipeline / GradeBakeOrchestrator |
 | `chunkSchedule` | Free functions: rings / path-ahead enqueue | Не пишет pack blobs; не generate cells |
 | `pathCorridorSelect` | `select_path_corridor_rects` → `ColumnRect[]` | Не persist |
 | `packMapHelpers.tile_for_anchor` / `entryRingGeom` | Coord / scene chunk indices | — |
 
-**Публичный entry:** debug HTTP / bake → `EntryRefineOrchestrator` → facade; background worker → `refine_queued_chunk` → runner.
+**Публичный entry:** debug HTTP / bake → `EntryRefineOrchestrator` → facade; background worker / scene / path → `refine_queued_chunk` / `refine_rects` с `stages=off()`. On-demand mill/paint — **тот же** `refine_queued_chunk(stages=full())` (debug: `POST …/refine-chunk`), не новый оркестратор.
 
 **Открыто (зафиксировано; не смешивать с «контракт утверждён»):**
 
@@ -1455,6 +1456,7 @@ sequenceDiagram
 | `refine_from_entry` | **write** blocking: scene + path corridor (WP-13 P0) |
 | `set_entry_anchor` | spawn / tile_cross / location_entry (session state) |
 | `schedule_chunk_refine` | **write** фон: кольца от anchor + path-ahead (predicted border entry) |
+| `refine_queued_chunk` | **write** один wilderness chunk (`r.{gx}.{gy}.c.{cx}.{cy}`); mill/paint только при `GradePipelineStages` (entry/queue = `off()`) |
 | `get_tile_wilderness_refine_status` | `absent` \| `partial` \| `complete` (**read** status) |
 | `tile_refine_status` | jobs + corridor + partial progress (**read** status) |
 
@@ -1806,8 +1808,9 @@ flowchart TB
 | `POST /worlds/{uid}/pack/import` | zip → `pack/` | L6 |
 | `POST /worlds/{uid}/map/pack/bake?mode=light` | **light_bake** | ✅ |
 | `POST …/pack/bake?mode=full` | **full_bake** — весь `world_bounds` L0 | ✅ |
-| `POST …/pack/bake?mode=detailed&scope=location&location_uid=` | **detailed_bake** location | ✅ (+ climate fine) |
-| `POST …/pack/bake?mode=detailed&scope=wilderness` | **detailed_bake** wilderness topping | ✅ |
+| `POST …/pack/bake?mode=detailed&scope=location&location_uid=` | **detailed_bake** location | ✅ (+ climate fine; `grade_mill`/`grade_paint` optional, default **off**) |
+| `POST …/pack/bake?mode=detailed&scope=wilderness` | **detailed_bake** wilderness topping | ✅ (`grade_mill`/`grade_paint` optional, default **off**) |
+| `POST …/map/refine-chunk?gx=&gy=&cx=&cy=` | one wilderness chunk re-refine (same `FineChunkRunner`); `grade_mill`/`grade_paint` omit = off | ✅ debug |
 | `GET /worlds/{uid}/map/loading-progress` | progress + `pack_completeness` | ✅ pct + classifier |
 | `GET /worlds/{uid}/export?level=skeleton` | без map_cells / pack blobs | L6 |
 
@@ -1921,7 +1924,8 @@ flowchart TB
 
 > **Статус:** ⬜ backlog. **Не блокирует** WP-A1 (light bake ≤ 2 min уже PASS).  
 > **Цель:** сократить orchestration overhead light bake с **~35 s → ~5–10 s** на чистой БД и удержать WP-A9 (spawn ≤ 30 s) с запасом.  
-> **Источник:** § **WP-A1 — фактический smoke**; профиль 2026-07-10.
+> **Источник:** § **WP-A1 — фактический smoke**; профиль 2026-07-10.  
+> **Измеренные прогоны** (L0 full / L2 detailed, wall vs CPU-sum): [`tz_application_performance.md`](./tz_application_performance.md).
 
 ### Принцип
 
@@ -2039,6 +2043,7 @@ flowchart LR
 | [`project_data_storage_tz.md`](./project_data_storage_tz.md) | schema patch store |
 | [`tz_world_snapshot.md`](./tz_world_snapshot.md) | pack_hash в snapshot |
 | [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | техдолг; § **WP-DELETE-1** ↔ WP-FIX-DEBT-10 |
+| [`tz_application_performance.md`](./tz_application_performance.md) | измерения bake (APP-PERF-R1); не WP-PERF backlog |
 
 ---
 
@@ -2046,6 +2051,9 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-30 | **On-demand grade = chunk re-refine:** `refine_queued_chunk` / `POST …/refine-chunk` + `GradePipelineStages`; тот же `FineChunkRunner` (R41), не отдельный bake. Entry/queue остаются `stages=off()`. |
+| 2026-08-30 | **Mill/paint не gameplay:** entry/runtime без mill/paint; `detailed_bake` `grade_mill`/`grade_paint` default **off** (явный on = APP-PERF-R1). |
+| 2026-08-30 | Измерения bake 003 → [`tz_application_performance.md`](./tz_application_performance.md) **APP-PERF-R1** (full ~11 с; detailed `(-2,-2)` ~820 с wall). |
 | 2026-08-26 | **grade_rays тело:** `SCH-GRADE-CELL-SLOTS` `{x,y,slots[8]}` — consume § Тело sidecar |
 | 2026-08-23 | **grade_rays = фронт:** sender+receiver только с реальных фронтов (не тело×8) — consume TZ |
 | 2026-08-22 | **Grade rim edges pack:** `tiles/r.{gx}.{gy}.grade_rays.json` / `locations/l.{uid}.grade_rays.json` — отправитель + получатель; не FineTerrain column — [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) |

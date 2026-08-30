@@ -4,8 +4,11 @@ Production materialization runs through **engine DAG nodes** (not these routes).
 
 Canonical debug harness:
 - ``POST …/map/pack/bake?mode=light|full|detailed`` — L0 / detailed L2 (WP-27)
-  (detailed: ``scope=location|wilderness``; location needs ``location_uid``)
+  (detailed: ``scope=location|wilderness``; location needs ``location_uid``;
+  optional ``grade_mill`` / ``grade_paint``, omit = off)
 - ``POST …/map/refine-from-entry`` / ``schedule-chunk-refine``
+- ``POST …/map/refine-chunk`` — one wilderness chunk re-refine (``gx,gy,cx,cy``;
+  optional ``grade_mill`` / ``grade_paint``, omit = off)
 - ``GET …/map/render-*``, ``pack/fine-terrain-read``, ``loading-progress``, ``bootstrap-tiles``
   (detailed L2 wilderness: ``render-wilderness-tile-grid?gx=&gy=``)
 
@@ -31,6 +34,7 @@ from app.application.worldData.pack.read.parentLightLoad import MissingParentLig
 from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
 from app.dataModel.worldPack.detailedBakeScope import DetailedBakeScopeKind
+from app.dataModel.worldPack.packBakeDefaults import resolve_detailed_grade_stages
 from app.dataModel.worldPack.packBakeMode import PackBakeApiMode
 from app.dataModel.worldPack.packTilePlan import PackTilePlanScope
 
@@ -125,6 +129,14 @@ async def bake_world_pack(
         default=None,
         description="detailed scope=wilderness: single macro-tile gy (with tile_gx)",
     ),
+    grade_mill: bool | None = Query(
+        default=None,
+        description="detailed: mill outdoor grade (omit = off). Paint without mill is coerced off",
+    ),
+    grade_paint: bool | None = Query(
+        default=None,
+        description="detailed: paint grade into L2 heightmap (omit = off; requires mill)",
+    ),
     anchor_x: int | None = Query(default=None),
     anchor_y: int | None = Query(default=None),
     free_cores: int | None = Query(default=None, ge=1),
@@ -162,6 +174,8 @@ async def bake_world_pack(
             detailed_scope=scope,
             tile_gx=tile_gx,
             tile_gy=tile_gy,
+            grade_mill=grade_mill,
+            grade_paint=grade_paint,
             nodes=nodes, edges=edges, hydrology_generator=_hydrology_generator,
             anchor_x=anchor_x, anchor_y=anchor_y,
         )
@@ -540,6 +554,80 @@ async def refine_from_entry_route(
         "background_expand_radius_m": (
             SceneVolumePolicy.canonical_defaults().background_expand_radius_m
         ),
+    })
+
+
+@router.post("/worlds/{world_uid}/map/refine-chunk")
+async def refine_chunk_route(
+    world_uid: str,
+    gx: int = Query(description="macro-tile gx"),
+    gy: int = Query(description="macro-tile gy"),
+    cx: int = Query(description="wilderness chunk cx"),
+    cy: int = Query(description="wilderness chunk cy"),
+    grade_mill: bool | None = Query(
+        default=None,
+        description="mill outdoor grade on this chunk (omit = off)",
+    ),
+    grade_paint: bool | None = Query(
+        default=None,
+        description="paint grade into L2 (omit = off; requires mill)",
+    ),
+    free_cores: int | None = Query(default=None, ge=1),
+    parallel_workers: int | None = Query(default=None, ge=1),
+    container=Depends(get_container),
+) -> JSONResponse:
+    """Debug — re-refine one wilderness chunk (same FineChunkRunner). Mill/paint opt-in."""
+    world_svc = container.world_service()
+    location_svc = container.location_service()
+    conn_svc = container.connection_graph_service()
+    world = await world_svc.get_by_id(world_uid)
+    if world is None:
+        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
+    locations = await location_svc.get_all(world_uid)
+    nodes = await conn_svc.get_nodes(world_uid)
+    edges = await conn_svc.get_edges(world_uid)
+    try:
+        surface_ctx = require_surface_terrain_context(
+            world, locations, nodes=nodes, edges=edges,
+            hydrology_generator=_hydrology_generator,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    mat_ctx = resolve_materialization_context(
+        world, free_cores=free_cores, parallel_workers_override=parallel_workers,
+    )
+    writer = container.world_pack_writer_for(world)
+    stages = resolve_detailed_grade_stages(grade_mill, grade_paint)
+    entry_orch = container.entry_refine_orchestrator()
+    try:
+        with generation_world_log(world_uid, mode="entry"):
+            result = await entry_orch.fine_terrain.refine_queued_chunk(
+                world, locations, writer, mat_ctx, surface_ctx,
+                gx, gy, cx, cy,
+                stages=stages,
+            )
+            await finalize_pack_on_world(
+                world_svc,
+                world,
+                writer,
+                read_context=container.pack_read_services(world_uid).context,
+            )
+    except MissingParentLightError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return JSONResponse(content={
+        "world_uid": world_uid,
+        "tile_gx": gx,
+        "tile_gy": gy,
+        "cx": cx,
+        "cy": cy,
+        "grade_mill": stages.mill,
+        "grade_paint": stages.paint,
+        "terrain": result.persist.to_dict(),
+        "wilderness_chunks": result.wilderness_chunks_written,
+        "grade_instances": len(result.grade_instances),
+        "grade_s": round(result.grade_s, 3),
     })
 
 

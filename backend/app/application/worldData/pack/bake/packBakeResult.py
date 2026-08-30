@@ -34,6 +34,8 @@ class PackBakeResult:
                 "tiles_refined": self.detailed.tiles_refined,
                 "wilderness_chunks": self.detailed.wilderness_chunks,
                 "climate_fine_tiles": self.detailed.climate_fine_tiles,
+                "grade_mill": self.detailed.grade_mill,
+                "grade_paint": self.detailed.grade_paint,
             }
             gp = self.detailed.pipeline_s.as_dict()
             gp["l2_s"] = round(self.detailed.l2_s, 3)

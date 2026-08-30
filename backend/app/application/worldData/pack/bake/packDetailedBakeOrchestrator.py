@@ -19,7 +19,10 @@ from app.application.worldData.generators.terrain.relief.discover.timings import
 )
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.materializationContext import MaterializationContext
-from app.application.worldData.pack.bake.packBakeLog import log_pack_detailed_bake_done
+from app.application.worldData.pack.bake.packBakeLog import (
+    log_pack_detailed_bake_done,
+    log_pack_detailed_bake_start,
+)
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import (
     ClimatePackBakeOrchestrator,
 )
@@ -51,6 +54,7 @@ from app.dataModel.worldPack.detailedBakeScope import (
     refine_role_for_detailed_scope,
 )
 from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
+from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
 from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
 from app.db.models.namedLocation import NamedLocation
@@ -71,6 +75,8 @@ class PackDetailedBakeResult:
     l2_s: float = 0.0
     grade_persist_s: float = 0.0
     pipeline_s: GradePipelineTimings = field(default_factory=GradePipelineTimings)
+    grade_mill: bool = False
+    grade_paint: bool = False
 
 
 @dataclass
@@ -117,6 +123,12 @@ class PackDetailedBakeOrchestrator:
         request: DetailedBakeRequest,
     ) -> PackDetailedBakeResult:
         with generation_world_log(world.world_uid, mode="detailed"):
+            log_pack_detailed_bake_start(
+                world.world_uid,
+                scope=request.scope,
+                grade_mill=request.grade_mill,
+                grade_paint=request.grade_paint,
+            )
             return await self._bake_in_log_scope(
                 world, locations, writer, mat_ctx, surface_ctx, request,
             )
@@ -131,7 +143,7 @@ class PackDetailedBakeOrchestrator:
         request: DetailedBakeRequest,
     ) -> PackDetailedBakeResult:
         relief_templates: dict[str, ReliefTemplate] = {}
-        if self._relief_library is not None:
+        if request.stages.mill and self._relief_library is not None:
             from app.application.worldData.loadReliefTemplatesForWorld import (
                 load_relief_templates_for_world,
             )
@@ -184,6 +196,7 @@ class PackDetailedBakeOrchestrator:
             refine_role=refine_role_for_detailed_scope("location"),
             expected_chunks_for_status=None,
             relief_templates_by_uid=relief_templates,
+            stages=request.stages,
         )
         l2_s = time.perf_counter() - l2_t0
 
@@ -211,6 +224,8 @@ class PackDetailedBakeOrchestrator:
             l2_s=l2_s,
             grade_persist_s=grade_persist_s,
             pipeline=aggregate.pipeline_s,
+            grade_mill=request.grade_mill,
+            grade_paint=request.grade_paint,
         )
         return PackDetailedBakeResult(
             scope="location",
@@ -222,6 +237,8 @@ class PackDetailedBakeOrchestrator:
             l2_s=l2_s,
             grade_persist_s=grade_persist_s,
             pipeline_s=aggregate.pipeline_s,
+            grade_mill=request.grade_mill,
+            grade_paint=request.grade_paint,
         )
 
     async def _bake_wilderness_scope(
@@ -252,6 +269,7 @@ class PackDetailedBakeOrchestrator:
             refine_role=refine_role_for_detailed_scope("wilderness"),
             expected_chunks_for_status=lambda gx, gy: expected_meter_chunks(world, gx, gy),
             relief_templates_by_uid=relief_templates,
+            stages=request.stages,
         )
         l2_s = time.perf_counter() - l2_t0
 
@@ -268,6 +286,8 @@ class PackDetailedBakeOrchestrator:
             l2_s=l2_s,
             grade_persist_s=grade_persist_s,
             pipeline=aggregate.pipeline_s,
+            grade_mill=request.grade_mill,
+            grade_paint=request.grade_paint,
         )
         return PackDetailedBakeResult(
             scope="wilderness",
@@ -279,6 +299,8 @@ class PackDetailedBakeOrchestrator:
             l2_s=l2_s,
             grade_persist_s=grade_persist_s,
             pipeline_s=aggregate.pipeline_s,
+            grade_mill=request.grade_mill,
+            grade_paint=request.grade_paint,
         )
 
     async def _persist_detailed_grades(
@@ -344,6 +366,7 @@ class PackDetailedBakeOrchestrator:
         expected_chunks_for_status: Callable[[int, int], int] | None,
         phase: str = "detailed",
         relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
+        stages: GradePipelineStages | None = None,
     ) -> _FineAggregate:
         tile_m = cell_size_m(world)
         reader = WorldPackReader(writer.paths)
@@ -365,6 +388,7 @@ class PackDetailedBakeOrchestrator:
                 refine_role=refine_role,
                 phase=phase,
                 relief_templates_by_uid=relief_templates_by_uid,
+                stages=stages or GradePipelineStages.off(),
             )
             for key, z in refined.meter_surface_z.items():
                 prev = aggregate.meter_surface_z.get(key)

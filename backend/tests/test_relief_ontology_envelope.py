@@ -245,6 +245,30 @@ class ReliefOntologyEnvelopePojoTest(unittest.TestCase):
             plains.slope_length_for(2, template_length=2, length_cap=1), 1,
         )
 
+    def test_kind_decision_supplies_sheer_for_slope_and_sheer_outcomes(self) -> None:
+        plains = _canonical_plains()
+        forest = ReliefOntologyEnvelopes.canonical_defaults().forest
+        l_min = plains.length_from_min_cells()
+        slope = plains.kind_decision(1, l_min)
+        self.assertEqual(slope.outcome, "slope")
+        self.assertEqual(slope.outcome, plains.slope_outcome(1, l_min))
+        self.assertEqual(slope.weights, (1.0, 0.0))
+        self.assertEqual(slope.length_cells, l_min)
+        first_sheer = _l1_first_sheer_abs_dz(plains)
+        sheer = plains.kind_decision(first_sheer, 1)
+        self.assertEqual(sheer.outcome, "sheer")
+        self.assertEqual(sheer.outcome, plains.slope_outcome(first_sheer, 1))
+        self.assertEqual(sheer.weights, (0.0, 1.0))
+        self.assertEqual(
+            sheer.length_cells, plains.canonical_sheer_length_cells(),
+        )
+        keep_roll = forest.kind_decision(int(forest.sheer_min_abs_dz), l_min)
+        self.assertEqual(keep_roll.outcome, "slope")
+        self.assertIsNone(keep_roll.weights)
+        force_slope = forest.kind_decision(int(forest.sheer_min_abs_dz) - 1, l_min)
+        self.assertEqual(force_slope.outcome, "slope")
+        self.assertEqual(force_slope.weights, (1.0, 0.0))
+
     def test_geom_formulas_and_envelope_parts(self) -> None:
         self.assertAlmostEqual(angle_from_height_length(1, 1), 45.0, places=5)
         self.assertEqual(length_from_target_angle(1, 45.0), 1)

@@ -30,7 +30,12 @@ from app.dataModel.worldPack.worldMapCellsPerTile import (
     resolve_world_map_side,
 )
 from app.dataModel.worldPack.lightSettlementFootprint import LightSettlementFootprintPolicy
-from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults, resolve_light_tile_cap
+from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
+from app.dataModel.worldPack.packBakeDefaults import (
+    PackBakeDefaults,
+    resolve_detailed_grade_stages,
+    resolve_light_tile_cap,
+)
 from app.dataModel.worldPack.packJobUid import FaceGridAxis, PackJobSiteKind, PackJobUid
 from app.dataModel.worldPack.packBakeMode import (
     PACK_BAKE_FULL,
@@ -83,6 +88,7 @@ __all__ = [
     "FineTerrainChunkWire",
     "FineTerrainColumnWire",
     "FineTerrainZRun",
+    "GradePipelineStages",
     "LAYER_PRIORITY_ORDER",
     "LayerSlice",
     "LocationTerrainEntry",
@@ -124,6 +130,7 @@ __all__ = [
     "merge_layers",
     "refine_role_for_detailed_scope",
     "resolve_detailed_bake_request",
+    "resolve_detailed_grade_stages",
     "resolve_light_tile_cap",
     "resolve_world_map_cells_per_tile",
     "resolve_world_map_side",

@@ -7,7 +7,7 @@ Not world JSON in v1 — ``canonical_defaults()`` is SoT.
 from __future__ import annotations
 
 import math
-from typing import ClassVar
+from typing import ClassVar, Literal, NamedTuple
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -33,6 +33,17 @@ _OPEN_LAND_SLOPE_MAX_DEG = LEFTOVER_SHEER_MIN_DEG
 _SHORE_SLOPE_MIN_DEG = 20.0
 _SHORE_SLOPE_MAX_DEG = 70.0
 _SHORE_CONTEXTS = (ReliefContext.SHORE,)
+
+_KIND_WEIGHTS_SLOPE = (1.0, 0.0)
+_KIND_WEIGHTS_SHEER = (0.0, 1.0)
+
+
+class EnvelopeKindDecision(NamedTuple):
+    """Mill SLOPE/SHEER after L is known. ``weights is None`` → keep template roll."""
+
+    outcome: Literal["slope", "sheer", "skip"]
+    length_cells: int | None
+    weights: tuple[float, float] | None
 
 
 def _open_land_grade_floor(
@@ -364,19 +375,26 @@ class ReliefTerrainEnvelope(BaseModel):
                 return False
         return True
 
+    def kind_decision(self, h: int, length: int) -> EnvelopeKindDecision:
+        """Single mill SHEER/SLOPE clamp: θ fit, sheer floor, and kindRoll weights."""
+        if self.slope_fits(h, length):
+            weights = (
+                _KIND_WEIGHTS_SLOPE
+                if self.slope_preferred or not self.sheer_ok(h)
+                else None
+            )
+            return EnvelopeKindDecision("slope", max(1, int(length)), weights)
+        if self.sheer_ok(h):
+            return EnvelopeKindDecision(
+                "sheer",
+                self.canonical_sheer_length_cells(),
+                _KIND_WEIGHTS_SHEER,
+            )
+        return EnvelopeKindDecision("skip", None, None)
+
     def slope_outcome(self, h: int, length: int) -> str:
         """``slope`` | ``sheer`` | ``skip`` after envelope length is known."""
-        if self.slope_fits(h, length):
-            return "slope"
-        if self.sheer_ok(h):
-            return "sheer"
-        return "skip"
-
-    def weights_for_fitted_slope(self, h: int) -> tuple[float, float] | None:
-        """When SLOPE fits: ``(slope, sheer)`` override, or ``None`` to keep roll."""
-        if self.slope_preferred or not self.sheer_ok(h):
-            return (1.0, 0.0)
-        return None
+        return self.kind_decision(h, length).outcome
 
 
 class ReliefOntologyEnvelopes(BaseModel):

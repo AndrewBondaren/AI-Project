@@ -33,6 +33,7 @@ from app.application.worldData.terrainBatchOrchestrator import (
 )
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
+from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
 from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
 from app.db.models.namedLocation import NamedLocation
@@ -54,9 +55,13 @@ def prepare_fine_tile(
     refine_role: ChunkRefineRole = "scene",
     phase: str | None = None,
     relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
+    stages: GradePipelineStages | None = None,
 ) -> FineTileContext:
     """Prep before the pool: parent light, upsample + hills + hydro, halo, catalog."""
     phase_name = phase or refine_role
+    stages = stages or GradePipelineStages.off()
+    run_mill = stages.mill
+    run_paint = stages.paint
     chunk_size = terrain_chunk_columns(world)
     cell_m = cell_size_m(world)
     meter_bbox = meter_bbox_for_tile(tile_gx, tile_gy, cell_m)
@@ -86,12 +91,20 @@ def prepare_fine_tile(
         workers=workers,
         chunks_total=chunks_total,
     )
-    templates = relief_templates_by_uid or {}
-    existing_uids = existing_grade_uids_from_pack(
-        writer, reader, tile_gx, tile_gy, meter_bbox, chunk_size,
+    templates = (relief_templates_by_uid or {}) if run_mill else {}
+    existing_uids = (
+        existing_grade_uids_from_pack(
+            writer, reader, tile_gx, tile_gy, meter_bbox, chunk_size,
+        )
+        if run_mill
+        else {}
     )
-    catalog = catalog_for_surface(
-        world, meter_bbox, tile_gx=tile_gx, tile_gy=tile_gy, chunk_size=chunk_size,
+    catalog = (
+        catalog_for_surface(
+            world, meter_bbox, tile_gx=tile_gx, tile_gy=tile_gy, chunk_size=chunk_size,
+        )
+        if run_paint
+        else None
     )
     grade_halo = grade_halo_cells(templates) if templates else 0
     bounds = world_bounds_from_world(world, locations)
@@ -131,6 +144,7 @@ def prepare_fine_tile(
         chunks_total=chunks_total,
         location_pairs=location_pairs,
         volumes=volumes,
+        stages=stages,
     )
 
 

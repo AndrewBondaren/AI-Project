@@ -89,6 +89,10 @@ class EntryRefineOrchestrator:
         return self._queue
 
     @property
+    def fine_terrain(self) -> FineTerrainRefineOrchestrator:
+        return self._fine_terrain
+
+    @property
     def anchor_tracker(self) -> EntryAnchorTracker:
         return self._anchors
 

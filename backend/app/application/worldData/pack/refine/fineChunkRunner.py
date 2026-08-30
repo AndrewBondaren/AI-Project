@@ -26,6 +26,7 @@ from app.application.worldData.pack.refine.fineTileContext import ChunkComputeRe
 from app.application.worldData.pack.refine.fineTilePrep import prepare_fine_tile
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
+from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
 from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
 from app.db.models.namedLocation import NamedLocation
@@ -53,6 +54,7 @@ class FineChunkRunner:
         refine_role: ChunkRefineRole = "scene",
         phase: str | None = None,
         relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
+        stages: GradePipelineStages | None = None,
     ) -> FineRefineResult:
         """Generate + persist fine chunks; ``meter_surface_z`` for climate ladder."""
         if not rects:
@@ -73,6 +75,7 @@ class FineChunkRunner:
             refine_role=refine_role,
             phase=phase,
             relief_templates_by_uid=relief_templates_by_uid,
+            stages=stages or GradePipelineStages.off(),
         )
         persist = FineChunkPersist(ctx, writer)
         compute = partial(compute_rect, self._terrain, ctx)

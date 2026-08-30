@@ -11,6 +11,7 @@ from app.application.worldData.terrainBatchOrchestrator import TileSurfaceState
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.terrain.relief.enums import ReliefConditionTerrain, ReliefContext
+from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
 from app.dataModel.terrainMasks.worldTerrainMasks import WorldTerrainMasks
 
 _MASKS = WorldTerrainMasks.canonical_defaults()
@@ -1483,6 +1484,7 @@ class GradeFormationApplyTest(unittest.TestCase):
             chunks_total=1,
             location_pairs=[],
             volumes=[],
+            stages=GradePipelineStages.full(),
         )
         compute_rect(capture, ctx, (0, rect))
         self.assertIs(state.heightmap.surface_z, parent_map)
@@ -1540,6 +1542,7 @@ class GradeFormationApplyTest(unittest.TestCase):
             chunks_total=1,
             location_pairs=[],
             volumes=[],
+            stages=GradePipelineStages.full(),
         )
         result = compute_rect(capture, ctx, (0, rect))
         self.assertEqual(state.heightmap.surface_z, parent)
@@ -1547,6 +1550,116 @@ class GradeFormationApplyTest(unittest.TestCase):
         self.assertGreater(result.grade_s, 0.0)
         self.assertGreaterEqual(result.materialize_s, 0.0)
         self.assertEqual(capture.captured.heightmap.surface_z[(5, 5)], 8)
+
+    def test_compute_rect_skips_mill_when_flag_off(self) -> None:
+        from app.application.worldData.generators.terrain.types import ColumnRect
+        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+            catalog_for_surface,
+        )
+        from app.application.worldData.pack.refine.detailedGradeHalo import (
+            grade_halo_cells,
+        )
+        from app.application.worldData.pack.refine.fineChunkCompute import compute_rect
+        from app.application.worldData.pack.refine.fineTileContext import FineTileContext
+
+        tpl = self._ramp_tpl(length=2)
+        world, tuid = self._world("w_mill_off", tpl)
+        state = self._cliff_state("w_mill_off")
+        parent = dict(state.heightmap.surface_z)
+        rect = ColumnRect(x_min=4, x_max=8, y_min=5, y_max=5)
+        catalog = catalog_for_surface(
+            world, state.heightmap.bbox, tile_gx=0, tile_gy=0,
+        )
+        templates = {tuid: tpl}
+
+        class _Capture:
+            def generate_chunk_cells_sync(self, *args, surface_state=None, **kwargs):
+                self.captured = surface_state
+                return []
+
+        capture = _Capture()
+        ctx = FineTileContext(
+            world=world,
+            locations=[],
+            surface_ctx=MagicMock(),
+            tile_gx=0,
+            tile_gy=0,
+            meter_bbox=rect,
+            chunk_size=32,
+            surface_state=state,
+            templates=templates,
+            grade_halo=grade_halo_cells(templates),
+            existing_uids={},
+            catalog=catalog,
+            workers=1,
+            refine_role="scene",
+            phase_name="test",
+            world_uid=world.world_uid,
+            chunks_total=1,
+            location_pairs=[],
+            volumes=[],
+            stages=GradePipelineStages.off(),
+        )
+        result = compute_rect(capture, ctx, (0, rect))
+        self.assertEqual(state.heightmap.surface_z, parent)
+        self.assertFalse(result.chunk_grades)
+        self.assertEqual(result.grade_s, 0.0)
+        self.assertEqual(capture.captured.heightmap.surface_z[(5, 5)], parent[(5, 5)])
+
+    def test_compute_rect_mill_without_paint_has_no_overlay(self) -> None:
+        from app.application.worldData.generators.terrain.types import ColumnRect
+        from app.application.worldData.pack.refine.detailedGradeCatalog import (
+            catalog_for_surface,
+        )
+        from app.application.worldData.pack.refine.detailedGradeHalo import (
+            grade_halo_cells,
+        )
+        from app.application.worldData.pack.refine.fineChunkCompute import compute_rect
+        from app.application.worldData.pack.refine.fineTileContext import FineTileContext
+
+        tpl = self._ramp_tpl(length=2)
+        world, tuid = self._world("w_paint_off", tpl)
+        state = self._cliff_state("w_paint_off")
+        parent = dict(state.heightmap.surface_z)
+        rect = ColumnRect(x_min=4, x_max=8, y_min=5, y_max=5)
+        catalog = catalog_for_surface(
+            world, state.heightmap.bbox, tile_gx=0, tile_gy=0,
+        )
+        templates = {tuid: tpl}
+
+        class _Capture:
+            def generate_chunk_cells_sync(self, *args, surface_state=None, **kwargs):
+                self.captured = surface_state
+                return []
+
+        capture = _Capture()
+        ctx = FineTileContext(
+            world=world,
+            locations=[],
+            surface_ctx=MagicMock(),
+            tile_gx=0,
+            tile_gy=0,
+            meter_bbox=rect,
+            chunk_size=32,
+            surface_state=state,
+            templates=templates,
+            grade_halo=grade_halo_cells(templates),
+            existing_uids={},
+            catalog=catalog,
+            workers=1,
+            refine_role="scene",
+            phase_name="test",
+            world_uid=world.world_uid,
+            chunks_total=1,
+            location_pairs=[],
+            volumes=[],
+            stages=GradePipelineStages(mill=True, paint=False),
+        )
+        result = compute_rect(capture, ctx, (0, rect))
+        self.assertEqual(state.heightmap.surface_z, parent)
+        self.assertFalse(result.chunk_grades)
+        self.assertGreater(result.grade_s, 0.0)
+        self.assertEqual(capture.captured.heightmap.surface_z[(5, 5)], parent[(5, 5)])
 
 
 class DiscoverAndPaintPolishTest(unittest.TestCase):

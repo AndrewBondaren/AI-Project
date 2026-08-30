@@ -122,9 +122,11 @@ def discover_and_paint(
     catalog: TileFaceCatalog | None,
     templates: dict[str, ReliefTemplate],
     existing_uids: dict[Coord, str] | None = None,
+    run_mill: bool = True,
+    run_paint: bool = True,
 ) -> tuple[DetailedGradeResult, tuple[VertexSlotSeam, ...], GradePipelineTimings]:
     """Discover vertices/fronts on the ready heightmap, then one L2 write-set."""
-    if not templates:
+    if not templates or not run_mill:
         return DetailedGradeResult.empty(), (), GradePipelineTimings()
 
     t0 = time.perf_counter()
@@ -178,58 +180,59 @@ def discover_and_paint(
     interior_seq: dict[tuple[int, int], int] = defaultdict(int)
     painted_uids: dict[int, list[str]] = defaultdict(list)
     paint_t0 = time.perf_counter()
-    for front in fronts:
-        owned = tuple(
-            xy for xy in front.corridor
-            if rect_contains(rect, xy[0], xy[1])
-        )
-        if not owned:
-            continue
-        identity = front_bake_identity(grid, front)
-        if int(front.path_length) < 1:
-            relief_debug(
-                "grade_front_skip",
-                why="no_path_length",
-                site_id=identity.site_id,
+    if run_paint:
+        for front in fronts:
+            owned = tuple(
+                xy for xy in front.corridor
+                if rect_contains(rect, xy[0], xy[1])
             )
-            continue
-        picked = pick_front_grade(
-            front,
-            identity,
-            registry=registry,
-            policy=policy,
-            world_seed=world_seed,
-            templates=templates,
-            occurrence_seq=pick_seq,
-        )
-        pick_seq += 1
-        if picked is None:
-            continue
-        uid = uid_for_front(
-            front,
-            world_uid=world.world_uid,
-            site_id=identity.site_id,
-            catalog=catalog,
-            existing=known,
-            interior_seq=interior_seq,
-        )
-        painted = discovered_front_from(
-            front,
-            identity,
-            grade_uid=uid,
-            decision=picked.decision,
-            template_uid=picked.template_uid,
-        )
-        part = apply_grade_paint_spec(painted, world=world, surface=grid)
-        clipped = part.clipped_to_rect(rect)
-        if not clipped.grade_instances:
-            continue
-        acc = acc.merged_with(
-            replace(clipped, rim_rays=rim_rays_from_front(painted)),
-        )
-        apply_grade_uids(grid, clipped.surface_grade_uid)
-        known.update(clipped.surface_grade_uid)
-        painted_uids[int(front.slot)].append(uid)
+            if not owned:
+                continue
+            identity = front_bake_identity(grid, front)
+            if int(front.path_length) < 1:
+                relief_debug(
+                    "grade_front_skip",
+                    why="no_path_length",
+                    site_id=identity.site_id,
+                )
+                continue
+            picked = pick_front_grade(
+                front,
+                identity,
+                registry=registry,
+                policy=policy,
+                world_seed=world_seed,
+                templates=templates,
+                occurrence_seq=pick_seq,
+            )
+            pick_seq += 1
+            if picked is None:
+                continue
+            uid = uid_for_front(
+                front,
+                world_uid=world.world_uid,
+                site_id=identity.site_id,
+                catalog=catalog,
+                existing=known,
+                interior_seq=interior_seq,
+            )
+            painted = discovered_front_from(
+                front,
+                identity,
+                grade_uid=uid,
+                decision=picked.decision,
+                template_uid=picked.template_uid,
+            )
+            part = apply_grade_paint_spec(painted, world=world, surface=grid)
+            clipped = part.clipped_to_rect(rect)
+            if not clipped.grade_instances:
+                continue
+            acc = acc.merged_with(
+                replace(clipped, rim_rays=rim_rays_from_front(painted)),
+            )
+            apply_grade_uids(grid, clipped.surface_grade_uid)
+            known.update(clipped.surface_grade_uid)
+            painted_uids[int(front.slot)].append(uid)
     paint_s = time.perf_counter() - paint_t0
     seams_t0 = time.perf_counter()
     seams = build_vertex_slot_seams(

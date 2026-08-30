@@ -16,6 +16,7 @@ from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_worker_chunk,
 )
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
+from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.db.repositories.iChunkRefineJobRepository import IChunkRefineJobRepository
@@ -100,9 +101,10 @@ class ChunkRefineWorker:
             if nxt is None:
                 break
             gx, gy, cx, cy = nxt
-            cells = await self._fine_terrain.refine_queued_chunk(
+            result = await self._fine_terrain.refine_queued_chunk(
                 world, locations, writer, mat_ctx, surface_ctx,
                 gx, gy, cx, cy,
+                stages=GradePipelineStages.off(),
             )
             processed += 1
             log_pack_worker_chunk(
@@ -112,7 +114,7 @@ class ChunkRefineWorker:
                 tile_gy=gy,
                 chunk_cx=cx,
                 chunk_cy=cy,
-                cells=cells,
+                cells=result.persist.succeeded,
             )
         fine_tiles = self.drain_climate_fine(world, surface_ctx, writer)
         log_pack_drain_queue_done(world_uid, processed=processed, started_at=drain_t0)
@@ -137,9 +139,10 @@ class ChunkRefineWorker:
             job = await self._jobs.pop_next_pending(world_uid)
             if job is None:
                 break
-            cells = await self._fine_terrain.refine_queued_chunk(
+            result = await self._fine_terrain.refine_queued_chunk(
                 world, locations, writer, mat_ctx, surface_ctx,
                 job.gx, job.gy, job.cx, job.cy,
+                stages=GradePipelineStages.off(),
             )
             await self._jobs.mark_complete(job.job_uid)
             processed += 1
@@ -150,7 +153,7 @@ class ChunkRefineWorker:
                 tile_gy=job.gy,
                 chunk_cx=job.cx,
                 chunk_cy=job.cy,
-                cells=cells,
+                cells=result.persist.succeeded,
                 job=job.job_uid,
             )
         processed += self.drain_climate_fine(world, surface_ctx, writer)

@@ -10,6 +10,7 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
 from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
 
 DetailedBakeScopeKind = Literal["location", "wilderness"]
@@ -29,6 +30,9 @@ class DetailedBakeRequest(BaseModel):
     # Wilderness single-tile job (recommended debug unit). Both set or both None.
     tile_gx: int | None = None
     tile_gy: int | None = None
+    # Outdoor grade in this detailed job. Product off; paint requires mill (coerced off).
+    grade_mill: bool = False
+    grade_paint: bool = False
 
     @model_validator(mode="before")
     @classmethod
@@ -47,12 +51,24 @@ class DetailedBakeRequest(BaseModel):
                 raise ValueError("scope=location requires location_uid")
             if gx is not None:
                 raise ValueError("tile_gx/tile_gy only apply to scope=wilderness")
-            return {**data, "location_uid": uid_s, "tile_gx": None, "tile_gy": None}
-        if scope == "wilderness":
+            data = {**data, "location_uid": uid_s, "tile_gx": None, "tile_gy": None}
+        elif scope == "wilderness":
             if uid is not None and str(uid).strip():
                 raise ValueError("scope=wilderness must not include location_uid")
-            return {**data, "location_uid": None}
+            data = {**data, "location_uid": None}
+        mill = data.get("grade_mill")
+        paint = data.get("grade_paint")
+        if mill is not None or paint is not None:
+            stages = GradePipelineStages(
+                mill=False if mill is None else bool(mill),
+                paint=False if paint is None else bool(paint),
+            )
+            data = {**data, "grade_mill": stages.mill, "grade_paint": stages.paint}
         return data
+
+    @property
+    def stages(self) -> GradePipelineStages:
+        return GradePipelineStages(mill=self.grade_mill, paint=self.grade_paint)
 
 
 def resolve_detailed_bake_request(
@@ -62,6 +78,8 @@ def resolve_detailed_bake_request(
     max_tiles: int = 0,
     tile_gx: int | None = None,
     tile_gy: int | None = None,
+    grade_mill: bool = False,
+    grade_paint: bool = False,
 ) -> DetailedBakeRequest:
     """Build validated request. Explicit ``scope`` is SoT.
 
@@ -82,6 +100,8 @@ def resolve_detailed_bake_request(
         max_tiles=max_tiles,
         tile_gx=tile_gx,
         tile_gy=tile_gy,
+        grade_mill=grade_mill,
+        grade_paint=grade_paint,
     )
 
 

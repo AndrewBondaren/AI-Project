@@ -47,6 +47,7 @@ from app.application.worldData.pack.refine.meterChunkGeom import rects_for_macro
 from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
+from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
 from app.dataModel.worldPack.worldPackManifest import ChunkRefineRole
 from app.db.models.namedLocation import NamedLocation
@@ -107,7 +108,7 @@ class FineTerrainRefineOrchestrator:
             tile_gx, tile_gy, scene_rects, loc_volumes,
             refine_role="scene",
             phase="scene",
-            relief_templates_by_uid=await self._relief_templates(world),
+            stages=GradePipelineStages.off(),
         )
         await self._persist_grade_instances(world, result)
         log_pack_fine_terrain_phase_done(
@@ -134,19 +135,23 @@ class FineTerrainRefineOrchestrator:
         location_volumes: list[TerritoryVolume] | None = None,
         *,
         refine_role: ChunkRefineRole = "background",
-    ) -> int:
+        stages: GradePipelineStages | None = None,
+    ) -> FineRefineResult:
         loc_volumes = location_volumes or [
             vol for _, vol in territory_volumes_by_location(world, locations)
         ]
+        resolved = stages or GradePipelineStages.off()
+        templates = await self._relief_templates(world) if resolved.mill else None
         result = await self._runner.refine_rects(
             world, locations, writer, mat_ctx, surface_ctx,
             tile_gx, tile_gy, [rect], loc_volumes,
             refine_role=refine_role,
             phase=refine_role,
-            relief_templates_by_uid=await self._relief_templates(world),
+            relief_templates_by_uid=templates,
+            stages=resolved,
         )
         await self._persist_grade_instances(world, result)
-        return result.persist.succeeded
+        return result
 
     async def schedule_tile_background(
         self,
@@ -216,10 +221,19 @@ class FineTerrainRefineOrchestrator:
         tile_gy: int,
         cx: int,
         cy: int,
-    ) -> int:
+        *,
+        stages: GradePipelineStages | None = None,
+    ) -> FineRefineResult:
         cell_m = cell_size_m(world)
         chunk_size = terrain_chunk_columns(world)
         meter_bbox = meter_bbox_for_tile(tile_gx, tile_gy, cell_m)
+        n_cx = (meter_bbox.x_max - meter_bbox.x_min + 1) // chunk_size
+        n_cy = (meter_bbox.y_max - meter_bbox.y_min + 1) // chunk_size
+        if n_cx < 1 or n_cy < 1 or not (0 <= cx < n_cx and 0 <= cy < n_cy):
+            raise ValueError(
+                f"chunk=({cx},{cy}) out of range for tile=({tile_gx},{tile_gy}) "
+                f"(grid {n_cx}x{n_cy})",
+            )
         x_min = meter_bbox.x_min + cx * chunk_size
         y_min = meter_bbox.y_min + cy * chunk_size
         rect = ColumnRect(
@@ -232,6 +246,7 @@ class FineTerrainRefineOrchestrator:
             world, locations, writer, mat_ctx, surface_ctx,
             tile_gx, tile_gy, rect,
             refine_role="background",
+            stages=stages,
         )
 
     async def refine_path_corridor(
@@ -274,7 +289,7 @@ class FineTerrainRefineOrchestrator:
             tile_gx, tile_gy, corridor, loc_volumes,
             refine_role="path",
             phase="path",
-            relief_templates_by_uid=await self._relief_templates(world),
+            stages=GradePipelineStages.off(),
         )
         await self._persist_grade_instances(world, result)
         log_pack_fine_terrain_phase_done(
