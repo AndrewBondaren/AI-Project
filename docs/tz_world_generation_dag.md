@@ -192,6 +192,7 @@ flowchart LR
 | `terrain_summary` | pre_llm | … | read-only для LLM payload | — |
 
 > **Terrain chain (target):** после `materialize-stack` wilderness cells без `location_uid` — `eager_terrain` грузит bbox вокруг `(map_x,map_y,map_z)`, не весь location. Детали — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § **TR-LAZY-LOAD**, **TR-PERF**.  
+> **Outdoor grade (product):** mill **не** на каждый scene read и не на spawn. Если сцена **требует** рельеф и в pack нет — 1…N чанков (не тайл, не мир). Если ГМ залил pack — только read. Rematerialize **сбрасывает** stale grade. SoT — [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Caller. Wiring — после gate.  
 > **Impl нод** — § «Gate: DAG» выше; агент **не** меняет эту таблицу в коде до снятия gate мастером.
 
 **Lazy settlement chain** (gameplay vertical slice):
@@ -243,7 +244,7 @@ CRUD (`GET/POST/DELETE …/map`) — import/export для мастера и debu
 | `recalculate_climate` | post_llm | `recalculate(request)` | partial upsert | **`output_bbox` обязателен** — regional event |
 | `generate_z_slice` | pre/post_llm | `generate_z_slice` | `save_pass(terrain)` | одна колонка (local) |
 | `lazy_terrain` | pre_llm | `generate_minimal` | 1 cell | orphan repair |
-| `modify_terrain` | post_llm | `apply_patch` + grade helper (**R36v**, тот же что detailed) ⬜ | `persist_terrain_patch` + `persist_relief_grades` ⬜ | **cataclysm**, **combat**, road bed |
+| `modify_terrain` | post_llm | `apply_patch`; **сброс** stale outdoor grade в bounds (не mill в том же проходе) ⬜ | `persist_terrain_patch` + wipe grade ⬜ | **cataclysm**, **combat**, road bed |
 | `excavate` | post_llm | patch `patch_kind=excavate` ⬜ | тот же persist | **player / NPC dig** |
 
 EventBus / `world_history` (`cataclysm`, `destruction`) → DAG нода собирает `TerrainPatchRequest` (center, radius, event_uid) → generate → persist. См. [project_data_storage_tz.md](./project_data_storage_tz.md).
@@ -454,6 +455,7 @@ Generator-side work **может** опережать ноды (как climate e
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-30 | **Relief product:** mill не спекулятивно (дорого); несколько чанков на сцене ок; полный мир = bake ГМ. Rematerialize сбрасывает grade. [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Caller. |
 | 2026-08-16 | **Modification ≠ bake:** `modify_terrain` пишет Patch Store, не `pack/bake` |
 | 2026-08-13 | **R36v:** `modify_terrain` после patch зовёт тот же grade helper — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-07 | § **Gate: DAG** — ноды только с мастером после G1–G4 (полный тест генераторов); TR-LAZY-LOAD / TR-PERF service-first |

@@ -46,7 +46,7 @@ metadata:
 
 Dump (z-срезы, `surface_grade.txt`) **не** входит в bake.
 
-Offline `detailed_bake` mill/paint **выкл.** пока не переданы `grade_mill` / `grade_paint`. Entry/runtime refine mill/paint **нет** (старт игрока = L2 column fill). APP-PERF-R1 ниже — прогон **с** явным mill+paint. Без них остаётся L2 fill от parent-light, не «пустой bake».
+Offline `detailed_bake` mill/paint **выкл.** пока не переданы `grade_mill` / `grade_paint` (ГМ может включить и залить pack — тогда сцена читает). Entry refine mill/paint **нет** (старт = L2 column fill). Product mill на сцене — DAG, когда рельеф необходим ([`tz_terrain_relief.md`](./tz_terrain_relief.md) § Caller). APP-PERF-R1 ниже — прогон **с** явным mill+paint. Без них остаётся L2 fill от parent-light, не «пустой bake».
 
 ---
 
@@ -117,7 +117,7 @@ CPU-сумма по чанкам (не wall):
 
 1. L0 full на 25 тайлах 003 — **~11 с**, не узкое место этого сценария.
 2. Один L2 wilderness-тайл (1024 чанка, grade включён) — **~14 мин wall**; почти всё — параллельный mill+paint.
-3. Оптимизация L2, если понадобится: **paint**, не dump и не SQL persist. Product: mill/paint не на entry; на bake только `grade_mill=true` (+ `grade_paint=true` для штампа).
+3. Оптимизация L2, если понадобится: **paint**, не dump и не SQL persist. Product: mill/paint **не** звать постоянно (entry, каждый scene read). Несколько чанков, когда сцена требует grade — ок. Полный мир — только ГМ `grade_mill=true` (+ `grade_paint=true`). Тайл ~1024 чанка — APP-PERF-R1, не gameplay path.
 4. Сравнивать прогоны по **`l2_s` / HTTP `elapsed_s`**, не по `paint_s` как «ещё 50 минут».
 5. Качество: paint этого тайла принят; слоты/occupancy T-25 этим прогоном **не** закрывались.
 
@@ -129,5 +129,6 @@ SLO на L2 detailed **не** записывали. WP-A1 (light ≤ 2 min) эт
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-30 | **Бюджет:** mill не спекулятивно; несколько чанков на сцене ок; полный мир = bake ГМ. APP-PERF-R1 = тайл целиком. |
 | 2026-08-30 | Product: mill/paint default **off** (bake opt-in; entry никогда). **APP-PERF-R1** = явный полный mill+paint. |
 | 2026-08-30 | Файл создан. **APP-PERF-R1:** 003 full ~11 с; detailed `(-2,-2)` wall ~820 с, paint CPU-сумма ~3141 с; paint визуально ок. |

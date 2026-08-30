@@ -12,7 +12,7 @@ metadata:
 
 | Документ | Роль |
 |---|---|
-| Этот файл | mill Q1/Q2, pack-слоты, стрелки, шаблоны/pick, canal/obstacle, SQL DDL + R43 |
+| Этот файл | mill Q1/Q2, pack-слоты, стрелки, шаблоны/pick, canal/obstacle, SQL DDL + R43; **product callers** (§ Caller) |
 | [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | dump 3×3, sidecar paths, LLM-чтение |
 | [`tz_terrain_relief_technical_debt.md`](./tz_terrain_relief_technical_debt.md) | техдолг **кода** (leftover-pack для locked, жирные классы). Не generate SoT |
 | [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) | архив: R36 bake (u–w), R37 envelope подробно, L2 volume, C29, примеры JSON pick |
@@ -41,6 +41,34 @@ flowchart LR
 | **Валидатор** | ERROR в лог, generate не abort | дописывать слоты; закрывать из z |
 
 Dump и контракт 3×3 — consume. Envelope длинного mill-луча (plains/forest θ≤80°, L min 20) — архив **R37** L_min; knobs шаблона не круче/короче пола. Kind на коротком луче — тот же порог 80°, что leftover L=1. **Не** путать L_min 20 с leftover-парой.
+
+---
+
+## Caller (продукт, locked 2026-08-30)
+
+Outdoor grade **не** печётся на старте сессии и **не** живёт отдельным bake-оркестратором. Единица работы — чанк `FineChunkRunner` (`refine_queued_chunk` / `refine_rect`, R41: mill→paint→один fill→pack).
+
+| Режим | Кто | Когда | Что |
+|---|---|---|---|
+| **1. Сцена (основной)** | DAG terrain chain, **после gate** | рендер сцены, **где рельеф необходим**, а в pack нет актуального grade | 1…N чанков `refine_queued_chunk(stages=full())` → запись в мир (pack + SQL) |
+| **2. Pack ГМ** | мастер offline `detailed_bake` + `grade_mill`/`grade_paint` | хочет готовый рельеф на мир / scope | mill в pack; сцена **только читает** |
+| **3. L2 без mill** | `refine_from_entry` / rings / queue | spawn, фон | `stages=off()` — column fill от parent-light, **без** mill |
+
+«Рельеф необходим» — outdoor сцена, которой нужны грани SLOPE/SHEER (проходимость, consume dump, факты хода). Предикат ноды — wiring после gate.
+
+**Бюджет (locked):** mill/paint **дорого**, если звать постоянно там, где grade не нужен (каждый `get_scene_volume`, spawn, rings, фон). **Не звать.** Несколько чанков, когда сцена действительно требует рельеф — приемлемо (APP-PERF-R1: дорогой путь = **весь** L2-тайл ~1024 чанка / ~14 мин wall, не сцена из единиц чанков). Полный мир с рельефом — **только** если ГМ сам запечёт (режим 2); сцена тогда читает pack, DAG не mill.
+
+Если ГМ уже залил mill в pack — DAG **не** перепекает, только читает.
+
+**Не:** mill на `refine-from-entry`; mill «на всякий случай»; `detailed_bake` `max_tiles=1` как «один чанк»; `generate_detailed_grade` + ручная запись pack; отдельный GradeBakeOrchestrator.
+
+### Сброс при materialize
+
+Повторный **materialize** (L2 column fill / refine `stages=off()`, patch, что меняет `z` или колонку) на объёме, где grade уже был → **удалить** рельеф этого объёма: pack column (`system_grade_uid` / overlay), sidecar `grade_rays`, SQL instances/systems, чьи `cell_refs` пересекают bounds. Старый mill **неактуален** (геометрия колонок другая).
+
+**Не:** оставлять старые uid/слоты на новых колонках; mill в том же fill-only проходе (нарушает R41). Вернуть grade — снова режим **1** (сцена) или **2** (ГМ).
+
+Debug HTTP `POST …/refine-chunk` — тот же application-метод, не product path игрока. DAG-ноды агент **не** правит до gate ([`tz_world_generation_dag.md`](./tz_world_generation_dag.md)).
 
 ---
 
@@ -257,7 +285,7 @@ CREATE TABLE IF NOT EXISTS relief_grade_instances (
 
 ### Persist (bake-writer)
 
-Один application-caller: `persist_relief_grades`. Три оркестратора (`detailed_bake` / entry / L0 если есть instances) — `replace_world=False` (**не** `True` на light/full: иначе wipe detailed). Оркестраторы SQL сами не пишут. Mill/paint **не** на gameplay entry/runtime (игрок не ждёт): L2 = column fill от parent-light. Caller mill/paint — `FineTerrainRefineOrchestrator.refine_queued_chunk(stages=full())` (debug `POST …/refine-chunk`) или opt-in `detailed_bake` `grade_mill`/`grade_paint` (product **off**; paint без mill принудительно off). **Не** `refine-from-entry` и не отдельный GradeBakeOrchestrator. Алгоритм mill/paint в этом файле не меняется. Pack wilderness + `grade_rays` sidecar пишет `FineChunkPersist` на том же `ColumnRect` (R41: mill→paint→один fill→pack).
+Один application-caller SQL: `persist_relief_grades`. Оркестраторы SQL сами не пишут. `replace_world=False` на detailed / scene mill / entry, если instances есть (**не** `True` на light/full: иначе wipe detailed). Кто зовёт mill/paint и когда сбрасывать grade — § Caller. Алгоритм mill/paint в этом файле не меняется. Pack wilderness + `grade_rays` sidecar пишет `FineChunkPersist` на том же `ColumnRect` (R41: mill→paint→один fill→pack).
 
 | Слой | Контракт |
 |---|---|
@@ -478,6 +506,8 @@ Mill: один SOUTH, Q2 вниз, не тело×8. Pack: клетка заня
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-30 | **Бюджет mill:** не звать постоянно где grade не нужен; несколько чанков на сцене — ок; полный мир — только bake ГМ. APP-PERF-R1 = тайл целиком, не сцена. |
+| 2026-08-30 | **Product callers:** DAG mill 1…N чанков на сцене, где grade нужен и в pack нет; ГМ может залить полный рельеф в pack (сцена читает); повторный materialize **сбрасывает** stale grade. Не mill на entry. |
 | 2026-08-30 | **Caller mill/paint:** `refine_queued_chunk(stages=…)` / bake opt-in; не entry. On-demand = тот же `FineChunkRunner` chunk. |
 | 2026-08-30 | **Mill/paint не gameplay:** entry/runtime без mill/paint; `detailed_bake` только явный `grade_mill`/`grade_paint` (default **off**). APP-PERF-R1 — [`tz_application_performance.md`](./tz_application_performance.md). |
 | 2026-08-28 | **SHEER θ + mill `[80, 90)`:** Instance пишет честный `atan(h/L)`; mill `slope_fits` на open_land `θ_max=80` как leftover (`>= 80` → не SLOPE). |

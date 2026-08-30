@@ -297,7 +297,7 @@ z_bottom = max(world.z_min, z_top - N_eff)
 → [`tz_terrain_relief.md`](./tz_terrain_relief.md) (SoT generate: очереди, стрелки). Bake R36v / SQL / шаблоны — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md).
 
 Кратко: grade — **не** MaskDomain и **не** `N_eff`. Column gap (этот документ § Зазоры) = *объём* колонки; relief = *проходимость грани*.  
-**Generate:** в `detailed_bake` / entry — per-chunk в `FineChunkRunner` pool ([`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **R36v**). Runtime patch — тот же helper. Consumers: горы, open land, shore, roads (`road_shoulder` T-10).
+**Generate:** mill — DAG на сцене (1…N чанков) или ГМ `detailed_bake`; entry L2 — без mill. Per-chunk в `FineChunkRunner` pool ([`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **R36v**). Повторный materialize/patch **сбрасывает** stale grade, не mill в том же проходе. Callers — [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Caller. Consumers: горы, open land, shore, roads (`road_shoulder` T-10).
 
 ### Terrain ↔ ClimateData (разделение ответственности, физическая связь)
 
@@ -1602,7 +1602,7 @@ class TerrainPatchGeneratorService:
         """Pure. Возвращает **только изменённые** cells ⊆ bounds."""
 ```
 
-**Grade после patch (R36v):** смена `z` / terrain в bounds → тот же rect-scoped `generate_detailed_grade` (+ halo), stamp `system_grade_uid`, upsert `relief_grade_instances` (`replace_world=False`). **Не** отдельный bake mode и **не** L0 sample. Generate SoT — [`tz_terrain_relief.md`](./tz_terrain_relief.md); подробности bake — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md).
+**Grade после patch:** смена `z` / terrain в bounds → **сброс** stale outdoor grade этого объёма (pack column, sidecar, SQL `cell_refs`). **Не** mill в том же проходе (R41). Вернуть grade: DAG на сцене, если рельеф снова необходим, или ГМ `detailed_bake`. SoT — [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Caller. **Не** отдельный bake mode и **не** L0 sample.
 
 **Контракт persist:**
 
@@ -1624,7 +1624,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 
 | Scope | Generate | Persist | DAG |
 |---|---|---|---|
-| `terrain_patch` | `apply_patch` + тот же grade helper (R36v) | `persist_terrain_patch` + `persist_relief_grades` | `modify_terrain`, `excavate` |
+| `terrain_patch` | `apply_patch`; сброс stale grade в bounds | `persist_terrain_patch` + wipe grade | `modify_terrain`, `excavate` |
 
 #### Idempotency
 
