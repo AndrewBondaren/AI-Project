@@ -330,7 +330,8 @@ gap = building.map_z - terrain_z[entry_x, entry_y]
           + внутренний passage: porch → entry_room через дверь
 ```
 
-Материалы:
+Материалы (дверь здания без уличного луча — этот блок). **Уличный вход по grid-лучу** (θ: ≤30° grade / 45° лестница / >45° `map_z` ↑↓, xy не двигать): [tz_structure_connections.md](./tz_structure_connections.md) **§5.1.2**.
+
 ```
 step_material  = context.porch_material ?? building.parent_floor_material
 porch_material = context.porch_material ?? building.parent_floor_material

@@ -50,20 +50,22 @@ SettlementAssembler
 - назначает `building_template` каждому слоту по `structure_type` + `economic_tier`
 - имеет собственный шаблон типа района (аналог `building_template` — описывает структуру квартала)
 
+**Не делает:** не выравнивает **участки** (и здания на них) под одну плоскость; `ground_z` и порог считает `StructureAreaAssembler` (outdoor **C21**).
+
 **Подробнее:** [tz_city_generation.md](tz_city_generation.md) — раздел 6 (алгоритм заполнения кварталов)
 
 ### StructureAreaAssembler
-**Знает:** `AreaSlot` (список координат участка + facing), шаблон, city skeleton, terrain  
+**Знает:** `AreaSlot` (клетки **участка** + facing), шаблон, city skeleton, terrain  
 **Делает:**
-- полностью понимает топологию своей зоны и что находится в ней
-- знает facing area (сторона к улице = направление главного входа)
-- вычисляет координаты и размеры здания внутри участка из шаблона (`footprint` из `building_template_registry`)
-- выводит `StructureContext` из `structure_type` + terrain + `economic_tier`
-- планировка участка: двор, забор (`barrier_template_registry`; probability из шаблона), малые постройки
-- вызывает `StructureAssembler` для каждого здания на участке (главного и малых)
+- полностью понимает топологию своей зоны: это не «всегда одно здание». Участок может быть зданием со входом у улицы **или** двором с землёй внутри и забором (ворота на facing), плюс здание в глубине, плюс только забор/площадка
+- знает facing area (сторона к улице)
+- **решает порог** (где улица стыкуется с участком) — `_resolve_threshold`: дверь / ворота забора / край участка. Формула «всегда фасад здания» запрещена
+- при наличии здания: координаты из шаблона, `StructureContext` (`ground_z` = `building.map_z` после clamp), вызов `StructureAssembler`
+- планировка: двор, забор (`barrier_template_registry`), малые постройки
+- `_build_paths`: улица → **порог** (не обязательно `building_entrance`); θ > 45° — clamp только z
 
-**Источник `StructureContext`:** этот слой. Только он знает достаточно для вывода контекста.  
-**`AreaSlot`:** список (x, y) координат + `ground_z` + `facing: Facing` (какая сторона смотрит на улицу).  
+**Источник `StructureContext`:** этот слой. Только он знает достаточно для вывода контекста и порога.  
+**`AreaSlot`:** список (x, y) участка (здание ∪ двор ∪ линия забора) + `ground_z` (**этого** участка) + `facing`. Не копия z района.  
 **Подробнее:** [tz_building_generator.md](tz_building_generator.md) — раздел 11 (StructureAssembler, StructureContext)
 
 ### StructureAssembler
@@ -173,7 +175,7 @@ class StructureContext:
 ground_z = context.ground_z ?? building.map_z
 ```
 
-`building.map_z` — z пола входного этажа (`z_offset=0`). Это «земля» **этого** здания/участка (улица поселения), не wilderness surface. Подземный город: `map_z` уже под открытым небом другого слоя.
+`building.map_z` — z пола входного этажа (`z_offset=0`), если на участке есть здание. Задаёт **assembler участка**, не район. Может отличаться от `AreaSlot.ground_z` (двор vs дом) и от z порога к улице (ворота vs дверь). Если входной луч даёт **θ > 45°** — править только `map_z` этого здания (опустить или поднять), пока `h = L` (connections **§5.1.2**). **Не** сдвигать дом в xy к улице. Подземный город: `map_z` уже под открытым небом другого слоя. SoT порога: connections §5.1.1, outdoor **C21**.
 
 Явный `context.ground_z` нужен для нестандартных случаев: корабль (нет земли под килем), данж (пол пещеры выше нуля), мегаздание (срез на высоте).
 
@@ -354,19 +356,66 @@ class CitySkeleton:
 
 ---
 
-**`AreaSlot`** — участок, выделенный `DistrictAssembler`:
+**`AreaSlot`** — участок, выделенный `DistrictAssembler` (не синоним здания):
 
 ```python
 @dataclass
 class AreaSlot:
-    cells:    list[tuple[int, int]]   # (x, y) координаты участка без z
-    ground_z: int                      # уровень земли
-    facing:   Facing                   # сторона участка к улице → ориентация главного входа
+    cells:    list[tuple[int, int]]   # (x, y) участок: двор ∪ забор ∪ опц. здание; без z
+    ground_z: int                      # опорная плоскость ЭТОГО участка (не порог улицы сам по себе)
+    facing:   Facing                   # сторона участка к улице
 ```
 
-`facing` определяет:
-- на какой стене здания будет `entry_point`
-- откуда идёт ворота в заборе
+`ground_z` — онтология **участка**, не района. Район не копирует одну z на слоты. Как считать z и **где порог к улице** — только `StructureAreaAssembler` (топология зоны). SoT порога: [tz_structure_connections.md](./tz_structure_connections.md) §5.1.1. Склейка: [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) **C21**. `DistrictSlot.ground_z` — пин района, не пол участка.
+
+`facing` — сторона к улице. Что на ней (дверь, ворота, открытый край) решает assembler участка.
+
+---
+
+**Порог (`AreaThreshold`)** — стык улицы с участком, не «всегда дверь». Не поле `AreaSlot` (packing не знает топологию). Не SQL и не `AreaSlotWire` v1.
+
+```python
+class AreaThresholdKind(StrEnum):
+    DOOR        = "door"
+    GATE        = "gate"
+    PARCEL_EDGE = "parcel_edge"
+
+@dataclass
+class AreaThreshold:
+    kind:  AreaThresholdKind
+    cells: list[tuple[int, int]]  # xy порога
+    z:     int                    # median колонок порога; clamp §5.1.2 если нет здания
+```
+
+| `kind` | Когда (примеры) | Клетки порога | Конец `_build_paths` |
+|---|---|---|---|
+| `door` | здание сидит на улице, вход на facing | проём `entry_point` | `building_entrance` |
+| `gate` | забор вокруг двора / земли | ворота на facing забора | `waypoint` на воротах (`graph_level=area`); участок не `location_type` (C3) |
+| `parcel_edge` | нет забора и нет двери на улице | facing-ребро `slot.cells` | `waypoint` на крае |
+
+**Подъезд (`StreetApproach`)** — результат луча, не mill-инстанс:
+
+```python
+class ApproachForm(StrEnum):
+    NONE   = "none"    # h = 0
+    GRADE  = "grade"   # θ ≤ 30°
+    STAIRS = "stairs"  # 30° < θ ≤ 45° (после clamp всегда ≤ 45°)
+
+@dataclass
+class StreetApproach:
+    ray:       tuple[tuple[int, int], ...]
+    length:    int     # L
+    z_far:     int     # полотно на дальнем конце
+    z_near:    int     # порог или building.map_z (уже после clamp)
+    theta_rad: float
+    form:      ApproachForm
+```
+
+`clamp_near_z_to_45(z_near, z_far, L) → int` — helper coordinates, не метод DTO. SoT: connections **§5.1.2**. `StreetApproach` / `AreaThreshold` — только поля.
+
+Дальше по участку (ворота → дверь в глубине) — второй луч от двери.
+
+`AreaSlot.ground_z` и `building.map_z` **могут различаться**: двор по земле внутри, дом на своём footprint. Оба считает assembler участка, не район. `StructureContext.ground_z` = `building.map_z` после clamp (фундамент к полу дома), не копия `slot.ground_z`.
 
 ---
 
@@ -375,14 +424,19 @@ class AreaSlot:
 ```python
 @dataclass
 class AreaLayout:
-    building_location: NamedLocation          # создан StructureAreaAssembler
-    building_layout:   StructureLayout        # главное здание (из StructureAssembler)
-    barrier_cells:     list[MapCell]          # забор / стена (пусто до реализации)
-    yard_cells:        list[MapCell]          # двор (нет ТЗ)
-    small_layouts:     list[StructureLayout]  # малые постройки (нет ТЗ)
+    slot:              AreaSlot
+    threshold:         AreaThreshold
+    approach:          StreetApproach | None  # нет луча / L=0
+    building_location: NamedLocation | None   # нет здания — двор/забор/площадка
+    building_layout:   StructureLayout | None
+    barrier_cells:     list[MapCell]
+    yard_cells:        list[MapCell]
+    small_layouts:     list[StructureLayout]
+    connection_nodes:  list[ConnectionNode]   # area graph, §5.1.1
+    connection_edges:  list[ConnectionEdge]
 ```
 
-Возвращается вместо плоского `StructureLayout` — участок многоуровневый, слои не мешать.
+Здание не обязательно. Слои не мешать. `threshold` / `approach` — рантайм assembler; extract пишет граф и `AreaSlotWire.ground_z` (плоскость участка), не kind порога.
 
 ---
 
@@ -398,30 +452,46 @@ class StructureAreaAssembler:
         template:      dict,
         city_skeleton: CitySkeleton,
         terrain_cells: list[MapCell] | None = None,
+        *,
+        street_xy:     AbstractSet[tuple[int, int]],  # полотно после DistrictAssembler._plan_streets
+        cached_layout: StructureLayout | None = None,
+        building_x:    int | None = None,
+        building_y:    int | None = None,
     ) -> AreaLayout:
-        # 1. _place_building() — создаёт NamedLocation здания
-        #    вычисляет map_x/map_y/map_z из slot.cells + template footprint + slot.facing
-        # 2. _derive_context() — выводит StructureContext
-        #    из structure_type + architectural_style + terrain
-        # 3. ASSEMBLER_REGISTRY.get(structure_type).assemble(...)
-        #    → StructureLayout главного здания
-        # 4. _build_barrier() — генерирует забор по периметру slot.cells
-        #    probability из template["perimeter_barrier"]
-        # 5. yard_cells — нет ТЗ → []
-        # 6. small_layouts — нет ТЗ → []
+        # 1. _resolve_threshold() — топология; без street_xy
+        # 2. slot.ground_z = median_surface_z(двор)
+        # 3. _place_building() — черновой map_z с footprint
+        # 4. measure_street_approach — peek z улицы; луч только при Δz
+        # 5. θ > 45° → clamp_near_z_to_45 в map_z или threshold.z; measure ещё раз
+        # 6. translate + context.ground_z = map_z + envelope
+        # 7. stamp_approach_cells — grade/лестница
+        # 8. _build_paths — только граф
+        # 9. _build_barrier — slot.ground_z
 ```
 
-Лог `INFO` на входе: `template.system_name`, `slot.facing`, `len(slot.cells)`.
+Район зовёт assembler участка **после** `_plan_streets` и передаёт `street_xy`. Лог `INFO` на входе: `template.system_name`, `slot.facing`, `len(slot.cells)`.
 
 ---
 
-### 7.3 Приватные методы (все скелетные — raise NotImplementedError)
+### 7.3 Методы assembler vs helpers
 
-| Метод | Вход | Выход | Что делает |
-|---|---|---|---|
-| `_place_building` | `world, slot, template` | `NamedLocation` | Вычисляет позицию здания внутри участка; создаёт `NamedLocation` с `map_x/y/z` |
-| `_derive_context` | `template, city_skeleton, slot, terrain_cells` | `StructureContext` | Алгоритм: `structure_type` + `architectural_style` → foundation/roof; не описан (см. открытые вопросы) |
-| `_build_barrier` | `world, slot, template` | `list[MapCell]` | Забор по периметру slot.cells; читает `template["perimeter_barrier"]` + probability roll |
+Assembler **не** считает θ, median, шаг сетки. Формулы — helpers (план C21 §2.0).
+
+| Метод assembler | Делает | Не делает |
+|---|---|---|
+| `_resolve_threshold` | `kind` + клетки порога | `street_xy`; луч; z-формула (z = `median_surface_z` снаружи) |
+| `_place_building` | `NamedLocation` xy + черновой `map_z` | clamp; envelope; граф |
+| `_derive_context` | `StructureContext`; `ground_z = building.map_z` после clamp | луч |
+| `_build_paths` | nodes/edges area | grade-клетки; `partition_height` |
+| `_build_barrier` | забор на `slot.ground_z` | порог; улица |
+
+| Helper | Слой |
+|---|---|
+| `column_surface`, `median_surface_z` | coordinates |
+| `walk_grid_ray` | coordinates |
+| `classify_approach`, `clamp_near_z_to_45` | coordinates |
+| `peek_abutting_street_z`, `measure_street_approach` | area planner |
+| `approach_material`, `stamp_approach_cells` | area planner |
 
 ---
 
@@ -444,11 +514,19 @@ generators/assemblers/
     districtAssembler.py
     districtLayout.py                 # результат DistrictAssembler
 
-  areaAssembler/                      # реализовано (скелет)
+  areaAssembler/                      # реализовано (скелет); C21 расширяет типы
     __init__.py
-    areaSlot.py                       # входной контракт (от DistrictAssembler)
-    areaLayout.py                     # результат StructureAreaAssembler
-    structureAreaAssembler.py
+    areaSlot.py                       # вход packing: cells + facing; ground_z пишет assembler
+    areaThreshold.py                  # DTO AreaThreshold + kind
+    streetApproach.py                 # DTO StreetApproach + ApproachForm
+    areaLayout.py
+    structureAreaAssembler.py         # оркестрация
+    planner/
+      resolveThreshold.py             # топология порога
+      measureApproach.py              # peek + measure_street_approach
+      stampApproach.py                # material + CITY_STRUCTURE клетки
+      areaPaths.py                    # только граф
+      areaBarriers.py
 
   structureAssembler/                 # реализовано
     __init__.py
@@ -557,6 +635,8 @@ Envelope здания (реальные размеры по x/y/z) нельзя 
 |---|---|
 | `_derive_context` — алгоритм вывода `StructureContext` из `structure_type` + terrain + `economic_tier` | не описан |
 | `_place_building` — правила позиционирования здания внутри участка (центрирование, offset от забора, facing-alignment) | не описан |
+| `_build_paths` — подъезд к улице при Δz | **closed:** [tz_structure_connections.md](./tz_structure_connections.md) §5.1.1; порог = assembler участка |
+| Кто считает `ground_z` / порог | **closed:** `StructureAreaAssembler` (участок, не район) — C21; порог ≠ всегда дверь |
 | `_build_barrier` — алгоритм генерации ячеек забора по списку координат участка | не описан |
 | Малые постройки на участке | нет ТЗ |
 | `AreaLayout` ↔ `DistrictAssembler` — как район агрегирует результаты нескольких участков | нет ТЗ |

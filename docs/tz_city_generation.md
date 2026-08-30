@@ -406,10 +406,12 @@ Civic-постройки (ратуша, рынок, храм) объявляют
         origin_y = cell_y * cell_size_m + offset,
         width_m  = width_pct  * cell_size_m,
         depth_m  = depth_pct  * cell_size_m,
-        ground_z = terrain_z_at(cell_x, cell_y),
+        ground_z = terrain_z_at(cell_x, cell_y),  # пин района, не пол всех зданий
         district_template = выбранный шаблон,
     )
 ```
+
+`DistrictSlot.ground_z` — sample coarse-клетки (якорь района / `NamedLocation.map_z`). **Не** плоскость пола застройки и не значение для копирования на все `AreaSlot`. Выравнивание зданий — участок: [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) **C21**, [tz_assembler_hierarchy.md](./tz_assembler_hierarchy.md) §7.1.
 
 `cell_size_m` — **`World.map_cell_size_m`** через `generators/coordinates/cell_size_m(world)`.  
 Не `world.map_settings["global_cell_size_m"]` (ghost key — см. NC-1g в tech debt).  
@@ -588,6 +590,7 @@ DAG может materialize **разные уровни** в разных нод�
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-30 | §9.6: `DistrictSlot.ground_z` = пин района, не пол застройки; SoT — outdoor **C21** |
 | 2026-08-30 | Persist/оркестрация outdoor на pack → [tz_settlement_outdoor.md](./tz_settlement_outdoor.md); HTTP `generate-settlement` = `SettlementOutdoorOrchestrator`; §11.5 map_cells как эталон superseded |
 | 2026-06 | §11.5 — persist cycle: ссылки на tz_world_generation_dag, tz_structure_connections §5.1, tz_construction, growth/world routes, terrain modification |
 | 2026-06 | Sync TZ ↔ код: `SettlementGeneratorService`, `StructureGeneratorService`, `map_cell_size_m`, статус фаз A–F, §10 |
