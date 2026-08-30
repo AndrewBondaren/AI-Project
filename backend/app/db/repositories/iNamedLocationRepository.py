@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 
 from app.db.models.namedLocation import NamedLocation
 
@@ -13,6 +14,17 @@ class INamedLocationRepository(ABC):
 
     @abstractmethod
     async def get_children(self, parent_uid: str) -> list[NamedLocation]: ...
+
+    @abstractmethod
+    async def list_descendants(self, ancestor_uid: str) -> list[NamedLocation]: ...
+
+    @abstractmethod
+    async def list_by_state_uids(
+        self, world_uid: str, state_uids: Sequence[str],
+    ) -> list[NamedLocation]: ...
+
+    @abstractmethod
+    async def upsert_bulk(self, rows: Sequence[NamedLocation]) -> int: ...
 
     @abstractmethod
     async def get_tree(self, world_uid: str) -> dict[str, int]:

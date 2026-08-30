@@ -778,6 +778,8 @@ CREATE TABLE IF NOT EXISTS location_entry_points (
     z                          INTEGER NOT NULL,
     leads_to_level_uid         TEXT,
     display_name               TEXT NOT NULL,
+    entry_role                 TEXT NOT NULL DEFAULT 'front'
+                               CHECK (entry_role IN ('front', 'service')),
     entry_difficulty_override  INTEGER,
     guard_level_override       INTEGER,
     is_discovered              INTEGER NOT NULL DEFAULT 0,

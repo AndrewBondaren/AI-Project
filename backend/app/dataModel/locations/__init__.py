@@ -13,11 +13,12 @@ from app.dataModel.locations.locationType import (
     LocationTypeSubtypeEntry,
     WorldLocationTypeRegistry,
 )
-from app.dataModel.locations.enums import GeographicSubtype, GEOGRAPHIC_LOCATION_TYPE
+from app.dataModel.locations.enums import EntryRole, GeographicSubtype, GEOGRAPHIC_LOCATION_TYPE
 from app.dataModel.locations.namedLocation import BundleNamedLocation
 
 __all__ = [
     "BundleNamedLocation",
+    "EntryRole",
     "GEOGRAPHIC_LOCATION_TYPE",
     "GeographicSubtype",
     "LocationTypeEntry",

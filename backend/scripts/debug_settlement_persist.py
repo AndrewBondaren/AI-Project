@@ -121,8 +121,8 @@ def test_persist_outdoor_http() -> None:
     with api_client() as client:
         api_reset_world(client, world, [settlement])
         first = api_generate_settlement(client, world.world_uid, settlement.location_uid)
-        assert first["scopes_applied"], first
-        assert first.get("dominant_material"), "expected dominant_material in response"
+        assert first.get("status") == "published", first
+        assert first.get("districts", 0) >= 1, first
 
         children = api_get_location_children(client, world.world_uid, settlement.location_uid)
         assert len(children) > 0
@@ -131,7 +131,7 @@ def test_persist_outdoor_http() -> None:
         assert len(conn["edges"]) > 0
 
         second = api_generate_settlement(client, world.world_uid, settlement.location_uid)
-        assert second.get("scopes_skipped"), second
+        assert second.get("status") == "skipped", second
 
     print("persist outdoor HTTP checks: OK")
 

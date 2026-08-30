@@ -1,5 +1,6 @@
 from app.dataModel.structure.enums.buildingElement import (
     DOOR_BUILDING_ELEMENTS,
+    OUTDOOR_SHELL_ELEMENTS,
     PASSABLE_BUILDING_ELEMENTS,
     STAIR_BUILDING_ELEMENTS,
     STAIR_DIRECTIONAL_ELEMENTS,
@@ -32,6 +33,7 @@ from app.dataModel.structure.enums.staircaseType import (
 
 __all__ = [
     "DOOR_BUILDING_ELEMENTS",
+    "OUTDOOR_SHELL_ELEMENTS",
     "PASSABLE_BUILDING_ELEMENTS",
     "PassageType",
     "RoomSize",

@@ -35,6 +35,12 @@ from app.db.repositories.iConnectionEdgeCellRepository import IConnectionEdgeCel
 from app.db.repositories.sqlite.connectionEdgeCellRepository import SqliteConnectionEdgeCellRepository
 from app.db.repositories.iStateRepository import IStateRepository
 from app.db.repositories.sqlite.stateRepository import SqliteStateRepository
+from app.db.repositories.iLocationLevelRepository import ILocationLevelRepository
+from app.db.repositories.sqlite.locationLevelRepository import SqliteLocationLevelRepository
+from app.db.repositories.iLocationEntryPointRepository import ILocationEntryPointRepository
+from app.db.repositories.sqlite.locationEntryPointRepository import (
+    SqliteLocationEntryPointRepository,
+)
 from app.db.repositories.iReliefTemplateRepository import IReliefTemplateRepository
 from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository
 from app.db.repositories.sqlite.reliefTemplateRepository import SqliteReliefTemplateRepository
@@ -59,6 +65,15 @@ from app.application.worldData.worldSurfaceMaterializationOrchestrator import (
 from app.application.worldData.connectionGraphService import ConnectionGraphService
 from app.application.worldData.connectionPersistService import ConnectionPersistService
 from app.application.worldData.settlementPersistService import SettlementPersistService
+from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator import (
+    SettlementOutdoorOrchestrator,
+)
+from app.application.worldData.settlementOutdoor.settlementOutdoorSqlPersist import (
+    SettlementOutdoorSqlPersist,
+)
+from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
+    SettlementGeneratorService,
+)
 from app.application.worldData.stateService import StateService
 from app.application.worldData.seedService import SeedService
 from app.application.worldData.worldBundleService import WorldBundleService
@@ -126,6 +141,8 @@ class Container:
         self._race_repository: IRaceRepository | None = None
         self._perk_repository: IWorldPerkRepository | None = None
         self._location_repository: INamedLocationRepository | None = None
+        self._location_level_repository: ILocationLevelRepository | None = None
+        self._location_entry_point_repository: ILocationEntryPointRepository | None = None
         self._map_cell_repository: IMapCellRepository | None = None
         self._connection_node_repository: IConnectionNodeRepository | None = None
         self._connection_edge_repository: IConnectionEdgeRepository | None = None
@@ -153,6 +170,7 @@ class Container:
         self._connection_persist_service: ConnectionPersistService | None = None
         self._connection_graph_service: ConnectionGraphService | None = None
         self._settlement_persist_service: SettlementPersistService | None = None
+        self._settlement_outdoor_orchestrator: SettlementOutdoorOrchestrator | None = None
         self._state_service: StateService | None = None
         self._seed_service: SeedService | None = None
         self._world_bundle_service: WorldBundleService | None = None
@@ -484,6 +502,18 @@ class Container:
             self._location_repository = SqliteNamedLocationRepository(db=self._db)
         return self._location_repository
 
+    def location_level_repository(self) -> ILocationLevelRepository:
+        if self._location_level_repository is None:
+            self._location_level_repository = SqliteLocationLevelRepository(db=self._db)
+        return self._location_level_repository
+
+    def location_entry_point_repository(self) -> ILocationEntryPointRepository:
+        if self._location_entry_point_repository is None:
+            self._location_entry_point_repository = SqliteLocationEntryPointRepository(
+                db=self._db,
+            )
+        return self._location_entry_point_repository
+
     def map_cell_repository(self) -> IMapCellRepository:
         if self._map_cell_repository is None:
             self._map_cell_repository = SqliteMapCellRepository(db=self._db)
@@ -709,6 +739,26 @@ class Container:
                 connection_edge_repo=self.connection_edge_repository(),
             )
         return self._settlement_persist_service
+
+    def settlement_outdoor_orchestrator(self) -> SettlementOutdoorOrchestrator:
+        if self._settlement_outdoor_orchestrator is None:
+            sql_persist = SettlementOutdoorSqlPersist(
+                db=self._db,
+                location_repo=self.location_repository(),
+                level_repo=self.location_level_repository(),
+                entry_repo=self.location_entry_point_repository(),
+                connection_persist=self.connection_persist_service(),
+            )
+            self._settlement_outdoor_orchestrator = SettlementOutdoorOrchestrator(
+                world_repo=self.world_repository(),
+                location_repo=self.location_repository(),
+                sql_persist=sql_persist,
+                generator=SettlementGeneratorService(),
+                writer_for=self.world_pack_writer_for,
+                facade_for=self.map_cell_query_facade,
+                pack_context_for=lambda uid: self.pack_read_services(uid).context,
+            )
+        return self._settlement_outdoor_orchestrator
 
     def state_service(self) -> StateService:
         if self._state_service is None:

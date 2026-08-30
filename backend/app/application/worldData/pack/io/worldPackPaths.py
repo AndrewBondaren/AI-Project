@@ -77,6 +77,9 @@ class WorldPackPaths:
     def location_terrain_path(self, location_uid: str) -> Path:
         return self.locations_dir / f"l.{location_uid}.terrain.zst"
 
+    def settlement_structure_path(self, location_uid: str) -> Path:
+        return self.locations_dir / f"l.{location_uid}.settlement.zst"
+
     def ensure_dirs(self) -> None:
         self.tiles_dir.mkdir(parents=True, exist_ok=True)
         self.locations_dir.mkdir(parents=True, exist_ok=True)

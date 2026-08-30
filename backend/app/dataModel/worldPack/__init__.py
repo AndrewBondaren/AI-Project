@@ -7,6 +7,14 @@ from app.dataModel.worldPack.climateFieldWire import (
 )
 from app.dataModel.worldPack.hydrologyMaskWire import HydrologyMaskWire, WorldMapHydrologyRole
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire, FineTerrainColumnWire, FineTerrainZRun
+from app.dataModel.worldPack.settlementStructureWire import (
+    AreaSlotWire,
+    AreaStructureWire,
+    BuildingShellWire,
+    DistrictStructureWire,
+    SettlementStructureWire,
+    ShellCellWire,
+)
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
 from app.dataModel.worldPack.layerPriority import LAYER_PRIORITY_ORDER, MapLayerKind
 from app.dataModel.worldPack.mergeMapCells import (
@@ -67,6 +75,7 @@ from app.dataModel.worldPack.worldPackManifest import (
     ChunkRef,
     ChunkRefineRole,
     LocationTerrainEntry,
+    SettlementStructureEntry,
     TileManifestEntry,
     WildernessRefineStatus,
     WorldPackManifest,
@@ -88,6 +97,13 @@ __all__ = [
     "FineTerrainChunkWire",
     "FineTerrainColumnWire",
     "FineTerrainZRun",
+    "AreaSlotWire",
+    "AreaStructureWire",
+    "BuildingShellWire",
+    "DistrictStructureWire",
+    "SettlementStructureWire",
+    "ShellCellWire",
+    "SettlementStructureEntry",
     "GradePipelineStages",
     "LAYER_PRIORITY_ORDER",
     "LayerSlice",

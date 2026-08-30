@@ -75,6 +75,17 @@ DOOR_BUILDING_ELEMENTS: frozenset[StructureElement] = frozenset({
     StructureElement.ARCHWAY,
 })
 
+# Outdoor shell persist (tz_settlement_outdoor C8). COLUMN stands in for foundation.
+OUTDOOR_SHELL_ELEMENTS: frozenset[StructureElement] = frozenset({
+    StructureElement.WALL,
+    StructureElement.ROOF,
+    StructureElement.DOOR,
+    StructureElement.WINDOW,
+    StructureElement.ARCHWAY,
+    StructureElement.COLUMN,
+    StructureElement.GATE,
+})
+
 STAIR_DIRECTIONAL_ELEMENTS: frozenset[StructureElement] = frozenset({
     StructureElement.STAIRCASE,
     StructureElement.STAIR_ANCHOR,

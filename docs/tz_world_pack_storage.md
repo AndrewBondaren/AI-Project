@@ -109,11 +109,11 @@ flowchart TB
 
 | Хранилище | Содержимое | Мутации |
 |---|---|---|
-| **World Pack** | L0–L2 skeleton, climate field, hydro mask | bake / version bump |
-| **Patch Store** | structures, settlement layout, gameplay deltas, ore/cave lazy | каждый ход |
+| **World Pack** | L0–L2 skeleton, climate field, hydro mask, **authored outdoor city** (`l.{uid}.settlement.zst`) | bake / master outdoor generate |
+| **Patch Store** | gameplay deltas, ore/cave lazy, growth/explosion | каждый ход |
 | **Derived** | tile LRU, merge view | RAM |
 
-**Единая точка чтения:** `MapCellQueryFacade` → `merge_layers` (WP-20: patch → player scene → path → location → wilderness → L0).
+**Единая точка чтения:** `MapCellQueryFacade` → `merge_layers` (WP-20: patch → player scene → path → **city structure** → location → wilderness → L0).
 
 ### Инварианты
 
@@ -121,7 +121,7 @@ flowchart TB
 |---|---|
 | WP-1 | Generators **не** пишут в pack/SQLite — только typed layout на выходе pass |
 | WP-2 | Persist skeleton — **только** `WorldPackWriter` на границе orchestrator |
-| WP-3 | Persist gameplay — **только** `PatchStoreService` / `save_pass(layer_kind)` |
+| WP-3 | Persist **gameplay** — только `PatchStoreService` / `save_pass(layer_kind)`. **Authored outdoor city** (master) — pack city layer (`CITY_STRUCTURE` / `l.{uid}.settlement.zst`), не патчи — [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) |
 | WP-4 | Patch **>** pack на `(world_uid,x,y,z)`; `system_building_element IS NOT NULL` не затирается regen |
 | WP-5 | Climate read: `field.sample(x,y)` + patch override |
 | WP-6 | `world_snapshots` хранит `pack_content_hash` + patch revision, **не** дублирует L2 blob |
@@ -411,7 +411,7 @@ flowchart TB
 | **WP-17** | `path_ahead_depth` — user setting в `config.toml` (`[world_loading]`), default **2** |
 | **WP-18** | Climate L2: **сначала A** (coarse sample, fast); **B** (per-tile fine) — в фоне, когда есть время |
 | **WP-19** | L2: **file-per-location** (territory) + **file-per-tile chunk** (wilderness); overlap — **mask на write**, **priority на read** |
-| **WP-20** | **Layer priority:** patch → **player scene** → **player path** → **location** → **wilderness** → L0 |
+| **WP-20** | **Layer priority:** patch → **player scene** → **player path** → **city structure** → **location** → **wilderness** → L0 |
 | **WP-21** | Location territory — **3D volume** `(x,y,z)`; на одном macro-tile — **несколько** локаций на **разных z**; mask/merge по `(x,y,z)` |
 | **WP-22** | **Stale L0 regen (A):** patches + location files сохраняем; wilderness regen **от координат/границы location** наружу — anti-seam |
 | **WP-23** | **Cutover:** **без** dual-read / interim slice на `map_cells`; сразу целевая загрузка мира (Pack + WP-13…21) |
@@ -746,10 +746,11 @@ Outdoor 8 слотов **не** колонка и **не** bake `occ`/`seam`. П
 |---|---|---|---|
 | 0 | **patch** | `map_cell_patches` | **modification layer:** взрыв / природа / локальный климат; не rewrite pack |
 | 1 | **player scene** | scene volume вокруг `(map_x,map_y)` | highest pack layer; blocking P0 |
-| 2 | **player path** | chunks/tiles на path corridor впереди | prefetch; ниже scene, выше location |
-| 3 | **location** | `locations/l.{uid}.terrain` если `(x,y,z) ∈ territory_volume` | несколько uid на одном tile — по **z** |
-| 4 | **wilderness** | `tiles/...c.{cx}.{cy}.zst` | только **вне** masked bbox локаций |
-| 5 | **L0** | `upsample world_map` | fallback |
+| 2 | **player path** | chunks/tiles на path corridor впереди | prefetch; ниже scene, выше city |
+| 3 | **city structure** | `locations/l.{uid}.settlement.zst` | authored outdoor walls/doors; [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) |
+| 4 | **location** | `locations/l.{uid}.terrain` если `(x,y,z) ∈ territory_volume` | земля volume; не стены города |
+| 5 | **wilderness** | `tiles/...c.{cx}.{cy}.zst` | только **вне** masked bbox локаций |
+| 6 | **L0** | `upsample world_map` | fallback |
 
 > **Статус impl merge:** § **Merge backlog (WP-MERGE)** v2 + § **WP-FIX** (фиксы) + § **WP-FIX-DEBT** + § **WP-FIX-REVIEW** (приоритеты code review).
 
@@ -1476,9 +1477,10 @@ sequenceDiagram
 | **0 patch** | ✅ | `PatchStoreService` + `MapCellPatchLayerKind`; field-wise merge |
 | **1 player scene** | ✅ | `ChunkRef.refine_role=scene` → `MapLayerKind.PLAYER_SCENE` |
 | **2 player path** | ⚠️ | `refine_role=path` + heading corridor (WP-16); DAG intent wire — backlog |
-| **3 location** | ⚠️ | `locations/l.*.terrain.zst`; local origin ✅; settlement footprint v1 ✅; multi-z overlap — backlog |
-| **4 wilderness** | ✅ | `tiles/...c.*.zst`; registry keys в wire |
-| **5 L0** | ⚠️ | surface @ `z==surface_z`; subsurface band `n_base`; не full column |
+| **3 city structure** | ✅ | `locations/l.*.settlement.zst`; `MapLayerKind.CITY_STRUCTURE` — [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) |
+| **4 location** | ⚠️ | `locations/l.*.terrain.zst`; local origin ✅; settlement footprint v1 ✅; multi-z overlap — backlog |
+| **5 wilderness** | ✅ | `tiles/...c.*.zst`; registry keys в wire |
+| **6 L0** | ⚠️ | surface @ `z==surface_z`; subsurface band `n_base`; не full column |
 | **climate** (WP-5) | ✅ | post-merge fine→coarse; light bake пишет `climate_coarse.zst`; fine denser via pending drain |
 | **registry resolve** | ✅ | L2/L0 `system_terrain` строки; не `terrain_{u8}` |
 | **продуктовая склейка** | ⚠️ | facade + debug routes (MERGE-9 ✅); location footprint assembler (DEBT-6 ✅) |
@@ -2053,7 +2055,7 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
-| 2026-08-30 | Outdoor city structure на pack: [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) — не location_terrain, authored ≠ patches |
+| 2026-08-30 | WP-3/WP-20: authored outdoor city = pack `CITY_STRUCTURE`; gameplay = patches |
 | 2026-08-30 | **Бюджет mill:** не спекулятивно; несколько чанков на сцене ок; полный мир — bake ГМ. APP-PERF-R1 = тайл целиком. |
 | 2026-08-30 | **On-demand grade = chunk re-refine:** `refine_queued_chunk` / `POST …/refine-chunk` + `GradePipelineStages`; тот же `FineChunkRunner` (R41), не отдельный bake. Entry/queue остаются `stages=off()`. |
 | 2026-08-30 | **Mill/paint не gameplay:** entry/runtime без mill/paint; `detailed_bake` `grade_mill`/`grade_paint` default **off** (явный on = APP-PERF-R1). |

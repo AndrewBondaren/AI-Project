@@ -55,6 +55,18 @@ class TileManifestEntry(BaseModel):
         return normalize_climate_bake_status(value)
 
 
+class SettlementStructureEntry(BaseModel):
+    """Manifest row for `locations/l.{uid}.settlement.zst` — not location_terrain."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    location_uid: str
+    territory_volume: TerritoryVolume
+    structure_path: str | None = None
+    structure_hash: str | None = None
+    bytes: int | None = None
+
+
 class LocationTerrainEntry(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
@@ -98,6 +110,7 @@ class WorldPackManifest(BaseModel):
     cell_size_m: int = 1
     map_subsurface_depth: int = 0
     location_terrain_entries: list[LocationTerrainEntry] = Field(default_factory=list)
+    settlement_structure_entries: list[SettlementStructureEntry] = Field(default_factory=list)
     tiles: list[TileManifestEntry] = Field(default_factory=list)
     world_map_cells: int = 0
     wilderness_tiles_total: int = 0
@@ -120,6 +133,12 @@ class WorldPackManifest(BaseModel):
 
     def location_entry(self, location_uid: str) -> LocationTerrainEntry | None:
         for loc in self.location_terrain_entries:
+            if loc.location_uid == location_uid:
+                return loc
+        return None
+
+    def settlement_structure_entry(self, location_uid: str) -> SettlementStructureEntry | None:
+        for loc in self.settlement_structure_entries:
             if loc.location_uid == location_uid:
                 return loc
         return None

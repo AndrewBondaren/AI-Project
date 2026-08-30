@@ -94,6 +94,7 @@ class StructureAreaAssembler:
         return AreaLayout(
             building_location=building,
             building_layout=building_layout,
+            slot=slot,
             barrier_cells=barrier_cells,
         )
 
@@ -106,16 +107,17 @@ class StructureAreaAssembler:
         map_y:    int,
     ) -> NamedLocation:
         """v1: origin здания = anchor bin-packing (building_x/y)."""
-        _ = slot
+        template_name = template.get("system_name", "building")
         return NamedLocation(
-            location_uid=f"{world.world_uid}-{template.get('system_name', 'building')}-{map_x}-{map_y}",
+            location_uid=f"{world.world_uid}-{template_name}-{map_x}-{map_y}",
             world_uid=world.world_uid,
-            display_name=template.get("display_name", template.get("system_name", "Building")),
+            display_name=template.get("display_name", template_name),
             system_location_type="building",
             created_at="2026-01-01T00:00:00",
             map_x=map_x,
             map_y=map_y,
             map_z=slot.ground_z,
+            system_template_uid=template_name,
             parent_wall_material="stone",
             parent_floor_material="wood",
         )

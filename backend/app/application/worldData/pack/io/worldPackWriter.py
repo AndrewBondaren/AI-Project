@@ -11,6 +11,7 @@ from app.application.worldData.pack.io.packBlobWire import (
     climate_field_payload,
     world_map_tile_payload,
     fine_terrain_chunk_payload,
+    settlement_structure_payload,
 )
 from app.application.worldData.pack.io.packManifestStore import PackManifestStore
 from app.application.worldData.pack.bake.packBakeLog import log_pack_manifest_saved, log_pack_write_blob
@@ -18,9 +19,11 @@ from app.application.worldData.pack.io.tileCodec import (
     PAYLOAD_KIND_CLIMATE,
     PAYLOAD_KIND_WORLD_MAP,
     PAYLOAD_KIND_FINE_TERRAIN,
+    PAYLOAD_KIND_SETTLEMENT_STRUCTURE,
     TileCodec,
 )
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
+from app.application.worldData.pack.io.settlementStructureTmp import SettlementStructureTmpRef
 from app.application.worldData.pack.read.parentLightCache import ParentLightCache
 from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
@@ -32,9 +35,11 @@ from app.dataModel.worldPack.packBakeDefaults import PackBakeDefaults
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
 from app.dataModel.worldPack.parentLightTile import ParentLightTile
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.settlementStructureWire import SettlementStructureWire
 from app.dataModel.worldPack.worldPackManifest import (
     ChunkRef,
     ChunkRefineRole,
+    SettlementStructureEntry,
     TileManifestEntry,
     WildernessRefineStatus,
     WorldPackManifest,
@@ -235,6 +240,91 @@ class WorldPackWriter:
         ]
         self._manifest.location_terrain_entries.append(entry)
         return content_hash
+
+    def encode_settlement_structure_tmp(
+        self,
+        location_uid: str,
+        wire: SettlementStructureWire,
+    ) -> SettlementStructureTmpRef:
+        blob = self._codec.encode(
+            PAYLOAD_KIND_SETTLEMENT_STRUCTURE,
+            settlement_structure_payload(wire),
+        )
+        target = self._paths.settlement_structure_path(location_uid)
+        tmp = target.with_suffix(target.suffix + ".tmp")
+        tmp.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_bytes(blob)
+        content_hash = self._codec.content_hash(blob)
+        log_pack_write_blob(
+            "settlement_structure_tmp",
+            world_uid=self._paths.world_uid,
+            path=tmp.relative_to(self._paths.root).as_posix(),
+            nbytes=len(blob),
+            content_hash=content_hash,
+            extra=f"location={location_uid}",
+        )
+        return SettlementStructureTmpRef(
+            settlement_uid=location_uid,
+            tmp_path=tmp,
+            content_hash=content_hash,
+            nbytes=len(blob),
+        )
+
+    def publish_settlement_structure(
+        self,
+        tmp: SettlementStructureTmpRef,
+        *,
+        territory_volume,
+    ) -> str:
+        target = self._paths.settlement_structure_path(tmp.settlement_uid)
+        if not tmp.tmp_path.is_file():
+            raise FileNotFoundError(f"settlement structure tmp missing: {tmp.tmp_path}")
+        os.replace(tmp.tmp_path, target)
+        rel = target.relative_to(self._paths.root).as_posix()
+        entry = SettlementStructureEntry(
+            location_uid=tmp.settlement_uid,
+            territory_volume=territory_volume,
+            structure_path=rel,
+            structure_hash=tmp.content_hash,
+            bytes=tmp.nbytes,
+        )
+        self._manifest.settlement_structure_entries = [
+            loc for loc in self._manifest.settlement_structure_entries
+            if loc.location_uid != tmp.settlement_uid
+        ]
+        self._manifest.settlement_structure_entries.append(entry)
+        self.save_manifest()
+        log_pack_write_blob(
+            "settlement_structure",
+            world_uid=self._paths.world_uid,
+            path=rel,
+            nbytes=tmp.nbytes,
+            content_hash=tmp.content_hash,
+            extra=f"location={tmp.settlement_uid}",
+        )
+        return tmp.content_hash
+
+    def has_published_settlement(self, location_uid: str) -> bool:
+        path = self._paths.settlement_structure_path(location_uid)
+        if not path.is_file():
+            return False
+        return self._manifest.settlement_structure_entry(location_uid) is not None
+
+    def load_settlement_structure_tmp(self, location_uid: str) -> SettlementStructureTmpRef | None:
+        tmp = self.settlement_structure_tmp_path(location_uid)
+        if not tmp.is_file():
+            return None
+        data = tmp.read_bytes()
+        return SettlementStructureTmpRef(
+            settlement_uid=location_uid,
+            tmp_path=tmp,
+            content_hash=self._codec.content_hash(data),
+            nbytes=len(data),
+        )
+
+    def settlement_structure_tmp_path(self, location_uid: str):
+        target = self._paths.settlement_structure_path(location_uid)
+        return target.with_suffix(target.suffix + ".tmp")
 
     def write_climate_coarse(self, field: ClimateFieldWire) -> str:
         blob = self._codec.encode(PAYLOAD_KIND_CLIMATE, climate_field_payload(field))

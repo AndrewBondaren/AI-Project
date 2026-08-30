@@ -1,4 +1,8 @@
-from app.db.database import Database
+from collections.abc import Sequence
+
+from app.db.bulkSql import executemany_rows
+from app.db.database import Database, _in_transaction
+from app.db.mapper import from_row, to_row
 from app.db.models.namedLocation import NamedLocation
 from app.db.repositories.iNamedLocationRepository import INamedLocationRepository
 from app.db.repositories.sqlite.base import BaseRepository
@@ -17,6 +21,57 @@ class SqliteNamedLocationRepository(BaseRepository[NamedLocation], INamedLocatio
 
     async def get_children(self, parent_uid: str) -> list[NamedLocation]:
         return await self.fetch_all("parent_location_uid = ?", [parent_uid], order="display_name ASC")
+
+    async def list_descendants(self, ancestor_uid: str) -> list[NamedLocation]:
+        sql = """
+        WITH RECURSIVE tree(uid) AS (
+          SELECT location_uid FROM named_locations WHERE location_uid = ?
+          UNION ALL
+          SELECT n.location_uid
+            FROM named_locations n
+            JOIN tree t ON n.parent_location_uid = t.uid
+        )
+        SELECT n.*
+          FROM named_locations n
+          JOIN tree t ON n.location_uid = t.uid
+         WHERE n.location_uid != ?
+         ORDER BY n.location_uid ASC
+        """
+        async with self._db.conn.execute(sql, [ancestor_uid, ancestor_uid]) as cur:
+            rows = await cur.fetchall()
+        return [from_row(NamedLocation, row) for row in rows]
+
+    async def list_by_state_uids(
+        self, world_uid: str, state_uids: Sequence[str],
+    ) -> list[NamedLocation]:
+        unique = [uid for uid in dict.fromkeys(state_uids) if uid]
+        if not unique:
+            return []
+        placeholders = ", ".join("?" * len(unique))
+        return await self.fetch_all(
+            f"world_uid = ? AND state_uid IN ({placeholders})",
+            [world_uid, *unique],
+            order="location_uid ASC",
+        )
+
+    async def upsert_bulk(self, rows: Sequence[NamedLocation]) -> int:
+        if not rows:
+            return 0
+        if _in_transaction.get():
+            await self._replace_many(rows)
+            return len(rows)
+        async with self._db.transaction():
+            await self._replace_many(rows)
+        return len(rows)
+
+    async def _replace_many(self, rows: Sequence[NamedLocation]) -> None:
+        cols, _ = to_row(rows[0])
+        placeholders = ", ".join("?" * len(cols))
+        sql = (
+            f"INSERT OR REPLACE INTO {self._table} ({', '.join(cols)}) "
+            f"VALUES ({placeholders})"
+        )
+        await executemany_rows(self._db.conn, sql, rows)
 
     async def get_tree(self, world_uid: str) -> dict[str, int]:
         sql = """

@@ -14,6 +14,7 @@ class PackReadPolicy(BaseModel):
 
     wilderness_chunk_lru_capacity: int = Field(default=64, ge=1)
     location_terrain_lru_capacity: int = Field(default=16, ge=1)
+    settlement_structure_lru_capacity: int = Field(default=8, ge=1)
 
     @classmethod
     def canonical_defaults(cls) -> PackReadPolicy:

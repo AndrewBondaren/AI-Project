@@ -6,35 +6,22 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
 from app.api.utils.jsonResolver import JsonResolver
-from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
-    SettlementGeneratorService,
+from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import (
+    SettlementOutdoorExtractError,
 )
-from app.application.worldData.settlementPersistScope import (
-    OUTDOOR_SCOPES,
-    SettlementPersistScope,
+from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator import (
+    SettlementOutdoorError,
+    SettlementOutdoorNotFoundError,
+    SettlementOutdoorPackMissingError,
 )
 
 router = APIRouter()
 
-_generator = SettlementGeneratorService()
 
-_SCOPE_ALIASES: dict[str, frozenset[SettlementPersistScope]] = {
-    "outdoor": OUTDOOR_SCOPES,
-    "occupancy": frozenset({SettlementPersistScope.OCCUPANCY}),
-}
-
-
-def _resolve_scopes(scope: str) -> frozenset[SettlementPersistScope]:
-    if scope in _SCOPE_ALIASES:
-        return _SCOPE_ALIASES[scope]
-    try:
-        return frozenset({SettlementPersistScope(scope)})
-    except ValueError as exc:
-        valid = sorted({s.value for s in SettlementPersistScope} | set(_SCOPE_ALIASES))
-        raise HTTPException(
-            status_code=422,
-            detail=f"Unknown scope '{scope}'. Valid: {valid}",
-        ) from exc
+def _http_from_outdoor(exc: SettlementOutdoorError) -> HTTPException:
+    if isinstance(exc, SettlementOutdoorNotFoundError):
+        return HTTPException(status_code=404, detail=str(exc))
+    return HTTPException(status_code=422, detail=str(exc))
 
 
 @router.get("/worlds/{world_uid}/locations")
@@ -136,52 +123,54 @@ async def import_locations(
 async def generate_settlement(
     world_uid: str,
     location_uid: str,
-    scope: str = Query(default="outdoor"),
     skip_if_initialized: bool = Query(default=True),
     container=Depends(get_container),
 ) -> JSONResponse:
-    """
-    Debug only — production: engine DAG node via SettlementPersistService.
+    """Debug only — outdoor etalon via SettlementOutdoorOrchestrator (C11)."""
+    try:
+        result = await container.settlement_outdoor_orchestrator().materialize(
+            world_uid,
+            location_uid,
+            skip_if_initialized=skip_if_initialized,
+        )
+    except (SettlementOutdoorError, SettlementOutdoorExtractError) as exc:
+        raise _http_from_outdoor(
+            exc if isinstance(exc, SettlementOutdoorError) else SettlementOutdoorError(str(exc))
+        ) from exc
+    return JSONResponse(content=result.to_dict())
 
-    Materializes settlement layout scopes (occupancy / outdoor / individual).
-    """
-    world = await container.world_service().get_by_id(world_uid)
-    if world is None:
-        raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
 
-    settlement = await container.location_service().get_by_id(world_uid, location_uid)
-    if settlement.system_location_type != "settlement":
+@router.post("/worlds/{world_uid}/generate-settlements")
+async def generate_settlements(
+    world_uid: str,
+    all_settlements: bool = Query(default=False, alias="all"),
+    under: str | None = Query(default=None),
+    state_uid: str | None = Query(default=None),
+    skip_if_initialized: bool = Query(default=True),
+    container=Depends(get_container),
+) -> JSONResponse:
+    """Debug C16 selectors — same orchestrator as generate-settlement."""
+    selected = sum(1 for flag in (all_settlements, bool(under), bool(state_uid)) if flag)
+    if selected != 1:
         raise HTTPException(
             status_code=422,
-            detail=f"Location '{location_uid}' is not a settlement type",
+            detail="Specify exactly one selector: all=1, under=<uid>, or state_uid=<uid>",
         )
-
-    scopes = _resolve_scopes(scope)
-    layout = None
-    occupancy_cells = None
-
-    needs_layout = bool(scopes & (OUTDOOR_SCOPES - {SettlementPersistScope.OCCUPANCY}))
-    if SettlementPersistScope.OCCUPANCY in scopes:
-        occupancy_cells = _generator.plan_occupancy_only(world, settlement)
-    if needs_layout:
-        existing = await container.map_cell_service().get_all(world_uid)
-        terrain_cells = [
-            c for c in existing
-            if c.location_uid == location_uid
-        ] or None
-        layout = _generator.generate_layout(world, settlement, terrain_cells)
-
-    result = await container.settlement_persist_service().persist(
-        world,
-        settlement,
-        layout=layout,
-        occupancy_cells=occupancy_cells,
-        scopes=scopes,
-        skip_if_initialized=skip_if_initialized,
-    )
-
-    payload = result.to_dict()
-    if layout is not None:
-        payload["dominant_material"] = layout.dominant_material
-
-    return JSONResponse(content=payload)
+    orch = container.settlement_outdoor_orchestrator()
+    try:
+        if all_settlements:
+            batch = await orch.materialize_all(
+                world_uid, skip_if_initialized=skip_if_initialized,
+            )
+        elif under:
+            batch = await orch.materialize_under(
+                world_uid, under, skip_if_initialized=skip_if_initialized,
+            )
+        else:
+            batch = await orch.materialize_state(
+                world_uid, state_uid or "", skip_if_initialized=skip_if_initialized,
+            )
+    except SettlementOutdoorError as exc:
+        raise _http_from_outdoor(exc) from exc
+    status_code = 200 if not batch.failed_uids else 207
+    return JSONResponse(status_code=status_code, content=batch.to_dict())

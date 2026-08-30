@@ -53,6 +53,27 @@ class TestMergeMapCells(unittest.TestCase):
         merged = merge_layers(9, 9, 0, [])
         self.assertIsNone(merged.source_layer)
 
+    def test_city_structure_over_location(self):
+        layers = [
+            LayerSlice(
+                kind=MapLayerKind.LOCATION,
+                cell=CellContribution(x=2, y=2, z=0, system_terrain="urban"),
+            ),
+            LayerSlice(
+                kind=MapLayerKind.CITY_STRUCTURE,
+                cell=CellContribution(
+                    x=2, y=2, z=0,
+                    system_building_element="wall",
+                    location_uid="bldg-1",
+                ),
+            ),
+        ]
+        merged = merge_layers(2, 2, 0, layers)
+        self.assertEqual(merged.source_layer, MapLayerKind.CITY_STRUCTURE)
+        self.assertEqual(merged.system_building_element, "wall")
+        self.assertEqual(merged.system_terrain, "urban")
+        self.assertEqual(merged.location_uid, "bldg-1")
+
 
 if __name__ == "__main__":
     unittest.main()

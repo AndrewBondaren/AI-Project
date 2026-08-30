@@ -291,12 +291,11 @@ def api_generate_settlement(
     world_uid: str,
     location_uid: str,
     *,
-    scope: str = "outdoor",
     skip_if_initialized: bool = True,
 ) -> dict:
     r = client.post(
         f"/worlds/{world_uid}/locations/{location_uid}/generate-settlement",
-        params={"scope": scope, "skip_if_initialized": skip_if_initialized},
+        params={"skip_if_initialized": skip_if_initialized},
     )
     _require_ok(r, f"POST generate-settlement {location_uid}")
     return r.json()

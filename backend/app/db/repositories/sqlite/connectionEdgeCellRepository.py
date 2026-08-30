@@ -25,6 +25,10 @@ class SqliteConnectionEdgeCellRepository(BaseRepository[ConnectionEdgeCell], ICo
     async def upsert_bulk(self, cells: list[ConnectionEdgeCell]) -> int:
         if not cells:
             return 0
+        if _in_transaction.get():
+            for cell in cells:
+                await self.upsert(cell)
+            return len(cells)
         async with self._db.transaction():
             for cell in cells:
                 await self.upsert(cell)

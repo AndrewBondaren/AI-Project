@@ -98,6 +98,7 @@ class DistrictAssembler:
         )
 
         return DistrictLayout(
+            slot             = slot,
             area_layouts     = area_layouts,
             connection_nodes = nodes,
             connection_edges = edges,

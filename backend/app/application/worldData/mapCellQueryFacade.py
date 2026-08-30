@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from app.application.worldData.generators.terrain.worldMapSettings import n_base, terrain_chunk_columns, world_z_min
+from app.application.worldData.pack.read.settlementStructureRaster import SettlementStructureRaster
 from app.application.worldData.pack.read.worldMapPackReader import WorldMapPackReader
 from app.application.worldData.pack.read.packMapHelpers import tile_index, world_tile_size_m
 from app.application.worldData.pack.read.packReadContext import PackReadContext
@@ -28,10 +29,13 @@ class MapCellQueryFacade:
         context: PackReadContext,
         patch_store: PatchStoreService,
         world_map_reader: WorldMapPackReader,
+        *,
+        city_raster: SettlementStructureRaster | None = None,
     ) -> None:
         self._ctx = context
         self._patches = patch_store
         self._world_map = world_map_reader
+        self._city = city_raster or SettlementStructureRaster(context)
 
     def has_pack(self) -> bool:
         return self._ctx.has_pack()
@@ -78,6 +82,10 @@ class MapCellQueryFacade:
                     "missing wilderness chunk world=%s tile=%d,%d chunk=%d,%d",
                     world.world_uid, gx, gy, cx, cy,
                 )
+
+        city = self._city.contribution(world, x, y, z)
+        if city is not None:
+            layers.append(LayerSlice(kind=MapLayerKind.CITY_STRUCTURE, cell=city))
 
         if manifest is not None:
             for loc in manifest.location_terrain_entries:
@@ -142,6 +150,99 @@ class MapCellQueryFacade:
     ) -> list[MapCell]:
         views = await self.get_scene_volume(world, x, y, z, **kwargs)
         return [merged_view_to_map_cell(world.world_uid, view) for view in views]
+
+    def invalidate_city_structure(self) -> None:
+        self._city.invalidate()
+
+    async def get_footprint_terrain(
+        self,
+        world: World,
+        *,
+        x0: int,
+        y0: int,
+        x1: int,
+        y1: int,
+        location_uid: str | None = None,
+    ) -> list[MapCell]:
+        """Surface columns in AABB for settlement assembler — no city layer, no z-flood."""
+        cells_by_xy: dict[tuple[int, int], MapCell] = {}
+        if self._ctx.has_pack_for(world):
+            reader = self._ctx.reader_for(world)
+            manifest = reader.manifest
+            loc_uid = location_uid
+            entries = manifest.location_terrain_entries
+            if loc_uid:
+                entries = [e for e in entries if e.location_uid == loc_uid]
+            for loc in entries:
+                vol = loc.territory_volume
+                if vol.x1 < x0 or vol.x0 > x1 or vol.y1 < y0 or vol.y0 > y1:
+                    continue
+                if not loc.terrain_path:
+                    continue
+                try:
+                    chunk = reader.read_location_terrain(loc.location_uid)
+                except FileNotFoundError:
+                    continue
+                for column in chunk.columns:
+                    wx = vol.x0 + column.lx
+                    wy = vol.y0 + column.ly
+                    if wx < x0 or wx > x1 or wy < y0 or wy > y1:
+                        continue
+                    surface = self._column_surface(column)
+                    if surface is None:
+                        continue
+                    sz, terrain, material = surface
+                    cells_by_xy[(wx, wy)] = MapCell(
+                        world_uid=world.world_uid,
+                        x=wx,
+                        y=wy,
+                        z=sz,
+                        system_terrain=terrain,
+                        system_material=material,
+                        location_uid=loc.location_uid,
+                    )
+            if not cells_by_xy:
+                tile_size = world_tile_size_m(world)
+                gx0, _ = tile_index(x0, tile_size)
+                gx1, _ = tile_index(x1, tile_size)
+                gy0, _ = tile_index(y0, tile_size)
+                gy1, _ = tile_index(y1, tile_size)
+                for gx in range(gx0, gx1 + 1):
+                    for gy in range(gy0, gy1 + 1):
+                        for cell in self._world_map.surface_cells_for_tile(
+                            world, gx, gy, tile_size,
+                        ):
+                            if x0 <= cell.x <= x1 and y0 <= cell.y <= y1:
+                                cells_by_xy[(cell.x, cell.y)] = cell
+
+        out = list(cells_by_xy.values())
+        if not out:
+            return out
+        z_lo = min(c.z for c in out)
+        z_hi = max(c.z for c in out)
+        patch_map = await self._patches.get_patches_map_in_bbox(
+            world.world_uid, x0, x1, y0, y1, z_lo, z_hi,
+        )
+        for cell in out:
+            patch = patch_map.get((cell.x, cell.y, cell.z))
+            if patch is None:
+                continue
+            if patch.system_terrain is not None:
+                cell.system_terrain = patch.system_terrain
+            if patch.system_material is not None:
+                cell.system_material = patch.system_material
+            if patch.location_uid is not None:
+                cell.location_uid = patch.location_uid
+        return out
+
+    @staticmethod
+    def _column_surface(column) -> tuple[int, str, str | None] | None:
+        best: tuple[int, str, str | None] | None = None
+        for run in column.runs:
+            z_hi = max(run.z0, run.z1)
+            if best is None or z_hi > best[0]:
+                best = (z_hi, run.system_terrain, run.system_material)
+        return best
 
     @staticmethod
     def _chunk_layer_kind(role: ChunkRefineRole | None) -> MapLayerKind:

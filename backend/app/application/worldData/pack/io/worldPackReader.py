@@ -12,6 +12,7 @@ from app.application.worldData.pack.io.packBlobWire import (
     parse_climate_field_payload,
     parse_world_map_tile_payload,
     parse_fine_terrain_chunk_payload,
+    parse_settlement_structure_payload,
 )
 from app.application.worldData.pack.read.fineTerrainDecodeCache import FineTerrainDecodeCache
 from app.application.worldData.pack.io.packManifestStore import PackManifestStore
@@ -19,6 +20,7 @@ from app.application.worldData.pack.io.tileCodec import (
     PAYLOAD_KIND_CLIMATE,
     PAYLOAD_KIND_WORLD_MAP,
     PAYLOAD_KIND_FINE_TERRAIN,
+    PAYLOAD_KIND_SETTLEMENT_STRUCTURE,
     TileCodec,
 )
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
@@ -26,6 +28,7 @@ from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
 from app.dataModel.worldPack.worldPackManifest import WorldPackManifest
+from app.dataModel.worldPack.settlementStructureWire import SettlementStructureWire
 
 # Disk identity of manifest.json — cache hit only if stamp matches.
 ManifestStamp = tuple[int, int]  # (mtime_ns, size)
@@ -109,6 +112,13 @@ class WorldPackReader:
             location_uid,
             lambda: self._load_location_terrain(location_uid),
         )
+
+    def read_settlement_structure(self, location_uid: str) -> SettlementStructureWire:
+        path = self._paths.settlement_structure_path(location_uid)
+        kind, payload = self._decode_file(path)
+        if kind != PAYLOAD_KIND_SETTLEMENT_STRUCTURE:
+            raise ValueError(f"expected settlement_structure blob at {path}")
+        return parse_settlement_structure_payload(payload)
 
     def read_climate_coarse(self) -> ClimateFieldWire:
         path = self._paths.climate_coarse_path()

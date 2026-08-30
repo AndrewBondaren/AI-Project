@@ -11,15 +11,17 @@ class MapLayerKind(IntEnum):
     PATCH = 0
     PLAYER_SCENE = 1
     PLAYER_PATH = 2
-    LOCATION = 3
-    WILDERNESS = 4
-    WORLD_MAP = 5
+    CITY_STRUCTURE = 3
+    LOCATION = 4
+    WILDERNESS = 5
+    WORLD_MAP = 6
 
 
 LAYER_PRIORITY_ORDER: tuple[MapLayerKind, ...] = (
     MapLayerKind.PATCH,
     MapLayerKind.PLAYER_SCENE,
     MapLayerKind.PLAYER_PATH,
+    MapLayerKind.CITY_STRUCTURE,
     MapLayerKind.LOCATION,
     MapLayerKind.WILDERNESS,
     MapLayerKind.WORLD_MAP,

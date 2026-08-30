@@ -500,11 +500,11 @@ Runtime **нет**; target — [`tz_world_snapshot.md`](./tz_world_snapshot.md).
 
 ### 11.5 DoD — persist cycle (без snapshot gate)
 
-**Куда писать эталон (pack city structure, SQL-дерево, не map_cells / не патчи):** [tz_settlement_outdoor.md](./tz_settlement_outdoor.md). Ниже — generate scopes и рост; target persist клеток как OLTP **superseded**.
+**Куда писать эталон (pack city structure, SQL-дерево, не map_cells / не патчи):** [tz_settlement_outdoor.md](./tz_settlement_outdoor.md). Ниже — generate scopes и рост; target persist клеток как OLTP **superseded**. Occupancy-flood в `map_cell_patches` **не** HTTP default.
 
-**Контракт:** отдельный `SettlementPersistService` (+ `ConnectionPersistService` для графа) — **не** генератор, **не** DAG, **не** LLM.  
-Debug API и DAG вызывают **одни и те же методы** (аналог `MapCellService.save_terrain_batch` ↔ `POST …/generate-surface` ↔ `lazy_terrain`).  
-DAG подключается **в обход HTTP** — напрямую к service/repos через `context` / `Container`.
+**Контракт outdoor etalon:** `SettlementOutdoorOrchestrator.materialize` (+ `ConnectionPersistService` для графа) — **не** генератор, **не** DAG, **не** LLM.  
+`SettlementPersistService` (scopes occupancy / map_cells_*) — leftover до Gate: DAG; debug HTTP outdoor **не** зовёт его.  
+DAG подключается **в обход HTTP** — напрямую к orchestrator через `context` / `Container` (P12, не этот цикл).
 
 > **Не новый продуктовый scope.** Создание зданий и дорог уже в ТЗ — здесь только **persist + сервисный контракт** для подключения DAG и debug harness.
 
@@ -562,21 +562,23 @@ DAG может materialize **разные уровни** в разных нод�
 
 #### Debug API (harness)
 
-Тонкая оболочка над service — **те же scopes и классы**, что DAG (обход HTTP в production):
+Тонкая оболочка над orchestrator — **те же методы**, что позже DAG (обход HTTP в production):
 
-- `POST …/map/generate-settlement?scope=occupancy|outdoor|…` — bootstrap
+- `POST …/locations/{uid}/generate-settlement` — outdoor etalon (C11); не occupancy, не `get_all`
+- `POST …/generate-settlements?all=1|under=|state_uid=` — селекторы C16
 - `POST …/settlements/{uid}/extend-road`, `POST …/connections/plan-world-route` — growth (TBD)
 - Smoke: `GET …/locations` + `GET …/connections`
 
 #### Checklist
 
-- [x] `SettlementPersistService` — scope-based bootstrap API
+- [x] `SettlementOutdoorOrchestrator` — pack city + SQL tree (C19); debug HTTP
+- [x] `SettlementPersistService` — scope-based bootstrap API (DAG leftover; не HTTP outdoor)
 - [x] `ConnectionPersistService` — patch persist nodes/edges (urban + world)
 - [x] repos + migration: `connection_nodes`, `connection_edges`, `connection_edge_cells`
 - [x] building `NamedLocation` upsert (skip if initialized)
 - [ ] `SettlementStateLoader` / `WorldGraphStateLoader` — для growth (можно следом)
 - [ ] `SettlementGrowthService` / `WorldRouteGeneratorService` — по контрактам DAG ТЗ (можно следом)
-- [x] debug route(s) — mirror DAG entry points
+- [x] debug route(s) — `generate-settlement` → orchestrator; batch C16
 - [ ] `init_mode` в `AppSettings` + API (можно параллельно)
 - [ ] DAG wire — **не в этом цикле** (мастер); см. [tz_world_generation_dag.md](./tz_world_generation_dag.md)
 
@@ -586,7 +588,7 @@ DAG может materialize **разные уровни** в разных нод�
 
 | Дата | Изменение |
 |---|---|
-| 2026-08-30 | Persist/оркестрация outdoor на pack → [tz_settlement_outdoor.md](./tz_settlement_outdoor.md); §11.5 map_cells как эталон superseded |
+| 2026-08-30 | Persist/оркестрация outdoor на pack → [tz_settlement_outdoor.md](./tz_settlement_outdoor.md); HTTP `generate-settlement` = `SettlementOutdoorOrchestrator`; §11.5 map_cells как эталон superseded |
 | 2026-06 | §11.5 — persist cycle: ссылки на tz_world_generation_dag, tz_structure_connections §5.1, tz_construction, growth/world routes, terrain modification |
 | 2026-06 | Sync TZ ↔ код: `SettlementGeneratorService`, `StructureGeneratorService`, `map_cell_size_m`, статус фаз A–F, §10 |
 | 2026-06 | `tz_assembler_hierarchy.md` §7.5 — `map_cell_size_m` вместо `map_settings.global_cell_size_m` |

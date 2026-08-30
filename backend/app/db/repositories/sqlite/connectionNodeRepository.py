@@ -21,6 +21,10 @@ class SqliteConnectionNodeRepository(BaseRepository[ConnectionNode], IConnection
     async def upsert_bulk(self, nodes: list[ConnectionNode]) -> int:
         if not nodes:
             return 0
+        if _in_transaction.get():
+            for node in nodes:
+                await self.upsert(node)
+            return len(nodes)
         async with self._db.transaction():
             for node in nodes:
                 await self.upsert(node)

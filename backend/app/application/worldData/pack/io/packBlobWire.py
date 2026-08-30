@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+from app.dataModel.worldPack.settlementStructureWire import SettlementStructureWire
 
 
 def world_map_tile_payload(cells_per_side: int, cells: list[WorldMapCellWire]) -> dict:
@@ -34,3 +35,11 @@ def climate_field_payload(field: ClimateFieldWire) -> dict:
 
 def parse_climate_field_payload(payload: dict) -> ClimateFieldWire:
     return ClimateFieldWire.model_validate(payload)
+
+
+def settlement_structure_payload(wire: SettlementStructureWire) -> dict:
+    return wire.model_dump(mode="json")
+
+
+def parse_settlement_structure_payload(payload: dict) -> SettlementStructureWire:
+    return SettlementStructureWire.model_validate(payload)
