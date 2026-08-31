@@ -5,7 +5,7 @@ description: "Outdoor settlement на запечённом World Pack — дер
 
 # ТЗ: Outdoor settlement на Pack
 
-**Статус:** целевая архитектура (согласовано 2026-08-30). **O1–O4 locked (C14–C16, C19–C20), C17–C18, C21.** Impl-план outdoor: [`.cursor/plans/settlement-outdoor-pack.md`](../.cursor/plans/settlement-outdoor-pack.md). **P13 High:** [`.cursor/plans/c21-plot-ground-z.md`](../.cursor/plans/c21-plot-ground-z.md) — код по явной просьбе.
+**Статус:** целевая архитектура (согласовано 2026-08-30). **O1–O4 locked (C14–C16, C19–C20), C17–C18, C21, C22.** Impl-план outdoor: [`.cursor/plans/settlement-outdoor-pack.md`](../.cursor/plans/settlement-outdoor-pack.md). **P13** ядро C21 в коде; leftover generate — **C21-T\*** (§14). План C21: [`.cursor/plans/c21-plot-ground-z.md`](../.cursor/plans/c21-plot-ground-z.md). **C22** SoT: [tz_structure_connections.md](./tz_structure_connections.md) §5.1.3.
 
 **Зачем отдельный документ:** алгоритм застройки — [`tz_city_generation.md`](./tz_city_generation.md); участок/здание — [`tz_assembler_hierarchy.md`](./tz_assembler_hierarchy.md) и [`tz_building_generator.md`](./tz_building_generator.md); земля/grade — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) и [`tz_terrain_relief.md`](./tz_terrain_relief.md). Здесь только **склейка**: оркестрация, куда писать эталон, дерево имён, экспорт. Алгоритмы не копировать — ссылки на пункты.
 
@@ -47,10 +47,10 @@ description: "Outdoor settlement на запечённом World Pack — дер
 | `CitySkeleton`, `dominant_material` | city §3, §3.1 | поля поселения / post-assemble |
 | Шов pack, город на ребре тайла | city §1; pack WP-19; relief-v1 **C29** | не клипать layout по тайлу |
 | Слои assembler, вход Settlement | assembler §1–§3 | не вызывать Structure вне stack в этом слое |
-| Участок: `AreaSlot` / `AreaLayout` | assembler §7.1–§7.2 | **persist-контракт геометрии**; **C21:** z и порог — assembler участка, не район; участок ≠ обязательно здание |
+| Участок: `AreaSlot` / `AreaLayout` | assembler §7.1–§7.2 | **persist-контракт геометрии**; **C21:** z и порог — assembler участка; **C22:** фасад из графа улиц (§5.1.3) |
 | generate-first, cache шаблона | assembler §7.7 | RAM; не второй generate при persist |
 | Координаты footprint | assembler §7.5; city §9.6 | `settlement_meter_rect` |
-| Дороги city/district, `settlement_gate` | connections §5, **§5.1**; city §11.5 | SQL `connection_*` |
+| Дороги city/district, `settlement_gate` | connections §5, **§5.1**, **§5.1.3** | SQL `connection_*`; приоритет/фасад — C22 |
 | Шаблон здания, `BuildingLayout`, levels, entry на комнате | building §3.6, §7, §8.9, §11 | не копировать схему шаблона |
 | Что не v1 здания (мебель и т.д.) | building §12 | не тащить |
 | Pack vs Patch, WP-1…7 | pack § Целевая архитектура, инварианты | эталон vs ход |
@@ -122,9 +122,9 @@ Debug `POST …/generate-settlement` — тонкая оболочка над or
 
 ## 6. Геометрия: граф участков, не dump клеток
 
-SoT объекта — assembler §7.1: район ссылается на **участки**; участок (`AreaLayout`) хранит **себя** (слот, facing, забор/двор) и **опционально** здания. Участок не синоним здания.
+SoT объекта — assembler §7.1: район ссылается на **участки**; участок (`AreaLayout`) хранит **себя** (слот, facing, оболочка) и содержимое **шаблона** — любое назначение (`structure_type`: дом, таверна, склад, `plaza`, …). Участок не синоним жилого дома.
 
-**Z — участок, не район (C21).** Район не выравнивает слоты и не копирует z улицы. Порог к улице (дверь / ворота / край) выбирает assembler участка (§5.1.1). Pack-земля не террасируется (C1). Код копирует одну z района на все слоты — **P13**.
+**Z — участок, не район (C21).** Район не выравнивает слоты и не копирует z улицы. Порог к улице (дверь / ворота / край) выбирает assembler участка (§5.1.1). Pack-земля не террасируется (C1). Ядро **P13** (пин ≠ `max(z)` AABB, `ground_z` на участке, clamp `map_z`) — в коде. Незакрытое generate — **C21-T\*** (§14).
 
 ```
 pack city structure
@@ -226,7 +226,8 @@ city §11.4 snapshot / regen — по-прежнему [`tz_world_snapshot.md`](
 |---|---|
 | **C1** | Эталон = pack city-structure + SQL имена/граф. Ход = Patch Store. Земля (`location_terrain` / wilderness / L0) этим job не переписывается. |
 | **C2** | Геометрия города = граф **участков** (assembler §7 `AreaSlot`/`AreaLayout`), не city-wide voxel и не occupancy-flood. Клетки — поле объекта. |
-| **C21** | **Онтология z участка.** Район **не** выравнивает участки: не одна плоскость, не `max(z)` AABB, не копия z улицы / `DistrictSlot.ground_z`. Участок ≠ обязательно здание (двор+забор, дом у улицы, дом в глубине). `ground_z` слота и **порог к улице** считает `StructureAreaAssembler` по топологии (`door` / `gate` / `parcel_edge` — connections §5.1.1). Не формула «всегда фасад здания». `building.map_z` (если дом есть) может отличаться от `AreaSlot.ground_z`. Луч порог→улица — **только если** `ground_z ≠ z` примыкающей улицы; иначе стык без профиля. Если луч даёт **θ > 45°** — assembler правит `map_z` **этого** дома (вверх или вниз), пока θ = 45° (§5.1.2). **Не** двигать здание в xy к улице. Соседние участки не трогать. Подъезд xy — `yard_path` к **порогу**. Pack-земля не терраса (C1). Пин района — не пол участка. |
+| **C21** | **Онтология z участка.** Район **не** выравнивает участки: не одна плоскость, не `max(z)` AABB, не копия z улицы / `DistrictSlot.ground_z`. Участок — слот из **шаблона**, любое назначение (`structure_type`): не обязательно жилой дом (двор+забор, здание у улицы, в глубине, **площадь**, склад, храм, …). `ground_z` слота и **порог к улице** считает `StructureAreaAssembler` по топологии (`door` / `gate` / `parcel_edge` — connections §5.1.1). Не формула «всегда фасад здания». `building.map_z` (если дом есть) может отличаться от `AreaSlot.ground_z`. Луч порог→улица — **только если** `ground_z ≠ z` примыкающей улицы; иначе стык без профиля. Если луч даёт **θ > 45°** — assembler правит `map_z` **этого** дома (вверх или вниз), пока θ = 45° (§5.1.2). **Не** двигать здание в xy к улице. Соседние участки не трогать. Подъезд xy — `yard_path` к **порогу**. Pack-земля не терраса (C1). Пин района — не пол участка. |
+| **C22** | **Онтология фасада** + посадка в **2D-бин модуля** (токены, корзины спан/один/остаток, жадный FFD; аллея из настроек если ≥2 в бине). Рамка до packing, граф после. Слоту только касающиеся отрезки. Нитка FRONT-4; `plaza` — улицы равны. Стены: поле есть → всегда. Переход кода — **TODO** city §6.3. SoT: connections **§5.1.3–§5.1.4**, city **§6.3**. |
 | **C3** | Участок **не** `location_type` и не SceneInit. SQL-дерево: settlement → district → building. Area uid только в pack-графе. |
 | **C4** | Районы писать сразу (`named_locations`). `parent` здания = район. Это extract/persist, не отдельный инвариант мира. |
 | **C5** | District `NamedLocation` и Area uid **синтезируются на extract** из `DistrictSlot` / слота (детерминированный uid). Assembler не ходит в SQL. `collect_building_locations` больше не ставит parent=settlement. |
@@ -305,17 +306,34 @@ SQL и файлы pack — не один COMMIT. Надёжность = прот
 
 ### P13 — High: район не должен выравнивать здания
 
-**Приоритет: высокий.** Нарушает **C21**. Не закрыто outdoor-impl (A–F). План: [`.cursor/plans/c21-plot-ground-z.md`](../.cursor/plans/c21-plot-ground-z.md).
+**Статус:** `partial` (ядро C21 в коде, 2026-08-31). **C21 не переоткрывать.** Остаток generate — **C21-T\*** ниже, не новый контракт. План: [`.cursor/plans/c21-plot-ground-z.md`](../.cursor/plans/c21-plot-ground-z.md).
 
-Код сажает **все** участки и здания района на **одну** z: `resolve_ground_z` берёт `max(z)` terrain в AABB района; `_make_area_slot(..., slot.ground_z, ...)` копирует её в каждый `AreaSlot`. Pack-heightmap не режется (C1), но полы/фундамент/заборы — плато на пике района. На склоне дома парят или врезаются в холм; «идеально плоский район» — баг, не цель.
+**Было (закрыто кодом):** одна z на район — `max(z)` AABB → все `AreaSlot`; cache без `dz`; забор через `DEFAULT_PARCEL_MARGIN_M` / `expand_bbox`.
 
-**Целевое:** порог и `ground_z` считает **`StructureAreaAssembler`** (дверь / ворота / край участка). Район не проставляет этаж. Подъезд — `yard_path` к порогу (§5.1.1). `DistrictSlot.ground_z` не онтология выравнивания.
+**Целевое (C21, в силе):** порог и `ground_z` считает **`StructureAreaAssembler`** (`door` / `gate` / `parcel_edge`). Район не проставляет этаж. Подъезд — `yard_path` к порогу ([connections](./tz_structure_connections.md) §5.1.1). `DistrictSlot.ground_z` — пин, не пол участка.
 
-Смежный симптом (тот же fix-pass): cache здания собирается при `ground_z=0`, `translate_layout` двигает xy; даже правильный `AreaSlot.ground_z` может не попасть в клетки этажей.
+### C21 leftover — временные (не C-замки)
+
+После pass: план / connections §5.1.x / код ещё не одно. Пункты **не** закрывают C21. Решение мастера → правка connections + код, или снять пункт. Не чинить «заодно» в склейке.
+
+| ID | Тема | ТЗ (connections) | Код сейчас | Что решать |
+|---|---|---|---|---|
+| **C21-T1** | Три кейса порога | 1 двор+калитка=`gate`; 2 двор без забора=`parcel_edge` (то же xy); 3 участок=дом → `door` через дверь. Крыльцо — заглушка | `plot_equals_house` (bbox+count) → `door`. Packing всё ещё `YARD_PADDING_M=1` → generate 1–2, не 3. `approach_material` для `door` = пол, TODO крыльцо | Packing pad=0, когда нужен кейс 3 на generate; крыльцо — когда будет геометрия |
+| **C21-T2** | Peek z улицы | шаг в `street_xy`, иначе **`node.z` ребра**; потом луч | peek `None` → `NONE`, луча нет. Примыкание к полотну → **L=1** | Нужен ли fallback `node.z` (длинный луч через разрыв) |
+| **C21-T3** | Стоп луча | полотно / **край участка** / `max_k` | только `c in street_xy` | Стоп на `parcel_edge` или только полотно |
+| **C21-T4** | `street_xy` и тротуар | полотно × `width_cells` + sidewalk-рёбра, если есть | rasterize — только проезжая; в графе нет child sidewalk edges (`has_sidewalk` — флаг) | Если тротуар между порогом и кромкой — peek пустой (тот же класс, что T2) |
+| **C21-T5** | GRADE stamp | `partition_height` **и** `geom_resolve` | только `partition_height`. `geom_resolve` режет `L_eff=min(L,h)` и ломает пологий θ | Скорее правка ТЗ: для входа GRADE = `partition_height`, не mill-resolve |
+| **C21-T6** | `AreaLayout.approach` | `StreetApproach \| None` при нет луча / L=0 | всегда объект, `form=NONE` | `None` vs sentinel |
+| **C21-T7** | Участок ≠ только дом | любой `structure_type` из шаблона; C20 только если здание с входом | packing сажает шаблоны cache из `allowed_structure_types` | Stamp малых объектов площади — assembler §7.8 |
+| **C21-T8** | Материал §5.1.2 | калитка + внутри двора уже дорога → её `material` | `door` = пол дома (крыльцо TODO). Иначе тир `road`. Lookup внутренней дороги нет | Внутренняя двор-дорога в v1 или всегда тир |
+| **C21-T9** | Второй hop дверь↔ворота | луч если `map_z ≠ z` порога | тот же `measure_street_approach` с `street_xy = threshold.cells`; дверь не впритык → peek пустой | Тот же peek, что T2, на дворе |
+| **C21-T10** | Packing `AreaSlot.ground_z` | packing не задаёт **финальный** пол | packing пишет пин как fallback; assembler перезаписывает median двора | Имя поля на packing-слоте vs «пол ещё не посчитан» |
+
+**Сознательно не в этом списке:** DAG, HTTP persist, occupancy flood, `0001`/`0002`, mill discover, pack-земля, `yard_depth_m` как поле шаблона (NC-2: позже).
 
 | ID | Где | Проблема |
 |---|---|---|
-| **P13** | `planner/terrain.resolve_ground_z` + `areaSlots._make_area_slot` | **High.** Одна z на район → все здания; C21. Fix: z на участке |
+| **P13** | было: `resolve_ground_z` + копия z района | **partial.** Ядро C21 в коде; leftover **C21-T\*** |
 | **P1** | `api/routes/locations.py` `generate-settlement` | Оркестрация в HTTP: type `== "settlement"`, `get_all` мира, generate+persist |
 | **P2** | `SettlementPersistService` | Эталон в `map_cell_patches` (`save_settlement_surface` / `save_generated`); occupancy+полный interior layout |
 | **P3** | `plan_footprint_occupancy_cells` + assembler | Метровый flood на весь footprint (порядок 10^6 cells у town) |
@@ -337,6 +355,9 @@ SQL и файлы pack — не один COMMIT. Надёжность = прот
 
 | Дата | Изменение |
 |---|---|
+| 2026-08-31 | C22: посадка в квартал сетки (рамка → cache → packing → граф). Переход кода — TODO city §6.3, не эта сессия. |
+| 2026-08-31 | **C22:** касание 4-сосед; счёт район×нитка; max_*_entries; третья улица игнор; cache (template, facing); skip unknown keys. |
+| 2026-08-31 | **C21-T1:** порог кейс 3 = участок=дом → `door`; крыльцо TODO. P13 `partial`; leftover **C21-T1…T10**. C21 не переоткрыт. |
 | 2026-08-30 | **C21:** участок ≠ здание; порог = assembler (`door`/`gate`/`parcel_edge`). План: `.cursor/plans/c21-plot-ground-z.md`. |
 | 2026-08-30 | **O3 → C20:** variant 1; `front`≥1, `service`≥0; default объявленные двери; ad-hoc не запрещён. |
 | 2026-08-30 | **O4 → C14/C19:** SQL+pack протокол; skip только согласованная пара. |

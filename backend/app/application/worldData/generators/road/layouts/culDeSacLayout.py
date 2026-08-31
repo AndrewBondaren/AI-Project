@@ -14,5 +14,7 @@ def generate_cul_de_sac(
     lanes_per_side:  int,
     has_sidewalk:    bool,
     rng:             random.Random,
+    surface:         dict[tuple[int, int], int] | None = None,
 ) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
+    _ = surface
     raise NotImplementedError("cul_de_sac layout — не реализован")

@@ -5,10 +5,6 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
-from app.application.worldData.generators.assemblers.areaAssembler.structureAreaAssembler import (
-    derive_structure_context,
-)
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
@@ -22,8 +18,10 @@ from app.application.worldData.generators.assemblers import structureAssembler a
 from app.application.worldData.generators.assemblers.structureAssembler.assemblerRegistry import (
     ASSEMBLER_REGISTRY,
 )
-from app.application.worldData.generators.structure.structureGeneratorService import StructureLayout
-from app.dataModel.spatial.facing import Facing
+from app.application.worldData.generators.structure.structureGeneratorService import (
+    StructureGeneratorService,
+    StructureLayout,
+)
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -80,11 +78,12 @@ def build_layout_cache(
     terrain_cells:  list[MapCell] | None = None,
 ) -> dict[str, StructureLayout]:
     """
-    Одна генерация на template.system_name за сборку поселения.
-    Probe-building at (0,0) — реальный bbox в occupied_footprint.
+    Одна генерация interior на template.system_name за сборку поселения.
+    Probe at (0,0), ground_z=0, без фундамента и крыши.
     """
+    _ = terrain_cells
     cache: dict[str, StructureLayout] = {}
-    probe_slot = AreaSlot(cells=[(0, 0)], ground_z=0, facing=Facing.SOUTH)
+    generator = StructureGeneratorService()
 
     for name in sorted(collect_building_template_names(district_slots, world, skeleton)):
         if name in cache:
@@ -108,11 +107,11 @@ def build_layout_cache(
             continue
 
         building = _probe_building(world.world_uid, name)
-        context  = derive_structure_context(template, skeleton, probe_slot, terrain_cells)
 
         try:
-            assembler = ASSEMBLER_REGISTRY.get(structure_type)
-            layout = assembler.assemble(world, building, template, context, terrain_cells)
+            layout = generator.generate_from_template(
+                world, building, template, ground_z=0, foundation_depth=0,
+            )
         except Exception as exc:
             logger.warning(
                 "building cache | template=%s генерация не удалась: %s",

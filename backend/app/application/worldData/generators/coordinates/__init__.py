@@ -1,3 +1,14 @@
+from app.application.worldData.generators.coordinates.approachZ import (
+    ApproachForm,
+    approach_angle_deg,
+    clamp_near_z_to_45,
+    classify_approach,
+)
+from app.application.worldData.generators.coordinates.columnSurface import (
+    column_surface,
+    median_surface_z,
+    resolve_district_pin_z,
+)
 from app.application.worldData.generators.coordinates.convert import (
     cell_size_m,
     coarse_cell_meter_xy,
@@ -15,6 +26,7 @@ from app.application.worldData.generators.coordinates.rect import (
     settlement_grid_rect,
     settlement_meter_rect,
 )
+from app.application.worldData.generators.coordinates.gridRay import walk_grid_ray
 from app.application.worldData.generators.coordinates.worldTile import (
     expand_coarse_hydro_to_tile,
     iter_macro_tiles,
@@ -46,6 +58,14 @@ from app.application.worldData.generators.coordinates.types import (
 )
 
 __all__ = [
+    "ApproachForm",
+    "approach_angle_deg",
+    "clamp_near_z_to_45",
+    "classify_approach",
+    "column_surface",
+    "median_surface_z",
+    "resolve_district_pin_z",
+    "walk_grid_ray",
     "CoordinateSpace",
     "expand_coarse_hydro_to_tile",
     "iter_macro_tiles",

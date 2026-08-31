@@ -47,6 +47,7 @@ class DistrictRoadGenerator:
         skeleton:  CitySkeleton,
         world:     World,
         rng:       random.Random | None = None,
+        surface:   dict[tuple[int, int], int] | None = None,
     ) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
         if rng is None:
             rng = random.Random()
@@ -69,4 +70,7 @@ class DistrictRoadGenerator:
             slot.origin_x, slot.origin_y, slot.width_m, slot.depth_m,
         )
 
-        return fn(slot, skeleton, world.world_uid, connection_type, lanes_per_side, has_sidewalk, rng)
+        return fn(
+            slot, skeleton, world.world_uid, connection_type, lanes_per_side, has_sidewalk, rng,
+            surface,
+        )

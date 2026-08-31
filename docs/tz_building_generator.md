@@ -18,7 +18,7 @@
 | Термин | Смысл |
 |--------|-------|
 | **Шаблон** | JSON-файл, описывающий тип здания: этажи, комнаты, связи, входы |
-| **structure_type** | Смысловой тип здания: `tavern`, `shop`, `dungeon`, `house`, etc. |
+| **structure_type** | Назначение шаблона участка (N+1): `house`, `tavern`, `shop`, `warehouse`, `plaza`, `dungeon`, … Не закрытый список |
 | **Комната** | Под-локация внутри здания (отдельная `NamedLocation` с `parent_uid = building.location_uid`) |
 | **Уровень** | Один этаж: `LocationLevel` с конкретным `z` |
 | **Проход** | `LocationPassage` между двумя комнатами или уровнями |
@@ -38,7 +38,7 @@
 | Поле | Тип | Обязательность | Описание |
 |------|-----|---------------|----------|
 | `system_name` | string | required | Уникальный системный идентификатор шаблона: `"tavern_1"`, `"manor_std"`. Используется для генерации `template_uid = uuid5(NAMESPACE_DNS, system_name)` |
-| `structure_type` | string | required | Смысловой тип: tavern, shop, dungeon, house, etc. |
+| `structure_type` | string | required | Назначение шаблона (N+1): tavern, shop, house, plaza, warehouse, dungeon, … |
 | `display_name` | string | required | Отображаемое название шаблона |
 | `description` | string | optional | Описание для UI |
 | `version` | string | required | Версия шаблона: `"1.0"` |
@@ -57,6 +57,8 @@
 | `staircases` | array | optional | Вертикальные связи (лестницы). Каждая лестница объявляет `stops` — упорядоченный список room_id снизу вверх. Shaft автогенерируется и не объявляется в `levels[].rooms`. Если не задан — авто-резолв (раздел 8.8). |
 
 `entry_point` и `back_entry_point` объявляются **на комнате** (поле `entry_point` / `back_entry_point` в room-объекте), не на верхнем уровне шаблона.
+
+Участок — любой шаблон по **назначению** (`structure_type`), не только жилой дом. Примеры: таверна, склад, храм, `plaza` (сады, фонтаны, террасы). Комнаты / C20 (`front` дверь) — если шаблон описывает здание с входом; площадь без дверей — не ошибка C20. **Интерьер** (`StructureGenerator`, `levels`/комнаты) — другой скоуп; C22 сажает оболочку из cache, не гоняет полный интерьер площади. Пустой двор без шаблона — не продукт generate.
 
 ---
 
@@ -256,6 +258,8 @@ else:
 | `frame_material` | string\|null | optional. Материал дверной коробки. Fallback: `wall_material` комнаты |
 | `panel_material` | string\|null | optional. Материал дверного полотна. Fallback: `economic_tier` → `material_registry`. `null` = открытый проём |
 | `access_type` | string | optional. Переход снаружи к двери при перепаде высот. `"auto"` \| `"none"` \| `"steps"` \| `"porch"`. Default: `"auto"` |
+
+На **корне шаблона здания** (C22, не на комнате): `max_front_entries` int, default `1`; `max_service_entries` int, default `0` (`1`, если объявлен `back_entry_point`). >1 → раскладка по отрезку стыка с улицей, приём как окна §3.10. SoT: [tz_structure_connections.md](./tz_structure_connections.md) §5.1.3.
 
 **Авто-резолв `door_height`:**
 

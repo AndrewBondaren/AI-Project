@@ -6,6 +6,10 @@ import unittest
 
 from app.application.worldData.generators.assemblers.areaAssembler.areaLayout import AreaLayout
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
+from app.application.worldData.generators.assemblers.areaAssembler.areaThreshold import (
+    AreaThreshold,
+    AreaThresholdKind,
+)
 from app.application.worldData.generators.assemblers.districtAssembler.districtLayout import (
     DistrictLayout,
 )
@@ -63,6 +67,9 @@ def _layout(*, passages: list[LocationPassage]) -> SettlementLayout:
         district_template=template,
     )
     aslot = AreaSlot(cells=[(0, 0), (1, 0)], ground_z=0, facing=Facing.SOUTH)
+    threshold = AreaThreshold(
+        kind=AreaThresholdKind.DOOR, cells=[(0, 0)], z=0,
+    )
     probe = NamedLocation(
         location_uid="probe-hut-0-0",
         world_uid="w1",
@@ -88,9 +95,10 @@ def _layout(*, passages: list[LocationPassage]) -> SettlementLayout:
         rooms=[],
     )
     area = AreaLayout(
+        slot=aslot,
+        threshold=threshold,
         building_location=probe,
         building_layout=building_layout,
-        slot=aslot,
     )
     district = DistrictLayout(slot=dslot, area_layouts=[area])
     return SettlementLayout(district_layouts=[district])
@@ -135,6 +143,29 @@ class TestSettlementOutdoorExtract(unittest.TestCase):
         self.assertTrue(extracted.entry_points[0].is_discovered)
         self.assertEqual(extracted.wire.settlement_uid, "set-1")
         self.assertEqual(len(extracted.wire.districts), 1)
+
+    def test_plot_without_building_skips_c20(self):
+        template = DistrictTemplateEntry(
+            system_name="core",
+            display_name="Core",
+            district_type="civic",
+        )
+        dslot = DistrictSlot(
+            origin_x=0, origin_y=0, width_m=10, depth_m=10, ground_z=0,
+            district_template=template,
+        )
+        aslot = AreaSlot(cells=[(0, 0), (1, 0), (0, 1), (1, 1)], ground_z=2, facing=Facing.SOUTH)
+        threshold = AreaThreshold(
+            kind=AreaThresholdKind.PARCEL_EDGE, cells=[(0, 0)], z=2,
+        )
+        area = AreaLayout(slot=aslot, threshold=threshold)
+        district = DistrictLayout(slot=dslot, area_layouts=[area])
+        extracted = extract_settlement(_settlement(), SettlementLayout(district_layouts=[district]))
+        self.assertEqual(len(extracted.buildings), 0)
+        self.assertEqual(len(extracted.entry_points), 0)
+        self.assertEqual(len(extracted.wire.districts[0].areas), 1)
+        self.assertEqual(extracted.wire.districts[0].areas[0].buildings, [])
+        self.assertEqual(extracted.wire.districts[0].areas[0].slot.ground_z, 2)
 
 
 if __name__ == "__main__":

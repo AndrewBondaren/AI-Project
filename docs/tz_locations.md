@@ -215,6 +215,8 @@ room         (depth 5) — indoor: комната внутри building; leaf и
 
 Строение без внутренних комнат (`room`) — `building` сам является leaf в дереве. **Якорь** `SessionScene.location_uid` = этот leaf; **объём сцены** (карта вокруг игрока, события за окном) — не этот uid. SoT: [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) **C18**.
 
+Общественная площадь (`structure_type="plaza"`) и любое другое назначение шаблона — **NamedLocation** под районом. Площадь: `is_outdoor=true`, состав из шаблона. Не новый `location_type` **участка** (outdoor **C3**: area uid только в pack). В SQL-дереве parent = район (**C4**). Не тип ребра графа (connections §1).
+
 ### `worlds.location_type_registry` (N+1)
 
 ```json

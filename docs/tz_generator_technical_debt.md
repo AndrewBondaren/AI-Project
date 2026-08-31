@@ -19,7 +19,7 @@
 | [tz_world_pack_storage.md](./tz_world_pack_storage.md) | World Pack; § WP-FIX-DEBT (в т.ч. WP-DELETE-1 → DEBT-10); terrain mask carry |
 | `.cursor/plans/full-bake-seam-halo-shoulder.md` | отдельные шаги: шов мира L0 · halo grid-соседа · T-10 |
 | `.cursor/plans/settlement-assembler.md` | Phase-план settlement |
-| `.cursor/plans/coordinate-spaces.md` | Phase-план NC-1 |
+| `.cursor/plans/c21-plot-ground-z.md` | C21 / P13; **NC-2** parcel + barrier без `DEFAULT_PARCEL_MARGIN_M` |
 | `.cursor/plans/grade-detailed-location-render.md` | L2 location grade ASCII impl |
 | `.cursor/plans/r36u-grade-detailed-migrate.md` | R36u migrate L0 ribbon → detailed geometry |
 | `.cursor/plans/r36u-post-impl-debt.md` | R36u-T-1…T-10 post-impl polish |
@@ -146,12 +146,25 @@ LOCATION_LOCAL_METERS  x, y, z    interior — v2, отложено
 
 ### NC-2 — `AreaSlot.cells` ≠ «участок с двором»
 
-**Status:** `open` | **Severity:** medium | **P:** P1
+**Status:** `open` | **Severity:** medium | **P:** P1  
+**Impl:** [`.cursor/plans/c21-plot-ground-z.md`](../.cursor/plans/c21-plot-ground-z.md) §2.2b (C21 / P13, тот же pass).
 
 Docstring `AreaSlot`: «здание + двор + забор». `_make_area_slot` заполняет **только bbox `occupied_footprint`**.  
-Area barrier: `_PARCEL_MARGIN_M = 1` снаружи bbox — workaround.
+Area barrier: `DEFAULT_PARCEL_MARGIN_M = 1` в `dataModel/settlement/area/perimeterBarrier.py` + `expand_bbox` в `areaBarriers` — workaround «забор снаружи дома». Константа **не** поле `PerimeterBarrier` (`template` + `probability` — [tz_locations.md](./tz_locations.md)).
 
-**Fix:** расширять cells в `areaSlots._make_area_slot` (parcel = footprint + padding).
+**Замок (не слайс):**
+
+| | |
+|---|---|
+| Участок | packing: `parcel_cells` = footprint + двор; collision = те же cells |
+| `PARCEL_GAP_M` | щель **между** участками, не глубина двора |
+| Забор | периметр уже готовых `slot.cells`; без второго expand |
+| `DEFAULT_PARCEL_MARGIN_M` | **удалить** (модуль + export) |
+| `PerimeterBarrier` | не добавлять отступ/yard |
+| Двор как ручка мастера | позже отдельное поле шаблона (`yard_depth_m`), не barrier; двор без забора (`parcel_edge`) валиден |
+| Порог `gate` | facing-ребро участка, не bbox дома |
+
+**Fix:** `areaSlots.parcel_cells` + packing; `areaBarriers` только ring(`slot.cells`); закрыть вместе с C21.
 
 ---
 
@@ -412,7 +425,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | ~~NC-1b~~ | ✅ `tz_terrain_generation.md` rework | resolved |
 | NC-1a | Persist contract / optional `coordinate_space` column | open |
 | LC-1..LC-4 | Neutral packages | open |
-| NC-2 | Parcel cells в `areaSlots` | open |
+| NC-2 | Parcel cells в `areaSlots`; замок C21 план §2.2b (не margin на `PerimeterBarrier`) | open |
 
 ### P2 — ближайший polish
 

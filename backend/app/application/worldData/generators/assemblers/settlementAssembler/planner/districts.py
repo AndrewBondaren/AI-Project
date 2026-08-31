@@ -21,7 +21,8 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     plan_settlement_entries,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.terrain import (
-    resolve_ground_z,
+    column_surface,
+    resolve_district_pin_z,
 )
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
@@ -65,6 +66,7 @@ def plan_district_slots(
     rng = random.Random(f"{settlement.location_uid}_{skeleton.system_city_size}")
     placed_types: dict[str, int] = {}
     slots: list[DistrictSlot] = []
+    surface = column_surface(terrain_cells)
 
     for cell_y in range(n):
         for cell_x in range(n):
@@ -86,8 +88,8 @@ def plan_district_slots(
             width_m, depth_m = slot_dimensions(template, cell_m, rng)
             dtype = template.district_type
             placed_types[dtype] = placed_types.get(dtype, 0) + 1
-            slot_ground_z = resolve_ground_z(
-                settlement, origin_x, origin_y, width_m, depth_m, terrain_cells,
+            slot_ground_z = resolve_district_pin_z(
+                settlement, origin_x, origin_y, surface,
             )
             required = list(template.required_structures or [])
 
@@ -116,7 +118,9 @@ def plan_district_slots(
                 len(required),
             )
 
-    plan_settlement_entries(slots, skeleton, origin.x, origin.y, side_m, world.world_uid)
+    plan_settlement_entries(
+        slots, skeleton, origin.x, origin.y, side_m, world.world_uid, surface,
+    )
 
     logger.info(
         "plan_district_slots done | settlement=%s slots=%d",

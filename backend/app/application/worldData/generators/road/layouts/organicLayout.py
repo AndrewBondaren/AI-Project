@@ -14,5 +14,7 @@ def generate_organic(
     lanes_per_side:  int,
     has_sidewalk:    bool,
     rng:             random.Random,
+    surface:         dict[tuple[int, int], int] | None = None,
 ) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
+    _ = surface
     raise NotImplementedError("organic layout — не реализован")

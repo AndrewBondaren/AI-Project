@@ -35,10 +35,15 @@ def generate_grid(
     lanes_per_side:  int,
     has_sidewalk:    bool,
     rng:             random.Random,
+    surface:         dict[tuple[int, int], int] | None = None,
 ) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
     ox, oy = slot.origin_x, slot.origin_y
     W,  D  = slot.width_m,  slot.depth_m
-    z      = slot.ground_z
+    pin_z  = slot.ground_z
+    z_lookup = surface or {}
+
+    def node_z(x: int, y: int) -> int:
+        return int(z_lookup.get((x, y), pin_z))
 
     density = slot.district_template.density or skeleton.settlement_density
     block_size = block_size_for_density(density)
@@ -61,6 +66,7 @@ def generate_grid(
         if key not in node_grid:
             x = ox + col * step_x
             y = oy + row * step_y
+            z = node_z(x, y)
             node_grid[key] = ConnectionNode(
                 node_uid    = f"n_{x}_{y}_{z}_{uuid.uuid4().hex[:6]}",
                 x           = x,
@@ -105,7 +111,7 @@ def generate_grid(
             edges.append(make_edge(get_or_create(col, row), get_or_create(col, row + 1)))
 
     # --- through_road коридоры из entry_nodes ---
-    _apply_through_roads(slot.entry_nodes, node_grid, edges, connection_type, lanes_per_side, width, has_sidewalk, world_uid, ox, oy, step_x, step_y, n_cols, n_rows, z)
+    _apply_through_roads(slot.entry_nodes, node_grid, edges, connection_type, lanes_per_side, width, has_sidewalk, world_uid, ox, oy, step_x, step_y, n_cols, n_rows)
 
     return list(node_grid.values()), edges
 
@@ -122,7 +128,6 @@ def _apply_through_roads(
     ox: int, oy: int,
     step_x: int, step_y: int,
     n_cols: int, n_rows: int,
-    z: int,
 ) -> None:
     """
     Для каждой пары through_road (вход + выход на противоположных гранях)

@@ -29,6 +29,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 )
 from app.application.worldData.generators.coordinates import (
     cell_size_m,
+    column_surface,
     settlement_origin_m,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.mapOccupancy import (
@@ -95,7 +96,7 @@ class SettlementAssembler:
             district_layouts.append(layout)
 
         city_nodes, city_edges = self._plan_street_grid(
-            world, settlement, skeleton, district_slots,
+            world, settlement, skeleton, district_slots, terrain_cells,
         )
         barrier_cells = self._plan_barriers(world, settlement, skeleton)
         occupancy_cells = plan_footprint_occupancy_cells(world, settlement, skeleton.system_city_size)
@@ -150,6 +151,7 @@ class SettlementAssembler:
         settlement:     NamedLocation,
         skeleton:       CitySkeleton,
         district_slots: list[DistrictSlot],
+        terrain_cells:  list[MapCell] | None,
     ):
         origin = settlement_origin_m(settlement)
         side_m = footprint_side_m(world, skeleton.system_city_size)
@@ -157,6 +159,7 @@ class SettlementAssembler:
         return plan_city_street_grid(
             origin.x, origin.y, origin.z, side_m, cell_size_m(world),
             district_slots, world.world_uid, world, rng, skeleton,
+            surface=column_surface(terrain_cells),
         )
 
     def _plan_barriers(

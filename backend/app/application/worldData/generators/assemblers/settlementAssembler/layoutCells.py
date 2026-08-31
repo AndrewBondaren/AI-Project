@@ -74,12 +74,14 @@ def collect_geometry_meter_cells(layout: SettlementLayout) -> list[MapCell]:
 
     for district in layout.district_layouts:
         for area in district.area_layouts:
-            bound = rebind_layout_to_building(
-                area.building_layout,
-                area.building_location,
-            )
-            cells.extend(bound.cells)
+            if area.building_layout is not None and area.building_location is not None:
+                bound = rebind_layout_to_building(
+                    area.building_layout,
+                    area.building_location,
+                )
+                cells.extend(bound.cells)
             cells.extend(area.barrier_cells)
+            cells.extend(area.yard_cells)
         cells.extend(district.barrier_cells)
 
     cells.extend(layout.barrier_cells)

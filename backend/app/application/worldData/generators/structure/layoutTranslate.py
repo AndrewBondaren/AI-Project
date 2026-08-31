@@ -13,16 +13,26 @@ def translate_layout(
     layout: StructureLayout,
     dx: MeterDelta | int,
     dy: MeterDelta | int,
+    dz: MeterDelta | int = 0,
 ) -> StructureLayout:
-    """Apply meter-space offset to all layout coordinates."""
-    if dx == 0 and dy == 0:
+    """Apply meter-space offset to layout coordinates (xy + z)."""
+    if dx == 0 and dy == 0 and dz == 0:
         return layout
 
-    cells = [replace(c, x=c.x + dx, y=c.y + dy) for c in layout.cells]
+    cells = [
+        replace(c, x=c.x + dx, y=c.y + dy, z=c.z + dz)
+        for c in layout.cells
+    ]
     rooms = [
-        replace(r, map_x=(r.map_x or 0) + dx, map_y=(r.map_y or 0) + dy)
+        replace(
+            r,
+            map_x=(r.map_x or 0) + dx,
+            map_y=(r.map_y or 0) + dy,
+            map_z=(r.map_z or 0) + dz,
+        )
         for r in layout.rooms
     ]
+    levels = [replace(lv, z=lv.z + dz) for lv in layout.levels]
     passages = []
     for p in layout.passages:
         passages.append(replace(
@@ -45,7 +55,7 @@ def translate_layout(
 
     return StructureLayout(
         cells=cells,
-        levels=layout.levels,
+        levels=levels,
         passages=passages,
         rooms=rooms,
         occupied_footprint=translated_fp,

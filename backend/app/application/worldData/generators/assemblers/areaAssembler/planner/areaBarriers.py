@@ -14,14 +14,10 @@ from app.application.worldData.generators.barrier.cells import emit_barrier_cell
 from app.application.worldData.generators.barrier.material import pick_barrier_material
 from app.application.worldData.generators.barrier.perimeter import (
     bbox_from_cells,
-    expand_bbox,
     gate_on_facing_edge,
     perimeter_ring_bbox,
 )
-from app.dataModel.settlement.area.perimeterBarrier import (
-    DEFAULT_PARCEL_MARGIN_M,
-    perimeter_barrier_from_template,
-)
+from app.dataModel.settlement.area.perimeterBarrier import perimeter_barrier_from_template
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -47,13 +43,12 @@ def plan_area_barrier_cells(
     world:             World,
     slot:              AreaSlot,
     building_template: dict,
-    building:          NamedLocation,
+    building:          NamedLocation | None,
     skeleton:          CitySkeleton,
     rng:               Random,
 ) -> list[MapCell]:
     """
-    Забор вокруг footprint участка (slot.cells) + margin.
-    CoordinateSpace: WORLD_LOCAL_METERS (parcel bbox from slot.cells).
+    Забор по периметру уже готовых slot.cells. Не expand.
     Gate — на грани slot.facing (сторона улицы).
     """
     if not slot.cells:
@@ -74,17 +69,20 @@ def plan_area_barrier_cells(
         return []
 
     bx0, by0, bx1, by1 = bbox_from_cells(slot.cells)
-    px0, py0, px1, py1 = expand_bbox(bx0, by0, bx1, by1, DEFAULT_PARCEL_MARGIN_M)
-    ring = set(perimeter_ring_bbox(px0, py0, px1, py1, step=1))
-    gate = gate_on_facing_edge(px0, py0, px1, py1, slot.facing)
+    ring = set(perimeter_ring_bbox(bx0, by0, bx1, by1, step=1))
+    gate = gate_on_facing_edge(bx0, by0, bx1, by1, slot.facing)
     gate_coords = {gate}
     ring |= gate_coords
 
     material = pick_barrier_material(
         world, barrier_template, skeleton.economic_tier, rng,
     )
+    if building is not None:
+        loc_uid = building.location_uid
+    else:
+        loc_uid = f"{world.world_uid}-area-{bx0}-{by0}"
     cells = emit_barrier_cells(
-        world, ring, gate_coords, material, building.location_uid, slot.ground_z,
+        world, ring, gate_coords, material, loc_uid, slot.ground_z,
     )
 
     logger.info(
@@ -94,10 +92,10 @@ def plan_area_barrier_cells(
         template_type,
         material,
         len(cells),
-        px0,
-        py0,
-        px1,
-        py1,
+        bx0,
+        by0,
+        bx1,
+        by1,
         slot.facing,
     )
     return cells

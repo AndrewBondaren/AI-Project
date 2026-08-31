@@ -11,7 +11,9 @@ from app.application.worldData.generators.assemblers.districtAssembler.districtS
 from app.application.worldData.generators.assemblers.districtAssembler.planner.areaSlots import (
     plan_area_placements,
 )
+from app.application.worldData.generators.coordinates.columnSurface import column_surface
 from app.application.worldData.generators.road.districtRoadGenerator import DistrictRoadGenerator
+from app.application.worldData.generators.road.streetCells import rasterize_street_xy
 from app.application.worldData.generators.structure.structureGeneratorService import StructureLayout
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
@@ -41,11 +43,14 @@ class DistrictAssembler:
             f"{world.world_uid}_{slot.origin_x}_{slot.origin_y}_{template.system_name}",
         )
         placements = plan_area_placements(slot, cache, world, city_skeleton, rng)
+        surface = column_surface(terrain_cells)
+        nodes, edges = self._plan_streets(slot, city_skeleton, world, surface)
+        street_xy = rasterize_street_xy(nodes, edges)
 
         logger.info(
             "DistrictAssembler | template=%s district_type=%s origin=(%d,%d) size=%dx%d"
             " street_layout=%s algorithm=%s connection_type=%s sidewalk=%s"
-            " area_slots=%d required_structures=%d",
+            " area_slots=%d required_structures=%d street_xy=%d",
             template.system_name,
             template.district_type,
             slot.origin_x,
@@ -58,6 +63,7 @@ class DistrictAssembler:
             primary.sidewalk,
             len(placements),
             len(slot.required_structures),
+            len(street_xy),
         )
         if slot.required_structures:
             for req in slot.required_structures:
@@ -81,13 +87,12 @@ class DistrictAssembler:
                 placement.template,
                 city_skeleton,
                 terrain_cells,
+                street_xy=street_xy,
                 cached_layout=cached,
                 building_x=placement.building_x,
                 building_y=placement.building_y,
             )
             area_layouts.append(layout)
-
-        nodes, edges = self._plan_streets(slot, city_skeleton, world)
 
         logger.info(
             "DistrictAssembler done | template=%s district_nodes=%d district_edges=%d area_layouts=%d",
@@ -109,7 +114,8 @@ class DistrictAssembler:
         slot:          DistrictSlot,
         city_skeleton: CitySkeleton,
         world:         World,
+        surface:       dict[tuple[int, int], int] | None = None,
     ) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
         generator = DistrictRoadGenerator()
         rng       = random.Random(f"{slot.origin_x}_{slot.origin_y}")
-        return generator.generate(slot, city_skeleton, world, rng)
+        return generator.generate(slot, city_skeleton, world, rng, surface=surface)

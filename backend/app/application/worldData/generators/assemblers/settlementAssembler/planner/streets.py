@@ -84,6 +84,7 @@ def plan_settlement_entries(
     origin_y:  int,
     side_m:    int,
     world_uid: str,
+    surface:   dict[tuple[int, int], int] | None = None,
 ) -> None:
     """
     Заполняет slot.entry_nodes для всех районов.
@@ -97,6 +98,10 @@ def plan_settlement_entries(
     y_lines = _grid_lines(origin_y, side_m, block)
 
     node_registry: dict[tuple[int, int, int], ConnectionNode] = {}
+    z_lookup = surface or {}
+
+    def node_z(x: int, y: int, fallback: int) -> int:
+        return int(z_lookup.get((x, y), fallback))
 
     def get_node(x: int, y: int, z: int, tag: str) -> ConnectionNode:
         key = (x, y, z)
@@ -109,14 +114,14 @@ def plan_settlement_entries(
     for slot in slots:
         ox, oy = slot.origin_x, slot.origin_y
         w, d = slot.width_m, slot.depth_m
-        z = slot.ground_z
+        pin_z = slot.ground_z
         conn_type = _connection_type(slot)
         entries: list[ConnectionEntry] = []
 
         slot_y = _lines_in_range(y_lines, oy, oy + d)
         for y in slot_y:
-            west = get_node(ox, y, z, "through_w")
-            east = get_node(ox + w, y, z, "through_e")
+            west = get_node(ox, y, node_z(ox, y, pin_z), "through_w")
+            east = get_node(ox + w, y, node_z(ox + w, y, pin_z), "through_e")
             entries.append(ConnectionEntry(
                 node=west, connection_type=conn_type, role=DistrictEntryRole.THROUGH_ROAD,
                 facing=Facing.WEST, paired_exit_uid=east.node_uid,
@@ -128,8 +133,8 @@ def plan_settlement_entries(
 
         slot_x = _lines_in_range(x_lines, ox, ox + w)
         for x in slot_x:
-            south = get_node(x, oy, z, "through_s")
-            north = get_node(x, oy + d, z, "through_n")
+            south = get_node(x, oy, node_z(x, oy, pin_z), "through_s")
+            north = get_node(x, oy + d, node_z(x, oy + d, pin_z), "through_n")
             entries.append(ConnectionEntry(
                 node=south, connection_type=conn_type, role=DistrictEntryRole.THROUGH_ROAD,
                 facing=Facing.SOUTH, paired_exit_uid=north.node_uid,
@@ -141,7 +146,7 @@ def plan_settlement_entries(
 
         x = ox + block
         while x < ox + w:
-            node = get_node(x, oy, z, "entry_s")
+            node = get_node(x, oy, node_z(x, oy, pin_z), "entry_s")
             entries.append(ConnectionEntry(
                 node=node, connection_type=conn_type, role=DistrictEntryRole.ENTRY_POINT,
                 facing=Facing.SOUTH, paired_exit_uid=None,
@@ -199,6 +204,7 @@ def plan_city_street_grid(
     world:          World,
     rng:            Random,
     skeleton:       CitySkeleton,
+    surface:        dict[tuple[int, int], int] | None = None,
 ) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
     """
     settlement_gate на периметре footprint + кольцевая магистраль.
@@ -209,6 +215,13 @@ def plan_city_street_grid(
     edges: list[ConnectionEdge] = []
     by_xy: dict[tuple[int, int], ConnectionNode] = {}
     district_nodes = _collect_node_registry(district_slots)
+    district_by_xy: dict[tuple[int, int], ConnectionNode] = {}
+    for n in district_nodes.values():
+        district_by_xy.setdefault((n.x, n.y), n)
+    z_lookup = surface or {}
+
+    def node_z(x: int, y: int) -> int:
+        return int(z_lookup.get((x, y), ground_z))
 
     def register(node: ConnectionNode) -> ConnectionNode:
         key = (node.x, node.y)
@@ -222,9 +235,12 @@ def plan_city_street_grid(
         key = (x, y)
         if key in by_xy:
             return by_xy[key]
-        if (x, y, ground_z) in district_nodes:
-            return register(district_nodes[(x, y, ground_z)])
-        node = _make_node(x, y, ground_z, ConnectionNodeType.SETTLEMENT_GATE, GraphLevel.CITY, world_uid, label)
+        if key in district_by_xy:
+            return register(district_by_xy[key])
+        node = _make_node(
+            x, y, node_z(x, y),
+            ConnectionNodeType.SETTLEMENT_GATE, GraphLevel.CITY, world_uid, label,
+        )
         return register(node)
 
     xs = footprint_gate_line_coords(origin_x, side_m, cell_m)
@@ -276,12 +292,15 @@ def plan_city_street_grid(
     corridor_nodes: list[ConnectionNode] = []
 
     def city_corridor_node(x: int, y: int, tag: str) -> ConnectionNode:
-        key = (x, y, ground_z)
-        if key in district_nodes:
-            return register(district_nodes[key])
-        if (x, y) in by_xy:
-            return by_xy[(x, y)]
-        node = _make_node(x, y, ground_z, ConnectionNodeType.INTERSECTION, GraphLevel.CITY, world_uid, tag)
+        key = (x, y)
+        if key in district_by_xy:
+            return register(district_by_xy[key])
+        if key in by_xy:
+            return by_xy[key]
+        node = _make_node(
+            x, y, node_z(x, y),
+            ConnectionNodeType.INTERSECTION, GraphLevel.CITY, world_uid, tag,
+        )
         return register(node)
 
     if grid_n > 1:

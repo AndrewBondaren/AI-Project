@@ -25,6 +25,7 @@ from app.db.models.world import World
 logger = logging.getLogger(__name__)
 
 PARCEL_GAP_M = 8
+YARD_PADDING_M = 1
 
 
 @dataclass(frozen=True)
@@ -58,6 +59,23 @@ def _rects_overlap(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -
     return ax0 <= bx1 and bx0 <= ax1 and ay0 <= by1 and by0 <= ay1
 
 
+def _parcel_rect(fp: OccupiedFootprint, building_x: int, building_y: int, pad: int) -> tuple[int, int, int, int]:
+    x0, y0, x1, y1 = _footprint_rect(fp, building_x, building_y)
+    p = max(0, pad)
+    return x0 - p, y0 - p, x1 + p, y1 + p
+
+
+def parcel_cells(
+    fp: OccupiedFootprint,
+    bx: int,
+    by: int,
+    yard_padding: int,
+) -> list[tuple[int, int]]:
+    """Footprint + courtyard padding. Same rect as packing collision."""
+    x0, y0, x1, y1 = _parcel_rect(fp, bx, by, yard_padding)
+    return [(x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)]
+
+
 def _fits_district(
     slot: DistrictSlot,
     fp:   OccupiedFootprint,
@@ -65,7 +83,7 @@ def _fits_district(
     by:   int,
 ) -> tuple[bool, str]:
     ox0, oy0, ox1, oy1 = _district_bounds(slot)
-    x0, y0, x1, y1 = _footprint_rect(fp, bx, by)
+    x0, y0, x1, y1 = _parcel_rect(fp, bx, by, YARD_PADDING_M)
     if x0 < ox0 or y0 < oy0 or x1 >= ox1 or y1 >= oy1:
         return False, "выход за границы района"
     return True, ""
@@ -80,19 +98,22 @@ def _position_center(slot: DistrictSlot, fp: OccupiedFootprint) -> tuple[int, in
 
 
 def _position_any(slot: DistrictSlot, fp: OccupiedFootprint, margin: int = PARCEL_GAP_M) -> tuple[int, int]:
-    return slot.origin_x + margin - fp.min_x, slot.origin_y + margin - fp.min_y
+    return (
+        slot.origin_x + margin + YARD_PADDING_M - fp.min_x,
+        slot.origin_y + margin + YARD_PADDING_M - fp.min_y,
+    )
 
 
 def _make_area_slot(
     fp:       OccupiedFootprint,
     bx:       int,
     by:       int,
-    ground_z: int,
     facing:   Facing,
+    *,
+    fallback_z: int = 0,
 ) -> AreaSlot:
-    x0, y0, x1, y1 = _footprint_rect(fp, bx, by)
-    cells = [(x, y) for x in range(x0, x1 + 1) for y in range(y0, y1 + 1)]
-    return AreaSlot(cells=cells, ground_z=ground_z, facing=facing)
+    cells = parcel_cells(fp, bx, by, YARD_PADDING_M)
+    return AreaSlot(cells=cells, ground_z=fallback_z, facing=facing)
 
 
 def plan_area_placements(
@@ -160,7 +181,7 @@ def plan_area_placements(
             )
             return False
 
-        rect = _footprint_rect(fp, bx, by)
+        rect = _parcel_rect(fp, bx, by, YARD_PADDING_M)
         for other in placed_rects:
             if _rects_overlap(rect, other):
                 logger.warning(
@@ -170,7 +191,7 @@ def plan_area_placements(
                 )
                 return False
 
-        area_slot = _make_area_slot(fp, bx, by, slot.ground_z, facing)
+        area_slot = _make_area_slot(fp, bx, by, facing, fallback_z=slot.ground_z)
         placements.append(AreaPlacement(
             area_slot=area_slot,
             template=template,
@@ -203,7 +224,7 @@ def plan_area_placements(
         ]
         rng.shuffle(candidates)
         step = max(
-            (layout_cache[n].occupied_footprint.width for n in candidates),
+            (layout_cache[n].occupied_footprint.width + 2 * YARD_PADDING_M for n in candidates),
             default=20,
         ) + PARCEL_GAP_M
         margin = PARCEL_GAP_M
@@ -212,16 +233,18 @@ def plan_area_placements(
                 continue
             fp = layout_cache[name].occupied_footprint
             placed = False
-            y = slot.origin_y + margin
-            while y + fp.depth < slot.origin_y + slot.depth_m - margin and not placed:
-                x = slot.origin_x + margin
-                while x + fp.width < slot.origin_x + slot.width_m - margin and not placed:
+            y = slot.origin_y + margin + YARD_PADDING_M
+            while y + fp.depth + YARD_PADDING_M < slot.origin_y + slot.depth_m - margin and not placed:
+                x = slot.origin_x + margin + YARD_PADDING_M
+                while x + fp.width + YARD_PADDING_M < slot.origin_x + slot.width_m - margin and not placed:
                     bx = x - fp.min_x
                     by = y - fp.min_y
                     ok, reason = _fits_district(slot, fp, bx, by)
-                    rect = _footprint_rect(fp, bx, by)
+                    rect = _parcel_rect(fp, bx, by, YARD_PADDING_M)
                     if ok and not any(_rects_overlap(rect, r) for r in placed_rects):
-                        area_slot = _make_area_slot(fp, bx, by, slot.ground_z, Facing.SOUTH)
+                        area_slot = _make_area_slot(
+                            fp, bx, by, Facing.SOUTH, fallback_z=slot.ground_z,
+                        )
                         placements.append(AreaPlacement(
                             area_slot=area_slot,
                             template=lookup_building_template(world, name),

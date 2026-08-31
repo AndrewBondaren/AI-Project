@@ -129,13 +129,31 @@ def extract_settlement(settlement: NamedLocation, layout: SettlementLayout) -> E
 
         for area in district_layout.area_layouts:
             area_slot = area.slot
-            probe = area.building_location
-            bx = int(probe.map_x or 0)
-            by = int(probe.map_y or 0)
-            slot_cells = list(area_slot.cells) or [(bx, by)]
+            slot_cells = list(area_slot.cells)
+            if not slot_cells:
+                slot_cells = [(0, 0)]
             min_x = min(x for x, _ in slot_cells)
             min_y = min(y for _, y in slot_cells)
             a_uid = area_uid(d_uid, min_x, min_y, area_slot.facing)
+            probe = area.building_location
+
+            if probe is None:
+                area_wires.append(AreaStructureWire(
+                    area_uid=a_uid,
+                    slot=AreaSlotWire(
+                        cells=list(dict.fromkeys(slot_cells)),
+                        ground_z=area_slot.ground_z,
+                        facing=area_slot.facing,
+                    ),
+                    barrier_cells=cells_to_shell_wires(area.barrier_cells),
+                    yard_cells=cells_to_shell_wires(area.yard_cells),
+                    small_layouts=[],
+                    buildings=[],
+                ))
+                continue
+
+            bx = int(probe.map_x or 0)
+            by = int(probe.map_y or 0)
             template_name = probe.system_template_uid or "building"
             b_uid = building_location_uid(a_uid, template_name, bx, by)
             building = replace(
@@ -150,7 +168,7 @@ def extract_settlement(settlement: NamedLocation, layout: SettlementLayout) -> E
             )
             buildings.append(building)
 
-            old_levels = list(area.building_layout.levels)
+            old_levels = list(area.building_layout.levels) if area.building_layout else []
             new_levels: list[LocationLevel] = []
             old_to_new: dict[str, str] = {}
             for lv in old_levels:
@@ -160,7 +178,8 @@ def extract_settlement(settlement: NamedLocation, layout: SettlementLayout) -> E
             levels_out.extend(new_levels)
 
             fronts = 0
-            for passage in area.building_layout.passages:
+            passages = area.building_layout.passages if area.building_layout else []
+            for passage in passages:
                 role = _role_for_passage(passage)
                 if role is None:
                     continue
@@ -189,7 +208,8 @@ def extract_settlement(settlement: NamedLocation, layout: SettlementLayout) -> E
                 )
 
             rebound_cells = [
-                replace(c, location_uid=b_uid) for c in area.building_layout.cells
+                replace(c, location_uid=b_uid)
+                for c in (area.building_layout.cells if area.building_layout else [])
             ]
             shell = outdoor_shell_wires(rebound_cells)
             small_shells = [
@@ -218,7 +238,7 @@ def extract_settlement(settlement: NamedLocation, layout: SettlementLayout) -> E
         ))
 
     nodes, edges = collect_connection_graph(
-        layout, frozenset({GraphLevel.CITY, GraphLevel.DISTRICT}),
+        layout, frozenset({GraphLevel.CITY, GraphLevel.DISTRICT, GraphLevel.AREA}),
     )
     wire = SettlementStructureWire(
         settlement_uid=settlement.location_uid,

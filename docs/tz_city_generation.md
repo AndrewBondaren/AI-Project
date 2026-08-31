@@ -82,6 +82,7 @@ LLM описывает → только из скелета (ограничен�
 | `dominant_material` | string | post-assemble | ref → `material_registry`; **не** import | ✅ `resolve_dominant_material` |
 | `architectural_style` | string | JSON import | ref → `architectural_style_registry`; для LLM | ✅ read |
 | `settlement_density` | string | JSON import | `sparse` / `medium` / `dense` | ✅ read (NC-9) |
+| `frontage_type_order` | string[] | JSON import, optional | Иерархия `connection_type` для парадного (C22). Как `settlement_density`: import → `CitySkeleton`; SQL колонка — при persist скелета (`0001`). `null` = дефолт движка. Район может переопределить | ⬜ connections §5.1.3 |
 | `state_uid` | string | `NamedLocation` | Политический контекст LLM | ✅ location; ⬜ в `CitySkeleton` |
 
 **Что LLM получает из скелета:**
@@ -212,24 +213,36 @@ city_footprint = квадрат footprint_m × footprint_m вокруг origin
 
 ### 6.3 Заполнение кварталов
 
-> **Impl:** `DistrictAssembler` + `areaSlots.py` (bin-packing), `buildingCache.py`, `required_structures` на slot.
+Единица посадки внутри района — **квартал сетки** (модуль `block_size`: 50 / 80 / 120 м), прямоугольник между улицами §6.2. Не bin-pack по AABB всего района.
 
-```
-для каждого квартала:
-    тип квартала: residential / commercial / civic / mixed
-        (зависит от distance от центра: центр → commercial/civic, периферия → residential)
-    
-    для каждого слота в квартале:
-        выбрать шаблон из building_template_registry
-            фильтр: structure_type совместим с типом квартала
-            фильтр: economic_tier совместим с city.economic_tier (±1 тир)
-        разместить здание → NamedLocation (без интерьера)
-        mark slot занятым
-```
+Порядок (`DistrictAssembler`, C22):
+
+1. Якоря входа / стены района (нет в данных — скип).
+2. **Рамка модулей** — кварталы и полосы главной сетки по границам. Ещё не полотно сквозь дома.
+3. Cache оболочек всех кандидатов (`allowed_structure_types` ∩ тир, `required_structures`). Интерьер комнат — не этот скоуп.
+4. Посадка **в модуль как 2D-бин.** Коллекция токенов: uid от размера (`w×d` + имя + индекс), список убыванию; вынули — нет в пуле. Искать с **начала / середины / конца** по дырке модуля, не сканировать все. Корзины спан / один бин / остаток. Жадный 2D-FFD. Аллея из `connections` если ≥2 в бине. Спан может вытеснить.
+5. **Граф улиц** — главные по рамке, аллеи внутри модуля, не через клетки участков.
+6. `StructureAreaAssembler` — слот уже стоит; только касающиеся отрезки.
+
+Тип квартала на уровне **города** (`district_type` / `allowed_structure_types`) — какие назначения в районе. Куда складу vs дому внутри района при fill — не карта зон v1.
+
+SoT деталей: [tz_structure_connections.md](./tz_structure_connections.md) §5.1.3–§5.1.4.
+
+**TODO — переход кода (отдельный план, не эта сессия):**
+
+- Рамка модулей `block_size` до packing (не overlay сетки после).
+- Packing: токен uid от `w×d`; список убыванию; поиск начало/середина/конец; 2D-FFD; аллея из `connections`; не перебор.
+- Аллея между мелкими из `connections`, если сумма bbox + ширина влезает в шаг; иначе не выдумывать.
+- Граф/rasterize после посадки; маска занятых клеток; слоту только касающиеся рёбра.
+- Якоря `entry_nodes` / `through_road` и стены если поле `perimeter_barrier` есть.
+- Нитка FRONT-4 (склейка кусков одной линии); `plaza` — улицы равны.
+- Не в этом TODO: интерьер, DAG, schema `0002`.
+
+Код сейчас: `buildingCache` → `areaSlots` AABB → `_plan_streets` на весь bbox.
 
 ### 6.4 Особые объекты
 
-Civic-здания (ратуша, храм, рынок) — `required_structures` в district template; impl ✅ (`areaSlots`, Phase C/E).
+Civic-здания (ратуша, храм, рынок) — `required_structures` в district template; impl ✅ (`areaSlots`, Phase C/E). Размер места — footprint **этого** шаблона, не абстрактный лот (C22 / connections §5.1.3).
 
 ---
 
@@ -292,12 +305,14 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 | `placement_conditions` | array | optional | Условия появления района (см. 9.3). Пустой массив = всегда доступен |
 | `max_per_city` | int | optional | Максимальное количество районов этого типа в одном городе. `null` = без ограничений |
 | `size_pct` | object | optional | Диапазон размера района как доля глобальной ячейки: `{ "width": [0.3, 1.0], "depth": [0.3, 1.0] }`. `1.0` = вся ячейка |
-| `allowed_structure_types` | string[] | optional | `structure_type` из `building_template`, допустимые в этом районе. `null` = без ограничений |
+| `allowed_structure_types` | string[] | optional | Допустимые `structure_type` шаблонов в районе (любое назначение). `null` = без ограничений |
 | `economic_tier_range` | object | optional | `{ "min": "poor", "max": "exceptional" }` — диапазон тиров зданий в районе |
 | `density` | string | optional | `"sparse"`, `"medium"`, `"dense"`. Переопределяет `city_skeleton.settlement_density` для этого района |
+| `frontage_type_order` | string[] | optional | Иерархия типов дорог для фасада (C22). `null` = список города, иначе дефолт движка. Пример: `["road","highway","alley"]` — входы со стороны `road` |
 | `street_layout` | string | optional | Алгоритм раскладки улиц района (см. 9.5). `null` = наследует от города |
 | `connections` | array | optional | Объявления дорог внутри района: тип, sidewalk, роль. Не объявленные — генератор определяет сам. Формат — см. 9.5 |
 | `required_structures` | array | optional | Особые обязательные постройки (ратуша, храм, рынок) — см. 9.4 |
+| `perimeter_barrier` | object | optional | Стены **района**. **Нет поля** — стен нет. **Поле есть** — стены всегда (детерминировано). `probability` здания **не** используется. Нужен `template` (ref barrier). |
 
 ### 9.3 Условия появления (`placement_conditions`)
 
@@ -324,7 +339,7 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
     { "type": "adjacent_terrain", "terrain_types": ["liquid_body"], "min_count": 1 },
     { "type": "min_city_size", "size": "town" }
   ],
-  "allowed_structure_types": ["warehouse", "tavern", "shop", "guild"],
+  "allowed_structure_types": ["warehouse", "tavern", "shop", "guild", "plaza"],
   "density": "dense"
 }
 ```
@@ -357,7 +372,7 @@ Civic-постройки (ратуша, рынок, храм) объявляют
 | `courtyard` | Закрытые кварталы с внутренними дворами; минимум уличного фронта | Медина, восточный стиль |
 
 Референс алгоритмов: Parish & Müller (2001) — паттерны `grid / radial / organic` применяются на уровне района, а не города целиком.  
-`DistrictAssembler` получает `street_layout` из шаблона и вызывает соответствующий генератор улиц.
+`DistrictAssembler` получает `street_layout` из шаблона и вызывает соответствующий генератор улиц. Рамка layout — до packing; полотно — после (§6.3). Улицы не через занятый участок.
 
 ### 9.5.1 Объявления соединений (`connections`)
 

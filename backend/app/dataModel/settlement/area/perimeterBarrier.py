@@ -18,8 +18,6 @@ class PerimeterBarrier(BaseModel):
         default=0.0, greater_equals=0.0, lesser_equals=1.0,
     )
 
-DEFAULT_PARCEL_MARGIN_M = 1
-
 
 def perimeter_barrier_from_template(template: dict) -> PerimeterBarrier:
     raw = template.get("perimeter_barrier")

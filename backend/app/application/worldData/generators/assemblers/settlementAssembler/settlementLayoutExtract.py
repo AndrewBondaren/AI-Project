@@ -34,6 +34,10 @@ def collect_connection_graph(
         if GraphLevel.DISTRICT in graph_levels:
             nodes.extend(district.connection_nodes)
             edges.extend(district.connection_edges)
+        if GraphLevel.AREA in graph_levels:
+            for area in district.area_layouts:
+                nodes.extend(area.connection_nodes)
+                edges.extend(area.connection_edges)
 
     return nodes, edges
 
@@ -51,6 +55,8 @@ def collect_building_locations(
     for district in layout.district_layouts:
         for area in district.area_layouts:
             building = area.building_location
+            if building is None:
+                continue
             buildings.append(replace(
                 building,
                 parent_location_uid=settlement.location_uid,
