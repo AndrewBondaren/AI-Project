@@ -37,7 +37,7 @@ SettlementAssembler
 - занимает ячейки карты мира под поселение
 - планирует поселение на ячейках; понимает топологию по z (наземный / подземный / воздушный — одновременно)
 - управляет топологией соединения ячеек поселения между собой (улицы, мосты, тоннели)
-- строит сетку улиц, определяет типы кварталов, нарезает слоты под здания
+- городская сетка и `DistrictSlot` (`size_pct`); участки (`AreaSlot`) сажает `DistrictAssembler` (C22)
 
 **Подробнее:** [tz_city_generation.md](tz_city_generation.md)
 
@@ -46,14 +46,14 @@ SettlementAssembler
 **Делает:**
 - вызывается несколько раз на каждой ячейке города — формирует несколько районов на одной ячейке
 - управляет топологией соединения районов между собой
-- **сажает** `AreaSlot` в **2D-бин** модуля: рамка → cache → токены + FFD → граф улиц после
+- **сажает** `AreaSlot` в **2D-бин** модуля: cache → бронь приоритетных → рамка вокруг → проход 2 → граф улиц после
 - назначает шаблон слоту по `structure_type` + `economic_tier`
 - имеет собственный шаблон типа района
-- улицы: рамка до посадки, полотно после; генератор улиц не ставит слоты
+- улицы: рамка после брони приоритетных, полотно после всей посадки; генератор улиц не ставит слоты
 
 **Не делает:** не выравнивает **участки** (и здания на них) под одну плоскость; `ground_z` и порог считает `StructureAreaAssembler` (outdoor **C21**). Не кладёт дверь дома. Не отдаёт участку чужие рёбра.
 
-**C22 (район):** city §6.3 — рамка модулей, packing в квартал, граф после. Переход кода — TODO §6.3. SoT: [tz_structure_connections.md](./tz_structure_connections.md) §5.1.4.
+**C22 (район):** city §6.3 — cache, бронь приоритетных, рамка вокруг, проход 2, граф после. Число копий — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов». Очередь — «Приоритет посадки»; два прохода — «Два прохода посадки». Оболочка 90° — «Поворот оболочки». Переход кода — TODO city §6.3. Контракт района: connections §5.1.4.
 
 **Подробнее:** [tz_city_generation.md](tz_city_generation.md) — раздел 6 (алгоритм заполнения кварталов)
 
@@ -596,30 +596,26 @@ Envelope здания (реальные размеры по x/y/z) нельзя 
 
 #### Решение: generate-first, place-second
 
-`DistrictAssembler` генерирует здания ДО расстановки, кэширует результаты,
-затем расставляет по реальным размерам из `StructureLayout`.
+`DistrictAssembler` считает **оболочки** кандидатов до посадки (cache), затем сажает по реальным `w`,`h`. Полный интерьер всех домов до района — нет (C22). Порядок посадки — [connections](./tz_structure_connections.md) §5.1.3 «Пайплайн посадки», не bin-pack AABB `DistrictSlot`.
 
 #### Алгоритм `DistrictAssembler`
 
 ```
-1. Выбрать шаблоны-кандидаты из district_template.allowed_structure_types
-2. Для каждого шаблона:
-     если template_system_name НЕ в cache:
-         layout = StructureAssembler.assemble(world, slot, template, context)
-         cache[template_system_name] = layout
-3. Читать реальные размеры из cache[name].occupied_cells (фактический bbox)
-4. Bin-packing: расставить здания в пределах DistrictSlot по реальным bbox
-5. Не влезло → logger.warning("district=%s template=%s не размещён: %s", ..., reason)
-6. StructureAreaAssembler получает готовый StructureLayout из кэша —
-   не запускает генерацию повторно
+1. Кандидаты: allowed_structure_types ∩ тир ∪ required_structures
+2. Cache оболочек (StructureAssembler; интерьер комнат — не этот скоуп)
+3. Проход 1 — бронь приоритетных во внутреннем bbox (решётка block_size)
+4. Рамка вокруг броней (не сквозь бронь / коридор якорей)
+5. Проход 2 — остальная коллекция
+6. Граф улиц → StructureAreaAssembler из cache (не второй generate)
+7. Не влезло → warning, не exception
 ```
 
 #### Кэш
 
 - Живёт на уровне сборки одного поселения (`SettlementAssembler.assemble` создаёт и передаёт вниз)
-- Ключ: `template["system_name"]`
-- Значение: `StructureLayout`
-- Один шаблон → одна генерация на весь город, переиспользуется во всех районах
+- Ключ целевой: `(template, facing)` — connections §5.1.3 «Cache и facing». Код сейчас: `system_name`
+- Значение: оболочка / `StructureLayout` (комнатная нарезка — не packing)
+- Один шаблон (+ facing) → не генерировать заново на каждый слот
 
 #### Warning-политика
 
@@ -630,7 +626,9 @@ Envelope здания (реальные размеры по x/y/z) нельзя 
 
 Это соответствует общей политике верификаторов проекта: warning без исключений.
 
-**C22:** целевое city §6.3: рамка → cache → 2D-бин модуля (токены, FFD) → граф после. Код: AABB + overlay. Переход — TODO в §6.3.
+C22: подробный DEBUG на каждом шаге packing — [connections](./tz_structure_connections.md) §5.1.3 «Debug packing». Sinks / хелперы — [tz_logging.md](./tz_logging.md) (не `getLogger` в planner).
+
+**C22:** целевое city §6.3: cache → бронь приоритетных → рамка вокруг → проход 2 → граф после. Число копий — connections §5.1.3 «Число токенов». Код: AABB + overlay. Переход — TODO в §6.3.
 
 ---
 
@@ -639,11 +637,14 @@ Envelope здания (реальные размеры по x/y/z) нельзя 
 | Вопрос | Статус |
 |---|---|
 | `_derive_context` — алгоритм вывода `StructureContext` из `structure_type` + terrain + `economic_tier` | не описан |
-| `_place_building` — правила позиционирования здания внутри участка (центрирование, offset от забора, facing-alignment) | **closed C22:** facing из примыкающего графа + приоритет района; стена входа = грань парадного, не rotate. SoT [tz_structure_connections.md](./tz_structure_connections.md) §5.1.3 |
+| `_place_building` — правила позиционирования здания внутри участка (центрирование, offset от забора, facing-alignment) | **closed C22:** facing из графа + приоритет; `entry_point.wall` = грань парадного, интерьер не rotate. Packer 90° оболочки + вход участка = парадный основного дома — [connections](./tz_structure_connections.md) §5.1.3 «Поворот оболочки» |
 | `_build_paths` — подъезд к улице при Δz | **closed:** [tz_structure_connections.md](./tz_structure_connections.md) §5.1.1; порог = assembler участка |
 | Кто считает `ground_z` / порог | **closed:** `StructureAreaAssembler` (участок, не район) — C21; порог ≠ всегда дверь |
 | `_build_barrier` — алгоритм генерации ячеек забора по списку координат участка | не описан |
 | Малые постройки на участке | состав площади (сад, фонтан, терраса) — **шаблон**, не хардкод; алгоритм stamp — нет ТЗ |
 | `AreaLayout` ↔ `DistrictAssembler` — как район агрегирует результаты нескольких участков | нет ТЗ |
-| `DistrictAssembler` — механика дорог (внутренние улицы, тротуары, соединение с городскими магистралями) | реализовано: `DistrictRoadGenerator` + `gridLayout`; граф в `connection_nodes/edges` |
+| `DistrictAssembler` — механика дорог (внутренние улицы, тротуары, соединение с городскими магистралями) | **C22:** рамка после брони прохода 1; код: `DistrictRoadGenerator` + overlay. Переход — city §6.3 |
+| Рамка `radial` / `organic` вокруг брони; snap `entry_nodes` вне `grid` | **CONN-PACK-1** — [connections](./tz_structure_connections.md) §8 |
+| Два `required_structures` с `position: center` | **CONN-PACK-2** — connections §8 |
+| Envelope `(template, facing)` на проходе 1, пока полосы рамки нет | **CONN-PACK-3** — connections §8 |
 | `DistrictSlot.facing` — нужна ли ориентация к главной улице города на уровне района | отложено |

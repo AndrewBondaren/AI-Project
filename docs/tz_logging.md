@@ -68,6 +68,7 @@ backend/logs/{domain}/{service}.log
 | `render` | `dumpLog` | `logs/render/dumpLog.log` | **script** | debug ASCII dump **для разработчика** (не мастер мира, не игрок, не DAG); ticks, heartbeat ≤5 с | [`dumpLog.py`](../backend/app/application/worldData/render/dumpLog.py) · [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) |
 | `terrain` | `terrainParallelLog` | `logs/terrain/terrainParallelLog.log` | server | parallel column / worker ticks | [`terrainParallelLog.py`](../backend/app/application/worldData/terrainParallelLog.py) · [`tz_terrain_generation.md`](./tz_terrain_generation.md) |
 | `climate` | `climateLog` | `logs/climate/climateLog.log` | server | pass INFO, `warn_once` / `debug_once` | [`loggingHelpers.py`](../backend/app/application/worldData/generators/climate/loggingHelpers.py) · [`tz_climate.md`](./tz_climate.md) § Логирование |
+| `settlement` | `settlementAssembler` | `logs/settlement/settlementAssembler.log` | server | C22 packing DEBUG/INFO/WARNING; шторм `fit` только файл (L8) | ⬜ хелпер по образцу relief `log.py` / climate `loggingHelpers` · [connections](./tz_structure_connections.md) §5.1.3 «Debug packing» |
 | `structure` | `headroom` | `logs/structure/headroom.log` | server | post-gen ERROR, не abort | [`tz_building_generator.md`](./tz_building_generator.md) § Headroom (образец R44) |
 | `core` | `runtime` | `logs/core/runtime.log` | server | непойманные server-логгеры (uvicorn / fastapi / …); **не** `app.log` | [`loggingConfig.py`](../backend/app/core/loggingConfig.py) |
 | `script` | `detailedBake` | `logs/script/detailedBake.log` | script | poll HTTP, summary скрипта | [`detailed_bake.py`](../backend/scripts/detailed_bake.py) |
@@ -76,7 +77,7 @@ backend/logs/{domain}/{service}.log
 | `script` | `entryBgRefine` | `logs/script/entryBgRefine.log` | script | entry refine smoke | [`entry_bg_refine.py`](../backend/scripts/entry_bg_refine.py) |
 | `script` | `renderMaps` | `logs/script/renderMaps.log` | script | CLI dump без bake | [`render_maps.py`](../backend/scripts/render_maps.py) |
 
-Позже тот же ключ (не `app.log`): `hydrology`, `chat`, `engine`, прочие `script/{stem}`.
+Позже тот же ключ (не `app.log`): `hydrology`, `chat`, `engine`, прочие `script/{stem}`. `settlement` / `settlementAssembler` — в каталоге (C22).
 
 ## Маршрут
 
@@ -92,6 +93,7 @@ backend/logs/{domain}/{service}.log
 | `app.application.worldData.render.dumpLog` | `render` | `dumpLog` |
 | `app.application.worldData.terrainParallelLog` | `terrain` | `terrainParallelLog` |
 | `app.application.worldData.generators.climate` / climate assembler | `climate` | `climateLog` |
+| `app.application.worldData.generators.assemblers` (кроме `climateAssembler` → `climate`) | `settlement` | `settlementAssembler` |
 | `backend/scripts/{stem}.py` после `ensure_script_logging` | `script` | camelCase stem |
 | непойманный (профиль server) | `core` | `runtime` |
 
@@ -129,6 +131,7 @@ backend/logs/{domain}/{service}.log
 | [`tz_map_light_bake.md`](./tz_map_light_bake.md) | `pack` / `packBakeLog` (light compose) |
 | [`tz_terrain_generation.md`](./tz_terrain_generation.md) | `terrain` / `terrainParallelLog` |
 | [`tz_climate.md`](./tz_climate.md) | `climate` / `climateLog` |
+| [`tz_structure_connections.md`](./tz_structure_connections.md) | `settlement` / `settlementAssembler` (C22 packing) |
 | [`tz_building_generator.md`](./tz_building_generator.md) | `structure` / `headroom` |
 | [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) | три входа; скрипты только HTTP |
 | [`tz_lighting.md`](./tz_lighting.md) | **не** этот файл (освещение мира) |
@@ -139,7 +142,7 @@ backend/logs/{domain}/{service}.log
 
 | Дата | Изменение |
 |---|---|
-| 2026-08-27 | Occupancy-validator `gradeCellSlotValidate` пишет тот же `grade_cell_empty_ray` (sink `relief/gradeCellRays`). |
+| 2026-09-01 | Консьюмер `settlement` / `settlementAssembler`: C22 packing. События — connections §5.1.3 «Debug packing». |
 | 2026-08-22 | SoT sinks: `{domain}/{service}.log`; один писатель на файл; каталог консьюмеров; скрипт ≠ серверный `app.log`. |
 | 2026-08-22 | unmatched server → `core`/`runtime` (не `app.log`). |
 | 2026-08-23 | **L7/L8:** консоль не блокирует bake (drop-queue); storm R44 / T-3c — файл; heartbeat sidecar/validate/emit — `packBakeLog` на консоль. |

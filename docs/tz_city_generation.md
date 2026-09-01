@@ -83,6 +83,8 @@ LLM описывает → только из скелета (ограничен�
 | `architectural_style` | string | JSON import | ref → `architectural_style_registry`; для LLM | ✅ read |
 | `settlement_density` | string | JSON import | `sparse` / `medium` / `dense` | ✅ read (NC-9) |
 | `frontage_type_order` | string[] | JSON import, optional | Иерархия `connection_type` для парадного (C22). Как `settlement_density`: import → `CitySkeleton`; SQL колонка — при persist скелета (`0001`). `null` = дефолт движка. Район может переопределить | ⬜ connections §5.1.3 |
+| `structure_counts` | object | JSON import, optional | Городской дефолт копий: `{ "<system_name>": int }`. Резолв N — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов» | ⬜ |
+| `structure_priority` | object | JSON import, optional | Городской дефолт очереди fill: `{ "<system_name>": int }`. Резолв — [connections](./tz_structure_connections.md) §5.1.3 «Приоритет посадки» | ⬜ |
 | `state_uid` | string | `NamedLocation` | Политический контекст LLM | ✅ location; ⬜ в `CitySkeleton` |
 
 **Что LLM получает из скелета:**
@@ -213,36 +215,38 @@ city_footprint = квадрат footprint_m × footprint_m вокруг origin
 
 ### 6.3 Заполнение кварталов
 
-Единица посадки внутри района — **квартал сетки** (модуль `block_size`: 50 / 80 / 120 м), прямоугольник между улицами §6.2. Не bin-pack по AABB всего района.
+Единица посадки внутри района — **квартал рамки района** (модуль `block_size`: **50 / 80 / 120 клеток**), не квартал city-сетки §6.2. Не bin-pack по AABB всего района. Метры/имперские — display, не generate.
 
-Порядок (`DistrictAssembler`, C22):
+Порядок (`DistrictAssembler`, C22). Fill — [connections](./tz_structure_connections.md) §5.1.3 «Пайплайн посадки». `DistrictSlot` — `size_pct` ячейки (§9.6); packing слот не растит.
 
 1. Якоря входа / стены района (нет в данных — скип).
-2. **Рамка модулей** — кварталы и полосы главной сетки по границам. Ещё не полотно сквозь дома.
-3. Cache оболочек всех кандидатов (`allowed_structure_types` ∩ тир, `required_structures`). Интерьер комнат — не этот скоуп.
-4. Посадка **в модуль как 2D-бин.** Коллекция токенов: uid от размера (`w×d` + имя + индекс), список убыванию; вынули — нет в пуле. Искать с **начала / середины / конца** по дырке модуля, не сканировать все. Корзины спан / один бин / остаток. Жадный 2D-FFD. Аллея из `connections` если ≥2 в бине. Спан может вытеснить.
-5. **Граф улиц** — главные по рамке, аллеи внутри модуля, не через клетки участков.
-6. `StructureAreaAssembler` — слот уже стоит; только касающиеся отрезки.
+2. **Коллекция оболочек** — cache кандидатов (`allowed_structure_types` ∩ тир, `required_structures`). Интерьер комнат — не этот скоуп.
+3. **Проход 1 — бронь приоритетных** в решётке `block_size` внутреннего bbox (не через коридор якорей). Не пустая сетка кварталов до этого шага. SoT: [connections](./tz_structure_connections.md) §5.1.3 «Два прохода посадки».
+4. **Рамка вокруг броней** — полосы той же решётки + пустые кварталы на земле без брони. Ещё не полотно сквозь дома.
+5. **Проход 2 — остальная коллекция** в оставшиеся кварталы. Спан только пустые слоты. Влезло — вынуть, не вытеснять.
+6. **Граф улиц** — главные по рамке, аллеи внутри модуля, не через клетки участков.
+7. `StructureAreaAssembler` — слот уже стоит; только касающиеся отрезки.
 
 Тип квартала на уровне **города** (`district_type` / `allowed_structure_types`) — какие назначения в районе. Куда складу vs дому внутри района при fill — не карта зон v1.
 
-SoT деталей: [tz_structure_connections.md](./tz_structure_connections.md) §5.1.3–§5.1.4.
+SoT деталей: [tz_structure_connections.md](./tz_structure_connections.md) §5.1.3–§5.1.4. Debug каждого шага — §5.1.3 «Debug packing»; политика sinks — [tz_logging.md](./tz_logging.md).
 
 **TODO — переход кода (отдельный план, не эта сессия):**
 
-- Рамка модулей `block_size` до packing (не overlay сетки после).
-- Packing: токен uid от `w×d`; список убыванию; поиск начало/середина/конец; 2D-FFD; аллея из `connections`; не перебор.
+- Рамка модулей `block_size` **после** брони прохода 1 (не пустая сетка до cache; не overlay сетки после всего packing).
+- Packing: пайплайн §5.1.3; два прохода — «Два прохода посадки»; число копий; оболочка 90°; аллея из `connections`.
 - Аллея между мелкими из `connections`, если сумма bbox + ширина влезает в шаг; иначе не выдумывать.
 - Граф/rasterize после посадки; маска занятых клеток; слоту только касающиеся рёбра.
 - Якоря `entry_nodes` / `through_road` и стены если поле `perimeter_barrier` есть.
 - Нитка FRONT-4 (склейка кусков одной линии); `plaza` — улицы равны.
+- Debug packing на каждом шаге — connections §5.1.3 «Debug packing»; sink — [tz_logging.md](./tz_logging.md) `settlement` / `settlementAssembler`.
 - Не в этом TODO: интерьер, DAG, schema `0002`.
 
 Код сейчас: `buildingCache` → `areaSlots` AABB → `_plan_streets` на весь bbox.
 
 ### 6.4 Особые объекты
 
-Civic-здания (ратуша, храм, рынок) — `required_structures` в district template; impl ✅ (`areaSlots`, Phase C/E). Размер места — footprint **этого** шаблона, не абстрактный лот (C22 / connections §5.1.3).
+Civic-здания (ратуша, храм, рынок) — `required_structures` в district template; impl ✅ (`areaSlots`, Phase C/E). Размер места — footprint **этого** шаблона, не абстрактный лот. Число копий — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов».
 
 ---
 
@@ -311,7 +315,9 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 | `frontage_type_order` | string[] | optional | Иерархия типов дорог для фасада (C22). `null` = список города, иначе дефолт движка. Пример: `["road","highway","alley"]` — входы со стороны `road` |
 | `street_layout` | string | optional | Алгоритм раскладки улиц района (см. 9.5). `null` = наследует от города |
 | `connections` | array | optional | Объявления дорог внутри района: тип, sidewalk, роль. Не объявленные — генератор определяет сам. Формат — см. 9.5 |
-| `required_structures` | array | optional | Особые обязательные постройки (ратуша, храм, рынок) — см. 9.4 |
+| `required_structures` | array | optional | Особые обязательные постройки (ратуша, храм, рынок) — см. 9.4. `count` — §5.1.3 «Число токенов»; очередь — §5.1.3 «Приоритет посадки» |
+| `structure_counts` | object | optional | `{ "<system_name>": int }` — районный override копий. Резолв N — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов» |
+| `structure_priority` | object | optional | `{ "<system_name>": int }` — районный override очереди fill. Резолв — [connections](./tz_structure_connections.md) §5.1.3 «Приоритет посадки» |
 | `perimeter_barrier` | object | optional | Стены **района**. **Нет поля** — стен нет. **Поле есть** — стены всегда (детерминировано). `probability` здания **не** используется. Нужен `template` (ref barrier). |
 
 ### 9.3 Условия появления (`placement_conditions`)
@@ -355,8 +361,10 @@ Civic-постройки (ратуша, рынок, храм) объявляют
 ]
 ```
 
+`count` — число токенов; default 1. Приоритет над `structure_counts` — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов». Массив — проход 1 **до** рамки пустых кварталов; порядок массива = очередь среди required — §5.1.3 «Приоритет посадки». Не путать с `structure_priority` (желательный fill, не обязательность).
+
 `position`:
-- `"center"` — размещается ближе к геометрическому центру района
+- `"center"` — размещается ближе к геометрическому центру района. Два+ с `center` — **CONN-PACK-2** ([connections](./tz_structure_connections.md) §8)
 - `"any"` — произвольная позиция
 
 ### 9.5 Типы раскладки улиц (`street_layout`)
@@ -372,7 +380,7 @@ Civic-постройки (ратуша, рынок, храм) объявляют
 | `courtyard` | Закрытые кварталы с внутренними дворами; минимум уличного фронта | Медина, восточный стиль |
 
 Референс алгоритмов: Parish & Müller (2001) — паттерны `grid / radial / organic` применяются на уровне района, а не города целиком.  
-`DistrictAssembler` получает `street_layout` из шаблона и вызывает соответствующий генератор улиц. Рамка layout — до packing; полотно — после (§6.3). Улицы не через занятый участок.
+`DistrictAssembler` получает `street_layout` из шаблона и вызывает соответствующий генератор улиц. Рамка layout — после брони прохода 1, вокруг неё; полотно — после всей посадки (§6.3). Улицы не через занятый участок.
 
 ### 9.5.1 Объявления соединений (`connections`)
 
@@ -442,7 +450,10 @@ Footprint и district slots — `generators/coordinates/` (WORLD_SURFACE_GRID vs
 | Размещение нескольких районов в одной глобальной ячейке — sub-cells | **open** — settlement-assembler Phase C |
 | `dominant_material` — post-assemble из layout; fallback tier / stone | **closed** — §3.1, `dominantMaterial.py` |
 | Regeneration — скелет изменился после generate | **deferred** — snapshot (§11.4) |
-| Механика дорог внутри района и между районами | **closed** — [tz_structure_connections.md](./tz_structure_connections.md) §5; `DistrictAssembler` + `connectionPolicy` |
+| Механика дорог внутри района и между районами | **closed** — [tz_structure_connections.md](./tz_structure_connections.md) §5; `DistrictAssembler` + `connectionPolicy`. Рамка после брони — §6.3 |
+| **CONN-PACK-1** — рамка `radial` / `organic` вокруг брони; snap якорей вне `grid` | **открыт** — [connections](./tz_structure_connections.md) §8 |
+| **CONN-PACK-2** — два+ `required_structures` с `position: center` | **открыт** — connections §8; поле — §9.4 |
+| **CONN-PACK-3** — envelope `(template, facing)` на проходе 1 до полосы рамки | **открыт** — connections §8 |
 | `adjacent_terrain` — связанность воды | **open** — condition есть, connectivity не описана |
 | **Footprint города — форма** | **v1 closed:** квадрат `footprint_multiplier × map_cell_size_m`. **v2:** §10 TODO organic |
 
@@ -605,6 +616,7 @@ DAG может materialize **разные уровни** в разных нод�
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-01 | C22 §6.3: cache → бронь приоритетных → рамка вокруг → проход 2. `DistrictSlot` packing не растит. SoT connections «Пайплайн посадки». |
 | 2026-08-30 | §9.6: `DistrictSlot.ground_z` = пин района, не пол застройки; SoT — outdoor **C21** |
 | 2026-08-30 | Persist/оркестрация outdoor на pack → [tz_settlement_outdoor.md](./tz_settlement_outdoor.md); HTTP `generate-settlement` = `SettlementOutdoorOrchestrator`; §11.5 map_cells как эталон superseded |
 | 2026-06 | §11.5 — persist cycle: ссылки на tz_world_generation_dag, tz_structure_connections §5.1, tz_construction, growth/world routes, terrain modification |
