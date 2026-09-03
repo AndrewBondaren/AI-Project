@@ -6,11 +6,19 @@ from typing import ClassVar
 
 from pydantic import RootModel
 
+from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
+    WorldConnectionTypeRegistry,
+)
 from app.dataModel.roads.roadSettingsEntry import RoadSettingsEntry
+
+
+def _connection_key(system_connection_type: str) -> str:
+    return WorldConnectionTypeRegistry.require_engine(system_connection_type)
+
 
 _CANONICAL_ENTRIES: tuple[RoadSettingsEntry, ...] = (
     RoadSettingsEntry(
-        system_connection_type="trail",
+        system_connection_type=_connection_key("trail"),
         curve_radius_factor=1,
         max_segment_length_m=30,
         min_segment_length_m=3,
@@ -18,7 +26,7 @@ _CANONICAL_ENTRIES: tuple[RoadSettingsEntry, ...] = (
         condition_degradation=0.2,
     ),
     RoadSettingsEntry(
-        system_connection_type="dirt_road",
+        system_connection_type=_connection_key("dirt_road"),
         curve_radius_factor=2,
         max_segment_length_m=60,
         min_segment_length_m=5,
@@ -26,7 +34,7 @@ _CANONICAL_ENTRIES: tuple[RoadSettingsEntry, ...] = (
         condition_degradation=0.4,
     ),
     RoadSettingsEntry(
-        system_connection_type="alley",
+        system_connection_type=_connection_key("alley"),
         curve_radius_factor=2,
         max_segment_length_m=30,
         min_segment_length_m=3,
@@ -34,7 +42,7 @@ _CANONICAL_ENTRIES: tuple[RoadSettingsEntry, ...] = (
         condition_degradation=0.3,
     ),
     RoadSettingsEntry(
-        system_connection_type="road",
+        system_connection_type=_connection_key("road"),
         curve_radius_factor=4,
         max_segment_length_m=100,
         min_segment_length_m=10,
@@ -44,7 +52,7 @@ _CANONICAL_ENTRIES: tuple[RoadSettingsEntry, ...] = (
         condition_degradation=0.6,
     ),
     RoadSettingsEntry(
-        system_connection_type="highway",
+        system_connection_type=_connection_key("highway"),
         curve_radius_factor=8,
         max_segment_length_m=200,
         min_segment_length_m=20,
@@ -54,7 +62,7 @@ _CANONICAL_ENTRIES: tuple[RoadSettingsEntry, ...] = (
         condition_degradation=0.8,
     ),
     RoadSettingsEntry(
-        system_connection_type="yard_path",
+        system_connection_type=_connection_key("yard_path"),
         curve_radius_factor=1,
         max_segment_length_m=20,
         min_segment_length_m=2,

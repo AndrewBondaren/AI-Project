@@ -37,13 +37,7 @@ def _terrain_key(system_terrain: str) -> str:
 
 
 def _road_connection_types() -> tuple[str, ...]:
-    reg = WorldConnectionTypeRegistry.canonical_defaults()
-    keys = ("trail", "dirt_road", "road", "highway", "bridge")
-    return tuple(
-        e.system_connection_type
-        for key in keys
-        if (e := reg.entry_for(key)) is not None
-    )
+    return WorldConnectionTypeRegistry.road_mask_connection_types()
 
 
 class MountainsCategoryPolicy(MaskCategoryPolicy):

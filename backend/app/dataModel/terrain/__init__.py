@@ -12,14 +12,22 @@ from app.dataModel.terrain.terrainRegistryEntry import TerrainRegistryEntry
 from app.dataModel.terrain.worldTerrainCategoryRegistry import WorldTerrainCategoryRegistry
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.dataModel.terrain.worldTerrainScalars import (
+    CANONICAL_ELEVATION_LAPSE_RATE,
+    CANONICAL_Z_MAX,
+    CANONICAL_Z_MIN,
     CHUNK_COLUMNS_MIN,
     SUBSURFACE_DEPTH_MIN,
+    TERRAIN_CHUNK_COLUMNS_DEFAULT,
     WorldTerrainScalars,
 )
 
 __all__ = [
+    "CANONICAL_ELEVATION_LAPSE_RATE",
+    "CANONICAL_Z_MAX",
+    "CANONICAL_Z_MIN",
     "CHUNK_COLUMNS_MIN",
     "SUBSURFACE_DEPTH_MIN",
+    "TERRAIN_CHUNK_COLUMNS_DEFAULT",
     "ReliefSideKind",
     "ReliefSideSpec",
     "SceneVolumePolicy",

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
 from app.dataModel.settlement.district.districtConnection import DistrictConnection
 from app.dataModel.settlement.district.placementCondition import PlacementCondition
 from app.dataModel.settlement.district.requiredStructure import RequiredStructure
@@ -28,3 +29,7 @@ class DistrictTemplateEntry(BaseModel):
     street_layout: DefaultOnWire[str | None] = None
     connections: DefaultOnWire[list[DistrictConnection] | None] = None
     required_structures: DefaultOnWire[list[RequiredStructure] | None] = None
+    frontage_type_order: DefaultOnWire[list[str] | None] = None
+    structure_counts: DefaultOnWire[dict[str, int] | None] = None
+    structure_priority: DefaultOnWire[dict[str, int] | None] = None
+    perimeter_barrier: DefaultOnWire[PerimeterBarrier | None] = None

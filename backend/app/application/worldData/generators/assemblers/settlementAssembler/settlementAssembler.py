@@ -18,7 +18,10 @@ import logging
 import random
 from dataclasses import replace
 
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.application.worldData.generators.assemblers.citySkeleton import (
+    CitySkeleton,
+    city_skeleton_from_settlement,
+)
 from app.application.worldData.generators.assemblers.districtAssembler.districtAssembler import DistrictAssembler
 from app.application.worldData.generators.assemblers.districtAssembler.districtLayout import DistrictLayout
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
@@ -83,7 +86,7 @@ class SettlementAssembler:
         logger.info(
             "SettlementAssembler | building_cache templates=%d names=%s",
             len(layout_cache),
-            sorted(layout_cache.keys()),
+            layout_cache.keys(),
         )
 
         district_assembler = DistrictAssembler()
@@ -92,6 +95,7 @@ class SettlementAssembler:
         for slot in district_slots:
             layout = district_assembler.assemble(
                 world, slot, skeleton, terrain_cells, layout_cache=layout_cache,
+                settlement_uid=settlement.location_uid,
             )
             district_layouts.append(layout)
 
@@ -127,13 +131,9 @@ class SettlementAssembler:
         return replace(layout, dominant_material=dominant_material)
 
     def _build_skeleton(self, world: World, settlement: NamedLocation) -> CitySkeleton:
-        return CitySkeleton(
-            economic_tier=        TierResolver.resolve(world=world, city=settlement),
-            architectural_style=  getattr(settlement, "architectural_style",  None),
-            dominant_material=    None,  # resolved post-assemble from layout; import value ignored
-            settlement_density=   getattr(settlement, "settlement_density",   None),
-            system_city_size=     settlement.system_city_size,
-            system_location_mood= settlement.system_location_mood,
+        return city_skeleton_from_settlement(
+            settlement,
+            economic_tier=TierResolver.resolve(world=world, city=settlement),
         )
 
     def _plan_district_slots(

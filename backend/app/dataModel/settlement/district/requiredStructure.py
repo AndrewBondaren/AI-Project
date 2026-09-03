@@ -6,10 +6,13 @@ from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 
+POSITION_ANY = "any"
+POSITION_CENTER = "center"
+
 
 class RequiredStructure(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     building_template: StrictOnWire[str]
     count: DefaultOnWire[int] = 1
-    position: DefaultOnWire[str] = "any"
+    position: DefaultOnWire[str] = POSITION_ANY

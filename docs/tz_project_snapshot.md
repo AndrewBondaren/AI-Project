@@ -6,7 +6,7 @@
 
 > Целевые спецификации по доменам — отдельные `docs/tz_*.md`.  
 > Этот документ — точка отсчёта «где мы сейчас» для мастера и агента.  
-> **Глобальная хар-ка для внешней оценки (2026-08-15, relief scores 2026-08-17):** [`.cursor/plans/project-characterization-2026-08-15.md`](../.cursor/plans/project-characterization-2026-08-15.md) — самодостаточный бриф (git, bake, DAG, аналоги). Outdoor grade — бриф **§8.1**. При расхождении чисел со § ниже — бриф новее.
+> **Глобальная хар-ка для внешней оценки (2026-09-03):** [`.cursor/plans/project-characterization-2026-09-03.md`](../.cursor/plans/project-characterization-2026-09-03.md) — самодостаточный бриф (git, bake, DAG, outdoor city, аналоги). Outdoor grade — бриф **§8.1**; outdoor settlement etalon — **§8.2**. Предыдущий срез: [2026-08-15](../.cursor/plans/project-characterization-2026-08-15.md). При расхождении чисел со § ниже — бриф новее.
 
 ---
 
@@ -387,5 +387,6 @@ Feature-slices: `session`, `chat`, `settings`. API base: `VITE_API_URL` (default
 | 1.1 | 2026-07-20 | Убран приоритет vertical slice; `scene_narration` зафиксирован как осознанный блокер (§5.5, §11, §12) |
 | 1.2 | 2026-08-15 | Pack bake вместо legacy generate-surface; hydrology не stub; ссылка на глобальную хар-ку `.cursor/plans/project-characterization-2026-08-15.md` |
 | 1.3 | 2026-08-17 | Outdoor relief grade в оценке продукта: бриф §8.1 (live v2 7/10; vs discrete-grid ~8; GM consumption 3/10) |
+| 1.3a | 2026-09-03 | Указатель хар-ки → бриф 2026-09-03 (relief writer 8/10; v1 cut; outdoor etalon §8.2). Тело snapshot §10–§12 не переписывалось |
 
 **Правило обновления:** при закрытии осознанного блокера из §12 / изменении пробелов §11 — bump minor version и строка в §10–§12.

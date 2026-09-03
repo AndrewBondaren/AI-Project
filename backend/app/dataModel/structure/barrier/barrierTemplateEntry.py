@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.constrainedField import constrained_field
 from app.dataModel.shared.ranges import IntMinMax
 from app.dataModel.structure.materialPick import MaterialPick
 
@@ -18,3 +19,4 @@ class BarrierTemplateEntry(BaseModel):
     height_levels: DefaultOnWire[IntMinMax | None] = None
     gates: DefaultOnWire[IntMinMax | None] = None
     towers: DefaultOnWire[IntMinMax | None] = None
+    width_cells: DefaultOnWire[int] = constrained_field(default=1, greater_equals=1)

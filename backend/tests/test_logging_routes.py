@@ -53,6 +53,14 @@ class RouteTableTests(unittest.TestCase):
         self.assertEqual(route_for("app.relief"), ("relief", "reliefLog"))
         self.assertIsNone(route_for("uvicorn.error"))
         self.assertIsNone(route_for("httpx"))
+        self.assertEqual(
+            route_for("app.application.worldData.generators.assemblers.districtAssembler"),
+            ("settlement", "settlementAssembler"),
+        )
+        self.assertEqual(
+            route_for("app.application.worldData.generators.assemblers.climateAssembler"),
+            ("climate", "climateLog"),
+        )
 
 
 class _LogDirCase(unittest.TestCase):
@@ -202,6 +210,28 @@ class ServerRouteFileTests(_LogDirCase):
         self.assertTrue(
             any("grade_ray validate start" in m for m in _read_json_msgs(pack)),
         )
+
+    def test_settlement_assembler_writes_settlement_log(self) -> None:
+        self._install_server()
+        logging.getLogger(
+            "app.application.worldData.generators.assemblers",
+        ).info(
+            "C22 packing | district=civic_center step=frame",
+            extra={"activity": "frame"},
+        )
+        logging.getLogger(
+            "app.application.worldData.generators.assemblers",
+        ).debug(
+            "C22 packing | district=civic_center step=fit fit='no'",
+            extra={"activity": "c22_packing_fit"},
+        )
+        _flush_facade()
+        path = self.logs / "settlement" / "settlementAssembler.log"
+        self.assertTrue(path.is_file())
+        msgs = _read_json_msgs(path)
+        self.assertTrue(any("step=frame" in m for m in msgs))
+        self.assertTrue(any("step=fit" in m for m in msgs))
+        self.assertNotIn("step=fit", self._stream.getvalue())
 
 
 class ScriptProfileTests(_LogDirCase):

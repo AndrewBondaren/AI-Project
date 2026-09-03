@@ -38,6 +38,7 @@ _CONSOLE_FILE_ONLY_ACTIVITIES = frozenset({
     "grade_cell_empty_ray",
     "grade_system_create",
     "grade_system_members",
+    "c22_packing_fit",
 })
 
 _CONSOLE_QUEUE_MAX = 4096
@@ -84,6 +85,11 @@ _PREFIX_ROUTES: tuple[tuple[str, str, str], ...] = tuple(
                 "climateLog",
             ),
             (
+                "app.application.worldData.generators.assemblers",
+                "settlement",
+                "settlementAssembler",
+            ),
+            (
                 "app.application.worldData.generators.climate",
                 "climate",
                 "climateLog",
@@ -106,6 +112,7 @@ SERVER_SINKS: frozenset[tuple[str, str]] = frozenset({
     ("relief", "gradeCellRays"),
     ("terrain", "terrainParallelLog"),
     ("climate", "climateLog"),
+    ("settlement", "settlementAssembler"),
     ("structure", "headroom"),
     ("core", "runtime"),
 })

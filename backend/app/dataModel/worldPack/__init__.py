@@ -37,9 +37,11 @@ from app.dataModel.worldPack.worldMapCellsPerTile import (
     resolve_world_map_cells_per_tile,
     resolve_world_map_side,
 )
+from app.dataModel.worldPack.mapCellSize import MAP_CELL_SIZE_M_DEFAULT
 from app.dataModel.worldPack.lightSettlementFootprint import LightSettlementFootprintPolicy
 from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
 from app.dataModel.worldPack.packBakeDefaults import (
+    PACK_CODEC_VERSION,
     PackBakeDefaults,
     resolve_detailed_grade_stages,
     resolve_light_tile_cap,
@@ -83,6 +85,8 @@ from app.dataModel.worldPack.worldPackManifest import (
 
 __all__ = [
     "PACK_WIRE_VERSION",
+    "PACK_CODEC_VERSION",
+    "MAP_CELL_SIZE_M_DEFAULT",
     "WORLD_MAP_CELLS_PER_TILE",
     "CellContribution",
     "ChunkRef",

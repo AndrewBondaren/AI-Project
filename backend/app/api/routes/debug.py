@@ -15,6 +15,7 @@ from app.application.worldData.generators.structure.structureGeneratorService im
 )
 from app.application.worldData.facingArrows import FACING_ARROW
 from app.application.worldData.generators.structure.gridRenderer import render_all_levels
+from app.dataModel.materials import DEFAULT_FLOOR_MATERIAL, DEFAULT_WALL_MATERIAL
 from app.dataModel.spatial.facing import Facing
 from app.db.models.namedLocation import NamedLocation
 from datetime import datetime, timezone
@@ -41,8 +42,8 @@ async def debug_generate_structure(
     map_x: int = 0,
     map_y: int = 0,
     map_z: int = 0,
-    wall_material: str = "stone",
-    floor_material: str = "wood",
+    wall_material: str = DEFAULT_WALL_MATERIAL,
+    floor_material: str = DEFAULT_FLOOR_MATERIAL,
     verbose: bool = False,
     file: UploadFile | None = File(default=None),
     path: str | None = Form(default=None),

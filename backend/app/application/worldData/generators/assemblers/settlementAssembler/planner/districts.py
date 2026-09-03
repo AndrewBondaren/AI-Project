@@ -20,6 +20,9 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.streets import (
     plan_settlement_entries,
 )
+from app.application.worldData.generators.assemblers.districtAssembler.planner.geometry import (
+    shrink_slot_by_settlement_barrier,
+)
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.terrain import (
     column_surface,
     resolve_district_pin_z,
@@ -118,8 +121,14 @@ def plan_district_slots(
                 len(required),
             )
 
+    for slot in slots:
+        shrink_slot_by_settlement_barrier(
+            slot, skeleton, world, origin.x, origin.y, side_m,
+        )
+
     plan_settlement_entries(
         slots, skeleton, origin.x, origin.y, side_m, world.world_uid, surface,
+        world=world,
     )
 
     logger.info(

@@ -85,6 +85,7 @@ LLM описывает → только из скелета (ограничен�
 | `frontage_type_order` | string[] | JSON import, optional | Иерархия `connection_type` для парадного (C22). Как `settlement_density`: import → `CitySkeleton`; SQL колонка — при persist скелета (`0001`). `null` = дефолт движка. Район может переопределить | ⬜ connections §5.1.3 |
 | `structure_counts` | object | JSON import, optional | Городской дефолт копий: `{ "<system_name>": int }`. Резолв N — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов» | ⬜ |
 | `structure_priority` | object | JSON import, optional | Городской дефолт очереди fill: `{ "<system_name>": int }`. Резолв — [connections](./tz_structure_connections.md) §5.1.3 «Приоритет посадки» | ⬜ |
+| `perimeter_barrier` | nullable `PerimeterBarrier` | optional | Инстанс барьера **поселения** (прямые footprint). Как `settlement_density`: import → `CitySkeleton`. Нет поля / `template` null — скип. Не барьер района. **`SettlementAssembler`** до generate района вычитает эти прямые (`footprint ∩ DistrictSlot`) из площади района | ⬜ |
 | `state_uid` | string | `NamedLocation` | Политический контекст LLM | ✅ location; ⬜ в `CitySkeleton` |
 
 **Что LLM получает из скелета:**
@@ -219,7 +220,7 @@ city_footprint = квадрат footprint_m × footprint_m вокруг origin
 
 Порядок (`DistrictAssembler`, C22). Fill — [connections](./tz_structure_connections.md) §5.1.3 «Пайплайн посадки». `DistrictSlot` — `size_pct` ячейки (§9.6); packing слот не растит.
 
-1. Якоря входа / стены района (нет в данных — скип).
+1. Площадь района и якоря — **`SettlementAssembler`** (не packing района). Сначала слот по `size_pct`. Если инстанс барьера **поселения** валиден — вычесть прямые footprint (`sides` + `width_cells` чертежа поселения) ∩ слот из площади района, чтобы слот не заходил на клетки поселения (клетки поселения — `SettlementLayout.barrier_cells`). Затем якоря: шаблон **этого** района (`density`; барьер **района** → прямые уже урезанного слота). Packing района прямые поселения не вычитает. Инстанс района: нет поля / `template` null — скип прямых района. Иначе **v1 packing** inner bbox = урезанный слот минус прямые района минус коридор. Клетки района TODO. Зоны трёх инстансов не пересекаются. Не забор участка, не стены здания.
 2. **Коллекция оболочек** — cache кандидатов (`allowed_structure_types` ∩ тир, `required_structures`). Интерьер комнат — не этот скоуп.
 3. **Проход 1 — бронь приоритетных** в решётке `block_size` внутреннего bbox (не через коридор якорей). Не пустая сетка кварталов до этого шага. SoT: [connections](./tz_structure_connections.md) §5.1.3 «Два прохода посадки».
 4. **Рамка вокруг броней** — полосы той же решётки + пустые кварталы на земле без брони. Ещё не полотно сквозь дома.
@@ -237,8 +238,8 @@ SoT деталей: [tz_structure_connections.md](./tz_structure_connections.md)
 - Packing: пайплайн §5.1.3; два прохода — «Два прохода посадки»; число копий; оболочка 90°; аллея из `connections`.
 - Аллея между мелкими из `connections`, если сумма bbox + ширина влезает в шаг; иначе не выдумывать.
 - Граф/rasterize после посадки; маска занятых клеток; слоту только касающиеся рёбра.
-- Якоря `entry_nodes` / `through_road` и стены если поле `perimeter_barrier` есть.
-- Нитка FRONT-4 (склейка кусков одной линии); `plaza` — улицы равны.
+- Якоря `entry_nodes` — город, шаг `density` района, на **уже урезанном** слоте. Барьер **поселения**: `SettlementAssembler` вычитает прямые footprint ∩ слот из площади района **до** packing. Барьер **района** (§9.2): packing вычитает прямые района из этого слота; generate клеток TODO. Нет поля района / `template` null — скип прямых района. Зоны не пересекаются.
+- Нитка `frontage` (склейка кусков одной линии); `plaza` — улицы равны.
 - Debug packing на каждом шаге — connections §5.1.3 «Debug packing»; sink — [tz_logging.md](./tz_logging.md) `settlement` / `settlementAssembler`.
 - Не в этом TODO: интерьер, DAG, schema `0002`.
 
@@ -311,14 +312,14 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 | `size_pct` | object | optional | Диапазон размера района как доля глобальной ячейки: `{ "width": [0.3, 1.0], "depth": [0.3, 1.0] }`. `1.0` = вся ячейка |
 | `allowed_structure_types` | string[] | optional | Допустимые `structure_type` шаблонов в районе (любое назначение). `null` = без ограничений |
 | `economic_tier_range` | object | optional | `{ "min": "poor", "max": "exceptional" }` — диапазон тиров зданий в районе |
-| `density` | string | optional | `"sparse"`, `"medium"`, `"dense"`. Переопределяет `city_skeleton.settlement_density` для этого района |
+| `density` | string | optional | `"sparse"`, `"medium"`, `"dense"`. Переопределяет `city_skeleton.settlement_density` для этого района. **`SettlementAssembler`** ставит `entry_nodes` с `block_size` **этого** поля (нет → плотность города) |
 | `frontage_type_order` | string[] | optional | Иерархия типов дорог для фасада (C22). `null` = список города, иначе дефолт движка. Пример: `["road","highway","alley"]` — входы со стороны `road` |
 | `street_layout` | string | optional | Алгоритм раскладки улиц района (см. 9.5). `null` = наследует от города |
 | `connections` | array | optional | Объявления дорог внутри района: тип, sidewalk, роль. Не объявленные — генератор определяет сам. Формат — см. 9.5 |
 | `required_structures` | array | optional | Особые обязательные постройки (ратуша, храм, рынок) — см. 9.4. `count` — §5.1.3 «Число токенов»; очередь — §5.1.3 «Приоритет посадки» |
 | `structure_counts` | object | optional | `{ "<system_name>": int }` — районный override копий. Резолв N — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов» |
 | `structure_priority` | object | optional | `{ "<system_name>": int }` — районный override очереди fill. Резолв — [connections](./tz_structure_connections.md) §5.1.3 «Приоритет посадки» |
-| `perimeter_barrier` | object | optional | Стены **района**. **Нет поля** — стен нет. **Поле есть** — стены всегда (детерминировано). `probability` здания **не** используется. Нужен `template` (ref barrier). |
+| `perimeter_barrier` | nullable `PerimeterBarrier` | optional | Барьер **района** (прямые **уже урезанного** `DistrictSlot`). Тот же класс, другой инстанс, чем у поселения ([tz_locations.md](./tz_locations.md)). Omit/null / `template` null — скип. Поле + `template` — всегда, без roll. `sides` — прямые **слота**; нет ключа / `null` / `[]` → четыре прямые слота. **v1 packing:** inner bbox минус эти прямые внутрь. Клетки — `DistrictAssembler` (TODO). Список поселения не пишет; общая xy запрещена (вычет поселения раньше). |
 
 ### 9.3 Условия появления (`placement_conditions`)
 
@@ -451,6 +452,9 @@ Footprint и district slots — `generators/coordinates/` (WORLD_SURFACE_GRID vs
 | `dominant_material` — post-assemble из layout; fallback tier / stone | **closed** — §3.1, `dominantMaterial.py` |
 | Regeneration — скелет изменился после generate | **deferred** — snapshot (§11.4) |
 | Механика дорог внутри района и между районами | **closed** — [tz_structure_connections.md](./tz_structure_connections.md) §5; `DistrictAssembler` + `connectionPolicy`. Рамка после брони — §6.3 |
+| **TODO** generate барьера **района** | **открыт** — `DistrictLayout.barrier_cells`. Зоны: не список поселения |
+| **TODO** поле барьера **поселения** на скелете (`CitySkeleton.perimeter_barrier`) | **открыт** — прямые footprint + вычет из площади района до packing; код сейчас эвристика `planner/barriers.py`, не SoT поля |
+| Зоны трёх инстансов `PerimeterBarrier` (нет общей xy) | **закрыт** — поселение вычитает `footprint ∩ слот` из площади района; packing района — только прямые района; [tz_locations.md](./tz_locations.md) |
 | **CONN-PACK-1** — рамка `radial` / `organic` вокруг брони; snap якорей вне `grid` | **открыт** — [connections](./tz_structure_connections.md) §8 |
 | **CONN-PACK-2** — два+ `required_structures` с `position: center` | **открыт** — connections §8; поле — §9.4 |
 | **CONN-PACK-3** — envelope `(template, facing)` на проходе 1 до полосы рамки | **открыт** — connections §8 |
@@ -616,7 +620,8 @@ DAG может materialize **разные уровни** в разных нод�
 
 | Дата | Изменение |
 |---|---|
-| 2026-09-01 | C22 §6.3: cache → бронь приоритетных → рамка вокруг → проход 2. `DistrictSlot` packing не растит. SoT connections «Пайплайн посадки». |
+| 2026-09-03 | C22: три зоны `PerimeterBarrier` без общей xy; поселение вычитает прямые footprint из площади района до packing; `sides` = прямые bbox инстанса (`[]` = все четыре). |
+| 2026-09-02 | Барьер поселения (периметр footprint) vs барьер района (`DistrictSlot`): один класс, разные инстансы. |
 | 2026-08-30 | §9.6: `DistrictSlot.ground_z` = пин района, не пол застройки; SoT — outdoor **C21** |
 | 2026-08-30 | Persist/оркестрация outdoor на pack → [tz_settlement_outdoor.md](./tz_settlement_outdoor.md); HTTP `generate-settlement` = `SettlementOutdoorOrchestrator`; §11.5 map_cells как эталон superseded |
 | 2026-06 | §11.5 — persist cycle: ссылки на tz_world_generation_dag, tz_structure_connections §5.1, tz_construction, growth/world routes, terrain modification |

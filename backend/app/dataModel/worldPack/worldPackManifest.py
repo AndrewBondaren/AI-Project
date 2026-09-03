@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Literal
+from typing import ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.worldPack.climateFieldWire import (
-    ClimateBakeStatus,
-    normalize_climate_bake_status,
-)
+from app.dataModel.worldPack.climateFieldWire import ClimateBakeStatusMixin
+from app.dataModel.worldPack.mapCellSize import MAP_CELL_SIZE_M_DEFAULT
+from app.dataModel.worldPack.packBakeDefaults import PACK_CODEC_VERSION
 from app.dataModel.worldPack.packBakeMode import PackBakeMode
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
+from app.dataModel.worldPack.worldMapCellsPerTile import WORLD_MAP_CELLS_PER_TILE
 
 PACK_WIRE_VERSION = "1.0.0"
 BakeMode = PackBakeMode  # manifest last L0 mode — not "detailed"
@@ -29,30 +29,13 @@ class ChunkRef(BaseModel):
     bytes: int | None = None
 
 
-class TileManifestEntry(BaseModel):
-    model_config = ConfigDict(extra="ignore", frozen=True)
-
+class TileManifestEntry(ClimateBakeStatusMixin):
     gx: int
     gy: int
     world_map_path: str | None = None
     world_map_hash: str | None = None
     wilderness_refine_status: WildernessRefineStatus = "absent"
-    climate_status: ClimateBakeStatus = "coarse"
     chunks: list[ChunkRef] = Field(default_factory=list)
-
-    @model_validator(mode="before")
-    @classmethod
-    def _legacy_climate_tier(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
-        if "climate_status" not in data and "climate_tier" in data:
-            data = {**data, "climate_status": data["climate_tier"]}
-        return data
-
-    @field_validator("climate_status", mode="before")
-    @classmethod
-    def _climate_status(cls, value: Any) -> ClimateBakeStatus:
-        return normalize_climate_bake_status(value)
 
 
 class SettlementStructureEntry(BaseModel):
@@ -67,30 +50,13 @@ class SettlementStructureEntry(BaseModel):
     bytes: int | None = None
 
 
-class LocationTerrainEntry(BaseModel):
-    model_config = ConfigDict(extra="ignore", frozen=True)
-
+class LocationTerrainEntry(ClimateBakeStatusMixin):
     location_uid: str
     territory_volume: TerritoryVolume
     terrain_path: str | None = None
     terrain_hash: str | None = None
-    climate_status: ClimateBakeStatus = "coarse"
     z_band: str | None = None
     bytes: int | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def _legacy_climate_tier(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
-        if "climate_status" not in data and "climate_tier" in data:
-            data = {**data, "climate_status": data["climate_tier"]}
-        return data
-
-    @field_validator("climate_status", mode="before")
-    @classmethod
-    def _climate_status(cls, value: Any) -> ClimateBakeStatus:
-        return normalize_climate_bake_status(value)
 
 
 class WorldPackManifest(BaseModel):
@@ -101,12 +67,12 @@ class WorldPackManifest(BaseModel):
     pack_version: str = PACK_WIRE_VERSION
     world_uid: str
     content_hash: str | None = None
-    codec_version: int = 1
+    codec_version: int = PACK_CODEC_VERSION
     payload_format: str = "json"
     registry_hash: str | None = None
     bake_mode: BakeMode = "light"
-    map_cell_size_m: int = 1000
-    world_map_cells_per_tile: int = 32
+    map_cell_size_m: int = MAP_CELL_SIZE_M_DEFAULT
+    world_map_cells_per_tile: int = WORLD_MAP_CELLS_PER_TILE
     cell_size_m: int = 1
     map_subsurface_depth: int = 0
     location_terrain_entries: list[LocationTerrainEntry] = Field(default_factory=list)

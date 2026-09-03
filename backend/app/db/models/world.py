@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from app.dataModel.terrain.worldTerrainScalars import TERRAIN_CHUNK_COLUMNS_DEFAULT
+from app.dataModel.worldPack.mapCellSize import MAP_CELL_SIZE_M_DEFAULT
 from app.db.mapper import bool_col, json_col, json_nullable_col
 
 
@@ -112,14 +114,14 @@ class World:
     z_min:                          int | None = None
     map_subsurface_depth:           int = 0             # N_base under flat ground; 0 = surface-only
     grid_bbox_padding:              int = 2             # anchor bbox ± cells (v1 extent)
-    terrain_chunk_columns:          int = 32            # column-fill persist chunk side
+    terrain_chunk_columns:          int = TERRAIN_CHUNK_COLUMNS_DEFAULT  # column-fill persist chunk side
     terrain_parallel_workers:       int | None = None   # cap TR-PAR pool; NULL = free_cores only
     world_bounds:                   dict | None = json_nullable_col(default=None)
     magma_band_thickness:           int | None = None   # 0/null = skip magma band
     closed_planet_grid:             bool = bool_col(default=False)
     elevation_lapse_rate:           float | None = None
     g:                              float = 1.0
-    map_cell_size_m:                int = 1000  # world surface cell size in meters, multiples of 1000
+    map_cell_size_m:                int = MAP_CELL_SIZE_M_DEFAULT  # world surface cell size in meters, multiples of 1000
     default_passage_height:         int = 2
 
     # custom field declarations

@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.application.worldData.generators.structure.cellBuilder import _wall_cell
 from app.application.worldData.generators.structure.cellFactory import _floor_cell
 from app.application.worldData.generators.assemblers.structureAssembler.structureContext import StructureContext
+from app.dataModel.materials import DEFAULT_WALL_MATERIAL
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -58,7 +59,7 @@ class FoundationBuilder:
         self.mat = (
             context.foundation_material
             or building.parent_wall_material
-            or "stone"
+            or DEFAULT_WALL_MATERIAL
         )
 
     def build(self, cells: list[MapCell]) -> list[MapCell]:

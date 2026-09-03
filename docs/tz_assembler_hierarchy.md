@@ -32,12 +32,12 @@ SettlementAssembler
 ## 2. Слои
 
 ### SettlementAssembler
-**Знает:** city skeleton (economic_tier, architectural_style, dominant_material, settlement_density)  
+**Знает:** city skeleton (в т.ч. барьер **поселения**); шаблон каждого района (`density`, барьер **района**) — `entry_nodes` / `DistrictSlot`  
 **Делает:**
 - занимает ячейки карты мира под поселение
 - планирует поселение на ячейках; понимает топологию по z (наземный / подземный / воздушный — одновременно)
 - управляет топологией соединения ячеек поселения между собой (улицы, мосты, тоннели)
-- городская сетка и `DistrictSlot` (`size_pct`); участки (`AreaSlot`) сажает `DistrictAssembler` (C22)
+- городская сетка и `DistrictSlot`; вычет прямых барьера **поселения** (`footprint ∩ слот`) из площади района; `entry_nodes` (шаг района, на урезанном слоте). Барьер поселения → `SettlementLayout.barrier_cells` (прямые footprint). Участки сажает `DistrictAssembler`
 
 **Подробнее:** [tz_city_generation.md](tz_city_generation.md)
 
@@ -53,7 +53,7 @@ SettlementAssembler
 
 **Не делает:** не выравнивает **участки** (и здания на них) под одну плоскость; `ground_z` и порог считает `StructureAreaAssembler` (outdoor **C21**). Не кладёт дверь дома. Не отдаёт участку чужие рёбра.
 
-**C22 (район):** city §6.3 — cache, бронь приоритетных, рамка вокруг, проход 2, граф после. Число копий — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов». Очередь — «Приоритет посадки»; два прохода — «Два прохода посадки». Оболочка 90° — «Поворот оболочки». Переход кода — TODO city §6.3. Контракт района: connections §5.1.4.
+**C22 (район):** city §6.3. **`PerimeterBarrier` района** — прямые **уже урезанного** `DistrictSlot`; packing вычитает их из слота; клетки `DistrictLayout.barrier_cells` (TODO). Барьер поселения — другой инстанс: вычет из площади района делает `SettlementAssembler` **до** этого слоя. Зоны не пересекаются. Якоря — город. Стены здания — не этот класс. Переход packing — TODO city §6.3. Контракт: connections §5.1.4.
 
 **Подробнее:** [tz_city_generation.md](tz_city_generation.md) — раздел 6 (алгоритм заполнения кварталов)
 
@@ -63,7 +63,7 @@ SettlementAssembler
 - полностью понимает топологию своей зоны: тип — из шаблона, любое назначение (`structure_type`). Не «всегда жилой дом». Примеры геометрии: здание у улицы; двор+забор+здание в глубине; общественная площадь (`plaza`: сады, фонтаны, террасы); только оболочка, если так задан шаблон
 - знает facing area (сторона к улице)
 - **решает порог** (где улица стыкуется с участком) — `_resolve_threshold`: дверь / ворота забора / край участка. Формула «всегда фасад здания» запрещена
-- при наличии здания: координаты из шаблона, `StructureContext` (`ground_z` = `building.map_z` после clamp), вызов `StructureAssembler`
+- при наличии здания: координаты из шаблона, `StructureContext` (`ground_z` = `building.map_z` после clamp), вызов `StructureAssembler`. Шаблон даёт здание, участок без NL — **ошибка generate**, не пустой двор
 - планировка: двор, забор (`barrier_template_registry`), малые постройки
 - `_build_paths`: улица → **порог** (не обязательно `building_entrance`); θ > 45° — clamp только z
 
@@ -353,9 +353,15 @@ class CitySkeleton:
     settlement_density:   str | None   # "sparse" | "medium" | "dense"
     system_city_size:     str | None   # ref → worlds.city_size_registry
     system_location_mood: str | None   # ref → worlds.location_mood_registry
+    frontage_type_order:  list[str] | None          # C22; null = дефолт движка
+    structure_counts:     dict[str, int] | None     # C22; городской дефолт N
+    structure_priority:   dict[str, int] | None     # C22; городской дефолт очереди
+    perimeter_barrier:    PerimeterBarrier | None   # барьер **поселения** (прямые footprint); вычет из площади района — SettlementAssembler, не район
 ```
 
 Источник данных: поля `NamedLocation` поселения. Собирается `SettlementAssembler` и передаётся вниз без изменений.
+
+C22-поля: перечень и persist — [tz_city_generation.md](tz_city_generation.md) §3 (`⬜` в коде). Резолв N / очереди / фасада — [tz_structure_connections.md](tz_structure_connections.md) §5.1.3 (не дублировать таблицы здесь). Район перекрывает город **по ключу** (`district_template`) для counts/priority/frontage. `perimeter_barrier` на скелете — барьер **поселения** (прямые footprint), не района. `display_location_mood` / `state_uid` — city §3; в этот dataclass не входят (`state_uid` ⬜ в скелете отдельно).
 
 ---
 
@@ -430,16 +436,49 @@ class AreaLayout:
     slot:              AreaSlot
     threshold:         AreaThreshold
     approach:          StreetApproach | None  # нет луча / L=0
-    building_location: NamedLocation | None   # NL из шаблона (любое назначение); None если шаблон не даёт NL
+    building_location: NamedLocation | None   # NL из шаблона; None только если шаблон NL не даёт; иначе ошибка generate
     building_layout:   StructureLayout | None
-    barrier_cells:     list[MapCell]
+    barrier_cells:     list[MapCell]          # прямые **участка**, не района, не поселения, не wall здания
     yard_cells:        list[MapCell]
     small_layouts:     list[StructureLayout]
     connection_nodes:  list[ConnectionNode]   # area graph, §5.1.1
     connection_edges:  list[ConnectionEdge]
 ```
 
-Здание не обязательно: участок = шаблон любого назначения (дом, таверна, площадь, …), не leftover packing. Слои не мешать. `threshold` / `approach` — рантайм assembler; extract пишет граф и `AreaSlotWire.ground_z` (плоскость участка), не kind порога. C20 — только если шаблон даёт здание с входом.
+Здание не обязательно: участок = шаблон любого назначения (дом, таверна, площадь, …), не leftover packing. `building_location is None` — **только** если шаблон **не** даёт NamedLocation (типично `plaza` / сад: состав шаблона без здания). **Если шаблон даёт здание, а generate собрал участок без него** (`building_location is None`, пустой двор) — **критическая ошибка генерации участка**. Не plaza, не silent skip, не «участок без дома допустим». Слои не мешать. `threshold` / `approach` — рантайм assembler; extract пишет граф и `AreaSlotWire.ground_z` (плоскость участка), не kind порога. C20 — только если шаблон даёт здание с входом (здание без `front` — тоже ошибка generate, не этот кейс).
+
+---
+
+**`DistrictLayout`** — результат `DistrictAssembler` (в коде: `districtLayout.py`; в этом § сниппет не был — дырка ТЗ).
+
+```python
+@dataclass
+class DistrictLayout:
+    slot:             DistrictSlot
+    area_layouts:     list[AreaLayout]
+    connection_nodes: list[ConnectionNode]
+    connection_edges: list[ConnectionEdge]
+    barrier_cells:    list[MapCell]   # прямые **района** (v1: включённые грани слота); пишет DistrictAssembler (TODO generate)
+```
+
+Не `AreaLayout.barrier_cells` (участок). Не `SettlementLayout.barrier_cells` (прямые **поселения**). Зоны не пересекаются: слот уже урезан поселением. Не wall здания.
+
+---
+
+**`SettlementLayout`** — результат `SettlementAssembler`:
+
+```python
+@dataclass
+class SettlementLayout:
+    district_layouts:  list[DistrictLayout]
+    connection_nodes:  list[ConnectionNode]
+    connection_edges:  list[ConnectionEdge]
+    occupancy_cells:   list[MapCell]
+    barrier_cells:     list[MapCell]  # барьер **поселения** (прямые footprint); не район
+    dominant_material: str | None
+```
+
+Пишет только `SettlementAssembler` (клетки + вычет из площади района). `DistrictAssembler` этот список не трогает.
 
 ---
 
@@ -601,13 +640,14 @@ Envelope здания (реальные размеры по x/y/z) нельзя 
 #### Алгоритм `DistrictAssembler`
 
 ```
-1. Кандидаты: allowed_structure_types ∩ тир ∪ required_structures
-2. Cache оболочек (StructureAssembler; интерьер комнат — не этот скоуп)
-3. Проход 1 — бронь приоритетных во внутреннем bbox (решётка block_size)
-4. Рамка вокруг броней (не сквозь бронь / коридор якорей)
-5. Проход 2 — остальная коллекция
-6. Граф улиц → StructureAreaAssembler из cache (не второй generate)
-7. Не влезло → warning, не exception
+1. Слот уже урезан поселением; якоря в слоте (`SettlementAssembler`). Инстанс барьера района — скип если нет поля / template null. Иначе inner bbox = слот минус прямые района (`sides` + `width_cells`) минус коридор
+2. Кандидаты: allowed_structure_types ∩ тир ∪ required_structures
+3. Cache оболочек (StructureAssembler; интерьер комнат — не этот скоуп)
+4. Проход 1 — бронь приоритетных во внутреннем bbox (решётка block_size)
+5. Рамка вокруг броней (не сквозь бронь / коридор якорей)
+6. Проход 2 — остальная коллекция
+7. Граф улиц → StructureAreaAssembler из cache (не второй generate)
+8. Не влезло → warning, не exception
 ```
 
 #### Кэш
@@ -640,7 +680,8 @@ C22: подробный DEBUG на каждом шаге packing — [connection
 | `_place_building` — правила позиционирования здания внутри участка (центрирование, offset от забора, facing-alignment) | **closed C22:** facing из графа + приоритет; `entry_point.wall` = грань парадного, интерьер не rotate. Packer 90° оболочки + вход участка = парадный основного дома — [connections](./tz_structure_connections.md) §5.1.3 «Поворот оболочки» |
 | `_build_paths` — подъезд к улице при Δz | **closed:** [tz_structure_connections.md](./tz_structure_connections.md) §5.1.1; порог = assembler участка |
 | Кто считает `ground_z` / порог | **closed:** `StructureAreaAssembler` (участок, не район) — C21; порог ≠ всегда дверь |
-| `_build_barrier` — алгоритм генерации ячеек забора по списку координат участка | не описан |
+| `_build_barrier` — алгоритм клеток **барьера вокруг участка** (`AreaLayout.barrier_cells`) | не описан. Ширина — `width_cells` шаблона барьера (дефолт 1); прямые граней участка |
+| `DistrictAssembler` — generate прямых **района** | **TODO**. Слот уже без xy поселения; свой список, зона не пересекается с поселением и участком |
 | Малые постройки на участке | состав площади (сад, фонтан, терраса) — **шаблон**, не хардкод; алгоритм stamp — нет ТЗ |
 | `AreaLayout` ↔ `DistrictAssembler` — как район агрегирует результаты нескольких участков | нет ТЗ |
 | `DistrictAssembler` — механика дорог (внутренние улицы, тротуары, соединение с городскими магистралями) | **C22:** рамка после брони прохода 1; код: `DistrictRoadGenerator` + overlay. Переход — city §6.3 |

@@ -287,9 +287,9 @@
       { "system_size": "city", "display_size": "Город", "radius": 1 }
     ],
     "economic_tier_registry": [
-      { "system_tier": "poor", "display_tier": "Хлам", "base_value": 0 },
-      { "system_tier": "basic", "display_tier": "Базовый", "base_value": 1 },
-      { "system_tier": "standard", "display_tier": "Стандартный", "base_value": 10 }
+      { "system_tier": "poor", "display_tier": "Хлам", "base_value": 0, "road_tier_bonus": 1.2, "road_tier_durability": 0.6 },
+      { "system_tier": "basic", "display_tier": "Базовый", "base_value": 1, "road_tier_bonus": 1.1, "road_tier_durability": 0.8 },
+      { "system_tier": "standard", "display_tier": "Стандартный", "base_value": 10, "road_tier_bonus": 1.0, "road_tier_durability": 1.0 }
     ],
     "material_registry": [
       { "system_material": "earth", "display_name": "Земля", "material_category": "solid", "tags": ["raw"], "economic_tier": "poor", "hardness": 1, "density": 150, "flammable": false },

@@ -1,20 +1,35 @@
-"""Connection edge width builtins — tz_structure_connections.md §3.4."""
+"""Connection edge width builtins — tz_structure_connections.md §3.4.
+
+Keys come from ``WorldConnectionTypeRegistry`` (POJO-D-3). Width numbers stay here.
+"""
 
 from __future__ import annotations
 
+from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
+    LANE_BASED_CONNECTION_TYPE_KEYS,
+    WorldConnectionTypeRegistry,
+)
+
+
+def _connection_key(system_connection_type: str) -> str:
+    return WorldConnectionTypeRegistry.require_engine(system_connection_type)
+
+
 # Fixed width per connection_type; None = no physical cells.
 FIXED_WIDTH_CELLS: dict[str, int | None] = {
-    "trail": 1,
-    "dirt_road": 2,
-    "alley": 2,
-    "yard_path": 1,
-    "portal": None,
-    "air_route": None,
-    "sea_route": None,
+    _connection_key("trail"): 1,
+    _connection_key("dirt_road"): 2,
+    _connection_key("alley"): 2,
+    _connection_key("yard_path"): 1,
+    _connection_key("portal"): None,
+    _connection_key("air_route"): None,
+    _connection_key("sea_route"): None,
 }
 
 LANE_WIDTH_CELLS = 2
-LANE_BASED_CONNECTION_TYPES = frozenset({"road", "highway", "bridge"})
+LANE_BASED_CONNECTION_TYPES = frozenset(
+    _connection_key(key) for key in LANE_BASED_CONNECTION_TYPE_KEYS
+)
 UNKNOWN_CONNECTION_WIDTH_FALLBACK = 2
 
 

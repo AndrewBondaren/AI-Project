@@ -103,7 +103,7 @@ _CANONICAL_ENTRIES: tuple[TerrainRegistryEntry, ...] = (
     ),
 )
 
-# Interior / structure types — tz_locations.md full engine set (beyond world_template outdoor slice).
+# Interior / structure types — engine delta beyond world_template outdoor slice.
 _ENGINE_INTERIOR_ENTRIES: tuple[TerrainRegistryEntry, ...] = (
     TerrainRegistryEntry(
         system_terrain="crevice",
@@ -184,7 +184,7 @@ class WorldTerrainRegistry(RootModel[list[TerrainRegistryEntry]]):
 
     @classmethod
     def canonical_engine(cls) -> WorldTerrainRegistry:
-        """Outdoor + interior + settlement occupancy — tz_locations + occupancy."""
+        """Fixture outdoor + interior + settlement occupancy."""
         return cls(list(
             _CANONICAL_ENTRIES + _ENGINE_INTERIOR_ENTRIES + _ENGINE_SETTLEMENT_ENTRIES
         ))

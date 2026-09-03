@@ -9,6 +9,13 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     footprint_gate_line_coords,
     grid_dimension,
 )
+from app.application.worldData.generators.assemblers.districtAssembler.planner.geometry import (
+    axis_lines,
+    district_barrier_widths,
+    district_step,
+    inner_edge_coords,
+)
+from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import packing_info
 from app.application.worldData.generators.road.blockSize import block_size_for_density
 from app.application.worldData.generators.road.connectionPolicy import resolve_has_sidewalk
 from app.application.worldData.generators.road.sidewalkWidthResolver import resolve_sidewalk_width
@@ -85,18 +92,13 @@ def plan_settlement_entries(
     side_m:    int,
     world_uid: str,
     surface:   dict[tuple[int, int], int] | None = None,
+    world:     World | None = None,
 ) -> None:
     """
-    Заполняет slot.entry_nodes для всех районов.
-    CoordinateSpace: WORLD_LOCAL_METERS on ConnectionNode x/y/z.
-    Узлы на (x, y, z) дедуплицируются — соседние районы делят узел на общей границе.
-    through_road: пары W↔E и S↔N на гранях с шагом block_size.
-    entry_point: узлы на южной грани с шагом block_size.
+    Заполняет slot.entry_nodes. Шаг — density этого района.
+    При барьере района — внутренняя грань прямых; слот уже урезан поселением.
     """
-    block = block_size_for_density(skeleton.settlement_density)
-    x_lines = _grid_lines(origin_x, side_m, block)
-    y_lines = _grid_lines(origin_y, side_m, block)
-
+    _ = origin_x, origin_y, side_m
     node_registry: dict[tuple[int, int, int], ConnectionNode] = {}
     z_lookup = surface or {}
 
@@ -112,16 +114,25 @@ def plan_settlement_entries(
         return node_registry[key]
 
     for slot in slots:
-        ox, oy = slot.origin_x, slot.origin_y
-        w, d = slot.width_m, slot.depth_m
         pin_z = slot.ground_z
         conn_type = _connection_type(slot)
         entries: list[ConnectionEntry] = []
+        widths: dict = {}
+        if world is not None:
+            widths, _reason, _template, _skipped = district_barrier_widths(slot, world)
+        x0, y0, x1, y1 = inner_edge_coords(slot, widths)
+        district = slot.district_template.system_name
+        if x1 <= x0 or y1 <= y0:
+            packing_info(district, "anchors", reason="skip_no_entry_nodes")
+            slot.entry_nodes = []
+            continue
+        step = district_step(slot, skeleton)
+        xs = axis_lines(x0, x1, step)
+        ys = axis_lines(y0, y1, step)
 
-        slot_y = _lines_in_range(y_lines, oy, oy + d)
-        for y in slot_y:
-            west = get_node(ox, y, node_z(ox, y, pin_z), "through_w")
-            east = get_node(ox + w, y, node_z(ox + w, y, pin_z), "through_e")
+        for y in ys:
+            west = get_node(x0, y, node_z(x0, y, pin_z), "through_w")
+            east = get_node(x1, y, node_z(x1, y, pin_z), "through_e")
             entries.append(ConnectionEntry(
                 node=west, connection_type=conn_type, role=DistrictEntryRole.THROUGH_ROAD,
                 facing=Facing.WEST, paired_exit_uid=east.node_uid,
@@ -131,10 +142,9 @@ def plan_settlement_entries(
                 facing=Facing.EAST, paired_exit_uid=west.node_uid,
             ))
 
-        slot_x = _lines_in_range(x_lines, ox, ox + w)
-        for x in slot_x:
-            south = get_node(x, oy, node_z(x, oy, pin_z), "through_s")
-            north = get_node(x, oy + d, node_z(x, oy + d, pin_z), "through_n")
+        for x in xs:
+            south = get_node(x, y0, node_z(x, y0, pin_z), "through_s")
+            north = get_node(x, y1, node_z(x, y1, pin_z), "through_n")
             entries.append(ConnectionEntry(
                 node=south, connection_type=conn_type, role=DistrictEntryRole.THROUGH_ROAD,
                 facing=Facing.SOUTH, paired_exit_uid=north.node_uid,
@@ -144,41 +154,32 @@ def plan_settlement_entries(
                 facing=Facing.NORTH, paired_exit_uid=south.node_uid,
             ))
 
-        x = ox + block
-        while x < ox + w:
-            node = get_node(x, oy, node_z(x, oy, pin_z), "entry_s")
+        for x in xs:
+            if x == x0 or x == x1:
+                continue
+            node = get_node(x, y0, node_z(x, y0, pin_z), "entry_s")
             entries.append(ConnectionEntry(
                 node=node, connection_type=conn_type, role=DistrictEntryRole.ENTRY_POINT,
                 facing=Facing.SOUTH, paired_exit_uid=None,
             ))
-            x += block
 
         slot.entry_nodes = entries
-
         through = sum(1 for e in entries if e.role == DistrictEntryRole.THROUGH_ROAD) // 2
         entry_pts = sum(1 for e in entries if e.role == DistrictEntryRole.ENTRY_POINT)
-        logger.info(
-            "plan_settlement_entries slot | template=%s origin=(%d,%d) size=%dx%d"
-            " connection_type=%s through_road_pairs=%d entry_points=%d",
-            slot.district_template.system_name,
-            ox,
-            oy,
-            w,
-            d,
-            conn_type,
-            through,
-            entry_pts,
+        packing_info(
+            district, "anchors",
+            entry_nodes=len(entries),
+            through_road_pairs=through,
+            entry_points=entry_pts,
+            step=step,
+            inner=(x0, y0, x1, y1),
         )
 
-    logger.info(
-        "plan_settlement_entries done | algorithm=block_size_grid block=%d density=%s"
-        " x_lines=%d y_lines=%d slots=%d unique_nodes=%d",
-        block,
-        skeleton.settlement_density,
-        len(x_lines),
-        len(y_lines),
-        len(slots),
-        len(node_registry),
+    packing_info(
+        "settlement", "anchors",
+        slots=len(slots),
+        unique_nodes=len(node_registry),
+        density=skeleton.settlement_density,
     )
 
 

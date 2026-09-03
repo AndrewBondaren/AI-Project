@@ -50,6 +50,7 @@ from app.application.worldData.generators.structure.structureGeneratorService im
     StructureGeneratorService,
     StructureLayout,
 )
+from app.dataModel.materials import DEFAULT_FLOOR_MATERIAL, DEFAULT_WALL_MATERIAL
 from app.dataModel.structure.enums.passageType import PassageType
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
@@ -334,8 +335,8 @@ class StructureAreaAssembler:
             map_y=map_y,
             map_z=map_z,
             system_template_uid=template_name,
-            parent_wall_material="stone",
-            parent_floor_material="wood",
+            parent_wall_material=DEFAULT_WALL_MATERIAL,
+            parent_floor_material=DEFAULT_FLOOR_MATERIAL,
         )
 
     def _build_barrier(

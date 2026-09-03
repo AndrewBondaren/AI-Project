@@ -9,17 +9,7 @@ from pydantic import RootModel
 from app.dataModel.locations.locationType.locationTypeEntry import LocationTypeEntry
 from app.dataModel.locations.locationType.locationTypeSubtypeEntry import LocationTypeSubtypeEntry
 
-_CANONICAL_ENTRIES: tuple[LocationTypeEntry, ...] = (
-    LocationTypeEntry(system_type="region", display_type="Регион"),
-    LocationTypeEntry(system_type="territory", display_type="Территория"),
-    LocationTypeEntry(system_type="settlement", display_type="Поселение"),
-    LocationTypeEntry(system_type="district", display_type="Район"),
-    LocationTypeEntry(system_type="building", display_type="Строение"),
-    LocationTypeEntry(system_type="room", display_type="Помещение"),
-    LocationTypeEntry(system_type="geographic", display_type="География"),
-    LocationTypeEntry(system_type="climate_pole", display_type="Климатический полюс"),
-)
-
+# tz_locations.md § location_type_registry — full hierarchy + subtypes (engine SoT).
 _ENGINE_ENTRIES: tuple[LocationTypeEntry, ...] = (
     LocationTypeEntry(
         system_type="region",
@@ -103,6 +93,10 @@ _ENGINE_ENTRIES: tuple[LocationTypeEntry, ...] = (
         parent_types=[None],
         is_outdoor=True,
     ),
+)
+
+_CANONICAL_ENTRIES: tuple[LocationTypeEntry, ...] = tuple(
+    entry.fixture_identity() for entry in _ENGINE_ENTRIES
 )
 
 

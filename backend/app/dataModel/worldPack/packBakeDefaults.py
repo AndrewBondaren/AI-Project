@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.dataModel.worldPack.gradePipelineStages import GradePipelineStages
 from app.dataModel.worldPack.lightFineTilePolicy import LightFineTilePolicy
 
+PACK_CODEC_VERSION = 1
+
 
 class PackBakeDefaults(BaseModel):
     SCHEMA_ID: ClassVar[str] = "SCH-PACK-BAKE-DEFAULTS"
@@ -18,7 +20,7 @@ class PackBakeDefaults(BaseModel):
     # Debug-only light bake slice. 0 = uncapped (product default: all location∪hydro tiles).
     max_tiles_light: int = Field(default=0, ge=0)
     zstd_level: int = 3
-    codec_version: int = 1
+    codec_version: int = PACK_CODEC_VERSION
     background_drain_per_request: int = 0
     # WP-11 single-writer: at most one active background chunk job.
     refine_queue_max_workers: int = Field(default=1, ge=1)

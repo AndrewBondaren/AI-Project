@@ -869,8 +869,21 @@ price = tier.base_value × location.economic_modifier × supply_demand_modifier 
 ]
 ```
 
-`perimeter_barrier.template` — ref → `barrier_template_registry.system_type`; null = нет забора  
-`perimeter_barrier.probability` — вероятность генерации забора вокруг этого здания (0.0–1.0)
+`perimeter_barrier.template` — ref → `barrier_template_registry.system_type`. **Нет поля**, или поле есть и `template` **null** — инстанса нет (скип как нет поля).  
+`perimeter_barrier.probability` — поле **класса**; читает только владелец-участок (roll 0.0–1.0). Владельцы поселение и район не крутят.  
+`perimeter_barrier.sides` — какие прямые bbox **этого** инстанса включены: cardinals `north`/`south`/`east`/`west` (`Facing`). v1: каждая включённая грань — **прямая** вдоль этой грани (толщина — `width_cells` чертежа **этого** инстанса). Нет поля / `null` / пустой список `[]` → **все четыре** прямые этого bbox. Непустой список — только эти грани. Intercardinal и unknown — skip ключа + warning. Не синглтон: три хоста — три объекта, зоны не пересекаются.
+
+**Класс один:** `PerimeterBarrier`. Владельцы — **разные инстансы**, не shared object. Толщина прямой — `barrier_template_registry.width_cells` (дефолт **1**).
+
+| Владелец инстанса | Периметр (чьи прямые) | Контракт инстанса | Клетки |
+|---|---|---|---|
+| поселение (`SettlementSkeleton` / `CitySkeleton.perimeter_barrier`) | грани **footprint** поселения, не bbox района | нет поля / `template` null → скип. Поле + `template` → всегда, без roll. Нет `sides` / `null` / `[]` → четыре прямые footprint | `SettlementLayout.barrier_cells`. Пишет **`SettlementAssembler`**. До generate района этот слой **вычитает** свои прямые (`footprint ∩ DistrictSlot`) из площади района, чтобы слот не заходил на клетки поселения. Чертёж может быть `city_wall` — это `template`, не другой класс |
+| `DistrictTemplateEntry.perimeter_barrier` | грани **уже урезанного** `DistrictSlot` | нет поля / `template` null → скип. Поле + `template` → всегда, без roll. `sides` — прямые **слота** | `DistrictLayout.barrier_cells`. Пишет **`DistrictAssembler`** (TODO generate). **v1 packing:** вычесть прямые района из слота. Не пишет список поселения; xy с поселением не делит (зоны) |
+| шаблон здания `perimeter_barrier` | грани **участка** | roll `probability` → `_build_barrier` | `AreaLayout.barrier_cells` |
+
+**Инвариант зон:** три инстанса, три списка клеток, общая xy запрещена. Не flatten last-write. Край footprint: сначала вычет поселения из площади района, потом прямые района по новому краю слота, участок — внутри слота.
+
+**Не этот класс:** стены здания (`StructureLayout` / `system_building_element` wall).
 
 **Порядок генерации (template engine):**
 1. Рандомизировать footprint и количество уровней в диапазоне
@@ -878,11 +891,11 @@ price = tier.base_value × location.economic_modifier × supply_demand_modifier 
 3. Разместить required комнаты по правилам `room_type_registry` (adjacency, level_constraint, perimeter)
 4. Заполнить optional комнаты в оставшемся пространстве
 5. Сгенерировать стены, двери, переходы между комнатами → map_cells + location_levels + location_passages
-6. Если `perimeter_barrier.probability` → roll → при успехе сгенерировать barrier по шаблону вокруг footprint
+6. Инстанс `perimeter_barrier` **этого** шаблона здания: `probability` → roll → при успехе барьер вокруг участка (`AreaLayout.barrier_cells`, `_build_barrier`). Не стены комнат (шаг 5). Не инстанс района.
 
 ### `worlds.barrier_template_registry` (N+1)
 
-Чертежи барьеров без interior: заборы, стены, укрепления. Размещаются вокруг зданий (referenced из building template) или независимо вокруг district/settlement.
+Чертежи барьеров без interior. Любой инстанс `PerimeterBarrier.template` ссылается сюда (`wooden_fence`, `stone_fence`, **`city_wall`** — шаблон для **поселения**, не «вместо» класса). Не несущие стены комнат.
 
 ```json
 [
@@ -890,25 +903,30 @@ price = tier.base_value × location.economic_modifier × supply_demand_modifier 
     "system_type": "wooden_fence", "glossary_ref": "barrier_wooden_fence",
     "wall_material":  { "pick_from": ["wood"] },
     "height_levels":  { "min": 1, "max": 1 },
+    "width_cells": 1,
     "gates": { "min": 1, "max": 2 }
   },
   {
     "system_type": "stone_fence",  "glossary_ref": "barrier_stone_fence",
     "wall_material":  { "pick_from": ["stone"] },
     "height_levels":  { "min": 1, "max": 2 },
+    "width_cells": 1,
     "gates": { "min": 1, "max": 4 }
   },
   {
     "system_type": "city_wall",    "glossary_ref": "barrier_city_wall",
     "wall_material":  { "pick_from": ["stone"] },
     "height_levels":  { "min": 2, "max": 5 },
+    "width_cells": 1,
     "gates":   { "min": 1, "max": 6 },
     "towers":  { "min": 0, "max": 20 }
   }
 ]
 ```
 
-Городские стены и стены крепостей — `barrier_template_registry`, не часть ни одного здания; размещаются на уровне settlement/territory.
+`width_cells` — толщина в клетках для **любого** инстанса (поселение / район / участок). Нет поля → **1**.
+
+Барьер **поселения** — прямые footprint; клетки `SettlementLayout.barrier_cells`; вычет из площади района до packing. Барьер **района** — прямые `DistrictSlot`; v1 packing вычитает их из уже урезанного слота. Барьер **участка** — прямые участка. Зоны не пересекаются.
 
 **Связь с relief:** шаблоны обочин ([`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) R28) могут нести `structure_refs: [system_type, …]`. Stamp вдоль ribbon — bake `ribbonBarrierApply` (**RELIEF-BAR-1 ✅**), не в relief generators.
 

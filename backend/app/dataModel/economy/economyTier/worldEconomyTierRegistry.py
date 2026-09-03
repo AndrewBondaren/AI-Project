@@ -6,26 +6,35 @@ from typing import ClassVar
 
 from pydantic import RootModel
 
-from app.dataModel.economy.economyTier.economyTierEntry import EconomyTierEntry
-
-_CANONICAL_ENTRIES: tuple[EconomyTierEntry, ...] = (
-    EconomyTierEntry(system_tier="poor", display_tier="Хлам", base_value=0),
-    EconomyTierEntry(system_tier="basic", display_tier="Базовый", base_value=1),
-    EconomyTierEntry(system_tier="standard", display_tier="Стандартный", base_value=10),
-    EconomyTierEntry(system_tier="quality", display_tier="Качественный", base_value=100),
-    EconomyTierEntry(system_tier="premium", display_tier="Премиальный", base_value=500),
-    EconomyTierEntry(system_tier="exceptional", display_tier="Исключительный", base_value=2000),
+from app.dataModel.economy.economyTier.economyTierEntry import (
+    EconomyTierEntry,
+    road_modifiers_for,
 )
 
-# tz_structure_connections.md §3.7 — road modifiers per tier
-_ROAD_DEFAULTS: dict[str, tuple[float, float]] = {
-    "poor":        (1.20, 0.6),
-    "basic":       (1.10, 0.8),
-    "standard":    (1.00, 1.0),
-    "quality":     (0.95, 1.3),
-    "premium":     (0.95, 1.3),
-    "exceptional": (0.90, 1.6),
-}
+
+def _canonical_entry(
+    system_tier: str,
+    display_tier: str,
+    base_value: int,
+) -> EconomyTierEntry:
+    bonus, durability = road_modifiers_for(system_tier)
+    return EconomyTierEntry(
+        system_tier=system_tier,
+        display_tier=display_tier,
+        base_value=base_value,
+        road_tier_bonus=bonus,
+        road_tier_durability=durability,
+    )
+
+
+_CANONICAL_ENTRIES: tuple[EconomyTierEntry, ...] = (
+    _canonical_entry("poor", "Хлам", 0),
+    _canonical_entry("basic", "Базовый", 1),
+    _canonical_entry("standard", "Стандартный", 10),
+    _canonical_entry("quality", "Качественный", 100),
+    _canonical_entry("premium", "Премиальный", 500),
+    _canonical_entry("exceptional", "Исключительный", 2000),
+)
 
 
 class WorldEconomyTierRegistry(RootModel[list[EconomyTierEntry]]):
@@ -36,25 +45,13 @@ class WorldEconomyTierRegistry(RootModel[list[EconomyTierEntry]]):
 
     @classmethod
     def canonical_defaults(cls) -> WorldEconomyTierRegistry:
-        """fixtures/world_template.json — tiers without explicit road_* fields."""
+        """fixtures/world_template.json + TZ §3.7 road modifiers."""
         return cls(list(_CANONICAL_ENTRIES))
 
     @classmethod
     def canonical_engine(cls) -> WorldEconomyTierRegistry:
-        """Fixture tiers + road_tier_bonus / road_tier_durability from TZ §3.7."""
-        entries: list[EconomyTierEntry] = []
-        for row in _CANONICAL_ENTRIES:
-            bonus, durability = _ROAD_DEFAULTS.get(row.system_tier, (1.0, 1.0))
-            entries.append(
-                EconomyTierEntry(
-                    system_tier=row.system_tier,
-                    display_tier=row.display_tier,
-                    base_value=row.base_value,
-                    road_tier_bonus=bonus,
-                    road_tier_durability=durability,
-                ),
-            )
-        return cls(entries)
+        """Same builtins as ``canonical_defaults`` — one SoT for road_tier_*."""
+        return cls.canonical_defaults()
 
     def entry_for(self, system_tier: str) -> EconomyTierEntry | None:
         for entry in self.root:

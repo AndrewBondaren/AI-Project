@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultOnWire
+from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
 
 
 class SettlementSkeleton(BaseModel):
@@ -21,3 +22,7 @@ class SettlementSkeleton(BaseModel):
     settlement_density: DefaultOnWire[str | None] = None
     system_city_size: DefaultOnWire[str | None] = None
     system_location_mood: DefaultOnWire[str | None] = None
+    frontage_type_order: DefaultOnWire[list[str] | None] = None
+    structure_counts: DefaultOnWire[dict[str, int] | None] = None
+    structure_priority: DefaultOnWire[dict[str, int] | None] = None
+    perimeter_barrier: DefaultOnWire[PerimeterBarrier | None] = None

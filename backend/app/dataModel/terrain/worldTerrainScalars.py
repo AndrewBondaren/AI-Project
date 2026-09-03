@@ -21,6 +21,11 @@ from app.dataModel.worldScalarWire import (
 
 CHUNK_COLUMNS_MIN = 1
 SUBSURFACE_DEPTH_MIN = 0
+# Persist chunk side — not L0 ``WORLD_MAP_CELLS_PER_TILE`` (POJO-D-5).
+TERRAIN_CHUNK_COLUMNS_DEFAULT = 32
+CANONICAL_Z_MIN = -500
+CANONICAL_Z_MAX = 8000
+CANONICAL_ELEVATION_LAPSE_RATE = 0.65
 
 
 class WorldTerrainScalars(BaseModel):
@@ -31,7 +36,7 @@ class WorldTerrainScalars(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     terrain_chunk_columns: DefaultOnWire[int] = constrained_field(
-        default=32, greater_equals=CHUNK_COLUMNS_MIN,
+        default=TERRAIN_CHUNK_COLUMNS_DEFAULT, greater_equals=CHUNK_COLUMNS_MIN,
     )
     terrain_parallel_workers: DefaultOnWire[int | None] = None
     map_subsurface_depth: DefaultOnWire[int] = constrained_field(
@@ -51,28 +56,40 @@ class WorldTerrainScalars(BaseModel):
     @classmethod
     def canonical_defaults(cls) -> WorldTerrainScalars:
         """Explicit scalars after normalize."""
-        return cls(z_min=-500, z_max=8000, elevation_lapse_rate=0.65)
+        return cls(
+            z_min=CANONICAL_Z_MIN,
+            z_max=CANONICAL_Z_MAX,
+            elevation_lapse_rate=CANONICAL_ELEVATION_LAPSE_RATE,
+        )
 
     @classmethod
     def resolved_z_min(cls, z_min: int | None) -> int:
         if z_min is not None:
             return int(z_min)
         default = cls.canonical_defaults().z_min
-        return int(default) if default is not None else -500
+        if default is None:
+            raise RuntimeError("WorldTerrainScalars.canonical_defaults().z_min is None")
+        return int(default)
 
     @classmethod
     def resolved_z_max(cls, z_max: int | None) -> int:
         if z_max is not None:
             return int(z_max)
         default = cls.canonical_defaults().z_max
-        return int(default) if default is not None else 8000
+        if default is None:
+            raise RuntimeError("WorldTerrainScalars.canonical_defaults().z_max is None")
+        return int(default)
 
     @classmethod
     def resolved_elevation_lapse_rate(cls, lapse: float | None) -> float:
         if lapse is not None:
             return float(lapse)
         default = cls.canonical_defaults().elevation_lapse_rate
-        return float(default) if default is not None else 0.65
+        if default is None:
+            raise RuntimeError(
+                "WorldTerrainScalars.canonical_defaults().elevation_lapse_rate is None",
+            )
+        return float(default)
 
 
 TERRAIN_SCALAR_WIRE_KEYS: frozenset[str] = pojo_wire_keys(WorldTerrainScalars)

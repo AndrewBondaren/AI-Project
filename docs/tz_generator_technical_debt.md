@@ -12,6 +12,7 @@
 | [tz_city_generation.md](./tz_city_generation.md) | Продуктовое ТЗ города |
 | [tz_terrain_relief.md](./tz_terrain_relief.md) | Relief generate SoT (Q1/Q2, стрелки, шаблоны, canal/obstacle, SQL catalog). Bake R36u–w — архив v1 |
 | [tz_terrain_relief_technical_debt.md](./tz_terrain_relief_technical_debt.md) | Relief **код**: dual sidecar, god/жирные классы, хардкоды (не R41-T-25 алгоритм) |
+| [tz_datamodel_pojo_discrepancies.md](./tz_datamodel_pojo_discrepancies.md) | Дубли SoT в `dataModel/` (POJO-D-*); D-1…D-9 resolved 2026-09-03 |
 | [tz_pack_ascii_render.md](./tz_pack_ascii_render.md) | Pack ASCII SoT (**PAR-G\***); L2 location grade; debt **PAR-T-*** · **R36u-T-*** |
 | [tz_locations.md](./tz_locations.md) | `barrier_template_registry`; perimeter barriers |
 | [tz_terrain_hydrology.md](./tz_terrain_hydrology.md) | Гидрология: моря, озёра, реки (target) |

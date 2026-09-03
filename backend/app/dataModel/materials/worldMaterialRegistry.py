@@ -8,6 +8,7 @@ from pydantic import RootModel
 
 from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
 from app.dataModel.materials.enums.materialCategory import MaterialCategory
+from app.dataModel.registryEngine import engine_rows
 
 # fixtures/world_template.json
 _CANONICAL_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
@@ -65,8 +66,9 @@ _CANONICAL_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
     ),
 )
 
-# tz_locations.md § material_registry — engine-complete slice
-_ENGINE_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
+# tz_locations.md § material_registry — replaces overlapping fixture keys + engine-only.
+# Fixture-only sand/ice are dropped from the engine slice.
+_ENGINE_DELTA: tuple[MaterialRegistryEntry, ...] = (
     MaterialRegistryEntry(
         system_material="stone",
         display_name="Камень",
@@ -185,8 +187,15 @@ class WorldMaterialRegistry(RootModel[list[MaterialRegistryEntry]]):
 
     @classmethod
     def canonical_engine(cls) -> WorldMaterialRegistry:
-        """Engine slice incl. air/gas — tz_locations.md § material_registry."""
-        return cls(list(_ENGINE_ENTRIES))
+        """Fixture + delta (drop sand/ice) — tz_locations.md § material_registry."""
+        return cls(list(
+            engine_rows(
+                _CANONICAL_ENTRIES,
+                _ENGINE_DELTA,
+                key=lambda e: e.system_material,
+                drop=frozenset({"sand", "ice"}),
+            ),
+        ))
 
     def entry_for(self, system_material: str) -> MaterialRegistryEntry | None:
         for entry in self.root:

@@ -81,7 +81,7 @@ def _pick_template_material(
     rng:      Random,
 ) -> str:
     return pick_barrier_material(
-        world, template, skeleton.economic_tier, rng, default="stone",
+        world, template, skeleton.economic_tier, rng,
     )
 
 

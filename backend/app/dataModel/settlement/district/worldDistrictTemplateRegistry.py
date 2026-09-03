@@ -9,7 +9,7 @@ from pydantic import RootModel
 from app.dataModel.settlement.district.districtConnection import DistrictConnection
 from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.settlement.district.placementCondition import PlacementCondition
-from app.dataModel.settlement.district.requiredStructure import RequiredStructure
+from app.dataModel.settlement.district.requiredStructure import POSITION_CENTER, RequiredStructure
 
 _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
     DistrictTemplateEntry(
@@ -22,7 +22,7 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
         ],
         max_per_city=1,
         required_structures=[
-            RequiredStructure(building_template="town_hall", count=1, position="center"),
+            RequiredStructure(building_template="town_hall", count=1, position=POSITION_CENTER),
         ],
         street_layout="grid",
         connections=[

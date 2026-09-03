@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.application.worldData.generators.structure.cellFactory import _roof_cell
 from app.application.worldData.generators.structure.roof.gableRoof import GableRoof, _shrink_roof_loop
 from app.application.worldData.generators.assemblers.structureAssembler.structureContext import StructureContext
+from app.dataModel.materials import DEFAULT_WALL_MATERIAL
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -34,7 +35,7 @@ class RoofBuilder:
         self.mat = (
             context.roof_material
             or building.parent_wall_material
-            or "stone"
+            or DEFAULT_WALL_MATERIAL
         )
 
     def build(self, cells: list[MapCell]) -> list[MapCell]:

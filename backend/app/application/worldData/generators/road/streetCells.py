@@ -52,20 +52,34 @@ def _thicken(
     return out
 
 
+def rasterize_edge_xy(
+    edge: ConnectionEdge,
+    by_uid: dict[str, ConnectionNode],
+) -> set[tuple[int, int]]:
+    a = by_uid.get(edge.from_node_uid)
+    b = by_uid.get(edge.to_node_uid)
+    if a is None or b is None:
+        return set()
+    line = _line_cells(a.x, a.y, b.x, b.y)
+    width = edge.width_cells if edge.width_cells is not None else 1
+    horizontal = a.y == b.y
+    return _thicken(line, width, horizontal)
+
+
+def rasterize_edges_xy(
+    nodes: list[ConnectionNode],
+    edges: list[ConnectionEdge],
+) -> dict[str, set[tuple[int, int]]]:
+    by_uid = {n.node_uid: n for n in nodes}
+    return {edge.edge_uid: rasterize_edge_xy(edge, by_uid) for edge in edges}
+
+
 def rasterize_street_xy(
     nodes: list[ConnectionNode],
     edges: list[ConnectionEdge],
 ) -> set[tuple[int, int]]:
     """Cells along each edge × width_cells; plus sidewalk child edges if present."""
-    by_uid = {n.node_uid: n for n in nodes}
     xy: set[tuple[int, int]] = set()
-    for edge in edges:
-        a = by_uid.get(edge.from_node_uid)
-        b = by_uid.get(edge.to_node_uid)
-        if a is None or b is None:
-            continue
-        line = _line_cells(a.x, a.y, b.x, b.y)
-        width = edge.width_cells if edge.width_cells is not None else 1
-        horizontal = a.y == b.y
-        xy |= _thicken(line, width, horizontal)
+    for cells in rasterize_edges_xy(nodes, edges).values():
+        xy |= cells
     return xy

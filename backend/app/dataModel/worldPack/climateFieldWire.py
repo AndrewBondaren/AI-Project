@@ -24,6 +24,37 @@ def normalize_climate_bake_status(value: Any) -> ClimateBakeStatus:
     return status  # type: ignore[return-value]
 
 
+def promote_legacy_climate_status(data: Any, *, legacy_key: str) -> Any:
+    """If ``climate_status`` is absent, copy ``legacy_key`` onto it."""
+    if not isinstance(data, dict):
+        return data
+    if "climate_status" not in data and legacy_key in data:
+        return {**data, "climate_status": data[legacy_key]}
+    return data
+
+
+class ClimateBakeStatusMixin(BaseModel):
+    """Shared ``climate_status`` wire + one legacy-key promotion (POJO-D-9)."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    _climate_status_legacy_key: ClassVar[str] = "climate_tier"
+
+    climate_status: ClimateBakeStatus = "coarse"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _promote_legacy_climate_status(cls, data: Any) -> Any:
+        return promote_legacy_climate_status(
+            data, legacy_key=cls._climate_status_legacy_key,
+        )
+
+    @field_validator("climate_status", mode="before")
+    @classmethod
+    def _normalize_climate_status(cls, value: Any) -> ClimateBakeStatus:
+        return normalize_climate_bake_status(value)
+
+
 class ClimateSampleWire(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
@@ -31,7 +62,7 @@ class ClimateSampleWire(BaseModel):
     rainfall: int | None = None
 
 
-class ClimateFieldWire(BaseModel):
+class ClimateFieldWire(ClimateBakeStatusMixin):
     """Rectangular climate grid sampled in pack.
 
     coarse: ``origin_*`` / sample coords are **macro grid** indices; ``sample_step_m=1``.
@@ -40,29 +71,14 @@ class ClimateFieldWire(BaseModel):
 
     SCHEMA_ID: ClassVar[str] = "SCH-CLIMATE-FIELD-WIRE"
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    _climate_status_legacy_key: ClassVar[str] = "tier"
 
-    climate_status: ClimateBakeStatus = "coarse"
     origin_x: int = 0
     origin_y: int = 0
     width: int
     height: int
     sample_step_m: int = Field(default=1, ge=1)
     samples: list[ClimateSampleWire]
-
-    @model_validator(mode="before")
-    @classmethod
-    def _legacy_tier_key(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
-        if "climate_status" not in data and "tier" in data:
-            data = {**data, "climate_status": data["tier"]}
-        return data
-
-    @field_validator("climate_status", mode="before")
-    @classmethod
-    def _climate_status(cls, value: Any) -> ClimateBakeStatus:
-        return normalize_climate_bake_status(value)
 
     @field_validator("samples")
     @classmethod

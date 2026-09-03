@@ -19,6 +19,9 @@ from app.application.worldData.generators.road.layouts.courtyardLayout import ge
 from app.application.worldData.generators.road.layouts.gridLayout import generate_grid
 from app.application.worldData.generators.road.layouts.organicLayout import generate_organic
 from app.application.worldData.generators.road.layouts.radialLayout import generate_radial
+from app.application.worldData.generators.assemblers.districtAssembler.planner.types import (
+    StreetFrameContext,
+)
 from app.dataModel.settlement.district.districtConnection import primary_or_default
 from app.dataModel.roads.enums.streetLayout import StreetLayout
 from app.application.worldData.generators.road.connectionPolicy import (
@@ -48,6 +51,7 @@ class DistrictRoadGenerator:
         world:     World,
         rng:       random.Random | None = None,
         surface:   dict[tuple[int, int], int] | None = None,
+        frame:     StreetFrameContext | None = None,
     ) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
         if rng is None:
             rng = random.Random()
@@ -69,6 +73,12 @@ class DistrictRoadGenerator:
             street_layout.value, connection_type, lanes_per_side, has_sidewalk,
             slot.origin_x, slot.origin_y, slot.width_m, slot.depth_m,
         )
+
+        if street_layout == StreetLayout.GRID:
+            return generate_grid(
+                slot, skeleton, world.world_uid, connection_type, lanes_per_side,
+                has_sidewalk, rng, surface, frame=frame,
+            )
 
         return fn(
             slot, skeleton, world.world_uid, connection_type, lanes_per_side, has_sidewalk, rng,

@@ -8,6 +8,7 @@ from random import Random
 
 logger = logging.getLogger(__name__)
 
+from app.dataModel.materials import DEFAULT_WALL_MATERIAL
 from app.dataModel.structure.enums.passageType import PassageType
 from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.generators.structure.cellBuilder import build_level_cells
@@ -254,7 +255,7 @@ class StructureGeneratorService:
         connect_corridors(
             all_rooms, cells_dict, levels,
             world.world_uid, building.location_uid,
-            building.parent_wall_material or "stone",
+            building.parent_wall_material or DEFAULT_WALL_MATERIAL,
             world.default_passage_height,
         )
 
@@ -532,7 +533,7 @@ class StructureGeneratorService:
         """Steps 6-8: assign UIDs, generate cells per level."""
         logger.info("=== PHASE: cell generation ===")
         connections = template.get("connections", [])
-        wall_mat    = building.parent_wall_material or "stone"
+        wall_mat    = building.parent_wall_material or DEFAULT_WALL_MATERIAL
 
         room_uids: dict[str, str] = {
             room.uid_key: _det_uuid(building.location_uid, room.uid_key)

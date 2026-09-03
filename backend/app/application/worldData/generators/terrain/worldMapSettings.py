@@ -1,14 +1,17 @@
 """World map generation settings — single read path for terrain/climate bbox and persist tuning."""
 
 from app.application.jsonValidation import terrain_scalars
-from app.dataModel.terrain.worldTerrainScalars import WorldTerrainScalars
+from app.dataModel.terrain.worldTerrainScalars import (
+    TERRAIN_CHUNK_COLUMNS_DEFAULT,
+    WorldTerrainScalars,
+)
 from app.db.models.world import World
 
 DEFAULT_GRID_BBOX_PADDING = 2
 MIN_MAP_SUBSURFACE_DEPTH = 0
 
 _terrain_defaults = WorldTerrainScalars.canonical_defaults()
-DEFAULT_TERRAIN_CHUNK_COLUMNS = _terrain_defaults.terrain_chunk_columns or 32
+DEFAULT_TERRAIN_CHUNK_COLUMNS = TERRAIN_CHUNK_COLUMNS_DEFAULT
 DEFAULT_MAP_SUBSURFACE_DEPTH = (
     _terrain_defaults.map_subsurface_depth
     if _terrain_defaults.map_subsurface_depth is not None

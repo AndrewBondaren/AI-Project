@@ -595,32 +595,44 @@
       {
         "system_tier": "poor",
         "display_tier": "Хлам",
-        "base_value": 0
+        "base_value": 0,
+        "road_tier_bonus": 1.2,
+        "road_tier_durability": 0.6
       },
       {
         "system_tier": "basic",
         "display_tier": "Базовый",
-        "base_value": 1
+        "base_value": 1,
+        "road_tier_bonus": 1.1,
+        "road_tier_durability": 0.8
       },
       {
         "system_tier": "standard",
         "display_tier": "Стандартный",
-        "base_value": 10
+        "base_value": 10,
+        "road_tier_bonus": 1.0,
+        "road_tier_durability": 1.0
       },
       {
         "system_tier": "quality",
         "display_tier": "Качественный",
-        "base_value": 100
+        "base_value": 100,
+        "road_tier_bonus": 0.95,
+        "road_tier_durability": 1.3
       },
       {
         "system_tier": "premium",
         "display_tier": "Премиальный",
-        "base_value": 500
+        "base_value": 500,
+        "road_tier_bonus": 0.95,
+        "road_tier_durability": 1.3
       },
       {
         "system_tier": "exceptional",
         "display_tier": "Исключительный",
-        "base_value": 2000
+        "base_value": 2000,
+        "road_tier_bonus": 0.9,
+        "road_tier_durability": 1.6
       }
     ],
     "material_registry": [
