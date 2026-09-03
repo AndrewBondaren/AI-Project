@@ -75,6 +75,7 @@ from app.dataModel.settlement import (
 )
 from app.dataModel.structure import (
     BarrierTemplateEntry,
+    BuildingLayoutTemplate,
     BuildingTemplateOutline,
     BuildingTemplateRegistryEntry,
     RoomSize,
@@ -109,6 +110,7 @@ __all__ = [
     "BAND_RICH",
     "BAND_WEALTHY",
     "BarrierTemplateEntry",
+    "BuildingLayoutTemplate",
     "BuildingTemplateOutline",
     "BuildingTemplateRegistryEntry",
     "CitySizeEntry",

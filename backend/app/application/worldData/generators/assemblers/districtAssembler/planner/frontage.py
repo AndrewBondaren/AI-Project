@@ -24,6 +24,7 @@ from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import
 from app.dataModel.settlement.district.districtConnection import DistrictConnection
 from app.dataModel.settlement.district.frontageTypeOrder import resolve_frontage_type_order
 from app.dataModel.spatial.facing import CARDINAL_WALL_OUTWARD_DELTA, Facing
+from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
 from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
 from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.db.models.connectionEdge import ConnectionEdge
@@ -37,9 +38,8 @@ _NEIGHBORS = ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1))
 PLAZA_STRUCTURE_TYPE = "plaza"
 
 
-def is_plaza(template: dict) -> bool:
-    st = template.get("structure_type") or template.get("system_type")
-    return st == PLAZA_STRUCTURE_TYPE
+def is_plaza(template: BuildingLayoutTemplate) -> bool:
+    return template.structure_type == PLAZA_STRUCTURE_TYPE
 
 
 def plot_cells(placement: AreaPlacement) -> set[Coord]:
@@ -165,7 +165,7 @@ def apply_frontage(
         if is_plaza(placement.template):
             packing_info(
                 PackingStep.FRONTAGE, district=district,
-                template=placement.template.get("system_name"),
+                template=placement.template.system_name,
                 reason=PackingReason.PLAZA,
             )
             continue
@@ -186,7 +186,7 @@ def apply_frontage(
             winner = counts[0][1]
             packing_info(
                 PackingStep.FRONTAGE, district=district,
-                template=placement.template.get("system_name"),
+                template=placement.template.system_name,
                 reason=PackingReason.THREAD_COUNT,
                 counts={str(k): thread_plot_count[k] for k, _ct in tied},
             )
@@ -196,7 +196,7 @@ def apply_frontage(
             winner = local.choice([k for k, _ct in tied])
             packing_info(
                 PackingStep.FRONTAGE, district=district,
-                template=placement.template.get("system_name"),
+                template=placement.template.system_name,
                 reason=PackingReason.RNG,
                 seed=seed,
             )

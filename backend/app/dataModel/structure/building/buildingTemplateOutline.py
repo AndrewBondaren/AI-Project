@@ -14,7 +14,8 @@ from app.dataModel.structure.materialPick import MaterialPick
 class BuildingTemplateOutline(BaseModel):
     """
     Outline for `building_templates.data` / inline world registry rows.
-    Full generator schema — tz_building_generator.md §3 (levels[] deferred to JV-4).
+    Full generate schema (`levels[]` as floors) — `BuildingLayoutTemplate` + **POJO-D-16** / JV-4b.
+    Here `levels` is IntMinMax (library), `rooms` is `BuildingTemplateRoomSlot` — not generate rooms.
     """
 
     model_config = ConfigDict(extra="ignore", frozen=True)

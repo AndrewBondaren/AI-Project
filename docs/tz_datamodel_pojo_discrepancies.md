@@ -59,6 +59,53 @@ Runtime `economic_tiers(world)` шёл через `canonical_defaults` / world J
 
 ## Средние
 
+### POJO-D-16 — generate layout interior still `list[dict]`
+
+**Severity:** medium · **Status:** **open** 2026-09-03 · **P2** · JV-4b / GV-6 remainder
+
+**Конвенция dataModel:** вложенный JSON-объект на wire = nested frozen `BaseModel`, не `dict`. Эталон уже в дереве:
+
+| Хост | Поле | Тип |
+|---|---|---|
+| `DistrictTemplateEntry` | `connections` | `list[DistrictConnection]` |
+| `DistrictTemplateEntry` | `required_structures` | `list[RequiredStructure]` |
+| `BuildingLayoutTemplate` | `perimeter_barrier` | `PerimeterBarrier` |
+| `BuildingLayoutTemplate` | `default_structure_context` | `DefaultStructureContext` |
+| `BuildingTemplateOutline` | `rooms` | `list[BuildingTemplateRoomSlot]` |
+
+**Сейчас (баг контракта):** `BuildingLayoutTemplate` держит generate-интерьер как wire:
+
+```python
+levels: list[dict]
+staircases: list[dict]
+connections: list[dict]
+```
+
+`extra="ignore"` на корне **не** валидирует вложенные ключи. Generators читают `level_def["z_offset"]`, `room_def.get(...)`, `sc.get("stops")`, `conn["from_room"]` — параллельный SoT к ТЗ [`tz_building_generator.md`](./tz_building_generator.md) §3.2 / §3.4 / §3.5 / §3.7 / §3.7b.
+
+**Целевые nested POJO** (имена — рабочие; схема полей = TZ §3):
+
+| TZ | Целевой тип | Не путать с |
+|---|---|---|
+| §3.2 level | `BuildingLayoutLevel` (`z_offset`, `display_name`, `rooms`, …) | persist `LocationLevel`; Outline `levels: IntMinMax` |
+| §3.4 room | `BuildingLayoutRoom` | `BuildingTemplateRoomSlot` (`system_room` / `count` — **library outline**, другой JSON) |
+| §3.5 size | nested size-объект на room / staircase | `RoomSize` enum — только пресет `size_type` |
+| §3.4 entry_point | nested entry-объект | persist `LocationEntryPoint` |
+| §3.7 connection | `BuildingLayoutConnection` | `DistrictConnection` (улицы района); persist `LocationPassage` |
+| §3.7b staircase | `BuildingLayoutStaircase` | `_RoomInstance(is_shaft=True)`; `StaircaseType` enum |
+
+**Можно переиспользовать как тип поля (не как контейнер):** `RoomSize`, `StaircaseType`, `PassageType`, `IntMinMax` для диапазонов, `Facing`.
+
+**Нельзя подставить Outline в generate:** `BuildingTemplateOutline.levels` — min/max числа этажей библиотеки; generate `levels[]` — массив этажей с комнатами. Смешение = сломанный roundtrip (как Outline vs `BuildingLayoutTemplate` на корне).
+
+**Consumers (после типов — только поля POJO, без `.get` на layout-item):** `structureGeneratorService`, `roomFactory`, `shaftFactory`, `passages/builder`, `doorway`, `archway`, `corridorTrimmer`, `layoutEngine`; builtins `worldBuildingLayoutDefaults._TOWN_HALL_LEVELS` / `_INN_LEVELS`.
+
+**Готово когда:** `BuildingLayoutTemplate.levels: list[BuildingLayoutLevel]` (и аналоги для staircases/connections); generate читает `.z_offset` / `.rooms` / `.stops`; nested `.get` на layout-item нет. Import ENUM-E шаблонов (`JV-4`) — соседний срез, не этот.
+
+См. [`tz_json_validation.md`](./tz_json_validation.md) § JV-4b.
+
+---
+
 ### POJO-D-3 — словарь `connection_type` в нескольких модулях
 
 **Severity:** medium · **Status:** **resolved** 2026-09-03
@@ -192,8 +239,9 @@ Enum values = `WorldConnectionTypeRegistry.require_engine(...)`. Состав ч
 
 ---
 
-## Очередь (minor)
+## Очередь
 
 | P | ID | Действие |
 |---|---|---|
+| P2 | **POJO-D-16** | nested generate layout POJO (`BuildingLayoutLevel` / Room / Connection / Staircase); generators без dict `.get` на item |
 | P3 | POJO-D-10…D-15 | wire flatten / aliases / mixins — не баги SoT |

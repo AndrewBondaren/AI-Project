@@ -25,6 +25,7 @@ from app.application.worldData.generators.structure.structureGeneratorService im
 )
 from app.dataModel.materials import DEFAULT_FLOOR_MATERIAL, DEFAULT_WALL_MATERIAL
 from app.dataModel.spatial.facing import Facing
+from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -50,9 +51,9 @@ def collect_building_template_names(
         if not allowed:
             continue
         for bt in registry:
-            st = bt.get("structure_type") or bt.get("system_type")
+            st = bt.structure_type
             if st in allowed and building_tier_compatible(bt, skeleton, world):
-                names.add(bt["system_name"])
+                names.add(bt.system_name)
 
     return names
 
@@ -124,12 +125,12 @@ class BuildingLayoutCache:
     def ensure(
         self,
         world: World,
-        template: dict,
+        template: BuildingLayoutTemplate,
         facing: Facing = Facing.SOUTH,
         *,
         district: str | None = None,
     ) -> StructureLayout | None:
-        name = str(template.get("system_name") or "")
+        name = template.system_name
         if not name:
             return None
         cached = self.get(name, facing)
@@ -146,11 +147,11 @@ class BuildingLayoutCache:
 
 def _generate_probe(
     world: World,
-    template: dict,
+    template: BuildingLayoutTemplate,
     name: str,
     facing: Facing,
 ) -> StructureLayout | None:
-    structure_type = template.get("structure_type", "building")
+    structure_type = template.structure_type
     if structure_type not in ASSEMBLER_REGISTRY.all():
         packing_warning("cache", "cache", system_name=name, reason="no_assembler")
         return None

@@ -85,7 +85,7 @@ def test_phase_c_placement() -> None:
     # No water → no port district
     slots_dry = plan_district_slots(world, settlement, skeleton, None)
     assert not any(
-        s.district_template.get("district_type") == "port" for s in slots_dry
+        s.district_template.district_type == "port" for s in slots_dry
     ), "port must not appear without adjacent water"
 
     # Water on north edge of cell (0,1): y = 6000 = origin_y + depth for cell_y=1
@@ -96,7 +96,7 @@ def test_phase_c_placement() -> None:
         ),
     ]
     slots_wet = plan_district_slots(world, settlement, skeleton, terrain)
-    port_slots = [s for s in slots_wet if s.district_template.get("district_type") == "port"]
+    port_slots = [s for s in slots_wet if s.district_template.district_type == "port"]
     assert len(port_slots) == 1, f"expected 1 port, got {len(port_slots)}"
     assert port_slots[0].ground_z == 0, "port cell has no interior terrain → settlement z"
 
@@ -105,7 +105,7 @@ def test_phase_c_placement() -> None:
         s for s in slots_wet
         if s.origin_x == 3000 and s.origin_y == 3000
     )
-    assert civic.district_template.get("system_name") == "civic_center"
+    assert civic.district_template.system_name == "civic_center"
     assert len(civic.required_structures) == 1
     print("phase C placement checks: OK")
 
@@ -195,16 +195,15 @@ def test_phase_e_building_cache() -> None:
 
     civic = WorldDistrictTemplateRegistry.canonical_defaults().entry_for("civic_center")
     assert civic is not None
-    civic = civic.model_dump(mode="json")
     slot_a = DistrictSlot(
         origin_x=0, origin_y=0, width_m=3000, depth_m=3000, ground_z=0,
         district_template=civic,
-        required_structures=civic.get("required_structures") or [],
+        required_structures=list(civic.required_structures or []),
     )
     slot_b = DistrictSlot(
         origin_x=3000, origin_y=0, width_m=3000, depth_m=3000, ground_z=0,
         district_template=civic,
-        required_structures=civic.get("required_structures") or [],
+        required_structures=list(civic.required_structures or []),
     )
 
     assembler = SettlementAssembler()
@@ -241,12 +240,25 @@ def test_phase_area_barriers() -> None:
         lookup_building_template,
     )
 
+    from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
+    from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+
     assert should_build_area_barrier(
-        {"perimeter_barrier": {"template": "stone_fence", "probability": 1.0}},
+        BuildingLayoutTemplate(
+            system_name="probe_fence",
+            structure_type="building",
+            display_name="probe",
+            perimeter_barrier=PerimeterBarrier(template="stone_fence", probability=1.0),
+        ),
         Random(0),
     )
     assert not should_build_area_barrier(
-        {"perimeter_barrier": {"template": None, "probability": 0}},
+        BuildingLayoutTemplate(
+            system_name="probe_open",
+            structure_type="building",
+            display_name="probe",
+            perimeter_barrier=PerimeterBarrier(template=None, probability=0),
+        ),
         Random(0),
     )
 
@@ -275,7 +287,7 @@ def test_phase_area_barriers() -> None:
 
     town_hall = lookup_building_template(world, "town_hall")
     assert town_hall is not None
-    assert town_hall.get("perimeter_barrier", {}).get("template") == "stone_fence"
+    assert town_hall.perimeter_barrier.template == "stone_fence"
 
     layout = SettlementAssembler().assemble(world, settlement)
     area = layout.district_layouts[0].area_layouts[0]
@@ -306,8 +318,6 @@ def test_phase_b_travel_and_sidewalk() -> None:
     industrial = registry.entry_for("industrial_quarter")
     civic = registry.entry_for("civic_center")
     assert industrial is not None and civic is not None
-    industrial = industrial.model_dump(mode="json")
-    civic = civic.model_dump(mode="json")
     assert resolve_has_sidewalk(industrial) is False
     assert resolve_has_sidewalk(civic) is True
 

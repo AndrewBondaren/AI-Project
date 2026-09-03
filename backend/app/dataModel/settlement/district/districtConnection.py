@@ -36,17 +36,13 @@ def parse_district_connection(raw: Any) -> DistrictConnection | None:
 
 def primary_from_template(template: Any) -> DistrictConnection | None:
     """First ``connections[]`` row when present and valid."""
-    from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-
-    if isinstance(template, DistrictTemplateEntry):
-        connections = template.connections
-        if not connections:
-            return None
-        return connections[0]
-    connections = template.get("connections")
+    connections = getattr(template, "connections", None)
     if not connections:
         return None
-    return parse_district_connection(connections[0])
+    first = connections[0]
+    if isinstance(first, DistrictConnection):
+        return first
+    return parse_district_connection(first)
 
 
 def primary_or_default(template: Any) -> DistrictConnection:

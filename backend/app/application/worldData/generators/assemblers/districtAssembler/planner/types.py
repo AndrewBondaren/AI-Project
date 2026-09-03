@@ -6,6 +6,12 @@ from dataclasses import dataclass, field
 
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
 from app.dataModel.spatial.facing import Facing
+from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+
+Rect = tuple[int, int, int, int]
+
+# C21 courtyard pad — not an alley. Packing and AreaSlot share this value.
+YARD_PADDING_M = 1
 
 
 @dataclass(frozen=True)
@@ -108,7 +114,7 @@ class StreetFrameContext:
 @dataclass
 class AreaPlacement:
     area_slot: AreaSlot
-    template: dict
+    template: BuildingLayoutTemplate
     building_x: int
     building_y: int
     facing: Facing = Facing.SOUTH

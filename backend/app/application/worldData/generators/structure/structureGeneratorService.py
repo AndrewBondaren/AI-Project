@@ -9,6 +9,10 @@ from random import Random
 logger = logging.getLogger(__name__)
 
 from app.dataModel.materials import DEFAULT_WALL_MATERIAL
+from app.dataModel.structure.building.buildingLayoutTemplate import (
+    BuildingLayoutTemplate,
+    coerce_building_layout,
+)
 from app.dataModel.structure.enums.passageType import PassageType
 from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.generators.structure.cellBuilder import build_level_cells
@@ -95,21 +99,21 @@ def _make_seed(world_uid: str, building_uid: str) -> int:
     return int(hashlib.md5(raw).hexdigest()[:8], 16)
 
 
-def _resolve_z_heights(template: dict) -> dict[int, int]:
+def _resolve_z_heights(template: BuildingLayoutTemplate) -> dict[int, int]:
     """z_offset → effective z_height."""
-    default = template.get("default_z_height", 3)
+    default = template.default_z_height
     return {
         level_def["z_offset"]: level_def.get("z_height") or default
-        for level_def in template["levels"]
+        for level_def in template.levels
     }
 
 
-def _resolve_template_z_heights(template: dict) -> dict[int, int | None]:
+def _resolve_template_z_heights(template: BuildingLayoutTemplate) -> dict[int, int | None]:
     """z_offset → explicit z_height from template (None if not specified at all)."""
-    template_default = template.get("default_z_height")
+    template_default = template.default_z_height
     return {
         level_def["z_offset"]: level_def.get("z_height") or template_default
-        for level_def in template["levels"]
+        for level_def in template.levels
     }
 
 
@@ -121,7 +125,7 @@ def _compute_level_z(building_map_z: int, z_offset: int, z_heights: dict[int, in
     return building_map_z - foundation_depth - sum(z_heights[k] for k in range(z_offset, 0))
 
 
-def _build_levels(template: dict, building: NamedLocation,
+def _build_levels(template: BuildingLayoutTemplate, building: NamedLocation,
                   z_heights: dict[int, int], foundation_depth: int = 0) -> dict[int, LocationLevel]:
     return {
         level_def["z_offset"]: LocationLevel(
@@ -133,7 +137,7 @@ def _build_levels(template: dict, building: NamedLocation,
             isolated=level_def.get("isolated", False),
             access_mechanic=level_def.get("access_mechanic", []),
         )
-        for level_def in template["levels"]
+        for level_def in template.levels
     }
 
 
@@ -141,7 +145,7 @@ def _build_levels(template: dict, building: NamedLocation,
 # Level layout ordering — propagate staircase anchors across levels
 
 def _staircase_layout_order(
-    template: dict,
+    template: BuildingLayoutTemplate,
     room_z_offsets: dict[str, int],
 ) -> list[int]:
     """
@@ -150,9 +154,9 @@ def _staircase_layout_order(
     so we can propagate anchor positions.
     Unreachable levels are appended at the end in template order.
     """
-    all_z = [level_def["z_offset"] for level_def in template["levels"]]
+    all_z = [level_def["z_offset"] for level_def in template.levels]
     adj: dict[int, list[int]] = {z: [] for z in all_z}
-    for sc in template.get("staircases", []):
+    for sc in template.staircases:
         stops = sc.get("stops", [])
         for i in range(len(stops) - 1):
             fr_z = room_z_offsets.get(stops[i])
@@ -222,13 +226,14 @@ class StructureGeneratorService:
         self,
         world: World,
         building: NamedLocation,
-        template: dict,
+        template: BuildingLayoutTemplate | dict,
         ground_z: int | None = None,
         foundation_depth: int = 0,
     ) -> StructureLayout:
+        template = coerce_building_layout(template)
         logger.info(
             "generate_from_template | start building=%s template=%s",
-            building.location_uid, template.get("system_name", "?"),
+            building.location_uid, template.system_name,
         )
 
         ground_z = ground_z if ground_z is not None else building.map_z
@@ -275,7 +280,7 @@ class StructureGeneratorService:
 
     def _instantiate_rooms(
         self,
-        template: dict,
+        template: BuildingLayoutTemplate,
         building: NamedLocation,
         levels: dict[int, LocationLevel],
         world: World,
@@ -288,7 +293,7 @@ class StructureGeneratorService:
         all_rooms: list[_RoomInstance] = []
         room_z_offsets: dict[str, int] = {}
 
-        for level_def in template["levels"]:
+        for level_def in template.levels:
             z_offset    = level_def["z_offset"]
             level       = levels[z_offset]
             level_rooms = instantiate_level_rooms(
@@ -339,7 +344,7 @@ class StructureGeneratorService:
 
     def _layout_rooms(
         self,
-        template: dict,
+        template: BuildingLayoutTemplate,
         building: NamedLocation,
         all_rooms: list[_RoomInstance],
         room_z_offsets: dict[str, int],
@@ -349,7 +354,7 @@ class StructureGeneratorService:
         logger.info("=== PHASE: layout (order propagation) ===")
         bx = building.map_x or 0
         by = building.map_y or 0
-        connections = template.get("connections", [])
+        connections = template.connections
 
         layout_order = _staircase_layout_order(template, room_z_offsets)
         level_start: dict[int, tuple[int, int]] = {layout_order[0]: (bx, by)}
@@ -418,14 +423,14 @@ class StructureGeneratorService:
     def _build_synth_conns(
         self,
         connections: list[dict],
-        template: dict,
+        template: BuildingLayoutTemplate,
         z_offset: int,
         room_z_offsets: dict[str, int],
         shaft_by_staircase: dict[str, list[_RoomInstance]],
     ) -> list[dict]:
         """Synthetic archway connections: shaft ↔ to_room for the current level."""
         synth = list(connections)
-        for sc in template.get("staircases", []):
+        for sc in template.staircases:
             if not requires_shaft(sc.get("staircase_type")):
                 continue
             sc_id      = sc.get("staircase_id", "staircase")
@@ -447,7 +452,7 @@ class StructureGeneratorService:
     def _place_level_shafts(
         self,
         z_offset: int,
-        template: dict,
+        template: BuildingLayoutTemplate,
         all_rooms: list[_RoomInstance],
         room_z_offsets: dict[str, int],
         shaft_by_staircase: dict[str, list[_RoomInstance]],
@@ -455,7 +460,7 @@ class StructureGeneratorService:
         level_start: dict[int, tuple[int, int]],
     ) -> None:
         """AdjacentShaftPlacer for fr_z shaft instances; propagates level_start to to_z levels."""
-        for sc in template.get("staircases", []):
+        for sc in template.staircases:
             if not requires_shaft(sc.get("staircase_type")):
                 continue
             sc_id  = sc.get("staircase_id", "staircase")
@@ -492,13 +497,13 @@ class StructureGeneratorService:
     def _propagate_trapdoor_starts(
         self,
         z_offset: int,
-        template: dict,
+        template: BuildingLayoutTemplate,
         room_z_offsets: dict[str, int],
         all_placed_by_id: dict[str, _RoomInstance],
         level_start: dict[int, tuple[int, int]],
     ) -> None:
         """No-shaft staircases (trapdoor): align target level to the placed anchor room."""
-        for sc in template.get("staircases", []):
+        for sc in template.staircases:
             if requires_shaft(sc.get("staircase_type")):
                 continue
             sc_id = sc.get("staircase_id", "?")
@@ -524,7 +529,7 @@ class StructureGeneratorService:
 
     def _generate_cells(
         self,
-        template: dict,
+        template: BuildingLayoutTemplate,
         building: NamedLocation,
         levels: dict[int, LocationLevel],
         all_rooms: list[_RoomInstance],
@@ -532,7 +537,7 @@ class StructureGeneratorService:
     ) -> tuple[dict[tuple, MapCell], dict[str, str]]:
         """Steps 6-8: assign UIDs, generate cells per level."""
         logger.info("=== PHASE: cell generation ===")
-        connections = template.get("connections", [])
+        connections = template.connections
         wall_mat    = building.parent_wall_material or DEFAULT_WALL_MATERIAL
 
         room_uids: dict[str, str] = {
@@ -542,7 +547,7 @@ class StructureGeneratorService:
         }
 
         cells_dict: dict[tuple, MapCell] = {}
-        for level_def in template["levels"]:
+        for level_def in template.levels:
             z_offset    = level_def["z_offset"]
             level       = levels[z_offset]
             level_rooms = [r for r in all_rooms if r.z_offset == z_offset and r.placed]
@@ -561,7 +566,7 @@ class StructureGeneratorService:
 
     def _run_passages(
         self,
-        template: dict,
+        template: BuildingLayoutTemplate,
         building: NamedLocation,
         levels: dict[int, LocationLevel],
         all_rooms: list[_RoomInstance],
@@ -576,7 +581,7 @@ class StructureGeneratorService:
             if r.staircase_type:
                 logger.info("pre-passages room staircase_type: %r  %r", r.room_id, r.staircase_type)
         passages = build_passages(
-            cells_dict, all_rooms, template.get("connections", []),
+            cells_dict, all_rooms, template.connections,
             levels, room_z_offsets,
             world.world_uid, building.location_uid, rng,
             world=world, template=template,
@@ -596,7 +601,7 @@ class StructureGeneratorService:
 
     def _place_wall_openings(
         self,
-        template: dict,
+        template: BuildingLayoutTemplate,
         building: NamedLocation,
         levels: dict[int, LocationLevel],
         all_rooms: list[_RoomInstance],
@@ -613,7 +618,7 @@ class StructureGeneratorService:
             rng=rng,
         )
 
-        for level_def in template["levels"]:
+        for level_def in template.levels:
             z_offset    = level_def["z_offset"]
             level       = levels[z_offset]
             level_rooms = [

@@ -51,6 +51,7 @@ from app.application.worldData.generators.structure.structureGeneratorService im
     StructureLayout,
 )
 from app.dataModel.materials import DEFAULT_FLOOR_MATERIAL, DEFAULT_WALL_MATERIAL
+from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
 from app.dataModel.structure.enums.passageType import PassageType
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
@@ -62,7 +63,7 @@ Coord = tuple[int, int]
 
 
 def derive_structure_context(
-    template:      dict,
+    template:      BuildingLayoutTemplate,
     city_skeleton: CitySkeleton,
     slot:          AreaSlot,
     terrain_cells: list[MapCell] | None,
@@ -80,24 +81,24 @@ def derive_structure_context(
             len(terrain_cells),
             ground_z,
         )
-    defaults = template.get("default_structure_context") or {}
+    ctx = template.default_structure_context
     return StructureContext(
-        foundation_type=defaults.get("foundation_type", "slab"),
-        roof_type=defaults.get("roof_type", "gable"),
+        foundation_type=ctx.foundation_type,
+        roof_type=ctx.roof_type,
         facing=slot.facing,
-        foundation_depth=int(defaults.get("foundation_depth", 1)),
+        foundation_depth=ctx.foundation_depth,
         ground_z=ground_z,
-        foundation_material=defaults.get("foundation_material"),
-        roof_material=defaults.get("roof_material"),
-        porch_material=defaults.get("porch_material"),
-        porch_has_roof=bool(defaults.get("porch_has_roof", False)),
+        foundation_material=ctx.foundation_material,
+        roof_material=ctx.roof_material,
+        porch_material=ctx.porch_material,
+        porch_has_roof=ctx.porch_has_roof,
     )
 
 
-def _has_building(template: dict, cached_layout: StructureLayout | None) -> bool:
+def _has_building(template: BuildingLayoutTemplate, cached_layout: StructureLayout | None) -> bool:
     if cached_layout is not None:
         return True
-    return bool(template.get("levels"))
+    return bool(template.levels)
 
 
 def _footprint_cells(fp: OccupiedFootprint, bx: int, by: int) -> list[Coord]:
@@ -143,7 +144,7 @@ class StructureAreaAssembler:
         self,
         world:          World,
         slot:           AreaSlot,
-        template:       dict,
+        template:       BuildingLayoutTemplate,
         city_skeleton:  CitySkeleton,
         terrain_cells:  list[MapCell] | None = None,
         *,
@@ -161,7 +162,7 @@ class StructureAreaAssembler:
 
         logger.info(
             "StructureAreaAssembler | template=%s facing=%s slot_cells=%d cached=%s origin=(%d,%d)",
-            template.get("system_name", "?"),
+            template.system_name,
             slot.facing,
             len(slot.cells),
             cached_layout is not None,
@@ -317,18 +318,18 @@ class StructureAreaAssembler:
         self,
         world:     World,
         slot:      AreaSlot,
-        template:  dict,
+        template:  BuildingLayoutTemplate,
         map_x:     int,
         map_y:     int,
         fp_cells:  list[Coord],
         surface:   dict[Coord, int],
     ) -> NamedLocation:
-        template_name = template.get("system_name", "building")
+        template_name = template.system_name
         map_z = median_surface_z(fp_cells, surface, slot.ground_z)
         return NamedLocation(
             location_uid=f"{world.world_uid}-{template_name}-{map_x}-{map_y}",
             world_uid=world.world_uid,
-            display_name=template.get("display_name", template_name),
+            display_name=template.display_name,
             system_location_type="building",
             created_at="2026-01-01T00:00:00",
             map_x=map_x,
@@ -343,7 +344,7 @@ class StructureAreaAssembler:
         self,
         world:         World,
         slot:          AreaSlot,
-        template:      dict,
+        template:      BuildingLayoutTemplate,
         building:      NamedLocation | None,
         city_skeleton: CitySkeleton,
         rng:           random.Random,

@@ -12,6 +12,7 @@ from random import Random
 
 from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
+from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
 from app.dataModel.structure.enums.staircaseType import (
     StaircaseType,
     default_shaft_size_type,
@@ -46,7 +47,7 @@ def _resolve_shaft_size(sc_entry: dict, staircase_type: StaircaseType) -> tuple[
 
 
 def instantiate_shaft_rooms(
-    template: dict,
+    template: BuildingLayoutTemplate,
     room_z_offsets: dict[str, int],
     levels: dict[int, LocationLevel],
     world: World,
@@ -60,7 +61,7 @@ def instantiate_shaft_rooms(
     """
     result: list[_RoomInstance] = []
 
-    for sc in template.get("staircases", []):
+    for sc in template.staircases:
         staircase_id = sc.get("staircase_id", "staircase")
         staircase_type = StaircaseType.parse_template(sc.get("staircase_type"))
         stops = sc.get("stops", [])

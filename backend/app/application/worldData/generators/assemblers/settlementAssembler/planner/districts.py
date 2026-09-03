@@ -20,7 +20,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.streets import (
     plan_settlement_entries,
 )
-from app.application.worldData.generators.assemblers.districtAssembler.planner.geometry import (
+from app.application.worldData.generators.assemblers.districtAssembler.planner.barrierInset import (
     shrink_slot_by_settlement_barrier,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.terrain import (

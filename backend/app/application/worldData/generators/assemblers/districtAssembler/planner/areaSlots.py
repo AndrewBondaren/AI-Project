@@ -4,12 +4,10 @@ from __future__ import annotations
 
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
-from app.application.worldData.generators.assemblers.districtAssembler.planner.pack import (
-    YARD_PADDING_M as _PACK_PAD,
-)
 from app.application.worldData.generators.assemblers.districtAssembler.planner.types import (
     AreaPlacement,
     Reservation,
+    YARD_PADDING_M,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.buildingCache import (
     BuildingLayoutCache,
@@ -22,9 +20,6 @@ from app.application.worldData.generators.structure.structureGeneratorService im
 )
 from app.dataModel.spatial.facing import Facing
 from app.db.models.world import World
-
-# C21 courtyard pad — not an alley. Packing imports the same value via pack.py.
-YARD_PADDING_M = _PACK_PAD
 
 __all__ = [
     "AreaPlacement",

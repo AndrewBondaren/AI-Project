@@ -10,6 +10,7 @@ from app.application.worldData.generators.structure.structureGeneratorService im
     StructureGeneratorService,
     StructureLayout,
 )
+from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -60,13 +61,13 @@ class BuildingAssembler(BaseStructureAssembler):
         self,
         world: World,
         building: NamedLocation,
-        template: dict,
+        template: BuildingLayoutTemplate,
         context: StructureContext,
         terrain_cells: list[MapCell] | None = None,
     ) -> StructureLayout:
         logger.info(
             "BuildingAssembler | template=%s building=%s",
-            template.get("system_name", "?"), building.location_uid,
+            template.system_name, building.location_uid,
         )
         ground_z = context.ground_z if context.ground_z is not None else building.map_z
         fd = context.foundation_depth if context.foundation_type != "none" else 0

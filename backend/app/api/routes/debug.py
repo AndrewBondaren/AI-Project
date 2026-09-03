@@ -5,6 +5,7 @@ Debug endpoints — только для разработки и тестиров
 from dataclasses import asdict
 import logging
 
+from pydantic import ValidationError
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
@@ -17,6 +18,7 @@ from app.application.worldData.facingArrows import FACING_ARROW
 from app.application.worldData.generators.structure.gridRenderer import render_all_levels
 from app.dataModel.materials import DEFAULT_FLOOR_MATERIAL, DEFAULT_WALL_MATERIAL
 from app.dataModel.spatial.facing import Facing
+from app.dataModel.structure.building.buildingLayoutTemplate import coerce_building_layout
 from app.db.models.namedLocation import NamedLocation
 from datetime import datetime, timezone
 
@@ -62,6 +64,11 @@ async def debug_generate_structure(
     if not isinstance(template, dict):
         raise HTTPException(status_code=422, detail="Template must be a JSON object")
 
+    try:
+        layout_template = coerce_building_layout(template)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
     world = await container.world_service().get_by_id(world_uid)
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
@@ -69,7 +76,7 @@ async def debug_generate_structure(
     building = NamedLocation(
         location_uid=f"debug-building-{world_uid}",
         world_uid=world_uid,
-        display_name="[Debug] " + template.get("display_name", "Building"),
+        display_name="[Debug] " + layout_template.display_name,
         system_location_type="building",
         created_at=datetime.now(timezone.utc).isoformat(),
         map_x=map_x,
@@ -84,7 +91,7 @@ async def debug_generate_structure(
     gen_logger = logging.getLogger("app.application.worldData.generators")
     gen_logger.addHandler(capture)
     try:
-        layout = _structure_generator.generate_from_template(world, building, template)
+        layout = _structure_generator.generate_from_template(world, building, layout_template)
     finally:
         gen_logger.removeHandler(capture)
 

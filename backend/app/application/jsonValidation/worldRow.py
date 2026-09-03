@@ -41,6 +41,11 @@ from app.dataModel.settlement.settlement.worldCitySizeRegistry import WorldCityS
 from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
     WorldBarrierTemplateRegistry,
 )
+from app.dataModel.structure.building.buildingLayoutTemplate import (
+    BuildingLayoutTemplate,
+    try_building_layout,
+)
+from app.dataModel.structure.building.worldBuildingLayoutDefaults import canonical_defaults
 from app.dataModel.structure.building.worldBuildingTemplateRegistry import (
     WorldBuildingTemplateRegistry,
 )
@@ -179,26 +184,20 @@ def district_templates(world: Any) -> WorldDistrictTemplateRegistry:
         world, WorldDistrictTemplateRegistry, world_uid=_uid(world),
     )
 
-def building_layout_templates(world: Any) -> list[dict]:
-    """
-    Merged building layout bodies — engine builtins + world rows.
-    Layout JSON is not yet a single POJO row; registry merge stays wire-shaped.
-    """
-    from app.dataModel.structure.building.worldBuildingLayoutDefaults import (
-        canonical_defaults,
-    )
-
-    by_name: dict[str, dict] = {
-        layout["system_name"]: dict(layout)
+def building_layout_templates(world: Any) -> list[BuildingLayoutTemplate]:
+    """Engine builtins + world rows that validate as generate layouts (not uid pointers)."""
+    by_name: dict[str, BuildingLayoutTemplate] = {
+        layout.system_name: layout
         for layout in canonical_defaults()
     }
     col = slice_column_key(WorldBuildingTemplateRegistry)
     for row in getattr(world, col, None) or []:
         if not isinstance(row, dict):
             continue
-        key = row.get("system_name") or row.get("system_template_uid")
-        if key:
-            by_name[str(key)] = row
+        layout = try_building_layout(row)
+        if layout is None:
+            continue
+        by_name[layout.system_name] = layout
     return list(by_name.values())
 
 

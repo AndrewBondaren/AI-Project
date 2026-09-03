@@ -13,7 +13,7 @@ from app.application.worldData.generators.assemblers.districtAssembler.connectio
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
 )
-from app.application.worldData.generators.assemblers.districtAssembler.planner.geometry import (
+from app.application.worldData.generators.assemblers.districtAssembler.planner.lattice import (
     axis_lines,
     district_step,
 )

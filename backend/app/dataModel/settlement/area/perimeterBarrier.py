@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultOnWire
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing, parse_facing
+
+if TYPE_CHECKING:
+    from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+    from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
 
 
 class PerimeterBarrier(BaseModel):
@@ -48,10 +54,10 @@ def resolved_host_sides(barrier: PerimeterBarrier) -> tuple[frozenset[Facing], l
     return frozenset(kept), skipped
 
 
-def perimeter_barrier_from_template(template: dict) -> PerimeterBarrier:
-    raw = template.get("perimeter_barrier")
-    if raw is None:
+def perimeter_barrier_from_template(
+    template: BuildingLayoutTemplate | DistrictTemplateEntry,
+) -> PerimeterBarrier:
+    spec = template.perimeter_barrier
+    if spec is None:
         return PerimeterBarrier()
-    if isinstance(raw, PerimeterBarrier):
-        return raw
-    return PerimeterBarrier.model_validate(raw)
+    return spec

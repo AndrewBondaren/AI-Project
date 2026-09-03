@@ -1,6 +1,6 @@
 # ТЗ: Генератор города
 
-**Обновлено:** §11 init modes + persist plan (2026-06); **C29** город на шве pack (2026-08-15).
+**Обновлено:** 2026-09-03 **CITY-T-1** (контур import/persist vs packing); §11 init modes + persist plan (2026-06); **C29** город на шве pack (2026-08-15).
 
 **Связанные документы:**
 
@@ -12,7 +12,7 @@
 | [tz_terrain_relief.md](./tz_terrain_relief.md) | **C29:** город на техническом шве pack — норма; layout не клип по тайлу |
 | [tz_world_pack_storage.md](./tz_world_pack_storage.md) | WP-19: один location file на volume, в т.ч. несколько тайлов |
 | [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) | **SoT** persist/оркестрация outdoor на pack (граф участков, эталон vs патч). Не дублировать сюда |
-| [tz_generator_technical_debt.md](./tz_generator_technical_debt.md) | NC/MR smells settlement stack |
+| [tz_generator_technical_debt.md](./tz_generator_technical_debt.md) | NC/MR smells; **CITY-T-1** контур скелет/persist/шапка ТЗ |
 
 ### Статус реализации (код vs это ТЗ)
 
@@ -28,6 +28,8 @@
 | Phase G organic footprint | `planner/footprint.py` v1 square | ⬜ v2 |
 | Persist layout → connections + building `NamedLocation` в БД | `layoutCells` → map_cells only | ⬜ SoT: [tz_settlement_outdoor.md](./tz_settlement_outdoor.md); §11.5 generate scopes |
 | `world_generation.init_mode` (`config.toml` + API) | — | ⬜ spec ✅ §11 |
+
+Шапка таблицы **отстаёт от кода packing/outdoor** (C22 pass1→рамка→pass2; debug orchestrator ≠ только map_cells). Контур import/SQL скелета, dual persist, эвристика стен, DAG→LLM: **[CITY-T-1](./tz_generator_technical_debt.md#city-t-1--контур-вокруг-city-generate)**. Не путать с open §10 (footprint v2, cells барьера района).
 
 **Имена в коде (не путать с legacy в других TZ):**
 
@@ -453,13 +455,14 @@ Footprint и district slots — `generators/coordinates/` (WORLD_SURFACE_GRID vs
 | Regeneration — скелет изменился после generate | **deferred** — snapshot (§11.4) |
 | Механика дорог внутри района и между районами | **closed** — [tz_structure_connections.md](./tz_structure_connections.md) §5; `DistrictAssembler` + `connectionPolicy`. Рамка после брони — §6.3 |
 | **TODO** generate барьера **района** | **открыт** — `DistrictLayout.barrier_cells`. Зоны: не список поселения |
-| **TODO** поле барьера **поселения** на скелете (`CitySkeleton.perimeter_barrier`) | **открыт** — прямые footprint + вычет из площади района до packing; код сейчас эвристика `planner/barriers.py`, не SoT поля |
+| **TODO** поле барьера **поселения** на скелете (`CitySkeleton.perimeter_barrier`) | **открыт** — generate shrink есть; клетки стен всё ещё эвристика — **CITY-T-1c**; import поля нет — **CITY-T-1a** |
 | Зоны трёх инстансов `PerimeterBarrier` (нет общей xy) | **закрыт** — поселение вычитает `footprint ∩ слот` из площади района; packing района — только прямые района; [tz_locations.md](./tz_locations.md) |
 | **CONN-PACK-1** — рамка `radial` / `organic` вокруг брони; snap якорей вне `grid` | **открыт** — [connections](./tz_structure_connections.md) §8 |
 | **CONN-PACK-2** — два+ `required_structures` с `position: center` | **открыт** — connections §8; поле — §9.4 |
 | **CONN-PACK-3** — envelope `(template, facing)` на проходе 1 до полосы рамки | **открыт** — connections §8 |
 | `adjacent_terrain` — связанность воды | **open** — condition есть, connectivity не описана |
 | **Footprint города — форма** | **v1 closed:** квадрат `footprint_multiplier × map_cell_size_m`. **v2:** §10 TODO organic |
+| **CITY-T-1** — скелет C22 не roundtrip import/SQL; debug persist ≠ `lazy_settlement`; стены эвристика vs поле; шапка этого ТЗ stale | **open** — [tech debt CITY-T-1](./tz_generator_technical_debt.md#city-t-1--контур-вокруг-city-generate); не алгоритм §6.3 в коде |
 
 ### TODO: Псевдо-историчный алгоритм footprint (v2)
 
@@ -620,6 +623,7 @@ DAG может materialize **разные уровни** в разных нод�
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-03 | **CITY-T-1:** контур import/SQL скелета, dual persist, стены vs C22, stale шапка — SoT [tz_generator_technical_debt.md](./tz_generator_technical_debt.md). Не packing §6.3 в коде. |
 | 2026-09-03 | C22: три зоны `PerimeterBarrier` без общей xy; поселение вычитает прямые footprint из площади района до packing; `sides` = прямые bbox инстанса (`[]` = все четыре). |
 | 2026-09-02 | Барьер поселения (периметр footprint) vs барьер района (`DistrictSlot`): один класс, разные инстансы. |
 | 2026-08-30 | §9.6: `DistrictSlot.ground_z` = пин района, не пол застройки; SoT — outdoor **C21** |

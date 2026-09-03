@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
+from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,7 @@ _MIN_CORRIDOR_LENGTH = 3
 
 def trim_corridor_rooms(
     all_rooms: list[_RoomInstance],
-    template:  dict,
+    template:  BuildingLayoutTemplate,
 ) -> None:
     """
     Shorten each corridor room to the extent of its last attached room.
@@ -159,9 +160,9 @@ def _apply(
 # ---------------------------------------------------------------------------
 # Build helpers
 
-def _build_corridor_to_staircase(template: dict) -> dict[str, str]:
+def _build_corridor_to_staircase(template: BuildingLayoutTemplate) -> dict[str, str]:
     result: dict[str, str] = {}
-    for sc in template.get("staircases", []):
+    for sc in template.staircases:
         sc_id = sc.get("staircase_id", "?")
         for stop in sc.get("stops", [])[1:]:
             result[stop] = sc_id

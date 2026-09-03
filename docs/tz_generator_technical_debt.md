@@ -3,7 +3,7 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py` / `render_maps.py`, `worldBundleService.py`, relief library/import, pack render / parent-light refine.  
-**Обновлено:** 2026-08-26 — SoT generate: [`tz_terrain_relief.md`](./tz_terrain_relief.md) (очереди, стрелки). Bake R36/R43 — архив [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). **R41-T-25** алгоритм+валидатор+тесты **open** (следующая разработка с мастером). **R41-T-17** leftover→COUPLE + валидатор не из z ✅ (не конечный occupancy). **R41-T-18** / **T-19** mill Q1/Q2 ✅. Полиш mill **R41-T-20…T-23** ✅. Rename heightmap **R41-T-24** (`z_height_map`) ✅. **R41-T-13…T-16** ✅. Очередь v2 полиш **R41-T-1…T-12** ✅. Consume dump: [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md).  
+**Обновлено:** 2026-09-03 — **CITY-T-1** контур city generate (скелет import/SQL, dual persist, эвристика стен vs C22). SoT generate: [`tz_terrain_relief.md`](./tz_terrain_relief.md) (очереди, стрелки). Bake R36/R43 — архив [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). **R41-T-25** алгоритм+валидатор+тесты **open** (следующая разработка с мастером). **R41-T-17** leftover→COUPLE + валидатор не из z ✅ (не конечный occupancy). **R41-T-18** / **T-19** mill Q1/Q2 ✅. Полиш mill **R41-T-20…T-23** ✅. Rename heightmap **R41-T-24** (`z_height_map`) ✅. **R41-T-13…T-16** ✅. Очередь v2 полиш **R41-T-1…T-12** ✅. Consume dump: [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md).  
 **Связанные документы:**
 
 | Документ | Роль |
@@ -12,7 +12,7 @@
 | [tz_city_generation.md](./tz_city_generation.md) | Продуктовое ТЗ города |
 | [tz_terrain_relief.md](./tz_terrain_relief.md) | Relief generate SoT (Q1/Q2, стрелки, шаблоны, canal/obstacle, SQL catalog). Bake R36u–w — архив v1 |
 | [tz_terrain_relief_technical_debt.md](./tz_terrain_relief_technical_debt.md) | Relief **код**: dual sidecar, god/жирные классы, хардкоды (не R41-T-25 алгоритм) |
-| [tz_datamodel_pojo_discrepancies.md](./tz_datamodel_pojo_discrepancies.md) | Дубли SoT в `dataModel/` (POJO-D-*); D-1…D-9 resolved 2026-09-03 |
+| [tz_datamodel_pojo_discrepancies.md](./tz_datamodel_pojo_discrepancies.md) | Дубли SoT в `dataModel/` (POJO-D-*); D-1…D-9 resolved 2026-09-03; **POJO-D-16** nested generate layout `list[dict]` |
 | [tz_pack_ascii_render.md](./tz_pack_ascii_render.md) | Pack ASCII SoT (**PAR-G\***); L2 location grade; debt **PAR-T-*** · **R36u-T-*** |
 | [tz_locations.md](./tz_locations.md) | `barrier_template_registry`; perimeter barriers |
 | [tz_terrain_hydrology.md](./tz_terrain_hydrology.md) | Гидрология: моря, озёра, реки (target) |
@@ -233,9 +233,35 @@ Perimeter не учитывает template района — v1 compromise.
 
 ### NC-9 — `settlement_density` на NamedLocation
 
-**Status:** `open` | **Severity:** low | **P:** P3
+**Status:** `open` | **Severity:** low | **P:** P3  
+**Срез более широкого:** [CITY-T-1a](#city-t-1--контур-вокруг-city-generate)
 
 `getattr(settlement, "settlement_density", None)` — не поле модели, dynamic attr.
+
+---
+
+## City generate — контур vs ТЗ (CITY-T)
+
+Аудит 2026-09-03: ось [`tz_city_generation.md`](./tz_city_generation.md) vs код. **Алгоритм фазы 2 (C22 packing, районы, grid, `dominant_material` resolver) не этот ID.** Здесь — import/SQL скелета, два persist-пути, эвристика стен, отставание шапки ТЗ.
+
+### CITY-T-1 — контур вокруг city generate
+
+**Status:** `open` | **Severity:** high | **P:** P1 (1a) / P2 (1c, 1d) / DAG-gate (1b, 1e)
+
+Generate (`SettlementAssembler` → `DistrictAssembler`: cache → pass1 → рамка grid → pass2 → frontage) ближе к C22, чем шапка city TZ и фраза «код сейчас» в §6.3. Разрыв — вокруг assembler’а.
+
+| Sub-ID | Severity | P | Проблема | Fix |
+|---|---|---|---|---|
+| **CITY-T-1a** | **high** | **P1** | `SettlementSkeleton` / `CitySkeleton` держат C22-поля (`settlement_density`, `architectural_style`, `frontage_type_order`, `structure_counts`, `structure_priority`, `perimeter_barrier`). `BundleNamedLocation` — `extra="ignore"`; `named_locations` колонок нет. После JSON-import поля = `None`. Smoke ставит attr в памяти. **NC-9** — только density getattr | Wire на import: поля в `BundleNamedLocation` + колонки `0001` / JSON на NL (как `settlement_density` в §3 city TZ). `city_skeleton_from_settlement` уже читает getattr |
+| **CITY-T-1b** | high | DAG | Два persist: debug `SettlementOutdoorOrchestrator` (pack + SQL-дерево + connections) vs `lazy_settlement` → только `map_cells` `insert_bulk_ignore`. Игрок и harness видят разный город | Нода зовёт тот же orchestrator (Gate: DAG; агент не трогает ноды). Не баг генератора |
+| **CITY-T-1c** | medium | P2 | Два движка стен поселения: `shrink_slot_by_settlement_barrier` (C22 поле) vs `plan_settlement_barriers` (эвристика size/tier, поле не читает). Перекрывает [NC-3](#nc-3--три-barrier-pipeline-разная-gate-политика) | Клетки периметра из инстанса `PerimeterBarrier`; эвристика — только omit/null. Зоны без общей xy — city C22 |
+| **CITY-T-1d** | low | P2 | Документы отстают: шапка city TZ (packing=AABB, persist=map_cells only, C22-поля=⬜); §6.3 «код сейчас»; connections §5.1 «packing→overlay»; нет `.cursor/plans/settlement-assembler.md`; `assembler-hierarchy.mdc` ещё пишет NotImplemented на area | Синхрон шапки/§6.3/connections; план или снять ссылку; правило hierarchy |
+| **CITY-T-1e** | medium | DAG | `SettlementLayout.dominant_material` post-assemble есть. На `NamedLocation` не пишется. `lazy_settlement` в `NodeResult` material не кладёт → LLM «мраморные стены» не из layout | Persist опционально (§3.1); payload — DAG (`tz_engine_flow.md`) |
+| **CITY-T-1f** | info | — | `street_layout` кроме `grid`: `NotImplementedError`. Canonical templates все `grid`. **CONN-PACK-1** | Не слайс 1a. Не выдавать organic/radial в registry, пока нет generate |
+
+**Не этот ID (уже в city §10 / §11):** organic footprint v2, snapshot, `init_mode`, growth/world routes, `DistrictLayout.barrier_cells`, CONN-PACK-2/3 как open product, `StructureInteriorAssembler`.
+
+**Готово когда:** импортированный мир без ручных setattr даёт те же C22-поля на `CitySkeleton`, что JSON мастера; один SoT стен поселения; шапка city TZ не противоречит `DistrictAssembler`. 1b/1e — после Gate: DAG.
 
 ---
 
@@ -427,13 +453,15 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | NC-1a | Persist contract / optional `coordinate_space` column | open |
 | LC-1..LC-4 | Neutral packages | open |
 | NC-2 | Parcel cells в `areaSlots`; замок C21 план §2.2b (не margin на `PerimeterBarrier`) | open |
+| **CITY-T-1a** | Скелет C22: import/SQL `named_locations` (density, style, barrier, counts, frontage) | **open** |
 
 ### P2 — ближайший polish
 
 | ID | Действие | Status |
 |---|---|---|
 | MR-1, MR-2, MR-6 | Split cache / rebind / footprint facade | open |
-| NC-3, NC-4 | Barrier contract в product docs | open |
+| NC-3, NC-4, **CITY-T-1c** | Barrier contract; стены поселения = C22 инстанс, не эвристика size | open |
+| **CITY-T-1d** | Синхрон шапки city TZ / §6.3 / connections §5.1 vs C22 packing | open |
 | DR-1, FM-3 | span_lines; barrier pick | open |
 | **CL-3** | Единый `ClimateSpatialSample` / Protocol | open |
 | **CL-4** | `climate_pole_mode` в `poleResolve.py` | **resolved** |
@@ -1876,7 +1904,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 - Imperial conversion in generators (display only)
 - Hex / organic footprint (settlement Phase G/H)
 - Full interior `LOCATION_LOCAL_METERS` (coordinate Phase 7)
-- Persist `SettlementLayout` → connection_nodes/edges в БД (product backlog)
+- Persist `SettlementLayout` → connection_nodes/edges в БД — **частично закрыто** debug orchestrator; gameplay-щель = **CITY-T-1b** (не «нет persist»)
 
 ---
 
@@ -1884,6 +1912,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-03 | **POJO-D-16** open: generate `levels`/`rooms`/`staircases`/`connections` = `list[dict]`; целевые nested objects; не Outline `BuildingTemplateRoomSlot`. CITY-T-1 open: контур city generate (1a скелет import/SQL P1; 1b dual persist DAG; 1c стены vs C22; 1d шапка ТЗ; 1e dominant_material LLM; 1f non-grid). NC-9 = срез 1a. Не алгоритм packing |
 | 2026-08-25 | **R41-T-17 ✅:** leftover + COUPLE; first-wins; валидатор не invent из z. **T-18/T-19 ✅** mill Q1/Q2, нет `is_q3_seed`. **T-13 ✅** equal-z = envelope. **T-14** один `seam[]`. **T-15 ✅** L=1 TZ exception. **T-16** θ vs L_min в docstring |
 | 2026-08-25 | **R41-T-20…T-23 ✅:** `millSchedule`; `DiscoverResult`; `BucketRef`/`MillFamily`/`Q2Kind`; `LiveCorridors`; timings без `from_mill`; leftover walk на rim; `is_side_seed` геометрия. T-18/T-19 ✅; T-13…T-16 ✅ |
 | 2026-08-25 | **R41-T-19 open P1 третьим:** снос mill Q3 (`is_q3_seed`, `q3_s`, `q3_parent`); бок-attach persist оставить; rename bake-полей. После T-18 |

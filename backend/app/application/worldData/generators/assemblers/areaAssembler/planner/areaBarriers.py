@@ -18,6 +18,7 @@ from app.application.worldData.generators.barrier.perimeter import (
     perimeter_ring_bbox,
 )
 from app.dataModel.settlement.area.perimeterBarrier import perimeter_barrier_from_template
+from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 def should_build_area_barrier(
-    building_template: dict,
+    building_template: BuildingLayoutTemplate,
     rng:               Random,
 ) -> bool:
     spec = perimeter_barrier_from_template(building_template)
@@ -42,7 +43,7 @@ def should_build_area_barrier(
 def plan_area_barrier_cells(
     world:             World,
     slot:              AreaSlot,
-    building_template: dict,
+    building_template: BuildingLayoutTemplate,
     building:          NamedLocation | None,
     skeleton:          CitySkeleton,
     rng:               Random,
@@ -63,7 +64,7 @@ def plan_area_barrier_cells(
     if barrier_template is None:
         logger.warning(
             "plan_area_barrier | building=%s template=%r not found in barrier_template_registry",
-            building_template.get("system_name", "?"),
+            building_template.system_name,
             template_type,
         )
         return []
@@ -88,7 +89,7 @@ def plan_area_barrier_cells(
     logger.info(
         "plan_area_barrier | building=%s barrier_template=%s material=%s"
         " cells=%d parcel=(%d,%d)-(%d,%d) facing=%s",
-        building_template.get("system_name", "?"),
+        building_template.system_name,
         template_type,
         material,
         len(cells),

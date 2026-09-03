@@ -10,9 +10,12 @@ from app.application.worldData.generators.structure.errors import UnsupportedSha
 from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.shapeResolver import SizeShapeResolver
+from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+from app.dataModel.structure.enums.roomSize import RoomSize
 from app.dataModel.structure.enums.staircaseSize import StaircaseSizePreset, all_staircase_size_presets
 from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing
 from app.application.worldData.generators.structure.shapeType import ShapeType, _V1_SHAPES
+from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
 from app.db.models.world import World
 
 logger = logging.getLogger(__name__)
@@ -114,7 +117,7 @@ def _resolve_shape_params(room_def: dict, rng: Random) -> dict:
 
 def instantiate_level_rooms(
     level_def: dict,
-    template: dict,
+    template: BuildingLayoutTemplate,
     level_z_height: int,
     z_offset: int,
     world: World,
@@ -140,7 +143,7 @@ def instantiate_level_rooms(
         width, depth, room_z = _resolve_size(room_def, shape, level_z_height, rng, template_z_height)
 
         room_tier = room_def.get("economic_tier")
-        template_tier = template.get("economic_tier")
+        template_tier = template.economic_tier
         wall_mat, floor_mat = resolve_room_materials(
             world, room_tier, template_tier, rng, room_id=room_id,
             building_tier=building_tier, template=template,

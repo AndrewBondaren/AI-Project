@@ -17,17 +17,25 @@ from app.application.worldData.generators.assemblers.districtAssembler.planner.f
     plot_cells,
     touching_street_xy,
 )
-from app.application.worldData.generators.assemblers.districtAssembler.planner.geometry import (
-    corridor_rects_from_entries,
-    district_step,
+from app.application.worldData.generators.assemblers.districtAssembler.planner.barrierInset import (
     inner_bbox_for_slot,
+)
+from app.application.worldData.generators.assemblers.districtAssembler.planner.corridor import (
+    corridor_rects_from_entries,
+)
+from app.application.worldData.generators.assemblers.districtAssembler.planner.lattice import (
+    district_step,
     make_lattice,
 )
-from app.application.worldData.generators.assemblers.districtAssembler.planner.pack import (
-    build_tokens,
-    holes_after_frame,
+from app.application.worldData.generators.assemblers.districtAssembler.planner.pass1 import (
     run_pass1,
+)
+from app.application.worldData.generators.assemblers.districtAssembler.planner.pass2 import (
+    holes_after_frame,
     run_pass2,
+)
+from app.application.worldData.generators.assemblers.districtAssembler.planner.tokens import (
+    build_tokens,
 )
 from app.application.worldData.generators.assemblers.districtAssembler.planner.types import (
     StreetFrameContext,
@@ -153,7 +161,7 @@ class DistrictAssembler:
             if not footprint_fits_rect(fp, res.rect_xy, bx, by):
                 packing_warning(
                     district, "cache",
-                    system_name=placement.template.get("system_name"),
+                    system_name=placement.template.system_name,
                     facing=facing.value,
                     reason="footprint_miss_reservation",
                 )
@@ -181,14 +189,14 @@ class DistrictAssembler:
         for placement in placements:
             local_street = touching_street_xy(plot_cells(placement), street_xy)
             cached = cache.get(
-                str(placement.template.get("system_name") or ""),
+                placement.template.system_name,
                 placement.area_slot.facing,
             )
             if cached is None:
-                cached = cache.get(str(placement.template.get("system_name") or ""), Facing.SOUTH)
+                cached = cache.get(placement.template.system_name, Facing.SOUTH)
             packing_info(
                 district, "area",
-                template=placement.template.get("system_name"),
+                template=placement.template.system_name,
                 facing=placement.area_slot.facing.value,
                 touching=len(local_street),
             )

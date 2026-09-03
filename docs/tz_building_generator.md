@@ -33,6 +33,10 @@
 
 ## 3. Схема шаблона (JSON)
 
+Объекты этого раздела — контракт generate-layout. В `dataModel` корень — `BuildingLayoutTemplate`. Вложенные level / room / size / connection / staircase — **те же объекты**, целевые nested POJO (**[POJO-D-16](./tz_datamodel_pojo_discrepancies.md)** / JV-4b); сейчас ещё `list[dict]` в generators.
+
+Не путать с library **`BuildingTemplateOutline`**: там `levels` = `IntMinMax`, `rooms` = `BuildingTemplateRoomSlot` (`system_room` + count) — другой JSON.
+
 ### 3.1 Поля верхнего уровня
 
 | Поле | Тип | Обязательность | Описание |

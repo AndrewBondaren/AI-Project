@@ -9,11 +9,13 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     footprint_gate_line_coords,
     grid_dimension,
 )
-from app.application.worldData.generators.assemblers.districtAssembler.planner.geometry import (
-    axis_lines,
+from app.application.worldData.generators.assemblers.districtAssembler.planner.barrierInset import (
     district_barrier_widths,
-    district_step,
     inner_edge_coords,
+)
+from app.application.worldData.generators.assemblers.districtAssembler.planner.lattice import (
+    axis_lines,
+    district_step,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import packing_info
 from app.application.worldData.generators.road.blockSize import block_size_for_density

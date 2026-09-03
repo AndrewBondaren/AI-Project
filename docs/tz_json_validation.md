@@ -346,7 +346,7 @@ json_validation | resolve | label=… mode=import|runtime | wire={…} | resolve
 
 **Назначение:** зафиксировать перенос `application/worldData/generators/` с сырого `world.*` / `dict.get` на typed accessors `jsonValidation/worldRow` → `dataModel` POJO.
 
-**Не входит:** layout JSON зданий (`levels`, `rooms`, `connections`) — отдельный контракт structure; `world_seed()`; technical invariants (`map_cell_size_m`, …).
+**Не входит:** `world_seed()`; technical invariants (`map_cell_size_m`, …). Generate-layout корень — `BuildingLayoutTemplate` (GV-6 ◐). Вложенный интерьер (`levels[]` / rooms / staircases / connections) — **JV-4b** / [POJO-D-16](./tz_datamodel_pojo_discrepancies.md).
 
 **Правило:** generators читают master-data **только** через `worldRow`; `model_dump()` в generators — не целевой путь (допустим только в resolve-логах и import facade).
 
@@ -364,7 +364,7 @@ json_validation | resolve | label=… mode=import|runtime | wire={…} | resolve
 | Barrier templates | `barrier_templates()` | barrierDefaults, barriers, areaBarriers | ✅ |
 | City sizes | `city_sizes()` | `footprint.footprint_multiplier` | ✅ |
 | District templates | `district_templates()` | footprint → placement → DistrictSlot → roads | ✅ |
-| Building layouts | `building_layout_templates()` | buildingDefaults, buildingCache | ◐ merge в worldRow; тело — `list[dict]` |
+| Building layouts | `building_layout_templates()` | buildingDefaults, buildingCache, assemblers | ✅ корень `BuildingLayoutTemplate`; nested — **JV-4b** `list[dict]` |
 | Terrain scalars | `terrain_scalars()` | worldMapSettings, columnFillPass, climateGeneratorService (lapse) | ✅ |
 | Connection types | ⬜ | — | ⬜ POJO есть, consumers нет |
 | Location types, lore, weather, room types, terrain categories, location mood | ⬜ | — | ⬜ |
@@ -385,9 +385,25 @@ json_validation | resolve | label=… mode=import|runtime | wire={…} | resolve
 
 | Что | Где | Следующий шаг |
 |-----|-----|----------------|
-| Building layout bodies | `structure/`, assemblers, `building_layout_templates()` | JV-4 / typed layout POJO |
-| `economic_tier_band` на template dict | `tierResolver.band_from_template` | POJO шаблонов или bundle |
-| `building_tier_compatible(template: dict)` | economic.py, buildingCache | после layout POJO |
+| Nested generate `levels[]` / rooms / staircases / connections | `BuildingLayoutTemplate` + `structure/` | **JV-4b** / [POJO-D-16](./tz_datamodel_pojo_discrepancies.md) — nested objects, не `list[dict]` |
+| `economic_tier_band` на district/city | `tz_economic_tier` planned | не building layout (поле на корне уже есть) |
+
+### JV-4b
+
+**P2 · open 2026-09-03.** Срез GV-6 после корневого `BuildingLayoutTemplate`.
+
+TZ уже описывает **объекты** ([`tz_building_generator.md`](./tz_building_generator.md) §3.2–3.7b). Конвенция `dataModel`: вложенный объект = nested `BaseModel` (как `PerimeterBarrier`, `DistrictConnection`, `BuildingTemplateRoomSlot` на Outline). Сейчас три поля корня — `list[dict]`; generators делают `.get` / `[]` на item.
+
+| Сделать | Не делать |
+|---------|-----------|
+| `BuildingLayoutLevel`, `BuildingLayoutRoom` (+ size, entry_point), `BuildingLayoutConnection`, `BuildingLayoutStaircase` | Подставить `BuildingTemplateRoomSlot` / Outline `levels: IntMinMax` в generate |
+| Поля-enum: `RoomSize`, `StaircaseType`, `PassageType` | Дублировать пресеты литералами в generator |
+| Builtins `worldBuildingLayoutDefaults` собирать из POJO | Оставить `_TOWN_HALL_LEVELS: list[dict]` после типов |
+| Generators: `level.z_offset`, `room.room_id`, `sc.stops` | `level_def["z_offset"]`, `room_def.get`, `sc.get("stops")` |
+
+**Consumers:** `structureGeneratorService`, `roomFactory`, `shaftFactory`, `passages/builder`+doorway/archway, `corridorTrimmer`, `layoutEngine`.
+
+**Готово:** вложенный `.get` на layout-item нет; import ENUM-E шаблонов — отдельный **JV-4**.
 
 ### Facade import — пробелы (symmetry с runtime)
 
@@ -403,7 +419,7 @@ json_validation | resolve | label=… mode=import|runtime | wire={…} | resolve
 | GV-3 | Facade: все world registry slices (barrier … building_template_registry) | P1 | ✅ |
 | GV-4 | Убрать `hydrology_dict` shim; consumers только `hydrology()` POJO | P2 | — |
 | GV-5 | Подключить реестры с POJO без consumers (connection_type, location_type, …) по мере появления в generators | P2 | JV-2 REF-W |
-| GV-6 | Building layout typed POJO (не только `building_layout_templates` dict merge) | P2 | JV-4 |
+| GV-6 | Building layout typed POJO — ◐ корень `BuildingLayoutTemplate`; nested — JV-4b | P2 | JV-4b |
 | GV-7 | Удалить transitional `*_rows()` shims после полного GV | P3 | GV-1…6 |
 
 **Порядок:** ~~GV-1~~ ~~GV-2~~ ~~JV-1b~~ → GV-3 → остальное.  
@@ -526,6 +542,7 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 | CONN-1 | rename `node_type` → `connection_node_type` — отдельный PR + recreate БД; JV-0b может стартовать со старым wire key |
 | JV-2 | REF-W после normalize; совместно с N1-W полями на edges |
 | JV-4 | barrier / district / building template import — больше ENUM-E |
+| JV-4b | nested generate layout POJO (`levels` / rooms / staircases / connections) — [POJO-D-16](./tz_datamodel_pojo_discrepancies.md) |
 | Engine | `npc_fields.node_category` → `NpcFieldCategory` — **post-JV-0** |
 | Barrel-only enum | `BorderCategory`, `SeasonKey`, `SystemGender`, … — только при появлении import DTO |
 
@@ -551,6 +568,7 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 | JV-2 | REF-W index после normalize | P1 | ✅ MVP |
 | JV-3 | peak explicit on import; hydrology import rules | P1 | ⬜ |
 | JV-4 | building/district/barrier template import | P2 | ⬜ |
+| JV-4b | nested generate layout POJO (не Outline slot) | P2 | ⬜ |
 | JV-5 | N1-S normalize (`stat_schema` map→array) | P2 | ⬜ |
 | JV-6 | character validation sibling package | P3 | ⬜ |
 | JV-7 | remove runtime SCH-RUNTIME-* hardcodes | P2 | ⬜ |
@@ -578,6 +596,7 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 
 | Версия | Дата | Изменение |
 |--------|------|-----------|
+| — | 2026-09-03 | **JV-4b** / [POJO-D-16](./tz_datamodel_pojo_discrepancies.md): nested generate layout должен быть nested POJO, не `list[dict]`; Outline slot ≠ generate room |
 | 0.1 | 2026-06 | Field Contract Registry, orchestrator, `worldData/jsonValidation/` |
 | — | 2026-07 | Удаление v0.1 code (`dc6b171`); пауза simple CRUD |
 | **1.0** | 2026-07 | POJO-first `application/jsonValidation/`: resolve, facade, worldRow; wire projection B; документ v1 |

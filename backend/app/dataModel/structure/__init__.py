@@ -7,10 +7,14 @@ Structure templates ≠ settlement layout; settlement references structure via t
 
 from app.dataModel.structure.barrier import BarrierTemplateEntry, WorldBarrierTemplateRegistry
 from app.dataModel.structure.building import (
+    BuildingLayoutTemplate,
     BuildingTemplateOutline,
     BuildingTemplateRegistryEntry,
     BuildingTemplateRoomSlot,
+    DefaultStructureContext,
     WorldBuildingTemplateRegistry,
+    coerce_building_layout,
+    try_building_layout,
 )
 from app.dataModel.structure.enums import (
     DOOR_BUILDING_ELEMENTS,
@@ -45,9 +49,13 @@ from app.dataModel.structure.room import RoomTypeEntry, WorldRoomTypeRegistry
 
 __all__ = [
     "BarrierTemplateEntry",
+    "BuildingLayoutTemplate",
     "BuildingTemplateOutline",
     "BuildingTemplateRegistryEntry",
     "BuildingTemplateRoomSlot",
+    "DefaultStructureContext",
+    "coerce_building_layout",
+    "try_building_layout",
     "DOOR_BUILDING_ELEMENTS",
     "MaterialPick",
     "PASSABLE_BUILDING_ELEMENTS",
