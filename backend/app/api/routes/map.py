@@ -303,7 +303,10 @@ async def render_world_grid(
     gy0: int | None = Query(default=None),
     gx1: int | None = Query(default=None),
     gy1: int | None = Query(default=None),
-    mark_locations: bool = Query(default=True),
+    mark_locations: bool = Query(
+        default=True,
+        description="@ on non-settlement pins; settlement footprint glyph from SQL subtype",
+    ),
     container=Depends(get_container),
 ) -> JSONResponse:
     """Debug only — ASCII world map (pack: L0 light tiles; legacy: map_cells)."""
@@ -314,7 +317,10 @@ async def render_world_grid(
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
 
-    svc = MapGridRenderService(container.map_cell_service())
+    svc = MapGridRenderService(
+        container.map_cell_service(),
+        location_service=container.location_service(),
+    )
     bbox = (gx0, gy0, gx1, gy1)
     if any(v is not None for v in bbox) and not all(v is not None for v in bbox):
         raise HTTPException(
@@ -345,7 +351,10 @@ async def render_world_tile_grids(
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
 
-    svc = MapGridRenderService(container.map_cell_service())
+    svc = MapGridRenderService(
+        container.map_cell_service(),
+        location_service=container.location_service(),
+    )
     payload = await svc.render_world_tile_grids(world)
     return JSONResponse(content=payload)
 
@@ -363,7 +372,10 @@ async def render_all_location_grids(
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
 
-    svc = MapGridRenderService(container.map_cell_service())
+    svc = MapGridRenderService(
+        container.map_cell_service(),
+        location_service=container.location_service(),
+    )
     payload = await svc.render_all_location_grids(world)
     return JSONResponse(content=payload)
 
@@ -398,7 +410,10 @@ async def render_wilderness_tile_grid(
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
 
-    svc = MapGridRenderService(container.map_cell_service())
+    svc = MapGridRenderService(
+        container.map_cell_service(),
+        location_service=container.location_service(),
+    )
     payload = await svc.render_wilderness_tile_grid(
         world,
         gx,

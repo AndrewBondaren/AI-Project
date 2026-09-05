@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 
 from app.application.worldData.pack.read.packRenderReadFacade import PackTileLightView
 from app.application.worldData.render.lightMapCells import wire_symbol
@@ -13,7 +13,32 @@ from app.application.worldData.render.lightMosaicFrame import (
     cell_at_world,
 )
 from app.application.worldData.render.mapSymbols import LOCATION_PIN_SYMBOL
+from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
+    WorldLocationTypeRegistry,
+)
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin
+from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
+
+
+def _mask_glyph(
+    cell: WorldMapCellWire | None,
+    *,
+    mark_location: bool,
+    pin: bool,
+    index_pins: Sequence[LocationsIndexPin] | None,
+    location_types: WorldLocationTypeRegistry | None,
+) -> str | None:
+    """Settlement footprint wins over ``@`` when they share a sample cell."""
+    if mark_location and pin and (cell is None or cell.location_pin is None):
+        return LOCATION_PIN_SYMBOL
+    if cell is None:
+        return None
+    return wire_symbol(
+        cell,
+        mark_pin=mark_location,
+        pins=index_pins,
+        location_types=location_types,
+    )
 
 
 def collect_mask_symbols(
@@ -22,17 +47,21 @@ def collect_mask_symbols(
     *,
     pin_wxy: set[tuple[int, int]],
     mark_location: bool,
+    index_pins: Sequence[LocationsIndexPin] | None = None,
+    location_types: WorldLocationTypeRegistry | None = None,
 ) -> dict[tuple[int, int], str]:
     symbols: dict[tuple[int, int], str] = {}
     for wy in range(frame.ly0, frame.ly1 + 1):
         for wx in range(frame.lx0, frame.lx1 + 1):
-            if mark_location and (wx, wy) in pin_wxy:
-                symbols[(wx, wy)] = LOCATION_PIN_SYMBOL
-                continue
-            cell = cell_at_world(by_xy, frame, wx, wy)
-            if cell is None:
-                continue
-            symbols[(wx, wy)] = wire_symbol(cell, mark_pin=mark_location)
+            glyph = _mask_glyph(
+                cell_at_world(by_xy, frame, wx, wy),
+                mark_location=mark_location,
+                pin=(wx, wy) in pin_wxy,
+                index_pins=index_pins,
+                location_types=location_types,
+            )
+            if glyph is not None:
+                symbols[(wx, wy)] = glyph
     return symbols
 
 
@@ -55,18 +84,22 @@ def collect_tile_mask_symbols(
     tile_size_m: int,
     *,
     mark_location: bool,
+    index_pins: Sequence[LocationsIndexPin] | None = None,
+    location_types: WorldLocationTypeRegistry | None = None,
 ) -> dict[tuple[int, int], str]:
     pin_xy = pin_light_xy_on_tile(pins, tile, tile_size_m) if mark_location else set()
     symbols: dict[tuple[int, int], str] = {}
     for ty in range(tile.side):
         for tx in range(tile.side):
-            if mark_location and (tx, ty) in pin_xy:
-                symbols[(tx, ty)] = LOCATION_PIN_SYMBOL
-                continue
-            cell = tile.cells.get((tx, ty))
-            if cell is None:
-                continue
-            symbols[(tx, ty)] = wire_symbol(cell, mark_pin=mark_location)
+            glyph = _mask_glyph(
+                tile.cells.get((tx, ty)),
+                mark_location=mark_location,
+                pin=(tx, ty) in pin_xy,
+                index_pins=index_pins,
+                location_types=location_types,
+            )
+            if glyph is not None:
+                symbols[(tx, ty)] = glyph
     return symbols
 
 

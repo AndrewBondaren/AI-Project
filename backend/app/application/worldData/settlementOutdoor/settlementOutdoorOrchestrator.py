@@ -5,8 +5,12 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+from app.application.worldData.buildingTemplateLibraryService import BuildingTemplateLibraryService
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
+)
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
+    assemble_building_catalog,
 )
 from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
@@ -96,6 +100,7 @@ class SettlementOutdoorOrchestrator:
         writer_for,
         facade_for,
         pack_context_for,
+        library: BuildingTemplateLibraryService,
     ) -> None:
         self._worlds = world_repo
         self._locations = location_repo
@@ -104,6 +109,7 @@ class SettlementOutdoorOrchestrator:
         self._writer_for = writer_for
         self._facade_for = facade_for
         self._pack_context_for = pack_context_for
+        self._library = library
 
     async def materialize(
         self,
@@ -169,8 +175,10 @@ class SettlementOutdoorOrchestrator:
             y1=volume.y1,
             location_uid=location_uid,
         )
+        library_layouts = await self._library.layouts_for_world(world)
+        catalog = assemble_building_catalog(world, library_layouts)
         layout = self._generator.generate_layout(
-            world, settlement, terrain_cells or None,
+            world, settlement, terrain_cells or None, catalog=catalog,
         )
         extracted = extract_settlement(settlement, layout)
         tmp_ref = writer.encode_settlement_structure_tmp(location_uid, extracted.wire)

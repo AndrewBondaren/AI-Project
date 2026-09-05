@@ -6,7 +6,11 @@ from app.application.jsonValidation import terrain_masks, terrain_system_keys
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
     settlement_grid_rect,
 )
-from app.application.worldData.generators.coordinates import cell_size_m, world_meter_xy
+from app.application.worldData.generators.coordinates import (
+    cell_size_m,
+    settlement_origin_m,
+    world_meter_xy,
+)
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation

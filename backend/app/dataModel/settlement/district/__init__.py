@@ -1,3 +1,6 @@
+from app.dataModel.settlement.district.allowedStructureTypes import (
+    allowed_fill_structure_types,
+)
 from app.dataModel.settlement.district.districtConnection import (
     DEFAULT_CONNECTION_TYPE,
     DistrictConnection,
@@ -11,6 +14,10 @@ from app.dataModel.settlement.district.frontageTypeOrder import (
 )
 from app.dataModel.settlement.district.placementCondition import PlacementCondition
 from app.dataModel.settlement.district.requiredStructure import RequiredStructure
+from app.dataModel.settlement.district.requiredStructureResolve import (
+    resolve_required_layouts,
+    union_required_structures,
+)
 from app.dataModel.settlement.district.structurePlacement import (
     COUNT_WITHOUT_KEY,
     PRIORITY_WITHOUT_KEY,
@@ -29,9 +36,12 @@ __all__ = [
     "PlacementCondition",
     "RequiredStructure",
     "WorldDistrictTemplateRegistry",
+    "allowed_fill_structure_types",
     "primary_from_template",
     "primary_or_default",
     "resolve_frontage_type_order",
+    "resolve_required_layouts",
     "resolve_structure_count",
     "resolve_structure_priority",
+    "union_required_structures",
 ]

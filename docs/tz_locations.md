@@ -189,6 +189,7 @@ named_locations (
 - `map_cells` — footprint: количество поверхностных (x,y) позиций; не 3D-объём
 - Работает одинаково для hex и square — движок оперирует количеством, не формой
 - `city_size` на `named_locations` — nullable; актуально только для settlement-типа
+- **Не тип поселения.** Масштаб footprint. Рецепт районов и обязательных зданий — subtype `settlement`. SoT: [`tz_city_generation.md`](./tz_city_generation.md) **§1.1** (не дублировать таблицу осей сюда)
 
 ---
 
@@ -261,6 +262,8 @@ room         (depth 5) — indoor: комната внутри building; leaf и
 ]
 ```
 
+L0 debug-карта: глиф footprint поселения — `subtypes[].l0_map_symbol` (optional; canonical: city=`u`, village=`n`, dungeon=`d`, underground_city=`g`). SoT identity = строка `named_locations`, не pack. Контракт overlay — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) § L0 identity.
+
 `porch` и `entrance_steps` — субтипы `room` с `is_outdoor` override на уровне `NamedLocation` (поле `is_outdoor` на записи, не из реестра). `entrance_steps` дополнительно имеет `is_transit=true`.
 
 - `system_type` — immutable ключ движка; `display_type` — редактируемое имя; N+1 — пользователь добавляет свои типы
@@ -277,6 +280,7 @@ room         (depth 5) — indoor: комната внутри building; leaf и
 - **`geographic`** — map anchor; **не** обязан иметь детей в иерархии settlement; может быть корнем (`parent_types` включает `null`) или child territory
 - **`geographic.river`** — **optional** имя русла; polyline / bed — `ConnectionEdge` (`location_uid` может быть `null`)
 - **`climate_pole`** — max 1 manual на мир (validator); отдельный type, не subtype `geographic`
+- **Три оси city generate** (не смешивать ключи): subtype **поселения** (`city`/`village`/…) — тип поселения; `district_type` — тип района; `structure_type` библиотеки — тип здания. Subtype **здания** в этом реестре (`residential`/…) — только дерево NL. `city_size` — масштаб. SoT: [`tz_city_generation.md`](./tz_city_generation.md) §1.1
 
 ### Вертикальное наложение локаций
 

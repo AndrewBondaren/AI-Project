@@ -1,6 +1,6 @@
 import logging
-import random
 
+from app.application.jsonValidation.worldRow import location_types
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
@@ -12,6 +12,10 @@ from app.application.worldData.generators.coordinates import (
     coarse_cell_meter_xy,
     grid_dimension,
     settlement_origin_m,
+)
+from app.application.worldData.generators.coordinates.settlementCellRng import (
+    SettlementCellRngRole,
+    settlement_cell_rng,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.placement import (
     select_district_template,
@@ -26,6 +30,9 @@ from app.application.worldData.generators.assemblers.districtAssembler.planner.b
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.terrain import (
     column_surface,
     resolve_district_pin_z,
+)
+from app.dataModel.settlement.district.requiredStructureResolve import (
+    union_required_structures,
 )
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
@@ -49,11 +56,20 @@ def plan_district_slots(
     n      = grid_dimension(side_m, cell_m)
     origin = settlement_origin_m(settlement)
     templates = district_templates(world)
+    subtype = (settlement.system_location_subtype or "").strip()
+    recipe = (
+        location_types(world).subtype_for("settlement", subtype) if subtype else None
+    )
+    typical: tuple[str, ...] | None = None
+    settlement_required: list[str] = []
+    if recipe is not None and recipe.has_district_recipe():
+        typical = tuple(recipe.typical_district_types)
+        settlement_required = list(recipe.required_structure_types)
 
     logger.info(
         "plan_district_slots | settlement=%s algorithm=uniform_grid"
         " side_m=%d cell_m=%d grid=%dx%d origin=(%d,%d) ground_z=%d"
-        " city_size=%s density=%s templates=%d",
+        " city_size=%s density=%s templates=%d recipe=%s typical=%s",
         settlement.location_uid,
         side_m,
         cell_m,
@@ -65,8 +81,9 @@ def plan_district_slots(
         skeleton.system_city_size,
         skeleton.settlement_density,
         len(templates),
+        subtype or "-",
+        list(typical) if typical else "-",
     )
-    rng = random.Random(f"{settlement.location_uid}_{skeleton.system_city_size}")
     placed_types: dict[str, int] = {}
     slots: list[DistrictSlot] = []
     surface = column_surface(terrain_cells)
@@ -74,12 +91,20 @@ def plan_district_slots(
     for cell_y in range(n):
         for cell_x in range(n):
             origin_x, origin_y = coarse_cell_meter_xy(origin, cell_x, cell_y, cell_m)
+            rng = settlement_cell_rng(
+                world.world_uid,
+                settlement.location_uid,
+                cell_x,
+                cell_y,
+                SettlementCellRngRole.DISTRICTS,
+            )
 
             template = select_district_template(
                 templates, settlement, skeleton, world,
                 origin_x, origin_y, cell_m, cell_m,
                 terrain_cells, placed_types,
                 cell_x, cell_y, n, rng,
+                typical_district_types=typical,
             )
             if template is None:
                 logger.warning(
@@ -94,7 +119,10 @@ def plan_district_slots(
             slot_ground_z = resolve_district_pin_z(
                 settlement, origin_x, origin_y, surface,
             )
-            required = list(template.required_structures or [])
+            required = union_required_structures(
+                settlement_required,
+                list(template.required_structures or []),
+            )
 
             slots.append(DistrictSlot(
                 origin_x=origin_x,
@@ -104,6 +132,8 @@ def plan_district_slots(
                 ground_z=slot_ground_z,
                 district_template=template,
                 required_structures=required,
+                cell_x=cell_x,
+                cell_y=cell_y,
             ))
 
             logger.info(

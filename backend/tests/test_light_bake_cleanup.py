@@ -40,6 +40,7 @@ from app.application.worldData.generators.terrain.passes.surfaceTerrainContext i
 )
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
+from app.db.models.namedLocation import NamedLocation
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
 
 
@@ -238,6 +239,65 @@ class TestWorldGridMosaic(unittest.IsolatedAsyncioTestCase):
         payload = render.render_world_grid(world).to_dict()
         # pin at tile (0,0) + padding 2 → Gx-2..Gx2 Gy-2..Gy2
         self.assertIn("macro Gx-2..Gx2 Gy-2..Gy2", payload["ascii"])
+
+
+class TestSettlementContributorPins(unittest.TestCase):
+    def test_skips_geographic_stamps_settlement(self) -> None:
+        scale = LightGridScale.from_tile(1000, 8)
+        compose = LightGridCompose(scale)
+        world = SimpleNamespace(
+            world_uid="w-pins",
+            city_size_registry=[
+                {"system_size": "town", "display_size": "Town", "map_cells_count": 4},
+            ],
+        )
+        town = NamedLocation(
+            location_uid="town-1",
+            world_uid=world.world_uid,
+            display_name="Town",
+            system_location_type="settlement",
+            system_city_size="town",
+            map_x=500,
+            map_y=500,
+            created_at="2026-01-01T00:00:00Z",
+        )
+        peak = NamedLocation(
+            location_uid="peak-1",
+            world_uid=world.world_uid,
+            display_name="Peak",
+            system_location_type="geographic",
+            map_x=100,
+            map_y=100,
+            created_at="2026-01-01T00:00:00Z",
+        )
+        ctx = LightGridBakeContext(
+            world=world,
+            locations=[town, peak],
+            locations_index=LocationsIndexWire(
+                locations=[
+                    LocationsIndexPin(
+                        location_uid="peak-1",
+                        map_x=100,
+                        map_y=100,
+                        system_location_type="geographic",
+                    ),
+                    LocationsIndexPin(
+                        location_uid="town-1",
+                        map_x=500,
+                        map_y=500,
+                        system_location_type="settlement",
+                    ),
+                ],
+            ),
+            tiles=[(0, 0)],
+            scale=scale,
+        )
+        SettlementContributor().apply(compose, ctx)
+        wires = compose.to_wire_tile(0, 0)
+        pinned = [c for c in wires if c.location_pin is not None]
+        self.assertGreater(len(pinned), 1)
+        self.assertTrue(all(c.location_pin == 1 for c in pinned))
+        self.assertFalse(any(c.location_pin == 0 for c in wires))
 
 
 if __name__ == "__main__":

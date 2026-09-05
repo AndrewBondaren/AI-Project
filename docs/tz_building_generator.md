@@ -18,7 +18,7 @@
 | Термин | Смысл |
 |--------|-------|
 | **Шаблон** | JSON-файл, описывающий тип здания: этажи, комнаты, связи, входы |
-| **structure_type** | Назначение шаблона участка (N+1): `house`, `tavern`, `shop`, `warehouse`, `plaza`, `dungeon`, … Не закрытый список |
+| **structure_type** | Назначение шаблона участка (N+1): `house`, `tavern`, `shop`, `warehouse`, `plaza`, `dungeon`, … Не закрытый список. **Тип здания** в city generate — эта ось; чертёж = `system_name` / uid библиотеки. Не `district_type` и не subtype NL `building`. SoT осей: [`tz_city_generation.md`](./tz_city_generation.md) §1.1 |
 | **Комната** | Под-локация внутри здания (отдельная `NamedLocation` с `parent_uid = building.location_uid`) |
 | **Уровень** | Один этаж: `LocationLevel` с конкретным `z` |
 | **Проход** | `LocationPassage` между двумя комнатами или уровнями |

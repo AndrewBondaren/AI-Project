@@ -43,6 +43,10 @@ from app.application.worldData.generators.coordinates.worldTile import (
     tile_origin_y,
     world_meter_xy,
 )
+from app.application.worldData.generators.coordinates.settlementCellRng import (
+    SettlementCellRngRole,
+    settlement_cell_rng,
+)
 from app.application.worldData.generators.coordinates.space import CoordinateSpace
 from app.application.worldData.generators.coordinates.types import (
     GridX,
@@ -101,6 +105,8 @@ __all__ = [
     "grid_tile_origin_y",
     "meters_to_grid_x",
     "meters_to_grid_y",
+    "settlement_cell_rng",
+    "SettlementCellRngRole",
     "settlement_grid_rect",
     "settlement_meter_rect",
     "settlement_origin_m",

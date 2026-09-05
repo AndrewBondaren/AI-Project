@@ -1,3 +1,4 @@
+from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
 from app.dataModel.structure.building.buildingLayoutTemplate import (
     BuildingLayoutTemplate,
     coerce_building_layout,
@@ -11,6 +12,7 @@ from app.dataModel.structure.building.worldBuildingLayoutDefaults import canonic
 from app.dataModel.structure.building.worldBuildingTemplateRegistry import WorldBuildingTemplateRegistry
 
 __all__ = [
+    "BuildingCatalog",
     "BuildingLayoutTemplate",
     "BuildingTemplateOutline",
     "BuildingTemplateRegistryEntry",

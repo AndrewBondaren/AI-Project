@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from app.application.jsonValidation.worldRow import location_types as location_types_for_world
 from app.application.worldData.generators.terrain.worldMapSettings import grid_bbox_padding
 from app.application.worldData.pack.read.packRenderReadFacade import (
     PackRenderReadFacade,
     PackWorldMapRenderSource,
 )
 from app.application.worldData.render.gradeRayDump import GradeSlotIndex
+from app.application.worldData.render.locationPinOverlay import overlay_location_pins
 from app.application.worldData.render.locationTerrainPackRenderer import LocationTerrainPackRenderer
 from app.application.worldData.render.renderPayloads import (
     LEVEL_GRADE,
@@ -23,7 +25,9 @@ from app.application.worldData.render.renderPayloads import (
 )
 from app.application.worldData.render.wildernessTilePackRenderer import WildernessTilePackRenderer
 from app.application.worldData.render.worldMapPackRenderer import WorldMapPackRenderer
+from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
 from app.dataModel.worldPack.worldBounds import WorldBounds
+from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
@@ -35,12 +39,24 @@ class PackMapGridRender:
         self,
         world: World,
         source: PackWorldMapRenderSource,
+        *,
+        pins: LocationsIndexWire | None = None,
     ) -> WorldMapPackRenderer:
         return WorldMapPackRenderer(
             source.tiles,
             tile_size_m=source.tile_size_m,
-            pins=source.pins,
+            pins=pins if pins is not None else source.pins,
+            location_types=location_types_for_world(world),
         )
+
+    def _overlay_pins(
+        self,
+        source: PackWorldMapRenderSource,
+        locations: list[NamedLocation] | None,
+    ) -> LocationsIndexWire:
+        if locations is None:
+            return source.pins
+        return overlay_location_pins(source.pins, locations)
 
     @staticmethod
     def _resolve_mosaic_macro_bbox(
@@ -84,13 +100,17 @@ class PackMapGridRender:
         gx1: int | None = None,
         gy1: int | None = None,
         mark_locations: bool = True,
+        locations: list[NamedLocation] | None = None,
     ) -> WorldGridPayload:
         """Pack world ASCII — always L0 light-cell mosaic (WP-10 / MLB-12)."""
         source = self._read.try_world_map_source(world)
+        types = location_types_for_world(world)
         if source is None:
             return WorldGridPayload(
                 ascii="",
-                legend=WorldMapPackRenderer.render_legend(mark_location=mark_locations),
+                legend=WorldMapPackRenderer.render_legend(
+                    mark_location=mark_locations, location_types=types,
+                ),
                 mark_locations=mark_locations,
                 cell_size_m=world.map_cell_size_m,
                 read_path="pack",
@@ -105,7 +125,9 @@ class PackMapGridRender:
             gx1=gx1,
             gy1=gy1,
         )
-        renderer = self._world_renderer(world, source)
+        renderer = self._world_renderer(
+            world, source, pins=self._overlay_pins(source, locations),
+        )
         ascii_height, legend_height = renderer.render_light_height_mosaic(
             gx0=frame_gx0,
             gy0=frame_gy0,
@@ -121,7 +143,9 @@ class PackMapGridRender:
         )
         return WorldGridPayload(
             ascii=ascii_grid,
-            legend=WorldMapPackRenderer.render_legend(mark_location=mark_locations),
+            legend=WorldMapPackRenderer.render_legend(
+                mark_location=mark_locations, location_types=types,
+            ),
             mark_locations=mark_locations,
             cell_size_m=world.map_cell_size_m,
             read_path="pack",
@@ -130,12 +154,19 @@ class PackMapGridRender:
             legend_height=legend_height,
         )
 
-    def render_world_tile_grids(self, world: World) -> WorldTileGridsPayload:
+    def render_world_tile_grids(
+        self,
+        world: World,
+        *,
+        locations: list[NamedLocation] | None = None,
+    ) -> WorldTileGridsPayload:
         """Canonical per-tile L0 mask smoke — always mosaic cells, never aggregate."""
         source = self._read.try_world_map_source(world)
         tiles: dict[str, WorldTileEntryPayload] = {}
         if source is not None:
-            renderer = self._world_renderer(world, source)
+            renderer = self._world_renderer(
+                world, source, pins=self._overlay_pins(source, locations),
+            )
             height_by_xy = renderer.render_all_tile_light_height_grids()
             for (gx, gy), ascii_grid in renderer.render_all_tile_light_grids(
                 mark_location=True,
@@ -150,7 +181,10 @@ class PackMapGridRender:
                     tile_gy=gy,
                     levels=levels,
                     z_levels=list(levels.keys()),
-                    legend=WorldMapPackRenderer.render_legend(mark_location=True),
+                    legend=WorldMapPackRenderer.render_legend(
+                        mark_location=True,
+                        location_types=location_types_for_world(world),
+                    ),
                     grid_kind="world_map_light",
                 )
         return WorldTileGridsPayload(

@@ -1250,7 +1250,7 @@ Fixture-пример: [`fixtures/world_test_gen_noloc.json`](../fixtures/world_t
 | **mountain** | `system_terrain=mountain` | declare + autoresolve (`default_mountains`); empty declare ≠ off |
 | **ravine** | `system_terrain=ravine` | `default_ravines` + autoresolve; не затирает hydro |
 | **hydro** | `hydrology_*` | `world.hydrology` Path A |
-| **settlement** | `location_pin` | pin (+ footprint policy) |
+| **settlement** | `location_pin` | disk **только** settlement-site (`is_settlement_map_site`); geographic не штампуется |
 | **road** | `system_terrain=road` | edges + `default_roads.enabled`; preserve water |
 
 | Объект UI | Слой |
@@ -1260,7 +1260,8 @@ Fixture-пример: [`fixtures/world_test_gen_noloc.json`](../fixtures/world_t
 | Леса / равнина | landcover |
 | Овраг | ravine |
 | Дороги | road |
-| Города / POI | settlement |
+| Поселения | settlement (`location_pin`); ASCII глиф по SQL subtype — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) § L0 identity |
+| Именованные якоря (geographic, …) | `locations_index` `@` (render overlay, не `location_pin`) |
 
 ---
 

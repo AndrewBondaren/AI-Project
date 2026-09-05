@@ -14,6 +14,7 @@ from app.application.worldData.render.mapSymbols import (
     render_map_legend,
     symbol_for_role_or_terrain,
 )
+from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.db.models.mapCell import MapCell
 
 
@@ -35,7 +36,8 @@ def _macro_top_surface_cells(
 
 
 def cell_symbol(cell: MapCell, *, mark_location: bool = False) -> str:
-    if mark_location and cell.location_uid:
+    urban = WorldTerrainRegistry.occupancy_terrain_key()
+    if mark_location and cell.location_uid and cell.system_terrain != urban:
         return LOCATION_PIN_SYMBOL
     hydrology = cell.hydrology
     if isinstance(hydrology, str):
@@ -70,7 +72,7 @@ class WorldGridRenderer:
     def render_legend(*, mark_location: bool = False) -> str:
         return render_map_legend(
             mark_location=mark_location,
-            pin_label="map_cell.location_uid set",
+            pin_label="map_cell.location_uid set (not urban occupancy)",
         )
 
     def render_bbox(

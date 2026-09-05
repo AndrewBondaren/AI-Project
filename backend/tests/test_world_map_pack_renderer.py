@@ -228,8 +228,120 @@ class TestWorldMapPackRenderer(unittest.TestCase):
     def test_legend(self):
         legend = WorldMapPackRenderer.render_legend(mark_location=True)
         self.assertIn("locations_index", legend)
-        self.assertNotIn("location_pin", legend)
+        self.assertIn("not settlement", legend)
         self.assertIn("river_bed", legend)
+        self.assertIn("u=city", legend)
+        self.assertIn("n=village", legend)
+        self.assertIn("d=dungeon", legend)
+        self.assertIn("g=underground_city", legend)
+        self.assertIn("not a location mark", legend)
+
+    def test_settlement_footprint_is_not_location_pin(self):
+        cells = {
+            (0, 0): WorldMapCellWire(tx=0, ty=0, surface_z=1, system_terrain="plains"),
+            (1, 0): WorldMapCellWire(
+                tx=1, ty=0, surface_z=1, system_terrain="plains", location_pin=0,
+            ),
+            (0, 1): WorldMapCellWire(tx=0, ty=1, surface_z=1, system_terrain="forest"),
+            (1, 1): WorldMapCellWire(
+                tx=1, ty=1, surface_z=1, system_terrain="plains", location_pin=0,
+            ),
+        }
+        tile = PackTileLightView(gx=0, gy=0, side=2, cells=cells)
+        pins = LocationsIndexWire(
+            locations=[
+                LocationsIndexPin(
+                    location_uid="town-1",
+                    map_x=1500,
+                    map_y=1500,
+                    display_name="Town",
+                    system_location_type="settlement",
+                ),
+                LocationsIndexPin(
+                    location_uid="peak-1",
+                    map_x=0,
+                    map_y=0,
+                    display_name="Peak",
+                    system_location_type="geographic",
+                ),
+            ],
+        )
+        renderer = WorldMapPackRenderer([tile], tile_size_m=3000, pins=pins)
+        light = renderer.render_tile_light_grid(0, 0, mark_location=True)
+        self.assertIn("u", light)
+        self.assertIn("@", light)
+        self.assertIn("f", light)
+        macro = renderer.render_macro(mark_location=True)
+        self.assertIn("u", macro)
+        unmarked = renderer.render_tile_light_grid(0, 0, mark_location=False)
+        self.assertIn("u", unmarked)
+
+    def test_geographic_pin_on_city_cell_keeps_footprint(self):
+        cells = {
+            (0, 0): WorldMapCellWire(
+                tx=0, ty=0, surface_z=1, system_terrain="plains", location_pin=0,
+            ),
+        }
+        tile = PackTileLightView(gx=0, gy=0, side=1, cells=cells)
+        pins = LocationsIndexWire(
+            locations=[
+                LocationsIndexPin(
+                    location_uid="peak-on-city",
+                    map_x=0,
+                    map_y=0,
+                    display_name="Peak",
+                    system_location_type="geographic",
+                ),
+            ],
+        )
+        renderer = WorldMapPackRenderer([tile], tile_size_m=3000, pins=pins)
+        light = renderer.render_tile_light_grid(0, 0, mark_location=True)
+        self.assertIn("u", light)
+        self.assertNotIn("@", light)
+        macro = renderer.render_macro(mark_location=True)
+        self.assertIn("u", macro)
+        self.assertNotIn("@", macro)
+
+    def test_wire_symbol_location_pin_is_urban_not_at(self):
+        city = WorldMapCellWire(
+            tx=0, ty=0, surface_z=1, system_terrain="plains", location_pin=0,
+        )
+        road = WorldMapCellWire(
+            tx=1, ty=0, surface_z=1, system_terrain="road", location_pin=0,
+        )
+        river = WorldMapCellWire(
+            tx=2, ty=0, surface_z=1, system_terrain="plains",
+            hydrology_role=WorldMapHydrologyRole.RIVER, location_pin=0,
+        )
+        self.assertEqual(wire_symbol(city), "u")
+        self.assertEqual(wire_symbol(city, mark_pin=True), "u")
+        self.assertEqual(wire_symbol(road), "r")
+        self.assertEqual(wire_symbol(river), "y")
+
+    def test_village_subtype_glyph(self):
+        cell = WorldMapCellWire(
+            tx=0, ty=0, surface_z=1, system_terrain="plains", location_pin=0,
+        )
+        pins = [
+            LocationsIndexPin(
+                location_uid="v1",
+                map_x=0,
+                map_y=0,
+                system_location_type="settlement",
+                system_location_subtype="village",
+            ),
+        ]
+        self.assertEqual(wire_symbol(cell, pins=pins), "n")
+        dungeon = [
+            LocationsIndexPin(
+                location_uid="d1",
+                map_x=0,
+                map_y=0,
+                system_location_type="settlement",
+                system_location_subtype="dungeon",
+            ),
+        ]
+        self.assertEqual(wire_symbol(cell, pins=dungeon), "d")
 
 
 if __name__ == "__main__":

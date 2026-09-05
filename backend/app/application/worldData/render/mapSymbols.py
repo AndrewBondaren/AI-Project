@@ -5,6 +5,9 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from app.application.worldData.facingArrows import FACING_ARROW
+from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
+    WorldLocationTypeRegistry,
+)
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.gradeSlot import (
@@ -50,6 +53,8 @@ GRADE_EMPTY_SYMBOL = " "
 UNKNOWN_SYMBOL = " "
 
 LOCATION_PIN_SYMBOL = "@"
+SETTLEMENT_FOOTPRINT_SYMBOL = TERRAIN_SYMBOLS["urban"]
+ROAD_TERRAIN_KEY = "road"
 
 # Missing height cell: spaces of the same width as numeric cells (caller sets width).
 HEIGHT_MISSING_FILL = " "
@@ -108,16 +113,44 @@ def symbol_for_role_or_terrain(
     return "?"
 
 
-def render_map_legend(*, mark_location: bool = False, pin_label: str | None = None) -> str:
+def render_map_legend(
+    *,
+    mark_location: bool = False,
+    pin_label: str | None = None,
+    location_types: WorldLocationTypeRegistry | None = None,
+) -> str:
     role_part = " ".join(f"{sym}={name}" for name, sym in ROLE_SYMBOLS.items())
     terrain_part = " ".join(f"{sym}={name}" for name, sym in TERRAIN_SYMBOLS.items())
+    registry = location_types or WorldLocationTypeRegistry.canonical_engine()
+    settlement = registry.entry_for("settlement")
+    if settlement is None:
+        settlement = WorldLocationTypeRegistry.canonical_engine().entry_for("settlement")
+    parts: list[str] = []
+    seen: set[str] = set()
+    for entry in (settlement.subtypes if settlement is not None else []):
+        if not entry.l0_map_symbol or entry.system_subtype in seen:
+            continue
+        seen.add(entry.system_subtype)
+        parts.append(f"{entry.l0_map_symbol}={entry.system_subtype}")
+    if not parts:
+        engine_settlement = WorldLocationTypeRegistry.canonical_engine().entry_for(
+            "settlement",
+        )
+        for entry in engine_settlement.subtypes if engine_settlement is not None else []:
+            if not entry.l0_map_symbol or entry.system_subtype in seen:
+                continue
+            seen.add(entry.system_subtype)
+            parts.append(f"{entry.l0_map_symbol}={entry.system_subtype}")
+    if not parts:
+        parts.append(f"{SETTLEMENT_FOOTPRINT_SYMBOL}=city")
     lines = [
         f"hydrology: {role_part}",
         f"terrain: {terrain_part}",
+        f"settlement: {' '.join(parts)} (location_pin; not a location mark)",
     ]
     if mark_location:
         lines.append(
-            f"binding: {LOCATION_PIN_SYMBOL}={pin_label or 'location pin'}",
+            f"binding: {LOCATION_PIN_SYMBOL}={pin_label or 'named location pin (not settlement)'}",
         )
     lines.append("(space)=unmapped  ?=missing cell")
     return "\n".join(lines)

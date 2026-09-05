@@ -56,3 +56,42 @@ def named_location_uses_settlement_meter_footprint(location: object) -> bool:
         system_location_subtype=getattr(location, "system_location_subtype", None),
         system_city_size=getattr(location, "system_city_size", None),
     )
+
+
+def is_settlement_map_site(
+    *,
+    system_location_type: str | None,
+    system_location_subtype: str | None = None,
+    system_city_size: str | None = None,
+) -> bool:
+    """L0 city footprint: settlement root, not district/building/room or geography."""
+    if not uses_settlement_meter_footprint(
+        system_location_type=system_location_type,
+        system_location_subtype=system_location_subtype,
+        system_city_size=system_city_size,
+    ):
+        return False
+    loc_type = (system_location_type or "").strip().lower()
+    if not loc_type:
+        return True
+    engine = WorldLocationTypeRegistry.canonical_engine()
+    entry = engine.entry_for(loc_type)
+    if entry is None:
+        return True
+    settlement = engine.entry_for("settlement")
+    if settlement is not None and entry.system_type == settlement.system_type:
+        return True
+    nested = {
+        e.system_type
+        for key in ("settlement", "district", "building")
+        if (e := engine.entry_for(key)) is not None
+    }
+    return not any(p in nested for p in (entry.parent_types or []) if p)
+
+
+def named_location_is_settlement_map_site(location: object) -> bool:
+    return is_settlement_map_site(
+        system_location_type=getattr(location, "system_location_type", None),
+        system_location_subtype=getattr(location, "system_location_subtype", None),
+        system_city_size=getattr(location, "system_city_size", None),
+    )

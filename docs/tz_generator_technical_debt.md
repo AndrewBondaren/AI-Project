@@ -3,13 +3,14 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py` / `render_maps.py`, `worldBundleService.py`, relief library/import, pack render / parent-light refine.  
-**Обновлено:** 2026-09-03 — **CITY-T-1** контур city generate (скелет import/SQL, dual persist, эвристика стен vs C22). SoT generate: [`tz_terrain_relief.md`](./tz_terrain_relief.md) (очереди, стрелки). Bake R36/R43 — архив [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). **R41-T-25** алгоритм+валидатор+тесты **open** (следующая разработка с мастером). **R41-T-17** leftover→COUPLE + валидатор не из z ✅ (не конечный occupancy). **R41-T-18** / **T-19** mill Q1/Q2 ✅. Полиш mill **R41-T-20…T-23** ✅. Rename heightmap **R41-T-24** (`z_height_map`) ✅. **R41-T-13…T-16** ✅. Очередь v2 полиш **R41-T-1…T-12** ✅. Consume dump: [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md).  
+**Обновлено:** 2026-09-05 — **CITY-T-2d** рецепт типа поселения; **2c** seed клетки footprint. **CITY-T-3** parallel generate **одного** поселения (owner: мастер; не агент). 2026-09-04 — **CITY-T-2** пул шаблонов мира → packing (allowed null, uid library). **CITY-T-1** контур city generate (скелет import/SQL, dual persist, эвристика стен vs C22). SoT generate: [`tz_terrain_relief.md`](./tz_terrain_relief.md) (очереди, стрелки). Bake R36/R43 — архив [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). **R41-T-25** алгоритм+валидатор+тесты **open** (следующая разработка с мастером). **R41-T-17** leftover→COUPLE + валидатор не из z ✅ (не конечный occupancy). **R41-T-18** / **T-19** mill Q1/Q2 ✅. Полиш mill **R41-T-20…T-23** ✅. Rename heightmap **R41-T-24** (`z_height_map`) ✅. **R41-T-13…T-16** ✅. Очередь v2 полиш **R41-T-1…T-12** ✅. Consume dump: [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md).  
 **Связанные документы:**
 
 | Документ | Роль |
 |---|---|
 | [tz_assembler_hierarchy.md](./tz_assembler_hierarchy.md) | Целевая архитектура assembler stack |
 | [tz_city_generation.md](./tz_city_generation.md) | Продуктовое ТЗ города |
+| [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) | Склейка outdoor pack+SQL; **дыры склейки** §14; C16 serial |
 | [tz_terrain_relief.md](./tz_terrain_relief.md) | Relief generate SoT (Q1/Q2, стрелки, шаблоны, canal/obstacle, SQL catalog). Bake R36u–w — архив v1 |
 | [tz_terrain_relief_technical_debt.md](./tz_terrain_relief_technical_debt.md) | Relief **код**: dual sidecar, god/жирные классы, хардкоды (не R41-T-25 алгоритм) |
 | [tz_datamodel_pojo_discrepancies.md](./tz_datamodel_pojo_discrepancies.md) | Дубли SoT в `dataModel/` (POJO-D-*); D-1…D-9 resolved 2026-09-03; **POJO-D-16** nested generate layout `list[dict]` |
@@ -259,9 +260,61 @@ Generate (`SettlementAssembler` → `DistrictAssembler`: cache → pass1 → р�
 | **CITY-T-1e** | medium | DAG | `SettlementLayout.dominant_material` post-assemble есть. На `NamedLocation` не пишется. `lazy_settlement` в `NodeResult` material не кладёт → LLM «мраморные стены» не из layout | Persist опционально (§3.1); payload — DAG (`tz_engine_flow.md`) |
 | **CITY-T-1f** | info | — | `street_layout` кроме `grid`: `NotImplementedError`. Canonical templates все `grid`. **CONN-PACK-1** | Не слайс 1a. Не выдавать organic/radial в registry, пока нет generate |
 
-**Не этот ID (уже в city §10 / §11):** organic footprint v2, snapshot, `init_mode`, growth/world routes, `DistrictLayout.barrier_cells`, CONN-PACK-2/3 как open product, `StructureInteriorAssembler`.
+**Не этот ID (уже в city §10 / §11):** organic footprint v2, snapshot, `init_mode`, growth/world routes, `DistrictLayout.barrier_cells`, CONN-PACK-2/3 как open product, `StructureInteriorAssembler`. Пул шаблонов мира vs packing — **[CITY-T-2](#city-t-2--пул-шаблонов-мира--packing)**. Parallel **одного** поселения — **[CITY-T-3](#city-t-3--parallel-generate-одного-поселения)**.
 
 **Готово когда:** импортированный мир без ручных setattr даёт те же C22-поля на `CitySkeleton`, что JSON мастера; один SoT стен поселения; шапка city TZ не противоречит `DistrictAssembler`. 1b/1e — после Gate: DAG.
+
+### CITY-T-2 — пул шаблонов мира — packing
+
+**Status:** `open` | **Severity:** high | **P:** P1
+
+Продукт ([`tz_city_generation.md`](./tz_city_generation.md) **§1.1** три оси, §9, [`tz_building_generator.md`](./tz_building_generator.md) §5.2): каталог чертежей — **реестр/библиотека мира**. Тип поселения задаёт типовые `district_type` и обязательные `structure_type`; город не хранит список `tavern_1`. Район: тип по рецепту+зоне → чертёж того же `district_type`. Здание: rng среди чертежей одного `structure_type`. **Seed зданий:** `world_uid` + `location_uid` + клетка footprint ([city §9.6](./tz_city_generation.md#воспроизводимость-чертёж-из-пула-мира)). N копий — [connections](./tz_structure_connections.md) §5.1.3.
+
+Код районов выбирает чертёж из registry (`select_district_template`), без рецепта на subtype поселения. Fill зданий из library по типу — нет.
+
+| Sub-ID | Severity | P | Проблема | Fix |
+|---|---|---|---|---|
+| **CITY-T-2a** | **high** | **P1** | City §9.2: `allowed_structure_types` `null` = без ограничений. `buildingCache.collect_building_template_names` / `tokens.candidate_template_names`: `if not allowed: skip` — каталог не берётся. Canonical районы поле не задают → только `required_structures` (`town_hall` у civic). Загрузка зданий в мир при канон-районах = пустой fill | `null`/omit = все layout-кандидаты мира ∩ тир (как ТЗ). Явный `[]` = ничего кроме required. Не выдавать за «рандом с реестра», пока 2a open |
+| **CITY-T-2b** | **high** | **P1** | Building §5.2: `building_template_registry` = uid → SQL `building_templates`. Packing (`building_layout_templates` / `lookup_building_template`) принимает только строки, которые валидятся как `BuildingLayoutTemplate` (`system_name` + `levels`) + builtins `town_hall` / `inn_small`. Указатели uid **игнор** | Generate читает library по uid реестра мира (тот же SoT, что import шаблона). Пока 2b open smoke layout-телами в JSON мира — interim, не контракт мастера |
+| **CITY-T-2c** | medium | P1 | City §9.6: seed чертежа здания = `world_uid` + `location_uid` + `(cell_x,cell_y)` footprint. `plan_district_slots` — `Random(f"{location_uid}_{system_city_size}")`: нет мира, в seed размер, нет клетки. Frontage: без `world_uid`. `_plan_streets`: только xy слота | Здания: `Random` от пары uid + клетка footprint (суффикс `_buildings`). Ничья района: + `_districts`. В seed не `city_size` и не pack tile. Планирование слотов serial (CITY-T-3) |
+| **CITY-T-2d** | **high** | **P1** | §1.1: обязательные **типы** зданий и типовые **типы** районов — на типе поселения. Код: `required_structures.building_template` = имя чертежа на шаблоне района; районы режутся `min_city_size`, не subtype. `village` = и size, и subtype | Рецепт на settlement subtype (wire TBD). Required резолвится в чертёж library того же `structure_type`. Size не задаёт рецепт |
+
+**Не этот ID:** список чертежей **на городе** (его нет в продукте); CITY-T-1a (оверлеи скелета на NL); CONN-PACK-* (radial/organic, два center, envelope facing).
+
+**Готово когда:** тип поселения задаёт типы районов + обязательные `structure_type`; generate берёт чертежи зданий из library по типу (seed §9.6); `allowed` null = каталог типов; uid registry читает SQL. Повтор той же клетки footprint — тот же чертёж при том же пуле типа.
+
+### CITY-T-3 — parallel generate одного поселения
+
+**Status:** `open` | **Severity:** medium | **P:** P3 (скорость, не correctness) | **Owner: мастер** (не агент, не слайс, не Gate: DAG)
+
+Как **эффективно и безопасно** параллелить **один** `SettlementAssembler.assemble` (один `location_uid`). Контракт generate в ТЗ города **не** объявлял ThreadPool; TR-PAR — земля/климат ([`tz_terrain_generation.md`](./tz_terrain_generation.md) § Многопоточность). Batch многих городов (C16) — другой вопрос: склейка, serial сейчас, parallel только после C19 ([`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md)).
+
+**Код сейчас:** полностью serial. Районы — `for slot`; packing района — pass1 → рамка → pass2; cache оболочек — заранее, тоже serial; persist C19 — serial (так и должно).
+
+**Инварианты (не ломать при любом плане):**
+
+| Инвариант | Следствие |
+|---|---|
+| Тот же `world_uid` + `location_uid` + клетка footprint → тот же чертёж здания ([city §9.6](./tz_city_generation.md#воспроизводимость-чертёж-из-пула-мира)) | `gather` в **порядке слотов**; не `as_completed`; планирование районов serial |
+| Packing района упорядочен (C22) | **не** параллелить pass1 / рамку / pass2 / frontage внутри одного района |
+| `BuildingLayoutCache` шарится на сборку | fill cache **закончить и заморозить** до параллели районов; воркер только читает |
+| City-граф улиц после всех районов | `plan_city_street_grid` serial **после** join районов (вход — слоты, не layouts) |
+| `dominant_material` post-assemble | serial после полного `SettlementLayout` |
+| SQLite / pack C19 — один writer | persist **не** параллелить; generate ∥ persist запрещён (как TR-PAR) |
+| Один `ChunkComputePool` на процесс | не второй пул «для города» рядом с terrain bake; воркеры — `MaterializationContext` / `ParallelPolicy`, не `os.cpu_count()` в assembler |
+| Генератор pure | assembler **не** знает SQL/async; pool на границе orchestrator / service, как terrain |
+
+**Кандидаты швов (решает мастер, не фиксировать в коде до контракта):**
+
+1. **Cache `(template, facing)`** — независимые generate оболочек; после freeze — packing.
+2. **`DistrictAssembler.assemble` по слотам** — после freeze cache; join по порядку `district_slots`; затем city-streets / barriers / occupancy / material.
+3. **Не кандидат:** шаги packing внутри района; SQL+pack C19; `asyncio.gather` многих `materialize` вместо (1)–(2) — это C16, не этот ID.
+
+GIL: cache interior CPU-heavy → тот же backlog ProcessPool, что TR-PAR (`ChunkComputePool` backend), не отдельная архитектура.
+
+**Не этот ID:** C16 parallel batch поселений (склейка, после C19); TR-PAR чанки земли; DAG `free_cores` probe (TR-PAR-DAG-1); CITY-T-1b persist path.
+
+**Готово когда:** мастер зафиксировал швы + политику воркеров (кто зовёт pool, cap vs terrain) в city/outdoor ТЗ; агент тогда может имплементировать по контракту. До фиксации — serial.
 
 ---
 
@@ -454,6 +507,10 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | LC-1..LC-4 | Neutral packages | open |
 | NC-2 | Parcel cells в `areaSlots`; замок C21 план §2.2b (не margin на `PerimeterBarrier`) | open |
 | **CITY-T-1a** | Скелет C22: import/SQL `named_locations` (density, style, barrier, counts, frontage) | **open** |
+| **CITY-T-2a** | `allowed_structure_types` null = каталог (city §9.2), не skip cache | **open** |
+| **CITY-T-2b** | Packing читает `building_templates` по uid реестра мира (building §5.2) | **open** |
+| **CITY-T-2c** | Seed чертежа = `world_uid`+uid города+клетка footprint (city §9.6) | **open** |
+| **CITY-T-2d** | Рецепт типа поселения (типы районов + обязательные `structure_type`), не имя чертежа на районе | **open** |
 
 ### P2 — ближайший polish
 
@@ -490,6 +547,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | **R41-T-14, T-16** | один `seam[]`; `slope_fits` vs L_min | **resolved** |
 | **R41-T-24** | `z_at` → `z_height_map` (relief heightmap, не T-17) | **resolved** |
 | **DR-7, MAP-1, MAP-2, CL-16** | lazy cell helper; map.py boilerplate; location_uid attribution | open |
+| **CITY-T-3** | Parallel generate **одного** поселения — контракт швов; **owner: мастер** | **open** |
 
 ---
 
@@ -1912,6 +1970,9 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-05 | **CITY-T-3** open, **owner: мастер:** как безопасно параллелить generate **одного** поселения (cache freeze → районы; packing внутри района serial; persist C19 serial; один pool). Не C16 batch, не TR-PAR земля. Агент не слайс |
+| 2026-09-05 | **CITY-T-2d** open: рецепт на типе поселения (§1.1 city TZ). **2c:** seed зданий = мир+город+клетка footprint, не size. Три оси зафиксированы в city §1.1. |
+| 2026-09-04 | **CITY-T-2** open: пул шаблонов мира → packing. **2a** `allowed_structure_types` null в коде = skip каталога (ТЗ §9.2 = без ограничений). **2b** uid `building_template_registry` packing не читает (только layout-строки + builtins). Районы из реестра мира уже ок; fill зданий нет. Не CITY-T-1, не список шаблонов на городе |
 | 2026-09-03 | **POJO-D-16** open: generate `levels`/`rooms`/`staircases`/`connections` = `list[dict]`; целевые nested objects; не Outline `BuildingTemplateRoomSlot`. CITY-T-1 open: контур city generate (1a скелет import/SQL P1; 1b dual persist DAG; 1c стены vs C22; 1d шапка ТЗ; 1e dominant_material LLM; 1f non-grid). NC-9 = срез 1a. Не алгоритм packing |
 | 2026-08-25 | **R41-T-17 ✅:** leftover + COUPLE; first-wins; валидатор не invent из z. **T-18/T-19 ✅** mill Q1/Q2, нет `is_q3_seed`. **T-13 ✅** equal-z = envelope. **T-14** один `seam[]`. **T-15 ✅** L=1 TZ exception. **T-16** θ vs L_min в docstring |
 | 2026-08-25 | **R41-T-20…T-23 ✅:** `millSchedule`; `DiscoverResult`; `BucketRef`/`MillFamily`/`Q2Kind`; `LiveCorridors`; timings без `from_mill`; leftover walk на rim; `is_side_seed` геометрия. T-18/T-19 ✅; T-13…T-16 ✅ |

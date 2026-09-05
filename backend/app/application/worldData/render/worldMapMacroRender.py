@@ -6,8 +6,13 @@ from app.application.worldData.pack.read.packRenderReadFacade import PackTileLig
 from app.application.worldData.render.fineTerrainAsciiKernel import draw_symbol_grid
 from app.application.worldData.render.lightMapCells import wire_symbol
 from app.application.worldData.render.lightMosaicFrame import TileIndex
+from app.application.worldData.render.locationPinOverlay import l0_settlement_glyph, pin_at
 from app.application.worldData.render.mapSymbols import LOCATION_PIN_SYMBOL
+from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
+    WorldLocationTypeRegistry,
+)
 from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
+from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin
 
 
 def rep_cell(tile: PackTileLightView):
@@ -23,6 +28,25 @@ def rep_cell(tile: PackTileLightView):
     return next(iter(tile.cells.values()))
 
 
+def tile_has_settlement_footprint(tile: PackTileLightView) -> bool:
+    return any(cell.location_pin is not None for cell in tile.cells.values())
+
+
+def tile_settlement_glyph(
+    tile: PackTileLightView,
+    pins: list[LocationsIndexPin] | None,
+    location_types: WorldLocationTypeRegistry | None,
+) -> str | None:
+    for cell in tile.cells.values():
+        if cell.location_pin is None:
+            continue
+        return l0_settlement_glyph(
+            pin_at(pins, cell.location_pin),
+            location_types=location_types,
+        )
+    return None
+
+
 def render_macro_bbox(
     by_xy: TileIndex,
     tile_size_m: int,
@@ -33,19 +57,28 @@ def render_macro_bbox(
     gy1: int,
     *,
     mark_location: bool = False,
+    index_pins: list[LocationsIndexPin] | None = None,
+    location_types: WorldLocationTypeRegistry | None = None,
 ) -> str:
     symbols: dict[tuple[int, int], str] = {}
     for gy in range(gy0, gy1 + 1):
         for gx in range(gx0, gx1 + 1):
+            tile = by_xy.get((gx, gy))
+            if tile is not None and tile_has_settlement_footprint(tile):
+                glyph = tile_settlement_glyph(tile, index_pins, location_types)
+                if glyph is not None:
+                    symbols[(gx, gy)] = glyph
+                    continue
             if mark_location and (gx, gy) in pin_macros:
                 symbols[(gx, gy)] = LOCATION_PIN_SYMBOL
                 continue
-            tile = by_xy.get((gx, gy))
             if tile is None:
                 continue
             cell = rep_cell(tile)
             if cell is not None:
-                symbols[(gx, gy)] = wire_symbol(cell)
+                symbols[(gx, gy)] = wire_symbol(
+                    cell, pins=index_pins, location_types=location_types,
+                )
     return draw_symbol_grid(
         symbols,
         title="pack L0 MACRO AGGREGATE (not mask SoT) — one symbol per macro-tile",
@@ -61,6 +94,8 @@ def render_macro(
     pin_macros: set[tuple[int, int]],
     *,
     mark_location: bool = False,
+    index_pins: list[LocationsIndexPin] | None = None,
+    location_types: WorldLocationTypeRegistry | None = None,
 ) -> str:
     if not by_xy:
         return ""
@@ -70,4 +105,6 @@ def render_macro(
         by_xy, tile_size_m, pin_macros,
         min(xs), min(ys), max(xs), max(ys),
         mark_location=mark_location,
+        index_pins=index_pins,
+        location_types=location_types,
     )

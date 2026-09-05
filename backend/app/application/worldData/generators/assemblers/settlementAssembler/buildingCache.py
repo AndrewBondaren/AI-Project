@@ -8,8 +8,7 @@ from app.application.worldData.generators.assemblers.citySkeleton import CitySke
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import packing_warning
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
-    lookup_building_template,
-    merge_building_registry,
+    assemble_building_catalog,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.economic import (
     building_tier_compatible,
@@ -24,7 +23,14 @@ from app.application.worldData.generators.structure.structureGeneratorService im
     StructureLayout,
 )
 from app.dataModel.materials import DEFAULT_FLOOR_MATERIAL, DEFAULT_WALL_MATERIAL
+from app.dataModel.settlement.district.allowedStructureTypes import (
+    allowed_fill_structure_types,
+)
+from app.dataModel.settlement.district.requiredStructureResolve import (
+    resolve_required_layouts,
+)
 from app.dataModel.spatial.facing import Facing
+from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
 from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
@@ -37,23 +43,27 @@ def collect_building_template_names(
     district_slots: list[DistrictSlot],
     world:          World,
     skeleton:       CitySkeleton,
+    catalog:        BuildingCatalog | None = None,
 ) -> set[str]:
+    catalog = catalog or assemble_building_catalog(world)
     names: set[str] = set()
-    registry = merge_building_registry(world)
+    affected_types: set[str] = set()
 
     for slot in district_slots:
         for req in slot.required_structures:
-            name = req.building_template
-            if name:
-                names.add(name)
+            for layout in resolve_required_layouts(req, catalog):
+                if building_tier_compatible(layout, skeleton, world):
+                    affected_types.add(layout.structure_type)
+        fill = allowed_fill_structure_types(
+            slot.district_template.allowed_structure_types,
+            catalog.structure_types(),
+        )
+        affected_types.update(fill)
 
-        allowed = slot.district_template.allowed_structure_types
-        if not allowed:
-            continue
-        for bt in registry:
-            st = bt.structure_type
-            if st in allowed and building_tier_compatible(bt, skeleton, world):
-                names.add(bt.system_name)
+    for structure_type in affected_types:
+        for layout in catalog.of_structure_type(structure_type):
+            if building_tier_compatible(layout, skeleton, world):
+                names.add(layout.system_name)
 
     return names
 
@@ -174,15 +184,18 @@ def build_layout_cache(
     skeleton:       CitySkeleton,
     district_slots: list[DistrictSlot],
     terrain_cells:  list[MapCell] | None = None,
+    catalog:        BuildingCatalog | None = None,
 ) -> BuildingLayoutCache:
     """
     SOUTH envelope per template.system_name for packing (CONN-PACK-3).
+    Freeze all drawings of affected structure types before packing.
     ``ensure(template, facing)`` after the street frame fills other keys.
     """
     _ = terrain_cells
+    catalog = catalog or assemble_building_catalog(world)
     cache = BuildingLayoutCache()
-    for name in sorted(collect_building_template_names(district_slots, world, skeleton)):
-        template = lookup_building_template(world, name)
+    for name in sorted(collect_building_template_names(district_slots, world, skeleton, catalog)):
+        template = catalog.by_system_name(name)
         if template is None:
             packing_warning("cache", "cache", system_name=name, reason="missing_template")
             continue

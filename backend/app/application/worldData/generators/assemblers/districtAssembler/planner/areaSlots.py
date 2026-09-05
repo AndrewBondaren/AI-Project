@@ -13,12 +13,14 @@ from app.application.worldData.generators.assemblers.settlementAssembler.buildin
     BuildingLayoutCache,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
+    assemble_building_catalog,
     lookup_building_template,
 )
 from app.application.worldData.generators.structure.structureGeneratorService import (
     OccupiedFootprint,
 )
 from app.dataModel.spatial.facing import Facing
+from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
 from app.db.models.world import World
 
 __all__ = [
@@ -87,12 +89,14 @@ def placements_from_reservations(
     world: World,
     skeleton: CitySkeleton,
     fallback_z: int,
+    catalog: BuildingCatalog | None = None,
 ) -> list[AreaPlacement]:
     _ = skeleton
+    catalog = catalog or assemble_building_catalog(world)
     placements: list[AreaPlacement] = []
     for reservation in reservations:
         name = reservation.token.system_name
-        template = lookup_building_template(world, name)
+        template = catalog.by_system_name(name) or lookup_building_template(world, name)
         fp = cache.envelope(name)
         if template is None or fp is None:
             continue

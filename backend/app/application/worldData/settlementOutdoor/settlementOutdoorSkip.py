@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.dataModel.locations.locationFootprintPolicy import (
-    named_location_uses_settlement_meter_footprint,
-)
-from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
-    WorldLocationTypeRegistry,
+    named_location_is_settlement_map_site,
 )
 from app.db.models.namedLocation import NamedLocation
 from app.db.repositories.iNamedLocationRepository import INamedLocationRepository
@@ -15,22 +12,7 @@ from app.db.repositories.iNamedLocationRepository import INamedLocationRepositor
 
 def is_settlement_outdoor_target(location: NamedLocation) -> bool:
     """C6: settlement-like footprint, not district/building descendants."""
-    if not named_location_uses_settlement_meter_footprint(location):
-        return False
-    loc_type = (location.system_location_type or "").strip().lower()
-    entry = WorldLocationTypeRegistry.canonical_engine().entry_for(loc_type)
-    if entry is None:
-        return True
-    settlement = WorldLocationTypeRegistry.canonical_engine().entry_for("settlement")
-    if settlement is not None and entry.system_type == settlement.system_type:
-        return True
-    parents = entry.parent_types or []
-    nested_under = {
-        e.system_type
-        for key in ("settlement", "district", "building")
-        if (e := WorldLocationTypeRegistry.canonical_engine().entry_for(key)) is not None
-    }
-    return not any(p in nested_under for p in parents if p)
+    return named_location_is_settlement_map_site(location)
 
 
 async def should_skip_materialize(

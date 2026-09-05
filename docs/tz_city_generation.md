@@ -1,6 +1,6 @@
 # ТЗ: Генератор города
 
-**Обновлено:** 2026-09-03 **CITY-T-1** (контур import/persist vs packing); §11 init modes + persist plan (2026-06); **C29** город на шве pack (2026-08-15).
+**Обновлено:** 2026-09-05 **§1.1** три оси (поселение / район / здание); seed чертежа здания = мир+город+клетка footprint (§9.6); 2026-09-04 **CITY-T-2**; 2026-09-03 **CITY-T-1**; **C29** город на шве pack.
 
 **Связанные документы:**
 
@@ -8,11 +8,14 @@
 |---|---|
 | [tz_assembler_hierarchy.md](./tz_assembler_hierarchy.md) | Stack Settlement → District → Area → Structure |
 | [.cursor/plans/settlement-assembler.md](../.cursor/plans/settlement-assembler.md) | Фазы A–H impl, acceptance |
+| [.cursor/plans/city-three-axes-transition.md](../.cursor/plans/city-three-axes-transition.md) | Переход на §1.1: слои, контракты, CITY-T-2a…2d |
 | [tz_structure_connections.md](./tz_structure_connections.md) | Дороги settlement/district (§5) |
 | [tz_terrain_relief.md](./tz_terrain_relief.md) | **C29:** город на техническом шве pack — норма; layout не клип по тайлу |
 | [tz_world_pack_storage.md](./tz_world_pack_storage.md) | WP-19: один location file на volume, в т.ч. несколько тайлов |
 | [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) | **SoT** persist/оркестрация outdoor на pack (граф участков, эталон vs патч). Не дублировать сюда |
-| [tz_generator_technical_debt.md](./tz_generator_technical_debt.md) | NC/MR smells; **CITY-T-1** контур скелет/persist/шапка ТЗ |
+| [tz_locations.md](./tz_locations.md) | Дерево NL; subtype поселения ≠ `city_size`; SoT трёх осей — **§1.1 здесь** |
+| [tz_building_generator.md](./tz_building_generator.md) | Library: `structure_type` vs `system_name` чертежа |
+| [tz_generator_technical_debt.md](./tz_generator_technical_debt.md) | NC/MR smells; **CITY-T-1** контур; **CITY-T-2** пул/allowed/uid/seed; рецепт типа поселения — **2d** |
 
 ### Статус реализации (код vs это ТЗ)
 
@@ -21,6 +24,7 @@
 | Фаза 2 lazy layout | `SettlementGeneratorService` → `SettlementAssembler` | ✅ фазы A–F plan |
 | Фаза 3 lazy interior | `StructureGeneratorService` (+ area cache) | ✅ |
 | Engine hook | `lazy_settlement` node | ✅ |
+| §1.1 три оси (тип поселения / района / здания) | рецепт на subtype; packing по шаблону района | ⬜ рецепт; ✅ слоты/типы в шаблонах |
 | §9 district templates | `planner/placement.py`, `DistrictAssembler` | ✅ core |
 | §8 Eager World Bake | UI batch bake | ⬜ |
 | Фаза 1 skeleton validate | import / world create | ⬜ partial |
@@ -29,7 +33,7 @@
 | Persist layout → connections + building `NamedLocation` в БД | `layoutCells` → map_cells only | ⬜ SoT: [tz_settlement_outdoor.md](./tz_settlement_outdoor.md); §11.5 generate scopes |
 | `world_generation.init_mode` (`config.toml` + API) | — | ⬜ spec ✅ §11 |
 
-Шапка таблицы **отстаёт от кода packing/outdoor** (C22 pass1→рамка→pass2; debug orchestrator ≠ только map_cells). Контур import/SQL скелета, dual persist, эвристика стен, DAG→LLM: **[CITY-T-1](./tz_generator_technical_debt.md#city-t-1--контур-вокруг-city-generate)**. Не путать с open §10 (footprint v2, cells барьера района).
+Шапка таблицы **отстаёт от кода packing/outdoor** (C22 pass1→рамка→pass2; debug orchestrator ≠ только map_cells). Контур import/SQL скелета, dual persist, эвристика стен, DAG→LLM: **[CITY-T-1](./tz_generator_technical_debt.md#city-t-1--контур-вокруг-city-generate)**. Три оси (§1.1) vs packing fill: **[CITY-T-2](./tz_generator_technical_debt.md#city-t-2--пул-шаблонов-мира--packing)**. Не путать с open §10 (footprint v2, cells барьера района).
 
 **Имена в коде (не путать с legacy в других TZ):**
 
@@ -46,6 +50,35 @@
 Скелет генерируется **при создании мира** для всех поселений сразу. Детали (интерьеры, планировки) — **lazy**, при первом посещении игроком.
 
 `SettlementLayout` — мировые `(x,y)` / meter geometry, **не** клип по макро-тайлу. Поселение на техническом шве pack (ребро двух тайлов / грань чанка) — **валидный** кейс: один settlement, улицы и районы пересекают ребро. Не сдвигать город с шва и не плодить второй скелет «на соседнем тайле». Pack/grade: [`tz_terrain_relief.md`](./tz_terrain_relief.md) **C29**, [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) WP-19.
+
+### 1.1 Три оси: тип поселения, тип района, тип здания
+
+Тип ≠ чертёж. Generate идёт сверху вниз. Не класть список `tavern_1` на город. Не выбирать район как случайный JSON из всей библиотеки зданий.
+
+| Ось | Тип (семантика, N+1) | Чертёж (экземпляр в реестре/библиотеке мира) | Что задаёт тип | Что задаёт чертёж |
+|---|---|---|---|---|
+| **1. Поселение** | subtype `settlement`: `city`, `village`, `dungeon`, `underground_city`, … ([tz_locations.md](./tz_locations.md)) | этот Ironhold (`location_uid`) | типовые **типы районов**; обязательные **типы зданий** (ратуша, храм, рынок) | не рандомится |
+| **2. Район** | `district_type`: канон `civic`, `commercial`, `residential`, `industrial`, `port` (+ N+1, напр. `military`) | строка `district_template_registry` (`civic_center`, `port_district`) | какие `structure_type` можно в квартале; зона в сетке города; улицы/плотность | ничья среди чертежей **того же** `district_type` |
+| **3. Здание** | `structure_type` библиотеки: `tavern`, `house`, `warehouse`, `town_hall`, `plaza`, … ([tz_building_generator.md](./tz_building_generator.md) §2) | `system_name` / uid в `building_templates` (`tavern_1`) | назначение участка | rng среди чертежей **этого** типа, допущенных районом и тиром |
+
+`system_city_size` (`hamlet`…`megalopolis`) — **масштаб footprint**, не тип поселения. Слово `village` есть и у subtype, и у size — не подменять одно другим: size не задаёт рецепт районов.
+
+Subtype локации `building` в дереве NL (`residential` / `commercial` / …) — иерархия SQL, **не** `district_type` и **не** `structure_type` библиотеки.
+
+**Клетка generate** — глобальная ячейка **footprint города** (§9.6): индекс `(cell_x, cell_y)` от пина поселения, сторона `map_cell_size_m`. То же число метров, что у pack макротайла, **другой индекс**. Не `tile_gx/gy`. Город на шве двух тайлов — один settlement (C29).
+
+**Рецепт типа поселения** (типовые `district_type` + обязательные `structure_type`): поля на subtype в `location_type_registry` (тип `settlement`), не на каждом городе и не вместо библиотеки. Geographic subtypes поля игнорируют. Код сейчас вешает обязательные на шаблон района (`required_structures.building_template` = имя чертежа) и режет районы через `min_city_size` — **[CITY-T-2d](./tz_generator_technical_debt.md#city-t-2--пул-шаблонов-мира--packing)**. Переход слоёв: [`.cursor/plans/city-three-axes-transition.md`](../.cursor/plans/city-three-axes-transition.md).
+
+Поток:
+
+```
+тип поселения
+  → набор типов районов + обязательные типы зданий
+     → клетка footprint (не макротайл): тип района по зоне + рецепту
+        → чертёж района этого типа из реестра мира
+           → required: тип здания → чертёж из библиотеки (seed §9.6)
+           → fill: allowed structure_type → чертёж того же типа (seed)
+```
 
 ---
 
@@ -294,8 +327,7 @@ Legacy UX-идеи (прогресс-бар, export) — применимы к �
 
 > **Impl:** ✅ core — `planner/placement.py`, `planner/districts.py`, `DistrictAssembler`. См. settlement-assembler Phase A–C.
 
-Район — шаблон. `SettlementAssembler` размещает шаблоны районов на позиции глобальных ячеек города,
-проверяя условия появления. `DistrictAssembler` получает уже выбранный шаблон.
+Район — **тип** (`district_type`) плюс **чертёж** в `district_template_registry`. Сначала тип по рецепту поселения и зоне клетки footprint (§1.1, §9.6); `DistrictAssembler` получает уже выбранный чертёж. Не путать с `structure_type` библиотеки зданий.
 
 ### 9.1 Хранение
 
@@ -308,11 +340,11 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 |---|---|---|---|
 | `system_name` | string | required | Уникальный ключ: `"port_district"`, `"merchant_quarter"` |
 | `display_name` | string | required | Отображаемое название |
-| `district_type` | string | required | Семантический тип: `"residential"`, `"commercial"`, `"civic"`, `"military"`, `"port"`, `"industrial"` и др. (N+1) |
+| `district_type` | string | required | Тип района (§1.1): `"civic"`, `"commercial"`, `"residential"`, `"industrial"`, `"port"`, … N+1 |
 | `placement_conditions` | array | optional | Условия появления района (см. 9.3). Пустой массив = всегда доступен |
 | `max_per_city` | int | optional | Максимальное количество районов этого типа в одном городе. `null` = без ограничений |
 | `size_pct` | object | optional | Диапазон размера района как доля глобальной ячейки: `{ "width": [0.3, 1.0], "depth": [0.3, 1.0] }`. `1.0` = вся ячейка |
-| `allowed_structure_types` | string[] | optional | Допустимые `structure_type` шаблонов в районе (любое назначение). `null` = без ограничений |
+| `allowed_structure_types` | string[] | optional | Допустимые **типы зданий** (`structure_type` библиотеки), не имена чертежей. `null` = без ограничений типа. **Код:** omit/`null` = каталог не берётся — **CITY-T-2a** |
 | `economic_tier_range` | object | optional | `{ "min": "poor", "max": "exceptional" }` — диапазон тиров зданий в районе |
 | `density` | string | optional | `"sparse"`, `"medium"`, `"dense"`. Переопределяет `city_skeleton.settlement_density` для этого района. **`SettlementAssembler`** ставит `entry_nodes` с `block_size` **этого** поля (нет → плотность города) |
 | `frontage_type_order` | string[] | optional | Иерархия типов дорог для фасада (C22). `null` = список города, иначе дефолт движка. Пример: `["road","highway","alley"]` — входы со стороны `road` |
@@ -355,7 +387,9 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 
 ### 9.4 Обязательные особые постройки (`required_structures`)
 
-Civic-постройки (ратуша, рынок, храм) объявляются в шаблоне района:
+**SoT (§1.1):** обязательные **типы зданий** задаёт **тип поселения** (ратуша, храм, рынок). Районный чертёж может **добавить** свои. Резолв: тип → чертёж из библиотеки мира того же `structure_type` (seed §9.6). Не список `tavern_1` на городе.
+
+**Код / wire сейчас:** ключ `building_template` = `system_name` чертежа (`town_hall`), висит на шаблоне района — **CITY-T-2d**, пока нет рецепта на subtype.
 
 ```json
 "required_structures": [
@@ -418,24 +452,39 @@ Civic-постройки (ратуша, рынок, храм) объявляют
 
 ### 9.6 Алгоритм размещения районов (`SettlementAssembler`)
 
+Клетка цикла — **ячейка footprint города**, не pack макротайл (§1.1). Сначала **тип района** (рецепт поселения + зона center/edge/inner), затем чертёж этого типа из `district_template_registry`.
+
 ```
-для каждой позиции глобальной ячейки города:
-    кандидаты = [t for t in district_template_registry
-                 if _check_conditions(t, cell_position, city, terrain)]
-    
-    отсортировать кандидаты по приоритету (специализированные > общие)
-    
-    выбрать шаблон (rng или детерминированный выбор)
-    
-    DistrictSlot(
-        origin_x = cell_x * cell_size_m + offset,
-        origin_y = cell_y * cell_size_m + offset,
-        width_m  = width_pct  * cell_size_m,
-        depth_m  = depth_pct  * cell_size_m,
-        ground_z = terrain_z_at(cell_x, cell_y),  # пин района, не пол всех зданий
-        district_template = выбранный шаблон,
-    )
+для каждой позиции глобальной ячейки footprint:
+    тип района = рецепт поселения ∩ предпочтение зоны
+                 (центр: civic → commercial → residential;
+                  край: port → commercial → residential → industrial;
+                  внутри: residential → commercial → industrial)
+    кандидаты = чертежи registry с этим district_type
+                 и прошедшие placement_conditions
+    выбрать чертёж: специализация, затем rng среди равных (seed §9.6)
+    DistrictSlot(…, district_template = чертёж)
 ```
+
+#### Воспроизводимость (чертёж из пула мира)
+
+Rng **не** выбирает тип поселения и не подменяет N копий ([connections](./tz_structure_connections.md) §5.1.3).
+
+**Главный пул — чертежи зданий** одного `structure_type` из библиотеки мира (§1.1 ось 3): среди `tavern_1` / `tavern_2`, не «любой JSON библиотеки».
+
+**База seed:** `world.world_uid` + `location_uid` поселения. Для независимости клеток и роста footprint — те же два uid + **`(cell_x, cell_y)` ячейки footprint** (не `tile_gx/gy`). Та же клетка + тот же пул типа → тот же чертёж. Смена размера города не должна перетасовывать уже существующие индексы клеток.
+
+Ничья чертежей района одного `district_type` — тот же ключ (пара uid + клетка footprint), суффикс роли `_districts` чтобы не сдвигать поток зданий.
+
+| В seed | Не в seed |
+|---|---|
+| `world_uid`, `location_uid` города | `system_city_size`, JSON реестра как строка, время, pid |
+| `(cell_x, cell_y)` footprint; опц. суффикс `_districts` / `_buildings` | pack макротайл; третий uid сущности |
+| внутри слота (frontage, size_pct): + origin слота в метрах | |
+
+Смена состава библиотеки (добавили `tavern_3`) меняет eligible — при том же seed выбор **может** смениться. Копия `location_uid` в другой мир — другой город.
+
+**Код:** `plan_district_slots` — `location_uid` + `system_city_size`, без мира и без клетки footprint — **CITY-T-2c**. Pick здания по `structure_type` из SQL library — **2b**; рецепт обязательных типов на поселении — **2d**.
 
 `DistrictSlot.ground_z` — sample coarse-клетки (якорь района / `NamedLocation.map_z`). **Не** плоскость пола застройки и не значение для копирования на все `AreaSlot`. Выравнивание зданий — участок: [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) **C21**, [tz_assembler_hierarchy.md](./tz_assembler_hierarchy.md) §7.1.
 
@@ -463,6 +512,7 @@ Footprint и district slots — `generators/coordinates/` (WORLD_SURFACE_GRID vs
 | `adjacent_terrain` — связанность воды | **open** — condition есть, connectivity не описана |
 | **Footprint города — форма** | **v1 closed:** квадрат `footprint_multiplier × map_cell_size_m`. **v2:** §10 TODO organic |
 | **CITY-T-1** — скелет C22 не roundtrip import/SQL; debug persist ≠ `lazy_settlement`; стены эвристика vs поле; шапка этого ТЗ stale | **open** — [tech debt CITY-T-1](./tz_generator_technical_debt.md#city-t-1--контур-вокруг-city-generate); не алгоритм §6.3 в коде |
+| **CITY-T-2** — три оси §1.1 vs packing: allowed null skip; uid library; seed; рецепт типа поселения (2d) | **open** — [tech debt CITY-T-2](./tz_generator_technical_debt.md#city-t-2--пул-шаблонов-мира--packing) |
 
 ### TODO: Псевдо-историчный алгоритм footprint (v2)
 
@@ -623,6 +673,9 @@ DAG может materialize **разные уровни** в разных нод�
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-05 | **§1.1** три оси: тип поселения (рецепт районов + обязательные типы зданий) ≠ тип района ≠ `structure_type` / чертёж библиотеки. Клетка = footprint, не макротайл. §9.4/§9.6/seed под оси. **CITY-T-2d**. |
+| 2026-09-05 | §9.6 seed: было «пул районов одним потоком»; уточнено — чертёж здания по типу, ключ мир+город+клетка footprint. |
+| 2026-09-04 | **CITY-T-2:** пул шаблонов мира (не список на городе) vs packing fill — SoT [tz_generator_technical_debt.md](./tz_generator_technical_debt.md) CITY-T-2. §9.2 `allowed` null — указатель на 2a. |
 | 2026-09-03 | **CITY-T-1:** контур import/SQL скелета, dual persist, стены vs C22, stale шапка — SoT [tz_generator_technical_debt.md](./tz_generator_technical_debt.md). Не packing §6.3 в коде. |
 | 2026-09-03 | C22: три зоны `PerimeterBarrier` без общей xy; поселение вычитает прямые footprint из площади района до packing; `sides` = прямые bbox инстанса (`[]` = все четыре). |
 | 2026-09-02 | Барьер поселения (периметр footprint) vs барьер района (`DistrictSlot`): один класс, разные инстансы. |

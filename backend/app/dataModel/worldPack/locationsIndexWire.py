@@ -20,6 +20,8 @@ class LocationsIndexPin(BaseModel):
     map_z: int = 0
     display_name: str | None = None
     system_location_type: str | None = None
+    system_location_subtype: str | None = None
+    system_city_size: str | None = None
 
 
 class LocationsIndexWire(BaseModel):

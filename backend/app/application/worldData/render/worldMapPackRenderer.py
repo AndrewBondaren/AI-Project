@@ -10,7 +10,7 @@ from app.application.worldData.render.fineTerrainAsciiKernel import (
     draw_symbol_grid,
 )
 from app.application.worldData.render.lightMapCells import wire_grade_symbol, wire_symbol
-from app.application.worldData.render.lightMapPins import pin_macros, pin_world_xy
+from app.application.worldData.render.lightMapPins import location_mark_pins, pin_macros, pin_world_xy
 from app.application.worldData.render.lightMosaic import (
     collect_height_values,
     collect_mask_symbols,
@@ -35,6 +35,9 @@ from app.application.worldData.render.worldMapMacroRender import (
     render_macro as _macro,
     render_macro_bbox as _macro_bbox,
 )
+from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
+    WorldLocationTypeRegistry,
+)
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
 
 
@@ -55,6 +58,7 @@ class WorldMapPackRenderer:
         *,
         tile_size_m: int,
         pins: LocationsIndexWire | None = None,
+        location_types: WorldLocationTypeRegistry | None = None,
     ) -> None:
         self._tile_m = max(1, int(tile_size_m))
         self._by_xy: dict[tuple[int, int], PackTileLightView] = {
@@ -63,7 +67,9 @@ class WorldMapPackRenderer:
         self._pins: list[LocationsIndexPin] = (
             list(pins.locations) if pins is not None else []
         )
-        self._pin_macros = pin_macros(self._pins, self._tile_m)
+        self._location_types = location_types
+        self._location_mark_pins = location_mark_pins(self._pins)
+        self._pin_macros = pin_macros(self._location_mark_pins, self._tile_m)
 
     def tile_count(self) -> int:
         return len(self._by_xy)
@@ -81,10 +87,15 @@ class WorldMapPackRenderer:
         )
 
     @staticmethod
-    def render_legend(*, mark_location: bool = False) -> str:
+    def render_legend(
+        *,
+        mark_location: bool = False,
+        location_types: WorldLocationTypeRegistry | None = None,
+    ) -> str:
         return render_map_legend(
             mark_location=mark_location,
-            pin_label="locations_index pin",
+            pin_label="locations_index pin (not settlement)",
+            location_types=location_types,
         )
 
     def render_macro_bbox(
@@ -100,6 +111,7 @@ class WorldMapPackRenderer:
         return _macro_bbox(
             self._by_xy, self._tile_m, self._pin_macros,
             gx0, gy0, gx1, gy1, mark_location=mark_location,
+            index_pins=self._pins, location_types=self._location_types,
         )
 
     def render_macro(self, *, mark_location: bool = False) -> str:
@@ -107,6 +119,7 @@ class WorldMapPackRenderer:
         return _macro(
             self._by_xy, self._tile_m, self._pin_macros,
             mark_location=mark_location,
+            index_pins=self._pins, location_types=self._location_types,
         )
 
     def render_tile_light_grid(
@@ -122,7 +135,8 @@ class WorldMapPackRenderer:
             return ""
         return draw_symbol_grid(
             collect_tile_mask_symbols(
-                tile, self._pins, self._tile_m, mark_location=mark_location,
+                tile, self._location_mark_pins, self._tile_m, mark_location=mark_location,
+                index_pins=self._pins, location_types=self._location_types,
             ),
             title=f"tile Gx={gx} Gy={gy}  (pack L0 light grid {tile.side}×{tile.side})",
             coord_prefix="light ",
@@ -173,11 +187,12 @@ class WorldMapPackRenderer:
         if frame is None:
             return ""
         pin_wxy = (
-            pin_world_xy(self._pins, frame, self._tile_m) if mark_location else set()
+            pin_world_xy(self._location_mark_pins, frame, self._tile_m) if mark_location else set()
         )
         return draw_symbol_grid(
             collect_mask_symbols(
                 self._by_xy, frame, pin_wxy=pin_wxy, mark_location=mark_location,
+                index_pins=self._pins, location_types=self._location_types,
             ),
             title=_mosaic_title("light", frame),
             coord_prefix="light ",

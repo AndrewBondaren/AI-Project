@@ -184,19 +184,30 @@ def district_templates(world: Any) -> WorldDistrictTemplateRegistry:
         world, WorldDistrictTemplateRegistry, world_uid=_uid(world),
     )
 
+def world_building_layout_overrides(world: Any) -> list[BuildingLayoutTemplate]:
+    """Layout-shaped registry rows only (not uid pointers, not engine builtins)."""
+    col = slice_column_key(WorldBuildingTemplateRegistry)
+    raw = getattr(world, col, None) or []
+    if isinstance(raw, dict):
+        raw = list(raw.values())
+    out: list[BuildingLayoutTemplate] = []
+    for row in raw:
+        if not isinstance(row, dict):
+            continue
+        layout = try_building_layout(row)
+        if layout is None:
+            continue
+        out.append(layout)
+    return out
+
+
 def building_layout_templates(world: Any) -> list[BuildingLayoutTemplate]:
     """Engine builtins + world rows that validate as generate layouts (not uid pointers)."""
     by_name: dict[str, BuildingLayoutTemplate] = {
         layout.system_name: layout
         for layout in canonical_defaults()
     }
-    col = slice_column_key(WorldBuildingTemplateRegistry)
-    for row in getattr(world, col, None) or []:
-        if not isinstance(row, dict):
-            continue
-        layout = try_building_layout(row)
-        if layout is None:
-            continue
+    for layout in world_building_layout_overrides(world):
         by_name[layout.system_name] = layout
     return list(by_name.values())
 
@@ -219,9 +230,10 @@ def connection_types(world: Any) -> WorldConnectionTypeRegistry:
 
 
 def location_types(world: Any) -> WorldLocationTypeRegistry:
-    return resolve_registry_list_world(
+    resolved = resolve_registry_list_world(
         world, WorldLocationTypeRegistry, world_uid=_uid(world),
     )
+    return resolved.merged_with_engine()
 
 
 def lore(world: Any) -> WorldLoreRegistry:

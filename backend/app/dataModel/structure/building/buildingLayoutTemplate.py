@@ -54,6 +54,11 @@ def coerce_building_layout(raw: BuildingLayoutTemplate | dict[str, Any]) -> Buil
 
 
 def try_building_layout(raw: dict[str, Any]) -> BuildingLayoutTemplate | None:
+    if not isinstance(raw, dict):
+        return None
+    levels = raw.get("levels")
+    if not isinstance(levels, list) or not levels:
+        return None
     try:
         return BuildingLayoutTemplate.model_validate(raw)
     except ValidationError:

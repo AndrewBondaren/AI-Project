@@ -161,7 +161,17 @@ def select_district_template(
     cell_y:        int,
     grid_n:        int,
     rng:           random.Random,
+    typical_district_types: tuple[str, ...] | None = None,
 ) -> DistrictTemplateEntry | None:
+    zone = _cell_zone(cell_x, cell_y, grid_n)
+    if typical_district_types:
+        return _select_by_recipe(
+            candidates, settlement, skeleton, world,
+            origin_x, origin_y, width_m, depth_m,
+            terrain_cells, placed_types,
+            cell_x, cell_y, grid_n, rng, zone, typical_district_types,
+        )
+
     eligible = [
         t for t in candidates
         if check_placement_conditions(
@@ -173,7 +183,7 @@ def select_district_template(
     if not eligible:
         logger.info(
             "DistrictTemplate select | cell=(%d,%d) zone=%s eligible=0 algorithm=none — skipped",
-            cell_x, cell_y, _cell_zone(cell_x, cell_y, grid_n).value,
+            cell_x, cell_y, zone.value,
         )
         return None
 
@@ -184,7 +194,6 @@ def select_district_template(
     best_key = template_specialization_key(eligible[0])
     pool = [template for template in eligible if template_specialization_key(template) == best_key]
 
-    zone = _cell_zone(cell_x, cell_y, grid_n)
     preferred = DISTRICT_TYPE_PREFERENCE[zone]
     algorithm = "fallback_random"
     matched_pref: str | None = None
@@ -220,6 +229,78 @@ def select_district_template(
         chosen.connections or [],
     )
     return chosen
+
+
+def _pick_specialized(
+    eligible: list[DistrictTemplateEntry],
+    rng: random.Random,
+) -> DistrictTemplateEntry:
+    eligible.sort(
+        key=lambda template: (template_specialization_key(template), template.system_name),
+        reverse=True,
+    )
+    best_key = template_specialization_key(eligible[0])
+    pool = [template for template in eligible if template_specialization_key(template) == best_key]
+    return rng.choice(pool)
+
+
+def _select_by_recipe(
+    candidates: list[DistrictTemplateEntry],
+    settlement: NamedLocation,
+    skeleton: CitySkeleton,
+    world: World,
+    origin_x: int,
+    origin_y: int,
+    width_m: int,
+    depth_m: int,
+    terrain_cells: list[MapCell] | None,
+    placed_types: dict[str, int],
+    cell_x: int,
+    cell_y: int,
+    grid_n: int,
+    rng: random.Random,
+    zone: CellZone,
+    typical_district_types: tuple[str, ...],
+) -> DistrictTemplateEntry | None:
+    typical = set(typical_district_types)
+    for pref in DISTRICT_TYPE_PREFERENCE[zone]:
+        if pref not in typical:
+            continue
+        typed = [template for template in candidates if template.district_type == pref]
+        eligible = [
+            template for template in typed
+            if check_placement_conditions(
+                template, settlement, skeleton, origin_x, origin_y, width_m, depth_m,
+                terrain_cells, placed_types, world,
+                cell_x, cell_y, grid_n,
+            )
+        ]
+        if not eligible:
+            continue
+        chosen = _pick_specialized(eligible, rng)
+        logger.info(
+            "DistrictTemplate select | cell=(%d,%d) zone=%s eligible=%d algorithm=recipe"
+            " matched_type=%s template=%s district_type=%s conditions=%s"
+            " street_layout=%s density=%s connections=%s",
+            cell_x,
+            cell_y,
+            zone.value,
+            len(eligible),
+            pref,
+            chosen.system_name,
+            chosen.district_type,
+            chosen.placement_conditions or [],
+            chosen.street_layout or StreetLayout.GRID.value,
+            chosen.density or "-",
+            chosen.connections or [],
+        )
+        return chosen
+
+    logger.warning(
+        "No district type in settlement recipe ∩ zone | cell=(%d,%d) zone=%s typical=%s — skipped",
+        cell_x, cell_y, zone.value, list(typical_district_types),
+    )
+    return None
 
 
 def slot_dimensions(

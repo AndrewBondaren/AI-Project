@@ -14,5 +14,6 @@ class RequiredStructure(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     building_template: StrictOnWire[str]
+    structure_type: DefaultOnWire[str | None] = None
     count: DefaultOnWire[int] = 1
     position: DefaultOnWire[str] = POSITION_ANY

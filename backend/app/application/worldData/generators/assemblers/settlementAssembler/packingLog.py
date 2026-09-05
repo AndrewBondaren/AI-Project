@@ -78,7 +78,7 @@ def _fmt(fields: dict[str, Any]) -> str:
     )
 
 
-def _message(district: str, step: PackingStep, fields: dict[str, Any]) -> str:
+def _message(district: str, step: PackingStep | str, fields: dict[str, Any]) -> str:
     body = _fmt(fields)
     step_s = str(step)
     if body:
@@ -86,14 +86,39 @@ def _message(district: str, step: PackingStep, fields: dict[str, Any]) -> str:
     return f"C22 packing | district={district} step={step_s}"
 
 
-def packing_info(step: PackingStep, /, *, district: str, **fields: Any) -> None:
-    logger.info(_message(district, step, fields), extra={"activity": str(step)})
+def _as_packing_step(raw: Any) -> PackingStep | str:
+    if isinstance(raw, PackingStep):
+        return raw
+    try:
+        return PackingStep(str(raw))
+    except ValueError:
+        return str(raw)
 
 
-def packing_warning(step: PackingStep, /, *, district: str, **fields: Any) -> None:
-    logger.warning(_message(district, step, fields), extra={"activity": str(step)})
+def _normalize_packing_call(
+    args: tuple[Any, ...],
+    fields: dict[str, Any],
+) -> tuple[str, PackingStep | str, dict[str, Any]]:
+    extra = dict(fields)
+    if len(args) >= 2:
+        return str(args[0]), _as_packing_step(args[1]), extra
+    if len(args) == 1:
+        district = str(extra.pop("district"))
+        return district, _as_packing_step(args[0]), extra
+    raise TypeError("packing log requires step and district")
 
 
-def packing_debug(step: PackingStep, /, *, district: str, **fields: Any) -> None:
-    extra = {"activity": FIT_ACTIVITY if step is PackingStep.FIT else str(step)}
-    logger.debug(_message(district, step, fields), extra=extra)
+def packing_info(*args: Any, **fields: Any) -> None:
+    district, step, extra = _normalize_packing_call(args, fields)
+    logger.info(_message(district, step, extra), extra={"activity": str(step)})
+
+
+def packing_warning(*args: Any, **fields: Any) -> None:
+    district, step, extra = _normalize_packing_call(args, fields)
+    logger.warning(_message(district, step, extra), extra={"activity": str(step)})
+
+
+def packing_debug(*args: Any, **fields: Any) -> None:
+    district, step, extra = _normalize_packing_call(args, fields)
+    log_extra = {"activity": FIT_ACTIVITY if step is PackingStep.FIT else str(step)}
+    logger.debug(_message(district, step, extra), extra=log_extra)

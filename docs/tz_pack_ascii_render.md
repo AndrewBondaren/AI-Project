@@ -1,6 +1,6 @@
 ---
 name: tz-pack-ascii-render
-description: "ТЗ pack ASCII / grid render — L0 mosaic и L2 location/wilderness levels; consumers pack wire, не генераторы"
+description: "ТЗ pack ASCII / grid render — L0 mosaic и L2 location/wilderness levels; pack geometry + SQL identity overlay; не генераторы"
 metadata:
   node_type: memory
   type: project
@@ -15,7 +15,7 @@ metadata:
 
 ## Назначение
 
-Единый контракт **debug ASCII для разработчика** поверх World Pack. **Не** UX мастера мира, **не** игрок, **не** DAG. Сцепление (COUPLE) живёт в pack sidecar; dump и HTTP grid **только читают**.
+Единый контракт **debug ASCII для разработчика** поверх World Pack. **Не** UX мастера мира, **не** игрок, **не** DAG. Сцепление (COUPLE) живёт в pack sidecar; dump и HTTP grid **только читают**. L0 identity поселений (subtype) — **SQL overlay** на пины, не второе SoT в pack (§ L0 identity).
 
 | Слой | Что рисует | Не делает |
 |---|---|---|
@@ -25,7 +25,7 @@ metadata:
 
 **Scope (R36u):** L0→L2 **mask** carry (terrain / hydro / facing) — unchanged ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md)). Меняется только **relief grade** writer + omit L0 grade ASCII.
 
-Код (ориентиры): `render/worldMapPackRenderer.py` (фасад L0 mask+height), `lightMosaic.py` / `lightMosaicFrame.py` / `lightMapPins.py` / `lightMapCells.py`, `worldMapMacroRender.py`, `worldMapGradeOverlay.py` (L0 grade omit), `locationTerrainPackRenderer.py`, `wildernessTilePackRenderer.py`, `fineTerrainAsciiKernel.py`, `mapSymbols.py`, `facingArrows.py`, `renderPayloads.py`; dump — `scripts/render_maps.py` / `dump_detailed_renders`.
+Код (ориентиры): `render/mapGridRenderService.py` (SQL overlay + pack/legacy), `render/packMapGridRender.py`, `render/worldMapPackRenderer.py` (фасад L0 mask+height), `lightMosaic.py` / `lightMosaicFrame.py` / `lightMapPins.py` / `lightMapCells.py`, `worldMapMacroRender.py`, `worldMapGradeOverlay.py` (L0 grade omit), `locationTerrainPackRenderer.py`, `wildernessTilePackRenderer.py`, `fineTerrainAsciiKernel.py`, `mapSymbols.py`, `facingArrows.py`, `renderPayloads.py`; dump — `scripts/render_maps.py` / `dump_detailed_renders`.
 
 **Антипаттерн:** «рендер чинит мир» (gap fill, invent `system_grade_uid`, повторный ribbon apply на L0); выносить сцепление или онтологию grade в dump / DAG. **Dump без строки ≥5 с** — crit: `dumpLog` + heartbeat (`DEBUG_PROGRESS_POLL_S`, default 5) через `loggingConfig` / `generation_world_log(mode="dump")`. Не `print` / не script-tee. Sink: [`tz_logging.md`](./tz_logging.md) консьюмер `render` / `dumpLog` (процесс **script**, не `app.log` uvicorn).
 
@@ -44,6 +44,68 @@ metadata:
 | **`grade` / `world-grade`** | **omit** | outdoor grade **не** на L0 (**R36u**); не писать `world-grade.txt` как SoT |
 
 **Locked (мастер):** L0 ASCII = map + height only. Legacy dump `world-grade.txt` / tile `levels.grade` — **не** продукт после R36u (пусто / omit).
+
+**Поселения vs локации (L0 light / full bake):**
+
+| Знак | Что | Когда |
+|---|---|---|
+| `u` / `n` / `d` / `g` | footprint поселения (`location_pin`); глиф по **subtype** (§ L0 identity) | всегда, не `mark_locations` |
+| `@` | пин `locations_index` **не**-поселения (geographic, …) | `mark_locations=true` |
+| hydro / `r` | река, море, дорога | поверх footprint |
+
+`SettlementContributor` ставит `location_pin` **только** на settlement-site (не на geographic). Поселение **не** рисуется как `@`. Фильтр site: `is_settlement_map_site`. Вид места (city / village / dungeon / …) рендер **не** берёт из pack как SoT — § L0 identity.
+
+### L0 identity: SQL overlay, pack = геометрия
+
+**Зачем:** один источник правды для «что это за место». Расхождение pack↔SQL по subtype — дефект, не допустимая eventual consistency для ярлыка.
+
+| Данное | SoT | Где живёт | Кто читает |
+|---|---|---|---|
+| Вид места: `system_location_type`, **`system_location_subtype`**, `system_city_size`, имя | SQL `named_locations` | L1, [`tz_locations.md`](./tz_locations.md) | движок, сцена, DAG, **debug render API** |
+| Геометрия карты: диск footprint, `location_pin` = **индекс** в `locations_index[]`, координаты пина | pack light tile + `locations_index.json` | WP-9 зеркало якорей, не полный `NamedLocation` | L0 mosaic / dump |
+| Порядок пинов в индексе | pack bake | стабилен, пока не light/full bake | клетка → uid |
+
+**Стык (locked):** HTTP `GET …/render-world-grid` (и tile-grids) уже грузит мир из SQL. На том же запросе — `named_locations` мира. Overlay **по `location_uid`** на существующий список пинов pack: type/subtype/size с SQL **перекрывают** поля пина. Порядок массива **не** менять (`location_pin` на клетке сломается). План имплементации: [`.cursor/plans/l0-identity-sql-overlay.md`](../.cursor/plans/l0-identity-sql-overlay.md).
+
+```
+pack tiles + locations_index          named_locations (SQL)
+        │                                      │
+        │  pin[i].location_uid  ───────────────┤
+        ▼                                      ▼
+   WorldMapPackRenderer   ←  in-memory pins (geometry + SQL identity)
+```
+
+**Не делать:**
+
+| Антипаттерн | Почему |
+|---|---|
+| Писать subtype в `locations_index.json` как SoT | второе место правки; drift после edit без bake |
+| Класть subtype на каждую `WorldMapCellWire` | дубль индекса; WP-9: pins, не NamedLocation |
+| Renderer сам ходит в HTTP | цикл; overlay — application (`MapGridRenderService` / `PackMapGridRender`) |
+| Движок читает pack, чтобы узнать subtype | L1 = SQL |
+| Менять порядок пинов при overlay | индексы клеток |
+
+**Rebake** нужен, если сменились координаты, набор поселений или диск footprint. Смена только subtype/имени — следующий render API, без bake.
+
+**Нет SQL (unit test / pin-only):** глиф из полей пина, если есть; settlement-site без subtype → `u`. HTTP debug path **обязан** overlay.
+
+**Движок:** как L1 — `NamedLocation`, не pack. Карта/ASCII — тот же identity через overlay, не копия в blob.
+
+#### Глифы footprint по `system_location_subtype`
+
+Только settlement-site (`is_settlement_map_site`). Hydro / road по-прежнему поверх. Canonical settlement subtypes ([`tz_locations.md`](./tz_locations.md) реестр):
+
+| `system_location_subtype` | Глиф | Не путать |
+|---|---|---|
+| `city` | `u` | urban occupancy; fallback неизвестного settlement |
+| `village` | `n` | не `v` (ravine) |
+| `dungeon` | `d` | |
+| `underground_city` | `g` | |
+| нет / неизвестный N+1 | `u` | пока у subtype в реестре нет своего символа |
+
+N+1: символ живёт на `location_type_registry[].subtypes[].l0_map_symbol` (optional). Canonical engine заполняет таблицу выше. Рендер читает реестр мира / engine, **не** параллельный литерал в генераторе. Size (`hamlet`…`megalopolis`) глиф не меняет — только радиус диска на bake.
+
+Macro-tile (один знак на тайл): тот же lookup по любому `location_pin` на тайле; городский footprint важнее `@` на том же тайле (как сейчас).
 
 ### L2 location + wilderness (detailed dump)
 
@@ -133,7 +195,7 @@ Open product XOR по L2 grade ASCII — **нет**.
 
 | Путь | Grade |
 |---|---|
-| `GET …/render-world-grid` (+ dump L0) | **нет** `ascii_grade` / `world-grade.txt` (R36u) |
+| `GET …/render-world-grid` (+ dump L0) | **нет** `ascii_grade` / `world-grade.txt` (R36u). **SQL overlay** identity на пины (§ L0 identity) |
 | `GET …/render-location-grids` | `levels.surface_grade` (+ optional `grade_{n}` в dense) |
 | `GET …/render-wilderness-tile-grid` | `levels.surface_grade`; per-z grade в dump только `--grade-z` (`z/grade_{n}.txt`) |
 | `dump_detailed_renders` | `surface_grade.txt` + `z/{n}.txt` (`--z-range N[:M]` optional clip); `z/grade_{n}.txt` — opt-in `--grade-z` |
@@ -149,18 +211,17 @@ Open product XOR по L2 grade ASCII — **нет**.
 | [`tz_terrain_relief.md`](./tz_terrain_relief.md) | generate SoT (очереди, стрелки) |
 | [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) | bake **R36u** / Grade entity / templates / **R36t** |
 | [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md) | клетка 3×3, pack 8 слотов (SLOPE / SHEER / COUPLE), wire/SQL, LLM uid→Instance→System |
-| [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | FineTerrain blob layout; categorical carry **не** для grade uid |
+| [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | FineTerrain blob; WP-9 pin mirror (не NamedLocation); L1 = SQL; categorical carry **не** для grade uid |
 | [`tz_map_light_bake.md`](./tz_map_light_bake.md) | L0 paint/bake frame (MLB); **без** outdoor grade writer |
 | [`tz_mountain_architecture.md`](./tz_mountain_architecture.md) | L2 column_span / cliff_delta diagnostics |
-| [`tz_locations.md`](./tz_locations.md) | stairs `system_facing` per-cell |
+| [`tz_locations.md`](./tz_locations.md) | stairs `system_facing` per-cell; `named_locations.system_location_subtype` (SoT identity); subtype `l0_map_symbol` |
 
 ---
 
 ## История
 
-| Дата | Изменение |
-|---|---|
-| 2026-08-27 | **L0 renderer split:** фасад mask+height; grade overlay leftover — [`tz_terrain_relief_technical_debt.md`](./tz_terrain_relief_technical_debt.md) **RELIEF-TD-6**. |
+| 2026-09-04 | **L0 identity overlay:** subtype SoT = SQL `named_locations`; pack = геометрия/`location_pin` index. Render API joins by uid. Glyphs city=`u` village=`n` dungeon=`d` underground_city=`g`. |
+| 2026-09-04 | **L0 city vs location:** footprint ≠ `@`; settlement contributor skips geographic. Glyphs by subtype — строка «L0 identity overlay». |
 | 2026-08-23 | **Pack 8 слотов:** sidecar SLOPE/SHEER/COUPLE; dump не invent `+` из z — consume TZ |
 | 2026-08-23 | **grade_rays = фронт:** pack лучи фронта (не тело×8) — consume TZ |
 | 2026-08-23 | **Сцепление `+` (superseded same-day):** сначала equal-z на dump; затем COUPLE в sidecar — строка «Pack 8 слотов». |

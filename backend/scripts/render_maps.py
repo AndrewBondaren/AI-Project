@@ -896,7 +896,7 @@ def main() -> None:
         "--mark-locations",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="World map: @ on locations_index pins / location_uid (default: on)",
+        help="World map: @ on non-settlement pins; cities as u footprint (default: on)",
     )
     parser.add_argument(
         "--base-url",

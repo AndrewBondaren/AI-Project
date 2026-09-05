@@ -196,7 +196,7 @@ def main() -> None:
         "--mark-locations",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Render: @ pins on world map (default: on)",
+        help="Render: @ on non-settlement pins; cities as u footprint (default: on)",
     )
     parser.add_argument(
         "--anchor-x",

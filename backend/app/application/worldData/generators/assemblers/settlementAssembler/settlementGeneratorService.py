@@ -22,6 +22,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import (
     SettlementLayout,
 )
+from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -51,8 +52,9 @@ class SettlementGeneratorService:
         world:         World,
         settlement:    NamedLocation,
         terrain_cells: list[MapCell] | None = None,
+        catalog:       BuildingCatalog | None = None,
     ) -> SettlementLayout:
-        return self._assembler.assemble(world, settlement, terrain_cells)
+        return self._assembler.assemble(world, settlement, terrain_cells, catalog=catalog)
 
     def collect_map_cells(
         self,
@@ -75,8 +77,9 @@ class SettlementGeneratorService:
         world:         World,
         settlement:    NamedLocation,
         terrain_cells: list[MapCell] | None = None,
+        catalog:       BuildingCatalog | None = None,
     ) -> tuple[SettlementLayout, list[MapCell]]:
-        layout = self.generate_layout(world, settlement, terrain_cells)
+        layout = self.generate_layout(world, settlement, terrain_cells, catalog=catalog)
         grid_cells   = self.collect_surface_grid_cells(layout)
         meter_cells  = self.collect_geometry_meter_cells(layout)
         cells        = grid_cells + meter_cells

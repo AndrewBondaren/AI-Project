@@ -26,6 +26,9 @@ from app.application.worldData.generators.assemblers.districtAssembler.districtA
 from app.application.worldData.generators.assemblers.districtAssembler.districtLayout import DistrictLayout
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.assemblers.settlementAssembler.buildingCache import build_layout_cache
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
+    assemble_building_catalog,
+)
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.districts import plan_district_slots
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
     footprint_side_m,
@@ -47,6 +50,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.streets import plan_city_street_grid
 from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import SettlementLayout
+from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -61,8 +65,10 @@ class SettlementAssembler:
         world:         World,
         settlement:    NamedLocation,
         terrain_cells: list[MapCell] | None = None,
+        catalog:       BuildingCatalog | None = None,
     ) -> SettlementLayout:
         skeleton = self._build_skeleton(world, settlement)
+        catalog = catalog or assemble_building_catalog(world)
         logger.info(
             "SettlementAssembler | settlement=%s size=%s density=%s tier=%s",
             settlement.location_uid,
@@ -82,7 +88,9 @@ class SettlementAssembler:
         )
         district_slots = self._plan_district_slots(world, settlement, skeleton, terrain_cells)
 
-        layout_cache = build_layout_cache(world, skeleton, district_slots, terrain_cells)
+        layout_cache = build_layout_cache(
+            world, skeleton, district_slots, terrain_cells, catalog=catalog,
+        )
         logger.info(
             "SettlementAssembler | building_cache templates=%d names=%s",
             len(layout_cache),
@@ -96,6 +104,7 @@ class SettlementAssembler:
             layout = district_assembler.assemble(
                 world, slot, skeleton, terrain_cells, layout_cache=layout_cache,
                 settlement_uid=settlement.location_uid,
+                catalog=catalog,
             )
             district_layouts.append(layout)
 

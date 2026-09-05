@@ -33,3 +33,5 @@ class DistrictSlot:
     district_template:   DistrictTemplateEntry
     entry_nodes:         list[ConnectionEntry] = field(default_factory=list)
     required_structures: list[RequiredStructure] = field(default_factory=list)
+    cell_x:              int = 0
+    cell_y:              int = 0

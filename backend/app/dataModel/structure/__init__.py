@@ -7,6 +7,7 @@ Structure templates ≠ settlement layout; settlement references structure via t
 
 from app.dataModel.structure.barrier import BarrierTemplateEntry, WorldBarrierTemplateRegistry
 from app.dataModel.structure.building import (
+    BuildingCatalog,
     BuildingLayoutTemplate,
     BuildingTemplateOutline,
     BuildingTemplateRegistryEntry,
@@ -49,6 +50,7 @@ from app.dataModel.structure.room import RoomTypeEntry, WorldRoomTypeRegistry
 
 __all__ = [
     "BarrierTemplateEntry",
+    "BuildingCatalog",
     "BuildingLayoutTemplate",
     "BuildingTemplateOutline",
     "BuildingTemplateRegistryEntry",

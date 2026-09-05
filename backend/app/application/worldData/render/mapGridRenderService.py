@@ -3,14 +3,22 @@
 from __future__ import annotations
 
 from app.application.worldData.mapCellService import MapCellService
+from app.application.worldData.namedLocationService import NamedLocationService
 from app.application.worldData.render.legacyMapGridRender import LegacyMapGridRender
 from app.application.worldData.render.packMapGridRender import PackMapGridRender
+from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
 class MapGridRenderService:
-    def __init__(self, map_cell_service: MapCellService) -> None:
+    def __init__(
+        self,
+        map_cell_service: MapCellService,
+        *,
+        location_service: NamedLocationService | None = None,
+    ) -> None:
         self._map_cells = map_cell_service
+        self._locations = location_service
         self._legacy = LegacyMapGridRender(map_cell_service)
 
     def _pack(self, world: World) -> PackMapGridRender | None:
@@ -18,6 +26,11 @@ class MapGridRenderService:
         if pack is None:
             return None
         return PackMapGridRender(pack.render)
+
+    async def _sql_locations(self, world: World) -> list[NamedLocation] | None:
+        if self._locations is None:
+            return None
+        return await self._locations.get_all(world.world_uid)
 
     async def render_world_grid(
         self,
@@ -38,6 +51,7 @@ class MapGridRenderService:
                 gx1=gx1,
                 gy1=gy1,
                 mark_locations=mark_locations,
+                locations=await self._sql_locations(world),
             ).to_dict()
         return (
             await self._legacy.render_world_grid(
@@ -53,7 +67,10 @@ class MapGridRenderService:
     async def render_world_tile_grids(self, world: World) -> dict[str, object]:
         pack = self._pack(world)
         if pack is not None:
-            return pack.render_world_tile_grids(world).to_dict()
+            return pack.render_world_tile_grids(
+                world,
+                locations=await self._sql_locations(world),
+            ).to_dict()
         return (await self._legacy.render_world_tile_grids(world)).to_dict()
 
     async def render_all_location_grids(self, world: World) -> dict[str, object]:

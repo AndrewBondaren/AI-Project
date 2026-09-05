@@ -47,7 +47,14 @@ from app.application.worldData.generators.assemblers.settlementAssembler.packing
     packing_info,
     packing_warning,
 )
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
+    assemble_building_catalog,
+)
 from app.application.worldData.generators.coordinates.columnSurface import column_surface
+from app.application.worldData.generators.coordinates.settlementCellRng import (
+    SettlementCellRngRole,
+    settlement_cell_rng,
+)
 from app.application.worldData.generators.road.districtRoadGenerator import DistrictRoadGenerator
 from app.application.worldData.generators.road.streetCells import (
     rasterize_edges_xy,
@@ -60,6 +67,7 @@ from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import
 from app.dataModel.roads.enums.streetLayout import StreetLayout
 from app.dataModel.settlement.district.districtConnection import primary_or_default
 from app.dataModel.spatial.facing import Facing
+from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.mapCell import MapCell
@@ -84,21 +92,33 @@ class DistrictAssembler:
         terrain_cells:   list[MapCell] | None = None,
         layout_cache:    BuildingLayoutCache | dict[str, StructureLayout] | None = None,
         settlement_uid:  str | None = None,
+        catalog:         BuildingCatalog | None = None,
     ) -> DistrictLayout:
         template = slot.district_template
         district = template.system_name
         primary = primary_or_default(template)
         cache = _as_cache(layout_cache)
         settlement_uid = settlement_uid or world.world_uid
+        catalog = catalog or assemble_building_catalog(world)
+        buildings_rng = settlement_cell_rng(
+            world.world_uid,
+            settlement_uid,
+            slot.cell_x,
+            slot.cell_y,
+            SettlementCellRngRole.BUILDINGS,
+        )
         rng = random.Random(
-            f"{world.world_uid}_{settlement_uid}_{slot.origin_x}_{slot.origin_y}_{district}",
+            f"{world.world_uid}_{settlement_uid}_{slot.cell_x}_{slot.cell_y}"
+            f"_{slot.origin_x}_{slot.origin_y}",
         )
 
         inner, _widths, _reason = inner_bbox_for_slot(slot, world)
         step = district_step(slot, city_skeleton)
         lattice = make_lattice(inner, step)
         corridor, _ = corridor_rects_from_entries(slot, inner)
-        tokens = build_tokens(slot, cache, world, city_skeleton)
+        tokens = build_tokens(
+            slot, cache, world, city_skeleton, catalog=catalog, rng=buildings_rng,
+        )
         pass1, leftover1, occupied = run_pass1(slot, inner, lattice, tokens, corridor)
         _ = leftover1
 
@@ -127,7 +147,7 @@ class DistrictAssembler:
         _ = leftover2
         reservations = pass1 + pass2
         placements = placements_from_reservations(
-            reservations, cache, world, city_skeleton, slot.ground_z,
+            reservations, cache, world, city_skeleton, slot.ground_z, catalog=catalog,
         )
 
         add_alleys(slot, placements, nodes, edges, world.world_uid)

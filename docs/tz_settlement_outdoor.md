@@ -329,7 +329,25 @@ SQL и файлы pack — не один COMMIT. Надёжность = прот
 | **C21-T9** | Второй hop дверь↔ворота | луч если `map_z ≠ z` порога | тот же `measure_street_approach` с `street_xy = threshold.cells`; дверь не впритык → peek пустой | Тот же peek, что T2, на дворе |
 | **C21-T10** | Packing `AreaSlot.ground_z` | packing не задаёт **финальный** пол | packing пишет пин как fallback; assembler перезаписывает median двора | Имя поля на packing-слоте vs «пол ещё не посчитан» |
 
-**Сознательно не в этом списке:** DAG, HTTP persist, occupancy flood, `0001`/`0002`, mill discover, pack-земля, `yard_depth_m` как поле шаблона (NC-2: позже).
+**Сознательно не в этом списке:** DAG, HTTP persist, occupancy flood, `0001`/`0002`, mill discover, pack-земля, `yard_depth_m` как поле шаблона (NC-2: позже). Parallel **одного** generate — [CITY-T-3](./tz_generator_technical_debt.md#city-t-3--parallel-generate-одного-поселения) (мастер); DAG wiring — [`tz_world_generation_dag.md`](./tz_world_generation_dag.md).
+
+### Дыры склейки (код vs цель)
+
+Слой оркестрации / эталон pack+SQL, не алгоритм packing. Generate-дыры каталога и скелета — CITY-T в [tech debt](./tz_generator_technical_debt.md); gameplay-нода — DAG ТЗ. Исторический список **P1–P12** ниже — не снимать, пока строка не `resolved`; часть уже закрыта C11/C14/C19.
+
+| Дыра | Статус | Суть |
+|---|---|---|
+| **C16 batch = serial** | **open** (скорость) | `_materialize_many` — `for` по uid. Parallel многих городов — **после** C19, не вместо. Не CITY-T-3 (тот — один generate). |
+| **CITY-T-1a на входе склейки** | **open** | Orchestrator читает `NamedLocation`. C22-поля скелета после import часто `None` → layout не тот, что JSON мастера. |
+| **CITY-T-2 fill при stitch** | **open** | Canonical район без `allowed_structure_types` → pack-граф почти пустой (только required). Склейка честно пишет пустоту. |
+| **P2 leftover persist** | **open** | `SettlementPersistService` / occupancy в патчи ещё живы. HTTP outdoor их не зовёт; эталон = C1. Два писателя эталона — риск. |
+| **P3 occupancy flood** | **open** (не HTTP default) | `plan_footprint_occupancy_cells` в assembler. C7: на карте — L0 pin, не метровая матрица в патчи. |
+| **P4 flatten cells** | **open** (не эталон) | `collect_geometry_meter_cells` тянет interior. C2/C8: эталон = граф участков. |
+| **P9 `entry_role`** | **open** | C20: `front`/`service`; колонки в `0001` ещё нет. |
+| **P10 слой города в merge** | **open** | C12: rasterize участков в merge выше `location_terrain`, ниже patch. `MapLayerKind` city — leftover. |
+| **C19 recovery journal** | **open** | После COMMIT tmp потерян: ТЗ требует pending или тот же seed. Журнала pending в коде нет. |
+| **`MaterializationContext`** | нет (так и надо до CITY-T-3) | Склейка не берёт `free_cores`. Не подключать pool «заодно». |
+| **P12 production path** | **open**, не этот слой | `lazy_settlement` ≠ C11. SoT дыры DAG: [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) § Дыры: settlement. |
 
 | ID | Где | Проблема |
 |---|---|---|
@@ -355,6 +373,7 @@ SQL и файлы pack — не один COMMIT. Надёжность = прот
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-05 | §14 **дыры склейки:** C16 serial; вход CITY-T-1a/T-2; leftover P2–P4/P9/P10; C19 journal; parallel одного generate → CITY-T-3 (мастер). DAG — отдельное ТЗ. |
 | 2026-09-03 | C22: зоны трёх инстансов `PerimeterBarrier` не пересекаются; поселение вычитает прямые footprint из площади района до packing. |
 | 2026-09-02 | C22: барьер поселения (периметр footprint) vs барьер района; разные инстансы. |
 | 2026-09-02 | Шаблон даёт здание, участок собран пустым — критическая ошибка generate участка (SoT assembler §7.1). Не `plaza`. |
@@ -377,4 +396,4 @@ SQL и файлы pack — не один COMMIT. Надёжность = прот
 
 ## Связанные документы
 
-Полный список пунктов — §2. Кратко: [city](./tz_city_generation.md), [assembler](./tz_assembler_hierarchy.md), [pack](./tz_world_pack_storage.md), [locations](./tz_locations.md), [building](./tz_building_generator.md), [connections](./tz_structure_connections.md), [bundle](./tz_world_bundle.md), [relief](./tz_terrain_relief.md) (только границы), [DAG](./tz_world_generation_dag.md) (не impl).
+Полный список пунктов — §2. Кратко: [city](./tz_city_generation.md), [assembler](./tz_assembler_hierarchy.md), [pack](./tz_world_pack_storage.md), [locations](./tz_locations.md), [building](./tz_building_generator.md), [connections](./tz_structure_connections.md), [bundle](./tz_world_bundle.md), [relief](./tz_terrain_relief.md) (только границы), [DAG](./tz_world_generation_dag.md) (не impl), [tech debt](./tz_generator_technical_debt.md) CITY-T (в т.ч. **CITY-T-3** parallel одного generate — мастер).

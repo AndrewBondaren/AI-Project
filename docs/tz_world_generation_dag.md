@@ -437,6 +437,25 @@ Generator-side work **может** опережать ноды (как climate e
 
 ---
 
+## Дыры: settlement в DAG
+
+Не алгоритм застройки ([`tz_city_generation.md`](./tz_city_generation.md)) и не протокол pack ([`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md)). Здесь — **когда** нода зовёт generate и **куда** пишет. Агент ноды не трогает (§ Gate: DAG).
+
+| Дыра | Статус | Суть |
+|---|---|---|
+| **CITY-T-1b** dual persist | **open**, Gate: DAG | Debug: `SettlementOutdoorOrchestrator` → pack city + SQL-дерево + connections (C11). Нода `lazy_settlement` → `map_cells` `insert_bulk_ignore`. Игрок и harness видят разный город. Target: нода зовёт **тот же** `materialize`. |
+| Таблица нод stale | **open** | Строка `lazy_settlement` всё ещё `generate_and_collect` / upsert cells. Кода `generate_and_collect` нет; сервис — `generate_layout` + collect cells. Не чинить таблицу «заодно» с нодой. |
+| Persist lazy = клетки, не эталон | **open**, Gate: DAG | Trigger-path «Lazy gameplay» пишет `map_cell_repo`. Целевой эталон outdoor — C1 (pack + SQL имена), occupancy-flood запрещён (C7). |
+| **CITY-T-1e** LLM payload | **open**, Gate: DAG | `SettlementLayout.dominant_material` после assemble есть. Нода не кладёт в `NodeResult` → LLM не из layout. |
+| Scopes §11.5 не ноды | **open**, Gate: DAG | `generate_settlement_skeleton` / `generate_settlement_geometry` / `connections_*` / `buildings` в city TZ — target. В карте нод отдельных id нет; v1 = одна post-нода на город. |
+| `init_mode=full` | **open** | Все outdoor layout при создании мира — city §11. Нет settings-ключа и нет master-графа нод на batch C16. |
+| TR-PAR / `free_cores` | не city | Probe и `ChunkComputePool` — terrain/climate. Settlement в `MaterializationContext` нет. Parallel **одного** generate — [CITY-T-3](./tz_generator_technical_debt.md#city-t-3--parallel-generate-одного-поселения) (**owner: мастер**), не этот документ. |
+| P12 outdoor | **open** | `lazy_settlement` historically: литералы size как type, `get_by_world` клеток. Пока нода не C11 — production path сломан относительно склейки. |
+
+**Не дыры этого ТЗ:** packing C22, пул шаблонов CITY-T-2, import скелета CITY-T-1a (склейка читает NL — [дыры склейки](./tz_settlement_outdoor.md#дыры-склейки-код-vs-цель)).
+
+---
+
 ## Связанные документы
 
 - [`tz_climate.md`](./tz_climate.md) — три процесса, `ClimateRecalcRequest`, **Climate LOD**, volume A/B/C
@@ -447,7 +466,8 @@ Generator-side work **может** опережать ноды (как climate e
 - [`tz_city_generation.md`](./tz_city_generation.md) — skeleton vs lazy phase 2
 - [`tz_structure_connections.md`](./tz_structure_connections.md) — ConnectionNode graph
 - [`tz_engine_flow.md`](./tz_engine_flow.md) — engine phases only
-- [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) — MR/LC/FM smells
+- [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) — MR/LC/FM; **CITY-T-1b/1e**, **CITY-T-3** (parallel одного поселения — мастер)
+- [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) — склейка pack+SQL; дыры оркестрации §14
 
 ---
 
@@ -455,6 +475,7 @@ Generator-side work **может** опережать ноды (как climate e
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-05 | § **Дыры: settlement в DAG** — dual persist vs C11 (CITY-T-1b); stale `generate_and_collect`; эталон pack vs map_cells; dominant_material (1e); scopes §11.5; `init_mode`; P12. Parallel одного generate → CITY-T-3 (мастер). Склейка — outdoor ТЗ. |
 | 2026-08-30 | **Relief product:** mill не спекулятивно (дорого); несколько чанков на сцене ок; полный мир = bake ГМ. Rematerialize сбрасывает grade. [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Caller. |
 | 2026-08-16 | **Modification ≠ bake:** `modify_terrain` пишет Patch Store, не `pack/bake` |
 | 2026-08-13 | **R36v:** `modify_terrain` после patch зовёт тот же grade helper — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |

@@ -9,6 +9,10 @@ from datetime import datetime, timezone
 from app.application.importResult import ImportResult
 from app.application.worldData.bundle.errors import BundleValidationError
 from app.application.worldData.worldService import WorldService
+from app.dataModel.structure.building.buildingLayoutTemplate import (
+    BuildingLayoutTemplate,
+    try_building_layout,
+)
 from app.dataModel.structure.building.buildingTemplateOutline import BuildingTemplateOutline
 from app.dataModel.structure.building.buildingTemplateRegistryEntry import (
     BuildingTemplateRegistryEntry,
@@ -48,6 +52,32 @@ class BuildingTemplateLibraryService:
     ) -> None:
         self._repo = repo
         self._worlds = world_service
+
+    async def layouts_for_world(self, world) -> list[BuildingLayoutTemplate]:
+        """Hydrate uid registry rows to generate layouts. Outline-only → warning, skip."""
+        layouts: list[BuildingLayoutTemplate] = []
+        world_uid = getattr(world, "world_uid", "?")
+        for entry in _registry_entries(world):
+            row = await self._repo.get_by_uid(entry.system_template_uid)
+            if row is None:
+                logger.warning(
+                    "building | library miss template_uid=%s world=%s",
+                    entry.system_template_uid,
+                    world_uid,
+                )
+                continue
+            data = row.data if isinstance(row.data, dict) else {}
+            layout = try_building_layout(data)
+            if layout is None:
+                logger.warning(
+                    "building | outline-only skip template_uid=%s system_name=%s world=%s",
+                    entry.system_template_uid,
+                    row.system_name,
+                    world_uid,
+                )
+                continue
+            layouts.append(layout)
+        return layouts
 
     async def find_by_uid(self, template_uid: str) -> BuildingTemplateRow | None:
         return await self._repo.get_by_uid(template_uid)

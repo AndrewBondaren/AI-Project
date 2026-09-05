@@ -34,10 +34,25 @@ _ENGINE_ENTRIES: tuple[LocationTypeEntry, ...] = (
         parent_types=["territory"],
         is_outdoor=True,
         subtypes=[
-            LocationTypeSubtypeEntry(system_subtype="city"),
-            LocationTypeSubtypeEntry(system_subtype="village"),
-            LocationTypeSubtypeEntry(system_subtype="dungeon"),
-            LocationTypeSubtypeEntry(system_subtype="underground_city"),
+            LocationTypeSubtypeEntry(
+                system_subtype="city",
+                l0_map_symbol="u",
+                typical_district_types=[
+                    "civic", "commercial", "residential", "industrial", "port",
+                ],
+                required_structure_types=["town_hall"],
+            ),
+            LocationTypeSubtypeEntry(
+                system_subtype="village",
+                l0_map_symbol="n",
+                typical_district_types=["civic", "residential"],
+            ),
+            LocationTypeSubtypeEntry(system_subtype="dungeon", l0_map_symbol="d"),
+            LocationTypeSubtypeEntry(
+                system_subtype="underground_city",
+                l0_map_symbol="g",
+                typical_district_types=["civic", "residential"],
+            ),
         ],
     ),
     LocationTypeEntry(
@@ -137,3 +152,67 @@ class WorldLocationTypeRegistry(RootModel[list[LocationTypeEntry]]):
         if entry is None:
             return False
         return parent_system_type in entry.parent_types
+
+    def merged_with_engine(self) -> WorldLocationTypeRegistry:
+        """Engine hierarchy + recipes; world types/subtypes overlay by key (CITY-T-2d)."""
+        engine = type(self).canonical_engine()
+        world_by_type = {entry.system_type: entry for entry in self.root}
+        merged: list[LocationTypeEntry] = []
+        seen: set[str] = set()
+        for engine_entry in engine.root:
+            world_entry = world_by_type.get(engine_entry.system_type)
+            if world_entry is None:
+                merged.append(engine_entry)
+            else:
+                merged.append(_overlay_location_type(engine_entry, world_entry))
+            seen.add(engine_entry.system_type)
+        for world_entry in self.root:
+            if world_entry.system_type not in seen:
+                merged.append(world_entry)
+        return WorldLocationTypeRegistry(merged)
+
+
+def _overlay_location_type(
+    engine: LocationTypeEntry,
+    world: LocationTypeEntry,
+) -> LocationTypeEntry:
+    parent_types = world.parent_types if world.parent_types else engine.parent_types
+    is_outdoor = engine.is_outdoor if world.is_outdoor is None else world.is_outdoor
+    if not world.subtypes:
+        subtypes = list(engine.subtypes)
+    else:
+        by_sub = {subtype.system_subtype: subtype for subtype in engine.subtypes}
+        for subtype in world.subtypes:
+            by_sub[subtype.system_subtype] = _overlay_subtype(
+                by_sub.get(subtype.system_subtype), subtype,
+            )
+        subtypes = list(by_sub.values())
+    return LocationTypeEntry(
+        system_type=world.system_type,
+        display_type=world.display_type,
+        parent_types=list(parent_types),
+        is_outdoor=is_outdoor,
+        subtypes=subtypes,
+    )
+
+
+def _overlay_subtype(
+    engine: LocationTypeSubtypeEntry | None,
+    world: LocationTypeSubtypeEntry,
+) -> LocationTypeSubtypeEntry:
+    if engine is None:
+        return world
+    return LocationTypeSubtypeEntry(
+        system_subtype=world.system_subtype,
+        display_subtype=(
+            world.display_subtype if world.display_subtype is not None else engine.display_subtype
+        ),
+        border_category=(
+            world.border_category if world.border_category is not None else engine.border_category
+        ),
+        l0_map_symbol=(
+            world.l0_map_symbol if world.l0_map_symbol is not None else engine.l0_map_symbol
+        ),
+        typical_district_types=list(world.typical_district_types),
+        required_structure_types=list(world.required_structure_types),
+    )

@@ -757,6 +757,7 @@ class Container:
                 writer_for=self.world_pack_writer_for,
                 facade_for=self.map_cell_query_facade,
                 pack_context_for=lambda uid: self.pack_read_services(uid).context,
+                library=self.building_template_library_service(),
             )
         return self._settlement_outdoor_orchestrator
 

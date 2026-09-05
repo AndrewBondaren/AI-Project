@@ -1,4 +1,4 @@
-"""Settlement contributor — location_pin mask on light grid (tz_map_light_bake)."""
+"""Settlement contributor — city footprint ``location_pin`` on light grid (tz_map_light_bake)."""
 
 from __future__ import annotations
 
@@ -8,10 +8,25 @@ from app.application.jsonValidation.worldRow import city_sizes
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.coords import meters_to_macro_local
+from app.dataModel.locations.locationFootprintPolicy import (
+    is_settlement_map_site,
+    named_location_is_settlement_map_site,
+)
 from app.dataModel.masks.enums.maskDomainId import LightContributorId
 from app.dataModel.worldPack.lightSettlementFootprint import LightSettlementFootprintPolicy
+from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin
+from app.db.models.namedLocation import NamedLocation
 
 logger = logging.getLogger(__name__)
+
+
+def _pin_is_settlement_site(
+    pin: LocationsIndexPin,
+    loc: NamedLocation | None,
+) -> bool:
+    if loc is not None:
+        return named_location_is_settlement_map_site(loc)
+    return is_settlement_map_site(system_location_type=pin.system_location_type)
 
 
 class SettlementContributor:
@@ -31,12 +46,14 @@ class SettlementContributor:
         radii: list[int] = []
 
         for index, pin in enumerate(pins):
+            loc = loc_by_uid.get(pin.location_uid)
+            if not _pin_is_settlement_site(pin, loc):
+                continue
             gx, gy, tx, ty = meters_to_macro_local(pin.map_x, pin.map_y, scale)
             if (gx, gy) not in tile_set:
                 continue
             pins_in_tiles += 1
 
-            loc = loc_by_uid.get(pin.location_uid)
             size_key = loc.system_city_size if loc is not None else None
             entry = registry.entry_for(size_key) if size_key else None
             count = entry.map_cells_count if entry is not None else None
