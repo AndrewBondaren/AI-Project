@@ -16,6 +16,12 @@ def district_location_uid(settlement_uid: str, system_name: str, index: int) -> 
     return _uuid5(settlement_uid, f"district|{system_name}|{index}")
 
 
+def city_connection_node_uid(
+    settlement_uid: str, tag: str, x: int, y: int, z: int,
+) -> str:
+    return _uuid5(settlement_uid, f"city_node|{tag}|{x}|{y}|{z}")
+
+
 def area_uid(district_uid: str, min_x: int, min_y: int, facing: Facing) -> str:
     return _uuid5(district_uid, f"area|{min_x}|{min_y}|{facing.value}")
 

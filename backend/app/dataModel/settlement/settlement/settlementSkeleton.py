@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultOnWire
@@ -19,6 +21,20 @@ class SettlementSkeleton(BaseModel):
     """
 
     model_config = ConfigDict(extra="ignore", frozen=True)
+
+    # Same names on SQL NamedLocation (CITY-T-1a). Not on NL: economic_tier → system_economic_tier.
+    NAMED_LOCATION_OVERLAY_FIELDS: ClassVar[tuple[str, ...]] = (
+        "architectural_style",
+        "dominant_material",
+        "settlement_density",
+        "frontage_type_order",
+        "structure_counts",
+        "structure_priority",
+        "perimeter_barrier",
+    )
+    NAMED_LOCATION_FIELD_ALIASES: ClassVar[dict[str, str]] = {
+        "economic_tier": "system_economic_tier",
+    }
 
     economic_tier: DefaultOnWire[str | None] = None
     architectural_style: DefaultOnWire[str | None] = None

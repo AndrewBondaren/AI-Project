@@ -99,7 +99,7 @@ app/application/worldData/generators/
 | **Terrain** | `TerrainGeneratorService` | multi-pass skeleton ✅ impl | [`tz_terrain_generation.md`](./tz_terrain_generation.md) |
 | **Road** | `DistrictRoadGenerator`, layouts | `ConnectionNode` / `ConnectionEdge` graph | [`tz_structure_connections.md`](./tz_structure_connections.md), [`tz_city_generation.md`](./tz_city_generation.md) |
 | **Structure** | `StructureGeneratorService`, `StructureAreaAssembler`, … | `StructureLayout` (cells, levels, passages, rooms) | [`tz_building_generator.md`](./tz_building_generator.md), [`tz_assembler_hierarchy.md`](./tz_assembler_hierarchy.md) |
-| **Settlement** | `SettlementGeneratorService` → `SettlementAssembler` | occupancy + full city geometry (roads inside stack) | [`tz_city_generation.md`](./tz_city_generation.md) |
+| **Settlement** | `SettlementGeneratorService` → `SettlementAssembler` | packing layout; topology — city §8 / C23 на `full_bake`, не occupancy-flood | [`tz_city_generation.md`](./tz_city_generation.md) |
 
 **Road** — отдельный пакет, не подмножество `structure/`. Settlement **компонует** road + area + building.
 
@@ -333,8 +333,8 @@ context["materialization_ctx"] = MaterializationContext(free_cores=free_cores)
 
 | id | phase | Generator | Trigger |
 |---|---|---|---|
-| `generate_settlement_skeleton` | post_llm | `SettlementGeneratorService.plan_occupancy_only` | world create phase 1 |
-| `generate_settlement_geometry` | post_llm | full `SettlementAssembler` | explicit regen (не lazy) |
+| `generate_settlement_skeleton` | post_llm | **target:** `settlement_topology` (city §8 / outdoor C23): `plan_district_slots` + entries + city street grid. **Не** `plan_occupancy_only` | после `full_bake` L0 |
+| `generate_settlement_geometry` | post_llm | packing `SettlementAssembler` / outdoor `materialize`; **reuse** topology слотов | C11 / lazy / detailed; не `init_mode=full` |
 
 #### Structure — процедура + игрок
 
@@ -447,8 +447,8 @@ Generator-side work **может** опережать ноды (как climate e
 | Таблица нод stale | **open** | Строка `lazy_settlement` всё ещё `generate_and_collect` / upsert cells. Кода `generate_and_collect` нет; сервис — `generate_layout` + collect cells. Не чинить таблицу «заодно» с нодой. |
 | Persist lazy = клетки, не эталон | **open**, Gate: DAG | Trigger-path «Lazy gameplay» пишет `map_cell_repo`. Целевой эталон outdoor — C1 (pack + SQL имена), occupancy-flood запрещён (C7). |
 | **CITY-T-1e** LLM payload | **open**, Gate: DAG | `SettlementLayout.dominant_material` после assemble есть. Нода не кладёт в `NodeResult` → LLM не из layout. |
-| Scopes §11.5 не ноды | **open**, Gate: DAG | `generate_settlement_skeleton` / `generate_settlement_geometry` / `connections_*` / `buildings` в city TZ — target. В карте нод отдельных id нет; v1 = одна post-нода на город. |
-| `init_mode=full` | **open** | Все outdoor layout при создании мира — city §11. Нет settings-ключа и нет master-графа нод на batch C16. |
+| Scopes §11.5 не ноды | **open**, Gate: DAG | `generate_settlement_skeleton` = topology (C23), не occupancy-flood. `generate_settlement_geometry` = packing C11. В карте нод отдельных id нет; v1 packing = одна post-нода на город. |
+| `init_mode=full` | **open** (ключ settings ⬜) | Target: L0 `full_bake` **+ topology** (city §8). **Не** packing всех городов (не batch C16 outdoor). Packing = C11 / lazy / detailed. Процесс мастера = `POST pack/bake?mode=full` + post-pass topology. |
 | TR-PAR / `free_cores` | не city | Probe и `ChunkComputePool` — terrain/climate. Settlement в `MaterializationContext` нет. Parallel **одного** generate — [CITY-T-3](./tz_generator_technical_debt.md#city-t-3--parallel-generate-одного-поселения) (**owner: мастер**), не этот документ. |
 | P12 outdoor | **open** | `lazy_settlement` historically: литералы size как type, `get_by_world` клеток. Пока нода не C11 — production path сломан относительно склейки. |
 
@@ -463,7 +463,7 @@ Generator-side work **может** опережать ноды (как climate e
 - [`tz_terrain_generation.md`](./tz_terrain_generation.md) — multi-pass terrain skeleton ✅; world generation pass order
 - [`tz_assembler_hierarchy.md`](./tz_assembler_hierarchy.md) — settlement → structure layers
 - [`tz_building_generator.md`](./tz_building_generator.md) — templates, construction flags
-- [`tz_city_generation.md`](./tz_city_generation.md) — skeleton vs lazy phase 2
+- [`tz_city_generation.md`](./tz_city_generation.md) — skeleton import; **§8 topology** на `full_bake`; packing lazy / C11
 - [`tz_structure_connections.md`](./tz_structure_connections.md) — ConnectionNode graph
 - [`tz_engine_flow.md`](./tz_engine_flow.md) — engine phases only
 - [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) — MR/LC/FM; **CITY-T-1b/1e**, **CITY-T-3** (parallel одного поселения — мастер)
@@ -475,6 +475,7 @@ Generator-side work **может** опережать ноды (как climate e
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-06 | `generate_settlement_skeleton` → scope topology (C23), не occupancy-flood. `init_mode=full` = L0 + topology, не packing всех городов. |
 | 2026-09-05 | § **Дыры: settlement в DAG** — dual persist vs C11 (CITY-T-1b); stale `generate_and_collect`; эталон pack vs map_cells; dominant_material (1e); scopes §11.5; `init_mode`; P12. Parallel одного generate → CITY-T-3 (мастер). Склейка — outdoor ТЗ. |
 | 2026-08-30 | **Relief product:** mill не спекулятивно (дорого); несколько чанков на сцене ок; полный мир = bake ГМ. Rematerialize сбрасывает grade. [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Caller. |
 | 2026-08-16 | **Modification ≠ bake:** `modify_terrain` пишет Patch Store, не `pack/bake` |

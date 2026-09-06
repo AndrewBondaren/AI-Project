@@ -235,10 +235,10 @@ Perimeter не учитывает template района — v1 compromise.
 
 ### NC-9 — `settlement_density` на NamedLocation
 
-**Status:** `open` | **Severity:** low | **P:** P3  
+**Status:** `resolved` | **Severity:** low | **P:** P3  
 **Срез более широкого:** [CITY-T-1a](#city-t-1--контур-вокруг-city-generate)
 
-`getattr(settlement, "settlement_density", None)` — не поле модели, dynamic attr.
+Колонка `named_locations.settlement_density` + поле `NamedLocation`. Overlay CITY-T-1a.
 
 ---
 
@@ -248,13 +248,13 @@ Perimeter не учитывает template района — v1 compromise.
 
 ### CITY-T-1 — контур вокруг city generate
 
-**Status:** `open` | **Severity:** high | **P:** P1 (1a) / P2 (1c, 1d) / DAG-gate (1b, 1e)
+**Status:** `open` | **Severity:** high | **P:** P2 (1c, 1d) / DAG-gate (1b, 1e)
 
 Generate (`SettlementAssembler` → `DistrictAssembler`: cache → pass1 → рамка grid → pass2 → frontage) ближе к C22, чем шапка city TZ и фраза «код сейчас» в §6.3. Разрыв — вокруг assembler’а.
 
 | Sub-ID | Severity | P | Проблема | Fix |
 |---|---|---|---|---|
-| **CITY-T-1a** | **high** | **P1** | `SettlementSkeleton` / `CitySkeleton` держат C22-поля (`settlement_density`, `architectural_style`, `frontage_type_order`, `structure_counts`, `structure_priority`, `perimeter_barrier`). `BundleNamedLocation` — `extra="ignore"`; `named_locations` колонок нет. После JSON-import поля = `None`. Smoke ставит attr в памяти. **NC-9** — только density getattr | Wire на import: поля в `BundleNamedLocation` + колонки `0001` / JSON на NL (как `settlement_density` в §3 city TZ). `city_skeleton_from_settlement` уже читает getattr |
+| **CITY-T-1a** | **high** | **P1** | ~~import ignore / нет колонок~~ | **resolved** (C23): `BundleNamedLocation` overlay из `SettlementSkeleton`; колонки `0001`; `city_skeleton_from_settlement` читает поля NL |
 | **CITY-T-1b** | high | DAG | Два persist: debug `SettlementOutdoorOrchestrator` (pack + SQL-дерево + connections) vs `lazy_settlement` → только `map_cells` `insert_bulk_ignore`. Игрок и harness видят разный город | Нода зовёт тот же orchestrator (Gate: DAG; агент не трогает ноды). Не баг генератора |
 | **CITY-T-1c** | medium | P2 | Два движка стен поселения: `shrink_slot_by_settlement_barrier` (C22 поле) vs `plan_settlement_barriers` (эвристика size/tier, поле не читает). Перекрывает [NC-3](#nc-3--три-barrier-pipeline-разная-gate-политика) | Клетки периметра из инстанса `PerimeterBarrier`; эвристика — только omit/null. Зоны без общей xy — city C22 |
 | **CITY-T-1d** | low | P2 | Документы отстают: шапка city TZ (packing=AABB, persist=map_cells only, C22-поля=⬜); §6.3 «код сейчас»; connections §5.1 «packing→overlay»; нет `.cursor/plans/settlement-assembler.md`; `assembler-hierarchy.mdc` ещё пишет NotImplemented на area | Синхрон шапки/§6.3/connections; план или снять ссылку; правило hierarchy |
@@ -532,7 +532,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | NC-1a | Persist contract / optional `coordinate_space` column | open |
 | LC-1..LC-4 | Neutral packages | open |
 | NC-2 | Parcel cells в `areaSlots`; замок C21 план §2.2b (не margin на `PerimeterBarrier`) | open |
-| **CITY-T-1a** | Скелет C22: import/SQL `named_locations` (density, style, barrier, counts, frontage) | **open** |
+| **CITY-T-1a** | Скелет C22: import/SQL `named_locations` (density, style, barrier, counts, frontage) | **resolved** |
 | **CITY-T-2a** | `allowed` null = каталог (§9.2) — civic flood закрыт **4c** | **resolved** |
 | **CITY-T-2b** | Packing читает `building_templates` по uid реестра мира (building §5.2) | **open** |
 | **CITY-T-2c** | Seed чертежа = `world_uid`+uid города+клетка footprint (city §9.6); leftover frontage/`world_uid` | **partial** |

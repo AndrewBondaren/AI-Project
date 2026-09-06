@@ -1,5 +1,4 @@
 import logging
-import uuid
 from random import Random
 
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
@@ -24,8 +23,12 @@ from app.application.worldData.generators.road.sidewalkWidthResolver import reso
 from app.application.worldData.generators.road.roadTravelResolver import effective_travel_modifier
 from app.application.worldData.generators.road.widthResolver import resolve_width
 from app.application.worldData.generators.utils.materialResolver import resolve_material
+from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
+    city_connection_node_uid,
+)
 from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
 from app.dataModel.connections.enums.graphLevel import GraphLevel
+from app.dataModel.settlement.enums.districtDensity import DistrictDensity
 from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.settlement.district.districtConnection import primary_or_default
@@ -39,7 +42,8 @@ logger = logging.getLogger(__name__)
 
 def _city_has_sidewalk(skeleton: CitySkeleton) -> bool:
     """Perimeter/inter-district city roads: sidewalk unless settlement is sparse."""
-    return skeleton.settlement_density != "sparse"
+    density = DistrictDensity.from_wire(skeleton.settlement_density) or DistrictDensity.default()
+    return density is not DistrictDensity.SPARSE
 
 
 def _city_road_material(world: World, skeleton: CitySkeleton, rng: Random) -> str:
@@ -54,14 +58,20 @@ def _make_node(
     graph_level: GraphLevel | str,
     world_uid: str,
     tag: str,
+    *,
+    settlement_uid: str,
+    location_uid: str | None = None,
 ) -> ConnectionNode:
-    """ConnectionNode x/y/z in WORLD_LOCAL_METERS."""
+    """ConnectionNode x/y/z in WORLD_LOCAL_METERS. City/entry uids are uuid5 (C23)."""
+    node_type_wire = node_type.value if isinstance(node_type, ConnectionNodeType) else node_type
+    graph_wire = graph_level.value if isinstance(graph_level, GraphLevel) else graph_level
     return ConnectionNode(
-        node_uid=f"{tag}_{x}_{y}_{z}_{uuid.uuid4().hex[:8]}",
+        node_uid=city_connection_node_uid(settlement_uid, tag, x, y, z),
         x=x, y=y, z=z,
-        node_type=node_type.value if isinstance(node_type, ConnectionNodeType) else node_type,
-        graph_level=graph_level.value if isinstance(graph_level, GraphLevel) else graph_level,
+        node_type=node_type_wire,
+        graph_level=graph_wire,
         world_uid=world_uid,
+        location_uid=location_uid,
     )
 
 
@@ -95,6 +105,8 @@ def plan_settlement_entries(
     world_uid: str,
     surface:   dict[tuple[int, int], int] | None = None,
     world:     World | None = None,
+    *,
+    settlement_uid: str,
 ) -> None:
     """
     Заполняет slot.entry_nodes. Шаг — density этого района.
@@ -112,6 +124,8 @@ def plan_settlement_entries(
         if key not in node_registry:
             node_registry[key] = _make_node(
                 x, y, z, ConnectionNodeType.INTERSECTION, GraphLevel.DISTRICT, world_uid, tag,
+                settlement_uid=settlement_uid,
+                location_uid=settlement_uid,
             )
         return node_registry[key]
 
@@ -208,6 +222,8 @@ def plan_city_street_grid(
     rng:            Random,
     skeleton:       CitySkeleton,
     surface:        dict[tuple[int, int], int] | None = None,
+    *,
+    settlement_uid: str,
 ) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
     """
     settlement_gate на периметре footprint + кольцевая магистраль.
@@ -243,6 +259,8 @@ def plan_city_street_grid(
         node = _make_node(
             x, y, node_z(x, y),
             ConnectionNodeType.SETTLEMENT_GATE, GraphLevel.CITY, world_uid, label,
+            settlement_uid=settlement_uid,
+            location_uid=settlement_uid,
         )
         return register(node)
 
@@ -303,6 +321,8 @@ def plan_city_street_grid(
         node = _make_node(
             x, y, node_z(x, y),
             ConnectionNodeType.INTERSECTION, GraphLevel.CITY, world_uid, tag,
+            settlement_uid=settlement_uid,
+            location_uid=settlement_uid,
         )
         return register(node)
 

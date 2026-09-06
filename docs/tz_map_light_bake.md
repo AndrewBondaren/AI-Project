@@ -26,6 +26,7 @@ metadata:
 - Patch Store / merge priority WP-20;
 - DAG wiring;
 - **MountainPassBuilder / topology / карта классов** — [`tz_mountain_architecture.md`](./tz_mountain_architecture.md);
+- **settlement_topology** (районы + `settlement_gate` в SQL) — после `full_bake` L0, не этот compose: [city §8](./tz_city_generation.md), [outdoor C23](./tz_settlement_outdoor.md);
 - план имплементации агента (`.cursor/plans/`).
 
 **Связь с storage TZ:** wire-поля light cell, `world_map_cells_per_tile`, pins/`locations_index` уже описаны в pack storage. Этот документ закрепляет **как** наполнять L0 (compose), а не формат zstd.
@@ -83,7 +84,7 @@ pack/bake/worldMapBakeOrchestrator.py   # thin: compose → writer
 | `landcover` | biome / mountain из climate+relief | z-band stub |
 | `ravine` / `road` | овраг / дорога на `system_terrain` | L2 carve / city streets |
 | `hydro` contributor | light-rasterize hydro mask | fine bed / column fill |
-| `settlement` contributor | pin (+ footprint later) на light cells | `SettlementLayout` / CitySkeleton materialize |
+| `settlement` contributor | pin (+ footprint later) на light cells | `SettlementLayout` / packing / **C23 topology** (районы, gates) |
 | `WorldMapBakeOrchestrator` | `to_wire` + `write_world_map_tile` | собственный семпл hydro/z |
 | `SurfaceTerrainContext` | L2 / fine planning, climate helpers | SoT записи L0 wire |
 
@@ -183,7 +184,7 @@ Impl note: pack ASCII default = **light-mask mosaic** (WP-10); frame от `world
 
 **Инвариант:** `terrain_registry` / `climate_zone_registry` растут N+1; **домен маски** — как `FloraKind` / `MountainKind`: новый id = PR dataModel + contributor, не JSON мастера.
 
-**Не** mask domain: добавление `swamp` / `volcanic` в registry; новые climate zones; flora type refs ([`tz_flora.md`](./tz_flora.md)); L2 city layout (на L0 settlement = pin/footprint).
+**Не** mask domain: добавление `swamp` / `volcanic` в registry; новые climate zones; flora type refs ([`tz_flora.md`](./tz_flora.md)); L2 city layout и C23 topology (на L0 settlement = pin/footprint).
 
 Mapping biome → preferred landcover terrain — **policy / climate profile**, не новый `MaskDomainId`.
 
@@ -396,7 +397,7 @@ flowchart LR
 |---|---|---|---|---|
 | **mountains** | `MountainSpec` \| `MountainRangeSpec` | FormGeometry→FormRaster→SideFill → footprint (+ fractions) | terrain + KindElevation z | **первый полный plugin**; stub disk/score→paint **удалить** |
 | **ravines** | `RavineSpec` | depression/path → footprint | terrain + drop z | тем же каркасом после гор |
-| **settlement** | `SettlementSpec` (origin, radius_m / size, `location_uid`) | disk / later outline | `location_pin` (index из `locations_index`) | углубить pin→Spec pipeline |
+| **settlement** | `SettlementSpec` (origin, radius_m / size, `location_uid`) | disk / later outline | `location_pin` (index из `locations_index`) | pin→Spec; **не** SQL районов / gates (C23) |
 | **farmland** | `FarmlandSpec` (region) | region fill | terrain key | **новый** `MaskDomainId.FARMLAND` (PR); flora/crops — отдельно ([`tz_flora`](./tz_flora.md)) |
 | **forests / plains** | `ForestSpec` / `PlainSpec` | region / climate | terrain | **отложено**; landcover interim OK до Spec |
 | **roads** | geometry = structure edges | polyline (+ dilate) | terrain | edges SoT; enable в policy; тот же apply_terrain |
@@ -528,7 +529,7 @@ NamedLocation(geographic.mountain) → disk paint  # interim; убрать
 | **plains** | `plains` | `declared_plains[]`: `PlainSpec` (region footprint) | фон суши. Hill knobs на `default_plains` — L2; локация перекрывает мир |
 | **ravines** | `ravine` | `declared_ravines[]`: `RavineSpec` (path / polygon) | депрессии → RavineSpec |
 | **roads** | `road` | geometry = structure edges; enable в `default_roads` | без edges маска пуста; `enabled: false` запрещает paint |
-| **settlement** (mask) | pin / optional terrain later | `SettlementSpec` (или declared list) | pins → Spec → footprint; не L2 assembler |
+| **settlement** (mask) | pin / optional terrain later | `SettlementSpec` (или declared list) | pins → Spec → footprint; не L2 assembler; не C23 topology |
 | **farmland** (later) | farmland terrain key | `declared_fields[]`: `FarmlandSpec` | region → mask; crops via flora |
 
 Каждый `*Spec` — POJO домена (поля footprint/knobs свои); materialize → `MaskFootprint` → shared apply (§ MaskDomain materialize).  
@@ -1429,6 +1430,7 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-06 | `settlement` contributor остаётся pin-диск L0. Topology районов / city gates — не compose; post-pass `full_bake` (C23). |
 | 2026-08-20 | **Open-land hills:** L0 не writer; не `MaskDomainId`; SoT → pack storage § L2 open-land hills. Мир = `default_*.hills`; локация `hills` перекрывает; POJO = fallback import |
 | 2026-08-13 | **R36v:** compose 5b / `road_shoulder` **removed** (не migrate-off); grade → detailed pool — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-08-13 | **R36u:** L0 не outdoor grade writer; ribbon 5b / shoulder — then migrate off; SoT → [`tz_terrain_relief.md`](./tz_terrain_relief.md) |

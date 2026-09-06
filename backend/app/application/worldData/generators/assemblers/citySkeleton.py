@@ -9,10 +9,15 @@ from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistri
 from app.db.models.namedLocation import NamedLocation
 
 
+def _nl_attr_for_skeleton_field(name: str) -> str:
+    return SettlementSkeleton.NAMED_LOCATION_FIELD_ALIASES.get(name, name)
+
+
 def _skeleton_wire_from_location(settlement: NamedLocation) -> dict:
     payload: dict = {}
     for name in SettlementSkeleton.model_fields:
-        value = getattr(settlement, name, None)
+        attr = _nl_attr_for_skeleton_field(name)
+        value = getattr(settlement, attr)
         if value is not None:
             payload[name] = value
     return payload
@@ -34,7 +39,7 @@ def city_skeleton_from_settlement(
         if name == "dominant_material":
             payload[name] = None
             continue
-        value = getattr(pojo, name, None)
+        value = getattr(pojo, name)
         if isinstance(value, list):
             value = list(value)
         elif isinstance(value, dict):
@@ -59,7 +64,7 @@ class CitySkeleton:
     economic_tier:        str | None   # ref → worlds.economic_tier_registry
     architectural_style:  str | None   # ref → worlds.architectural_style_registry
     dominant_material:    str | None   # ref → worlds.material_registry
-    settlement_density:   str | None   # "sparse" | "medium" | "dense"
+    settlement_density:   str | None   # DistrictDensity wire
     system_city_size:     str | None   # ref → worlds.city_size_registry
     system_location_mood: str | None   # ref → worlds.location_mood_registry
     frontage_type_order:  list[str] | None = None

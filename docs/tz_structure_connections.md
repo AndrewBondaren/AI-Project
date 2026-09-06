@@ -464,9 +464,12 @@ StructureAreaAssembler
                                 улица → порог (не всегда building_entrance)
                                 (алгоритм z — §5.1.1)
 
-WorldGenerator (отдельно)
-  └─ _plan_world_routes()    → highway, air_route, sea_route, portal между NamedLocation
+WorldGenerator (отдельно, **после** city gates)
+  └─ _plan_world_routes()    → highway, air_route, sea_route, portal
+                                якорь = `settlement_gate`, не центр пина
 ```
+
+**Topology на `full_bake` (не этот assembler, не L0 contributor):** после успешного L0 pack — `plan_district_slots` → `plan_settlement_entries` → `plan_city_street_grid` (ворота + стыки районов, `graph_level=city`). Persist SQL районов + city `connection_*`. Packing участков и `graph_level=district` — позже C11. SoT: [city §8](./tz_city_generation.md), [outdoor C23](./tz_settlement_outdoor.md). `_plan_world_routes` — **после** ворот; алгоритм A* всё ещё §8 отложен, **триггер** = gates есть.
 
 Порядок в районе **по z / порогу (C21, код сейчас):** packing xy участков → `_plan_streets` (z узла = terrain колонки, не пин района) → на каждый участок: `StructureAreaAssembler` (порог, опц. здание, `_build_paths`).
 
@@ -1101,7 +1104,7 @@ generators/
 |---|---|
 | Резолв `material` ребра — `find_candidates("road")` по `material_registry`, тот же алгоритм что для зданий | закрыт |
 | Гранулярность `condition` — закрыт через waypoint-сегменты (раздел 3.5) | закрыт |
-| Алгоритм прокладки `highway` между городами — A* с weighted cost function; референс: [Procedural Generation of Roads](https://www.researchgate.net/publication/229707505_Procedural_Generation_of_Roads), tmwhere | отложено — зависит от terrain v2 |
+| Алгоритм прокладки `highway` между городами — A* с weighted cost function; референс: [Procedural Generation of Roads](https://www.researchgate.net/publication/229707505_Procedural_Generation_of_Roads), tmwhere | отложено — зависит от terrain v2. **Триггер locked:** после C23 `settlement_gate`, не в центр пина. Не ждать packing. |
 | Алгоритм городской сетки улиц — референс: Parish & Müller (2001), tmwhere; паттерны: grid / radial / organic | отложено — реализуется при написании DistrictAssembler |
 | `air_route` узлы — всегда `structure_type="air_dock"` или могут быть произвольные точки | открыт |
 | Морской путь (`sea_route`) — нужен отдельный мировой WorldGenerator или часть SettlementAssembler | открыт |

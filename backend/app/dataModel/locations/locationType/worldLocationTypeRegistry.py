@@ -128,6 +128,8 @@ class WorldLocationTypeRegistry(RootModel[list[LocationTypeEntry]]):
 
     SCHEMA_ID: ClassVar[str] = "SCH-WORLD-LOC-TYPE"
     SYSTEM_TYPE_SETTLEMENT: ClassVar[str] = "settlement"
+    SYSTEM_TYPE_DISTRICT: ClassVar[str] = "district"
+    SYSTEM_TYPE_BUILDING: ClassVar[str] = "building"
 
     root: list[LocationTypeEntry]
 

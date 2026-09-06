@@ -51,6 +51,7 @@ from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
 from app.dataModel.locations.namedLocation import BundleNamedLocation
+from app.dataModel.settlement.enums.districtDensity import DistrictDensity
 from app.dataModel.settlement.settlement.citySizeEntry import CitySizeEntry
 from app.dataModel.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.dataModel.settlement.settlement.settlementSpecializationBind import (
@@ -124,8 +125,8 @@ def _settlement(*, subtype: str | None, size: str = "city", loc_type: str = "set
         map_x=0,
         map_y=0,
         map_z=0,
+        settlement_density=DistrictDensity.MEDIUM.wire_value,
     )
-    loc.settlement_density = "medium"
     return loc
 
 

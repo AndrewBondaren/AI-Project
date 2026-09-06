@@ -1,8 +1,11 @@
-"""C6 target filter + C14 skip: file + manifest + SQL children."""
+"""C6 target filter + C14 skip: file + manifest + SQL children. C23 authored skip."""
 
 from __future__ import annotations
 
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
+from app.application.worldData.settlementOutdoor.settlementOutdoorTopology import (
+    has_authored_non_district_children,
+)
 from app.dataModel.locations.locationFootprintPolicy import (
     named_location_is_settlement_map_site,
 )
@@ -20,7 +23,9 @@ async def should_skip_materialize(
     writer: WorldPackWriter,
     location_repo: INamedLocationRepository,
 ) -> bool:
+    children = await location_repo.get_children(settlement.location_uid)
+    if has_authored_non_district_children(children):
+        return True
     if not writer.has_published_settlement(settlement.location_uid):
         return False
-    children = await location_repo.get_children(settlement.location_uid)
     return bool(children)

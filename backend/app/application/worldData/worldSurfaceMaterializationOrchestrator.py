@@ -16,8 +16,8 @@ from app.application.worldData.pack.bake.packDetailedBakeOrchestrator import (
     PackDetailedBakeOrchestrator,
     PackDetailedBakeResult,
 )
-from app.application.worldData.pack.bake.packMaterializationOrchestrator import (
-    PackMaterializationOrchestrator,
+from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator import (
+    SettlementOutdoorOrchestrator,
 )
 from app.application.worldData.materializationContext import (
     MaterializationContext,
@@ -45,6 +45,7 @@ class WorldSurfaceMaterializationOrchestrator:
         pack: PackMaterializationOrchestrator,
         *,
         detailed: PackDetailedBakeOrchestrator | None = None,
+        outdoor: SettlementOutdoorOrchestrator | None = None,
     ) -> None:
         self._pack = pack
         self._detailed = detailed or PackDetailedBakeOrchestrator(
@@ -52,6 +53,7 @@ class WorldSurfaceMaterializationOrchestrator:
             relief_library=pack.relief_library,
             relief_grade_repo=pack.relief_grade_repo,
         )
+        self._outdoor = outdoor
 
     async def bake_pack(
         self,
@@ -195,11 +197,14 @@ class WorldSurfaceMaterializationOrchestrator:
         edges: list[ConnectionEdge] | None = None,
         hydrology_generator: HydrologyGeneratorService | None = None,
     ) -> MaterializationJobReport:
-        return await self._pack.materialize_full_pack(
+        report = await self._pack.materialize_full_pack(
             world_uid, world, locations, pack_writer, ctx,
             nodes=nodes, edges=edges,
             hydrology_generator=hydrology_generator,
         )
+        if self._outdoor is not None:
+            await self._outdoor.plan_topology(world_uid)
+        return report
 
     async def materialize_pack_detailed(
         self,

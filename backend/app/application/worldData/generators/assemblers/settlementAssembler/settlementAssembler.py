@@ -51,6 +51,8 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import SettlementLayout
 from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
+from app.db.models.connectionEdge import ConnectionEdge
+from app.db.models.connectionNode import ConnectionNode
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -66,6 +68,9 @@ class SettlementAssembler:
         settlement:    NamedLocation,
         terrain_cells: list[MapCell] | None = None,
         catalog:       BuildingCatalog | None = None,
+        *,
+        district_slots: list[DistrictSlot] | None = None,
+        city_graph: tuple[list[ConnectionNode], list[ConnectionEdge]] | None = None,
     ) -> SettlementLayout:
         skeleton = self._build_skeleton(world, settlement)
         catalog = catalog or assemble_building_catalog(world)
@@ -73,7 +78,7 @@ class SettlementAssembler:
             "SettlementAssembler | settlement=%s size=%s density=%s tier=%s",
             settlement.location_uid,
             settlement.system_city_size,
-            getattr(settlement, "settlement_density", None),
+            settlement.settlement_density,
             skeleton.economic_tier,
         )
         logger.info(
@@ -86,7 +91,10 @@ class SettlementAssembler:
             skeleton.system_city_size,
             skeleton.system_location_mood,
         )
-        district_slots = self._plan_district_slots(world, settlement, skeleton, terrain_cells)
+        if district_slots is None:
+            district_slots = self._plan_district_slots(
+                world, settlement, skeleton, terrain_cells,
+            )
 
         layout_cache = build_layout_cache(
             world, skeleton, district_slots, terrain_cells, catalog=catalog,
@@ -109,9 +117,12 @@ class SettlementAssembler:
             )
             district_layouts.append(layout)
 
-        city_nodes, city_edges = self._plan_street_grid(
-            world, settlement, skeleton, district_slots, terrain_cells,
-        )
+        if city_graph is None:
+            city_nodes, city_edges = self._plan_street_grid(
+                world, settlement, skeleton, district_slots, terrain_cells,
+            )
+        else:
+            city_nodes, city_edges = city_graph
         barrier_cells = self._plan_barriers(world, settlement, skeleton)
         occupancy_cells = plan_footprint_occupancy_cells(world, settlement, skeleton.system_city_size)
 
@@ -170,6 +181,7 @@ class SettlementAssembler:
             origin.x, origin.y, origin.z, side_m, cell_size_m(world),
             district_slots, world.world_uid, world, rng, skeleton,
             surface=column_surface(terrain_cells),
+            settlement_uid=settlement.location_uid,
         )
 
     def _plan_barriers(

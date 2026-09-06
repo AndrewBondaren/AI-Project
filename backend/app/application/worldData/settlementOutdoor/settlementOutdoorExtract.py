@@ -7,12 +7,19 @@ from dataclasses import dataclass, replace
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import (
     SettlementLayout,
 )
+from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
+    DistrictSlot,
+)
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayoutExtract import (
     collect_connection_graph,
 )
 from app.application.worldData.settlementOutdoor.settlementOutdoorShell import (
     cells_to_shell_wires,
     outdoor_shell_wires,
+)
+from app.application.worldData.settlementOutdoor.settlementOutdoorTypes import (
+    building_type_entry,
+    district_type_entry,
 )
 from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
     area_uid,
@@ -23,7 +30,10 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
 )
 from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.dataModel.locations.enums.entryRole import EntryRole
-from app.dataModel.locations.locationType.worldLocationTypeRegistry import WorldLocationTypeRegistry
+from app.dataModel.settlement.district.districtTopologySlot import (
+    DistrictTopologyEntry,
+    DistrictTopologySlot,
+)
 from app.dataModel.structure.enums.passageType import PassageType
 from app.dataModel.worldPack.settlementStructureWire import (
     AreaSlotWire,
@@ -55,8 +65,88 @@ class ExtractedSettlement:
     wire: SettlementStructureWire
 
 
-def _type_entry(system_type: str):
-    return WorldLocationTypeRegistry.canonical_engine().entry_for(system_type)
+@dataclass
+class ExtractedTopology:
+    districts: list[NamedLocation]
+    nodes: list[ConnectionNode]
+    edges: list[ConnectionEdge]
+
+
+def topology_slot_wire(slot: DistrictSlot, *, slot_index: int) -> DistrictTopologySlot:
+    entries = tuple(
+        DistrictTopologyEntry(
+            node_uid=entry.node.node_uid,
+            x=entry.node.x,
+            y=entry.node.y,
+            z=entry.node.z,
+            role=entry.role,
+            facing=entry.facing,
+            connection_type=entry.connection_type,
+            paired_exit_uid=entry.paired_exit_uid,
+        )
+        for entry in slot.entry_nodes
+    )
+    return DistrictTopologySlot(
+        cell_x=slot.cell_x,
+        cell_y=slot.cell_y,
+        origin_x=slot.origin_x,
+        origin_y=slot.origin_y,
+        width_m=slot.width_m,
+        depth_m=slot.depth_m,
+        ground_z=slot.ground_z,
+        template_system_name=slot.district_template.system_name,
+        slot_index=slot_index,
+        entries=entries,
+    )
+
+
+def _city_topology_graph(
+    nodes: list[ConnectionNode],
+    edges: list[ConnectionEdge],
+) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
+    city = GraphLevel.CITY.value
+    city_edges = [edge for edge in edges if edge.graph_level == city]
+    keep = {node.node_uid for node in nodes if node.graph_level == city}
+    for edge in city_edges:
+        keep.add(edge.from_node_uid)
+        keep.add(edge.to_node_uid)
+    city_nodes = [node for node in nodes if node.node_uid in keep]
+    return city_nodes, city_edges
+
+
+def extract_topology(
+    settlement: NamedLocation,
+    slots: list[DistrictSlot],
+    nodes: list[ConnectionNode],
+    edges: list[ConnectionEdge],
+) -> ExtractedTopology:
+    district_type = district_type_entry()
+    districts: list[NamedLocation] = []
+    for d_index, slot in enumerate(slots):
+        template = slot.district_template
+        d_uid = district_location_uid(
+            settlement.location_uid, template.system_name, d_index,
+        )
+        districts.append(NamedLocation(
+            location_uid=d_uid,
+            world_uid=settlement.world_uid,
+            display_name=template.display_name,
+            system_location_type=district_type.system_type,
+            system_location_subtype=template.district_subtype,
+            created_at=settlement.created_at,
+            parent_location_uid=settlement.location_uid,
+            is_outdoor=bool(district_type.is_outdoor),
+            is_accessible=True,
+            is_selectable=True,
+            map_x=slot.origin_x,
+            map_y=slot.origin_y,
+            map_z=slot.ground_z,
+            state_uid=settlement.state_uid,
+            system_template_uid=template.system_name,
+            district_topology=topology_slot_wire(slot, slot_index=d_index).model_dump(mode="json"),
+        ))
+    city_nodes, city_edges = _city_topology_graph(nodes, edges)
+    return ExtractedTopology(districts=districts, nodes=city_nodes, edges=city_edges)
 
 
 def _role_for_passage(passage: LocationPassage) -> EntryRole | None:
@@ -88,12 +178,12 @@ def _entry_level(
 
 
 def extract_settlement(settlement: NamedLocation, layout: SettlementLayout) -> ExtractedSettlement:
-    district_type = _type_entry("district")
-    building_type = _type_entry("building")
-    district_is_outdoor = True if district_type is None else bool(district_type.is_outdoor)
-    building_is_outdoor = False if building_type is None else bool(building_type.is_outdoor)
-    district_system_type = "district" if district_type is None else district_type.system_type
-    building_system_type = "building" if building_type is None else building_type.system_type
+    district_type = district_type_entry()
+    building_type = building_type_entry()
+    district_is_outdoor = bool(district_type.is_outdoor)
+    building_is_outdoor = bool(building_type.is_outdoor)
+    district_system_type = district_type.system_type
+    building_system_type = building_type.system_type
 
     districts: list[NamedLocation] = []
     buildings: list[NamedLocation] = []
@@ -123,6 +213,7 @@ def extract_settlement(settlement: NamedLocation, layout: SettlementLayout) -> E
             map_z=slot.ground_z,
             state_uid=settlement.state_uid,
             system_template_uid=template.system_name,
+            district_topology=topology_slot_wire(slot, slot_index=d_index).model_dump(mode="json"),
         )
         districts.append(district_nl)
         area_wires: list[AreaStructureWire] = []

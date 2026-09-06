@@ -3,15 +3,33 @@
 from __future__ import annotations
 
 import logging
+import random
 from dataclasses import dataclass, field
 
 from app.application.worldData.buildingTemplateLibraryService import BuildingTemplateLibraryService
-from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
-    SettlementGeneratorService,
+from app.application.worldData.generators.assemblers.citySkeleton import (
+    city_skeleton_from_settlement,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
     assemble_building_catalog,
 )
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.districts import (
+    plan_district_slots,
+)
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
+    footprint_side_m,
+)
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.streets import (
+    plan_city_street_grid,
+)
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.terrain import (
+    column_surface,
+)
+from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
+    SettlementGeneratorService,
+)
+from app.application.worldData.generators.coordinates import cell_size_m, settlement_origin_m
+from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.locationTerritoryVolumes import (
@@ -20,6 +38,7 @@ from app.application.worldData.pack.read.locationTerritoryVolumes import (
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import (
     extract_settlement,
+    extract_topology,
 )
 from app.application.worldData.settlementOutdoor.settlementOutdoorSkip import (
     is_settlement_outdoor_target,
@@ -28,11 +47,23 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorSkip import (
 from app.application.worldData.settlementOutdoor.settlementOutdoorSqlPersist import (
     SettlementOutdoorSqlPersist,
 )
-from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
-    WorldLocationTypeRegistry,
+from app.application.worldData.settlementOutdoor.settlementOutdoorTopology import (
+    city_graph_for_settlement,
+    city_nodes_for_settlement,
+    has_authored_non_district_children,
+    load_topology_slots,
+    should_skip_topology,
+    topology_districts,
 )
+from app.application.worldData.settlementOutdoor.settlementOutdoorTypes import (
+    is_district_location,
+)
+from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
+from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+from app.db.repositories.iConnectionEdgeRepository import IConnectionEdgeRepository
+from app.db.repositories.iConnectionNodeRepository import IConnectionNodeRepository
 from app.db.repositories.iNamedLocationRepository import INamedLocationRepository
 from app.db.repositories.iWorldRepository import IWorldRepository
 
@@ -89,6 +120,38 @@ class MaterializeBatchResult:
         }
 
 
+@dataclass
+class TopologyResult:
+    location_uid: str
+    status: str
+    districts: int = 0
+    gates: int = 0
+    error: str | None = None
+
+    def to_dict(self) -> dict:
+        payload = {
+            "location_uid": self.location_uid,
+            "status": self.status,
+            "districts": self.districts,
+            "gates": self.gates,
+        }
+        if self.error:
+            payload["error"] = self.error
+        return payload
+
+
+@dataclass
+class TopologyBatchResult:
+    results: list[TopologyResult] = field(default_factory=list)
+    failed_uids: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "results": [r.to_dict() for r in self.results],
+            "failed_uids": self.failed_uids,
+        }
+
+
 class SettlementOutdoorOrchestrator:
 
     def __init__(
@@ -101,6 +164,8 @@ class SettlementOutdoorOrchestrator:
         facade_for,
         pack_context_for,
         library: BuildingTemplateLibraryService,
+        node_repo: IConnectionNodeRepository,
+        edge_repo: IConnectionEdgeRepository,
     ) -> None:
         self._worlds = world_repo
         self._locations = location_repo
@@ -110,6 +175,111 @@ class SettlementOutdoorOrchestrator:
         self._facade_for = facade_for
         self._pack_context_for = pack_context_for
         self._library = library
+        self._nodes = node_repo
+        self._edges = edge_repo
+
+    async def plan_topology(self, world_uid: str) -> TopologyBatchResult:
+        world = await self._require_world(world_uid)
+        facade: MapCellQueryFacade = self._facade_for(world_uid)
+        if not facade.has_pack_for(world):
+            raise SettlementOutdoorPackMissingError(
+                f"World '{world_uid}' has no baked pack"
+            )
+        locs = await self._locations.get_by_world(world_uid)
+        targets = [loc for loc in locs if is_settlement_outdoor_target(loc)]
+        ordered = sorted(targets, key=lambda loc: loc.location_uid)
+        results: list[TopologyResult] = []
+        failed: list[str] = []
+        for loc in ordered:
+            try:
+                result = await self._plan_topology_one(world, loc, facade)
+                results.append(result)
+            except Exception as exc:
+                logger.exception(
+                    "SettlementOutdoorOrchestrator | topology settlement=%s failed",
+                    loc.location_uid,
+                )
+                failed.append(loc.location_uid)
+                results.append(TopologyResult(
+                    location_uid=loc.location_uid,
+                    status="error",
+                    error=str(exc),
+                ))
+        return TopologyBatchResult(results=results, failed_uids=failed)
+
+    async def _plan_topology_one(
+        self,
+        world: World,
+        settlement: NamedLocation,
+        facade: MapCellQueryFacade,
+        *,
+        force: bool = False,
+    ) -> TopologyResult:
+        children = await self._locations.get_children(settlement.location_uid)
+        world_nodes = await self._nodes.get_by_world(world.world_uid)
+        settlement_nodes = city_nodes_for_settlement(
+            world_nodes, settlement.location_uid,
+        )
+        if not force and should_skip_topology(children, settlement_nodes):
+            logger.info(
+                "SettlementOutdoorOrchestrator | settlement=%s topology skipped",
+                settlement.location_uid,
+            )
+            return TopologyResult(
+                location_uid=settlement.location_uid,
+                status="skipped",
+                districts=len(topology_districts(children)),
+            )
+
+        volume = territory_volume_for_location(world, settlement)
+        if volume is None:
+            raise SettlementOutdoorError(
+                f"Location '{settlement.location_uid}' has no territory volume"
+            )
+        terrain_cells = await facade.get_footprint_terrain(
+            world,
+            x0=volume.x0,
+            y0=volume.y0,
+            x1=volume.x1,
+            y1=volume.y1,
+            location_uid=settlement.location_uid,
+        )
+        skeleton = city_skeleton_from_settlement(
+            settlement,
+            economic_tier=TierResolver.resolve(world=world, city=settlement),
+        )
+        slots = plan_district_slots(
+            world, settlement, skeleton, terrain_cells or None,
+        )
+        origin = settlement_origin_m(settlement)
+        rng = random.Random(f"{world.world_uid}_{settlement.location_uid}")
+        city_nodes, city_edges = plan_city_street_grid(
+            origin.x, origin.y, origin.z,
+            footprint_side_m(world, skeleton.system_city_size),
+            cell_size_m(world),
+            slots, world.world_uid, world, rng, skeleton,
+            surface=column_surface(terrain_cells),
+            settlement_uid=settlement.location_uid,
+        )
+        extracted = extract_topology(settlement, slots, city_nodes, city_edges)
+        await self._sql.persist_topology(extracted)
+        gates = sum(
+            1 for node in city_nodes
+            if node.node_type == ConnectionNodeType.SETTLEMENT_GATE.value
+            and node.graph_level == GraphLevel.CITY.value
+        )
+        logger.info(
+            "SettlementOutdoorOrchestrator | settlement=%s topology districts=%d gates=%d",
+            settlement.location_uid,
+            len(extracted.districts),
+            gates,
+        )
+        return TopologyResult(
+            location_uid=settlement.location_uid,
+            status="planned",
+            districts=len(extracted.districts),
+            gates=gates,
+        )
 
     async def materialize(
         self,
@@ -127,6 +297,13 @@ class SettlementOutdoorOrchestrator:
             )
         writer: WorldPackWriter = self._writer_for(world)
         children = await self._locations.get_children(location_uid)
+
+        if has_authored_non_district_children(children):
+            logger.info(
+                "SettlementOutdoorOrchestrator | settlement=%s skipped authored children",
+                location_uid,
+            )
+            return MaterializeResult(location_uid=location_uid, status="skipped")
 
         if skip_if_initialized and await should_skip_materialize(
             settlement, writer, self._locations,
@@ -153,14 +330,11 @@ class SettlementOutdoorOrchestrator:
                 "SettlementOutdoorOrchestrator | settlement=%s recovered publish",
                 location_uid,
             )
-            district_type = WorldLocationTypeRegistry.canonical_engine().entry_for("district")
-            district_key = district_type.system_type if district_type is not None else None
             return MaterializeResult(
                 location_uid=location_uid,
                 status="recovered_publish",
                 districts=sum(
-                    1 for c in children
-                    if district_key is not None and c.system_location_type == district_key
+                    1 for c in children if is_district_location(c.system_location_type)
                 ),
             )
 
@@ -177,8 +351,43 @@ class SettlementOutdoorOrchestrator:
         )
         library_layouts = await self._library.layouts_for_world(world)
         catalog = assemble_building_catalog(world, library_layouts)
+        skeleton = city_skeleton_from_settlement(
+            settlement,
+            economic_tier=TierResolver.resolve(world=world, city=settlement),
+        )
+        world_nodes = await self._nodes.get_by_world(world_uid)
+        world_edges = await self._edges.get_by_world(world_uid)
+        district_rows = topology_districts(children)
+        frozen_slots = load_topology_slots(
+            world, settlement, skeleton, district_rows,
+        ) if district_rows else None
+        city_graph = None
+        if frozen_slots is not None:
+            city_graph = city_graph_for_settlement(
+                world_nodes, world_edges, location_uid,
+            )
+            if not city_graph[0]:
+                frozen_slots = None
+                city_graph = None
+        if frozen_slots is None:
+            await self._plan_topology_one(
+                world, settlement, facade,
+                force=bool(district_rows),
+            )
+            children = await self._locations.get_children(location_uid)
+            world_nodes = await self._nodes.get_by_world(world_uid)
+            world_edges = await self._edges.get_by_world(world_uid)
+            frozen_slots = load_topology_slots(
+                world, settlement, skeleton, topology_districts(children),
+            )
+            if frozen_slots is not None:
+                city_graph = city_graph_for_settlement(
+                    world_nodes, world_edges, location_uid,
+                )
         layout = self._generator.generate_layout(
             world, settlement, terrain_cells or None, catalog=catalog,
+            district_slots=frozen_slots,
+            city_graph=city_graph,
         )
         extracted = extract_settlement(settlement, layout)
         tmp_ref = writer.encode_settlement_structure_tmp(location_uid, extracted.wire)

@@ -282,6 +282,7 @@ def plan_district_slots(
     plan_settlement_entries(
         slots, skeleton, origin.x, origin.y, side_m, world.world_uid, surface,
         world=world,
+        settlement_uid=settlement.location_uid,
     )
 
     logger.info(
@@ -291,6 +292,21 @@ def plan_district_slots(
     )
 
     return slots
+
+
+def specialization_extras(
+    world: World,
+    settlement: NamedLocation,
+    skeleton: CitySkeleton,
+) -> tuple[list[str], dict[str, tuple[str, ...]]]:
+    subtype = (settlement.system_location_subtype or "").strip()
+    recipe = (
+        location_types(world).subtype_for(
+            WorldLocationTypeRegistry.SYSTEM_TYPE_SETTLEMENT, subtype,
+        ) if subtype else None
+    )
+    resolved = _resolve_specialization(world, skeleton, recipe)
+    return list(resolved.required_types), dict(resolved.subject_tags)
 
 
 def _resolve_specialization(

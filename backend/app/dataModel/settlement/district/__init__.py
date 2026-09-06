@@ -32,6 +32,10 @@ from app.dataModel.settlement.district.structurePlacement import (
     resolve_structure_count,
     resolve_structure_priority,
 )
+from app.dataModel.settlement.district.districtTopologySlot import (
+    DistrictTopologyEntry,
+    DistrictTopologySlot,
+)
 from app.dataModel.settlement.district.worldDistrictTemplateRegistry import WorldDistrictTemplateRegistry
 
 __all__ = [
@@ -39,6 +43,8 @@ __all__ = [
     "CellZone",
     "DistrictConnection",
     "DistrictTemplateEntry",
+    "DistrictTopologyEntry",
+    "DistrictTopologySlot",
     "DistrictZonePreferenceEntry",
     "COUNT_WITHOUT_KEY",
     "FrontageTypeOrder",

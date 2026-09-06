@@ -47,3 +47,11 @@ class NamedLocation:
     is_outdoor:                 bool | None = None
     is_sheltered:               bool = bool_col(default=False)
     is_transit:                 bool = bool_col(default=False)
+    architectural_style:        str | None = None
+    dominant_material:          str | None = None
+    settlement_density:         str | None = None
+    frontage_type_order:        list | None = json_nullable_col()
+    structure_counts:           dict | None = json_nullable_col()
+    structure_priority:         dict | None = json_nullable_col()
+    perimeter_barrier:          dict | None = json_nullable_col()
+    district_topology:          dict | None = json_nullable_col()

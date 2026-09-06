@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.application.worldData.connectionPersistService import ConnectionPersistService
 from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import (
     ExtractedSettlement,
+    ExtractedTopology,
 )
 from app.db.database import Database
 from app.db.repositories.iLocationEntryPointRepository import ILocationEntryPointRepository
@@ -35,6 +36,13 @@ class SettlementOutdoorSqlPersist:
             )
             await self._levels.upsert_bulk(extracted.levels)
             await self._entries.upsert_bulk(extracted.entry_points)
+            await self._connections.persist_graph(
+                extracted.nodes, extracted.edges, [],
+            )
+
+    async def persist_topology(self, extracted: ExtractedTopology) -> None:
+        async with self._db.transaction():
+            await self._locations.upsert_bulk(extracted.districts)
             await self._connections.persist_graph(
                 extracted.nodes, extracted.edges, [],
             )

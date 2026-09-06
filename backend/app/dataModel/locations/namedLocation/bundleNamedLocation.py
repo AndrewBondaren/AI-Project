@@ -7,10 +7,16 @@ from typing import Any
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire, IgnoreOnWire, StrictOnWire
+from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
+from app.dataModel.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.dataModel.settlement.settlement.settlementSpecializationBind import (
     SettlementSpecializationBind,
 )
 from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
+
+
+def _skeleton_default(name: str):
+    return SettlementSkeleton.model_fields[name].default
 
 
 class BundleNamedLocation(BaseModel):
@@ -60,6 +66,22 @@ class BundleNamedLocation(BaseModel):
     is_sheltered: DefaultOnWire[bool] = False
     is_transit: DefaultOnWire[bool] = False
     created_at: DefaultOnWire[str | None] = None
+
+    architectural_style: DefaultOnWire[str | None] = _skeleton_default("architectural_style")
+    dominant_material: DefaultOnWire[str | None] = _skeleton_default("dominant_material")
+    settlement_density: DefaultOnWire[str | None] = _skeleton_default("settlement_density")
+    frontage_type_order: DefaultOnWire[list[str] | None] = _skeleton_default(
+        "frontage_type_order",
+    )
+    structure_counts: DefaultOnWire[dict[str, int] | None] = _skeleton_default(
+        "structure_counts",
+    )
+    structure_priority: DefaultOnWire[dict[str, int] | None] = _skeleton_default(
+        "structure_priority",
+    )
+    perimeter_barrier: DefaultOnWire[PerimeterBarrier | None] = _skeleton_default(
+        "perimeter_barrier",
+    )
 
     def to_db_fields(self) -> dict[str, Any]:
         """Wire → ``NamedLocation`` kwargs."""

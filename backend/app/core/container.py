@@ -710,6 +710,7 @@ class Container:
         if self._surface_materialization_orchestrator is None:
             self._surface_materialization_orchestrator = WorldSurfaceMaterializationOrchestrator(
                 pack=self.pack_materialization_orchestrator(),
+                outdoor=self.settlement_outdoor_orchestrator(),
             )
         return self._surface_materialization_orchestrator
 
@@ -758,6 +759,8 @@ class Container:
                 facade_for=self.map_cell_query_facade,
                 pack_context_for=lambda uid: self.pack_read_services(uid).context,
                 library=self.building_template_library_service(),
+                node_repo=self.connection_node_repository(),
+                edge_repo=self.connection_edge_repository(),
             )
         return self._settlement_outdoor_orchestrator
 

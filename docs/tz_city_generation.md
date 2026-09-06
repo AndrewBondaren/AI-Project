@@ -1,6 +1,6 @@
 # ТЗ: Генератор города
 
-**Обновлено:** 2026-09-06 **§1.2.1** subject packing: named святой; пустой → RNG из реестра мира + лог; канон dataModel только на пустой колонке; 2026-09-05 **§1.1 / §1.2** морфология vs специализация; районы `district_type` + `district_subtype`; приоритет списка на городе → специализация; seed чертежа здания = мир+город+клетка footprint (§9.6); 2026-09-04 **CITY-T-2**; 2026-09-03 **CITY-T-1**; **C29** город на шве pack.
+**Обновлено:** 2026-09-06 **§8** topology на `full_bake` (районы + ворота, не packing); **§1.2.1** subject packing; 2026-09-05 **§1.1 / §1.2** морфология vs специализация; районы `district_type` + `district_subtype`; приоритет списка на городе → специализация; seed чертежа здания = мир+город+клетка footprint (§9.6); 2026-09-04 **CITY-T-2**; 2026-09-03 **CITY-T-1**; **C29** город на шве pack.
 
 **Связанные документы:**
 
@@ -13,8 +13,8 @@
 | [.cursor/plans/city-t-4-planner-debt.md](../.cursor/plans/city-t-4-planner-debt.md) | CITY-T-4 планировщик после 2d — **сделано** (`/impl-city-t-4`) |
 | [tz_structure_connections.md](./tz_structure_connections.md) | Дороги settlement/district (§5) |
 | [tz_terrain_relief.md](./tz_terrain_relief.md) | **C29:** город на техническом шве pack — норма; layout не клип по тайлу |
-| [tz_world_pack_storage.md](./tz_world_pack_storage.md) | WP-19: один location file на volume, в т.ч. несколько тайлов |
-| [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) | **SoT** persist/оркестрация outdoor на pack (граф участков, эталон vs патч). Не дублировать сюда |
+| [tz_world_pack_storage.md](./tz_world_pack_storage.md) | WP-19; **job:** topology после `full_bake` L0, не packing |
+| [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) | **SoT** persist/оркестрация outdoor на pack. **C23** topology. Не дублировать сюда |
 | [tz_locations.md](./tz_locations.md) | Дерево NL; морфология `city`/`village` ≠ `city_size` ≠ специализация; subtype района; SoT осей — **§1.1–§1.2 здесь** |
 | [tz_building_generator.md](./tz_building_generator.md) | Library: `structure_type` vs `system_name` чертежа |
 | [tz_generator_technical_debt.md](./tz_generator_technical_debt.md) | NC/MR smells; **CITY-T-1** контур; **CITY-T-2** пул/uid (**2d** `partial`, **2b** open); **CITY-T-4** планировщик **resolved** |
@@ -28,7 +28,7 @@
 | Engine hook | `lazy_settlement` node | ✅ |
 | §1.1–§1.2 оси + специализация + приоритет районов | 3 прохода, registry ролей, subjects N+1 | ✅ path 3; path 2 recreate DB |
 | §9 district templates | `planner/placement.py`, `DistrictAssembler` | ✅ core |
-| §8 Eager World Bake | UI batch bake | ⬜ |
+| §8 Topology на `full_bake` | районы + city gates после L0 | ✅ spec locked; код C23 |
 | Фаза 1 skeleton validate | import / world create | ⬜ partial |
 | `dominant_material` post-assemble + DAG → LLM | layout / DAG | ✅ resolver; ⬜ DAG wire |
 | Phase G organic footprint | `planner/footprint.py` v1 square | ⬜ v2 |
@@ -49,7 +49,7 @@
 ## 1. Scope
 
 Генератор города строит наполнение поселения — здания, улицы, районы — из скелета города.  
-Скелет генерируется **при создании мира** для всех поселений сразу. Детали (интерьеры, планировки) — **lazy**, при первом посещении игроком.
+Скелет — **JSON import** на `NamedLocation`. На **`full_bake`** фиксируется **топология** районов и ворот (§8), без packing. Здания и внутренняя сетка квартала — **lazy** / detailed / C11. Интерьеры — фаза 3.
 
 `SettlementLayout` — мировые `(x,y)` / meter geometry, **не** клип по макро-тайлу. Поселение на техническом шве pack (ребро двух тайлов / грань чанка) — **валидный** кейс: один settlement, улицы и районы пересекают ребро. Не сдвигать город с шва и не плодить второй скелет «на соседнем тайле». Pack/grade: [`tz_terrain_relief.md`](./tz_terrain_relief.md) **C29**, [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) WP-19.
 
@@ -324,22 +324,23 @@ Import `dominant_material` на `NamedLocation` **игнорируется** г�
 - Вычисляется `dominant_material` если не задан явно (из `economic_tier` + `material_registry`) — **⬜** (перенесено на post-assemble, §3.1)
 - Скелет сохраняется на `NamedLocation` (JSON import)
 
-Опционально уже сейчас: `SettlementGeneratorService.plan_occupancy_only` — резерв footprint cells без полной геометрии.
+Occupancy-flood метровой матрицы в патчи **не** делать (outdoor **C7**).
 
-Результат: все поселения имеют скелет. LLM может описывать любой город сразу.
+Результат: все поселения имеют скелет. LLM может назвать город по import `display_name`.
 
-### Фаза 2 — City entry (lazy)
+### Фаза 1b — Topology на `full_bake` (§8)
 
-При первом входе игрока в поселение (engine node `lazy_settlement`):
-- `SettlementGeneratorService.generate_layout(world, settlement, terrain_cells?)` → `SettlementLayout`
-- Оркестрация: `SettlementAssembler.assemble` — районы, улицы, barriers, building cache, map occupancy
-- Читает скелет (`economic_tier`, `architectural_style`, `settlement_density`)
-- После assemble: `SettlementLayout.dominant_material` — authoritative для LLM («мраморные стены»)
-- Выбирает шаблоны из `building_template_registry` по `structure_type` и tier (±1)
-- Persist: `collect_map_cells_from_layout` → `MapCellService` (grid occupancy + meter geometry)
-- `NamedLocation` для каждого здания — **⬜ persist в БД отложен** (см. settlement-assembler plan)
+После L0 pack: число и типы районов, входы между ними, `settlement_gate`. Не packing. **Код ⬜.**
 
-**Точка входа кода:** `backend/app/application/worldData/generators/assemblers/settlementAssembler/`
+### Фаза 2 — Packing / outdoor layout (lazy или C11)
+
+При detailed / первом входе / `generate-settlement`:
+- Если топология уже в SQL — **reuse** слотов и uid районов (§8), не второй rng типов
+- `SettlementGeneratorService.generate_layout` → packing участков + внутренняя сетка (C22)
+- После assemble: `SettlementLayout.dominant_material` — authoritative для LLM
+- Эталон: pack city-structure + SQL здания — [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) C11
+
+**Точка входа packing:** `backend/app/application/worldData/generators/assemblers/settlementAssembler/`
 
 ### Фаза 3 — Building entry (lazy)
 
@@ -458,13 +459,52 @@ LLM **не получает** от генератора напрямую: пла
 
 ---
 
-## 8. Режим полной инициализации
+## 8. Topology на `full_bake` (locked)
 
-**Superseded** настройкой **`world_generation.init_mode = "full"`** (§11). Отдельная UI-кнопка «Инициализировать мир» — опционально позже, тот же gate.
+**Не** четвёртый bake mode. **Не** L2 / mill. **Не** packing зданий. **Не** `SettlementContributor` (тот — pin-диск L0).
 
-**Не входит в `full`:** интерьеры зданий (фаза 3) — **STUB / отдельный epic**.
+После успешного [`full_bake`](./tz_world_pack_storage.md) L0 (pack есть, surface footprint читается) — pass **`settlement_topology`** на все settlement-like NL (C6). `light_bake` этот pass **не** делает: соседние тайлы большого footprint могут отсутствовать. Если `full_bake` не было — **тот же** pass при первом packing / входе (§11.3), не второй алгоритм.
 
-Legacy UX-идеи (прогресс-бар, export) — применимы к режиму `full` после snapshot + persist.
+Склейка: [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) **C23**. World-трассы: [tz_structure_connections.md](./tz_structure_connections.md) §5.1 `_plan_world_routes` — **после** ворот, не внутри packing.
+
+Тот же planner, что assembler: `plan_district_slots` → `plan_settlement_entries` → `plan_city_street_grid`. Bake не дублирует алгоритм.
+
+### Что фиксирует
+
+| | |
+|---|---|
+| **Имена районов** | `display_name` чертежа района. Город — import `display_name`. Генератор **не** зовёт LLM. Overlay имён — DAG U13 **без** сдвига xy |
+| **Размеры** | `system_city_size` → сторона footprint. N районов = клетки сетки ∩ рецепт §1.2. Второго счётчика «сколько кварталов» нет |
+| **Типы** | `district_type` + `district_subtype` + чертёж района |
+| **Входы** | пары `through_road` / `paired_exit` на гранях районов; `settlement_gate` на периметре footprint; коридоры **между** районами (`graph_level=city`) |
+
+### Что не фиксирует
+
+Packing участков, внутренняя сетка квартала (C22: бронь → рамка → pass2), здания, `l.{uid}.settlement.zst`, интерьеры, `graph_level=district` внутри квартала.
+
+### Persist
+
+SQL: NL районов (`system_location_type=district`, parent=settlement, C4/C5 uid из слота) + `connection_nodes` / `connection_edges` уровня city (ворота + стыки районов). Не occupancy-flood. Не pack city-structure.
+
+### Skip / reuse
+
+| Уже есть | Topology | Packing (C11) |
+|---|---|---|
+| Authored-дети не-район (таверна / square / gate у города) | **скип** (не этот рецепт) | скип generate |
+| Районы + city gates с этого pass | идемпотентный skip | **reuse** слотов/uid, не второй rng типов |
+| `l.{uid}.settlement.zst` + manifest + дети | skip | skip (C14) |
+
+### Зачем
+
+Мировые дороги садятся в `settlement_gate`, не в центр пина. `detailed_bake` / grade видят meter-rect района, не только диск `city_size`.
+
+L0 restamp полотна новых world-рёбер на уже записанный `world_map` — leftover, не блокер этого pass.
+
+**Код:** ✅ C23. CITY-T-1a: поля скелета на NL.
+
+Отдельная UI-кнопка «Инициализировать мир» — не нужна: `full_bake` уже процесс. `init_mode` (§11) не подменяет этот контракт packing’ом всех городов.
+
+**Не входит сюда и в `init_mode=full`:** интерьеры (фаза 3).
 
 ---
 
@@ -726,17 +766,21 @@ init_mode = "partial"   # full | partial
 
 | `init_mode` | Поведение (target) |
 |---|---|
-| **`full`** | Materialization **по правилам целиком**: terrain **S→O→C→CL**, все settlements — outdoor layout + persist (§11.3). Regen при изменении terrain — **после snapshot**. |
-| **`partial`** | Lazy: дозагрузка при входе в локацию. Regen уже созданных при изменении — **после snapshot** (§11.4). |
+| **`full`** | L0 **`full_bake`** + **§8 topology** (районы + city gates). Packing зданий — не этот gate (C11 / lazy / detailed). Regen земли — **после snapshot**. |
+| **`partial`** | Lazy: L0 по необходимости; topology/packing при входе, если ещё нет. Regen уже созданных — **после snapshot** (§11.4). |
+
+Ключ `init_mode` в settings — ⬜; процесс мастера сейчас = `POST pack/bake?mode=full` (+ topology, когда код §8 появится).
 
 ### 11.3 Scope materialization (без интерьеров)
 
-| Слой | `full` | `partial` | Persist (след. цикл) |
+| Слой | `full` / `full_bake` | `partial` / lazy | Persist |
 |---|---|---|---|
-| Terrain S→O→C→CL | ✅ | по необходимости | map_cells ✅ |
-| Settlement outdoor layout | ✅ | при первом входе | map_cells ✅ |
-| `connection_nodes` / `edges` | ✅ | при layout | ⬜ |
-| Building `NamedLocation` | ✅ | при layout, **если ещё не init** | ⬜ |
+| Terrain S→O→C→CL (L0 pack) | ✅ | по необходимости | pack world_map |
+| **Settlement topology** (§8) | ✅ после L0 | если ещё нет — при входе или C11 | SQL районы + city gates |
+| Settlement outdoor packing | detailed / C11 / вход | при первом входе | pack `settlement.zst` + SQL здания |
+| `connection_*` city (ворота, стыки районов) | с topology | с topology или packing | SQL |
+| `connection_*` district (внутренняя сетка) | нет | с packing | SQL |
+| Building `NamedLocation` | нет | с packing, **если ещё не init** | SQL |
 | **Интерьеры** (фаза 3) | **⬜ STUB** | lazy отдельно | отдельный epic |
 
 ### 11.4 World Snapshot — unified module
@@ -767,7 +811,7 @@ DAG подключается **в обход HTTP** — напрямую к orch
 |---|---|---|
 | Процедурная застройка города | [tz_assembler_hierarchy.md](./tz_assembler_hierarchy.md), §6 здесь | bootstrap persist outdoor layout |
 | Граф дорог, `graph_level`, `settlement_gate` | [tz_structure_connections.md](./tz_structure_connections.md) §1–5, **§5.1** поток сборки | persist `connection_nodes` / `connection_edges` |
-| Межгородские маршруты (`_plan_world_routes`, highway, sea_route) | [tz_structure_connections.md](./tz_structure_connections.md) §5.1, §8 | persist `graph_level=world`; generate — отдельно от `SettlementAssembler` |
+| Межгородские маршруты (`_plan_world_routes`, highway, sea_route) | [tz_structure_connections.md](./tz_structure_connections.md) §5.1, §8 | persist `graph_level=world`; **после** §8 `settlement_gate`; не packing |
 | Игрок / мастер: новое здание, участок дороги | [tz_world_generation_dag.md](./tz_world_generation_dag.md) — `place_building`, `construct_building`, `connect_road`; правило v2 (узкие вызовы) | patch persist `add_building` / `add_road_*` |
 | `under_construction` / `under_repair` | [tz_building_generator.md](./tz_building_generator.md) §14, [tz_structure_connections.md](./tz_structure_connections.md) §3.2 | поля на persist; gameplay gate — DAG |
 | Строительство (ресурсы, время, мастерство) | [tz_construction.md](./tz_construction.md) | placeholder; не блокирует persist cycle |
@@ -779,14 +823,15 @@ DAG может materialize **разные уровни** в разных нод�
 
 #### Уровни bootstrap (generate ↔ persist)
 
-| Scope | Generate (сейчас) | Persist (target) | Когда DAG |
+| Scope | Generate (сейчас) | Persist (target) | Когда |
 |---|---|---|---|
-| `occupancy` | `plan_occupancy_only` | surface grid cells (`occupancy_cells`) | world create / `full` init — [`generate_settlement_skeleton`](./tz_world_generation_dag.md) |
-| `map_cells_surface` | `collect_surface_grid_cells` | INSERT OR IGNORE footprint | с occupancy или отдельно |
-| `map_cells_geometry` | `collect_geometry_meter_cells` | barriers + building shell cells | первый вход / outdoor layout — [`generate_settlement_geometry`](./tz_world_generation_dag.md) |
-| `connections_city` | `SettlementLayout.connection_*` | nodes/edges `graph_level=city` | после city streets — [tz_structure_connections.md](./tz_structure_connections.md) §5.1 |
-| `connections_district` | `DistrictLayout.connection_*` | nodes/edges `graph_level=district` | `DistrictRoadGenerator` |
-| `buildings` | `AreaLayout.building_location` | upsert `NamedLocation`, **skip if initialized** | `StructureAreaAssembler._place_building` |
+| `settlement_topology` | `plan_district_slots` + entries + city street grid (**без** packing) | SQL NL районов + `connection_*` `graph_level=city` (ворота, стыки) | **`full_bake` после L0** (§8). DAG: [`generate_settlement_skeleton`](./tz_world_generation_dag.md) — target этот scope, не occupancy-flood |
+| `occupancy` | `plan_occupancy_only` | **не** эталон (C7: L0 pin / union слотов later) | не HTTP outdoor |
+| `map_cells_surface` | `collect_surface_grid_cells` | INSERT OR IGNORE leftover | не эталон |
+| `map_cells_geometry` | `collect_geometry_meter_cells` | не эталон (C2) | packing / C11 |
+| `connections_city` | topology pass (ворота + межрайонные); packing не переигрывает типы | upsert by uid | §8; [connections](./tz_structure_connections.md) §5.1 |
+| `connections_district` | `DistrictLayout.connection_*` | nodes/edges `graph_level=district` | packing C11 — не topology |
+| `buildings` | `AreaLayout.building_location` | upsert `NamedLocation`, **skip if initialized** | packing C11 |
 | `interiors` | `StructureGeneratorService` | ⬜ STUB | [`generate_building`](./tz_world_generation_dag.md); отдельный epic |
 
 Удобная обёртка `persist_outdoor(layout)` = union scopes без `interiors` — для smoke и типового lazy settlement, но **не** единственная точка входа.
@@ -805,7 +850,7 @@ DAG может materialize **разные уровни** в разных нод�
 **State loaders** (read persisted → base для growth): `SettlementStateLoader` (urban), `WorldGraphStateLoader` (world graph + gates/hubs).  
 **Persist:** общий `ConnectionPersistService.persist_patch` для urban и world edges; `SettlementPersistService` — cells + building locations.
 
-Стык urban ↔ world: `settlement_gate` на границе footprint — [tz_structure_connections.md](./tz_structure_connections.md) §2.2, §5.1.
+Стык urban ↔ world: `settlement_gate` с topology (§8) на границе footprint — [tz_structure_connections.md](./tz_structure_connections.md) §2.2, §5.1. Без ворот трасса не в центр пина.
 
 #### Idempotency
 
@@ -832,7 +877,9 @@ DAG может materialize **разные уровни** в разных нод�
 - [ ] `SettlementStateLoader` / `WorldGraphStateLoader` — для growth (можно следом)
 - [ ] `SettlementGrowthService` / `WorldRouteGeneratorService` — по контрактам DAG ТЗ (можно следом)
 - [x] debug route(s) — `generate-settlement` → orchestrator; batch C16
-- [ ] `init_mode` в `AppSettings` + API (можно параллельно)
+- [x] §8 `settlement_topology` после `full_bake` L0 (C23); reuse на C11
+- [ ] `_plan_world_routes` на `settlement_gate` (после topology)
+- [ ] `init_mode` в `AppSettings` + API (можно параллельно; packing всех городов **не** входит)
 - [ ] DAG wire — **не в этом цикле** (мастер); см. [tz_world_generation_dag.md](./tz_world_generation_dag.md)
 
 ---
@@ -841,6 +888,8 @@ DAG может materialize **разные уровни** в разных нод�
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-06 | **§8 код:** `plan_topology` после `full_bake` L0; CITY-T-1a skeleton на NL; C11 reuse слотов. |
+| 2026-09-06 | **§8 locked:** после `full_bake` L0 — topology (имена районов с чертежа, N/типы по §1.2, входы + `settlement_gate`). Не packing, не LLM, не light_bake. C11 reuse слотов. SoT склейки — outdoor **C23**. |
 | 2026-09-06 | **§1.2.1** subject packing: named токен святой; пустой → RNG из реестра **мира** того же kind + packing log; канон dataModel только если колонка пустая (не union `iron_ore` в чужой каталог). |
 | 2026-09-06 | **Livestock:** ENUM-E `livestock_kind` (`meat`/`dairy`/`fiber`/`draft`/`mount`) + N+1 `livestock_registry`. Роль `livestock` ≠ `farm`. Kind ≠ постройка. Recreate DB (`livestock_registry`). |
 | 2026-09-06 | **Farm crops:** ENUM-E `crop_kind` (`grain`/`vegetable`/`fruit`/`fiber`/`fodder`) + N+1 `crops_registry`. Шаблон фермы: `crop_kind`. Recreate DB (`crops_registry`). |

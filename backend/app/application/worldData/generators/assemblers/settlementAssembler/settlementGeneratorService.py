@@ -16,6 +16,9 @@ from app.application.worldData.generators.assemblers.settlementAssembler.layoutC
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.mapOccupancy import (
     plan_footprint_occupancy_cells,
 )
+from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
+    DistrictSlot,
+)
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementAssembler import (
     SettlementAssembler,
 )
@@ -23,6 +26,8 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
     SettlementLayout,
 )
 from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
+from app.db.models.connectionEdge import ConnectionEdge
+from app.db.models.connectionNode import ConnectionNode
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -53,8 +58,14 @@ class SettlementGeneratorService:
         settlement:    NamedLocation,
         terrain_cells: list[MapCell] | None = None,
         catalog:       BuildingCatalog | None = None,
+        *,
+        district_slots: list[DistrictSlot] | None = None,
+        city_graph: tuple[list[ConnectionNode], list[ConnectionEdge]] | None = None,
     ) -> SettlementLayout:
-        return self._assembler.assemble(world, settlement, terrain_cells, catalog=catalog)
+        return self._assembler.assemble(
+            world, settlement, terrain_cells, catalog=catalog,
+            district_slots=district_slots, city_graph=city_graph,
+        )
 
     def collect_map_cells(
         self,
