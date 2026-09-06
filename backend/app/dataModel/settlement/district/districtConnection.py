@@ -7,9 +7,19 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
+    WorldConnectionTypeRegistry,
+)
 
-# Builtin district street default — all canonical templates use ``road``.
-DEFAULT_CONNECTION_TYPE = "road"
+
+def _engine_street_connection_type() -> str:
+    return WorldConnectionTypeRegistry.require_engine(
+        WorldConnectionTypeRegistry.SYSTEM_CONNECTION_TYPE_ROAD,
+    )
+
+
+# Resolved engine key — not a parallel literal. Canonical templates omit connections[].
+DEFAULT_CONNECTION_TYPE = _engine_street_connection_type()
 
 
 class DistrictConnection(BaseModel):
@@ -23,7 +33,7 @@ class DistrictConnection(BaseModel):
     @classmethod
     def street_default(cls) -> DistrictConnection:
         """Primary connection when template omits ``connections[]``."""
-        return cls(connection_type=DEFAULT_CONNECTION_TYPE)
+        return cls(connection_type=_engine_street_connection_type())
 
 
 def parse_district_connection(raw: Any) -> DistrictConnection | None:

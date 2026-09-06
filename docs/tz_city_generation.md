@@ -18,6 +18,7 @@
 | [tz_locations.md](./tz_locations.md) | Дерево NL; морфология `city`/`village` ≠ `city_size` ≠ специализация; subtype района; SoT осей — **§1.1–§1.2 здесь** |
 | [tz_building_generator.md](./tz_building_generator.md) | Library: `structure_type` vs `system_name` чертежа |
 | [tz_generator_technical_debt.md](./tz_generator_technical_debt.md) | NC/MR smells; **CITY-T-1** контур; **CITY-T-2** пул/uid (**2d** `partial`, **2b** open); **CITY-T-4** планировщик **resolved** |
+| [tz_city_generation_technical_debt.md](./tz_city_generation_technical_debt.md) | **CITY-T-5** после C23: dual persist, хардкоды, смешение слоёв. Не SoT §8 |
 
 ### Статус реализации (код vs это ТЗ)
 
@@ -35,7 +36,7 @@
 | Persist layout → connections + building `NamedLocation` в БД | `layoutCells` → map_cells only | ⬜ SoT: [tz_settlement_outdoor.md](./tz_settlement_outdoor.md); §11.5 generate scopes |
 | `world_generation.init_mode` (`config.toml` + API) | — | ⬜ spec ✅ §11 |
 
-Шапка таблицы **отстаёт от кода packing/outdoor** (C22 pass1→рамка→pass2; debug orchestrator ≠ только map_cells). Контур import/SQL скелета, dual persist, эвристика стен, DAG→LLM: **[CITY-T-1](./tz_generator_technical_debt.md#city-t-1--контур-вокруг-city-generate)**. Три оси (§1.1) vs packing fill: **[CITY-T-2](./tz_generator_technical_debt.md#city-t-2--пул-шаблонов-мира--packing)**. Не путать с open §10 (footprint v2, cells барьера района).
+Шапка таблицы **отстаёт от кода packing/outdoor** (C22 pass1→рамка→pass2; debug orchestrator ≠ только map_cells). Контур import/SQL скелета, dual persist, эвристика стен, DAG→LLM: **[CITY-T-1](./tz_generator_technical_debt.md#city-t-1--контур-вокруг-city-generate)**. Три оси (§1.1) vs packing fill: **[CITY-T-2](./tz_generator_technical_debt.md#city-t-2--пул-шаблонов-мира--packing)**. Швы после C23 (legacy persist, reuse в DAG, хардкоды): **[CITY-T-5](./tz_city_generation_technical_debt.md)**. Не путать с open §10 (footprint v2, cells барьера района).
 
 **Имена в коде (не путать с legacy в других TZ):**
 
@@ -888,6 +889,7 @@ DAG может materialize **разные уровни** в разных нод�
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-06 | **CITY-T-5:** техдолг после C23 — [tz_city_generation_technical_debt.md](./tz_city_generation_technical_debt.md). Спеку §8 не менять. |
 | 2026-09-06 | **§8 код:** `plan_topology` после `full_bake` L0; CITY-T-1a skeleton на NL; C11 reuse слотов. |
 | 2026-09-06 | **§8 locked:** после `full_bake` L0 — topology (имена районов с чертежа, N/типы по §1.2, входы + `settlement_gate`). Не packing, не LLM, не light_bake. C11 reuse слотов. SoT склейки — outdoor **C23**. |
 | 2026-09-06 | **§1.2.1** subject packing: named токен святой; пустой → RNG из реестра **мира** того же kind + packing log; канон dataModel только если колонка пустая (не union `iron_ore` в чужой каталог). |

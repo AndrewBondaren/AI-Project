@@ -48,6 +48,8 @@ class WorldConnectionTypeRegistry(RootModel[list[ConnectionTypeEntry]]):
     SCHEMA_ID: ClassVar[str] = "SCH-WORLD-CONN"
     """Root POJO for `worlds.connection_type_registry`. Wire shape: JSON array."""
 
+    SYSTEM_CONNECTION_TYPE_ROAD: ClassVar[str] = "road"
+
     root: list[ConnectionTypeEntry]
 
     @classmethod

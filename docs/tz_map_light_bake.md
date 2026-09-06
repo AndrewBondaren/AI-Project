@@ -26,7 +26,7 @@ metadata:
 - Patch Store / merge priority WP-20;
 - DAG wiring;
 - **MountainPassBuilder / topology / карта классов** — [`tz_mountain_architecture.md`](./tz_mountain_architecture.md);
-- **settlement_topology** (районы + `settlement_gate` в SQL) — после `full_bake` L0, не этот compose: [city §8](./tz_city_generation.md), [outdoor C23](./tz_settlement_outdoor.md);
+- **settlement_topology** (районы + `settlement_gate` в SQL) — после `full_bake` L0, не этот compose: [city §8](./tz_city_generation.md), [outdoor C23](./tz_settlement_outdoor.md); швы кода — [CITY-T-5](./tz_city_generation_technical_debt.md);
 - план имплементации агента (`.cursor/plans/`).
 
 **Связь с storage TZ:** wire-поля light cell, `world_map_cells_per_tile`, pins/`locations_index` уже описаны в pack storage. Этот документ закрепляет **как** наполнять L0 (compose), а не формат zstd.
@@ -1421,7 +1421,8 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 | [`tz_terrain_generation.md`](./tz_terrain_generation.md) | surface pass, coarse planning |
 | [`tz_terrain_relief.md`](./tz_terrain_relief.md) | **Relief grade** SoT (**R36u** writer; **R36v** per-chunk pool); L0 не grade SoT |
 | [`tz_climate.md`](./tz_climate.md) | pole / zone sample |
-| [`tz_city_generation.md`](./tz_city_generation.md) | L1 skeletons vs L2 layout |
+| [`tz_city_generation.md`](./tz_city_generation.md) | L1 skeletons vs L2 layout; **§8 topology** не этот compose |
+| [`tz_city_generation_technical_debt.md`](./tz_city_generation_technical_debt.md) | **CITY-T-5** — не тащить районы в `SettlementContributor` |
 | [`tz_logging.md`](./tz_logging.md) | sink `pack/packBakeLog`; транскрипт generation/{uid} |
 
 ---
@@ -1430,6 +1431,7 @@ Bake diagnostics (activity, без `L0`/`L2` в именах — см. pack stor
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-06 | Швы C23 (не compose) — [`tz_city_generation_technical_debt.md`](./tz_city_generation_technical_debt.md). |
 | 2026-09-06 | `settlement` contributor остаётся pin-диск L0. Topology районов / city gates — не compose; post-pass `full_bake` (C23). |
 | 2026-08-20 | **Open-land hills:** L0 не writer; не `MaskDomainId`; SoT → pack storage § L2 open-land hills. Мир = `default_*.hills`; локация `hills` перекрывает; POJO = fallback import |
 | 2026-08-13 | **R36v:** compose 5b / `road_shoulder` **removed** (не migrate-off); grade → detailed pool — [`tz_terrain_relief.md`](./tz_terrain_relief.md) |

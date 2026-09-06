@@ -10,6 +10,7 @@
 |---|---|
 | [tz_assembler_hierarchy.md](./tz_assembler_hierarchy.md) | Целевая архитектура assembler stack |
 | [tz_city_generation.md](./tz_city_generation.md) | Продуктовое ТЗ города |
+| [tz_city_generation_technical_debt.md](./tz_city_generation_technical_debt.md) | **CITY-T-5** после C23 (dual persist, хардкоды, слои). SoT продукта — city §8 / outdoor C23 / pack bake |
 | [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) | Склейка outdoor pack+SQL; **дыры склейки** §14; C16 serial |
 | [tz_terrain_relief.md](./tz_terrain_relief.md) | Relief generate SoT (Q1/Q2, стрелки, шаблоны, canal/obstacle, SQL catalog). Bake R36u–w — архив v1 |
 | [tz_terrain_relief_technical_debt.md](./tz_terrain_relief_technical_debt.md) | Relief **код**: dual sidecar, god/жирные классы, хардкоды (не R41-T-25 алгоритм) |
@@ -255,13 +256,13 @@ Generate (`SettlementAssembler` → `DistrictAssembler`: cache → pass1 → р�
 | Sub-ID | Severity | P | Проблема | Fix |
 |---|---|---|---|---|
 | **CITY-T-1a** | **high** | **P1** | ~~import ignore / нет колонок~~ | **resolved** (C23): `BundleNamedLocation` overlay из `SettlementSkeleton`; колонки `0001`; `city_skeleton_from_settlement` читает поля NL |
-| **CITY-T-1b** | high | DAG | Два persist: debug `SettlementOutdoorOrchestrator` (pack + SQL-дерево + connections) vs `lazy_settlement` → только `map_cells` `insert_bulk_ignore`. Игрок и harness видят разный город | Нода зовёт тот же orchestrator (Gate: DAG; агент не трогает ноды). Не баг генератора |
+| **CITY-T-1b** | high | DAG | Два persist: debug `SettlementOutdoorOrchestrator` (pack + SQL-дерево + connections) vs `lazy_settlement` → только `map_cells` `insert_bulk_ignore`. Игрок и harness видят разный город. После C23: `generate_map_cells` не reuse слотов — **[CITY-T-5b](./tz_city_generation_technical_debt.md)** | Нода зовёт тот же orchestrator (Gate: DAG; агент не трогает ноды). Не баг генератора |
 | **CITY-T-1c** | medium | P2 | Два движка стен поселения: `shrink_slot_by_settlement_barrier` (C22 поле) vs `plan_settlement_barriers` (эвристика size/tier, поле не читает). Перекрывает [NC-3](#nc-3--три-barrier-pipeline-разная-gate-политика) | Клетки периметра из инстанса `PerimeterBarrier`; эвристика — только omit/null. Зоны без общей xy — city C22 |
 | **CITY-T-1d** | low | P2 | Документы отстают: шапка city TZ (packing=AABB, persist=map_cells only, C22-поля=⬜); §6.3 «код сейчас»; connections §5.1 «packing→overlay»; нет `.cursor/plans/settlement-assembler.md`; `assembler-hierarchy.mdc` ещё пишет NotImplemented на area | Синхрон шапки/§6.3/connections; план или снять ссылку; правило hierarchy |
 | **CITY-T-1e** | medium | DAG | `SettlementLayout.dominant_material` post-assemble есть. На `NamedLocation` не пишется. `lazy_settlement` в `NodeResult` material не кладёт → LLM «мраморные стены» не из layout | Persist опционально (§3.1); payload — DAG (`tz_engine_flow.md`) |
 | **CITY-T-1f** | info | — | `street_layout` кроме `grid`: `NotImplementedError`. Canonical templates все `grid`. **CONN-PACK-1** | Не слайс 1a. Не выдавать organic/radial в registry, пока нет generate |
 
-**Не этот ID (уже в city §10 / §11):** organic footprint v2, snapshot, `init_mode`, growth/world routes, `DistrictLayout.barrier_cells`, CONN-PACK-2/3 как open product, `StructureInteriorAssembler`. Пул шаблонов мира vs packing — **[CITY-T-2](#city-t-2--пул-шаблонов-мира--packing)**. Смешение/хардкоды планировщика после 2d — **[CITY-T-4](#city-t-4--планировщик-после-2d-смешение-и-хардкоды)**. Parallel **одного** поселения — **[CITY-T-3](#city-t-3--parallel-generate-одного-поселения)**.
+**Не этот ID (уже в city §10 / §11):** organic footprint v2, snapshot, `init_mode`, growth/world routes, `DistrictLayout.barrier_cells`, CONN-PACK-2/3 как open product, `StructureInteriorAssembler`. Пул шаблонов мира vs packing — **[CITY-T-2](#city-t-2--пул-шаблонов-мира--packing)**. Смешение/хардкоды планировщика после 2d — **[CITY-T-4](#city-t-4--планировщик-после-2d-смешение-и-хардкоды)**. Parallel **одного** поселения — **[CITY-T-3](#city-t-3--parallel-generate-одного-поселения)**. Швы после C23 — **[CITY-T-5](./tz_city_generation_technical_debt.md)**.
 
 **Готово когда:** импортированный мир без ручных setattr даёт те же C22-поля на `CitySkeleton`, что JSON мастера; один SoT стен поселения; шапка city TZ не противоречит `DistrictAssembler`. 1b/1e — после Gate: DAG.
 
@@ -340,6 +341,19 @@ GIL: cache interior CPU-heavy → тот же backlog ProcessPool, что TR-PAR
 **Готово когда:** N+1 `district_type` не требует правки `DISTRICT_TYPE_PREFERENCE`/`CITY_SIZE_ORDER`; cache и tokens один список имён; неизвестный assembler не маскируется под `building`; `max_per` не склеивает civic+culture. ✅
 
 **Код сейчас:** `ASSEMBLER_REGISTRY` ключи = `building` / `ruins` / `resourceExtraction` / `vastHull`. Каталог `structure_type` (`town_hall`, `tavern`, `mine`, …) не эти ключи → probe skip / packing `NO_CACHE` (не silent ратуша). Настоящие интерьеры / uid library — **2b**.
+
+### CITY-T-5 — швы после C23 topology-on-bake
+
+**Status:** `open` | **Severity:** high (5a/5g/5b) | **P:** P1 persist+хардкод / P2 слои / DAG (5b)
+
+**SoT деталей:** [`tz_city_generation_technical_debt.md`](./tz_city_generation_technical_debt.md) — не копировать сюда. Продукт: city §8, outdoor **C23**, pack § Bake modes. **Не** reopen C22 packing, **не** A*.
+
+| Sub-ID | Ось | Суть |
+|---|---|---|
+| **5a** / **5g** | legacy | `SettlementPersistService` parent зданий на город; skip «есть дети+city edge» после topology без zst |
+| **5b** | legacy | `generate_map_cells` / `lazy_settlement` не reuse freeze — срез **1b** |
+| **5h** / **5d** | хардкод | `"road"` / `"city"` / smoke `"medium"` |
+| **5i**–**5m** | смешение | два planner call site; дубль extract; uids в outdoor-пакете; skip×3; loader+рецепт; отчёт bake |
 
 ---
 
@@ -538,6 +552,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | **CITY-T-2c** | Seed чертежа = `world_uid`+uid города+клетка footprint (city §9.6); leftover frontage/`world_uid` | **partial** |
 | **CITY-T-2d** | Рецепт §1.2 в коде (город → роли → морфология, subjects); leftover **2b** | **partial** |
 | **CITY-T-4e** | `CITY_SIZE_ORDER` / `DISTRICT_TYPE_PREFERENCE` / condition `type` strings → POJO | **resolved** |
+| **CITY-T-5a** / **5g** | Dual persist + ложный skip packing после C23 | **open** |
 
 ### P2 — ближайший polish
 
@@ -547,6 +562,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | **CITY-T-4** | Смешение + хардкоды после 2d | **resolved** |
 | NC-3, NC-4, **CITY-T-1c** | Barrier contract; стены поселения = C22 инстанс, не эвристика size | open |
 | **CITY-T-1d** | Синхрон шапки city TZ / §6.3 / connections §5.1 vs C22 packing | open |
+| **CITY-T-5** | Швы после C23 (слои, хардкоды leftover) — SoT [city debt TZ](./tz_city_generation_technical_debt.md) | open |
 | DR-1, FM-3 | span_lines; barrier pick | open |
 | **CL-3** | Единый `ClimateSpatialSample` / Protocol | open |
 | **CL-4** | `climate_pole_mode` в `poleResolve.py` | **resolved** |
@@ -1998,6 +2014,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-06 | **CITY-T-5** open: швы после C23 — [`tz_city_generation_technical_debt.md`](./tz_city_generation_technical_debt.md). **1a** resolved. Не reopen §8 / C22. |
 | 2026-09-05 | **CITY-T-4** **resolved** (`/impl-city-t-4` слои A–G): POJO rank/zone/conditions; один resolve; cache=`pick_layout_names`; Bind-only coerce; skip unknown assembler; `max_per` type+subtype. **2a** civic flood ✅; **2c** tokens `BUILDINGS` ✅; leftover **2b**. **MR-8** ✅. Не reopen §1.2 |
 | 2026-09-05 | **CITY-T-4** команда `/impl-city-t-4` + план слоёв A–G (`city-t-4-planner-debt.md`). Не reopen §1.2, не 2b. |
 | 2026-09-05 | **CITY-T-4** open: ревью после 2d — смешение (`plan_district_slots`, placement, cache≠tokens, coerce×3) и хардкоды (`CITY_SIZE_ORDER`, zone preference, assembler `"building"`, `max_per` по type). **2d/2a/2c** → `partial`. **MR-8**. Не reopen рецепт §1.2 |

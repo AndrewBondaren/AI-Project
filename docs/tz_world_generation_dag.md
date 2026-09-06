@@ -443,7 +443,7 @@ Generator-side work **может** опережать ноды (как climate e
 
 | Дыра | Статус | Суть |
 |---|---|---|
-| **CITY-T-1b** dual persist | **open**, Gate: DAG | Debug: `SettlementOutdoorOrchestrator` → pack city + SQL-дерево + connections (C11). Нода `lazy_settlement` → `map_cells` `insert_bulk_ignore`. Игрок и harness видят разный город. Target: нода зовёт **тот же** `materialize`. |
+| **CITY-T-1b** dual persist | **open**, Gate: DAG | Debug: `SettlementOutdoorOrchestrator` → pack city + SQL-дерево + connections (C11). Нода `lazy_settlement` → `map_cells` `insert_bulk_ignore`. Игрок и harness видят разный город. После C23: нода/`generate_map_cells` не reuse freeze слотов — **[CITY-T-5b](./tz_city_generation_technical_debt.md)**. Target: нода зовёт **тот же** `materialize`. |
 | Таблица нод stale | **open** | Строка `lazy_settlement` всё ещё `generate_and_collect` / upsert cells. Кода `generate_and_collect` нет; сервис — `generate_layout` + collect cells. Не чинить таблицу «заодно» с нодой. |
 | Persist lazy = клетки, не эталон | **open**, Gate: DAG | Trigger-path «Lazy gameplay» пишет `map_cell_repo`. Целевой эталон outdoor — C1 (pack + SQL имена), occupancy-flood запрещён (C7). |
 | **CITY-T-1e** LLM payload | **open**, Gate: DAG | `SettlementLayout.dominant_material` после assemble есть. Нода не кладёт в `NodeResult` → LLM не из layout. |
@@ -464,6 +464,7 @@ Generator-side work **может** опережать ноды (как climate e
 - [`tz_assembler_hierarchy.md`](./tz_assembler_hierarchy.md) — settlement → structure layers
 - [`tz_building_generator.md`](./tz_building_generator.md) — templates, construction flags
 - [`tz_city_generation.md`](./tz_city_generation.md) — skeleton import; **§8 topology** на `full_bake`; packing lazy / C11
+- [`tz_city_generation_technical_debt.md`](./tz_city_generation_technical_debt.md) — **CITY-T-5b** reuse topology в DAG
 - [`tz_structure_connections.md`](./tz_structure_connections.md) — ConnectionNode graph
 - [`tz_engine_flow.md`](./tz_engine_flow.md) — engine phases only
 - [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) — MR/LC/FM; **CITY-T-1b/1e**, **CITY-T-3** (parallel одного поселения — мастер)
@@ -475,6 +476,7 @@ Generator-side work **может** опережать ноды (как climate e
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-06 | **CITY-T-5b:** `lazy_settlement` не reuse C23 freeze — [`tz_city_generation_technical_debt.md`](./tz_city_generation_technical_debt.md). Ноду не чинить без Gate: DAG. |
 | 2026-09-06 | `generate_settlement_skeleton` → scope topology (C23), не occupancy-flood. `init_mode=full` = L0 + topology, не packing всех городов. |
 | 2026-09-05 | § **Дыры: settlement в DAG** — dual persist vs C11 (CITY-T-1b); stale `generate_and_collect`; эталон pack vs map_cells; dominant_material (1e); scopes §11.5; `init_mode`; P12. Parallel одного generate → CITY-T-3 (мастер). Склейка — outdoor ТЗ. |
 | 2026-08-30 | **Relief product:** mill не спекулятивно (дорого); несколько чанков на сцене ок; полный мир = bake ГМ. Rematerialize сбрасывает grade. [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Caller. |

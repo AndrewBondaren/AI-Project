@@ -44,6 +44,7 @@ description: "Outdoor settlement на запечённом World Pack — дер
 | Тема | SoT | Что брать |
 |---|---|---|
 | Topology районов + city gates | city **§8**; **C23** здесь | после `full_bake` L0; не packing |
+| Швы кода после C23 | [CITY-T-5](./tz_city_generation_technical_debt.md) | dual persist, хардкоды, смешение; не алгоритм §8 |
 | Skeleton-first, фазы 1–2, district templates, footprint v1 | city §2, §5 фазы 1–2, §6, §9 | generate |
 | `CitySkeleton`, `dominant_material` | city §3, §3.1 | поля поселения / post-assemble |
 | Шов pack, город на ребре тайла | city §1; pack WP-19; relief-v1 **C29** | не клипать layout по тайлу |
@@ -339,14 +340,14 @@ SQL и файлы pack — не один COMMIT. Надёжность = прот
 
 ### Дыры склейки (код vs цель)
 
-Слой оркестрации / эталон pack+SQL, не алгоритм packing. Generate-дыры каталога и скелета — CITY-T в [tech debt](./tz_generator_technical_debt.md); gameplay-нода — DAG ТЗ. Исторический список **P1–P12** ниже — не снимать, пока строка не `resolved`; часть уже закрыта C11/C14/C19.
+Слой оркестрации / эталон pack+SQL, не алгоритм packing. Generate-дыры каталога и скелета — CITY-T в [tech debt](./tz_generator_technical_debt.md); швы после C23 — [CITY-T-5](./tz_city_generation_technical_debt.md); gameplay-нода — DAG ТЗ. Исторический список **P1–P12** ниже — не снимать, пока строка не `resolved`; часть уже закрыта C11/C14/C19.
 
 | Дыра | Статус | Суть |
 |---|---|---|
 | **C16 batch = serial** | **open** (скорость) | `_materialize_many` — `for` по uid. Parallel многих городов — **после** C19, не вместо. Не CITY-T-3 (тот — один generate). |
-| **CITY-T-1a на входе склейки** | **open** | Orchestrator читает `NamedLocation`. C22-поля скелета после import часто `None` → layout не тот, что JSON мастера. |
+| **CITY-T-1a на входе склейки** | **resolved** | Overlay скелета на NL (C23). |
 | **CITY-T-2 fill при stitch** | **open** | Canonical район без `allowed_structure_types` → pack-граф почти пустой (только required). Склейка честно пишет пустоту. |
-| **P2 leftover persist** | **open** | `SettlementPersistService` / occupancy в патчи ещё живы. HTTP outdoor их не зовёт; эталон = C1. Два писателя эталона — риск. |
+| **P2 leftover persist** | **open** | `SettlementPersistService` / occupancy в патчи ещё живы. HTTP outdoor их не зовёт; эталон = C1. Два писателя эталона — риск. После C23: parent зданий и ложный skip — **[CITY-T-5a/5g](./tz_city_generation_technical_debt.md)**. |
 | **P3 occupancy flood** | **open** (не HTTP default) | `plan_footprint_occupancy_cells` в assembler. C7: на карте — L0 pin, не метровая матрица в патчи. |
 | **P4 flatten cells** | **open** (не эталон) | `collect_geometry_meter_cells` тянет interior. C2/C8: эталон = граф участков. |
 | **P9 `entry_role`** | **open** | C20: `front`/`service`; колонки в `0001` ещё нет. |
@@ -354,7 +355,7 @@ SQL и файлы pack — не один COMMIT. Надёжность = прот
 | **C19 recovery journal** | **open** | После COMMIT tmp потерян: ТЗ требует pending или тот же seed. Журнала pending в коде нет. |
 | **`MaterializationContext`** | нет (так и надо до CITY-T-3) | Склейка не берёт `free_cores`. Не подключать pool «заодно». |
 | **P12 production path** | **open**, не этот слой | `lazy_settlement` ≠ C11. SoT дыры DAG: [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) § Дыры: settlement. |
-| **C23 topology не в коде** | **resolved** | `plan_topology` после `full_bake` L0; packing reuse слотов. World routes A* — по-прежнему отложен (триггер gates есть). |
+| **C23 topology не в коде** | **resolved** | `plan_topology` после `full_bake` L0; packing reuse слотов. World routes A* — по-прежнему отложен (триггер gates есть). Швы кода — [CITY-T-5](./tz_city_generation_technical_debt.md). |
 
 | ID | Где | Проблема |
 |---|---|---|
@@ -380,6 +381,7 @@ SQL и файлы pack — не один COMMIT. Надёжность = прот
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-06 | **CITY-T-5:** долг склейки после C23 (dual persist, skip, слои) — [tz_city_generation_technical_debt.md](./tz_city_generation_technical_debt.md). C23 спеку не менять. |
 | 2026-09-06 | **C23 код:** topology после `full_bake` L0; CITY-T-1a на NL; packing reuse. World routes A* не в этом PR. |
 | 2026-09-05 | §14 **дыры склейки:** C16 serial; вход CITY-T-1a/T-2; leftover P2–P4/P9/P10; C19 journal; parallel одного generate → CITY-T-3 (мастер). DAG — отдельное ТЗ. |
 | 2026-09-03 | C22: зоны трёх инстансов `PerimeterBarrier` не пересекаются; поселение вычитает прямые footprint из площади района до packing. |

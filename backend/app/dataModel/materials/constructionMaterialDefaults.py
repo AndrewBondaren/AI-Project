@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 
 @dataclass(frozen=True)
 class ConstructionMaterialDefaults:
     """Engine defaults per construction use_type / role."""
+
+    USE_TYPE_WALL: ClassVar[str] = "wall"
+    USE_TYPE_FLOOR: ClassVar[str] = "floor"
+    USE_TYPE_ROAD: ClassVar[str] = "road"
 
     wall: str = "stone"
     floor: str = "wood"
@@ -16,11 +21,11 @@ class ConstructionMaterialDefaults:
 
     def for_use_type(self, use_type: str) -> str:
         key = (use_type or "").strip().lower()
-        if key == "wall":
+        if key == self.USE_TYPE_WALL:
             return self.wall
-        if key == "floor":
+        if key == self.USE_TYPE_FLOOR:
             return self.floor
-        if key == "road":
+        if key == self.USE_TYPE_ROAD:
             return self.road
         return self.wall
 

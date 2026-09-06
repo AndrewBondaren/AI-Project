@@ -2045,6 +2045,7 @@ flowchart LR
 | [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) | Pass 1.5, liquid_candidate |
 | [`tz_climate.md`](./tz_climate.md) | SurfaceClimateField, Climate LOD |
 | [`tz_city_generation.md`](./tz_city_generation.md) | CitySkeleton import; **§8 topology** после `full_bake` L0; packing — lazy / C11 |
+| [`tz_city_generation_technical_debt.md`](./tz_city_generation_technical_debt.md) | **CITY-T-5** швы после topology-on-bake (не compose, не 4-й mode) |
 | [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) | Outdoor city layer на pack (граф участков); **C23** topology; не `location_terrain`; authored ≠ Patch Store |
 | [`project_data_storage_tz.md`](./project_data_storage_tz.md) | schema patch store |
 | [`tz_world_snapshot.md`](./tz_world_snapshot.md) | pack_hash в snapshot |
@@ -2057,6 +2058,7 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-06 | **CITY-T-5:** техдолг после C23 — [`tz_city_generation_technical_debt.md`](./tz_city_generation_technical_debt.md). Job boundaries bake не менять. |
 | 2026-09-06 | **Job boundaries:** после `full_bake` L0 — post-pass `settlement_topology` (C23). Не 4-й mode, не L2, не packing, не compose. `light_bake` topology не делает. |
 | 2026-08-30 | WP-3/WP-20: authored outdoor city = pack `CITY_STRUCTURE`; gameplay = patches |
 | 2026-08-30 | **Бюджет mill:** не спекулятивно; несколько чанков на сцене ок; полный мир — bake ГМ. APP-PERF-R1 = тайл целиком. |
