@@ -35,3 +35,5 @@ class DistrictSlot:
     required_structures: list[RequiredStructure] = field(default_factory=list)
     cell_x:              int = 0
     cell_y:              int = 0
+    # structure_type → subjects of this settlement that apply to that type (not wire).
+    subject_tags:        dict[str, tuple[str, ...]] = field(default_factory=dict)

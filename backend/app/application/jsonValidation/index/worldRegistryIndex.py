@@ -17,6 +17,9 @@ class WorldRegistryIndex:
     climate_zones: frozenset[str] | None = None
     economic_tiers: frozenset[str] | None = None
     connection_types: frozenset[str] | None = None
+    resources: frozenset[str] | None = None
+    crops: frozenset[str] | None = None
+    livestock: frozenset[str] | None = None
 
     def keys_for(self, ref: RefKind) -> frozenset[str] | None:
         return {
@@ -26,4 +29,7 @@ class WorldRegistryIndex:
             RefKind.CLIMATE: self.climate_zones,
             RefKind.ECON_TIER: self.economic_tiers,
             RefKind.CONN: self.connection_types,
+            RefKind.RESOURCE: self.resources,
+            RefKind.CROP: self.crops,
+            RefKind.LIVESTOCK: self.livestock,
         }.get(ref)

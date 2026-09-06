@@ -7,6 +7,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from app.dataModel.flora.enums.cropKind import CropKind
+from app.dataModel.livestock.enums.livestockKind import LivestockKind
+from app.dataModel.resources.enums.resourceKind import ResourceKind
 from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
 
 
@@ -34,6 +37,62 @@ class BuildingCatalog:
     def of_structure_type(self, structure_type: str) -> tuple[BuildingLayoutTemplate, ...]:
         return tuple(
             layout for layout in self.layouts if layout.structure_type == structure_type
+        )
+
+    @staticmethod
+    def prefer_subjects(
+        layouts: tuple[BuildingLayoutTemplate, ...] | list[BuildingLayoutTemplate],
+        subjects: tuple[str, ...] | list[str] | set[str],
+        resource_kinds: tuple[ResourceKind, ...] | list[ResourceKind] | set[ResourceKind] | None = None,
+        crop_kinds: tuple[CropKind, ...] | list[CropKind] | set[CropKind] | None = None,
+        livestock_kinds: tuple[LivestockKind, ...] | list[LivestockKind] | set[LivestockKind] | None = None,
+    ) -> tuple[BuildingLayoutTemplate, ...]:
+        """Prefer instance-tagged drawings; else extract/farm/livestock kind; else untagged."""
+        pool = tuple(layouts)
+        wanted = {token.strip() for token in subjects if token and token.strip()}
+        extract_kinds = {kind for kind in (resource_kinds or ()) if kind is not None}
+        farm_kinds = {kind for kind in (crop_kinds or ()) if kind is not None}
+        herd_kinds = {kind for kind in (livestock_kinds or ()) if kind is not None}
+        if not wanted and not extract_kinds and not farm_kinds and not herd_kinds:
+            return pool
+        tagged = tuple(
+            layout for layout in pool
+            if wanted.intersection(layout.subjects or ())
+        )
+        if tagged:
+            return tagged
+        by_kind = tuple(
+            layout for layout in pool
+            if (
+                layout.resource_kind is not None and layout.resource_kind in extract_kinds
+            ) or (
+                layout.crop_kind is not None and layout.crop_kind in farm_kinds
+            ) or (
+                layout.livestock_kind is not None and layout.livestock_kind in herd_kinds
+            )
+        )
+        if by_kind:
+            return by_kind
+        untagged = tuple(
+            layout for layout in pool
+            if not layout.subjects
+            and layout.resource_kind is None
+            and layout.crop_kind is None
+            and layout.livestock_kind is None
+        )
+        return untagged or pool
+
+    def of_structure_type_for_subjects(
+        self,
+        structure_type: str,
+        subjects: tuple[str, ...] | list[str] | set[str],
+        resource_kinds: tuple[ResourceKind, ...] | list[ResourceKind] | set[ResourceKind] | None = None,
+        crop_kinds: tuple[CropKind, ...] | list[CropKind] | set[CropKind] | None = None,
+        livestock_kinds: tuple[LivestockKind, ...] | list[LivestockKind] | set[LivestockKind] | None = None,
+    ) -> tuple[BuildingLayoutTemplate, ...]:
+        return self.prefer_subjects(
+            self.of_structure_type(structure_type),
+            subjects, resource_kinds, crop_kinds, livestock_kinds,
         )
 
     def structure_types(self) -> tuple[str, ...]:

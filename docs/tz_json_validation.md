@@ -70,6 +70,9 @@ Preset keys в fixtures (`temperate`, `water`) — **строки N1-W**, не �
 | REF-W-ECON-TIER | N1-W-09 | `system_tier` |
 | REF-W-CONN | N1-W-06 | `system_connection_type` |
 | REF-W-LOC-TYPE | N1-W-07 | `system_location_type` |
+| REF-W-RESOURCE | N1-W-10 | `system_resource` |
+| REF-W-CROP | N1-W-11 | `system_crop` |
+| REF-W-LIVESTOCK | N1-W-12 | `system_livestock` |
 
 Полная таблица — git history v0.1 § Field Contract Registry.  
 Имплементация: `jsonValidation/index/` (✅ MVP), **после** `resolve` + normalize.
@@ -166,6 +169,8 @@ backend/app/application/worldData/  # WorldService, bundle — без domain val
 
 Политика empty-on-import — уточняется per-slice в POJO; не дублировать в facade.
 
+**Instance-каталоги extract/farm/livestock** (`resource_type_registry`, `crops_registry`, `livestock_registry`) — не T-29 union. Runtime: пусто → канон POJO; непустой список мира → **только** он (канонический `iron_ore` не дописывать, если мастер завёл свои руды). Overlay по id (canonical⊕world) остаётся для чертежей района / барьеров. SoT packing — [`tz_city_generation.md`](./tz_city_generation.md) §1.2.1.
+
 ---
 
 ## SCH-* ↔ dataModel
@@ -177,6 +182,9 @@ backend/app/application/worldData/  # WorldService, bundle — без domain val
 | SCH-WORLD-CLIMATE | `WorldClimateScalars` | 8 scalar columns | ✅ | ✅ |
 | SCH-WORLD-ECON-TIER | `WorldEconomyTierRegistry` | `economic_tier_registry` | ✅ | ✅ |
 | SCH-WORLD-MATERIAL | `WorldMaterialRegistry` | `material_registry` | ✅ | ✅ |
+| SCH-WORLD-RESOURCE | `WorldResourceTypeRegistry` | `resource_type_registry` | ✅ | ✅ |
+| SCH-WORLD-CROPS | `WorldCropsRegistry` | `crops_registry` | ✅ | ✅ |
+| SCH-WORLD-LIVESTOCK | `WorldLivestockRegistry` | `livestock_registry` | ✅ | ✅ |
 | SCH-WORLD-TERRAIN | `WorldTerrainRegistry` | `terrain_registry` | ✅ | ✅ |
 | SCH-WORLD-HYDROLOGY | `WorldHydrology` | `hydrology` | ✅ | ✅ |
 | SCH-WORLD-TERRAIN-MASKS | `WorldTerrainMasks` | `terrain_masks` | ✅ | ✅ |
@@ -219,7 +227,7 @@ class WorldSlice:
     wire_from_mapping: Callable | None  # multi_column only
 ```
 
-`facade` merge → `worldSliceMerge.merge_facade_slices` (T-29). Runtime (`worldRow`) — thin DX поверх `resolve_multi_column_world` / `resolve_registry_list_world` / `resolve_registry_dict_world` / `resolve_json_blob_world` (тот же catalog; RELIEF-T-28). Registry с `RUNTIME_MERGE_ID_FIELD` на POJO → runtime canonical⊕world (district/barrier). Не свои `_LIST_REGISTRY_KEYS`.
+`facade` merge → `worldSliceMerge.merge_facade_slices` (T-29). Runtime (`worldRow`) — thin DX поверх `resolve_multi_column_world` / `resolve_registry_list_world` / `resolve_registry_dict_world` / `resolve_json_blob_world` (тот же catalog; RELIEF-T-28). Registry с `RUNTIME_MERGE_ID_FIELD` на POJO → runtime canonical⊕world (district/barrier). **Исключение:** resource / crops / livestock — пусто→канон, непусто→только мир ([`tz_city_generation.md`](./tz_city_generation.md) §1.2.1). Не свои `_LIST_REGISTRY_KEYS`.
 
 **Чеклист нового POJO на `worlds`:**
 
@@ -596,6 +604,8 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 
 | Версия | Дата | Изменение |
 |--------|------|-----------|
+| — | 2026-09-06 | Instance-каталоги resource/crops/livestock: runtime пусто→канон, непусто→только мир (не T-29 union). Packing fallback — [`tz_city_generation.md`](./tz_city_generation.md) §1.2.1 (impl) |
+| — | 2026-09-06 | `SCH-WORLD-CROPS` / `REF-W-CROP` (N1-W-11): `crops_registry`, ENUM-E `crop_kind` |
 | — | 2026-09-03 | **JV-4b** / [POJO-D-16](./tz_datamodel_pojo_discrepancies.md): nested generate layout должен быть nested POJO, не `list[dict]`; Outline slot ≠ generate room |
 | 0.1 | 2026-06 | Field Contract Registry, orchestrator, `worldData/jsonValidation/` |
 | — | 2026-07 | Удаление v0.1 code (`dc6b171`); пауза simple CRUD |

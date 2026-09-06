@@ -5,6 +5,9 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.flora.enums.cropKind import CropKind
+from app.dataModel.livestock.enums.livestockKind import LivestockKind
+from app.dataModel.resources.enums.resourceKind import ResourceKind
 from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
 from app.dataModel.shared.ranges import EconomicTierRange, IntMinMax
 from app.dataModel.structure.building.buildingTemplateRoomSlot import BuildingTemplateRoomSlot
@@ -23,6 +26,14 @@ class BuildingTemplateOutline(BaseModel):
     system_name: StrictOnWire[str]
     structure_type: StrictOnWire[str]
     display_name: StrictOnWire[str]
+    # Extract drawings only. ENUM-E: ore / stone / timber / liquid.
+    resource_kind: DefaultOnWire[ResourceKind | None] = None
+    # Farm drawings only. ENUM-E: grain / vegetable / fruit / fiber / fodder.
+    crop_kind: DefaultOnWire[CropKind | None] = None
+    # Livestock drawings only. ENUM-E: meat / dairy / fiber / draft / mount.
+    livestock_kind: DefaultOnWire[LivestockKind | None] = None
+    # Extract/farm/livestock N+1 tags when resource_kind, crop_kind or livestock_kind is set.
+    subjects: DefaultOnWire[list[str]] = Field(default_factory=list)
     glossary_ref: DefaultOnWire[str | None] = None
     description: DefaultOnWire[str | None] = None
     version: DefaultOnWire[str] = "1.0"

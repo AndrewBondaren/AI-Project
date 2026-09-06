@@ -1,8 +1,4 @@
 from app.application.jsonValidation import city_sizes, district_templates as district_templates_registry
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.defaults import (
-    CellZone,
-    DISTRICT_TYPE_PREFERENCE,
-)
 from app.application.worldData.generators.coordinates import (
     cell_in_local_meter_rect,
     cell_in_surface_grid_rect,

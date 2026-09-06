@@ -13,3 +13,6 @@ class RefKind(StrEnum):
     ECON_TIER = "REF-W-ECON-TIER"
     CONN = "REF-W-CONN"
     LOC_TYPE = "REF-W-LOC-TYPE"
+    RESOURCE = "REF-W-RESOURCE"
+    CROP = "REF-W-CROP"
+    LIVESTOCK = "REF-W-LIVESTOCK"

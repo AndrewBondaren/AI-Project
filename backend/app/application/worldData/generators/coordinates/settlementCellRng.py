@@ -9,6 +9,7 @@ from enum import StrEnum
 class SettlementCellRngRole(StrEnum):
     BUILDINGS = "buildings"
     DISTRICTS = "districts"
+    SUBJECTS = "subjects"
 
 
 def settlement_cell_rng(

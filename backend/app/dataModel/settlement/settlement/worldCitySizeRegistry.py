@@ -20,6 +20,7 @@ _CANONICAL_ENTRIES: tuple[CitySizeEntry, ...] = (
 
 class WorldCitySizeRegistry(RootModel[list[CitySizeEntry]]):
     SCHEMA_ID: ClassVar[str] = "SCH-WORLD-CITY-SIZE"
+    RUNTIME_MERGE_ID_FIELD: ClassVar[str] = "system_size"
     root: list[CitySizeEntry]
 
     @classmethod
@@ -31,6 +32,15 @@ class WorldCitySizeRegistry(RootModel[list[CitySizeEntry]]):
             if entry.system_size == system_size:
                 return entry
         return None
+
+    def rank(self, system_size: str | None) -> int:
+        """Index in resolved ``root`` (canon ⊕ world). Empty / unknown → 0."""
+        if not system_size:
+            return 0
+        for index, entry in enumerate(self.root):
+            if entry.system_size == system_size:
+                return index
+        return 0
 
     @classmethod
     def footprint_multiplier_defaults(cls) -> dict[str, float]:

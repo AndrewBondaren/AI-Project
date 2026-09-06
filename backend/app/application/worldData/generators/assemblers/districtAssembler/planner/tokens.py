@@ -26,6 +26,14 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.economic import (
     building_tier_compatible,
 )
+from app.application.worldData.generators.coordinates.settlementCellRng import (
+    SettlementCellRngRole,
+    settlement_cell_rng,
+)
+from app.application.jsonValidation.worldRow import crops, livestock, resource_types
+from app.dataModel.flora.enums.cropKind import CropKind
+from app.dataModel.livestock.enums.livestockKind import LivestockKind
+from app.dataModel.resources.enums.resourceKind import ResourceKind
 from app.dataModel.settlement.district.allowedStructureTypes import (
     allowed_fill_structure_types,
 )
@@ -54,6 +62,179 @@ def _tier_pool(
     ]
 
 
+def _subjects_for(slot: DistrictSlot, structure_type: str) -> tuple[str, ...]:
+    return tuple((slot.subject_tags or {}).get(structure_type, ()))
+
+
+def _subject_catalog(
+    layouts: list[BuildingLayoutTemplate],
+    structure_type: str,
+) -> str | None:
+    if any(layout.resource_kind is not None for layout in layouts):
+        return "resource"
+    if any(layout.crop_kind is not None for layout in layouts):
+        return "crop"
+    if (
+        any(layout.livestock_kind is not None for layout in layouts)
+        or structure_type == "livestock"
+    ):
+        return "livestock"
+    return None
+
+
+def _fallback_pool(world: World, catalog: str, layouts: list[BuildingLayoutTemplate]) -> list[str]:
+    if catalog == "resource":
+        wanted = {layout.resource_kind for layout in layouts if layout.resource_kind is not None}
+        return sorted(
+            entry.system_resource
+            for entry in resource_types(world).root
+            if entry.resource_kind in wanted
+        )
+    if catalog == "crop":
+        wanted = {layout.crop_kind for layout in layouts if layout.crop_kind is not None}
+        return sorted(
+            entry.system_crop
+            for entry in crops(world).root
+            if entry.crop_kind in wanted
+        )
+    registry = livestock(world)
+    wanted = {layout.livestock_kind for layout in layouts if layout.livestock_kind is not None}
+    if wanted:
+        return sorted(
+            entry.system_livestock
+            for entry in registry.root
+            if entry.livestock_kind in wanted
+        )
+    return sorted(registry.keys())
+
+
+def _token_in_catalog(world: World, catalog: str, token: str) -> bool:
+    if catalog == "resource":
+        return resource_types(world).entry_for(token) is not None
+    if catalog == "crop":
+        return crops(world).entry_for(token) is not None
+    return livestock(world).entry_for(token) is not None
+
+
+def _subjects_rng(
+    world: World,
+    slot: DistrictSlot,
+    settlement_uid: str | None,
+) -> random.Random:
+    return settlement_cell_rng(
+        world.world_uid,
+        settlement_uid or world.world_uid,
+        slot.cell_x,
+        slot.cell_y,
+        SettlementCellRngRole.SUBJECTS,
+    )
+
+
+def _resolve_subjects(
+    slot: DistrictSlot,
+    world: World,
+    structure_type: str,
+    layouts: list[BuildingLayoutTemplate],
+    settlement_uid: str | None,
+) -> tuple[str, ...]:
+    """Named tokens stay; empty extract/farm/livestock → world RNG (§1.2.1)."""
+    catalog = _subject_catalog(layouts, structure_type)
+    subjects = _subjects_for(slot, structure_type)
+    district = slot.district_template.system_name
+    if subjects:
+        if catalog is not None:
+            for token in subjects:
+                if not _token_in_catalog(world, catalog, token):
+                    packing_warning(
+                        PackingStep.TOKENS,
+                        district=district,
+                        structure_type=structure_type,
+                        system_name=token,
+                        reason=PackingReason.SUBJECT_UNKNOWN,
+                    )
+        return subjects
+    if catalog is None:
+        return subjects
+    pool = _fallback_pool(world, catalog, layouts)
+    if not pool:
+        packing_warning(
+            PackingStep.TOKENS,
+            district=district,
+            structure_type=structure_type,
+            reason=PackingReason.SUBJECT_POOL_EMPTY,
+        )
+        return ()
+    picked = _subjects_rng(world, slot, settlement_uid).choice(pool)
+    slot.subject_tags[structure_type] = (picked,)
+    packing_warning(
+        PackingStep.TOKENS,
+        district=district,
+        structure_type=structure_type,
+        system_name=picked,
+        reason=PackingReason.SUBJECT_FALLBACK,
+    )
+    return (picked,)
+
+
+def _resource_kinds_for(world: World, subjects: tuple[str, ...]) -> tuple[ResourceKind, ...]:
+    if not subjects:
+        return ()
+    registry = resource_types(world)
+    kinds: list[ResourceKind] = []
+    seen: set[ResourceKind] = set()
+    for token in subjects:
+        kind = registry.kind_for(token)
+        if kind is None or kind in seen:
+            continue
+        seen.add(kind)
+        kinds.append(kind)
+    return tuple(kinds)
+
+
+def _crop_kinds_for(world: World, subjects: tuple[str, ...]) -> tuple[CropKind, ...]:
+    if not subjects:
+        return ()
+    registry = crops(world)
+    kinds: list[CropKind] = []
+    seen: set[CropKind] = set()
+    for token in subjects:
+        kind = registry.kind_for(token)
+        if kind is None or kind in seen:
+            continue
+        seen.add(kind)
+        kinds.append(kind)
+    return tuple(kinds)
+
+
+def _livestock_kinds_for(world: World, subjects: tuple[str, ...]) -> tuple[LivestockKind, ...]:
+    if not subjects:
+        return ()
+    registry = livestock(world)
+    kinds: list[LivestockKind] = []
+    seen: set[LivestockKind] = set()
+    for token in subjects:
+        kind = registry.kind_for(token)
+        if kind is None or kind in seen:
+            continue
+        seen.add(kind)
+        kinds.append(kind)
+    return tuple(kinds)
+
+
+def _choose_layout(
+    layouts: list[BuildingLayoutTemplate],
+    rng: random.Random,
+    subjects: tuple[str, ...],
+    resource_kinds: tuple[ResourceKind, ...] = (),
+    crop_kinds: tuple[CropKind, ...] = (),
+    livestock_kinds: tuple[LivestockKind, ...] = (),
+) -> BuildingLayoutTemplate:
+    pool = list(BuildingCatalog.prefer_subjects(
+        layouts, subjects, resource_kinds, crop_kinds, livestock_kinds,
+    ))
+    return rng.choice(pool)
+
+
 def _required_type_keys(required: RequiredStructure, catalog: BuildingCatalog) -> set[str]:
     keys: set[str] = set()
     if required.structure_type:
@@ -64,29 +245,64 @@ def _required_type_keys(required: RequiredStructure, catalog: BuildingCatalog) -
     return keys
 
 
+def _buildings_rng(
+    world: World,
+    slot: DistrictSlot,
+    rng: random.Random | None,
+    settlement_uid: str | None,
+) -> random.Random:
+    if rng is not None:
+        return rng
+    return settlement_cell_rng(
+        world.world_uid,
+        settlement_uid or world.world_uid,
+        slot.cell_x,
+        slot.cell_y,
+        SettlementCellRngRole.BUILDINGS,
+    )
+
+
+def pick_layout_names(
+    slot: DistrictSlot,
+    world: World,
+    skeleton: CitySkeleton,
+    catalog: BuildingCatalog,
+    rng: random.Random | None = None,
+    *,
+    settlement_uid: str | None = None,
+) -> list[str]:
+    """One ``system_name`` per required/fill type (SoT for tokens and cache)."""
+    rng = _buildings_rng(world, slot, rng, settlement_uid)
+    return [
+        name
+        for name, _req in _pick_layout_picks(
+            slot, world, skeleton, catalog, rng, settlement_uid,
+        )
+    ]
+
+
 def candidate_template_names(
     slot: DistrictSlot,
-    cache: BuildingLayoutCache,
     world: World,
     skeleton: CitySkeleton,
     catalog: BuildingCatalog | None = None,
     rng: random.Random | None = None,
+    *,
+    settlement_uid: str | None = None,
 ) -> list[str]:
-    """One ``system_name`` per required/fill type (not one per library file)."""
     catalog = catalog or assemble_building_catalog(world)
-    rng = rng or random.Random(0)
-    picks = _pick_layout_names(slot, world, skeleton, catalog, rng)
-    names = [name for name, _req in picks]
-    _ = cache
-    return names
+    return pick_layout_names(
+        slot, world, skeleton, catalog, rng, settlement_uid=settlement_uid,
+    )
 
 
-def _pick_layout_names(
+def _pick_layout_picks(
     slot: DistrictSlot,
     world: World,
     skeleton: CitySkeleton,
     catalog: BuildingCatalog,
     rng: random.Random,
+    settlement_uid: str | None = None,
 ) -> list[tuple[str, RequiredStructure | None]]:
     picks: list[tuple[str, RequiredStructure | None]] = []
     seen_names: set[str] = set()
@@ -103,7 +319,15 @@ def _pick_layout_names(
                 reason=PackingReason.NO_CACHE,
             )
             continue
-        chosen = rng.choice(layouts)
+        type_keys = _required_type_keys(req, catalog)
+        stype = next(iter(type_keys), layouts[0].structure_type)
+        subjects = _resolve_subjects(slot, world, stype, layouts, settlement_uid)
+        chosen = _choose_layout(
+            layouts, rng, subjects,
+            _resource_kinds_for(world, subjects),
+            _crop_kinds_for(world, subjects),
+            _livestock_kinds_for(world, subjects),
+        )
         if chosen.system_name in seen_names:
             continue
         seen_names.add(chosen.system_name)
@@ -119,7 +343,15 @@ def _pick_layout_names(
         layouts = _tier_pool(catalog.of_structure_type(structure_type), skeleton, world)
         if not layouts:
             continue
-        chosen = rng.choice(layouts)
+        subjects = _resolve_subjects(
+            slot, world, structure_type, layouts, settlement_uid,
+        )
+        chosen = _choose_layout(
+            layouts, rng, subjects,
+            _resource_kinds_for(world, subjects),
+            _crop_kinds_for(world, subjects),
+            _livestock_kinds_for(world, subjects),
+        )
         if chosen.system_name in seen_names:
             continue
         seen_names.add(chosen.system_name)
@@ -148,11 +380,15 @@ def build_tokens(
     skeleton: CitySkeleton,
     catalog: BuildingCatalog | None = None,
     rng: random.Random | None = None,
+    *,
+    settlement_uid: str | None = None,
 ) -> list[PackingToken]:
     catalog = catalog or assemble_building_catalog(world)
-    rng = rng or random.Random(0)
+    rng = _buildings_rng(world, slot, rng, settlement_uid)
     district = slot.district_template.system_name
-    picks = _pick_layout_names(slot, world, skeleton, catalog, rng)
+    picks = _pick_layout_picks(
+        slot, world, skeleton, catalog, rng, settlement_uid,
+    )
     if not picks:
         packing_warning(
             PackingStep.CACHE, district=district, reason=PackingReason.NO_CANDIDATES,

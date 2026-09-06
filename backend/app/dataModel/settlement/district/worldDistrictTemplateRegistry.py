@@ -21,6 +21,7 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
             PlacementCondition(type="cell_zone", zone="center"),
         ],
         max_per_city=1,
+        allowed_structure_types=["town_hall"],
         required_structures=[
             RequiredStructure(building_template="town_hall", count=1, position=POSITION_CENTER),
         ],
@@ -74,6 +75,72 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
         density="dense",
         connections=[
             DistrictConnection(connection_type="road", role="main_street", sidewalk=True),
+        ],
+    ),
+    DistrictTemplateEntry(
+        system_name="mining_quarter",
+        display_name="Добывающий квартал",
+        district_type="industrial",
+        district_subtype="extract",
+        street_layout="grid",
+        allowed_structure_types=["mine"],
+        connections=[
+            DistrictConnection(connection_type="road", role="service_road", sidewalk=False),
+        ],
+    ),
+    DistrictTemplateEntry(
+        system_name="processing_quarter",
+        display_name="Квартал обработки",
+        district_type="industrial",
+        district_subtype="process",
+        street_layout="grid",
+        allowed_structure_types=["mill", "smelter"],
+        connections=[
+            DistrictConnection(connection_type="road", role="service_road", sidewalk=False),
+        ],
+    ),
+    DistrictTemplateEntry(
+        system_name="manufacture_quarter",
+        display_name="Квартал производства",
+        district_type="industrial",
+        district_subtype="manufacture",
+        street_layout="grid",
+        allowed_structure_types=["workshop"],
+        connections=[
+            DistrictConnection(connection_type="road", role="service_road", sidewalk=False),
+        ],
+    ),
+    DistrictTemplateEntry(
+        system_name="cultural_quarter",
+        display_name="Культурный квартал",
+        district_type="civic",
+        district_subtype="culture",
+        street_layout="grid",
+        allowed_structure_types=["temple", "theater", "library"],
+        connections=[
+            DistrictConnection(connection_type="road", role="main_street", sidewalk=True),
+        ],
+    ),
+    DistrictTemplateEntry(
+        system_name="farm_quarter",
+        display_name="Аграрный квартал",
+        district_type="agricultural",
+        district_subtype="farm",
+        street_layout="grid",
+        allowed_structure_types=["farm", "mill"],
+        connections=[
+            DistrictConnection(connection_type="road", role="service_road", sidewalk=False),
+        ],
+    ),
+    DistrictTemplateEntry(
+        system_name="livestock_quarter",
+        display_name="Скотоводческий квартал",
+        district_type="agricultural",
+        district_subtype="livestock",
+        street_layout="grid",
+        allowed_structure_types=["livestock"],
+        connections=[
+            DistrictConnection(connection_type="road", role="service_road", sidewalk=False),
         ],
     ),
 )

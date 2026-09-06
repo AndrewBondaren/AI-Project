@@ -15,6 +15,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
+from app.dataModel.flora.enums.cropKind import CropKind
+from app.dataModel.livestock.enums.livestockKind import LivestockKind
+from app.dataModel.resources.enums.resourceKind import ResourceKind
 from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
 from app.dataModel.shared.ranges import EconomicTierRange
 from app.dataModel.structure.building.defaultStructureContext import DefaultStructureContext
@@ -45,6 +48,17 @@ class BuildingLayoutTemplate(BaseModel):
     levels: DefaultOnWire[list[dict[str, Any]]] = Field(default_factory=list)
     staircases: DefaultOnWire[list[dict[str, Any]]] = Field(default_factory=list)
     connections: DefaultOnWire[list[dict[str, Any]]] = Field(default_factory=list)
+    # Extract drawings: ENUM-E class of resource this layout extracts (ore mine vs timber camp).
+    resource_kind: DefaultOnWire[ResourceKind | None] = None
+    # Farm drawings: ENUM-E how this farm grows (grain field vs orchard).
+    crop_kind: DefaultOnWire[CropKind | None] = None
+    # Livestock drawings: ENUM-E husbandry purpose (meat vs dairy vs mount). Not a structure_type.
+    livestock_kind: DefaultOnWire[LivestockKind | None] = None
+    # N+1 tags: iron_ore, wheat, cow, religion, knowledge, … Filter when the settlement names subjects.
+    # If resource_kind is set, extract tags must be keys in worlds.resource_type_registry of that kind.
+    # If crop_kind is set, farm tags must be keys in worlds.crops_registry of that kind.
+    # If livestock_kind is set, livestock tags must be keys in worlds.livestock_registry of that kind.
+    subjects: DefaultOnWire[list[str]] = Field(default_factory=list)
 
 
 def coerce_building_layout(raw: BuildingLayoutTemplate | dict[str, Any]) -> BuildingLayoutTemplate:

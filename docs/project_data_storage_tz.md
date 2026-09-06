@@ -2300,15 +2300,20 @@ world_history (
 **`worlds.resource_type_registry`** (N+1):
 ```json
 [
-  { "system_resource": "iron_ore", "glossary_ref": "res_iron_ore", "is_renewable": false, "base_regen_per_tick": null, "default_yield": 10, "yield_item_uid": "item_iron_ore", "tag_refs": ["tag_mineral"] },
-  { "system_resource": "timber",   "glossary_ref": "res_timber",   "is_renewable": true,  "base_regen_per_tick": 5,    "default_yield": 5,  "yield_item_uid": "item_log",      "tag_refs": ["tag_natural"] }
+  { "system_resource": "iron_ore", "resource_kind": "ore", "glossary_ref": "res_iron_ore", "is_renewable": false, "base_regen_per_tick": null, "default_yield": 10, "yield_item_uid": "item_iron_ore", "tag_refs": ["tag_mineral"] },
+  { "system_resource": "timber",   "resource_kind": "timber", "glossary_ref": "res_timber",   "is_renewable": true,  "base_regen_per_tick": 5,    "default_yield": 5,  "yield_item_uid": "item_log",      "tag_refs": ["tag_natural"] }
 ]
 ```
+- `resource_kind` — ENUM-E: `ore` \| `stone` \| `timber` \| `liquid` (как добывают). Не N+1. Непустой `resource_type_registry` мира **не** дополняется каноническим `iron_ore`. Пустой extract-subject → случайный ключ мира того же kind + log; named subject не подменять. SoT: [`tz_city_generation.md`](./tz_city_generation.md) §1.2.1.
 - `display_*` не хранится; берётся из `lore_registry` по `glossary_ref`
 - `is_renewable: false` — невозобновляемый; `quantity` только убывает
 - `is_renewable: true` — возобновляемый; `quantity` регенерирует до `max_quantity`
 - `default_yield` — константа добычи за одно действие когда формулы нет
 - `yield_item_uid` — ref → items; сырой предмет за одно действие добычи; обработка (руда → слиток) — в системе крафта
+
+**`worlds.crops_registry`** (N+1, роль `farm`): тонкий каталог `system_crop` + ENUM-E `crop_kind` (`grain` \| `vegetable` \| `fruit` \| `fiber` \| `fodder`). SoT полей и морфологии — [`tz_flora.md`](./tz_flora.md) § `crops_type`. Скот не crop. Непустой мир — только его ключи; пустой farm-subject — RNG + log ([`tz_city_generation.md`](./tz_city_generation.md) §1.2.1).
+
+**`worlds.livestock_registry`** (N+1, роль `livestock`): тонкий каталог `system_livestock` + ENUM-E `livestock_kind` (`meat` \| `dairy` \| `fiber` \| `draft` \| `mount`). Яйца — yield, не kind. Kind ≠ постройка. Непустой мир — только его ключи; пустой subject — RNG + log. Location-bind — later.
 
 **`location_resources`**:
 ```sql

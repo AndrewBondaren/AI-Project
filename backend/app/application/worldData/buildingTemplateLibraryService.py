@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime, timezone
 
 from app.application.importResult import ImportResult
+from app.application.jsonValidation.worldRow import crops, livestock, resource_types
 from app.application.worldData.bundle.errors import BundleValidationError
 from app.application.worldData.worldService import WorldService
 from app.dataModel.structure.building.buildingLayoutTemplate import (
@@ -108,11 +109,32 @@ class BuildingTemplateLibraryService:
     ) -> ImportResult:
         if not isinstance(bodies, list):
             raise BundleValidationError("building_templates section must be an array")
+        world = await self._worlds.get_by_id(world_uid)
+        registry = resource_types(world)
         succeeded = 0
         errors = []
         for i, raw in enumerate(bodies):
             try:
                 outline = BuildingTemplateOutline.model_validate(raw)
+                issues = registry.check_template_subjects(
+                    outline.resource_kind, outline.subjects,
+                )
+                if not issues:
+                    issues = crops(world).check_template_subjects(
+                        outline.crop_kind, outline.subjects,
+                    )
+                if not issues:
+                    issues = livestock(world).check_template_subjects(
+                        outline.livestock_kind, outline.subjects,
+                    )
+                if issues:
+                    from app.application.importResult import ImportError
+                    token, code = issues[0]
+                    errors.append(ImportError(
+                        index=i,
+                        message=f"{code}: extract/farm/livestock subject {token!r}",
+                    ))
+                    continue
                 row = await self.upsert_outline(outline, source_file="bundle")
                 await self._ensure_registry(world_uid, row)
                 succeeded += 1

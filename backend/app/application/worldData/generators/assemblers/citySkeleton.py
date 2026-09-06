@@ -1,7 +1,11 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, fields as dataclass_fields
 
 from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
 from app.dataModel.settlement.settlement.settlementSkeleton import SettlementSkeleton
+from app.dataModel.settlement.settlement.settlementSpecializationBind import (
+    SettlementSpecializationBind,
+)
+from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
 from app.db.models.namedLocation import NamedLocation
 
 
@@ -21,29 +25,26 @@ def city_skeleton_from_settlement(
 ) -> "CitySkeleton":
     """Mirror SettlementSkeleton onto runtime CitySkeleton (assembler §7.1)."""
     pojo = SettlementSkeleton.model_validate(_skeleton_wire_from_location(settlement))
-    frontage = (
-        list(pojo.frontage_type_order)
-        if pojo.frontage_type_order is not None
-        else None
-    )
-    counts = dict(pojo.structure_counts) if pojo.structure_counts is not None else None
-    priority = (
-        dict(pojo.structure_priority)
-        if pojo.structure_priority is not None
-        else None
-    )
-    return CitySkeleton(
-        economic_tier=economic_tier,
-        architectural_style=pojo.architectural_style,
-        dominant_material=None,
-        settlement_density=pojo.settlement_density,
-        system_city_size=settlement.system_city_size or pojo.system_city_size,
-        system_location_mood=settlement.system_location_mood or pojo.system_location_mood,
-        frontage_type_order=frontage,
-        structure_counts=counts,
-        structure_priority=priority,
-        perimeter_barrier=pojo.perimeter_barrier,
-    )
+    payload: dict = {}
+    for field in dataclass_fields(CitySkeleton):
+        name = field.name
+        if name == "economic_tier":
+            payload[name] = economic_tier
+            continue
+        if name == "dominant_material":
+            payload[name] = None
+            continue
+        value = getattr(pojo, name, None)
+        if isinstance(value, list):
+            value = list(value)
+        elif isinstance(value, dict):
+            value = dict(value)
+        payload[name] = value
+    if settlement.system_city_size:
+        payload["system_city_size"] = settlement.system_city_size
+    if settlement.system_location_mood:
+        payload["system_location_mood"] = settlement.system_location_mood
+    return CitySkeleton(**payload)
 
 
 @dataclass
@@ -65,3 +66,5 @@ class CitySkeleton:
     structure_counts:     dict[str, int] | None = None
     structure_priority:   dict[str, int] | None = None
     perimeter_barrier:    PerimeterBarrier | None = None
+    typical_districts:    list[TypicalDistrictRef] | None = None
+    system_settlement_specializations: list[SettlementSpecializationBind] | None = None

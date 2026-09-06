@@ -90,6 +90,7 @@ class SettlementAssembler:
 
         layout_cache = build_layout_cache(
             world, skeleton, district_slots, terrain_cells, catalog=catalog,
+            settlement_uid=settlement.location_uid,
         )
         logger.info(
             "SettlementAssembler | building_cache templates=%d names=%s",

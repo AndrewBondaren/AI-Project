@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.application.jsonValidation.index.worldRegistryIndex import WorldRegistryIndex
-from app.application.jsonValidation.worldSlices import climate_zone_wire_from_raw
+from app.application.jsonValidation.worldSlices import climate_zone_wire_from_raw, registry_map_to_list
 from app.dataModel import (
     WorldClimateZoneRegistry,
     WorldEconomyTierRegistry,
@@ -23,6 +23,9 @@ from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import
     WorldConnectionTypeRegistry,
 )
 from app.dataModel.materials.enums.materialCategory import MaterialCategory
+from app.dataModel.resources.worldResourceTypeRegistry import WorldResourceTypeRegistry
+from app.dataModel.flora.worldCropsRegistry import WorldCropsRegistry
+from app.dataModel.livestock.worldLivestockRegistry import WorldLivestockRegistry
 
 
 def _registry_rows(
@@ -54,6 +57,9 @@ def _canonical_rows(world_key: str) -> list[Any]:
         "climate_zone_registry": WorldClimateZoneRegistry.canonical_defaults().root,
         "economic_tier_registry": WorldEconomyTierRegistry.canonical_defaults().root,
         "connection_type_registry": WorldConnectionTypeRegistry.canonical_defaults().root,
+        "resource_type_registry": WorldResourceTypeRegistry.canonical_defaults().root,
+        "crops_registry": WorldCropsRegistry.canonical_defaults().root,
+        "livestock_registry": WorldLivestockRegistry.canonical_defaults().root,
     }[world_key]
 
 
@@ -95,6 +101,24 @@ def build_world_registry_index(
     ) or []
     tier_rows = _registry_rows(normalized, "economic_tier_registry", partial=partial) or []
     conn_rows = _registry_rows(normalized, "connection_type_registry", partial=partial) or []
+    resource_rows = _registry_rows(
+        normalized,
+        "resource_type_registry",
+        partial=partial,
+        wire_adapter=lambda raw: registry_map_to_list(raw, id_field="system_resource"),
+    ) or []
+    crop_rows = _registry_rows(
+        normalized,
+        "crops_registry",
+        partial=partial,
+        wire_adapter=lambda raw: registry_map_to_list(raw, id_field="system_crop"),
+    ) or []
+    livestock_rows = _registry_rows(
+        normalized,
+        "livestock_registry",
+        partial=partial,
+        wire_adapter=lambda raw: registry_map_to_list(raw, id_field="system_livestock"),
+    ) or []
 
     materials, liquids = _material_keys(material_rows) if material_rows else (None, None)
     if partial and "material_registry" not in normalized:
@@ -121,6 +145,21 @@ def build_world_registry_index(
         connection_types=(
             _row_keys(conn_rows, "system_connection_type")
             if conn_rows or not partial
+            else None
+        ),
+        resources=(
+            _row_keys(resource_rows, "system_resource")
+            if resource_rows or not partial
+            else None
+        ),
+        crops=(
+            _row_keys(crop_rows, "system_crop")
+            if crop_rows or not partial
+            else None
+        ),
+        livestock=(
+            _row_keys(livestock_rows, "system_livestock")
+            if livestock_rows or not partial
             else None
         ),
     )

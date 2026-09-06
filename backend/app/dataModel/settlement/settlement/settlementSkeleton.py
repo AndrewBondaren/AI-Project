@@ -6,6 +6,10 @@ from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultOnWire
 from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
+from app.dataModel.settlement.settlement.settlementSpecializationBind import (
+    SettlementSpecializationBind,
+)
+from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
 
 
 class SettlementSkeleton(BaseModel):
@@ -26,3 +30,7 @@ class SettlementSkeleton(BaseModel):
     structure_counts: DefaultOnWire[dict[str, int] | None] = None
     structure_priority: DefaultOnWire[dict[str, int] | None] = None
     perimeter_barrier: DefaultOnWire[PerimeterBarrier | None] = None
+    typical_districts: DefaultOnWire[list[TypicalDistrictRef] | None] = None
+    system_settlement_specializations: DefaultOnWire[
+        list[SettlementSpecializationBind] | None
+    ] = None

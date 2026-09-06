@@ -41,6 +41,9 @@ class PackingReason(StrEnum):
     SKIP_NO_ENTRY_NODES = "skip_no_entry_nodes"
     NO_CANDIDATES = "no_candidates"
     NO_CACHE = "no_cache"
+    SUBJECT_FALLBACK = "subject_fallback"
+    SUBJECT_UNKNOWN = "subject_unknown"
+    SUBJECT_POOL_EMPTY = "subject_pool_empty"
     PLACE = "place"
     SKIP_NO_HOLE = "skip_no_hole"
     CENTER = "center"
@@ -59,6 +62,7 @@ class PackingReason(StrEnum):
     FOOTPRINT_MISS = "footprint_miss_reservation"
     NO_ASSEMBLER = "no_assembler"
     EMPTY_FOOTPRINT = "empty_footprint"
+    STUB_NO_SHELL = "stub_no_shell"
     MISSING_TEMPLATE = "missing_template"
 
 

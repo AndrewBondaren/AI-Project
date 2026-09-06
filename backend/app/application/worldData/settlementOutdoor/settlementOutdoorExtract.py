@@ -112,7 +112,7 @@ def extract_settlement(settlement: NamedLocation, layout: SettlementLayout) -> E
             world_uid=settlement.world_uid,
             display_name=template.display_name,
             system_location_type=district_system_type,
-            system_location_subtype=template.district_type,
+            system_location_subtype=template.district_subtype,
             created_at=settlement.created_at,
             parent_location_uid=settlement.location_uid,
             is_outdoor=district_is_outdoor,

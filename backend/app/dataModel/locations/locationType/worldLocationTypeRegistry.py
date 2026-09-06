@@ -60,6 +60,14 @@ _ENGINE_ENTRIES: tuple[LocationTypeEntry, ...] = (
         display_type="Район",
         parent_types=["settlement"],
         is_outdoor=True,
+        subtypes=[
+            LocationTypeSubtypeEntry(system_subtype="extract"),
+            LocationTypeSubtypeEntry(system_subtype="process"),
+            LocationTypeSubtypeEntry(system_subtype="manufacture"),
+            LocationTypeSubtypeEntry(system_subtype="culture"),
+            LocationTypeSubtypeEntry(system_subtype="farm"),
+            LocationTypeSubtypeEntry(system_subtype="livestock"),
+        ],
     ),
     LocationTypeEntry(
         system_type="building",
@@ -119,6 +127,7 @@ class WorldLocationTypeRegistry(RootModel[list[LocationTypeEntry]]):
     """Root POJO for `worlds.location_type_registry`. Wire shape: JSON array (map normalized on import)."""
 
     SCHEMA_ID: ClassVar[str] = "SCH-WORLD-LOC-TYPE"
+    SYSTEM_TYPE_SETTLEMENT: ClassVar[str] = "settlement"
 
     root: list[LocationTypeEntry]
 

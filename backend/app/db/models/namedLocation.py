@@ -32,6 +32,8 @@ class NamedLocation:
     state_uid:                  str | None = None
     system_city_size:           str | None = None
     system_economic_tier:       str | None = None
+    typical_districts:          list | None = json_nullable_col()
+    system_settlement_specializations: list | None = json_nullable_col()
     is_public:                  bool = bool_col(default=False)
     is_forbidden:               bool = bool_col(default=False)
     is_selectable:              bool = bool_col(default=True)

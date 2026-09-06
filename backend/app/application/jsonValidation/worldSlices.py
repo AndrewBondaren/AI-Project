@@ -31,6 +31,9 @@ from app.dataModel import (
     WorldLocationTypeRegistry,
     WorldLoreRegistry,
     WorldMaterialRegistry,
+    WorldResourceTypeRegistry,
+    WorldCropsRegistry,
+    WorldLivestockRegistry,
     WorldTerrainRegistry,
     WorldWeatherTypeRegistry,
 )
@@ -42,8 +45,14 @@ from app.dataModel.roads.worldRoadSettings import WorldRoadSettings
 from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
     WorldDistrictTemplateRegistry,
 )
+from app.dataModel.settlement.district.worldDistrictZonePreference import (
+    WorldDistrictZonePreference,
+)
 from app.dataModel.settlement.settlement.worldCitySizeRegistry import WorldCitySizeRegistry
 from app.dataModel.settlement.settlement.worldLocationMoodRegistry import WorldLocationMoodRegistry
+from app.dataModel.settlement.settlement.worldSettlementSpecializationRegistry import (
+    WorldSettlementSpecializationRegistry,
+)
 from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
     WorldBarrierTemplateRegistry,
 )
@@ -199,6 +208,24 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
         facade=True,
     ),
     _registry_slice(
+        pojo_cls=WorldResourceTypeRegistry,
+        world_key="resource_type_registry",
+        facade=True,
+        wire_adapter=lambda raw: registry_map_to_list(raw, id_field="system_resource"),
+    ),
+    _registry_slice(
+        pojo_cls=WorldCropsRegistry,
+        world_key="crops_registry",
+        facade=True,
+        wire_adapter=lambda raw: registry_map_to_list(raw, id_field="system_crop"),
+    ),
+    _registry_slice(
+        pojo_cls=WorldLivestockRegistry,
+        world_key="livestock_registry",
+        facade=True,
+        wire_adapter=lambda raw: registry_map_to_list(raw, id_field="system_livestock"),
+    ),
+    _registry_slice(
         pojo_cls=WorldTerrainRegistry,
         world_key="terrain_registry",
         facade=True,
@@ -236,8 +263,18 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
         facade=True,
     ),
     _registry_slice(
+        pojo_cls=WorldSettlementSpecializationRegistry,
+        world_key="settlement_specialization_registry",
+        facade=True,
+    ),
+    _registry_slice(
         pojo_cls=WorldDistrictTemplateRegistry,
         world_key="district_template_registry",
+        facade=True,
+    ),
+    _registry_slice(
+        pojo_cls=WorldDistrictZonePreference,
+        world_key="district_zone_preference",
         facade=True,
     ),
     _registry_slice(

@@ -109,6 +109,33 @@ world.bush_registry[]
 
 **Как отличить crops от plant:** у записи `flora_kind: crops` vs `flora_kind: plant` — значение из **движкового** enum в dataModel, не свободная строка мастера.
 
+### CropKind — внутри `FloraKind.crops` (ENUM-E, не N+1)
+
+Как `ResourceKind` внутри extract-ресурсов: **класс культуры** закрыт движком, **вид** (`system_crop`) — N+1 в `worlds.crops_registry`.
+
+```text
+# SoT:
+backend/app/dataModel/flora/enums/cropKind.py   # StrEnum CropKind
+```
+
+```text
+CropKind (engine, fixed in dataModel) =
+  | grain
+  | vegetable
+  | fruit
+  | fiber
+  | fodder
+```
+
+Скот / животноводство — **не** CropKind: роль `livestock`, реестр `worlds.livestock_registry`, ENUM-E `livestock_kind` (`meat` / `dairy` / `fiber` / `draft` / `mount`). Мастер не выдумывает `crop_kind` через JSON.
+
+| | Engine (`CropKind`) | N+1 (`system_crop`) |
+|---|---|---|
+| Кто задаёт | движок (PR → **dataModel**) | мастер мира |
+| Примеры | `grain`, `fiber` | `wheat`, `flax` |
+| Новый элемент | новый kind = PR dataModel | новая строка в `crops_registry` |
+| На здании | `BuildingLayoutTemplate.crop_kind` того же ENUM-E | `subjects` = ключи реестра того же kind |
+
 ```text
 # OK — мастер кладёт вид в crops registry с engine kind
 { flora_kind: "crops", system_crop: "wheat", … }
@@ -386,15 +413,20 @@ plant_weight = k_plant * plant_volume^(2/3)
 ```text
 CropsTypeEntry:
   system_crop: str
+  crop_kind: CropKind              # ENUM-E: grain | vegetable | fruit | fiber | fodder
   display_name: str
   glossary_ref: str | null
-  flora_kind: "crops"
+  flora_kind: "crops"              # FloraKind; later morphology
   leaves_type?: ref → world leaves
   crop_max_age: int
   crop_max_volume: float
   reproduction: list[FloraReproduction]
   # + FloraClimateSuitability (B)
+```
 
+**Сейчас в коде (farm subjects):** `worlds.crops_registry` — тонкий POJO `system_crop` + `crop_kind` (+ display/glossary). Морфология / FloraGenerator — later. Канон: `wheat` (grain), `cabbage` (vegetable), `apple` (fruit), `flax` (fiber), `hay` (fodder). Шаблон фермы: `crop_kind` того же ENUM-E.
+
+```text
 CropsInstance:
   system_crop: ref → crops_type
   crop_age: int
@@ -747,6 +779,8 @@ Consumers карты **не** блокируются на flora stub: сейча
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-06 | **LivestockKind** ENUM-E (`meat`/`dairy`/`fiber`/`draft`/`mount`) + `worlds.livestock_registry`. Не CropKind. Recreate DB (`livestock_registry`). |
+| 2026-09-06 | **CropKind** ENUM-E (`grain`/`vegetable`/`fruit`/`fiber`/`fodder`) + тонкий `worlds.crops_registry` (`SCH-WORLD-CROPS`). Морфология FloraGenerator — later. Recreate DB (`crops_registry`). |
 | 2026-07-29 | Pointer: open_land grade under forest/plains → [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-07-17 | Домен flora вынесен из light bake; FloraGenerator multi-context; registries + suitability B; forest = consumer |
 | 2026-07-17 | Entry fields tree/bush/plant/crops/grass; occupancy = volume weight + bulk chunk + per-cell API |

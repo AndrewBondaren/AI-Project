@@ -23,6 +23,9 @@ from app.dataModel import (
     WorldLocationTypeRegistry,
     WorldLoreRegistry,
     WorldMaterialRegistry,
+    WorldResourceTypeRegistry,
+    WorldCropsRegistry,
+    WorldLivestockRegistry,
     WorldRoadSettings,
     WorldRoomTypeRegistry,
     WorldTerrainCategoryRegistry,
@@ -37,7 +40,13 @@ from app.dataModel.hydrology.rivers import RiverTypeClassify as PojoRiverTypeCla
 from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
     WorldDistrictTemplateRegistry,
 )
+from app.dataModel.settlement.district.worldDistrictZonePreference import (
+    WorldDistrictZonePreference,
+)
 from app.dataModel.settlement.settlement.worldCitySizeRegistry import WorldCitySizeRegistry
+from app.dataModel.settlement.settlement.worldSettlementSpecializationRegistry import (
+    WorldSettlementSpecializationRegistry,
+)
 from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
     WorldBarrierTemplateRegistry,
 )
@@ -96,6 +105,24 @@ def material_rows(world: Any) -> list[dict]:
 
 def materials_engine() -> WorldMaterialRegistry:
     return _ENGINE_MATERIALS
+
+
+def resource_types(world: Any) -> WorldResourceTypeRegistry:
+    return resolve_registry_list_world(
+        world, WorldResourceTypeRegistry, world_uid=_uid(world),
+    )
+
+
+def crops(world: Any) -> WorldCropsRegistry:
+    return resolve_registry_list_world(
+        world, WorldCropsRegistry, world_uid=_uid(world),
+    )
+
+
+def livestock(world: Any) -> WorldLivestockRegistry:
+    return resolve_registry_list_world(
+        world, WorldLivestockRegistry, world_uid=_uid(world),
+    )
 
 
 def terrain(world: Any) -> WorldTerrainRegistry:
@@ -182,6 +209,20 @@ def district_templates(world: Any) -> WorldDistrictTemplateRegistry:
     """Canonical ⊕ world by ``RUNTIME_MERGE_ID_FIELD`` (T-29)."""
     return resolve_registry_list_world(
         world, WorldDistrictTemplateRegistry, world_uid=_uid(world),
+    )
+
+
+def district_zone_preference(world: Any) -> WorldDistrictZonePreference:
+    """Canonical ⊕ world by ``zone`` (CITY-T-4e)."""
+    return resolve_registry_list_world(
+        world, WorldDistrictZonePreference, world_uid=_uid(world),
+    )
+
+
+def settlement_specializations(world: Any) -> WorldSettlementSpecializationRegistry:
+    """Canonical ⊕ world by ``RUNTIME_MERGE_ID_FIELD`` (T-29)."""
+    return resolve_registry_list_world(
+        world, WorldSettlementSpecializationRegistry, world_uid=_uid(world),
     )
 
 def world_building_layout_overrides(world: Any) -> list[BuildingLayoutTemplate]:

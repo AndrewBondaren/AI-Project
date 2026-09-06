@@ -160,7 +160,7 @@ def test_city_shared_nodes() -> None:
 
 
 def test_phase_e_building_cache() -> None:
-    """town_hall: one cache entry, civic district gets area_layout from cache."""
+    """Axis-3 names are picked; cache is a shell stub (no interiors)."""
     from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
     from app.application.worldData.generators.assemblers.settlementAssembler.buildingCache import (
         build_layout_cache,
@@ -212,16 +212,12 @@ def test_phase_e_building_cache() -> None:
     assert "town_hall" in names
 
     cache = build_layout_cache(world, skeleton, [slot_a, slot_b], None)
-    assert "town_hall" in cache
-    fp = cache["town_hall"].occupied_footprint
-    assert fp is not None and fp.width >= 4 and fp.depth >= 4
+    assert "town_hall" not in cache
+    assert len(cache) == 0
 
     layout = assembler.assemble(world, settlement)
     civic_layout = layout.district_layouts[0]
-    assert len(civic_layout.area_layouts) == 1
-    area = civic_layout.area_layouts[0]
-    assert area.building_layout.cells
-    assert area.building_location.map_x is not None
+    assert civic_layout.area_layouts == []
     print("phase E building cache checks: OK")
 
 
@@ -231,9 +227,6 @@ def test_phase_area_barriers() -> None:
 
     from app.application.worldData.generators.assemblers.areaAssembler.planner.areaBarriers import (
         should_build_area_barrier,
-    )
-    from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
-        collect_map_cells_from_layout,
     )
     from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
         lookup_building_template,
@@ -289,14 +282,7 @@ def test_phase_area_barriers() -> None:
     assert town_hall.perimeter_barrier.template == "stone_fence"
 
     layout = SettlementAssembler().assemble(world, settlement)
-    area = layout.district_layouts[0].area_layouts[0]
-    assert len(area.barrier_cells) > 0
-    assert any(c.system_terrain == "gate" for c in area.barrier_cells)
-    assert all(c.location_uid == area.building_location.location_uid for c in area.barrier_cells)
-
-    flat = collect_map_cells_from_layout(world, settlement, layout)
-    area_barrier_xy = {(c.x, c.y, c.z) for c in area.barrier_cells}
-    assert area_barrier_xy <= {(c.x, c.y, c.z) for c in flat}
+    assert layout.district_layouts[0].area_layouts == []
 
     print("phase area barriers checks: OK")
 
@@ -1440,14 +1426,11 @@ def test_phase_4_collect_map_cells() -> None:
     assert (grid_cells[0].x, grid_cells[0].y) == (1, 0)
     assert not any(c.system_building_element for c in grid_cells)
 
-    assert len(meter_cells) > 0
-    assert any(c.system_building_element for c in meter_cells)
+    assert not any(c.system_building_element for c in meter_cells)
     ox, oy, x1, y1, _ = footprint_meter_rect(world, settlement)
     for c in meter_cells:
-        if not c.system_building_element:
-            continue
         assert cell_in_footprint_meters(c.x, c.y, ox, oy, x1, y1), (
-            f"building cell ({c.x},{c.y}) outside meter footprint"
+            f"meter cell ({c.x},{c.y}) outside meter footprint"
         )
 
     assert merged == grid_cells + meter_cells
@@ -1455,7 +1438,7 @@ def test_phase_4_collect_map_cells() -> None:
 
     svc = SettlementGeneratorService()
     assert needs_settlement_geometry(settlement, world, grid_cells) is True
-    assert svc.needs_geometry(settlement, world, merged) is False
+    assert svc.needs_geometry(settlement, world, merged) is True
 
     print("phase 4 collect_map_cells checks: OK")
 

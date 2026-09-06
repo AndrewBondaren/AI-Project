@@ -189,7 +189,7 @@ named_locations (
 - `map_cells` — footprint: количество поверхностных (x,y) позиций; не 3D-объём
 - Работает одинаково для hex и square — движок оперирует количеством, не формой
 - `city_size` на `named_locations` — nullable; актуально только для settlement-типа
-- **Не тип поселения.** Масштаб footprint. Рецепт районов и обязательных зданий — subtype `settlement`. SoT: [`tz_city_generation.md`](./tz_city_generation.md) **§1.1** (не дублировать таблицу осей сюда)
+- **Не тип поселения и не специализация.** Масштаб footprint. Морфология (`city`/`village`) и роли добыча/ферма/… — [`tz_city_generation.md`](./tz_city_generation.md) **§1.1–§1.2** (не дублировать таблицу осей сюда)
 
 ---
 
@@ -234,7 +234,14 @@ room         (depth 5) — indoor: комната внутри building; leaf и
       { "system_subtype": "dungeon",          "border_category": null },
       { "system_subtype": "underground_city", "border_category": null }
   ]},
-  { "system_type": "district",   "display_type": "Район",      "parent_types": ["settlement"],               "is_outdoor": true,  "subtypes": [] },
+  { "system_type": "district",   "display_type": "Район",      "parent_types": ["settlement"],               "is_outdoor": true,  "subtypes": [
+      { "system_subtype": "extract",     "border_category": null },
+      { "system_subtype": "process",     "border_category": null },
+      { "system_subtype": "manufacture", "border_category": null },
+      { "system_subtype": "culture",     "border_category": null },
+      { "system_subtype": "farm",        "border_category": null },
+      { "system_subtype": "livestock",   "border_category": null }
+  ]},
   { "system_type": "building",   "display_type": "Строение",   "parent_types": ["settlement","district"],    "is_outdoor": false, "subtypes": [
       { "system_subtype": "residential", "border_category": null },
       { "system_subtype": "commercial",  "border_category": null },
@@ -262,7 +269,7 @@ room         (depth 5) — indoor: комната внутри building; leaf и
 ]
 ```
 
-L0 debug-карта: глиф footprint поселения — `subtypes[].l0_map_symbol` (optional; canonical: city=`u`, village=`n`, dungeon=`d`, underground_city=`g`). SoT identity = строка `named_locations`, не pack. Контракт overlay — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) § L0 identity.
+L0 debug-карта: глиф footprint поселения — `subtypes[].l0_map_symbol` (optional; canonical: city=`u`, village=`n`, dungeon=`d`, underground_city=`g`). SoT identity = строка `named_locations`, не pack. Контракт overlay — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) § L0 identity. Специализация поселения (`extract` / `farm` / …) — **не** этот subtype и не глиф; SoT [`tz_city_generation.md`](./tz_city_generation.md) §1.2. NL района: `system_location_subtype` = `district_subtype` чертежа (`extract`, `culture`, …), не `civic`.
 
 `porch` и `entrance_steps` — субтипы `room` с `is_outdoor` override на уровне `NamedLocation` (поле `is_outdoor` на записи, не из реестра). `entrance_steps` дополнительно имеет `is_transit=true`.
 
@@ -280,7 +287,7 @@ L0 debug-карта: глиф footprint поселения — `subtypes[].l0_ma
 - **`geographic`** — map anchor; **не** обязан иметь детей в иерархии settlement; может быть корнем (`parent_types` включает `null`) или child territory
 - **`geographic.river`** — **optional** имя русла; polyline / bed — `ConnectionEdge` (`location_uid` может быть `null`)
 - **`climate_pole`** — max 1 manual на мир (validator); отдельный type, не subtype `geographic`
-- **Три оси city generate** (не смешивать ключи): subtype **поселения** (`city`/`village`/…) — тип поселения; `district_type` — тип района; `structure_type` библиотеки — тип здания. Subtype **здания** в этом реестре (`residential`/…) — только дерево NL. `city_size` — масштаб. SoT: [`tz_city_generation.md`](./tz_city_generation.md) §1.1
+- **Три оси city generate** (не смешивать ключи): морфология поселения (`city`/`village`/…) ≠ **специализация** на шаблоне поселения (`extract`/`farm`/…) ≠ `district_type` (ткань) ≠ `district_subtype` (те же ключи, что специализация; NL района) ≠ `structure_type` библиотеки. Subtype **здания** в этом реестре (`residential`/…) — только дерево NL. `city_size` — масштаб. SoT: [`tz_city_generation.md`](./tz_city_generation.md) §1.1–§1.2
 
 ### Вертикальное наложение локаций
 
@@ -1025,13 +1032,29 @@ world_history (
 ## Ресурсы локаций
 
 ### `worlds.resource_type_registry` (N+1)
+
+Каталог **добываемых** ресурсов для роли `extract`. Экземпляр — N+1 (`iron_ore`, `timber`, …). **Тип добычи** — ENUM-E `resource_kind`: `ore` \| `stone` \| `timber` \| `liquid`. Не путать с `material_registry` (`iron` — слиток/стройматериал, не extract).
+
 ```json
 [
-  { "system_resource": "iron_ore", "is_renewable": false, "base_regen_per_tick": null, "default_yield": 10, "yield_item_uid": "item_iron_ore" },
-  { "system_resource": "timber",   "is_renewable": true,  "base_regen_per_tick": 5,    "default_yield": 5,  "yield_item_uid": "item_log"      }
+  { "system_resource": "iron_ore", "resource_kind": "ore", "is_renewable": false, "base_regen_per_tick": null, "default_yield": 10, "yield_item_uid": "item_iron_ore" },
+  { "system_resource": "copper_ore", "resource_kind": "ore", "is_renewable": false, "default_yield": 10, "yield_item_uid": "item_copper_ore" },
+  { "system_resource": "timber", "resource_kind": "timber", "is_renewable": true, "base_regen_per_tick": 5, "default_yield": 5, "yield_item_uid": "item_log" }
 ]
 ```
-`display_*` — из `lore_registry`.
+`display_*` — из `lore_registry` / поле `display_name`. Builtin канон — POJO `WorldResourceTypeRegistry` **только если колонка мира пустая**. Непустой реестр мира — только его ключи; generate не подставляет `iron_ore`, если его нет у мастера. Шаблон здания: `resource_kind` того же ENUM-E; `subjects` на extract-чертеже — ключи **этого** реестра того же kind. Пустой subject на роли extract — RNG из мира того же kind + packing log. SoT: [`tz_city_generation.md`](./tz_city_generation.md) §1.2.1.
+
+### `worlds.crops_registry` (N+1)
+
+Каталог **культур** для роли `farm`. Экземпляр — N+1 (`wheat`, `flax`, …). **Вид культуры** — ENUM-E `crop_kind`: `grain` \| `vegetable` \| `fruit` \| `fiber` \| `fodder`. Внутри `FloraKind.crops` ([tz_flora.md](./tz_flora.md)); скот не crop. Не путать с extract `resource_type_registry`.
+
+Builtin канон — POJO `WorldCropsRegistry` только на пустой колонке; непустой мир — только его культуры. Шаблон фермы: `crop_kind` того же ENUM-E; `subjects` — ключи этого реестра того же kind. Пустой farm-subject — RNG из мира + log ([tz_city_generation.md](./tz_city_generation.md) §1.2.1). Location-bind REF-W для farm subjects — ещё не wired.
+
+### `worlds.livestock_registry` (N+1)
+
+Каталог **скота** для роли `livestock` (не `farm`). Экземпляр — N+1 (`cow`, `horse`, …). **Предназначение** — ENUM-E `livestock_kind`: `meat` \| `dairy` \| `fiber` \| `draft` \| `mount`. Яйца — yield, не kind. Постройка не следует из kind (птичник / хлев / конюшня — N+1 чертеж). Дикая фауна — later.
+
+Канон: `pig`/`chicken` meat, `cow` dairy, `sheep` fiber, `ox`/`donkey` draft, `horse` mount — только если колонка мира пустая. Builtin чертёж `livestock` — generic, без `livestock_kind`. Пустой livestock-subject — RNG из мира + log ([tz_city_generation.md](./tz_city_generation.md) §1.2.1). Location-bind REF-W для livestock subjects — ещё не wired.
 
 ### `location_resources`
 ```sql

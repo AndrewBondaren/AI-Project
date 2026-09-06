@@ -7,6 +7,10 @@ from typing import Any
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire, IgnoreOnWire, StrictOnWire
+from app.dataModel.settlement.settlement.settlementSpecializationBind import (
+    SettlementSpecializationBind,
+)
+from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
 
 
 class BundleNamedLocation(BaseModel):
@@ -38,6 +42,10 @@ class BundleNamedLocation(BaseModel):
     state_uid: DefaultOnWire[str | None] = None
     system_city_size: DefaultOnWire[str | None] = None
     system_economic_tier: DefaultOnWire[str | None] = None
+    typical_districts: DefaultOnWire[list[TypicalDistrictRef] | None] = None
+    system_settlement_specializations: DefaultOnWire[
+        list[SettlementSpecializationBind] | None
+    ] = None
     is_public: DefaultOnWire[bool] = False
     is_forbidden: DefaultOnWire[bool] = False
     is_selectable: DefaultOnWire[bool] = True
