@@ -52,7 +52,7 @@ from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
 )
 from app.dataModel.locations.namedLocation import BundleNamedLocation
 from app.dataModel.settlement.enums.districtDensity import DistrictDensity
-from app.dataModel.settlement.settlement.citySizeEntry import CitySizeEntry
+from app.dataModel.settlement.settlement.settlementSizeEntry import SettlementSizeEntry
 from app.dataModel.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.dataModel.settlement.settlement.settlementSpecializationBind import (
     SettlementSpecializationBind,
@@ -60,7 +60,9 @@ from app.dataModel.settlement.settlement.settlementSpecializationBind import (
 from app.dataModel.settlement.settlement.settlementSpecializationEntry import (
     SettlementSpecializationEntry,
 )
-from app.dataModel.settlement.settlement.worldCitySizeRegistry import WorldCitySizeRegistry
+from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import (
+    WorldSettlementSizeRegistry,
+)
 from app.dataModel.settlement.settlement.worldSettlementSpecializationRegistry import (
     WorldSettlementSpecializationRegistry,
 )
@@ -101,18 +103,12 @@ def _world(**kwargs) -> World:
         "name": "Test",
         "created_at": "2026-01-01T00:00:00",
         "map_cell_size_m": 3000,
-        "city_size_registry": [
-            {"system_size": "city", "display_size": "City", "footprint_multiplier": 2.0},
-            {"system_size": "town", "display_size": "Town", "footprint_multiplier": 1.0},
-            {"system_size": "village", "display_size": "Village", "footprint_multiplier": 0.5},
-            {"system_size": "hamlet", "display_size": "Hamlet", "footprint_multiplier": 0.25},
-        ],
     }
     payload.update(kwargs)
     return World(**payload)
 
 
-def _settlement(*, subtype: str | None, size: str = "city", loc_type: str = "settlement") -> NamedLocation:
+def _settlement(*, subtype: str | None, size: str = "medium", loc_type: str = "settlement") -> NamedLocation:
     loc = NamedLocation(
         location_uid="loc-1",
         world_uid="w1",
@@ -437,7 +433,7 @@ class DistrictSelectTest(unittest.TestCase):
 
     def test_recipe_city_types_are_typical_only(self) -> None:
         world = _world()
-        settlement = _settlement(subtype="city", size="city")
+        settlement = _settlement(subtype="city", size="medium")
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         types = {slot.district_template.district_type for slot in slots}
         typical = set(
@@ -455,7 +451,7 @@ class DistrictSelectTest(unittest.TestCase):
 
     def test_recipe_unknown_subtype_is_legacy(self) -> None:
         world = _world()
-        settlement = _settlement(subtype="not_a_real_subtype", size="city")
+        settlement = _settlement(subtype="not_a_real_subtype", size="medium")
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         self.assertTrue(slots)
 
@@ -463,7 +459,7 @@ class DistrictSelectTest(unittest.TestCase):
 class SpecializationPassTest(unittest.TestCase):
     def test_extract_places_mining_keeps_civic_center(self) -> None:
         world = _world()
-        settlement = _settlement(subtype="city", size="city")
+        settlement = _settlement(subtype="city", size="medium")
         settlement.system_settlement_specializations = ["extract"]
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         names = {slot.district_template.system_name for slot in slots}
@@ -476,7 +472,7 @@ class SpecializationPassTest(unittest.TestCase):
 
     def test_city_typical_districts_before_extract(self) -> None:
         world = _world()
-        settlement = _settlement(subtype="city", size="city")
+        settlement = _settlement(subtype="city", size="medium")
         settlement.typical_districts = [{"district_type": "civic"}]
         settlement.system_settlement_specializations = ["extract"]
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
@@ -494,7 +490,7 @@ class SpecializationPassTest(unittest.TestCase):
 
     def test_farm_village_places_farm_quarter(self) -> None:
         world = _world()
-        settlement = _settlement(subtype="village", size="village")
+        settlement = _settlement(subtype="village", size="medium")
         settlement.system_settlement_specializations = [
             {"system_specialization": "farm", "subjects": ["wheat"]},
         ]
@@ -504,7 +500,7 @@ class SpecializationPassTest(unittest.TestCase):
 
     def test_livestock_village_places_livestock_quarter(self) -> None:
         world = _world()
-        settlement = _settlement(subtype="village", size="village")
+        settlement = _settlement(subtype="village", size="medium")
         settlement.system_settlement_specializations = [
             {"system_specialization": "livestock", "subjects": ["cow"]},
         ]
@@ -514,7 +510,7 @@ class SpecializationPassTest(unittest.TestCase):
 
     def test_culture_religion_requires_temple_not_theater(self) -> None:
         world = _world()
-        settlement = _settlement(subtype="city", size="city")
+        settlement = _settlement(subtype="city", size="medium")
         settlement.system_settlement_specializations = [
             {"system_specialization": "culture", "subjects": ["religion"]},
         ]
@@ -814,26 +810,30 @@ class Path3GenerateTest(unittest.TestCase):
 
 class CityT4PlannerTest(unittest.TestCase):
     def test_city_size_rank_canonical_unknown_and_overlay(self) -> None:
-        canon = WorldCitySizeRegistry.canonical_defaults()
-        self.assertEqual(canon.rank("hamlet"), 0)
-        self.assertEqual(canon.rank("city"), 3)
-        self.assertEqual(canon.rank("nope"), 0)
-        self.assertEqual(canon.rank(None), 0)
-        with_burg = WorldCitySizeRegistry([
-            *canon.root[:2],
-            CitySizeEntry(system_size="burg", display_size="Burg"),
-            *canon.root[2:],
+        canon = WorldSettlementSizeRegistry.canonical_defaults()
+        small = canon.root[0].system_size
+        medium = WorldSettlementSizeRegistry.default_system_size()
+        large = canon.root[-1].system_size
+        self.assertEqual(canon.rank(small), 0)
+        self.assertEqual(canon.rank(medium), 1)
+        self.assertEqual(canon.rank(large), 2)
+        self.assertEqual(canon.rank("nope"), -1)
+        self.assertEqual(canon.rank(None), 1)
+        with_burg = WorldSettlementSizeRegistry([
+            *canon.root[:1],
+            SettlementSizeEntry(system_size="burg", display_size="Burg"),
+            *canon.root[1:],
         ])
-        self.assertEqual(with_burg.rank("burg"), 2)
-        self.assertEqual(with_burg.rank("town"), 3)
+        self.assertEqual(with_burg.rank("burg"), 1)
+        self.assertEqual(with_burg.rank(medium), 2)
         world = SimpleNamespace(
             world_uid="w1",
-            city_size_registry=[{"system_size": "village", "display_size": "Overlay Village"}],
+            city_size_registry=[{"system_size": "medium", "display_size": "Overlay Medium"}],
         )
         merged = city_sizes(world)
-        self.assertEqual(merged.rank("village"), 1)
-        self.assertEqual(merged.entry_for("village").display_size, "Overlay Village")
-        self.assertEqual(merged.rank("city"), 3)
+        self.assertEqual(merged.rank("medium"), 1)
+        self.assertEqual(merged.entry_for("medium").display_size, "Overlay Medium")
+        self.assertEqual(merged.rank(large), 2)
 
     def test_zone_preference_overlay_and_unknown_type_score(self) -> None:
         world = SimpleNamespace(
@@ -854,7 +854,7 @@ class CityT4PlannerTest(unittest.TestCase):
 
     def test_civic_center_fill_excludes_stub_catalog_leftover(self) -> None:
         world = _world()
-        settlement = _settlement(subtype="city", size="city")
+        settlement = _settlement(subtype="city", size="medium")
         skeleton = _skeleton(world, settlement)
         slots = plan_district_slots(world, settlement, skeleton, None)
         center = next(
@@ -870,7 +870,7 @@ class CityT4PlannerTest(unittest.TestCase):
 
     def test_culture_and_civic_center_both_place(self) -> None:
         world = _world()
-        settlement = _settlement(subtype="city", size="city")
+        settlement = _settlement(subtype="city", size="medium")
         settlement.typical_districts = [{"district_type": "civic"}]
         settlement.system_settlement_specializations = ["culture"]
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
@@ -880,7 +880,7 @@ class CityT4PlannerTest(unittest.TestCase):
 
     def test_religion_tags_temple_not_theater(self) -> None:
         world = _world()
-        settlement = _settlement(subtype="city", size="city")
+        settlement = _settlement(subtype="city", size="medium")
         settlement.system_settlement_specializations = [
             {"system_specialization": "culture", "subjects": ["religion"]},
         ]
@@ -891,7 +891,7 @@ class CityT4PlannerTest(unittest.TestCase):
 
     def test_extract_multiple_subject_kinds_tag_mine(self) -> None:
         world = _world()
-        settlement = _settlement(subtype="city", size="city")
+        settlement = _settlement(subtype="city", size="medium")
         settlement.system_settlement_specializations = [
             {
                 "system_specialization": "extract",

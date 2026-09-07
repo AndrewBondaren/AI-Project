@@ -1,4 +1,9 @@
-from app.application.jsonValidation import city_sizes, district_templates as district_templates_registry
+from app.application.jsonValidation import (
+    city_sizes,
+    district_templates as district_templates_registry,
+    location_types,
+)
+from app.application.jsonValidation.settlementSizeResolve import resolve_settlement_size_key
 from app.application.worldData.generators.coordinates import (
     cell_in_local_meter_rect,
     cell_in_surface_grid_rect,
@@ -17,8 +22,13 @@ from app.application.worldData.generators.coordinates.types import (
     MeterZ,
     SurfaceGridRect,
 )
+from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
+    WorldLocationTypeRegistry,
+)
 from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.settlement.settlement.worldCitySizeRegistry import WorldCitySizeRegistry
+from app.dataModel.settlement.settlement.settlementFootprint import (
+    resolve_settlement_footprint_multiplier,
+)
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -41,15 +51,32 @@ __all__ = [
 ]
 
 
+def _size_only_morphology() -> str:
+    """Callers that only pass rank: city subtype from engine (not a metre table copy)."""
+    settlement = WorldLocationTypeRegistry.canonical_engine().entry_for(
+        WorldLocationTypeRegistry.SYSTEM_TYPE_SETTLEMENT,
+    )
+    if settlement is None or not settlement.subtypes:
+        raise RuntimeError("engine settlement subtypes missing")
+    for sub in settlement.subtypes:
+        if sub.required_structure_types:
+            return sub.system_subtype
+    return settlement.subtypes[0].system_subtype
+
+
 def footprint_multiplier(world: World, system_city_size: str | None) -> float:
-    entry = city_sizes(world).entry_for(system_city_size or "")
-    if entry is not None:
-        if entry.footprint_multiplier is not None:
-            return float(entry.footprint_multiplier)
-        if entry.map_cells_count is not None:
-            side = max(1, int(entry.map_cells_count) * 2 + 1)
-            return float(side)
-    return WorldCitySizeRegistry.footprint_multiplier_defaults().get(system_city_size or "hamlet", 1.0)
+    sizes = city_sizes(world)
+    key = resolve_settlement_size_key(
+        sizes,
+        system_city_size,
+        world_uid=getattr(world, "world_uid", "") or "",
+    )
+    return resolve_settlement_footprint_multiplier(
+        _size_only_morphology(),
+        key,
+        location_types(world),
+        sizes,
+    )
 
 
 def footprint_side_m(world: World, system_city_size: str | None) -> int:

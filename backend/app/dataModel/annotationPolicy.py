@@ -48,26 +48,34 @@ type DefaultEnumOnWire[E: StrEnum] = Annotated[
 
 
 def _annotation_parts(annotation: Any) -> tuple[Any, tuple[Any, ...]]:
-    """Unwrap PEP 695 wire aliases; return inner type and collected metadata."""
-    if hasattr(annotation, "__value__"):
-        annotation = annotation.__value__
+    """Unwrap PEP 695 wire aliases; return inner type and collected metadata.
 
+    Specialized aliases (``StrictOnWire[Concrete]``) are ``GenericAlias``: do
+    not peel ``__value__`` (that is ``Annotated[T, …]`` with the unbound TypeVar).
+    Policy metadata comes from the alias origin's ``Annotated`` value.
+    """
     meta: list[Any] = []
     inner = annotation
     while True:
+        origin = get_origin(inner)
+        if origin is not None and getattr(origin, "__name__", "") in _WIRE_ALIAS_NAMES:
+            args = get_args(inner)
+            alias_val = getattr(origin, "__value__", None)
+            if get_origin(alias_val) is Annotated:
+                meta.extend(get_args(alias_val)[1:])
+            if not args:
+                break
+            inner = args[0]
+            continue
+        if type(inner).__name__ == "TypeAliasType":
+            inner = inner.__value__
+            continue
         if get_origin(inner) is Annotated:
             args = get_args(inner)
             if not args:
                 break
             inner = args[0]
             meta.extend(args[1:])
-            continue
-        origin = get_origin(inner)
-        if origin is not None and getattr(origin, "__name__", "") in _WIRE_ALIAS_NAMES:
-            args = get_args(inner)
-            if not args:
-                break
-            inner = args[0]
             continue
         break
     return inner, tuple(meta)

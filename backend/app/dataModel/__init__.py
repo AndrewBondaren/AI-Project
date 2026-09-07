@@ -67,10 +67,12 @@ from app.dataModel.annotationPolicy import (
     unwrap_wire_type,
     wire_enum_class,
 )
+from app.dataModel.registryKey import RegistryKey, registry_key_target
 from app.dataModel.roads import RoadSettingsEntry, WorldRoadSettings
 from app.dataModel.settlement import (
     CellZone,
-    CitySizeEntry,
+    SettlementSizeEntry,
+    SettlementSizeKey,
     DEFAULT_BLOCK_SIZE_M,
     DistrictDensity,
     DistrictTemplateEntry,
@@ -83,12 +85,18 @@ from app.dataModel.settlement import (
     SettlementSpecializationBind,
     SettlementSpecializationEntry,
     TypicalDistrictRef,
-    WorldCitySizeRegistry,
+    WorldSettlementSizeRegistry,
     WorldDistrictTemplateRegistry,
     WorldDistrictZonePreference,
     WorldLocationMoodRegistry,
     WorldSettlementSpecializationRegistry,
     block_size_for_density,
+)
+from app.dataModel.settlement.settlement.settlementFootprint import (
+    SettlementFootprintError,
+    resolve_settlement_footprint_multiplier,
+    settlement_size_registry_issues,
+    village_city_footprint_invariant_holds,
 )
 from app.dataModel.structure import (
     BarrierTemplateEntry,
@@ -131,7 +139,9 @@ __all__ = [
     "BuildingTemplateOutline",
     "BuildingTemplateRegistryEntry",
     "CellZone",
-    "CitySizeEntry",
+    "SettlementFootprintError",
+    "SettlementSizeEntry",
+    "SettlementSizeKey",
     "ClimateZone",
     "ClimateZoneEntry",
     "ClimateZoneProfile",
@@ -154,6 +164,8 @@ __all__ = [
     "DistrictTopologySlot",
     "DistrictZonePreferenceEntry",
     "FrontageTypeOrder",
+    "RegistryKey",
+    "registry_key_target",
     "PlacementCondition",
     "PlacementConditionType",
     "EconomyTierEntry",
@@ -193,7 +205,8 @@ __all__ = [
     "WeatherTypeEntry",
     "WorldBarrierTemplateRegistry",
     "WorldBuildingTemplateRegistry",
-    "WorldCitySizeRegistry",
+    "WorldSettlementSizeRegistry",
+    "resolve_settlement_footprint_multiplier",
     "WorldClimateScalars",
     "WorldClimateZoneRegistry",
     "WorldConnectionTypeRegistry",

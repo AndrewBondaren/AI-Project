@@ -66,7 +66,7 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
             PlacementCondition(
                 type="adjacent_terrain",
                 terrain_types=["liquid_body"],
-                min_count=1,
+                min_adjacent_cells=1,
             ),
             PlacementCondition(type="min_city_size", size="town"),
         ],

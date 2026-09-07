@@ -421,25 +421,51 @@ flowchart TB
 | **WP-27** | ✅ **Bake modes (контракт мастера 2026-07-19):** `light` = тайлы с локациями; `full` = весь `world_bounds`; `detailed` = L2 одной локации — см. § **Bake modes** |
 | **WP-28** | ✅ detect (`pack_completeness`); resume — caller `POST pack/bake` (incremental skip / auto-loop — ⬜); classifier fields → sync к новому scope (impl ⬜) |
 
-### Bake modes (утверждено мастером 2026-07-19)
+### Bake modes (утверждено мастером 2026-07-19; контракт city 2026-09-06)
 
-Продуктовый **процесс** L0/L2 bake (terrain + hydrology + climate). Домен generators — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § **Bake modes**; hydro — [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md); climate — [`tz_climate.md`](./tz_climate.md). После успешного **`full_bake` L0** — post-pass **`settlement_topology`** ([city](./tz_city_generation.md) §8, outdoor **C23**): не 4-й `mode`, не L2, не packing, не compose.
+Продуктовый **процесс** pack. Bake jobs — **консьюмеры** генераторов, не их имплементация. Смена L0-compose / L2 refine / C23 planner / C11 packing **не** меняет тело bake — только вызовы контрактов.
 
-| Термин | Wire `mode` | LOD | Scope |
+| Термин | Wire `mode` | Pack'ает | Scope |
 |---|---|---|---|
-| **light_bake** | `light` | **только L0** + climate coarse | **Все** macro-tiles с `named_locations` **∪ declared hydro** (тайлы локаций + declare endpoints) |
-| **full_bake** | `full` | **только L0** + climate coarse | **Тот же** L0 pipeline на **весь** `world_bounds` (AABB квадрат/прямоугольник) |
-| **detailed_bake** | `detailed` + `scope` (+ `location_uid` при `scope=location`) | **L2** | `scope=location` → `location_terrain` (+ climate fine territory); `scope=wilderness` → wilderness chunks по L0 tiles (optional offline topping). Mill/paint grade: query `grade_mill`/`grade_paint` (default **off**; paint без mill → paint off) |
+| **light_bake** | `light` | **только L0** + climate coarse | **Все** macro-tiles с `named_locations` **∪ declared hydro** |
+| **full_bake** | `full` | **L0** всего `world_bounds` + **C23 topology** (не L2, не здания) | AABB мира |
+| **detailed_bake** | `detailed` + `scope` (+ `location_uid` при `scope=location`) | **детальный эталон локации** (или wilderness topping) | см. контракт ниже |
 
-#### Job boundaries (утверждено мастером 2026-07-20)
+#### Контракт `full_bake` (locked)
 
-**Инвариант:** `light_bake` и `full_bake` **не** включают L2. L2 — только `detailed_bake` и/или **отдельная** runtime/entry джоба (WP-13). Packing зданий города — не этот job (C11 / outdoor). Topology районов — **post-pass `full_bake`**, не compose.
+Консьюмер. Порядок **обязателен**:
+
+1. L0 compose на весь `world_bounds` (тот же pipeline, что light) + **шов мира** на краях AABB.
+2. **`plan_topology`** (C23) — районы + `settlement_gate` + city-коридоры в SQL. Не C22, не `settlement.zst`.
+
+| Делает | Не делает |
+|---|---|
+| L0 pack, climate coarse, topology freeze | L2 / `location_terrain`; C11 здания; интерьеры; entry refine |
+
+#### Контракт `detailed_bake` (locked)
+
+**Pack-job локации**, не «terrain_bake». Консьюмер **двух** интерфейсов. Порядок **обязателен**:
+
+1. **Сначала** генерация terrain L2 (refine facade / `FineChunkRunner`) — земля под локацией (`location_terrain`). Mill/paint default **off**.
+2. **Затем** если `scope=location` и uid settlement-like — генерация поселения **поверх** этой земли: тот же C11 `materialize`, что debug `POST …/generate-settlement` (`settlement.zst` + SQL здания, reuse C23).
+
+`scope=wilderness` — только шаг 1. Интерьеры — не этот mode. Topology **не invent** здесь (C23 — шаг full); если freeze нет, C11 сам делает тот же `plan_topology` (уже в `materialize`).
+
+Без шага 2 город после detailed **неиграбелен**. HTTP generate-settlement — другой caller того же C11, не второй product-job. Хук шага 2 в коде — ✅.
+
+| Делает | Не делает |
+|---|---|
+| L2; C11 поверх L2 на городе | L0; шов мира; алгоритм C22 / FineChunk внутри оркестратора detailed; C11 на wilderness |
+
+#### Job boundaries (утверждено мастером 2026-07-20; city-слой 2026-09-06)
+
+**Инвариант:** `light_bake` и `full_bake` **не** включают L2. L2 — шаг 1 `detailed_bake` и/или runtime/entry (WP-13). Topology — шаг 2 `full_bake`, не compose L0.
 
 | Job | Делает | Не делает |
 |---|---|---|
 | **light_bake** | L0 на location∪hydro tiles; `locations_index`; climate coarse; finalize pack | L2 `location_terrain` / wilderness chunks; blocking `refine_from_entry`; **settlement_topology** (соседние тайлы большого footprint могут отсутствовать) |
-| **full_bake** | L0 на весь `world_bounds` (добить дыры после light); **шов мира** на крайних макро-тайлах (антагонисты AABB). Uid тайла: [`PackJobUid`](../backend/app/dataModel/worldPack/packJobUid.py) + [`pack_job_seed`](../backend/app/application/worldData/pack/bake/macroTileUid.py). **После L0 (тот же процесс мастера, не новый `mode`):** `settlement_topology` — SQL районы + city gates ([city](./tz_city_generation.md) §8, [outdoor](./tz_settlement_outdoor.md) **C23**). Не внутри `SettlementContributor` | L2; entry refine; packing зданий / `l.{uid}.settlement.zst`; occupancy-flood |
-| **detailed_bake** | L2 offline: `scope=location` (одна `location_uid`) или `scope=wilderness` (tile topping от parent light); partition WP-19. Refine — § Идея 2; outdoor grade generate — [`tz_terrain_relief.md`](./tz_terrain_relief.md); bake **R36u** — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). Mill/paint **не** в этом job по умолчанию — только `grade_mill`/`grade_paint=true`. **ГМ:** может залить полный рельеф мира в pack; тогда сцена только читает. Районы C23 уже в SQL — L2 видит meter-rect, не только диск пина | L0 world map bake; шов мира; climate fine на wilderness (debt); **не** invent topology; packing C11 — отдельный generate-settlement, не этот job |
+| **full_bake** | L0 на весь `world_bounds` + шов мира. **Шаг 2 того же job:** `plan_topology` (C23). Не внутри `SettlementContributor` | L2; entry refine; C11 / `settlement.zst`; occupancy-flood |
+| **detailed_bake** | **Шаг 1:** L2 refine (консьюмер terrain). **Шаг 2** если `scope=location` settlement-like: C11 `materialize` **поверх** L2. Mill/paint default **off**. C23 уже в SQL — L2 по footprint | L0; шов мира; invent topology отдельным алгоритмом; C22 внутри bake; интерьеры; C11 на wilderness |
 | **entry / WP-13** | scene volume + background rings/path у spawn. **Без** mill/paint (игрок не ждёт grade generate) | часть `POST …/pack/bake?mode=light\|full`; mill/paint |
 | **on-demand grade (не bake)** | Product: DAG **только** когда сцена требует grade и в pack нет — 1…N чанков (не тайл/мир; mill спекулятивно **дорого**). Debug: `POST …/refine-chunk`. Тот же `FineChunkRunner` (R41) | mill на каждый scene/entry; GradeBakeOrchestrator; `generate_detailed_grade` + ручная запись pack; `detailed_bake` `max_tiles=1` как «один чанк» |
 | **modification** (не bake job) | Patch Store: `terrain_delta` / `climate_delta` в `patch_bounds`. Повторный materialize / patch на объёме с grade → **сброс** stale relief ([`tz_terrain_relief.md`](./tz_terrain_relief.md) § Caller). Не mill в том же fill-only проходе | `POST pack/bake`; rewrite `complete` tile; четвёртый `mode=`; stamp старого grade на новые колонки |
@@ -448,23 +474,21 @@ flowchart TB
 
 **Технический шов (chunk / tile rim / `ColumnRect`) — не продукт.** Нарезка джоб и pack-blob. Климат, полотно дороги, **локация/город** и шаг сетки **проходят** ребро как один мир ([`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **C29**). `territory_volume` **может** пересекать макро-тайлы: один `locations/l.{uid}.terrain.zst`, wilderness mask на каждом пересечённом тайле. WP-19 — куда писать клетку, не стена и не второй `location_uid`. Шов мира (антагонисты) — другая топология; внутри AABB сосед = `grid_neighbor`.
 
-**После light (отдельный шаг процесса, не фаза bake):** caller **может** стартовать entry job (blocking scene у player entry point + enqueue фоновой инициализации) — это **старт другой джобы**, не продолжение `light_bake`. Full не обязан ждать entry; entry не обязан ждать full. **После full L0:** caller **обязан** (target) прогнать `settlement_topology` (C23), затем опционально world routes на `settlement_gate`. Не часть L0 compose.
+**После light (отдельный шаг процесса, не фаза bake):** caller **может** стартовать entry job — **другая джоба**, не продолжение `light_bake`. Full не обязан ждать entry. Topology — **внутри** `full_bake` (шаг 2), не отдельный клик мастера. World routes на `settlement_gate` — после C23, не L0 compose.
 
 ```mermaid
 flowchart LR
   LB["light_bake L0 only"]
-  FB["full_bake L0 world_bounds"]
-  TOPO["settlement_topology C23"]
-  DB["detailed_bake L2 scope location|wilderness"]
-  EJ["entry / WP-13 L2 scene + bg"]
+  FB["full_bake: L0 then C23"]
+  DB["detailed_bake: L2 then C11 if city"]
+  EJ["entry / WP-13 L2 scene"]
   MOD["modification Patch Store"]
   LB -->|"resume / offline"| FB
-  LB -.->|"отдельная джоба после light"| EJ
-  FB --> TOPO
-  TOPO -->|"per location / wilderness topping"| DB
+  LB -.->|"другая джоба"| EJ
+  FB -->|"scope=location / wilderness"| DB
   EJ --> DB
-  FB -.->|"overlay, не rewrite"| MOD
-  DB -.->|"overlay, не force-rebuild complete"| MOD
+  FB -.->|"overlay"| MOD
+  DB -.->|"overlay"| MOD
 ```
 
 **Инвариант процесса (мастер):** отдельного product bake mode «wilderness» **нет**. Полное заполнение прямоугольника мира L0 = `full_bake`. L2 wilderness topping = `detailed&scope=wilderness` (тот же product mode `detailed`, не третий bake mode).
@@ -477,8 +501,9 @@ Pack (`world_map.zst`, wilderness chunks, `location_terrain`) = **immutable snap
 
 | Слой процесса | Что пишет | Когда |
 |---|---|---|
-| **full_bake** | L0 pack | мастер / init мира |
-| **detailed_bake** / entry | L2 pack (refine L0) | topping / сцена |
+| **full_bake** | L0 pack + C23 topology | мастер / init мира |
+| **detailed_bake** | L2, затем C11 на городе; wilderness = L2 | детализация локации / topping |
+| **entry / WP-13** | L2 scene (без C11, без mill) | gameplay spawn |
 | **modification** | `map_cell_patches` (`terrain_delta` / `climate_delta` / …) | ход: взрыв, природа, климат в `patch_bounds` |
 
 | Можно | Нельзя |
@@ -511,7 +536,7 @@ SoT generate/persist patch: [`tz_terrain_generation.md`](./tz_terrain_generation
 |---|---|---|
 | **1. light_bake complete** | L0 на **всех** location tiles; pins в `locations_index` | World map по локациям; вне них — дыры до full; L2 lazy |
 | **2. full_bake complete** | L0 на **весь** `world_bounds` | Сплошная world map в прямоугольнике мира; L2 lazy |
-| **3. full + all detailed_bake complete** | (2) + `location_terrain` на каждый pin | Тёплый старт локаций |
+| **3. full + all detailed_bake complete** | (2) + `location_terrain` на каждый pin + **`settlement.zst` на settlement-like** | Тёплый старт: земля и outdoor город |
 
 **Инвариант:** все три — валидные master packages. Partial → **определять и дозаполнять** (WP-28), не требовать case 3. Игрок **может** войти после light (не ждать full).
 
@@ -1813,7 +1838,7 @@ flowchart TB
 | `POST /worlds/{uid}/pack/import` | zip → `pack/` | L6 |
 | `POST /worlds/{uid}/map/pack/bake?mode=light` | **light_bake** | ✅ |
 | `POST …/pack/bake?mode=full` | **full_bake** — весь `world_bounds` L0 | ✅ |
-| `POST …/pack/bake?mode=detailed&scope=location&location_uid=` | **detailed_bake** location | ✅ (+ climate fine; `grade_mill`/`grade_paint` optional, default **off**) |
+| `POST …/pack/bake?mode=detailed&scope=location&location_uid=` | **detailed_bake** location: L2 ✅; C11 на settlement-like ✅ (тот же `materialize`) |
 | `POST …/pack/bake?mode=detailed&scope=wilderness` | **detailed_bake** wilderness topping | ✅ (`grade_mill`/`grade_paint` optional, default **off**) |
 | `POST …/map/refine-chunk?gx=&gy=&cx=&cy=` | one wilderness chunk re-refine (same `FineChunkRunner`); `grade_mill`/`grade_paint` omit = off | ✅ debug |
 | `GET /worlds/{uid}/map/loading-progress` | progress + `pack_completeness` | ✅ pct + classifier |
@@ -2044,7 +2069,7 @@ flowchart LR
 | [`tz_terrain_relief.md`](./tz_terrain_relief.md) | outdoor grade generate (очереди, стрелки); холм ≠ Grade. Bake R36 — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) |
 | [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) | Pass 1.5, liquid_candidate |
 | [`tz_climate.md`](./tz_climate.md) | SurfaceClimateField, Climate LOD |
-| [`tz_city_generation.md`](./tz_city_generation.md) | CitySkeleton import; **§8 topology** после `full_bake` L0; packing — lazy / C11 |
+| [`tz_city_generation.md`](./tz_city_generation.md) | CitySkeleton import; **§8 topology** после `full_bake`; packing = C11, product caller = **detailed_bake** |
 | [`tz_city_generation_technical_debt.md`](./tz_city_generation_technical_debt.md) | **CITY-T-5** швы после topology-on-bake (не compose, не 4-й mode) |
 | [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) | Outdoor city layer на pack (граф участков); **C23** topology; не `location_terrain`; authored ≠ Patch Store |
 | [`project_data_storage_tz.md`](./project_data_storage_tz.md) | schema patch store |
@@ -2058,7 +2083,7 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
-| 2026-09-06 | **CITY-T-5:** техдолг после C23 — [`tz_city_generation_technical_debt.md`](./tz_city_generation_technical_debt.md). Job boundaries bake не менять. |
+| 2026-09-06 | **Контракт bake:** `full_bake` = L0 затем C23. `detailed_bake` = L2 затем C11 поверх (settlement-like). Bake = консьюмер; хук C11 ✅. |
 | 2026-09-06 | **Job boundaries:** после `full_bake` L0 — post-pass `settlement_topology` (C23). Не 4-й mode, не L2, не packing, не compose. `light_bake` topology не делает. |
 | 2026-08-30 | WP-3/WP-20: authored outdoor city = pack `CITY_STRUCTURE`; gameplay = patches |
 | 2026-08-30 | **Бюджет mill:** не спекулятивно; несколько чанков на сцене ок; полный мир — bake ГМ. APP-PERF-R1 = тайл целиком. |

@@ -1,4 +1,4 @@
-"""Smoke: detailed_bake L2 — location territory and/or wilderness tiles.
+"""Smoke: detailed_bake — location L2 then C11 if settlement-like; wilderness L2.
 
 Assumes the world already has L0 parent light (after light_and_full_bake / full).
 Does **not** wipe pack, re-import, or run entry/bg refine.

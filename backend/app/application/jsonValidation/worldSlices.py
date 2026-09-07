@@ -48,7 +48,9 @@ from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
 from app.dataModel.settlement.district.worldDistrictZonePreference import (
     WorldDistrictZonePreference,
 )
-from app.dataModel.settlement.settlement.worldCitySizeRegistry import WorldCitySizeRegistry
+from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import (
+    WorldSettlementSizeRegistry,
+)
 from app.dataModel.settlement.settlement.worldLocationMoodRegistry import WorldLocationMoodRegistry
 from app.dataModel.settlement.settlement.worldSettlementSpecializationRegistry import (
     WorldSettlementSpecializationRegistry,
@@ -258,7 +260,7 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
         facade=True,
     ),
     _registry_slice(
-        pojo_cls=WorldCitySizeRegistry,
+        pojo_cls=WorldSettlementSizeRegistry,
         world_key="city_size_registry",
         facade=True,
     ),

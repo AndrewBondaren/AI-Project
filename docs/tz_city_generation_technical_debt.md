@@ -39,12 +39,12 @@ flowchart TD
   TOPO["plan_topology C23"]
   C11["C11 materialize packing"]
   OLD["SettlementPersistService.persist_outdoor"]
-  DAG["lazy_settlement generate_map_cells"]
+  GMC["generate_map_cells без reuse"]
   LB -.->|"не зовёт"| TOPO
   FB --> TOPO
   TOPO --> C11
   TOPO -.->|"ложный skip / parent зданий"| OLD
-  TOPO -.->|"не reuse слотов"| DAG
+  TOPO -.->|"второй impl, не контракт bake"| GMC
 ```
 
 ---
@@ -55,7 +55,7 @@ flowchart TD
 |---|---|---|---|---|---|
 | 1 | **CITY-T-5a** | legacy | Два persist: здания parent = город vs район; authored-skip ломается | **P1** | **open** |
 | 2 | **CITY-T-5g** | legacy | `needs_settlement_outdoor_persist`: C23 дети+city edges = «packing готов» без zst | **P1** | **open** |
-| 3 | **CITY-T-5b** | legacy | DAG/`generate_map_cells` не reuse topology → второй бросок типов | DAG | **open** |
+| 3 | **CITY-T-5b** | legacy | `generate_map_cells` не reuse freeze — контракт generate; **lazy отложен** | later | **deferred** |
 | 4 | **CITY-T-5h** | хардкод | `"road"` / `"city"` в consumer вместо POJO/registry | P1 | **open** |
 | 5 | **CITY-T-5i** | смешение | Два call site `plan_district_slots` + `plan_city_street_grid` | P2 | **open** |
 | 6 | **CITY-T-5j** | смешение | Дубль extract NL района (topology vs packing) | P2 | **open** |
@@ -128,19 +128,12 @@ C23 как раз создаёт children + city edges **без** packing. Ст�
 
 ---
 
-### CITY-T-5b — DAG / `generate_map_cells` не reuse topology
+### CITY-T-5b — `generate_map_cells` не reuse freeze
 
-**Status:** `open` | **Severity:** high | **P:** DAG-gate  
-**Родитель:** [CITY-T-1b](./tz_generator_technical_debt.md#city-t-1--контур-вокруг-city-generate).  
-**DAG ТЗ:** [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) § Дыры: settlement. Агент ноды **не** меняет.
+**Status:** `deferred` | **Severity:** high | **P:** later  
+**Не путать** с загрузкой мира и lazy L2 / `detailed_bake` ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md) WP-13, [`tz_terrain_generation.md`](./tz_terrain_generation.md) § TR-LAZY-LOAD) — это **другие** алгоритмы, не этот ID.
 
-[`SettlementGeneratorService.generate_map_cells`](../backend/app/application/worldData/generators/assemblers/settlementAssembler/settlementGeneratorService.py) не принимает `district_slots` / `city_graph`. `lazy_settlement` зовёт его → `assemble` снова `plan_district_slots`.
-
-Uid района = `district_location_uid(settlement, system_name, index)` — стабилен **только** при том же чертеже и индексе. Другой бросок типов → второй набор NL рядом с C23-районами; upsert зданий может уехать под новые uid.
-
-Канон C11 в оркестраторе: load freeze → packing. DAG этот путь не использует.
-
-**Fix (мастер, Gate: DAG):** нода зовёт тот же `SettlementOutdoorOrchestrator.materialize` (reuse слотов, C19). До gate — не второй planner в ноде.
+Дыра только **settlement** `generate_map_cells` без reuse C23 freeze. Отложена. Не утверждать, что «lazy-init алгоритмов нет».
 
 ---
 
@@ -293,7 +286,7 @@ Freeze JSON не содержит required/tags — их считают зано
 
 [`materialize_pack_full`](../backend/app/application/worldData/worldSurfaceMaterializationOrchestrator.py): `plan_topology` после L0. `SettlementOutdoorPackMissingError` уронит весь bake (после finalize pack не должно случаться). Ошибки **одного** uid — continue + `failed_uids` внутри batch; отчёт bake **не** несёт failed topology.
 
-`light_bake` / `detailed_bake` вызов не делают — совпадает с ТЗ.
+`light_bake` topology не делает. **`detailed_bake` topology не делает** (C23 — full). Packing — C11 из detailed, не из этого фасада full.
 
 **Fix:** прокинуть `TopologyBatchResult` в job report bake (failed uids видны мастеру); PackMissing после L0 — инвариант «pack есть», не новый mode.
 
@@ -322,8 +315,8 @@ God-object’ов в Settlement → District → Area **по-прежнему н
 2. **P1 хардкод streets:** `link_chain` через POJO.  
 3. **P2 слои:** 5i → 5j → 5c (снять цикл пакета).  
 4. **P2 контракт graph:** 5f до A* world routes.  
-5. **DAG:** 5b = CITY-T-1b, только с мастером.  
-6. **P3:** 5e FK, 5d smoke, 5k/5l/5m polish.
+5. **P3:** 5e FK, 5d smoke, 5k/5l/5m polish.  
+**CITY-T-5b** / lazy generate — **не этот срез.** Wiring ноды — **CITY-T-1b / 1e**, Gate: DAG.
 
 Код C23 / city §8 / outdoor C23 **не** откатывать. Спеку topology **не** переписывать.
 
@@ -333,4 +326,5 @@ God-object’ов в Settlement → District → Area **по-прежнему н
 
 | Дата | Изменение |
 |---|---|
-| 2026-09-06 | Файл открыт: ревью после C23 — dual persist (5a/5g), DAG reuse (5b), хардкоды (5h/5d), смешение call site/extract/uids/skip/loader/bake report (5i–5m). SoT продукта — city §8, склейка C23, bake modes. |
+| 2026-09-06 | **detailed_bake** консьюмер C11 (хук ⬜). Topology по-прежнему только full. |
+| 2026-09-06 | Файл открыт: ревью после C23 — dual persist (5a/5g), generate reuse (5b), хардкоды (5h/5d), смешение call site/extract/uids/skip/loader/bake report (5i–5m). SoT продукта — city §8, склейка C23, bake modes. |

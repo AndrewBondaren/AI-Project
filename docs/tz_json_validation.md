@@ -10,7 +10,7 @@
 | Код | `backend/app/application/jsonValidation/` |
 | Покрытие import | `world` slice: climate scalars, tiers, materials, terrain, hydrology, climate_zones |
 | Покрытие runtime | `worldRow` — те же POJO через `resolve` (warn-only) |
-| Bundle sections | `world` ✅; `connection_*` — JV-0b ✅; races, perks, locations — ⬜ |
+| Bundle sections | `world` ✅; `connection_*` — JV-0b ✅; races, perks, locations — ⬜ (**LOC-T-1** type←subtype — не `normalize_world`) |
 | JV-0 ENUM gate | JV-0a ✅; JV-0b ✅ bundle connections |
 | REF-W index | ✅ (MVP) |
 | `SCHEMA_ID` в 422 | ✅ |
@@ -58,6 +58,43 @@ ref на сущность     → ключ ∈ N1-S или N1-W index мира (
 ```
 
 Preset keys в fixtures (`temperate`, `water`) — **строки N1-W**, не отдельный ENUM gate.
+
+### RegistryKey[R] (N1-W identity, не голый `str`)
+
+Ключ строки реестра на POJO — **не** `StrictOnWire[str]`. Голый `str` неотличим от морфологии, uid, terrain.
+
+```python
+# dataModel/registryKey.py
+class RegistryKey[R](str): ...
+type SettlementSizeKey = RegistryKey[WorldSettlementSizeRegistry]
+
+class SettlementSizeEntry:
+    system_size: StrictOnWire[RegistryKey[WorldSettlementSizeRegistry]]
+
+class BundleNamedLocation:
+    system_settlement_size: DefaultOnWire[SettlementSizeKey | None]  # код до rename: system_city_size
+```
+
+JSON на проводе — строка (`"small"`). Тип — номинальный: `RegistryKey[WorldSettlementSizeRegistry]` ≠ `str` ≠ `RegistryKey[WorldLocationTypeRegistry]`.
+
+Это **не** ENUM-E: мастер может добавить `huge`. Закрытый `StrictEnumOnWire` запрещён для N1-W identity.
+
+| Слой | Что режет / fallback |
+|---|---|
+| `RegistryKey[R]` | чужой словарь на type-check (subtype vs size) |
+| REF-W / `entry_for` | строка не из **этого** мира (`nope`, ключ морфологии) |
+
+**Ранг поселения (эталон):** не 422 на generate, если type/membership не прошёл.
+
+| Wire на city/settlement | Import persist | Generate / `resolve_settlement_size_key` |
+|---|---|---|
+| omit / SQL NULL | NULL | канон **medium**, без warning |
+| не строка, `""` (type fail) | `DefaultOnWire`: WARNING `json_validation \| … invalid; using field default` + NULL | **medium** |
+| строка не из реестра мира (`hamlet`, `nope`) | строка как есть (N+1 identity) | **medium** + WARNING `json_validation \| settlement_size invalid`; sink [`tz_logging.md`](./tz_logging.md) `jsonValidation` / `resolve` |
+
+Дубль subtype==size — по-прежнему **422**. Geographic + size — не этот fallback.
+
+Эталон первого поля: `settlement_size_registry[].system_size` + refs на NL/skeleton/placement `size`. Остальные N1-W (`system_tier`, `system_material`, …) — мигрировать на `RegistryKey` при касании, не массово.
 
 ### REF-W → N1-W (cross-ref, import-only)
 
@@ -190,7 +227,7 @@ backend/app/application/worldData/  # WorldService, bundle — без domain val
 | SCH-WORLD-TERRAIN-MASKS | `WorldTerrainMasks` | `terrain_masks` | ✅ | ✅ |
 | SCH-WORLD-CLIMATE-ZONE | `WorldClimateZoneRegistry` | `climate_zone_registry` | ✅ | ✅ |
 | SCH-WORLD-BARRIER-TEMPLATE | `WorldBarrierTemplateRegistry` | `barrier_template_registry` | ✅ | ✅ runtime |
-| SCH-WORLD-CITY-SIZE | `WorldCitySizeRegistry` | `city_size_registry` | ✅ | ✅ runtime |
+| SCH-WORLD-CITY-SIZE | `WorldCitySizeRegistry` | `city_size_registry` | ✅ runtime | **LOC-T-2** ⬜ `settlement_size_registry` + ранги `small`/`medium`/`large`; множитель на subtype |
 | SCH-WORLD-DISTRICT-TEMPLATE | `WorldDistrictTemplateRegistry` | `district_template_registry` | ✅ | ✅ runtime |
 | SCH-WORLD-TERRAIN-SCALARS | `WorldTerrainScalars` | multi-column | ✅ | ✅ `terrain_scalars()` |
 | SCH-WORLD-ROAD-SETTINGS | `WorldRoadSettings` | `road_settings` | ✅ | ✅ runtime |
@@ -370,7 +407,7 @@ json_validation | resolve | label=… mode=import|runtime | wire={…} | resolve
 | Hydrology | `hydrology()` | resolveHydrologyBands, resolveRiverTypeClassify, loadHydrologyFromWorld | ✅ POJO; ◐ `hydrology_dict` shim |
 | Road settings | `road_settings()` | connectionPolicy, roadTravelResolver | ✅ runtime |
 | Barrier templates | `barrier_templates()` | barrierDefaults, barriers, areaBarriers | ✅ |
-| City sizes | `city_sizes()` | `footprint.footprint_multiplier` | ✅ |
+| City sizes | `city_sizes()` | `footprint.footprint_multiplier` | ✅ код; целевой lookup subtype×ранг — [`tz_locations.md`](./tz_locations.md) **LOC-T-2** |
 | District templates | `district_templates()` | footprint → placement → DistrictSlot → roads | ✅ |
 | Building layouts | `building_layout_templates()` | buildingDefaults, buildingCache, assemblers | ✅ корень `BuildingLayoutTemplate`; nested — **JV-4b** `list[dict]` |
 | Terrain scalars | `terrain_scalars()` | worldMapSettings, columnFillPass, climateGeneratorService (lapse) | ✅ |
@@ -415,7 +452,7 @@ TZ уже описывает **объекты** ([`tz_building_generator.md`](./
 
 ### Facade import — пробелы (symmetry с runtime)
 
-`normalize_world` **не** нормализует (⬜): N1-S technical columns (`stat_schema`, `map_cell_size_m`, …); bundle sections (`races`, `locations`, …).  
+`normalize_world` **не** нормализует (⬜): N1-S technical columns (`stat_schema`, `map_cell_size_m`, …); bundle sections (`races`, `locations`, …). Fill `system_location_type` из уникального subtype — **LOC-T-1** ([`tz_locations.md`](./tz_locations.md)), слой `NamedLocationService` + registry helper, не facade world-slice.  
 ~~barrier / city_size / district / road_settings / terrain scalars / connection_type_registry / location_type / lore / weather / terrain_category / room_type / location_mood / building_template_registry~~ — ✅ GV-3 registry facades.
 
 ### Очередь GV (приоритет)
@@ -480,7 +517,8 @@ JSON → facade / bundle normalize       DB → worldRow → resolve (RUNTIME)
 - ENUM-E **reject** только на import (`ResolveMode.IMPORT`); runtime — warn + skip/default.
 - Defaults и wire-контракт — **только** `dataModel`; не дублировать в `jsonValidation`.
 - `generators/registries/wireEnums.py` — re-export barrel **для jsonValidation**; generators не импортируют (HY-5).
-- N1-W registry keys (`system_material`, …) — REF-W (JV-2), не `parse_enum`.
+- N1-W registry keys — `RegistryKey[R]` на POJO + REF-W (JV-2), не `parse_enum` и не голый `StrictOnWire[str]` на identity/ref.
+- Settlement size: type/membership miss на generate → канон `medium` + WARNING фасада (`json_validation \| settlement_size invalid`), не 422 и не голый `getLogger` в planner.
 - Preset keys в fixtures (`temperate`, `water`) — N1-W, не ENUM-E.
 
 ### Интеграция `parse_enum` (вариант A)
@@ -581,6 +619,8 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 | JV-6 | character validation sibling package | P3 | ⬜ |
 | JV-7 | remove runtime SCH-RUNTIME-* hardcodes | P2 | ⬜ |
 | JV-8 | races import (SCH-RACE-*) | P3 | ⬜ |
+| **LOC-T-1** | locations: infer `system_location_type` from unique subtype | P2 | ⬜ SoT [`tz_locations.md`](./tz_locations.md); не `normalize_world` |
+| **LOC-T-2** | settlement size rank (`small`…) + rename `system_city_size`; footprint = subtype × rank | P2 | ⬜ SoT [`tz_locations.md`](./tz_locations.md) § Размер поселения |
 | GV-* | generators → worldRow (см. § Generators — миграция на worldRow) | P1–P3 | ◐ |
 
 **Порядок (архитектура перед фичами):** ~~GV-1~~ ~~GV-2~~ ~~JV-1b~~ ~~JV-2 MVP~~ → **JV-0a → JV-0b** → GV-3… → JV-8.
@@ -604,7 +644,7 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 
 | Версия | Дата | Изменение |
 |--------|------|-----------|
-| — | 2026-09-06 | Instance-каталоги resource/crops/livestock: runtime пусто→канон, непусто→только мир (не T-29 union). Packing fallback — [`tz_city_generation.md`](./tz_city_generation.md) §1.2.1 (impl) |
+| — | 2026-09-07 | **RegistryKey[R]**: N1-W identity не голый `str`; эталон `SettlementSizeKey`. Type/membership miss ранга на generate → `medium` + WARNING `jsonValidation/resolve` |
 | — | 2026-09-06 | `SCH-WORLD-CROPS` / `REF-W-CROP` (N1-W-11): `crops_registry`, ENUM-E `crop_kind` |
 | — | 2026-09-03 | **JV-4b** / [POJO-D-16](./tz_datamodel_pojo_discrepancies.md): nested generate layout должен быть nested POJO, не `list[dict]`; Outline slot ≠ generate room |
 | 0.1 | 2026-06 | Field Contract Registry, orchestrator, `worldData/jsonValidation/` |

@@ -16,8 +16,16 @@ from app.application.worldData.pack.bake.packDetailedBakeOrchestrator import (
     PackDetailedBakeOrchestrator,
     PackDetailedBakeResult,
 )
+from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import (
+    SettlementOutdoorExtractError,
+)
 from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator import (
+    MaterializeResult,
+    SettlementOutdoorError,
     SettlementOutdoorOrchestrator,
+)
+from app.application.worldData.settlementOutdoor.settlementOutdoorSkip import (
+    is_settlement_outdoor_target,
 )
 from app.application.worldData.materializationContext import (
     MaterializationContext,
@@ -80,8 +88,9 @@ class WorldSurfaceMaterializationOrchestrator:
     ) -> PackBakeResult:
         """Single application entry for HTTP ``mode=light|full|detailed``.
 
-        L0 only for light/full (Job boundaries). Entry/L2 → refine-from-entry
-        or ``mode=detailed`` with typed scope / ``DetailedBakeRequest``.
+        light/full: L0 only; full then C23 topology. detailed: L2 then C11
+        ``materialize`` on settlement-like ``scope=location``. Wilderness: L2 only.
+        Entry → refine-from-entry.
         """
         if mode == "light":
             report = await self.materialize_pack_light(
@@ -125,7 +134,7 @@ class WorldSurfaceMaterializationOrchestrator:
                 )
             else:
                 request = detailed_request
-            detailed = await self.materialize_pack_detailed(
+            detailed, settlement = await self.materialize_pack_detailed(
                 world, locations, ctx, pack_writer, request,
                 nodes=nodes, edges=edges,
                 hydrology_generator=hydrology_generator,
@@ -135,6 +144,7 @@ class WorldSurfaceMaterializationOrchestrator:
                 terrain_failed=detailed.terrain.failed,
                 detailed=detailed,
                 climate_fine_tiles=detailed.climate_fine_tiles or None,
+                settlement=settlement,
             )
         raise ValueError(f"unknown pack bake mode '{mode}'")
 
@@ -217,11 +227,41 @@ class WorldSurfaceMaterializationOrchestrator:
         nodes: list[ConnectionNode] | None = None,
         edges: list[ConnectionEdge] | None = None,
         hydrology_generator: HydrologyGeneratorService | None = None,
-    ) -> PackDetailedBakeResult:
+    ) -> tuple[PackDetailedBakeResult, MaterializeResult | None]:
         surface_ctx = require_surface_terrain_context(
             world, locations, nodes=nodes, edges=edges,
             hydrology_generator=hydrology_generator,
         )
-        return await self._detailed.bake(
+        detailed = await self._detailed.bake(
             world, locations, pack_writer, ctx, surface_ctx, request,
         )
+        settlement = await self._maybe_materialize_c11(world, locations, request)
+        return detailed, settlement
+
+    async def _maybe_materialize_c11(
+        self,
+        world: World,
+        locations: list[NamedLocation],
+        request: DetailedBakeRequest,
+    ) -> MaterializeResult | None:
+        """Step 2 detailed_bake: C11 packing on settlement-like location. L2 already persisted."""
+        if self._outdoor is None or request.scope != "location":
+            return None
+        location_uid = request.location_uid
+        if not location_uid:
+            return None
+        loc = next((item for item in locations if item.location_uid == location_uid), None)
+        if loc is None or not is_settlement_outdoor_target(loc):
+            return None
+        try:
+            return await self._outdoor.materialize(
+                world.world_uid,
+                location_uid,
+                skip_if_initialized=True,
+            )
+        except (SettlementOutdoorError, SettlementOutdoorExtractError) as exc:
+            return MaterializeResult(
+                location_uid=location_uid,
+                status="error",
+                error=str(exc),
+            )

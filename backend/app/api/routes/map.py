@@ -3,8 +3,9 @@
 Production materialization runs through **engine DAG nodes** (not these routes).
 
 Canonical debug harness:
-- ``POST …/map/pack/bake?mode=light|full|detailed`` — L0 / detailed L2 (WP-27)
+- ``POST …/map/pack/bake?mode=light|full|detailed`` — L0 / detailed L2 then C11 (WP-27)
   (detailed: ``scope=location|wilderness``; location needs ``location_uid``;
+  settlement-like location runs C11 ``materialize`` after L2;
   optional ``grade_mill`` / ``grade_paint``, omit = off)
 - ``POST …/map/refine-from-entry`` / ``schedule-chunk-refine``
 - ``POST …/map/refine-chunk`` — one wilderness chunk re-refine (``gx,gy,cx,cy``;
@@ -145,7 +146,8 @@ async def bake_world_pack(
 ) -> JSONResponse:
     """Debug — bake World Pack: light_bake / full_bake / detailed_bake (WP-27).
 
-    L0 only for light/full. L2 offline: ``mode=detailed&scope=location|wilderness``.
+    L0 only for light/full (full then topology C23). detailed: L2 then C11
+    ``materialize`` on settlement-like location. Wilderness: L2 only.
     Wilderness debug unit: ``tile_gx``+``tile_gy`` (one macro-cell per request).
     Entry/runtime L2 → ``POST …/map/refine-from-entry``.
     """
@@ -188,7 +190,7 @@ async def bake_world_pack(
         world, locations=locations,
     )
     result.loading_progress = progress.to_dict()
-    status_code = 200 if result.terrain_failed == 0 else 207
+    status_code = 207 if result.is_partial() else 200
     return JSONResponse(status_code=status_code, content=result.to_dict())
 
 

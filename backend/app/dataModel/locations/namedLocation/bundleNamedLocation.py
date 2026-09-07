@@ -13,6 +13,7 @@ from app.dataModel.settlement.settlement.settlementSpecializationBind import (
     SettlementSpecializationBind,
 )
 from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
+from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
 
 
 def _skeleton_default(name: str):
@@ -46,7 +47,7 @@ class BundleNamedLocation(BaseModel):
     owner_uid: DefaultOnWire[str | None] = None
     system_climate_zone: DefaultOnWire[str | None] = None
     state_uid: DefaultOnWire[str | None] = None
-    system_city_size: DefaultOnWire[str | None] = None
+    system_city_size: DefaultOnWire[SettlementSizeKey | None] = None
     system_economic_tier: DefaultOnWire[str | None] = None
     typical_districts: DefaultOnWire[list[TypicalDistrictRef] | None] = None
     system_settlement_specializations: DefaultOnWire[

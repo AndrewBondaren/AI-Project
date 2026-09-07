@@ -10,6 +10,9 @@ from app.application.worldData.pack.bake.packDetailedBakeOrchestrator import (
     PackDetailedBakeResult,
 )
 from app.application.worldData.persistResult import PersistResult
+from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator import (
+    MaterializeResult,
+)
 from app.dataModel.worldPack.packBakeMode import PackBakeApiMode
 
 
@@ -22,7 +25,14 @@ class PackBakeResult:
     report: MaterializationJobReport | None = None
     detailed: PackDetailedBakeResult | PersistResult | None = None
     climate_fine_tiles: int | None = None
+    settlement: MaterializeResult | None = None
     loading_progress: dict[str, Any] = field(default_factory=dict)
+
+    def is_partial(self) -> bool:
+        """HTTP 207: L2/L0 terrain failed, or C11 packing failed after L2."""
+        if self.terrain_failed != 0:
+            return True
+        return self.settlement is not None and self.settlement.status == "error"
 
     def to_dict(self) -> dict[str, Any]:
         if self.report is not None:
@@ -50,6 +60,8 @@ class PackBakeResult:
             payload = {}
         if self.climate_fine_tiles is not None and "climate_fine_tiles" not in payload:
             payload["climate_fine_tiles"] = self.climate_fine_tiles
+        if self.settlement is not None:
+            payload["settlement"] = self.settlement.to_dict()
         return {
             **payload,
             "pack_mode": self.mode,

@@ -1,4 +1,12 @@
 {
+  "_fixture_meta": {
+    "description": "Bake smoke world: two skeleton-only settlements (no authored children). Type=settlement, subtype=city (morphology), size=town (footprint — not the same axis as subtype). full_bake → C23; detailed_bake location → C11.",
+    "world_uid": "world-test-002",
+    "cities": [
+      "loc-city-ironhold-002",
+      "loc-city-amberport-002"
+    ]
+  },
   "world": {
     "world_uid": "world-test-002",
     "name": "Эйдора (генерация)",
@@ -64,6 +72,9 @@
       },
       "village": {
         "display_name": "Деревня"
+      },
+      "settlement": {
+        "display_name": "Поселение"
       },
       "district": {
         "display_name": "Район"
@@ -313,32 +324,38 @@
       {
         "system_size": "hamlet",
         "display_size": "Хутор",
-        "radius": 0
+        "map_cells_count": 1,
+        "footprint_multiplier": 0.25
       },
       {
         "system_size": "village",
         "display_size": "Деревня",
-        "radius": 0
+        "map_cells_count": 2,
+        "footprint_multiplier": 0.5
       },
       {
         "system_size": "town",
         "display_size": "Городок",
-        "radius": 1
+        "map_cells_count": 4,
+        "footprint_multiplier": 1.0
       },
       {
         "system_size": "city",
         "display_size": "Город",
-        "radius": 1
+        "map_cells_count": 9,
+        "footprint_multiplier": 2.0
       },
       {
         "system_size": "metropolis",
         "display_size": "Метрополис",
-        "radius": 2
+        "map_cells_count": 20,
+        "footprint_multiplier": 4.0
       },
       {
         "system_size": "megalopolis",
         "display_size": "Мегалополис",
-        "radius": 3
+        "map_cells_count": 50,
+        "footprint_multiplier": 8.0
       }
     ]
   },
@@ -447,47 +464,27 @@
       "state_uid": "state-iron-crown-002",
       "map_x": 2,
       "map_y": 2,
-      "map_z": 0,
-      "system_location_type": "city",
-      "system_city_size": "city"
-    },
-    {
-      "location_uid": "loc-tavern-broken-axe-002",
-      "world_uid": "world-test-002",
-      "display_name": "Таверна «Сломанный топор»",
-      "created_at": "2026-05-23T00:00:00",
-      "parent_location_uid": "loc-city-ironhold-002",
-      "display_description": "Шумная таверна в центре Айронхолда. Старые дубовые балки, очаг и запах пива.",
-      "is_discovered": true,
-      "is_accessible": true,
-      "is_public": true,
-      "system_location_type": "building"
-    },
-    {
-      "location_uid": "loc-market-ironhold-002",
-      "world_uid": "world-test-002",
-      "display_name": "Рыночная площадь",
-      "created_at": "2026-05-23T00:00:00",
-      "parent_location_uid": "loc-city-ironhold-002",
-      "display_description": "Главная торговая площадь Айронхолда.",
-      "is_discovered": true,
-      "is_accessible": true,
-      "is_public": true,
-      "system_location_type": "square"
-    },
-    {
-      "location_uid": "loc-city-gate-ironhold-002",
-      "world_uid": "world-test-002",
-      "display_name": "Северные ворота",
-      "created_at": "2026-05-23T00:00:00",
-      "parent_location_uid": "loc-city-ironhold-002",
-      "display_description": "Массивные каменные ворота с постоянной стражей.",
-      "is_discovered": true,
-      "is_accessible": true,
-      "is_public": true,
-      "guard_level": 5,
-      "is_forbidden": true,
-      "system_location_type": "gate"
+      "system_location_type": "settlement",
+      "system_location_subtype": "city",
+      "system_city_size": "town",
+      "system_economic_tier": "standard",
+      "architectural_style": "gothic",
+      "settlement_density": "medium",
+      "perimeter_barrier": {
+        "template": "stone_fence",
+        "probability": 1.0
+      },
+      "system_settlement_specializations": [
+        {
+          "system_specialization": "extract",
+          "subjects": {
+            "resource": ["iron_ore"]
+          }
+        }
+      ],
+      "typical_districts": [
+        { "district_type": "civic" }
+      ]
     },
     {
       "location_uid": "loc-region-southern-002",
@@ -513,33 +510,18 @@
       "state_uid": "state-amber-league-002",
       "map_x": 2,
       "map_y": 6,
-      "map_z": 0,
-      "system_location_type": "city",
-      "system_city_size": "city"
-    },
-    {
-      "location_uid": "loc-amberport-harbor-002",
-      "world_uid": "world-test-002",
-      "display_name": "Портовые доки",
-      "created_at": "2026-05-23T00:00:00",
-      "parent_location_uid": "loc-city-amberport-002",
-      "display_description": "Шумный район доков. Запах соли и рыбы, скрип снастей, крики матросов.",
-      "is_discovered": true,
-      "is_accessible": true,
-      "is_public": true,
-      "system_location_type": "district"
-    },
-    {
-      "location_uid": "loc-amberport-tavern-002",
-      "world_uid": "world-test-002",
-      "display_name": "Таверна «Золотой якорь»",
-      "created_at": "2026-05-23T00:00:00",
-      "parent_location_uid": "loc-city-amberport-002",
-      "display_description": "Любимое место моряков и купцов.",
-      "is_discovered": true,
-      "is_accessible": true,
-      "is_public": true,
-      "system_location_type": "building"
+      "system_location_type": "settlement",
+      "system_location_subtype": "city",
+      "system_city_size": "town",
+      "system_economic_tier": "quality",
+      "architectural_style": "mediterranean",
+      "settlement_density": "dense",
+      "system_settlement_specializations": [
+        "process"
+      ],
+      "typical_districts": [
+        { "district_type": "port" }
+      ]
     }
   ]
 }

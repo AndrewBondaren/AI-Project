@@ -1,7 +1,7 @@
-"""Detailed bake L2 scope — docs/tz_world_pack_storage.md § Bake modes.
+"""Detailed bake request — docs/tz_world_pack_storage.md § Контракт detailed_bake.
 
-Offline ``mode=detailed`` is one product bake with typed scope:
-``location`` (territory) or ``wilderness`` (tile L2 topping). Not a third bake mode.
+Offline ``mode=detailed``: pack-job локации (или wilderness topping). Not a third bake mode.
+Consumer: L2 terrain first, then C11 ``materialize`` if settlement-like ``scope=location``.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ DetailedBakeScopeKind = Literal["location", "wilderness"]
 
 
 class DetailedBakeRequest(BaseModel):
-    """Wire/application contract for offline detailed L2 bake."""
+    """Wire/application contract for offline detailed bake (L2, then C11 on cities)."""
 
     SCHEMA_ID: ClassVar[str] = "SCH-DETAILED-BAKE-REQUEST"
 

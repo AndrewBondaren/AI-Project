@@ -7,6 +7,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire
+from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
 
 
 class PlacementConditionType(StrEnum):
@@ -26,8 +27,8 @@ class PlacementCondition(BaseModel):
 
     type: StrictEnumOnWire[PlacementConditionType]
     terrain_types: DefaultOnWire[list[str] | None] = None
-    min_count: DefaultOnWire[int | None] = None
-    size: DefaultOnWire[str | None] = None
+    min_adjacent_cells: DefaultOnWire[int | None] = None
+    size: DefaultOnWire[SettlementSizeKey | None] = None
     tier: DefaultOnWire[str | None] = None
     district_type: DefaultOnWire[str | None] = None
     zone: DefaultOnWire[str | None] = None

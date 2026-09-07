@@ -256,7 +256,7 @@ Generate (`SettlementAssembler` → `DistrictAssembler`: cache → pass1 → р�
 | Sub-ID | Severity | P | Проблема | Fix |
 |---|---|---|---|---|
 | **CITY-T-1a** | **high** | **P1** | ~~import ignore / нет колонок~~ | **resolved** (C23): `BundleNamedLocation` overlay из `SettlementSkeleton`; колонки `0001`; `city_skeleton_from_settlement` читает поля NL |
-| **CITY-T-1b** | high | DAG | Два persist: debug `SettlementOutdoorOrchestrator` (pack + SQL-дерево + connections) vs `lazy_settlement` → только `map_cells` `insert_bulk_ignore`. Игрок и harness видят разный город. После C23: `generate_map_cells` не reuse слотов — **[CITY-T-5b](./tz_city_generation_technical_debt.md)** | Нода зовёт тот же orchestrator (Gate: DAG; агент не трогает ноды). Не баг генератора |
+| **CITY-T-1b** | high | DAG | Два persist: debug `SettlementOutdoorOrchestrator` (pack + SQL-дерево + connections) vs `lazy_settlement` → только `map_cells` `insert_bulk_ignore`. Игрок и harness видят разный город | Persist/wiring **ноды** — Gate: DAG (агент ноды не трогает). Reuse freeze в generate — **[CITY-T-5b](./tz_city_generation_technical_debt.md)** (интерфейс, не нода) |
 | **CITY-T-1c** | medium | P2 | Два движка стен поселения: `shrink_slot_by_settlement_barrier` (C22 поле) vs `plan_settlement_barriers` (эвристика size/tier, поле не читает). Перекрывает [NC-3](#nc-3--три-barrier-pipeline-разная-gate-политика) | Клетки периметра из инстанса `PerimeterBarrier`; эвристика — только omit/null. Зоны без общей xy — city C22 |
 | **CITY-T-1d** | low | P2 | Документы отстают: шапка city TZ (packing=AABB, persist=map_cells only, C22-поля=⬜); §6.3 «код сейчас»; connections §5.1 «packing→overlay»; нет `.cursor/plans/settlement-assembler.md`; `assembler-hierarchy.mdc` ещё пишет NotImplemented на area | Синхрон шапки/§6.3/connections; план или снять ссылку; правило hierarchy |
 | **CITY-T-1e** | medium | DAG | `SettlementLayout.dominant_material` post-assemble есть. На `NamedLocation` не пишется. `lazy_settlement` в `NodeResult` material не кладёт → LLM «мраморные стены» не из layout | Persist опционально (§3.1); payload — DAG (`tz_engine_flow.md`) |
@@ -264,7 +264,7 @@ Generate (`SettlementAssembler` → `DistrictAssembler`: cache → pass1 → р�
 
 **Не этот ID (уже в city §10 / §11):** organic footprint v2, snapshot, `init_mode`, growth/world routes, `DistrictLayout.barrier_cells`, CONN-PACK-2/3 как open product, `StructureInteriorAssembler`. Пул шаблонов мира vs packing — **[CITY-T-2](#city-t-2--пул-шаблонов-мира--packing)**. Смешение/хардкоды планировщика после 2d — **[CITY-T-4](#city-t-4--планировщик-после-2d-смешение-и-хардкоды)**. Parallel **одного** поселения — **[CITY-T-3](#city-t-3--parallel-generate-одного-поселения)**. Швы после C23 — **[CITY-T-5](./tz_city_generation_technical_debt.md)**.
 
-**Готово когда:** импортированный мир без ручных setattr даёт те же C22-поля на `CitySkeleton`, что JSON мастера; один SoT стен поселения; шапка city TZ не противоречит `DistrictAssembler`. 1b/1e — после Gate: DAG.
+**Готово когда:** импортированный мир без ручных setattr даёт те же C22-поля на `CitySkeleton`, что JSON мастера; один SoT стен поселения; шапка city TZ не противоречит `DistrictAssembler`. Persist wiring **1b** / payload **1e** — после Gate: DAG. Reuse freeze — **CITY-T-5b**, отложен (lazy позже).
 
 ### CITY-T-2 — пул шаблонов мира — packing
 
@@ -344,14 +344,14 @@ GIL: cache interior CPU-heavy → тот же backlog ProcessPool, что TR-PAR
 
 ### CITY-T-5 — швы после C23 topology-on-bake
 
-**Status:** `open` | **Severity:** high (5a/5g/5b) | **P:** P1 persist+хардкод / P2 слои / DAG (5b)
+**Status:** `open` | **Severity:** high (5a/5g) | **P:** P1 persist+хардкод / P2 слои; **5b deferred** (lazy позже)
 
 **SoT деталей:** [`tz_city_generation_technical_debt.md`](./tz_city_generation_technical_debt.md) — не копировать сюда. Продукт: city §8, outdoor **C23**, pack § Bake modes. **Не** reopen C22 packing, **не** A*.
 
 | Sub-ID | Ось | Суть |
 |---|---|---|
 | **5a** / **5g** | legacy | `SettlementPersistService` parent зданий на город; skip «есть дети+city edge» после topology без zst |
-| **5b** | legacy | `generate_map_cells` / `lazy_settlement` не reuse freeze — срез **1b** |
+| **5b** | legacy | `generate_map_cells` без reuse freeze — **deferred** (lazy позже); не нода |
 | **5h** / **5d** | хардкод | `"road"` / `"city"` / smoke `"medium"` |
 | **5i**–**5m** | смешение | два planner call site; дубль extract; uids в outdoor-пакете; skip×3; loader+рецепт; отчёт bake |
 

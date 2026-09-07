@@ -61,6 +61,14 @@ class RouteTableTests(unittest.TestCase):
             route_for("app.application.worldData.generators.assemblers.climateAssembler"),
             ("climate", "climateLog"),
         )
+        self.assertEqual(
+            route_for("app.application.jsonValidation.resolve"),
+            ("jsonValidation", "resolve"),
+        )
+        self.assertEqual(
+            route_for("app.application.jsonValidation.settlementSizeResolve"),
+            ("jsonValidation", "resolve"),
+        )
 
 
 class _LogDirCase(unittest.TestCase):
@@ -210,6 +218,20 @@ class ServerRouteFileTests(_LogDirCase):
         self.assertTrue(
             any("grade_ray validate start" in m for m in _read_json_msgs(pack)),
         )
+
+    def test_json_validation_writes_resolve_log(self) -> None:
+        self._install_server()
+        logging.getLogger("app.application.jsonValidation.settlementSizeResolve").warning(
+            "json_validation | settlement_size invalid 'hamlet'; using field default 'medium'",
+            extra={"activity": "settlement_size_fallback"},
+        )
+        _flush_facade()
+        path = self.logs / "jsonValidation" / "resolve.log"
+        self.assertTrue(path.is_file())
+        self.assertTrue(
+            any("settlement_size invalid" in m for m in _read_json_msgs(path)),
+        )
+        self.assertFalse((self.logs / "core" / "runtime.log").exists())
 
     def test_settlement_assembler_writes_settlement_log(self) -> None:
         self._install_server()

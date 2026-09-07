@@ -8,6 +8,20 @@ from pydantic import RootModel
 
 from app.dataModel.locations.locationType.locationTypeEntry import LocationTypeEntry
 from app.dataModel.locations.locationType.locationTypeSubtypeEntry import LocationTypeSubtypeEntry
+from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import (
+    WorldSettlementSizeRegistry,
+)
+
+_SIZE = WorldSettlementSizeRegistry.canonical_defaults()
+_SMALL = _SIZE.root[0].system_size
+_MEDIUM = _SIZE.root[1].system_size
+_LARGE = _SIZE.root[-1].system_size
+
+# tz_locations.md § Размер поселения (LOC-T-2) — metres on settlement subtypes only.
+_FOOTPRINT_VILLAGE: dict[str, float] = {_SMALL: 0.25, _MEDIUM: 0.50, _LARGE: 0.75}
+_FOOTPRINT_CITY: dict[str, float] = {_SMALL: 1.00, _MEDIUM: 2.00, _LARGE: 4.00}
+_FOOTPRINT_DUNGEON: dict[str, float] = {_SMALL: 0.25, _MEDIUM: 0.50, _LARGE: 1.00}
+_FOOTPRINT_UNDERGROUND_CITY: dict[str, float] = dict(_FOOTPRINT_CITY)
 
 # tz_locations.md § location_type_registry — full hierarchy + subtypes (engine SoT).
 _ENGINE_ENTRIES: tuple[LocationTypeEntry, ...] = (
@@ -41,17 +55,24 @@ _ENGINE_ENTRIES: tuple[LocationTypeEntry, ...] = (
                     "civic", "commercial", "residential", "industrial", "port",
                 ],
                 required_structure_types=["town_hall"],
+                footprint_by_size=dict(_FOOTPRINT_CITY),
             ),
             LocationTypeSubtypeEntry(
                 system_subtype="village",
                 l0_map_symbol="n",
                 typical_district_types=["civic", "residential"],
+                footprint_by_size=dict(_FOOTPRINT_VILLAGE),
             ),
-            LocationTypeSubtypeEntry(system_subtype="dungeon", l0_map_symbol="d"),
+            LocationTypeSubtypeEntry(
+                system_subtype="dungeon",
+                l0_map_symbol="d",
+                footprint_by_size=dict(_FOOTPRINT_DUNGEON),
+            ),
             LocationTypeSubtypeEntry(
                 system_subtype="underground_city",
                 l0_map_symbol="g",
                 typical_district_types=["civic", "residential"],
+                footprint_by_size=dict(_FOOTPRINT_UNDERGROUND_CITY),
             ),
         ],
     ),
@@ -213,6 +234,9 @@ def _overlay_subtype(
 ) -> LocationTypeSubtypeEntry:
     if engine is None:
         return world
+    merged_footprint = dict(engine.footprint_by_size)
+    if world.footprint_by_size:
+        merged_footprint.update(world.footprint_by_size)
     return LocationTypeSubtypeEntry(
         system_subtype=world.system_subtype,
         display_subtype=(
@@ -226,4 +250,5 @@ def _overlay_subtype(
         ),
         typical_district_types=list(world.typical_district_types),
         required_structure_types=list(world.required_structure_types),
+        footprint_by_size=merged_footprint,
     )

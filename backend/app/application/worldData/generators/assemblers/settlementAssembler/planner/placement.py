@@ -6,6 +6,7 @@ from app.application.jsonValidation import (
     district_zone_preference,
     economic_tiers,
 )
+from app.application.jsonValidation.settlementSizeResolve import resolve_settlement_size_key
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.economic import (
     check_district_economic_compat,
@@ -55,7 +56,7 @@ def _check_adjacent_terrain(
     if not terrain_cells:
         return False
     required = set(condition.terrain_types or [])
-    min_count = int(condition.min_count or 1)
+    min_adjacent = int(condition.min_adjacent_cells or 1)
     x0, x1 = origin_x - 1, origin_x + width_m
     y0, y1 = origin_y - 1, origin_y + depth_m
     count = 0
@@ -68,7 +69,7 @@ def _check_adjacent_terrain(
         on_north = cell.y == y1 and x0 <= cell.x < x1
         if on_west or on_east or on_south or on_north:
             count += 1
-    return count >= min_count
+    return count >= min_adjacent
 
 
 def template_constraint_key(template: DistrictTemplateEntry) -> tuple[int, int, int, int]:
@@ -113,7 +114,10 @@ def check_placement_conditions(
 
     registry = economic_tiers(world).root
     sizes = city_sizes(world)
-    city_rank = sizes.rank(skeleton.system_city_size)
+    world_uid = getattr(world, "world_uid", "") or ""
+    city_rank = sizes.rank(
+        resolve_settlement_size_key(sizes, skeleton.system_city_size, world_uid=world_uid),
+    )
 
     for cond in conditions:
         try:
@@ -125,7 +129,10 @@ def check_placement_conditions(
         except ValueError:
             return False
         if ctype is PlacementConditionType.MIN_CITY_SIZE:
-            if city_rank < sizes.rank(cond.size):
+            min_rank = sizes.rank(
+                resolve_settlement_size_key(sizes, cond.size, world_uid=world_uid),
+            )
+            if city_rank < min_rank:
                 return False
         elif ctype is PlacementConditionType.ECONOMIC_TIER_MIN:
             if not tier_at_least(registry, skeleton.economic_tier, cond.tier):

@@ -31,6 +31,7 @@ from app.application.jsonValidation.types import (
     import_validation_http_detail,
 )
 from app.application.jsonValidation.wire import WireEnumError, parse_enum
+from app.application.jsonValidation.settlementSizeResolve import resolve_settlement_size_key
 from app.application.jsonValidation.worldRow import (
     barrier_template_defaults,
     barrier_templates,
@@ -38,6 +39,7 @@ from app.application.jsonValidation.worldRow import (
     building_template_registry,
     world_building_layout_overrides,
     city_sizes,
+    settlement_sizes,
     climate_scalars,
     climate_zones,
     connection_types,
@@ -109,7 +111,9 @@ __all__ = [
     "relief_pick_policy",
     "relief_template_registry",
     "build_world_registry_index",
+    "resolve_settlement_size_key",
     "city_sizes",
+    "settlement_sizes",
     "climate_scalars",
     "climate_zone_wire_from_raw",
     "climate_zones",

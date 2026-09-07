@@ -12,6 +12,7 @@ from app.dataModel.settlement.settlement.settlementSpecializationBind import (
     SettlementSpecializationBind,
 )
 from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
+from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
 
 
 class SettlementSkeleton(BaseModel):
@@ -40,7 +41,7 @@ class SettlementSkeleton(BaseModel):
     architectural_style: DefaultOnWire[str | None] = None
     dominant_material: DefaultOnWire[str | None] = None
     settlement_density: DefaultOnWire[str | None] = None
-    system_city_size: DefaultOnWire[str | None] = None
+    system_city_size: DefaultOnWire[SettlementSizeKey | None] = None
     system_location_mood: DefaultOnWire[str | None] = None
     frontage_type_order: DefaultOnWire[list[str] | None] = None
     structure_counts: DefaultOnWire[dict[str, int] | None] = None

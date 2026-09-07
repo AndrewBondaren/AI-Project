@@ -11,6 +11,18 @@ from app.dataModel.settlement.enums import (
     DistrictDensity,
     block_size_for_density,
 )
+from app.dataModel.settlement.settlement import (
+    LocationMoodEntry,
+    SettlementSizeEntry,
+    SettlementSizeKey,
+    SettlementSkeleton,
+    SettlementSpecializationBind,
+    SettlementSpecializationEntry,
+    TypicalDistrictRef,
+    WorldLocationMoodRegistry,
+    WorldSettlementSizeRegistry,
+    WorldSettlementSpecializationRegistry,
+)
 from app.dataModel.settlement.district import (
     COUNT_WITHOUT_KEY,
     CellZone,
@@ -33,21 +45,11 @@ from app.dataModel.settlement.district import (
     resolve_structure_priority,
     union_required_structures,
 )
-from app.dataModel.settlement.settlement import (
-    CitySizeEntry,
-    LocationMoodEntry,
-    SettlementSkeleton,
-    SettlementSpecializationBind,
-    SettlementSpecializationEntry,
-    TypicalDistrictRef,
-    WorldCitySizeRegistry,
-    WorldLocationMoodRegistry,
-    WorldSettlementSpecializationRegistry,
-)
 
 __all__ = [
     "CellZone",
-    "CitySizeEntry",
+    "SettlementSizeEntry",
+    "SettlementSizeKey",
     "DEFAULT_BLOCK_SIZE_M",
     "DistrictConnection",
     "DistrictDensity",
@@ -67,7 +69,7 @@ __all__ = [
     "SettlementSpecializationBind",
     "SettlementSpecializationEntry",
     "TypicalDistrictRef",
-    "WorldCitySizeRegistry",
+    "WorldSettlementSizeRegistry",
     "WorldDistrictTemplateRegistry",
     "WorldDistrictZonePreference",
     "WorldLocationMoodRegistry",

@@ -19,6 +19,8 @@ class LocationTypeSubtypeEntry(BaseModel):
     # Settlement recipe only (CITY-T-2d). Geographic subtypes may carry the keys; generate ignores them.
     typical_district_types: DefaultOnWire[list[str]] = Field(default_factory=list)
     required_structure_types: DefaultOnWire[list[str]] = Field(default_factory=list)
+    # Settlement morphology × rank (LOC-T-2). Empty on geographic / district / building subtypes.
+    footprint_by_size: DefaultOnWire[dict[str, float]] = Field(default_factory=dict)
 
     def has_district_recipe(self) -> bool:
         """Non-empty typical district types → recipe path; empty → legacy district select."""

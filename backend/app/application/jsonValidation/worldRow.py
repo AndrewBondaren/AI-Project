@@ -43,7 +43,9 @@ from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
 from app.dataModel.settlement.district.worldDistrictZonePreference import (
     WorldDistrictZonePreference,
 )
-from app.dataModel.settlement.settlement.worldCitySizeRegistry import WorldCitySizeRegistry
+from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import (
+    WorldSettlementSizeRegistry,
+)
 from app.dataModel.settlement.settlement.worldSettlementSpecializationRegistry import (
     WorldSettlementSpecializationRegistry,
 )
@@ -199,10 +201,15 @@ def default_precipitation_liquid() -> str:
     return _DEFAULT_PRECIPITATION_LIQUID
 
 
-def city_sizes(world: Any) -> WorldCitySizeRegistry:
+def settlement_sizes(world: Any) -> WorldSettlementSizeRegistry:
     return resolve_registry_list_world(
-        world, WorldCitySizeRegistry, world_uid=_uid(world),
+        world, WorldSettlementSizeRegistry, world_uid=_uid(world),
     )
+
+
+def city_sizes(world: Any) -> WorldSettlementSizeRegistry:
+    """Wire name until LOC-T-2 SQL rename; same POJO as ``settlement_sizes``."""
+    return settlement_sizes(world)
 
 
 def district_templates(world: Any) -> WorldDistrictTemplateRegistry:

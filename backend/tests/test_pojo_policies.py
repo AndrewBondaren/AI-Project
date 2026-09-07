@@ -33,7 +33,6 @@ class TestPojoPolicies(unittest.TestCase):
         self.assertTrue(
             uses_settlement_meter_footprint(
                 system_location_type="settlement",
-                system_city_size="hamlet",
             )
         )
         self.assertTrue(uses_settlement_meter_footprint(system_location_type="district"))

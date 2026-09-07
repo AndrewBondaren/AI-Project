@@ -114,7 +114,7 @@ Generators **не** пишут в `named_locations` и **не** вызывают
 
 | Семейство | Примеры `display_name` | Роль | Geometry / persist |
 |---|---|---|---|
-| **Поселения** (иерархия § ниже) | «Королевский порт», «Деревня Заречье» | SceneInit, layout, economy | `map_cells` + footprint по `city_size` |
+| **Поселения** (иерархия § ниже) | «Королевский порт», «Деревня Заречье» | SceneInit, layout, economy | `map_cells` + footprint по морфологии × ранг размера (**LOC-T-2**) |
 | **География** (optional) | «Гора Белая», «Озеро Лунное» | declare / **LLM U13** | anchor + **`world.hydrology.declared_*`** (U20/U21/U27) |
 | **Линейные** (optional) | «Река Волга» | имя русла | declare `declared_rivers[]` → bed carve; routing — `ConnectionEdge` emit (U18) |
 | **Климат / админ** | `climate_pole`, zone override на territory | Pole / Voronoi / zone field | point anchor; см. [`tz_climate.md`](./tz_climate.md) |
@@ -149,7 +149,9 @@ named_locations (
   owner_uid,                      -- nullable FK → character_sheet; персональный владелец
   system_climate_zone,            -- nullable ref → worlds.climate_zone_registry; null = наследует от parent
   state_uid,                      -- nullable; soft ref → states; orphan = ничейная, движок логирует
-  system_city_size,               -- nullable ref → worlds.city_size_registry; актуально для settlement
+  system_settlement_size,         -- nullable ref → worlds.settlement_size_registry (ранг small/medium/large).
+                                  -- Целевой ключ (**LOC-T-2**). Код/SQL до impl: `system_city_size`.
+                                  -- Только settlement-like. Абсолютный footprint — не это поле, а subtype × ранг.
   system_economic_tier,           -- nullable ref → worlds.economic_tier_registry; null = наследует от parent; если у всех предков null → медианный тир (index = floor(count/2) по base_value ASC) + лог WARNING
   is_public,                      -- bool default False; публичная локация — NPC-занятость не блокирует старт игрока
   is_forbidden,                   -- bool default False; restricted-зона — location_faction_access переходит в режим allowlist
@@ -157,7 +159,9 @@ named_locations (
   is_sheltered,                   -- bool default False; навес над outdoor-локацией; non-penetrating погода не влияет
   is_transit,                     -- bool default False; транзитная локация — движок не создаёт SessionScene; LLM описывает как часть перехода
   is_mobile,                      -- bool default False; локация может перемещаться (корабль, дирижабль); позиция через map_x/y/z
-  map_x, map_y, map_z,            -- nullable int; глобальные координаты локации на карте мира
+  map_x, map_y, map_z,            -- nullable int; глобальные координаты локации на карте мира.
+                                  -- Omit `map_z` = pin z 0 (`TerritoryVolumePolicy.pin_map_z_fallback`).
+                                  -- Писать `map_z` только для ненулевого пина (подземный/hive/плато). `0` на wire = то же, что omit.
   system_template_uid,            -- nullable FK → building_templates; из какого шаблона сгенерировано здание
   parent_wall_material,           -- nullable ref → material_registry; материал стен здания (наследуется из шаблона)
   parent_floor_material,          -- nullable ref → material_registry; материал полов здания
@@ -171,25 +175,77 @@ named_locations (
 
 ---
 
-## Размер поселения
+## Размер поселения (**LOC-T-2**)
 
-### `worlds.city_size_registry` (N+1)
+Две оси, два словаря. Писать **оба** поля — нормально, если токены **разные**.
+
+| Ось | Wire | Что это | Канон |
+|---|---|---|---|
+| Морфология | `system_location_subtype` | вид места (рецепт районов, глиф L0) | `village`, `city`, `dungeon`, `underground_city` |
+| Ранг размера | `system_settlement_size` | **относительный** масштаб **в контексте** морфологии | `small`, `medium`, `large` (+ N+1) |
+
+| Wire | Вердикт |
+|---|---|
+| `subtype: village` + `size: small` | ✅ маленькая деревня |
+| `subtype: city` + `size: small` | ✅ маленький город |
+| `subtype: village` + `size: village` | ❌ один токен на двух осях |
+| `subtype: city` + `size: city` | ❌ то же |
+
+Ошибка — **дублирование значения** (одна и та же строка в subtype и size), не пара «морфология + ранг». Import: оба заданы и равны (trim, case-insensitive) → **422**. N+1 size registry не должен брать ключи морфологии (`village`, `city`, `dungeon`, …); канон рангов — `small` / `medium` / `large`. Код до impl ещё хранит `hamlet`…`megalopolis` в `city_size_registry` — это как раз сломанный словарь размера.
+
+Инвариант абсолютного footprint (метры): **малый город всегда больше большой деревни.**  
+`footprint(city, small) > footprint(village, large)` при любом N+1, пока мастер не сломает таблицы — тогда **422** на import реестра.
+
+### Контекст
+
+Один и тот же ранг `small` — разный смысл:
+
+- `village` + `small` — маленькая деревня (хутор)
+- `city` + `small` — маленький город (городок)
+- `dungeon` + `small` — маленький данж
+
+Столица — не размер и не морфология (`states.capital_location_uid`). Geographic / лес: ранг поселения **не** задаёт pin; omit `system_settlement_size`. Лес — terrain, не size.
+
+Omit ранга на settlement → канон **`medium`** (обычный для этой морфологии). Не выводить ранг из subtype.
+
+Невалидный ранг на **городе/поселении** (не строка, пусто, ключ не из `settlement_size_registry` мира — в т.ч. legacy `hamlet`/`town`): generate ставит **`medium`** и пишет **WARNING** в продуктовый фасад логов ([`tz_logging.md`](./tz_logging.md) `jsonValidation` / `resolve`, сообщение `json_validation | settlement_size invalid`). Omit (поля нет / SQL NULL) — тот же `medium` **без** warning. Не 422. Дубль subtype==size — 422, не этот fallback.
+
+### `worlds.settlement_size_registry` (N+1)
+
+Только **упорядоченные ранги** (identity + display). **Нет** `footprint_multiplier` на строке ранга.
 
 ```json
 [
-  { "system_size": "hamlet",      "display_size": "Хутор",       "map_cells_count": 1  },
-  { "system_size": "village",     "display_size": "Деревня",     "map_cells_count": 2  },
-  { "system_size": "town",        "display_size": "Городок",     "map_cells_count": 4  },
-  { "system_size": "city",        "display_size": "Город",       "map_cells_count": 9  },
-  { "system_size": "metropolis",  "display_size": "Метрополис",  "map_cells_count": 20 },
-  { "system_size": "megalopolis", "display_size": "Мегалополис", "map_cells_count": 50 }
+  { "system_size": "small",  "display_size": "Малый" },
+  { "system_size": "medium", "display_size": "Средний" },
+  { "system_size": "large",  "display_size": "Большой" }
 ]
 ```
 
-- `map_cells` — footprint: количество поверхностных (x,y) позиций; не 3D-объём
-- Работает одинаково для hex и square — движок оперирует количеством, не формой
-- `city_size` на `named_locations` — nullable; актуально только для settlement-типа
-- **Не тип поселения и не специализация.** Масштаб footprint. Морфология (`city`/`village`) и роли добыча/ферма/… — [`tz_city_generation.md`](./tz_city_generation.md) **§1.1–§1.2** (не дублировать таблицу осей сюда)
+Порядок в массиве = порядок rank (как `WorldCitySizeRegistry.rank` сейчас). Код/колонка до impl: `city_size_registry` + токены `hamlet`…`megalopolis`.
+
+### Абсолютный footprint
+
+`footprint_m = footprint_by_size[subtype][size] × map_cell_size_m`
+
+Таблица множителей — на **`location_type_registry`**, subtype поселения (`subtypes[].footprint_by_size`), не на ранге. Hex/square — число метров стороны квадрата v1, не форма.
+
+Канон (полосы не пересекаются: max village < min city):
+
+| subtype \ size | `small` | `medium` | `large` |
+|---|---|---|---|
+| `village` | 0.25 | 0.50 | 0.75 |
+| `city` | 1.00 | 2.00 | 4.00 |
+| `dungeon` | 0.25 | 0.50 | 1.00 |
+| `underground_city` | 1.00 | 2.00 | 4.00 |
+
+При `map_cell_size_m=3000`: большая деревня 2250 м, малый город 3000 м. N+1 может сдвинуть числа, **не** инвариант village≺city. `huge` и др. — только N+1; если ключ есть в size registry, он должен быть в `footprint_by_size` этого subtype или import 422.
+
+Omit ранга на settlement → **`medium`**. Неизвестный токен ранга, нет `footprint_by_size` у subtype, нет строки для этого ранга → **422** (не молчаливый `hamlet`).
+
+**Не** специализация и не `district_type`. SoT осей generate: [`tz_city_generation.md`](./tz_city_generation.md) **§1.1–§1.2**.
+
+Условия шаблонов (`min_city_size` в коде): ранг сравнивать **в той же морфологии**, не как глобальную лестницу `small`<`large` между городом и деревней. «Только города» = subtype `city`, не size. Порог «больше большой деревни» = сравнение resolved `footprint_m`, не токена ранга.
 
 ---
 
@@ -287,7 +343,29 @@ L0 debug-карта: глиф footprint поселения — `subtypes[].l0_ma
 - **`geographic`** — map anchor; **не** обязан иметь детей в иерархии settlement; может быть корнем (`parent_types` включает `null`) или child territory
 - **`geographic.river`** — **optional** имя русла; polyline / bed — `ConnectionEdge` (`location_uid` может быть `null`)
 - **`climate_pole`** — max 1 manual на мир (validator); отдельный type, не subtype `geographic`
-- **Три оси city generate** (не смешивать ключи): морфология поселения (`city`/`village`/…) ≠ **специализация** на шаблоне поселения (`extract`/`farm`/…) ≠ `district_type` (ткань) ≠ `district_subtype` (те же ключи, что специализация; NL района) ≠ `structure_type` библиотеки. Subtype **здания** в этом реестре (`residential`/…) — только дерево NL. `city_size` — масштаб. SoT: [`tz_city_generation.md`](./tz_city_generation.md) §1.1–§1.2
+- **Три оси city generate** (не смешивать ключи): морфология поселения (`city`/`village`/…) ≠ **специализация** на шаблоне поселения (`extract`/`farm`/…) ≠ `district_type` (ткань) ≠ `district_subtype` (те же ключи, что специализация; NL района) ≠ `structure_type` библиотеки. Subtype **здания** в этом реестре (`residential`/…) — только дерево NL. Ранг размера (`small`/`medium`/`large`) — **LOC-T-2**, не морфология. SoT: [`tz_city_generation.md`](./tz_city_generation.md) §1.1–§1.2
+
+### Import wire: `system_location_type` vs `system_location_subtype` (**LOC-T-1**)
+
+Мастер не обязан писать оба поля, если subtype однозначно задаёт type. SQL `named_locations.system_location_type` остаётся **NOT NULL** — fill на import, не nullable persist.
+
+Реестр для lookup: `location_types(world)` = world overlay **`merged_with_engine()`**. `canonical_engine()` без world **недостаточен** (N+1 subtype мира может быть уникальным или создать коллизию).
+
+| Wire | Поведение |
+|---|---|
+| type есть, subtype omit | OK (`region`, `continent`, `climate_pole`, …) |
+| type + subtype | subtype обязан принадлежать **этому** type; иначе 422 |
+| type omit, subtype есть | ровно **один** owner-type в merged-реестре → fill этим type; 0 или 2+ owner → 422 |
+| оба omit | 422 |
+| legacy `system_location_type: "city"` (subtype omit) | остаётся валидным (`_LEGACY_FOOTPRINT_SYSTEM_TYPES`); не требовать subtype |
+
+**Не выводить type** из `system_settlement_size` и не из `parent_location_uid`. Ранг `small` ≠ морфология. Subtype `village` ≠ size (LOC-T-2).
+
+**Неуникальные subtype (канон engine):** `mountain` и `island` живут и на `territory`, и на `geographic`. Без явного type → **422**. `city` уникален у `settlement`. World N+1 может сделать уникальный ключ коллизией (тогда тоже 422, пока type не указан явно) или добавить уникальный subtype (тогда infer работает).
+
+Слой: typed helper на `WorldLocationTypeRegistry` + fill в import/`NamedLocationService` (world уже в bundle до `locations`). **Не** в генераторах. **Не** `world.fetch` внутри Pydantic-модели. `normalize_world` локации не трогает — это не world-slice.
+
+Код ⬜ — план: [`.cursor/plans/infer-location-type-from-subtype.md`](../.cursor/plans/infer-location-type-from-subtype.md).
 
 ### Вертикальное наложение локаций
 
@@ -1359,3 +1437,5 @@ repositories = {
 | Coordinate bridging local↔global | `location_passages.(from_x, from_y)` и `location_objects.(x, y)` — локальные координаты; offset = MIN(map_cells.x/y WHERE location_uid=X AND z=Z); нигде не хранится, вычисляется при выходе из interior |
 | Ранги доступа в `is_forbidden`-зонах | `location_faction_access.min_rank` — не реализовано; отложено до системы рангов фракций |
 | Fallback для бездомного + hometown при пустых детях | Если все дочерние `system_home_settlement_uid.depth+1` отфильтрованы `can_start()` — `NoLocationsAvailableError`. Нет fallback на глубину+2 или другой settlement. Требует решения совместно с UI-флоу. |
+| **LOC-T-1** Infer `system_location_type` из уникального subtype | Контракт locked (этот §). Код ⬜: omit type + `subtype=city` сейчас 422 (`BundleNamedLocation` StrictOnWire). Не CITY-T-5. |
+| **LOC-T-2** Ранг размера поселения vs морфология | Контракт locked (§ Размер поселения): omit → medium; type/unknown rank на generate → medium + WARNING фасада. Код: POJO `WorldSettlementSizeRegistry` ⬜ rename SQL `system_city_size`. Не CITY-T-5. План: [`.cursor/plans/loc-t-2-settlement-size.md`](../.cursor/plans/loc-t-2-settlement-size.md). |

@@ -61,7 +61,7 @@ metadata:
 
 | Данное | SoT | Где живёт | Кто читает |
 |---|---|---|---|
-| Вид места: `system_location_type`, **`system_location_subtype`**, `system_city_size`, имя | SQL `named_locations` | L1, [`tz_locations.md`](./tz_locations.md) | движок, сцена, DAG, **debug render API** |
+| Вид места: `system_location_type`, **`system_location_subtype`**, `system_settlement_size` (код: `system_city_size`), имя | SQL `named_locations` | L1, [`tz_locations.md`](./tz_locations.md) **LOC-T-2** | движок, сцена, DAG, **debug render API** |
 | Геометрия карты: диск footprint, `location_pin` = **индекс** в `locations_index[]`, координаты пина | pack light tile + `locations_index.json` | WP-9 зеркало якорей, не полный `NamedLocation` | L0 mosaic / dump |
 | Порядок пинов в индексе | pack bake | стабилен, пока не light/full bake | клетка → uid |
 

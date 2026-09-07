@@ -6,6 +6,8 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
+
 
 class LocationsIndexPin(BaseModel):
     """Single location pin on the world map index."""
@@ -21,7 +23,7 @@ class LocationsIndexPin(BaseModel):
     display_name: str | None = None
     system_location_type: str | None = None
     system_location_subtype: str | None = None
-    system_city_size: str | None = None
+    system_city_size: SettlementSizeKey | None = None
 
 
 class LocationsIndexWire(BaseModel):
