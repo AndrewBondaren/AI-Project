@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
+from app.core.constants import FINE_CELL_SIZE
 from app.dataModel.worldPack.climateFieldWire import ClimateBakeStatusMixin
-from app.dataModel.worldPack.mapCellSize import MAP_CELL_SIZE_M_DEFAULT
+from app.dataModel.worldPack.mapCellSize import FINE_CELLS_PER_MAP_CELL_DEFAULT
 from app.dataModel.worldPack.packBakeDefaults import PACK_CODEC_VERSION
 from app.dataModel.worldPack.packBakeMode import PackBakeMode
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
@@ -62,7 +63,7 @@ class LocationTerrainEntry(ClimateBakeStatusMixin):
 class WorldPackManifest(BaseModel):
     SCHEMA_ID: ClassVar[str] = "SCH-WORLD-PACK-MANIFEST"
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     pack_version: str = PACK_WIRE_VERSION
     world_uid: str
@@ -71,9 +72,15 @@ class WorldPackManifest(BaseModel):
     payload_format: str = "json"
     registry_hash: str | None = None
     bake_mode: BakeMode = "light"
-    map_cell_size_m: int = MAP_CELL_SIZE_M_DEFAULT
+    fine_cells_per_map_cell: int = Field(
+        default=FINE_CELLS_PER_MAP_CELL_DEFAULT,
+        validation_alias=AliasChoices("fine_cells_per_map_cell", "map_cell_size_m"),
+    )
     world_map_cells_per_tile: int = WORLD_MAP_CELLS_PER_TILE
-    cell_size_m: int = 1
+    fine_cell_size: int = Field(
+        default=FINE_CELL_SIZE,
+        validation_alias=AliasChoices("fine_cell_size", "cell_size_m"),
+    )
     map_subsurface_depth: int = 0
     location_terrain_entries: list[LocationTerrainEntry] = Field(default_factory=list)
     settlement_structure_entries: list[SettlementStructureEntry] = Field(default_factory=list)

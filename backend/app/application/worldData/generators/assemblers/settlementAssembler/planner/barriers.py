@@ -12,11 +12,11 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
     footprint_gate_coordinates,
-    footprint_side_m,
+    footprint_side_fine,
 )
 from app.application.worldData.generators.coordinates import (
-    cell_size_m,
-    settlement_origin_m,
+    map_cell_fine_span,
+    settlement_origin_fine,
 )
 from app.application.worldData.generators.road.blockSize import block_size_for_density
 from app.application.worldData.generators.barrier.material import pick_barrier_material
@@ -119,9 +119,9 @@ def plan_settlement_barriers(
         )
         return []
 
-    origin = settlement_origin_m(settlement)
-    side_m = footprint_side_m(world, skeleton.system_city_size)
-    cell_m = cell_size_m(world)
+    origin = settlement_origin_fine(settlement)
+    side_m = footprint_side_fine(world, skeleton.system_city_size)
+    cell_m = map_cell_fine_span(world)
     step_m = block_size_for_density(skeleton.settlement_density)
 
     gate_coords = footprint_gate_coordinates(origin.x, origin.y, side_m, cell_m)

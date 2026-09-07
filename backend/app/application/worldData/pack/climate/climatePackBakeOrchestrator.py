@@ -6,7 +6,7 @@ import logging
 import time
 from collections.abc import Mapping
 
-from app.application.worldData.generators.coordinates import cell_size_m
+from app.application.worldData.generators.coordinates import map_cell_fine_span
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
 )
@@ -95,7 +95,7 @@ class ClimatePackBakeOrchestrator:
     ) -> tuple[PersistResult, int]:
         """Write denser per-tile climate. Returns (blob PersistResult, sample count)."""
         side = resolve_world_map_cells_per_tile(
-            cell_size_m(world),
+            map_cell_fine_span(world),
             world.world_map_cells_per_tile,
         )
         uid_map = (
@@ -140,7 +140,7 @@ class ClimatePackBakeOrchestrator:
         require_parent: bool = True,
     ) -> bool:
         """Load parent light and bake fine. Skip (False) when parent missing and required."""
-        tile_m = cell_size_m(world)
+        tile_m = map_cell_fine_span(world)
         parent = load_parent_light(
             world.world_uid,
             tile_gx,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections import Counter
 
-from app.application.worldData.generators.coordinates import meters_to_grid_x, meters_to_grid_y
+from app.application.worldData.generators.coordinates import fine_to_grid_x, fine_to_grid_y
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.coords import light_cell_center_m
@@ -45,8 +45,8 @@ class ClimateContributor:
             for ty in range(scale.side):
                 for tx in range(scale.side):
                     xm, ym = light_cell_center_m(gx, gy, tx, ty, scale)
-                    mgx = int(meters_to_grid_x(xm, tile_m))
-                    mgy = int(meters_to_grid_y(ym, tile_m))
+                    mgx = int(fine_to_grid_x(xm, tile_m))
+                    mgy = int(fine_to_grid_y(ym, tile_m))
                     sample = pole.sample(world, mgx, mgy)
                     zone_id = _climate_zone_id(sample.system_climate_zone)
                     compose.ensure(gx, gy, tx, ty).climate_zone_id = zone_id

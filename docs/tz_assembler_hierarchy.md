@@ -590,11 +590,11 @@ generators/assemblers/
 
 ### 7.5 Система координат
 
-Единая система координат (x, y, z) в метрах — одна для всего движка (map_cells, NamedLocation, всё).
+Единая система координат (x, y, z) в coarse- и fine-клетках — одна для всего движка (map_cells, NamedLocation, всё). Метры/футы — только UI/LLM.
 
 **Глобальная ячейка карты** — конфигурируемая единица планирования города:
 ```
-cell_size_m = World.map_cell_size_m   # через generators/coordinates/cell_size_m(world)
+map_cell_fine_span = World.fine_cells_per_map_cell   # через generators/coordinates/map_cell_fine_span(world)
 ```
 
 > **Не** `world.map_settings["global_cell_size_m"]` — ghost key (NC-1g). См. [tz_city_generation.md](./tz_city_generation.md) §9.6, [tz_terrain_generation.md](./tz_terrain_generation.md) § coordinates.
@@ -604,13 +604,13 @@ cell_size_m = World.map_cell_size_m   # через generators/coordinates/cell_s
 | Слой | Единица | Тип в коде |
 |---|---|---|
 | `SettlementAssembler` | планирует в глобальных ячейках `(cell_x, cell_y)` сетки города | `int` |
-| `DistrictSlot` | мировые метры — `SettlementAssembler` вычисляет и укладывает в слот вместе с шаблоном | `int` |
-| `DistrictAssembler` | работает в мировых метрах из `slot.origin_x/y, width_m, depth_m` | `int` |
-| `AreaSlot` | абсолютные (x, y) в метрах; список ячеек | `list[tuple[int,int]]` |
+| `DistrictSlot` | WORLD_FINE_GRID — `SettlementAssembler` вычисляет и укладывает в слот вместе с шаблоном | `int` |
+| `DistrictAssembler` | работает в fine-клетках из `slot.origin_x/y, width_fine, depth_fine` | `int` |
+| `AreaSlot` | абсолютные (x, y) в fine-клетках; список ячеек | `list[tuple[int,int]]` |
 
-Один район может занимать всю глобальную ячейку: `width_m = depth_m = cell_size_m`.
+Один район может занимать всю глобальную ячейку: `width_fine = depth_fine = map_cell_fine_span`.
 
-**Координаты:** hub `generators/coordinates/` — WORLD_SURFACE_GRID vs WORLD_LOCAL_METERS ([`.cursor/plans/coordinate-spaces.md`](../.cursor/plans/coordinate-spaces.md)).
+**Координаты:** hub `generators/coordinates/` — WORLD_SURFACE_GRID vs WORLD_FINE_GRID ([`.cursor/plans/coordinate-spaces.md`](../.cursor/plans/coordinate-spaces.md)).
 
 ---
 

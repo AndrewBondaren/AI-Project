@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TypeVar
 
-from app.application.worldData.generators.coordinates.worldTile import world_meter_xy
+from app.application.worldData.generators.coordinates.worldTile import world_fine_xy
 from app.application.worldData.generators.terrain.resolveWorldMapTerrain import (
     resolve_world_map_terrain,
 )
@@ -43,7 +43,7 @@ def _upsample_optional(
     out: dict[tuple[int, int], T] = {}
     for ly in range(tile_m):
         for lx in range(tile_m):
-            xm, ym = world_meter_xy(parent.gx, parent.gy, lx, ly, tile_m)
+            xm, ym = world_fine_xy(parent.gx, parent.gy, lx, ly, tile_m)
             tx, ty = parent.meters_to_tx_ty(xm, ym)
             cell = parent.cell_at(tx, ty)
             if cell is None:
@@ -67,7 +67,7 @@ def upsample_terrain_from_parent_light(
     out: dict[tuple[int, int], str] = {}
     for ly in range(tile_m):
         for lx in range(tile_m):
-            xm, ym = world_meter_xy(parent.gx, parent.gy, lx, ly, tile_m)
+            xm, ym = world_fine_xy(parent.gx, parent.gy, lx, ly, tile_m)
             tx, ty = parent.meters_to_tx_ty(xm, ym)
             cell = parent.cell_at(tx, ty)
             out[(xm, ym)] = resolve_world_map_terrain(world, cell)

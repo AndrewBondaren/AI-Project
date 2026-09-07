@@ -13,6 +13,10 @@ from app.application.jsonValidation.worldSliceMerge import merge_facade_slices
 def normalize_world(data: dict[str, Any], *, partial: bool = False) -> dict[str, Any]:
     """Normalize ``worlds`` wire dict for import or CRUD write."""
     out = dict(data)
+    if "fine_cells_per_map_cell" in out:
+        out.pop("map_cell_size_m", None)
+    elif "map_cell_size_m" in out:
+        out["fine_cells_per_map_cell"] = out.pop("map_cell_size_m")
     ctx = ResolveContext(mode=ResolveMode.IMPORT, partial=partial)
 
     merge_facade_slices(out, ctx)

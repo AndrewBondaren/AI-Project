@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from app.application.jsonValidation.worldRow import hydrology as read_hydrology
 from app.application.worldData.generators.coordinates.convert import (
-    cell_size_m,
+    map_cell_fine_span,
 )
 from app.application.worldData.generators.hydrology.basins.basinKindResolver import (
     resolve_lake_basin_role,
@@ -119,7 +119,7 @@ def load_declared_hydrology(
 ) -> LoadedDeclaredHydrology:
     """Read POJO declare from world; segments mode → edges at import (A3 hybrid)."""
     pojo = read_hydrology(world)
-    cell_m = cell_size_m(world)
+    cell_m = map_cell_fine_span(world)
     loc_map = {loc.location_uid: loc for loc in locations}
     coastlines = _coerce_declared_coastlines(list(pojo.declared_coastlines))
     lakes = _coerce_declared_lakes(list(pojo.declared_lakes))

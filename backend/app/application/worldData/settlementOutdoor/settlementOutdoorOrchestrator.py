@@ -17,7 +17,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     plan_district_slots,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
-    footprint_side_m,
+    footprint_side_fine,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.streets import (
     plan_city_street_grid,
@@ -28,7 +28,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
 )
-from app.application.worldData.generators.coordinates import cell_size_m, settlement_origin_m
+from app.application.worldData.generators.coordinates import map_cell_fine_span, settlement_origin_fine
 from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
@@ -251,12 +251,12 @@ class SettlementOutdoorOrchestrator:
         slots = plan_district_slots(
             world, settlement, skeleton, terrain_cells or None,
         )
-        origin = settlement_origin_m(settlement)
+        origin = settlement_origin_fine(settlement)
         rng = random.Random(f"{world.world_uid}_{settlement.location_uid}")
         city_nodes, city_edges = plan_city_street_grid(
             origin.x, origin.y, origin.z,
-            footprint_side_m(world, skeleton.system_city_size),
-            cell_size_m(world),
+            footprint_side_fine(world, skeleton.system_city_size),
+            map_cell_fine_span(world),
             slots, world.world_uid, world, rng, skeleton,
             surface=column_surface(terrain_cells),
             settlement_uid=settlement.location_uid,

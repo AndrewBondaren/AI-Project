@@ -1,7 +1,7 @@
 """Defaults for location territory AABB — docs/tz_world_pack_storage.md § Location L2.
 
-Settlement footprint: ``settlement_meter_rect`` is half-open ``[x0,x1)×[y0,y1)``;
-``TerritoryVolume`` is inclusive — convert with ``x1_exclusive - 1`` (±1 m on edge vs generator).
+Settlement footprint: ``settlement_fine_rect`` is half-open ``[x0,x1)×[y0,y1)``;
+``TerritoryVolume`` is inclusive — convert with ``x1_exclusive - 1`` (±1 fine cell on edge vs generator).
 """
 
 from __future__ import annotations

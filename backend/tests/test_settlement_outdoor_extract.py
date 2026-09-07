@@ -61,8 +61,8 @@ def _layout(*, passages: list[LocationPassage]) -> SettlementLayout:
     dslot = DistrictSlot(
         origin_x=0,
         origin_y=0,
-        width_m=10,
-        depth_m=10,
+        width_fine=10,
+        depth_fine=10,
         ground_z=0,
         district_template=template,
     )
@@ -151,7 +151,7 @@ class TestSettlementOutdoorExtract(unittest.TestCase):
             district_type="civic",
         )
         dslot = DistrictSlot(
-            origin_x=0, origin_y=0, width_m=10, depth_m=10, ground_z=0,
+            origin_x=0, origin_y=0, width_fine=10, depth_fine=10, ground_z=0,
             district_template=template,
         )
         aslot = AreaSlot(cells=[(0, 0), (1, 0), (0, 1), (1, 1)], ground_z=2, facing=Facing.SOUTH)

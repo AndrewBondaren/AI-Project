@@ -62,7 +62,7 @@ def _make_node(
     settlement_uid: str,
     location_uid: str | None = None,
 ) -> ConnectionNode:
-    """ConnectionNode x/y/z in WORLD_LOCAL_METERS. City/entry uids are uuid5 (C23)."""
+    """ConnectionNode x/y/z in WORLD_FINE_GRID. City/entry uids are uuid5 (C23)."""
     node_type_wire = node_type.value if isinstance(node_type, ConnectionNodeType) else node_type
     graph_wire = graph_level.value if isinstance(graph_level, GraphLevel) else graph_level
     return ConnectionNode(
@@ -227,7 +227,7 @@ def plan_city_street_grid(
 ) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
     """
     settlement_gate на периметре footprint + кольцевая магистраль.
-    CoordinateSpace: WORLD_LOCAL_METERS (origin_x/y, side_m, cell_m for gate spacing).
+    CoordinateSpace: WORLD_FINE_GRID (origin_x/y, side_m, cell_m for gate spacing).
     Для n>1: city-level коридоры на внутренних границах между районами.
     """
     nodes: list[ConnectionNode] = []

@@ -1,8 +1,8 @@
 """WP-10 v2: world_map_cells_per_tile — constant mask side (default 32).
 
 See ``docs/tz_world_pack_storage.md`` § L0 / WP-10 v2.
-``light_m = map_cell_size_m // side`` — physical scale drifts with tile size;
-``side`` itself does **not** depend on ``map_cell_size_m``.
+``light_m = fine_cells_per_map_cell // side`` — physical scale drifts with tile size;
+``side`` itself does **not** depend on ``fine_cells_per_map_cell``.
 """
 
 from __future__ import annotations
@@ -33,21 +33,21 @@ class WorldMapCellsPerTilePolicy(BaseModel):
             return max(1, int(override))
         return max(1, int(self.cells_per_tile))
 
-    def resolve(self, map_cell_size_m: int, override: int | None = None) -> int:
-        """Compat wrapper — ``map_cell_size_m`` ignored (affects ``light_m``, not side)."""
-        del map_cell_size_m
+    def resolve(self, fine_cells_per_map_cell: int, override: int | None = None) -> int:
+        """Compat wrapper — ``fine_cells_per_map_cell`` ignored (affects ``light_m``, not side)."""
+        del fine_cells_per_map_cell
         return self.resolve_side(override)
 
 
 def resolve_world_map_cells_per_tile(
-    map_cell_size_m: int,
+    fine_cells_per_map_cell: int,
     override: int | None = None,
     *,
     policy: WorldMapCellsPerTilePolicy | None = None,
 ) -> int:
-    """Return L0 mask side. ``map_cell_size_m`` does not change side (WP-10 v2)."""
+    """Return L0 mask side. ``fine_cells_per_map_cell`` does not change side (WP-10 v2)."""
     pol = policy or WorldMapCellsPerTilePolicy.canonical_defaults()
-    return pol.resolve(map_cell_size_m, override)
+    return pol.resolve(fine_cells_per_map_cell, override)
 
 
 def resolve_world_map_side(
@@ -61,7 +61,7 @@ def resolve_world_map_side(
 
 
 def light_m_for(tile_m: int, side: int) -> int:
-    """Meters per light cell: ``map_cell_size_m // side`` (WP-10).
+    """Fine cells per light cell: ``fine_cells_per_map_cell // side`` (WP-10).
 
     Single SoT for ``LightGridScale.light_m`` and ``ParentLightTile.light_m``.
     """

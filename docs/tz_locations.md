@@ -226,7 +226,7 @@ Omit ранга на settlement → канон **`medium`** (обычный дл
 
 ### Абсолютный footprint
 
-`footprint_m = footprint_by_size[subtype][size] × map_cell_size_m`
+`footprint_m = footprint_by_size[subtype][size] × fine_cells_per_map_cell`
 
 Таблица множителей — на **`location_type_registry`**, subtype поселения (`subtypes[].footprint_by_size`), не на ранге. Hex/square — число метров стороны квадрата v1, не форма.
 
@@ -239,7 +239,7 @@ Omit ранга на settlement → канон **`medium`** (обычный дл
 | `dungeon` | 0.25 | 0.50 | 1.00 |
 | `underground_city` | 1.00 | 2.00 | 4.00 |
 
-При `map_cell_size_m=3000`: большая деревня 2250 м, малый город 3000 м. N+1 может сдвинуть числа, **не** инвариант village≺city. `huge` и др. — только N+1; если ключ есть в size registry, он должен быть в `footprint_by_size` этого subtype или import 422.
+При `fine_cells_per_map_cell=3000`: большая деревня 2250 м, малый город 3000 м. N+1 может сдвинуть числа, **не** инвариант village≺city. `huge` и др. — только N+1; если ключ есть в size registry, он должен быть в `footprint_by_size` этого subtype или import 422.
 
 Omit ранга на settlement → **`medium`**. Неизвестный токен ранга, нет `footprint_by_size` у subtype, нет строки для этого ранга → **422** (не молчаливый `hamlet`).
 

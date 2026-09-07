@@ -19,7 +19,7 @@ def _minimal_world(uid: str = "w-perf-test") -> World:
         world_uid=uid,
         name="Perf Test",
         created_at="2026-01-01T00:00:00Z",
-        map_cell_size_m=1000,
+        fine_cells_per_map_cell=1000,
         map_subsurface_depth=20,
         terrain_chunk_columns=32,
     )

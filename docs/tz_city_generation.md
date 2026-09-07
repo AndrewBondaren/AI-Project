@@ -19,6 +19,7 @@
 | [tz_building_generator.md](./tz_building_generator.md) | Library: `structure_type` vs `system_name` чертежа |
 | [tz_generator_technical_debt.md](./tz_generator_technical_debt.md) | NC/MR smells; **CITY-T-1** контур; **CITY-T-2** пул/uid (**2d** `partial`, **2b** open); **CITY-T-4** планировщик **resolved** |
 | [tz_city_generation_technical_debt.md](./tz_city_generation_technical_debt.md) | **CITY-T-5** после C23: dual persist, хардкоды, смешение слоёв. Не SoT §8 |
+| [tz_pojo_city_typing.md](./tz_pojo_city_typing.md) | City POJO: `str` → `RegistryKey` / ENUM-E (`POJO-C-*`). Скелет size/tier/material/density — не reopen |
 
 ### Статус реализации (код vs это ТЗ)
 
@@ -70,7 +71,7 @@ Import: `system_location_type` можно **не** писать, если `syste
 
 Subtype локации `building` в дереве NL (`residential` / `commercial` / …) — иерархия SQL, **не** `district_type`, **не** `district_subtype` и **не** `structure_type` библиотеки.
 
-**Клетка generate** — глобальная ячейка **footprint города** (§9.6): индекс `(cell_x, cell_y)` от пина поселения, сторона `map_cell_size_m`. То же число метров, что у pack макротайла, **другой индекс**. Не `tile_gx/gy`. Город на шве двух тайлов — один settlement (C29).
+**Клетка generate** — глобальная ячейка **footprint города** (§9.6): индекс `(cell_x, cell_y)` от пина поселения, сторона `fine_cells_per_map_cell`. То же число метров, что у pack макротайла, **другой индекс**. Не `tile_gx/gy`. Город на шве двух тайлов — один settlement (C29).
 
 ### 1.2 Шаблон поселения: морфология, специализация, приоритет районов
 
@@ -366,7 +367,7 @@ Occupancy-flood метровой матрицы в патчи **не** дела�
 ### 6.1 Входные данные
 
 - `city.map_x, map_y` — origin города на глобальной карте
-- `footprint_by_size[subtype][system_settlement_size]` — множитель на `world.map_cell_size_m`; сторона footprint в метрах = множитель × `map_cell_size_m`. SoT таблица и инвариант village≺city: [`tz_locations.md`](./tz_locations.md) **LOC-T-2**. Код до impl: `city_size_registry[system_city_size].footprint_multiplier` (токены `hamlet`… смешаны с морфологией — **не** целевой контракт)
+- `footprint_by_size[subtype][system_settlement_size]` — множитель на `world.fine_cells_per_map_cell`; сторона footprint в fine-клетках = множитель × `fine_cells_per_map_cell`. SoT таблица и инвариант village≺city: [`tz_locations.md`](./tz_locations.md) **LOC-T-2**. Код до impl: `city_size_registry[system_city_size].footprint_multiplier` (токены `hamlet`… смешаны с морфологией — **не** целевой контракт)
 - `settlement_density` → плотность застройки
 - `building_template_registry` — доступные шаблоны
 
@@ -382,8 +383,8 @@ Occupancy-flood метровой матрицы в патчи **не** дела�
 > Адаптация к нашей модели: вместо population density map — `economic_tier` зон и `district_type`; вместо глобальной карты — `DistrictSlot` с `settlement_density`.
 
 ```
-footprint_m    = footprint_multiplier × map_cell_size_m
-city_footprint = квадрат footprint_m × footprint_m вокруг origin
+footprint_fine = footprint_multiplier × fine_cells_per_map_cell
+city_footprint = квадрат footprint_fine × footprint_fine вокруг origin
 главная улица  = горизонтальная или вертикальная полоса через центр (rng)
 вторичные улицы = перпендикулярные ответвления; количество зависит от ранга размера (в контексте морфологии)
 кварталы = прямоугольные блоки между улицами
@@ -682,7 +683,7 @@ Rng **не** выбирает тип поселения и не подменяе
 |---|---|
 | `world_uid`, `location_uid` города | ранг размера, JSON реестра как строка, время, pid |
 | `(cell_x, cell_y)` footprint; опц. суффикс `_districts` / `_buildings` / `_subjects` | pack макротайл; третий uid сущности |
-| внутри слота (frontage, size_pct): + origin слота в метрах | |
+| внутри слота (frontage, size_pct): + origin слота в fine-клетках | |
 
 Смена состава библиотеки (добавили `tavern_3`) меняет eligible — при том же seed выбор **может** смениться. Копия `location_uid` в другой мир — другой город.
 
@@ -690,9 +691,9 @@ Rng **не** выбирает тип поселения и не подменяе
 
 `DistrictSlot.ground_z` — sample coarse-клетки (якорь района / `NamedLocation.map_z`). **Не** плоскость пола застройки и не значение для копирования на все `AreaSlot`. Выравнивание зданий — участок: [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) **C21**, [tz_assembler_hierarchy.md](./tz_assembler_hierarchy.md) §7.1.
 
-`cell_size_m` — **`World.map_cell_size_m`** через `generators/coordinates/cell_size_m(world)`.  
+`map_cell_fine_span` — **`World.fine_cells_per_map_cell`** через `generators/coordinates/map_cell_fine_span(world)`.  
 Не `world.map_settings["global_cell_size_m"]` (ghost key — см. NC-1g в tech debt).  
-Footprint и district slots — `generators/coordinates/` (WORLD_SURFACE_GRID vs WORLD_LOCAL_METERS — [tz_terrain_generation.md](./tz_terrain_generation.md) § coordinates).
+Footprint и district slots — `generators/coordinates/` (WORLD_SURFACE_GRID vs WORLD_FINE_GRID — [tz_terrain_generation.md](./tz_terrain_generation.md) § coordinates).
 
 ---
 
@@ -712,7 +713,7 @@ Footprint и district slots — `generators/coordinates/` (WORLD_SURFACE_GRID vs
 | **CONN-PACK-2** — два+ `required_structures` с `position: center` | **открыт** — connections §8; поле — §9.4 |
 | **CONN-PACK-3** — envelope `(template, facing)` на проходе 1 до полосы рамки | **открыт** — connections §8 |
 | `adjacent_terrain` — связанность воды | **open** — condition есть, connectivity не описана |
-| **Footprint города — форма** | **v1 closed:** квадрат `footprint_multiplier × map_cell_size_m`. **v2:** §10 TODO organic |
+| **Footprint города — форма** | **v1 closed:** квадрат `footprint_multiplier × fine_cells_per_map_cell`. **v2:** §10 TODO organic |
 | **CITY-T-1** — скелет C22 не roundtrip import/SQL; debug persist ≠ `lazy_settlement`; стены эвристика vs поле; шапка этого ТЗ stale | **open** — [tech debt CITY-T-1](./tz_generator_technical_debt.md#city-t-1--контур-вокруг-city-generate); не алгоритм §6.3 в коде |
 | **CITY-T-2** — пул мира vs packing: uid library (**2b**); 2a/2c/2d `partial` | **partial** — [tech debt CITY-T-2](./tz_generator_technical_debt.md#city-t-2--пул-шаблонов-мира--packing) |
 | **CITY-T-4** — смешение/хардкоды планировщика после 2d | **resolved** — [tech debt CITY-T-4](./tz_generator_technical_debt.md#city-t-4--планировщик-после-2d-смешение-и-хардкоды); leftover interiors/uid — **CITY-T-2b** |
@@ -825,7 +826,7 @@ DAG может materialize **разные уровни** в разных нод�
 | `settlement_topology` | `plan_district_slots` + entries + city street grid (**без** packing) | SQL NL районов + `connection_*` `graph_level=city` (ворота, стыки) | **`full_bake` после L0** (§8). DAG: [`generate_settlement_skeleton`](./tz_world_generation_dag.md) — target этот scope, не occupancy-flood |
 | `occupancy` | `plan_occupancy_only` | **не** эталон (C7: L0 pin / union слотов later) | не HTTP outdoor |
 | `map_cells_surface` | `collect_surface_grid_cells` | INSERT OR IGNORE leftover | не эталон |
-| `map_cells_geometry` | `collect_geometry_meter_cells` | не эталон (C2) | packing / C11 |
+| `map_cells_geometry` | `collect_geometry_fine_cells` | не эталон (C2) | packing / C11 |
 | `connections_city` | topology pass (ворота + межрайонные); packing не переигрывает типы | upsert by uid | §8; [connections](./tz_structure_connections.md) §5.1 |
 | `connections_district` | `DistrictLayout.connection_*` | nodes/edges `graph_level=district` | packing C11 — не topology |
 | `buildings` | `AreaLayout.building_location` | upsert `NamedLocation`, **skip if initialized** | packing C11 |
@@ -886,7 +887,7 @@ DAG может materialize **разные уровни** в разных нод�
 
 | Дата | Изменение |
 |---|---|
-| 2026-09-07 | **Skeleton:** `dominant_material` — MaterialKey; `settlement_density` / district `density` — DistrictDensity; overlay ClassVar — Literal. |
+| 2026-09-07 | Очередь leftover `str` на city POJO — [tz_pojo_city_typing.md](./tz_pojo_city_typing.md) (`POJO-C-*`). Скелет не reopen. |
 | 2026-09-07 | **EconomyTierKey** на скелете / NL / `EconomicTierRange` (и layout `economic_tier`). Не size→medium. |
 | 2026-09-07 | **§9.3** POJO: `terrain_types`/`tier` — RegistryKey; `zone` — CellZone; `district_type` — `str`. Identity `system_terrain`/`system_tier` branded. |
 | 2026-09-07 | **§9.3** `min_count` → `min_adjacent_cells` (порог соседних terrain-клеток слота). Breaking wire. |
@@ -911,5 +912,5 @@ DAG может materialize **разные уровни** в разных нод�
 | 2026-08-30 | §9.6: `DistrictSlot.ground_z` = пин района, не пол застройки; SoT — outdoor **C21** |
 | 2026-08-30 | Persist/оркестрация outdoor на pack → [tz_settlement_outdoor.md](./tz_settlement_outdoor.md); HTTP `generate-settlement` = `SettlementOutdoorOrchestrator`; §11.5 map_cells как эталон superseded |
 | 2026-06 | §11.5 — persist cycle: ссылки на tz_world_generation_dag, tz_structure_connections §5.1, tz_construction, growth/world routes, terrain modification |
-| 2026-06 | Sync TZ ↔ код: `SettlementGeneratorService`, `StructureGeneratorService`, `map_cell_size_m`, статус фаз A–F, §10 |
-| 2026-06 | `tz_assembler_hierarchy.md` §7.5 — `map_cell_size_m` вместо `map_settings.global_cell_size_m` |
+| 2026-06 | Sync TZ ↔ код: `SettlementGeneratorService`, `StructureGeneratorService`, `fine_cells_per_map_cell`, статус фаз A–F, §10 |
+| 2026-06 | `tz_assembler_hierarchy.md` §7.5 — `fine_cells_per_map_cell` вместо `map_settings.global_cell_size_m` |

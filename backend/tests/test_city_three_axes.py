@@ -102,7 +102,7 @@ def _world(**kwargs) -> World:
         "world_uid": "w1",
         "name": "Test",
         "created_at": "2026-01-01T00:00:00",
-        "map_cell_size_m": 3000,
+        "fine_cells_per_map_cell": 3000,
     }
     payload.update(kwargs)
     return World(**payload)
@@ -548,7 +548,7 @@ class SpecializationPassTest(unittest.TestCase):
             allowed_structure_types=[],
         )
         slot = DistrictSlot(
-            origin_x=0, origin_y=0, width_m=40, depth_m=40, ground_z=0,
+            origin_x=0, origin_y=0, width_fine=40, depth_fine=40, ground_z=0,
             district_template=template,
             required_structures=[RequiredStructure(
                 building_template="mine", structure_type="mine",
@@ -586,7 +586,7 @@ class SpecializationPassTest(unittest.TestCase):
             allowed_structure_types=[],
         )
         slot = DistrictSlot(
-            origin_x=0, origin_y=0, width_m=40, depth_m=40, ground_z=0,
+            origin_x=0, origin_y=0, width_fine=40, depth_fine=40, ground_z=0,
             district_template=template,
             required_structures=[RequiredStructure(
                 building_template="mine", structure_type="mine",
@@ -608,7 +608,7 @@ class SpecializationPassTest(unittest.TestCase):
         self.assertEqual(slot.subject_tags.get("mine"), ("mithril_ore",))
         self.assertNotIn("iron_ore", slot.subject_tags.get("mine", ()))
         again = DistrictSlot(
-            origin_x=0, origin_y=0, width_m=40, depth_m=40, ground_z=0,
+            origin_x=0, origin_y=0, width_fine=40, depth_fine=40, ground_z=0,
             district_template=template,
             required_structures=[RequiredStructure(
                 building_template="mine", structure_type="mine",
@@ -639,7 +639,7 @@ class SpecializationPassTest(unittest.TestCase):
             allowed_structure_types=[],
         )
         slot = DistrictSlot(
-            origin_x=0, origin_y=0, width_m=40, depth_m=40, ground_z=0,
+            origin_x=0, origin_y=0, width_fine=40, depth_fine=40, ground_z=0,
             district_template=template,
             required_structures=[RequiredStructure(
                 building_template="mine", structure_type="mine",
@@ -676,7 +676,7 @@ class SpecializationPassTest(unittest.TestCase):
             allowed_structure_types=[],
         )
         slot = DistrictSlot(
-            origin_x=0, origin_y=0, width_m=40, depth_m=40, ground_z=0,
+            origin_x=0, origin_y=0, width_fine=40, depth_fine=40, ground_z=0,
             district_template=template,
             required_structures=[RequiredStructure(
                 building_template="mine", structure_type="mine",
@@ -710,7 +710,7 @@ class TokenPickTest(unittest.TestCase):
             allowed_structure_types=["tavern"],
         )
         slot = DistrictSlot(
-            origin_x=0, origin_y=0, width_m=40, depth_m=40, ground_z=0,
+            origin_x=0, origin_y=0, width_fine=40, depth_fine=40, ground_z=0,
             district_template=template,
             cell_x=0, cell_y=0,
         )
@@ -738,7 +738,7 @@ class TokenPickTest(unittest.TestCase):
             structure_counts={"tavern_1": 3},
         )
         slot = DistrictSlot(
-            origin_x=0, origin_y=0, width_m=40, depth_m=40, ground_z=0,
+            origin_x=0, origin_y=0, width_fine=40, depth_fine=40, ground_z=0,
             district_template=template,
             cell_x=1, cell_y=1,
         )
@@ -765,7 +765,7 @@ class TokenPickTest(unittest.TestCase):
 class Path3GenerateTest(unittest.TestCase):
     def test_generate_layout_catalog_none_replay_same_drawings(self) -> None:
         world = _world(
-            map_cell_size_m=16,
+            fine_cells_per_map_cell=16,
             city_size_registry=[
                 {"system_size": "town", "display_size": "Town", "footprint_multiplier": 1.0},
             ],
@@ -946,7 +946,7 @@ class CityT4PlannerTest(unittest.TestCase):
             allowed_structure_types=["tavern"],
         )
         slot = DistrictSlot(
-            origin_x=0, origin_y=0, width_m=40, depth_m=40, ground_z=0,
+            origin_x=0, origin_y=0, width_fine=40, depth_fine=40, ground_z=0,
             district_template=template,
             cell_x=0, cell_y=0,
         )

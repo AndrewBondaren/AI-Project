@@ -37,7 +37,7 @@ class FineTileContext:
     surface_ctx: SurfaceTerrainContext
     tile_gx: int
     tile_gy: int
-    meter_bbox: ColumnRect
+    fine_bbox: ColumnRect
     chunk_size: int
     surface_state: TileSurfaceState
     templates: dict[str, ReliefTemplate]

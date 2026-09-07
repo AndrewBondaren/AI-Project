@@ -95,7 +95,7 @@ pack/bake/worldMapBakeOrchestrator.py   # thin: compose → writer
 ## Координаты (контракт)
 
 ```text
-tile_m  = map_cell_size_m
+tile_m  = fine_cells_per_map_cell
 side    = 32                         # WP-10 v2: константа маски (POJO)
 light_m = tile_m // side             # масштаб light-cell; плывёт с tile мира
 
@@ -114,7 +114,7 @@ tx = lx %  side,  ty = ly %  side
 | Bresenham / rasterize hydro | **light indices**, не meters и не macro `(gx, gy)` |
 | Центр light cell (climate sample) | `(xm + light_m/2, ym + light_m/2)` |
 
-Cross-ref: [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § WP-10 v2. `side` — только через POJO [`WorldMapCellsPerTilePolicy`](../backend/app/dataModel/worldPack/worldMapCellsPerTile.py) (default **32**); **не** литерал в bake и **не** ∝-формула от `map_cell_size_m`.
+Cross-ref: [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) § WP-10 v2. `side` — только через POJO [`WorldMapCellsPerTilePolicy`](../backend/app/dataModel/worldPack/worldMapCellsPerTile.py) (default **32**); **не** литерал в bake и **не** ∝-формула от `fine_cells_per_map_cell`.
 
 ### World mosaic / ASCII frame (утверждено 2026-07-19)
 
@@ -1141,7 +1141,7 @@ apply(compose: LightGridCompose, ctx: LightGridBakeContext) → None
 
 | Поле | Назначение |
 |---|---|
-| `world` | seed, `map_cell_size_m`, flags |
+| `world` | seed, `fine_cells_per_map_cell`, flags |
 | `locations` | L1 anchors |
 | `nodes` / `edges` | connection graph (hydro legs + **roads**) |
 | `locations_index` | `LocationsIndexWire`; `location_pin` = **index** в `locations[]` |

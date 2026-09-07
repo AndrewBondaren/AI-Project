@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from app.dataModel.terrain.worldTerrainScalars import TERRAIN_CHUNK_COLUMNS_DEFAULT
-from app.dataModel.worldPack.mapCellSize import MAP_CELL_SIZE_M_DEFAULT
+from app.dataModel.worldPack.mapCellSize import FINE_CELLS_PER_MAP_CELL_DEFAULT
 from app.db.mapper import bool_col, json_col, json_nullable_col
 
 
@@ -125,7 +125,7 @@ class World:
     closed_planet_grid:             bool = bool_col(default=False)
     elevation_lapse_rate:           float | None = None
     g:                              float = 1.0
-    map_cell_size_m:                int = MAP_CELL_SIZE_M_DEFAULT  # world surface cell size in meters, multiples of 1000
+    fine_cells_per_map_cell:        int = FINE_CELLS_PER_MAP_CELL_DEFAULT  # fine cells per coarse map cell, multiples of 1000
     default_passage_height:         int = 2
 
     # custom field declarations

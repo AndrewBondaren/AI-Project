@@ -3,8 +3,8 @@
 import unittest
 
 from app.dataModel.locations.locationFootprintPolicy import (
-    named_location_uses_settlement_meter_footprint,
-    uses_settlement_meter_footprint,
+    named_location_uses_settlement_fine_footprint,
+    uses_settlement_fine_footprint,
 )
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
 from app.dataModel.worldPack.pathHeadingPolicy import PathHeadingPolicy
@@ -31,12 +31,12 @@ class TestPojoPolicies(unittest.TestCase):
 
     def test_settlement_footprint_from_registry(self):
         self.assertTrue(
-            uses_settlement_meter_footprint(
+            uses_settlement_fine_footprint(
                 system_location_type="settlement",
             )
         )
-        self.assertTrue(uses_settlement_meter_footprint(system_location_type="district"))
-        self.assertFalse(uses_settlement_meter_footprint(system_location_type="landmark"))
+        self.assertTrue(uses_settlement_fine_footprint(system_location_type="district"))
+        self.assertFalse(uses_settlement_fine_footprint(system_location_type="landmark"))
 
     def test_named_location_footprint_helper(self):
         from types import SimpleNamespace
@@ -46,7 +46,7 @@ class TestPojoPolicies(unittest.TestCase):
             system_location_subtype=None,
             system_city_size="village",
         )
-        self.assertTrue(named_location_uses_settlement_meter_footprint(loc))
+        self.assertTrue(named_location_uses_settlement_fine_footprint(loc))
 
 
 if __name__ == "__main__":

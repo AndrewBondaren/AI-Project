@@ -85,7 +85,7 @@ Pack-backed reads delegate to ``MapCellReadService`` (gameplay / debug / loading
         read = self._read(world.world_uid)
         if read is not None and read.has_pack_for(world):
             return read.pack.debug.get_world_map_tile_sample_cells(world, gx, gy)
-        cell_m = world.map_cell_size_m
+        cell_m = world.fine_cells_per_map_cell
         x0, y0 = gx * cell_m, gy * cell_m
         x1, y1 = x0 + cell_m - 1, y0 + cell_m - 1
         all_cells = await self.get_all(world.world_uid)

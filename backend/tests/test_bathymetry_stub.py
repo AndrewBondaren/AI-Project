@@ -59,7 +59,7 @@ class TestLightSeaZ(unittest.TestCase):
             world_uid="world-bath-stub",
             z_min=-20,
             z_max=8,
-            map_cell_size_m=1000,
+            fine_cells_per_map_cell=1000,
             hydrology={
                 "enabled": True,
                 "default_seas": {"stub_drop_fraction_of_span": 0.05},

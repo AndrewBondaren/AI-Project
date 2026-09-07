@@ -10,8 +10,8 @@ from app.application.worldData.generators.climate.climateAnchorField import Clim
 from app.application.worldData.generators.climate.locations import static_map_anchors
 from app.application.worldData.generators.climate.math import dist_sq
 from app.application.worldData.generators.coordinates import (
-    meters_to_grid_x,
-    meters_to_grid_y,
+    fine_to_grid_x,
+    fine_to_grid_y,
 )
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -28,8 +28,8 @@ def collect_manual_anchors(
         if not loc.system_climate_zone:
             continue
         points.append(ClimateAnchorPoint(
-            gx=meters_to_grid_x(loc.map_x, cell_m),
-            gy=meters_to_grid_y(loc.map_y, cell_m),
+            gx=fine_to_grid_x(loc.map_x, cell_m),
+            gy=fine_to_grid_y(loc.map_y, cell_m),
             system_climate_zone=loc.system_climate_zone,
             location_uid=loc.location_uid,
             source=AnchorSource.MANUAL,
@@ -49,8 +49,8 @@ def collect_admin_anchors(
         if not climate:
             continue
         points.append(ClimateAnchorPoint(
-            gx=meters_to_grid_x(loc.map_x, cell_m),
-            gy=meters_to_grid_y(loc.map_y, cell_m),
+            gx=fine_to_grid_x(loc.map_x, cell_m),
+            gy=fine_to_grid_y(loc.map_y, cell_m),
             system_climate_zone=climate,
             location_uid=loc.location_uid,
             source=AnchorSource.ADMIN,

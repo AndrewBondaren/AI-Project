@@ -404,7 +404,7 @@ Excavation — **отдельная node** + material `hardness` ([`tz_materials
 | Space | Generators | DAG note |
 |---|---|---|
 | `WORLD_SURFACE_GRID` | climate eager, wilderness terrain | `generate_climate` |
-| `WORLD_LOCAL_METERS` | settlement streets, building geometry after translate | `lazy_settlement`, player build |
+| `WORLD_FINE_GRID` | settlement streets, building geometry after translate | `lazy_settlement`, player build |
 | Interior 1m | `StructureGeneratorService` | never run `CellWeatherPass` on interior |
 
 Ноды обязаны передавать в generator **правильный space** — см. [`tz_terrain_generation.md`](./tz_terrain_generation.md) § coordinate spaces.

@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from app.application.jsonValidation import terrain_masks
-from app.application.worldData.generators.coordinates import cell_size_m
+from app.application.worldData.generators.coordinates import map_cell_fine_span
 from app.application.worldData.generators.terrain.mountains.collect import (
     collect_mountain_entries_for_coarse,
 )
@@ -53,7 +53,7 @@ def apply_mountain_z(
 
     z_min = world_z_min(world)
     z_max = world_z_max(world)
-    cell_m = cell_size_m(world)
+    cell_m = map_cell_fine_span(world)
     side = resolve_world_map_cells_per_tile(
         cell_m,
         getattr(world, "world_map_cells_per_tile", None),

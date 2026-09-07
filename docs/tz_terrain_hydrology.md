@@ -1309,11 +1309,11 @@ Settlement outdoor persist — **после** regional terrain exists (как с
 
 ```python
 from app.application.worldData.generators.coordinates.convert import (
-    cell_size_m, meters_to_grid_x, meters_to_grid_y,
+    map_cell_fine_span, fine_to_grid_x, fine_to_grid_y,
 )
-cell_m = cell_size_m(world)
-gx = meters_to_grid_x(node.x, cell_m)
-gy = meters_to_grid_y(node.y, cell_m)
+cell_m = map_cell_fine_span(world)
+gx = fine_to_grid_x(node.x, cell_m)
+gy = fine_to_grid_y(node.y, cell_m)
 ```
 
 Polyline declare → rasterize (**Bresenham**) по grid в bbox heightmap.

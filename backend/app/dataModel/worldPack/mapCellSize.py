@@ -1,3 +1,3 @@
-"""World surface cell size in meters — ``worlds.map_cell_size_m``."""
+"""Fine cells per coarse map cell — ``worlds.fine_cells_per_map_cell``."""
 
-MAP_CELL_SIZE_M_DEFAULT = 1000
+FINE_CELLS_PER_MAP_CELL_DEFAULT = 1000

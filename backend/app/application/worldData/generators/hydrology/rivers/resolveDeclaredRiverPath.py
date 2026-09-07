@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.application.worldData.generators.coordinates.convert import (
-    cell_size_m,
+    map_cell_fine_span,
 )
 from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments import (
     classify_autoresolve_polyline,
@@ -145,7 +145,7 @@ def resolve_declared_river_intents(
     type_classify: RiverTypeClassify,
 ) -> list[RiverSegment]:
     """Modes endpoints / via_locations → classified segments (B2)."""
-    cell_m = cell_size_m(world)  # type: ignore[arg-type]
+    cell_m = map_cell_fine_span(world)  # type: ignore[arg-type]
     loc_map = {loc.location_uid: loc for loc in locations}
     segments: list[RiverSegment] = []
 

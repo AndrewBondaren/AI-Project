@@ -53,7 +53,7 @@ class WorldGridPayload:
     ascii: str
     legend: str
     mark_locations: bool
-    cell_size_m: int
+    fine_span: int
     read_path: ReadPath
     read_mode: ReadMode
     ascii_height: str = ""
@@ -66,7 +66,7 @@ class WorldGridPayload:
             "ascii": self.ascii,
             "legend": self.legend,
             "mark_locations": self.mark_locations,
-            "cell_size_m": self.cell_size_m,
+            "fine_span": self.fine_span,
             "read_path": self.read_path,
             "read_mode": self.read_mode,
         }
@@ -106,7 +106,7 @@ class WorldTileEntryPayload:
 @dataclass(frozen=True)
 class WorldTileGridsPayload:
     world_uid: str
-    cell_size_m: int
+    fine_span: int
     tiles: dict[str, WorldTileEntryPayload]
     read_path: ReadPath
     read_mode: ReadMode
@@ -114,7 +114,7 @@ class WorldTileGridsPayload:
     def to_dict(self) -> dict[str, object]:
         return {
             "world_uid": self.world_uid,
-            "cell_size_m": self.cell_size_m,
+            "fine_span": self.fine_span,
             "tile_keys": list(self.tiles.keys()),
             "tiles": {k: v.to_dict() for k, v in self.tiles.items()},
             "read_path": self.read_path,
@@ -145,7 +145,7 @@ class LocationEntryPayload:
 @dataclass(frozen=True)
 class LocationGridsPayload:
     world_uid: str
-    cell_size_m: int
+    fine_span: int
     location_uids: list[str]
     locations: dict[str, LocationEntryPayload]
     outdoor_legend: str
@@ -156,7 +156,7 @@ class LocationGridsPayload:
     def to_dict(self) -> dict[str, object]:
         out: dict[str, object] = {
             "world_uid": self.world_uid,
-            "cell_size_m": self.cell_size_m,
+            "fine_span": self.fine_span,
             "location_uids": self.location_uids,
             "locations": {k: v.to_dict() for k, v in self.locations.items()},
             "outdoor_legend": self.outdoor_legend,
@@ -171,7 +171,7 @@ class LocationGridsPayload:
 @dataclass(frozen=True)
 class LocationGridPayload:
     legend: str
-    cell_size_m: int
+    fine_span: int
     read_path: ReadPath
     read_mode: ReadMode
     indoor: bool = False
@@ -182,7 +182,7 @@ class LocationGridPayload:
     def to_dict(self) -> dict[str, object]:
         out: dict[str, object] = {
             "legend": self.legend,
-            "cell_size_m": self.cell_size_m,
+            "fine_span": self.fine_span,
             "read_path": self.read_path,
             "read_mode": self.read_mode,
         }
@@ -203,7 +203,7 @@ class WildernessTileGridPayload:
     tile_gx: int
     tile_gy: int
     legend: str
-    cell_size_m: int
+    fine_span: int
     read_path: ReadPath
     read_mode: ReadMode
     levels: dict[str, str] = field(default_factory=dict)
@@ -221,7 +221,7 @@ class WildernessTileGridPayload:
             "tile_gx": self.tile_gx,
             "tile_gy": self.tile_gy,
             "legend": self.legend,
-            "cell_size_m": self.cell_size_m,
+            "fine_span": self.fine_span,
             "read_path": self.read_path,
             "read_mode": self.read_mode,
             "chunks_listed": self.chunks_listed,

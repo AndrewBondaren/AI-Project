@@ -128,8 +128,8 @@ def load_topology_slots(
         slots.append(DistrictSlot(
             origin_x=wire.origin_x,
             origin_y=wire.origin_y,
-            width_m=wire.width_m,
-            depth_m=wire.depth_m,
+            width_fine=wire.width_fine,
+            depth_fine=wire.depth_fine,
             ground_z=wire.ground_z,
             district_template=template,
             entry_nodes=entries,

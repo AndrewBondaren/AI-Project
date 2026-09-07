@@ -2,8 +2,8 @@ from dataclasses import dataclass
 
 from app.application.worldData.generators.climate.math import dist_sq
 from app.application.worldData.generators.coordinates import (
-    meters_to_grid_x,
-    meters_to_grid_y,
+    fine_to_grid_x,
+    fine_to_grid_y,
 )
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -41,8 +41,8 @@ def build_zone_field(
     zone_list = [loc for loc in anchors if loc.system_location_type in ZONE_LOCATION_TYPES]
     zone_centers = {
         (
-            meters_to_grid_x(zone.map_x, cell_m),
-            meters_to_grid_y(zone.map_y, cell_m),
+            fine_to_grid_x(zone.map_x, cell_m),
+            fine_to_grid_y(zone.map_y, cell_m),
         ): zone
         for zone in zone_list
     }

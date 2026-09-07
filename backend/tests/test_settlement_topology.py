@@ -12,7 +12,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     plan_district_slots,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
-    footprint_side_m,
+    footprint_side_fine,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.streets import (
     plan_city_street_grid,
@@ -20,7 +20,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
 )
-from app.application.worldData.generators.coordinates import cell_size_m, settlement_origin_m
+from app.application.worldData.generators.coordinates import map_cell_fine_span, settlement_origin_fine
 from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import (
     extract_topology,
@@ -54,7 +54,7 @@ def _world(**kwargs) -> World:
         "world_uid": "w-topo",
         "name": "Test",
         "created_at": "2026-01-01T00:00:00",
-        "map_cell_size_m": 16,
+        "fine_cells_per_map_cell": 16,
         "city_size_registry": [
             {"system_size": "town", "display_size": "Town", "footprint_multiplier": 1.0},
         ],
@@ -93,12 +93,12 @@ def _skeleton(world: World, settlement: NamedLocation):
 
 def _plan_city(world: World, settlement: NamedLocation, slots):
     skeleton = _skeleton(world, settlement)
-    origin = settlement_origin_m(settlement)
+    origin = settlement_origin_fine(settlement)
     rng = random.Random(f"{world.world_uid}_{settlement.location_uid}")
     return plan_city_street_grid(
         origin.x, origin.y, origin.z,
-        footprint_side_m(world, skeleton.system_city_size),
-        cell_size_m(world),
+        footprint_side_fine(world, skeleton.system_city_size),
+        map_cell_fine_span(world),
         slots, world.world_uid, world, rng, skeleton,
         settlement_uid=settlement.location_uid,
     )
@@ -227,8 +227,8 @@ class TopologySkipTest(unittest.TestCase):
             cell_y=0,
             origin_x=0,
             origin_y=0,
-            width_m=16,
-            depth_m=16,
+            width_fine=16,
+            depth_fine=16,
             ground_z=0,
             template_system_name="core",
             slot_index=0,

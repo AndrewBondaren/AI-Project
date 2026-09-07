@@ -262,7 +262,7 @@ class TestHillsInTilePrep(unittest.TestCase):
         )
         w = MagicMock()
         w.world_uid = "w-hills"
-        w.map_cell_size_m = 16
+        w.fine_cells_per_map_cell = 16
         w.seed = 1
         w.z_min = 0
         w.z_max = 20

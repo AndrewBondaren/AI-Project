@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.coordinates import cell_size_m
+from app.application.worldData.generators.coordinates import map_cell_fine_span
 from app.application.worldData.generators.coordinates.worldTile import macro_tile_of
 from app.application.worldData.pack.bake.packTileCollect import (
     declared_hydro_tiles,
@@ -44,7 +44,7 @@ def bootstrap_macro_tiles(
     for tile in declared_hydro_tiles(world, locations):
         add(tile, 1)
 
-    cell_m = cell_size_m(world)
+    cell_m = map_cell_fine_span(world)
     for xm, ym in (sparse_meter_hydro or {}):
         add(macro_tile_of(xm, ym, cell_m), 2)
 

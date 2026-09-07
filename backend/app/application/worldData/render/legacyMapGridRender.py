@@ -32,7 +32,7 @@ class LegacyMapGridRender:
         mark_locations: bool = True,
     ) -> WorldGridPayload:
         cells = await self._map_cells.get_all_for_read(world)
-        renderer = WorldGridRenderer(cells, cell_size_m=world.map_cell_size_m)
+        renderer = WorldGridRenderer(cells, fine_span=world.fine_cells_per_map_cell)
         if gx0 is not None and gy0 is not None and gx1 is not None and gy1 is not None:
             ascii_grid = renderer.render_bbox(gx0, gy0, gx1, gy1, mark_location=mark_locations)
         else:
@@ -41,19 +41,19 @@ class LegacyMapGridRender:
             ascii=ascii_grid,
             legend=WorldGridRenderer.render_legend(mark_location=mark_locations),
             mark_locations=mark_locations,
-            cell_size_m=world.map_cell_size_m,
+            fine_span=world.fine_cells_per_map_cell,
             read_path="legacy",
             read_mode="map_cells",
         )
 
     async def render_world_tile_grids(self, world: World) -> WorldTileGridsPayload:
-        cell_size_m_val = world.map_cell_size_m
+        fine_span_val = world.fine_cells_per_map_cell
         cells = await self._map_cells.get_all_for_read(world)
         tiles: dict[str, WorldTileEntryPayload] = {}
-        if not cell_size_m_val:
+        if not fine_span_val:
             return WorldTileGridsPayload(
                 world_uid=world.world_uid,
-                cell_size_m=0,
+                fine_span=0,
                 tiles={},
                 read_path="legacy",
                 read_mode="map_cells_tiles",
@@ -62,15 +62,15 @@ class LegacyMapGridRender:
         for cell in cells:
             if cell.system_building_element:
                 continue
-            gx = cell.x // cell_size_m_val
-            gy = cell.y // cell_size_m_val
+            gx = cell.x // fine_span_val
+            gy = cell.y // fine_span_val
             by_tile.setdefault((gx, gy), []).append(cell)
         for (gx, gy), tile_cells in sorted(by_tile.items()):
             renderer = WorldTileGridRenderer(
                 tile_cells,
                 tile_gx=gx,
                 tile_gy=gy,
-                cell_size_m=cell_size_m_val,
+                fine_span=fine_span_val,
             )
             levels_raw = renderer.render_all_levels()
             levels = {str(z): txt for z, txt in sorted(levels_raw.items())}
@@ -84,7 +84,7 @@ class LegacyMapGridRender:
             )
         return WorldTileGridsPayload(
             world_uid=world.world_uid,
-            cell_size_m=cell_size_m_val,
+            fine_span=fine_span_val,
             tiles=tiles,
             read_path="legacy",
             read_mode="map_cells_tiles",
@@ -92,7 +92,7 @@ class LegacyMapGridRender:
 
     async def render_all_location_grids(self, world: World) -> LocationGridsPayload:
         cells = await self._map_cells.get_all_for_read(world)
-        cell_size_m_val = world.map_cell_size_m
+        fine_span_val = world.fine_cells_per_map_cell
         location_uids = sorted({
             cell.location_uid
             for cell in cells
@@ -104,7 +104,7 @@ class LegacyMapGridRender:
             renderer = LocationGridRenderer(
                 cells,
                 location_uid,
-                cell_size_m=cell_size_m_val,
+                fine_span=fine_span_val,
             )
             levels_raw = renderer.render_all_levels()
             levels = {
@@ -121,7 +121,7 @@ class LegacyMapGridRender:
             )
         return LocationGridsPayload(
             world_uid=world.world_uid,
-            cell_size_m=cell_size_m_val,
+            fine_span=fine_span_val,
             location_uids=location_uids,
             locations=locations,
             outdoor_legend=outdoor_legend,
@@ -137,18 +137,18 @@ class LegacyMapGridRender:
         z: int | None = None,
     ) -> LocationGridPayload:
         cells = await self._map_cells.get_all_for_read(world)
-        cell_size_m_val = world.map_cell_size_m
+        fine_span_val = world.fine_cells_per_map_cell
         renderer = LocationGridRenderer(
             cells,
             location_uid,
-            cell_size_m=cell_size_m_val,
+            fine_span=fine_span_val,
         )
         indoor = bool(renderer._indoor_cells())
         legend = LocationGridRenderer.render_legend(indoor=indoor)
         if z is not None:
             return LocationGridPayload(
                 legend=legend,
-                cell_size_m=cell_size_m_val,
+                fine_span=fine_span_val,
                 read_path="legacy",
                 read_mode="map_cells",
                 ascii=renderer.render_level(z),
@@ -158,7 +158,7 @@ class LegacyMapGridRender:
         levels = {str(z_key): grid for z_key, grid in levels_raw.items()}
         return LocationGridPayload(
             legend=legend,
-            cell_size_m=cell_size_m_val,
+            fine_span=fine_span_val,
             read_path="legacy",
             read_mode="map_cells",
             indoor=indoor,

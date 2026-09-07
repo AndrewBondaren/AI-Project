@@ -57,7 +57,7 @@ def render_tile_light_grade_grid(
             f"×{min(y for _, y in hits)}..{max(y for _, y in hits)})"
         ),
         coord_prefix="light ",
-        cell_size_m=max(1, int(tile_size_m) // tile.side),
+        fine_span=max(1, int(tile_size_m) // tile.side),
         x_rulers=True,
     )
     return f"{ascii_g}\n\n{render_grade_legend()}"
@@ -91,7 +91,7 @@ def render_light_grade_mosaic(
             f"macro Gx{frame.gx0}..Gx{frame.gx1} Gy{frame.gy0}..Gy{frame.gy1})"
         ),
         coord_prefix="light ",
-        cell_size_m=frame.light_m,
+        fine_span=frame.light_m,
         x_rulers=True,
     )
     return ascii_g, render_grade_legend()

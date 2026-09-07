@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from app.application.worldData.generators.climate.math import world_seed
 from app.application.worldData.generators.coordinates.worldTile import (
-    meter_bbox_for_tile,
-    world_meter_xy,
+    fine_bbox_for_tile,
+    world_fine_xy,
 )
 from app.application.worldData.generators.terrain.noise import cell_z_noise
 from app.application.worldData.generators.terrain.worldMapSettings import world_z_max, world_z_min
@@ -53,7 +53,7 @@ def upsample_from_parent_light(
 
     for ly in range(tile_m):
         for lx in range(tile_m):
-            xm, ym = world_meter_xy(parent.gx, parent.gy, lx, ly, tile_m)
+            xm, ym = world_fine_xy(parent.gx, parent.gy, lx, ly, tile_m)
             # Continuous light coords at cell center of meter.
             fx = (lx + 0.5) * side / tile_m
             fy = (ly + 0.5) * side / tile_m
@@ -74,5 +74,5 @@ def upsample_from_parent_light(
     return surface_z
 
 
-def meter_bbox_for_parent(parent: ParentLightTile):
-    return meter_bbox_for_tile(parent.gx, parent.gy, parent.tile_m)
+def fine_bbox_for_parent(parent: ParentLightTile):
+    return fine_bbox_for_tile(parent.gx, parent.gy, parent.tile_m)

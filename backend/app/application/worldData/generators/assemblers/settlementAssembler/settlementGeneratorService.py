@@ -8,7 +8,7 @@ Skeleton на NamedLocation — фаза 1 (world create).
 import logging
 
 from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
-    collect_geometry_meter_cells,
+    collect_geometry_fine_cells,
     collect_map_cells_from_layout,
     collect_surface_grid_cells,
     needs_settlement_geometry,
@@ -79,9 +79,9 @@ class SettlementGeneratorService:
         """WORLD_SURFACE_GRID occupancy — grid index in x/y."""
         return collect_surface_grid_cells(layout)
 
-    def collect_geometry_meter_cells(self, layout: SettlementLayout) -> list[MapCell]:
-        """WORLD_LOCAL_METERS — buildings + barriers."""
-        return collect_geometry_meter_cells(layout)
+    def collect_geometry_fine_cells(self, layout: SettlementLayout) -> list[MapCell]:
+        """WORLD_FINE_GRID — buildings + barriers."""
+        return collect_geometry_fine_cells(layout)
 
     def generate_map_cells(
         self,
@@ -92,15 +92,15 @@ class SettlementGeneratorService:
     ) -> tuple[SettlementLayout, list[MapCell]]:
         layout = self.generate_layout(world, settlement, terrain_cells, catalog=catalog)
         grid_cells   = self.collect_surface_grid_cells(layout)
-        meter_cells  = self.collect_geometry_meter_cells(layout)
-        cells        = grid_cells + meter_cells
+        fine_cells   = self.collect_geometry_fine_cells(layout)
+        cells        = grid_cells + fine_cells
         logger.info(
             "SettlementGeneratorService | settlement=%s map_cells=%d "
-            "surface_grid=%d meter_geometry=%d dominant_material=%r",
+            "surface_grid=%d fine_geometry=%d dominant_material=%r",
             settlement.location_uid,
             len(cells),
             len(grid_cells),
-            len(meter_cells),
+            len(fine_cells),
             layout.dominant_material,
         )
         return layout, cells

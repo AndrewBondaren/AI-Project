@@ -12,7 +12,7 @@ from app.application.worldData.pack.bake.packBakeLog import (
     hydro_hist_is_only_none,
     terrain_hist_is_only_plains,
 )
-from app.application.worldData.pack.read.packMapHelpers import world_tile_size_m
+from app.application.worldData.pack.read.packMapHelpers import world_map_cell_span
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.dataModel.terrain.relief.gradeSlot import GradeCellSlots
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
@@ -146,7 +146,7 @@ class PackRenderReadFacade:
         return PackWorldMapRenderSource(
             tiles=tiles,
             pins=pins,
-            tile_size_m=world_tile_size_m(world),
+            tile_size_m=world_map_cell_span(world),
         )
 
     def has_location_terrain(self, world: World, location_uid: str) -> bool:
@@ -237,7 +237,7 @@ class PackRenderReadFacade:
         return WildernessTileRenderSource(
             gx=gx,
             gy=gy,
-            tile_size_m=world_tile_size_m(world),
+            tile_size_m=world_map_cell_span(world),
             chunks=chunks,
             chunks_listed=len(listed),
             chunks_loaded=len(chunks),

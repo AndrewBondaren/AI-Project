@@ -7,8 +7,8 @@ SCH-WORLD-LOC-TYPE — `worlds.location_type_registry` (N1-W-07).
 from app.dataModel.locations.locationFootprintPolicy import (
     is_settlement_map_site,
     named_location_is_settlement_map_site,
-    named_location_uses_settlement_meter_footprint,
-    uses_settlement_meter_footprint,
+    named_location_uses_settlement_fine_footprint,
+    uses_settlement_fine_footprint,
 )
 from app.dataModel.locations.locationType import (
     LocationTypeEntry,
@@ -26,8 +26,8 @@ __all__ = [
     "LocationTypeEntry",
     "LocationTypeSubtypeEntry",
     "WorldLocationTypeRegistry",
-    "uses_settlement_meter_footprint",
-    "named_location_uses_settlement_meter_footprint",
+    "uses_settlement_fine_footprint",
+    "named_location_uses_settlement_fine_footprint",
     "is_settlement_map_site",
     "named_location_is_settlement_map_site",
 ]

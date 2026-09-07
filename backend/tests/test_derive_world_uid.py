@@ -18,7 +18,7 @@ class DeriveWorldUidTests(unittest.TestCase):
         self.assertEqual(len(a), len("world-") + 16)
 
     def test_created_at_does_not_affect_uid(self) -> None:
-        base = {"name": "Test", "map_cell_size_m": 3000}
+        base = {"name": "Test", "fine_cells_per_map_cell": 3000}
         a = derive_world_uid(normalize_world({**base, "created_at": "2026-01-01T00:00:00"}))
         b = derive_world_uid(normalize_world({**base, "created_at": "2027-06-01T00:00:00"}))
         self.assertEqual(a, b)

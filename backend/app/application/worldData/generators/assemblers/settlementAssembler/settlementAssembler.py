@@ -31,12 +31,12 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.districts import plan_district_slots
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
-    footprint_side_m,
+    footprint_side_fine,
 )
 from app.application.worldData.generators.coordinates import (
-    cell_size_m,
+    map_cell_fine_span,
     column_surface,
-    settlement_origin_m,
+    settlement_origin_fine,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.mapOccupancy import (
     plan_footprint_occupancy_cells,
@@ -174,11 +174,11 @@ class SettlementAssembler:
         district_slots: list[DistrictSlot],
         terrain_cells:  list[MapCell] | None,
     ):
-        origin = settlement_origin_m(settlement)
-        side_m = footprint_side_m(world, skeleton.system_city_size)
+        origin = settlement_origin_fine(settlement)
+        side_m = footprint_side_fine(world, skeleton.system_city_size)
         rng = random.Random(f"{world.world_uid}_{settlement.location_uid}")
         return plan_city_street_grid(
-            origin.x, origin.y, origin.z, side_m, cell_size_m(world),
+            origin.x, origin.y, origin.z, side_m, map_cell_fine_span(world),
             district_slots, world.world_uid, world, rng, skeleton,
             surface=column_surface(terrain_cells),
             settlement_uid=settlement.location_uid,

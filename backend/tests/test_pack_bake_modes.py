@@ -119,7 +119,7 @@ class TestPackTilePlannerScopes(unittest.TestCase):
 
         world = SimpleNamespace(
             world_uid="w1",
-            map_cell_size_m=3000,
+            fine_cells_per_map_cell=3000,
             hydrology=None,
             world_bounds=None,
             grid_bbox_padding=2,
@@ -151,13 +151,13 @@ class TestPackTilePlannerScopes(unittest.TestCase):
             "app.application.worldData.pack.bake.packTileCollect.static_map_anchors",
             side_effect=lambda locs: list(locs),
         ), patch(
-            "app.application.worldData.pack.bake.packTileCollect.cell_size_m",
+            "app.application.worldData.pack.bake.packTileCollect.map_cell_fine_span",
             return_value=3000,
         ), patch(
             "app.application.worldData.generators.terrain.passes.bbox.static_map_anchors",
             side_effect=lambda locs: list(locs),
         ), patch(
-            "app.application.worldData.generators.terrain.passes.bbox.cell_size_m",
+            "app.application.worldData.generators.terrain.passes.bbox.map_cell_fine_span",
             return_value=3000,
         ), patch(
             "app.application.worldData.generators.terrain.passes.bbox.grid_bbox_padding",
@@ -183,7 +183,7 @@ class TestPackTilePlannerScopes(unittest.TestCase):
     def test_light_debug_cap_via_resolve(self):
         from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
 
-        world = SimpleNamespace(world_uid="w1", map_cell_size_m=3000, hydrology=None)
+        world = SimpleNamespace(world_uid="w1", fine_cells_per_map_cell=3000, hydrology=None)
         locations: list = []
 
         with patch(
@@ -200,7 +200,7 @@ class TestPackTilePlannerScopes(unittest.TestCase):
     def test_defaults_max_tiles_light_applies_when_max_tiles_none(self):
         from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
 
-        world = SimpleNamespace(world_uid="w1", map_cell_size_m=3000)
+        world = SimpleNamespace(world_uid="w1", fine_cells_per_map_cell=3000)
         with patch(
             "app.application.worldData.pack.bake.packTilePlanner.light_l0_tiles",
             return_value=[(0, 0), (1, 1), (2, 2)],
@@ -219,7 +219,7 @@ class TestPackCompletenessClassifier(unittest.TestCase):
             PackCompletenessClassifier,
         )
 
-        world = SimpleNamespace(world_uid="w1", map_cell_size_m=3000)
+        world = SimpleNamespace(world_uid="w1", fine_cells_per_map_cell=3000)
         snap = PackCompletenessClassifier().classify(
             world, [], manifest=None,
         )
@@ -231,7 +231,7 @@ class TestPackCompletenessClassifier(unittest.TestCase):
         )
         from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
 
-        world = SimpleNamespace(world_uid="w1", map_cell_size_m=3000)
+        world = SimpleNamespace(world_uid="w1", fine_cells_per_map_cell=3000)
         planner = MagicMock(spec=PackTilePlanner)
         planner.plan.side_effect = [
             MagicMock(

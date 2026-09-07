@@ -130,7 +130,7 @@ class TerrainBatchOrchestrator:
             upsample_terrain_from_parent_light,
         )
         from app.application.worldData.generators.terrain.passes.parentLightUpsample import (
-            meter_bbox_for_parent,
+            fine_bbox_for_parent,
             upsample_from_parent_light,
         )
         from app.application.worldData.generators.terrain.types import SurfaceHeightmap
@@ -172,10 +172,10 @@ class TerrainBatchOrchestrator:
             z_max=world_z_max(world),
         )
 
-        meter_bbox = meter_bbox_for_parent(parent_light)
+        fine_bbox = fine_bbox_for_parent(parent_light)
         heightmap = SurfaceHeightmap(
             world_uid=world.world_uid,
-            bbox=meter_bbox,
+            bbox=fine_bbox,
             surface_z=fine_z,
         )
         tile_hydro = merge_hydro_hard_corridor(parent_light, ctx.sparse_meter_hydro)

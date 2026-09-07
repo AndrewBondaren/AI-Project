@@ -7,7 +7,7 @@ from app.application.worldData.generators.assemblers.citySkeleton import CitySke
 from app.application.worldData.generators.assemblers.districtAssembler.planner.types import (
     AreaPlacement,
     Reservation,
-    YARD_PADDING_M,
+    YARD_PADDING_FINE,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.buildingCache import (
     BuildingLayoutCache,
@@ -25,7 +25,7 @@ from app.db.models.world import World
 
 __all__ = [
     "AreaPlacement",
-    "YARD_PADDING_M",
+    "YARD_PADDING_FINE",
     "make_area_slot",
     "parcel_cells",
     "placements_from_reservations",
@@ -65,7 +65,7 @@ def make_area_slot(
     *,
     fallback_z: int = 0,
 ) -> AreaSlot:
-    cells = parcel_cells(fp, bx, by, YARD_PADDING_M)
+    cells = parcel_cells(fp, bx, by, YARD_PADDING_FINE)
     return AreaSlot(cells=cells, ground_z=fallback_z, facing=facing)
 
 
@@ -74,11 +74,11 @@ def origin_in_reservation(
     rect: tuple[int, int, int, int],
 ) -> tuple[int, int]:
     x0, y0, _x1, _y1 = rect
-    return x0 + YARD_PADDING_M - fp.min_x, y0 + YARD_PADDING_M - fp.min_y
+    return x0 + YARD_PADDING_FINE - fp.min_x, y0 + YARD_PADDING_FINE - fp.min_y
 
 
 def footprint_fits_rect(fp: OccupiedFootprint, rect: tuple[int, int, int, int], bx: int, by: int) -> bool:
-    px0, py0, px1, py1 = _parcel_rect(fp, bx, by, YARD_PADDING_M)
+    px0, py0, px1, py1 = _parcel_rect(fp, bx, by, YARD_PADDING_FINE)
     rx0, ry0, rx1, ry1 = rect
     return px0 >= rx0 and py0 >= ry0 and px1 < rx1 and py1 < ry1
 

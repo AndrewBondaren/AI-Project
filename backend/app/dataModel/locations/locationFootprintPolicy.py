@@ -24,12 +24,12 @@ def _settlement_subtypes() -> frozenset[str]:
     return frozenset(s.system_subtype for s in entry.subtypes)
 
 
-def uses_settlement_meter_footprint(
+def uses_settlement_fine_footprint(
     *,
     system_location_type: str | None,
     system_location_subtype: str | None = None,
 ) -> bool:
-    """True when territory uses settlement assembler meter rect, not pin box.
+    """True when territory uses settlement assembler fine-grid rect, not pin box.
 
     Size rank (``small`` / ``medium`` / ``large``) is not a settlement signal.
     """
@@ -42,9 +42,9 @@ def uses_settlement_meter_footprint(
     return False
 
 
-def named_location_uses_settlement_meter_footprint(location: object) -> bool:
+def named_location_uses_settlement_fine_footprint(location: object) -> bool:
     """``NamedLocation`` / bundle row — typed fields via getattr for tests."""
-    return uses_settlement_meter_footprint(
+    return uses_settlement_fine_footprint(
         system_location_type=getattr(location, "system_location_type", None),
         system_location_subtype=getattr(location, "system_location_subtype", None),
     )
@@ -56,7 +56,7 @@ def is_settlement_map_site(
     system_location_subtype: str | None = None,
 ) -> bool:
     """L0 city footprint: settlement root, not district/building/room or geography."""
-    if not uses_settlement_meter_footprint(
+    if not uses_settlement_fine_footprint(
         system_location_type=system_location_type,
         system_location_subtype=system_location_subtype,
     ):

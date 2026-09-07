@@ -146,8 +146,8 @@ def shrink_slot_by_settlement_barrier(
     x0, y0, x1, y1 = subtract_strips(before, host_strips(fp, widths))
     slot.origin_x = x0
     slot.origin_y = y0
-    slot.width_m = max(0, x1 - x0)
-    slot.depth_m = max(0, y1 - y0)
+    slot.width_fine = max(0, x1 - x0)
+    slot.depth_fine = max(0, y1 - y0)
     _log_barrier(
         district, PackingReason.SETTLEMENT_BARRIER_SHRINK,
         host=PackingHost.SETTLEMENT,

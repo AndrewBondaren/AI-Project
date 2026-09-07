@@ -83,7 +83,7 @@ class TestApplyClimateMeterToMacro(unittest.TestCase):
         ctx = MagicMock()
         ctx.climate_tile_field.return_value = None
         ctx.climate_field.return_value = field
-        world = SimpleNamespace(map_cell_size_m=3000, map_settings=None)
+        world = SimpleNamespace(fine_cells_per_map_cell=3000, map_settings=None)
         view = MergedCellView(x=36000 + 100, y=36000 + 200, z=0)
         merged = apply_climate_to_view(ctx, world, view)
         self.assertEqual(merged.temperature_base, 17)
@@ -113,7 +113,7 @@ class TestApplyClimatePreferFine(unittest.TestCase):
         ctx = MagicMock()
         ctx.climate_tile_field.return_value = field_fine
         ctx.climate_field.return_value = field_coarse
-        world = SimpleNamespace(map_cell_size_m=3000, map_settings=None)
+        world = SimpleNamespace(fine_cells_per_map_cell=3000, map_settings=None)
         view = MergedCellView(x=3500, y=3500, z=0)
         merged = apply_climate_to_view(ctx, world, view)
         self.assertEqual(merged.temperature_base, 99)

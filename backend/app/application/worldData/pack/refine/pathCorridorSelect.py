@@ -5,10 +5,10 @@ Does not persist — returns ``ColumnRect`` list for ``FineChunkRunner``.
 
 from __future__ import annotations
 
-from app.application.worldData.generators.coordinates import cell_size_m
+from app.application.worldData.generators.coordinates import map_cell_fine_span
 from app.application.worldData.generators.coordinates.worldTile import (
-    iter_meter_chunks,
-    meter_bbox_for_tile,
+    iter_fine_chunks,
+    fine_bbox_for_tile,
 )
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.generators.terrain.worldMapSettings import (
@@ -35,10 +35,10 @@ def select_path_corridor_rects(
     """Filter meter chunks in tile to heading corridor; empty if heading undefined."""
     if not heading.is_defined:
         return []
-    cell_m = cell_size_m(world)
+    cell_m = map_cell_fine_span(world)
     chunk_size = terrain_chunk_columns(world)
-    meter_bbox = meter_bbox_for_tile(tile_gx, tile_gy, cell_m)
-    rects = list(iter_meter_chunks(meter_bbox, chunk_size))
+    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, cell_m)
+    rects = list(iter_fine_chunks(fine_bbox, chunk_size))
     depth = (
         depth_tiles
         if depth_tiles is not None

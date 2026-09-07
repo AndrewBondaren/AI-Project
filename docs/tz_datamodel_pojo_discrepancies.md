@@ -4,7 +4,7 @@
 **Scope:** `backend/app/dataModel/` + потребители, которые дублируют поля/defaults POJO (generators, `db/models`, debug routes).  
 **Правило:** [`.cursor/rules/dataModel-no-hardcode.mdc`](../.cursor/rules/dataModel-no-hardcode.mdc).  
 **Срез:** 2026-09-03 (~223 файла, ~90 BaseModel/RootModel).  
-**Связанные:** [`tz_json_validation.md`](./tz_json_validation.md), [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) (HY-5 wire enum), [`tz_structure_connections.md`](./tz_structure_connections.md) §3.7.
+**Связанные:** [`tz_json_validation.md`](./tz_json_validation.md), [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) (HY-5 wire enum), [`tz_structure_connections.md`](./tz_structure_connections.md) §3.7, [`tz_pojo_city_typing.md`](./tz_pojo_city_typing.md) (city `str` → RegistryKey / ENUM-E, не дубли SoT).
 
 Новый smell → новый ID; resolved не удалять.
 
@@ -158,11 +158,11 @@ Enum values = `WorldConnectionTypeRegistry.require_engine(...)`. Состав ч
 
 ---
 
-### POJO-D-8 — `map_cell_size_m = 1000` / `codec_version = 1`
+### POJO-D-8 — `fine_cells_per_map_cell = 1000` / `codec_version = 1`
 
 **Severity:** medium · **Status:** **resolved** 2026-09-03
 
-- `MAP_CELL_SIZE_M_DEFAULT` — manifest + `World.map_cell_size_m`
+- `FINE_CELLS_PER_MAP_CELL_DEFAULT` — manifest + `World.fine_cells_per_map_cell`
 - `PACK_CODEC_VERSION` — `PackBakeDefaults` + manifest
 
 ---

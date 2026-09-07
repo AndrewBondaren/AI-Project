@@ -11,12 +11,12 @@ from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayo
 Rect = tuple[int, int, int, int]
 
 # C21 courtyard pad — not an alley. Packing and AreaSlot share this value.
-YARD_PADDING_M = 1
+YARD_PADDING_FINE = 1
 
 
 @dataclass(frozen=True)
 class InnerBBox:
-    """Exclusive-max AABB in WORLD_LOCAL_METERS (1 cell = 1 m)."""
+    """Exclusive-max AABB in WORLD_FINE_GRID (1 int = 1 fine cell)."""
 
     x0: int
     y0: int

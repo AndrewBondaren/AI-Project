@@ -15,6 +15,7 @@ from app.application.worldData.render.mapSymbols import (
     symbol_for_role_or_terrain,
 )
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
+from app.dataModel.worldPack.mapCellSize import FINE_CELLS_PER_MAP_CELL_DEFAULT
 from app.db.models.mapCell import MapCell
 
 
@@ -22,7 +23,7 @@ def _macro_top_surface_cells(
     cells: list[MapCell],
     cell_m: int,
 ) -> dict[tuple[int, int], MapCell]:
-    """Aggregate fine meter cells → one top cell per macro tile (Gx, Gy)."""
+    """Aggregate fine-grid cells → one top cell per macro tile (Gx, Gy)."""
     tops: dict[tuple[int, int], MapCell] = {}
     for cell in cells:
         if cell.system_building_element:
@@ -63,9 +64,9 @@ class WorldGridRenderer:
         self,
         cells: list[MapCell],
         *,
-        cell_size_m: int | None = None,
+        fine_span: int | None = None,
     ) -> None:
-        self._cell_m = cell_size_m or 1000
+        self._cell_m = fine_span or FINE_CELLS_PER_MAP_CELL_DEFAULT
         self._tops = _macro_top_surface_cells(cells, self._cell_m)
 
     @staticmethod
@@ -85,7 +86,7 @@ class WorldGridRenderer:
         mark_location: bool = False,
     ) -> str:
         lines: list[str] = [
-            format_grid_header(gx0, gx1, gy0, gy1, cell_size_m=self._cell_m),
+            format_grid_header(gx0, gx1, gy0, gy1, fine_span=self._cell_m),
         ]
         for gy in range(gy1, gy0 - 1, -1):
             row = "".join(

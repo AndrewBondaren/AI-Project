@@ -6,7 +6,7 @@ import logging
 from collections import Counter
 
 from app.application.worldData.generators.climate.math import world_seed
-from app.application.worldData.generators.coordinates import meters_to_grid_x, meters_to_grid_y
+from app.application.worldData.generators.coordinates import fine_to_grid_x, fine_to_grid_y
 from app.application.worldData.generators.terrain.noise import cell_z_noise
 from app.application.worldData.generators.terrain.worldMapSettings import world_z_max, world_z_min
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
@@ -50,8 +50,8 @@ class ReliefContributor:
             for ty in range(scale.side):
                 for tx in range(scale.side):
                     xm, ym = light_cell_center_m(gx, gy, tx, ty, scale)
-                    mgx = int(meters_to_grid_x(xm, tile_m))
-                    mgy = int(meters_to_grid_y(ym, tile_m))
+                    mgx = int(fine_to_grid_x(xm, tile_m))
+                    mgy = int(fine_to_grid_y(ym, tile_m))
                     sample = pole.sample(world, mgx, mgy)
                     base = planning_z.get((mgx, mgy), sample.typical_elevation_z)
                     z = cell_z_noise(seed, xm, ym, int(base), amplitude=1)

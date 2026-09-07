@@ -7,7 +7,7 @@ from collections import Counter
 
 from app.application.jsonValidation import terrain_system_keys
 from app.dataModel.worldPack.packBakeMode import PACK_BAKE_FULL, PACK_BAKE_LIGHT, PackBakeMode
-from app.application.worldData.generators.coordinates import cell_size_m
+from app.application.worldData.generators.coordinates import map_cell_fine_span
 from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
     is_hydrology_enabled,
 )
@@ -123,7 +123,7 @@ class WorldMapBakeOrchestrator:
             surface_z_hist=_surface_z_hist(surface_ctx.coarse_surface_z),
         )
 
-        tile_m = cell_size_m(world)
+        tile_m = map_cell_fine_span(world)
         side = resolve_world_map_cells_per_tile(tile_m, world.world_map_cells_per_tile)
         scale = LightGridScale.from_tile(tile_m, side)
         index = locations_index or build_locations_index(locations)
@@ -210,7 +210,7 @@ class WorldMapBakeOrchestrator:
     ) -> tuple[list[WorldMapCellWire], str]:
         """Single-tile convenience wrapper around compose pipeline."""
         locs = locations or []
-        tile_m = cell_size_m(world)
+        tile_m = map_cell_fine_span(world)
         side = cells_per_side or resolve_world_map_cells_per_tile(
             tile_m,
             world.world_map_cells_per_tile,

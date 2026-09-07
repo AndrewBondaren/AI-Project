@@ -26,7 +26,7 @@ from app.db.models.namedLocation import NamedLocation
 def _world(**overrides):
     base = dict(
         world_uid="world-light-test",
-        map_cell_size_m=1000,
+        fine_cells_per_map_cell=1000,
         world_map_cells_per_tile=None,
         z_min=-2,
         z_max=4,

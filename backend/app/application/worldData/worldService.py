@@ -55,7 +55,7 @@ class WorldService:
         data = _normalize_world_data(data, partial=True)
         world = await self.get_by_id(world_uid)
         original = dataclasses.replace(world)  # snapshot before mutations
-        old_map_cell_size = world.map_cell_size_m
+        old_map_cell_size = world.fine_cells_per_map_cell
 
         for key, value in data.items():
             if hasattr(world, key) and key not in self._IMMUTABLE:
@@ -63,13 +63,13 @@ class WorldService:
 
         self._validate(world)
 
-        map_size_changed = old_map_cell_size != world.map_cell_size_m
+        map_size_changed = old_map_cell_size != world.fine_cells_per_map_cell
 
         if map_size_changed and not force:
             return WorldUpdateResult(
                 world=original,
                 warning=(
-                    f"map_cell_size_m changed from {old_map_cell_size} to {world.map_cell_size_m}. "
+                    f"fine_cells_per_map_cell changed from {old_map_cell_size} to {world.fine_cells_per_map_cell}. "
                     "All map_cells will be deleted and terrain must be regenerated. "
                     "Re-send with force=true to confirm."
                 ),
@@ -137,16 +137,16 @@ class WorldService:
 
     @staticmethod
     def _validate(world: World) -> None:
-        v = world.map_cell_size_m
+        v = world.fine_cells_per_map_cell
         if not isinstance(v, int) or isinstance(v, bool):
             raise HTTPException(status_code=422,
-                detail="map_cell_size_m must be an integer")
+                detail="fine_cells_per_map_cell must be an integer")
         if v < 1000:
             raise HTTPException(status_code=422,
-                detail="map_cell_size_m must be at least 1000")
+                detail="fine_cells_per_map_cell must be at least 1000")
         if v % 1000 != 0:
             raise HTTPException(status_code=422,
-                detail="map_cell_size_m must be a multiple of 1000")
+                detail="fine_cells_per_map_cell must be a multiple of 1000")
 
         if world.grid_bbox_padding < 0:
             raise HTTPException(status_code=422,

@@ -146,7 +146,7 @@ class TestWorldGridMosaic(unittest.IsolatedAsyncioTestCase):
         )
         self.world = SimpleNamespace(
             world_uid=self.uid,
-            map_cell_size_m=3000,
+            fine_cells_per_map_cell=3000,
             world_bounds=None,
             grid_bbox_padding=2,
         )
@@ -194,7 +194,7 @@ class TestWorldGridMosaic(unittest.IsolatedAsyncioTestCase):
         )
         world = SimpleNamespace(
             world_uid=sparse_uid,
-            map_cell_size_m=3000,
+            fine_cells_per_map_cell=3000,
             world_bounds={"x_min": -1, "x_max": 1, "y_min": -1, "y_max": 1},
             grid_bbox_padding=2,
         )
@@ -231,7 +231,7 @@ class TestWorldGridMosaic(unittest.IsolatedAsyncioTestCase):
         )
         world = SimpleNamespace(
             world_uid=sparse_uid,
-            map_cell_size_m=3000,
+            fine_cells_per_map_cell=3000,
             world_bounds=None,
             grid_bbox_padding=2,
         )

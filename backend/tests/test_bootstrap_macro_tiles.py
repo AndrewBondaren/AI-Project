@@ -13,7 +13,7 @@ def _world(**kwargs):
     defaults = {
         "world_uid": "test-world",
         "hydrology": {"enabled": True},
-        "map_cell_size_m": 3000,
+        "fine_cells_per_map_cell": 3000,
         "map_settings": None,
     }
     defaults.update(kwargs)

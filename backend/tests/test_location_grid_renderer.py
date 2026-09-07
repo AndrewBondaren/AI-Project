@@ -68,7 +68,7 @@ class TestLocationGridRenderer(unittest.TestCase):
                 system_terrain="urban",
             ),
         ]
-        out = LocationGridRenderer(cells, "loc-port", cell_size_m=3000).render_level(0)
+        out = LocationGridRenderer(cells, "loc-port", map_cell_fine_span=3000).render_level(0)
         self.assertIn("location=loc-port", out)
         self.assertIn("u", out)
 

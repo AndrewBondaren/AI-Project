@@ -7,7 +7,7 @@ import logging
 from app.application.worldData.generators.terrain.worldMapSettings import n_base, terrain_chunk_columns, world_z_min
 from app.application.worldData.pack.read.settlementStructureRaster import SettlementStructureRaster
 from app.application.worldData.pack.read.worldMapPackReader import WorldMapPackReader
-from app.application.worldData.pack.read.packMapHelpers import tile_index, world_tile_size_m
+from app.application.worldData.pack.read.packMapHelpers import tile_index, world_map_cell_span
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.read.mapCellFromMerged import merged_view_to_map_cell
 from app.application.worldData.patchStoreService import PatchStoreService
@@ -59,7 +59,7 @@ class MapCellQueryFacade:
         if patch_contrib is not None:
             layers.append(LayerSlice(kind=MapLayerKind.PATCH, cell=patch_contrib))
 
-        tile_size = world_tile_size_m(world)
+        tile_size = world_map_cell_span(world)
         gx, lx = tile_index(x, tile_size)
         gy, ly = tile_index(y, tile_size)
         chunk_cols = terrain_chunk_columns(world)
@@ -202,7 +202,7 @@ class MapCellQueryFacade:
                         location_uid=loc.location_uid,
                     )
             if not cells_by_xy:
-                tile_size = world_tile_size_m(world)
+                tile_size = world_map_cell_span(world)
                 gx0, _ = tile_index(x0, tile_size)
                 gx1, _ = tile_index(x1, tile_size)
                 gy0, _ = tile_index(y0, tile_size)

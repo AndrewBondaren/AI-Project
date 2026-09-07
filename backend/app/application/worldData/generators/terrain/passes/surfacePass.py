@@ -2,9 +2,9 @@ from app.application.worldData.generators.climate.loggingHelpers import warn_onc
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
 from app.application.worldData.generators.climate.math import world_seed
 from app.application.worldData.generators.coordinates import (
-    cell_size_m,
-    meter_bbox_for_tile,
-    world_meter_xy,
+    map_cell_fine_span,
+    fine_bbox_for_tile,
+    world_fine_xy,
 )
 from app.application.worldData.generators.terrain.noise import cell_z_noise
 from app.application.worldData.generators.terrain.passes.bbox import grid_bbox_from_locations
@@ -60,10 +60,10 @@ def build_fine_surface_tile(
     coarse_surface_z: dict[tuple[int, int], int],
 ) -> dict[tuple[int, int], int]:
     """
-  Fine meter surface_z for one macro tile — map_cell_size_m × map_cell_size_m keys (xm, ym).
+  Fine meter surface_z for one macro tile — fine_cells_per_map_cell × fine_cells_per_map_cell keys (xm, ym).
   Base elevation from post-hydro coarse tile + per-meter noise.
   """
-    cell_m = cell_size_m(world)
+    cell_m = map_cell_fine_span(world)
     z_min = world_z_min(world)
     z_max = world_z_max(world)
     seed = world_seed(world)
@@ -77,7 +77,7 @@ def build_fine_surface_tile(
     surface_z: dict[tuple[int, int], int] = {}
     for ly in range(cell_m):
         for lx in range(cell_m):
-            xm, ym = world_meter_xy(tile_gx, tile_gy, lx, ly, cell_m)
+            xm, ym = world_fine_xy(tile_gx, tile_gy, lx, ly, cell_m)
             delta = cell_z_noise(seed, xm, ym, 0, amplitude=1)
             z = max(z_min, min(z_max, coarse_z + delta))
             surface_z[(xm, ym)] = z
@@ -92,11 +92,11 @@ def fine_surface_heightmap_for_tile(
     tile_gy: int,
     coarse_surface_z: dict[tuple[int, int], int],
 ) -> SurfaceHeightmap:
-    cell_m = cell_size_m(world)
-    meter_bbox = meter_bbox_for_tile(tile_gx, tile_gy, cell_m)
+    cell_m = map_cell_fine_span(world)
+    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, cell_m)
     return SurfaceHeightmap(
         world_uid=world.world_uid,
-        bbox=meter_bbox,
+        bbox=fine_bbox,
         surface_z=build_fine_surface_tile(
             world, pole_field, tile_gx, tile_gy, coarse_surface_z,
         ),

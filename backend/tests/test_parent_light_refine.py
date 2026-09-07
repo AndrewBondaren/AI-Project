@@ -87,7 +87,7 @@ class TestParentLightCache(unittest.TestCase):
             paths = WorldPackPaths.from_db_parent(str(Path(tmp) / "game.db"), uid)
             writer = WorldPackWriter(paths)
             writer.sync_world_metadata(
-                SimpleNamespace(map_cell_size_m=32, world_map_cells_per_tile=None),
+                SimpleNamespace(fine_cells_per_map_cell=32, world_map_cells_per_tile=None),
                 cells_per_side=2,
             )
             cells = [
@@ -122,7 +122,7 @@ class TestUpsampleAndCorridor(unittest.TestCase):
         policy = ParentLightRefinePolicy(z_band=1, detail_noise_amplitude=1)
         w = MagicMock()
         w.world_uid = "w-parent"
-        w.map_cell_size_m = 16
+        w.fine_cells_per_map_cell = 16
         w.seed = 7
         # terrain_scalars path — provide z bounds via world attributes if used
         w.z_min = -5
@@ -163,7 +163,7 @@ class TestUpsampleAndCorridor(unittest.TestCase):
         parent = _parent_with_river(side=2, tile_m=8)
         w = MagicMock()
         w.world_uid = "w-parent"
-        w.map_cell_size_m = 8
+        w.fine_cells_per_map_cell = 8
         w.seed = 1
         w.z_min = -2
         w.z_max = 8
@@ -261,7 +261,7 @@ class TestTerrainMaskCarry(unittest.TestCase):
         parent = _parent_mixed_terrain(side=2, tile_m=8)
         w = MagicMock()
         w.world_uid = "w-mask"
-        w.map_cell_size_m = 8
+        w.fine_cells_per_map_cell = 8
         w.seed = 1
         w.z_min = -2
         w.z_max = 20
@@ -312,7 +312,7 @@ class TestRefineFailClosed(unittest.IsolatedAsyncioTestCase):
         l2 = FineTerrainRefineOrchestrator(terrain)
         world = SimpleNamespace(
             world_uid="w-miss",
-            map_cell_size_m=32,
+            fine_cells_per_map_cell=32,
             terrain_chunk_columns=16,
             terrain_parallel_workers=None,
         )

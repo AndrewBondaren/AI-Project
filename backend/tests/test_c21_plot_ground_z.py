@@ -28,7 +28,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
     SettlementAssembler,
 )
 from app.application.worldData.generators.assemblers.districtAssembler.planner.areaSlots import (
-    YARD_PADDING_M,
+    YARD_PADDING_FINE,
     parcel_cells,
 )
 from app.application.worldData.generators.coordinates.approachZ import (
@@ -121,13 +121,13 @@ class ParcelCellsTests(unittest.TestCase):
 
     def test_parcel_wider_than_footprint(self):
         fp = OccupiedFootprint(min_x=0, min_y=0, width=4, depth=3)
-        cells = parcel_cells(fp, 10, 20, YARD_PADDING_M)
+        cells = parcel_cells(fp, 10, 20, YARD_PADDING_FINE)
         xs = {c[0] for c in cells}
         ys = {c[1] for c in cells}
-        self.assertEqual(min(xs), 10 - YARD_PADDING_M)
-        self.assertEqual(max(xs), 10 + 3 + YARD_PADDING_M)
-        self.assertEqual(min(ys), 20 - YARD_PADDING_M)
-        self.assertEqual(max(ys), 20 + 2 + YARD_PADDING_M)
+        self.assertEqual(min(xs), 10 - YARD_PADDING_FINE)
+        self.assertEqual(max(xs), 10 + 3 + YARD_PADDING_FINE)
+        self.assertEqual(min(ys), 20 - YARD_PADDING_FINE)
+        self.assertEqual(max(ys), 20 + 2 + YARD_PADDING_FINE)
         self.assertGreater(len(cells), 4 * 3)
 
 

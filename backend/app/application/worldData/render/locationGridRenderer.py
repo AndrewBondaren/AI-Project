@@ -22,11 +22,11 @@ class LocationGridRenderer:
         cells: list[MapCell],
         location_uid: str,
         *,
-        cell_size_m: int | None = None,
+        fine_span: int | None = None,
     ) -> None:
         self._cells = [c for c in cells if c.location_uid == location_uid]
         self.location_uid = location_uid
-        self._cell_size_m = cell_size_m
+        self._fine_span = fine_span
 
     def _indoor_cells(self) -> list[MapCell]:
         return [c for c in self._cells if c.system_building_element]
@@ -54,7 +54,7 @@ class LocationGridRenderer:
         gy0, gy1 = min(ys), max(ys)
         lines: list[str] = [
             f"location={self.location_uid} z={z}",
-            format_grid_header(gx0, gx1, gy0, gy1, cell_size_m=self._cell_size_m),
+            format_grid_header(gx0, gx1, gy0, gy1, fine_span=self._fine_span),
         ]
         for gy in range(gy1, gy0 - 1, -1):
             row = "".join(

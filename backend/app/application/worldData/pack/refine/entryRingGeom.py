@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.coordinates import cell_size_m
+from app.application.worldData.generators.coordinates import map_cell_fine_span
 from app.application.worldData.generators.coordinates.worldTile import (
-    iter_meter_chunks,
-    meter_bbox_for_tile,
+    iter_fine_chunks,
+    fine_bbox_for_tile,
 )
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.generators.terrain.worldMapSettings import terrain_chunk_columns
@@ -22,25 +22,25 @@ def distance_sq(ax: float, ay: float, bx: float, by: float) -> float:
 
 def tile_local_chunk_indices(
     rect: ColumnRect,
-    meter_bbox: ColumnRect,
+    fine_bbox: ColumnRect,
     chunk_size: int,
 ) -> tuple[int, int]:
     return (
-        (rect.x_min - meter_bbox.x_min) // chunk_size,
-        (rect.y_min - meter_bbox.y_min) // chunk_size,
+        (rect.x_min - fine_bbox.x_min) // chunk_size,
+        (rect.y_min - fine_bbox.y_min) // chunk_size,
     )
 
 
 def wilderness_chunk_origin(
-    meter_bbox: ColumnRect,
+    fine_bbox: ColumnRect,
     cx: int,
     cy: int,
     chunk_size: int,
 ) -> tuple[int, int]:
     """World xy of chunk (0,0) — inverse of ``tile_local_chunk_indices`` (R36v-T-7)."""
     return (
-        meter_bbox.x_min + int(cx) * chunk_size,
-        meter_bbox.y_min + int(cy) * chunk_size,
+        fine_bbox.x_min + int(cx) * chunk_size,
+        fine_bbox.y_min + int(cy) * chunk_size,
     )
 
 
@@ -70,11 +70,11 @@ def scene_chunk_indices(
     xy_radius: int,
 ) -> set[tuple[int, int]]:
     """Chunk (cx, cy) indices covered by scene volume around anchor."""
-    cell_m = cell_size_m(world)
+    cell_m = map_cell_fine_span(world)
     chunk_size = terrain_chunk_columns(world)
-    meter_bbox = meter_bbox_for_tile(tile_gx, tile_gy, cell_m)
+    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, cell_m)
     out: set[tuple[int, int]] = set()
-    for rect in iter_meter_chunks(meter_bbox, chunk_size):
+    for rect in iter_fine_chunks(fine_bbox, chunk_size):
         if chunk_within_ring(rect, float(anchor_x), float(anchor_y), float(xy_radius), chunk_size):
-            out.add(tile_local_chunk_indices(rect, meter_bbox, chunk_size))
+            out.add(tile_local_chunk_indices(rect, fine_bbox, chunk_size))
     return out

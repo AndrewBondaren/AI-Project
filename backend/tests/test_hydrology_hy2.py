@@ -34,7 +34,7 @@ def _world(**kwargs):
             "enabled": True,
             "default_seas": {"bands": {"min": 1, "max": 3}},
         },
-        "map_cell_size_m": 3000,
+        "fine_cells_per_map_cell": 3000,
     }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)

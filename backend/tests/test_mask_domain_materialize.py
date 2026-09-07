@@ -29,7 +29,7 @@ from types import SimpleNamespace
 def _world(**overrides):
     base = dict(
         world_uid="world-mask-mat",
-        map_cell_size_m=1000,
+        fine_cells_per_map_cell=1000,
         world_map_cells_per_tile=None,
         z_min=0,
         z_max=8,

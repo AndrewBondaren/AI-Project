@@ -20,7 +20,7 @@ from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, Locati
 
 
 def _world(uid: str = "w-render-read", **kwargs):
-    defaults = {"world_uid": uid, "map_cell_size_m": 3000}
+    defaults = {"world_uid": uid, "fine_cells_per_map_cell": 3000}
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
 

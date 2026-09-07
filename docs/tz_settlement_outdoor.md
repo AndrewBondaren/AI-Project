@@ -53,7 +53,7 @@ description: "Outdoor settlement на запечённом World Pack — дер
 | Слои assembler, вход Settlement | assembler §1–§3 | не вызывать Structure вне stack в этом слое |
 | Участок: `AreaSlot` / `AreaLayout` | assembler §7.1–§7.2 | **persist-контракт геометрии**; **C21:** z и порог — assembler участка; **C22:** фасад из графа улиц (§5.1.3) |
 | generate-first, cache шаблона | assembler §7.7 | RAM; не второй generate при persist |
-| Координаты footprint | assembler §7.5; city §9.6 | `settlement_meter_rect` |
+| Координаты footprint | assembler §7.5; city §9.6 | `settlement_fine_rect` |
 | Дороги city/district, `settlement_gate` | connections §5, **§5.1**, **§5.1.3** | SQL `connection_*`; приоритет/фасад — C22 |
 | Шаблон здания, `BuildingLayout`, levels, entry на комнате | building §3.6, §7, §8.9, §11 | не копировать схему шаблона |
 | Что не v1 здания (мебель и т.д.) | building §12 | не тащить |
@@ -108,7 +108,7 @@ full_bake L0
 Route (debug HTTP) / **`detailed_bake` scope=location** / lazy (позже)
   → orchestrator.materialize(world_uid, location_uid)   # C11; bake только вызывает
        → SQL: NamedLocation поселения
-       → тип: named_location_uses_settlement_meter_footprint
+       → тип: named_location_uses_settlement_fine_footprint
        → terrain: MapCellQueryFacade по footprint (pack + патчи), не get_all мира
        → generate_layout: reuse topology слотов если есть (C23); packing C22
        → persist: SQL здания/levels + pack city structure
@@ -143,7 +143,7 @@ pack city structure
 ```
 
 - Клетки — **поле** участка/здания, не SoT всего города.
-- Не flatten в `collect_geometry_meter_cells` на весь settlement.
+- Не flatten в `collect_geometry_fine_cells` на весь settlement.
 - Не FineTerrain column-runs и не смесь с `l.{uid}.terrain.zst` (pack § L2 location = земля).
 - Occupancy метровой матрицы **не persist**. Резерв на карте — L0 pin + `city_size` / footprint (pack § L1, light bake settlement contributor). `plan_footprint_occupancy_cells` как flood в патчи — запрещён.
 
@@ -163,7 +163,7 @@ Read: query bbox пересекает участки → вклад клеток
 
 Не `system_location_type == "settlement"`.
 
-SoT: `uses_settlement_meter_footprint` / `named_location_uses_settlement_meter_footprint` — type `settlement` | `district` | legacy `city`, subtype из реестра, либо ранг размера (**LOC-T-2**; код: `system_city_size` / `city_size_registry`). Footprint метров — морфология × ранг, не токен `village` как size.
+SoT: `uses_settlement_fine_footprint` / `named_location_uses_settlement_fine_footprint` — type `settlement` | `district` | legacy `city`, subtype из реестра, либо ранг размера (**LOC-T-2**; код: `system_city_size` / `city_size_registry`). Footprint метров — морфология × ранг, не токен `village` как size.
 
 Orchestrator и route используют policy. Нода `lazy_settlement` с литералами size — вне слоя; правится при DAG.
 
@@ -239,7 +239,7 @@ city §11.4 snapshot / regen — по-прежнему [`tz_world_snapshot.md`](
 | **C3** | Участок **не** `location_type` и не SceneInit. SQL-дерево: settlement → district → building. Area uid только в pack-графе. |
 | **C4** | Районы писать сразу (`named_locations`). `parent` здания = район. Это extract/persist, не отдельный инвариант мира. |
 | **C5** | District `NamedLocation` и Area uid **синтезируются на extract** из `DistrictSlot` / слота (детерминированный uid). Assembler не ходит в SQL. `collect_building_locations` больше не ставит parent=settlement. |
-| **C6** | Тип поселения = `named_location_uses_settlement_meter_footprint`, не `== "settlement"`. |
+| **C6** | Тип поселения = `named_location_uses_settlement_fine_footprint`, не `== "settlement"`. |
 | **C7** | Occupancy на карте = L0 pin + footprint rect. Не persist метровой матрицы, не `plan_footprint_occupancy_cells` → патчи. |
 | **C8** | Outdoor shell здания: `wall` / `roof` / `door` / `window` / `archway` / foundation + barriers участка. Interior cells / rooms / `location_passages` между комнатами — не persist. |
 | **C9** | Persist `location_levels` зданий (из `StructureLayout.levels`): абсолютный `z` / `z_height` / `display_name`. Улицы как уровни — отложить. Yard / small_layouts / пустые barriers — как есть. |
@@ -268,7 +268,7 @@ city §11.4 snapshot / regen — по-прежнему [`tz_world_snapshot.md`](
 
 Отдельно — тонкие проходы по уже существующим скелетам в SQL (не новый генератор, не placement на wilderness):
 
-1. Все поселения мира (`named_location_uses_settlement_meter_footprint`).
+1. Все поселения мира (`named_location_uses_settlement_fine_footprint`).
 2. По иерархии **локаций:** задан uid предка (`region` / `territory`) → CTE потомки → из них только settlement-like. «Континент» в продукте = узел дерева, не отдельный `location_type`.
 3. По иерархии **государств:** задан `state_uid` → поселения с этим `state_uid`; при необходимости включить дочерние государства (`states.parent_state_uid`). Settlement может иметь иной `state_uid`, чем territory ([tz_states.md](./tz_states.md)).
 
@@ -351,7 +351,7 @@ SQL и файлы pack — не один COMMIT. Надёжность = прот
 | **CITY-T-2 fill при stitch** | **open** | Canonical район без `allowed_structure_types` → pack-граф почти пустой (только required). Склейка честно пишет пустоту. |
 | **P2 leftover persist** | **open** | `SettlementPersistService` / occupancy в патчи ещё живы. HTTP outdoor их не зовёт; эталон = C1. Два писателя эталона — риск. После C23: parent зданий и ложный skip — **[CITY-T-5a/5g](./tz_city_generation_technical_debt.md)**. |
 | **P3 occupancy flood** | **open** (не HTTP default) | `plan_footprint_occupancy_cells` в assembler. C7: на карте — L0 pin, не метровая матрица в патчи. |
-| **P4 flatten cells** | **open** (не эталон) | `collect_geometry_meter_cells` тянет interior. C2/C8: эталон = граф участков. |
+| **P4 flatten cells** | **open** (не эталон) | `collect_geometry_fine_cells` тянет interior. C2/C8: эталон = граф участков. |
 | **P9 `entry_role`** | **open** | C20: `front`/`service`; колонки в `0001` ещё нет. |
 | **P10 слой города в merge** | **open** | C12: rasterize участков в merge выше `location_terrain`, ниже patch. `MapLayerKind` city — leftover. |
 | **C19 recovery journal** | **open** | После COMMIT tmp потерян: ТЗ требует pending или тот же seed. Журнала pending в коде нет. |
@@ -365,7 +365,7 @@ SQL и файлы pack — не один COMMIT. Надёжность = прот
 | **P1** | `api/routes/locations.py` `generate-settlement` | Оркестрация в HTTP: type `== "settlement"`, `get_all` мира, generate+persist |
 | **P2** | `SettlementPersistService` | Эталон в `map_cell_patches` (`save_settlement_surface` / `save_generated`); occupancy+полный interior layout |
 | **P3** | `plan_footprint_occupancy_cells` + assembler | Метровый flood на весь footprint (порядок 10^6 cells у town) |
-| **P4** | `layoutCells.collect_geometry_meter_cells` | Flatten всего города, включая interior `StructureLayout.cells` |
+| **P4** | `layoutCells.collect_geometry_fine_cells` | Flatten всего города, включая interior `StructureLayout.cells` |
 | **P5** | `collect_building_locations` | `parent_location_uid=settlement`; районов в SQL нет |
 | **P6** | `DistrictLayout` / `AreaLayout` | Нет district `NamedLocation`, нет area uid — extract не из чего взять без синтеза |
 | **P7** | `StructureAreaAssembler._place_building` | Building NL без parent; uid/created_at/материалы — черновые литералы |

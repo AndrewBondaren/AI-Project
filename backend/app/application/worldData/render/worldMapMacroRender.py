@@ -83,7 +83,7 @@ def render_macro_bbox(
         symbols,
         title="pack L0 MACRO AGGREGATE (not mask SoT) — one symbol per macro-tile",
         bounds=(gx0, gx1, gy0, gy1),
-        cell_size_m=tile_size_m,
+        fine_span=tile_size_m,
         x_rulers=False,
     )
 

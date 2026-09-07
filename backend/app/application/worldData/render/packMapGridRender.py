@@ -78,7 +78,7 @@ class PackMapGridRender:
 
         pins = source.pins.locations
         if pins:
-            cell_m = max(1, int(getattr(world, "map_cell_size_m", None) or source.tile_size_m))
+            cell_m = max(1, int(getattr(world, "fine_cells_per_map_cell", None) or source.tile_size_m))
             padding = grid_bbox_padding(world)
             xs = [int(p.map_x) // cell_m for p in pins]
             ys = [int(p.map_y) // cell_m for p in pins]
@@ -112,7 +112,7 @@ class PackMapGridRender:
                     mark_location=mark_locations, location_types=types,
                 ),
                 mark_locations=mark_locations,
-                cell_size_m=world.map_cell_size_m,
+                fine_span=world.fine_cells_per_map_cell,
                 read_path="pack",
                 read_mode="world_map_light_mask",
             )
@@ -147,7 +147,7 @@ class PackMapGridRender:
                 mark_location=mark_locations, location_types=types,
             ),
             mark_locations=mark_locations,
-            cell_size_m=world.map_cell_size_m,
+            fine_span=world.fine_cells_per_map_cell,
             read_path="pack",
             read_mode="world_map_light_mask",
             ascii_height=ascii_height,
@@ -189,7 +189,7 @@ class PackMapGridRender:
                 )
         return WorldTileGridsPayload(
             world_uid=world.world_uid,
-            cell_size_m=world.map_cell_size_m,
+            fine_span=world.fine_cells_per_map_cell,
             tiles=tiles,
             read_path="pack",
             read_mode="world_map_light_mask",
@@ -223,7 +223,7 @@ class PackMapGridRender:
         ]
         return LocationGridsPayload(
             world_uid=world.world_uid,
-            cell_size_m=world.map_cell_size_m,
+            fine_span=world.fine_cells_per_map_cell,
             location_uids=location_uids,
             locations=locations,
             outdoor_legend=legend,
@@ -244,7 +244,7 @@ class PackMapGridRender:
         if loc_source is None:
             return LocationGridPayload(
                 legend=legend,
-                cell_size_m=world.map_cell_size_m,
+                fine_span=world.fine_cells_per_map_cell,
                 read_path="pack",
                 read_mode="location_terrain_missing",
                 indoor=False,
@@ -259,7 +259,7 @@ class PackMapGridRender:
         if z is not None:
             return LocationGridPayload(
                 legend=legend,
-                cell_size_m=world.map_cell_size_m,
+                fine_span=world.fine_cells_per_map_cell,
                 read_path="pack",
                 read_mode="location_terrain",
                 ascii=renderer.render_level(z),
@@ -268,7 +268,7 @@ class PackMapGridRender:
         levels = renderer.render_all_levels()
         return LocationGridPayload(
             legend=legend,
-            cell_size_m=world.map_cell_size_m,
+            fine_span=world.fine_cells_per_map_cell,
             read_path="pack",
             read_mode="location_terrain",
             indoor=False,
@@ -297,7 +297,7 @@ class PackMapGridRender:
                 tile_gx=tile_gx,
                 tile_gy=tile_gy,
                 legend=legend,
-                cell_size_m=world.map_cell_size_m,
+                fine_span=world.fine_cells_per_map_cell,
                 read_path="pack",
                 read_mode="wilderness_tile_l2_missing",
             )
@@ -315,7 +315,7 @@ class PackMapGridRender:
                 tile_gx=tile_gx,
                 tile_gy=tile_gy,
                 legend=legend,
-                cell_size_m=world.map_cell_size_m,
+                fine_span=world.fine_cells_per_map_cell,
                 read_path="pack",
                 read_mode="wilderness_tile_l2",
                 ascii=ascii_grid,
@@ -335,7 +335,7 @@ class PackMapGridRender:
             tile_gx=tile_gx,
             tile_gy=tile_gy,
             legend=legend,
-            cell_size_m=world.map_cell_size_m,
+            fine_span=world.fine_cells_per_map_cell,
             read_path="pack",
             read_mode="wilderness_tile_l2",
             levels=levels,

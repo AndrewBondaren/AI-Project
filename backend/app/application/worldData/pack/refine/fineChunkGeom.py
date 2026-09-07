@@ -1,15 +1,15 @@
-"""Shared meter-chunk geometry for pack L2 refine / detailed bake.
+"""Shared fine-chunk geometry for pack L2 refine / detailed bake.
 
 Grid math only — no I/O, no generate. Callers: PackDetailedBake, FineTerrainRefine.
 """
 
 from __future__ import annotations
 
-from app.application.worldData.generators.coordinates import cell_size_m
+from app.application.worldData.generators.coordinates import map_cell_fine_span
 from app.application.worldData.generators.coordinates.worldTile import (
-    iter_meter_chunks,
+    iter_fine_chunks,
     macro_tile_of,
-    meter_bbox_for_tile,
+    fine_bbox_for_tile,
 )
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.pack.refine.columnBounds import (
@@ -49,7 +49,7 @@ def _rect_overlaps_volume(rect: ColumnRect, volume: TerritoryVolume) -> bool:
 
 
 def tiles_covering_volume(world: World, volume: TerritoryVolume) -> list[tuple[int, int]]:
-    cell_m = cell_size_m(world)
+    cell_m = map_cell_fine_span(world)
     corners = (
         (volume.x0, volume.y0),
         (volume.x0, volume.y1),
@@ -67,13 +67,13 @@ def tiles_covering_volume(world: World, volume: TerritoryVolume) -> list[tuple[i
 
 
 def rects_for_macro_tile(world: World, tile_gx: int, tile_gy: int) -> list[ColumnRect]:
-    cell_m = cell_size_m(world)
-    meter_bbox = meter_bbox_for_tile(tile_gx, tile_gy, cell_m)
+    cell_m = map_cell_fine_span(world)
+    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, cell_m)
     chunk_size = terrain_chunk_columns(world)
-    return list(iter_meter_chunks(meter_bbox, chunk_size))
+    return list(iter_fine_chunks(fine_bbox, chunk_size))
 
 
-def expected_meter_chunks(world: World, tile_gx: int, tile_gy: int) -> int:
+def expected_fine_chunks(world: World, tile_gx: int, tile_gy: int) -> int:
     return len(rects_for_macro_tile(world, tile_gx, tile_gy))
 
 

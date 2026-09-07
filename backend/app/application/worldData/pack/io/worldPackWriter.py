@@ -103,7 +103,7 @@ class WorldPackWriter:
         self.save_manifest()
 
     def sync_world_metadata(self, world: World, *, cells_per_side: int) -> None:
-        self._manifest.map_cell_size_m = world.map_cell_size_m
+        self._manifest.fine_cells_per_map_cell = world.fine_cells_per_map_cell
         self._manifest.world_map_cells_per_tile = cells_per_side
         if world.world_map_cells_per_tile is not None:
             self._manifest.world_map_cells_per_tile = world.world_map_cells_per_tile
@@ -152,12 +152,12 @@ class WorldPackWriter:
         )
         self._replace_tile(updated)
         self._manifest.world_map_cells_per_tile = cells_per_side
-        if self._manifest.map_cell_size_m is None or int(self._manifest.map_cell_size_m) < 1:
+        if self._manifest.fine_cells_per_map_cell is None or int(self._manifest.fine_cells_per_map_cell) < 1:
             raise ValueError(
-                "manifest.map_cell_size_m required before write_world_map_tile "
+                "manifest.fine_cells_per_map_cell required before write_world_map_tile "
                 "(cannot cache parent light with tile_m fallback)",
             )
-        tile_m = int(self._manifest.map_cell_size_m)
+        tile_m = int(self._manifest.fine_cells_per_map_cell)
         self._parent_light_cache.put(
             ParentLightTile.from_cells(
                 world_uid=self._paths.world_uid,

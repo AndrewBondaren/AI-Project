@@ -6,7 +6,7 @@ from app.application.worldData.generators.assemblers.districtAssembler.planner.t
     PackingToken,
     Rect,
     Reservation,
-    YARD_PADDING_M,
+    YARD_PADDING_FINE,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import (
     PackingReason,
@@ -17,7 +17,7 @@ from app.dataModel.spatial.facing import Facing
 
 
 def parcel_size(w: int, h: int, rotated: bool) -> tuple[int, int]:
-    pad = 2 * YARD_PADDING_M
+    pad = 2 * YARD_PADDING_FINE
     if rotated:
         return h + pad, w + pad
     return w + pad, h + pad

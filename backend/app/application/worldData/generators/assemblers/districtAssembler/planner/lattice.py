@@ -43,8 +43,8 @@ def slot_rect(slot: DistrictSlot) -> Rect:
     return (
         slot.origin_x,
         slot.origin_y,
-        slot.origin_x + slot.width_m,
-        slot.origin_y + slot.depth_m,
+        slot.origin_x + slot.width_fine,
+        slot.origin_y + slot.depth_fine,
     )
 
 

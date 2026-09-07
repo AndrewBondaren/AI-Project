@@ -7,8 +7,8 @@ import math
 from app.db.models.world import World
 
 
-def world_tile_size_m(world: World) -> int:
-    return world.map_cell_size_m
+def world_map_cell_span(world: World) -> int:
+    return world.fine_cells_per_map_cell
 
 
 def tile_index(coord: int, tile_size: int) -> tuple[int, int]:
@@ -18,15 +18,15 @@ def tile_index(coord: int, tile_size: int) -> tuple[int, int]:
 
 
 def tile_for_anchor(world: World, anchor_x: int, anchor_y: int) -> tuple[int, int]:
-    """Macro-tile (gx, gy) containing meter anchor."""
-    tile_size = world_tile_size_m(world)
+    """Macro-tile (gx, gy) containing fine-grid anchor."""
+    tile_size = world_map_cell_span(world)
     gx, _ = tile_index(anchor_x, tile_size)
     gy, _ = tile_index(anchor_y, tile_size)
     return gx, gy
 
 
 def world_map_sample_index(local: int, tile_size: int, cells_per_side: int) -> int:
-    """Map meter-local offset inside a macro-tile to light ``tx``/``ty``.
+    """Map fine-local offset inside a macro-tile to light ``tx``/``ty``.
 
     Used for pin placement and coarse sampling — **not** a substitute for the
     full L0 light mask (side×side wire cells).

@@ -9,7 +9,7 @@ from app.application.worldData.generators.terrain.resolveWorldMapTerrain import 
 )
 from app.application.worldData.generators.terrain.worldMapSettings import n_base
 from app.application.worldData.pack.climate.climatePackApply import apply_climate_to_view
-from app.application.worldData.pack.read.packMapHelpers import world_map_sample_index, world_tile_size_m
+from app.application.worldData.pack.read.packMapHelpers import world_map_sample_index, world_map_cell_span
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
 from app.dataModel.worldPack.layerPriority import MapLayerKind
@@ -56,7 +56,7 @@ class WorldMapPackReader:
             side, cells = reader.read_world_map_tile(gx, gy)
         except FileNotFoundError:
             return None
-        tile_size = world_tile_size_m(world)
+        tile_size = world_map_cell_span(world)
         tx = world_map_sample_index(lx, tile_size, side)
         ty = world_map_sample_index(ly, tile_size, side)
         cell = next((c for c in cells if c.tx == tx and c.ty == ty), None)

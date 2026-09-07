@@ -296,7 +296,7 @@ Live writer — `discover_and_paint` в `compute_rect`. Sample/stitch/`FineTileC
 
 | Режим | Откуда rects | Порядок |
 |---|---|---|
-| Offline `detailed` wilderness | все chunk макро-тайла | `iter_meter_chunks` (ряд) |
+| Offline `detailed` wilderness | все chunk макро-тайла | `iter_fine_chunks` (ряд) |
 | Offline `detailed` location | rects ∩ territory; **вершины — R41** (не stencil volume) | как покрывают volume |
 | Entry P0 scene | кольцо scene volume от якоря (ноги / spawn / entry) | distance от anchor |
 | Фон колец | `schedule_tile_background` | distance; runtime часто **≤ 1** active chunk |
@@ -307,7 +307,7 @@ Live writer — `discover_and_paint` в `compute_rect`. Sample/stitch/`FineTileC
 
 **Единица стыка — грань chunk-сетки, не «кто первый взял lock».**
 
-На старте `refine_rects` / `detailed_bake` (до пула) известны `map_cell_size_m`, `terrain_chunk_columns`, макро-тайл `(gx, gy)`. Из этого строится полный каталог:
+На старте `refine_rects` / `detailed_bake` (до пула) известны `fine_cells_per_map_cell`, `terrain_chunk_columns`, макро-тайл `(gx, gy)`. Из этого строится полный каталог:
 
 | Объект | Сколько | Uid |
 |---|---|---|

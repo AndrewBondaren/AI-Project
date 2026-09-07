@@ -1,4 +1,4 @@
-"""Per macro-tile local fine grid — map_cell_size_m × map_cell_size_m."""
+"""Per macro-tile local fine grid — fine_cells_per_map_cell × fine_cells_per_map_cell."""
 
 from __future__ import annotations
 
@@ -16,18 +16,18 @@ class WorldTileGridRenderer:
         *,
         tile_gx: int,
         tile_gy: int,
-        cell_size_m: int,
+        fine_span: int,
     ) -> None:
-        self._cell_m = cell_size_m
+        self._cell_m = fine_span
         self._tile_gx = tile_gx
         self._tile_gy = tile_gy
-        self._x0 = tile_gx * cell_size_m
-        self._y0 = tile_gy * cell_size_m
+        self._x0 = tile_gx * fine_span
+        self._y0 = tile_gy * fine_span
         self._cells = [
             c for c in cells
             if not c.system_building_element
-            and self._x0 <= c.x < self._x0 + cell_size_m
-            and self._y0 <= c.y < self._y0 + cell_size_m
+            and self._x0 <= c.x < self._x0 + fine_span
+            and self._y0 <= c.y < self._y0 + fine_span
         ]
 
     @staticmethod
@@ -52,7 +52,7 @@ class WorldTileGridRenderer:
             format_grid_header(
                 0, self._cell_m - 1,
                 0, self._cell_m - 1,
-                cell_size_m=1,
+                fine_span=1,
                 prefix="local ",
             ),
         ]
@@ -77,7 +77,7 @@ class WorldTileGridRenderer:
             format_grid_header(
                 0, self._cell_m - 1,
                 0, self._cell_m - 1,
-                cell_size_m=1,
+                fine_span=1,
                 prefix="local ",
             ),
         ]

@@ -14,8 +14,8 @@ from app.dataModel.climate.enums.climatePolePreset import pole_specs_for_preset
 from app.dataModel.climate.enums.poleKind import PoleKind
 from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
 from app.application.worldData.generators.coordinates import (
-    meters_to_grid_x,
-    meters_to_grid_y,
+    fine_to_grid_x,
+    fine_to_grid_y,
 )
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -68,8 +68,8 @@ def collect_manual_pole(
     peak_min, peak_max = peak_bounds(world)
     kind = infer_pole_kind(loc)
     return ClimatePolePoint(
-        gx=meters_to_grid_x(loc.map_x, cell_m),
-        gy=meters_to_grid_y(loc.map_y, cell_m),
+        gx=fine_to_grid_x(loc.map_x, cell_m),
+        gy=fine_to_grid_y(loc.map_y, cell_m),
         pole_kind=kind,
         system_climate_zone=loc.system_climate_zone,
         base_temperature=derived_pole_temperature(kind, peak_min, peak_max),

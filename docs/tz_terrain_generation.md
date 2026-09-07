@@ -429,7 +429,7 @@ Generator **не** знает про threads/SQL — только `(world, locat
 `TerrainBatchOrchestrator._materialize_fine_tile` (legacy sequential reference):
 
 1. macro-тайлы — **последовательно** (bootstrap: priority list; `mode=full`: весь bbox);
-2. внутри тайла — `iter_meter_chunks` row-major, **32×32** fine-колонок (`terrain_chunk_columns`);
+2. внутри тайла — `iter_fine_chunks` row-major, **32×32** fine-колонок (`terrain_chunk_columns`);
 3. **v2:** `ChunkComputePool` → `generate_surface_chunk` parallel; `save_pass(terrain)` **strictly serial**;
 4. **v1 (до TR-PAR):** синхронный chunk loop без pool.
 
@@ -545,7 +545,7 @@ flowchart TB
 | Chunks внутри одного тайла | serial | **parallel generate**, serial persist |
 | `materialize-tile?gx=&gy=` | один тайл, serial | тот же chunk pool |
 
-**Практика для `map_cell_size_m=3000`:** параллелить **chunks внутри тайла**, не весь bbox; bootstrap `max_tiles` ограничивает число тайлов.
+**Практика для `fine_cells_per_map_cell=3000`:** параллелить **chunks внутри тайла**, не весь bbox; bootstrap `max_tiles` ограничивает число тайлов.
 
 #### Что не параллелить
 
@@ -776,7 +776,7 @@ flowchart TB
 | PERF-1 | `_upsert_partial` / `insert_bulk_ignore` используют `executemany` |
 | PERF-2 | init tile: commits ≤ `ceil(chunks_total / chunks_per_commit)` |
 | PERF-3 | Тот же world+seed → идентичный cell set до/после (как TR-PAR v2) |
-| PERF-4 | Smoke: 1 bootstrap tile, `map_cell_size_m=1000`, persist быстрее serial execute (benchmark в TR-PAR-4) |
+| PERF-4 | Smoke: 1 bootstrap tile, `fine_cells_per_map_cell=1000`, persist быстрее serial execute (benchmark в TR-PAR-4) |
 
 | ID | Задача | Статус |
 |---|---|---|
@@ -1056,7 +1056,7 @@ Regen: clear map → снова **S → O → C → CL**.
 | **E TR-PERF** | Bulk persist init: `executemany` + `chunks_per_commit` (§ TR-PERF) | benchmark 1 tile; commits ↓; cell set идентичен |
 | **F TR-LAZY-LOAD** | Scene volume + z_slice: **service/repo + debug HTTP** (§ TR-LAZY-LOAD-1/2) | LAZY-1…3 без нод |
 | **B Ores/caves** *(опционально)* | Замена STUB в `oresGenerator` / `cavesGenerator`; **cave hydrology U12** — вместе с caves, не в D HY | debug `POST generate-ores/caves`; merge rules в repo |
-| **C Regen doc** | § «Регенерация при map_cell_size_m» — явный manual path через debug API до DAG | ТЗ + `WorldService` warning; auto re-run — только после DAG |
+| **C Regen doc** | § «Регенерация при fine_cells_per_map_cell» — явный manual path через debug API до DAG | ТЗ + `WorldService` warning; auto re-run — только после DAG |
 
 **Порядок:** `9 TR-1b` ✅ → `A DBG-1` ✅ → **`E TR-PERF`** → **`F TR-LAZY-LOAD`** (service only) → **`D HY`** → smoke G1–G4 → **gate снят мастером** → DAG wiring. **Агент не правит ноды** до явного снятия gate.
 
@@ -1134,7 +1134,7 @@ flowchart TB
 | Gate | `check_world_materialization` |
 | Nodes | `generate_surface` (внутри HY — impl **D HY**), `generate_ores`, `generate_caves`, chain `generate_climate`; опционально `apply_hydrology` как отдельная нода — **только если** не встроено в `generate_surface` node |
 | Wiring | trigger первого входа игрока; deps; `supported_tasks` |
-| Regen | auto re-run materialization после `map_cell_size_m` |
+| Regen | auto re-run materialization после `fine_cells_per_map_cell` |
 | Hydrology LLM (U13) | `collect_geography_naming_candidates` → `llm_name_procedural_locations` — **после DAG gate**, не в D HY |
 
 **Vertical slice (после DAG-сессии):** новый мир → первый chat turn → S→O→C→CL в БД без ручного curl.
@@ -1420,7 +1420,7 @@ Wilderness `system_terrain` от z — **не urban**. Urban — settlement ил
 | Ось | Суть |
 |---|---|
 | `measurement_system` | imperial/metric — **только display/LLM**; generators не ветвятся |
-| `INTERIOR_CELL_SIZE_M = 1` | fine step = 1 m — **константа движка**, не настройка мира |
+| `FINE_CELL_SIZE = 1` | шаг fine-сетки = 1 int — **константа движка**, не настройка мира |
 | **Coordinate spaces** | разная семантика одного `int` в разных слоях |
 
 ### Coordinate spaces (v1)
@@ -1430,15 +1430,15 @@ Wilderness `system_terrain` от z — **не urban**. Urban — settlement ил
 │  WORLD_SURFACE_GRID                                          │
 │  MapCell.x/y при eager terrain + occupancy                 │
 │  gx, gy = индекс coarse tile (0, 1, 2, …)                   │
-│  один tile покрывает cell_m × cell_m метров на земле          │
+│  один tile покрывает fine_cells_per_map_cell² fine-клеток   │
 └─────────────────────────────────────────────────────────────┘
-         │  gx = map_x // cell_m     (convert hub)
+         │  gx = map_x // map_cell     (convert hub)
          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  WORLD_LOCAL_METERS                                          │
+│  WORLD_FINE_GRID                                             │
 │  NamedLocation.map_x/y — anchor на карте (поселение, гора, озеро, …) │
 │  Settlement: districts, streets, gates, barriers, buildings  │
-│  ConnectionNode.x/y — метры                                  │
+│  ConnectionNode.x/y — fine cells                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -1446,11 +1446,11 @@ Wilderness `system_terrain` от z — **не urban**. Urban — settlement ил
 
 | Generator | x/y space | z | Notes |
 |---|---|---|---|
-| `generate_surface` (wilderness) | grid index | meters (elevation) | zone climate |
+| `generate_surface` (wilderness) | grid index | elevation (z cells) | zone climate |
 | `plan_footprint_occupancy_cells` | grid index | surface | urban occupancy |
-| `SettlementAssembler` geometry | world local meters | meters | after translate |
+| `SettlementAssembler` geometry | world fine grid | z cells | after translate |
 | `generate_minimal` | raw anchor (repair) | anchor map_z | NC-1c |
-| `_non_surface_anchor_cells` (climate eager) | **world meters** (`map_x`, `map_y`) ❌ | anchor `map_z` | **NC-1c bug** — см. § Smoke regression |
+| `_non_surface_anchor_cells` (climate eager) | **world fine** (`map_x`, `map_y`) ❌ | anchor `map_z` | **NC-1c bug** — см. § Smoke regression |
 
 ---
 
@@ -1462,8 +1462,8 @@ Wilderness `system_terrain` от z — **не urban**. Urban — settlement ил
 
 | Метрика | Значение |
 |---|---|
-| Terrain skeleton cells | 5460 — `x/y` в **WORLD_SURFACE_GRID** (≈ −2…17 при `map_cell_size_m: 3000`) |
-| Extra anchor cells | **2** — `x/y` в **WORLD_LOCAL_METERS** (6000, 42000) |
+| Terrain skeleton cells | 5460 — `x/y` в **WORLD_SURFACE_GRID** (≈ −2…17 при `fine_cells_per_map_cell: 3000`) |
+| Extra anchor cells | **2** — `x/y` в **WORLD_FINE_GRID** (6000, 42000) |
 | Surface tops (grid) | 260 columns, z≈3…7, `tundra` |
 | False `liquid_body` | 2 — только extra anchors; overworld без воды |
 
@@ -1477,14 +1477,14 @@ Wilderness `system_terrain` от z — **не urban**. Urban — settlement ил
 x=anchor.map_x, y=anchor.map_y, z=anchor.map_z  # meters
 ```
 
-Skeleton `run_column_fill` пишет `x=gx, y=gy` (grid index). Конверсия `meters_to_grid_x/y` **не** применяется.
+Skeleton `run_column_fill` пишет `x=gx, y=gy` (grid index). Конверсия `fine_to_grid_x/y` **не** применяется.
 
 **Триггер в fixture:** единственные локации с `map_z != 0` — dungeon (`map_z: -1`) и underground city (`map_z: -3`). Остальные anchors `map_z: 0` → extra cell не создаётся.
 
 **Target fix (NC-1c):**
 
 - Либо **не persist** point-anchor в `map_cells` (weather-only / volume layer TBD),
-- Либо grid-normalize: `x=meters_to_grid_x(map_x)*cell_m` **или** хранить grid `(gx, gy)` с явным `coordinate_space` (NC-1a),
+- Либо grid-normalize: `x=fine_to_grid_x(map_x)*cell_m` **или** хранить grid `(gx, gy)` с явным `coordinate_space` (NC-1a),
 - Либо отдельный контракт «repair cell» только для `generate_minimal` / lazy, без merge в eager surface batch.
 
 **Cross-ref:** interim `liquid_body` на этих ячейках — [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) § Interim bug; climate pass — [`tz_climate.md`](./tz_climate.md) § Smoke regression.
@@ -1685,7 +1685,7 @@ Debug harness: `POST …/map/patch-terrain` с телом `TerrainPatchRequest` 
 
 ---
 
-## Регенерация при изменении `map_cell_size_m`
+## Регенерация при изменении `fine_cells_per_map_cell`
 
 **Триггер:** `WorldService.update()` — старое ≠ новое.
 

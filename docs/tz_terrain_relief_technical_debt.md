@@ -156,7 +156,7 @@ SQL upsert **не** был в `finish`: `persist_relief_grades` на `PackDetail
 | `lightMosaic` | collect mask/height; `render_all_tiles` |
 | `worldMapMacroRender` | обзор 1 глиф / макротайл, не mask SoT |
 | `worldMapGradeOverlay` | L0 grade leftover (**PAR-G5** omit) |
-| `fineTerrainAsciiKernel.draw_*_grid` | raster; L0: `cell_size_m` / `x_rulers` / `bounds` |
+| `fineTerrainAsciiKernel.draw_*_grid` | raster; L0: `map_cell_fine_span` / `x_rulers` / `bounds` |
 
 **Не** класть `WorldMapCellWire` в L2 kernel колонок FineTerrain.
 

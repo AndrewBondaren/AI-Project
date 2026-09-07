@@ -14,8 +14,8 @@ from app.application.worldData.generators.climate.climateGeneratorService import
 )
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
 from app.application.worldData.generators.coordinates import (
-    meters_to_grid_x,
-    meters_to_grid_y,
+    fine_to_grid_x,
+    fine_to_grid_y,
 )
 from app.application.worldData.generators.coordinates.worldTile import (
     tile_origin_x,
@@ -100,8 +100,8 @@ def resolve_pack_surface_z(
         hit = meter_z_overrides.get((int(xm), int(ym)))
         if hit is not None:
             return int(hit)
-    mgx = int(meters_to_grid_x(xm, tile_m))
-    mgy = int(meters_to_grid_y(ym, tile_m))
+    mgx = int(fine_to_grid_x(xm, tile_m))
+    mgy = int(fine_to_grid_y(ym, tile_m))
     if coarse_surface_z:
         hit = coarse_surface_z.get((mgx, mgy))
         if hit is not None:
@@ -127,8 +127,8 @@ def sample_pack_climate_at(
 ) -> ClimateSampleWire:
     """One pack climate sample at meters — zone from pole+local, temp/rain from z."""
     svc = climate or ClimateGeneratorService()
-    mgx = int(meters_to_grid_x(xm, tile_m))
-    mgy = int(meters_to_grid_y(ym, tile_m))
+    mgx = int(fine_to_grid_x(xm, tile_m))
+    mgy = int(fine_to_grid_y(ym, tile_m))
     zone = resolve_pack_zone_sample(
         world, pole_field, local_field, mgx, mgy, uid_map=uid_map, climate=svc,
     )

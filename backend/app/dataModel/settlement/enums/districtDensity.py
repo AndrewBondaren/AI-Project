@@ -6,7 +6,7 @@ from enum import StrEnum
 
 
 class DistrictDensity(StrEnum):
-    """District / settlement density; owns builtin street-grid block_size (meters)."""
+    """District / settlement density; owns builtin street-grid block_size (fine cells)."""
 
     SPARSE = "sparse"
     MEDIUM = "medium"
@@ -33,23 +33,23 @@ class DistrictDensity(StrEnum):
         return cls.MEDIUM
 
     @property
-    def block_size_m(self) -> int:
-        return _BLOCK_SIZE_M[self]
+    def block_size_fine(self) -> int:
+        return _BLOCK_SIZE_FINE[self]
 
     @classmethod
     def block_size_map(cls) -> dict[str, int]:
-        return {member.value: member.block_size_m for member in cls}
+        return {member.value: member.block_size_fine for member in cls}
 
 
-_BLOCK_SIZE_M: dict[DistrictDensity, int] = {
+_BLOCK_SIZE_FINE: dict[DistrictDensity, int] = {
     DistrictDensity.SPARSE: 120,
     DistrictDensity.MEDIUM: 80,
     DistrictDensity.DENSE: 50,
 }
 
-DEFAULT_BLOCK_SIZE_M = DistrictDensity.MEDIUM.block_size_m
+DEFAULT_BLOCK_SIZE_FINE = DistrictDensity.MEDIUM.block_size_fine
 
 
 def block_size_for_density(density: DistrictDensity | str | None) -> int:
     member = DistrictDensity.from_wire(density) or DistrictDensity.default()
-    return member.block_size_m
+    return member.block_size_fine

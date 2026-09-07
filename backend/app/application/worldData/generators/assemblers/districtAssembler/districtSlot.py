@@ -17,9 +17,12 @@ class DistrictSlot:
     Создаётся SettlementAssembler после проверки placement_conditions шаблона.
     district_template — уже выбранный шаблон; условия гарантированно выполнены.
 
-    Координаты в WORLD_LOCAL_METERS — вычислены SettlementAssembler из:
-        origin = settlement_origin_m(settlement)
-        (origin_x, origin_y) = coarse_cell_meter_xy(origin, cell_x, cell_y, cell_size_m(world))
+    Координаты в WORLD_FINE_GRID — вычислены SettlementAssembler из:
+        origin = settlement_origin_fine(settlement)
+        (origin_x, origin_y) = coarse_cell_fine_xy(origin, cell_x, cell_y, map_cell_fine_span(world))
+
+    width_fine / depth_fine — сторона слота в fine-клетках (не coarse).
+    Полная глобальная клетка: width_fine = depth_fine = map_cell_fine_span(world).
 
     entry_nodes — точки входа/выхода на гранях района, созданные SettlementAssembler.
     DistrictAssembler прокладывает through_road-коридоры от этих точек,
@@ -27,8 +30,8 @@ class DistrictSlot:
     """
     origin_x:            int
     origin_y:            int
-    width_m:             int
-    depth_m:             int
+    width_fine:          int
+    depth_fine:          int
     ground_z:            int
     district_template:   DistrictTemplateEntry
     entry_nodes:         list[ConnectionEntry] = field(default_factory=list)

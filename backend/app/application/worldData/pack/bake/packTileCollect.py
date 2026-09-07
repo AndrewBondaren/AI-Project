@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from app.application.worldData.generators.climate.locations import static_map_anchors
-from app.application.worldData.generators.coordinates import cell_size_m
+from app.application.worldData.generators.coordinates import map_cell_fine_span
 from app.application.worldData.generators.coordinates.worldTile import (
     iter_macro_tiles,
     macro_tile_of,
@@ -35,7 +35,7 @@ def location_anchor_tiles(
     world: World,
     locations: list[NamedLocation],
 ) -> set[Tile]:
-    cell_m = cell_size_m(world)
+    cell_m = map_cell_fine_span(world)
     return {
         macro_tile_of(loc.map_x, loc.map_y, cell_m)
         for loc in static_map_anchors(locations)
@@ -49,7 +49,7 @@ def declared_hydro_tiles(
     """Macro-tiles covering declared coastline / lake shore / river endpoints."""
     if not is_hydrology_enabled(world):
         return set()
-    cell_m = cell_size_m(world)
+    cell_m = map_cell_fine_span(world)
     tiles: set[Tile] = set()
     loaded = load_declared_hydrology(world, locations)
     for a, b in loaded.coastline_segments:

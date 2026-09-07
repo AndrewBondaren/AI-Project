@@ -114,7 +114,7 @@ class FineChunkPersist:
         )
         for location_uid, additions in loc_additions.items():
             self._location_cells.setdefault(location_uid, []).extend(additions)
-        cx, cy = tile_local_chunk_indices(result.rect, ctx.meter_bbox, ctx.chunk_size)
+        cx, cy = tile_local_chunk_indices(result.rect, ctx.fine_bbox, ctx.chunk_size)
         log_pack_wilderness_chunk_persist(
             ctx.world_uid,
             phase=ctx.phase_name,
@@ -129,7 +129,7 @@ class FineChunkPersist:
         )
         if wilderness:
             origin_x, origin_y = wilderness_chunk_origin(
-                ctx.meter_bbox, cx, cy, ctx.chunk_size,
+                ctx.fine_bbox, cx, cy, ctx.chunk_size,
             )
             chunk = cells_to_fine_terrain_chunk(
                 cx, cy, ctx.chunk_size, origin_x, origin_y, wilderness,

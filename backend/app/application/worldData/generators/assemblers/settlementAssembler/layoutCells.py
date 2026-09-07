@@ -4,14 +4,14 @@ import logging
 from dataclasses import replace
 
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
-    settlement_meter_rect,
+    settlement_fine_rect,
 )
-from app.application.worldData.generators.coordinates import cell_in_local_meter_rect
+from app.application.worldData.generators.coordinates import cell_in_fine_rect
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import (
     SettlementLayout,
 )
 from app.application.worldData.generators.structure.structureGeneratorService import StructureLayout
-from app.dataModel.locations.locationFootprintPolicy import named_location_uses_settlement_meter_footprint
+from app.dataModel.locations.locationFootprintPolicy import named_location_uses_settlement_fine_footprint
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 def _is_settlement_location(settlement: NamedLocation) -> bool:
-    return named_location_uses_settlement_meter_footprint(settlement)
+    return named_location_uses_settlement_fine_footprint(settlement)
 
 
 def rebind_layout_to_building(
@@ -50,15 +50,15 @@ def needs_settlement_geometry(
     True если в footprint ещё нет сгенерированной застройки (building elements).
     Urban-only terrain / occupancy grid cells не считаются geometry.
 
-    Проверяет только WORLD_LOCAL_METERS: system_building_element в meter rect footprint.
+    Проверяет только WORLD_FINE_GRID: system_building_element в fine-grid rect footprint.
     """
     if not _is_settlement_location(settlement):
         return False
-    rect = settlement_meter_rect(world, settlement)
+    rect = settlement_fine_rect(world, settlement)
     for cell in existing_cells:
         if not cell.system_building_element:
             continue
-        if cell_in_local_meter_rect(cell.x, cell.y, rect):
+        if cell_in_fine_rect(cell.x, cell.y, rect):
             return False
     return True
 
@@ -68,8 +68,8 @@ def collect_surface_grid_cells(layout: SettlementLayout) -> list[MapCell]:
     return list(layout.occupancy_cells)
 
 
-def collect_geometry_meter_cells(layout: SettlementLayout) -> list[MapCell]:
-    """WORLD_LOCAL_METERS: building interior/outdoor cells + settlement/district/area barriers."""
+def collect_geometry_fine_cells(layout: SettlementLayout) -> list[MapCell]:
+    """WORLD_FINE_GRID: building interior/outdoor cells + settlement/district/area barriers."""
     cells: list[MapCell] = []
 
     for district in layout.district_layouts:
@@ -94,18 +94,18 @@ def collect_map_cells_from_layout(
     layout:     SettlementLayout,
 ) -> list[MapCell]:
     """
-    Persist batch: surface grid occupancy + meter geometry.
+    Persist batch: surface grid occupancy + fine-grid geometry.
     Option A — spaces stay separate until DB carries coordinate_space (v2).
     """
     grid_cells = collect_surface_grid_cells(layout)
-    meter_cells = collect_geometry_meter_cells(layout)
-    cells = grid_cells + meter_cells
+    fine_cells = collect_geometry_fine_cells(layout)
+    cells = grid_cells + fine_cells
     logger.info(
         "collect_map_cells_from_layout | settlement=%s total=%d "
-        "surface_grid=%d meter_geometry=%d",
+        "surface_grid=%d fine_geometry=%d",
         settlement.location_uid,
         len(cells),
         len(grid_cells),
-        len(meter_cells),
+        len(fine_cells),
     )
     return cells

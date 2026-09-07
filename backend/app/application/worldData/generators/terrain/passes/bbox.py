@@ -5,9 +5,9 @@ from __future__ import annotations
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
 from app.application.worldData.generators.climate.locations import static_map_anchors
 from app.application.worldData.generators.coordinates import (
-    cell_size_m,
-    meters_to_grid_x,
-    meters_to_grid_y,
+    map_cell_fine_span,
+    fine_to_grid_x,
+    fine_to_grid_y,
 )
 from app.application.worldData.generators.terrain.worldMapSettings import grid_bbox_padding
 from app.dataModel.worldPack.worldBounds import WorldBounds
@@ -60,9 +60,9 @@ def grid_bbox_from_locations(
     anchors = static_map_anchors(locations)
     if not anchors:
         return None
-    cell_m = cell_size_m(world)
+    cell_m = map_cell_fine_span(world)
     positions = [
-        (meters_to_grid_x(l.map_x, cell_m), meters_to_grid_y(l.map_y, cell_m))
+        (fine_to_grid_x(l.map_x, cell_m), fine_to_grid_y(l.map_y, cell_m))
         for l in anchors
     ]
     return GridBBox(

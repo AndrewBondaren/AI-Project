@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from app.application.worldData.pack.read.mapCellFromMerged import merged_view_to_map_cell
 from app.application.worldData.pack.read.worldMapPackReader import WorldMapPackReader
-from app.application.worldData.pack.read.packMapHelpers import world_map_sample_index, tile_index, world_tile_size_m
+from app.application.worldData.pack.read.packMapHelpers import world_map_sample_index, tile_index, world_map_cell_span
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.read.patchCellContribution import map_cell_to_patch_contribution
 from app.application.worldData.patchStoreService import PatchStoreService
@@ -54,7 +54,7 @@ class PackDebugReadFacade:
         if not self._ctx.has_pack_for(world):
             return []
         manifest = self._ctx.reader_for(world).manifest
-        tile_size = world_tile_size_m(world)
+        tile_size = world_map_cell_span(world)
         out: list[MapCell] = []
         for entry in manifest.tiles:
             if not entry.world_map_path:
@@ -65,7 +65,7 @@ class PackDebugReadFacade:
     def get_world_map_tile_sample_cells(self, world: World, gx: int, gy: int) -> list[MapCell]:
         if not self._ctx.has_pack_for(world):
             return []
-        return self._world_map.surface_cells_for_tile(world, gx, gy, world_tile_size_m(world))
+        return self._world_map.surface_cells_for_tile(world, gx, gy, world_map_cell_span(world))
 
     async def get_debug_export_cells(self, world: World) -> list[MapCell]:
         """World map coarse surface + patches per ``(x,y,z)`` — ``read_mode=world_map_surface_merged_patches``."""
@@ -123,7 +123,7 @@ class PackDebugReadFacade:
             return False
         if self._gameplay is None:
             raise RuntimeError("PackDebugReadFacade: gameplay facade not bound")
-        tile_size = world_tile_size_m(world)
+        tile_size = world_map_cell_span(world)
         gx, lx = tile_index(x, tile_size)
         gy, ly = tile_index(y, tile_size)
         reader = self._ctx.reader_for(world)

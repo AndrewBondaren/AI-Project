@@ -16,7 +16,7 @@ from app.db.models.mapCell import MapCell
 def _world() -> SimpleNamespace:
     return SimpleNamespace(
         world_uid="w-par",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         terrain_chunk_columns=32,
         terrain_parallel_workers=None,
     )

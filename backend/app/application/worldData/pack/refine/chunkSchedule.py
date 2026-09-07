@@ -5,10 +5,10 @@ Does not write pack blobs or generate cells — only ``ChunkRefineQueue``.
 
 from __future__ import annotations
 
-from app.application.worldData.generators.coordinates import cell_size_m
+from app.application.worldData.generators.coordinates import map_cell_fine_span
 from app.application.worldData.generators.coordinates.worldTile import (
-    iter_meter_chunks,
-    meter_bbox_for_tile,
+    iter_fine_chunks,
+    fine_bbox_for_tile,
 )
 from app.application.worldData.generators.terrain.worldMapSettings import (
     terrain_chunk_columns,
@@ -24,7 +24,7 @@ from app.application.worldData.pack.refine.pathHeading import (
     macro_tiles_ahead,
     predicted_border_entry,
 )
-from app.application.worldData.pack.read.packMapHelpers import world_tile_size_m
+from app.application.worldData.pack.read.packMapHelpers import world_map_cell_span
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
 from app.db.models.world import World
 
@@ -41,9 +41,9 @@ async def schedule_tile_background(
     max_radius_m: float | None = None,
 ) -> int:
     """Enqueue background chunks near anchor — WP-13 rings, not whole tile (WP-PERF-10)."""
-    cell_m = cell_size_m(world)
+    cell_m = map_cell_fine_span(world)
     chunk_size = terrain_chunk_columns(world)
-    meter_bbox = meter_bbox_for_tile(tile_gx, tile_gy, cell_m)
+    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, cell_m)
     skip = skip_scene_rects or set()
     policy = SceneVolumePolicy.canonical_defaults()
     radius = (
@@ -52,8 +52,8 @@ async def schedule_tile_background(
         else float(policy.background_expand_radius_m)
     )
     count = 0
-    for rect in iter_meter_chunks(meter_bbox, chunk_size):
-        cx, cy = tile_local_chunk_indices(rect, meter_bbox, chunk_size)
+    for rect in iter_fine_chunks(fine_bbox, chunk_size):
+        cx, cy = tile_local_chunk_indices(rect, fine_bbox, chunk_size)
         if (cx, cy) in skip:
             continue
         if not chunk_within_ring(rect, float(anchor_x), float(anchor_y), radius, chunk_size):
@@ -92,7 +92,7 @@ async def schedule_path_ahead_tiles(
     Each neighbor tile uses **predicted border entry** as ring anchor (WP-13),
     not the current spawn/session anchor.
     """
-    tile_size = world_tile_size_m(world)
+    tile_size = world_map_cell_span(world)
     count = 0
     prev_gx, prev_gy = tile_gx, tile_gy
     for ngx, ngy in macro_tiles_ahead(tile_gx, tile_gy, heading, depth_tiles):

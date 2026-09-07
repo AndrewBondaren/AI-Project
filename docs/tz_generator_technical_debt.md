@@ -15,6 +15,7 @@
 | [tz_terrain_relief.md](./tz_terrain_relief.md) | Relief generate SoT (Q1/Q2, стрелки, шаблоны, canal/obstacle, SQL catalog). Bake R36u–w — архив v1 |
 | [tz_terrain_relief_technical_debt.md](./tz_terrain_relief_technical_debt.md) | Relief **код**: dual sidecar, god/жирные классы, хардкоды (не R41-T-25 алгоритм) |
 | [tz_datamodel_pojo_discrepancies.md](./tz_datamodel_pojo_discrepancies.md) | Дубли SoT в `dataModel/` (POJO-D-*); D-1…D-9 resolved 2026-09-03; **POJO-D-16** nested generate layout `list[dict]` |
+| [tz_pojo_city_typing.md](./tz_pojo_city_typing.md) | City POJO leftover `str` (`POJO-C-*`); не дубли SoT |
 | [tz_pack_ascii_render.md](./tz_pack_ascii_render.md) | Pack ASCII SoT (**PAR-G\***); L2 location grade; debt **PAR-T-*** · **R36u-T-*** |
 | [tz_locations.md](./tz_locations.md) | `barrier_template_registry`; perimeter barriers |
 | [tz_terrain_hydrology.md](./tz_terrain_hydrology.md) | Гидрология: моря, озёра, реки (target) |
@@ -97,14 +98,14 @@
 | CL-1 | Climate Voronoi from admin zones only | pole/local tiers + orchestrator + `tierResolve` | partial → CL-2b admin merge |
 | CL-2 | Global local Voronoi kills pole tier | `tierResolve.py` world-relative r + temp blend | resolved |
 | CL-13 | Tier resolution docs vs code | `tz_climate.md` § на ячейке | resolved |
-| R-11 | `collect_map_cells` silent mix | split `collect_surface_grid_*` / `collect_geometry_meter_*` | resolved |
-| R-12 | Inline `// cell_size_m` в planners | только `coordinates/convert.py` | resolved |
+| R-11 | `collect_map_cells` silent mix | split `collect_surface_grid_*` / `collect_geometry_fine_*` | resolved |
+| R-12 | Inline `// map_cell_fine_span` в planners | только `coordinates/convert.py` | resolved |
 
 ---
 
 ## Implicit contracts (NC)
 
-### NC-1 — Coordinate spaces (grid index vs world meters)
+### NC-1 — Coordinate spaces (coarse index vs fine grid)
 
 **Status:** `partial` (Phase 1–6 docs ✅; persist tag NC-1a — open)
 
@@ -112,23 +113,23 @@
 
 | Ось | Суть |
 |---|---|
-| `measurement_system` | imperial/metric — **только display/LLM**; БД в метрах |
-| `INTERIOR_CELL_SIZE_M = 1` | fine step = 1 м — **совпадение масштаба**, не imperial |
-| **NC-1 core** | `MapCell.x/y` = grid index **или** absolute meters — разная семантика |
+| `measurement_system` | imperial/metric — **только display/LLM**; generate в coarse/fine cells |
+| `FINE_CELL_SIZE = 1` | шаг fine-сетки = 1 int — **константа движка**, не настройка мира |
+| **NC-1 core** | `MapCell.x/y` = coarse index **или** fine-grid coord — разная семантика |
 
 **Модель (v1):**
 
 ```
-WORLD_SURFACE_GRID     gx, gy     tile index; step = map_cell_size_m (dynamic, ≥1000, ×1000)
-WORLD_LOCAL_METERS     x, y, z    settlement outdoor, nodes, barriers, buildings after translate
-LOCATION_LOCAL_METERS  x, y, z    interior — v2, отложено
+WORLD_SURFACE_GRID     gx, gy     coarse tile index; span = fine_cells_per_map_cell (dynamic, ≥1000, ×1000)
+WORLD_FINE_GRID        x, y, z    settlement outdoor, nodes, barriers, buildings after translate
+LOCATION_FINE_GRID     x, y, z    interior — v2, отложено
 ```
 
 **Сделано (Phase 1–5):**
 
-- `generators/coordinates/` — convert hub, typed rects, `settlement_origin_m`
+- `generators/coordinates/` — convert hub, typed rects, `settlement_origin_fine`
 - Terrain decoupled from cities; urban via settlement / explicit `map_cells`
-- Persist split Option A (grid occupancy + meter geometry)
+- Persist split Option A (grid occupancy + fine geometry)
 - Smoke `map_x=0` и `map_x=3000`, `cell_m=5000`
 
 **Открыто (NC-1 follow-up):**
@@ -137,9 +138,9 @@ LOCATION_LOCAL_METERS  x, y, z    interior — v2, отложено
 |---|---|---|---|
 | NC-1a | medium | `MapCell` PK без `coordinate_space`; merged upsert без tag | v2 DB column или Option B |
 | NC-1b | ~~medium~~ | ~~Product docs § coordinates~~ | ✅ `tz_terrain_generation.md` rework |
-| NC-1c | medium | Non-city anchors в terrain: `x=anchor.map_x` (meters?) vs cities (grid) | `meters_to_grid` или явный point-anchor contract |
+| NC-1c | medium | Non-city anchors в terrain: `x=anchor.map_x` (fine?) vs cities (grid) | `fine_to_grid` или явный point-anchor contract |
 | NC-1d | low | Voronoi climate: grid corner of **zone** anchor, не центр rect | doc или center-of-rect |
-| NC-1e | low | Half-open meter rect `[x0,x1)` vs gates **on** boundary `y=side_m` | inclusive boundary helper или doc |
+| NC-1e | low | Half-open fine rect `[x0,x1)` vs gates **on** boundary `y=side_fine` | inclusive boundary helper или doc |
 | NC-1f | info | NewType phantom — ORM/`ConnectionNode`/`DistrictSlot` still `int` | discipline + boundaries; optional strict mypy |
 | NC-1g | low | `map_settings.global_cell_size_m` — ghost override, нет на `World` | поле модели или удалить ветку |
 | NC-1h | low | `needs_geometry` только `system_building_element`; barriers-only → re-gen | расширить heuristic или doc limitation |
@@ -393,7 +394,7 @@ GIL: cache interior CPU-heavy → тот же backlog ProcessPool, что TR-PAR
 |---|---|---|---|---|---|
 | DR-1 | medium | `footprint_gate_line_coords` vs `streets._grid_lines` | один алгоритм span lines, разный step | `span_lines(origin, side_m, step)` | P2 |
 | DR-2 | low | `footprint.py` facade | 3 слоя rect API + deprecated names | удалить deprecated после миграции smoke | P3 |
-| DR-3 | low | `settlement_origin_m` + `settlement_origin()` tuple | dual API | один путь | P3 |
+| DR-3 | low | `settlement_origin_fine` + `settlement_origin()` tuple | dual API | один путь | P3 |
 | DR-4 | low | `(cell_m, side_m, size)` в каждом caller | повтор bundle resolution | `SettlementFootprintContext` dataclass | P3 |
 | DR-5 | low | `_smoothstep`, `_dist` (hypot) | `climatePoleField.py` + `tierResolve.py` | `generators/climate/math.py` или shared | P2 |
 | DR-6 | low | `terrain_set` comprehension | inline ×6 (`columnFillPass`, `heightmapPass`, `liquidOverlayPass`, `cavesGenerator`, `generate_minimal`, `_non_surface_anchor_cells`); `_terrain_set` только в `columnFillPass` | `terrain_registry_set(world)` в `terrain/terrainZ.py` | P2 |
@@ -2005,7 +2006,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 - Imperial conversion in generators (display only)
 - Hex / organic footprint (settlement Phase G/H)
-- Full interior `LOCATION_LOCAL_METERS` (coordinate Phase 7)
+- Full interior `LOCATION_FINE_GRID` (coordinate Phase 7)
 - Persist `SettlementLayout` → connection_nodes/edges в БД — **частично закрыто** debug orchestrator; gameplay-щель = **CITY-T-1b** (не «нет persist»)
 
 ---

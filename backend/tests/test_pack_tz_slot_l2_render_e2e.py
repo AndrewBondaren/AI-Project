@@ -136,7 +136,7 @@ class TestPackTzSlotL2RenderE2e(unittest.TestCase):
             surface_ctx=MagicMock(),
             tile_gx=0,
             tile_gy=0,
-            meter_bbox=bbox,
+            fine_bbox=bbox,
             chunk_size=_CHUNK,
             surface_state=MagicMock(),
             templates={},

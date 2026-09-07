@@ -15,7 +15,7 @@ from app.application.worldData.generators.hydrology.hydrologyGeneratorService im
 from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld import (
     is_hydrology_enabled,
 )
-from app.application.worldData.generators.hydrology.shore.meterHydrologyIndex import (
+from app.application.worldData.generators.hydrology.shore.fineHydrologyIndex import (
     apply_declared_meter_river_carves,
 )
 from app.application.worldData.generators.terrain.passes.surfacePass import run_surface_pass_coarse

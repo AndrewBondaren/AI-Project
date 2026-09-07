@@ -1,8 +1,8 @@
-"""Смещение StructureLayout в WORLD_LOCAL_METERS (reuse из settlement cache)."""
+"""Смещение StructureLayout в WORLD_FINE_GRID (reuse из settlement cache)."""
 
 from dataclasses import replace
 
-from app.application.worldData.generators.coordinates.types import MeterDelta
+from app.application.worldData.generators.coordinates.types import FineDelta
 from app.application.worldData.generators.structure.structureGeneratorService import (
     OccupiedFootprint,
     StructureLayout,
@@ -11,11 +11,11 @@ from app.application.worldData.generators.structure.structureGeneratorService im
 
 def translate_layout(
     layout: StructureLayout,
-    dx: MeterDelta | int,
-    dy: MeterDelta | int,
-    dz: MeterDelta | int = 0,
+    dx: FineDelta | int,
+    dy: FineDelta | int,
+    dz: FineDelta | int = 0,
 ) -> StructureLayout:
-    """Apply meter-space offset to layout coordinates (xy + z)."""
+    """Apply fine-grid offset to layout coordinates (xy + z)."""
     if dx == 0 and dy == 0 and dz == 0:
         return layout
 

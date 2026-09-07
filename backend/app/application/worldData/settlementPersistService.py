@@ -7,7 +7,7 @@ from app.application.worldData.connectionPersistService import (
     ConnectionPersistService,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
-    collect_geometry_meter_cells,
+    collect_geometry_fine_cells,
     collect_surface_grid_cells,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayoutExtract import (
@@ -124,7 +124,7 @@ class SettlementPersistService:
                 if layout is None:
                     result.scopes_skipped.append(scope.value)
                     continue
-                cells = collect_geometry_meter_cells(layout)
+                cells = collect_geometry_fine_cells(layout)
                 r = await self._map_cells.save_generated(cells)
                 map_total += r.total
                 map_succeeded += r.succeeded

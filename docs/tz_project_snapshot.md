@@ -244,8 +244,8 @@ Climate **отделён** от terrain shape; pole field передаётся �
 | Space | Семантика |
 |-------|-----------|
 | `WORLD_SURFACE_GRID` | grid index occupancy |
-| `WORLD_LOCAL_METERS` | settlement geometry (buildings, barriers) |
-| `LOCATION_LOCAL_METERS` | interior |
+| `WORLD_FINE_GRID` | settlement geometry (buildings, barriers) |
+| `LOCATION_FINE_GRID` | interior |
 
 Конверсия только через `generators/coordinates/convert.py`. Persist tag NC-1a — **open**.
 

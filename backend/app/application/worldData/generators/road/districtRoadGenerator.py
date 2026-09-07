@@ -71,7 +71,7 @@ class DistrictRoadGenerator:
         logger.info(
             "DistrictRoadGenerator | layout=%s type=%s lanes=%s sidewalk=%s origin=(%d,%d) size=%dx%d",
             street_layout.value, connection_type, lanes_per_side, has_sidewalk,
-            slot.origin_x, slot.origin_y, slot.width_m, slot.depth_m,
+            slot.origin_x, slot.origin_y, slot.width_fine, slot.depth_fine,
         )
 
         if street_layout == StreetLayout.GRID:

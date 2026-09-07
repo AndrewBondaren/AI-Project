@@ -12,7 +12,7 @@ from app.dataModel.worldPack import FineTerrainChunkWire, FineTerrainColumnWire,
 
 
 def _world(**kwargs):
-    defaults = {"world_uid": "w-fine-read", "map_cell_size_m": 3000}
+    defaults = {"world_uid": "w-fine-read", "fine_cells_per_map_cell": 3000}
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
 
@@ -68,7 +68,7 @@ class TestPackFineTerrainReadFacade(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["sample_columns"][0]["runs"][0]["system_terrain"], "forest")
 
     async def test_read_merged_cell_reads_fine_layer(self) -> None:
-        tile_m = self.world.map_cell_size_m
+        tile_m = self.world.fine_cells_per_map_cell
         x = 12 * tile_m + 1
         y = 12 * tile_m + 2
         payload = await self.facade.read_merged_cell(self.world, x, y, 0)

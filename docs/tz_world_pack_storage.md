@@ -401,7 +401,7 @@ flowchart TB
 |---|---|
 | **WP-8** | L2 tile = `refine(L0_tile, world_seed, declared_hydro)` — реки/озёра/рельеф **согласованы** с world map |
 | **WP-9** | Локации на world map: L1 anchors + optional coarse footprint; L0 хранит **pins**, не дублирует `NamedLocation` целиком |
-| **WP-10** | `world_map_cells_per_tile = 32` (константа маски); `light_m = map_cell_size_m / 32` — масштаб light-cell плывёт с размером tile; manifest фиксирует `side` |
+| **WP-10** | `world_map_cells_per_tile = 32` (константа маски); `light_m = fine_cells_per_map_cell / 32` — масштаб light-cell плывёт с размером tile; manifest фиксирует `side` |
 | **WP-11** | L2 соседей — фон **по одному tile**; очередь **path-first** (heading + tile cross), не burst кольцом |
 | **WP-12** | Восстановление refine: **chunk manifest + atomic chunk commit**; прерванный chunk — redo; tile `partial` \| `complete` |
 | **WP-13** | L2 gameplay: **от точки входа**; blocking **только** scene volume; **никогда** blocking целого tile |
@@ -579,9 +579,9 @@ SoT generate/persist patch: [`tz_terrain_generation.md`](./tz_terrain_generation
 
 | Параметр | Значение |
 |---|---|
-| Unit | **1 macro-tile** (`map_cell_size_m`, default 1000 m) |
+| Unit | **1 macro-tile** (`fine_cells_per_map_cell`, default 1000 m) |
 | Разрешение внутри tile | **`world_map_cells_per_tile = 32`** (константа маски L0) |
-| Физический шаг light cell | `light_m = map_cell_size_m // 32` — **масштаб** маски плывёт с размером tile |
+| Физический шаг light cell | `light_m = fine_cells_per_map_cell // 32` — **масштаб** маски плывёт с размером tile |
 | Файл pack | `tiles/r.{gx}.{gy}.world_map.zst` + глобальный `climate_coarse.zst` |
 
 #### Масштаб light grid (утверждено 2026-07-15)
@@ -590,18 +590,18 @@ SoT generate/persist patch: [`tz_terrain_generation.md`](./tz_terrain_generation
 
 ```
 side     = 32                                 # WORLD_MAP_CELLS_PER_TILE (константа)
-light_m  = map_cell_size_m // side            # физический шаг light-cell
+light_m  = fine_cells_per_map_cell // side            # физический шаг light-cell
 ```
 
 | Константа / поле | Default | POJO / код |
 |---|---|---|
 | `WORLD_MAP_CELLS_PER_TILE` / `side` | **32** | `WorldMapCellsPerTilePolicy` — единственный SoT |
-| `light_m` | `map_cell_size_m // 32` | вычисляется при bake; не хранить параллельный литерал |
+| `light_m` | `fine_cells_per_map_cell // 32` | вычисляется при bake; не хранить параллельный литерал |
 | Master override `worlds.world_map_cells_per_tile` | optional | редкий тумблер; default = 32 |
 
 **Примеры:**
 
-| `map_cell_size_m` | `side` | `light_m` | Light cells / tile |
+| `fine_cells_per_map_cell` | `side` | `light_m` | Light cells / tile |
 |---:|---:|---:|---:|
 | 1000 | 32 | 31 m | 1024 |
 | 3000 | 32 | 93 m | 1024 |
@@ -609,7 +609,7 @@ light_m  = map_cell_size_m // side            # физический шаг ligh
 
 **Manifest:** при bake писать `world_map_cells_per_tile = 32` (или override); при load **не** пересчитывать из старой ∝-формулы.
 
-**Зачем:** стабильный бюджет blob/UI (`1024` cells/tile); динамический `map_cell_size_m` без формулы `3000↔32` / clamp 8…48.
+**Зачем:** стабильный бюджет blob/UI (`1024` cells/tile); динамический `fine_cells_per_map_cell` без формулы `3000↔32` / clamp 8…48.
 
 **Consumers (ASCII / grid):** pack render default = **light-mask mosaic** `32×32` per tile (WP-10 ✅). Macro one-symbol-per-tile (`render_macro`) — debug-only, не SoT world map. Frame — [`tz_map_light_bake.md`](./tz_map_light_bake.md) MLB-12. **SoT уровней ASCII** (L0 map/height **без** outdoor grade; L2 `surface_grade` / `grade_{n}`): [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) · grade writer — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **R36u**.
 
@@ -634,7 +634,7 @@ light_m  = map_cell_size_m // side            # физический шаг ligh
 **Инвариант:** игрок **входит в мир** после light (или attach готового pack); недостающее — `full_bake` / resume / lazy L2 (WP-28). Partial pack у игрока допустим; SoT формы всё равно bounds.  
 **Cross-ref:** L2 — § WP-13 + **detailed_bake**; generators — [`tz_terrain_generation.md`](./tz_terrain_generation.md) § Bake modes.
 
-**L2 не зависит:** fine grid всегда `map_cell_size_m × map_cell_size_m` meter cells; L0 всегда `32×32`, меняется только `light_m`, не детализация gameplay.
+**L2 не зависит:** fine grid всегда `fine_cells_per_map_cell × fine_cells_per_map_cell` meter cells; L0 всегда `32×32`, меняется только `light_m`, не детализация gameplay.
 
 **Данные на light cell `(tx, ty)` внутри tile:**
 
@@ -674,7 +674,7 @@ pole + world_seed
 
 (Детальные контракты compose — [`tz_map_light_bake.md`](./tz_map_light_bake.md).)
 
-**Объём (bbox 19×19 tiles):** 361 × 32² ≈ **371k** light cells → **< 1 MB** zstd — **не зависит** от `map_cell_size_m` (всегда `side=32`).
+**Объём (bbox 19×19 tiles):** 361 × 32² ≈ **371k** light cells → **< 1 MB** zstd — **не зависит** от `fine_cells_per_map_cell` (всегда `side=32`).
 
 ### L1 — LocationSkeletons (скелеты локаций, без fine cells)
 
@@ -812,7 +812,7 @@ wilderness_chunk.cells = refine_chunk(L0, rect)
 | Параметр | Значение |
 |---|---|
 | Unit persist | **fine chunk** `terrain_chunk_columns × terrain_chunk_columns` (default 32×32 m), см. [`tz_terrain_generation.md`](./tz_terrain_generation.md) § TR-PAR |
-| Unit tile | macro-tile `map_cell_size_m`; статус `absent` \| `partial` \| `complete` |
+| Unit tile | macro-tile `fine_cells_per_map_cell`; статус `absent` \| `partial` \| `complete` |
 | **Точка входа (anchor)** | `(entry_x, entry_y)` — откуда начинается/продолжается refine **внутри** tile |
 | Триггер anchor | см. § **Генерация от точки входа** |
 | Триггер соседних tiles | фоновая очередь path-first, § **Фоновый refine** |
@@ -1349,9 +1349,9 @@ effective_climate(x,y) =
 | `pack_version` | wire semver |
 | `world_uid`, `content_hash`, `registry_hash` | validation |
 | `bake_mode` | last completed master bake: `light` \| `full` (detailed не меняет mode; смотри `location_terrain_entries`) |
-| `map_cell_size_m` | из `worlds` |
+| `fine_cells_per_map_cell` | из `worlds` |
 | `world_map_cells_per_tile` | resolved при bake, см. § L0 |
-| `cell_size_m`, `map_subsurface_depth` | из `WorldTerrainScalars` / `worlds` |
+| `map_cell_fine_span`, `map_subsurface_depth` | из `WorldTerrainScalars` / `worlds` |
 | `location_terrain_entries[]` | per-location L2 terrain — см. § `LocationTerrainEntry` |
 | `tiles[]` | per macro-tile — см. § `TileManifestEntry` |
 | `world_map_cells`, `wilderness_tiles_total`, `wilderness_chunks_baked` | progress |
@@ -1574,7 +1574,7 @@ sequenceDiagram
 | **DEBT-3** | `source_layer` в field-wise merge вводит в заблуждение | ✅ `field_sources` |
 | **DEBT-4** | `has_pack()` не учитывал `worlds.terrain_pack_path` | ✅ `packPresence` + `WorldPackPaths.for_world` (REVIEW-1) |
 | **DEBT-5** | queue in-memory vs `chunk_refine_jobs` без recovery drain | ✅ `drain_persisted` на resume |
-| **DEBT-6** | location `TerritoryVolume` stub (не settlement geometry) | ✅ assembler `footprint_side_m` / `settlement_meter_rect` |
+| **DEBT-6** | location `TerritoryVolume` stub (не settlement geometry) | ✅ assembler `footprint_side_fine` / `settlement_fine_rect` |
 | **DEBT-7** | PLAYER_PATH corridor только +X | ✅ `pathHeading.py`; intent/history; без heading — no prefetch |
 | **DEBT-8** | debug routes / `export` мимо facade | ✅ MERGE-9 |
 | **DEBT-9** | pack orchestrators → `api.schemas.ImportResult` | ✅ `PersistResult` |
@@ -1601,7 +1601,7 @@ sequenceDiagram
 | Контракт | Риск | Действие |
 |---|---|---|
 | Heading на light bake без intent | path corridor **молча** не строится (WP-16) | smoke с `heading_dx/dy` или DAG wire |
-| `depth_tiles × cell_m` в corridor | macro-tiles vs метры при смене `map_cell_size_m` | docstring + POJO единицы |
+| `depth_tiles × cell_m` в corridor | macro-tiles vs метры при смене `fine_cells_per_map_cell` | docstring + POJO единицы |
 | Settlement rect half-open → territory inclusive | граница ±1 m vs generator occupancy | задокументировать в territory POJO |
 | Entry refine session на Container singleton | одна очередь/anchors на process (`EntryRefineOrchestrator`) | WP-13-OPEN-6 — session scope при DAG / multi-session |
 | `tile_cross` / `location_entry` kind без caller | debug/light bake зовут только `session_start` | WP-13-OPEN-1/2 |
@@ -2111,8 +2111,8 @@ flowchart LR
 | 2026-07-19 | **Impl:** `PackTilePlanner` + classifier + HTTP/smoke `max_tiles` default uncapped |
 | 2026-07-19 | Smell fixes: `WorldBounds` POJO; `light_l0_tiles`; single `resolve_light_tile_cap`; light = locations∪declared hydro |
 | 2026-07 | § Идея 1 (light world map) + § Идея 2 (refine from L0) утверждены |
-| 2026-07 | WP-10: `world_map_cells_per_tile` ∝ 1/`map_cell_size_m` |
-| 2026-07-15 | **WP-10 v2:** `side = 32` константа; `light_m = map_cell_size_m // 32`; убрана ∝-формула / clamp 8…48 |
+| 2026-07 | WP-10: `world_map_cells_per_tile` ∝ 1/`fine_cells_per_map_cell` |
+| 2026-07-15 | **WP-10 v2:** `side = 32` константа; `light_m = fine_cells_per_map_cell // 32`; убрана ∝-формула / clamp 8…48 |
 | 2026-07 | World Pack + Patch Store; LOD L0/L1/L2 |
 | 2026-07 | WP-26: legacy freeze — map_cells/materialize-stack/TR-PERF вне scope Pack migration |
 | 2026-07 | WP-MERGE: статус merge v1 + приоритет доработок MERGE-1…9 |

@@ -35,7 +35,7 @@ class TestGridBboxFromLocations(unittest.TestCase):
         world = SimpleNamespace(
             world_bounds={"x_min": 1, "x_max": 3, "y_min": 2, "y_max": 4},
             grid_bbox_padding=2,
-            map_cell_size_m=3000,
+            fine_cells_per_map_cell=3000,
             map_settings=None,
         )
         bbox = grid_bbox_from_locations(world, [])
@@ -51,7 +51,7 @@ class TestGridBboxFromLocations(unittest.TestCase):
         world = SimpleNamespace(
             world_bounds=None,
             grid_bbox_padding=2,
-            map_cell_size_m=3000,
+            fine_cells_per_map_cell=3000,
             map_settings=None,
         )
         loc = SimpleNamespace(
@@ -61,7 +61,7 @@ class TestGridBboxFromLocations(unittest.TestCase):
             "app.application.worldData.generators.terrain.passes.bbox.static_map_anchors",
             return_value=[loc],
         ), patch(
-            "app.application.worldData.generators.terrain.passes.bbox.cell_size_m",
+            "app.application.worldData.generators.terrain.passes.bbox.map_cell_fine_span",
             return_value=3000,
         ):
             bbox = grid_bbox_from_locations(world, [loc])

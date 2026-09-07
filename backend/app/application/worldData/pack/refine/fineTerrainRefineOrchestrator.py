@@ -8,8 +8,8 @@ corridor select to ``pathCorridorSelect``. Public method names stable for
 from __future__ import annotations
 
 from app.application.worldData.persistResult import PersistResult
-from app.application.worldData.generators.coordinates import cell_size_m
-from app.application.worldData.generators.coordinates.worldTile import meter_bbox_for_tile
+from app.application.worldData.generators.coordinates import map_cell_fine_span
+from app.application.worldData.generators.coordinates.worldTile import fine_bbox_for_tile
 from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.generators.terrain.worldMapSettings import (
     terrain_chunk_columns,
@@ -43,7 +43,7 @@ from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volumes_by_location,
 )
 from app.application.worldData.pack.read.packMapHelpers import tile_for_anchor
-from app.application.worldData.pack.refine.meterChunkGeom import rects_for_macro_tile
+from app.application.worldData.pack.refine.fineChunkGeom import rects_for_macro_tile
 from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
 from app.application.worldData.terrainBatchOrchestrator import TerrainBatchOrchestrator
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
@@ -224,18 +224,18 @@ class FineTerrainRefineOrchestrator:
         *,
         stages: GradePipelineStages | None = None,
     ) -> FineRefineResult:
-        cell_m = cell_size_m(world)
+        cell_m = map_cell_fine_span(world)
         chunk_size = terrain_chunk_columns(world)
-        meter_bbox = meter_bbox_for_tile(tile_gx, tile_gy, cell_m)
-        n_cx = (meter_bbox.x_max - meter_bbox.x_min + 1) // chunk_size
-        n_cy = (meter_bbox.y_max - meter_bbox.y_min + 1) // chunk_size
+        fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, cell_m)
+        n_cx = (fine_bbox.x_max - fine_bbox.x_min + 1) // chunk_size
+        n_cy = (fine_bbox.y_max - fine_bbox.y_min + 1) // chunk_size
         if n_cx < 1 or n_cy < 1 or not (0 <= cx < n_cx and 0 <= cy < n_cy):
             raise ValueError(
                 f"chunk=({cx},{cy}) out of range for tile=({tile_gx},{tile_gy}) "
                 f"(grid {n_cx}x{n_cy})",
             )
-        x_min = meter_bbox.x_min + cx * chunk_size
-        y_min = meter_bbox.y_min + cy * chunk_size
+        x_min = fine_bbox.x_min + cx * chunk_size
+        y_min = fine_bbox.y_min + cy * chunk_size
         rect = ColumnRect(
             x_min=x_min,
             x_max=x_min + chunk_size - 1,

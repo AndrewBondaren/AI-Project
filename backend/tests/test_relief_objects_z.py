@@ -36,7 +36,7 @@ from app.db.models.mapCell import MapCell
 def _world(**overrides):
     base = dict(
         world_uid="world-relief-test",
-        map_cell_size_m=1000,
+        fine_cells_per_map_cell=1000,
         world_map_cells_per_tile=None,
         z_min=0,
         z_max=8,
@@ -212,7 +212,7 @@ class TestAntiDoubleRise(unittest.TestCase):
         )
         from app.dataModel.terrainMasks.mountain import MountainKind
 
-        world = _world(z_max=8, z_min=0, map_cell_size_m=1000)
+        world = _world(z_max=8, z_min=0, fine_cells_per_map_cell=1000)
         rise = mountain_rise_amount(MountainKind.ROCKY, 8)
         self.assertEqual(rise, 3)
 

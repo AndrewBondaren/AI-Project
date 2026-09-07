@@ -7,7 +7,7 @@ Subdomains: settlement (city registries + skeleton), district, area.
 
 from app.dataModel.settlement.area import PerimeterBarrier, resolved_host_sides
 from app.dataModel.settlement.enums import (
-    DEFAULT_BLOCK_SIZE_M,
+    DEFAULT_BLOCK_SIZE_FINE,
     DistrictDensity,
     block_size_for_density,
 )
@@ -50,7 +50,7 @@ __all__ = [
     "CellZone",
     "SettlementSizeEntry",
     "SettlementSizeKey",
-    "DEFAULT_BLOCK_SIZE_M",
+    "DEFAULT_BLOCK_SIZE_FINE",
     "DistrictConnection",
     "DistrictDensity",
     "DistrictTemplateEntry",

@@ -113,7 +113,7 @@ class MapGridRenderService:
                 tile_gx=tile_gx,
                 tile_gy=tile_gy,
                 legend=WildernessTilePackRenderer.render_legend(),
-                cell_size_m=world.map_cell_size_m,
+                fine_span=world.fine_cells_per_map_cell,
                 read_path="pack",
                 read_mode="wilderness_tile_l2_missing",
             ).to_dict()

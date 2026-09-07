@@ -14,7 +14,7 @@ from app.db.models.namedLocation import NamedLocation
 def _world(**kwargs):
     defaults = {
         "world_uid": "test-world",
-        "map_cell_size_m": 3000,
+        "fine_cells_per_map_cell": 3000,
         "hydrology": {"enabled": True},
     }
     defaults.update(kwargs)
@@ -26,7 +26,7 @@ class TestDeclaredWire(unittest.TestCase):
     def test_normalize_and_load_coastline(self):
         raw = {
             "world_uid": "test-world",
-            "map_cell_size_m": 3000,
+            "fine_cells_per_map_cell": 3000,
             "hydrology": {
                 "declared_coastlines": [{
                     "location_uid": "loc-sea",

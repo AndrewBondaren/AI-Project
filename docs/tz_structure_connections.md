@@ -915,9 +915,9 @@ class ConnectionEntry:
 `block_size` dense=50 / medium=80 / sparse=120 **клеток**.
 
 **Footprint поселения:**  
-`footprint_m = footprint_by_size[subtype][system_settlement_size] × world.map_cell_size_m`  
+`footprint_m = footprint_by_size[subtype][system_settlement_size] × world.fine_cells_per_map_cell`  
 Множитель на **subtype** в `location_type_registry`, ранг в `settlement_size_registry`. SoT + инвариант «малый город > большая деревня»: [`tz_locations.md`](./tz_locations.md) **LOC-T-2**. Код до impl: `city_size_registry[system_city_size].footprint_multiplier` (токены `hamlet`… — не целевой контракт).  
-Settlement_gate-узлы ставятся на границах map_cell (координаты кратные `map_cell_size_m`).
+Settlement_gate-узлы ставятся на границах map_cell (координаты кратные `fine_cells_per_map_cell`).
 
 ### 5.3 Расширение DistrictSlot
 

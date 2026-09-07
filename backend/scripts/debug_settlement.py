@@ -60,7 +60,7 @@ def test_phase_c_placement() -> None:
         world_uid="world-test-c",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=1000,
+        fine_cells_per_map_cell=1000,
         city_size_registry=[
             {"system_size": "city", "display_size": "City", "footprint_multiplier": 2.0},
         ],
@@ -116,7 +116,7 @@ def test_city_shared_nodes() -> None:
         world_uid="world-test-2",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         city_size_registry=[
             {"system_size": "city", "display_size": "City", "footprint_multiplier": 2.0},
         ],
@@ -174,7 +174,7 @@ def test_phase_e_building_cache() -> None:
         world_uid="world-test-e",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         city_size_registry=[
             {"system_size": "town", "display_size": "Town", "footprint_multiplier": 1.0},
         ],
@@ -196,12 +196,12 @@ def test_phase_e_building_cache() -> None:
     civic = WorldDistrictTemplateRegistry.canonical_defaults().entry_for("civic_center")
     assert civic is not None
     slot_a = DistrictSlot(
-        origin_x=0, origin_y=0, width_m=3000, depth_m=3000, ground_z=0,
+        origin_x=0, origin_y=0, width_fine=3000, depth_fine=3000, ground_z=0,
         district_template=civic,
         required_structures=list(civic.required_structures or []),
     )
     slot_b = DistrictSlot(
-        origin_x=3000, origin_y=0, width_m=3000, depth_m=3000, ground_z=0,
+        origin_x=3000, origin_y=0, width_fine=3000, depth_fine=3000, ground_z=0,
         district_template=civic,
         required_structures=list(civic.required_structures or []),
     )
@@ -258,7 +258,7 @@ def test_phase_area_barriers() -> None:
         world_uid="world-test-area",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         city_size_registry=[
             {"system_size": "town", "display_size": "Town", "footprint_multiplier": 1.0},
         ],
@@ -310,7 +310,7 @@ def test_phase_b_travel_and_sidewalk() -> None:
         world_uid="world-test-b",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=1000,
+        fine_cells_per_map_cell=1000,
         economic_tier_registry=[
             {
                 "system_tier": "standard",
@@ -383,8 +383,8 @@ def test_phase_d_barriers() -> None:
         should_have_settlement_wall,
     )
     from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
-        cell_size_m,
-        footprint_side_m,
+        map_cell_fine_span,
+        footprint_side_fine,
         settlement_origin,
     )
     from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
@@ -395,7 +395,7 @@ def test_phase_d_barriers() -> None:
         world_uid="world-test-d",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         city_size_registry=[
             {"system_size": "town", "display_size": "Town", "footprint_multiplier": 1.0},
             {"system_size": "city", "display_size": "City", "footprint_multiplier": 2.0},
@@ -439,8 +439,8 @@ def test_phase_d_barriers() -> None:
     assert len(barriers) > 0
 
     ox, oy, gz = settlement_origin(city)
-    side_m = footprint_side_m(world, sk_c.system_city_size)
-    gate_coords = footprint_gate_coordinates(ox, oy, side_m, cell_size_m(world))
+    side_m = footprint_side_fine(world, sk_c.system_city_size)
+    gate_coords = footprint_gate_coordinates(ox, oy, side_m, map_cell_fine_span(world))
     barrier_by_xy = {(c.x, c.y): c for c in barriers}
     assert gate_coords <= set(barrier_by_xy)
     for x, y in gate_coords:
@@ -475,7 +475,7 @@ def test_phase_f_map_occupancy() -> None:
         world_uid="world-test-f",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         terrain_registry=[
             {"system_terrain": "urban", "glossary_ref": "terrain_urban"},
             {"system_terrain": "plains", "glossary_ref": "terrain_plains"},
@@ -543,27 +543,27 @@ def test_coordinate_spaces_anchor_3000() -> None:
         plan_district_slots,
     )
     from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
-        cell_size_m,
+        map_cell_fine_span,
         footprint_gate_coordinates,
         footprint_grid_rect,
-        footprint_meter_rect,
-        footprint_side_m,
+        footprint_fine_rect,
+        footprint_side_fine,
         settlement_grid_rect,
-        settlement_meter_rect,
+        settlement_fine_rect,
         settlement_origin,
     )
     from app.application.worldData.generators.assemblers.settlementAssembler.planner.mapOccupancy import (
         plan_footprint_occupancy_cells,
     )
     from app.application.worldData.generators.coordinates import (
-        settlement_origin_m,
+        settlement_origin_fine,
     )
 
     world = World(
         world_uid="world-test-nc1",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         city_size_registry=[
             {"system_size": "town", "display_size": "Town", "footprint_multiplier": 1.0},
             {"system_size": "city", "display_size": "City", "footprint_multiplier": 2.0},
@@ -583,23 +583,23 @@ def test_coordinate_spaces_anchor_3000() -> None:
     )
     town.settlement_density = "medium"
 
-    cell_m = cell_size_m(world)
+    cell_m = map_cell_fine_span(world)
     assert cell_m == 3000
 
-    origin = settlement_origin_m(town)
+    origin = settlement_origin_fine(town)
     assert (origin.x, origin.y, origin.z) == (3000, 0, 0)
     assert settlement_origin(town) == (3000, 0, 0)
 
-    side_m = footprint_side_m(world, town.system_city_size)
+    side_m = footprint_side_fine(world, town.system_city_size)
     assert side_m == 3000
 
     grid_rect = settlement_grid_rect(world, town)
     assert grid_rect.as_tuple() == (1, 0, 2, 1)
     assert footprint_grid_rect(world, town) == (1, 0, 2, 1)
 
-    meter_rect = settlement_meter_rect(world, town)
+    meter_rect = settlement_fine_rect(world, town)
     assert meter_rect.as_tuple() == (3000, 0, 6000, 3000, 0)
-    assert footprint_meter_rect(world, town) == (3000, 0, 6000, 3000, 0)
+    assert footprint_fine_rect(world, town) == (3000, 0, 6000, 3000, 0)
 
     gate_coords = footprint_gate_coordinates(3000, 0, side_m, cell_m)
     assert (3000, 0) in gate_coords
@@ -641,7 +641,7 @@ def test_coordinate_spaces_anchor_3000() -> None:
     )
     city.settlement_density = "medium"
     assert settlement_grid_rect(world, city).as_tuple() == (1, 0, 3, 2)
-    assert settlement_meter_rect(world, city).as_tuple() == (3000, 0, 9000, 6000, 0)
+    assert settlement_fine_rect(world, city).as_tuple() == (3000, 0, 9000, 6000, 0)
 
     sk_city = assembler._build_skeleton(world, city)
     city_slots = plan_district_slots(world, city, sk_city, None)
@@ -679,7 +679,7 @@ def test_terrain_decoupled_from_settlements() -> None:
         world_uid="world-test-terrain",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         terrain_registry=terrain_reg,
         default_climate_zone="temperate",
     )
@@ -750,7 +750,7 @@ def test_climate_zone_voronoi() -> None:
         world_uid="world-test-climate-voronoi",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         default_climate_zone="temperate",
     )
     region = NamedLocation(
@@ -833,7 +833,7 @@ def test_climate_manual_anchor_voronoi() -> None:
         world_uid="world-test-climate-manual",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         terrain_registry=[{"system_terrain": "plains", "glossary_ref": "terrain_plains"}],
         default_climate_zone="temperate",
     )
@@ -885,7 +885,7 @@ def test_climate_orchestrator_passes() -> None:
         world_uid="world-test-orchestrator",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         terrain_registry=[{"system_terrain": "plains", "glossary_ref": "terrain_plains"}],
     )
     region = NamedLocation(
@@ -927,7 +927,7 @@ def test_climate_detect_relative_elevation() -> None:
         world_uid=world_uid,
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         climate_pole_preset="desert",
         default_climate_zone="desert",
     )
@@ -991,7 +991,7 @@ def test_climate_pole_tier() -> None:
         world_uid="world-test-pole",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         climate_temperature_peak_min=-40,
         climate_temperature_peak_max=45,
         climate_pole_preset="ice",
@@ -1049,7 +1049,7 @@ def test_climate_pole_mode_manual() -> None:
         world_uid="world-test-pole-manual",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         climate_pole_mode=ClimatePoleMode.MANUAL.wire_value,
         climate_pole_preset="ice",
     )
@@ -1072,7 +1072,7 @@ def test_climate_pole_mode_manual() -> None:
         world_uid="world-test-pole-auto",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         climate_pole_mode=ClimatePoleMode.AUTORESOLVE.wire_value,
         climate_pole_preset="ice",
     )
@@ -1088,13 +1088,13 @@ def test_climate_admin_merge_skipped_with_pole() -> None:
         run_anchor_collect_pass,
     )
     from app.application.worldData.generators.climate.poleResolve import resolve_pole_field
-    from app.application.worldData.generators.coordinates import cell_size_m
+    from app.application.worldData.generators.coordinates import map_cell_fine_span
 
     world = World(
         world_uid="world-test-admin-skip",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         climate_pole_preset="ice",
         terrain_registry=[{"system_terrain": "plains", "glossary_ref": "terrain_plains"}],
     )
@@ -1114,7 +1114,7 @@ def test_climate_admin_merge_skipped_with_pole() -> None:
         run_heightmap_pass,
     )
 
-    cell_m     = cell_size_m(world)
+    cell_m     = map_cell_fine_span(world)
     bbox       = grid_bbox_from_locations(world, [region])
     pole_field = resolve_pole_field(world, [region], cell_m, bbox)
     heightmap  = run_heightmap_pass(world, [region], pole_field, 2)
@@ -1128,7 +1128,7 @@ def test_climate_admin_merge_skipped_with_pole() -> None:
             world_uid="world-test-admin-fallback",
             name="Test",
             created_at="2026-01-01T00:00:00",
-            map_cell_size_m=3000,
+            fine_cells_per_map_cell=3000,
             climate_pole_mode="manual",
         ),
         [region],
@@ -1156,7 +1156,7 @@ def test_climate_tier_resolve() -> None:
         world_uid="world-test-tier",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         terrain_registry=[{"system_terrain": "plains", "glossary_ref": "terrain_plains"}],
         climate_pole_preset="binary",
         climate_local_influence_fraction=0.25,
@@ -1323,7 +1323,7 @@ def test_climate_logging_warnings() -> None:
             world_uid="world-log-pole-bad",
             name="Test",
             created_at="2026-01-01T00:00:00",
-            map_cell_size_m=3000,
+            fine_cells_per_map_cell=3000,
         ),
         [
             NamedLocation(
@@ -1380,14 +1380,14 @@ def test_climate_logging_warnings() -> None:
 def test_phase_4_collect_map_cells() -> None:
     """Split persist: surface grid occupancy vs meter geometry (Option A)."""
     from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
-        collect_geometry_meter_cells,
+        collect_geometry_fine_cells,
         collect_map_cells_from_layout,
         collect_surface_grid_cells,
         needs_settlement_geometry,
     )
     from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
-        cell_in_footprint_meters,
-        footprint_meter_rect,
+        cell_in_footprint_fine,
+        footprint_fine_rect,
     )
     from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
         SettlementGeneratorService,
@@ -1397,7 +1397,7 @@ def test_phase_4_collect_map_cells() -> None:
         world_uid="world-test-p4",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         city_size_registry=[
             {"system_size": "town", "display_size": "Town", "footprint_multiplier": 1.0},
         ],
@@ -1418,7 +1418,7 @@ def test_phase_4_collect_map_cells() -> None:
 
     layout = SettlementAssembler().assemble(world, settlement)
     grid_cells = collect_surface_grid_cells(layout)
-    meter_cells = collect_geometry_meter_cells(layout)
+    meter_cells = collect_geometry_fine_cells(layout)
     merged = collect_map_cells_from_layout(world, settlement, layout)
 
     assert grid_cells == layout.occupancy_cells
@@ -1427,9 +1427,9 @@ def test_phase_4_collect_map_cells() -> None:
     assert not any(c.system_building_element for c in grid_cells)
 
     assert not any(c.system_building_element for c in meter_cells)
-    ox, oy, x1, y1, _ = footprint_meter_rect(world, settlement)
+    ox, oy, x1, y1, _ = footprint_fine_rect(world, settlement)
     for c in meter_cells:
-        assert cell_in_footprint_meters(c.x, c.y, ox, oy, x1, y1), (
+        assert cell_in_footprint_fine(c.x, c.y, ox, oy, x1, y1), (
             f"meter cell ({c.x},{c.y}) outside meter footprint"
         )
 
@@ -1448,7 +1448,7 @@ def main() -> None:
         world_uid="world-test",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         city_size_registry=[
             {"system_size": "town", "display_size": "Town", "radius": 1, "footprint_multiplier": 1.0},
         ],

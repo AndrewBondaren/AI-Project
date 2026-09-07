@@ -7,9 +7,9 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     settlement_grid_rect,
 )
 from app.application.worldData.generators.coordinates import (
-    cell_size_m,
-    settlement_origin_m,
-    world_meter_xy,
+    map_cell_fine_span,
+    settlement_origin_fine,
+    world_fine_xy,
 )
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.db.models.mapCell import MapCell
@@ -35,17 +35,17 @@ def plan_footprint_occupancy_cells(
     Маркирует global map cells под footprint поселения.
     CoordinateSpace: WORLD_SURFACE_GRID (MapCell.x/y = grid index).
     """
-    origin = settlement_origin_m(settlement)
+    origin = settlement_origin_fine(settlement)
     rect = settlement_grid_rect(world, settlement, system_city_size)
     terrain = _surface_terrain(world)
 
     cells: list[MapCell] = []
-    cell_m = cell_size_m(world)
+    cell_m = map_cell_fine_span(world)
     for gy in range(rect.gy0, rect.gy1):
         for gx in range(rect.gx0, rect.gx1):
             for ly in range(cell_m):
                 for lx in range(cell_m):
-                    xm, ym = world_meter_xy(gx, gy, lx, ly, cell_m)
+                    xm, ym = world_fine_xy(gx, gy, lx, ly, cell_m)
                     cells.append(MapCell(
                         world_uid=world.world_uid,
                         x=xm,

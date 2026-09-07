@@ -141,7 +141,7 @@ class WorldMapPackRenderer:
             title=f"tile Gx={gx} Gy={gy}  (pack L0 light grid {tile.side}×{tile.side})",
             coord_prefix="light ",
             bounds=(0, tile.side - 1, 0, tile.side - 1),
-            cell_size_m=max(1, self._tile_m // tile.side),
+            fine_span=max(1, self._tile_m // tile.side),
             x_rulers=False,
         )
 
@@ -161,7 +161,7 @@ class WorldMapPackRenderer:
             coord_prefix="light ",
             width=width,
             bounds=(0, tile.side - 1, 0, tile.side - 1),
-            cell_size_m=max(1, self._tile_m // tile.side),
+            fine_span=max(1, self._tile_m // tile.side),
         )
         if not hist:
             return ascii_h
@@ -197,7 +197,7 @@ class WorldMapPackRenderer:
             title=_mosaic_title("light", frame),
             coord_prefix="light ",
             bounds=frame.bounds,
-            cell_size_m=frame.light_m,
+            fine_span=frame.light_m,
             x_rulers=False,
         )
 
@@ -224,7 +224,7 @@ class WorldMapPackRenderer:
             coord_prefix="light ",
             width=width,
             bounds=frame.bounds,
-            cell_size_m=frame.light_m,
+            fine_span=frame.light_m,
         )
         legend = render_height_legend(
             z_min=min(hist) if hist else None,

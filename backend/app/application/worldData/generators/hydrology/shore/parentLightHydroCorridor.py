@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.coordinates.worldTile import world_meter_xy
+from app.application.worldData.generators.coordinates.worldTile import world_fine_xy
 from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
 from app.dataModel.worldPack.parentLightTile import ParentLightTile
@@ -36,7 +36,7 @@ def hydro_mask_from_parent(
                     ly = ty * light_m + dty
                     if lx >= tile_m or ly >= tile_m:
                         continue
-                    xm, ym = world_meter_xy(parent.gx, parent.gy, lx, ly, tile_m)
+                    xm, ym = world_fine_xy(parent.gx, parent.gy, lx, ly, tile_m)
                     out[(xm, ym)] = entry
 
             # Dilate river width in meters (hydrology_width on wire).

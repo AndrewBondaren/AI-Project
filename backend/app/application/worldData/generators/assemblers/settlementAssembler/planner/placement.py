@@ -49,16 +49,16 @@ def _check_adjacent_terrain(
     condition:   PlacementCondition,
     origin_x:    int,
     origin_y:    int,
-    width_m:     int,
-    depth_m:     int,
+    width_fine:     int,
+    depth_fine:     int,
     terrain_cells: list[MapCell] | None,
 ) -> bool:
     if not terrain_cells:
         return False
     required = set(condition.terrain_types or [])
     min_adjacent = int(condition.min_adjacent_cells or 1)
-    x0, x1 = origin_x - 1, origin_x + width_m
-    y0, y1 = origin_y - 1, origin_y + depth_m
+    x0, x1 = origin_x - 1, origin_x + width_fine
+    y0, y1 = origin_y - 1, origin_y + depth_fine
     count = 0
     for cell in terrain_cells:
         if cell.system_terrain not in required:
@@ -91,8 +91,8 @@ def check_placement_conditions(
     skeleton:      CitySkeleton,
     origin_x:      int,
     origin_y:      int,
-    width_m:       int,
-    depth_m:       int,
+    width_fine:       int,
+    depth_fine:       int,
     terrain_cells: list[MapCell] | None,
     placed_types:  PlacedCounts,
     world:         World,
@@ -147,7 +147,7 @@ def check_placement_conditions(
             if _placed_type_count(placed_types, cond.district_type) > 0:
                 return False
         elif ctype is PlacementConditionType.ADJACENT_TERRAIN:
-            if not _check_adjacent_terrain(cond, origin_x, origin_y, width_m, depth_m, terrain_cells):
+            if not _check_adjacent_terrain(cond, origin_x, origin_y, width_fine, depth_fine, terrain_cells):
                 return False
         elif ctype is PlacementConditionType.CELL_ZONE:
             if cell_x is None or grid_n is None:
@@ -194,8 +194,8 @@ def pick_template_for_ref(
     world: World,
     origin_x: int,
     origin_y: int,
-    width_m: int,
-    depth_m: int,
+    width_fine: int,
+    depth_fine: int,
     terrain_cells: list[MapCell] | None,
     placed_types: PlacedCounts,
     cell_x: int,
@@ -217,7 +217,7 @@ def pick_template_for_ref(
                 cell_x, cell_y, pin,
             )
         elif check_placement_conditions(
-            pinned, settlement, skeleton, origin_x, origin_y, width_m, depth_m,
+            pinned, settlement, skeleton, origin_x, origin_y, width_fine, depth_fine,
             terrain_cells, placed_types, world, cell_x, cell_y, grid_n,
         ):
             return pinned
@@ -227,7 +227,7 @@ def pick_template_for_ref(
     eligible = [
         template for template in pool
         if check_placement_conditions(
-            template, settlement, skeleton, origin_x, origin_y, width_m, depth_m,
+            template, settlement, skeleton, origin_x, origin_y, width_fine, depth_fine,
             terrain_cells, placed_types, world, cell_x, cell_y, grid_n,
         )
     ]
@@ -243,8 +243,8 @@ def select_district_template(
     world:         World,
     origin_x:      int,
     origin_y:      int,
-    width_m:       int,
-    depth_m:       int,
+    width_fine:       int,
+    depth_fine:       int,
     terrain_cells: list[MapCell] | None,
     placed_types:  PlacedCounts,
     cell_x:        int,
@@ -258,7 +258,7 @@ def select_district_template(
     if typical_district_types:
         return _select_by_recipe(
             candidates, settlement, skeleton, world,
-            origin_x, origin_y, width_m, depth_m,
+            origin_x, origin_y, width_fine, depth_fine,
             terrain_cells, placed_types,
             cell_x, cell_y, grid_n, rng, zone, typical_district_types,
             unspecialized_only=unspecialized_only,
@@ -268,7 +268,7 @@ def select_district_template(
         t for t in candidates
         if not (t.district_subtype or "").strip()
         and check_placement_conditions(
-            t, settlement, skeleton, origin_x, origin_y, width_m, depth_m,
+            t, settlement, skeleton, origin_x, origin_y, width_fine, depth_fine,
             terrain_cells, placed_types, world,
             cell_x, cell_y, grid_n,
         )
@@ -344,8 +344,8 @@ def _select_by_recipe(
     world: World,
     origin_x: int,
     origin_y: int,
-    width_m: int,
-    depth_m: int,
+    width_fine: int,
+    depth_fine: int,
     terrain_cells: list[MapCell] | None,
     placed_types: PlacedCounts,
     cell_x: int,
@@ -371,7 +371,7 @@ def _select_by_recipe(
         eligible = [
             template for template in typed
             if check_placement_conditions(
-                template, settlement, skeleton, origin_x, origin_y, width_m, depth_m,
+                template, settlement, skeleton, origin_x, origin_y, width_fine, depth_fine,
                 terrain_cells, placed_types, world,
                 cell_x, cell_y, grid_n,
             )
@@ -420,8 +420,8 @@ def slot_dimensions(
             d_range = [size_pct.depth.min, size_pct.depth.max]
     w_frac = rng.uniform(float(w_range[0]), float(w_range[1]))
     d_frac = rng.uniform(float(d_range[0]), float(d_range[1]))
-    width_m = max(1, int(cell_m * w_frac))
-    depth_m = max(1, int(cell_m * d_frac))
+    width_fine = max(1, int(cell_m * w_frac))
+    depth_fine = max(1, int(cell_m * d_frac))
     logger.info(
         "DistrictSlot dimensions | template=%s algorithm=size_pct"
         " cell_m=%d width_frac=%.2f depth_frac=%.2f → %dx%d",
@@ -429,7 +429,7 @@ def slot_dimensions(
         cell_m,
         w_frac,
         d_frac,
-        width_m,
-        depth_m,
+        width_fine,
+        depth_fine,
     )
-    return width_m, depth_m
+    return width_fine, depth_fine

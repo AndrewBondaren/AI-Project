@@ -23,7 +23,7 @@ from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
 def _world(**overrides):
     base = dict(
         world_uid="w-climate-sample",
-        map_cell_size_m=1000,
+        fine_cells_per_map_cell=1000,
         elevation_lapse_rate=0.65,
         climate_temperature_peak_min=-40,
         climate_temperature_peak_max=50,
@@ -97,7 +97,7 @@ class TestLightFineTilePolicy(unittest.TestCase):
             resolve_fine_tiles_for_policy,
         )
 
-        world = SimpleNamespace(world_uid="w", map_cell_size_m=1000)
+        world = SimpleNamespace(world_uid="w", fine_cells_per_map_cell=1000)
         with patch(
             "app.application.worldData.pack.climate.lightFineTileResolve.tile_for_anchor",
             return_value=(9, 9),

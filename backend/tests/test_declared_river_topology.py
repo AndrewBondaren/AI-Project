@@ -132,7 +132,7 @@ class TestDeclaredRiverTopology(unittest.TestCase):
     def test_river_system_index_from_loader(self):
         w = SimpleNamespace(
             world_uid="test",
-            map_cell_size_m=3000,
+            fine_cells_per_map_cell=3000,
             hydrology={
                 "declared_rivers": [
                     _system("sys-basin"),
@@ -152,7 +152,7 @@ class TestDeclaredRiverTopology(unittest.TestCase):
     def test_build_hydrology_master_input_carries_index(self):
         w = SimpleNamespace(
             world_uid="test",
-            map_cell_size_m=3000,
+            fine_cells_per_map_cell=3000,
             hydrology={"enabled": True, "declared_rivers": [_stem("stem-only")]},
         )
         master = build_hydrology_master_input(w, [])

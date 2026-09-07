@@ -6,13 +6,13 @@ from app.application.worldData.generators.assemblers.citySkeleton import CitySke
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
     district_templates,
-    footprint_side_m,
+    footprint_side_fine,
 )
 from app.application.worldData.generators.coordinates import (
-    cell_size_m,
-    coarse_cell_meter_xy,
+    map_cell_fine_span,
+    coarse_cell_fine_xy,
     grid_dimension,
-    settlement_origin_m,
+    settlement_origin_fine,
 )
 from app.application.worldData.generators.coordinates.settlementCellRng import (
     SettlementCellRngRole,
@@ -72,10 +72,10 @@ def plan_district_slots(
     v1: равномерная прямоугольная сетка глобальных ячеек footprint.
     Проходы §1.2: typical_districts города → специализации → морфология.
     """
-    cell_m = cell_size_m(world)
-    side_m = footprint_side_m(world, skeleton.system_city_size)
+    cell_m = map_cell_fine_span(world)
+    side_m = footprint_side_fine(world, skeleton.system_city_size)
     n      = grid_dimension(side_m, cell_m)
-    origin = settlement_origin_m(settlement)
+    origin = settlement_origin_fine(settlement)
     templates = district_templates(world)
     subtype = (settlement.system_location_subtype or "").strip()
     recipe = (
@@ -127,7 +127,7 @@ def plan_district_slots(
     def _materialize(cell_x: int, cell_y: int, template: DistrictTemplateEntry | None) -> bool:
         if template is None:
             return False
-        origin_x, origin_y = coarse_cell_meter_xy(origin, cell_x, cell_y, cell_m)
+        origin_x, origin_y = coarse_cell_fine_xy(origin, cell_x, cell_y, cell_m)
         rng = settlement_cell_rng(
             world.world_uid,
             settlement.location_uid,
@@ -135,7 +135,7 @@ def plan_district_slots(
             cell_y,
             SettlementCellRngRole.DISTRICTS,
         )
-        width_m, depth_m = slot_dimensions(template, cell_m, rng)
+        width_fine, depth_fine = slot_dimensions(template, cell_m, rng)
         key = placement_count_key(template)
         placed_types[key] = placed_types.get(key, 0) + 1
         occupied.add((cell_x, cell_y))
@@ -149,8 +149,8 @@ def plan_district_slots(
         slots.append(DistrictSlot(
             origin_x=origin_x,
             origin_y=origin_y,
-            width_m=width_m,
-            depth_m=depth_m,
+            width_fine=width_fine,
+            depth_fine=depth_fine,
             ground_z=slot_ground_z,
             district_template=template,
             required_structures=required,
@@ -169,8 +169,8 @@ def plan_district_slots(
             template.district_subtype or "-",
             origin_x,
             origin_y,
-            width_m,
-            depth_m,
+            width_fine,
+            depth_fine,
             slot_ground_z,
             len(required),
         )
@@ -187,7 +187,7 @@ def plan_district_slots(
             key=lambda xy: cell_type_score(xy[0], xy[1], n, ref.district_type, world),
         )
         for cell_x, cell_y in candidates:
-            origin_x, origin_y = coarse_cell_meter_xy(origin, cell_x, cell_y, cell_m)
+            origin_x, origin_y = coarse_cell_fine_xy(origin, cell_x, cell_y, cell_m)
             rng = settlement_cell_rng(
                 world.world_uid,
                 settlement.location_uid,
@@ -219,7 +219,7 @@ def plan_district_slots(
         unspecialized_only: bool = False,
         allow_legacy: bool = False,
     ) -> DistrictTemplateEntry | None:
-        origin_x, origin_y = coarse_cell_meter_xy(origin, cell_x, cell_y, cell_m)
+        origin_x, origin_y = coarse_cell_fine_xy(origin, cell_x, cell_y, cell_m)
         rng = settlement_cell_rng(
             world.world_uid,
             settlement.location_uid,

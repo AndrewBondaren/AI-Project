@@ -28,7 +28,7 @@ def _test_world() -> World:
         world_uid="world-persist-smoke",
         name="Persist Smoke",
         created_at="2026-06-26T00:00:00",
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         city_size_registry=[
             {"system_size": "town", "display_size": "Town", "footprint_multiplier": 1.0},
         ],

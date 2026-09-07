@@ -3,10 +3,10 @@ from typing import NewType
 
 GridX = NewType("GridX", int)
 GridY = NewType("GridY", int)
-MeterX = NewType("MeterX", int)
-MeterY = NewType("MeterY", int)
-MeterZ = NewType("MeterZ", int)
-MeterDelta = NewType("MeterDelta", int)
+FineX = NewType("FineX", int)
+FineY = NewType("FineY", int)
+FineZ = NewType("FineZ", int)
+FineDelta = NewType("FineDelta", int)
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,10 +16,10 @@ class SurfaceGridCoord:
 
 
 @dataclass(frozen=True, slots=True)
-class LocalMeterCoord:
-    x: MeterX
-    y: MeterY
-    z: MeterZ
+class FineGridCoord:
+    x: FineX
+    y: FineY
+    z: FineZ
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,12 +34,12 @@ class SurfaceGridRect:
 
 
 @dataclass(frozen=True, slots=True)
-class LocalMeterRect:
-    x0: MeterX
-    y0: MeterY
-    x1: MeterX
-    y1: MeterY
-    z: MeterZ
+class FineGridRect:
+    x0: FineX
+    y0: FineY
+    x1: FineX
+    y1: FineY
+    z: FineZ
 
     def as_tuple(self) -> tuple[int, int, int, int, int]:
         return self.x0, self.y0, self.x1, self.y1, self.z

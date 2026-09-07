@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import asdict
 
 from app.application.worldData.generators.coordinates.convert import (
-    cell_size_m,
-    meters_to_grid_x,
-    meters_to_grid_y,
+    map_cell_fine_span,
+    fine_to_grid_x,
+    fine_to_grid_y,
 )
 from app.application.worldData.generators.hydrology.types import (
     LoadedConnectionGraph,
@@ -40,7 +40,7 @@ def load_connection_graph(
 ) -> LoadedConnectionGraph:
     """Resolve waypoint coords (meters) and grid indices for hydrology."""
     loc_map = {loc.location_uid: loc for loc in locations}
-    cell_m = cell_size_m(world)
+    cell_m = map_cell_fine_span(world)
 
     resolved: list[ResolvedConnectionNode] = []
     for node in nodes:
@@ -50,8 +50,8 @@ def load_connection_graph(
             x_m=x_m,
             y_m=y_m,
             z_m=z_m,
-            gx=int(meters_to_grid_x(x_m, cell_m)),
-            gy=int(meters_to_grid_y(y_m, cell_m)),
+            gx=int(fine_to_grid_x(x_m, cell_m)),
+            gy=int(fine_to_grid_y(y_m, cell_m)),
             node_type=node.node_type,
             graph_level=node.graph_level,
             location_uid=node.location_uid,

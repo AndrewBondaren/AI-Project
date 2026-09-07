@@ -228,7 +228,7 @@ def draw_grade_ray_grid(
     lines = [title]
     if extra_headers:
         lines.extend(extra_headers)
-    lines.append(format_grid_header(x0, x1, y0, y1, cell_size_m=1, prefix=coord_prefix))
+    lines.append(format_grid_header(x0, x1, y0, y1, fine_span=1, prefix=coord_prefix))
     field_w = max(GRADE_CELL_INNER_WIDTH, int(width))
     for y in range(y1, y0 - 1, -1):
         bands = ([], [], [])

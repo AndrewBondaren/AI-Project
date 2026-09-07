@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.coordinates import cell_size_m
-from app.application.worldData.generators.coordinates.worldTile import meter_bbox_for_tile
+from app.application.worldData.generators.coordinates import map_cell_fine_span
+from app.application.worldData.generators.coordinates.worldTile import fine_bbox_for_tile
 from app.application.worldData.generators.terrain.passes.bbox import world_bounds_from_world
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
@@ -63,8 +63,8 @@ def prepare_fine_tile(
     run_mill = stages.mill
     run_paint = stages.paint
     chunk_size = terrain_chunk_columns(world)
-    cell_m = cell_size_m(world)
-    meter_bbox = meter_bbox_for_tile(tile_gx, tile_gy, cell_m)
+    cell_m = map_cell_fine_span(world)
+    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, cell_m)
     location_pairs = territory_volumes_by_location(world, locations)
     reader = WorldPackReader(writer.paths)
     parent = require_parent_light(
@@ -78,8 +78,8 @@ def prepare_fine_tile(
     surface_state = terrain.build_tile_surface_state(
         world, locations, surface_ctx, tile_gx, tile_gy, parent_light=parent,
     )
-    surface_columns = (meter_bbox.x_max - meter_bbox.x_min + 1) * (
-        meter_bbox.y_max - meter_bbox.y_min + 1
+    surface_columns = (fine_bbox.x_max - fine_bbox.x_min + 1) * (
+        fine_bbox.y_max - fine_bbox.y_min + 1
     )
     workers = resolve_terrain_workers(mat_ctx, world)
     if force_serial_terrain_generate(world, surface_columns):
@@ -94,14 +94,14 @@ def prepare_fine_tile(
     templates = (relief_templates_by_uid or {}) if run_mill else {}
     existing_uids = (
         existing_grade_uids_from_pack(
-            writer, reader, tile_gx, tile_gy, meter_bbox, chunk_size,
+            writer, reader, tile_gx, tile_gy, fine_bbox, chunk_size,
         )
         if run_mill
         else {}
     )
     catalog = (
         catalog_for_surface(
-            world, meter_bbox, tile_gx=tile_gx, tile_gy=tile_gy, chunk_size=chunk_size,
+            world, fine_bbox, tile_gx=tile_gx, tile_gy=tile_gy, chunk_size=chunk_size,
         )
         if run_paint
         else None
@@ -114,7 +114,7 @@ def prepare_fine_tile(
             world_uid=world.world_uid,
             tile_gx=tile_gx,
             tile_gy=tile_gy,
-            this_bbox=meter_bbox,
+            this_bbox=fine_bbox,
             halo=grade_halo,
             bounds=bounds,
             reader=reader,
@@ -130,7 +130,7 @@ def prepare_fine_tile(
         surface_ctx=surface_ctx,
         tile_gx=tile_gx,
         tile_gy=tile_gy,
-        meter_bbox=meter_bbox,
+        fine_bbox=fine_bbox,
         chunk_size=chunk_size,
         surface_state=surface_state,
         templates=templates,
@@ -153,7 +153,7 @@ def existing_grade_uids_from_pack(
     reader: WorldPackReader,
     tile_gx: int,
     tile_gy: int,
-    meter_bbox: ColumnRect,
+    fine_bbox: ColumnRect,
     chunk_size: int,
 ) -> dict[tuple[int, int], str]:
     """Late-chunk inherit: uids already on wilderness columns (R36v)."""
@@ -169,7 +169,7 @@ def existing_grade_uids_from_pack(
         except (OSError, ValueError, FileNotFoundError):
             continue
         origin_x, origin_y = wilderness_chunk_origin(
-            meter_bbox, int(ref.cx), int(ref.cy), chunk_size,
+            fine_bbox, int(ref.cx), int(ref.cy), chunk_size,
         )
         for col in chunk.columns:
             uid = col.system_grade_uid

@@ -7,7 +7,7 @@ from dataclasses import replace
 
 from app.application.worldData.generators.coordinates.worldTile import (
     macro_tile_of,
-    meter_bbox_for_tile,
+    fine_bbox_for_tile,
 )
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.application.worldData.pack.io.worldPackReader import WorldPackReader
@@ -173,7 +173,7 @@ def overlay_halo_from_wilderness(
     halo_set = set(iter_halo_meters(this_bbox, halo))
     if not halo_set:
         return state
-    meter_bbox = meter_bbox_for_tile(neighbor_gx, neighbor_gy, tile_m)
+    fine_bbox = fine_bbox_for_tile(neighbor_gx, neighbor_gy, tile_m)
     new_z = dict(state.heightmap.surface_z)
     new_terrain = dict(state.surface_terrain or {})
     new_facing = dict(state.surface_facing or {})
@@ -190,7 +190,7 @@ def overlay_halo_from_wilderness(
         except (OSError, ValueError, FileNotFoundError):
             continue
         origin_x, origin_y = wilderness_chunk_origin(
-            meter_bbox, int(cx), int(cy), chunk_size,
+            fine_bbox, int(cx), int(cy), chunk_size,
         )
         for col in chunk.columns:
             xy = (origin_x + int(col.lx), origin_y + int(col.ly))

@@ -11,8 +11,8 @@ from app.application.worldData.pack.refine.fineTerrainRefineOrchestrator import 
     FineTerrainRefineOrchestrator,
 )
 from app.application.worldData.generators.coordinates.worldTile import (
-    iter_meter_chunks,
-    meter_bbox_for_tile,
+    iter_fine_chunks,
+    fine_bbox_for_tile,
 )
 from app.application.worldData.generators.terrain.worldMapSettings import terrain_chunk_columns
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
@@ -21,7 +21,7 @@ from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
 def _world(*, cell_m: int = 1000, chunk: int = 32) -> SimpleNamespace:
     return SimpleNamespace(
         world_uid="w-wp13",
-        map_cell_size_m=cell_m,
+        fine_cells_per_map_cell=cell_m,
         terrain_chunk_columns=chunk,
         terrain_parallel_workers=None,
     )
@@ -33,10 +33,10 @@ class TestScheduleTileBackgroundRings(unittest.IsolatedAsyncioTestCase):
         orch = FineTerrainRefineOrchestrator(MagicMock())
         queue = ChunkRefineQueue(max_workers=1)
         policy = SceneVolumePolicy.canonical_defaults()
-        cell_m = world.map_cell_size_m
+        cell_m = world.fine_cells_per_map_cell
         chunk_size = terrain_chunk_columns(world)
-        meter_bbox = meter_bbox_for_tile(0, 0, cell_m)
-        full_tile = sum(1 for _ in iter_meter_chunks(meter_bbox, chunk_size))
+        fine_bbox = fine_bbox_for_tile(0, 0, cell_m)
+        full_tile = sum(1 for _ in iter_fine_chunks(fine_bbox, chunk_size))
 
         # Anchor near tile center so ring is interior.
         ax = cell_m // 2

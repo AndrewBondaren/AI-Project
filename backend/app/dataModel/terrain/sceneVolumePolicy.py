@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class SceneVolumePolicy(BaseModel):
-    """Gameplay scene load bounds around anchor (meters / fine cells)."""
+    """Gameplay scene load bounds around anchor (fine cells)."""
 
     SCHEMA_ID: ClassVar[str] = "SCH-SCENE-VOLUME-POLICY"
 

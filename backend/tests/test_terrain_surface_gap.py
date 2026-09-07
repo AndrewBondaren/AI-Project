@@ -17,7 +17,7 @@ def _world(*, depth: int = 0) -> World:
         name="Gap Test",
         created_at="2026-01-01T00:00:00Z",
         map_subsurface_depth=depth,
-        map_cell_size_m=3000,
+        fine_cells_per_map_cell=3000,
         terrain_registry=[
             {
                 "system_terrain": "plains",

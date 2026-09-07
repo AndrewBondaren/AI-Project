@@ -120,7 +120,7 @@ JSON на проводе — строка (`"small"`). Тип — номинал
 
 Дубль subtype==size — по-прежнему **422**. Geographic + size — не этот fallback.
 
-Эталон identity: `settlement_size_registry[].system_size`, `economic_tier_registry[].system_tier`, `terrain_registry[].system_terrain`, `material_registry[].system_material`. Refs: NL/skeleton `system_city_size` / `economic_tier` / `dominant_material`, `PlacementCondition.size` / `.terrain_types` / `.tier`, `EconomicTierRange.min/max`. `settlement_density` / district `density` — ENUM-E `DistrictDensity`. `PlacementCondition.zone` — ENUM-E `CellZone`. `district_type` — голый `str`. Остальные N1-W — при касании, не массово.
+Эталон identity: `settlement_size_registry[].system_size`, `economic_tier_registry[].system_tier`, `terrain_registry[].system_terrain`, `material_registry[].system_material`. Refs: NL/skeleton `system_city_size` / `economic_tier` / `dominant_material`, `PlacementCondition.size` / `.terrain_types` / `.tier`, `EconomicTierRange.min/max`. `settlement_density` / district `density` — ENUM-E `DistrictDensity`. `PlacementCondition.zone` — ENUM-E `CellZone`. `district_type` — голый `str`. Очередь leftover city `str` — [`tz_pojo_city_typing.md`](./tz_pojo_city_typing.md) (`POJO-C-*`), при касании, не массово.
 
 ### REF-W → N1-W (cross-ref, import-only)
 
@@ -322,7 +322,7 @@ class WorldSlice:
 | `StrictOnWire` | 422 | `detail: [{ "loc": [...], "msg": "..." }]` |
 | ENUM-E unknown (JV-0) | 422 | `code: "UNKNOWN_ENUM"` + список допустимых wire values |
 | Normalize warnings | 200/201 | **не в HTTP** — только server log |
-| Technical (`map_cell_size_m`, …) | 422 | `WorldService._validate` |
+| Technical (`fine_cells_per_map_cell`, …) | 422 | `WorldService._validate` |
 
 **Формат strict error (422):**
 
@@ -403,7 +403,7 @@ json_validation | resolve | label=… mode=import|runtime | wire={…} | resolve
 
 Скалярные инварианты **без** POJO domain policy:
 
-- `map_cell_size_m` — int, ≥1000, кратно 1000
+- `fine_cells_per_map_cell` — int, ≥1000, кратно 1000
 - `grid_bbox_padding` ≥ 0
 - `terrain_chunk_columns` ≥ 1
 - `map_subsurface_depth` ≥ 10
@@ -417,7 +417,7 @@ json_validation | resolve | label=… mode=import|runtime | wire={…} | resolve
 
 **Назначение:** зафиксировать перенос `application/worldData/generators/` с сырого `world.*` / `dict.get` на typed accessors `jsonValidation/worldRow` → `dataModel` POJO.
 
-**Не входит:** `world_seed()`; technical invariants (`map_cell_size_m`, …). Generate-layout корень — `BuildingLayoutTemplate` (GV-6 ◐). Вложенный интерьер (`levels[]` / rooms / staircases / connections) — **JV-4b** / [POJO-D-16](./tz_datamodel_pojo_discrepancies.md).
+**Не входит:** `world_seed()`; technical invariants (`fine_cells_per_map_cell`, …). Generate-layout корень — `BuildingLayoutTemplate` (GV-6 ◐). Вложенный интерьер (`levels[]` / rooms / staircases / connections) — **JV-4b** / [POJO-D-16](./tz_datamodel_pojo_discrepancies.md).
 
 **Правило:** generators читают master-data **только** через `worldRow`; `model_dump()` в generators — не целевой путь (допустим только в resolve-логах и import facade).
 
@@ -478,7 +478,7 @@ TZ уже описывает **объекты** ([`tz_building_generator.md`](./
 
 ### Facade import — пробелы (symmetry с runtime)
 
-`normalize_world` **не** нормализует (⬜): N1-S technical columns (`stat_schema`, `map_cell_size_m`, …); bundle sections (`races`, `locations`, …). Fill `system_location_type` из уникального subtype — **LOC-T-1** ([`tz_locations.md`](./tz_locations.md)), слой `NamedLocationService` + registry helper, не facade world-slice.  
+`normalize_world` **не** нормализует (⬜): N1-S technical columns (`stat_schema`, `fine_cells_per_map_cell`, …); bundle sections (`races`, `locations`, …). Fill `system_location_type` из уникального subtype — **LOC-T-1** ([`tz_locations.md`](./tz_locations.md)), слой `NamedLocationService` + registry helper, не facade world-slice.  
 ~~barrier / city_size / district / road_settings / terrain scalars / connection_type_registry / location_type / lore / weather / terrain_category / room_type / location_mood / building_template_registry~~ — ✅ GV-3 registry facades.
 
 ### Очередь GV (приоритет)
@@ -670,7 +670,7 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 
 | Версия | Дата | Изменение |
 |--------|------|-----------|
-| — | 2026-09-07 | **Skeleton:** `dominant_material` — `MaterialKey`; `settlement_density` — `DistrictDensity`; overlay/alias ClassVar — `Literal` field names. Identity `system_material` branded |
+| — | 2026-09-07 | Очередь city leftover `str` — [tz_pojo_city_typing.md](./tz_pojo_city_typing.md) |
 | — | 2026-09-07 | **EconomyTierKey refs:** скелет `economic_tier`, NL `system_economic_tier`, `EconomicTierRange.min/max`, layout `economic_tier`. Identity уже branded. Не size→medium |
 | — | 2026-09-07 | **PlacementCondition**: `terrain_types`/`tier` — `TerrainKey`/`EconomyTierKey`; identity `system_terrain`/`system_tier` branded; `zone` — `CellZone`; `district_type` остаётся `str`. Membership miss terrain/tier — прежний REF-W, не size→medium |
 | — | 2026-09-07 | **RegistryKey[R]**: N1-W identity не голый `str`; эталон `SettlementSizeKey`. Type/membership miss ранга на generate → `medium` + WARNING `jsonValidation/resolve` |

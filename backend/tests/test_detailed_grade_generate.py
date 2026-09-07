@@ -67,7 +67,7 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         terrain = TerrainBatchOrchestrator(MagicMock())
         w = MagicMock()
         w.world_uid = "w"
-        w.map_cell_size_m = 4
+        w.fine_cells_per_map_cell = 4
         w.seed = 1
         w.z_min = -2
         w.z_max = 20
@@ -1470,7 +1470,7 @@ class GradeFormationApplyTest(unittest.TestCase):
             surface_ctx=MagicMock(),
             tile_gx=0,
             tile_gy=0,
-            meter_bbox=rect,
+            fine_bbox=rect,
             chunk_size=32,
             surface_state=state,
             templates=templates,
@@ -1528,7 +1528,7 @@ class GradeFormationApplyTest(unittest.TestCase):
             surface_ctx=MagicMock(),
             tile_gx=0,
             tile_gy=0,
-            meter_bbox=rect,
+            fine_bbox=rect,
             chunk_size=32,
             surface_state=state,
             templates=templates,
@@ -1584,7 +1584,7 @@ class GradeFormationApplyTest(unittest.TestCase):
             surface_ctx=MagicMock(),
             tile_gx=0,
             tile_gy=0,
-            meter_bbox=rect,
+            fine_bbox=rect,
             chunk_size=32,
             surface_state=state,
             templates=templates,
@@ -1639,7 +1639,7 @@ class GradeFormationApplyTest(unittest.TestCase):
             surface_ctx=MagicMock(),
             tile_gx=0,
             tile_gy=0,
-            meter_bbox=rect,
+            fine_bbox=rect,
             chunk_size=32,
             surface_state=state,
             templates=templates,

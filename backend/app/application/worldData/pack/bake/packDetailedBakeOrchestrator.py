@@ -10,7 +10,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from app.application.worldData.generators.coordinates import cell_size_m
+from app.application.worldData.generators.coordinates import map_cell_fine_span
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
 )
@@ -34,8 +34,8 @@ from app.application.worldData.pack.read.locationTerritoryVolumes import (
 )
 from app.application.worldData.pack.read.parentLightLoad import require_parent_light
 from app.application.worldData.pack.refine.fineChunkRunner import FineChunkRunner
-from app.application.worldData.pack.refine.meterChunkGeom import (
-    expected_meter_chunks,
+from app.application.worldData.pack.refine.fineChunkGeom import (
+    expected_fine_chunks,
     rects_for_macro_tile,
     rects_overlapping_volume,
     tiles_covering_volume,
@@ -267,7 +267,7 @@ class PackDetailedBakeOrchestrator:
             rects_for_tile=lambda gx, gy: rects_for_macro_tile(world, gx, gy),
             location_volumes=volumes,
             refine_role=refine_role_for_detailed_scope("wilderness"),
-            expected_chunks_for_status=lambda gx, gy: expected_meter_chunks(world, gx, gy),
+            expected_chunks_for_status=lambda gx, gy: expected_fine_chunks(world, gx, gy),
             relief_templates_by_uid=relief_templates,
             stages=request.stages,
         )
@@ -368,7 +368,7 @@ class PackDetailedBakeOrchestrator:
         relief_templates_by_uid: dict[str, ReliefTemplate] | None = None,
         stages: GradePipelineStages | None = None,
     ) -> _FineAggregate:
-        tile_m = cell_size_m(world)
+        tile_m = map_cell_fine_span(world)
         reader = WorldPackReader(writer.paths)
         cache = writer.parent_light_cache
         for gx, gy in tiles:

@@ -27,7 +27,7 @@ class TestMapGridRenderServicePackGate(unittest.IsolatedAsyncioTestCase):
         )
         writer.save_manifest()
         self.pack = build_pack_read_services(self.uid, PatchStoreService(), db_path=self.db_path)
-        self.world = SimpleNamespace(world_uid=self.uid, map_cell_size_m=3000)
+        self.world = SimpleNamespace(world_uid=self.uid, fine_cells_per_map_cell=3000)
 
         self.map_cells = MagicMock()
         self.map_cells.uses_pack_read.return_value = True

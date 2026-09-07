@@ -8,7 +8,7 @@ from app.application.worldData.generators.climate.climateAnchorField import Clim
 from app.application.worldData.generators.climate.climateGeneratorService import ClimateGeneratorService
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField, GridBBox
 from app.application.worldData.generators.coordinates import (
-    cell_size_m,
+    map_cell_fine_span,
     grid_tile_origin_x,
     grid_tile_origin_y,
 )
@@ -37,7 +37,7 @@ def build_climate_coarse_wire(
     """Coarse: one sample per macro-grid cell over *bbox* (pole+local + coarse z)."""
     svc = climate or ClimateGeneratorService()
     anchors = local_field if local_field is not None else ClimateAnchorField(())
-    tile_m = cell_size_m(world)
+    tile_m = map_cell_fine_span(world)
     z_map = coarse_surface_z or {}
     width = bbox.x_max - bbox.x_min + 1
     height = bbox.y_max - bbox.y_min + 1
@@ -86,7 +86,7 @@ def build_climate_tile_wire(
     """Fine: denser light-grid samples over one macro-tile (origin in meters)."""
     svc = climate or ClimateGeneratorService()
     anchors = local_field if local_field is not None else ClimateAnchorField(())
-    tile_m = cell_size_m(world)
+    tile_m = map_cell_fine_span(world)
     side = cells_per_side or resolve_world_map_cells_per_tile(
         tile_m,
         world.world_map_cells_per_tile,

@@ -1,11 +1,11 @@
-"""Declared hydrology carve at world meter resolution (1 m cells)."""
+"""Declared hydrology carve at world fine-grid resolution."""
 
 from __future__ import annotations
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
 from app.application.worldData.generators.coordinates.worldTile import (
     expand_coarse_hydro_to_tile,
-    meter_bbox_for_tile,
+    fine_bbox_for_tile,
 )
 from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments import (
     segments_from_declared,
@@ -35,7 +35,7 @@ def apply_declared_meter_river_carves(
     locations: list[NamedLocation],
     base_surface_z: dict[tuple[int, int], int],
 ) -> tuple[dict[tuple[int, int], MapCellHydrology], dict[tuple[int, int], int]]:
-    """Rasterize declare rivers at meter coords."""
+    """Rasterize declared rivers at fine-grid coords."""
     loaded = load_declared_hydrology(world, locations)
     type_classify = resolve_river_type_classify(world)
     merged_hydro: dict[tuple[int, int], MapCellHydrology] = {}
@@ -93,11 +93,11 @@ def merge_meter_hydro_for_tile(
     merged: dict[tuple[int, int], MapCellHydrology] = {}
     merged.update(expand_coarse_hydro_to_tile(coarse_hydro, tile_gx, tile_gy, cell_m))
 
-    meter_bbox = meter_bbox_for_tile(tile_gx, tile_gy, cell_m)
+    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, cell_m)
     for (xm, ym), entry in sparse_meter_hydro.items():
         if (
-            meter_bbox.x_min <= xm <= meter_bbox.x_max
-            and meter_bbox.y_min <= ym <= meter_bbox.y_max
+            fine_bbox.x_min <= xm <= fine_bbox.x_max
+            and fine_bbox.y_min <= ym <= fine_bbox.y_max
         ):
             merged[(xm, ym)] = entry
 
