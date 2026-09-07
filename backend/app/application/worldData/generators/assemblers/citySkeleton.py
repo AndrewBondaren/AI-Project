@@ -12,6 +12,7 @@ from app.dataModel.settlement.settlement.settlementSpecializationBind import (
     SettlementSpecializationBind,
 )
 from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
+from app.dataModel.settlement.settlement.worldLocationMoodRegistry import LocationMoodKey
 from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
 from app.dataModel.structure.building.buildingLayoutTemplate import DrawingKey
 from app.db.models.namedLocation import NamedLocation
@@ -93,7 +94,7 @@ class CitySkeleton:
     dominant_material:    MaterialKey | None
     settlement_density:   DistrictDensity | None
     system_city_size:     SettlementSizeKey | None
-    system_location_mood: str | None   # ref → worlds.location_mood_registry
+    system_location_mood: LocationMoodKey | None
     frontage_type_order:  list[ConnectionTypeKey] | None = None
     plot_counts:          dict[DrawingKey, int] | None = None
     plot_priority:        dict[DrawingKey, int] | None = None

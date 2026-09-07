@@ -6,9 +6,34 @@ from typing import ClassVar
 
 from pydantic import RootModel
 
-from app.dataModel.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
+from app.dataModel.registryKey import RegistryKey
 from app.dataModel.shared.ranges import IntMinMax
 from app.dataModel.structure.materialPick import MaterialPick
+import app.dataModel.structure.barrier.barrierTemplateEntry as _entry_mod
+from app.dataModel.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
+
+
+class WorldBarrierTemplateRegistry(RootModel[list[BarrierTemplateEntry]]):
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-BARRIER-TEMPLATE"
+    # Runtime worldRow: canonical ⊕ world overrides by this entry field (T-29).
+    RUNTIME_MERGE_ID_FIELD: ClassVar[str] = "system_type"
+    root: list[BarrierTemplateEntry]
+
+    @classmethod
+    def canonical_defaults(cls) -> WorldBarrierTemplateRegistry:
+        return cls(list(_CANONICAL_ENTRIES))
+
+    def entry_for(self, system_type: str) -> BarrierTemplateEntry | None:
+        for entry in self.root:
+            if entry.system_type == system_type:
+                return entry
+        return None
+
+
+type BarrierTemplateKey = RegistryKey[WorldBarrierTemplateRegistry]
+
+_entry_mod.WorldBarrierTemplateRegistry = WorldBarrierTemplateRegistry
+BarrierTemplateEntry.model_rebuild()
 
 _CANONICAL_ENTRIES: tuple[BarrierTemplateEntry, ...] = (
     BarrierTemplateEntry(
@@ -34,20 +59,3 @@ _CANONICAL_ENTRIES: tuple[BarrierTemplateEntry, ...] = (
         towers=IntMinMax(min=0, max=20),
     ),
 )
-
-
-class WorldBarrierTemplateRegistry(RootModel[list[BarrierTemplateEntry]]):
-    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-BARRIER-TEMPLATE"
-    # Runtime worldRow: canonical ⊕ world overrides by this entry field (T-29).
-    RUNTIME_MERGE_ID_FIELD: ClassVar[str] = "system_type"
-    root: list[BarrierTemplateEntry]
-
-    @classmethod
-    def canonical_defaults(cls) -> WorldBarrierTemplateRegistry:
-        return cls(list(_CANONICAL_ENTRIES))
-
-    def entry_for(self, system_type: str) -> BarrierTemplateEntry | None:
-        for entry in self.root:
-            if entry.system_type == system_type:
-                return entry
-        return None

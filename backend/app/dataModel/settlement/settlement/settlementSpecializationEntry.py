@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.registryKey import RegistryKey
 from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
+
+if TYPE_CHECKING:
+    from app.dataModel.settlement.settlement.worldSettlementSpecializationRegistry import (
+        WorldSettlementSpecializationRegistry,
+    )
 
 
 class SettlementSpecializationEntry(BaseModel):
@@ -16,7 +22,7 @@ class SettlementSpecializationEntry(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    system_specialization: StrictOnWire[str]
+    system_specialization: StrictOnWire[RegistryKey[WorldSettlementSpecializationRegistry]]
     display_specialization: DefaultOnWire[str | None] = None
     # N+1 kind label(s), not a closed enum: resource, material, crop, product, domain, …
     # Wire: string, list, or alias ``subject_kinds``.

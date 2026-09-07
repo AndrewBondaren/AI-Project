@@ -70,6 +70,10 @@ type SettlementSizeKey = RegistryKey[WorldSettlementSizeRegistry]
 type EconomyTierKey = RegistryKey[WorldEconomyTierRegistry]
 type TerrainKey = RegistryKey[WorldTerrainRegistry]
 type ConnectionTypeKey = RegistryKey[WorldConnectionTypeRegistry]
+type LocationMoodKey = RegistryKey[WorldLocationMoodRegistry]
+type SettlementSpecializationKey = RegistryKey[WorldSettlementSpecializationRegistry]
+type DistrictTemplateKey = RegistryKey[WorldDistrictTemplateRegistry]
+type BarrierTemplateKey = RegistryKey[WorldBarrierTemplateRegistry]
 type MaterialKey = RegistryKey[WorldMaterialRegistry]
 
 class SettlementSizeEntry:
@@ -84,6 +88,24 @@ class TerrainRegistryEntry:
 class ConnectionTypeEntry:
     system_connection_type: StrictOnWire[RegistryKey[WorldConnectionTypeRegistry]]
 
+class SettlementSpecializationEntry:
+    system_specialization: StrictOnWire[RegistryKey[WorldSettlementSpecializationRegistry]]
+
+class DistrictTemplateEntry:
+    system_name: StrictOnWire[RegistryKey[WorldDistrictTemplateRegistry]]
+
+class TypicalDistrictRef:
+    system_name: DefaultOnWire[DistrictTemplateKey | None]  # pin чертежа; omit/null/blank → None
+
+class DistrictTopologySlot:
+    template_system_name: StrictOnWire[DistrictTemplateKey]
+
+class BarrierTemplateEntry:
+    system_type: StrictOnWire[RegistryKey[WorldBarrierTemplateRegistry]]
+
+class PerimeterBarrier:
+    template: DefaultOnWire[BarrierTemplateKey | None]  # omit/null/blank → None (скип)
+
 class BundleNamedLocation:
     system_settlement_size: DefaultOnWire[SettlementSizeKey | None]  # код до rename: system_city_size
     system_economic_tier: DefaultOnWire[EconomyTierKey | None]
@@ -94,6 +116,7 @@ class SettlementSkeleton:
     dominant_material: DefaultOnWire[MaterialKey | None]
     settlement_density: DefaultOnWire[DistrictDensity | None]
     frontage_type_order: DefaultOnWire[list[ConnectionTypeKey] | None]
+    system_location_mood: DefaultOnWire[LocationMoodKey | None]
 
 class EconomicTierRange:
     min: StrictOnWire[EconomyTierKey]
@@ -676,6 +699,10 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 
 | Версия | Дата | Изменение |
 |--------|------|-----------|
+| — | 2026-09-07 | **BarrierTemplateKey** (POJO-C-6 resolved): identity `system_type` + `PerimeterBarrier.template`. Omit/`null`/`""` → `None` + warning на blank. Relief `structure_refs` / `sides` — не этот срез. |
+| — | 2026-09-07 | **DistrictTemplateKey** (POJO-C-4 resolved): identity `system_name` + pin `TypicalDistrictRef.system_name` + `DistrictTopologySlot.template_system_name`. Pin `""`/blank → `None` + warning. Не ткань `district_type`. |
+| — | 2026-09-07 | **SettlementSpecializationKey** (POJO-C-3 resolved): identity + bind `system_specialization`. Не `district_subtype` / subjects. |
+| — | 2026-09-07 | **LocationMoodKey** (POJO-C-2 resolved): identity `system_mood` + скелет/NL `system_location_mood`. Omit/`null` → `None`. Не size→medium. |
 | — | 2026-09-07 | **ConnectionTypeKey** (POJO-C-5 resolved): identity `system_connection_type` + city refs `DistrictConnection` / topology / `frontage_type_order`. Не ENUM-E; membership REF-W-CONN. Roads/hydrology/SQL edges — не этот срез. |
 | — | 2026-09-07 | Очередь city leftover `str` — [tz_pojo_city_typing.md](./tz_pojo_city_typing.md) |
 | — | 2026-09-07 | **EconomyTierKey refs:** скелет `economic_tier`, NL `system_economic_tier`, `EconomicTierRange.min/max`, layout `economic_tier`. Identity уже branded. Не size→medium |

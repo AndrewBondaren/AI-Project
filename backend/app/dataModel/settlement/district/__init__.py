@@ -36,13 +36,17 @@ from app.dataModel.settlement.district.districtTopologySlot import (
     DistrictTopologyEntry,
     DistrictTopologySlot,
 )
-from app.dataModel.settlement.district.worldDistrictTemplateRegistry import WorldDistrictTemplateRegistry
+from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+    DistrictTemplateKey,
+    WorldDistrictTemplateRegistry,
+)
 
 __all__ = [
     "DEFAULT_CONNECTION_TYPE",
     "CellZone",
     "DistrictConnection",
     "DistrictTemplateEntry",
+    "DistrictTemplateKey",
     "DistrictTopologyEntry",
     "DistrictTopologySlot",
     "DistrictZonePreferenceEntry",

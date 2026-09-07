@@ -19,6 +19,7 @@ from app.dataModel.settlement.settlement.settlementSpecializationBind import (
     SettlementSpecializationBind,
 )
 from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
+from app.dataModel.settlement.settlement.worldLocationMoodRegistry import LocationMoodKey
 from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
 from app.dataModel.structure.building.buildingLayoutTemplate import DrawingKey
 
@@ -49,7 +50,7 @@ class BundleNamedLocation(BaseModel):
     is_accessible: DefaultOnWire[bool] = True
     entry_difficulty: DefaultOnWire[int | None] = None
     guard_level: DefaultOnWire[int | None] = None
-    system_location_mood: DefaultOnWire[str | None] = None
+    system_location_mood: DefaultOnWire[LocationMoodKey | None] = None
     display_location_mood: DefaultOnWire[str | None] = None
     owner_uid: DefaultOnWire[str | None] = None
     system_climate_zone: DefaultOnWire[str | None] = None

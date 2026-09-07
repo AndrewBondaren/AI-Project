@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     ConnectionTypeKey,
 )
+from app.dataModel.registryKey import RegistryKey
 from app.dataModel.roads.enums.streetLayout import StreetLayout
 from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
 from app.dataModel.settlement.district.districtConnection import DistrictConnection
@@ -17,13 +20,18 @@ from app.dataModel.settlement.enums.districtDensity import DistrictDensity
 from app.dataModel.shared.ranges import EconomicTierRange, SizePct
 from app.dataModel.structure.building.buildingLayoutTemplate import DrawingKey
 
+if TYPE_CHECKING:
+    from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+        WorldDistrictTemplateRegistry,
+    )
+
 
 class DistrictTemplateEntry(BaseModel):
     """tz_city_generation.md §9.2."""
 
     model_config = ConfigDict(extra="ignore", frozen=True, populate_by_name=True)
 
-    system_name: StrictOnWire[str]
+    system_name: StrictOnWire[RegistryKey[WorldDistrictTemplateRegistry]]
     display_name: StrictOnWire[str]
     district_type: StrictOnWire[str]
     district_subtype: DefaultOnWire[str | None] = None

@@ -8,6 +8,9 @@ from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     ConnectionTypeKey,
 )
+from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+    DistrictTemplateKey,
+)
 from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
 from app.dataModel.spatial.facing import Facing
 
@@ -43,6 +46,6 @@ class DistrictTopologySlot(BaseModel):
         validation_alias=AliasChoices("depth_fine", "depth_m"),
     )
     ground_z: StrictOnWire[int]
-    template_system_name: StrictOnWire[str]
+    template_system_name: StrictOnWire[DistrictTemplateKey]
     slot_index: StrictOnWire[int]
     entries: DefaultOnWire[tuple[DistrictTopologyEntry, ...]] = ()

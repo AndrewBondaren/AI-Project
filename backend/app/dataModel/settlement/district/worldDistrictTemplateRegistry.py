@@ -6,11 +6,43 @@ from typing import ClassVar
 
 from pydantic import RootModel
 
+from app.dataModel.registryKey import RegistryKey
 from app.dataModel.roads.enums.streetLayout import StreetLayout
 from app.dataModel.settlement.district.districtConnection import DistrictConnection
+import app.dataModel.settlement.district.districtTemplateEntry as _entry_mod
 from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.settlement.district.placementCondition import PlacementCondition
 from app.dataModel.settlement.district.requiredStructure import POSITION_CENTER, RequiredStructure
+
+
+class WorldDistrictTemplateRegistry(RootModel[list[DistrictTemplateEntry]]):
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-DISTRICT-TEMPLATE"
+    # Runtime worldRow: canonical ⊕ world overrides by this entry field (T-29).
+    RUNTIME_MERGE_ID_FIELD: ClassVar[str] = "system_name"
+    root: list[DistrictTemplateEntry]
+
+    @classmethod
+    def canonical_defaults(cls) -> WorldDistrictTemplateRegistry:
+        return cls(list(_CANONICAL_ENTRIES))
+
+    @classmethod
+    def example_port_district(cls) -> DistrictTemplateEntry:
+        """Alias — port row from builtin catalog."""
+        entry = cls.canonical_defaults().entry_for("port_district")
+        assert entry is not None
+        return entry
+
+    def entry_for(self, system_name: str) -> DistrictTemplateEntry | None:
+        for entry in self.root:
+            if entry.system_name == system_name:
+                return entry
+        return None
+
+
+type DistrictTemplateKey = RegistryKey[WorldDistrictTemplateRegistry]
+
+_entry_mod.WorldDistrictTemplateRegistry = WorldDistrictTemplateRegistry
+DistrictTemplateEntry.model_rebuild()
 
 _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
     DistrictTemplateEntry(
@@ -145,27 +177,3 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
         ],
     ),
 )
-
-
-class WorldDistrictTemplateRegistry(RootModel[list[DistrictTemplateEntry]]):
-    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-DISTRICT-TEMPLATE"
-    # Runtime worldRow: canonical ⊕ world overrides by this entry field (T-29).
-    RUNTIME_MERGE_ID_FIELD: ClassVar[str] = "system_name"
-    root: list[DistrictTemplateEntry]
-
-    @classmethod
-    def canonical_defaults(cls) -> WorldDistrictTemplateRegistry:
-        return cls(list(_CANONICAL_ENTRIES))
-
-    @classmethod
-    def example_port_district(cls) -> DistrictTemplateEntry:
-        """Alias — port row from builtin catalog."""
-        entry = cls.canonical_defaults().entry_for("port_district")
-        assert entry is not None
-        return entry
-
-    def entry_for(self, system_name: str) -> DistrictTemplateEntry | None:
-        for entry in self.root:
-            if entry.system_name == system_name:
-                return entry
-        return None

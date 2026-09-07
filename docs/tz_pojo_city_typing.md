@@ -40,10 +40,22 @@
 | POJO-C-1 | `DistrictTemplateEntry.street_layout` | `StreetLayout` (`DefaultOnWire` = `GRID`; omit/invalid → GRID + warning) |
 | POJO-C-7 | чертёж участка: `BuildingLayoutTemplate.system_name` + `RequiredStructure.building_template` + ключи `plot_counts` / `plot_priority`; rename `structure_counts`/`structure_priority` | `DrawingKey` = `RegistryKey[BuildingLayoutTemplate]` |
 | POJO-C-5 | `ConnectionTypeEntry.system_connection_type` + `DistrictConnection` / `DistrictTopologyEntry.connection_type` + `frontage_type_order[]` + `FrontageTypeOrder.order` | `ConnectionTypeKey` |
+| POJO-C-2 | `LocationMoodEntry.system_mood` + скелет / NL / `CitySkeleton.system_location_mood` | `LocationMoodKey` |
+| POJO-C-3 | `SettlementSpecializationEntry.system_specialization` + `SettlementSpecializationBind.system_specialization` | `SettlementSpecializationKey` |
+| POJO-C-4 | `DistrictTemplateEntry.system_name` + `TypicalDistrictRef.system_name` + `DistrictTopologySlot.template_system_name` | `DistrictTemplateKey` |
+| POJO-C-6 | `BarrierTemplateEntry.system_type` + `PerimeterBarrier.template` | `BarrierTemplateKey` |
 
 Generate: unknown **size** → `medium` + WARNING (`jsonValidation` / `resolve`). Omit size → `medium` без warning.
 
 `street_layout`: `DefaultOnWire` (не `DefaultEnumOnWire` / не 422). Generate — `StreetLayout.for_generator`; non-grid layout — **CITY-T-1f**, не этот срез. TZ §9.2 inherit-from-city не реализован (у скелета нет `street_layout`).
+
+`system_location_mood`: omit/`null` → `None` (нет дефолтного mood). `""` → reject. Не size→medium.
+
+`system_specialization`: identity роли, не `district_subtype`. `subjects` / `subject_kind` — не этот ID.
+
+`DistrictTemplateKey`: чертёж района (`civic_center`), не ткань `civic` и не `DrawingKey` участка. Pin `TypicalDistrictRef.system_name`: omit/`null` → `None` (подбор по `district_type` / subtype); `""` / blank на `resolve_model` → `None` + WARNING `invalid; using field default` (не 422). Identity и `DistrictTopologySlot.template_system_name`: `""` → reject. Не size→medium.
+
+`BarrierTemplateKey`: чертёж барьера (`wooden_fence` / `stone_fence` / `city_wall`), identity `system_type` (не `system_name`). `PerimeterBarrier.template`: omit/`null` → `None` (скип инстанса); `""` / blank на `resolve_model` → `None` + WARNING (не 422, не `wooden_fence`). Identity `system_type`: `""` → reject. `sides` — POJO-C-9. Relief `structure_refs` — не этот срез.
 
 ### Контракт connection_type (POJO-C-5)
 
@@ -118,46 +130,7 @@ SQL `named_locations.frontage_type_order` — JSON-массив; dataclass `Name
 
 ## Open — реестр или enum уже есть
 
-Дальше — **POJO-C-2** mood, затем identity+refs одним срезом.
-
-### POJO-C-2 — mood
-
-**Status:** open
-
-| Поле | Сейчас |
-|---|---|
-| `LocationMoodEntry.system_mood` | `StrictOnWire[str]` |
-| скелет / NL `system_location_mood` | `str` |
-
-Реестр: `WorldLocationMoodRegistry`.
-
-### POJO-C-3 — specialization identity
-
-**Status:** open
-
-| Поле | Сейчас |
-|---|---|
-| `SettlementSpecializationEntry.system_specialization` | `StrictOnWire[str]` |
-| `SettlementSpecializationBind.system_specialization` | `StrictOnWire[str]` |
-
-Реестр: `WorldSettlementSpecializationRegistry`. `subjects` / `subject_kind` — не этот ID (`leave` / TODO extract).
-
-### POJO-C-4 — чертёж района `system_name`
-
-**Status:** open
-
-Identity `DistrictTemplateEntry.system_name` + refs:
-
-- `TypicalDistrictRef.system_name` (pin чертежа, не `district_type`)
-- `DistrictTopologySlot.template_system_name`
-
-`RegistryKey[WorldDistrictTemplateRegistry]`. Не брендировать как ткань `civic`.
-
-### POJO-C-6 — `PerimeterBarrier.template`
-
-**Status:** open
-
-Ref → `barrier_template_registry` (`WorldBarrierTemplateRegistry`).
+Дальше — **POJO-C-8** позиция required structure.
 
 ### Контракт участка (locked)
 
@@ -230,6 +203,7 @@ Ref → `barrier_template_registry` (`WorldBarrierTemplateRegistry`).
 | `subjects`, `subject_kind`, ключи `subjects_to_structure_types` | N+1 в несколько реестров; TODO в POJO bind/entry |
 | uid (`location_uid`, `node_uid`, `paired_exit_uid`, …) | экземпляр |
 | `LocationTypeSubtypeEntry.footprint_by_size` ключи | не SoT метров; не этот обход |
+| `CanalStructureSpec.structure_refs` / relief knobs `structure_refs` | relief/канал; не city PerimeterBarrier |
 
 ---
 
@@ -261,3 +235,7 @@ SQL dataclass `NamedLocation` остаётся `str \| None`; coerce на POJO /
 | 2026-09-07 | POJO-C-7 resolved: `DrawingKey`; `plot_counts` / `plot_priority`; alias старых имён map |
 | 2026-09-07 | POJO-C-5 **locked**: `ConnectionTypeKey`; identity + city refs включая `frontage_type_order`; roads/hydrology/SQL edges — не срез |
 | 2026-09-07 | POJO-C-5 **resolved**: `ConnectionTypeKey` на identity + city refs; `FrontageTypeOrder.order` через `require_engine` |
+| 2026-09-07 | POJO-C-2 **resolved**: `LocationMoodKey`; omit/`null` → `None`; не size→medium |
+| 2026-09-07 | POJO-C-3 **resolved**: `SettlementSpecializationKey` на entry + bind; subjects/`district_subtype` не трогать |
+| 2026-09-07 | POJO-C-4 **resolved**: `DistrictTemplateKey` на identity + pin `TypicalDistrictRef.system_name` + `template_system_name`; pin `""` → `None` + warning; ткань `district_type` leave |
+| 2026-09-07 | POJO-C-6 **resolved**: `BarrierTemplateKey` на identity `system_type` + `PerimeterBarrier.template`; `""` → `None` + warning; `sides`/relief `structure_refs` не срез |

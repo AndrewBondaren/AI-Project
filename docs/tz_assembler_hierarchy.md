@@ -352,7 +352,7 @@ class CitySkeleton:
     dominant_material:    MaterialKey | None
     settlement_density:   DistrictDensity | None
     system_city_size:     SettlementSizeKey | None
-    system_location_mood: str | None   # ref → worlds.location_mood_registry (POJO-C-2)
+    system_location_mood: LocationMoodKey | None
     frontage_type_order:  list[ConnectionTypeKey] | None  # C22; null = дефолт движка; POJO-C-5
     plot_counts:          dict[DrawingKey, int] | None
     plot_priority:        dict[DrawingKey, int] | None

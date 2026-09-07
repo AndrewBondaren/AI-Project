@@ -188,18 +188,18 @@ LLM описывает → только из скелета (ограничен�
 | Поле | Тип | Откуда | Описание | Impl |
 |---|---|---|---|---|
 | `economic_tier` | `EconomyTierKey` | `system_economic_tier` | Материалы, плотность, тип зданий | ✅ |
-| `system_location_mood` | string | `NamedLocation` | `prosperous`, `declining`, … | ✅ |
+| `system_location_mood` | `LocationMoodKey \| None` | `NamedLocation` | `prosperous`, `declining`, … N+1. Omit/`null` → нет mood. [POJO-C-2](./tz_pojo_city_typing.md) | ✅ |
 | `display_location_mood` | string | `NamedLocation` | Для LLM | ✅ |
 | `system_settlement_size` | string | `NamedLocation` | ранг → `settlement_size_registry`; footprint — subtype × ранг (**LOC-T-2**). Код: `system_city_size` | ⬜ LOC-T-2 |
 | `system_settlement_specializations` | string[] | JSON import, optional | Ключи §4.1. Пусто / omit — нет вторичного рецепта районов. Несколько = union. Не `system_location_subtype` | ⬜ §1.2 |
-| `typical_districts` | object[] | JSON import, optional | Приоритет 1: `{ "district_type", "district_subtype"?, "system_name"? }`. Пусто — сразу приоритет 2–3 | ⬜ §1.2 |
+| `typical_districts` | object[] | JSON import, optional | Приоритет 1: `{ "district_type", "district_subtype"?, "system_name"? }`. Pin `system_name` — `DistrictTemplateKey`. Omit/`null`/`""` → нет пина (подбор по type/subtype); blank на resolve — warning. Пусто — сразу приоритет 2–3. [POJO-C-4](./tz_pojo_city_typing.md) | ⬜ §1.2 |
 | `dominant_material` | `MaterialKey` | post-assemble | ref → `material_registry`; **не** import | ✅ `resolve_dominant_material` |
 | `architectural_style` | string | JSON import | ref → `architectural_style_registry`; для LLM | ✅ read |
 | `settlement_density` | `DistrictDensity` | JSON import | ENUM-E `sparse` / `medium` / `dense` | ✅ read (NC-9) |
 | `frontage_type_order` | `list[ConnectionTypeKey] \| None` | JSON import, optional | Иерархия `connection_type` для парадного (C22). Элементы — ключи `connection_type_registry`. Как `settlement_density`: import → `CitySkeleton`; SQL — JSON на NL. `null`/`[]` = дефолт движка. Район может переопределить. Контракт — [tz_pojo_city_typing.md](./tz_pojo_city_typing.md) **POJO-C-5** | ⬜ connections §5.1.3 |
 | `plot_counts` | object | JSON import, optional | Городской дефолт копий участка: `{ "<drawing system_name>": int }`. Wire alias `structure_counts`. Резолв N — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов» | ⬜ |
 | `plot_priority` | object | JSON import, optional | Городской дефолт очереди fill: `{ "<drawing system_name>": int }`. Wire alias `structure_priority`. Резолв — [connections](./tz_structure_connections.md) §5.1.3 «Приоритет посадки» | ⬜ |
-| `perimeter_barrier` | nullable `PerimeterBarrier` | optional | Инстанс барьера **поселения** (прямые footprint). Как `settlement_density`: import → `CitySkeleton`. Нет поля / `template` null — скип. Не барьер района. **`SettlementAssembler`** до generate района вычитает эти прямые (`footprint ∩ DistrictSlot`) из площади района | ⬜ |
+| `perimeter_barrier` | nullable `PerimeterBarrier` | optional | Инстанс барьера **поселения** (прямые footprint). Как `settlement_density`: import → `CitySkeleton`. Нет поля / `template` null/`""` — скип. `template` — `BarrierTemplateKey`. Не барьер района. **`SettlementAssembler`** до generate района вычитает эти прямые (`footprint ∩ DistrictSlot`) из площади района. [POJO-C-6](./tz_pojo_city_typing.md) | ⬜ |
 | `state_uid` | string | `NamedLocation` | Политический контекст LLM | ✅ location; ⬜ в `CitySkeleton` |
 
 **Что LLM получает из скелета:**
@@ -237,7 +237,7 @@ Import `dominant_material` на `NamedLocation` **игнорируется** г�
 
 ### 4.1 `worlds.settlement_specialization_registry`
 
-Рецепт **роли**, не морфологии и не списка `tavern_1`. Мастер вешает ключи на шаблон поселения; generate тянет районы приоритетом 2 (§1.2).
+Рецепт **роли**, не морфологии и не списка `tavern_1`. Identity — `SettlementSpecializationKey` ([POJO-C-3](./tz_pojo_city_typing.md)). Мастер вешает ключи на шаблон поселения; generate тянет районы приоритетом 2 (§1.2).
 
 ```json
 [
@@ -520,7 +520,7 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 
 | Поле | Тип | Обязательность | Описание |
 |---|---|---|---|
-| `system_name` | string | required | Уникальный ключ: `"port_district"`, `"merchant_quarter"` |
+| `system_name` | `DistrictTemplateKey` | required | Уникальный ключ чертежа: `"port_district"`, `"merchant_quarter"`. Не ткань `district_type`. [POJO-C-4](./tz_pojo_city_typing.md) |
 | `display_name` | string | required | Отображаемое название |
 | `district_type` | string | required | Ткань квартала (§1.1): `"civic"`, `"commercial"`, `"residential"`, `"industrial"`, `"port"`, `"agricultural"`, … N+1 |
 | `district_subtype` | string | optional | Функция квартала (§1.2): `"extract"`, `"process"`, `"manufacture"`, `"culture"`, `"farm"`, `"livestock"`, … N+1. Должен быть в `location_type_registry` тип `district`. `null` = без специализации |
@@ -536,7 +536,7 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 | `required_structures` | array | optional | Особые обязательные постройки (ратуша, храм, рынок) — см. 9.4. `count` — §5.1.3 «Число токенов»; очередь — §5.1.3 «Приоритет посадки» |
 | `plot_counts` | object | optional | `{ "<drawing system_name>": int }` — районный override копий участка. Wire alias `structure_counts`. Резолв N — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов» |
 | `plot_priority` | object | optional | `{ "<drawing system_name>": int }` — районный override очереди fill. Wire alias `structure_priority`. Резолв — [connections](./tz_structure_connections.md) §5.1.3 «Приоритет посадки» |
-| `perimeter_barrier` | nullable `PerimeterBarrier` | optional | Барьер **района** (прямые **уже урезанного** `DistrictSlot`). Тот же класс, другой инстанс, чем у поселения ([tz_locations.md](./tz_locations.md)). Omit/null / `template` null — скип. Поле + `template` — всегда, без roll. `sides` — прямые **слота**; нет ключа / `null` / `[]` → четыре прямые слота. **v1 packing:** inner bbox минус эти прямые внутрь. Клетки — `DistrictAssembler` (TODO). Список поселения не пишет; общая xy запрещена (вычет поселения раньше). |
+| `perimeter_barrier` | nullable `PerimeterBarrier` | optional | Барьер **района** (прямые **уже урезанного** `DistrictSlot`). Тот же класс, другой инстанс, чем у поселения ([tz_locations.md](./tz_locations.md)). Omit/null / `template` null/`""` — скип. `template` — `BarrierTemplateKey` ([POJO-C-6](./tz_pojo_city_typing.md)). Поле + `template` — всегда, без roll. `sides` — прямые **слота**; нет ключа / `null` / `[]` → четыре прямые слота. **v1 packing:** inner bbox минус эти прямые внутрь. Клетки — `DistrictAssembler` (TODO). Список поселения не пишет; общая xy запрещена (вычет поселения раньше). |
 
 Канон **специализированных** чертежей (builtin, overlay мира по `system_name`). Существующие `civic_center` / `industrial_quarter` / … без `district_subtype` — неспециализированная ткань (проход 3 морфологии). **Код:** этих строк в registry нет.
 
@@ -887,6 +887,10 @@ DAG может materialize **разные уровни** в разных нод�
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-07 | **POJO-C-6 resolved:** `PerimeterBarrier.template` / identity `system_type` — `BarrierTemplateKey`. |
+| 2026-09-07 | **POJO-C-4 resolved:** чертёж района `system_name` / pin / `template_system_name` — `DistrictTemplateKey`. |
+| 2026-09-07 | **POJO-C-3 resolved:** `system_specialization` — `SettlementSpecializationKey` (entry + bind). |
+| 2026-09-07 | **POJO-C-2 resolved:** скелет / NL `system_location_mood` — `LocationMoodKey`. |
 | 2026-09-07 | **POJO-C-5 resolved:** `frontage_type_order` / `DistrictConnection.connection_type` — `ConnectionTypeKey`. |
 | 2026-09-07 | **POJO-C-5 locked:** `frontage_type_order` / `DistrictConnection.connection_type` — `ConnectionTypeKey`. Код ещё `str`. |
 | 2026-09-07 | Очередь leftover `str` на city POJO — [tz_pojo_city_typing.md](./tz_pojo_city_typing.md) (`POJO-C-*`). Скелет не reopen. |

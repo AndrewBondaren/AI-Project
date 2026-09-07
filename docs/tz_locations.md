@@ -958,7 +958,7 @@ price = tier.base_value × location.economic_modifier × supply_demand_modifier 
 ]
 ```
 
-`perimeter_barrier.template` — ref → `barrier_template_registry.system_type`. **Нет поля**, или поле есть и `template` **null** — инстанса нет (скип как нет поля).  
+`perimeter_barrier.template` — ref → `barrier_template_registry.system_type` (`BarrierTemplateKey`, [POJO-C-6](./tz_pojo_city_typing.md)). **Нет поля**, или поле есть и `template` **null** / `""` — инстанса нет (скип как нет поля).  
 `perimeter_barrier.probability` — поле **класса**; читает только владелец-участок (roll 0.0–1.0). Владельцы поселение и район не крутят.  
 `perimeter_barrier.sides` — какие прямые bbox **этого** инстанса включены: cardinals `north`/`south`/`east`/`west` (`Facing`). v1: каждая включённая грань — **прямая** вдоль этой грани (толщина — `width_cells` чертежа **этого** инстанса). Нет поля / `null` / пустой список `[]` → **все четыре** прямые этого bbox. Непустой список — только эти грани. Intercardinal и unknown — skip ключа + warning. Не синглтон: три хоста — три объекта, зоны не пересекаются.
 

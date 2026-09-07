@@ -6,10 +6,35 @@ from typing import ClassVar
 
 from pydantic import RootModel
 
+from app.dataModel.registryKey import RegistryKey
+import app.dataModel.settlement.settlement.settlementSpecializationEntry as _entry_mod
 from app.dataModel.settlement.settlement.settlementSpecializationEntry import (
     SettlementSpecializationEntry,
 )
 from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
+
+
+class WorldSettlementSpecializationRegistry(RootModel[list[SettlementSpecializationEntry]]):
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-SETTLEMENT-SPEC"
+    RUNTIME_MERGE_ID_FIELD: ClassVar[str] = "system_specialization"
+    root: list[SettlementSpecializationEntry]
+
+    @classmethod
+    def canonical_defaults(cls) -> WorldSettlementSpecializationRegistry:
+        return cls(list(_CANONICAL_ENTRIES))
+
+    def entry_for(self, system_specialization: str) -> SettlementSpecializationEntry | None:
+        key = (system_specialization or "").strip()
+        for entry in self.root:
+            if entry.system_specialization == key:
+                return entry
+        return None
+
+
+type SettlementSpecializationKey = RegistryKey[WorldSettlementSpecializationRegistry]
+
+_entry_mod.WorldSettlementSpecializationRegistry = WorldSettlementSpecializationRegistry
+SettlementSpecializationEntry.model_rebuild()
 
 _CANONICAL_ENTRIES: tuple[SettlementSpecializationEntry, ...] = (
     SettlementSpecializationEntry(
@@ -75,20 +100,3 @@ _CANONICAL_ENTRIES: tuple[SettlementSpecializationEntry, ...] = (
         required_structure_types=["livestock"],
     ),
 )
-
-
-class WorldSettlementSpecializationRegistry(RootModel[list[SettlementSpecializationEntry]]):
-    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-SETTLEMENT-SPEC"
-    RUNTIME_MERGE_ID_FIELD: ClassVar[str] = "system_specialization"
-    root: list[SettlementSpecializationEntry]
-
-    @classmethod
-    def canonical_defaults(cls) -> WorldSettlementSpecializationRegistry:
-        return cls(list(_CANONICAL_ENTRIES))
-
-    def entry_for(self, system_specialization: str) -> SettlementSpecializationEntry | None:
-        key = (system_specialization or "").strip()
-        for entry in self.root:
-            if entry.system_specialization == key:
-                return entry
-        return None

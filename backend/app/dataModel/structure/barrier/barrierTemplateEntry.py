@@ -2,18 +2,26 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
+from app.dataModel.registryKey import RegistryKey
 from app.dataModel.shared.ranges import IntMinMax
 from app.dataModel.structure.materialPick import MaterialPick
+
+if TYPE_CHECKING:
+    from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
+        WorldBarrierTemplateRegistry,
+    )
 
 
 class BarrierTemplateEntry(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    system_type: StrictOnWire[str]
+    system_type: StrictOnWire[RegistryKey[WorldBarrierTemplateRegistry]]
     glossary_ref: DefaultOnWire[str | None] = None
     wall_material: DefaultOnWire[MaterialPick | None] = None
     height_levels: DefaultOnWire[IntMinMax | None] = None

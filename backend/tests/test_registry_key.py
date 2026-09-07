@@ -255,6 +255,7 @@ class TestRegistryKey(unittest.TestCase):
         self.assertIsNone(skeleton.dominant_material)
         self.assertIsInstance(skeleton.system_city_size, RegistryKey)
         self.assertEqual(skeleton.system_city_size, "small")
+        self.assertIsInstance(skeleton.system_location_mood, RegistryKey)
         self.assertEqual(skeleton.system_location_mood, "prosperous")
         cleared = city_skeleton_from_settlement(loc, economic_tier=None)
         self.assertIsNone(cleared.economic_tier)
@@ -445,6 +446,322 @@ class TestRegistryKey(unittest.TestCase):
         self.assertIsInstance(district.frontage_type_order[0], RegistryKey)
         with self.assertRaises(Exception):
             SettlementSkeleton(frontage_type_order=[""])
+
+    def test_location_mood_identity_and_city_refs_are_branded(self) -> None:
+        from app.dataModel.locations.namedLocation.bundleNamedLocation import (
+            BundleNamedLocation,
+        )
+        from app.dataModel.settlement.settlement.locationMoodEntry import (
+            LocationMoodEntry,
+        )
+        from app.dataModel.settlement.settlement.settlementSkeleton import (
+            SettlementSkeleton,
+        )
+        from app.dataModel.settlement.settlement.worldLocationMoodRegistry import (
+            LocationMoodKey,
+            WorldLocationMoodRegistry,
+        )
+
+        mood = WorldLocationMoodRegistry.canonical_defaults().root[0]
+        self.assertIsInstance(mood.system_mood, RegistryKey)
+        self.assertEqual(mood.system_mood, "prosperous")
+        self.assertIs(
+            registry_key_target(
+                LocationMoodEntry.model_fields["system_mood"].annotation,
+            ),
+            WorldLocationMoodRegistry,
+        )
+        self.assertIs(registry_key_target(LocationMoodKey), WorldLocationMoodRegistry)
+        self.assertIsNot(
+            registry_key_target(LocationMoodKey),
+            registry_key_target(EconomyTierKey),
+        )
+        with self.assertRaises(Exception):
+            LocationMoodEntry(system_mood="")
+
+        skeleton = SettlementSkeleton(system_location_mood="declining")
+        self.assertIsInstance(skeleton.system_location_mood, RegistryKey)
+        self.assertEqual(skeleton.system_location_mood, "declining")
+        loc = BundleNamedLocation(
+            location_uid="loc-1",
+            display_name="X",
+            system_location_type="settlement",
+            system_location_mood="abandoned",
+        )
+        self.assertIsInstance(loc.system_location_mood, RegistryKey)
+        self.assertEqual(loc.system_location_mood, "abandoned")
+        self.assertIs(
+            registry_key_target(
+                SettlementSkeleton.model_fields["system_location_mood"].annotation,
+            ),
+            WorldLocationMoodRegistry,
+        )
+        self.assertIs(
+            registry_key_target(
+                BundleNamedLocation.model_fields["system_location_mood"].annotation,
+            ),
+            WorldLocationMoodRegistry,
+        )
+        with self.assertRaises(Exception):
+            SettlementSkeleton(system_location_mood="")
+
+    def test_specialization_identity_and_bind_are_branded(self) -> None:
+        from app.dataModel.settlement.settlement.settlementSpecializationBind import (
+            SettlementSpecializationBind,
+        )
+        from app.dataModel.settlement.settlement.settlementSpecializationEntry import (
+            SettlementSpecializationEntry,
+        )
+        from app.dataModel.settlement.settlement.worldSettlementSpecializationRegistry import (
+            SettlementSpecializationKey,
+            WorldSettlementSpecializationRegistry,
+        )
+
+        extract = WorldSettlementSpecializationRegistry.canonical_defaults().entry_for(
+            "extract",
+        )
+        assert extract is not None
+        self.assertIsInstance(extract.system_specialization, RegistryKey)
+        self.assertEqual(extract.system_specialization, "extract")
+        self.assertIs(
+            registry_key_target(
+                SettlementSpecializationEntry.model_fields[
+                    "system_specialization"
+                ].annotation,
+            ),
+            WorldSettlementSpecializationRegistry,
+        )
+        self.assertIs(
+            registry_key_target(SettlementSpecializationKey),
+            WorldSettlementSpecializationRegistry,
+        )
+        self.assertIsNot(
+            registry_key_target(SettlementSpecializationKey),
+            registry_key_target(EconomyTierKey),
+        )
+        with self.assertRaises(Exception):
+            SettlementSpecializationEntry(system_specialization="")
+
+        bind = SettlementSpecializationBind(system_specialization="farm")
+        self.assertIsInstance(bind.system_specialization, RegistryKey)
+        self.assertEqual(bind.system_specialization, "farm")
+        bare = SettlementSpecializationBind.model_validate("culture")
+        self.assertIsInstance(bare.system_specialization, RegistryKey)
+        self.assertEqual(bare.system_specialization, "culture")
+        self.assertIs(
+            registry_key_target(
+                SettlementSpecializationBind.model_fields[
+                    "system_specialization"
+                ].annotation,
+            ),
+            WorldSettlementSpecializationRegistry,
+        )
+        with self.assertRaises(Exception):
+            SettlementSpecializationBind(system_specialization="")
+
+    def test_district_template_identity_and_refs_are_branded(self) -> None:
+        from app.application.jsonValidation.resolve import resolve_model
+        from app.dataModel.settlement.district.districtTemplateEntry import (
+            DistrictTemplateEntry,
+        )
+        from app.dataModel.settlement.district.districtTopologySlot import (
+            DistrictTopologySlot,
+        )
+        from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+            DistrictTemplateKey,
+            WorldDistrictTemplateRegistry,
+        )
+        from app.dataModel.settlement.settlement.settlementSpecializationEntry import (
+            SettlementSpecializationEntry,
+        )
+        from app.dataModel.settlement.settlement.typicalDistrictRef import (
+            TypicalDistrictRef,
+        )
+
+        civic = WorldDistrictTemplateRegistry.canonical_defaults().entry_for(
+            "civic_center",
+        )
+        assert civic is not None
+        self.assertIsInstance(civic.system_name, RegistryKey)
+        self.assertEqual(civic.system_name, "civic_center")
+        self.assertIs(
+            registry_key_target(
+                DistrictTemplateEntry.model_fields["system_name"].annotation,
+            ),
+            WorldDistrictTemplateRegistry,
+        )
+        self.assertIs(
+            registry_key_target(DistrictTemplateKey),
+            WorldDistrictTemplateRegistry,
+        )
+        self.assertIsNot(
+            registry_key_target(DistrictTemplateKey),
+            registry_key_target(EconomyTierKey),
+        )
+        self.assertIsNone(
+            registry_key_target(
+                DistrictTemplateEntry.model_fields["district_type"].annotation,
+            ),
+        )
+        with self.assertRaises(Exception):
+            DistrictTemplateEntry(
+                system_name="",
+                display_name="x",
+                district_type="civic",
+            )
+
+        omitted = TypicalDistrictRef(district_type="industrial")
+        self.assertIsNone(omitted.system_name)
+        self.assertIsNone(
+            registry_key_target(
+                TypicalDistrictRef.model_fields["district_type"].annotation,
+            ),
+        )
+        self.assertEqual(
+            field_policy(TypicalDistrictRef.model_fields["system_name"].annotation),
+            WireFieldPolicy.DEFAULT,
+        )
+        self.assertIs(
+            registry_key_target(
+                TypicalDistrictRef.model_fields["system_name"].annotation,
+            ),
+            WorldDistrictTemplateRegistry,
+        )
+        pinned = TypicalDistrictRef(
+            district_type="civic",
+            system_name="civic_center",
+        )
+        self.assertIsInstance(pinned.system_name, RegistryKey)
+        self.assertEqual(pinned.system_name, "civic_center")
+        blank = TypicalDistrictRef(district_type="civic", system_name="")
+        self.assertIsNone(blank.system_name)
+        whitespace = TypicalDistrictRef(district_type="civic", system_name="   ")
+        self.assertIsNone(whitespace.system_name)
+
+        log = "app.application.jsonValidation.resolve"
+        with self.assertLogs(log, level="WARNING") as captured:
+            resolved = resolve_model(
+                TypicalDistrictRef,
+                {"district_type": "industrial", "system_name": ""},
+            )
+        self.assertIsNone(resolved.system_name)
+        self.assertEqual(resolved.district_type, "industrial")
+        text = "\n".join(captured.output)
+        self.assertIn("system_name", text)
+        self.assertIn("invalid", text)
+        self.assertIn("using field default", text)
+
+        nested = resolve_model(
+            SettlementSpecializationEntry,
+            {
+                "system_specialization": "extract",
+                "typical_districts": [
+                    {
+                        "district_type": "industrial",
+                        "district_subtype": "extract",
+                        "system_name": "",
+                    },
+                ],
+            },
+        )
+        self.assertEqual(len(nested.typical_districts), 1)
+        self.assertEqual(nested.typical_districts[0].district_type, "industrial")
+        self.assertIsNone(nested.typical_districts[0].system_name)
+
+        slot = DistrictTopologySlot(
+            cell_x=0,
+            cell_y=0,
+            origin_x=0,
+            origin_y=0,
+            width_fine=16,
+            depth_fine=16,
+            ground_z=0,
+            template_system_name="civic_center",
+            slot_index=0,
+        )
+        self.assertIsInstance(slot.template_system_name, RegistryKey)
+        self.assertEqual(slot.template_system_name, "civic_center")
+        self.assertIs(
+            registry_key_target(
+                DistrictTopologySlot.model_fields["template_system_name"].annotation,
+            ),
+            WorldDistrictTemplateRegistry,
+        )
+        with self.assertRaises(Exception):
+            DistrictTopologySlot(
+                cell_x=0,
+                cell_y=0,
+                origin_x=0,
+                origin_y=0,
+                width_fine=16,
+                depth_fine=16,
+                ground_z=0,
+                template_system_name="",
+                slot_index=0,
+            )
+
+    def test_barrier_template_identity_and_perimeter_ref_are_branded(self) -> None:
+        from app.application.jsonValidation.resolve import resolve_model
+        from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
+        from app.dataModel.structure.barrier.barrierTemplateEntry import (
+            BarrierTemplateEntry,
+        )
+        from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
+            BarrierTemplateKey,
+            WorldBarrierTemplateRegistry,
+        )
+
+        stone = WorldBarrierTemplateRegistry.canonical_defaults().entry_for(
+            "stone_fence",
+        )
+        assert stone is not None
+        self.assertIsInstance(stone.system_type, RegistryKey)
+        self.assertEqual(stone.system_type, "stone_fence")
+        self.assertIs(
+            registry_key_target(
+                BarrierTemplateEntry.model_fields["system_type"].annotation,
+            ),
+            WorldBarrierTemplateRegistry,
+        )
+        self.assertIs(
+            registry_key_target(BarrierTemplateKey),
+            WorldBarrierTemplateRegistry,
+        )
+        self.assertIsNot(
+            registry_key_target(BarrierTemplateKey),
+            registry_key_target(EconomyTierKey),
+        )
+        with self.assertRaises(Exception):
+            BarrierTemplateEntry(system_type="")
+
+        omitted = PerimeterBarrier()
+        self.assertIsNone(omitted.template)
+        self.assertEqual(
+            field_policy(PerimeterBarrier.model_fields["template"].annotation),
+            WireFieldPolicy.DEFAULT,
+        )
+        self.assertIs(
+            registry_key_target(
+                PerimeterBarrier.model_fields["template"].annotation,
+            ),
+            WorldBarrierTemplateRegistry,
+        )
+        pinned = PerimeterBarrier(template="city_wall", probability=1.0)
+        self.assertIsInstance(pinned.template, RegistryKey)
+        self.assertEqual(pinned.template, "city_wall")
+        blank = PerimeterBarrier(template="")
+        self.assertIsNone(blank.template)
+        whitespace = PerimeterBarrier(template="   ")
+        self.assertIsNone(whitespace.template)
+
+        log = "app.application.jsonValidation.resolve"
+        with self.assertLogs(log, level="WARNING") as captured:
+            resolved = resolve_model(PerimeterBarrier, {"template": ""})
+        self.assertIsNone(resolved.template)
+        text = "\n".join(captured.output)
+        self.assertIn("template", text)
+        self.assertIn("invalid", text)
+        self.assertIn("using field default", text)
 
 
 if __name__ == "__main__":
