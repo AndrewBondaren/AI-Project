@@ -7,6 +7,9 @@ from typing import Any
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire, IgnoreOnWire, StrictOnWire
+from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
+    ConnectionTypeKey,
+)
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 from app.dataModel.materials.worldMaterialRegistry import MaterialKey
 from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
@@ -17,6 +20,7 @@ from app.dataModel.settlement.settlement.settlementSpecializationBind import (
 )
 from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
 from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
+from app.dataModel.structure.building.buildingLayoutTemplate import DrawingKey
 
 
 def _skeleton_default(name: str):
@@ -26,7 +30,7 @@ def _skeleton_default(name: str):
 class BundleNamedLocation(BaseModel):
     """tz_locations.md § named_locations — import wire contract."""
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, populate_by_name=True)
 
     location_uid: StrictOnWire[str]
     display_name: StrictOnWire[str]
@@ -80,14 +84,16 @@ class BundleNamedLocation(BaseModel):
     settlement_density: DefaultOnWire[DistrictDensity | None] = _skeleton_default(
         "settlement_density",
     )
-    frontage_type_order: DefaultOnWire[list[str] | None] = _skeleton_default(
-        "frontage_type_order",
+    frontage_type_order: DefaultOnWire[list[ConnectionTypeKey] | None] = (
+        _skeleton_default("frontage_type_order")
     )
-    structure_counts: DefaultOnWire[dict[str, int] | None] = _skeleton_default(
-        "structure_counts",
+    plot_counts: DefaultOnWire[dict[DrawingKey, int] | None] = Field(
+        default=_skeleton_default("plot_counts"),
+        validation_alias=AliasChoices("plot_counts", "structure_counts"),
     )
-    structure_priority: DefaultOnWire[dict[str, int] | None] = _skeleton_default(
-        "structure_priority",
+    plot_priority: DefaultOnWire[dict[DrawingKey, int] | None] = Field(
+        default=_skeleton_default("plot_priority"),
+        validation_alias=AliasChoices("plot_priority", "structure_priority"),
     )
     perimeter_barrier: DefaultOnWire[PerimeterBarrier | None] = _skeleton_default(
         "perimeter_barrier",

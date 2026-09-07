@@ -5,6 +5,9 @@ from __future__ import annotations
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
+    ConnectionTypeKey,
+)
 from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
 from app.dataModel.spatial.facing import Facing
 
@@ -20,7 +23,7 @@ class DistrictTopologyEntry(BaseModel):
     z: StrictOnWire[int]
     role: StrictOnWire[DistrictEntryRole]
     facing: StrictOnWire[Facing]
-    connection_type: StrictOnWire[str]
+    connection_type: StrictOnWire[ConnectionTypeKey]
     paired_exit_uid: DefaultOnWire[str | None] = None
 
 

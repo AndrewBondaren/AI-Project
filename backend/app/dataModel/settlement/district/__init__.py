@@ -29,8 +29,8 @@ from app.dataModel.settlement.district.requiredStructureResolve import (
 from app.dataModel.settlement.district.structurePlacement import (
     COUNT_WITHOUT_KEY,
     PRIORITY_WITHOUT_KEY,
-    resolve_structure_count,
-    resolve_structure_priority,
+    resolve_plot_count,
+    resolve_plot_priority,
 )
 from app.dataModel.settlement.district.districtTopologySlot import (
     DistrictTopologyEntry,
@@ -59,7 +59,7 @@ __all__ = [
     "primary_or_default",
     "resolve_frontage_type_order",
     "resolve_required_layouts",
-    "resolve_structure_count",
-    "resolve_structure_priority",
+    "resolve_plot_count",
+    "resolve_plot_priority",
     "union_required_structures",
 ]

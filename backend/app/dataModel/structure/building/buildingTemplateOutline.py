@@ -10,6 +10,7 @@ from app.dataModel.livestock.enums.livestockKind import LivestockKind
 from app.dataModel.resources.enums.resourceKind import ResourceKind
 from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
 from app.dataModel.shared.ranges import EconomicTierRange, IntMinMax
+from app.dataModel.structure.building.buildingLayoutTemplate import DrawingKey
 from app.dataModel.structure.building.buildingTemplateRoomSlot import BuildingTemplateRoomSlot
 from app.dataModel.structure.materialPick import MaterialPick
 
@@ -23,7 +24,7 @@ class BuildingTemplateOutline(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    system_name: StrictOnWire[str]
+    system_name: StrictOnWire[DrawingKey]
     structure_type: StrictOnWire[str]
     display_name: StrictOnWire[str]
     # Extract drawings only. ENUM-E: ore / stone / timber / liquid.

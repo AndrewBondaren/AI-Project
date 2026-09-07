@@ -30,8 +30,10 @@ class StreetLayout(StrEnum):
         return default
 
     @classmethod
-    def for_generator(cls, wire: str | None) -> StreetLayout:
-        """Empty wire → GRID; unknown wire → ValueError (HY-5 roads)."""
+    def for_generator(cls, wire: str | StreetLayout | None) -> StreetLayout:
+        """Resolved member as-is; empty → GRID; unknown leftover str → ValueError."""
+        if isinstance(wire, cls):
+            return wire
         if wire is None or not str(wire).strip():
             return cls.GRID
         parsed = cls.from_wire(wire)

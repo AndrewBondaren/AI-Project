@@ -42,8 +42,8 @@ from app.dataModel.settlement.district.requiredStructureResolve import (
     resolve_required_layouts,
 )
 from app.dataModel.settlement.district.structurePlacement import (
-    resolve_structure_count,
-    resolve_structure_priority,
+    resolve_plot_count,
+    resolve_plot_priority,
 )
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
@@ -410,16 +410,16 @@ def build_tokens(
         )
         if required is None:
             required = _required_for(slot, name, catalog)
-        n, n_from = resolve_structure_count(
+        n, n_from = resolve_plot_count(
             name,
             required=required,
-            district_counts=slot.district_template.structure_counts,
-            settlement_counts=skeleton.structure_counts,
+            district_counts=slot.district_template.plot_counts,
+            settlement_counts=skeleton.plot_counts,
         )
-        priority = resolve_structure_priority(
+        priority = resolve_plot_priority(
             name,
-            district_priority=slot.district_template.structure_priority,
-            settlement_priority=skeleton.structure_priority,
+            district_priority=slot.district_template.plot_priority,
+            settlement_priority=skeleton.plot_priority,
         )
         position = required.position if required is not None else None
         if n <= 0:

@@ -347,21 +347,21 @@ def generate_from_template(
 ```python
 @dataclass
 class CitySkeleton:
-    economic_tier:        str | None   # ref → worlds.economic_tier_registry
-    architectural_style:  str | None   # ref → worlds.architectural_style_registry
-    dominant_material:    str | None   # ref → worlds.material_registry
-    settlement_density:   str | None   # "sparse" | "medium" | "dense"
-    system_city_size:     str | None   # ref → worlds.city_size_registry
-    system_location_mood: str | None   # ref → worlds.location_mood_registry
-    frontage_type_order:  list[str] | None          # C22; null = дефолт движка
-    structure_counts:     dict[str, int] | None     # C22; городской дефолт N
-    structure_priority:   dict[str, int] | None     # C22; городской дефолт очереди
-    perimeter_barrier:    PerimeterBarrier | None   # барьер **поселения** (прямые footprint); вычет из площади района — SettlementAssembler, не район
+    economic_tier:        EconomyTierKey | None
+    architectural_style:  str | None   # ref → worlds.architectural_style_registry (POJO нет)
+    dominant_material:    MaterialKey | None
+    settlement_density:   DistrictDensity | None
+    system_city_size:     SettlementSizeKey | None
+    system_location_mood: str | None   # ref → worlds.location_mood_registry (POJO-C-2)
+    frontage_type_order:  list[ConnectionTypeKey] | None  # C22; null = дефолт движка; POJO-C-5
+    plot_counts:          dict[DrawingKey, int] | None
+    plot_priority:        dict[DrawingKey, int] | None
+    perimeter_barrier:    PerimeterBarrier | None
 ```
 
 Источник данных: поля `NamedLocation` поселения. Собирается `SettlementAssembler` и передаётся вниз без изменений.
 
-C22-поля: перечень и persist — [tz_city_generation.md](tz_city_generation.md) §3 (`⬜` в коде). Резолв N / очереди / фасада — [tz_structure_connections.md](tz_structure_connections.md) §5.1.3 (не дублировать таблицы здесь). Район перекрывает город **по ключу** (`district_template`) для counts/priority/frontage. `perimeter_barrier` на скелете — барьер **поселения** (прямые footprint), не района. `display_location_mood` / `state_uid` — city §3; в этот dataclass не входят (`state_uid` ⬜ в скелете отдельно).
+C22-поля: перечень и persist — [tz_city_generation.md](tz_city_generation.md) §3 (`⬜` в коде). Резолв N / очереди / фасада — [tz_structure_connections.md](tz_structure_connections.md) §5.1.3 (не дублировать таблицы здесь). Типы ключей фасада — [tz_pojo_city_typing.md](tz_pojo_city_typing.md) **POJO-C-5**. Район перекрывает город **по ключу** (`district_template`) для counts/priority/frontage. `perimeter_barrier` на скелете — барьер **поселения** (прямые footprint), не района. `display_location_mood` / `state_uid` — city §3; в этот dataclass не входят (`state_uid` ⬜ в скелете отдельно).
 
 ---
 

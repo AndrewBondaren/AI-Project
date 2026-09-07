@@ -69,6 +69,8 @@ class RegistryKey[R](str): ...
 type SettlementSizeKey = RegistryKey[WorldSettlementSizeRegistry]
 type EconomyTierKey = RegistryKey[WorldEconomyTierRegistry]
 type TerrainKey = RegistryKey[WorldTerrainRegistry]
+type ConnectionTypeKey = RegistryKey[WorldConnectionTypeRegistry]
+type MaterialKey = RegistryKey[WorldMaterialRegistry]
 
 class SettlementSizeEntry:
     system_size: StrictOnWire[RegistryKey[WorldSettlementSizeRegistry]]
@@ -79,6 +81,9 @@ class EconomyTierEntry:
 class TerrainRegistryEntry:
     system_terrain: StrictOnWire[RegistryKey[WorldTerrainRegistry]]
 
+class ConnectionTypeEntry:
+    system_connection_type: StrictOnWire[RegistryKey[WorldConnectionTypeRegistry]]
+
 class BundleNamedLocation:
     system_settlement_size: DefaultOnWire[SettlementSizeKey | None]  # код до rename: system_city_size
     system_economic_tier: DefaultOnWire[EconomyTierKey | None]
@@ -88,6 +93,7 @@ class SettlementSkeleton:
     system_city_size: DefaultOnWire[SettlementSizeKey | None]
     dominant_material: DefaultOnWire[MaterialKey | None]
     settlement_density: DefaultOnWire[DistrictDensity | None]
+    frontage_type_order: DefaultOnWire[list[ConnectionTypeKey] | None]
 
 class EconomicTierRange:
     min: StrictOnWire[EconomyTierKey]
@@ -602,7 +608,7 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 |-------|--------|-----|---------------------|
 | **JV-0a** | `resolve` + `parse_enum` hook | 1 | ✅ invalid `material_category` → 422 `UNKNOWN_ENUM` |
 | **JV-0b** | `ConnectionNodeImportRow` (+ edge row) + `WorldBundleService` hook | 1 | ✅ |
-| **JV-0c** | Аудит world POJO: `StrictOnWire[Enum]` где enum уже в `dataModel` | по мере slice | `climate_pole_mode`, district `street_layout` — вместе с JV-4 / GV-3 |
+| **JV-0c** | Аудит world POJO: `StrictOnWire[Enum]` где enum уже в `dataModel` | по мере slice | `climate_pole_mode`; district `street_layout` — **POJO-C-1** `DefaultOnWire[StreetLayout]` (warn+`grid`, не Strict) |
 
 **Порядок:** JV-0a → JV-0b → JV-0c (не блокирует GV-3 / JV-4, но enum-поля шаблонов лягут туда же).
 
@@ -670,6 +676,7 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 
 | Версия | Дата | Изменение |
 |--------|------|-----------|
+| — | 2026-09-07 | **ConnectionTypeKey** (POJO-C-5 resolved): identity `system_connection_type` + city refs `DistrictConnection` / topology / `frontage_type_order`. Не ENUM-E; membership REF-W-CONN. Roads/hydrology/SQL edges — не этот срез. |
 | — | 2026-09-07 | Очередь city leftover `str` — [tz_pojo_city_typing.md](./tz_pojo_city_typing.md) |
 | — | 2026-09-07 | **EconomyTierKey refs:** скелет `economic_tier`, NL `system_economic_tier`, `EconomicTierRange.min/max`, layout `economic_tier`. Identity уже branded. Не size→medium |
 | — | 2026-09-07 | **PlacementCondition**: `terrain_types`/`tier` — `TerrainKey`/`EconomyTierKey`; identity `system_terrain`/`system_tier` branded; `zone` — `CellZone`; `district_type` остаётся `str`. Membership miss terrain/tier — прежний REF-W, не size→medium |

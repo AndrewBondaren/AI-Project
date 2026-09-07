@@ -7,6 +7,18 @@ from typing import ClassVar
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire
+from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
+    ConnectionTypeKey,
+    WorldConnectionTypeRegistry,
+)
+
+_FRONTAGE_ORDER_LOOKUP: tuple[str, ...] = (
+    "highway", "road", "dirt_road", "alley", "trail",
+)
+
+
+def _engine_frontage_order() -> list[ConnectionTypeKey]:
+    return [WorldConnectionTypeRegistry.require_engine(k) for k in _FRONTAGE_ORDER_LOOKUP]
 
 
 class FrontageTypeOrder(BaseModel):
@@ -16,8 +28,8 @@ class FrontageTypeOrder(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    order: DefaultOnWire[list[str]] = Field(
-        default_factory=lambda: ["highway", "road", "dirt_road", "alley", "trail"],
+    order: DefaultOnWire[list[ConnectionTypeKey]] = Field(
+        default_factory=_engine_frontage_order,
     )
 
     @classmethod
@@ -26,10 +38,10 @@ class FrontageTypeOrder(BaseModel):
 
 
 def _filter_known(
-    order: list[str],
+    order: list[ConnectionTypeKey],
     known_types: frozenset[str],
-) -> tuple[list[str], list[str]]:
-    kept: list[str] = []
+) -> tuple[list[ConnectionTypeKey], list[str]]:
+    kept: list[ConnectionTypeKey] = []
     skipped: list[str] = []
     for key in order:
         if key in known_types:
@@ -40,10 +52,10 @@ def _filter_known(
 
 
 def resolve_frontage_type_order(
-    district_order: list[str] | None,
-    settlement_order: list[str] | None,
+    district_order: list[ConnectionTypeKey] | None,
+    settlement_order: list[ConnectionTypeKey] | None,
     known_types: frozenset[str],
-) -> tuple[list[str], list[str]]:
+) -> tuple[list[ConnectionTypeKey], list[str]]:
     """
     District → settlement → FrontageTypeOrder.canonical_defaults().
     Empty / null inherits. Unknown keys skipped; empty after skip inherits.

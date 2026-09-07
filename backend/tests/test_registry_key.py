@@ -232,6 +232,193 @@ class TestRegistryKey(unittest.TestCase):
             "system_economic_tier",
         )
 
+    def test_drawing_key_is_layout_identity(self) -> None:
+        from app.dataModel.settlement.district.districtTemplateEntry import (
+            DistrictTemplateEntry,
+        )
+        from app.dataModel.settlement.district.requiredStructure import RequiredStructure
+        from app.dataModel.structure.building.buildingLayoutTemplate import (
+            BuildingLayoutTemplate,
+            DrawingKey,
+        )
+
+        self.assertIs(registry_key_target(DrawingKey), BuildingLayoutTemplate)
+        self.assertIs(
+            registry_key_target(
+                BuildingLayoutTemplate.model_fields["system_name"].annotation,
+            ),
+            BuildingLayoutTemplate,
+        )
+        self.assertIs(
+            registry_key_target(
+                RequiredStructure.model_fields["building_template"].annotation,
+            ),
+            BuildingLayoutTemplate,
+        )
+        layout = BuildingLayoutTemplate(
+            system_name="tavern_1",
+            structure_type="tavern",
+            display_name="Inn",
+        )
+        self.assertIsInstance(layout.system_name, RegistryKey)
+        pin = RequiredStructure(building_template="tavern_1")
+        self.assertIsInstance(pin.building_template, RegistryKey)
+        district = DistrictTemplateEntry(
+            system_name="inn_row",
+            display_name="Inns",
+            district_type="commercial",
+            plot_counts={"tavern_1": 3},
+        )
+        key = next(iter(district.plot_counts or {}))
+        self.assertIsInstance(key, RegistryKey)
+        self.assertEqual(district.plot_counts["tavern_1"], 3)
+        aliased = DistrictTemplateEntry(
+            system_name="inn_row",
+            display_name="Inns",
+            district_type="commercial",
+            structure_counts={"tavern_1": 2},
+        )
+        self.assertEqual(aliased.plot_counts["tavern_1"], 2)
+        with self.assertRaises(Exception):
+            RequiredStructure(building_template="")
+
+    def test_connection_type_identity_and_city_refs_are_branded(self) -> None:
+        from app.dataModel.connections.connectionType.connectionTypeEntry import (
+            ConnectionTypeEntry,
+        )
+        from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
+            ConnectionTypeKey,
+            WorldConnectionTypeRegistry,
+        )
+        from app.dataModel.locations.namedLocation.bundleNamedLocation import (
+            BundleNamedLocation,
+        )
+        from app.dataModel.settlement.district.districtConnection import (
+            DEFAULT_CONNECTION_TYPE,
+            DistrictConnection,
+        )
+        from app.dataModel.settlement.district.districtTemplateEntry import (
+            DistrictTemplateEntry,
+        )
+        from app.dataModel.settlement.district.districtTopologySlot import (
+            DistrictTopologyEntry,
+        )
+        from app.dataModel.settlement.district.frontageTypeOrder import (
+            FrontageTypeOrder,
+        )
+        from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
+        from app.dataModel.settlement.settlement.settlementSkeleton import (
+            SettlementSkeleton,
+        )
+        from app.dataModel.spatial.facing import Facing
+
+        road = WorldConnectionTypeRegistry.canonical_engine().entry_for("road")
+        assert road is not None
+        self.assertIsInstance(road.system_connection_type, RegistryKey)
+        self.assertEqual(road.system_connection_type, "road")
+        self.assertIsInstance(
+            WorldConnectionTypeRegistry.require_engine("alley"),
+            RegistryKey,
+        )
+        self.assertIs(
+            registry_key_target(
+                ConnectionTypeEntry.model_fields["system_connection_type"].annotation,
+            ),
+            WorldConnectionTypeRegistry,
+        )
+        self.assertIs(registry_key_target(ConnectionTypeKey), WorldConnectionTypeRegistry)
+        self.assertIsNot(
+            registry_key_target(ConnectionTypeKey),
+            registry_key_target(EconomyTierKey),
+        )
+        with self.assertRaises(Exception):
+            ConnectionTypeEntry(system_connection_type="", display_name="x")
+
+        conn = DistrictConnection(connection_type="road")
+        self.assertIsInstance(conn.connection_type, RegistryKey)
+        self.assertEqual(conn.connection_type, "road")
+        self.assertIsInstance(DEFAULT_CONNECTION_TYPE, RegistryKey)
+        self.assertEqual(
+            DistrictConnection.street_default().connection_type,
+            DEFAULT_CONNECTION_TYPE,
+        )
+        self.assertIs(
+            registry_key_target(
+                DistrictConnection.model_fields["connection_type"].annotation,
+            ),
+            WorldConnectionTypeRegistry,
+        )
+        with self.assertRaises(Exception):
+            DistrictConnection(connection_type="")
+
+        entry = DistrictTopologyEntry(
+            node_uid="n1",
+            x=0,
+            y=0,
+            z=0,
+            role=DistrictEntryRole.ENTRY_POINT,
+            facing=Facing.NORTH,
+            connection_type="dirt_road",
+        )
+        self.assertIsInstance(entry.connection_type, RegistryKey)
+        self.assertIs(
+            registry_key_target(
+                DistrictTopologyEntry.model_fields["connection_type"].annotation,
+            ),
+            WorldConnectionTypeRegistry,
+        )
+
+        engine_order = FrontageTypeOrder.canonical_defaults().order
+        self.assertEqual(
+            list(engine_order),
+            ["highway", "road", "dirt_road", "alley", "trail"],
+        )
+        self.assertTrue(all(isinstance(k, RegistryKey) for k in engine_order))
+        self.assertIs(
+            registry_key_target(FrontageTypeOrder.model_fields["order"].annotation),
+            WorldConnectionTypeRegistry,
+        )
+        self.assertIs(
+            registry_key_target(
+                DistrictTemplateEntry.model_fields["frontage_type_order"].annotation,
+            ),
+            WorldConnectionTypeRegistry,
+        )
+        self.assertIs(
+            registry_key_target(
+                SettlementSkeleton.model_fields["frontage_type_order"].annotation,
+            ),
+            WorldConnectionTypeRegistry,
+        )
+        self.assertIs(
+            registry_key_target(
+                BundleNamedLocation.model_fields["frontage_type_order"].annotation,
+            ),
+            WorldConnectionTypeRegistry,
+        )
+
+        skeleton = SettlementSkeleton(frontage_type_order=["road", "alley"])
+        assert skeleton.frontage_type_order is not None
+        self.assertIsInstance(skeleton.frontage_type_order[0], RegistryKey)
+        loc = BundleNamedLocation(
+            location_uid="loc-1",
+            display_name="X",
+            system_location_type="settlement",
+            frontage_type_order=["highway"],
+        )
+        assert loc.frontage_type_order is not None
+        self.assertIsInstance(loc.frontage_type_order[0], RegistryKey)
+        district = DistrictTemplateEntry(
+            system_name="inn_row",
+            display_name="Inns",
+            district_type="commercial",
+            frontage_type_order=["road", "dirt_road"],
+        )
+        assert district.frontage_type_order is not None
+        self.assertIsInstance(district.frontage_type_order[0], RegistryKey)
+        with self.assertRaises(Exception):
+            SettlementSkeleton(frontage_type_order=[""])
+
 
 if __name__ == "__main__":
     unittest.main()

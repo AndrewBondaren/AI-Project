@@ -3,6 +3,7 @@ from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import
     HYDROLOGY_CONNECTION_TYPE_KEYS,
     LANE_BASED_CONNECTION_TYPE_KEYS,
     ROAD_MASK_CONNECTION_TYPE_KEYS,
+    ConnectionTypeKey,
     WorldConnectionTypeRegistry,
 )
 
@@ -11,5 +12,6 @@ __all__ = [
     "LANE_BASED_CONNECTION_TYPE_KEYS",
     "ROAD_MASK_CONNECTION_TYPE_KEYS",
     "ConnectionTypeEntry",
+    "ConnectionTypeKey",
     "WorldConnectionTypeRegistry",
 ]

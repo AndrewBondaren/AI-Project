@@ -51,7 +51,7 @@ class NamedLocation:
     dominant_material:          str | None = None
     settlement_density:         str | None = None
     frontage_type_order:        list | None = json_nullable_col()
-    structure_counts:           dict | None = json_nullable_col()
-    structure_priority:         dict | None = json_nullable_col()
+    plot_counts:                dict | None = json_nullable_col()
+    plot_priority:              dict | None = json_nullable_col()
     perimeter_barrier:          dict | None = json_nullable_col()
     district_topology:          dict | None = json_nullable_col()

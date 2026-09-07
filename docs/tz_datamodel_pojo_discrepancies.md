@@ -114,6 +114,8 @@ connections: list[dict]
 
 Wire-имена полей (`DistrictConnection.connection_type` vs `system_connection_type`) — контракт JSON, не merge.
 
+Типизация city identity/refs — [tz_pojo_city_typing.md](./tz_pojo_city_typing.md) **POJO-C-5** (`ConnectionTypeKey`). Не этот ID.
+
 ---
 
 ### POJO-D-4 — fixture / engine tuples без mechanical derive

@@ -11,7 +11,11 @@ from app.dataModel.climate import (
     WorldClimateZoneRegistry,
     WorldWeatherTypeRegistry,
 )
-from app.dataModel.connections import ConnectionTypeEntry, WorldConnectionTypeRegistry
+from app.dataModel.connections import (
+    ConnectionTypeEntry,
+    ConnectionTypeKey,
+    WorldConnectionTypeRegistry,
+)
 from app.dataModel.economy import (
     BAND_COMMON,
     BAND_MIDDLE,
@@ -105,6 +109,7 @@ from app.dataModel.structure import (
     BuildingLayoutTemplate,
     BuildingTemplateOutline,
     BuildingTemplateRegistryEntry,
+    DrawingKey,
     RoomSize,
     RoomSizePreset,
     SPIRAL_SIZE_PRESETS,
@@ -141,6 +146,7 @@ __all__ = [
     "BuildingLayoutTemplate",
     "BuildingTemplateOutline",
     "BuildingTemplateRegistryEntry",
+    "DrawingKey",
     "CellZone",
     "SettlementFootprintError",
     "SettlementSizeEntry",
@@ -150,6 +156,7 @@ __all__ = [
     "ClimateZoneProfile",
     "ClimateZoneProfileData",
     "ConnectionTypeEntry",
+    "ConnectionTypeKey",
     "CONSTRUCTION_MATERIAL_DEFAULTS",
     "DEFAULT_DOMINANT_MATERIAL",
     "DEFAULT_FLOOR_MATERIAL",

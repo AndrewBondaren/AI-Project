@@ -603,6 +603,8 @@ Assembler участка назначает роли C20: **парадный** (
 
 Резолв (первый заданный список): **район** (`district_template.frontage_type_order`) → **город** (`CitySkeleton.frontage_type_order` с поселения) → **дефолт движка** (`FrontageTypeOrder.canonical_defaults()`, dataModel). Пустой/null = наследовать. SoT значений — POJO, не литерал в генераторе.
 
+Элементы списка и `DistrictConnection.connection_type` — `ConnectionTypeKey` (`RegistryKey[WorldConnectionTypeRegistry]`). Дефолтный порядок: SoT `FrontageTypeOrder.order`; ключи — `require_engine`, не параллельный `["highway", …]`. Полный срез полей — [tz_pojo_city_typing.md](./tz_pojo_city_typing.md) **POJO-C-5**.
+
 Неизвестный ключ в списке: **skip** + `warning` (не валить generate). Если после skip список пуст — наследовать уровень выше. Ключ должен быть в `connection_type_registry` мира.
 
 **Поле города.** Не колонка ребра и не строка типа. Импорт на **поселении**, как `settlement_density` (JSON / `getattr` → `CitySkeleton`; SQL на `NamedLocation` — при persist скелета, `0001`, не блокер generate). Район: `district_template.frontage_type_order`. Мировой N+1-список «на все города» в v1 нет.
@@ -677,7 +679,7 @@ SoT полного порядка района (C22). Внутренность *
 
 #### Число токенов (копии `system_name`)
 
-SoT. Поля JSON — [tz_city_generation.md](./tz_city_generation.md) §3 (`CitySkeleton.structure_counts`), §9.2 / §9.4 (район). Здесь — резолв **N** для каждого `system_name`.
+SoT. Поля JSON — [tz_city_generation.md](./tz_city_generation.md) §3 (`CitySkeleton.plot_counts`), §9.2 / §9.4 (район). Здесь — резолв **N** для каждого чертежа (`system_name`). Wire alias: `structure_counts`.
 
 Пул: для каждого кандидата cache — **N** одинаковых токенов (один footprint). Кандидаты = `allowed_structure_types` ∩ тир ∪ шаблоны из `required_structures`. Нет в cache — нет токенов.
 
@@ -686,13 +688,13 @@ SoT. Поля JSON — [tz_city_generation.md](./tz_city_generation.md) §3 (`Ci
 | № | Источник | Когда |
 |---|---|---|
 | 1 | `required_structures[].count` | этот шаблон есть в `required_structures` района (`building_template` = `system_name`) |
-| 2 | `district_template.structure_counts[system_name]` | ключ есть |
-| 3 | `CitySkeleton.structure_counts[system_name]` | ключ есть |
+| 2 | `district_template.plot_counts[system_name]` | ключ есть |
+| 3 | `CitySkeleton.plot_counts[system_name]` | ключ есть |
 | 4 | **1** | иначе |
 
-Нет поля / нет ключа — **не** ноль: смотреть уровень ниже. Явный `0` — ноль токенов (не сажать). Запись в `required_structures` включает уровень 1 (нет `count` → 1) и **не** смотрит `structure_counts` для этого имени, даже если там больше.
+Нет поля / нет ключа — **не** ноль: смотреть уровень ниже. Явный `0` — ноль токенов (не сажать). Запись в `required_structures` включает уровень 1 (нет `count` → 1) и **не** смотрит `plot_counts` для этого имени, даже если там больше.
 
-`structure_counts` — `{ "<system_name>": int }`, optional. Район перекрывает город **по ключу**, не целиком map.
+`plot_counts` — `{ "<drawing system_name>": int }`, optional. Район перекрывает город **по ключу**, не целиком map. Import: `structure_counts` — alias.
 
 Не добивать район копиями «пока есть место». Не влезло — `warning`; лишние токены не превращаются в ещё N копий других шаблонов.
 
@@ -700,14 +702,14 @@ SoT. Поля JSON — [tz_city_generation.md](./tz_city_generation.md) §3 (`Ci
 
 #### Приоритет посадки
 
-SoT. Не путать с N: priority **не** меняет число токенов. Поля JSON — [tz_city_generation.md](./tz_city_generation.md) §3 (`CitySkeleton.structure_priority`), §9.2 / §9.4 (район).
+SoT. Не путать с N: priority **не** меняет число токенов. Поля JSON — [tz_city_generation.md](./tz_city_generation.md) §3 (`CitySkeleton.plot_priority`), §9.2 / §9.4 (район).
 
 **Очередь:**
 
-1. **Приоритетные** (проход 1, до рамки пустых кварталов): `required_structures` (порядок массива) и шаблоны с `structure_priority` **> 0**. Для каждого — бронь во внутреннем bbox. Не «взять первый из кучи». Не «сначала нарезать район, потом втиснуть».
+1. **Приоритетные** (проход 1, до рамки пустых кварталов): `required_structures` (порядок массива) и шаблоны с `plot_priority` **> 0**. Для каждого — бронь во внутреннем bbox. Не «взять первый из кучи». Не «сначала нарезать район, потом втиснуть».
 2. **Остальная коллекция** (проход 2, после рамки): остальные токены (`priority` ≤ 0 и не required).
 
-`structure_priority` — `{ "<system_name>": int }`, optional. Больше = раньше **внутри прохода 1**. Нет поля / нет ключа — **0** (проход 2). Район перекрывает город **по ключу**. Явный `0` = остальная коллекция. Отрицательное — тоже проход 2, после нуля в списке коллекции.
+`plot_priority` — `{ "<drawing system_name>": int }`, optional. Больше = раньше **внутри прохода 1**. Нет поля / нет ключа — **0** (проход 2). Район перекрывает город **по ключу**. Явный `0` = остальная коллекция. Отрицательное — тоже проход 2, после нуля в списке коллекции. Import: `structure_priority` — alias.
 
 Не делает шаблон `required_structures`. Не встал в проходе 1 — `warning`, в проход 2 как затычку щели **не** класть.
 
@@ -720,13 +722,13 @@ SoT. Не путать с N: priority **не** меняет число токе�
 
 `(60,60)` раньше `(18,18)` при одном priority; `(100,20)` раньше `(80,80)` (max 100>80). Площадь `w*h` в ключ не входит.
 
-Пример: `structure_priority`: `{ "manor_rich": 10 }` → усадьба в **проходе 1** до прочих приоритетных с меньшим числом. Ратуша в `required_structures` — раньше усадьбы. Дома с priority 0 — только проход 2.
+Пример: `plot_priority`: `{ "manor_rich": 10 }` → усадьба в **проходе 1** до прочих приоритетных с меньшим числом. Ратуша в `required_structures` — раньше усадьбы. Дома с priority 0 — только проход 2.
 
 #### Два прохода посадки
 
 SoT. Не «берём первый токен». Два смысла подряд:
 
-**Проход 1 — приоритетные (до рамки).** Состав: все `required_structures`, затем токены с `structure_priority` **> 0** (порядок — «Приоритет посадки»). Для **каждого** — бронь связного блока клеток решётки `block_size` во внутреннем bbox (спан `ceil(w/step)×ceil(d/step)`, 90°). Не через коридор якорей. Поставили — вынуть, не вытеснять. Нет места в bbox слота — `warning` / leftover; **не** отдавать это место обычной коллекции «пока ищем»; **не** расти `DistrictSlot`. `position: center` — только у центра внутреннего bbox; не встал — не класть куда попало и **не** в проход 2. AABB брони — из cache; facing к полосе рамки — после шага рамки («Поворот оболочки»). Какой AABB до полосы — **CONN-PACK-3** (§8).
+**Проход 1 — приоритетные (до рамки).** Состав: все `required_structures`, затем токены с `plot_priority` **> 0** (порядок — «Приоритет посадки»). Для **каждого** — бронь связного блока клеток решётки `block_size` во внутреннем bbox (спан `ceil(w/step)×ceil(d/step)`, 90°). Не через коридор якорей. Поставили — вынуть, не вытеснять. Нет места в bbox слота — `warning` / leftover; **не** отдавать это место обычной коллекции «пока ищем»; **не** расти `DistrictSlot`. `position: center` — только у центра внутреннего bbox; не встал — не класть куда попало и **не** в проход 2. AABB брони — из cache; facing к полосе рамки — после шага рамки («Поворот оболочки»). Какой AABB до полосы — **CONN-PACK-3** (§8).
 
 **Проход 2 — остальная коллекция (после рамки).** Только токены, которых не было в проходе 1 (`priority` ≤ 0, не required). Оставшиеся пустые кварталы / дырки: для каждой — с начала этого списка, кто влезает (таблица ниже). Leftover после прохода — `warning`.
 
@@ -875,7 +877,7 @@ Bin-pack всего района без модулей и шаг fill = `max(ш�
 |---|---|
 | Какие шаблоны вообще можно | да: `allowed_structure_types`, тир ±1 |
 | Обязательные (ратуша, рынок, `plaza` в `required_structures`) | да: конкретный шаблон + `position` `center` \| `any` |
-| Куда на плане обычный дом vs склад vs площадь при fill | **нет в v1:** после required и `structure_priority` — packing по размеру и щели, не «площадь в центр потому что plaza» |
+| Куда на плане обычный дом vs склад vs площадь при fill | **нет в v1:** после required и `plot_priority` — packing по размеру и щели, не «площадь в центр потому что plaza» |
 
 Геометрия fill — 2D-упаковка в модуль (`DistrictAssembler`). Не генератор улиц как автор слотов и не `StructureAreaAssembler`.
 

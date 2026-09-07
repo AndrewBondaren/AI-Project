@@ -64,7 +64,6 @@ from app.application.worldData.generators.structure.structureGeneratorService im
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
 )
-from app.dataModel.roads.enums.streetLayout import StreetLayout
 from app.dataModel.settlement.district.districtConnection import primary_or_default
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
@@ -197,7 +196,7 @@ class DistrictAssembler:
             area_slots=len(placements),
             street_xy=len(street_xy),
             connection_type=primary.connection_type,
-            street_layout=template.street_layout or StreetLayout.GRID.value,
+            street_layout=template.street_layout,
         )
 
         from app.application.worldData.generators.assemblers.areaAssembler.structureAreaAssembler import (

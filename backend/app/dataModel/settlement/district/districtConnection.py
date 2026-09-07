@@ -8,11 +8,12 @@ from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
+    ConnectionTypeKey,
     WorldConnectionTypeRegistry,
 )
 
 
-def _engine_street_connection_type() -> str:
+def _engine_street_connection_type() -> ConnectionTypeKey:
     return WorldConnectionTypeRegistry.require_engine(
         WorldConnectionTypeRegistry.SYSTEM_CONNECTION_TYPE_ROAD,
     )
@@ -25,7 +26,7 @@ DEFAULT_CONNECTION_TYPE = _engine_street_connection_type()
 class DistrictConnection(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True, populate_by_name=True)
 
-    connection_type: StrictOnWire[str]
+    connection_type: StrictOnWire[ConnectionTypeKey]
     role: DefaultOnWire[str | None] = None
     sidewalk: DefaultOnWire[bool | None] = None
     lanes_per_side: DefaultOnWire[int | None] = None

@@ -9,6 +9,7 @@ from app.dataModel.connections.connectionType import (
     LANE_BASED_CONNECTION_TYPE_KEYS,
     ROAD_MASK_CONNECTION_TYPE_KEYS,
     ConnectionTypeEntry,
+    ConnectionTypeKey,
     WorldConnectionTypeRegistry,
 )
 from app.dataModel.connections.enums import ConnectionNodeType, GraphLevel, PortalType
@@ -19,6 +20,7 @@ __all__ = [
     "ROAD_MASK_CONNECTION_TYPE_KEYS",
     "ConnectionNodeType",
     "ConnectionTypeEntry",
+    "ConnectionTypeKey",
     "GraphLevel",
     "PortalType",
     "WorldConnectionTypeRegistry",

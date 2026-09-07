@@ -41,8 +41,8 @@ from app.dataModel.settlement.district import (
     allowed_fill_structure_types,
     resolve_frontage_type_order,
     resolve_required_layouts,
-    resolve_structure_count,
-    resolve_structure_priority,
+    resolve_plot_count,
+    resolve_plot_priority,
     union_required_structures,
 )
 
@@ -78,8 +78,8 @@ __all__ = [
     "block_size_for_density",
     "resolve_frontage_type_order",
     "resolve_required_layouts",
-    "resolve_structure_count",
-    "resolve_structure_priority",
+    "resolve_plot_count",
+    "resolve_plot_priority",
     "resolved_host_sides",
     "union_required_structures",
 ]

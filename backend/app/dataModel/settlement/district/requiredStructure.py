@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.structure.building.buildingLayoutTemplate import DrawingKey
 
 POSITION_ANY = "any"
 POSITION_CENTER = "center"
@@ -13,7 +14,7 @@ POSITION_CENTER = "center"
 class RequiredStructure(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    building_template: StrictOnWire[str]
+    building_template: StrictOnWire[DrawingKey]
     structure_type: DefaultOnWire[str | None] = None
     count: DefaultOnWire[int] = 1
     position: DefaultOnWire[str] = POSITION_ANY

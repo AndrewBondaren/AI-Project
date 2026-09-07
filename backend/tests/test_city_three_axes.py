@@ -728,14 +728,14 @@ class TokenPickTest(unittest.TestCase):
         )
         self.assertEqual(names, names2)
 
-    def test_structure_counts_copies_chosen_drawing(self) -> None:
+    def test_plot_counts_copies_chosen_drawing(self) -> None:
         catalog = BuildingCatalog.from_layouts([_layout("tavern_1", "tavern")])
         template = DistrictTemplateEntry(
             system_name="inn_row",
             display_name="Inns",
             district_type="commercial",
             allowed_structure_types=["tavern"],
-            structure_counts={"tavern_1": 3},
+            plot_counts={"tavern_1": 3},
         )
         slot = DistrictSlot(
             origin_x=0, origin_y=0, width_fine=40, depth_fine=40, ground_z=0,

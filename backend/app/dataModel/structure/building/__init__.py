@@ -1,6 +1,7 @@
 from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
 from app.dataModel.structure.building.buildingLayoutTemplate import (
     BuildingLayoutTemplate,
+    DrawingKey,
     coerce_building_layout,
     try_building_layout,
 )
@@ -14,6 +15,7 @@ from app.dataModel.structure.building.worldBuildingTemplateRegistry import World
 __all__ = [
     "BuildingCatalog",
     "BuildingLayoutTemplate",
+    "DrawingKey",
     "BuildingTemplateOutline",
     "BuildingTemplateRegistryEntry",
     "BuildingTemplateRoomSlot",

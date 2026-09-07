@@ -52,8 +52,8 @@ class BundleNamedLocationWireTests(unittest.TestCase):
             "architectural_style": "gothic",
             "perimeter_barrier": barrier.model_dump(mode="json"),
             "frontage_type_order": ["road", "dirt_road"],
-            "structure_counts": {"tavern": 2},
-            "structure_priority": {"tavern": 1},
+            "plot_counts": {"tavern_1": 2},
+            "plot_priority": {"tavern_1": 1},
         })
         fields = wire.to_db_fields()
         self.assertEqual(fields["settlement_density"], density)
@@ -66,8 +66,22 @@ class BundleNamedLocationWireTests(unittest.TestCase):
         )
         self.assertEqual(fields["perimeter_barrier"]["template"], barrier.template)
         self.assertEqual(fields["frontage_type_order"], ["road", "dirt_road"])
-        self.assertEqual(fields["structure_counts"]["tavern"], 2)
-        self.assertEqual(fields["structure_priority"]["tavern"], 1)
+        self.assertEqual(fields["plot_counts"]["tavern_1"], 2)
+        self.assertEqual(fields["plot_priority"]["tavern_1"], 1)
+
+    def test_legacy_structure_counts_alias(self) -> None:
+        wire = BundleNamedLocation.model_validate({
+            "location_uid": "loc-city",
+            "display_name": "Ironhold",
+            "system_location_type": "settlement",
+            "structure_counts": {"tavern_1": 2},
+            "structure_priority": {"tavern_1": 1},
+        })
+        self.assertEqual(wire.plot_counts["tavern_1"], 2)
+        self.assertEqual(wire.plot_priority["tavern_1"], 1)
+        fields = wire.to_db_fields()
+        self.assertEqual(fields["plot_counts"]["tavern_1"], 2)
+        self.assertNotIn("structure_counts", fields)
 
 
 if __name__ == "__main__":

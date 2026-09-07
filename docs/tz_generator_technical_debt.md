@@ -3,7 +3,7 @@
 **Тип:** инженерное ТЗ / living registry (не player-facing).  
 **Scope:** `backend/app/application/worldData/generators/` — settlement, district, area, terrain, climate, structure, coordinates.  
 **Adjacent (orchestration hooks):** `mapCellService.py`, `api/routes/map.py`, `backend/scripts/debug_*.py` / `render_maps.py`, `worldBundleService.py`, relief library/import, pack render / parent-light refine.  
-**Обновлено:** 2026-09-05 — **CITY-T-4** планировщик после 2d **resolved** (`/impl-city-t-4`: POJO rank/zone/conditions, один resolve, cache=tokens, skip unknown assembler). **CITY-T-2d** контракт §1.2 в коде (`partial`; leftover **2b**). **CITY-T-2a** null=каталог + civic allow-list (`resolved`). **CITY-T-3** parallel generate **одного** поселения (owner: мастер; не агент). 2026-09-04 — **CITY-T-2** пул шаблонов мира → packing (allowed null, uid library). **CITY-T-1** контур city generate (скелет import/SQL, dual persist, эвристика стен vs C22). SoT generate: [`tz_terrain_relief.md`](./tz_terrain_relief.md) (очереди, стрелки). Bake R36/R43 — архив [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). **R41-T-25** алгоритм+валидатор+тесты **open** (следующая разработка с мастером). **R41-T-17** leftover→COUPLE + валидатор не из z ✅ (не конечный occupancy). **R41-T-18** / **T-19** mill Q1/Q2 ✅. Полиш mill **R41-T-20…T-23** ✅. Rename heightmap **R41-T-24** (`z_height_map`) ✅. **R41-T-13…T-16** ✅. Очередь v2 полиш **R41-T-1…T-12** ✅. Consume dump: [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md).  
+**Обновлено:** 2026-09-07 — **NC-10** leftover `_m` (горы / гидрология / pack `light_m`) после rename coordinate hub на fine grid. 2026-09-05 — **CITY-T-4** планировщик после 2d **resolved** (`/impl-city-t-4`: POJO rank/zone/conditions, один resolve, cache=tokens, skip unknown assembler). **CITY-T-2d** контракт §1.2 в коде (`partial`; leftover **2b**). **CITY-T-2a** null=каталог + civic allow-list (`resolved`). **CITY-T-3** parallel generate **одного** поселения (owner: мастер; не агент). 2026-09-04 — **CITY-T-2** пул шаблонов мира → packing (allowed null, uid library). **CITY-T-1** контур city generate (скелет import/SQL, dual persist, эвристика стен vs C22). SoT generate: [`tz_terrain_relief.md`](./tz_terrain_relief.md) (очереди, стрелки). Bake R36/R43 — архив [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md). **R41-T-25** алгоритм+валидатор+тесты **open** (следующая разработка с мастером). **R41-T-17** leftover→COUPLE + валидатор не из z ✅ (не конечный occupancy). **R41-T-18** / **T-19** mill Q1/Q2 ✅. Полиш mill **R41-T-20…T-23** ✅. Rename heightmap **R41-T-24** (`z_height_map`) ✅. **R41-T-13…T-16** ✅. Очередь v2 полиш **R41-T-1…T-12** ✅. Consume dump: [`tz_terrain_relief_consume.md`](./tz_terrain_relief_consume.md).  
 **Связанные документы:**
 
 | Документ | Роль |
@@ -144,8 +144,41 @@ LOCATION_FINE_GRID     x, y, z    interior — v2, отложено
 | NC-1f | info | NewType phantom — ORM/`ConnectionNode`/`DistrictSlot` still `int` | discipline + boundaries; optional strict mypy |
 | NC-1g | low | `map_settings.global_cell_size_m` — ghost override, нет на `World` | поле модели или удалить ветку |
 | NC-1h | low | `needs_geometry` только `system_building_element`; barriers-only → re-gen | расширить heuristic или doc limitation |
+| NC-1i | — | leftover `_m` вне hub | **не этот ряд** — отдельный ID **NC-10** |
 
 **Refs:** `.cursor/plans/coordinate-spaces.md`
+
+---
+
+### NC-10 — leftover `_m` вне coordinate hub
+
+**Status:** `open` | **Severity:** medium | **P:** P2  
+**Не:** NC-1a (persist tag), NC-1c (якорь в чужом space), NC-1g (ghost `global_cell_size_m`), NC-2 (`DEFAULT_PARCEL_MARGIN_M` / двор).  
+**После:** 2026-09-07 rename — generate в **coarse / fine cells**; метры/футы только `measurement_system` (UI/LLM).
+
+Hub и settlement-слоты уже без метров: `WORLD_FINE_GRID`, `fine_cells_per_map_cell`, `width_fine` / `depth_fine`, `map_cell_fine_span`, `FineX` / `FineGridCoord`. Старые JSON-ключи (`map_cell_size_m`, topology `width_m`) — alias на импорте, не SoT.
+
+**Проблема:** в соседних доменах те же `int` всё ещё названы метрами. Читатель думает SI; это fine-grid (или light-span = `fine_cells_per_map_cell // side`).
+
+| Кластер | Примеры (не исчерпывающий grep) | Целевые имена (черновик) |
+|---|---|---|
+| Горы / relief masks | `MountainSpec.origin_x_m` / `radius_m` / `width_m`, `peak_spacing_m`, `hat_radius_m`, `half_width_m`, `band_m` | `*_fine` или без суффикса + тип `Fine*` на границе convert |
+| Гидрология | `CorridorForm.half_width_m`, `semi_minor_m`, `spine_m`, `apply_declared_meter_river_carves`, `sparse_meter_hydro`, `merge_meter_hydro_for_tile` | `*_fine`, `apply_declared_fine_river_carves`, `sparse_fine_hydro` |
+| Pack / parent light | `ParentLightTile.tile_m`, `light_m`, `light_m_for`, `tile_size_m`, `background_expand_radius_m`, `corridor_half_width_m`, `max_radius_m` | `map_cell_span` / `fine_per_light_cell` / `*_fine` |
+| Locals | `cell_m`, `tile_m`, `xm`/`ym` как «meter x» в surface/pack | `map_cell`, `x_fine` — по касанию, не mass-rename ради grep |
+
+**Замок:**
+
+| | |
+|---|---|
+| Единица generate | coarse index **или** fine cell; не SI-метр |
+| `measurement_system` | только display/LLM |
+| Wire | breaking OK + alias старого ключа на импорте (как `map_cell_size_m`) |
+| Один слайс = один кластер | не смешивать горы + pack + гидрологию в одном PR |
+| DAG `engine/nodes/` | не трогать (gate) |
+| NC-2 parcel `*_M` | свой ID; не открывать здесь |
+
+**Fix:** по кластеру — POJO/dataclass + callers + доменное ТЗ (`tz_mountain_architecture`, `tz_terrain_hydrology`, `tz_world_pack_storage` / `tz_map_light_bake`). Convert только в `generators/coordinates/`.
 
 ---
 
@@ -545,6 +578,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | **R41-T-19** | Снос mill-очереди Q3 (`is_q3_seed`, `q3_s`, `q3_parent`); бок-attach persist оставить | **resolved** |
 | ~~NC-1b~~ | ✅ `tz_terrain_generation.md` rework | resolved |
 | NC-1a | Persist contract / optional `coordinate_space` column | open |
+| **NC-10** | leftover `_m` вне hub (горы / гидрология / pack `light_m`) — отдельный ID | open |
 | LC-1..LC-4 | Neutral packages | open |
 | NC-2 | Parcel cells в `areaSlots`; замок C21 план §2.2b (не margin на `PerimeterBarrier`) | open |
 | **CITY-T-1a** | Скелет C22: import/SQL `named_locations` (density, style, barrier, counts, frontage) | **resolved** |
@@ -562,6 +596,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 | MR-1, MR-2, MR-6 | Split cache / rebind / footprint | open |
 | **CITY-T-4** | Смешение + хардкоды после 2d | **resolved** |
 | NC-3, NC-4, **CITY-T-1c** | Barrier contract; стены поселения = C22 инстанс, не эвристика size | open |
+| **NC-10** | leftover `_m` вне hub (горы / гидрология / pack `light_m`); слайс по кластеру | open |
 | **CITY-T-1d** | Синхрон шапки city TZ / §6.3 / connections §5.1 vs C22 packing | open |
 | **CITY-T-5** | Швы после C23 (слои, хардкоды leftover) — SoT [city debt TZ](./tz_city_generation_technical_debt.md) | open |
 | DR-1, FM-3 | span_lines; barrier pick | open |
@@ -2015,6 +2050,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-07 | **NC-10** open: leftover `_m` / «метры» вне coordinate hub (горы, гидрология, pack `light_m`/`tile_m`, `sparse_meter_hydro`) после rename на fine grid. Не NC-1a/c/g, не NC-2 parcel. Слайс по кластеру. |
 | 2026-09-06 | **CITY-T-5** open: швы после C23 — [`tz_city_generation_technical_debt.md`](./tz_city_generation_technical_debt.md). **1a** resolved. Не reopen §8 / C22. |
 | 2026-09-05 | **CITY-T-4** **resolved** (`/impl-city-t-4` слои A–G): POJO rank/zone/conditions; один resolve; cache=`pick_layout_names`; Bind-only coerce; skip unknown assembler; `max_per` type+subtype. **2a** civic flood ✅; **2c** tokens `BUILDINGS` ✅; leftover **2b**. **MR-8** ✅. Не reopen §1.2 |
 | 2026-09-05 | **CITY-T-4** команда `/impl-city-t-4` + план слоёв A–G (`city-t-4-planner-debt.md`). Не reopen §1.2, не 2b. |

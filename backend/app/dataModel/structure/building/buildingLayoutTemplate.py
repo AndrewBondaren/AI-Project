@@ -17,6 +17,7 @@ from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.flora.enums.cropKind import CropKind
 from app.dataModel.livestock.enums.livestockKind import LivestockKind
+from app.dataModel.registryKey import RegistryKey
 from app.dataModel.resources.enums.resourceKind import ResourceKind
 from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
@@ -31,7 +32,7 @@ class BuildingLayoutTemplate(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    system_name: StrictOnWire[str]
+    system_name: StrictOnWire[RegistryKey[BuildingLayoutTemplate]]
     structure_type: StrictOnWire[str]
     display_name: StrictOnWire[str]
     default_z_height: DefaultOnWire[int] = constrained_field(
@@ -60,6 +61,10 @@ class BuildingLayoutTemplate(BaseModel):
     # If crop_kind is set, farm tags must be keys in worlds.crops_registry of that kind.
     # If livestock_kind is set, livestock tags must be keys in worlds.livestock_registry of that kind.
     subjects: DefaultOnWire[list[str]] = Field(default_factory=list)
+
+
+type DrawingKey = RegistryKey[BuildingLayoutTemplate]
+BuildingLayoutTemplate.model_rebuild()
 
 
 def coerce_building_layout(raw: BuildingLayoutTemplate | dict[str, Any]) -> BuildingLayoutTemplate:

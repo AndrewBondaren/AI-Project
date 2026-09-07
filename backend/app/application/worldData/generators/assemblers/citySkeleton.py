@@ -1,5 +1,8 @@
 from dataclasses import dataclass, fields as dataclass_fields
 
+from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
+    ConnectionTypeKey,
+)
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 from app.dataModel.materials.worldMaterialRegistry import MaterialKey
 from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
@@ -10,6 +13,7 @@ from app.dataModel.settlement.settlement.settlementSpecializationBind import (
 )
 from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
 from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
+from app.dataModel.structure.building.buildingLayoutTemplate import DrawingKey
 from app.db.models.namedLocation import NamedLocation
 
 
@@ -77,9 +81,9 @@ class CitySkeleton:
     settlement_density:   DistrictDensity | None
     system_city_size:     SettlementSizeKey | None
     system_location_mood: str | None   # ref → worlds.location_mood_registry
-    frontage_type_order:  list[str] | None = None
-    structure_counts:     dict[str, int] | None = None
-    structure_priority:   dict[str, int] | None = None
+    frontage_type_order:  list[ConnectionTypeKey] | None = None
+    plot_counts:          dict[DrawingKey, int] | None = None
+    plot_priority:        dict[DrawingKey, int] | None = None
     perimeter_barrier:    PerimeterBarrier | None = None
     typical_districts:    list[TypicalDistrictRef] | None = None
     system_settlement_specializations: list[SettlementSpecializationBind] | None = None

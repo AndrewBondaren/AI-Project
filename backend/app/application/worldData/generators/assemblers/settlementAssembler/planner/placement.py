@@ -41,10 +41,6 @@ def _placed_type_count(placed: PlacedCounts, district_type: str | None) -> int:
     return sum(count for (dtype, _), count in placed.items() if dtype == district_type)
 
 
-def _street_layout_of(template: DistrictTemplateEntry) -> str:
-    return template.street_layout or DistrictTemplateEntry.model_fields["street_layout"].default
-
-
 def _check_adjacent_terrain(
     condition:   PlacementCondition,
     origin_x:    int,
@@ -317,7 +313,7 @@ def select_district_template(
         chosen.system_name,
         chosen.district_type,
         chosen.placement_conditions or [],
-        _street_layout_of(chosen),
+        chosen.street_layout,
         chosen.density or "-",
         chosen.connections or [],
     )
@@ -392,7 +388,7 @@ def _select_by_recipe(
             chosen.district_type,
             chosen.district_subtype or "-",
             chosen.placement_conditions or [],
-            _street_layout_of(chosen),
+            chosen.street_layout,
             chosen.density or "-",
             chosen.connections or [],
         )

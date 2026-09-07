@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from typing import ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire
+from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
+    ConnectionTypeKey,
+)
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 from app.dataModel.materials.worldMaterialRegistry import MaterialKey
 from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
@@ -16,14 +19,15 @@ from app.dataModel.settlement.settlement.settlementSpecializationBind import (
 )
 from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
 from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
+from app.dataModel.structure.building.buildingLayoutTemplate import DrawingKey
 
 type SettlementSkeletonNlOverlayField = Literal[
     "architectural_style",
     "dominant_material",
     "settlement_density",
     "frontage_type_order",
-    "structure_counts",
-    "structure_priority",
+    "plot_counts",
+    "plot_priority",
     "perimeter_barrier",
 ]
 type SettlementSkeletonNlAliasedField = Literal["economic_tier"]
@@ -36,7 +40,7 @@ class SettlementSkeleton(BaseModel):
     `dominant_material` on import ignored by generator (post-assemble authoritative).
     """
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, populate_by_name=True)
 
     # Same names on SQL NamedLocation (CITY-T-1a). Not on NL: economic_tier → system_economic_tier.
     NAMED_LOCATION_OVERLAY_FIELDS: ClassVar[tuple[SettlementSkeletonNlOverlayField, ...]] = (
@@ -44,8 +48,8 @@ class SettlementSkeleton(BaseModel):
         "dominant_material",
         "settlement_density",
         "frontage_type_order",
-        "structure_counts",
-        "structure_priority",
+        "plot_counts",
+        "plot_priority",
         "perimeter_barrier",
     )
     NAMED_LOCATION_FIELD_ALIASES: ClassVar[
@@ -60,9 +64,15 @@ class SettlementSkeleton(BaseModel):
     settlement_density: DefaultOnWire[DistrictDensity | None] = None
     system_city_size: DefaultOnWire[SettlementSizeKey | None] = None
     system_location_mood: DefaultOnWire[str | None] = None
-    frontage_type_order: DefaultOnWire[list[str] | None] = None
-    structure_counts: DefaultOnWire[dict[str, int] | None] = None
-    structure_priority: DefaultOnWire[dict[str, int] | None] = None
+    frontage_type_order: DefaultOnWire[list[ConnectionTypeKey] | None] = None
+    plot_counts: DefaultOnWire[dict[DrawingKey, int] | None] = Field(
+        default=None,
+        validation_alias=AliasChoices("plot_counts", "structure_counts"),
+    )
+    plot_priority: DefaultOnWire[dict[DrawingKey, int] | None] = Field(
+        default=None,
+        validation_alias=AliasChoices("plot_priority", "structure_priority"),
+    )
     perimeter_barrier: DefaultOnWire[PerimeterBarrier | None] = None
     typical_districts: DefaultOnWire[list[TypicalDistrictRef] | None] = None
     system_settlement_specializations: DefaultOnWire[
