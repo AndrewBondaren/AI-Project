@@ -19,6 +19,7 @@ from app.dataModel.flora.enums.cropKind import CropKind
 from app.dataModel.livestock.enums.livestockKind import LivestockKind
 from app.dataModel.resources.enums.resourceKind import ResourceKind
 from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
+from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 from app.dataModel.shared.ranges import EconomicTierRange
 from app.dataModel.structure.building.defaultStructureContext import DefaultStructureContext
 
@@ -36,7 +37,7 @@ class BuildingLayoutTemplate(BaseModel):
     default_z_height: DefaultOnWire[int] = constrained_field(
         default=DEFAULT_Z_HEIGHT, greater_equals=1,
     )
-    economic_tier: DefaultOnWire[str | None] = None
+    economic_tier: DefaultOnWire[EconomyTierKey | None] = None
     economic_tier_band: DefaultOnWire[str | None] = None
     economic_tier_range: DefaultOnWire[EconomicTierRange | None] = None
     perimeter_barrier: DefaultOnWire[PerimeterBarrier] = Field(

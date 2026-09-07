@@ -67,12 +67,38 @@ Preset keys в fixtures (`temperate`, `water`) — **строки N1-W**, не �
 # dataModel/registryKey.py
 class RegistryKey[R](str): ...
 type SettlementSizeKey = RegistryKey[WorldSettlementSizeRegistry]
+type EconomyTierKey = RegistryKey[WorldEconomyTierRegistry]
+type TerrainKey = RegistryKey[WorldTerrainRegistry]
 
 class SettlementSizeEntry:
     system_size: StrictOnWire[RegistryKey[WorldSettlementSizeRegistry]]
 
+class EconomyTierEntry:
+    system_tier: StrictOnWire[RegistryKey[WorldEconomyTierRegistry]]
+
+class TerrainRegistryEntry:
+    system_terrain: StrictOnWire[RegistryKey[WorldTerrainRegistry]]
+
 class BundleNamedLocation:
     system_settlement_size: DefaultOnWire[SettlementSizeKey | None]  # код до rename: system_city_size
+    system_economic_tier: DefaultOnWire[EconomyTierKey | None]
+
+class SettlementSkeleton:
+    economic_tier: DefaultOnWire[EconomyTierKey | None]
+    system_city_size: DefaultOnWire[SettlementSizeKey | None]
+    dominant_material: DefaultOnWire[MaterialKey | None]
+    settlement_density: DefaultOnWire[DistrictDensity | None]
+
+class EconomicTierRange:
+    min: StrictOnWire[EconomyTierKey]
+    max: StrictOnWire[EconomyTierKey]
+
+class PlacementCondition:
+    size: DefaultOnWire[SettlementSizeKey | None]
+    terrain_types: DefaultOnWire[list[TerrainKey] | None]
+    tier: DefaultOnWire[EconomyTierKey | None]
+    zone: DefaultOnWire[CellZone | None]  # ENUM-E, не RegistryKey
+    district_type: DefaultOnWire[str | None]  # нет реестра типов ткани
 ```
 
 JSON на проводе — строка (`"small"`). Тип — номинальный: `RegistryKey[WorldSettlementSizeRegistry]` ≠ `str` ≠ `RegistryKey[WorldLocationTypeRegistry]`.
@@ -94,7 +120,7 @@ JSON на проводе — строка (`"small"`). Тип — номинал
 
 Дубль subtype==size — по-прежнему **422**. Geographic + size — не этот fallback.
 
-Эталон первого поля: `settlement_size_registry[].system_size` + refs на NL/skeleton/placement `size`. Остальные N1-W (`system_tier`, `system_material`, …) — мигрировать на `RegistryKey` при касании, не массово.
+Эталон identity: `settlement_size_registry[].system_size`, `economic_tier_registry[].system_tier`, `terrain_registry[].system_terrain`, `material_registry[].system_material`. Refs: NL/skeleton `system_city_size` / `economic_tier` / `dominant_material`, `PlacementCondition.size` / `.terrain_types` / `.tier`, `EconomicTierRange.min/max`. `settlement_density` / district `density` — ENUM-E `DistrictDensity`. `PlacementCondition.zone` — ENUM-E `CellZone`. `district_type` — голый `str`. Остальные N1-W — при касании, не массово.
 
 ### REF-W → N1-W (cross-ref, import-only)
 
@@ -644,6 +670,9 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 
 | Версия | Дата | Изменение |
 |--------|------|-----------|
+| — | 2026-09-07 | **Skeleton:** `dominant_material` — `MaterialKey`; `settlement_density` — `DistrictDensity`; overlay/alias ClassVar — `Literal` field names. Identity `system_material` branded |
+| — | 2026-09-07 | **EconomyTierKey refs:** скелет `economic_tier`, NL `system_economic_tier`, `EconomicTierRange.min/max`, layout `economic_tier`. Identity уже branded. Не size→medium |
+| — | 2026-09-07 | **PlacementCondition**: `terrain_types`/`tier` — `TerrainKey`/`EconomyTierKey`; identity `system_terrain`/`system_tier` branded; `zone` — `CellZone`; `district_type` остаётся `str`. Membership miss terrain/tier — прежний REF-W, не size→medium |
 | — | 2026-09-07 | **RegistryKey[R]**: N1-W identity не голый `str`; эталон `SettlementSizeKey`. Type/membership miss ранга на generate → `medium` + WARNING `jsonValidation/resolve` |
 | — | 2026-09-06 | `SCH-WORLD-CROPS` / `REF-W-CROP` (N1-W-11): `crops_registry`, ENUM-E `crop_kind` |
 | — | 2026-09-03 | **JV-4b** / [POJO-D-16](./tz_datamodel_pojo_discrepancies.md): nested generate layout должен быть nested POJO, не `list[dict]`; Outline slot ≠ generate room |

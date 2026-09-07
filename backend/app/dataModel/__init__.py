@@ -21,6 +21,7 @@ from app.dataModel.economy import (
     DEFAULT_SIDEWALK_WIDTH_CELLS,
     EconomicTierBand,
     EconomyTierEntry,
+    EconomyTierKey,
     WorldEconomyTierRegistry,
     sidewalk_width_for_band,
 )
@@ -45,6 +46,7 @@ from app.dataModel.materials import (
     DEFAULT_ROAD_MATERIAL,
     DEFAULT_WALL_MATERIAL,
     ConstructionMaterialDefaults,
+    MaterialKey,
     MaterialRegistryEntry,
     WorldMaterialRegistry,
 )
@@ -120,6 +122,7 @@ from app.dataModel.structure import (
 )
 from app.dataModel.terrain import (
     TerrainCategoryEntry,
+    TerrainKey,
     TerrainRegistryEntry,
     WorldTerrainCategoryRegistry,
     WorldTerrainRegistry,
@@ -169,6 +172,7 @@ __all__ = [
     "PlacementCondition",
     "PlacementConditionType",
     "EconomyTierEntry",
+    "EconomyTierKey",
     "EconomicTierBand",
     "LocationTypeEntry",
     "LocationTypeSubtypeEntry",
@@ -177,6 +181,7 @@ __all__ = [
     "EnumWire",
     "IgnoreOnWire",
     "MaterialRegistryEntry",
+    "MaterialKey",
     "ResourceKind",
     "ResourceTypeEntry",
     "DefaultEnumOnWire",
@@ -201,6 +206,7 @@ __all__ = [
     "StrictEnumOnWire",
     "StrictOnWire",
     "TerrainCategoryEntry",
+    "TerrainKey",
     "TerrainRegistryEntry",
     "WeatherTypeEntry",
     "WorldBarrierTemplateRegistry",

@@ -52,7 +52,7 @@ class RegistryKey[R](str):
 
 
 def _peel_aliases(annotation: Any) -> Any:
-    """Follow PEP 695 aliases and ``T | None`` so ``SettlementSizeKey`` resolves to ``R``."""
+    """Follow PEP 695 aliases, ``T | None``, and ``list[T]`` so branded keys resolve to ``R``."""
     inner = annotation
     while True:
         if type(inner).__name__ == "TypeAliasType":
@@ -61,6 +61,11 @@ def _peel_aliases(annotation: Any) -> Any:
         origin = get_origin(inner)
         if origin is Union or origin is UnionType:
             args = [a for a in get_args(inner) if a is not type(None)]
+            if len(args) == 1:
+                inner = args[0]
+                continue
+        if origin is list:
+            args = get_args(inner)
             if len(args) == 1:
                 inner = args[0]
                 continue

@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.dataModel.annotationPolicy import IgnoreOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
+from app.dataModel.registryKey import RegistryKey
+
+if TYPE_CHECKING:
+    from app.dataModel.economy.economyTier.worldEconomyTierRegistry import (
+        WorldEconomyTierRegistry,
+    )
 
 # Neutral modifiers: unknown tier; TZ §3.7 natural terrain (material=null).
 NEUTRAL_ROAD_TIER_BONUS = 1.0
@@ -38,7 +44,7 @@ class EconomyTierEntry(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    system_tier: StrictOnWire[str]
+    system_tier: StrictOnWire[RegistryKey[WorldEconomyTierRegistry]]
     display_tier: StrictOnWire[str]
     base_value: StrictOnWire[int] = constrained_field(greater_equals=0)
     # IgnoreOnWire: omitted keys must not be stamped with the neutral 1.0 before

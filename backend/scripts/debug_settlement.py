@@ -60,7 +60,7 @@ def test_phase_c_placement() -> None:
         world_uid="world-test-c",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        map_cell_size_m=1000,
         city_size_registry=[
             {"system_size": "city", "display_size": "City", "footprint_multiplier": 2.0},
         ],
@@ -310,7 +310,7 @@ def test_phase_b_travel_and_sidewalk() -> None:
         world_uid="world-test-b",
         name="Test",
         created_at="2026-01-01T00:00:00",
-        map_cell_size_m=3000,
+        map_cell_size_m=1000,
         economic_tier_registry=[
             {
                 "system_tier": "standard",

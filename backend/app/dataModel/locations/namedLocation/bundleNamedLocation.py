@@ -7,7 +7,10 @@ from typing import Any
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire, IgnoreOnWire, StrictOnWire
+from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
+from app.dataModel.materials.worldMaterialRegistry import MaterialKey
 from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
+from app.dataModel.settlement.enums.districtDensity import DistrictDensity
 from app.dataModel.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.dataModel.settlement.settlement.settlementSpecializationBind import (
     SettlementSpecializationBind,
@@ -48,7 +51,9 @@ class BundleNamedLocation(BaseModel):
     system_climate_zone: DefaultOnWire[str | None] = None
     state_uid: DefaultOnWire[str | None] = None
     system_city_size: DefaultOnWire[SettlementSizeKey | None] = None
-    system_economic_tier: DefaultOnWire[str | None] = None
+    system_economic_tier: DefaultOnWire[EconomyTierKey | None] = _skeleton_default(
+        "economic_tier",
+    )
     typical_districts: DefaultOnWire[list[TypicalDistrictRef] | None] = None
     system_settlement_specializations: DefaultOnWire[
         list[SettlementSpecializationBind] | None
@@ -69,8 +74,12 @@ class BundleNamedLocation(BaseModel):
     created_at: DefaultOnWire[str | None] = None
 
     architectural_style: DefaultOnWire[str | None] = _skeleton_default("architectural_style")
-    dominant_material: DefaultOnWire[str | None] = _skeleton_default("dominant_material")
-    settlement_density: DefaultOnWire[str | None] = _skeleton_default("settlement_density")
+    dominant_material: DefaultOnWire[MaterialKey | None] = _skeleton_default(
+        "dominant_material",
+    )
+    settlement_density: DefaultOnWire[DistrictDensity | None] = _skeleton_default(
+        "settlement_density",
+    )
     frontage_type_order: DefaultOnWire[list[str] | None] = _skeleton_default(
         "frontage_type_order",
     )

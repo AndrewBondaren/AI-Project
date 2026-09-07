@@ -10,7 +10,7 @@ from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
 from app.dataModel.terrain.terrainCategoryEntry import TerrainCategoryEntry
 from app.dataModel.terrain.terrainRegistryEntry import TerrainRegistryEntry
 from app.dataModel.terrain.worldTerrainCategoryRegistry import WorldTerrainCategoryRegistry
-from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
+from app.dataModel.terrain.worldTerrainRegistry import TerrainKey, WorldTerrainRegistry
 from app.dataModel.terrain.worldTerrainScalars import (
     CANONICAL_ELEVATION_LAPSE_RATE,
     CANONICAL_Z_MAX,
@@ -33,6 +33,7 @@ __all__ = [
     "SceneVolumePolicy",
     "TerrainCategoryEntry",
     "TerrainRegistryEntry",
+    "TerrainKey",
     "WorldTerrainCategoryRegistry",
     "WorldTerrainRegistry",
     "WorldTerrainScalars",

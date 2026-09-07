@@ -18,7 +18,7 @@ from app.dataModel.materials.materialRegistryEntry import (
     MaterialRegistryEntry,
 )
 from app.dataModel.materials.enums.materialCategory import MaterialCategory
-from app.dataModel.materials.worldMaterialRegistry import WorldMaterialRegistry
+from app.dataModel.materials.worldMaterialRegistry import MaterialKey, WorldMaterialRegistry
 
 __all__ = [
     "CONSTRUCTION_MATERIAL_DEFAULTS",
@@ -30,6 +30,7 @@ __all__ = [
     "HARDNESS_MIN",
     "HARDNESS_MAX",
     "MaterialCategory",
+    "MaterialKey",
     "MaterialRegistryEntry",
     "WorldMaterialRegistry",
 ]

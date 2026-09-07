@@ -4,7 +4,11 @@ SCH-WORLD-ECON-TIER — `worlds.economic_tier_registry` (N1-W-09).
 Эталон: fixtures/world_template.json, docs/tz_economic_tier.md.
 """
 
-from app.dataModel.economy.economyTier import EconomyTierEntry, WorldEconomyTierRegistry
+from app.dataModel.economy.economyTier import (
+    EconomyTierEntry,
+    EconomyTierKey,
+    WorldEconomyTierRegistry,
+)
 from app.dataModel.economy.enums import (
     BAND_COMMON,
     BAND_MIDDLE,
@@ -25,6 +29,7 @@ __all__ = [
     "BAND_WEALTHY",
     "DEFAULT_SIDEWALK_WIDTH_CELLS",
     "EconomyTierEntry",
+    "EconomyTierKey",
     "EconomicTierBand",
     "SidewalkWidthDefault",
     "WorldEconomyTierRegistry",

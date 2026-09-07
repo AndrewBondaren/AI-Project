@@ -1,11 +1,15 @@
 from dataclasses import dataclass, fields as dataclass_fields
 
+from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
+from app.dataModel.materials.worldMaterialRegistry import MaterialKey
 from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
+from app.dataModel.settlement.enums.districtDensity import DistrictDensity
 from app.dataModel.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.dataModel.settlement.settlement.settlementSpecializationBind import (
     SettlementSpecializationBind,
 )
 from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
+from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
 from app.db.models.namedLocation import NamedLocation
 
 
@@ -34,7 +38,13 @@ def city_skeleton_from_settlement(
     for field in dataclass_fields(CitySkeleton):
         name = field.name
         if name == "economic_tier":
-            payload[name] = economic_tier
+            payload[name] = (
+                SettlementSkeleton.model_validate(
+                    {"economic_tier": economic_tier},
+                ).economic_tier
+                if economic_tier
+                else None
+            )
             continue
         if name == "dominant_material":
             payload[name] = None
@@ -61,11 +71,11 @@ class CitySkeleton:
     Все поля nullable — поселение может существовать без части атрибутов.
     C22-поля — зеркало SettlementSkeleton (wire); сбор — city_skeleton_from_settlement.
     """
-    economic_tier:        str | None   # ref → worlds.economic_tier_registry
+    economic_tier:        EconomyTierKey | None
     architectural_style:  str | None   # ref → worlds.architectural_style_registry
-    dominant_material:    str | None   # ref → worlds.material_registry
-    settlement_density:   str | None   # DistrictDensity wire
-    system_city_size:     str | None   # ref → worlds.city_size_registry
+    dominant_material:    MaterialKey | None
+    settlement_density:   DistrictDensity | None
+    system_city_size:     SettlementSizeKey | None
     system_location_mood: str | None   # ref → worlds.location_mood_registry
     frontage_type_order:  list[str] | None = None
     structure_counts:     dict[str, int] | None = None

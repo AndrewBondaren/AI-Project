@@ -10,6 +10,7 @@ from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
 from app.dataModel.settlement.district.districtConnection import DistrictConnection
 from app.dataModel.settlement.district.placementCondition import PlacementCondition
 from app.dataModel.settlement.district.requiredStructure import RequiredStructure
+from app.dataModel.settlement.enums.districtDensity import DistrictDensity
 from app.dataModel.shared.ranges import EconomicTierRange, SizePct
 
 
@@ -27,7 +28,7 @@ class DistrictTemplateEntry(BaseModel):
     size_pct: DefaultOnWire[SizePct | None] = None
     allowed_structure_types: DefaultOnWire[list[str] | None] = None
     economic_tier_range: DefaultOnWire[EconomicTierRange | None] = None
-    density: DefaultOnWire[str | None] = None
+    density: DefaultOnWire[DistrictDensity | None] = None
     street_layout: DefaultOnWire[str] = StreetLayout.GRID.value
     connections: DefaultOnWire[list[DistrictConnection] | None] = None
     required_structures: DefaultOnWire[list[RequiredStructure] | None] = None

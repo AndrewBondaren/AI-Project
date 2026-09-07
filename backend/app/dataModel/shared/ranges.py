@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
+from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 
 
 class IntMinMax(BaseModel):
@@ -24,10 +25,12 @@ class PctRange(BaseModel):
 
 
 class EconomicTierRange(BaseModel):
+    """Inclusive ``system_tier`` bounds — ``RegistryKey[WorldEconomyTierRegistry]``."""
+
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    min: StrictOnWire[str]
-    max: StrictOnWire[str]
+    min: StrictOnWire[EconomyTierKey]
+    max: StrictOnWire[EconomyTierKey]
 
 
 class SizePct(BaseModel):

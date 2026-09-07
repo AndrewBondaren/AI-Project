@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
+from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 from app.dataModel.materials.enums.materialCategory import MaterialCategory
+from app.dataModel.registryKey import RegistryKey
+
+if TYPE_CHECKING:
+    from app.dataModel.materials.worldMaterialRegistry import WorldMaterialRegistry
 
 HARDNESS_MIN = 1
 HARDNESS_MAX = 5
@@ -17,13 +24,13 @@ class MaterialRegistryEntry(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    system_material: StrictOnWire[str]
+    system_material: StrictOnWire[RegistryKey[WorldMaterialRegistry]]
     display_name: StrictOnWire[str]
     glossary_ref: DefaultOnWire[str | None] = None
     material_category: StrictEnumOnWire[MaterialCategory]
     tags: DefaultOnWire[list[str]] = Field(default_factory=list)
     use_type: DefaultOnWire[list[str]] = Field(default_factory=list)
-    economic_tier: DefaultOnWire[str | None] = None
+    economic_tier: DefaultOnWire[EconomyTierKey | None] = None
     hardness: DefaultOnWire[int | None] = constrained_field(
         default=None, greater_equals=HARDNESS_MIN, lesser_equals=HARDNESS_MAX,
     )

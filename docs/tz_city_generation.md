@@ -1,6 +1,6 @@
 # ТЗ: Генератор города
 
-**Обновлено:** 2026-09-07 **§9.3** `min_adjacent_cells`; **LOC-T-2** ранг размера (`small`…) ≠ морфология, footprint из контекста; 2026-09-06 **detailed_bake** консьюмер C11 (`generate-settlement`); **§8** topology на `full_bake`; **§1.2.1** subject packing; 2026-09-05 **§1.1 / §1.2** морфология vs специализация; районы `district_type` + `district_subtype`; приоритет списка на городе → специализация; seed чертежа здания = мир+город+клетка footprint (§9.6); 2026-09-04 **CITY-T-2**; 2026-09-03 **CITY-T-1**; **C29** город на шве pack.
+**Обновлено:** 2026-09-07 **§9.3** PlacementCondition RegistryKey/`CellZone`; `min_adjacent_cells`; **LOC-T-2** ранг размера (`small`…) ≠ морфология, footprint из контекста; 2026-09-06 **detailed_bake** консьюмер C11 (`generate-settlement`); **§8** topology на `full_bake`; **§1.2.1** subject packing; 2026-09-05 **§1.1 / §1.2** морфология vs специализация; районы `district_type` + `district_subtype`; приоритет списка на городе → специализация; seed чертежа здания = мир+город+клетка footprint (§9.6); 2026-09-04 **CITY-T-2**; 2026-09-03 **CITY-T-1**; **C29** город на шве pack.
 
 **Связанные документы:**
 
@@ -186,15 +186,15 @@ LLM описывает → только из скелета (ограничен�
 
 | Поле | Тип | Откуда | Описание | Impl |
 |---|---|---|---|---|
-| `economic_tier` | string | `system_economic_tier` | Материалы, плотность, тип зданий | ✅ |
+| `economic_tier` | `EconomyTierKey` | `system_economic_tier` | Материалы, плотность, тип зданий | ✅ |
 | `system_location_mood` | string | `NamedLocation` | `prosperous`, `declining`, … | ✅ |
 | `display_location_mood` | string | `NamedLocation` | Для LLM | ✅ |
 | `system_settlement_size` | string | `NamedLocation` | ранг → `settlement_size_registry`; footprint — subtype × ранг (**LOC-T-2**). Код: `system_city_size` | ⬜ LOC-T-2 |
 | `system_settlement_specializations` | string[] | JSON import, optional | Ключи §4.1. Пусто / omit — нет вторичного рецепта районов. Несколько = union. Не `system_location_subtype` | ⬜ §1.2 |
 | `typical_districts` | object[] | JSON import, optional | Приоритет 1: `{ "district_type", "district_subtype"?, "system_name"? }`. Пусто — сразу приоритет 2–3 | ⬜ §1.2 |
-| `dominant_material` | string | post-assemble | ref → `material_registry`; **не** import | ✅ `resolve_dominant_material` |
+| `dominant_material` | `MaterialKey` | post-assemble | ref → `material_registry`; **не** import | ✅ `resolve_dominant_material` |
 | `architectural_style` | string | JSON import | ref → `architectural_style_registry`; для LLM | ✅ read |
-| `settlement_density` | string | JSON import | `sparse` / `medium` / `dense` | ✅ read (NC-9) |
+| `settlement_density` | `DistrictDensity` | JSON import | ENUM-E `sparse` / `medium` / `dense` | ✅ read (NC-9) |
 | `frontage_type_order` | string[] | JSON import, optional | Иерархия `connection_type` для парадного (C22). Как `settlement_density`: import → `CitySkeleton`; SQL колонка — при persist скелета (`0001`). `null` = дефолт движка. Район может переопределить | ⬜ connections §5.1.3 |
 | `structure_counts` | object | JSON import, optional | Городской дефолт копий: `{ "<system_name>": int }`. Резолв N — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов» | ⬜ |
 | `structure_priority` | object | JSON import, optional | Городской дефолт очереди fill: `{ "<system_name>": int }`. Резолв — [connections](./tz_structure_connections.md) §5.1.3 «Приоритет посадки» | ⬜ |
@@ -527,8 +527,8 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 | `max_per_city` | int | optional | Максимальное количество районов этого типа в одном городе. `null` = без ограничений |
 | `size_pct` | object | optional | Диапазон размера района как доля глобальной ячейки: `{ "width": [0.3, 1.0], "depth": [0.3, 1.0] }`. `1.0` = вся ячейка |
 | `allowed_structure_types` | string[] | optional | Допустимые **типы зданий** (`structure_type` библиотеки), не имена чертежей. `null` = без ограничений типа. **Код:** omit/`null` = каталог не берётся — **CITY-T-2a** |
-| `economic_tier_range` | object | optional | `{ "min": "poor", "max": "exceptional" }` — диапазон тиров зданий в районе |
-| `density` | string | optional | `"sparse"`, `"medium"`, `"dense"`. Переопределяет `city_skeleton.settlement_density` для этого района. **`SettlementAssembler`** ставит `entry_nodes` с `block_size` **этого** поля (нет → плотность города) |
+| `economic_tier_range` | object | optional | `{ "min", "max" }` — `EconomyTierKey` (диапазон тиров зданий в районе) |
+| `density` | `DistrictDensity` | optional | `"sparse"` / `"medium"` / `"dense"`. Переопределяет `city_skeleton.settlement_density` для этого района. **`SettlementAssembler`** ставит `entry_nodes` с `block_size` **этого** поля (нет → плотность города) |
 | `frontage_type_order` | string[] | optional | Иерархия типов дорог для фасада (C22). `null` = список города, иначе дефолт движка. Пример: `["road","highway","alley"]` — входы со стороны `road` |
 | `street_layout` | string | optional | Алгоритм раскладки улиц района (см. 9.5). `null` = наследует от города |
 | `connections` | array | optional | Объявления дорог внутри района: тип, sidewalk, роль. Не объявленные — генератор определяет сам. Формат — см. 9.5 |
@@ -555,12 +555,13 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 
 | `type` | Параметры | Описание |
 |---|---|---|
-| `adjacent_terrain` | `terrain_types: string[]`, `min_adjacent_cells: int` | На внешнем кольце **слота района** ≥ N соседних terrain-клеток с `system_terrain ∈ terrain_types`. Omit → 1. Порт: `["liquid_body"]` + `1`. Не длина берега, не связность водоёма (open ниже). |
-| `min_settlement_size` | `size: string` | ранг → `settlement_size_registry`; поселение **этой морфологии** не меньше ранга. Не сравнивать `small` города с `large` деревни. «Только города» = subtype `city`, не size. Код/wire до impl: `min_city_size` + токены `town`/… |
-| `economic_tier_min` | `tier: string` | Минимальный `system_economic_tier` города |
-| `economic_tier_max` | `tier: string` | Максимальный `system_economic_tier` города |
-| `requires_district_type` | `district_type: string` | В городе уже должен быть район указанного типа |
+| `adjacent_terrain` | `terrain_types: TerrainKey[]`, `min_adjacent_cells: int` | На внешнем кольце **слота района** ≥ N соседних terrain-клеток с `system_terrain ∈ terrain_types`. Omit → 1. Порт: `["liquid_body"]` + `1`. Не длина берега, не связность водоёма (open ниже). Wire — JSON-строки; POJO — `RegistryKey[WorldTerrainRegistry]`. |
+| `min_settlement_size` | `size: SettlementSizeKey` | ранг → `settlement_size_registry`; поселение **этой морфологии** не меньше ранга. Не сравнивать `small` города с `large` деревни. «Только города» = subtype `city`, не size. Код/wire до impl: `min_city_size` + токены `town`/… |
+| `economic_tier_min` | `tier: EconomyTierKey` | Минимальный `system_economic_tier` города. POJO — `RegistryKey[WorldEconomyTierRegistry]`. Membership miss — REF-W / warn+default, **не** size→medium. |
+| `economic_tier_max` | `tier: EconomyTierKey` | Максимальный `system_economic_tier` города |
+| `requires_district_type` | `district_type: string` | В городе уже должен быть район указанного типа. Голый `str` — нет реестра типов ткани (не брендировать как template `system_name`). |
 | `excludes_district_type` | `district_type: string` | В городе НЕ должно быть района указанного типа |
+| `cell_zone` | `zone: CellZone` | Клетка footprint в `center` / `edge` / `inner`. ENUM-E, тот же словарь, что `district_zone_preference`. Optional на условии. |
 
 Пример — шаблон портового района:
 ```json
@@ -885,6 +886,9 @@ DAG может materialize **разные уровни** в разных нод�
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-07 | **Skeleton:** `dominant_material` — MaterialKey; `settlement_density` / district `density` — DistrictDensity; overlay ClassVar — Literal. |
+| 2026-09-07 | **EconomyTierKey** на скелете / NL / `EconomicTierRange` (и layout `economic_tier`). Не size→medium. |
+| 2026-09-07 | **§9.3** POJO: `terrain_types`/`tier` — RegistryKey; `zone` — CellZone; `district_type` — `str`. Identity `system_terrain`/`system_tier` branded. |
 | 2026-09-07 | **§9.3** `min_count` → `min_adjacent_cells` (порог соседних terrain-клеток слота). Breaking wire. |
 | 2026-09-06 | **Контракт bake:** full = L0→C23; detailed = L2→C11 поверх. Хук C11 ✅. |
 | 2026-09-06 | **§8 код:** `plan_topology` после `full_bake` L0; CITY-T-1a skeleton на NL; C11 reuse слотов. |

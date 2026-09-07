@@ -153,7 +153,7 @@ def check_placement_conditions(
             if cell_x is None or grid_n is None:
                 return False
             required = cond.zone
-            if _cell_zone(cell_x, cell_y or 0, grid_n).value != required:
+            if _cell_zone(cell_x, cell_y or 0, grid_n) != required:
                 return False
         else:
             return False

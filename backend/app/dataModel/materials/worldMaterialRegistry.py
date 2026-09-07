@@ -6,9 +6,52 @@ from typing import ClassVar
 
 from pydantic import RootModel
 
-from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
+from app.dataModel.materials import materialRegistryEntry as _material_entry_mod
 from app.dataModel.materials.enums.materialCategory import MaterialCategory
+from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
 from app.dataModel.registryEngine import engine_rows
+from app.dataModel.registryKey import RegistryKey
+
+
+class WorldMaterialRegistry(RootModel[list[MaterialRegistryEntry]]):
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-MATERIAL"
+    """Root POJO for `worlds.material_registry`. Wire shape: JSON array."""
+
+    root: list[MaterialRegistryEntry]
+
+    @classmethod
+    def canonical_defaults(cls) -> WorldMaterialRegistry:
+        """Fixture slice — fixtures/world_template.json."""
+        return cls(list(_CANONICAL_ENTRIES))
+
+    @classmethod
+    def canonical_engine(cls) -> WorldMaterialRegistry:
+        """Fixture + delta (drop sand/ice) — tz_locations.md § material_registry."""
+        return cls(list(
+            engine_rows(
+                _CANONICAL_ENTRIES,
+                _ENGINE_DELTA,
+                key=lambda e: e.system_material,
+                drop=frozenset({"sand", "ice"}),
+            ),
+        ))
+
+    def entry_for(self, system_material: str) -> MaterialRegistryEntry | None:
+        for entry in self.root:
+            if entry.system_material == system_material:
+                return entry
+        return None
+
+    def liquid_keys(self) -> frozenset[str]:
+        return frozenset(
+            e.system_material for e in self.root if e.material_category.is_liquid()
+        )
+
+
+type MaterialKey = RegistryKey[WorldMaterialRegistry]
+
+_material_entry_mod.WorldMaterialRegistry = WorldMaterialRegistry
+MaterialRegistryEntry.model_rebuild()
 
 # fixtures/world_template.json
 _CANONICAL_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
@@ -172,38 +215,3 @@ _ENGINE_DELTA: tuple[MaterialRegistryEntry, ...] = (
         vision_block=True,
     ),
 )
-
-
-class WorldMaterialRegistry(RootModel[list[MaterialRegistryEntry]]):
-    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-MATERIAL"
-    """Root POJO for `worlds.material_registry`. Wire shape: JSON array."""
-
-    root: list[MaterialRegistryEntry]
-
-    @classmethod
-    def canonical_defaults(cls) -> WorldMaterialRegistry:
-        """Fixture slice — fixtures/world_template.json."""
-        return cls(list(_CANONICAL_ENTRIES))
-
-    @classmethod
-    def canonical_engine(cls) -> WorldMaterialRegistry:
-        """Fixture + delta (drop sand/ice) — tz_locations.md § material_registry."""
-        return cls(list(
-            engine_rows(
-                _CANONICAL_ENTRIES,
-                _ENGINE_DELTA,
-                key=lambda e: e.system_material,
-                drop=frozenset({"sand", "ice"}),
-            ),
-        ))
-
-    def entry_for(self, system_material: str) -> MaterialRegistryEntry | None:
-        for entry in self.root:
-            if entry.system_material == system_material:
-                return entry
-        return None
-
-    def liquid_keys(self) -> frozenset[str]:
-        return frozenset(
-            e.system_material for e in self.root if e.material_category.is_liquid()
-        )

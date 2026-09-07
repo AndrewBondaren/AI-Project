@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
+from app.dataModel.registryKey import RegistryKey
+
+if TYPE_CHECKING:
+    from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 
 
 class TerrainRegistryEntry(BaseModel):
@@ -13,7 +19,7 @@ class TerrainRegistryEntry(BaseModel):
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    system_terrain: StrictOnWire[str]
+    system_terrain: StrictOnWire[RegistryKey[WorldTerrainRegistry]]
     glossary_ref: DefaultOnWire[str | None] = None
     terrain_category: StrictOnWire[str]
     travel_modifier: DefaultOnWire[float | None] = None

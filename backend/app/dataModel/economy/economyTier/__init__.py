@@ -5,10 +5,14 @@ from app.dataModel.economy.economyTier.economyTierEntry import (
     ROAD_TIER_DEFAULTS,
     road_modifiers_for,
 )
-from app.dataModel.economy.economyTier.worldEconomyTierRegistry import WorldEconomyTierRegistry
+from app.dataModel.economy.economyTier.worldEconomyTierRegistry import (
+    EconomyTierKey,
+    WorldEconomyTierRegistry,
+)
 
 __all__ = [
     "EconomyTierEntry",
+    "EconomyTierKey",
     "NEUTRAL_ROAD_TIER_BONUS",
     "NEUTRAL_ROAD_TIER_DURABILITY",
     "ROAD_TIER_DEFAULTS",

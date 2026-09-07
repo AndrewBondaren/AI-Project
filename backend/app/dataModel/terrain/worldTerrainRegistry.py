@@ -6,7 +6,73 @@ from typing import ClassVar
 
 from pydantic import RootModel
 
+from app.dataModel.registryKey import RegistryKey
+from app.dataModel.terrain import terrainRegistryEntry as _terrain_entry_mod
 from app.dataModel.terrain.terrainRegistryEntry import TerrainRegistryEntry
+
+
+class WorldTerrainRegistry(RootModel[list[TerrainRegistryEntry]]):
+    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-TERRAIN"
+    """Root POJO for `worlds.terrain_registry`. Wire shape: JSON array."""
+
+    root: list[TerrainRegistryEntry]
+
+    @classmethod
+    def canonical_defaults(cls) -> WorldTerrainRegistry:
+        """Fixture outdoor set — fixtures/world_template.json."""
+        return cls(list(_CANONICAL_ENTRIES))
+
+    @classmethod
+    def canonical_engine(cls) -> WorldTerrainRegistry:
+        """Fixture outdoor + interior + settlement occupancy."""
+        return cls(list(
+            _CANONICAL_ENTRIES + _ENGINE_INTERIOR_ENTRIES + _ENGINE_SETTLEMENT_ENTRIES
+        ))
+
+    @classmethod
+    def occupancy_terrain_key(cls) -> str:
+        """Settlement footprint ``system_terrain`` — not wilderness."""
+        return _URBAN_ENTRY.system_terrain
+
+    def entry_for(self, system_terrain: str) -> TerrainRegistryEntry | None:
+        for entry in self.root:
+            if entry.system_terrain == system_terrain:
+                return entry
+        return None
+
+    def keys_for_category(self, terrain_category: str) -> frozenset[str]:
+        """``system_terrain`` keys whose ``terrain_category`` matches."""
+        return frozenset(
+            e.system_terrain
+            for e in self.root
+            if e.terrain_category == terrain_category
+        )
+
+    @classmethod
+    def require_engine_terrain_key(cls, system_terrain: str) -> str:
+        """Builtin terrain key from ``canonical_engine`` (wall/gate/… live here)."""
+        entry = cls.canonical_engine().entry_for(system_terrain)
+        if entry is None:
+            raise RuntimeError(
+                f"WorldTerrainRegistry.canonical_engine missing {system_terrain!r}"
+            )
+        return entry.system_terrain
+
+    @classmethod
+    def canonical_barrier_terrain_keys(cls) -> frozenset[str]:
+        """All engine terrains in category ``barrier`` (wall/gate/door/window)."""
+        from app.dataModel.terrain.worldTerrainCategoryRegistry import (
+            WorldTerrainCategoryRegistry,
+        )
+
+        cat = WorldTerrainCategoryRegistry.require_canonical_category("barrier")
+        return cls.canonical_engine().keys_for_category(cat)
+
+
+type TerrainKey = RegistryKey[WorldTerrainRegistry]
+
+_terrain_entry_mod.WorldTerrainRegistry = WorldTerrainRegistry
+TerrainRegistryEntry.model_rebuild()
 
 # Outdoor + hydrology-facing set — fixtures/world_template.json
 _CANONICAL_ENTRIES: tuple[TerrainRegistryEntry, ...] = (
@@ -169,61 +235,3 @@ _URBAN_ENTRY = TerrainRegistryEntry(
     danger_level="none",
 )
 _ENGINE_SETTLEMENT_ENTRIES: tuple[TerrainRegistryEntry, ...] = (_URBAN_ENTRY,)
-
-
-class WorldTerrainRegistry(RootModel[list[TerrainRegistryEntry]]):
-    SCHEMA_ID: ClassVar[str] = "SCH-WORLD-TERRAIN"
-    """Root POJO for `worlds.terrain_registry`. Wire shape: JSON array."""
-
-    root: list[TerrainRegistryEntry]
-
-    @classmethod
-    def canonical_defaults(cls) -> WorldTerrainRegistry:
-        """Fixture outdoor set — fixtures/world_template.json."""
-        return cls(list(_CANONICAL_ENTRIES))
-
-    @classmethod
-    def canonical_engine(cls) -> WorldTerrainRegistry:
-        """Fixture outdoor + interior + settlement occupancy."""
-        return cls(list(
-            _CANONICAL_ENTRIES + _ENGINE_INTERIOR_ENTRIES + _ENGINE_SETTLEMENT_ENTRIES
-        ))
-
-    @classmethod
-    def occupancy_terrain_key(cls) -> str:
-        """Settlement footprint ``system_terrain`` — not wilderness."""
-        return _URBAN_ENTRY.system_terrain
-
-    def entry_for(self, system_terrain: str) -> TerrainRegistryEntry | None:
-        for entry in self.root:
-            if entry.system_terrain == system_terrain:
-                return entry
-        return None
-
-    def keys_for_category(self, terrain_category: str) -> frozenset[str]:
-        """``system_terrain`` keys whose ``terrain_category`` matches."""
-        return frozenset(
-            e.system_terrain
-            for e in self.root
-            if e.terrain_category == terrain_category
-        )
-
-    @classmethod
-    def require_engine_terrain_key(cls, system_terrain: str) -> str:
-        """Builtin terrain key from ``canonical_engine`` (wall/gate/… live here)."""
-        entry = cls.canonical_engine().entry_for(system_terrain)
-        if entry is None:
-            raise RuntimeError(
-                f"WorldTerrainRegistry.canonical_engine missing {system_terrain!r}"
-            )
-        return entry.system_terrain
-
-    @classmethod
-    def canonical_barrier_terrain_keys(cls) -> frozenset[str]:
-        """All engine terrains in category ``barrier`` (wall/gate/door/window)."""
-        from app.dataModel.terrain.worldTerrainCategoryRegistry import (
-            WorldTerrainCategoryRegistry,
-        )
-
-        cat = WorldTerrainCategoryRegistry.require_canonical_category("barrier")
-        return cls.canonical_engine().keys_for_category(cat)

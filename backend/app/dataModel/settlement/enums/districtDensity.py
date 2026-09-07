@@ -2,36 +2,31 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 
-@dataclass(frozen=True)
-class _DistrictDensityBuiltin:
-    block_size_m: int
-
-
-class DistrictDensity(Enum):
+class DistrictDensity(StrEnum):
     """District / settlement density; owns builtin street-grid block_size (meters)."""
 
-    SPARSE = _DistrictDensityBuiltin(120)
-    MEDIUM = _DistrictDensityBuiltin(80)
-    DENSE = _DistrictDensityBuiltin(50)
+    SPARSE = "sparse"
+    MEDIUM = "medium"
+    DENSE = "dense"
 
     @property
     def wire_value(self) -> str:
-        return self.name.lower()
-
-    def __str__(self) -> str:
-        return self.wire_value
+        return str(self)
 
     @classmethod
-    def from_wire(cls, key: str | None) -> DistrictDensity | None:
-        norm = (key or "").strip().lower()
-        for member in cls:
-            if member.wire_value == norm:
-                return member
-        return None
+    def from_wire(cls, key: str | DistrictDensity | None) -> DistrictDensity | None:
+        if key is None:
+            return None
+        if isinstance(key, cls):
+            return key
+        norm = str(key).strip().lower()
+        try:
+            return cls(norm)
+        except ValueError:
+            return None
 
     @classmethod
     def default(cls) -> DistrictDensity:
@@ -39,16 +34,22 @@ class DistrictDensity(Enum):
 
     @property
     def block_size_m(self) -> int:
-        return self.value.block_size_m
+        return _BLOCK_SIZE_M[self]
 
     @classmethod
     def block_size_map(cls) -> dict[str, int]:
-        return {member.wire_value: member.block_size_m for member in cls}
+        return {member.value: member.block_size_m for member in cls}
 
+
+_BLOCK_SIZE_M: dict[DistrictDensity, int] = {
+    DistrictDensity.SPARSE: 120,
+    DistrictDensity.MEDIUM: 80,
+    DistrictDensity.DENSE: 50,
+}
 
 DEFAULT_BLOCK_SIZE_M = DistrictDensity.MEDIUM.block_size_m
 
 
-def block_size_for_density(density: str | None) -> int:
+def block_size_for_density(density: DistrictDensity | str | None) -> int:
     member = DistrictDensity.from_wire(density) or DistrictDensity.default()
     return member.block_size_m

@@ -7,7 +7,10 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire
+from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
+from app.dataModel.settlement.district.cellZone import CellZone
 from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
+from app.dataModel.terrain.worldTerrainRegistry import TerrainKey
 
 
 class PlacementConditionType(StrEnum):
@@ -26,9 +29,9 @@ class PlacementCondition(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     type: StrictEnumOnWire[PlacementConditionType]
-    terrain_types: DefaultOnWire[list[str] | None] = None
+    terrain_types: DefaultOnWire[list[TerrainKey] | None] = None
     min_adjacent_cells: DefaultOnWire[int | None] = None
     size: DefaultOnWire[SettlementSizeKey | None] = None
-    tier: DefaultOnWire[str | None] = None
+    tier: DefaultOnWire[EconomyTierKey | None] = None
     district_type: DefaultOnWire[str | None] = None
-    zone: DefaultOnWire[str | None] = None
+    zone: DefaultOnWire[CellZone | None] = None
