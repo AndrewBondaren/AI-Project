@@ -232,6 +232,33 @@ class TestRegistryKey(unittest.TestCase):
             "system_economic_tier",
         )
 
+    def test_city_skeleton_resolved_tier_overrides_nl_and_keeps_size_brand(self) -> None:
+        from app.application.worldData.generators.assemblers.citySkeleton import (
+            city_skeleton_from_settlement,
+        )
+        from app.db.models.namedLocation import NamedLocation
+
+        loc = NamedLocation(
+            location_uid="loc-1",
+            world_uid="w1",
+            display_name="Hold",
+            system_location_type="settlement",
+            created_at="2026-01-01T00:00:00",
+            system_city_size="small",
+            system_economic_tier="poor",
+            dominant_material="stone",
+            system_location_mood="prosperous",
+        )
+        skeleton = city_skeleton_from_settlement(loc, economic_tier="quality")
+        self.assertIsInstance(skeleton.economic_tier, RegistryKey)
+        self.assertEqual(skeleton.economic_tier, "quality")
+        self.assertIsNone(skeleton.dominant_material)
+        self.assertIsInstance(skeleton.system_city_size, RegistryKey)
+        self.assertEqual(skeleton.system_city_size, "small")
+        self.assertEqual(skeleton.system_location_mood, "prosperous")
+        cleared = city_skeleton_from_settlement(loc, economic_tier=None)
+        self.assertIsNone(cleared.economic_tier)
+
     def test_drawing_key_is_layout_identity(self) -> None:
         from app.dataModel.settlement.district.districtTemplateEntry import (
             DistrictTemplateEntry,

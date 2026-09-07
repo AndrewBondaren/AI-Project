@@ -31,6 +31,36 @@ def _skeleton_wire_from_location(settlement: NamedLocation) -> dict:
     return payload
 
 
+def _copy_pojo_value(value: object) -> object:
+    if isinstance(value, list):
+        return list(value)
+    if isinstance(value, dict):
+        return dict(value)
+    return value
+
+
+def _branded_resolved_aliases(*, economic_tier: str | None) -> dict[str, EconomyTierKey | None]:
+    """Aliased skeleton fields come from generate resolve, not the NL column copy."""
+    supplied = {"economic_tier": economic_tier}
+    expected = set(SettlementSkeleton.NAMED_LOCATION_FIELD_ALIASES)
+    extra = set(supplied) - expected
+    missing = expected - set(supplied)
+    if extra or missing:
+        raise RuntimeError(
+            "city_skeleton_from_settlement resolved kwargs must match "
+            "SettlementSkeleton.NAMED_LOCATION_FIELD_ALIASES "
+            f"(missing={sorted(missing)} extra={sorted(extra)})"
+        )
+    branded: dict[str, EconomyTierKey | None] = {}
+    for name, raw in supplied.items():
+        branded[name] = (
+            getattr(SettlementSkeleton.model_validate({name: raw}), name)
+            if raw
+            else None
+        )
+    return branded
+
+
 def city_skeleton_from_settlement(
     settlement: NamedLocation,
     *,
@@ -41,28 +71,11 @@ def city_skeleton_from_settlement(
     payload: dict = {}
     for field in dataclass_fields(CitySkeleton):
         name = field.name
-        if name == "economic_tier":
-            payload[name] = (
-                SettlementSkeleton.model_validate(
-                    {"economic_tier": economic_tier},
-                ).economic_tier
-                if economic_tier
-                else None
-            )
-            continue
         if name == "dominant_material":
             payload[name] = None
             continue
-        value = getattr(pojo, name)
-        if isinstance(value, list):
-            value = list(value)
-        elif isinstance(value, dict):
-            value = dict(value)
-        payload[name] = value
-    if settlement.system_city_size:
-        payload["system_city_size"] = settlement.system_city_size
-    if settlement.system_location_mood:
-        payload["system_location_mood"] = settlement.system_location_mood
+        payload[name] = _copy_pojo_value(getattr(pojo, name))
+    payload.update(_branded_resolved_aliases(economic_tier=economic_tier))
     return CitySkeleton(**payload)
 
 
