@@ -71,8 +71,8 @@ class BundleNamedLocation(BaseModel):
     map_z: DefaultOnWire[int | None] = None
     is_mobile: DefaultOnWire[bool] = False
     system_template_uid: DefaultOnWire[str | None] = None
-    parent_wall_material: DefaultOnWire[str | None] = None
-    parent_floor_material: DefaultOnWire[str | None] = None
+    parent_wall_material: DefaultOnWire[MaterialKey | None] = None
+    parent_floor_material: DefaultOnWire[MaterialKey | None] = None
     is_outdoor: DefaultOnWire[bool | None] = None
     is_sheltered: DefaultOnWire[bool] = False
     is_transit: DefaultOnWire[bool] = False

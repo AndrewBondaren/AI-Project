@@ -74,8 +74,15 @@ def _annotation_parts(annotation: Any) -> tuple[Any, tuple[Any, ...]]:
             args = get_args(inner)
             if not args:
                 break
+            rest = args[1:]
+            meta.extend(rest)
+            # Wire aliases only. Keep Pydantic BeforeValidator / other constraints
+            # so resolve TypeAdapter still coerces (POJO-C-9 sides).
+            if rest and not all(
+                isinstance(item, (WireFieldPolicy, EnumWire)) for item in rest
+            ):
+                break
             inner = args[0]
-            meta.extend(args[1:])
             continue
         break
     return inner, tuple(meta)

@@ -232,6 +232,60 @@ class TestRegistryKey(unittest.TestCase):
             "system_economic_tier",
         )
 
+    def test_nl_parent_materials_are_branded(self) -> None:
+        from app.dataModel.locations.namedLocation.bundleNamedLocation import (
+            BundleNamedLocation,
+        )
+        from app.dataModel.materials.worldMaterialRegistry import (
+            WorldMaterialRegistry,
+        )
+
+        self.assertIs(
+            registry_key_target(
+                BundleNamedLocation.model_fields["parent_wall_material"].annotation,
+            ),
+            WorldMaterialRegistry,
+        )
+        self.assertIs(
+            registry_key_target(
+                BundleNamedLocation.model_fields["parent_floor_material"].annotation,
+            ),
+            WorldMaterialRegistry,
+        )
+        loc = BundleNamedLocation(
+            location_uid="loc-1",
+            display_name="X",
+            system_location_type="settlement",
+            parent_wall_material="stone",
+            parent_floor_material="wood",
+        )
+        self.assertIsInstance(loc.parent_wall_material, RegistryKey)
+        self.assertEqual(loc.parent_wall_material, "stone")
+        self.assertIsInstance(loc.parent_floor_material, RegistryKey)
+        self.assertEqual(loc.parent_floor_material, "wood")
+        omitted = BundleNamedLocation(
+            location_uid="loc-1",
+            display_name="X",
+            system_location_type="settlement",
+            parent_wall_material=None,
+        )
+        self.assertIsNone(omitted.parent_wall_material)
+        self.assertIsNone(omitted.parent_floor_material)
+        with self.assertRaises(Exception):
+            BundleNamedLocation(
+                location_uid="loc-1",
+                display_name="X",
+                system_location_type="settlement",
+                parent_wall_material="",
+            )
+        with self.assertRaises(Exception):
+            BundleNamedLocation(
+                location_uid="loc-1",
+                display_name="X",
+                system_location_type="settlement",
+                parent_floor_material="",
+            )
+
     def test_city_skeleton_resolved_tier_overrides_nl_and_keeps_size_brand(self) -> None:
         from app.application.worldData.generators.assemblers.citySkeleton import (
             city_skeleton_from_settlement,

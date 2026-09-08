@@ -887,6 +887,7 @@ DAG может materialize **разные уровни** в разных нод�
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-08 | **POJO-C-9 resolved:** `PerimeterBarrier.sides` — `list[Facing]` (кардиналы). |
 | 2026-09-08 | **POJO-C-8 resolved:** `required_structures[].position` — `RequiredStructurePosition` (`any`/`center`). |
 | 2026-09-07 | **POJO-C-6 resolved:** `PerimeterBarrier.template` / identity `system_type` — `BarrierTemplateKey`. |
 | 2026-09-07 | **POJO-C-4 resolved:** чертёж района `system_name` / pin / `template_system_name` — `DistrictTemplateKey`. |

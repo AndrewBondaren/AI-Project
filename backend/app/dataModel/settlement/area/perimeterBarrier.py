@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import logging
+from typing import TYPE_CHECKING, Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, field_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire
 from app.dataModel.constrainedField import constrained_field
@@ -18,6 +19,45 @@ if TYPE_CHECKING:
     )
     from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
 
+logger = logging.getLogger(__name__)
+
+
+def coerce_cardinal_barrier_sides(value: Any) -> list[Facing] | None:
+    """Keep host cardinals; skip intercardinal / unknown. Non-list raises (resolve → default)."""
+    if value is None:
+        return None
+    if not isinstance(value, (list, tuple)):
+        raise ValueError("sides expected list of cardinal facings")
+    kept: list[Facing] = []
+    seen: set[Facing] = set()
+    for item in value:
+        facing: Facing | None
+        try:
+            facing = parse_facing(item) if not isinstance(item, Facing) else item
+        except (TypeError, ValueError):
+            logger.warning(
+                "perimeter_barrier | sides skip %r; not a host cardinal",
+                item,
+            )
+            continue
+        if facing is None or facing not in CARDINAL_FACINGS:
+            logger.warning(
+                "perimeter_barrier | sides skip %r; not a host cardinal",
+                item if facing is None else facing.value,
+            )
+            continue
+        if facing in seen:
+            continue
+        seen.add(facing)
+        kept.append(facing)
+    return kept
+
+
+type CardinalBarrierSides = Annotated[
+    list[Facing] | None,
+    BeforeValidator(coerce_cardinal_barrier_sides),
+]
+
 
 class PerimeterBarrier(BaseModel):
     """One class, three host instances (settlement / district / parcel) — tz_locations.md."""
@@ -28,8 +68,8 @@ class PerimeterBarrier(BaseModel):
     probability: DefaultOnWire[float] = constrained_field(
         default=0.0, greater_equals=0.0, lesser_equals=1.0,
     )
-    # None / [] = all four cardinals of this host bbox; resolve skips unknown / intercardinal.
-    sides: DefaultOnWire[list[str] | None] = None
+    # None / [] = all four cardinals of this host bbox.
+    sides: DefaultOnWire[CardinalBarrierSides] = None
 
     @field_validator("template", mode="before")
     @classmethod
@@ -57,7 +97,7 @@ def resolved_host_sides(barrier: PerimeterBarrier) -> tuple[frozenset[Facing], l
             skipped.append(str(item))
             continue
         if facing is None or facing not in CARDINAL_FACINGS:
-            skipped.append(str(item))
+            skipped.append(str(item) if facing is None else facing.value)
             continue
         kept.add(facing)
     if not kept:

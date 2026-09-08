@@ -45,6 +45,8 @@
 | POJO-C-4 | `DistrictTemplateEntry.system_name` + `TypicalDistrictRef.system_name` + `DistrictTopologySlot.template_system_name` | `DistrictTemplateKey` |
 | POJO-C-6 | `BarrierTemplateEntry.system_type` + `PerimeterBarrier.template` | `BarrierTemplateKey` |
 | POJO-C-8 | `RequiredStructure.position` | `RequiredStructurePosition` (`any` / `center`; `DefaultOnWire` = `ANY`) |
+| POJO-C-9 | `PerimeterBarrier.sides` | `list[Facing]` (кардиналы; omit/`[]` = все четыре) |
+| POJO-C-10 | `BundleNamedLocation.parent_wall_material` / `parent_floor_material` | `MaterialKey` (как `dominant_material`; не скелет) |
 
 Generate: unknown **size** → `medium` + WARNING (`jsonValidation` / `resolve`). Omit size → `medium` без warning.
 
@@ -56,9 +58,13 @@ Generate: unknown **size** → `medium` + WARNING (`jsonValidation` / `resolve`)
 
 `DistrictTemplateKey`: чертёж района (`civic_center`), не ткань `civic` и не `DrawingKey` участка. Pin `TypicalDistrictRef.system_name`: omit/`null` → `None` (подбор по `district_type` / subtype); `""` / blank на `resolve_model` → `None` + WARNING `invalid; using field default` (не 422). Identity и `DistrictTopologySlot.template_system_name`: `""` → reject. Не size→medium.
 
-`BarrierTemplateKey`: чертёж барьера (`wooden_fence` / `stone_fence` / `city_wall`), identity `system_type` (не `system_name`). `PerimeterBarrier.template`: omit/`null` → `None` (скип инстанса); `""` / blank на `resolve_model` → `None` + WARNING (не 422, не `wooden_fence`). Identity `system_type`: `""` → reject. `sides` — POJO-C-9. Relief `structure_refs` — не этот срез.
+`BarrierTemplateKey`: чертёж барьера (`wooden_fence` / `stone_fence` / `city_wall`), identity `system_type` (не `system_name`). `PerimeterBarrier.template`: omit/`null` → `None` (скип инстанса); `""` / blank на `resolve_model` → `None` + WARNING (не 422, не `wooden_fence`). Identity `system_type`: `""` → reject. Relief `structure_refs` — не этот срез.
+
+`PerimeterBarrier.sides`: `DefaultOnWire[list[Facing] \| None] = None`. Только кардиналы. Omit/`null`/`[]` → четыре прямые. Intercardinal / unknown в списке — skip элемента + warning; не 422 на барьер. После skip пусто → как `[]`. Не `RequiredStructure.position`, не горные `sides`.
 
 `RequiredStructure.position`: ENUM-E `RequiredStructurePosition` (`any` / `center`). `DefaultOnWire` = `ANY` (как `street_layout`, не `StrictEnumOnWire` / не 422). Omit → `any`. `""` / unknown на `resolve_model` → `any` + WARNING. `PackingToken.position` и CONN-PACK-2 — не этот срез. Не `CellZone.center`, не `Facing`.
+
+`parent_wall_material` / `parent_floor_material`: тот же `MaterialKey`, что `dominant_material` (identity уже branded). Omit/`null` → `None` (generate позже берёт `DEFAULT_WALL_MATERIAL` / floor). `"stone"` → branded. `""` → reject. Не size→medium. Не заполнять `wood`/`stone` на import. Скелет не reopen; SQL `NamedLocation` остаётся `str | None`. `MaterialPick` на building/barrier — не этот срез.
 
 ### Контракт connection_type (POJO-C-5)
 
@@ -133,7 +139,7 @@ SQL `named_locations.frontage_type_order` — JSON-массив; dataclass `Name
 
 ## Open — реестр или enum уже есть
 
-Дальше — **POJO-C-9** грани барьера.
+Очередь POJO-C закрыта. Осталось blocked `architectural_style` (реестр в ТЗ, POJO нет).
 
 ### Контракт участка (locked)
 
@@ -174,18 +180,6 @@ SQL `named_locations.frontage_type_order` — JSON-массив; dataclass `Name
 | `structure_context` / `default_structure_context` / `StructureAreaAssembler` / `ASSEMBLER_REGISTRY` | generate здания |
 | `structure_canal` / `structure_refs` | relief/канал |
 | pack `structure_path` / `structure_hash` | world pack |
-
-### POJO-C-9 — `PerimeterBarrier.sides`
-
-**Status:** open
-
-Сейчас `list[str]`; разбор в `resolved_host_sides` → `Facing`. Цель: `list[Facing]` (кардиналы).
-
-### POJO-C-10 — NL parent materials
-
-**Status:** open
-
-`BundleNamedLocation.parent_wall_material` / `parent_floor_material` — тот же `MaterialKey`, что `dominant_material`. Не скелет (скелет не reopen).
 
 ---
 
@@ -237,3 +231,5 @@ SQL dataclass `NamedLocation` остаётся `str \| None`; coerce на POJO /
 | 2026-09-07 | POJO-C-4 **resolved**: `DistrictTemplateKey` на identity + pin `TypicalDistrictRef.system_name` + `template_system_name`; pin `""` → `None` + warning; ткань `district_type` leave |
 | 2026-09-07 | POJO-C-6 **resolved**: `BarrierTemplateKey` на identity `system_type` + `PerimeterBarrier.template`; `""` → `None` + warning; `sides`/relief `structure_refs` не срез |
 | 2026-09-08 | POJO-C-8 **resolved**: `RequiredStructurePosition` (`any`/`center`); omit/invalid → `any` + warning; CONN-PACK-2 не срез |
+| 2026-09-08 | POJO-C-9 **resolved**: `PerimeterBarrier.sides` → `list[Facing]` (кардиналы); skip unknown/intercardinal + warning |
+| 2026-09-08 | POJO-C-10 **resolved**: NL `parent_wall_material` / `parent_floor_material` → `MaterialKey`; omit/`null` → `None`; `""` → reject. Не скелет, не `MaterialPick` |

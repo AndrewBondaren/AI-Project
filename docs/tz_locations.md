@@ -163,8 +163,8 @@ named_locations (
                                   -- Omit `map_z` = pin z 0 (`TerritoryVolumePolicy.pin_map_z_fallback`).
                                   -- Писать `map_z` только для ненулевого пина (подземный/hive/плато). `0` на wire = то же, что omit.
   system_template_uid,            -- nullable FK → building_templates; из какого шаблона сгенерировано здание
-  parent_wall_material,           -- nullable ref → material_registry; материал стен здания (наследуется из шаблона)
-  parent_floor_material,          -- nullable ref → material_registry; материал полов здания
+  parent_wall_material,           -- nullable MaterialKey → material_registry; стены здания (из шаблона). Omit/null → None; "" → reject.
+  parent_floor_material,          -- nullable MaterialKey → material_registry; полы. Как dominant_material. Не заполнять wood/stone на import.
   hills                           -- nullable JSON; IgnoreOnWire. Patch холмов: {plains?, forest?} тех же ключей POJO.
                                   -- Нет ключа = мир. Перекрывает world.terrain_masks.default_plains|forests.
                                   -- SoT: tz_world_pack_storage § L2 open-land hills. L2 only; schema 0001 при impl.
@@ -960,7 +960,7 @@ price = tier.base_value × location.economic_modifier × supply_demand_modifier 
 
 `perimeter_barrier.template` — ref → `barrier_template_registry.system_type` (`BarrierTemplateKey`, [POJO-C-6](./tz_pojo_city_typing.md)). **Нет поля**, или поле есть и `template` **null** / `""` — инстанса нет (скип как нет поля).  
 `perimeter_barrier.probability` — поле **класса**; читает только владелец-участок (roll 0.0–1.0). Владельцы поселение и район не крутят.  
-`perimeter_barrier.sides` — какие прямые bbox **этого** инстанса включены: cardinals `north`/`south`/`east`/`west` (`Facing`). v1: каждая включённая грань — **прямая** вдоль этой грани (толщина — `width_cells` чертежа **этого** инстанса). Нет поля / `null` / пустой список `[]` → **все четыре** прямые этого bbox. Непустой список — только эти грани. Intercardinal и unknown — skip ключа + warning. Не синглтон: три хоста — три объекта, зоны не пересекаются.
+`perimeter_barrier.sides` — какие прямые bbox **этого** инстанса включены: кардиналы `north`/`south`/`east`/`west` (`Facing`, [POJO-C-9](./tz_pojo_city_typing.md)). v1: каждая включённая грань — **прямая** вдоль этой грани (толщина — `width_cells` чертежа **этого** инстанса). Нет поля / `null` / пустой список `[]` → **все четыре** прямые этого bbox. Непустой список — только эти грани. Intercardinal и unknown — skip ключа + warning. Не синглтон: три хоста — три объекта, зоны не пересекаются.
 
 **Класс один:** `PerimeterBarrier`. Владельцы — **разные инстансы**, не shared object. Толщина прямой — `barrier_template_registry.width_cells` (дефолт **1**).
 

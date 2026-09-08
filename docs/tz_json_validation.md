@@ -109,6 +109,8 @@ class PerimeterBarrier:
 class BundleNamedLocation:
     system_settlement_size: DefaultOnWire[SettlementSizeKey | None]  # код до rename: system_city_size
     system_economic_tier: DefaultOnWire[EconomyTierKey | None]
+    parent_wall_material: DefaultOnWire[MaterialKey | None]  # omit/null → None; "" → reject
+    parent_floor_material: DefaultOnWire[MaterialKey | None]
 
 class SettlementSkeleton:
     economic_tier: DefaultOnWire[EconomyTierKey | None]
@@ -149,7 +151,7 @@ JSON на проводе — строка (`"small"`). Тип — номинал
 
 Дубль subtype==size — по-прежнему **422**. Geographic + size — не этот fallback.
 
-Эталон identity: `settlement_size_registry[].system_size`, `economic_tier_registry[].system_tier`, `terrain_registry[].system_terrain`, `material_registry[].system_material`. Refs: NL/skeleton `system_city_size` / `economic_tier` / `dominant_material`, `PlacementCondition.size` / `.terrain_types` / `.tier`, `EconomicTierRange.min/max`. `settlement_density` / district `density` — ENUM-E `DistrictDensity`. `PlacementCondition.zone` — ENUM-E `CellZone`. `district_type` — голый `str`. Очередь leftover city `str` — [`tz_pojo_city_typing.md`](./tz_pojo_city_typing.md) (`POJO-C-*`), при касании, не массово.
+Эталон identity: `settlement_size_registry[].system_size`, `economic_tier_registry[].system_tier`, `terrain_registry[].system_terrain`, `material_registry[].system_material`. Refs: NL/skeleton `system_city_size` / `economic_tier` / `dominant_material`, NL `parent_wall_material` / `parent_floor_material`, `PlacementCondition.size` / `.terrain_types` / `.tier`, `EconomicTierRange.min/max`. `settlement_density` / district `density` — ENUM-E `DistrictDensity`. `PlacementCondition.zone` — ENUM-E `CellZone`. `district_type` — голый `str`. Очередь leftover city `str` — [`tz_pojo_city_typing.md`](./tz_pojo_city_typing.md) (`POJO-C-*`), при касании, не массово.
 
 ### REF-W → N1-W (cross-ref, import-only)
 
@@ -699,6 +701,8 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 
 | Версия | Дата | Изменение |
 |--------|------|-----------|
+| — | 2026-09-08 | **NL parent materials** (POJO-C-10 resolved): `parent_wall_material` / `parent_floor_material` → `MaterialKey`. Omit/`null` → `None`; `""` → reject. Как `dominant_material`. Не скелет, не `MaterialPick`. |
+| — | 2026-09-08 | **PerimeterBarrier.sides** (POJO-C-9 resolved): `list[Facing]` кардиналы. Omit/`[]` = все четыре. Intercardinal/unknown — skip элемента + warning, не 422. |
 | — | 2026-09-08 | **RequiredStructurePosition** (POJO-C-8 resolved): ENUM-E `any`/`center` на `RequiredStructure.position`. `DefaultOnWire` = `ANY`; omit/invalid → `any` + warning. Не `StrictEnumOnWire`. CONN-PACK-2 не этот срез. |
 | — | 2026-09-07 | **BarrierTemplateKey** (POJO-C-6 resolved): identity `system_type` + `PerimeterBarrier.template`. Omit/`null`/`""` → `None` + warning на blank. Relief `structure_refs` / `sides` — не этот срез. |
 | — | 2026-09-07 | **DistrictTemplateKey** (POJO-C-4 resolved): identity `system_name` + pin `TypicalDistrictRef.system_name` + `DistrictTopologySlot.template_system_name`. Pin `""`/blank → `None` + warning. Не ткань `district_type`. |
