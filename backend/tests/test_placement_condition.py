@@ -73,7 +73,7 @@ class TestPlacementConditionTyping(unittest.TestCase):
             c for c in port.placement_conditions if c.type is PlacementConditionType.MIN_CITY_SIZE
         )
         self.assertIsInstance(size_cond.size, RegistryKey)
-        self.assertEqual(size_cond.size, "town")
+        self.assertEqual(size_cond.size, WorldSettlementSizeRegistry.default_system_size())
         self.assertIs(
             type(size_cond.size),
             type(WorldSettlementSizeRegistry.default_system_size()),

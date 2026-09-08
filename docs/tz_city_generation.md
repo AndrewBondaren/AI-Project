@@ -557,7 +557,7 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 | `type` | Параметры | Описание |
 |---|---|---|
 | `adjacent_terrain` | `terrain_types: TerrainKey[]`, `min_adjacent_cells: int` | На внешнем кольце **слота района** ≥ N соседних terrain-клеток с `system_terrain ∈ terrain_types`. Omit → 1. Порт: `["liquid_body"]` + `1`. Не длина берега, не связность водоёма (open ниже). Wire — JSON-строки; POJO — `RegistryKey[WorldTerrainRegistry]`. |
-| `min_settlement_size` | `size: SettlementSizeKey` | ранг → `settlement_size_registry`; поселение **этой морфологии** не меньше ранга. Не сравнивать `small` города с `large` деревни. «Только города» = subtype `city`, не size. Код/wire до impl: `min_city_size` + токены `town`/… |
+| `min_settlement_size` | `size: SettlementSizeKey` | ранг → `settlement_size_registry`; поселение **этой морфологии** не меньше ранга. Не сравнивать `small` города с `large` деревни. «Только города» = subtype `city`, не size. Код: wire `min_city_size`; канон чертежей — `size` = `medium`. |
 | `economic_tier_min` | `tier: EconomyTierKey` | Минимальный `system_economic_tier` города. POJO — `RegistryKey[WorldEconomyTierRegistry]`. Membership miss — REF-W / warn+default, **не** size→medium. |
 | `economic_tier_max` | `tier: EconomyTierKey` | Максимальный `system_economic_tier` города |
 | `requires_district_type` | `district_type: string` | В городе уже должен быть район указанного типа. Голый `str` — нет реестра типов ткани (не брендировать как template `system_name`). |

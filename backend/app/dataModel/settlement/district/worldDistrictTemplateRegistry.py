@@ -13,6 +13,11 @@ import app.dataModel.settlement.district.districtTemplateEntry as _entry_mod
 from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.settlement.district.placementCondition import PlacementCondition
 from app.dataModel.settlement.district.requiredStructure import POSITION_CENTER, RequiredStructure
+from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import (
+    WorldSettlementSizeRegistry,
+)
+
+_RANK_MEDIUM = WorldSettlementSizeRegistry.default_system_size()
 
 
 class WorldDistrictTemplateRegistry(RootModel[list[DistrictTemplateEntry]]):
@@ -50,7 +55,7 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
         display_name="Центральный квартал",
         district_type="civic",
         placement_conditions=[
-            PlacementCondition(type="min_city_size", size="town"),
+            PlacementCondition(type="min_city_size", size=_RANK_MEDIUM),
             PlacementCondition(type="cell_zone", zone="center"),
         ],
         max_per_city=1,
@@ -85,7 +90,7 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
         system_name="industrial_quarter",
         display_name="Промышленный квартал",
         district_type="industrial",
-        placement_conditions=[PlacementCondition(type="min_city_size", size="town")],
+        placement_conditions=[PlacementCondition(type="min_city_size", size=_RANK_MEDIUM)],
         street_layout=StreetLayout.GRID,
         connections=[
             DistrictConnection(connection_type="road", role="service_road", sidewalk=False),
@@ -101,7 +106,7 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
                 terrain_types=["liquid_body"],
                 min_adjacent_cells=1,
             ),
-            PlacementCondition(type="min_city_size", size="town"),
+            PlacementCondition(type="min_city_size", size=_RANK_MEDIUM),
         ],
         max_per_city=1,
         street_layout=StreetLayout.GRID,
