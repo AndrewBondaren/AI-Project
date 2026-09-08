@@ -17,7 +17,12 @@ from app.dataModel.settlement.district.placementCondition import (
     PlacementCondition,
     PlacementConditionType,
 )
-from app.dataModel.settlement.district.requiredStructure import RequiredStructure
+from app.dataModel.settlement.district.requiredStructure import (
+    POSITION_ANY,
+    POSITION_CENTER,
+    RequiredStructure,
+    RequiredStructurePosition,
+)
 from app.dataModel.settlement.district.worldDistrictZonePreference import (
     DistrictZonePreferenceEntry,
     WorldDistrictZonePreference,
@@ -53,9 +58,12 @@ __all__ = [
     "COUNT_WITHOUT_KEY",
     "FrontageTypeOrder",
     "PRIORITY_WITHOUT_KEY",
+    "POSITION_ANY",
+    "POSITION_CENTER",
     "PlacementCondition",
     "PlacementConditionType",
     "RequiredStructure",
+    "RequiredStructurePosition",
     "WorldDistrictTemplateRegistry",
     "WorldDistrictZonePreference",
     "allowed_fill_structure_types",

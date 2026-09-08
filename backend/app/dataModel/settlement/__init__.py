@@ -9,6 +9,9 @@ from app.dataModel.settlement.area import PerimeterBarrier, resolved_host_sides
 from app.dataModel.settlement.enums import (
     DEFAULT_BLOCK_SIZE_FINE,
     DistrictDensity,
+    POSITION_ANY,
+    POSITION_CENTER,
+    RequiredStructurePosition,
     block_size_for_density,
 )
 from app.dataModel.settlement.settlement import (
@@ -67,9 +70,12 @@ __all__ = [
     "COUNT_WITHOUT_KEY",
     "PRIORITY_WITHOUT_KEY",
     "PerimeterBarrier",
+    "POSITION_ANY",
+    "POSITION_CENTER",
     "PlacementCondition",
     "PlacementConditionType",
     "RequiredStructure",
+    "RequiredStructurePosition",
     "SettlementSkeleton",
     "SettlementSpecializationBind",
     "SettlementSpecializationEntry",

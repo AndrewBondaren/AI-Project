@@ -595,9 +595,9 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 
 `count` — число токенов; default 1. Приоритет над `plot_counts` — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов». Массив — проход 1 **до** рамки пустых кварталов; порядок массива = очередь среди required — §5.1.3 «Приоритет посадки». Не путать с `plot_priority` (желательный fill, не обязательность).
 
-`position`:
+`position` (`RequiredStructurePosition`, [POJO-C-8](./tz_pojo_city_typing.md)):
 - `"center"` — размещается ближе к геометрическому центру района. Два+ с `center` — **CONN-PACK-2** ([connections](./tz_structure_connections.md) §8)
-- `"any"` — произвольная позиция
+- `"any"` — произвольная позиция (default; omit / invalid wire → `any` + warning)
 
 ### 9.5 Типы раскладки улиц (`street_layout`)
 
@@ -887,6 +887,7 @@ DAG может materialize **разные уровни** в разных нод�
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-08 | **POJO-C-8 resolved:** `required_structures[].position` — `RequiredStructurePosition` (`any`/`center`). |
 | 2026-09-07 | **POJO-C-6 resolved:** `PerimeterBarrier.template` / identity `system_type` — `BarrierTemplateKey`. |
 | 2026-09-07 | **POJO-C-4 resolved:** чертёж района `system_name` / pin / `template_system_name` — `DistrictTemplateKey`. |
 | 2026-09-07 | **POJO-C-3 resolved:** `system_specialization` — `SettlementSpecializationKey` (entry + bind). |

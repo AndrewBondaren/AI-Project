@@ -699,6 +699,7 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 
 | Версия | Дата | Изменение |
 |--------|------|-----------|
+| — | 2026-09-08 | **RequiredStructurePosition** (POJO-C-8 resolved): ENUM-E `any`/`center` на `RequiredStructure.position`. `DefaultOnWire` = `ANY`; omit/invalid → `any` + warning. Не `StrictEnumOnWire`. CONN-PACK-2 не этот срез. |
 | — | 2026-09-07 | **BarrierTemplateKey** (POJO-C-6 resolved): identity `system_type` + `PerimeterBarrier.template`. Omit/`null`/`""` → `None` + warning на blank. Relief `structure_refs` / `sides` — не этот срез. |
 | — | 2026-09-07 | **DistrictTemplateKey** (POJO-C-4 resolved): identity `system_name` + pin `TypicalDistrictRef.system_name` + `DistrictTopologySlot.template_system_name`. Pin `""`/blank → `None` + warning. Не ткань `district_type`. |
 | — | 2026-09-07 | **SettlementSpecializationKey** (POJO-C-3 resolved): identity + bind `system_specialization`. Не `district_subtype` / subjects. |
