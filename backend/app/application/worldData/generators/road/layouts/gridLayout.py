@@ -21,31 +21,31 @@ from app.application.worldData.generators.assemblers.districtAssembler.planner.t
     InnerBBox,
     StreetFrameContext,
 )
+from app.application.worldData.generators.road.connectionPolicy import ConnectionPaint
 from app.application.worldData.generators.road.widthResolver import resolve_width
 from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
 from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
+from app.dataModel.settlement.enums.districtStreetRole import DistrictStreetRole
 from app.dataModel.spatial.facing import Facing, is_latitudinal_edge, is_meridional_edge
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 
-_AUTO_SIDEWALK_TYPES = {"road", "highway"}
-
 
 def generate_grid(
-    slot:            DistrictSlot,
-    skeleton:        CitySkeleton,
-    world_uid:       str,
-    connection_type: str,
-    lanes_per_side:  int,
-    has_sidewalk:    bool,
-    rng:             random.Random,
-    surface:         dict[tuple[int, int], int] | None = None,
-    frame:           StreetFrameContext | None = None,
-) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
+    slot:     DistrictSlot,
+    skeleton: CitySkeleton,
+    world_uid: str,
+    fill:     ConnectionPaint,
+    spine:    ConnectionPaint,
+    rng:      random.Random,
+    surface:  dict[tuple[int, int], int] | None = None,
+    frame:    StreetFrameContext | None = None,
+) -> tuple[list[ConnectionNode], list[ConnectionEdge], dict[str, DistrictStreetRole]]:
     _ = rng
     pin_z = slot.ground_z
     z_lookup = surface or {}
+    edge_roles: dict[str, DistrictStreetRole] = {}
 
     def node_z(x: int, y: int) -> int:
         return int(z_lookup.get((x, y), pin_z))
@@ -63,14 +63,13 @@ def generate_grid(
         blocked = ()
 
     if inner.empty:
-        return [], []
+        return [], [], edge_roles
 
     xs = axis_lines(inner.x0, inner.x1, step)
     ys = axis_lines(inner.y0, inner.y1, step)
     if len(xs) < 2 or len(ys) < 2:
-        return [], []
+        return [], [], edge_roles
 
-    width = resolve_width(connection_type, lanes_per_side, bidirectional=True)
     node_grid: dict[tuple[int, int], ConnectionNode] = {}
 
     def get_or_create(col: int, row: int) -> ConnectionNode:
@@ -95,36 +94,46 @@ def generate_grid(
     edges: list[ConnectionEdge] = []
     edge_keys: set[frozenset[str]] = set()
 
-    def make_edge(a: ConnectionNode, b: ConnectionNode, conn_type: str | None = None) -> ConnectionEdge:
-        return ConnectionEdge(
+    def _apply_paint(edge: ConnectionEdge, paint: ConnectionPaint) -> None:
+        edge.connection_type = paint.connection_type
+        edge.lanes_per_side = paint.lanes_per_side
+        edge.has_sidewalk = paint.has_sidewalk
+        extra_w = resolve_width(paint.connection_type, paint.lanes_per_side, True)
+        if extra_w is not None:
+            edge.width_cells = extra_w
+        if paint.role is not None:
+            edge_roles[edge.edge_uid] = paint.role
+        else:
+            edge_roles.pop(edge.edge_uid, None)
+
+    def make_edge(a: ConnectionNode, b: ConnectionNode, paint: ConnectionPaint) -> ConnectionEdge:
+        width = resolve_width(paint.connection_type, paint.lanes_per_side, bidirectional=True)
+        edge = ConnectionEdge(
             edge_uid=f"e_{a.node_uid}_{b.node_uid}",
             from_node_uid=a.node_uid,
             to_node_uid=b.node_uid,
-            connection_type=conn_type or connection_type,
+            connection_type=paint.connection_type,
             bidirectional=True,
-            lanes_per_side=lanes_per_side,
-            width_cells=width if conn_type is None else resolve_width(
-                conn_type, lanes_per_side, True,
-            ),
-            has_sidewalk=has_sidewalk,
+            lanes_per_side=paint.lanes_per_side,
+            width_cells=width,
+            has_sidewalk=paint.has_sidewalk,
             graph_level=GraphLevel.DISTRICT.value,
             world_uid=world_uid,
         )
+        _apply_paint(edge, paint)
+        return edge
 
-    def ensure_edge(a: ConnectionNode, b: ConnectionNode, conn_type: str | None = None) -> None:
+    def ensure_edge(a: ConnectionNode, b: ConnectionNode, paint: ConnectionPaint) -> None:
         key = frozenset((a.node_uid, b.node_uid))
         if key in edge_keys:
-            if conn_type is not None:
-                for edge in edges:
-                    ids = frozenset((edge.from_node_uid, edge.to_node_uid))
-                    if ids == key:
-                        edge.connection_type = conn_type
-                        extra_w = resolve_width(conn_type, lanes_per_side, True)
-                        if extra_w is not None:
-                            edge.width_cells = extra_w
+            for edge in edges:
+                ids = frozenset((edge.from_node_uid, edge.to_node_uid))
+                if ids == key:
+                    _apply_paint(edge, paint)
+                    return
             return
         edge_keys.add(key)
-        edges.append(make_edge(a, b, conn_type))
+        edges.append(make_edge(a, b, paint))
 
     def omits_horizontal(y: int, x0: int, x1: int) -> bool:
         lo, hi = (x0, x1) if x0 <= x1 else (x1, x0)
@@ -146,7 +155,7 @@ def generate_grid(
             b = get_or_create(col + 1, row)
             if omits_horizontal(y, a.x, b.x):
                 continue
-            ensure_edge(a, b)
+            ensure_edge(a, b, fill)
 
     for col, x in enumerate(xs):
         for row in range(len(ys) - 1):
@@ -154,24 +163,23 @@ def generate_grid(
             b = get_or_create(col, row + 1)
             if omits_vertical(x, a.y, b.y):
                 continue
-            ensure_edge(a, b)
+            ensure_edge(a, b, fill)
 
     extra_nodes: list[ConnectionNode] = []
     _apply_through_threads(
         slot.entry_nodes, node_grid, ensure_edge, xs, ys,
-        omits_horizontal, omits_vertical,
+        omits_horizontal, omits_vertical, spine,
     )
     extra_nodes.extend(_connect_entry_points(
-        slot.entry_nodes, node_grid, ensure_edge, xs, ys,
+        slot.entry_nodes, node_grid, ensure_edge, xs, ys, spine,
     ))
-    _ = _AUTO_SIDEWALK_TYPES
     nodes = list(node_grid.values())
     seen = {n.node_uid for n in nodes}
     for node in extra_nodes:
         if node.node_uid not in seen:
             nodes.append(node)
             seen.add(node.node_uid)
-    return nodes, edges
+    return nodes, edges, edge_roles
 
 
 def _nearest_index(lines: list[int], value: int) -> int:
@@ -205,6 +213,7 @@ def _apply_through_threads(
     ys: list[int],
     omits_horizontal,
     omits_vertical,
+    spine: ConnectionPaint,
 ) -> None:
     through_map = {
         e.node.node_uid: e
@@ -224,7 +233,6 @@ def _apply_through_threads(
             continue
         c0, r0 = _snap_entry(entry, xs, ys)
         c1, r1 = _snap_entry(exit_entry, xs, ys)
-        conn = entry.connection_type
         if r0 == r1:
             lo, hi = (c0, c1) if c0 <= c1 else (c1, c0)
             for col in range(lo, hi):
@@ -234,7 +242,7 @@ def _apply_through_threads(
                     continue
                 if omits_horizontal(a.y, a.x, b.x):
                     continue
-                ensure_edge(a, b, conn)
+                ensure_edge(a, b, spine)
         elif c0 == c1:
             lo, hi = (r0, r1) if r0 <= r1 else (r1, r0)
             for row in range(lo, hi):
@@ -244,7 +252,7 @@ def _apply_through_threads(
                     continue
                 if omits_vertical(a.x, a.y, b.y):
                     continue
-                ensure_edge(a, b, conn)
+                ensure_edge(a, b, spine)
 
 
 def _connect_entry_points(
@@ -253,6 +261,7 @@ def _connect_entry_points(
     ensure_edge,
     xs: list[int],
     ys: list[int],
+    spine: ConnectionPaint,
 ) -> list[ConnectionNode]:
     extra: list[ConnectionNode] = []
     for entry in entry_nodes:
@@ -266,5 +275,5 @@ def _connect_entry_points(
         extra.append(node)
         if (node.x, node.y) == (grid.x, grid.y):
             continue
-        ensure_edge(node, grid)
+        ensure_edge(node, grid, spine)
     return extra

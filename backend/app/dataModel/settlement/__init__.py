@@ -9,6 +9,7 @@ from app.dataModel.settlement.area import PerimeterBarrier, resolved_host_sides
 from app.dataModel.settlement.enums import (
     DEFAULT_BLOCK_SIZE_FINE,
     DistrictDensity,
+    DistrictStreetRole,
     POSITION_ANY,
     POSITION_CENTER,
     RequiredStructurePosition,
@@ -32,6 +33,7 @@ from app.dataModel.settlement.district import (
     COUNT_WITHOUT_KEY,
     CellZone,
     DistrictConnection,
+    DistrictStreetClasses,
     DistrictTemplateEntry,
     DistrictTemplateKey,
     DistrictTopologyEntry,
@@ -49,6 +51,7 @@ from app.dataModel.settlement.district import (
     resolve_required_layouts,
     resolve_plot_count,
     resolve_plot_priority,
+    street_classes_for,
     union_required_structures,
 )
 
@@ -59,6 +62,8 @@ __all__ = [
     "DEFAULT_BLOCK_SIZE_FINE",
     "DistrictConnection",
     "DistrictDensity",
+    "DistrictStreetClasses",
+    "DistrictStreetRole",
     "DistrictTemplateEntry",
     "DistrictTemplateKey",
     "DistrictTopologyEntry",
@@ -93,5 +98,6 @@ __all__ = [
     "resolve_plot_count",
     "resolve_plot_priority",
     "resolved_host_sides",
+    "street_classes_for",
     "union_required_structures",
 ]

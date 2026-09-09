@@ -5,8 +5,11 @@ from app.dataModel.settlement.district.cellZone import CellZone
 from app.dataModel.settlement.district.districtConnection import (
     DEFAULT_CONNECTION_TYPE,
     DistrictConnection,
+    DistrictStreetClasses,
+    connections_from_template,
     primary_from_template,
     primary_or_default,
+    street_classes_for,
 )
 from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.settlement.district.frontageTypeOrder import (
@@ -50,6 +53,7 @@ __all__ = [
     "DEFAULT_CONNECTION_TYPE",
     "CellZone",
     "DistrictConnection",
+    "DistrictStreetClasses",
     "DistrictTemplateEntry",
     "DistrictTemplateKey",
     "DistrictTopologyEntry",
@@ -67,8 +71,10 @@ __all__ = [
     "WorldDistrictTemplateRegistry",
     "WorldDistrictZonePreference",
     "allowed_fill_structure_types",
+    "connections_from_template",
     "primary_from_template",
     "primary_or_default",
+    "street_classes_for",
     "resolve_frontage_type_order",
     "resolve_required_layouts",
     "resolve_plot_count",

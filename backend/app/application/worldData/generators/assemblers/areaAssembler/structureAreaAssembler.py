@@ -4,7 +4,11 @@ from collections.abc import Set
 from dataclasses import replace
 
 from app.application.worldData.generators.assemblers.areaAssembler.areaLayout import AreaLayout
-from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
+from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import (
+    AreaSlot,
+    height_from_levels,
+    z_deep_from_levels,
+)
 from app.application.worldData.generators.assemblers.areaAssembler.areaThreshold import AreaThresholdKind
 from app.application.worldData.generators.assemblers.areaAssembler.planner.areaBarriers import (
     plan_area_barrier_cells,
@@ -301,6 +305,10 @@ class StructureAreaAssembler:
         barrier_cells = self._build_barrier(
             world, slot, template, building, city_skeleton, rng,
         )
+
+        levels = building_layout.levels if building_layout is not None else ()
+        slot.height = height_from_levels(slot.ground_z, levels)
+        slot.z_deep = z_deep_from_levels(slot.ground_z, levels)
 
         return AreaLayout(
             slot=slot,

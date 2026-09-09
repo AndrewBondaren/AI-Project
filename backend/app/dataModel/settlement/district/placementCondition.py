@@ -17,12 +17,18 @@ class PlacementConditionType(StrEnum):
     """Wire ``type`` values from city TZ §9.3 plus ``cell_zone``."""
 
     ADJACENT_TERRAIN = "adjacent_terrain"
-    MIN_CITY_SIZE = "min_city_size"
+    MIN_SETTLEMENT_SIZE = "min_settlement_size"
     ECONOMIC_TIER_MIN = "economic_tier_min"
     ECONOMIC_TIER_MAX = "economic_tier_max"
     REQUIRES_DISTRICT_TYPE = "requires_district_type"
     EXCLUDES_DISTRICT_TYPE = "excludes_district_type"
     CELL_ZONE = "cell_zone"
+
+    @classmethod
+    def _missing_(cls, value: object) -> PlacementConditionType | None:
+        if isinstance(value, str) and value.strip().lower() == "min_city_size":
+            return cls.MIN_SETTLEMENT_SIZE
+        return None
 
 
 class PlacementCondition(BaseModel):

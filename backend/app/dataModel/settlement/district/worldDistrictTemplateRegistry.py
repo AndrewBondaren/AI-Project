@@ -55,7 +55,7 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
         display_name="Центральный квартал",
         district_type="civic",
         placement_conditions=[
-            PlacementCondition(type="min_city_size", size=_RANK_MEDIUM),
+            PlacementCondition(type="min_settlement_size", size=_RANK_MEDIUM),
             PlacementCondition(type="cell_zone", zone="center"),
         ],
         max_per_city=1,
@@ -90,7 +90,7 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
         system_name="industrial_quarter",
         display_name="Промышленный квартал",
         district_type="industrial",
-        placement_conditions=[PlacementCondition(type="min_city_size", size=_RANK_MEDIUM)],
+        placement_conditions=[PlacementCondition(type="min_settlement_size", size=_RANK_MEDIUM)],
         street_layout=StreetLayout.GRID,
         connections=[
             DistrictConnection(connection_type="road", role="service_road", sidewalk=False),
@@ -106,7 +106,7 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
                 terrain_types=["liquid_body"],
                 min_adjacent_cells=1,
             ),
-            PlacementCondition(type="min_city_size", size=_RANK_MEDIUM),
+            PlacementCondition(type="min_settlement_size", size=_RANK_MEDIUM),
         ],
         max_per_city=1,
         street_layout=StreetLayout.GRID,

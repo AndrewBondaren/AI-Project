@@ -55,7 +55,10 @@ from app.application.worldData.generators.coordinates.settlementCellRng import (
     SettlementCellRngRole,
     settlement_cell_rng,
 )
-from app.application.worldData.generators.road.districtRoadGenerator import DistrictRoadGenerator
+from app.application.worldData.generators.road.districtRoadGenerator import (
+    DistrictRoadGenerator,
+    DistrictStreetGraph,
+)
 from app.application.worldData.generators.road.streetCells import (
     rasterize_edges_xy,
     rasterize_street_xy,
@@ -64,11 +67,9 @@ from app.application.worldData.generators.structure.structureGeneratorService im
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
 )
-from app.dataModel.settlement.district.districtConnection import primary_or_default
+from app.dataModel.settlement.district.districtConnection import street_classes_for
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.db.models.connectionEdge import ConnectionEdge
-from app.db.models.connectionNode import ConnectionNode
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
@@ -95,7 +96,7 @@ class DistrictAssembler:
     ) -> DistrictLayout:
         template = slot.district_template
         district = template.system_name
-        primary = primary_or_default(template)
+        classes = street_classes_for(template)
         cache = _as_cache(layout_cache)
         settlement_uid = settlement_uid or world.world_uid
         catalog = catalog or assemble_building_catalog(world)
@@ -128,9 +129,10 @@ class DistrictAssembler:
             blocked_rects=tuple(r.rect_xy for r in pass1),
             corridor_rects=corridor,
         )
-        nodes, edges = self._plan_streets(
+        graph = self._plan_streets(
             slot, city_skeleton, world, surface, frame=frame,
         )
+        nodes, edges, edge_roles = graph.nodes, graph.edges, graph.edge_roles
         empty_holes = holes_after_frame(lattice, occupied)
         packing_info(
             district, "frame",
@@ -149,7 +151,7 @@ class DistrictAssembler:
             reservations, cache, world, city_skeleton, slot.ground_z, catalog=catalog,
         )
 
-        add_alleys(slot, placements, nodes, edges, world.world_uid)
+        add_alleys(slot, placements, nodes, edges, world.world_uid, edge_roles)
 
         plot_mask: set[tuple[int, int]] = set()
         for placement in placements:
@@ -167,6 +169,7 @@ class DistrictAssembler:
         apply_frontage(
             placements, nodes, edges, edge_xy, street_xy,
             slot, city_skeleton, known, rng, settlement_uid,
+            edge_roles=edge_roles,
         )
 
         for placement in placements:
@@ -195,7 +198,7 @@ class DistrictAssembler:
             district, "area_slots",
             area_slots=len(placements),
             street_xy=len(street_xy),
-            connection_type=primary.connection_type,
+            connection_type=classes.spine.connection_type,
             street_layout=template.street_layout,
         )
 
@@ -246,7 +249,7 @@ class DistrictAssembler:
         world:         World,
         surface:       dict[tuple[int, int], int] | None = None,
         frame:         StreetFrameContext | None = None,
-    ) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
+    ) -> DistrictStreetGraph:
         generator = DistrictRoadGenerator()
         rng = random.Random(f"{slot.origin_x}_{slot.origin_y}")
         return generator.generate(

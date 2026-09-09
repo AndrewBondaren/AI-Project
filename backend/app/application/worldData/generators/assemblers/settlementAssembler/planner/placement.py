@@ -124,7 +124,7 @@ def check_placement_conditions(
             )
         except ValueError:
             return False
-        if ctype is PlacementConditionType.MIN_CITY_SIZE:
+        if ctype is PlacementConditionType.MIN_SETTLEMENT_SIZE:
             min_rank = sizes.rank(
                 resolve_settlement_size_key(sizes, cond.size, world_uid=world_uid),
             )

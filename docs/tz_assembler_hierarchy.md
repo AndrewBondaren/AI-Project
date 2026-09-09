@@ -68,7 +68,7 @@ SettlementAssembler
 - `_build_paths`: улица → **порог** (не обязательно `building_entrance`); θ > 45° — clamp только z
 
 **Источник `StructureContext`:** этот слой. Только он знает достаточно для вывода контекста и порога.  
-**`AreaSlot`:** список (x, y) участка (здание ∪ двор ∪ линия забора) + `ground_z` (**этого** участка) + `facing`. Не копия z района.  
+**`AreaSlot`:** список (x, y) участка (здание ∪ двор ∪ линия забора) + `ground_z` (**этого** участка) + `facing` + `height` / `z_deep` (пролёт выше / ниже `ground_z`). Не копия z района.  
 **Подробнее:** [tz_building_generator.md](tz_building_generator.md) — раздел 11 (StructureAssembler, StructureContext)
 
 ### StructureAssembler
@@ -373,11 +373,19 @@ class AreaSlot:
     cells:    list[tuple[int, int]]   # (x, y) участок из шаблона, любой structure_type; без z
     ground_z: int                      # опорная плоскость ЭТОГО участка (не порог улицы сам по себе)
     facing:   Facing                   # сторона участка к улице
+    height:   int                      # fine cells выше ground_z; packing 0
+    z_deep:   int                      # fine cells ниже ground_z; packing 0
 ```
 
 `ground_z` — онтология **участка**, не района. Район не копирует одну z на слоты. Как считать z и **где порог к улице** — только `StructureAreaAssembler` (топология зоны). SoT порога: [tz_structure_connections.md](./tz_structure_connections.md) §5.1.1. Склейка: [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) **C21**. `DistrictSlot.ground_z` — пин района, не пол участка.
 
 `facing` — сторона к улице. Что на ней (дверь, ворота, открытый край) решает assembler участка.
+
+`height` — вертикальный пролёт участка **выше** `ground_z` (fine cells). Сумма `z_height` каждого этажа, который выступает над землёй: этаж занимает `[z, z+z_height)`; целиком под землёй — 0; пересекает землю — только часть в `[ground_z, top)`. Нет здания / packing — `0`.
+
+`z_deep` — то же **ниже** `ground_z`: часть этажа в `[z, ground_z)`. Плоскость `ground_z` не входит в подвал — чтобы ground не накладывался на участок снизу. Целиком над землёй — 0.
+
+Считает `StructureAreaAssembler` по `building_layout.levels` после translate. Pack-wire: `AreaSlotWire.height` / `z_deep` (omit → 0).
 
 ---
 
@@ -606,7 +614,7 @@ map_cell_fine_span = World.fine_cells_per_map_cell   # через generators/coo
 | `SettlementAssembler` | планирует в глобальных ячейках `(cell_x, cell_y)` сетки города | `int` |
 | `DistrictSlot` | WORLD_FINE_GRID — `SettlementAssembler` вычисляет и укладывает в слот вместе с шаблоном | `int` |
 | `DistrictAssembler` | работает в fine-клетках из `slot.origin_x/y, width_fine, depth_fine` | `int` |
-| `AreaSlot` | абсолютные (x, y) в fine-клетках; список ячеек | `list[tuple[int,int]]` |
+| `AreaSlot` | абсолютные (x, y) в fine-клетках; список ячеек; `height` / `z_deep` — клетки z выше / ниже `ground_z` | `list[tuple[int,int]]` + `int` |
 
 Один район может занимать всю глобальную ячейку: `width_fine = depth_fine = map_cell_fine_span`.
 

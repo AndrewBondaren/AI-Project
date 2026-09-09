@@ -18,10 +18,18 @@ from app.application.worldData.generators.assemblers.settlementAssembler.packing
     packing_info,
 )
 from app.application.worldData.generators.road.widthResolver import resolve_width
+from app.application.worldData.generators.road.connectionPolicy import sidewalk_of
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
 )
-from app.dataModel.settlement.district.districtConnection import DistrictConnection
+from app.dataModel.settlement.district.districtConnection import (
+    DistrictConnection,
+    street_classes_for,
+)
+from app.dataModel.settlement.enums.districtStreetRole import (
+    DistrictStreetRole,
+    frontage_role_rank,
+)
 from app.dataModel.settlement.district.frontageTypeOrder import resolve_frontage_type_order
 from app.dataModel.spatial.facing import CARDINAL_WALL_OUTWARD_DELTA, Facing
 from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
@@ -127,9 +135,11 @@ def apply_frontage(
     known_types: frozenset[str],
     rng: random.Random,
     settlement_uid: str,
+    edge_roles: dict[str, DistrictStreetRole] | None = None,
 ) -> list[str]:
-    """Set AreaSlot.facing from abutting streets. Equal-rank tie-break on threads. Plaza skips."""
+    """Set AreaSlot.facing from abutting streets. Type then role; equal-rank tie-break."""
     district = slot.district_template.system_name
+    roles = edge_roles or {}
     order, skipped = resolve_frontage_type_order(
         slot.district_template.frontage_type_order,
         skeleton.frontage_type_order,
@@ -145,14 +155,21 @@ def apply_frontage(
     by_uid = {n.node_uid: n for n in nodes}
     thread_xy: dict[tuple[str, int], set[Coord]] = {}
     thread_type: dict[tuple[str, int], str] = {}
+    thread_role: dict[tuple[str, int], DistrictStreetRole | None] = {}
     for key, group in threads.items():
         cells: set[Coord] = set()
         types: list[str] = []
+        group_roles: list[DistrictStreetRole | None] = []
         for edge in group:
             cells |= edge_xy.get(edge.edge_uid, set())
             types.append(edge.connection_type)
+            group_roles.append(roles.get(edge.edge_uid))
         thread_xy[key] = cells
         thread_type[key] = types[0] if types else DistrictConnection.street_default().connection_type
+        named = [r for r in group_roles if r is not None]
+        thread_role[key] = (
+            min(named, key=lambda r: r.frontage_rank()) if named else None
+        )
 
     plot_sets = [plot_cells(p) for p in placements]
     thread_plot_count: dict[tuple[str, int], int] = {
@@ -175,10 +192,20 @@ def apply_frontage(
                 touching.append((key, thread_type[key]))
         if len(touching) < 2:
             continue
-        ranked = sorted(touching, key=lambda item: _rank(item[1], order))
-        best_rank = _rank(ranked[0][1], order)
-        tied = [item for item in ranked if _rank(item[1], order) == best_rank]
-        if len(tied) < 2:
+
+        def _frontage_key(item: tuple[tuple[str, int], str]) -> tuple[int, int]:
+            thread_key, conn_type = item
+            return (
+                _rank(conn_type, order),
+                frontage_role_rank(thread_role.get(thread_key)),
+            )
+
+        ranked = sorted(touching, key=_frontage_key)
+        best = _frontage_key(ranked[0])
+        tied = [item for item in ranked if _frontage_key(item) == best]
+        if len(tied) == 1:
+            winner = tied[0][0]
+            placement.area_slot.facing = facing_from_street(list(cells), thread_xy[winner])
             continue
         counts = [(thread_plot_count[k], k, ct) for k, ct in tied]
         counts.sort(key=lambda row: -row[0])
@@ -210,12 +237,8 @@ def alley_connection_type() -> str:
     return WorldConnectionTypeRegistry.require_engine("alley")
 
 
-def alley_from_template(slot: DistrictSlot) -> str | None:
-    want = alley_connection_type()
-    for conn in slot.district_template.connections or []:
-        if conn.connection_type == want:
-            return want
-    return None
+def alley_from_template(slot: DistrictSlot) -> DistrictConnection | None:
+    return street_classes_for(slot.district_template).alley
 
 
 def add_alleys(
@@ -224,10 +247,11 @@ def add_alleys(
     nodes: list[ConnectionNode],
     edges: list[ConnectionEdge],
     world_uid: str,
+    edge_roles: dict[str, DistrictStreetRole] | None = None,
 ) -> None:
-    """Alley thread only from DistrictConnection alley when ≥2 plots in a module and width fits."""
+    """Alley thread from back_alley role or connection_type=alley when ≥2 plots fit."""
     district = slot.district_template.system_name
-    alley_type = alley_from_template(slot)
+    alley = alley_from_template(slot)
     by_module: dict[tuple[int, int], list[AreaPlacement]] = defaultdict(list)
     for placement in placements:
         res = placement.reservation
@@ -235,15 +259,17 @@ def add_alleys(
             continue
         by_module[(res.col, res.row)].append(placement)
 
-    width = resolve_width(alley_connection_type())
+    alley_type = alley.connection_type if alley is not None else alley_connection_type()
+    width = resolve_width(alley_type)
     if width is None:
         packing_info(
             PackingStep.ALLEY, district=district,
             alley="no", reason=PackingReason.WIDTH,
         )
         return
+    has_sidewalk = sidewalk_of(alley) if alley is not None else False
     for (col, row), group in by_module.items():
-        if alley_type is None:
+        if alley is None:
             packing_info(
                 PackingStep.ALLEY, district=district,
                 n_plots=len(group), alley="no", reason=PackingReason.NOT_IN_SETTINGS,
@@ -279,16 +305,19 @@ def add_alleys(
             nodes.append(from_node)
         if to_node not in nodes:
             nodes.append(to_node)
-        edges.append(ConnectionEdge(
+        edge = ConnectionEdge(
             edge_uid=f"e_alley_{col}_{row}_{from_node.node_uid}",
             from_node_uid=from_node.node_uid,
             to_node_uid=to_node.node_uid,
             connection_type=alley_type,
             width_cells=width,
-            has_sidewalk=False,
+            has_sidewalk=has_sidewalk,
             graph_level=GraphLevel.DISTRICT.value,
             world_uid=world_uid,
-        ))
+        )
+        edges.append(edge)
+        if edge_roles is not None:
+            edge_roles[edge.edge_uid] = DistrictStreetRole.BACK_ALLEY
         packing_info(
             PackingStep.ALLEY, district=district,
             n_plots=len(group), alley="yes", reason=PackingReason.FROM_CONNECTIONS,

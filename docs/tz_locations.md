@@ -245,7 +245,7 @@ Omit ранга на settlement → **`medium`**. Неизвестный ток�
 
 **Не** специализация и не `district_type`. SoT осей generate: [`tz_city_generation.md`](./tz_city_generation.md) **§1.1–§1.2**.
 
-Условия шаблонов (`min_city_size` в коде): ранг сравнивать **в той же морфологии**, не как глобальную лестницу `small`<`large` между городом и деревней. «Только города» = subtype `city`, не size. Порог «больше большой деревни» = сравнение resolved `footprint_m`, не токена ранга.
+Условия шаблонов (`min_settlement_size`): ранг хоста ≥ порога `size` на чертеже. «Только города» = subtype `city`, не size. Leftover wire `min_city_size` — тот же enum.
 
 ---
 

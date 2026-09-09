@@ -557,7 +557,7 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 | `type` | Параметры | Описание |
 |---|---|---|
 | `adjacent_terrain` | `terrain_types: TerrainKey[]`, `min_adjacent_cells: int` | На внешнем кольце **слота района** ≥ N соседних terrain-клеток с `system_terrain ∈ terrain_types`. Omit → 1. Порт: `["liquid_body"]` + `1`. Не длина берега, не связность водоёма (open ниже). Wire — JSON-строки; POJO — `RegistryKey[WorldTerrainRegistry]`. |
-| `min_settlement_size` | `size: SettlementSizeKey` | ранг → `settlement_size_registry`; поселение **этой морфологии** не меньше ранга. Не сравнивать `small` города с `large` деревни. «Только города» = subtype `city`, не size. Код: wire `min_city_size`; канон чертежей — `size` = `medium`. |
+| `min_settlement_size` | `size: SettlementSizeKey` | ранг → `settlement_size_registry`; поселение **этой морфологии** не меньше ранга. Не сравнивать `small` города с `large` деревни. «Только города» = subtype `city`, не size. Канон чертежей — `size` = `medium`. Leftover wire `min_city_size` → тот же enum. |
 | `economic_tier_min` | `tier: EconomyTierKey` | Минимальный `system_economic_tier` города. POJO — `RegistryKey[WorldEconomyTierRegistry]`. Membership miss — REF-W / warn+default, **не** size→medium. |
 | `economic_tier_max` | `tier: EconomyTierKey` | Максимальный `system_economic_tier` города |
 | `requires_district_type` | `district_type: string` | В городе уже должен быть район указанного типа. Голый `str` — нет реестра типов ткани (не брендировать как template `system_name`). |
@@ -638,7 +638,7 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 | Поле | Обязательность | Описание |
 |---|---|---|
 | `connection_type` | required | `ConnectionTypeKey` — ref → `connection_type_registry.system_connection_type` ([POJO-C-5](./tz_pojo_city_typing.md)) |
-| `role` | optional | Семантическая роль внутри района (`"main_street"`, `"back_alley"`, `"service_road"`, …); движок использует для приоритизации при планировке |
+| `role` | optional | Семантическая роль внутри района (`"main_street"`, `"back_alley"`, `"service_road"`, …); движок использует для приоритизации при планировке. **Код v1 (`grid`):** `main_street` — нитки `through_road` и подвод `entry_point`; `service_road` — остальная решётка, если на чертеже есть и `main_street`; иначе вся сетка одним классом. `back_alley` **или** `connection_type=alley` — аллеи между участками. Неизвестная роль — warning, строка не на рёбра. Фасад при равном `connection_type`: `main_street` > `service_road` > `back_alley`. Класс не пишется в SQL `connection_edges`. |
 | `sidewalk` | optional | `true` / `false`; `null` = генератор решает по контексту |
 | `lanes_per_side` | optional | Переопределяет `road_settings.default_lanes_per_side`; `null` = берётся из road_settings |
 
@@ -887,6 +887,8 @@ DAG может materialize **разные уровни** в разных нод�
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-09 | **§9.5.1 `role`:** generate `grid` красит позвоночник / заполнение / аллеи по `DistrictStreetRole`; фасад при равном типе ранжирует роль. Не SQL-колонка. |
+| 2026-09-08 | **§9.3:** wire `min_settlement_size` (leftover `min_city_size` alias); канон порога — `medium`. |
 | 2026-09-08 | **POJO-C-9 resolved:** `PerimeterBarrier.sides` — `list[Facing]` (кардиналы). |
 | 2026-09-08 | **POJO-C-8 resolved:** `required_structures[].position` — `RequiredStructurePosition` (`any`/`center`). |
 | 2026-09-07 | **POJO-C-6 resolved:** `PerimeterBarrier.template` / identity `system_type` — `BarrierTemplateKey`. |

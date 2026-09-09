@@ -70,7 +70,8 @@ class TestPlacementConditionTyping(unittest.TestCase):
         self.assertEqual((terrain_cond.terrain_types or [])[0], liquid.system_terrain)
 
         size_cond = next(
-            c for c in port.placement_conditions if c.type is PlacementConditionType.MIN_CITY_SIZE
+            c for c in port.placement_conditions
+            if c.type is PlacementConditionType.MIN_SETTLEMENT_SIZE
         )
         self.assertIsInstance(size_cond.size, RegistryKey)
         self.assertEqual(size_cond.size, WorldSettlementSizeRegistry.default_system_size())
@@ -78,6 +79,11 @@ class TestPlacementConditionTyping(unittest.TestCase):
             type(size_cond.size),
             type(WorldSettlementSizeRegistry.default_system_size()),
         )
+
+    def test_legacy_min_city_size_wire_aliases(self) -> None:
+        cond = PlacementCondition(type="min_city_size", size="medium")
+        self.assertIs(cond.type, PlacementConditionType.MIN_SETTLEMENT_SIZE)
+        self.assertEqual(cond.type.value, "min_settlement_size")
 
 
 if __name__ == "__main__":

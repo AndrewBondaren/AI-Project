@@ -383,6 +383,7 @@ SQL и файлы pack — не один COMMIT. Надёжность = прот
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-09 | **C21 `AreaSlot.height` / `z_deep`:** пролёт выше / ниже `ground_z` по этажам. Плоскость ground не в подвале. Packing 0; assembler по levels. Wire omit → 0. |
 | 2026-09-06 | **C11 caller:** `detailed_bake` scope=location — консьюмер `materialize`; HTTP generate-settlement — тот же контракт. Bake не содержит C22. |
 | 2026-09-06 | **C23 код:** topology после `full_bake` L0; CITY-T-1a на NL; packing reuse. World routes A* не в этом PR. |
 | 2026-09-05 | §14 **дыры склейки:** C16 serial; вход CITY-T-1a/T-2; leftover P2–P4/P9/P10; C19 journal; parallel одного generate → CITY-T-3 (мастер). DAG — отдельное ТЗ. |

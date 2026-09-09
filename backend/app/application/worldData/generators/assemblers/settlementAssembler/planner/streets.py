@@ -18,7 +18,10 @@ from app.application.worldData.generators.assemblers.districtAssembler.planner.l
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import packing_info
 from app.application.worldData.generators.road.blockSize import block_size_for_density
-from app.application.worldData.generators.road.connectionPolicy import resolve_has_sidewalk
+from app.application.worldData.generators.road.connectionPolicy import (
+    sidewalk_of,
+)
+from app.dataModel.settlement.district.districtConnection import street_classes_for
 from app.application.worldData.generators.road.sidewalkWidthResolver import resolve_sidewalk_width
 from app.application.worldData.generators.road.roadTravelResolver import effective_travel_modifier
 from app.application.worldData.generators.road.widthResolver import resolve_width
@@ -31,7 +34,7 @@ from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.dataModel.settlement.enums.districtDensity import DistrictDensity
 from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.settlement.district.districtConnection import primary_or_default
+from app.dataModel.settlement.district.districtConnection import street_classes_for
 from app.dataModel.materials import DEFAULT_ROAD_MATERIAL
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
@@ -93,7 +96,7 @@ def _lines_in_range(lines: list[int], lo: int, hi: int) -> list[int]:
 
 
 def _connection_type(slot: DistrictSlot) -> str:
-    return primary_or_default(slot.district_template).connection_type
+    return street_classes_for(slot.district_template).spine.connection_type
 
 
 def plan_settlement_entries(
@@ -360,8 +363,10 @@ def plan_city_street_grid(
                 lanes_per_side=1,
                 width_cells=width,
                 material=road_material,
-                has_sidewalk=resolve_has_sidewalk(
-                    slot.district_template, entry.connection_type, world=world,
+                has_sidewalk=sidewalk_of(
+                    street_classes_for(slot.district_template).spine,
+                    entry.connection_type,
+                    world=world,
                 ),
                 graph_level=GraphLevel.CITY.value,
                 world_uid=world_uid,

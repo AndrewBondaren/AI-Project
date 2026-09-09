@@ -38,6 +38,8 @@ class AreaSlotWire(BaseModel):
     cells: list[tuple[int, int]] = Field(default_factory=list)
     ground_z: int
     facing: Facing
+    height: int = 0
+    z_deep: int = 0
 
     @field_validator("facing", mode="before")
     @classmethod
