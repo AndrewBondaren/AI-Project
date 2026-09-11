@@ -1,5 +1,6 @@
 from app.dataModel.settlement.district.allowedStructureTypes import (
     allowed_fill_structure_types,
+    district_hosts_purpose,
 )
 from app.dataModel.settlement.district.cellZone import CellZone
 from app.dataModel.settlement.district.districtConnection import (
@@ -32,6 +33,7 @@ from app.dataModel.settlement.district.worldDistrictZonePreference import (
 )
 from app.dataModel.settlement.district.requiredStructureResolve import (
     resolve_required_layouts,
+    unhosted_settlement_types,
     union_required_structures,
 )
 from app.dataModel.settlement.district.structurePlacement import (
@@ -71,6 +73,7 @@ __all__ = [
     "WorldDistrictTemplateRegistry",
     "WorldDistrictZonePreference",
     "allowed_fill_structure_types",
+    "district_hosts_purpose",
     "connections_from_template",
     "primary_from_template",
     "primary_or_default",
@@ -80,4 +83,5 @@ __all__ = [
     "resolve_plot_count",
     "resolve_plot_priority",
     "union_required_structures",
+    "unhosted_settlement_types",
 ]

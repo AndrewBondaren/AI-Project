@@ -6,9 +6,9 @@
 Граф иерархический: мировой → городской → районный → участок.  
 Pathfinding поднимается и опускается по уровням иерархии.
 
-**Участок** — слот из шаблона (`building_template_registry`). Назначение — любой `structure_type` (N+1): жилой дом, таверна, склад, храм, `plaza`, `portal`, `air_dock`, … Не закрытый список «дом или площадь». Состав и размер — шаблон, не хардкод assembler. Собирает `StructureAreaAssembler`. Если шаблон даёт здание, а generate вернул пустой участок — **критическая ошибка генерации участка** (assembler §7.1), не площадь.
+**Участок** — слот из шаблона (`building_template_registry`). Назначение — теги `structure_types` из каталога движка (`BuildingPurpose`: дом, таверна, склад, храм, `plaza`, …). Не N+1 ключ мира. `portal` / `air_dock` / `lamp_post` — не plot-purpose city packing (пока мастер не откроет). Состав и размер — шаблон, не хардкод assembler. Собирает `StructureAreaAssembler`. Если шаблон даёт здание, а generate вернул пустой участок — **критическая ошибка генерации участка** (assembler §7.1), не площадь.
 
-**Площадь** — не тип соединения. Это один из `structure_type` (напр. `"plaza"`): общественная зона (сады, фонтаны, террасы — состав шаблона). В граф — `ConnectionNode` с `location_uid` площади. Участок в pack **не** `location_type` (outdoor **C3**).
+**Площадь** — не тип соединения. Это тег назначения `"plaza"` на чертеже: общественная зона (сады, фонтаны, террасы — состав шаблона). Frontage hierarchy **не** применяется, если `plaza` ∈ `structure_types`. В граф — `ConnectionNode` с `location_uid` площади. Участок в pack **не** `location_type` (outdoor **C3**).
 
 **Технический шов pack** (макро-тайл / chunk) **не** режет ребро. `ConnectionEdge` живёт в мировых координатах: полотно и pathfinding-иерархия пересекают границу тайла как один путь. Нарезка bake — не новый `system_connection_type` и не обрыв. Обочина Δz — relief `road_shoulder`, тот же catalog uid. Инвариант: [`tz_terrain_relief.md`](./tz_terrain_relief.md) **C29**. SHEER на travel-полотне запрещён (R20).
 
@@ -828,7 +828,7 @@ C22: консьюмер каталога **`settlement` / `settlementAssembler`*
 | `leftover` | токен не сел | те же поля, что WARNING; плюс оставшаяся дырка. `reason=leftover` |
 | `alley` | после ≥1 посадки в квартале | `n_plots`, `alley=yes\|no`, `reason=from_connections\|not_in_settings\|single_plot`, ширина §3.4 |
 | `graph` | граф после packing | `nodes`, `edges`, `street_xy`, занятые клетки участков (count) |
-| `area` | каждый слот → assembler участка | `template`, `slot.facing`, касающиеся рёбра (тип+нить), `threshold.kind`, парадный дома vs вход участка (`align=yes\|no`) |
+| `area` | каждый слот → assembler участка; после всех слотов — xy×z коллизия | `template`, `slot.facing`, касающиеся рёбра (тип+нить), `threshold.kind`, парадный дома vs вход участка (`align=yes\|no`). Удар: `reason=z_collision` + индексы пары, `deck_*`, интервалы z. Ярус — `DistrictTemplateEntry.deck` (участки копируют). Проверка только если в районе 2+ различных `deck` (assembler §7.1); warning, не abort |
 | `frontage` | tie равных рангов | счёт по ниткам, выбор или `reason=rng` + seed |
 
 Якоря / барьер района без данных — одна строка `skip` с `reason`, не молчание. Cache без кандидатов — `warning`, не молчание.

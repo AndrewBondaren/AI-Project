@@ -11,6 +11,12 @@ from app.dataModel.flora.enums.cropKind import CropKind
 from app.dataModel.livestock.enums.livestockKind import LivestockKind
 from app.dataModel.resources.enums.resourceKind import ResourceKind
 from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+from app.dataModel.structure.enums.buildingPurpose import (
+    BuildingPurpose,
+    BuildingPurposeMatch,
+    coerce_purpose_match,
+    purposes_match,
+)
 
 
 class BuildingCatalog:
@@ -34,9 +40,34 @@ class BuildingCatalog:
     def by_system_name(self, name: str) -> BuildingLayoutTemplate | None:
         return self._by_name.get(name)
 
-    def of_structure_type(self, structure_type: str) -> tuple[BuildingLayoutTemplate, ...]:
+    def of_structure_type(self, structure_type: str | BuildingPurpose) -> tuple[BuildingLayoutTemplate, ...]:
+        purpose = (
+            structure_type
+            if isinstance(structure_type, BuildingPurpose)
+            else BuildingPurpose.from_wire(structure_type)
+        )
+        if purpose is None:
+            return ()
         return tuple(
-            layout for layout in self.layouts if layout.structure_type == structure_type
+            layout for layout in self.layouts if purpose in layout.structure_types
+        )
+
+    def matching_allowed(
+        self,
+        layouts: Iterable[BuildingLayoutTemplate],
+        allowed: Iterable[BuildingPurpose] | None,
+        mode: BuildingPurposeMatch | str | None,
+    ) -> tuple[BuildingLayoutTemplate, ...]:
+        """Filter drawings by district allowed + ``like`` / ``strict``."""
+        pool = tuple(layouts)
+        if allowed is None:
+            return pool
+        allowed_list = list(allowed)
+        match = coerce_purpose_match(mode)
+        return tuple(
+            layout
+            for layout in pool
+            if purposes_match(layout.structure_types, allowed_list, match)
         )
 
     @staticmethod
@@ -96,4 +127,7 @@ class BuildingCatalog:
         )
 
     def structure_types(self) -> tuple[str, ...]:
-        return tuple(sorted({layout.structure_type for layout in self.layouts}))
+        keys: set[str] = set()
+        for layout in self.layouts:
+            keys.update(str(purpose) for purpose in layout.structure_types)
+        return tuple(sorted(keys))

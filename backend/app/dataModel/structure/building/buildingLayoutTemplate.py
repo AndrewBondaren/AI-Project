@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
@@ -23,6 +23,11 @@ from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 from app.dataModel.shared.ranges import EconomicTierRange
 from app.dataModel.structure.building.defaultStructureContext import DefaultStructureContext
+from app.dataModel.structure.enums.buildingPurpose import (
+    BuildingPurpose,
+    coerce_purpose_list,
+    primary_purpose,
+)
 
 DEFAULT_Z_HEIGHT = 3
 
@@ -33,7 +38,9 @@ class BuildingLayoutTemplate(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     system_name: StrictOnWire[RegistryKey[BuildingLayoutTemplate]]
-    structure_type: StrictOnWire[str]
+    structure_types: DefaultOnWire[list[BuildingPurpose]] = Field(
+        default_factory=lambda: coerce_purpose_list(None),
+    )
     display_name: StrictOnWire[str]
     default_z_height: DefaultOnWire[int] = constrained_field(
         default=DEFAULT_Z_HEIGHT, greater_equals=1,
@@ -61,6 +68,23 @@ class BuildingLayoutTemplate(BaseModel):
     # If crop_kind is set, farm tags must be keys in worlds.crops_registry of that kind.
     # If livestock_kind is set, livestock tags must be keys in worlds.livestock_registry of that kind.
     subjects: DefaultOnWire[list[str]] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_structure_types(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        payload = dict(data)
+        raw = payload.get("structure_types")
+        if raw is None:
+            raw = payload.get("structure_type")
+        payload["structure_types"] = coerce_purpose_list(raw, empty_as_house=True)
+        return payload
+
+    @property
+    def structure_type(self) -> str:
+        """Primary purpose (first tag). Leftover scalar wire — use ``structure_types``."""
+        return str(primary_purpose(self.structure_types))
 
 
 type DrawingKey = RegistryKey[BuildingLayoutTemplate]

@@ -13,6 +13,7 @@ from app.dataModel.settlement.enums.requiredStructurePosition import (
     RequiredStructurePosition,
 )
 from app.dataModel.structure.building.buildingLayoutTemplate import DrawingKey
+from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose
 
 __all__ = [
     "POSITION_ANY",
@@ -26,9 +27,16 @@ class RequiredStructure(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     building_template: StrictOnWire[DrawingKey]
-    structure_type: DefaultOnWire[str | None] = None
+    structure_type: DefaultOnWire[BuildingPurpose | None] = None
     count: DefaultOnWire[int] = 1
     position: DefaultOnWire[RequiredStructurePosition] = POSITION_ANY
+
+    @field_validator("structure_type", mode="before")
+    @classmethod
+    def _coerce_purpose(cls, value: Any) -> Any:
+        if value is None or value == "":
+            return None
+        return BuildingPurpose.from_wire(value)
 
     @field_validator("position", mode="before")
     @classmethod

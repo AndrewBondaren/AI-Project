@@ -264,18 +264,18 @@ class AllowedAndRequiredTest(unittest.TestCase):
         catalog = BuildingCatalog.from_layouts([
             _layout("tavern_1", "tavern"),
             _layout("tavern_2", "tavern"),
-            _layout("town_hall", "building"),
+            _layout("town_hall", "town_hall"),
         ])
         as_type = resolve_required_layouts(
             RequiredStructure(building_template="x", structure_type="tavern"),
             catalog,
         )
         self.assertEqual([row.system_name for row in as_type], ["tavern_1", "tavern_2"])
-        as_name_type = resolve_required_layouts(
+        pin_not_purpose = resolve_required_layouts(
             RequiredStructure(building_template="tavern"),
             catalog,
         )
-        self.assertEqual([row.system_name for row in as_name_type], ["tavern_1", "tavern_2"])
+        self.assertEqual(pin_not_purpose, ())
         as_system = resolve_required_layouts(
             RequiredStructure(building_template="town_hall"),
             catalog,
@@ -289,6 +289,12 @@ class AllowedAndRequiredTest(unittest.TestCase):
             [row.building_template for row in merged],
             ["town_hall", "market"],
         )
+        hosted = union_required_structures(
+            ["town_hall", "market"],
+            district,
+            ["town_hall"],
+        )
+        self.assertEqual([row.building_template for row in hosted], ["town_hall"])
 
 
 class CatalogAndRngTest(unittest.TestCase):
@@ -468,7 +474,16 @@ class SpecializationPassTest(unittest.TestCase):
         self.assertEqual(center.district_template.district_type, "civic")
         req = {row.structure_type or row.building_template for row in center.required_structures}
         self.assertIn("town_hall", req)
-        self.assertIn("mine", req)
+        self.assertNotIn("mine", req)
+        mining = next(
+            slot for slot in slots
+            if slot.district_template.system_name == "mining_quarter"
+        )
+        mining_req = {
+            row.structure_type or row.building_template
+            for row in mining.required_structures
+        }
+        self.assertIn("mine", mining_req)
 
     def test_city_typical_districts_before_extract(self) -> None:
         world = _world()

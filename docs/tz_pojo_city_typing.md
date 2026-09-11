@@ -147,11 +147,11 @@ SQL `named_locations.frontage_type_order` — JSON-массив; dataclass `Name
 
 | Слой | Что это | Где живёт | Пример |
 |---|---|---|---|
-| Назначение | purpose чертежа, N+1 | `BuildingLayoutTemplate.structure_type`; фильтр района `allowed_structure_types` | `tavern`, `plaza`, `town_hall` |
+| Назначение | `structure_types[]` движка (`BuildingPurpose`), не N+1 | `BuildingLayoutTemplate.structure_types`; leftover scalar `structure_type` = primary; фильтр района `allowed_structure_types` + `allowed_match` | `tavern`, `plaza`, `town_hall`, комбо `[house, workshop]` |
 | Чертёж участка | **тип участка** = identity шаблона | `BuildingLayoutTemplate.system_name` | `tavern_1`, `inn_small` |
 | Участок | инстанс после packing | `AreaSlot` / `AreaLayout` | клетка в районе |
 
-`structure_type` **не** владеет участком и **не** ключ counts. Он только режет пул («в квартале можно таверны»). Generate среди чертежей этого назначения — rng + тир + subjects. Pin конкретного чертежа — не через назначение.
+`structure_types` **не** владеет участком и **не** ключ counts. Режет пул («в квартале можно мастерские»). Generate среди чертежей с подходящими тегами — rng + тир + subjects + `like`/`strict`. Pin конкретного чертежа — `required_structures[].building_template` = `system_name`, не purpose.
 
 **Поля**
 
@@ -159,9 +159,10 @@ SQL `named_locations.frontage_type_order` — JSON-массив; dataclass `Name
 |---|---|---|
 | `plot_counts` | `DefaultOnWire[dict[DrawingKey, int] \| None] = None` | N **участков** = N копий этого чертежа. Район перекрывает город **по ключу**. Нет поля / нет ключа — не ноль, смотреть ниже. Явный `0` — не сажать |
 | `plot_priority` | `DefaultOnWire[dict[DrawingKey, int] \| None] = None` | очередь посадки, **не** N. Нет ключа → `0` (проход 2) |
-| `allowed_structure_types` | `list` назначений | фильтр purpose; не counts |
-| `required_structures[].building_template` | тот же `DrawingKey` | pin чертежа; `count` на строке **главнее** `plot_counts` |
-| `required_structures[].structure_type` | optional назначение | не pin, не ключ map |
+| `allowed_structure_types` | `list[BuildingPurpose] \| None` | фильтр purpose; omit = каталог; `[]` = pins only |
+| `allowed_match` | `BuildingPurposeMatch` | default `like`; `strict` = участок ⊆ фильтра |
+| `required_structures[].building_template` | тот же `DrawingKey` | pin чертежа (`by_system_name`); `count` на строке **главнее** `plot_counts` |
+| `required_structures[].structure_type` | leftover optional purpose | дубль ключа рецепта поселения, не pin, не ключ map |
 
 `DrawingKey` — `RegistryKey[BuildingLayoutTemplate]` (identity чертежа generate, не uid `WorldBuildingTemplateRegistry`). Не ткань района. Не `PlotType` / `StructureType`.
 
@@ -173,10 +174,10 @@ SQL `named_locations.frontage_type_order` — JSON-массив; dataclass `Name
 
 | Имя | Почему |
 |---|---|
-| `structure_type` | назначение чертежа |
+| `structure_type` / `structure_types` | назначение чертежа (engine enum + leftover scalar) |
 | `allowed_structure_types` / `required_structure_types` / `subjects_to_structure_types` | фильтр purpose |
 | `required_structures` | массив pin, не map N |
-| `RequiredStructure.structure_type` | optional назначение на pin |
+| `RequiredStructure.structure_type` | leftover optional purpose на строке рецепта |
 | `structure_context` / `default_structure_context` / `StructureAreaAssembler` / `ASSEMBLER_REGISTRY` | generate здания |
 | `structure_canal` / `structure_refs` | relief/канал |
 | pack `structure_path` / `structure_hash` | world pack |
@@ -190,7 +191,7 @@ SQL `named_locations.frontage_type_order` — JSON-массив; dataclass `Name
 | `display_*` | не ключ реестра |
 | `district_type` / `district_subtype` (шаблон, typical, zone preference, `PlacementCondition.district_type`) | нет реестра ткани; subtype ≠ identity specialization-строки |
 | `LocationTypeSubtypeEntry.typical_district_types` | та же ткань |
-| `allowed_structure_types`, `required_structure_types`, `RequiredStructure.structure_type` | назначение чертежа (`structure_type`), не identity участка; не ключи counts |
+| `allowed_structure_types`, `required_structure_types`, `RequiredStructure.structure_type` | назначение чертежа (`BuildingPurpose` / leftover scalar), не identity участка; не ключи counts |
 | `subjects`, `subject_kind`, ключи `subjects_to_structure_types` | N+1 в несколько реестров; TODO в POJO bind/entry |
 | uid (`location_uid`, `node_uid`, `paired_exit_uid`, …) | экземпляр |
 | `LocationTypeSubtypeEntry.footprint_by_size` ключи | не SoT метров; не этот обход |
@@ -232,4 +233,5 @@ SQL dataclass `NamedLocation` остаётся `str \| None`; coerce на POJO /
 | 2026-09-07 | POJO-C-6 **resolved**: `BarrierTemplateKey` на identity `system_type` + `PerimeterBarrier.template`; `""` → `None` + warning; `sides`/relief `structure_refs` не срез |
 | 2026-09-08 | POJO-C-8 **resolved**: `RequiredStructurePosition` (`any`/`center`); omit/invalid → `any` + warning; CONN-PACK-2 не срез |
 | 2026-09-08 | POJO-C-9 **resolved**: `PerimeterBarrier.sides` → `list[Facing]` (кардиналы); skip unknown/intercardinal + warning |
+| 2026-09-12 | Назначение участка: `structure_types[]` + `BuildingPurpose` (не N+1); `allowed_match` like/strict; pin только `system_name` |
 | 2026-09-08 | POJO-C-10 **resolved**: NL `parent_wall_material` / `parent_floor_material` → `MaterialKey`; omit/`null` → `None`; `""` → reject. Не скелет, не `MaterialPick` |

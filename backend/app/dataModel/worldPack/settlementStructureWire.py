@@ -40,6 +40,7 @@ class AreaSlotWire(BaseModel):
     facing: Facing
     height: int = 0
     z_deep: int = 0
+    deck: int = 0
 
     @field_validator("facing", mode="before")
     @classmethod

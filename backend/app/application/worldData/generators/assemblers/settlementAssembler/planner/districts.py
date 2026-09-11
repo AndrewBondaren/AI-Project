@@ -41,6 +41,7 @@ from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
 )
 from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.settlement.district.requiredStructureResolve import (
+    unhosted_settlement_types,
     union_required_structures,
 )
 from app.dataModel.settlement.settlement.settlementSpecializationEntry import (
@@ -145,6 +146,7 @@ def plan_district_slots(
         required = union_required_structures(
             settlement_required,
             list(template.required_structures or []),
+            template.allowed_structure_types,
         )
         slots.append(DistrictSlot(
             origin_x=origin_x,
@@ -290,6 +292,16 @@ def plan_district_slots(
         settlement.location_uid,
         len(slots),
     )
+    for type_name in unhosted_settlement_types(
+        settlement_required,
+        [slot.district_template.allowed_structure_types for slot in slots],
+    ):
+        logger.warning(
+            "Settlement required purpose has no host district | settlement=%s"
+            " structure_type=%s — leftover",
+            settlement.location_uid,
+            type_name,
+        )
 
     return slots
 

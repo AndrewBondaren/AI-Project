@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
@@ -19,6 +19,13 @@ from app.dataModel.settlement.district.requiredStructure import RequiredStructur
 from app.dataModel.settlement.enums.districtDensity import DistrictDensity
 from app.dataModel.shared.ranges import EconomicTierRange, SizePct
 from app.dataModel.structure.building.buildingLayoutTemplate import DrawingKey
+from app.dataModel.structure.enums.buildingPurpose import (
+    DEFAULT_PURPOSE_MATCH,
+    BuildingPurpose,
+    BuildingPurposeMatch,
+    coerce_purpose_list,
+    coerce_purpose_match,
+)
 
 if TYPE_CHECKING:
     from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
@@ -38,7 +45,8 @@ class DistrictTemplateEntry(BaseModel):
     placement_conditions: DefaultOnWire[list[PlacementCondition]] = Field(default_factory=list)
     max_per_city: DefaultOnWire[int | None] = None
     size_pct: DefaultOnWire[SizePct | None] = None
-    allowed_structure_types: DefaultOnWire[list[str] | None] = None
+    allowed_structure_types: DefaultOnWire[list[BuildingPurpose] | None] = None
+    allowed_match: DefaultOnWire[BuildingPurposeMatch] = DEFAULT_PURPOSE_MATCH
     economic_tier_range: DefaultOnWire[EconomicTierRange | None] = None
     density: DefaultOnWire[DistrictDensity | None] = None
     street_layout: DefaultOnWire[StreetLayout] = StreetLayout.GRID
@@ -54,3 +62,18 @@ class DistrictTemplateEntry(BaseModel):
         validation_alias=AliasChoices("plot_priority", "structure_priority"),
     )
     perimeter_barrier: DefaultOnWire[PerimeterBarrier | None] = None
+    deck: DefaultOnWire[int] = 0
+
+    @field_validator("allowed_structure_types", mode="before")
+    @classmethod
+    def _coerce_allowed_purposes(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        return coerce_purpose_list(value, empty_as_house=False)
+
+    @field_validator("allowed_match", mode="before")
+    @classmethod
+    def _coerce_allowed_match(cls, value: Any) -> Any:
+        if value is None:
+            return DEFAULT_PURPOSE_MATCH
+        return coerce_purpose_match(value)

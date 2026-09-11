@@ -2,6 +2,10 @@ import random
 
 from app.application.jsonValidation import connection_types
 from app.application.worldData.generators.assemblers.areaAssembler.areaLayout import AreaLayout
+from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import z_range
+from app.application.worldData.generators.assemblers.areaAssembler.planner.plotCollision import (
+    plot_z_collisions,
+)
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtLayout import DistrictLayout
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
@@ -44,6 +48,8 @@ from app.application.worldData.generators.assemblers.settlementAssembler.buildin
     BuildingLayoutCache,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import (
+    PackingReason,
+    PackingStep,
     packing_info,
     packing_warning,
 )
@@ -149,6 +155,7 @@ class DistrictAssembler:
         reservations = pass1 + pass2
         placements = placements_from_reservations(
             reservations, cache, world, city_skeleton, slot.ground_z, catalog=catalog,
+            deck=slot.district_template.deck,
         )
 
         add_alleys(slot, placements, nodes, edges, world.world_uid, edge_roles)
@@ -192,6 +199,7 @@ class DistrictAssembler:
             placement.building_y = by
             placement.area_slot = make_area_slot(
                 fp, bx, by, facing, fallback_z=slot.ground_z,
+                deck=placement.area_slot.deck,
             )
 
         packing_info(
@@ -234,6 +242,17 @@ class DistrictAssembler:
                 building_y=placement.building_y,
             )
             area_layouts.append(layout)
+
+        for i, j in plot_z_collisions([item.slot for item in area_layouts]):
+            a = area_layouts[i].slot
+            b = area_layouts[j].slot
+            packing_warning(
+                district, PackingStep.AREA,
+                reason=PackingReason.Z_COLLISION,
+                a=i, b=j,
+                deck_a=a.deck, deck_b=b.deck,
+                z_a=z_range(a), z_b=z_range(b),
+            )
 
         return DistrictLayout(
             slot=slot,

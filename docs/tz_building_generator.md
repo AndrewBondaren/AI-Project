@@ -18,7 +18,8 @@
 | Термин | Смысл |
 |--------|-------|
 | **Шаблон** | JSON-файл, описывающий тип здания: этажи, комнаты, связи, входы |
-| **structure_type** | Назначение шаблона участка (N+1): `house`, `tavern`, `shop`, `warehouse`, `plaza`, `dungeon`, `mine`, `mill`, `farm`, `livestock`, `temple`, `theater`, … Не закрытый список. **Тип здания** в city generate — эта ось; чертёж = `system_name` / uid библиотеки. Не `district_type`, не `district_subtype` и не subtype NL `building`. SoT осей: [`tz_city_generation.md`](./tz_city_generation.md) §1.1–§1.2 |
+| **structure_types** | Назначения чертежа участка: массив ключей **движка** (`BuildingPurpose`). Не N+1 overlay: мир не выдумывает `"blacksmith"` как purpose — это чертёж с тегом `workshop` (+ опц. `house`). Omit/`[]` → `[house]`. Leftover scalar `structure_type` → список из одного ключа. Primary (первый тег) — колонка SQL library. Не `district_type`, не subtype NL `building`, не `ASSEMBLER_REGISTRY`. SoT осей: [`tz_city_generation.md`](./tz_city_generation.md) §1.1–§1.2; enum — `backend/app/dataModel/structure/enums/buildingPurpose.py` |
+| **structure_type** | Leftover alias: тот же primary purpose. Новые JSON пишут `structure_types`. |
 | **Комната** | Под-локация внутри здания (отдельная `NamedLocation` с `parent_uid = building.location_uid`) |
 | **Уровень** | Один этаж: `LocationLevel` с конкретным `z` |
 | **Проход** | `LocationPassage` между двумя комнатами или уровнями |
@@ -42,7 +43,8 @@
 | Поле | Тип | Обязательность | Описание |
 |------|-----|---------------|----------|
 | `system_name` | string | required | Уникальный системный идентификатор шаблона: `"tavern_1"`, `"manor_std"`. Используется для генерации `template_uid = uuid5(NAMESPACE_DNS, system_name)` |
-| `structure_type` | string | required | Назначение шаблона (N+1): tavern, shop, house, plaza, warehouse, dungeon, … |
+| `structure_types` | `BuildingPurpose[]` | optional | Теги назначения (движок). Omit/`[]` → `[house]`. Неизвестный ключ drop. Комбо `[house, workshop]` — один чертёж закрывает оба тега при packing |
+| `structure_type` | string | leftover | Скаляр → `structure_types` из одного ключа. Не писать в новых JSON |
 | `display_name` | string | required | Отображаемое название шаблона |
 | `description` | string | optional | Описание для UI |
 | `version` | string | required | Версия шаблона: `"1.0"` |
@@ -60,9 +62,11 @@
 | `connections` | array | optional | Горизонтальные межкомнатные связи (doorway, archway). Лестницы сюда не входят. Комнаты с `attach_to` генерируют проход имплицитно — их можно не перечислять здесь. |
 | `staircases` | array | optional | Вертикальные связи (лестницы). Каждая лестница объявляет `stops` — упорядоченный список room_id снизу вверх. Shaft автогенерируется и не объявляется в `levels[].rooms`. Если не задан — авто-резолв (раздел 8.8). |
 
-`entry_point` и `back_entry_point` объявляются **на комнате** (поле `entry_point` / `back_entry_point` в room-объекте), не на верхнем уровне шаблона.
+Участок — любой шаблон по **назначениям** (`structure_types`, каталог движка), не только жилой дом. Примеры: таверна, склад, храм, `plaza` (сады, фонтаны, террасы). Комнаты / C20 (`front` дверь) — если шаблон описывает здание с входом; площадь без дверей — не ошибка C20. **Интерьер** (`StructureGenerator`, `levels`/комнаты) — другой скоуп; C22 сажает оболочку из cache, не гоняет полный интерьер площади. Пустой двор без шаблона — не продукт generate. Шаблон даёт здание, а участок собран пустым (без дома) — **критическая ошибка генерации участка** (assembler §7.1), не `plaza`.
 
-Участок — любой шаблон по **назначению** (`structure_type`), не только жилой дом. Примеры: таверна, склад, храм, `plaza` (сады, фонтаны, террасы). Комнаты / C20 (`front` дверь) — если шаблон описывает здание с входом; площадь без дверей — не ошибка C20. **Интерьер** (`StructureGenerator`, `levels`/комнаты) — другой скоуп; C22 сажает оболочку из cache, не гоняет полный интерьер площади. Пустой двор без шаблона — не продукт generate. Шаблон даёт здание, а участок собран пустым (без дома) — **критическая ошибка генерации участка** (assembler §7.1), не `plaza`.
+**Каталог `BuildingPurpose` (locked, не overlay мира):** жильё `house` / `inn` / `barracks`; общественное `town_hall`, `plaza`, `temple`, `shrine`, `theater`, `library`, `school`, `hospital`, `bathhouse`, `prison`, `courthouse`; торговля `tavern`, `shop`, `bakery`, `butcher`, `fishmonger`, `greengrocer`, `apothecary`, `tailor`, `cobbler`, `jeweler`, `bookseller`, `market`, `guild`, `warehouse`, `granary`; ремесло `workshop`, `smithy`, `carpenter`, `tannery`, `weaver`, `potter`, `glassblower`, `brewery`, `winery`, `chandler`; добыча/обработка `mine`, `quarry`, `lumber_camp`, `mill`, `smelter`, `sawmill`, `shipyard`, `kiln`; аграр `farm`, `orchard`, `vineyard`, `livestock`, `stable`, `apiary`, `fishery`; оборона/берег `gatehouse`, `watchtower`, `dock`. Не plot-purpose: `lamp_post`, `portal`, `air_dock`. `dungeon` — морфология поселения. Матч района: `like` (пересечение) / `strict` (участок ⊆ фильтр). Типы участка v1 = массив **этого** чертежа; union нескольких зданий на одном участке — helper на потом.
+
+`entry_point` и `back_entry_point` объявляются **на комнате** (поле `entry_point` / `back_entry_point` в room-объекте), не на верхнем уровне шаблона.
 
 ---
 

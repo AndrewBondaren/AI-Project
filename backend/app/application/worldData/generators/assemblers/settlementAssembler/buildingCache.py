@@ -186,7 +186,7 @@ def _generate_probe(
         system_name=name,
         facing=facing.value,
         reason=PackingReason.STUB_NO_SHELL,
-        structure_type=template.structure_type,
+        structure_type=",".join(str(p) for p in template.structure_types),
     )
     return None
 

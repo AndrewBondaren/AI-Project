@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.flora.enums.cropKind import CropKind
@@ -12,6 +14,11 @@ from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
 from app.dataModel.shared.ranges import EconomicTierRange, IntMinMax
 from app.dataModel.structure.building.buildingLayoutTemplate import DrawingKey
 from app.dataModel.structure.building.buildingTemplateRoomSlot import BuildingTemplateRoomSlot
+from app.dataModel.structure.enums.buildingPurpose import (
+    BuildingPurpose,
+    coerce_purpose_list,
+    primary_purpose,
+)
 from app.dataModel.structure.materialPick import MaterialPick
 
 
@@ -25,7 +32,9 @@ class BuildingTemplateOutline(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     system_name: StrictOnWire[DrawingKey]
-    structure_type: StrictOnWire[str]
+    structure_types: DefaultOnWire[list[BuildingPurpose]] = Field(
+        default_factory=lambda: coerce_purpose_list(None),
+    )
     display_name: StrictOnWire[str]
     # Extract drawings only. ENUM-E: ore / stone / timber / liquid.
     resource_kind: DefaultOnWire[ResourceKind | None] = None
@@ -47,3 +56,19 @@ class BuildingTemplateOutline(BaseModel):
     rooms: DefaultOnWire[list[BuildingTemplateRoomSlot]] = Field(default_factory=list)
     perimeter_barrier: DefaultOnWire[PerimeterBarrier] = Field(default_factory=PerimeterBarrier)
     economic_tier_range: DefaultOnWire[EconomicTierRange | None] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_structure_types(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        payload = dict(data)
+        raw = payload.get("structure_types")
+        if raw is None:
+            raw = payload.get("structure_type")
+        payload["structure_types"] = coerce_purpose_list(raw, empty_as_house=True)
+        return payload
+
+    @property
+    def structure_type(self) -> str:
+        return str(primary_purpose(self.structure_types))

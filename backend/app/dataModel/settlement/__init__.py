@@ -47,11 +47,13 @@ from app.dataModel.settlement.district import (
     WorldDistrictTemplateRegistry,
     WorldDistrictZonePreference,
     allowed_fill_structure_types,
+    district_hosts_purpose,
     resolve_frontage_type_order,
     resolve_required_layouts,
     resolve_plot_count,
     resolve_plot_priority,
     street_classes_for,
+    unhosted_settlement_types,
     union_required_structures,
 )
 
@@ -92,6 +94,7 @@ __all__ = [
     "WorldLocationMoodRegistry",
     "WorldSettlementSpecializationRegistry",
     "allowed_fill_structure_types",
+    "district_hosts_purpose",
     "block_size_for_density",
     "resolve_frontage_type_order",
     "resolve_required_layouts",
@@ -100,4 +103,5 @@ __all__ = [
     "resolved_host_sides",
     "street_classes_for",
     "union_required_structures",
+    "unhosted_settlement_types",
 ]

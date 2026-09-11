@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from pydantic import ValidationError
 
 from app.application.jsonValidation.worldRow import district_templates
@@ -22,12 +24,15 @@ from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeTyp
 from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.dataModel.settlement.district.districtTopologySlot import DistrictTopologySlot
 from app.dataModel.settlement.district.requiredStructureResolve import (
+    unhosted_settlement_types,
     union_required_structures,
 )
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+
+logger = logging.getLogger(__name__)
 
 
 def has_authored_non_district_children(children: list[NamedLocation]) -> bool:
@@ -102,6 +107,7 @@ def load_topology_slots(
         required = union_required_structures(
             list(required_types),
             list(template.required_structures or []),
+            template.allowed_structure_types,
         )
         entries: list[ConnectionEntry] = []
         for item in wire.entries:
@@ -138,6 +144,17 @@ def load_topology_slots(
             cell_y=wire.cell_y,
             subject_tags=dict(subject_tags),
         ))
+    leftover = unhosted_settlement_types(
+        list(required_types),
+        [slot.district_template.allowed_structure_types for slot in slots],
+    )
+    for type_name in leftover:
+        logger.warning(
+            "Settlement required purpose has no host district | settlement=%s"
+            " structure_type=%s — leftover",
+            settlement.location_uid,
+            type_name,
+        )
     return slots
 
 

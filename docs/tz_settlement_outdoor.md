@@ -132,7 +132,7 @@ Debug `POST …/generate-settlement` — тонкая оболочка над **
 
 SoT объекта — assembler §7.1: район ссылается на **участки**; участок (`AreaLayout`) хранит **себя** (слот, facing, оболочка) и содержимое **шаблона** — любое назначение (`structure_type`: дом, таверна, склад, `plaza`, …). Участок не синоним жилого дома.
 
-**Z — участок, не район (C21).** Район не выравнивает слоты и не копирует z улицы. Порог к улице (дверь / ворота / край) выбирает assembler участка (§5.1.1). Pack-земля не террасируется (C1). Ядро **P13** (пин ≠ `max(z)` AABB, `ground_z` на участке, clamp `map_z`) — в коде. Незакрытое generate — **C21-T\*** (§14).
+**Z — участок, не район (C21).** Район не выравнивает слоты и не копирует z улицы. Порог к улице (дверь / ворота / край) выбирает assembler участка (§5.1.1). Pack-земля не террасируется (C1). Ядро **P13** (пин ≠ `max(z)` AABB, `ground_z` на участке, clamp `map_z`) — в коде. Незакрытое generate — **C21-T\*** (§14). Пролёт `height` / `z_deep` — assembler §7.1. Ярус `deck` — настройка чертежа района (city §9.2); участок копирует. xy×z коллизия только если в районе больше одного яруса.
 
 ```
 pack city structure
@@ -383,7 +383,7 @@ SQL и файлы pack — не один COMMIT. Надёжность = прот
 
 | Дата | Изменение |
 |---|---|
-| 2026-09-09 | **C21 `AreaSlot.height` / `z_deep`:** пролёт выше / ниже `ground_z` по этажам. Плоскость ground не в подвале. Packing 0; assembler по levels. Wire omit → 0. |
+| 2026-09-09 | **C21 `AreaSlot.height` / `z_deep`:** пролёт выше / ниже `ground_z`. **`deck`:** SoT = `DistrictTemplateEntry.deck` (omit 0); участок копирует. Коллизия xy×z только при 2+ `deck` среди участков. |
 | 2026-09-06 | **C11 caller:** `detailed_bake` scope=location — консьюмер `materialize`; HTTP generate-settlement — тот же контракт. Bake не содержит C22. |
 | 2026-09-06 | **C23 код:** topology после `full_bake` L0; CITY-T-1a на NL; packing reuse. World routes A* не в этом PR. |
 | 2026-09-05 | §14 **дыры склейки:** C16 serial; вход CITY-T-1a/T-2; leftover P2–P4/P9/P10; C19 journal; parallel одного generate → CITY-T-3 (мастер). DAG — отдельное ТЗ. |

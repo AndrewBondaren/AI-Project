@@ -48,6 +48,7 @@ from app.dataModel.settlement.district.structurePlacement import (
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
 from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose
 from app.db.models.world import World
 
 
@@ -76,7 +77,7 @@ def _subject_catalog(
         return "crop"
     if (
         any(layout.livestock_kind is not None for layout in layouts)
-        or structure_type == "livestock"
+        or structure_type == BuildingPurpose.LIVESTOCK.value
     ):
         return "livestock"
     return None
@@ -235,14 +236,14 @@ def _choose_layout(
     return rng.choice(pool)
 
 
-def _required_type_keys(required: RequiredStructure, catalog: BuildingCatalog) -> set[str]:
-    keys: set[str] = set()
-    if required.structure_type:
-        keys.add(required.structure_type)
-        return keys
-    if catalog.of_structure_type(required.building_template):
-        keys.add(required.building_template)
-    return keys
+def _purpose_keys(layout: BuildingLayoutTemplate) -> set[str]:
+    return {str(purpose) for purpose in layout.structure_types}
+
+
+def _required_type_keys(required: RequiredStructure) -> set[str]:
+    if required.structure_type is not None:
+        return {str(required.structure_type)}
+    return set()
 
 
 def _buildings_rng(
@@ -308,18 +309,30 @@ def _pick_layout_picks(
     seen_names: set[str] = set()
     skip_fill_types: set[str] = set()
 
+    allowed = slot.district_template.allowed_structure_types
+    match = slot.district_template.allowed_match
+
     for req in slot.required_structures:
-        skip_fill_types |= _required_type_keys(req, catalog)
-        layouts = _tier_pool(resolve_required_layouts(req, catalog), skeleton, world)
+        skip_fill_types |= _required_type_keys(req)
+        layouts: tuple[BuildingLayoutTemplate, ...] | list[BuildingLayoutTemplate] = (
+            resolve_required_layouts(req, catalog)
+        )
+        if allowed:
+            layouts = catalog.matching_allowed(layouts, allowed, match)
+        layouts = _tier_pool(layouts, skeleton, world)
         if not layouts:
             packing_warning(
                 PackingStep.CACHE,
                 district=slot.district_template.system_name,
-                system_name=req.structure_type or req.building_template,
+                system_name=(
+                    str(req.structure_type)
+                    if req.structure_type is not None
+                    else req.building_template
+                ),
                 reason=PackingReason.NO_CACHE,
             )
             continue
-        type_keys = _required_type_keys(req, catalog)
+        type_keys = _required_type_keys(req)
         stype = next(iter(type_keys), layouts[0].structure_type)
         subjects = _resolve_subjects(slot, world, stype, layouts, settlement_uid)
         chosen = _choose_layout(
@@ -328,19 +341,23 @@ def _pick_layout_picks(
             _crop_kinds_for(world, subjects),
             _livestock_kinds_for(world, subjects),
         )
+        skip_fill_types |= _purpose_keys(chosen)
         if chosen.system_name in seen_names:
             continue
         seen_names.add(chosen.system_name)
         picks.append((chosen.system_name, req))
 
     fill_types = allowed_fill_structure_types(
-        slot.district_template.allowed_structure_types,
+        allowed,
         catalog.structure_types(),
     )
     for structure_type in fill_types:
         if structure_type in skip_fill_types:
             continue
-        layouts = _tier_pool(catalog.of_structure_type(structure_type), skeleton, world)
+        layouts = catalog.of_structure_type(structure_type)
+        if allowed:
+            layouts = catalog.matching_allowed(layouts, allowed, match)
+        layouts = _tier_pool(layouts, skeleton, world)
         if not layouts:
             continue
         subjects = _resolve_subjects(
@@ -352,6 +369,7 @@ def _pick_layout_picks(
             _crop_kinds_for(world, subjects),
             _livestock_kinds_for(world, subjects),
         )
+        skip_fill_types |= _purpose_keys(chosen)
         if chosen.system_name in seen_names:
             continue
         seen_names.add(chosen.system_name)

@@ -63,7 +63,7 @@ class PackingReason(StrEnum):
     NO_ASSEMBLER = "no_assembler"
     EMPTY_FOOTPRINT = "empty_footprint"
     STUB_NO_SHELL = "stub_no_shell"
-    MISSING_TEMPLATE = "missing_template"
+    Z_COLLISION = "z_collision"
 
 
 class PackingHost(StrEnum):

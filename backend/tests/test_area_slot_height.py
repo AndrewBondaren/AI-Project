@@ -62,6 +62,7 @@ class TestParcelHeight(unittest.TestCase):
         slot = AreaSlotWire(cells=[(0, 0)], ground_z=4, facing=Facing.SOUTH)
         self.assertEqual(slot.height, 0)
         self.assertEqual(slot.z_deep, 0)
+        self.assertEqual(slot.deck, 0)
 
 
 if __name__ == "__main__":

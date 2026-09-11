@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
+from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import (
+    AreaSlot,
+    SURFACE_DECK,
+)
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.planner.types import (
     AreaPlacement,
@@ -64,9 +67,10 @@ def make_area_slot(
     facing: Facing,
     *,
     fallback_z: int = 0,
+    deck: int = SURFACE_DECK,
 ) -> AreaSlot:
     cells = parcel_cells(fp, bx, by, YARD_PADDING_FINE)
-    return AreaSlot(cells=cells, ground_z=fallback_z, facing=facing)
+    return AreaSlot(cells=cells, ground_z=fallback_z, facing=facing, deck=deck)
 
 
 def origin_in_reservation(
@@ -90,6 +94,8 @@ def placements_from_reservations(
     skeleton: CitySkeleton,
     fallback_z: int,
     catalog: BuildingCatalog | None = None,
+    *,
+    deck: int = SURFACE_DECK,
 ) -> list[AreaPlacement]:
     _ = skeleton
     catalog = catalog or assemble_building_catalog(world)
@@ -101,7 +107,9 @@ def placements_from_reservations(
         if template is None or fp is None:
             continue
         bx, by = origin_in_reservation(fp, reservation.rect_xy)
-        area_slot = make_area_slot(fp, bx, by, Facing.SOUTH, fallback_z=fallback_z)
+        area_slot = make_area_slot(
+            fp, bx, by, Facing.SOUTH, fallback_z=fallback_z, deck=deck,
+        )
         placements.append(AreaPlacement(
             area_slot=area_slot,
             template=template,

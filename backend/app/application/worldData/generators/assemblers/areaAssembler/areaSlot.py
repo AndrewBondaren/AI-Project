@@ -18,12 +18,25 @@ class AreaSlot:
                StructureAreaAssembler по levels здания.
     z_deep   — то же ниже ground_z (подвал). Плоскость ground_z не входит:
                [z, ground_z) vs [ground_z, top). Packing = 0.
+    deck     — копия яруса чертежа района (`DistrictTemplateEntry.deck`).
+               SoT — настройка района, не участок. 0 = поверхность.
+               Не этаж здания и не economic tier. Коллизия xy×z только если
+               среди участков района больше одного яруса.
     """
     cells:    list[tuple[int, int]]
     ground_z: int
     facing:   Facing
     height:   int = 0
     z_deep:   int = 0
+    deck:     int = 0
+
+
+SURFACE_DECK = 0
+
+
+def z_range(slot: AreaSlot) -> tuple[int, int]:
+    """Half-open fine-z interval ``[ground_z - z_deep, ground_z + height)``."""
+    return slot.ground_z - slot.z_deep, slot.ground_z + slot.height
 
 
 def _level_span(level: object) -> tuple[int, int]:

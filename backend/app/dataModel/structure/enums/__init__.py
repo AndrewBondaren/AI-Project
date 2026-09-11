@@ -1,3 +1,16 @@
+from app.dataModel.structure.enums.buildingPurpose import (
+    DEFAULT_BUILDING_PURPOSES,
+    DEFAULT_PURPOSE_MATCH,
+    HOUSE,
+    PURPOSE_DISPLAY,
+    BuildingPurpose,
+    BuildingPurposeMatch,
+    coerce_purpose_list,
+    coerce_purpose_match,
+    primary_purpose,
+    purposes_match,
+    union_plot_purposes,
+)
 from app.dataModel.structure.enums.buildingElement import (
     DOOR_BUILDING_ELEMENTS,
     OUTDOOR_SHELL_ELEMENTS,
@@ -32,6 +45,17 @@ from app.dataModel.structure.enums.staircaseType import (
 )
 
 __all__ = [
+    "BuildingPurpose",
+    "BuildingPurposeMatch",
+    "DEFAULT_BUILDING_PURPOSES",
+    "DEFAULT_PURPOSE_MATCH",
+    "HOUSE",
+    "PURPOSE_DISPLAY",
+    "coerce_purpose_list",
+    "coerce_purpose_match",
+    "primary_purpose",
+    "purposes_match",
+    "union_plot_purposes",
     "DOOR_BUILDING_ELEMENTS",
     "OUTDOOR_SHELL_ELEMENTS",
     "PASSABLE_BUILDING_ELEMENTS",
