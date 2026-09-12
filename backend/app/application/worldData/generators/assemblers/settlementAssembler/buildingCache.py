@@ -2,11 +2,10 @@
 
 Target (tz_structure_connections.md §5.1.3): cache holds envelopes ``w×h``
 for packing. Interior rooms / ``StructureGeneratorService`` are not this
-scope (city TZ phase 3). Envelope SoT on the drawing is not wired yet.
+scope (city TZ phase 3). Envelope SoT = ``BuildingLayoutTemplate.occupied_footprint``
+on the plot drawing.
 
-Stub: pick ``system_name``s (axis 3), do not generate interiors or shells.
-Packing sees an empty cache until a shell pass exists. Tests may inject
-layouts via ``from_south_map``.
+Tests may inject layouts via ``from_south_map``.
 """
 
 from __future__ import annotations
@@ -120,13 +119,14 @@ class BuildingLayoutCache:
         *,
         district: str | None = None,
     ) -> StructureLayout | None:
+        _ = world
         name = template.system_name
         if not name:
             return None
         cached = self.get(name, facing)
         if cached is not None:
             return cached
-        layout = _generate_probe(world, template, name, facing, district=district)
+        layout = _envelope_layout(template, name, facing, district=district)
         if layout is None:
             return None
         self._layouts[self._key(name, facing)] = layout
@@ -142,7 +142,7 @@ def build_layout_cache(
     *,
     settlement_uid: str | None = None,
 ) -> BuildingLayoutCache:
-    """Pick drawings by ``system_name``; shells are stubbed (no interiors)."""
+    """Pick drawings by ``system_name``; envelopes from declared plot footprint."""
     _ = terrain_cells
     catalog = catalog or assemble_building_catalog(world)
     cache = BuildingLayoutCache()
@@ -165,70 +165,35 @@ def build_layout_cache(
     return cache
 
 
-def _generate_probe(
-    world: World,
+def _envelope_layout(
     template: BuildingLayoutTemplate,
     name: str,
     facing: Facing,
     *,
     district: str | None = None,
 ) -> StructureLayout | None:
-    """Envelope probe for the already-picked drawing (``template.system_name``).
-
-    ``structure_type`` is purpose (tavern, mine, …), not an ``ASSEMBLER_REGISTRY``
-    key (building / ruins / resourceExtraction / vastHull). Do not gate the
-    drawing on that registry — packing must use this чертёж as-is.
-    """
-    _ = world
-    packing_warning(
-        district or "cache",
-        PackingStep.CACHE,
-        system_name=name,
-        facing=facing.value,
-        reason=PackingReason.STUB_NO_SHELL,
-        structure_type=",".join(str(p) for p in template.structure_types),
+    """Packing envelope from the plot drawing. Does not generate rooms."""
+    spec = template.occupied_footprint
+    if spec is None:
+        packing_warning(
+            district or "cache",
+            PackingStep.CACHE,
+            system_name=name,
+            facing=facing.value,
+            reason=PackingReason.STUB_NO_SHELL,
+            structure_type=",".join(str(p) for p in template.structure_types),
+        )
+        return None
+    footprint = OccupiedFootprint(
+        min_x=spec.min_x,
+        min_y=spec.min_y,
+        width=spec.width,
+        depth=spec.depth,
     )
-    return None
-
-    # City packing cache is shells w×h (connections §5.1.3). Interior rooms are
-    # phase 3 and not implemented — do not derive envelopes from interiors.
-    #
-    # from datetime import datetime, timezone
-    # from app.application.worldData.generators.assemblers import structureAssembler as _structure_assemblers  # noqa: F401
-    # from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
-    # from app.dataModel.materials import DEFAULT_FLOOR_MATERIAL, DEFAULT_WALL_MATERIAL
-    # from app.db.models.namedLocation import NamedLocation
-    #
-    # CACHE_PROBE_PREFIX = "__cache_probe__"
-    #
-    # def _probe_building(world_uid: str, template_name: str, facing: Facing) -> NamedLocation:
-    #     return NamedLocation(
-    #         location_uid=f"{CACHE_PROBE_PREFIX}{template_name}_{facing.value}",
-    #         world_uid=world_uid,
-    #         display_name=f"[cache] {template_name}",
-    #         system_location_type="building",
-    #         created_at=datetime.now(timezone.utc).isoformat(),
-    #         map_x=0,
-    #         map_y=0,
-    #         map_z=0,
-    #         parent_wall_material=DEFAULT_WALL_MATERIAL,
-    #         parent_floor_material=DEFAULT_FLOOR_MATERIAL,
-    #     )
-    #
-    # building = _probe_building(world.world_uid, name, facing)
-    # try:
-    #     layout = StructureGeneratorService().generate_from_template(
-    #         world, building, template, ground_z=0, foundation_depth=0,
-    #     )
-    # except Exception as exc:
-    #     packing_warning("cache", "cache", system_name=name, reason=str(exc))
-    #     return None
-    # if layout.occupied_footprint is None:
-    #     packing_warning(
-    #         PackingStep.CACHE,
-    #         district="cache",
-    #         system_name=name,
-    #         reason=PackingReason.EMPTY_FOOTPRINT,
-    #     )
-    #     return None
-    # return layout
+    return StructureLayout(
+        cells=[],
+        levels=[],
+        passages=[],
+        rooms=[],
+        occupied_footprint=footprint,
+    )

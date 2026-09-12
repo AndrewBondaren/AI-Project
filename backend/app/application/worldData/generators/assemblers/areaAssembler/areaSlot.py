@@ -7,7 +7,7 @@ from app.dataModel.spatial.facing import Facing
 @dataclass
 class AreaSlot:
     """
-    Участок, выделенный DistrictAssembler под одно здание.
+    Участок, выделенный DistrictAssembler (не синоним здания).
 
     cells    — (x, y) координаты участка без z; покрывает здание + двор + забор.
     ground_z — уровень земли для этого участка (из terrain; финал — assembler).

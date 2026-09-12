@@ -937,16 +937,28 @@ class CityT4PlannerTest(unittest.TestCase):
         self.assertFalse(hasattr(SettlementSkeleton, "_coerce_specializations"))
         self.assertFalse(hasattr(BundleNamedLocation, "_coerce_specializations"))
 
-    def test_cache_probe_uses_drawing_not_assembler_key(self) -> None:
+    def test_cache_envelope_from_plot_footprint_not_assembler_key(self) -> None:
         cache = BuildingLayoutCache()
-        template = BuildingLayoutTemplate(
+        missing_fp = BuildingLayoutTemplate(
             system_name="town_hall",
             structure_type="town_hall",
             display_name="Town hall",
             levels=[{"z_offset": 0, "rooms": []}],
         )
-        self.assertIsNone(cache.ensure(_world(), template))
+        self.assertIsNone(cache.ensure(_world(), missing_fp))
         self.assertNotIn("town_hall", cache)
+        template = BuildingLayoutTemplate(
+            system_name="town_hall",
+            structure_type="town_hall",
+            display_name="Town hall",
+            occupied_footprint={"width": 4, "depth": 4},
+            levels=[{"z_offset": 0, "rooms": []}],
+        )
+        layout = cache.ensure(_world(), template)
+        self.assertIsNotNone(layout)
+        self.assertEqual(layout.occupied_footprint.width, 4)
+        self.assertFalse(layout.rooms)
+        self.assertIn("town_hall", cache)
 
     def test_tokens_rng_stable_for_same_cell(self) -> None:
         catalog = BuildingCatalog.from_layouts([

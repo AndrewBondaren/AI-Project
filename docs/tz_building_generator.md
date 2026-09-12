@@ -95,18 +95,22 @@ Wire мира: `purpose_packs: ["steampunk", "magic"]`. Не ключ zip `struc
 
 ## 3. Схема шаблона (JSON)
 
-Объекты этого раздела — контракт generate-layout. В `dataModel` корень — `BuildingLayoutTemplate`. Вложенные level / room / size / connection / staircase — **те же объекты**, целевые nested POJO (**[POJO-D-16](./tz_datamodel_pojo_discrepancies.md)** / JV-4b); сейчас ещё `list[dict]` в generators.
+Объекты этого раздела — контракт чертежа. В `dataModel` корень packing — `BuildingLayoutTemplate` (**участок**). Вложенное `building` — generate-layout здания (пример: [`fixtures/templates/tavern_1.json`](../fixtures/templates/tavern_1.json) внутри [`fixtures/templates/inn_small.json`](../fixtures/templates/inn_small.json)). Вложенные level / room / size / connection / staircase — **те же объекты**, целевые nested POJO (**[POJO-D-16](./tz_datamodel_pojo_discrepancies.md)** / JV-4b); сейчас ещё `list[dict]` в generators.
 
 Не путать с library **`BuildingTemplateOutline`**: там `levels` = `IntMinMax`, `rooms` = `BuildingTemplateRoomSlot` (`system_room` + count) — другой JSON.
 
 ### 3.1 Поля верхнего уровня
 
+Корень JSON, который ест packing (`DrawingKey`, `plot_counts`, pin `building_template`) — **чертёж участка**. Здание на участке — поле `building` (тело §3: `levels` / `connections` / `staircases`). Leftover: `levels` на корне без `building` = этот JSON сам тело здания (как `tavern_1` для `debug_structure`). Малые пристройки (`AreaLayout.small_layouts`) **не** в чертеже v1.
+
 | Поле | Тип | Обязательность | Описание |
 |------|-----|---------------|----------|
-| `system_name` | string | required | Уникальный системный идентификатор шаблона: `"tavern_1"`, `"manor_std"`. Используется для генерации `template_uid = uuid5(NAMESPACE_DNS, system_name)` |
-| `structure_types` | `BuildingPurpose[]` | optional | Теги назначения (движок). Omit/`[]` → `[house]`. Неизвестный ключ drop. Комбо `[house, workshop]` — один чертёж закрывает оба тега при packing |
+| `system_name` | string | required | Identity **участка** (`DrawingKey`): `"inn_small"`, `"tavern_1"`. Не путать с `building.system_name` интерьера |
+| `structure_types` | `BuildingPurpose[]` | optional | Теги назначения **участка** (движок). Omit/`[]` → `[house]`. Неизвестный ключ drop. Комбо `[house, workshop]` — один чертёж закрывает оба тега при packing |
 | `structure_type` | string | leftover | Скаляр → `structure_types` из одного ключа. Не писать в новых JSON |
 | `display_name` | string | required | Отображаемое название шаблона |
+| `occupied_footprint` | object | packing | `{ min_x, min_y, width, depth }` в fine-клетках — bbox **здания** на участке (не двор). Cache C22. Нет поля → участок не сажается (warning `stub_no_shell`) |
+| `building` | object \| null | optional | Тело здания (§3 `levels`…). `null` / omit + нет leftover `levels` → участок без NamedLocation (`plaza`). Есть тело, generate без NL — ошибка участка |
 | `description` | string | optional | Описание для UI |
 | `version` | string | required | Версия шаблона: `"1.0"` |
 | `default_z_height` | int | optional | Высота потолка по умолчанию для всех уровней. Default: `3` |
@@ -119,7 +123,7 @@ Wire мира: `purpose_packs: ["steampunk", "magic"]`. Не ключ zip `struc
 | `door_height_max` | int | optional | Максимальная высота двери в z-юнитах. Default: `5`. Cap для высоких этажей — дверь не растёт бесконечно |
 | `underground_expansion` | int | optional | Макс. расширение подземных уровней за границы ground floor footprint в ячейках. Default: `2`. Защита от конфликта с соседними зданиями |
 | `foundation_depth` | int | optional | Глубина фундамента в z-юнитах. Default: `1`. Передаётся в `StructureContext` если не задан явно (`context.foundation_depth ?? template.foundation_depth ?? 1`) |
-| `levels` | array | required | Массив уровней, минимум 1 |
+| `levels` | array | leftover на корне / required в `building` | Этажи generate-интерьера. На корне участка — leftover, если нет `building`. C22 packing **не** гоняет интерьер |
 | `connections` | array | optional | Горизонтальные межкомнатные связи (doorway, archway). Лестницы сюда не входят. Комнаты с `attach_to` генерируют проход имплицитно — их можно не перечислять здесь. |
 | `staircases` | array | optional | Вертикальные связи (лестницы). Каждая лестница объявляет `stops` — упорядоченный список room_id снизу вверх. Shaft автогенерируется и не объявляется в `levels[].rooms`. Если не задан — авто-резолв (раздел 8.8). |
 
@@ -923,6 +927,8 @@ TopWallZAdjuster — v2 (открытые верхние стены / парап
 ---
 
 ## 4. Пример: tavern_1
+
+Тело **здания** (интерьер §3). Пример **участка**, который его несёт: [`fixtures/templates/inn_small.json`](../fixtures/templates/inn_small.json) (`system_name` участка `inn_small`, поле `building` = этот JSON). `debug_structure.py tavern_1` по-прежнему грузит этот файл как generate-layout.
 
 ```json
 {

@@ -891,6 +891,7 @@ DAG может materialize **разные уровни** в разных нод�
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-12 | **Чертёж участка:** packing ест `occupied_footprint`; здание — вложенное `building` (пример `inn_small` + `tavern_1`). Без малых пристроек. Интерьер packing не гоняет. |
 | 2026-09-12 | **Семья `knowledge`:** `academy`, `laboratory`, `arcane_lab`. `library`/`school` остаются `public`. Канон `fantasy` — только `academy`; `arcane_lab` — пак `magic`; `laboratory` — steampunk/modern/sci_fi. |
 | 2026-09-12 | **Семья `government`:** `palace`, `legislature`, `chancery`. Не `public`, не `house`, не `defense`. В каноне `fantasy`. Имя семьи ≠ ткань `civic`. |
 | 2026-09-12 | **`prison` → `defense`.** Суд остаётся `public.courthouse`. Семьи разные; комбо-чертёж `[courthouse, prison]` разрешён (правила мира). `allowed: ["public"]` like пропускает такой чертёж в civic (есть `courthouse`). |

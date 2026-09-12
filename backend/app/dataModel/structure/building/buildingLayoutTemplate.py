@@ -1,10 +1,11 @@
-"""Runtime building layout body — generate / packing. Not the library Outline.
+"""Plot drawing for packing. Nested ``building`` is the interior template (TZ §3).
 
-`BuildingTemplateOutline.levels` is IntMinMax (library). Here `levels` is TZ §3 array.
+Root identity = ``DrawingKey`` (plot). Not the library Outline
+(``BuildingTemplateOutline.levels`` is IntMinMax).
 
-Nested `levels` / `staircases` / `connections` are still `list[dict]` (**POJO-D-16** / JV-4b).
-Target: nested frozen models (same pattern as `perimeter_barrier`, `DistrictConnection`).
-Do not reuse `BuildingTemplateRoomSlot` as a generate room.
+Nested ``levels`` / ``staircases`` / ``connections`` are still ``list[dict]``
+(**POJO-D-16** / JV-4b). Do not reuse ``BuildingTemplateRoomSlot`` as a generate room.
+Small outbuildings (``AreaLayout.small_layouts``) are not on this drawing.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 from app.dataModel.shared.ranges import EconomicTierRange
 from app.dataModel.structure.building.defaultStructureContext import DefaultStructureContext
+from app.dataModel.structure.building.occupiedFootprint import OccupiedFootprintSpec
 from app.dataModel.structure.enums.buildingPurpose import (
     BuildingPurpose,
     coerce_purpose_list,
@@ -32,8 +34,22 @@ from app.dataModel.structure.enums.buildingPurpose import (
 DEFAULT_Z_HEIGHT = 3
 
 
+def _is_generate_levels(value: Any) -> bool:
+    return isinstance(value, list) and bool(value) and isinstance(value[0], dict)
+
+
+def _looks_like_plot_or_interior(raw: dict[str, Any]) -> bool:
+    if _is_generate_levels(raw.get("levels")):
+        return True
+    nested = raw.get("building")
+    if isinstance(nested, dict) and _is_generate_levels(nested.get("levels")):
+        return True
+    footprint = raw.get("occupied_footprint")
+    return isinstance(footprint, dict) and footprint.get("width") is not None and footprint.get("depth") is not None
+
+
 class BuildingLayoutTemplate(BaseModel):
-    """One generate-able layout (engine builtin or world override). tz_building_generator.md §3.1."""
+    """Plot drawing (packing) with optional nested building body. tz_building_generator.md §3.1."""
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
@@ -54,6 +70,8 @@ class BuildingLayoutTemplate(BaseModel):
     default_structure_context: DefaultOnWire[DefaultStructureContext] = Field(
         default_factory=DefaultStructureContext,
     )
+    occupied_footprint: DefaultOnWire[OccupiedFootprintSpec | None] = None
+    building: DefaultOnWire[BuildingLayoutTemplate | None] = None
     levels: DefaultOnWire[list[dict[str, Any]]] = Field(default_factory=list)
     staircases: DefaultOnWire[list[dict[str, Any]]] = Field(default_factory=list)
     connections: DefaultOnWire[list[dict[str, Any]]] = Field(default_factory=list)
@@ -91,6 +109,22 @@ type DrawingKey = RegistryKey[BuildingLayoutTemplate]
 BuildingLayoutTemplate.model_rebuild()
 
 
+def interior_of(plot: BuildingLayoutTemplate) -> BuildingLayoutTemplate | None:
+    """Building body on the plot. Nested ``building`` wins; leftover root ``levels`` = this JSON is the body."""
+    nested = plot.building
+    if nested is not None:
+        return nested
+    if plot.levels:
+        return plot
+    return None
+
+
+def plot_has_building(plot: BuildingLayoutTemplate) -> bool:
+    """NamedLocation on the plot iff the drawing describes a building with generate levels."""
+    interior = interior_of(plot)
+    return interior is not None and bool(interior.levels)
+
+
 def coerce_building_layout(raw: BuildingLayoutTemplate | dict[str, Any]) -> BuildingLayoutTemplate:
     if isinstance(raw, BuildingLayoutTemplate):
         return raw
@@ -100,8 +134,7 @@ def coerce_building_layout(raw: BuildingLayoutTemplate | dict[str, Any]) -> Buil
 def try_building_layout(raw: dict[str, Any]) -> BuildingLayoutTemplate | None:
     if not isinstance(raw, dict):
         return None
-    levels = raw.get("levels")
-    if not isinstance(levels, list) or not levels:
+    if not _looks_like_plot_or_interior(raw):
         return None
     try:
         return BuildingLayoutTemplate.model_validate(raw)

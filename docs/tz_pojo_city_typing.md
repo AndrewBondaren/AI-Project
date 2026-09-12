@@ -149,6 +149,7 @@ SQL `named_locations.frontage_type_order` — JSON-массив; dataclass `Name
 |---|---|---|---|
 | Назначение | лист `BuildingPurpose` (+ семья в каталоге, не на чертеже) | `structure_types[]`; фильтр района — лист или `BuildingPurposeFamily`; паки мира режут каталог | `cafe`, `temple`, `portal`; комбо `[house, workshop]` |
 | Чертёж участка | **тип участка** = identity шаблона | `BuildingLayoutTemplate.system_name` | `tavern_1`, `inn_small` |
+| Здание на участке | тело generate (§3) или leftover корневые `levels` | `building` / leftover `levels` | `fixtures/templates/tavern_1.json` внутри `inn_small` |
 | Участок | инстанс после packing | `AreaSlot` / `AreaLayout` | клетка в районе |
 
 `structure_types` **не** владеет участком и **не** ключ counts. Режет пул («в квартале можно мастерские»). Generate среди чертежей с подходящими тегами — rng + тир + subjects + `like`/`strict`. Pin конкретного чертежа — `required_structures[].building_template` = `system_name`, не purpose.
@@ -233,6 +234,7 @@ SQL dataclass `NamedLocation` остаётся `str \| None`; coerce на POJO /
 | 2026-09-07 | POJO-C-6 **resolved**: `BarrierTemplateKey` на identity `system_type` + `PerimeterBarrier.template`; `""` → `None` + warning; `sides`/relief `structure_refs` не срез |
 | 2026-09-08 | POJO-C-8 **resolved**: `RequiredStructurePosition` (`any`/`center`); omit/invalid → `any` + warning; CONN-PACK-2 не срез |
 | 2026-09-08 | POJO-C-9 **resolved**: `PerimeterBarrier.sides` → `list[Facing]` (кардиналы); skip unknown/intercardinal + warning |
+| 2026-09-12 | Чертёж участка: `occupied_footprint` + вложенное `building` (пример `inn_small` ← `tavern_1`). Малые пристройки не в чертеже. |
 | 2026-09-12 | Дерево назначений: семья → лист; `allowed` может быть семьёй; паки мира. SoT [tz_building_generator.md](./tz_building_generator.md) §2.1 |
 | 2026-09-12 | Назначение участка: `structure_types[]` + `BuildingPurpose` (не N+1); `allowed_match` like/strict; pin только `system_name` |
 | 2026-09-08 | POJO-C-10 **resolved**: NL `parent_wall_material` / `parent_floor_material` → `MaterialKey`; omit/`null` → `None`; `""` → reject. Не скелет, не `MaterialPick` |

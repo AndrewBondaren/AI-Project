@@ -51,12 +51,15 @@ from app.application.worldData.generators.assemblers.settlementAssembler.layoutC
 )
 from app.application.worldData.generators.structure.structureGeneratorService import (
     OccupiedFootprint,
-    StructureGeneratorService,
     StructureLayout,
 )
 from app.dataModel.materials import DEFAULT_FLOOR_MATERIAL, DEFAULT_WALL_MATERIAL
-from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+from app.dataModel.structure.building.buildingLayoutTemplate import (
+    BuildingLayoutTemplate,
+    plot_has_building,
+)
 from app.dataModel.structure.enums.passageType import PassageType
+from app.application.worldData.generators.structure.cellFactory import _floor_cell
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -99,10 +102,54 @@ def derive_structure_context(
     )
 
 
-def _has_building(template: BuildingLayoutTemplate, cached_layout: StructureLayout | None) -> bool:
-    if cached_layout is not None:
-        return True
-    return bool(template.levels)
+def _runtime_footprint(
+    template: BuildingLayoutTemplate,
+    cached_layout: StructureLayout | None,
+) -> OccupiedFootprint | None:
+    if cached_layout is not None and cached_layout.occupied_footprint is not None:
+        return cached_layout.occupied_footprint
+    spec = template.occupied_footprint
+    if spec is None:
+        return None
+    return OccupiedFootprint(
+        min_x=spec.min_x,
+        min_y=spec.min_y,
+        width=spec.width,
+        depth=spec.depth,
+    )
+
+
+def _cache_has_rooms(cached_layout: StructureLayout | None) -> bool:
+    return cached_layout is not None and bool(cached_layout.rooms)
+
+
+def _shell_layout(
+    fp: OccupiedFootprint,
+    bx: int,
+    by: int,
+    map_z: int,
+    world: World,
+    building: NamedLocation,
+) -> StructureLayout:
+    """Floor cells for the declared building bbox. Not rooms / small outbuildings."""
+    material = building.parent_floor_material or DEFAULT_FLOOR_MATERIAL
+    x0 = bx + fp.min_x
+    y0 = by + fp.min_y
+    cells = [
+        _floor_cell(
+            x0 + dx, y0 + dy, map_z,
+            world.world_uid, building.location_uid, material,
+        )
+        for dx in range(fp.width)
+        for dy in range(fp.depth)
+    ]
+    return StructureLayout(
+        cells=cells,
+        levels=[],
+        passages=[],
+        rooms=[],
+        occupied_footprint=fp,
+    )
 
 
 def _footprint_cells(fp: OccupiedFootprint, bx: int, by: int) -> list[Coord]:
@@ -176,13 +223,13 @@ class StructureAreaAssembler:
 
         surface = column_surface(terrain_cells)
         fallback_z = slot.ground_z
-        want_building = _has_building(template, cached_layout)
+        want_building = plot_has_building(template)
 
         rng = random.Random(f"{world.world_uid}_{bx}_{by}_barrier")
         has_barrier = should_build_area_barrier(template, rng)
         entry_xy = _entry_xy_world(cached_layout, bx, by) if want_building else None
 
-        fp = cached_layout.occupied_footprint if cached_layout is not None else None
+        fp = _runtime_footprint(template, cached_layout)
         fp_cells: list[Coord] = _footprint_cells(fp, bx, by) if fp is not None else []
         threshold = resolve_threshold(
             slot,
@@ -245,15 +292,18 @@ class StructureAreaAssembler:
                 template, city_skeleton, slot, terrain_cells,
                 ground_z=int(building.map_z),
             )
-            interior = cached_layout
-            if interior is None:
-                probe = replace(building, map_x=0, map_y=0, map_z=0)
-                interior = StructureGeneratorService().generate_from_template(
-                    world, probe, template, ground_z=0, foundation_depth=0,
+            if _cache_has_rooms(cached_layout):
+                building_layout = translate_layout(
+                    cached_layout, bx, by, int(building.map_z),
                 )
-            building_layout = translate_layout(
-                interior, bx, by, int(building.map_z),
-            )
+            elif fp is not None:
+                building_layout = _shell_layout(
+                    fp, bx, by, int(building.map_z), world, building,
+                )
+            else:
+                building_layout = StructureLayout(
+                    cells=[], levels=[], passages=[], rooms=[],
+                )
             building_layout = BuildingAssembler.attach_envelope(
                 world, building, building_layout, context, terrain_cells,
             )

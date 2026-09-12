@@ -18,8 +18,11 @@ from app.dataModel.structure.building import (
     BuildingTemplateRoomSlot,
     DefaultStructureContext,
     DrawingKey,
+    OccupiedFootprintSpec,
     WorldBuildingTemplateRegistry,
     coerce_building_layout,
+    interior_of,
+    plot_has_building,
     try_building_layout,
 )
 from app.dataModel.structure.enums import (
@@ -76,7 +79,10 @@ __all__ = [
     "BuildingTemplateRoomSlot",
     "DefaultStructureContext",
     "DrawingKey",
+    "OccupiedFootprintSpec",
     "coerce_building_layout",
+    "interior_of",
+    "plot_has_building",
     "try_building_layout",
     "DEFAULT_BUILDING_PURPOSES",
     "DEFAULT_PURPOSE_MATCH",
