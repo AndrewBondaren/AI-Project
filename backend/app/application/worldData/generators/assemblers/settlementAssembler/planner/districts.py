@@ -1,7 +1,11 @@
 import logging
 from dataclasses import dataclass
 
-from app.application.jsonValidation.worldRow import location_types, settlement_specializations
+from app.application.jsonValidation.worldRow import (
+    enabled_building_purposes,
+    location_types,
+    settlement_specializations,
+)
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
@@ -124,6 +128,7 @@ def plan_district_slots(
     surface = column_surface(terrain_cells)
     settlement_required = list(resolved.required_types)
     subject_tags = dict(resolved.subject_tags)
+    enabled = enabled_building_purposes(world)
 
     def _materialize(cell_x: int, cell_y: int, template: DistrictTemplateEntry | None) -> bool:
         if template is None:
@@ -147,6 +152,7 @@ def plan_district_slots(
             settlement_required,
             list(template.required_structures or []),
             template.allowed_structure_types,
+            enabled,
         )
         slots.append(DistrictSlot(
             origin_x=origin_x,
@@ -295,6 +301,7 @@ def plan_district_slots(
     for type_name in unhosted_settlement_types(
         settlement_required,
         [slot.district_template.allowed_structure_types for slot in slots],
+        enabled,
     ):
         logger.warning(
             "Settlement required purpose has no host district | settlement=%s"

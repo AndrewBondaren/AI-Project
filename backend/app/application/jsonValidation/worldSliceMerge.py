@@ -82,7 +82,13 @@ def _merge_registry_list(
     dump_kw: dict[str, Any] = {"mode": "json"}
     if world_slice.dump_by_alias:
         dump_kw["by_alias"] = True
-    out[key] = [entry.model_dump(**dump_kw) for entry in resolved.root]
+    dumped: list[Any] = []
+    for entry in resolved.root:
+        if hasattr(entry, "model_dump"):
+            dumped.append(entry.model_dump(**dump_kw))
+        else:
+            dumped.append(str(entry))
+    out[key] = dumped
 
 
 def _merge_registry_dict(

@@ -426,7 +426,25 @@ def resolve_root_list(
         entry_cls = args[0] if args else entry_cls
 
     entries: list[Any] = []
+    enum_scalars = isinstance(entry_cls, type) and issubclass(entry_cls, StrEnum)
     for index, item in enumerate(raw):
+        if enum_scalars and not isinstance(item, dict):
+            member: Any = item if isinstance(item, entry_cls) else None
+            if member is None:
+                from_wire = getattr(entry_cls, "from_wire", None)
+                if callable(from_wire):
+                    member = from_wire(item)
+            if member is None:
+                logger.warning(
+                    "json_validation | world=%s %s[%s] unknown enum %r; skipped",
+                    world_uid or "?",
+                    label,
+                    index,
+                    item,
+                )
+                continue
+            entries.append(member)
+            continue
         if not isinstance(item, dict):
             if ctx is not None and ctx.mode == ResolveMode.IMPORT:
                 ctx.errors.append(_validation_issue(

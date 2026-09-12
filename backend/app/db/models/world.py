@@ -86,6 +86,7 @@ class World:
     district_zone_preference:       list = json_col(default_factory=list)
     economic_tier_registry:         list = json_col(default_factory=list)
     building_template_registry:     dict = json_col(default_factory=dict)
+    purpose_packs:                  list = json_col(default_factory=list)
     room_type_registry:             dict = json_col(default_factory=dict)
     barrier_template_registry:      dict = json_col(default_factory=dict)
     connection_type_registry:       list = json_col(default_factory=list)

@@ -1,32 +1,51 @@
-"""CITY-T-2a — ``allowed_structure_types`` null / [] / list + like/strict."""
+"""CITY-T-2a — ``allowed_structure_types`` null / [] / list + like/strict.
+
+Filter tokens are leaves and/or families (tz_building_generator.md §2.1).
+"""
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 
 from app.dataModel.structure.enums.buildingPurpose import (
+    AllowedToken,
     BuildingPurpose,
     BuildingPurposeMatch,
-    coerce_purpose_list,
     coerce_purpose_match,
+    expand_allowed,
 )
 
 
+def _enabled_keys(
+    enabled: Iterable[BuildingPurpose] | None,
+) -> set[str] | None:
+    if enabled is None:
+        return None
+    return {str(purpose) for purpose in enabled}
+
+
 def allowed_fill_structure_types(
-    allowed: list[BuildingPurpose] | list[str] | None,
+    allowed: Sequence[AllowedToken | str] | None,
     catalog_structure_types: Iterable[str],
+    enabled: Iterable[BuildingPurpose] | None = None,
 ) -> tuple[str, ...]:
     """Fill purposes for packing (required is separate).
 
-    ``None`` / omit → catalog purpose keys, sorted.
+    ``None`` / omit → catalog purpose keys ∩ enabled (enabled omit → catalog).
     ``[]`` → no fill (required / pins only).
-    list → those purposes (unknown dropped; not in catalog dropped).
+    list → expand families, then ∩ catalog ∩ enabled.
     """
     catalog = set(catalog_structure_types)
+    live = _enabled_keys(enabled)
     if allowed is None:
-        return tuple(sorted(catalog))
-    parsed = coerce_purpose_list(allowed, empty_as_house=False)
-    return tuple(str(purpose) for purpose in parsed if str(purpose) in catalog)
+        keys = catalog if live is None else catalog & live
+        return tuple(sorted(keys))
+    parsed = expand_allowed(allowed)
+    return tuple(
+        str(purpose)
+        for purpose in parsed
+        if str(purpose) in catalog and (live is None or str(purpose) in live)
+    )
 
 
 def allowed_match_mode(raw: object) -> BuildingPurposeMatch:
@@ -34,14 +53,16 @@ def allowed_match_mode(raw: object) -> BuildingPurposeMatch:
 
 
 def district_hosts_purpose(
-    allowed: Sequence[BuildingPurpose] | None,
+    allowed: Sequence[AllowedToken | str] | None,
     purpose: BuildingPurpose | str,
+    enabled: Iterable[BuildingPurpose] | None = None,
 ) -> bool:
     """Whether this district may host a settlement-required purpose.
 
-    Omit / ``None`` → all catalog purposes (unrestricted fill).
+    Omit / ``None`` → all enabled catalog purposes (unrestricted fill).
     ``[]`` → pins only, not a host.
-    list → membership of that purpose key (not like/strict on a drawing).
+    list → leaf or family; family expands before membership.
+    ``enabled`` (world packs) further restricts; omit enabled → no pack filter.
     """
     parsed = (
         purpose
@@ -50,15 +71,8 @@ def district_hosts_purpose(
     )
     if parsed is None:
         return False
+    if enabled is not None and parsed not in set(enabled):
+        return False
     if allowed is None:
         return True
-    allowed_set: set[BuildingPurpose] = set()
-    for item in allowed:
-        parsed_item = (
-            item
-            if isinstance(item, BuildingPurpose)
-            else BuildingPurpose.from_wire(item)
-        )
-        if parsed_item is not None:
-            allowed_set.add(parsed_item)
-    return parsed in allowed_set
+    return parsed in expand_allowed(allowed)

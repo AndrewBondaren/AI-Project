@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import unittest
 
+from types import SimpleNamespace
+
+from app.application.jsonValidation.worldRow import enabled_building_purposes, purpose_packs
 from app.dataModel.settlement.district.allowedStructureTypes import (
     allowed_fill_structure_types,
     district_hosts_purpose,
 )
+from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.settlement.district.requiredStructure import RequiredStructure
 from app.dataModel.settlement.district.requiredStructureResolve import (
     resolve_required_layouts,
@@ -18,11 +22,18 @@ from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
 from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
 from app.dataModel.structure.building.buildingTemplateOutline import BuildingTemplateOutline
 from app.dataModel.structure.enums.buildingPurpose import (
+    FAMILY_OF,
     BuildingPurpose,
+    BuildingPurposeFamily,
     BuildingPurposeMatch,
+    PurposePack,
+    WorldPurposePacks,
+    coerce_allowed_list,
     coerce_purpose_list,
     coerce_purpose_match,
+    expand_allowed,
     primary_purpose,
+    purposes_for_world,
     purposes_match,
     union_plot_purposes,
 )
@@ -81,6 +92,13 @@ class CoercePurposeTest(unittest.TestCase):
             "structure_type": "smithy",
         })
         self.assertEqual(aliased.structure_types, [BuildingPurpose.SMITHY])
+
+
+    def test_drawing_family_tag_dropped_to_house(self) -> None:
+        layout = _layout("bad_1", ["trade"])
+        self.assertEqual(layout.structure_types, [BuildingPurpose.HOUSE])
+        scalar = _layout("bad_2", "trade")
+        self.assertEqual(scalar.structure_types, [BuildingPurpose.HOUSE])
 
 
 class MatchAndUnionTest(unittest.TestCase):
@@ -210,6 +228,217 @@ class HostAndFillTest(unittest.TestCase):
         self.assertEqual(
             allowed_fill_structure_types(["tavern", "blacksmith"], catalog_types),
             ("tavern",),
+        )
+
+    def test_family_host_and_fill(self) -> None:
+        self.assertTrue(
+            district_hosts_purpose([BuildingPurposeFamily.TRADE], "tavern"),
+        )
+        self.assertFalse(
+            district_hosts_purpose([BuildingPurposeFamily.TRADE], "temple"),
+        )
+        catalog_types = ("tavern", "shop", "temple", "house")
+        self.assertEqual(
+            allowed_fill_structure_types(["trade"], catalog_types),
+            ("shop", "tavern"),
+        )
+        district = DistrictTemplateEntry.model_validate({
+            "system_name": "market",
+            "display_name": "Market",
+            "district_type": "commercial",
+            "allowed_structure_types": ["trade"],
+        })
+        self.assertEqual(
+            district.allowed_structure_types,
+            [BuildingPurposeFamily.TRADE],
+        )
+
+
+class PurposeTreeAndPacksTest(unittest.TestCase):
+    def test_family_of_new_leaves(self) -> None:
+        self.assertEqual(FAMILY_OF[BuildingPurpose.CAFE], BuildingPurposeFamily.TRADE)
+        self.assertEqual(FAMILY_OF[BuildingPurpose.CHURCH], BuildingPurposeFamily.PUBLIC)
+        self.assertEqual(
+            FAMILY_OF[BuildingPurpose.COURTHOUSE],
+            BuildingPurposeFamily.PUBLIC,
+        )
+        self.assertEqual(
+            FAMILY_OF[BuildingPurpose.PRISON],
+            BuildingPurposeFamily.DEFENSE,
+        )
+        self.assertEqual(FAMILY_OF[BuildingPurpose.PORTAL], BuildingPurposeFamily.TRANSIT)
+        public_leaves = expand_allowed(["public"])
+        self.assertIn(BuildingPurpose.COURTHOUSE, public_leaves)
+        self.assertNotIn(BuildingPurpose.PRISON, public_leaves)
+        self.assertIn(BuildingPurpose.PRISON, expand_allowed(["defense"]))
+        self.assertFalse(
+            purposes_match(
+                [BuildingPurpose.PRISON],
+                [BuildingPurposeFamily.PUBLIC],
+                BuildingPurposeMatch.LIKE,
+            )
+        )
+        self.assertEqual(
+            FAMILY_OF[BuildingPurpose.ASSEMBLY_PLANT],
+            BuildingPurposeFamily.FACTORY,
+        )
+        self.assertEqual(
+            FAMILY_OF[BuildingPurpose.PALACE],
+            BuildingPurposeFamily.GOVERNMENT,
+        )
+        self.assertEqual(
+            FAMILY_OF[BuildingPurpose.LEGISLATURE],
+            BuildingPurposeFamily.GOVERNMENT,
+        )
+        self.assertEqual(
+            FAMILY_OF[BuildingPurpose.CHANCERY],
+            BuildingPurposeFamily.GOVERNMENT,
+        )
+        gov = expand_allowed(["government"])
+        self.assertEqual(
+            set(gov),
+            {
+                BuildingPurpose.PALACE,
+                BuildingPurpose.LEGISLATURE,
+                BuildingPurpose.CHANCERY,
+            },
+        )
+        self.assertNotIn(BuildingPurpose.PALACE, expand_allowed(["public"]))
+        self.assertNotIn(BuildingPurpose.PALACE, expand_allowed(["dwelling"]))
+        self.assertFalse(
+            purposes_match(
+                [BuildingPurpose.PALACE],
+                [BuildingPurposeFamily.PUBLIC],
+                BuildingPurposeMatch.LIKE,
+            )
+        )
+        self.assertEqual(
+            FAMILY_OF[BuildingPurpose.ACADEMY],
+            BuildingPurposeFamily.KNOWLEDGE,
+        )
+        self.assertEqual(
+            FAMILY_OF[BuildingPurpose.LABORATORY],
+            BuildingPurposeFamily.KNOWLEDGE,
+        )
+        self.assertEqual(
+            FAMILY_OF[BuildingPurpose.ARCANE_LAB],
+            BuildingPurposeFamily.KNOWLEDGE,
+        )
+        self.assertNotIn(BuildingPurpose.LIBRARY, expand_allowed(["knowledge"]))
+        self.assertNotIn(BuildingPurpose.SCHOOL, expand_allowed(["knowledge"]))
+        self.assertFalse(
+            purposes_match(
+                [BuildingPurpose.ARCANE_LAB],
+                [BuildingPurposeFamily.PUBLIC],
+                BuildingPurposeMatch.LIKE,
+            )
+        )
+
+    def test_expand_trade_not_temple(self) -> None:
+        leaves = expand_allowed(["trade"])
+        self.assertIn(BuildingPurpose.TAVERN, leaves)
+        self.assertIn(BuildingPurpose.SHOP, leaves)
+        self.assertNotIn(BuildingPurpose.TEMPLE, leaves)
+
+    def test_like_family_match(self) -> None:
+        self.assertTrue(
+            purposes_match(
+                [BuildingPurpose.TAVERN],
+                [BuildingPurposeFamily.TRADE],
+                BuildingPurposeMatch.LIKE,
+            )
+        )
+        self.assertFalse(
+            purposes_match(
+                [BuildingPurpose.TEMPLE],
+                [BuildingPurposeFamily.TRADE],
+                BuildingPurposeMatch.LIKE,
+            )
+        )
+        catalog = BuildingCatalog.from_layouts([
+            _layout("tavern_1", "tavern"),
+            _layout("temple_1", "temple"),
+        ])
+        like = catalog.matching_allowed(
+            catalog.layouts, [BuildingPurposeFamily.TRADE], "like",
+        )
+        self.assertEqual([row.system_name for row in like], ["tavern_1"])
+
+    def test_omit_packs_is_fantasy(self) -> None:
+        enabled = purposes_for_world(None)
+        self.assertIn(BuildingPurpose.TAVERN, enabled)
+        self.assertIn(BuildingPurpose.HOUSE, enabled)
+        self.assertIn(BuildingPurpose.PRISON, enabled)
+        self.assertIn(BuildingPurpose.PALACE, enabled)
+        self.assertIn(BuildingPurpose.CHANCERY, enabled)
+        self.assertIn(BuildingPurpose.ACADEMY, enabled)
+        self.assertNotIn(BuildingPurpose.HYPERMARKET, enabled)
+        self.assertNotIn(BuildingPurpose.PORTAL, enabled)
+        self.assertNotIn(BuildingPurpose.CAFE, enabled)
+        self.assertNotIn(BuildingPurpose.LABORATORY, enabled)
+        self.assertNotIn(BuildingPurpose.ARCANE_LAB, enabled)
+        self.assertEqual(
+            WorldPurposePacks.canonical_defaults().root,
+            [PurposePack.FANTASY],
+        )
+
+    def test_steampunk_magic_union(self) -> None:
+        enabled = purposes_for_world(["steampunk", "magic"])
+        self.assertIn(BuildingPurpose.PORTAL, enabled)
+        self.assertIn(BuildingPurpose.ASSEMBLY_PLANT, enabled)
+        self.assertIn(BuildingPurpose.SMITHY, enabled)
+        self.assertIn(BuildingPurpose.ARCANE_LAB, enabled)
+        self.assertIn(BuildingPurpose.LABORATORY, enabled)
+        self.assertIn(BuildingPurpose.ACADEMY, enabled)
+        self.assertNotIn(BuildingPurpose.HYPERMARKET, enabled)
+        self.assertNotIn(BuildingPurpose.HOUSE, enabled)
+
+    def test_unknown_pack_dropped(self) -> None:
+        enabled = purposes_for_world(["fantasy", "nope"])
+        self.assertIn(BuildingPurpose.TAVERN, enabled)
+        self.assertNotIn(BuildingPurpose.PORTAL, enabled)
+
+    def test_world_row_omit_and_mix(self) -> None:
+        empty = SimpleNamespace(world_uid="w1")
+        self.assertEqual(purpose_packs(empty).root, [PurposePack.FANTASY])
+        self.assertNotIn(
+            BuildingPurpose.HYPERMARKET,
+            enabled_building_purposes(empty),
+        )
+        mixed = SimpleNamespace(
+            world_uid="w1",
+            purpose_packs=["steampunk", "magic"],
+        )
+        live = enabled_building_purposes(mixed)
+        self.assertIn(BuildingPurpose.PORTAL, live)
+        self.assertIn(BuildingPurpose.ASSEMBLY_PLANT, live)
+
+    def test_fill_intersect_enabled(self) -> None:
+        catalog_types = ("tavern", "hypermarket", "portal", "house")
+        fantasy = purposes_for_world(None)
+        self.assertEqual(
+            allowed_fill_structure_types(None, catalog_types, fantasy),
+            ("house", "tavern"),
+        )
+        self.assertFalse(
+            district_hosts_purpose(None, "hypermarket", fantasy),
+        )
+        leftover = unhosted_settlement_types(
+            ["tavern", "portal"],
+            [None],
+            fantasy,
+        )
+        self.assertEqual(leftover, ("portal",))
+
+    def test_coerce_allowed_keeps_family(self) -> None:
+        self.assertEqual(
+            coerce_allowed_list(["trade", "temple", "trade"]),
+            [BuildingPurposeFamily.TRADE, BuildingPurpose.TEMPLE],
+        )
+        self.assertEqual(coerce_allowed_list([]), [])
+        self.assertEqual(
+            coerce_purpose_list(["trade"], empty_as_house=True),
+            [BuildingPurpose.HOUSE],
         )
 
 

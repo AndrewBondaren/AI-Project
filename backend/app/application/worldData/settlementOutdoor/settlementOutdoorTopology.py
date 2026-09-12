@@ -6,7 +6,7 @@ import logging
 
 from pydantic import ValidationError
 
-from app.application.jsonValidation.worldRow import district_templates
+from app.application.jsonValidation.worldRow import district_templates, enabled_building_purposes
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.connectionEntry import (
     ConnectionEntry,
@@ -97,6 +97,7 @@ def load_topology_slots(
         parsed.append((DistrictTopologySlot.model_validate(row.district_topology), row))
     parsed.sort(key=lambda item: item[0].slot_index)
     templates = district_templates(world)
+    enabled = enabled_building_purposes(world)
     required_types, subject_tags = specialization_extras(world, settlement, skeleton)
     slots: list[DistrictSlot] = []
     nodes_by_uid: dict[str, ConnectionNode] = {}
@@ -108,6 +109,7 @@ def load_topology_slots(
             list(required_types),
             list(template.required_structures or []),
             template.allowed_structure_types,
+            enabled,
         )
         entries: list[ConnectionEntry] = []
         for item in wire.entries:
@@ -147,6 +149,7 @@ def load_topology_slots(
     leftover = unhosted_settlement_types(
         list(required_types),
         [slot.district_template.allowed_structure_types for slot in slots],
+        enabled,
     )
     for type_name in leftover:
         logger.warning(

@@ -8,7 +8,10 @@ from app.dataModel.settlement.district.allowedStructureTypes import district_hos
 from app.dataModel.settlement.district.requiredStructure import RequiredStructure
 from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
 from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
-from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose
+from app.dataModel.structure.enums.buildingPurpose import (
+    AllowedToken,
+    BuildingPurpose,
+)
 
 
 def resolve_required_layouts(
@@ -33,7 +36,8 @@ def _row_key(req: RequiredStructure) -> str:
 def union_required_structures(
     settlement_structure_types: Sequence[str],
     district_required: Sequence[RequiredStructure],
-    allowed_structure_types: Sequence[BuildingPurpose] | None = None,
+    allowed_structure_types: Sequence[AllowedToken] | None = None,
+    enabled: Sequence[BuildingPurpose] | None = None,
 ) -> list[RequiredStructure]:
     """Settlement recipe types this district hosts, then district pins; first key wins."""
     out: list[RequiredStructure] = []
@@ -42,7 +46,7 @@ def union_required_structures(
         purpose = BuildingPurpose.from_wire(type_name)
         if purpose is None:
             continue
-        if not district_hosts_purpose(allowed_structure_types, purpose):
+        if not district_hosts_purpose(allowed_structure_types, purpose, enabled):
             continue
         key = str(purpose)
         if key in seen:
@@ -65,7 +69,8 @@ def union_required_structures(
 
 def unhosted_settlement_types(
     settlement_structure_types: Sequence[str],
-    district_alloweds: Sequence[Sequence[BuildingPurpose] | None],
+    district_alloweds: Sequence[Sequence[AllowedToken] | None],
+    enabled: Sequence[BuildingPurpose] | None = None,
 ) -> tuple[str, ...]:
     """Settlement purposes with no host district (leftover + warning)."""
     leftover: list[str] = []
@@ -79,7 +84,10 @@ def unhosted_settlement_types(
         if purpose is None:
             leftover.append(key)
             continue
-        if any(district_hosts_purpose(allowed, purpose) for allowed in district_alloweds):
+        if any(
+            district_hosts_purpose(allowed, purpose, enabled)
+            for allowed in district_alloweds
+        ):
             continue
         leftover.append(key)
     return tuple(leftover)

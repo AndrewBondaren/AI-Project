@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS worlds (
     district_zone_preference    TEXT,
     economic_tier_registry      TEXT,
     building_template_registry  TEXT,
+    purpose_packs               TEXT,
     room_type_registry          TEXT,
     barrier_template_registry   TEXT,
     connection_type_registry    TEXT,

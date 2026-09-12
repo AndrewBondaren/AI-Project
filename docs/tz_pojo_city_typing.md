@@ -147,7 +147,7 @@ SQL `named_locations.frontage_type_order` — JSON-массив; dataclass `Name
 
 | Слой | Что это | Где живёт | Пример |
 |---|---|---|---|
-| Назначение | `structure_types[]` движка (`BuildingPurpose`), не N+1 | `BuildingLayoutTemplate.structure_types`; leftover scalar `structure_type` = primary; фильтр района `allowed_structure_types` + `allowed_match` | `tavern`, `plaza`, `town_hall`, комбо `[house, workshop]` |
+| Назначение | лист `BuildingPurpose` (+ семья в каталоге, не на чертеже) | `structure_types[]`; фильтр района — лист или `BuildingPurposeFamily`; паки мира режут каталог | `cafe`, `temple`, `portal`; комбо `[house, workshop]` |
 | Чертёж участка | **тип участка** = identity шаблона | `BuildingLayoutTemplate.system_name` | `tavern_1`, `inn_small` |
 | Участок | инстанс после packing | `AreaSlot` / `AreaLayout` | клетка в районе |
 
@@ -159,7 +159,7 @@ SQL `named_locations.frontage_type_order` — JSON-массив; dataclass `Name
 |---|---|---|
 | `plot_counts` | `DefaultOnWire[dict[DrawingKey, int] \| None] = None` | N **участков** = N копий этого чертежа. Район перекрывает город **по ключу**. Нет поля / нет ключа — не ноль, смотреть ниже. Явный `0` — не сажать |
 | `plot_priority` | `DefaultOnWire[dict[DrawingKey, int] \| None] = None` | очередь посадки, **не** N. Нет ключа → `0` (проход 2) |
-| `allowed_structure_types` | `list[BuildingPurpose] \| None` | фильтр purpose; omit = каталог; `[]` = pins only |
+| `allowed_structure_types` | `list[BuildingPurpose \| BuildingPurposeFamily] \| None` | фильтр: лист или семья; omit = легальный каталог мира; `[]` = pins only |
 | `allowed_match` | `BuildingPurposeMatch` | default `like`; `strict` = участок ⊆ фильтра |
 | `required_structures[].building_template` | тот же `DrawingKey` | pin чертежа (`by_system_name`); `count` на строке **главнее** `plot_counts` |
 | `required_structures[].structure_type` | leftover optional purpose | дубль ключа рецепта поселения, не pin, не ключ map |
@@ -233,5 +233,6 @@ SQL dataclass `NamedLocation` остаётся `str \| None`; coerce на POJO /
 | 2026-09-07 | POJO-C-6 **resolved**: `BarrierTemplateKey` на identity `system_type` + `PerimeterBarrier.template`; `""` → `None` + warning; `sides`/relief `structure_refs` не срез |
 | 2026-09-08 | POJO-C-8 **resolved**: `RequiredStructurePosition` (`any`/`center`); omit/invalid → `any` + warning; CONN-PACK-2 не срез |
 | 2026-09-08 | POJO-C-9 **resolved**: `PerimeterBarrier.sides` → `list[Facing]` (кардиналы); skip unknown/intercardinal + warning |
+| 2026-09-12 | Дерево назначений: семья → лист; `allowed` может быть семьёй; паки мира. SoT [tz_building_generator.md](./tz_building_generator.md) §2.1 |
 | 2026-09-12 | Назначение участка: `structure_types[]` + `BuildingPurpose` (не N+1); `allowed_match` like/strict; pin только `system_name` |
 | 2026-09-08 | POJO-C-10 **resolved**: NL `parent_wall_material` / `parent_floor_material` → `MaterialKey`; omit/`null` → `None`; `""` → reject. Не скелет, не `MaterialPick` |

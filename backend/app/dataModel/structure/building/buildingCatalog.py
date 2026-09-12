@@ -12,6 +12,7 @@ from app.dataModel.livestock.enums.livestockKind import LivestockKind
 from app.dataModel.resources.enums.resourceKind import ResourceKind
 from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
 from app.dataModel.structure.enums.buildingPurpose import (
+    AllowedToken,
     BuildingPurpose,
     BuildingPurposeMatch,
     coerce_purpose_match,
@@ -55,7 +56,7 @@ class BuildingCatalog:
     def matching_allowed(
         self,
         layouts: Iterable[BuildingLayoutTemplate],
-        allowed: Iterable[BuildingPurpose] | None,
+        allowed: Iterable[AllowedToken] | None,
         mode: BuildingPurposeMatch | str | None,
     ) -> tuple[BuildingLayoutTemplate, ...]:
         """Filter drawings by district allowed + ``like`` / ``strict``."""

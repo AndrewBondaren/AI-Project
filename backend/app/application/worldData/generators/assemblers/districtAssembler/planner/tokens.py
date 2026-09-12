@@ -30,7 +30,12 @@ from app.application.worldData.generators.coordinates.settlementCellRng import (
     SettlementCellRngRole,
     settlement_cell_rng,
 )
-from app.application.jsonValidation.worldRow import crops, livestock, resource_types
+from app.application.jsonValidation.worldRow import (
+    crops,
+    enabled_building_purposes,
+    livestock,
+    resource_types,
+)
 from app.dataModel.flora.enums.cropKind import CropKind
 from app.dataModel.livestock.enums.livestockKind import LivestockKind
 from app.dataModel.resources.enums.resourceKind import ResourceKind
@@ -48,7 +53,7 @@ from app.dataModel.settlement.district.structurePlacement import (
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
 from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
-from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose
+from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose, expand_allowed
 from app.db.models.world import World
 
 
@@ -246,6 +251,32 @@ def _required_type_keys(required: RequiredStructure) -> set[str]:
     return set()
 
 
+def _layouts_enabled(
+    layouts: tuple[BuildingLayoutTemplate, ...] | list[BuildingLayoutTemplate],
+    enabled: frozenset[BuildingPurpose],
+) -> list[BuildingLayoutTemplate]:
+    return [
+        layout for layout in layouts
+        if any(purpose in enabled for purpose in layout.structure_types)
+    ]
+
+
+def _match_allowed(
+    catalog: BuildingCatalog,
+    layouts: tuple[BuildingLayoutTemplate, ...] | list[BuildingLayoutTemplate],
+    allowed: list | None,
+    match,
+    enabled: frozenset[BuildingPurpose],
+) -> list[BuildingLayoutTemplate]:
+    live = _layouts_enabled(layouts, enabled)
+    if not allowed:
+        return live
+    filtered = [purpose for purpose in expand_allowed(allowed) if purpose in enabled]
+    if not filtered:
+        return []
+    return list(catalog.matching_allowed(live, filtered, match))
+
+
 def _buildings_rng(
     world: World,
     slot: DistrictSlot,
@@ -309,27 +340,48 @@ def _pick_layout_picks(
     seen_names: set[str] = set()
     skip_fill_types: set[str] = set()
 
+    enabled = enabled_building_purposes(world)
     allowed = slot.district_template.allowed_structure_types
     match = slot.district_template.allowed_match
+    district = slot.district_template.system_name
 
     for req in slot.required_structures:
         skip_fill_types |= _required_type_keys(req)
-        layouts: tuple[BuildingLayoutTemplate, ...] | list[BuildingLayoutTemplate] = (
+        if req.structure_type is not None and req.structure_type not in enabled:
+            packing_warning(
+                PackingStep.LEFTOVER,
+                district=district,
+                structure_type=str(req.structure_type),
+                reason=PackingReason.LEFTOVER,
+            )
+            continue
+        found: tuple[BuildingLayoutTemplate, ...] | list[BuildingLayoutTemplate] = (
             resolve_required_layouts(req, catalog)
         )
-        if allowed:
-            layouts = catalog.matching_allowed(layouts, allowed, match)
-        layouts = _tier_pool(layouts, skeleton, world)
-        if not layouts:
+        if not found:
             packing_warning(
                 PackingStep.CACHE,
-                district=slot.district_template.system_name,
+                district=district,
                 system_name=(
                     str(req.structure_type)
                     if req.structure_type is not None
                     else req.building_template
                 ),
                 reason=PackingReason.NO_CACHE,
+            )
+            continue
+        layouts = _match_allowed(catalog, found, allowed, match, enabled)
+        layouts = _tier_pool(layouts, skeleton, world)
+        if not layouts:
+            packing_warning(
+                PackingStep.LEFTOVER,
+                district=district,
+                system_name=(
+                    str(req.structure_type)
+                    if req.structure_type is not None
+                    else req.building_template
+                ),
+                reason=PackingReason.LEFTOVER,
             )
             continue
         type_keys = _required_type_keys(req)
@@ -350,13 +402,13 @@ def _pick_layout_picks(
     fill_types = allowed_fill_structure_types(
         allowed,
         catalog.structure_types(),
+        enabled,
     )
     for structure_type in fill_types:
         if structure_type in skip_fill_types:
             continue
-        layouts = catalog.of_structure_type(structure_type)
-        if allowed:
-            layouts = catalog.matching_allowed(layouts, allowed, match)
+        found = catalog.of_structure_type(structure_type)
+        layouts = _match_allowed(catalog, found, allowed, match, enabled)
         layouts = _tier_pool(layouts, skeleton, world)
         if not layouts:
             continue

@@ -60,6 +60,11 @@ from app.dataModel.structure.building.worldBuildingLayoutDefaults import canonic
 from app.dataModel.structure.building.worldBuildingTemplateRegistry import (
     WorldBuildingTemplateRegistry,
 )
+from app.dataModel.structure.enums.buildingPurpose import (
+    BuildingPurpose,
+    WorldPurposePacks,
+    purposes_for_world,
+)
 from app.dataModel.terrain.relief.enums import ReliefGradeObstaclePolicy
 from app.dataModel.terrain.relief.worldCanalTemplateRegistry import WorldCanalTemplateRegistry
 from app.dataModel.terrain.relief.worldReliefGradeObstacle import (
@@ -318,6 +323,17 @@ def building_template_registry(world: Any) -> WorldBuildingTemplateRegistry:
     return resolve_registry_list_world(
         world, WorldBuildingTemplateRegistry, world_uid=_uid(world),
     )
+
+
+def purpose_packs(world: Any) -> WorldPurposePacks:
+    """World ``purpose_packs``; omit / empty → canon ``[fantasy]``."""
+    return resolve_registry_list_world(
+        world, WorldPurposePacks, world_uid=_uid(world),
+    )
+
+
+def enabled_building_purposes(world: Any) -> frozenset[BuildingPurpose]:
+    return purposes_for_world(purpose_packs(world).root)
 
 
 def relief_template_registry(world: Any) -> WorldReliefTemplateRegistry:

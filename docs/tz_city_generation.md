@@ -16,7 +16,7 @@
 | [tz_world_pack_storage.md](./tz_world_pack_storage.md) | WP-19; topology после `full_bake`; **detailed_bake** = pack локации (консьюмер L2 + C11; не алгоритм C22) |
 | [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) | **SoT** persist/оркестрация outdoor на pack. **C23** topology. Не дублировать сюда |
 | [tz_locations.md](./tz_locations.md) | Дерево NL; морфология `city`/`village` ≠ ранг размера **LOC-T-2** ≠ специализация; subtype района; SoT осей — **§1.1–§1.2 здесь** |
-| [tz_building_generator.md](./tz_building_generator.md) | Library: `structure_types` (engine `BuildingPurpose`) vs `system_name` чертежа |
+| [tz_building_generator.md](./tz_building_generator.md) | Library: листья `structure_types` vs чертёж; **§2.1** дерево семей / паки мира |
 | [tz_generator_technical_debt.md](./tz_generator_technical_debt.md) | NC/MR smells; **CITY-T-1** контур; **CITY-T-2** пул/uid (**2d** `partial`, **2b** open); **CITY-T-4** планировщик **resolved** |
 | [tz_city_generation_technical_debt.md](./tz_city_generation_technical_debt.md) | **CITY-T-5** после C23: dual persist, хардкоды, смешение слоёв. Не SoT §8 |
 | [tz_pojo_city_typing.md](./tz_pojo_city_typing.md) | City POJO: `str` → `RegistryKey` / ENUM-E (`POJO-C-*`). Скелет size/tier/material/density — не reopen |
@@ -63,7 +63,7 @@
 |---|---|---|---|---|
 | **1. Поселение** | **морфология** `system_location_subtype`: `city`, `village`, `dungeon`, `underground_city`, … **плюс** **специализация** на шаблоне этого поселения (§1.2) | этот Ironhold (`location_uid`) | морфология — каркас районов (civic/жильё/…); специализация — районы и обязательные `structure_type` под функцию (шахта, мельница, театр) | не рандомится |
 | **2. Район** | `district_type` (ткань квартала): канон `civic`, `commercial`, `residential`, `industrial`, `port`, `agricultural` (+ N+1, напр. `military`) **и** `district_subtype` (функция квартала, те же ключи, что специализация поселения) | строка `district_template_registry` (`civic_center`, `mining_quarter`) | какие `structure_type` можно в квартале; зона в сетке; улицы/плотность | ничья среди чертежей **того же** `district_type` **и** `district_subtype` (omit subtype на чертеже = только неспециализированный слот того же `district_type`) |
-| **3. Здание** | **назначение** — закрытый каталог движка `BuildingPurpose` (`house`, `tavern`, `workshop`, `smithy`, `town_hall`, `mine`, `plaza`, `guild`, `market`, …). Не N+1: мир не добавляет ключ `"blacksmith"`. Чертёж несёт **массив** тегов `structure_types` (omit → `[house]`). Leftover scalar `structure_type` = один элемент. ([tz_building_generator.md](./tz_building_generator.md) §2) | `system_name` / uid в `building_templates` (`tavern_1`, `iron_mine_1`) | NPC и экономика вяжутся к ключам purpose; район фильтрует `allowed_structure_types` + `allowed_match` (`like` / `strict`) | rng среди чертежей, у которых тег пересекается (like) или множество ⊆ фильтра (strict), плюс тир. Материал/культура режет чертёж, не плодит subtype поселения |
+| **3. Здание** | **назначение** — дерево движка: семья (`BuildingPurposeFamily`) → лист (`BuildingPurpose`). Не N+1: мир не добавляет `"blacksmith"`. Чертёж несёт **листья** `structure_types` (omit → `[house]`). Паки сеттинга на мире (`purpose_packs`) — mixable union. SoT: [tz_building_generator.md](./tz_building_generator.md) **§2.1** | `system_name` / uid в `building_templates` (`tavern_1`, `iron_mine_1`) | NPC/экономика — к **листу**; район фильтрует лист **или** семью + `allowed_match`; мир режет каталог паками | rng среди чертежей с подходящими листьями (предки, если фильтр — семья), плюс тир. Материал/культура режет чертёж, не плодит subtype поселения |
 
 `system_settlement_size` (`small` / `medium` / `large`) — **относительный ранг в контексте морфологии**, не вид поселения и не специализация. Пара `village` + `small` корректна. Пара `village` + `village` (один токен на subtype и size) — ошибка дублирования, 422. Абсолютный footprint = `footprint_by_size[subtype][size]` ([`tz_locations.md`](./tz_locations.md) **LOC-T-2**). Инвариант: малый город > большая деревня. Код до impl: `system_city_size` и токены `hamlet`…`megalopolis`.
 
@@ -527,7 +527,7 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 | `placement_conditions` | array | optional | Условия появления района (см. 9.3). Пустой массив = всегда доступен |
 | `max_per_city` | int | optional | Максимальное количество районов этого типа в одном городе. `null` = без ограничений |
 | `size_pct` | object | optional | Диапазон размера района как доля глобальной ячейки: `{ "width": [0.3, 1.0], "depth": [0.3, 1.0] }`. `1.0` = вся ячейка |
-| `allowed_structure_types` | `BuildingPurpose[]` | optional | Допустимые **назначения** (ключи движка), не имена чертежей. `null`/omit = без ограничений типа (fill из каталога). `[]` = без fill, только pin / required. Неизвестный ключ drop. **Код:** CITY-T-2a |
+| `allowed_structure_types` | `BuildingPurpose[]` / семья | optional | Допустимые **листья или семьи** (§2.1 building). Не имена чертежей. `null`/omit = без ограничений типа внутри **легального каталога мира** (паки). `[]` = без fill, только pin / required. Неизвестный ключ drop. Семья при `like` раскрывается в детей. **Код:** CITY-T-2a + expand семьи + `purpose_packs`. |
 | `allowed_match` | `"like"` \| `"strict"` | optional | Как участок сравнивается с `allowed_structure_types`. Default **`like`**: непустое пересечение тегов. **`strict`**: множество тегов участка ⊆ фильтра (лишний тег — отказ). Флаг на **запросе района**, не на чертеже. |
 | `economic_tier_range` | object | optional | `{ "min", "max" }` — `EconomyTierKey` (диапазон тиров зданий в районе) |
 | `density` | `DistrictDensity` | optional | `"sparse"` / `"medium"` / `"dense"`. Переопределяет `city_skeleton.settlement_density` для этого района. **`SettlementAssembler`** ставит `entry_nodes` с `block_size` **этого** поля (нет → плотность города) |
@@ -891,6 +891,10 @@ DAG может materialize **разные уровни** в разных нод�
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-12 | **Семья `knowledge`:** `academy`, `laboratory`, `arcane_lab`. `library`/`school` остаются `public`. Канон `fantasy` — только `academy`; `arcane_lab` — пак `magic`; `laboratory` — steampunk/modern/sci_fi. |
+| 2026-09-12 | **Семья `government`:** `palace`, `legislature`, `chancery`. Не `public`, не `house`, не `defense`. В каноне `fantasy`. Имя семьи ≠ ткань `civic`. |
+| 2026-09-12 | **`prison` → `defense`.** Суд остаётся `public.courthouse`. Семьи разные; комбо-чертёж `[courthouse, prison]` разрешён (правила мира). `allowed: ["public"]` like пропускает такой чертёж в civic (есть `courthouse`). |
+| 2026-09-12 | **Дерево назначений §2.1 building:** семьи → листья; паки мира mixable union (`fantasy` default). Церковь = `public.church`; телепорт = `transit.portal`. Фильтр района: лист или семья. **Код:** `BuildingPurpose` дерево + `worlds.purpose_packs`; packing ∩ enabled. |
 | 2026-09-12 | **Назначения зданий:** закрытый `BuildingPurpose` (большой специализированный каталог). Чертёж — `structure_types[]`; leftover scalar `structure_type`. Район `allowed_match` like/strict. Pin `building_template` = только `system_name`. Хост settlement-required — membership `allowed_structure_types`. |
 | 2026-09-11 | **§9.4:** `required_structures[].building_template` = pin чертежа (не дыра). Назначение — `BuildingLayoutTemplate.structure_type` (required на чертеже). |
 | 2026-09-09 | **§9.2 `deck`:** ярус района на чертеже (omit → 0). Участки копируют. |

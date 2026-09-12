@@ -21,9 +21,9 @@ from app.dataModel.shared.ranges import EconomicTierRange, SizePct
 from app.dataModel.structure.building.buildingLayoutTemplate import DrawingKey
 from app.dataModel.structure.enums.buildingPurpose import (
     DEFAULT_PURPOSE_MATCH,
-    BuildingPurpose,
+    AllowedToken,
     BuildingPurposeMatch,
-    coerce_purpose_list,
+    coerce_allowed_list,
     coerce_purpose_match,
 )
 
@@ -45,7 +45,7 @@ class DistrictTemplateEntry(BaseModel):
     placement_conditions: DefaultOnWire[list[PlacementCondition]] = Field(default_factory=list)
     max_per_city: DefaultOnWire[int | None] = None
     size_pct: DefaultOnWire[SizePct | None] = None
-    allowed_structure_types: DefaultOnWire[list[BuildingPurpose] | None] = None
+    allowed_structure_types: DefaultOnWire[list[AllowedToken] | None] = None
     allowed_match: DefaultOnWire[BuildingPurposeMatch] = DEFAULT_PURPOSE_MATCH
     economic_tier_range: DefaultOnWire[EconomicTierRange | None] = None
     density: DefaultOnWire[DistrictDensity | None] = None
@@ -69,7 +69,7 @@ class DistrictTemplateEntry(BaseModel):
     def _coerce_allowed_purposes(cls, value: Any) -> Any:
         if value is None:
             return None
-        return coerce_purpose_list(value, empty_as_house=False)
+        return coerce_allowed_list(value)
 
     @field_validator("allowed_match", mode="before")
     @classmethod

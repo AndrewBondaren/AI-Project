@@ -18,7 +18,7 @@
 | Термин | Смысл |
 |--------|-------|
 | **Шаблон** | JSON-файл, описывающий тип здания: этажи, комнаты, связи, входы |
-| **structure_types** | Назначения чертежа участка: массив ключей **движка** (`BuildingPurpose`). Не N+1 overlay: мир не выдумывает `"blacksmith"` как purpose — это чертёж с тегом `workshop` (+ опц. `house`). Omit/`[]` → `[house]`. Leftover scalar `structure_type` → список из одного ключа. Primary (первый тег) — колонка SQL library. Не `district_type`, не subtype NL `building`, не `ASSEMBLER_REGISTRY`. SoT осей: [`tz_city_generation.md`](./tz_city_generation.md) §1.1–§1.2; enum — `backend/app/dataModel/structure/enums/buildingPurpose.py` |
+| **structure_types** | Листья дерева назначений (ребёнок `BuildingPurpose`), не семья и не чертёж. Не N+1: мир не выдумывает `"blacksmith"` — это чертёж с тегом `smithy` / `workshop` (+ опц. `house`). Omit/`[]` → `[house]`. Leftover scalar `structure_type` → один лист. Primary (первый тег) — колонка SQL library. Не `district_type`, не subtype NL `building`, не `ASSEMBLER_REGISTRY`. Дерево + паки мира — **§2.1**. SoT осей: [`tz_city_generation.md`](./tz_city_generation.md) §1.1–§1.2 |
 | **structure_type** | Leftover alias: тот же primary purpose. Новые JSON пишут `structure_types`. |
 | **Комната** | Под-локация внутри здания (отдельная `NamedLocation` с `parent_uid = building.location_uid`) |
 | **Уровень** | Один этаж: `LocationLevel` с конкретным `z` |
@@ -29,6 +29,67 @@
 | **attach_to** | Комнаты прикрепляются вдоль стены комнаты-хоста (обычно коридора) |
 | **z_height** | Высота потолка уровня в z-юнитах (1 юнит = 1м) |
 | **default_passage_height** | Параметр мира (`worlds.default_passage_height`, default: `2`). Минимально допустимая высота любого прохода в ячейках. Дверь/арка никогда не может быть ниже этого значения. Шаблон может задать больше — меньше запрещено. |
+| **BuildingPurposeFamily** | Родитель каталога (род функции: `dwelling`, `trade`, `public`, `government`, `knowledge`, …). Не ткань района (`civic` / `commercial`). Не пишется на чертеже. |
+| **PurposePack** | Маска сеттинга на **мире**: какие листья живы. Mix = union паков. Не zip шаблонов зданий. |
+
+### 2.1 Дерево назначений (locked)
+
+Три слоя. Не смешивать.
+
+| Слой | Ключ | Кто задаёт | Пример |
+|---|---|---|---|
+| Семья | `BuildingPurposeFamily` | движок, короткий список | `trade`, `public`, `factory` |
+| Лист (назначение) | `BuildingPurpose` | движок; файлы по семьям | `cafe`, `temple`, `portal` |
+| Чертёж | `system_name` | N+1 библиотека | `tavern_1`, `embassy_mars_3` |
+| Пак мира | `PurposePack` | overlay мира, **несколько сразу** | `["steampunk", "magic"]` |
+
+**Инварианты**
+
+- Чертёж несёт **листья** (`structure_types`). Семья выводится из каталога (`smithy` → `craft`).
+- NPC и экономика вяжутся к **листу** (`bakery` ≠ `hypermarket` ≠ `cafe`). К семье — только агрегат («все торговые»).
+- Районный фильтр (`allowed_structure_types`) — лист **или** семья. `allowed: ["trade"]` + `like` = любой ребёнок `trade`, который включён паками мира. `allowed: ["cafe"]` — только кофейня.
+- Мир **не** invent ключ purpose и **не** invent пак с новыми листьями. Пак = маска по уже известным листьям. Mix эпох = несколько паков, не гибридный ключ `"steampunk_magic"`.
+- Omit `purpose_packs` на мире → канон-пак **`fantasy`**, не весь движок (нет гипермаркета в Ironhold по умолчанию).
+- `dungeon` — морфология поселения, не лист. `lamp_post` — не plot-purpose (уличная мебель).
+- **Код:** дерево семей / листьев, `PurposePack` + `worlds.purpose_packs` (omit/`[]` → `fantasy`). Район `allowed` expand семьи перед like/strict. Packing ∩ enabled паками мира.
+
+Эпоха сеттинга — **не** родитель здания. `temple` и `hospital` оба дети `public`; какие из них живы — решают паки.
+
+#### Семьи и листья
+
+| Семья | Листья | Заметки |
+|---|---|---|
+| `dwelling` | `house`, `inn`, `barracks` | Fallback omit чертежа → `house` |
+| `public` | `town_hall`, `plaza`, `temple`, `shrine`, `church`, `theater`, `library`, `school`, `hospital`, `bathhouse`, `courthouse` | Культ: `temple` / `shrine` (фентези), `church` (modern). Не плодить второй bind, если священник тот же — один лист + разные чертежи. Суд — публичный процесс: `prison` **не** ребёнок `public`. Чертёж мира может нести оба листа (`[courthouse, prison]`), как `[house, workshop]`. Ратуша — магистрат посада, не дворец и не сенат. `library` / `school` — городская читальня и детская школа, не академия |
+| `government` | `palace`, `legislature`, `chancery` | Чем **правят**. Не ткань `civic`. Дворец / дума-сенат-вече / канцелярия-министерство-приказ. Не `house`, не `public`, не `defense` (генштаб — чертёж `chancery`, не `gatehouse`). Посольство — `diplomatic`. Комбо `[town_hall, palace]` на чертеже мира ок |
+| `knowledge` | `academy`, `laboratory`, `arcane_lab` | Исследуют и учат взрослых. Не `public`. Магическая vs приборная наука — два лабораторных листа + паки, не две семьи. Академия (магколлегия / университет) — чертежи одного листа. Башня мага: чертёж `arcane_lab`, жильё — комбо `[house, arcane_lab]` |
+| `diplomatic` | `embassy` | Посольства; не своё министерство (`chancery`), не `public` |
+| `trade` | `shop`, `hypermarket`, `market`, `guild`, `warehouse`, `granary`, `bakery`, `butcher`, `fishmonger`, `greengrocer`, `apothecary`, `tailor`, `cobbler`, `jeweler`, `bookseller`, `tavern`, `cafe`, `restaurant` | `shop` — лавка общего назначения, **не** родитель кофейни. `tavern` ≠ `restaurant` ≠ `cafe` |
+| `craft` | `workshop`, `smithy`, `carpenter`, `tannery`, `weaver`, `potter`, `glassblower`, `brewery`, `winery`, `chandler` | `"blacksmith"` не ключ — чертёж с `smithy` |
+| `factory` | `assembly_plant` | Заводы; нет в паке `fantasy`. Дальнейшие цеха — новые листья этой семьи |
+| `extract` | `mine`, `quarry`, `lumber_camp` | |
+| `process` | `mill`, `smelter`, `sawmill`, `shipyard`, `kiln` | Обработка / верфь, не современный завод |
+| `agrarian` | `farm`, `orchard`, `vineyard`, `livestock`, `stable`, `apiary`, `fishery` | |
+| `utility` | `water_treatment` | Очистка воды; энергия/стоки — следующие листья этой семьи |
+| `defense` | `gatehouse`, `watchtower`, `prison` | Стена / стража / содержание. Не телепорт. Тюрьма и суд — разные семьи; обычное размещение раздельно. Комбо на чертеже не запрещено (правила мира) |
+| `harbor` | `dock` | Причал |
+| `transit` | `portal`, `air_dock` | Телепорт / врата = `portal`. Участок, если пак мира включил лист. Не `public`, не `trade`. `gatehouse` сюда не входит |
+
+#### Паки мира (`purpose_packs`)
+
+Настройка **мира**, не чертежа. Смешение — норма: steampunk+магия, фентези+современность, классический sci-fi.
+
+| Пак | Типично включает (не исчерпывающий список) |
+|---|---|
+| `fantasy` | `dwelling`; `public` в фентези-формах; `government`; `knowledge.academy`; `trade` / `craft` / `extract` / `process` / `agrarian`; `defense`; `harbor`. Нет `factory`, `hypermarket`, `cafe`, `restaurant`, `embassy`, `portal`, `laboratory`, `arcane_lab` |
+| `magic` | `portal`; `arcane_lab`; `academy`; культовые листья `public` (union с `fantasy` не дублирует ключ) |
+| `steampunk` | `craft` + `factory` (`assembly_plant`) + `utility` + `laboratory` |
+| `modern` | `church`, `hospital`, `school`; `cafe`, `restaurant`, `hypermarket`; `embassy`; `utility`; `academy`; `laboratory` |
+| `sci_fi` | как modern + `factory` + `transit` (`portal`, `air_dock`) |
+
+Легальный каталог мира = **union** листьев включённых паков. Чертёж с листом вне union в этом мире не в пуле packing (как неизвестный ключ).
+
+Wire мира: `purpose_packs: ["steampunk", "magic"]`. Не ключ zip `structures_templates/`.
 
 ---
 
@@ -62,9 +123,9 @@
 | `connections` | array | optional | Горизонтальные межкомнатные связи (doorway, archway). Лестницы сюда не входят. Комнаты с `attach_to` генерируют проход имплицитно — их можно не перечислять здесь. |
 | `staircases` | array | optional | Вертикальные связи (лестницы). Каждая лестница объявляет `stops` — упорядоченный список room_id снизу вверх. Shaft автогенерируется и не объявляется в `levels[].rooms`. Если не задан — авто-резолв (раздел 8.8). |
 
-Участок — любой шаблон по **назначениям** (`structure_types`, каталог движка), не только жилой дом. Примеры: таверна, склад, храм, `plaza` (сады, фонтаны, террасы). Комнаты / C20 (`front` дверь) — если шаблон описывает здание с входом; площадь без дверей — не ошибка C20. **Интерьер** (`StructureGenerator`, `levels`/комнаты) — другой скоуп; C22 сажает оболочку из cache, не гоняет полный интерьер площади. Пустой двор без шаблона — не продукт generate. Шаблон даёт здание, а участок собран пустым (без дома) — **критическая ошибка генерации участка** (assembler §7.1), не `plaza`.
+Участок — любой шаблон по **листьям** (`structure_types`, §2.1), не только жилой дом. Примеры: таверна, склад, храм, `plaza`, кофейня, `portal`. Комнаты / C20 (`front` дверь) — если шаблон описывает здание с входом; площадь без дверей — не ошибка C20. **Интерьер** (`StructureGenerator`, `levels`/комнаты) — другой скоуп; C22 сажает оболочку из cache, не гоняет полный интерьер площади. Пустой двор без шаблона — не продукт generate. Шаблон даёт здание, а участок собран пустым (без дома) — **критическая ошибка генерации участка** (assembler §7.1), не `plaza`.
 
-**Каталог `BuildingPurpose` (locked, не overlay мира):** жильё `house` / `inn` / `barracks`; общественное `town_hall`, `plaza`, `temple`, `shrine`, `theater`, `library`, `school`, `hospital`, `bathhouse`, `prison`, `courthouse`; торговля `tavern`, `shop`, `bakery`, `butcher`, `fishmonger`, `greengrocer`, `apothecary`, `tailor`, `cobbler`, `jeweler`, `bookseller`, `market`, `guild`, `warehouse`, `granary`; ремесло `workshop`, `smithy`, `carpenter`, `tannery`, `weaver`, `potter`, `glassblower`, `brewery`, `winery`, `chandler`; добыча/обработка `mine`, `quarry`, `lumber_camp`, `mill`, `smelter`, `sawmill`, `shipyard`, `kiln`; аграр `farm`, `orchard`, `vineyard`, `livestock`, `stable`, `apiary`, `fishery`; оборона/берег `gatehouse`, `watchtower`, `dock`. Не plot-purpose: `lamp_post`, `portal`, `air_dock`. `dungeon` — морфология поселения. Матч района: `like` (пересечение) / `strict` (участок ⊆ фильтр). Типы участка v1 = массив **этого** чертежа; union нескольких зданий на одном участке — helper на потом.
+Дерево семей / листьев / паков мира — **§2.1** (SoT). Матч района: `like` / `strict`; фильтр — лист или семья. Типы участка v1 = массив **этого** чертежа; union нескольких зданий на одном участке — helper на потом.
 
 `entry_point` и `back_entry_point` объявляются **на комнате** (поле `entry_point` / `back_entry_point` в room-объекте), не на верхнем уровне шаблона.
 

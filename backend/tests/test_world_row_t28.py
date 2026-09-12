@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 
+from app.application.jsonValidation.resolve import ResolveContext, ResolveMode
 from app.application.jsonValidation.worldRow import (
     barrier_templates,
     climate_zones,
@@ -12,10 +13,12 @@ from app.application.jsonValidation.worldRow import (
     hydrology,
     lore,
     materials,
+    purpose_packs,
     relief_pick_policy,
     relief_template_registry,
     terrain,
 )
+from app.application.jsonValidation.worldSliceMerge import merge_world_slice
 from app.application.jsonValidation.worldSlices import (
     WORLD_SLICE_BY_POJO,
     slice_column_key,
@@ -28,6 +31,7 @@ from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
 from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
     WorldBarrierTemplateRegistry,
 )
+from app.dataModel.structure.enums.buildingPurpose import WorldPurposePacks
 from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy
 from app.dataModel.terrain.relief.worldReliefTemplateRegistry import (
     WorldReliefTemplateRegistry,
@@ -41,6 +45,7 @@ class WorldRowSliceResolveTest(unittest.TestCase):
             "relief_template_registry",
         )
         self.assertEqual(slice_column_key(WorldTerrainRegistry), "terrain_registry")
+        self.assertEqual(slice_column_key(WorldPurposePacks), "purpose_packs")
         self.assertIn(WorldMaterialRegistry, WORLD_SLICE_BY_POJO)
 
     def test_empty_world_uses_defaults(self) -> None:
@@ -137,6 +142,20 @@ class WorldRowRuntimeMergeT29Test(unittest.TestCase):
         self.assertEqual(len(got.root), canon_n)
         wooden = next(e for e in got.root if e.system_type == "wooden_fence")
         self.assertEqual(wooden.gates.min, 9)
+
+    def test_purpose_packs_omit_and_merge(self) -> None:
+        world = SimpleNamespace(world_uid="w1")
+        self.assertEqual(
+            [str(pack) for pack in purpose_packs(world).root],
+            ["fantasy"],
+        )
+        out = {"purpose_packs": ["steampunk", "magic"]}
+        ctx = ResolveContext(mode=ResolveMode.IMPORT)
+        merge_world_slice(out, slice_for_pojo(WorldPurposePacks), ctx)
+        self.assertEqual(out["purpose_packs"], ["steampunk", "magic"])
+        empty = {"purpose_packs": []}
+        merge_world_slice(empty, slice_for_pojo(WorldPurposePacks), ctx)
+        self.assertEqual(empty["purpose_packs"], ["fantasy"])
 
 
 if __name__ == "__main__":

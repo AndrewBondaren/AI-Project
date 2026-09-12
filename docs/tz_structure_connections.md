@@ -6,7 +6,7 @@
 Граф иерархический: мировой → городской → районный → участок.  
 Pathfinding поднимается и опускается по уровням иерархии.
 
-**Участок** — слот из шаблона (`building_template_registry`). Назначение — теги `structure_types` из каталога движка (`BuildingPurpose`: дом, таверна, склад, храм, `plaza`, …). Не N+1 ключ мира. `portal` / `air_dock` / `lamp_post` — не plot-purpose city packing (пока мастер не откроет). Состав и размер — шаблон, не хардкод assembler. Собирает `StructureAreaAssembler`. Если шаблон даёт здание, а generate вернул пустой участок — **критическая ошибка генерации участка** (assembler §7.1), не площадь.
+**Участок** — слот из шаблона (`building_template_registry`). Назначение — **листья** `structure_types` ([tz_building_generator.md](./tz_building_generator.md) §2.1). Не N+1 ключ мира. `portal` / `air_dock` — семья `transit`: участок, если пак мира включил лист (не fill в каноне `fantasy`). `lamp_post` — не plot-purpose. Состав и размер — шаблон, не хардкод assembler. Собирает `StructureAreaAssembler`. Если шаблон даёт здание, а generate вернул пустой участок — **критическая ошибка генерации участка** (assembler §7.1), не площадь.
 
 **Площадь** — не тип соединения. Это тег назначения `"plaza"` на чертеже: общественная зона (сады, фонтаны, террасы — состав шаблона). Frontage hierarchy **не** применяется, если `plaza` ∈ `structure_types`. В граф — `ConnectionNode` с `location_uid` площади. Участок в pack **не** `location_type` (outdoor **C3**).
 
