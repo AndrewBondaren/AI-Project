@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.settlement.enums.requiredStructurePosition import (
@@ -24,9 +24,13 @@ __all__ = [
 
 
 class RequiredStructure(BaseModel):
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    """Pin of a plot drawing (`DrawingKey`). Not a building body, not a purpose leaf."""
 
-    building_template: StrictOnWire[DrawingKey]
+    model_config = ConfigDict(extra="ignore", frozen=True, populate_by_name=True)
+
+    plot_template: StrictOnWire[DrawingKey] = Field(
+        validation_alias=AliasChoices("plot_template", "building_template"),
+    )
     structure_type: DefaultOnWire[BuildingPurpose | None] = None
     count: DefaultOnWire[int] = 1
     position: DefaultOnWire[RequiredStructurePosition] = POSITION_ANY

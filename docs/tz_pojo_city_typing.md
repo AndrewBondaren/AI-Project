@@ -38,7 +38,7 @@
 | POJO-C-R8 | `NAMED_LOCATION_OVERLAY_FIELDS` / `NAMED_LOCATION_FIELD_ALIASES` | `Literal` имён полей + assert ⊆ `model_fields` |
 | POJO-C-R9 | `CitySkeleton` зеркало: size / tier / material / density | те же типы, не параллельный `str` |
 | POJO-C-1 | `DistrictTemplateEntry.street_layout` | `StreetLayout` (`DefaultOnWire` = `GRID`; omit/invalid → GRID + warning) |
-| POJO-C-7 | чертёж участка: `BuildingLayoutTemplate.system_name` + `RequiredStructure.building_template` + ключи `plot_counts` / `plot_priority`; rename `structure_counts`/`structure_priority` | `DrawingKey` = `RegistryKey[BuildingLayoutTemplate]` |
+| POJO-C-7 | чертёж участка: `BuildingLayoutTemplate.system_name` + `RequiredStructure.plot_template` + ключи `plot_counts` / `plot_priority`; leftover `building_template` / `structure_counts`/`structure_priority` | `DrawingKey` = `RegistryKey[BuildingLayoutTemplate]` |
 | POJO-C-5 | `ConnectionTypeEntry.system_connection_type` + `DistrictConnection` / `DistrictTopologyEntry.connection_type` + `frontage_type_order[]` + `FrontageTypeOrder.order` | `ConnectionTypeKey` |
 | POJO-C-2 | `LocationMoodEntry.system_mood` + скелет / NL / `CitySkeleton.system_location_mood` | `LocationMoodKey` |
 | POJO-C-3 | `SettlementSpecializationEntry.system_specialization` + `SettlementSpecializationBind.system_specialization` | `SettlementSpecializationKey` |
@@ -152,7 +152,7 @@ SQL `named_locations.frontage_type_order` — JSON-массив; dataclass `Name
 | Здание на участке | главное тело generate (§3) | `main_building` | `fixtures/templates/tavern_1.json` внутри `inn_small` |
 | Участок | инстанс после packing | `AreaSlot` / `AreaLayout` | клетка в районе |
 
-`structure_types` **не** владеет участком и **не** ключ counts. Режет пул («в квартале можно мастерские»). Generate среди чертежей с подходящими тегами — rng + тир + subjects + `like`/`strict`. Pin конкретного чертежа — `required_structures[].building_template` = `system_name`, не purpose.
+`structure_types` **не** владеет участком и **не** ключ counts. Режет пул («в квартале можно мастерские»). Generate среди чертежей с подходящими тегами — rng + тир + subjects + `like`/`strict`. Pin конкретного чертежа — `required_structures[].plot_template` = `system_name`, не purpose. Leftover JSON `building_template`.
 
 **Поля**
 
@@ -162,7 +162,7 @@ SQL `named_locations.frontage_type_order` — JSON-массив; dataclass `Name
 | `plot_priority` | `DefaultOnWire[dict[DrawingKey, int] \| None] = None` | очередь посадки, **не** N. Нет ключа → `0` (проход 2) |
 | `allowed_structure_types` | `list[BuildingPurpose \| BuildingPurposeFamily] \| None` | фильтр: лист или семья; omit = легальный каталог мира; `[]` = pins only |
 | `allowed_match` | `BuildingPurposeMatch` | default `like`; `strict` = участок ⊆ фильтра |
-| `required_structures[].building_template` | тот же `DrawingKey` | pin чертежа (`by_system_name`); `count` на строке **главнее** `plot_counts` |
+| `required_structures[].plot_template` | тот же `DrawingKey` | pin чертежа участка (`by_system_name`); `count` на строке **главнее** `plot_counts`. Leftover `building_template` |
 | `required_structures[].structure_type` | leftover optional purpose | дубль ключа рецепта поселения, не pin, не ключ map |
 
 `DrawingKey` — `RegistryKey[BuildingLayoutTemplate]` (identity чертежа generate, не uid `WorldBuildingTemplateRegistry`). Не ткань района. Не `PlotType` / `StructureType`.
@@ -234,7 +234,7 @@ SQL dataclass `NamedLocation` остаётся `str \| None`; coerce на POJO /
 | 2026-09-07 | POJO-C-6 **resolved**: `BarrierTemplateKey` на identity `system_type` + `PerimeterBarrier.template`; `""` → `None` + warning; `sides`/relief `structure_refs` не срез |
 | 2026-09-08 | POJO-C-8 **resolved**: `RequiredStructurePosition` (`any`/`center`); omit/invalid → `any` + warning; CONN-PACK-2 не срез |
 | 2026-09-08 | POJO-C-9 **resolved**: `PerimeterBarrier.sides` → `list[Facing]` (кардиналы); skip unknown/intercardinal + warning |
-| 2026-09-12 | **`main_building`:** единственное поле главного здания на чертеже участка. Ключ `building` запрещён (не alias). Калитка / фасад забора смотрят на него. Пристройки не в чертеже v1. SoT [tz_building_generator.md](./tz_building_generator.md) (начало документа). |
+| 2026-09-13 | **`plot_template`:** pin участка на `RequiredStructure`; leftover JSON `building_template`. Не SQL library `building_templates`. |
 | 2026-09-12 | Чертёж участка: `occupied_footprint` + вложенное `main_building` (пример `inn_small` ← `tavern_1`). Малые пристройки не в чертеже. |
 | 2026-09-12 | Дерево назначений: семья → лист; `allowed` может быть семьёй; паки мира. SoT [tz_building_generator.md](./tz_building_generator.md) §2.1 |
 | 2026-09-12 | Назначение участка: `structure_types[]` + `BuildingPurpose` (не N+1); `allowed_match` like/strict; pin только `system_name` |

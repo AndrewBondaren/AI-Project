@@ -60,7 +60,7 @@ backend/logs/{domain}/{service}.log
 | Домен | Сервис | Файл (target) | Процесс | События (SoT) | Код (ориентир) |
 |---|---|---|---|---|---|
 | `http` | `api` | `logs/http/api.log` | server | `request_start` / `request_end` | [`logMiddleware.py`](../backend/app/core/logMiddleware.py) |
-| `pack` | `packBakeLog` | `logs/pack/packBakeLog.log` | server | heartbeat light/full/detailed, chunk done, **sidecar / R44 validate 0/N / T-3c emit start-done** (консоль). Не замена R44 ERROR | [`packBakeLog.py`](../backend/app/application/worldData/pack/bake/packBakeLog.py) · [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) · [`tz_map_light_bake.md`](./tz_map_light_bake.md) · SQL persist — [`tz_terrain_relief.md`](./tz_terrain_relief.md) § SQL catalog |
+| `pack` | `packBakeLog` | `logs/pack/packBakeLog.log` | server | heartbeat light/full/detailed, chunk done, **C11/C23 stage seconds**, **sidecar / R44 validate 0/N / T-3c emit start-done** (консоль). Не замена R44 ERROR | [`packBakeLog.py`](../backend/app/application/worldData/pack/bake/packBakeLog.py) · [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) · [`tz_map_light_bake.md`](./tz_map_light_bake.md) · SQL persist — [`tz_terrain_relief.md`](./tz_terrain_relief.md) § SQL catalog · C11 keys — [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) · [`tz_application_performance.md`](./tz_application_performance.md) |
 | `pack` | `packDetailedBake` | `logs/pack/packDetailedBake.log` | server | detailed scope / refine tiles | [`packDetailedBakeOrchestrator.py`](../backend/app/application/worldData/pack/bake/packDetailedBakeOrchestrator.py) · [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) (R36v/w) |
 | `pack` | `fineChunkPersist` | `logs/pack/fineChunkPersist.log` | server | persist chunk / sidecar; **не** подмена R44 | [`fineChunkPersist.py`](../backend/app/application/worldData/pack/refine/fineChunkPersist.py) |
 | `relief` | `reliefLog` | `logs/relief/reliefLog.log` | server | R8 INFO/DEBUG/WARNING generate | [`relief/log/log.py`](../backend/app/application/worldData/generators/terrain/relief/log/log.py) · [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) § Logging (R8) |
@@ -145,6 +145,7 @@ backend/logs/{domain}/{service}.log
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-13 | `packBakeLog`: heartbeat C11/C23 (`settlement_c11_*`, `settlement_topology_*`). |
 | 2026-09-07 | Консьюмер `jsonValidation` / `resolve`: DefaultOnWire + settlement size fallback (`medium`). |
 | 2026-09-01 | Консьюмер `settlement` / `settlementAssembler`: C22 packing. События — connections §5.1.3 «Debug packing». |
 | 2026-08-22 | SoT sinks: `{domain}/{service}.log`; один писатель на файл; каталог консьюмеров; скрипт ≠ серверный `app.log`. |

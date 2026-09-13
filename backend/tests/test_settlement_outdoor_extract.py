@@ -35,6 +35,7 @@ from app.dataModel.spatial.facing import Facing
 from app.dataModel.structure.enums.passageType import PassageType
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
+from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 
 
@@ -52,7 +53,11 @@ def _settlement() -> NamedLocation:
     )
 
 
-def _layout(*, passages: list[LocationPassage]) -> SettlementLayout:
+def _layout(
+    *,
+    passages: list[LocationPassage],
+    cells: list[MapCell] | None = None,
+) -> SettlementLayout:
     template = DistrictTemplateEntry(
         system_name="core",
         display_name="Core",
@@ -89,7 +94,7 @@ def _layout(*, passages: list[LocationPassage]) -> SettlementLayout:
         display_name="ground",
     )
     building_layout = StructureLayout(
-        cells=[],
+        cells=list(cells or []),
         levels=[level],
         passages=passages,
         rooms=[],
@@ -143,6 +148,42 @@ class TestSettlementOutdoorExtract(unittest.TestCase):
         self.assertTrue(extracted.entry_points[0].is_discovered)
         self.assertEqual(extracted.wire.settlement_uid, "set-1")
         self.assertEqual(len(extracted.wire.districts), 1)
+
+    def test_building_cells_persist_floor_and_stair(self):
+        passage = LocationPassage(
+            passage_uid="p-front",
+            world_uid="w1",
+            to_level_uid="old-level",
+            to_x=1,
+            to_y=0,
+            system_passage_type=PassageType.MAIN_ENTRANCE,
+            from_level_uid=None,
+        )
+        cells = [
+            MapCell(
+                world_uid="w1", x=0, y=0, z=0,
+                system_building_element="wall",
+            ),
+            MapCell(
+                world_uid="w1", x=1, y=0, z=0,
+                system_building_element="floor",
+            ),
+            MapCell(
+                world_uid="w1", x=1, y=0, z=1,
+                system_building_element="staircase",
+                system_facing="north",
+            ),
+        ]
+        extracted = extract_settlement(
+            _settlement(),
+            _layout(passages=[passage], cells=cells),
+        )
+        shell = extracted.wire.districts[0].areas[0].buildings[0].shell_cells
+        elements = {c.system_building_element for c in shell}
+        self.assertEqual(elements, {"wall", "floor", "staircase"})
+        stair = next(c for c in shell if c.system_building_element == "staircase")
+        self.assertEqual(stair.system_facing, "north")
+        self.assertEqual(len(extracted.entry_points), 1)
 
     def test_plot_without_building_skips_c20(self):
         template = DistrictTemplateEntry(

@@ -18,10 +18,10 @@ def resolve_required_layouts(
     required: RequiredStructure,
     catalog: BuildingCatalog,
 ) -> tuple[BuildingLayoutTemplate, ...]:
-    """Settlement recipe: pool by purpose. District row: pin ``building_template``."""
+    """Settlement recipe: pool by purpose. District row: pin ``plot_template``."""
     if required.structure_type is not None:
         return catalog.of_structure_type(required.structure_type)
-    layout = catalog.by_system_name(required.building_template)
+    layout = catalog.by_system_name(required.plot_template)
     if layout is None:
         return ()
     return (layout,)
@@ -30,7 +30,7 @@ def resolve_required_layouts(
 def _row_key(req: RequiredStructure) -> str:
     if req.structure_type is not None:
         return str(req.structure_type)
-    return req.building_template
+    return req.plot_template
 
 
 def union_required_structures(
@@ -54,7 +54,7 @@ def union_required_structures(
         seen.add(key)
         out.append(
             RequiredStructure(
-                building_template=key,
+                plot_template=key,
                 structure_type=purpose,
             )
         )

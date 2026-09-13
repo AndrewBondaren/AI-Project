@@ -2,44 +2,25 @@
 ASCII-визуализация уровня здания.
 Используется в debug API и скриптах разработки.
 """
-from app.application.worldData.facingArrows import FACING_ARROW
-from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.enums.buildingElement import (
-    StructureElement, _STAIR_DIRECTIONAL,
+from app.application.worldData.render.structureAsciiSymbols import (
+    symbol_for_building_element,
 )
+from app.dataModel.structure.enums.buildingElement import STAIR_DIRECTIONAL_ELEMENTS
 from app.db.models.mapCell import MapCell
-
-#Grid renderer is a debug class. No need to use in production modelData.
-_SYMBOLS: dict[StructureElement, str] = {
-    StructureElement.WALL:       "#",
-    StructureElement.FLOOR:      ".",
-    StructureElement.DOOR:       "D",
-    StructureElement.STAIR_FLOOR:"_",
-    StructureElement.VOID:       " ",
-    StructureElement.WINDOW:     "O",
-    StructureElement.ARROW_SLIT: "|",
-    StructureElement.PORTHOLE:   "o",
-    StructureElement.VENT:       "v",
-    StructureElement.COLUMN:     "C",
-    StructureElement.RAILING:    "r",
-    StructureElement.TRAPDOOR:   "T",
-    StructureElement.LADDER:     "H",
-    StructureElement.ARCHWAY:    "'",
-}
 
 
 def _cell_symbol(cell: MapCell) -> str:
     elem = cell.system_building_element
-    if elem in _STAIR_DIRECTIONAL:
+    if elem in STAIR_DIRECTIONAL_ELEMENTS:
         if not cell.system_facing:
             raise ValueError(
                 f"stair cell ({cell.x},{cell.y},z={cell.z}) "
                 f"element={elem!r} has no system_facing"
             )
-        return FACING_ARROW[Facing(cell.system_facing)]
+        return symbol_for_building_element(elem, facing=cell.system_facing)
     if cell.railing_sides:
         return cell.railing_sides[0].lower() if len(cell.railing_sides) == 1 else "r"
-    return _SYMBOLS.get(elem, "?")
+    return symbol_for_building_element(elem)
 
 
 def render_level(

@@ -62,6 +62,9 @@ from app.application.worldData.render.dumpLog import (  # noqa: E402
 from app.application.worldData.generators.terrain.relief.discover.timings import (  # noqa: E402
     GradePipelineTimings,
 )
+from app.application.worldData.settlementOutdoor.settlementPipelineTimings import (  # noqa: E402
+    SettlementPipelineTimings,
+)
 from app.core.generationLogging import generation_world_log  # noqa: E402
 from app.core.loggingConfig import ensure_script_logging  # noqa: E402
 from render_maps import (  # noqa: E402
@@ -132,6 +135,7 @@ def _format_location_global_summary(
 
 _BAKE_ONLY_KEYS = ("grade_persist_s", "l2_s")
 _PIPELINE_KEYS = GradePipelineTimings.wire_keys() + _BAKE_ONLY_KEYS
+_C11_PIPELINE_KEYS = SettlementPipelineTimings.wire_keys()
 
 
 def _grade_pipeline_from_bake(bake: dict[str, Any]) -> dict[str, float]:
@@ -158,6 +162,43 @@ def _log_grade_pipeline(bake: dict[str, Any], *, activity: str) -> dict[str, flo
     log_dump(
         "grade pipeline "
         f"{parts} (q/mill/paint/grade/materialize are CPU-sum over chunks; l2_s is wall)",
+        activity=activity,
+        **pipeline,
+    )
+    return pipeline
+
+
+def _c11_pipeline_from_bake(bake: dict[str, Any]) -> dict[str, float]:
+    settlement = bake.get("settlement")
+    raw = settlement.get("c11_pipeline") if isinstance(settlement, dict) else None
+    src = raw if isinstance(raw, dict) else {}
+    out: dict[str, float] = {}
+    for key in _C11_PIPELINE_KEYS:
+        val = src.get(key)
+        if val is None:
+            continue
+        try:
+            out[key] = round(float(val), 3)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _log_c11_pipeline(bake: dict[str, Any], *, activity: str) -> dict[str, float]:
+    pipeline = _c11_pipeline_from_bake(bake)
+    settlement = bake.get("settlement")
+    status = settlement.get("status") if isinstance(settlement, dict) else None
+    if not pipeline:
+        if status:
+            log_dump(
+                f"c11 pipeline timings absent from bake response status={status}",
+                activity=activity,
+            )
+        return pipeline
+    parts = " ".join(f"{key}={value:.2f}" for key, value in pipeline.items())
+    log_dump(
+        f"c11 pipeline status={status or '-'} {parts} "
+        "(wall per C11 stage; generate_s is assemble, not FineTerrain materialize_s)",
         activity=activity,
         **pipeline,
     )
@@ -303,6 +344,7 @@ def _run_detailed_location(
     cells = 0
     detail = "absent"
     pipeline: dict[str, float] = {}
+    settlement_pipeline: dict[str, float] = {}
 
     try:
         log_dump(
@@ -340,6 +382,15 @@ def _run_detailed_location(
             elapsed_s=round(elapsed_s, 2),
         )
         pipeline = _log_grade_pipeline(bake, activity="detailed_bake")
+        settlement_pipeline = _log_c11_pipeline(bake, activity="detailed_bake")
+        settlement = bake.get("settlement")
+        if isinstance(settlement, dict) and settlement.get("status"):
+            log_dump(
+                f"  settlement_status={settlement.get('status')} "
+                f"districts={settlement.get('districts')} "
+                f"buildings={settlement.get('buildings')}",
+                activity="detailed_bake",
+            )
         for key in (
             "tiles_refined",
             "wilderness_chunks",
@@ -376,6 +427,7 @@ def _run_detailed_location(
                     "error": error,
                     "started_at": started_at.isoformat(timespec="seconds"),
                     "grade_pipeline": pipeline,
+                    "c11_pipeline": settlement_pipeline,
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -395,6 +447,8 @@ def _run_detailed_location(
         "terrain_failed": terrain.get("failed") or bake.get("failed") or bake.get("terrain_failed"),
         "climate_fine_tiles": bake.get("climate_fine_tiles"),
         "grade_pipeline": pipeline,
+        "c11_pipeline": settlement_pipeline,
+        "settlement": bake.get("settlement"),
     }
 
 

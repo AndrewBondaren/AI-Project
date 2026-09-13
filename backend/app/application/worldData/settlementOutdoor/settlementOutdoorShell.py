@@ -1,4 +1,8 @@
-"""C8 outdoor shell filter — reads StructureElement.OUTDOOR_SHELL_ELEMENTS."""
+"""Building cell → pack shell wire.
+
+Persist (C8): all ``StructureLayout.cells`` / yard / barrier as-is.
+``OUTDOOR_SHELL_ELEMENTS`` is a street-visible subset for future C18 play-load, not pack SoT.
+"""
 
 from __future__ import annotations
 
@@ -40,9 +44,10 @@ def map_cell_to_shell_wire(cell: MapCell) -> ShellCellWire:
 
 
 def outdoor_shell_wires(cells: list[MapCell]) -> list[ShellCellWire]:
+    """Street-visible envelope only — not pack persist."""
     return [map_cell_to_shell_wire(c) for c in cells if is_outdoor_shell_cell(c)]
 
 
 def cells_to_shell_wires(cells: list[MapCell]) -> list[ShellCellWire]:
-    """Yard / barrier — persist as-is (C9), no C8 filter."""
+    """Pack persist: full building geometry, yard, barrier — no element filter."""
     return [map_cell_to_shell_wire(c) for c in cells]

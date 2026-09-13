@@ -33,12 +33,12 @@ class TestRequiredStructurePositionWire(unittest.TestCase):
             RequiredStructure.model_fields["position"].default,
             POSITION_ANY,
         )
-        omitted = RequiredStructure(building_template="town_hall")
+        omitted = RequiredStructure(plot_template="town_hall")
         self.assertIs(omitted.position, RequiredStructurePosition.ANY)
 
     def test_wire_string_coerces(self) -> None:
         entry = RequiredStructure(
-            building_template="town_hall",
+            plot_template="town_hall",
             position="center",
         )
         self.assertIs(entry.position, RequiredStructurePosition.CENTER)
@@ -82,15 +82,24 @@ class TestRequiredStructurePositionWire(unittest.TestCase):
         self.assertIn("invalid", text)
 
     def test_direct_unknown_coerces_to_any(self) -> None:
-        entry = RequiredStructure(building_template="market", position="edge")
+        entry = RequiredStructure(plot_template="market", position="edge")
         self.assertIs(entry.position, RequiredStructurePosition.ANY)
-        blank = RequiredStructure(building_template="town_hall", position="")
+        blank = RequiredStructure(plot_template="town_hall", position="")
         self.assertIs(blank.position, RequiredStructurePosition.ANY)
 
     def test_aliases_are_enum_members(self) -> None:
         self.assertIs(POSITION_ANY, RequiredStructurePosition.ANY)
         self.assertIs(POSITION_CENTER, RequiredStructurePosition.CENTER)
         self.assertEqual(POSITION_CENTER, "center")
+
+    def test_plot_template_leftover_alias(self) -> None:
+        leftover = RequiredStructure.model_validate({"building_template": "town_hall"})
+        self.assertEqual(leftover.plot_template, "town_hall")
+        dumped = leftover.model_dump(mode="json")
+        self.assertEqual(dumped["plot_template"], "town_hall")
+        self.assertNotIn("building_template", dumped)
+        canon = RequiredStructure(plot_template="inn_small")
+        self.assertEqual(canon.plot_template, "inn_small")
 
 
 if __name__ == "__main__":

@@ -16,6 +16,7 @@ SettlementAssembler — оркестратор генерации поселен
 """
 import logging
 import random
+import time
 from dataclasses import replace
 
 from app.application.worldData.generators.assemblers.citySkeleton import (
@@ -50,6 +51,9 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.streets import plan_city_street_grid
 from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import SettlementLayout
+from app.application.worldData.generators.assemblers.settlementAssembler.timings import (
+    SettlementAssembleTimings,
+)
 from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
@@ -71,7 +75,9 @@ class SettlementAssembler:
         *,
         district_slots: list[DistrictSlot] | None = None,
         city_graph: tuple[list[ConnectionNode], list[ConnectionEdge]] | None = None,
+        timings: SettlementAssembleTimings | None = None,
     ) -> SettlementLayout:
+        wall0 = time.perf_counter()
         skeleton = self._build_skeleton(world, settlement)
         catalog = catalog or assemble_building_catalog(world)
         logger.info(
@@ -96,10 +102,13 @@ class SettlementAssembler:
                 world, settlement, skeleton, terrain_cells,
             )
 
+        t = time.perf_counter()
         layout_cache = build_layout_cache(
             world, skeleton, district_slots, terrain_cells, catalog=catalog,
             settlement_uid=settlement.location_uid,
         )
+        if timings is not None:
+            timings.cache_s += time.perf_counter() - t
         logger.info(
             "SettlementAssembler | building_cache templates=%d names=%s",
             len(layout_cache),
@@ -114,17 +123,27 @@ class SettlementAssembler:
                 world, slot, skeleton, terrain_cells, layout_cache=layout_cache,
                 settlement_uid=settlement.location_uid,
                 catalog=catalog,
+                timings=timings,
             )
             district_layouts.append(layout)
 
+        t = time.perf_counter()
         if city_graph is None:
             city_nodes, city_edges = self._plan_street_grid(
                 world, settlement, skeleton, district_slots, terrain_cells,
             )
         else:
             city_nodes, city_edges = city_graph
+        if timings is not None:
+            timings.streets_s += time.perf_counter() - t
+        t = time.perf_counter()
         barrier_cells = self._plan_barriers(world, settlement, skeleton)
+        if timings is not None:
+            timings.barriers_s += time.perf_counter() - t
+        t = time.perf_counter()
         occupancy_cells = plan_footprint_occupancy_cells(world, settlement, skeleton.system_city_size)
+        if timings is not None:
+            timings.occupancy_s += time.perf_counter() - t
 
         layout = SettlementLayout(
             district_layouts=district_layouts,
@@ -148,6 +167,8 @@ class SettlementAssembler:
             len(occupancy_cells),
             dominant_material,
         )
+        if timings is not None:
+            timings.generate_s = time.perf_counter() - wall0
 
         return replace(layout, dominant_material=dominant_material)
 

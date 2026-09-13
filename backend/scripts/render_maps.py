@@ -8,7 +8,8 @@ Pack path (default after light bake):
   - ``render-location-grids`` → location_terrain when blob exists (may be empty after light-only)
 
 Detailed L2 (after detailed_bake):
-  - ``dump_detailed_renders`` → location_terrain + ``render-wilderness-tile-grid``
+  - ``dump_detailed_renders`` → location_terrain + ``city/{z}.txt`` when
+    settlement.zst exists + ``render-wilderness-tile-grid``
     Pack-read-only: each ``z/<n>.txt`` = sparse_xy cells already in FineTerrain
     runs (no generation); ``surface_grade.txt`` always. Per-z ``z/grade_<n>.txt``
     is opt-in (``write_grade_z_files`` / ``--grade-z``) — hundreds of files, slow.
@@ -50,6 +51,9 @@ from app.application.worldData.render.dumpLog import (  # noqa: E402
     log_dump,
 )
 from app.application.worldData.render.mapSymbols import render_grade_legend  # noqa: E402
+from app.application.worldData.render.structureAsciiSymbols import (  # noqa: E402
+    render_structure_legend,
+)
 from app.core.generationLogging import generation_world_log  # noqa: E402
 from app.core.loggingConfig import ensure_script_logging  # noqa: E402
 from app.application.worldData.render.renderPayloads import (  # noqa: E402
@@ -62,6 +66,7 @@ from app.application.worldData.render.renderPayloads import (  # noqa: E402
     LEVEL_SURFACE_Z,
     LEVEL_COLUMN_SPAN,
     grade_level_key,
+    parse_city_level_key,
 )
 
 # Base L2 dump keys (no dense z — those go under ``z/``).
@@ -147,6 +152,9 @@ def _filter_levels_by_z_range(
         grade_z = _parse_grade_z_key(k)
         if grade_z is not None and not _z_in_dump_range(grade_z, z_min, z_max):
             continue
+        city_z = parse_city_level_key(k)
+        if city_z is not None and not _z_in_dump_range(city_z, z_min, z_max):
+            continue
         out[k] = grid
     return out
 
@@ -175,6 +183,9 @@ def _level_sort_key(key: str) -> tuple[int, int | str]:
     grade_z = _parse_grade_z_key(key)
     if grade_z is not None:
         return (2, grade_z)
+    city_z = parse_city_level_key(key)
+    if city_z is not None:
+        return (4, city_z)
     try:
         return (1, int(key))
     except ValueError:
@@ -206,7 +217,8 @@ def _write_level_bundle(
     (no concatenated ASCII) — used when dense z lives under ``z/``.
 
     When ``z_subdir=True`` (L2 detailed): numeric z → ``z/{n}.txt``,
-    ``grade_{n}`` → ``z/grade_{n}.txt``; base keys stay at ``out_dir`` root.
+    ``grade_{n}`` → ``z/grade_{n}.txt``; ``city_{n}`` → ``city/{n}.txt``;
+    base keys stay at ``out_dir`` root.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     level_paths: dict[str, str] = {}
@@ -216,9 +228,12 @@ def _write_level_bundle(
             continue
         key = str(z_key)
         grade_z = _parse_grade_z_key(key)
+        city_z = parse_city_level_key(key)
         is_grade_layer = key in (LEVEL_GRADE, LEVEL_SURFACE_GRADE) or grade_z is not None
         if z_subdir and grade_z is not None:
             z_path = out_dir / "z" / f"grade_{grade_z}.txt"
+        elif z_subdir and city_z is not None:
+            z_path = out_dir / "city" / f"{city_z}.txt"
         elif z_subdir and _is_numeric_z_key(key):
             z_path = out_dir / "z" / f"{int(key)}.txt"
         else:
@@ -227,6 +242,12 @@ def _write_level_bundle(
         if is_grade_layer:
             # Composite dumps: terrain/map legend + grade legend.
             level_legend = f"{legend.rstrip()}\n{render_grade_legend()}"
+        elif city_z is not None:
+            struct = render_structure_legend()
+            if struct in legend:
+                level_legend = legend
+            else:
+                level_legend = f"{legend.rstrip()}\n{struct}"
         else:
             level_legend = legend
         body = f"{grid}\n\n--- legend ---\n{level_legend}\n"

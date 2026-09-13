@@ -75,7 +75,7 @@ DOOR_BUILDING_ELEMENTS: frozenset[StructureElement] = frozenset({
     StructureElement.ARCHWAY,
 })
 
-# Outdoor shell persist (tz_settlement_outdoor C8). COLUMN stands in for foundation.
+# Street-visible envelope (C18 play-load later). Pack persist is all StructureLayout cells.
 OUTDOOR_SHELL_ELEMENTS: frozenset[StructureElement] = frozenset({
     StructureElement.WALL,
     StructureElement.ROOF,

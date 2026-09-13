@@ -366,7 +366,7 @@ async def render_all_location_grids(
     world_uid: str,
     container=Depends(get_container),
 ) -> JSONResponse:
-    """Debug only — ASCII per location with location_terrain (pack) or map_cells (legacy)."""
+    """Debug only — ASCII per location: location_terrain plus ``city_{z}`` when settlement.zst exists."""
     from app.application.worldData.render.mapGridRenderService import MapGridRenderService
 
     world_svc = container.world_service()

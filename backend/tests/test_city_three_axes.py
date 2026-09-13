@@ -283,26 +283,26 @@ class AllowedAndRequiredTest(unittest.TestCase):
             _layout("town_hall", "town_hall"),
         ])
         as_type = resolve_required_layouts(
-            RequiredStructure(building_template="x", structure_type="tavern"),
+            RequiredStructure(plot_template="x", structure_type="tavern"),
             catalog,
         )
         self.assertEqual([row.system_name for row in as_type], ["tavern_1", "tavern_2"])
         pin_not_purpose = resolve_required_layouts(
-            RequiredStructure(building_template="tavern"),
+            RequiredStructure(plot_template="tavern"),
             catalog,
         )
         self.assertEqual(pin_not_purpose, ())
         as_system = resolve_required_layouts(
-            RequiredStructure(building_template="town_hall"),
+            RequiredStructure(plot_template="town_hall"),
             catalog,
         )
         self.assertEqual([row.system_name for row in as_system], ["town_hall"])
 
     def test_union_required_settlement_first(self) -> None:
-        district = [RequiredStructure(building_template="town_hall", count=1)]
+        district = [RequiredStructure(plot_template="town_hall", count=1)]
         merged = union_required_structures(["town_hall", "market"], district)
         self.assertEqual(
-            [row.building_template for row in merged],
+            [row.plot_template for row in merged],
             ["town_hall", "market"],
         )
         hosted = union_required_structures(
@@ -310,7 +310,7 @@ class AllowedAndRequiredTest(unittest.TestCase):
             district,
             ["town_hall"],
         )
-        self.assertEqual([row.building_template for row in hosted], ["town_hall"])
+        self.assertEqual([row.plot_template for row in hosted], ["town_hall"])
 
 
 class CatalogAndRngTest(unittest.TestCase):
@@ -468,7 +468,7 @@ class DistrictSelectTest(unittest.TestCase):
         self.assertNotIn("military", types)
         center = next(slot for slot in slots if slot.cell_x == 1 and slot.cell_y == 1)
         self.assertEqual(center.district_template.district_type, "civic")
-        req_names = {row.building_template for row in center.required_structures}
+        req_names = {row.plot_template for row in center.required_structures}
         self.assertIn("town_hall", req_names)
 
     def test_recipe_unknown_subtype_is_legacy(self) -> None:
@@ -488,7 +488,7 @@ class SpecializationPassTest(unittest.TestCase):
         self.assertIn("mining_quarter", names)
         center = next(slot for slot in slots if slot.cell_x == 1 and slot.cell_y == 1)
         self.assertEqual(center.district_template.district_type, "civic")
-        req = {row.structure_type or row.building_template for row in center.required_structures}
+        req = {row.structure_type or row.plot_template for row in center.required_structures}
         self.assertIn("town_hall", req)
         self.assertNotIn("mine", req)
         mining = next(
@@ -496,7 +496,7 @@ class SpecializationPassTest(unittest.TestCase):
             if slot.district_template.system_name == "mining_quarter"
         )
         mining_req = {
-            row.structure_type or row.building_template
+            row.structure_type or row.plot_template
             for row in mining.required_structures
         }
         self.assertEqual(mining.allowed_structure_types, [BuildingPurposeFamily.EXTRACT])
@@ -583,7 +583,7 @@ class SpecializationPassTest(unittest.TestCase):
         ]
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         types = {
-            row.structure_type or row.building_template
+            row.structure_type or row.plot_template
             for slot in slots
             for row in slot.required_structures
         }
@@ -628,7 +628,7 @@ class SpecializationPassTest(unittest.TestCase):
             origin_x=0, origin_y=0, width_fine=40, depth_fine=40, ground_z=0,
             district_template=template,
             required_structures=[RequiredStructure(
-                building_template="mine", structure_type="mine",
+                plot_template="mine", structure_type="mine",
             )],
             allowed_structure_types=template.allowed_structure_types,
             cell_x=0, cell_y=0,
@@ -667,7 +667,7 @@ class SpecializationPassTest(unittest.TestCase):
             origin_x=0, origin_y=0, width_fine=40, depth_fine=40, ground_z=0,
             district_template=template,
             required_structures=[RequiredStructure(
-                building_template="mine", structure_type="mine",
+                plot_template="mine", structure_type="mine",
             )],
             allowed_structure_types=template.allowed_structure_types,
             cell_x=0, cell_y=0,
@@ -690,7 +690,7 @@ class SpecializationPassTest(unittest.TestCase):
             origin_x=0, origin_y=0, width_fine=40, depth_fine=40, ground_z=0,
             district_template=template,
             required_structures=[RequiredStructure(
-                building_template="mine", structure_type="mine",
+                plot_template="mine", structure_type="mine",
             )],
             allowed_structure_types=template.allowed_structure_types,
             cell_x=0, cell_y=0,
@@ -722,7 +722,7 @@ class SpecializationPassTest(unittest.TestCase):
             origin_x=0, origin_y=0, width_fine=40, depth_fine=40, ground_z=0,
             district_template=template,
             required_structures=[RequiredStructure(
-                building_template="mine", structure_type="mine",
+                plot_template="mine", structure_type="mine",
             )],
             allowed_structure_types=template.allowed_structure_types,
             cell_x=0, cell_y=0,
@@ -760,7 +760,7 @@ class SpecializationPassTest(unittest.TestCase):
             origin_x=0, origin_y=0, width_fine=40, depth_fine=40, ground_z=0,
             district_template=template,
             required_structures=[RequiredStructure(
-                building_template="mine", structure_type="mine",
+                plot_template="mine", structure_type="mine",
             )],
             allowed_structure_types=template.allowed_structure_types,
             cell_x=0, cell_y=0,

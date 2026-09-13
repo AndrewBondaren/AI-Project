@@ -697,6 +697,6 @@ C22: подробный DEBUG на каждом шаге packing — [connection
 | `AreaLayout` ↔ `DistrictAssembler` — как район агрегирует результаты нескольких участков | нет ТЗ |
 | `DistrictAssembler` — механика дорог (внутренние улицы, тротуары, соединение с городскими магистралями) | **C22:** рамка после брони прохода 1; код: `DistrictRoadGenerator` + overlay. Переход — city §6.3 |
 | Рамка `radial` / `organic` вокруг брони; snap `entry_nodes` вне `grid` | **CONN-PACK-1** — [connections](./tz_structure_connections.md) §8 |
-| Два `required_structures` с `position: center` | **CONN-PACK-2** — connections §8 |
+| Два `required_structures` с `position: center` | **CONN-PACK-2 closed** — кластер вокруг home inner bbox; [connections](./tz_structure_connections.md) §5.1.3 / §8 |
 | Envelope `(template, facing)` на проходе 1, пока полосы рамки нет | **CONN-PACK-3** — connections §8 |
 | `DistrictSlot.facing` — нужна ли ориентация к главной улице города на уровне района | отложено |

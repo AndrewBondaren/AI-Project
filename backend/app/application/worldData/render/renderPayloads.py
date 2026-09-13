@@ -7,10 +7,12 @@
   (per-cell max world-z); ``LEVEL_SURFACE_GRADE`` (relief overlay); optional dense
   ``\"<z>\"`` material slices + ``grade_{z}`` (only where column surface_z == z);
   diagnostics ``LEVEL_COLUMN_SPAN`` / ``LEVEL_CLIFF_DELTA``;
-  query ``?z=`` slices arbitrary world-z
+  query ``?z=`` slices FineTerrain at world-z (land only)
+- pack location city (settlement.zst, omit if missing / empty): ``city_{z}`` composite
+  FineTerrain-at-z + outdoor shell at that z; dump ``city/{z}.txt``
 - legacy tiles: ``WorldTileGridRenderer`` surface key ``-1`` plus numeric z strings
-- ``indoor`` on pack location payloads is always False (shape-compat with legacy; structures
-  live in patches, not location_terrain blobs)
+- ``indoor`` on pack location payloads is always False (shape-compat with legacy;
+  outdoor city is pack city structure, not location_terrain; interiors are not this layer)
 - world grid: ``ascii`` = terrain/hydro mosaic; ``ascii_height`` = ``surface_z``;
   ``ascii_grade`` = relief facing arrows (pack)
 """
@@ -46,6 +48,22 @@ LEVEL_GRADE = "grade"  # L0 tile levels only; L2 dump uses LEVEL_SURFACE_GRADE
 def grade_level_key(z: int) -> str:
     """Dump / levels key for grade overlay at world-z → ``z/grade_{z}.txt``."""
     return f"grade_{z}"
+
+
+def city_level_key(z: int) -> str:
+    """Dump / levels key for outdoor city at world-z → ``city/{z}.txt``."""
+    return f"city_{int(z)}"
+
+
+def parse_city_level_key(key: str) -> int | None:
+    """``city_{n}`` → n; else None."""
+    s = str(key)
+    if not s.startswith("city_"):
+        return None
+    rest = s[len("city_"):]
+    if not rest.lstrip("-").isdigit():
+        return None
+    return int(rest)
 
 
 @dataclass(frozen=True)

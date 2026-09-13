@@ -5,10 +5,12 @@ from __future__ import annotations
 from app.application.jsonValidation.worldRow import location_types as location_types_for_world
 from app.application.worldData.generators.terrain.worldMapSettings import grid_bbox_padding
 from app.application.worldData.pack.read.packRenderReadFacade import (
+    LocationTerrainRenderSource,
     PackRenderReadFacade,
     PackWorldMapRenderSource,
 )
 from app.application.worldData.render.gradeRayDump import GradeSlotIndex
+from app.application.worldData.render.locationCityPackRenderer import LocationCityPackRenderer
 from app.application.worldData.render.locationPinOverlay import overlay_location_pins
 from app.application.worldData.render.locationTerrainPackRenderer import LocationTerrainPackRenderer
 from app.application.worldData.render.renderPayloads import (
@@ -23,6 +25,7 @@ from app.application.worldData.render.renderPayloads import (
     WorldTileEntryPayload,
     WorldTileGridsPayload,
 )
+from app.application.worldData.render.structureAsciiSymbols import render_structure_legend
 from app.application.worldData.render.wildernessTilePackRenderer import WildernessTilePackRenderer
 from app.application.worldData.render.worldMapPackRenderer import WorldMapPackRenderer
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
@@ -90,6 +93,29 @@ class PackMapGridRender:
             )
 
         return None, None, None, None
+
+    def _merge_city_levels(
+        self,
+        world: World,
+        loc_source: LocationTerrainRenderSource,
+        levels: dict[str, str],
+        legend: str,
+    ) -> tuple[dict[str, str], str]:
+        wire = self._read.try_settlement_structure(world, loc_source.location_uid)
+        if wire is None:
+            return levels, legend
+        city_levels = LocationCityPackRenderer(
+            loc_source.chunk,
+            volume=loc_source.volume,
+            location_uid=loc_source.location_uid,
+            wire=wire,
+        ).render_all_city_levels()
+        if not city_levels:
+            return levels, legend
+        merged = dict(levels)
+        merged.update(city_levels)
+        combined = f"{legend.rstrip()}\n{render_structure_legend()}"
+        return merged, combined
 
     def render_world_grid(
         self,
@@ -209,12 +235,14 @@ class PackMapGridRender:
                 location_uid=loc_source.location_uid,
                 slot_index=GradeSlotIndex(loc_source.slots),
             )
-            levels = renderer.render_all_levels()
+            levels, loc_legend = self._merge_city_levels(
+                world, loc_source, renderer.render_all_levels(), legend,
+            )
             locations[location_uid] = LocationEntryPayload(
                 indoor=False,
                 levels=levels,
                 z_levels=list(levels.keys()),
-                legend=legend,
+                legend=loc_legend,
                 read_mode="location_terrain",
             )
         pins = [
@@ -265,9 +293,11 @@ class PackMapGridRender:
                 ascii=renderer.render_level(z),
                 z=z,
             )
-        levels = renderer.render_all_levels()
+        levels, loc_legend = self._merge_city_levels(
+            world, loc_source, renderer.render_all_levels(), legend,
+        )
         return LocationGridPayload(
-            legend=legend,
+            legend=loc_legend,
             fine_span=world.fine_cells_per_map_cell,
             read_path="pack",
             read_mode="location_terrain",

@@ -44,6 +44,22 @@ metadata:
 | **`grade_persist_s`** | Wall SQL catalog после чанков |
 | Скрипт `detailed_bake.py` целиком | HTTP bake **плюс** dump ASCII на диск (не часть `l2_s`) |
 
+**Не путать:** `materialize_s` — **не** C11 `SettlementOutdoorOrchestrator.materialize`. Город — отдельные ключи.
+
+### Как читать тайминги C11 (город на `scope=location`)
+
+Источник: `SettlementPipelineTimings` + лог `pack settlement c11 done` / HTTP `settlement.c11_pipeline`. C11 зовётся **после** `pack detailed_bake done` (`l2_s` город не включает).
+
+| Ключ | Что это |
+|---|---|
+| **`c11_s`** | Wall packing одного settlement (после проверки pack) |
+| **`generate_s`** | Wall `generate_layout` |
+| **`assemble_packing_s` / `assemble_area_s`** | C22 посадка vs геометрия дома (`StructureAreaAssembler`) |
+| **`encode_s` / `sql_s`** | zst tmp vs SQL catalog (C19) |
+| **`elapsed_s` скрипта** на локации | HTTP = L2 **плюс** C11 **плюс** dump ASCII |
+
+C23 на `full_bake`: `pack settlement topology done` + `topo_*_s`. APP-PERF-R1 город **не** мерил; прогон location — отдельная строка, когда будет.
+
 Dump (z-срезы, `surface_grade.txt`) **не** входит в bake.
 
 Offline `detailed_bake` mill/paint **выкл.** пока не переданы `grade_mill` / `grade_paint` (ГМ может включить и залить pack — тогда сцена читает). Entry refine mill/paint **нет** (старт = L2 column fill). Product mill на сцене — DAG, когда рельеф необходим ([`tz_terrain_relief.md`](./tz_terrain_relief.md) § Caller). APP-PERF-R1 ниже — прогон **с** явным mill+paint. Без них остаётся L2 fill от parent-light, не «пустой bake».
@@ -129,6 +145,7 @@ SLO на L2 detailed **не** записывали. WP-A1 (light ≤ 2 min) эт
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-13 | C11/C23 wall keys (`c11_s`, `generate_s`, `sql_s`, …). `materialize_s` по-прежнему FineTerrain fill. Прогона города в APP-PERF-R1 нет. |
 | 2026-08-30 | **Бюджет:** mill не спекулятивно; несколько чанков на сцене ок; полный мир = bake ГМ. APP-PERF-R1 = тайл целиком. |
 | 2026-08-30 | Product: mill/paint default **off** (bake opt-in; entry никогда). **APP-PERF-R1** = явный полный mill+paint. |
 | 2026-08-30 | Файл создан. **APP-PERF-R1:** 003 full ~11 с; detailed `(-2,-2)` wall ~820 с, paint CPU-сумма ~3141 с; paint визуально ок. |

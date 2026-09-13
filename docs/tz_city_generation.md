@@ -26,7 +26,7 @@
 | Блок TZ | Код | Статус |
 |---|---|---|
 | Фаза 2 lazy layout | `SettlementGeneratorService` → `SettlementAssembler` | ✅ фазы A–F plan |
-| Фаза 3 lazy interior | `StructureGeneratorService` (+ area cache) | ✅ |
+| Фаза 3 наполнение здания | `StructureInteriorAssembler` | ⬜ STUB; не геометрия дома |
 | Engine hook | `lazy_settlement` node | ✅ |
 | §1.1–§1.2 оси + специализация + приоритет районов | 3 прохода, registry ролей, subjects N+1 | ✅ path 3; path 2 recreate DB |
 | §9 district templates | `planner/placement.py`, `DistrictAssembler` | ✅ core |
@@ -51,7 +51,7 @@
 ## 1. Scope
 
 Генератор города строит наполнение поселения — здания, улицы, районы — из скелета города.  
-Скелет — **JSON import** на `NamedLocation`. На **`full_bake`** — топология районов и ворот (§8), без зданий. Застройка — шаг 2 **`detailed_bake`** (C11 поверх L2). Интерьеры — фаза 3.
+Скелет — **JSON import** на `NamedLocation`. На **`full_bake`** — топология районов и ворот (§8), без зданий. Застройка — шаг 2 **`detailed_bake`** (C11 поверх L2): packing + **геометрия дома в pack**. Наполнение здания (мебель) — фаза 3, `StructureInteriorAssembler`.
 
 `SettlementLayout` — мировые `(x,y)` / meter geometry, **не** клип по макро-тайлу. Поселение на техническом шве pack (ребро двух тайлов / грань чанка) — **валидный** кейс: один settlement, улицы и районы пересекают ребро. Не сдвигать город с шва и не плодить второй скелет «на соседнем тайле». Pack/grade: [`tz_terrain_relief.md`](./tz_terrain_relief.md) **C29**, [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) WP-19.
 
@@ -172,8 +172,8 @@ Subtype локации `building` в дереве NL (`residential` / `commercia
 ```
 Мир создан → скелет всех городов (instant)
 LLM описывает → только из скелета (ограничена данными)
-Игрок входит в город → SettlementGeneratorService.generate_layout (lazy)
-Игрок входит в здание → StructureGeneratorService (lazy interior)
+Игрок входит в город → SettlementGeneratorService.generate_layout (lazy) / C11 detailed
+Игрок входит в здание → геометрия уже в pack (C8); наполнение — StructureInteriorAssembler (фаза 3, later)
 Описание совпадает с геометрией ✓
 ```
 
@@ -344,15 +344,11 @@ Occupancy-flood метровой матрицы в патчи **не** дела�
 
 **Точка входа packing:** `backend/app/application/worldData/generators/assemblers/settlementAssembler/`
 
-### Фаза 3 — Building entry (lazy)
+### Фаза 3 — наполнение здания (lazy)
 
-При первом входе в конкретное здание:
-- `StructureGeneratorService` — полный интерьер (комнаты, ячейки, проходы)
-- В city pipeline: layout часто из **building cache** (`StructureAreaAssembler` + `translate_layout`)
+Мебель, предметы, атмосфера — `StructureInteriorAssembler` (assembler hierarchy). Не `StructureGeneratorService`: коробка дома уже в pack после C11 (C8).
 
-> **Product (2026-06):** интерьеры — **отдельный epic / STUB для режима `full`**. В «полной инициализации» мира (§11) **не входят** до отдельной реализации.
-
-См. [tz_building_generator.md](./tz_building_generator.md) (legacy имя `BuildingGeneratorService` в тексте building TZ).
+> **Product:** наполнение — **отдельный epic / STUB**. В `full_bake` / `detailed_bake` **не входит**. Геометрия дома входит в C11.
 
 ---
 
@@ -445,7 +441,7 @@ dominant_material → display_name из material_registry
 
 Плюс список зданий (`NamedLocation.display_name`, `system_location_type`) — когда persist cycle закрыт.
 
-LLM **не получает** от генератора напрямую: планировку улиц, интерьеры, сырые cells.
+LLM **не получает** от генератора напрямую: планировку улиц, наполнение здания, сырые cells.
 
 **Инвариант:** описание LLM согласовано с данными. "Мраморные здания" → только если в payload попал `dominant_material` после assemble, не import.
 
@@ -472,7 +468,7 @@ LLM **не получает** от генератора напрямую: пла
 
 ### Что не фиксирует
 
-Packing участков, внутренняя сетка квартала (C22: бронь → рамка → pass2), здания, `l.{uid}.settlement.zst`, интерьеры, `graph_level=district` внутри квартала.
+Packing участков, внутренняя сетка квартала (C22: бронь → рамка → pass2), здания, `l.{uid}.settlement.zst` (геометрия дома — packing C11), наполнение (`StructureInteriorAssembler`), `graph_level=district` внутри квартала.
 
 ### Persist
 
@@ -496,7 +492,7 @@ L0 restamp полотна новых world-рёбер на уже записан
 
 Отдельная UI-кнопка «Инициализировать мир» — не нужна: `full_bake` уже процесс. `init_mode` (§11) не подменяет этот контракт packing’ом всех городов.
 
-**Не входит сюда и в `init_mode=full`:** интерьеры (фаза 3).
+**Не входит сюда и в `init_mode=full`:** наполнение здания (фаза 3, `StructureInteriorAssembler`). Геометрия дома — C11 packing, не этот gate.
 
 ---
 
@@ -585,19 +581,19 @@ Per-world реестр: `worlds.district_template_registry` (JSON-массив, 
 
 **Хост:** settlement-required purpose садится только в слоты, чей **штамп** `DistrictSlot.allowed_structure_types` содержит ключ (семья раскрывается). Ткань без специализации несёт семьи на чертеже, не omit=весь каталог. `[]` = pins only, не хост. Нет хоста среди слотов → leftover + warning. Не копировать тип на каждый слот.
 
-**Район `required_structures[]`:** `building_template` — pin **чертежа** (`system_name` / `DrawingKey`). Только `by_system_name`. Не пул purpose по строке pin (два чертежа `tavern_*` не выбираются pin-ом `"tavern"`). Назначение — массив **самого** чертежа (`structure_types`). Optional leftover `RequiredStructure.structure_type` — дубль purpose на строке рецепта поселения, не pin. Пул fill района — `allowed_structure_types` + `allowed_match`. Рецепт поселения даёт types; generate выбирает чертёж. Комбо `[house, workshop]` при like на `workshop` годится, если влезает в щель; одна посадка закрывает **все** свои теги (fill `house` после не ставить).
+**Район `required_structures[]`:** `plot_template` — pin **чертежа участка** (`system_name` / `DrawingKey`). Только `by_system_name`. Не пул purpose по строке pin (два чертежа `tavern_*` не выбираются pin-ом `"tavern"`). Назначение — массив **самого** чертежа (`structure_types`). Optional leftover `RequiredStructure.structure_type` — дубль purpose на строке рецепта поселения, не pin. Leftover JSON `building_template` → тот же pin. Пул fill района — `allowed_structure_types` + `allowed_match`. Рецепт поселения даёт types; generate выбирает чертёж. Комбо `[house, workshop]` при like на `workshop` годится, если влезает в щель; одна посадка закрывает **все** свои теги (fill `house` после не ставить).
 
 ```json
 "required_structures": [
-  { "building_template": "town_hall",  "count": 1, "position": "center" },
-  { "building_template": "market",     "count": 1, "position": "any"    }
+  { "plot_template": "town_hall",  "count": 1, "position": "center" },
+  { "plot_template": "market",     "count": 1, "position": "any"    }
 ]
 ```
 
 `count` — число токенов; default 1. Приоритет над `plot_counts` — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов». Массив — проход 1 **до** рамки пустых кварталов; порядок массива = очередь среди required — §5.1.3 «Приоритет посадки». Не путать с `plot_priority` (желательный fill, не обязательность).
 
 `position` (`RequiredStructurePosition`, [POJO-C-8](./tz_pojo_city_typing.md)):
-- `"center"` — размещается ближе к геометрическому центру района. Два+ с `center` — **CONN-PACK-2** ([connections](./tz_structure_connections.md) §8)
+- `"center"` — домашний модуль inner bbox **района** (fine cells, решётка `block_size`). Не centroid footprint поселения. Не `CellZone.center`. Несколько `center` — один кластер вокруг того же home: первый в массиве ближе к точному центру, остальные 4-соседние модули; рамка обходит hull. Не влезло — leftover, не проход 2. **CONN-PACK-2 closed** ([connections](./tz_structure_connections.md) §5.1.3 / §8)
 - `"any"` — произвольная позиция (default; omit / invalid wire → `any` + warning)
 
 ### 9.5 Типы раскладки улиц (`street_layout`)
@@ -711,7 +707,7 @@ Footprint и district slots — `generators/coordinates/` (WORLD_SURFACE_GRID vs
 | **TODO** поле барьера **поселения** на скелете (`CitySkeleton.perimeter_barrier`) | **открыт** — generate shrink есть; клетки стен всё ещё эвристика — **CITY-T-1c**; import поля нет — **CITY-T-1a** |
 | Зоны трёх инстансов `PerimeterBarrier` (нет общей xy) | **закрыт** — поселение вычитает `footprint ∩ слот` из площади района; packing района — только прямые района; [tz_locations.md](./tz_locations.md) |
 | **CONN-PACK-1** — рамка `radial` / `organic` вокруг брони; snap якорей вне `grid` | **открыт** — [connections](./tz_structure_connections.md) §8 |
-| **CONN-PACK-2** — два+ `required_structures` с `position: center` | **открыт** — connections §8; поле — §9.4 |
+| **CONN-PACK-2** — два+ `required_structures` с `position: center` | **closed** — кластер вокруг home inner bbox; connections §5.1.3 / §8; поле — §9.4 |
 | **CONN-PACK-3** — envelope `(template, facing)` на проходе 1 до полосы рамки | **открыт** — connections §8 |
 | `adjacent_terrain` — связанность воды | **open** — condition есть, connectivity не описана |
 | **Footprint города — форма** | **v1 closed:** квадрат `footprint_multiplier × fine_cells_per_map_cell`. **v2:** §10 TODO organic |
@@ -768,19 +764,19 @@ init_mode = "partial"   # full | partial
 
 Ключ `init_mode` в settings — ⬜; процесс мастера = `POST pack/bake?mode=full` (+ topology) → `mode=detailed&scope=location` (L2 + C11 на settlement-like).
 
-### 11.3 Scope materialization (без интерьеров)
+### 11.3 Scope materialization (геометрия дома в packing; наполнение — нет)
 
 | Слой | `full` / `full_bake` | `partial` / lazy | Persist |
 |---|---|---|---|
 | Terrain S→O→C→CL (L0 pack) | ✅ | по необходимости | pack world_map |
 | **Settlement topology** (§8) | ✅ после L0 | если ещё нет — при входе или C11 | SQL районы + city gates |
-| Settlement outdoor packing | нет | если ещё нет — при входе | pack `settlement.zst` + SQL здания |
+| Settlement outdoor packing | нет | если ещё нет — при входе | pack `settlement.zst` (клетки дома C8) + SQL здания |
 | `connection_*` city (ворота, стыки районов) | с topology | с topology или packing | SQL |
 | `connection_*` district (внутренняя сетка) | нет | с packing | SQL |
 | Building `NamedLocation` | нет | с packing, **если ещё не init** | SQL |
-| **Интерьеры** (фаза 3) | **⬜ STUB** | lazy отдельно | отдельный epic |
+| **Наполнение** (фаза 3, InteriorAssembler) | **⬜ STUB** | lazy отдельно | отдельный epic |
 
-**Мастер `detailed_bake` `scope=location`** — не строка `init_mode`. Консьюмер L2 + **C11** на settlement-like (тот же `materialize`, что debug generate-settlement). Без C11 город неиграбелен. Интерьеры не входят.
+**Мастер `detailed_bake` `scope=location`** — не строка `init_mode`. Консьюмер L2 + **C11** на settlement-like (тот же `materialize`, что debug generate-settlement). Без C11 город неиграбелен. Геометрия дома входит в C11. Наполнение (`StructureInteriorAssembler`) не входит.
 
 ### 11.4 World Snapshot — unified module
 
@@ -831,7 +827,7 @@ DAG может materialize **разные уровни** в разных нод�
 | `connections_city` | topology pass (ворота + межрайонные); packing не переигрывает типы | upsert by uid | §8; [connections](./tz_structure_connections.md) §5.1 |
 | `connections_district` | `DistrictLayout.connection_*` | nodes/edges `graph_level=district` | packing C11 — не topology |
 | `buildings` | `AreaLayout.building_location` | upsert `NamedLocation`, **skip if initialized** | packing C11 |
-| `interiors` | `StructureGeneratorService` | ⬜ STUB | [`generate_building`](./tz_world_generation_dag.md); отдельный epic |
+| `interiors` | `StructureInteriorAssembler` | ⬜ STUB | наполнение; геометрия дома уже в pack C11 |
 
 Удобная обёртка `persist_outdoor(layout)` = union scopes без `interiors` — для smoke и типового lazy settlement, но **не** единственная точка входа.
 
@@ -886,7 +882,8 @@ DAG может materialize **разные уровни** в разных нод�
 
 ## Changelog
 
-| 2026-09-13 | **Рецепты паков — dataModel:** `WorldPurposePackRegistry` / `PurposePackEntry` (`worlds.purpose_pack_registry`); `purpose_packs` — только включённые id. Канон `allowed` = enum семьи/листа, не строки в `catalog.py`. Overlay `base` не липнет. Мир может invent id маски, не лист. SoT [tz_building_generator.md](./tz_building_generator.md) §2.1. |
+| 2026-09-13 | **CONN-PACK-2 closed:** несколько `position: center` — кластер вокруг home-модуля inner bbox района; рамка по hull; leftover не в проход 2. Канон civic — один `town_hall`. |
+| 2026-09-13 | **`plot_template`:** `required_structures[]` pin чертежа участка, не здания. Leftover JSON `building_template`. Не SQL `building_templates`. |
 | 2026-09-13 | **`logistics`:** семья `warehouse`/`granary` в паке `base` (не `trade`). Хост ткани: port / голый industrial. Не отдельный `PurposePack`. |
 | 2026-09-13 | **`purpose_packs`:** каркас `base` + сеттинг-паки. Omit → `[base, fantasy]`. `fantasy` больше не несёт лавку/ратушу/шахту. |
 | 2026-09-13 | **Специализация → семья, мир → листья:** `SettlementSpecializationEntry.allowed_family`; листья = дети ∩ `purpose_packs`. Нет `required_structure_types` / `subjects_to_structure_types` на записи. Семьи `culture` / `cultivation` / `husbandry`; `agrarian` удалён. Штамп `DistrictSlot.allowed_structure_types`. `connections[].role` не входит. |

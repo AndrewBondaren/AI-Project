@@ -774,7 +774,7 @@ Outdoor 8 слотов **не** колонка и **не** bake `occ`/`seam`. П
 | 0 | **patch** | `map_cell_patches` | **modification layer:** взрыв / природа / локальный климат; не rewrite pack |
 | 1 | **player scene** | scene volume вокруг `(map_x,map_y)` | highest pack layer; blocking P0 |
 | 2 | **player path** | chunks/tiles на path corridor впереди | prefetch; ниже scene, выше city |
-| 3 | **city structure** | `locations/l.{uid}.settlement.zst` | authored outdoor walls/doors; [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) |
+| 3 | **city structure** | `locations/l.{uid}.settlement.zst` | клетки здания (геометрия дома C8); [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) |
 | 4 | **location** | `locations/l.{uid}.terrain` если `(x,y,z) ∈ territory_volume` | земля volume; не стены города |
 | 5 | **wilderness** | `tiles/...c.{cx}.{cy}.zst` | только **вне** masked bbox локаций |
 | 6 | **L0** | `upsample world_map` | fallback |
@@ -1316,6 +1316,8 @@ effective_climate(x,y) =
 | L0 | `world_map_bake_start`, `world_map_tile_write`, `pack_write_world_map` | `world_map` |
 | L2 wilderness | `wilderness_chunk_generate`, `wilderness_chunk_persist_pack`, `pack_write_wilderness_chunk` | `wilderness_chunk` |
 | L2 location | `location_terrain_persist_pack`, `pack_write_location_terrain` | `location_terrain` |
+| C11 packing | `settlement_c11_start`, `settlement_c11_done` | — |
+| C23 topology | `settlement_topology_start`, `settlement_topology_done`, `settlement_topology_batch_*` | — |
 | Orchestration | `fine_terrain_phase_start`, `fine_terrain_plan_parallel`, `drain_persisted_job` | — |
 
 Структурированные поля на каждой строке: `worker_thread`, `worker_tid`, `cpu_core`, `pool_workers` (см. `config.toml` `[logger_levels]` → `app.application.worldData.pack`).
@@ -2083,7 +2085,8 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
-| 2026-09-06 | **Контракт bake:** `full_bake` = L0 затем C23. `detailed_bake` = L2 затем C11 поверх (settlement-like). Bake = консьюмер; хук C11 ✅. |
+| 2026-09-13 | C11/C23 stage seconds in `packBakeLog` (`settlement_c11_*`, `settlement_topology_*`). |
+| 2026-09-13 | **C8:** city structure pack = full building cells (`StructureLayout`), not facade-only. Furniture remains InteriorAssembler. |
 | 2026-09-06 | **Job boundaries:** после `full_bake` L0 — post-pass `settlement_topology` (C23). Не 4-й mode, не L2, не packing, не compose. `light_bake` topology не делает. |
 | 2026-08-30 | WP-3/WP-20: authored outdoor city = pack `CITY_STRUCTURE`; gameplay = patches |
 | 2026-08-30 | **Бюджет mill:** не спекулятивно; несколько чанков на сцене ок; полный мир — bake ГМ. APP-PERF-R1 = тайл целиком. |

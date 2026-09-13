@@ -25,6 +25,9 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import (
     SettlementLayout,
 )
+from app.application.worldData.generators.assemblers.settlementAssembler.timings import (
+    SettlementAssembleTimings,
+)
 from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
@@ -61,10 +64,12 @@ class SettlementGeneratorService:
         *,
         district_slots: list[DistrictSlot] | None = None,
         city_graph: tuple[list[ConnectionNode], list[ConnectionEdge]] | None = None,
+        timings: SettlementAssembleTimings | None = None,
     ) -> SettlementLayout:
         return self._assembler.assemble(
             world, settlement, terrain_cells, catalog=catalog,
             district_slots=district_slots, city_graph=city_graph,
+            timings=timings,
         )
 
     def collect_map_cells(

@@ -174,17 +174,17 @@ class CatalogAndPinTest(unittest.TestCase):
             _layout("tavern_2", "tavern"),
         ])
         pool = resolve_required_layouts(
-            RequiredStructure(building_template="x", structure_type="tavern"),
+            RequiredStructure(plot_template="x", structure_type="tavern"),
             catalog,
         )
         self.assertEqual([row.system_name for row in pool], ["tavern_1", "tavern_2"])
         pin_miss = resolve_required_layouts(
-            RequiredStructure(building_template="tavern"),
+            RequiredStructure(plot_template="tavern"),
             catalog,
         )
         self.assertEqual(pin_miss, ())
         pin_hit = resolve_required_layouts(
-            RequiredStructure(building_template="tavern_1"),
+            RequiredStructure(plot_template="tavern_1"),
             catalog,
         )
         self.assertEqual([row.system_name for row in pin_hit], ["tavern_1"])
@@ -198,7 +198,7 @@ class HostAndFillTest(unittest.TestCase):
         self.assertFalse(district_hosts_purpose([BuildingPurpose.MINE], "tavern"))
 
     def test_union_required_only_hosted_types(self) -> None:
-        district = [RequiredStructure(building_template="town_hall", count=1)]
+        district = [RequiredStructure(plot_template="town_hall", count=1)]
         merged = union_required_structures(
             ["town_hall", "mine"],
             district,

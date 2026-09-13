@@ -93,6 +93,17 @@ class Reservation:
     rect_xy: tuple[int, int, int, int]
     rotated_90: bool
     pass_id: int
+    cluster_id: str | None = None
+
+
+@dataclass(frozen=True)
+class CenterCluster:
+    """Pass-1 civic cluster around the district home module. Runtime only."""
+
+    home: tuple[int, int] | None
+    reservations: tuple[Reservation, ...]
+    hull: Rect | None
+    leftover: tuple[PackingToken, ...]
 
 
 @dataclass

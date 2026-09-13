@@ -166,7 +166,7 @@ Wire включённых id: omit/`[]` → `[base, fantasy]`. `purpose_packs: [
 
 ### 3.1 Поля верхнего уровня
 
-Корень JSON, который ест packing (`DrawingKey`, `plot_counts`, pin `building_template`) — **чертёж участка**. Главное здание — только поле `main_building` (тело §3: `levels` / `connections` / `staircases`). Ключ `building` на участке запрещён. Малые пристройки (`AreaLayout.small_layouts`) **не** в чертеже v1.
+Корень JSON, который ест packing (`DrawingKey`, `plot_counts`, pin `plot_template`) — **чертёж участка**. Главное здание — только поле `main_building` (тело §3: `levels` / `connections` / `staircases`). Ключ `building` на участке запрещён. Leftover pin `building_template`. Малые пристройки (`AreaLayout.small_layouts`) **не** в чертеже v1.
 
 | Поле | Тип | Обязательность | Описание |
 |------|-----|---------------|----------|

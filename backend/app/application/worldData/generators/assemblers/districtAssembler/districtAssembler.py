@@ -1,4 +1,5 @@
 import random
+import time
 
 from app.application.jsonValidation import connection_types
 from app.application.worldData.generators.assemblers.areaAssembler.areaLayout import AreaLayout
@@ -31,6 +32,9 @@ from app.application.worldData.generators.assemblers.districtAssembler.planner.l
     district_step,
     make_lattice,
 )
+from app.application.worldData.generators.assemblers.districtAssembler.planner.cluster import (
+    frame_blocked_rects,
+)
 from app.application.worldData.generators.assemblers.districtAssembler.planner.pass1 import (
     run_pass1,
 )
@@ -46,6 +50,9 @@ from app.application.worldData.generators.assemblers.districtAssembler.planner.t
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.buildingCache import (
     BuildingLayoutCache,
+)
+from app.application.worldData.generators.assemblers.settlementAssembler.timings import (
+    SettlementAssembleTimings,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import (
     PackingReason,
@@ -99,7 +106,9 @@ class DistrictAssembler:
         layout_cache:    BuildingLayoutCache | dict[str, StructureLayout] | None = None,
         settlement_uid:  str | None = None,
         catalog:         BuildingCatalog | None = None,
+        timings:         SettlementAssembleTimings | None = None,
     ) -> DistrictLayout:
+        packing_t0 = time.perf_counter()
         template = slot.district_template
         district = template.system_name
         classes = street_classes_for(template)
@@ -132,7 +141,7 @@ class DistrictAssembler:
         frame = StreetFrameContext(
             inner=inner,
             step=step,
-            blocked_rects=tuple(r.rect_xy for r in pass1),
+            blocked_rects=frame_blocked_rects(pass1),
             corridor_rects=corridor,
         )
         graph = self._plan_streets(
@@ -209,6 +218,9 @@ class DistrictAssembler:
             connection_type=classes.spine.connection_type,
             street_layout=template.street_layout,
         )
+        if timings is not None:
+            timings.packing_s += time.perf_counter() - packing_t0
+        area_t0 = time.perf_counter()
 
         from app.application.worldData.generators.assemblers.areaAssembler.structureAreaAssembler import (
             StructureAreaAssembler,
@@ -253,6 +265,8 @@ class DistrictAssembler:
                 deck_a=a.deck, deck_b=b.deck,
                 z_a=z_range(a), z_b=z_range(b),
             )
+        if timings is not None:
+            timings.area_s += time.perf_counter() - area_t0
 
         return DistrictLayout(
             slot=slot,

@@ -15,7 +15,6 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
 )
 from app.application.worldData.settlementOutdoor.settlementOutdoorShell import (
     cells_to_shell_wires,
-    outdoor_shell_wires,
 )
 from app.application.worldData.settlementOutdoor.settlementOutdoorTypes import (
     building_type_entry,
@@ -305,9 +304,9 @@ def extract_settlement(settlement: NamedLocation, layout: SettlementLayout) -> E
                 replace(c, location_uid=b_uid)
                 for c in (area.building_layout.cells if area.building_layout else [])
             ]
-            shell = outdoor_shell_wires(rebound_cells)
+            shell = cells_to_shell_wires(rebound_cells)
             small_shells = [
-                outdoor_shell_wires(
+                cells_to_shell_wires(
                     [replace(c, location_uid=b_uid) for c in sl.cells]
                 )
                 for sl in area.small_layouts

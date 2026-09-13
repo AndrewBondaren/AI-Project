@@ -47,7 +47,7 @@ async def render_location_grid(
     z: int | None = Query(default=None),
     container=Depends(get_container),
 ) -> JSONResponse:
-    """Debug only — ASCII grid for one location (pack: location_terrain; legacy: map_cells)."""
+    """Debug only — ASCII grid for one location (pack: location_terrain + city_{z}; legacy: map_cells). ``?z=`` is FineTerrain only."""
     from app.application.worldData.render.mapGridRenderService import MapGridRenderService
 
     loc = await container.location_service().get_by_id(world_uid, location_uid)

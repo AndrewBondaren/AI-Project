@@ -365,7 +365,7 @@ def _pick_layout_picks(
                 system_name=(
                     str(req.structure_type)
                     if req.structure_type is not None
-                    else req.building_template
+                    else req.plot_template
                 ),
                 reason=PackingReason.NO_CACHE,
             )
@@ -379,7 +379,7 @@ def _pick_layout_picks(
                 system_name=(
                     str(req.structure_type)
                     if req.structure_type is not None
-                    else req.building_template
+                    else req.plot_template
                 ),
                 reason=PackingReason.LEFTOVER,
             )
@@ -447,7 +447,7 @@ def _required_for(
     catalog: BuildingCatalog,
 ) -> RequiredStructure | None:
     for req in slot.required_structures:
-        if req.building_template == system_name:
+        if req.plot_template == system_name:
             return req
         layouts = resolve_required_layouts(req, catalog)
         if any(layout.system_name == system_name for layout in layouts):

@@ -333,7 +333,7 @@ class TestRegistryKey(unittest.TestCase):
         )
         self.assertIs(
             registry_key_target(
-                RequiredStructure.model_fields["building_template"].annotation,
+                RequiredStructure.model_fields["plot_template"].annotation,
             ),
             BuildingLayoutTemplate,
         )
@@ -343,8 +343,8 @@ class TestRegistryKey(unittest.TestCase):
             display_name="Inn",
         )
         self.assertIsInstance(layout.system_name, RegistryKey)
-        pin = RequiredStructure(building_template="tavern_1")
-        self.assertIsInstance(pin.building_template, RegistryKey)
+        pin = RequiredStructure(plot_template="tavern_1")
+        self.assertIsInstance(pin.plot_template, RegistryKey)
         district = DistrictTemplateEntry(
             system_name="inn_row",
             display_name="Inns",
@@ -362,7 +362,7 @@ class TestRegistryKey(unittest.TestCase):
         )
         self.assertEqual(aliased.plot_counts["tavern_1"], 2)
         with self.assertRaises(Exception):
-            RequiredStructure(building_template="")
+            RequiredStructure(plot_template="")
 
     def test_connection_type_identity_and_city_refs_are_branded(self) -> None:
         from app.dataModel.connections.connectionType.connectionTypeEntry import (

@@ -239,6 +239,76 @@ def alley_from_template(slot: DistrictSlot) -> DistrictConnection | None:
     return street_classes_for(slot.district_template).alley
 
 
+def _emit_alley_for_group(
+    *,
+    district: str,
+    alley: DistrictConnection | None,
+    alley_type: str,
+    width: int,
+    has_sidewalk: bool,
+    group: list[AreaPlacement],
+    nodes: list[ConnectionNode],
+    edges: list[ConnectionEdge],
+    world_uid: str,
+    edge_roles: dict[str, DistrictStreetRole] | None,
+    edge_key: str,
+) -> None:
+    if alley is None:
+        packing_info(
+            PackingStep.ALLEY, district=district,
+            n_plots=len(group), alley="no", reason=PackingReason.NOT_IN_SETTINGS,
+        )
+        return
+    if len(group) < 2:
+        packing_info(
+            PackingStep.ALLEY, district=district,
+            n_plots=len(group), alley="no", reason=PackingReason.SINGLE_PLOT,
+        )
+        return
+    a, b = group[0], group[1]
+    ax = a.building_x
+    ay = a.building_y
+    bx = b.building_x
+    by = b.building_y
+    gap = abs(bx - ax) if ay == by else abs(by - ay)
+    if gap < width:
+        packing_info(
+            PackingStep.ALLEY, district=district,
+            n_plots=len(group), alley="no", reason=PackingReason.WIDTH,
+            width_cells=width,
+        )
+        return
+    from_node = _node_at(nodes, (ax + bx) // 2, ay if ay == by else (ay + by) // 2, world_uid)
+    to_node = _node_at(
+        nodes,
+        (ax + bx) // 2 if ay == by else ax,
+        (ay + by) // 2 if ay != by else ay,
+        world_uid,
+    )
+    if from_node not in nodes:
+        nodes.append(from_node)
+    if to_node not in nodes:
+        nodes.append(to_node)
+    edge = ConnectionEdge(
+        edge_uid=f"e_alley_{edge_key}_{from_node.node_uid}",
+        from_node_uid=from_node.node_uid,
+        to_node_uid=to_node.node_uid,
+        connection_type=alley_type,
+        width_cells=width,
+        has_sidewalk=has_sidewalk,
+        graph_level=GraphLevel.DISTRICT.value,
+        world_uid=world_uid,
+    )
+    edges.append(edge)
+    if edge_roles is not None:
+        edge_roles[edge.edge_uid] = DistrictStreetRole.BACK_ALLEY
+    packing_info(
+        PackingStep.ALLEY, district=district,
+        n_plots=len(group), alley="yes", reason=PackingReason.FROM_CONNECTIONS,
+        width_cells=width,
+    )
+
+
 def add_alleys(
     slot: DistrictSlot,
     placements: list[AreaPlacement],
@@ -251,9 +321,13 @@ def add_alleys(
     district = slot.district_template.system_name
     alley = alley_from_template(slot)
     by_module: dict[tuple[int, int], list[AreaPlacement]] = defaultdict(list)
+    by_cluster: dict[str, list[AreaPlacement]] = defaultdict(list)
     for placement in placements:
         res = placement.reservation
         if res is None:
+            continue
+        if res.cluster_id is not None:
+            by_cluster[res.cluster_id].append(placement)
             continue
         by_module[(res.col, res.row)].append(placement)
 
@@ -267,59 +341,32 @@ def add_alleys(
         return
     has_sidewalk = sidewalk_of(alley) if alley is not None else False
     for (col, row), group in by_module.items():
-        if alley is None:
-            packing_info(
-                PackingStep.ALLEY, district=district,
-                n_plots=len(group), alley="no", reason=PackingReason.NOT_IN_SETTINGS,
-            )
-            continue
-        if len(group) < 2:
-            packing_info(
-                PackingStep.ALLEY, district=district,
-                n_plots=len(group), alley="no", reason=PackingReason.SINGLE_PLOT,
-            )
-            continue
-        a, b = group[0], group[1]
-        ax = a.building_x
-        ay = a.building_y
-        bx = b.building_x
-        by = b.building_y
-        gap = abs(bx - ax) if ay == by else abs(by - ay)
-        if gap < width:
-            packing_info(
-                PackingStep.ALLEY, district=district,
-                n_plots=len(group), alley="no", reason=PackingReason.WIDTH,
-                width_cells=width,
-            )
-            continue
-        from_node = _node_at(nodes, (ax + bx) // 2, ay if ay == by else (ay + by) // 2, world_uid)
-        to_node = _node_at(
-            nodes,
-            (ax + bx) // 2 if ay == by else ax,
-            (ay + by) // 2 if ay != by else ay,
-            world_uid,
-        )
-        if from_node not in nodes:
-            nodes.append(from_node)
-        if to_node not in nodes:
-            nodes.append(to_node)
-        edge = ConnectionEdge(
-            edge_uid=f"e_alley_{col}_{row}_{from_node.node_uid}",
-            from_node_uid=from_node.node_uid,
-            to_node_uid=to_node.node_uid,
-            connection_type=alley_type,
-            width_cells=width,
+        _emit_alley_for_group(
+            district=district,
+            alley=alley,
+            alley_type=alley_type,
+            width=width,
             has_sidewalk=has_sidewalk,
-            graph_level=GraphLevel.DISTRICT.value,
+            group=group,
+            nodes=nodes,
+            edges=edges,
             world_uid=world_uid,
+            edge_roles=edge_roles,
+            edge_key=f"{col}_{row}",
         )
-        edges.append(edge)
-        if edge_roles is not None:
-            edge_roles[edge.edge_uid] = DistrictStreetRole.BACK_ALLEY
-        packing_info(
-            PackingStep.ALLEY, district=district,
-            n_plots=len(group), alley="yes", reason=PackingReason.FROM_CONNECTIONS,
-            width_cells=width,
+    for cluster_id, group in by_cluster.items():
+        _emit_alley_for_group(
+            district=district,
+            alley=alley,
+            alley_type=alley_type,
+            width=width,
+            has_sidewalk=has_sidewalk,
+            group=group,
+            nodes=nodes,
+            edges=edges,
+            world_uid=world_uid,
+            edge_roles=edge_roles,
+            edge_key=f"cluster_{cluster_id.replace(':', '_')}",
         )
 
 

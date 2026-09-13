@@ -17,6 +17,7 @@ from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.dataModel.terrain.relief.gradeSlot import GradeCellSlots
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
+from app.dataModel.worldPack.settlementStructureWire import SettlementStructureWire
 from app.dataModel.worldPack.territoryVolume import TerritoryVolume
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
 from app.db.models.world import World
@@ -196,6 +197,46 @@ class PackRenderReadFacade:
             chunk=chunk,
             slots=reader.read_grade_cell_slots_location(location_uid),
         )
+
+    def has_settlement_structure(self, world: World, location_uid: str) -> bool:
+        """Manifest ``structure_path`` and blob file both present."""
+        if not self._ctx.has_pack_for(world):
+            return False
+        reader = self._ctx.reader_for(world)
+        entry = reader.manifest.settlement_structure_entry(location_uid)
+        if entry is None or not entry.structure_path:
+            return False
+        return reader.paths.settlement_structure_path(location_uid).is_file()
+
+    def try_settlement_structure(
+        self,
+        world: World,
+        location_uid: str,
+    ) -> SettlementStructureWire | None:
+        if not self.has_settlement_structure(world, location_uid):
+            logger.debug(
+                "pack render settlement_structure missing | world=%s location=%s",
+                world.world_uid,
+                location_uid,
+            )
+            return None
+        reader = self._ctx.reader_for(world)
+        try:
+            wire = reader.read_settlement_structure(location_uid)
+        except FileNotFoundError:
+            logger.warning(
+                "pack render settlement_structure missing blob | world=%s location=%s",
+                world.world_uid,
+                location_uid,
+            )
+            return None
+        logger.info(
+            "pack render settlement_structure | world=%s location=%s districts=%d",
+            world.world_uid,
+            location_uid,
+            len(wire.districts),
+        )
+        return wire
 
     def location_uids_with_terrain(self, world: World) -> list[str]:
         if not self._ctx.has_pack_for(world):

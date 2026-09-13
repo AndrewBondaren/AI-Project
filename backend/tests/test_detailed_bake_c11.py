@@ -89,6 +89,24 @@ class PackBakeResultSettlementTests(TestCase):
         )
         self.assertFalse(result.is_partial())
 
+    def test_to_dict_includes_c11_pipeline(self):
+        from app.application.worldData.settlementOutdoor.settlementPipelineTimings import (
+            SettlementPipelineTimings,
+        )
+
+        result = PackBakeResult(
+            mode="detailed",
+            detailed=_l2(),
+            settlement=MaterializeResult(
+                location_uid="loc-city",
+                status="published",
+                pipeline_s=SettlementPipelineTimings(generate_s=2.5, c11_s=9.0),
+            ),
+        )
+        payload = result.to_dict()
+        self.assertEqual(payload["settlement"]["c11_pipeline"]["generate_s"], 2.5)
+        self.assertEqual(payload["settlement"]["c11_pipeline"]["c11_s"], 9.0)
+
 
 class DetailedBakeC11HookTests(IsolatedAsyncioTestCase):
     @patch(

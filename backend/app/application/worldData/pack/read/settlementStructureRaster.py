@@ -5,33 +5,11 @@ from __future__ import annotations
 from collections import OrderedDict
 
 from app.application.worldData.pack.read.packReadContext import PackReadContext
+from app.application.worldData.pack.read.settlementStructureIndex import index_shell_cells
 from app.dataModel.worldPack.mergeMapCells import CellContribution
 from app.dataModel.worldPack.packReadPolicy import PackReadPolicy
-from app.dataModel.worldPack.settlementStructureWire import (
-    SettlementStructureWire,
-    ShellCellWire,
-)
+from app.dataModel.worldPack.settlementStructureWire import ShellCellWire
 from app.db.models.world import World
-
-
-def _index_shell_cells(wire: SettlementStructureWire) -> dict[tuple[int, int, int], ShellCellWire]:
-    index: dict[tuple[int, int, int], ShellCellWire] = {}
-
-    def put_all(cells: list[ShellCellWire]) -> None:
-        for cell in cells:
-            index[(cell.x, cell.y, cell.z)] = cell
-
-    put_all(list(wire.barrier_cells))
-    for district in wire.districts:
-        put_all(list(district.barrier_cells))
-        for area in district.areas:
-            put_all(list(area.yard_cells))
-            put_all(list(area.barrier_cells))
-            for small in area.small_layouts:
-                put_all(list(small))
-            for building in area.buildings:
-                put_all(list(building.shell_cells))
-    return index
 
 
 class SettlementStructureRaster:
@@ -79,7 +57,7 @@ class SettlementStructureRaster:
             self._index_cache.move_to_end(cache_key)
             return cached
         wire = self._ctx.reader_for(world).read_settlement_structure(location_uid)
-        index = _index_shell_cells(wire)
+        index = index_shell_cells(wire)
         self._index_cache[cache_key] = index
         if len(self._index_cache) > self._cap:
             self._index_cache.popitem(last=False)

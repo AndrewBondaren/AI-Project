@@ -5,17 +5,13 @@ from __future__ import annotations
 from app.application.worldData.generators.structure.gridRenderer import render_all_levels, render_level
 from app.application.worldData.render.gridAxes import format_grid_header
 from app.application.worldData.render.mapSymbols import render_map_legend
+from app.application.worldData.render.structureAsciiSymbols import render_structure_legend
 from app.application.worldData.render.worldGridRenderer import cell_symbol
 from app.db.models.mapCell import MapCell
 
 
 class LocationGridRenderer:
     """Render cells bound to one ``location_uid``."""
-
-    _STRUCTURE_LEGEND = (
-        "structure: #=wall .=floor D=door O=window _=stair_floor "
-        "↑↓→←=stairs T=trapdoor H=ladder"
-    )
 
     def __init__(
         self,
@@ -37,7 +33,7 @@ class LocationGridRenderer:
     @staticmethod
     def render_legend(*, indoor: bool = False) -> str:
         if indoor:
-            return LocationGridRenderer._STRUCTURE_LEGEND
+            return render_structure_legend()
         return render_map_legend()
 
     def render_level(self, z: int) -> str:

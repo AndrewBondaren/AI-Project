@@ -61,7 +61,7 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
         max_per_city=1,
         allowed_structure_types=["town_hall"],
         required_structures=[
-            RequiredStructure(building_template="town_hall", count=1, position=POSITION_CENTER),
+            RequiredStructure(plot_template="town_hall", count=1, position=POSITION_CENTER),
         ],
         street_layout=StreetLayout.GRID,
         connections=[

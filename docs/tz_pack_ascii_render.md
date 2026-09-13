@@ -20,12 +20,12 @@ metadata:
 | Слой | Что рисует | Не делает |
 |---|---|---|
 | L0 world mosaic | light / height | invent height; **outdoor grade** (нет L0 grade layer) |
-| L2 location | surface (+ diagnostics) / **surface_grade** + **grade_{z}** | invent uid вне detailed geometry |
+| L2 location | surface (+ diagnostics) / **surface_grade** + **grade_{z}** / **city_{z}** | invent uid вне detailed geometry; invent city cells |
 | L2 wilderness tile | surface (+ mountain diagnostics) / **surface_grade** + **grade_{z}** | invent uid; L0→L2 **grade** carry |
 
 **Scope (R36u):** L0→L2 **mask** carry (terrain / hydro / facing) — unchanged ([`tz_world_pack_storage.md`](./tz_world_pack_storage.md)). Меняется только **relief grade** writer + omit L0 grade ASCII.
 
-Код (ориентиры): `render/mapGridRenderService.py` (SQL overlay + pack/legacy), `render/packMapGridRender.py`, `render/worldMapPackRenderer.py` (фасад L0 mask+height), `lightMosaic.py` / `lightMosaicFrame.py` / `lightMapPins.py` / `lightMapCells.py`, `worldMapMacroRender.py`, `worldMapGradeOverlay.py` (L0 grade omit), `locationTerrainPackRenderer.py`, `wildernessTilePackRenderer.py`, `fineTerrainAsciiKernel.py`, `mapSymbols.py`, `facingArrows.py`, `renderPayloads.py`; dump — `scripts/render_maps.py` / `dump_detailed_renders`.
+Код (ориентиры): `render/mapGridRenderService.py` (SQL overlay + pack/legacy), `render/packMapGridRender.py`, `render/worldMapPackRenderer.py` (фасад L0 mask+height), `lightMosaic.py` / `lightMosaicFrame.py` / `lightMapPins.py` / `lightMapCells.py`, `worldMapMacroRender.py`, `worldMapGradeOverlay.py` (L0 grade omit), `locationTerrainPackRenderer.py`, `locationCityPackRenderer.py`, `wildernessTilePackRenderer.py`, `fineTerrainAsciiKernel.py`, `mapSymbols.py`, `facingArrows.py`, `renderPayloads.py`; dump — `scripts/render_maps.py` / `dump_detailed_renders`.
 
 **Антипаттерн:** «рендер чинит мир» (gap fill, invent `system_grade_uid`, повторный ribbon apply на L0); выносить сцепление или онтологию grade в dump / DAG. **Dump без строки ≥5 с** — crit: `dumpLog` + heartbeat (`DEBUG_PROGRESS_POLL_S`, default 5) через `loggingConfig` / `generation_world_log(mode="dump")`. Не `print` / не script-tee. Sink: [`tz_logging.md`](./tz_logging.md) консьюмер `render` / `dumpLog` (процесс **script**, не `app.log` uvicorn).
 
@@ -114,7 +114,8 @@ Macro-tile (один знак на тайл): тот же lookup по любом
 | `surface` → `surface.txt` | ✅ | FineTerrain top / surface **symbols** |
 | **`surface_z`** → **`surface_z.txt`** | ✅ | per-cell **max world-z** (FineTerrain top); L2 analog of L0 `height` |
 | `column_span` / `cliff_delta` | ✅ diag | см. [`tz_mountain_architecture.md`](./tz_mountain_architecture.md) § Debug render |
-| numeric z → `z/{n}.txt` | ✅ | material slice at world-z. **Dump files:** `sparse_xy` (only occupied cells) — not a full mosaic of spaces per z. HTTP `?z=` remains aligned ASCII. **Dump clip:** `--z-range N[:M]` (inclusive, colon) |
+| numeric z → `z/{n}.txt` | ✅ | material slice at world-z. **Dump files:** `sparse_xy` (only occupied cells) — not a full mosaic of spaces per z. HTTP `?z=` remains aligned ASCII (FineTerrain only). **Dump clip:** `--z-range N[:M]` (inclusive, colon) |
+| **`city_{z}`** → **`city/{z}.txt`** | ✅ location only | FineTerrain at that world-z + pack `settlement.zst` **клетки здания** (WP-20 city over location): фасад, пол `.`, лестницы-стрелки, проёмы. Same local frame as `surface`. **Occupied z only**. Нет blob / нет клеток → omit. Wilderness — нет. Не `surface`. SQL streets не рисуются. Читает pack, не merge патчей. `--z-range` клипает и city z |
 | **`surface_grade`** → **`surface_grade.txt`** | ✅ путь; глиф — consume TZ | **3×3**, поле **W** как `surface_z`, **3 строки / gy**. Слоты — `grade_rays.json` § Тело sidecar. `+` = `COUPLE`. Omit если нет клеток sidecar и нет uid |
 | **`grade_{n}`** → **`z/grade_{n}.txt`** | ✅ слой; **dump opt-in** | **composite:** material at z + grade только где `surface_z == n`; omit если на этом z нет grade. **Dump:** только с `--grade-z` (иначе слишком много файлов / wall). Crop frame (+1 halo). HTTP / `surface_grade` без флага |
 
@@ -125,7 +126,7 @@ Macro-tile (один знак на тайл): тот же lookup по любом
 | light / full (L0) | ❌ (**R36u**) | нет L0 grade layer |
 | detailed (`detailed_bake` geometry) | ✅ single-writer (R36 / R36t) | **location + wilderness** `surface_grade`; `z/grade_{n}` в dump — `--grade-z` |
 
-`surface.txt` / `z/{n}.txt` остаются **без** grade (чистый material). Grade смотреть в `surface_grade` / `grade_{n}`.
+`surface.txt` / `z/{n}.txt` остаются **без** grade (чистый material). Grade смотреть в `surface_grade` / `grade_{n}`. Город — `city_{z}` / `city/{z}.txt`: полная геометрия дома из pack, не только фасад.
 
 ---
 
@@ -196,9 +197,10 @@ Open product XOR по L2 grade ASCII — **нет**.
 | Путь | Grade |
 |---|---|
 | `GET …/render-world-grid` (+ dump L0) | **нет** `ascii_grade` / `world-grade.txt` (R36u). **SQL overlay** identity на пины (§ L0 identity) |
-| `GET …/render-location-grids` | `levels.surface_grade` (+ optional `grade_{n}` в dense) |
+| `GET …/render-location-grids` | `levels.surface_grade` (+ optional `grade_{n}` в dense); `levels.city_{z}` если есть `settlement.zst` |
+| `GET …/locations/{uid}/render-grid` | те же `levels`; `?z=` — только FineTerrain |
 | `GET …/render-wilderness-tile-grid` | `levels.surface_grade`; per-z grade в dump только `--grade-z` (`z/grade_{n}.txt`) |
-| `dump_detailed_renders` | `surface_grade.txt` + `z/{n}.txt` (`--z-range N[:M]` optional clip); `z/grade_{n}.txt` — opt-in `--grade-z` |
+| `dump_detailed_renders` | `surface_grade.txt` + `z/{n}.txt` (`--z-range N[:M]` optional clip); `z/grade_{n}.txt` — opt-in `--grade-z`; `city/{z}.txt` если settlement.zst |
 
 Отдельный query `?layer=grade` **не** обязателен, если payload уже несёт `levels` dict.
 
@@ -215,12 +217,13 @@ Open product XOR по L2 grade ASCII — **нет**.
 | [`tz_map_light_bake.md`](./tz_map_light_bake.md) | L0 paint/bake frame (MLB); **без** outdoor grade writer |
 | [`tz_mountain_architecture.md`](./tz_mountain_architecture.md) | L2 column_span / cliff_delta diagnostics |
 | [`tz_locations.md`](./tz_locations.md) | stairs `system_facing` per-cell; `named_locations.system_location_subtype` (SoT identity); subtype `l0_map_symbol` |
+| [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) | pack city structure (`settlement.zst`); dump ASCII читает этот слой + location terrain, не Patch Store |
 
 ---
 
 ## История
 
-| 2026-09-04 | **L0 identity overlay:** subtype SoT = SQL `named_locations`; pack = геометрия/`location_pin` index. Render API joins by uid. Glyphs city=`u` village=`n` dungeon=`d` underground_city=`g`. |
+| 2026-09-13 | **C8 pack geometry:** `city_{z}` overlays full `StructureLayout.cells` from settlement.zst (floors, stairs), not facade-only. |
 | 2026-09-04 | **L0 city vs location:** footprint ≠ `@`; settlement contributor skips geographic. Glyphs by subtype — строка «L0 identity overlay». |
 | 2026-08-23 | **Pack 8 слотов:** sidecar SLOPE/SHEER/COUPLE; dump не invent `+` из z — consume TZ |
 | 2026-08-23 | **grade_rays = фронт:** pack лучи фронта (не тело×8) — consume TZ |

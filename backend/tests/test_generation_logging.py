@@ -99,6 +99,19 @@ class GenerationWorldLogTests(unittest.TestCase):
                 l2_s=42.0,
                 grade_persist_s=1.5,
             )
+            from app.application.worldData.pack.bake.packBakeLog import (
+                log_pack_settlement_c11_done,
+            )
+            from app.application.worldData.settlementOutdoor.settlementPipelineTimings import (
+                SettlementPipelineTimings,
+            )
+
+            log_pack_settlement_c11_done(
+                "world-terrain-test-001",
+                location_uid="loc-city",
+                status="published",
+                pipeline=SettlementPipelineTimings(generate_s=3.25, sql_s=0.4, c11_s=5.0),
+            )
 
         self.assertTrue(run_path.is_file())
         latest = self.root / "world-terrain-test-001" / "bake-detailed-latest.log"
@@ -110,6 +123,9 @@ class GenerationWorldLogTests(unittest.TestCase):
         self.assertIn("l2_s=42.00", text)
         self.assertIn("pack detailed_bake done", text)
         self.assertIn("grade_persist_s=1.50", text)
+        self.assertIn("pack settlement c11 done", text)
+        self.assertIn("generate_s=3.25", text)
+        self.assertIn("c11_s=5.00", text)
         self.assertIn("bake-detailed-", run_path.name)
 
     def test_generation_world_log_captures_dump_render_logger(self) -> None:
