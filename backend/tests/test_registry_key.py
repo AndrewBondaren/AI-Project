@@ -709,6 +709,7 @@ class TestRegistryKey(unittest.TestCase):
             SettlementSpecializationEntry,
             {
                 "system_specialization": "extract",
+                "allowed_family": "extract",
                 "typical_districts": [
                     {
                         "district_type": "industrial",

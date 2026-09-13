@@ -9,8 +9,6 @@ from .catalog import (
     DEFAULT_PURPOSE_MATCH,
     FAMILY_OF,
     HOUSE,
-    PACK_PURPOSES,
-    PURPOSE_DISPLAY,
     AllowedToken,
     BuildingPurpose,
     BuildingPurposeMatch,
@@ -19,13 +17,19 @@ from .catalog import (
     coerce_purpose_list,
     coerce_purpose_match,
     expand_allowed,
+    leaves_for_family,
     primary_purpose,
-    purposes_for_world,
     purposes_match,
     union_plot_purposes,
 )
 from .family import BuildingPurposeFamily
-from .packs import PurposePack, coerce_purpose_packs
+from .packs import PurposePack, coerce_purpose_packs, normalize_pack_id
+from .purposePackEntry import PurposePackEntry
+from .worldPurposePackRegistry import (
+    PurposePackKey,
+    WorldPurposePackRegistry,
+    purposes_for_world,
+)
 from .worldPurposePacks import WorldPurposePacks
 
 __all__ = [
@@ -37,9 +41,10 @@ __all__ = [
     "DEFAULT_PURPOSE_MATCH",
     "FAMILY_OF",
     "HOUSE",
-    "PACK_PURPOSES",
-    "PURPOSE_DISPLAY",
     "PurposePack",
+    "PurposePackEntry",
+    "PurposePackKey",
+    "WorldPurposePackRegistry",
     "WorldPurposePacks",
     "children_of",
     "coerce_allowed_list",
@@ -47,6 +52,8 @@ __all__ = [
     "coerce_purpose_match",
     "coerce_purpose_packs",
     "expand_allowed",
+    "leaves_for_family",
+    "normalize_pack_id",
     "primary_purpose",
     "purposes_for_world",
     "purposes_match",

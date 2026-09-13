@@ -1,120 +1,184 @@
 {
-  "system_name":      "manor_1",
-  "structure_type":   "manor",
-  "display_name":     "Манор тип 1",
-  "description":      "Двухэтажный манор. Две u_shape лестницы: facing=south и facing=east. rect_standard shaft (5×5 экстерьер, 3×3 интерьер).",
-  "version":          "1.0",
-  "default_z_height": 15,
-
-  "levels": [
-    {
-      "z_offset":     0,
-      "display_name": "Первый этаж",
-      "rooms": [
-        {
-          "room_id":      "great_hall",
-          "room_type":    "common_hall",
-          "display_name": "Парадный зал",
-          "shape_type":   "square",
-          "size":         { "size_type": "big" },
-          "required":     true,
-          "count":        1,
-          "is_public":    true,
-          "is_forbidden": false,
-          "entry_point": {
-            "wall":         "south",
-            "passage_type": "main_entrance"
+  "system_name": "manor_1",
+  "display_name": "Манор тип 1",
+  "structure_types": [
+    "manor"
+  ],
+  "occupied_footprint": {
+    "min_x": 0,
+    "min_y": 0,
+    "width": 20,
+    "depth": 20
+  },
+  "main_building": {
+    "system_name": "manor_1",
+    "display_name": "Манор тип 1",
+    "structure_type": "manor",
+    "description": "Двухэтажный манор. Две u_shape лестницы: facing=south и facing=east. rect_standard shaft (5×5 экстерьер, 3×3 интерьер).",
+    "version": "1.0",
+    "default_z_height": 15,
+    "levels": [
+      {
+        "z_offset": 0,
+        "display_name": "Первый этаж",
+        "rooms": [
+          {
+            "room_id": "great_hall",
+            "room_type": "common_hall",
+            "display_name": "Парадный зал",
+            "shape_type": "square",
+            "size": {
+              "size_type": "big"
+            },
+            "required": true,
+            "count": 1,
+            "is_public": true,
+            "is_forbidden": false,
+            "entry_point": {
+              "wall": "south",
+              "passage_type": "main_entrance"
+            }
           }
-        }
-      ]
-    },
-    {
-      "z_offset":     1,
-      "display_name": "Второй этаж",
-      "rooms": [
-        {
-          "room_id":      "gallery_n",
-          "room_type":    "corridor",
-          "display_name": "Северная галерея",
-          "shape_type":   "rectangle",
-          "size":         { "width_range": [12, 16], "depth_range": [3, 3] },
-          "required":     true,
-          "count":        1,
-          "is_public":    false,
-          "is_forbidden": false
+        ]
+      },
+      {
+        "z_offset": 1,
+        "display_name": "Второй этаж",
+        "rooms": [
+          {
+            "room_id": "gallery_n",
+            "room_type": "corridor",
+            "display_name": "Северная галерея",
+            "shape_type": "rectangle",
+            "size": {
+              "width_range": [
+                12,
+                16
+              ],
+              "depth_range": [
+                3,
+                3
+              ]
+            },
+            "required": true,
+            "count": 1,
+            "is_public": false,
+            "is_forbidden": false
+          },
+          {
+            "room_id": "gallery_e",
+            "room_type": "corridor",
+            "display_name": "Восточная галерея",
+            "shape_type": "rectangle",
+            "size": {
+              "width_range": [
+                3,
+                3
+              ],
+              "depth_range": [
+                12,
+                16
+              ]
+            },
+            "required": true,
+            "count": 1,
+            "is_public": false,
+            "is_forbidden": false
+          },
+          {
+            "room_id": "chamber",
+            "room_type": "guest_room",
+            "display_name": "Покои",
+            "shape_type": "rectangle",
+            "size": {
+              "width_range": [
+                5,
+                8
+              ],
+              "depth_range": [
+                5,
+                8
+              ]
+            },
+            "required": false,
+            "count_range": [
+              1,
+              3
+            ],
+            "is_public": false,
+            "is_forbidden": false,
+            "attach_to": "gallery_n",
+            "attach_wall": "both"
+          },
+          {
+            "room_id": "chamber_e",
+            "room_type": "guest_room",
+            "display_name": "Покои",
+            "shape_type": "rectangle",
+            "size": {
+              "width_range": [
+                5,
+                8
+              ],
+              "depth_range": [
+                5,
+                8
+              ]
+            },
+            "required": false,
+            "count_range": [
+              1,
+              3
+            ],
+            "is_public": false,
+            "is_forbidden": false,
+            "attach_to": "gallery_e",
+            "attach_wall": "both"
+          }
+        ]
+      }
+    ],
+    "staircases": [
+      {
+        "staircase_id": "south_stair",
+        "staircase_type": "u_shape",
+        "size": {
+          "size_type": "rect_standard"
         },
-        {
-          "room_id":      "gallery_e",
-          "room_type":    "corridor",
-          "display_name": "Восточная галерея",
-          "shape_type":   "rectangle",
-          "size":         { "width_range": [3, 3], "depth_range": [12, 16] },
-          "required":     true,
-          "count":        1,
-          "is_public":    false,
-          "is_forbidden": false
+        "facing": "south",
+        "has_walls": true,
+        "stops": [
+          "great_hall",
+          "gallery_n"
+        ]
+      },
+      {
+        "staircase_id": "east_stair",
+        "staircase_type": "u_shape",
+        "size": {
+          "size_type": "rect_standard"
         },
-        {
-          "room_id":      "chamber",
-          "room_type":    "guest_room",
-          "display_name": "Покои",
-          "shape_type":   "rectangle",
-          "size":         { "width_range": [5, 8], "depth_range": [5, 8] },
-          "required":     false,
-          "count_range":  [1, 3],
-          "is_public":    false,
-          "is_forbidden": false,
-          "attach_to":    "gallery_n",
-          "attach_wall":  "both"
-        },
-        {
-          "room_id":      "chamber_e",
-          "room_type":    "guest_room",
-          "display_name": "Покои",
-          "shape_type":   "rectangle",
-          "size":         { "width_range": [5, 8], "depth_range": [5, 8] },
-          "required":     false,
-          "count_range":  [1, 3],
-          "is_public":    false,
-          "is_forbidden": false,
-          "attach_to":    "gallery_e",
-          "attach_wall":  "both"
-        }
-      ]
-    }
-  ],
-
-  "connections": [
-    {
-      "from_room":    "gallery_n",
-      "to_room":      "chamber",
-      "passage_type": "doorway",
-      "required":     true
-    },
-    {
-      "from_room":    "gallery_e",
-      "to_room":      "chamber_e",
-      "passage_type": "doorway",
-      "required":     true
-    }
-  ],
-
-  "staircases": [
-    {
-      "staircase_id":   "south_stair",
-      "staircase_type": "u_shape",
-      "size":           { "size_type": "rect_standard" },
-      "facing":         "south",
-      "has_walls":      true,
-      "stops":          ["great_hall", "gallery_n"]
-    },
-    {
-      "staircase_id":   "east_stair",
-      "staircase_type": "u_shape",
-      "size":           { "size_type": "rect_standard" },
-      "facing":         "east",
-      "has_walls":      true,
-      "stops":          ["great_hall", "gallery_e"]
-    }
-  ]
+        "facing": "east",
+        "has_walls": true,
+        "stops": [
+          "great_hall",
+          "gallery_e"
+        ]
+      }
+    ],
+    "connections": [
+      {
+        "from_room": "gallery_n",
+        "to_room": "chamber",
+        "passage_type": "doorway",
+        "required": true
+      },
+      {
+        "from_room": "gallery_e",
+        "to_room": "chamber_e",
+        "passage_type": "doorway",
+        "required": true
+      }
+    ]
+  }
 }

@@ -54,7 +54,7 @@ Generate: unknown **size** → `medium` + WARNING (`jsonValidation` / `resolve`)
 
 `system_location_mood`: omit/`null` → `None` (нет дефолтного mood). `""` → reject. Не size→medium.
 
-`system_specialization`: identity роли, не `district_subtype`. `subjects` / `subject_kind` — не этот ID.
+`system_specialization`: identity специализации, не `district_subtype`. `subjects` / `subject_kind` — не этот ID. `allowed_family` — `BuildingPurposeFamily`, не лист.
 
 `DistrictTemplateKey`: чертёж района (`civic_center`), не ткань `civic` и не `DrawingKey` участка. Pin `TypicalDistrictRef.system_name`: omit/`null` → `None` (подбор по `district_type` / subtype); `""` / blank на `resolve_model` → `None` + WARNING `invalid; using field default` (не 422). Identity и `DistrictTopologySlot.template_system_name`: `""` → reject. Не size→medium.
 
@@ -149,7 +149,7 @@ SQL `named_locations.frontage_type_order` — JSON-массив; dataclass `Name
 |---|---|---|---|
 | Назначение | лист `BuildingPurpose` (+ семья в каталоге, не на чертеже) | `structure_types[]`; фильтр района — лист или `BuildingPurposeFamily`; паки мира режут каталог | `cafe`, `temple`, `portal`; комбо `[house, workshop]` |
 | Чертёж участка | **тип участка** = identity шаблона | `BuildingLayoutTemplate.system_name` | `tavern_1`, `inn_small` |
-| Здание на участке | тело generate (§3) или leftover корневые `levels` | `building` / leftover `levels` | `fixtures/templates/tavern_1.json` внутри `inn_small` |
+| Здание на участке | главное тело generate (§3) | `main_building` | `fixtures/templates/tavern_1.json` внутри `inn_small` |
 | Участок | инстанс после packing | `AreaSlot` / `AreaLayout` | клетка в районе |
 
 `structure_types` **не** владеет участком и **не** ключ counts. Режет пул («в квартале можно мастерские»). Generate среди чертежей с подходящими тегами — rng + тир + subjects + `like`/`strict`. Pin конкретного чертежа — `required_structures[].building_template` = `system_name`, не purpose.
@@ -176,7 +176,7 @@ SQL `named_locations.frontage_type_order` — JSON-массив; dataclass `Name
 | Имя | Почему |
 |---|---|
 | `structure_type` / `structure_types` | назначение чертежа (engine enum + leftover scalar) |
-| `allowed_structure_types` / `required_structure_types` / `subjects_to_structure_types` | фильтр purpose |
+| `allowed_structure_types` / `LocationTypeSubtypeEntry.required_structure_types` | фильтр purpose (ткань района / морфология). Не поля `SettlementSpecializationEntry` |
 | `required_structures` | массив pin, не map N |
 | `RequiredStructure.structure_type` | leftover optional purpose на строке рецепта |
 | `structure_context` / `default_structure_context` / `StructureAreaAssembler` / `ASSEMBLER_REGISTRY` | generate здания |
@@ -192,8 +192,8 @@ SQL `named_locations.frontage_type_order` — JSON-массив; dataclass `Name
 | `display_*` | не ключ реестра |
 | `district_type` / `district_subtype` (шаблон, typical, zone preference, `PlacementCondition.district_type`) | нет реестра ткани; subtype ≠ identity specialization-строки |
 | `LocationTypeSubtypeEntry.typical_district_types` | та же ткань |
-| `allowed_structure_types`, `required_structure_types`, `RequiredStructure.structure_type` | назначение чертежа (`BuildingPurpose` / leftover scalar), не identity участка; не ключи counts |
-| `subjects`, `subject_kind`, ключи `subjects_to_structure_types` | N+1 в несколько реестров; TODO в POJO bind/entry |
+| `allowed_structure_types`, `LocationTypeSubtypeEntry.required_structure_types`, `RequiredStructure.structure_type` | назначение / морфология / leftover purpose на pin; не identity участка; не поля `SettlementSpecializationEntry` |
+| `subjects`, `subject_kind` | N+1 в несколько реестров; TODO в POJO bind |
 | uid (`location_uid`, `node_uid`, `paired_exit_uid`, …) | экземпляр |
 | `LocationTypeSubtypeEntry.footprint_by_size` ключи | не SoT метров; не этот обход |
 | `CanalStructureSpec.structure_refs` / relief knobs `structure_refs` | relief/канал; не city PerimeterBarrier |
@@ -234,7 +234,8 @@ SQL dataclass `NamedLocation` остаётся `str \| None`; coerce на POJO /
 | 2026-09-07 | POJO-C-6 **resolved**: `BarrierTemplateKey` на identity `system_type` + `PerimeterBarrier.template`; `""` → `None` + warning; `sides`/relief `structure_refs` не срез |
 | 2026-09-08 | POJO-C-8 **resolved**: `RequiredStructurePosition` (`any`/`center`); omit/invalid → `any` + warning; CONN-PACK-2 не срез |
 | 2026-09-08 | POJO-C-9 **resolved**: `PerimeterBarrier.sides` → `list[Facing]` (кардиналы); skip unknown/intercardinal + warning |
-| 2026-09-12 | Чертёж участка: `occupied_footprint` + вложенное `building` (пример `inn_small` ← `tavern_1`). Малые пристройки не в чертеже. |
+| 2026-09-12 | **`main_building`:** единственное поле главного здания на чертеже участка. Ключ `building` запрещён (не alias). Калитка / фасад забора смотрят на него. Пристройки не в чертеже v1. SoT [tz_building_generator.md](./tz_building_generator.md) (начало документа). |
+| 2026-09-12 | Чертёж участка: `occupied_footprint` + вложенное `main_building` (пример `inn_small` ← `tavern_1`). Малые пристройки не в чертеже. |
 | 2026-09-12 | Дерево назначений: семья → лист; `allowed` может быть семьёй; паки мира. SoT [tz_building_generator.md](./tz_building_generator.md) §2.1 |
 | 2026-09-12 | Назначение участка: `structure_types[]` + `BuildingPurpose` (не N+1); `allowed_match` like/strict; pin только `system_name` |
 | 2026-09-08 | POJO-C-10 **resolved**: NL `parent_wall_material` / `parent_floor_material` → `MaterialKey`; omit/`null` → `None`; `""` → reject. Не скелет, не `MaterialPick` |

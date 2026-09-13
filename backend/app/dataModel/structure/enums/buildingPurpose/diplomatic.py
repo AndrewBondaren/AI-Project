@@ -1,5 +1,3 @@
 """Leaves of family ``diplomatic``."""
 
-LEAVES: tuple[tuple[str, str], ...] = (
-    ("embassy", "Посольство"),
-)
+LEAVES: tuple[str, ...] = ("embassy",)

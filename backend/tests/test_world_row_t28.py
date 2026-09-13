@@ -13,6 +13,7 @@ from app.application.jsonValidation.worldRow import (
     hydrology,
     lore,
     materials,
+    purpose_pack_registry,
     purpose_packs,
     relief_pick_policy,
     relief_template_registry,
@@ -31,7 +32,12 @@ from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
 from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
     WorldBarrierTemplateRegistry,
 )
-from app.dataModel.structure.enums.buildingPurpose import WorldPurposePacks
+from app.dataModel.structure.enums.buildingPurpose import (
+    BuildingPurpose,
+    BuildingPurposeFamily,
+    WorldPurposePackRegistry,
+    WorldPurposePacks,
+)
 from app.dataModel.terrain.relief.worldReliefPickPolicy import WorldReliefPickPolicy
 from app.dataModel.terrain.relief.worldReliefTemplateRegistry import (
     WorldReliefTemplateRegistry,
@@ -46,6 +52,10 @@ class WorldRowSliceResolveTest(unittest.TestCase):
         )
         self.assertEqual(slice_column_key(WorldTerrainRegistry), "terrain_registry")
         self.assertEqual(slice_column_key(WorldPurposePacks), "purpose_packs")
+        self.assertEqual(
+            slice_column_key(WorldPurposePackRegistry),
+            "purpose_pack_registry",
+        )
         self.assertIn(WorldMaterialRegistry, WORLD_SLICE_BY_POJO)
 
     def test_empty_world_uses_defaults(self) -> None:
@@ -147,15 +157,58 @@ class WorldRowRuntimeMergeT29Test(unittest.TestCase):
         world = SimpleNamespace(world_uid="w1")
         self.assertEqual(
             [str(pack) for pack in purpose_packs(world).root],
-            ["fantasy"],
+            ["base", "fantasy"],
         )
         out = {"purpose_packs": ["steampunk", "magic"]}
         ctx = ResolveContext(mode=ResolveMode.IMPORT)
         merge_world_slice(out, slice_for_pojo(WorldPurposePacks), ctx)
-        self.assertEqual(out["purpose_packs"], ["steampunk", "magic"])
+        self.assertEqual(out["purpose_packs"], ["base", "steampunk", "magic"])
         empty = {"purpose_packs": []}
         merge_world_slice(empty, slice_for_pojo(WorldPurposePacks), ctx)
-        self.assertEqual(empty["purpose_packs"], ["fantasy"])
+        self.assertEqual(empty["purpose_packs"], ["base", "fantasy"])
+
+    def test_purpose_pack_registry_overlay_and_frozen_base(self) -> None:
+        world = SimpleNamespace(world_uid="w1")
+        canon_ids = {
+            str(entry.system_pack)
+            for entry in WorldPurposePackRegistry.canonical_defaults().root
+        }
+        self.assertEqual(
+            {str(entry.system_pack) for entry in purpose_pack_registry(world).root},
+            canon_ids,
+        )
+        custom = SimpleNamespace(
+            world_uid="w1",
+            purpose_pack_registry=[{
+                "system_pack": "ironhold",
+                "allowed": ["temple"],
+            }],
+        )
+        merged = purpose_pack_registry(custom)
+        self.assertEqual(len(merged.root), len(canon_ids) + 1)
+        ironhold = merged.entry_for("ironhold")
+        self.assertIsNotNone(ironhold)
+        assert ironhold is not None
+        self.assertEqual(ironhold.allowed, [BuildingPurpose.TEMPLE])
+        overlay_base = SimpleNamespace(
+            world_uid="w1",
+            purpose_pack_registry=[{
+                "system_pack": "base",
+                "allowed": ["house"],
+            }],
+        )
+        frozen = purpose_pack_registry(overlay_base).entry_for("base")
+        assert frozen is not None
+        self.assertIn(BuildingPurposeFamily.DWELLING, frozen.allowed)
+        out = {"purpose_pack_registry": [{
+            "system_pack": "ironhold",
+            "allowed": ["culture", "tavern"],
+        }]}
+        ctx = ResolveContext(mode=ResolveMode.IMPORT)
+        merge_world_slice(out, slice_for_pojo(WorldPurposePackRegistry), ctx)
+        self.assertEqual(out["purpose_pack_registry"][0]["system_pack"], "ironhold")
+        self.assertIn("culture", out["purpose_pack_registry"][0]["allowed"])
+        self.assertIn("tavern", out["purpose_pack_registry"][0]["allowed"])
 
 
 if __name__ == "__main__":

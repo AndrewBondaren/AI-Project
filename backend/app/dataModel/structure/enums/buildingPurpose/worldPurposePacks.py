@@ -1,4 +1,4 @@
-"""Root POJO for ``worlds.purpose_packs`` — tz_building_generator.md §2.1."""
+"""Root POJO for ``worlds.purpose_packs`` — enabled mask ids. tz_building_generator.md §2.1."""
 
 from __future__ import annotations
 
@@ -12,15 +12,17 @@ from app.dataModel.structure.enums.buildingPurpose.packs import (
 )
 
 
-class WorldPurposePacks(RootModel[list[PurposePack]]):
+class WorldPurposePacks(RootModel[list[str]]):
+    """Enabled pack ids (N+1). Builtin names are ``PurposePack`` values."""
+
     SCHEMA_ID: ClassVar[str] = "SCH-WORLD-PURPOSE-PACKS"
-    root: list[PurposePack]
+    root: list[str]
 
     @classmethod
     def canonical_defaults(cls) -> WorldPurposePacks:
-        return cls([PurposePack.FANTASY])
+        return cls([PurposePack.BASE, PurposePack.FANTASY])
 
     @field_validator("root", mode="before")
     @classmethod
-    def _coerce_root(cls, value: Any) -> list[PurposePack]:
+    def _coerce_root(cls, value: Any) -> list[str]:
         return coerce_purpose_packs(value)

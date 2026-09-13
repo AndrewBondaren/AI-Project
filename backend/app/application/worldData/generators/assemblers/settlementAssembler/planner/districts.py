@@ -48,10 +48,12 @@ from app.dataModel.settlement.district.requiredStructureResolve import (
     unhosted_settlement_types,
     union_required_structures,
 )
-from app.dataModel.settlement.settlement.settlementSpecializationEntry import (
-    SettlementSpecializationEntry,
-)
 from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
+from app.dataModel.structure.enums.buildingPurpose import (
+    AllowedToken,
+    BuildingPurposeFamily,
+    leaves_for_family,
+)
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -60,11 +62,12 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
-class _SpecializationResolve:
+class SettlementSpecializationResolve:
     spec_refs: tuple[TypicalDistrictRef, ...]
-    unknown_roles: tuple[str, ...]
+    unknown_specializations: tuple[str, ...]
     required_types: tuple[str, ...]
     subject_tags: dict[str, tuple[str, ...]]
+    family_by_district: dict[tuple[str, str | None], tuple[BuildingPurposeFamily, ...]]
 
 
 def plan_district_slots(
@@ -92,13 +95,14 @@ def plan_district_slots(
     if recipe is not None and recipe.has_district_recipe():
         typical = tuple(recipe.typical_district_types)
 
-    resolved = _resolve_specialization(world, skeleton, recipe)
+    resolved = resolve_settlement_specialization(world, settlement, skeleton)
     city_refs = tuple(skeleton.typical_districts or ())
     spec_refs = resolved.spec_refs
-    for role in resolved.unknown_roles:
+    for system_specialization in resolved.unknown_specializations:
         logger.warning(
-            "Unknown settlement specialization | settlement=%s role=%s — skipped",
-            settlement.location_uid, role,
+            "Unknown settlement specialization | settlement=%s"
+            " system_specialization=%s — skipped",
+            settlement.location_uid, system_specialization,
         )
 
     logger.info(
@@ -148,10 +152,11 @@ def plan_district_slots(
         slot_ground_z = resolve_district_pin_z(
             settlement, origin_x, origin_y, surface,
         )
+        allowed = slot_allowed_for_template(template, resolved)
         required = union_required_structures(
             settlement_required,
             list(template.required_structures or []),
-            template.allowed_structure_types,
+            allowed,
             enabled,
         )
         slots.append(DistrictSlot(
@@ -162,6 +167,7 @@ def plan_district_slots(
             ground_z=slot_ground_z,
             district_template=template,
             required_structures=required,
+            allowed_structure_types=allowed,
             cell_x=cell_x,
             cell_y=cell_y,
             subject_tags=subject_tags,
@@ -300,7 +306,7 @@ def plan_district_slots(
     )
     for type_name in unhosted_settlement_types(
         settlement_required,
-        [slot.district_template.allowed_structure_types for slot in slots],
+        [slot.allowed_structure_types for slot in slots],
         enabled,
     ):
         logger.warning(
@@ -313,27 +319,30 @@ def plan_district_slots(
     return slots
 
 
-def specialization_extras(
+def slot_allowed_for_template(
+    template: DistrictTemplateEntry,
+    resolved: SettlementSpecializationResolve,
+) -> list[AllowedToken] | None:
+    have = (template.district_subtype or "").strip() or None
+    families = resolved.family_by_district.get((template.district_type, have))
+    if families:
+        return list(families)
+    return template.allowed_structure_types
+
+
+def resolve_settlement_specialization(
     world: World,
     settlement: NamedLocation,
     skeleton: CitySkeleton,
-) -> tuple[list[str], dict[str, tuple[str, ...]]]:
+) -> SettlementSpecializationResolve:
     subtype = (settlement.system_location_subtype or "").strip()
     recipe = (
         location_types(world).subtype_for(
             WorldLocationTypeRegistry.SYSTEM_TYPE_SETTLEMENT, subtype,
         ) if subtype else None
     )
-    resolved = _resolve_specialization(world, skeleton, recipe)
-    return list(resolved.required_types), dict(resolved.subject_tags)
-
-
-def _resolve_specialization(
-    world: World,
-    skeleton: CitySkeleton,
-    recipe,
-) -> _SpecializationResolve:
     spec_reg = settlement_specializations(world)
+    enabled = enabled_building_purposes(world)
     refs: list[TypicalDistrictRef] = []
     unknown: list[str] = []
     seen_refs: set[tuple[str, str | None]] = set()
@@ -341,6 +350,7 @@ def _resolve_specialization(
     seen_req: set[str] = set()
     tags: dict[str, list[str]] = {}
     tag_seen: dict[str, set[str]] = {}
+    families: dict[tuple[str, str | None], list[BuildingPurposeFamily]] = {}
 
     if recipe is not None:
         for type_name in recipe.required_structure_types:
@@ -354,52 +364,39 @@ def _resolve_specialization(
         if entry is None:
             unknown.append(bind.system_specialization)
             continue
+        live = leaves_for_family(entry.allowed_family, enabled)
+        if not live:
+            logger.warning(
+                "Specialization family has no enabled leaves | settlement=%s"
+                " system_specialization=%s allowed_family=%s — leftover",
+                settlement.location_uid,
+                bind.system_specialization,
+                entry.allowed_family,
+            )
         for ref in entry.typical_districts:
             key = (ref.district_type, ref.normalized_subtype())
-            if key in seen_refs:
-                continue
-            seen_refs.add(key)
-            refs.append(ref)
+            if key not in seen_refs:
+                seen_refs.add(key)
+                refs.append(ref)
+            bucket = families.setdefault(key, [])
+            if entry.allowed_family not in bucket:
+                bucket.append(entry.allowed_family)
         subjects = bind.subject_keys()
-        resolved_types = entry.resolved_structure_types(subjects)
-        for type_name in resolved_types:
-            if type_name in seen_req:
-                continue
-            seen_req.add(type_name)
-            required.append(type_name)
-        _accumulate_subject_tags(tags, tag_seen, entry, subjects, resolved_types)
+        if not subjects:
+            continue
+        for leaf in live:
+            for subject in subjects:
+                _add_subject_tag(tags, tag_seen, str(leaf), subject)
 
-    return _SpecializationResolve(
+    return SettlementSpecializationResolve(
         spec_refs=tuple(refs),
-        unknown_roles=tuple(unknown),
+        unknown_specializations=tuple(unknown),
         required_types=tuple(required),
         subject_tags={name: tuple(values) for name, values in tags.items()},
+        family_by_district={
+            key: tuple(values) for key, values in families.items()
+        },
     )
-
-
-def _accumulate_subject_tags(
-    tags: dict[str, list[str]],
-    seen: dict[str, set[str]],
-    entry: SettlementSpecializationEntry,
-    subjects: tuple[str, ...],
-    resolved_types: tuple[str, ...],
-) -> None:
-    mapped: set[str] = set()
-    resolved_set = set(resolved_types)
-    for subject in subjects:
-        mapped_types = entry.subjects_to_structure_types.get(subject) or []
-        if not mapped_types:
-            continue
-        mapped.add(subject)
-        for structure_type in mapped_types:
-            if structure_type in resolved_set:
-                _add_subject_tag(tags, seen, structure_type, subject)
-    unmapped = [subject for subject in subjects if subject not in mapped]
-    if not unmapped:
-        return
-    for structure_type in resolved_types:
-        for subject in unmapped:
-            _add_subject_tag(tags, seen, structure_type, subject)
 
 
 def _add_subject_tag(

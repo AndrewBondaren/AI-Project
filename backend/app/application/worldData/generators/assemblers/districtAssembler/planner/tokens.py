@@ -341,7 +341,7 @@ def _pick_layout_picks(
     skip_fill_types: set[str] = set()
 
     enabled = enabled_building_purposes(world)
-    allowed = slot.district_template.allowed_structure_types
+    allowed = slot.allowed_structure_types
     match = slot.district_template.allowed_match
     district = slot.district_template.system_name
 
@@ -404,6 +404,12 @@ def _pick_layout_picks(
         catalog.structure_types(),
         enabled,
     )
+    if allowed and not fill_types:
+        packing_warning(
+            PackingStep.CACHE,
+            district=district,
+            reason=PackingReason.NO_CANDIDATES,
+        )
     for structure_type in fill_types:
         if structure_type in skip_fill_types:
             continue
@@ -411,6 +417,12 @@ def _pick_layout_picks(
         layouts = _match_allowed(catalog, found, allowed, match, enabled)
         layouts = _tier_pool(layouts, skeleton, world)
         if not layouts:
+            packing_warning(
+                PackingStep.CACHE,
+                district=district,
+                structure_type=structure_type,
+                reason=PackingReason.NO_CACHE,
+            )
             continue
         subjects = _resolve_subjects(
             slot, world, structure_type, layouts, settlement_uid,

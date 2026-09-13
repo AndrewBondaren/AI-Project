@@ -15,7 +15,8 @@ from app.application.worldData.generators.assemblers.districtAssembler.districtS
     DistrictSlot,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.districts import (
-    specialization_extras,
+    resolve_settlement_specialization,
+    slot_allowed_for_template,
 )
 from app.application.worldData.settlementOutdoor.settlementOutdoorTypes import (
     is_district_location,
@@ -98,17 +99,18 @@ def load_topology_slots(
     parsed.sort(key=lambda item: item[0].slot_index)
     templates = district_templates(world)
     enabled = enabled_building_purposes(world)
-    required_types, subject_tags = specialization_extras(world, settlement, skeleton)
+    resolved = resolve_settlement_specialization(world, settlement, skeleton)
     slots: list[DistrictSlot] = []
     nodes_by_uid: dict[str, ConnectionNode] = {}
     for wire, row in parsed:
         template = templates.entry_for(wire.template_system_name)
         if template is None:
             return None
+        allowed = slot_allowed_for_template(template, resolved)
         required = union_required_structures(
-            list(required_types),
+            list(resolved.required_types),
             list(template.required_structures or []),
-            template.allowed_structure_types,
+            allowed,
             enabled,
         )
         entries: list[ConnectionEntry] = []
@@ -142,13 +144,14 @@ def load_topology_slots(
             district_template=template,
             entry_nodes=entries,
             required_structures=required,
+            allowed_structure_types=allowed,
             cell_x=wire.cell_x,
             cell_y=wire.cell_y,
-            subject_tags=dict(subject_tags),
+            subject_tags=dict(resolved.subject_tags),
         ))
     leftover = unhosted_settlement_types(
-        list(required_types),
-        [slot.district_template.allowed_structure_types for slot in slots],
+        list(resolved.required_types),
+        [slot.allowed_structure_types for slot in slots],
         enabled,
     )
     for type_name in leftover:

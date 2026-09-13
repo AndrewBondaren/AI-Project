@@ -14,9 +14,11 @@
     "template": null,
     "probability": 0
   },
-  "building": {
+  "main_building": {
     "system_name": "tavern_1",
-    "structure_type": "tavern",
+    "structure_types": [
+      "tavern"
+    ],
     "display_name": "Таверна тип 1",
     "description": "Двухэтажная таверна с подвалом. 1й этаж: прямое соединение (нет коридора). 2й этаж: коридор с жилыми комнатами по обе стороны.",
     "version": "1.0",

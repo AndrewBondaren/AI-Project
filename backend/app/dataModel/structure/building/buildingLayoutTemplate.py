@@ -1,4 +1,4 @@
-"""Plot drawing for packing. Nested ``building`` is the interior template (TZ §3).
+"""Plot drawing for packing. Nested ``main_building`` is the interior template (TZ §3).
 
 Root identity = ``DrawingKey`` (plot). Not the library Outline
 (``BuildingTemplateOutline.levels`` is IntMinMax).
@@ -41,7 +41,7 @@ def _is_generate_levels(value: Any) -> bool:
 def _looks_like_plot_or_interior(raw: dict[str, Any]) -> bool:
     if _is_generate_levels(raw.get("levels")):
         return True
-    nested = raw.get("building")
+    nested = raw.get("main_building")
     if isinstance(nested, dict) and _is_generate_levels(nested.get("levels")):
         return True
     footprint = raw.get("occupied_footprint")
@@ -49,7 +49,7 @@ def _looks_like_plot_or_interior(raw: dict[str, Any]) -> bool:
 
 
 class BuildingLayoutTemplate(BaseModel):
-    """Plot drawing (packing) with optional nested building body. tz_building_generator.md §3.1."""
+    """Plot drawing (packing) with optional nested main building. tz_building_generator.md (lock)."""
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
@@ -71,7 +71,7 @@ class BuildingLayoutTemplate(BaseModel):
         default_factory=DefaultStructureContext,
     )
     occupied_footprint: DefaultOnWire[OccupiedFootprintSpec | None] = None
-    building: DefaultOnWire[BuildingLayoutTemplate | None] = None
+    main_building: DefaultOnWire[BuildingLayoutTemplate | None] = None
     levels: DefaultOnWire[list[dict[str, Any]]] = Field(default_factory=list)
     staircases: DefaultOnWire[list[dict[str, Any]]] = Field(default_factory=list)
     connections: DefaultOnWire[list[dict[str, Any]]] = Field(default_factory=list)
@@ -89,7 +89,7 @@ class BuildingLayoutTemplate(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _coerce_structure_types(cls, data: Any) -> Any:
+    def _coerce_plot_wire(cls, data: Any) -> Any:
         if not isinstance(data, dict):
             return data
         payload = dict(data)
@@ -97,6 +97,10 @@ class BuildingLayoutTemplate(BaseModel):
         if raw is None:
             raw = payload.get("structure_type")
         payload["structure_types"] = coerce_purpose_list(raw, empty_as_house=True)
+        if "building" in payload:
+            raise ValueError(
+                "BuildingLayoutTemplate: wire key is main_building, not building"
+            )
         return payload
 
     @property
@@ -110,8 +114,8 @@ BuildingLayoutTemplate.model_rebuild()
 
 
 def interior_of(plot: BuildingLayoutTemplate) -> BuildingLayoutTemplate | None:
-    """Building body on the plot. Nested ``building`` wins; leftover root ``levels`` = this JSON is the body."""
-    nested = plot.building
+    """Main building body. Plot: ``main_building``. Building-body file / packing stub: root ``levels``."""
+    nested = plot.main_building
     if nested is not None:
         return nested
     if plot.levels:
@@ -120,7 +124,7 @@ def interior_of(plot: BuildingLayoutTemplate) -> BuildingLayoutTemplate | None:
 
 
 def plot_has_building(plot: BuildingLayoutTemplate) -> bool:
-    """NamedLocation on the plot iff the drawing describes a building with generate levels."""
+    """NamedLocation on the plot iff the drawing describes a main building with generate levels."""
     interior = interior_of(plot)
     return interior is not None and bool(interior.levels)
 

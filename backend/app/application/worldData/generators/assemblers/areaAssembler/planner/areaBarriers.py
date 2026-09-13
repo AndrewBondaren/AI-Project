@@ -50,7 +50,7 @@ def plan_area_barrier_cells(
 ) -> list[MapCell]:
     """
     Забор по периметру уже готовых slot.cells. Не expand.
-    Gate — на грани slot.facing (сторона улицы).
+    Gate — на грани slot.facing (сторона улицы); фасад входа смотрит на main_building.
     """
     if not slot.cells:
         return []

@@ -387,6 +387,17 @@ def _resolve_fieldwise(
     return model_cls.model_construct(**payload)
 
 
+def _is_string_scalar_entry(entry_cls: Any) -> bool:
+    """Root list of bare strings / ``RegistryKey`` (not a closed StrEnum)."""
+    if entry_cls is str:
+        return True
+    if not isinstance(entry_cls, type):
+        return False
+    if issubclass(entry_cls, StrEnum):
+        return False
+    return issubclass(entry_cls, str)
+
+
 def resolve_root_list(
     registry_cls: type[RootModel],
     raw: Any,
@@ -427,6 +438,7 @@ def resolve_root_list(
 
     entries: list[Any] = []
     enum_scalars = isinstance(entry_cls, type) and issubclass(entry_cls, StrEnum)
+    string_scalars = _is_string_scalar_entry(entry_cls)
     for index, item in enumerate(raw):
         if enum_scalars and not isinstance(item, dict):
             member: Any = item if isinstance(item, entry_cls) else None
@@ -444,6 +456,12 @@ def resolve_root_list(
                 )
                 continue
             entries.append(member)
+            continue
+        if string_scalars and not isinstance(item, dict):
+            token = str(item).strip() if item is not None else ""
+            if not token:
+                continue
+            entries.append(token if entry_cls is str else entry_cls(token))
             continue
         if not isinstance(item, dict):
             if ctx is not None and ctx.mode == ResolveMode.IMPORT:

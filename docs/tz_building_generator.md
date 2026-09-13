@@ -2,6 +2,25 @@
 
 > **Архитектура нод:** ноды structure-домена пишут только в `state.structure_context: StructureContext` — типизированный контекст на `ExecutionState`. `shared_context` не использовать как канал передачи данных. См. `tz_engine_node_context.md`.
 
+## Участок: главное здание (locked)
+
+Корень packing — **чертёж участка** (`BuildingLayoutTemplate`), не здание. После выбора чертежа связь со структурой **прямая**: поле `main_building`, не лотерея по `structure_types[]`.
+
+| Поле | Смысл |
+|---|---|
+| `structure_types[]` | Теги назначения **участка**. Не список структур на участке, не generate-пул. |
+| `occupied_footprint` | Bbox **главного** здания на участке (не двор, не пристройка). Cache C22. |
+| `main_building` | Главное здание: тело §3 (`levels` / комнаты / staircases / connections). **Одно.** `null` / omit на участке → без NamedLocation (`plaza`). Есть тело, generate без NL — ошибка участка. |
+| пристройки | Не на чертеже v1. Runtime `AreaLayout.small_layouts` пустой. |
+
+**Фасад входа забора** смотрит на `main_building`. Ось: улица → калитка или край участка (`AreaSlot.facing`) → двор → вход главного дома. Пристройки эту ось не задают. Порог: [tz_assembler_hierarchy.md](./tz_assembler_hierarchy.md) `AreaThreshold`; калитка на грани `slot.facing`.
+
+Ключ `building` на чертеже участка **нет**. Не alias, не второй вход. Тело главного здания — только `main_building`. Все JSON в [`fixtures/templates/`](../fixtures/templates/) — участки этого контракта (packing-каталог и `debug_structure`).
+
+Пример: [`inn_small.json`](../fixtures/templates/inn_small.json) (`main_building` = тело [`tavern_1.json`](../fixtures/templates/tavern_1.json)).
+
+---
+
 ## 1. Scope
 
 Генератор зданий строит полную структуру здания — этажи, комнаты, проходы, ячейки карты — из JSON-шаблона с рандомизацией в рамках заданных диапазонов.
@@ -17,7 +36,9 @@
 
 | Термин | Смысл |
 |--------|-------|
-| **Шаблон** | JSON-файл, описывающий тип здания: этажи, комнаты, связи, входы |
+| **Шаблон участка** | JSON-корень packing: `BuildingLayoutTemplate`. Identity = `system_name` (`DrawingKey`). |
+| **main_building** | Главное здание на участке (вложенное тело §3). Фасад забора / калитка целятся в него. Не `structure_types[]`. |
+| **Шаблон** | JSON тела здания: этажи, комнаты, связи, входы. На участке — поле `main_building`. |
 | **structure_types** | Листья дерева назначений (ребёнок `BuildingPurpose`), не семья и не чертёж. Не N+1: мир не выдумывает `"blacksmith"` — это чертёж с тегом `smithy` / `workshop` (+ опц. `house`). Omit/`[]` → `[house]`. Leftover scalar `structure_type` → один лист. Primary (первый тег) — колонка SQL library. Не `district_type`, не subtype NL `building`, не `ASSEMBLER_REGISTRY`. Дерево + паки мира — **§2.1**. SoT осей: [`tz_city_generation.md`](./tz_city_generation.md) §1.1–§1.2 |
 | **structure_type** | Leftover alias: тот же primary purpose. Новые JSON пишут `structure_types`. |
 | **Комната** | Под-локация внутри здания (отдельная `NamedLocation` с `parent_uid = building.location_uid`) |
@@ -30,87 +51,131 @@
 | **z_height** | Высота потолка уровня в z-юнитах (1 юнит = 1м) |
 | **default_passage_height** | Параметр мира (`worlds.default_passage_height`, default: `2`). Минимально допустимая высота любого прохода в ячейках. Дверь/арка никогда не может быть ниже этого значения. Шаблон может задать больше — меньше запрещено. |
 | **BuildingPurposeFamily** | Родитель каталога (род функции: `dwelling`, `trade`, `public`, `government`, `knowledge`, …). Не ткань района (`civic` / `commercial`). Не пишется на чертеже. |
-| **PurposePack** | Маска сеттинга на **мире**: какие листья живы. Mix = union паков. Не zip шаблонов зданий. |
+| **PurposePack** | Builtin id маски (`base`, `fantasy`, …). Рецепт — `PurposePackEntry` в `worlds.purpose_pack_registry`. Включённые id — `worlds.purpose_packs` (N+1, не закрытый enum). Mix = union листьев. Не zip шаблонов зданий. |
 
 ### 2.1 Дерево назначений (locked)
 
-Три слоя. Не смешивать.
+Дерево (семья / лист / чертёж) и пак (рецепт + включённые id). Не смешивать.
 
 | Слой | Ключ | Кто задаёт | Пример |
 |---|---|---|---|
 | Семья | `BuildingPurposeFamily` | движок, короткий список | `trade`, `public`, `factory` |
 | Лист (назначение) | `BuildingPurpose` | движок; файлы по семьям | `cafe`, `temple`, `portal` |
 | Чертёж | `system_name` | N+1 библиотека | `tavern_1`, `embassy_mars_3` |
-| Пак мира | `PurposePack` | overlay мира, **несколько сразу** | `["steampunk", "magic"]` |
+| Пак мира (рецепт) | `system_pack` + `allowed` | канон движка ⊕ overlay мира | `{ "system_pack": "fantasy", "allowed": ["temple", …] }` |
+| Пак мира (вкл.) | `purpose_packs[]` | overlay мира, **несколько сразу** | `["base", "steampunk", "magic"]` |
 
 **Инварианты**
 
 - Чертёж несёт **листья** (`structure_types`). Семья выводится из каталога (`smithy` → `craft`).
 - NPC и экономика вяжутся к **листу** (`bakery` ≠ `hypermarket` ≠ `cafe`). К семье — только агрегат («все торговые»).
 - Районный фильтр (`allowed_structure_types`) — лист **или** семья. `allowed: ["trade"]` + `like` = любой ребёнок `trade`, который включён паками мира. `allowed: ["cafe"]` — только кофейня.
-- Мир **не** invent ключ purpose и **не** invent пак с новыми листьями. Пак = маска по уже известным листьям. Mix эпох = несколько паков, не гибридный ключ `"steampunk_magic"`.
-- Omit `purpose_packs` на мире → канон-пак **`fantasy`**, не весь движок (нет гипермаркета в Ironhold по умолчанию).
+- Мир **не** invent ключ purpose (лист). Мир **может** invent id маски (`system_pack`) и `allowed` из уже известных семей/листьев. Неизвестный токен в `allowed` → drop + warning, не новый лист. Mix эпох = несколько паков, не гибридный ключ `"steampunk_magic"`.
+- Omit / `[]` `purpose_packs` на мире → канон **`[base, fantasy]`**, не весь движок (нет гипермаркета в Ironhold по умолчанию). `base` не сеттинг: лавка и ратуша не «фентези». Рецепт `base` **заморожен**: overlay не меняет состав каркаса.
+- Явный список сеттингов (`["modern"]`, `["steampunk", "magic"]`) **всегда** дополняется `base` первым. Выключить каркас нельзя. Только каркас: `["base"]`. Id вне merged-реестра рецептов → drop + warning.
 - `dungeon` — морфология поселения, не лист. `lamp_post` — не plot-purpose (уличная мебель).
-- **Код:** дерево семей / листьев, `PurposePack` + `worlds.purpose_packs` (omit/`[]` → `fantasy`). Район `allowed` expand семьи перед like/strict. Packing ∩ enabled паками мира.
+- **Код:** дерево семей / листьев в файлах семей + `catalog.py`. Рецепты паков — `WorldPurposePackRegistry` (`worlds.purpose_pack_registry`); включённые id — `worlds.purpose_packs` (omit/`[]` → `[base, fantasy]`; `base` всегда). `allowed` рецепта ссылается на enum семьи/листа, не на строковый хардкод. Район `allowed` expand семьи перед like/strict. Packing ∩ enabled.
 
-Эпоха сеттинга — **не** родитель здания. `temple` и `hospital` оба дети `public`; какие из них живы — решают паки.
+Эпоха сеттинга — **не** родитель здания. `temple` — семья `culture`, `hospital` — `public`; какие листья живы — решают паки (`base` + сеттинг).
+
+#### Антипаттерн: пак на листе дерева
+
+Дерево (семья → лист) и пак (маска мира) — **разные сущности**. Не сливать.
+
+| | Дерево | Пак |
+|---|---|---|
+| Вопрос | что это за функция? | какие известные листья живы в этом мире? |
+| Где канон | файлы семей (`public.py`, `trade.py`, …), только `system_name` | `WorldPurposePackRegistry` / `PurposePackEntry.allowed`, не файл семьи |
+| Кто задаёт | движок, закрытый список | маска; `base` — каркас движка |
+
+**Запрещено**
+
+- поле пака на `BuildingPurpose` / JSON участка / `LEAVES` семьи (`(town_hall, (BASE,))`, `DEFAULT_PACKS` в `dwelling.py`)
+- `FAMILY_OF` или имя семьи как id пака
+- выводить эпоху из родителя в дереве («храм → потому что fantasy»)
+
+Пак не родитель `temple`. Лист не знает `system_pack`. Состав маски — таблица/реестр паков, обход дерева это не заменяет.
 
 #### Семьи и листья
 
 | Семья | Листья | Заметки |
 |---|---|---|
 | `dwelling` | `house`, `inn`, `barracks` | Fallback omit чертежа → `house` |
-| `public` | `town_hall`, `plaza`, `temple`, `shrine`, `church`, `theater`, `library`, `school`, `hospital`, `bathhouse`, `courthouse` | Культ: `temple` / `shrine` (фентези), `church` (modern). Не плодить второй bind, если священник тот же — один лист + разные чертежи. Суд — публичный процесс: `prison` **не** ребёнок `public`. Чертёж мира может нести оба листа (`[courthouse, prison]`), как `[house, workshop]`. Ратуша — магистрат посада, не дворец и не сенат. `library` / `school` — городская читальня и детская школа, не академия |
+| `public` | `town_hall`, `plaza`, `school`, `hospital`, `bathhouse`, `courthouse` | Магистрат и городские службы. Не культ/театр/библиотека (`culture`). Суд — публичный процесс: `prison` **не** ребёнок `public`. Чертёж мира может нести оба листа (`[courthouse, prison]`), как `[house, workshop]`. Ратуша — магистрат посада, не дворец и не сенат. `school` — детская школа, не академия |
+| `culture` | `temple`, `shrine`, `church`, `theater`, `library` | Культ: `temple` / `shrine` (фентези), `church` (modern). Не плодить второй bind, если священник тот же — один лист + разные чертежи. `library` — городская читальня, не академия (`knowledge`) |
 | `government` | `palace`, `legislature`, `chancery` | Чем **правят**. Не ткань `civic`. Дворец / дума-сенат-вече / канцелярия-министерство-приказ. Не `house`, не `public`, не `defense` (генштаб — чертёж `chancery`, не `gatehouse`). Посольство — `diplomatic`. Комбо `[town_hall, palace]` на чертеже мира ок |
 | `knowledge` | `academy`, `laboratory`, `arcane_lab` | Исследуют и учат взрослых. Не `public`. Магическая vs приборная наука — два лабораторных листа + паки, не две семьи. Академия (магколлегия / университет) — чертежи одного листа. Башня мага: чертёж `arcane_lab`, жильё — комбо `[house, arcane_lab]` |
 | `diplomatic` | `embassy` | Посольства; не своё министерство (`chancery`), не `public` |
-| `trade` | `shop`, `hypermarket`, `market`, `guild`, `warehouse`, `granary`, `bakery`, `butcher`, `fishmonger`, `greengrocer`, `apothecary`, `tailor`, `cobbler`, `jeweler`, `bookseller`, `tavern`, `cafe`, `restaurant` | `shop` — лавка общего назначения, **не** родитель кофейни. `tavern` ≠ `restaurant` ≠ `cafe` |
+| `trade` | `shop`, `hypermarket`, `market`, `guild`, `bakery`, `butcher`, `fishmonger`, `greengrocer`, `apothecary`, `tailor`, `cobbler`, `jeweler`, `bookseller`, `tavern`, `cafe`, `restaurant` | Витрина и рынок. Не склад. `shop` — лавка общего назначения, **не** родитель кофейни. `tavern` ≠ `restaurant` ≠ `cafe` |
+| `logistics` | `warehouse`, `granary` | Хранение, не продажа. Не `trade`. В паке `base`. Хост ткани: `port` и голый `industrial`, не `commercial` |
 | `craft` | `workshop`, `smithy`, `carpenter`, `tannery`, `weaver`, `potter`, `glassblower`, `brewery`, `winery`, `chandler` | `"blacksmith"` не ключ — чертёж с `smithy` |
-| `factory` | `assembly_plant` | Заводы; нет в паке `fantasy`. Дальнейшие цеха — новые листья этой семьи |
-| `extract` | `mine`, `quarry`, `lumber_camp` | |
+| `factory` | `assembly_plant` | Заводы; нет в `base` / `fantasy`. Пак `steampunk` / `sci_fi`. Дальнейшие цеха — новые листья этой семьи |
+| `extract` | `mine`, `quarry`, `lumber_camp` | `system_specialization=extract` → эта семья |
 | `process` | `mill`, `smelter`, `sawmill`, `shipyard`, `kiln` | Обработка / верфь, не современный завод |
-| `agrarian` | `farm`, `orchard`, `vineyard`, `livestock`, `stable`, `apiary`, `fishery` | |
+| `cultivation` | `farm`, `orchard`, `vineyard`, `apiary`, `fishery` | `system_specialization=farm`. Имя семьи ≠ лист `farm` |
+| `husbandry` | `livestock`, `stable` | `system_specialization=livestock`. Имя семьи ≠ лист `livestock` |
 | `utility` | `water_treatment` | Очистка воды; энергия/стоки — следующие листья этой семьи |
 | `defense` | `gatehouse`, `watchtower`, `prison` | Стена / стража / содержание. Не телепорт. Тюрьма и суд — разные семьи; обычное размещение раздельно. Комбо на чертеже не запрещено (правила мира) |
 | `harbor` | `dock` | Причал |
 | `transit` | `portal`, `air_dock` | Телепорт / врата = `portal`. Участок, если пак мира включил лист. Не `public`, не `trade`. `gatehouse` сюда не входит |
 
-#### Паки мира (`purpose_packs`)
+#### Паки мира (рецепт + включённые id)
 
-Настройка **мира**, не чертежа. Смешение — норма: steampunk+магия, фентези+современность, классический sci-fi.
+Настройка **мира**, не чертежа. Два поля, не одно.
 
-| Пак | Типично включает (не исчерпывающий список) |
+| Поле | Что это | Omit / `[]` |
+|---|---|---|
+| `purpose_pack_registry` | Рецепты: `system_pack` + `allowed` (семья и/или лист из дерева). T-29 merge по `system_pack`. | канон движка (`base`, `fantasy`, `magic`, `steampunk`, `modern`, `sci_fi`) |
+| `purpose_packs` | Какие id масок **включены** | `[base, fantasy]` |
+
+`base` — каркас любого обитаемого поселения. Остальные builtin-id — **только** листья эпохи. Смешение сеттингов — норма: steampunk+магия, фентези+современность.
+
+Мир может добавить свою маску (`ironhold`), но `allowed` только из известных семей/листьев. Целая семья в паке → enum семьи (`dwelling`). Разрез семьи → enum листьев (`town_hall`), не строка `"town_hall"` в каноне Python.
+
+| Пак | `allowed` (канон) |
 |---|---|
-| `fantasy` | `dwelling`; `public` в фентези-формах; `government`; `knowledge.academy`; `trade` / `craft` / `extract` / `process` / `agrarian`; `defense`; `harbor`. Нет `factory`, `hypermarket`, `cafe`, `restaurant`, `embassy`, `portal`, `laboratory`, `arcane_lab` |
-| `magic` | `portal`; `arcane_lab`; `academy`; культовые листья `public` (union с `fantasy` не дублирует ключ) |
-| `steampunk` | `craft` + `factory` (`assembly_plant`) + `utility` + `laboratory` |
-| `modern` | `church`, `hospital`, `school`; `cafe`, `restaurant`, `hypermarket`; `embassy`; `utility`; `academy`; `laboratory` |
-| `sci_fi` | как modern + `factory` + `transit` (`portal`, `air_dock`) |
+| `base` | семья `dwelling`; листья `town_hall`, `plaza`, `bathhouse`, `courthouse`; `theater`, `library`; `chancery`; trade-подмножество без гильдии/таверны/кафе/ресторана/гипермаркета; семьи `logistics`, `craft`, `extract`, `process`, `cultivation`, `husbandry`, `defense`, `harbor` |
+| `fantasy` | `temple`, `shrine`, `tavern`, `guild`, `palace`, `academy` |
+| `magic` | `portal`, `temple`, `shrine`, `arcane_lab`, `academy` |
+| `steampunk` | семьи `factory`, `utility`; лист `laboratory` |
+| `modern` | `church`, `hospital`, `school`, `cafe`, `restaurant`, `hypermarket`; семьи `diplomatic`, `utility`; `academy`, `laboratory`, `legislature` |
+| `sci_fi` | как `modern` + семья `factory` + `portal` + `air_dock` |
 
-Легальный каталог мира = **union** листьев включённых паков. Чертёж с листом вне union в этом мире не в пуле packing (как неизвестный ключ).
+Рецепт **`base` заморожен**: overlay мира не подменяет состав каркаса (runtime restore канона).
 
-Wire мира: `purpose_packs: ["steampunk", "magic"]`. Не ключ zip `structures_templates/`.
+Легальный каталог мира = **union** `expand_allowed(entry.allowed)` по каждому включённому id. Чертёж с листом вне union в этом мире не в пуле packing (как неизвестный ключ).
+
+Wire включённых id: omit/`[]` → `[base, fantasy]`. `purpose_packs: ["steampunk", "magic"]` на resolve = `[base, steampunk, magic]`. Не ключ zip `structures_templates/`.
+
+Пример GM:
+
+```json
+"purpose_pack_registry": [
+  { "system_pack": "ironhold", "allowed": ["culture", "tavern", "guild"] }
+],
+"purpose_packs": ["base", "ironhold"]
+```
 
 ---
 
 ## 3. Схема шаблона (JSON)
 
-Объекты этого раздела — контракт чертежа. В `dataModel` корень packing — `BuildingLayoutTemplate` (**участок**). Вложенное `building` — generate-layout здания (пример: [`fixtures/templates/tavern_1.json`](../fixtures/templates/tavern_1.json) внутри [`fixtures/templates/inn_small.json`](../fixtures/templates/inn_small.json)). Вложенные level / room / size / connection / staircase — **те же объекты**, целевые nested POJO (**[POJO-D-16](./tz_datamodel_pojo_discrepancies.md)** / JV-4b); сейчас ещё `list[dict]` в generators.
+Объекты этого раздела — контракт чертежа. Lock участка / `main_building` — **в начале этого ТЗ**. В `dataModel` корень packing — `BuildingLayoutTemplate` (**участок**). Вложенное `main_building` — generate-layout главного здания (пример: [`fixtures/templates/tavern_1.json`](../fixtures/templates/tavern_1.json) внутри [`fixtures/templates/inn_small.json`](../fixtures/templates/inn_small.json)). Вложенные level / room / size / connection / staircase — **те же объекты**, целевые nested POJO (**[POJO-D-16](./tz_datamodel_pojo_discrepancies.md)** / JV-4b); сейчас ещё `list[dict]` в generators.
 
 Не путать с library **`BuildingTemplateOutline`**: там `levels` = `IntMinMax`, `rooms` = `BuildingTemplateRoomSlot` (`system_room` + count) — другой JSON.
 
 ### 3.1 Поля верхнего уровня
 
-Корень JSON, который ест packing (`DrawingKey`, `plot_counts`, pin `building_template`) — **чертёж участка**. Здание на участке — поле `building` (тело §3: `levels` / `connections` / `staircases`). Leftover: `levels` на корне без `building` = этот JSON сам тело здания (как `tavern_1` для `debug_structure`). Малые пристройки (`AreaLayout.small_layouts`) **не** в чертеже v1.
+Корень JSON, который ест packing (`DrawingKey`, `plot_counts`, pin `building_template`) — **чертёж участка**. Главное здание — только поле `main_building` (тело §3: `levels` / `connections` / `staircases`). Ключ `building` на участке запрещён. Малые пристройки (`AreaLayout.small_layouts`) **не** в чертеже v1.
 
 | Поле | Тип | Обязательность | Описание |
 |------|-----|---------------|----------|
-| `system_name` | string | required | Identity **участка** (`DrawingKey`): `"inn_small"`, `"tavern_1"`. Не путать с `building.system_name` интерьера |
-| `structure_types` | `BuildingPurpose[]` | optional | Теги назначения **участка** (движок). Omit/`[]` → `[house]`. Неизвестный ключ drop. Комбо `[house, workshop]` — один чертёж закрывает оба тега при packing |
+| `system_name` | string | required | Identity **участка** (`DrawingKey`): `"inn_small"`, `"tavern_1"`. Не путать с `main_building.system_name` интерьера |
+| `structure_types` | `BuildingPurpose[]` | optional | Теги назначения **участка** (движок). Omit/`[]` → `[house]`. Неизвестный ключ drop. Комбо `[house, workshop]` — один чертёж закрывает оба тега при packing. **Не** выбор здания на участке |
 | `structure_type` | string | leftover | Скаляр → `structure_types` из одного ключа. Не писать в новых JSON |
 | `display_name` | string | required | Отображаемое название шаблона |
-| `occupied_footprint` | object | packing | `{ min_x, min_y, width, depth }` в fine-клетках — bbox **здания** на участке (не двор). Cache C22. Нет поля → участок не сажается (warning `stub_no_shell`) |
-| `building` | object \| null | optional | Тело здания (§3 `levels`…). `null` / omit + нет leftover `levels` → участок без NamedLocation (`plaza`). Есть тело, generate без NL — ошибка участка |
+| `occupied_footprint` | object | packing | `{ min_x, min_y, width, depth }` в fine-клетках — bbox **главного** здания на участке (не двор). Cache C22. Нет поля → участок не сажается (warning `stub_no_shell`) |
+| `main_building` | object \| null | optional | Главное здание (§3 `levels`…). `null` / omit на **участке** → без NamedLocation (`plaza`). Есть тело, generate без NL — ошибка участка. Калитка / фасад забора смотрят сюда |
 | `description` | string | optional | Описание для UI |
 | `version` | string | required | Версия шаблона: `"1.0"` |
 | `default_z_height` | int | optional | Высота потолка по умолчанию для всех уровней. Default: `3` |
@@ -123,11 +188,11 @@ Wire мира: `purpose_packs: ["steampunk", "magic"]`. Не ключ zip `struc
 | `door_height_max` | int | optional | Максимальная высота двери в z-юнитах. Default: `5`. Cap для высоких этажей — дверь не растёт бесконечно |
 | `underground_expansion` | int | optional | Макс. расширение подземных уровней за границы ground floor footprint в ячейках. Default: `2`. Защита от конфликта с соседними зданиями |
 | `foundation_depth` | int | optional | Глубина фундамента в z-юнитах. Default: `1`. Передаётся в `StructureContext` если не задан явно (`context.foundation_depth ?? template.foundation_depth ?? 1`) |
-| `levels` | array | leftover на корне / required в `building` | Этажи generate-интерьера. На корне участка — leftover, если нет `building`. C22 packing **не** гоняет интерьер |
+| `levels` | array | required в `main_building` | Этажи generate-интерьера. На корне **участка** не пишутся. C22 packing **не** гоняет интерьер |
 | `connections` | array | optional | Горизонтальные межкомнатные связи (doorway, archway). Лестницы сюда не входят. Комнаты с `attach_to` генерируют проход имплицитно — их можно не перечислять здесь. |
 | `staircases` | array | optional | Вертикальные связи (лестницы). Каждая лестница объявляет `stops` — упорядоченный список room_id снизу вверх. Shaft автогенерируется и не объявляется в `levels[].rooms`. Если не задан — авто-резолв (раздел 8.8). |
 
-Участок — любой шаблон по **листьям** (`structure_types`, §2.1), не только жилой дом. Примеры: таверна, склад, храм, `plaza`, кофейня, `portal`. Комнаты / C20 (`front` дверь) — если шаблон описывает здание с входом; площадь без дверей — не ошибка C20. **Интерьер** (`StructureGenerator`, `levels`/комнаты) — другой скоуп; C22 сажает оболочку из cache, не гоняет полный интерьер площади. Пустой двор без шаблона — не продукт generate. Шаблон даёт здание, а участок собран пустым (без дома) — **критическая ошибка генерации участка** (assembler §7.1), не `plaza`.
+Участок — любой шаблон по **листьям** (`structure_types`, §2.1), не только жилой дом. Примеры: таверна, склад, храм, `plaza`, кофейня, `portal`. Комнаты / C20 (`front` дверь) — если шаблон описывает здание с входом; площадь без дверей — не ошибка C20. **Интерьер** (`StructureGenerator`, `levels`/комнаты) — другой скоуп; C22 сажает оболочку из cache, не гоняет полный интерьер площади. Пустой двор без шаблона — не продукт generate. Шаблон даёт `main_building`, а участок собран пустым (без дома) — **критическая ошибка генерации участка** (assembler §7.1), не `plaza`.
 
 Дерево семей / листьев / паков мира — **§2.1** (SoT). Матч района: `like` / `strict`; фильтр — лист или семья. Типы участка v1 = массив **этого** чертежа; union нескольких зданий на одном участке — helper на потом.
 
@@ -928,7 +993,7 @@ TopWallZAdjuster — v2 (открытые верхние стены / парап
 
 ## 4. Пример: tavern_1
 
-Тело **здания** (интерьер §3). Пример **участка**, который его несёт: [`fixtures/templates/inn_small.json`](../fixtures/templates/inn_small.json) (`system_name` участка `inn_small`, поле `building` = этот JSON). `debug_structure.py tavern_1` по-прежнему грузит этот файл как generate-layout.
+Тело **здания** (интерьер §3) живёт в `main_building` участка. Пример участка: [`fixtures/templates/inn_small.json`](../fixtures/templates/inn_small.json). Тот же интерьер как plot: [`tavern_1.json`](../fixtures/templates/tavern_1.json). `debug_structure.py tavern_1` грузит участок; generate читает `main_building`.
 
 ```json
 {

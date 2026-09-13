@@ -2,23 +2,25 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire, StrictOnWire
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
+from app.dataModel.structure.enums.buildingPurpose.family import BuildingPurposeFamily
 
 if TYPE_CHECKING:
     from app.dataModel.settlement.settlement.worldSettlementSpecializationRegistry import (
         WorldSettlementSpecializationRegistry,
     )
 
+_DEAD_KEYS = ("required_structure_types", "subjects_to_structure_types")
+
 
 class SettlementSpecializationEntry(BaseModel):
-    """Role recipe: districts, default buildings, optional subject → extra structure_type."""
+    """Specialization recipe: districts + one purpose family. Leaves come from the world."""
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
@@ -32,24 +34,38 @@ class SettlementSpecializationEntry(BaseModel):
     # Product / domain catalogs are not wired yet. See SettlementSpecializationBind.
     subject_kind: DefaultOnWire[str | list[str] | None] = None
     typical_districts: DefaultOnWire[list[TypicalDistrictRef]] = Field(default_factory=list)
-    required_structure_types: DefaultOnWire[list[str]] = Field(default_factory=list)
-    subjects_to_structure_types: DefaultOnWire[dict[str, list[str]]] = Field(
-        default_factory=dict,
-    )
+    allowed_family: StrictEnumOnWire[BuildingPurposeFamily]
 
     @model_validator(mode="before")
     @classmethod
-    def _coerce_subject_kind(cls, data: Any) -> Any:
+    def _coerce_wire(cls, data: Any) -> Any:
         if not isinstance(data, dict):
             return data
+        dead = [key for key in _DEAD_KEYS if key in data]
+        if dead:
+            raise ValueError(
+                "SettlementSpecializationEntry rejected "
+                + ", ".join(dead)
+                + "; use allowed_family"
+            )
         if "subject_kind" in data or "subject_kinds" not in data:
             return data
         payload = dict(data)
         payload["subject_kind"] = payload.get("subject_kinds")
         return payload
 
+    @field_validator("allowed_family", mode="before")
+    @classmethod
+    def _family_not_leaf(cls, value: Any) -> Any:
+        family = BuildingPurposeFamily.from_wire(value)
+        if family is None:
+            raise ValueError(
+                "allowed_family must be a BuildingPurposeFamily, not a leaf"
+            )
+        return family
+
     def kind_keys(self) -> tuple[str, ...]:
-        """Declared subject kinds for this role (one or several)."""
+        """Declared subject kinds for this specialization (one or several)."""
         raw = self.subject_kind
         if raw is None:
             return ()
@@ -67,24 +83,3 @@ class SettlementSpecializationEntry(BaseModel):
             seen.add(token)
             out.append(token)
         return tuple(out)
-
-    def resolved_structure_types(self, subjects: Sequence[str]) -> tuple[str, ...]:
-        """Empty subjects → role defaults. Mapped subjects replace defaults; unknown keep defaults."""
-        wanted = [token.strip() for token in subjects if token and token.strip()]
-        if not wanted:
-            return tuple(self.required_structure_types)
-        mapped: list[str] = []
-        seen: set[str] = set()
-        known = 0
-        for subject in wanted:
-            types = self.subjects_to_structure_types.get(subject) or []
-            if types:
-                known += 1
-            for structure_type in types:
-                if structure_type in seen:
-                    continue
-                seen.add(structure_type)
-                mapped.append(structure_type)
-        if known:
-            return tuple(mapped)
-        return tuple(self.required_structure_types)

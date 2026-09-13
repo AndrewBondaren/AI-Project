@@ -1,4 +1,4 @@
-"""Declared building bbox on a plot drawing — packing envelope, not generated rooms.
+"""Declared main-building bbox on a plot drawing — packing envelope, not generated rooms.
 
 Runtime packing dataclass lives in ``structureGeneratorService.OccupiedFootprint``.
 """
@@ -12,7 +12,7 @@ from app.dataModel.constrainedField import constrained_field
 
 
 class OccupiedFootprintSpec(BaseModel):
-    """Fine-cell bbox of the building on the plot (origin relative to building origin)."""
+    """Fine-cell bbox of the main building on the plot (origin relative to building origin)."""
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 

@@ -1,14 +1,14 @@
-"""PurposePack — world setting masks. Mix = union of leaves. Not zip templates."""
+"""PurposePack — builtin mask ids. World may add more ids; ``base`` is fabric."""
 
 from __future__ import annotations
 
-import logging
 from enum import StrEnum
-
-logger = logging.getLogger(__name__)
 
 
 class PurposePack(StrEnum):
+    """Named builtin pack ids. Enabled-list wire is not closed on this enum."""
+
+    BASE = "base"
     FANTASY = "fantasy"
     MAGIC = "magic"
     STEAMPUNK = "steampunk"
@@ -30,32 +30,45 @@ class PurposePack(StrEnum):
         return None
 
 
-def coerce_purpose_packs(raw: object) -> list[PurposePack]:
-    """Omit / empty → ``[fantasy]``. Unknown ids dropped + warning."""
+def normalize_pack_id(raw: object) -> str | None:
+    """Strip + lower. Empty → None. Unknown ids stay (membership is registry)."""
     if raw is None:
-        return [PurposePack.FANTASY]
+        return None
     if isinstance(raw, PurposePack):
-        return [raw]
+        return str(raw)
+    token = str(raw).strip().lower()
+    return token or None
+
+
+def _with_base(packs: list[str]) -> list[str]:
+    rest = [pack for pack in packs if pack != PurposePack.BASE]
+    return [str(PurposePack.BASE), *rest]
+
+
+def coerce_purpose_packs(raw: object) -> list[str]:
+    """Omit / empty → ``[base, fantasy]``. ``base`` always first. Custom ids kept."""
+    if raw is None:
+        return _with_base([str(PurposePack.FANTASY)])
+    if isinstance(raw, PurposePack):
+        return _with_base([str(raw)])
     items: list[object]
     if isinstance(raw, str):
         items = [raw]
     elif isinstance(raw, (list, tuple)):
         items = list(raw)
     else:
-        return [PurposePack.FANTASY]
-    out: list[PurposePack] = []
-    seen: set[PurposePack] = set()
+        return _with_base([str(PurposePack.FANTASY)])
+    out: list[str] = []
+    seen: set[str] = set()
     for item in items:
-        pack = PurposePack.from_wire(item)
+        pack = normalize_pack_id(item)
         if pack is None:
-            if item is not None and str(item).strip():
-                logger.warning(
-                    "Unknown purpose pack %r — dropped (not inventing leaves)",
-                    item,
-                )
             continue
         if pack in seen:
             continue
         seen.add(pack)
         out.append(pack)
-    return out if out else [PurposePack.FANTASY]
+    settings = [pack for pack in out if pack != PurposePack.BASE]
+    if not settings and PurposePack.BASE not in seen:
+        return _with_base([str(PurposePack.FANTASY)])
+    return _with_base(out)

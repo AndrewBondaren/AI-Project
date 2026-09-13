@@ -1,10 +1,12 @@
-"""Plot drawing: envelope + nested building. No small outbuildings."""
+"""Plot drawing: envelope + nested main_building. No small outbuildings."""
 
 from __future__ import annotations
 
 import json
 import unittest
 from pathlib import Path
+
+from pydantic import ValidationError
 
 from app.application.worldData.generators.assemblers.settlementAssembler.buildingCache import (
     BuildingLayoutCache,
@@ -50,8 +52,25 @@ class PlotLayoutContractTest(unittest.TestCase):
         interior = interior_of(plot)
         self.assertIsNotNone(interior)
         self.assertEqual(interior.system_name, "tavern_1")
-        self.assertEqual(interior.levels, tavern.levels)
+        self.assertEqual(interior.levels, interior_of(tavern).levels)
+        self.assertIsNotNone(plot.main_building)
         self.assertFalse(plot.levels)
+        self.assertIsNotNone(tavern.main_building)
+        self.assertFalse(tavern.levels)
+
+    def test_building_key_is_rejected(self) -> None:
+        with self.assertRaises(ValidationError):
+            BuildingLayoutTemplate.model_validate({
+                "system_name": "inn_alias",
+                "structure_types": ["tavern"],
+                "display_name": "Alias",
+                "occupied_footprint": {"width": 4, "depth": 4},
+                "building": {
+                    "system_name": "tavern_1",
+                    "display_name": "Таверна",
+                    "levels": [{"z_offset": 0, "rooms": [{"room_id": "hall"}]}],
+                },
+            })
 
     def test_try_layout_accepts_plot_without_root_levels(self) -> None:
         raw = json.loads((_TEMPLATES / "inn_small.json").read_text(encoding="utf-8"))
@@ -94,7 +113,13 @@ class PlotLayoutContractTest(unittest.TestCase):
         inn = catalog.by_system_name("inn_small")
         self.assertIsNotNone(inn)
         self.assertTrue(plot_has_building(inn))
+        self.assertEqual(inn.main_building.system_name, "tavern_1")
         self.assertEqual(interior_of(inn).system_name, "tavern_1")
+        self.assertFalse(inn.levels)
+        hall = catalog.by_system_name("town_hall")
+        self.assertIsNotNone(hall)
+        self.assertIsNotNone(hall.main_building)
+        self.assertFalse(hall.levels)
         cache = BuildingLayoutCache()
         layout = cache.ensure(_world(), inn)
         self.assertIsNotNone(layout)

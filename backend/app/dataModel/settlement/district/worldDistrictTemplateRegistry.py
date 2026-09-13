@@ -73,6 +73,7 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
         display_name="Торговый квартал",
         district_type="commercial",
         street_layout=StreetLayout.GRID,
+        allowed_structure_types=["trade"],
         connections=[
             DistrictConnection(connection_type="road", role="main_street", sidewalk=True),
         ],
@@ -82,6 +83,7 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
         display_name="Жилой квартал",
         district_type="residential",
         street_layout=StreetLayout.GRID,
+        allowed_structure_types=["dwelling"],
         connections=[
             DistrictConnection(connection_type="road", role="main_street", sidewalk=True),
         ],
@@ -92,6 +94,7 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
         district_type="industrial",
         placement_conditions=[PlacementCondition(type="min_settlement_size", size=_RANK_MEDIUM)],
         street_layout=StreetLayout.GRID,
+        allowed_structure_types=["extract", "process", "craft", "factory", "logistics"],
         connections=[
             DistrictConnection(connection_type="road", role="service_road", sidewalk=False),
         ],
@@ -111,6 +114,7 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
         max_per_city=1,
         street_layout=StreetLayout.GRID,
         density="dense",
+        allowed_structure_types=["harbor", "trade", "logistics"],
         connections=[
             DistrictConnection(connection_type="road", role="main_street", sidewalk=True),
         ],
@@ -121,7 +125,6 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
         district_type="industrial",
         district_subtype="extract",
         street_layout=StreetLayout.GRID,
-        allowed_structure_types=["mine"],
         connections=[
             DistrictConnection(connection_type="road", role="service_road", sidewalk=False),
         ],
@@ -132,7 +135,6 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
         district_type="industrial",
         district_subtype="process",
         street_layout=StreetLayout.GRID,
-        allowed_structure_types=["mill", "smelter"],
         connections=[
             DistrictConnection(connection_type="road", role="service_road", sidewalk=False),
         ],
@@ -143,7 +145,6 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
         district_type="industrial",
         district_subtype="manufacture",
         street_layout=StreetLayout.GRID,
-        allowed_structure_types=["workshop"],
         connections=[
             DistrictConnection(connection_type="road", role="service_road", sidewalk=False),
         ],
@@ -154,7 +155,6 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
         district_type="civic",
         district_subtype="culture",
         street_layout=StreetLayout.GRID,
-        allowed_structure_types=["temple", "theater", "library"],
         connections=[
             DistrictConnection(connection_type="road", role="main_street", sidewalk=True),
         ],
@@ -165,7 +165,6 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
         district_type="agricultural",
         district_subtype="farm",
         street_layout=StreetLayout.GRID,
-        allowed_structure_types=["farm", "mill"],
         connections=[
             DistrictConnection(connection_type="road", role="service_road", sidewalk=False),
         ],
@@ -176,7 +175,6 @@ _CANONICAL_ENTRIES: tuple[DistrictTemplateEntry, ...] = (
         district_type="agricultural",
         district_subtype="livestock",
         street_layout=StreetLayout.GRID,
-        allowed_structure_types=["livestock"],
         connections=[
             DistrictConnection(connection_type="road", role="service_road", sidewalk=False),
         ],

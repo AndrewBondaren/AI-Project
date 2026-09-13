@@ -12,6 +12,7 @@ from app.dataModel.settlement.settlement.settlementSpecializationEntry import (
     SettlementSpecializationEntry,
 )
 from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
+from app.dataModel.structure.enums.buildingPurpose.family import BuildingPurposeFamily
 
 
 class WorldSettlementSpecializationRegistry(RootModel[list[SettlementSpecializationEntry]]):
@@ -44,7 +45,7 @@ _CANONICAL_ENTRIES: tuple[SettlementSpecializationEntry, ...] = (
         typical_districts=[
             TypicalDistrictRef(district_type="industrial", district_subtype="extract"),
         ],
-        required_structure_types=["mine"],
+        allowed_family=BuildingPurposeFamily.EXTRACT,
     ),
     SettlementSpecializationEntry(
         system_specialization="process",
@@ -53,7 +54,7 @@ _CANONICAL_ENTRIES: tuple[SettlementSpecializationEntry, ...] = (
         typical_districts=[
             TypicalDistrictRef(district_type="industrial", district_subtype="process"),
         ],
-        required_structure_types=["mill", "smelter"],
+        allowed_family=BuildingPurposeFamily.PROCESS,
     ),
     SettlementSpecializationEntry(
         system_specialization="manufacture",
@@ -64,7 +65,7 @@ _CANONICAL_ENTRIES: tuple[SettlementSpecializationEntry, ...] = (
                 district_type="industrial", district_subtype="manufacture",
             ),
         ],
-        required_structure_types=["workshop"],
+        allowed_family=BuildingPurposeFamily.CRAFT,
     ),
     SettlementSpecializationEntry(
         system_specialization="culture",
@@ -73,11 +74,7 @@ _CANONICAL_ENTRIES: tuple[SettlementSpecializationEntry, ...] = (
         typical_districts=[
             TypicalDistrictRef(district_type="civic", district_subtype="culture"),
         ],
-        required_structure_types=["temple", "theater"],
-        subjects_to_structure_types={
-            "religion": ["temple"],
-            "knowledge": ["library"],
-        },
+        allowed_family=BuildingPurposeFamily.CULTURE,
     ),
     SettlementSpecializationEntry(
         system_specialization="farm",
@@ -86,7 +83,7 @@ _CANONICAL_ENTRIES: tuple[SettlementSpecializationEntry, ...] = (
         typical_districts=[
             TypicalDistrictRef(district_type="agricultural", district_subtype="farm"),
         ],
-        required_structure_types=["farm"],
+        allowed_family=BuildingPurposeFamily.CULTIVATION,
     ),
     SettlementSpecializationEntry(
         system_specialization="livestock",
@@ -97,6 +94,6 @@ _CANONICAL_ENTRIES: tuple[SettlementSpecializationEntry, ...] = (
                 district_type="agricultural", district_subtype="livestock",
             ),
         ],
-        required_structure_types=["livestock"],
+        allowed_family=BuildingPurposeFamily.HUSBANDRY,
     ),
 )

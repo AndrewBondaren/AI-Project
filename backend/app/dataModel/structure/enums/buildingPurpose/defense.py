@@ -1,7 +1,7 @@
 """Leaves of family ``defense``."""
 
-LEAVES: tuple[tuple[str, str], ...] = (
-    ("gatehouse", "Надвратная"),
-    ("watchtower", "Сторожка"),
-    ("prison", "Тюрьма"),
+LEAVES: tuple[str, ...] = (
+    "gatehouse",
+    "watchtower",
+    "prison",
 )

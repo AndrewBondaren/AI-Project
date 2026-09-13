@@ -12,6 +12,7 @@ from app.dataModel.materials import DEFAULT_WALL_MATERIAL
 from app.dataModel.structure.building.buildingLayoutTemplate import (
     BuildingLayoutTemplate,
     coerce_building_layout,
+    interior_of,
 )
 from app.dataModel.structure.enums.passageType import PassageType
 from app.application.worldData.generators.utils.tierResolver import TierResolver
@@ -231,6 +232,9 @@ class StructureGeneratorService:
         foundation_depth: int = 0,
     ) -> StructureLayout:
         template = coerce_building_layout(template)
+        body = interior_of(template)
+        if body is not None:
+            template = body
         logger.info(
             "generate_from_template | start building=%s template=%s",
             building.location_uid, template.system_name,

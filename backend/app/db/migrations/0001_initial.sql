@@ -79,7 +79,8 @@ CREATE TABLE IF NOT EXISTS worlds (
     district_zone_preference    TEXT,
     economic_tier_registry      TEXT,
     building_template_registry  TEXT,
-    purpose_packs               TEXT,
+    purpose_packs               TEXT,  -- enabled pack ids; omit/[] → [base, fantasy]
+    purpose_pack_registry       TEXT,  -- pack recipes (canonical ⊕ overlay); base frozen
     room_type_registry          TEXT,
     barrier_template_registry   TEXT,
     connection_type_registry    TEXT,

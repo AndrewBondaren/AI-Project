@@ -1,0 +1,49 @@
+{
+  "system_name": "temple",
+  "structure_types": [
+    "temple"
+  ],
+  "display_name": "Храм",
+  "occupied_footprint": {
+    "min_x": 0,
+    "min_y": 0,
+    "width": 4,
+    "depth": 4
+  },
+  "economic_tier_range": {
+    "min": "basic",
+    "max": "quality"
+  },
+  "main_building": {
+    "system_name": "temple_main",
+    "structure_types": [
+      "temple"
+    ],
+    "display_name": "Храм",
+    "levels": [
+      {
+        "z_offset": 0,
+        "display_name": "Первый этаж",
+        "rooms": [
+          {
+            "room_id": "hall",
+            "room_type": "common_hall",
+            "display_name": "Зал",
+            "shape_type": "square",
+            "size": {
+              "size_type": "small"
+            },
+            "required": true,
+            "count": 1,
+            "is_public": true,
+            "is_forbidden": false,
+            "entry_point": {
+              "wall": "south",
+              "passage_type": "main_entrance"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

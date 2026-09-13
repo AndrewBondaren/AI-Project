@@ -380,7 +380,7 @@ class AreaSlot:
 
 `ground_z` — онтология **участка**, не района. Район не копирует одну z на слоты. Как считать z и **где порог к улице** — только `StructureAreaAssembler` (топология зоны). SoT порога: [tz_structure_connections.md](./tz_structure_connections.md) §5.1.1. Склейка: [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) **C21**. `DistrictSlot.ground_z` — пин района, не пол участка.
 
-`facing` — сторона к улице. Что на ней (дверь, ворота, открытый край) решает assembler участка.
+`facing` — сторона участка к улице. Калитка / край порога на этой грани. Ось смотрит на **`main_building`**: улица → калитка или `parcel_edge` → двор → вход главного дома. Пристройки ось не задают. Что именно на грани (дверь, ворота, открытый край) решает assembler участка.
 
 `height` — вертикальный пролёт участка **выше** `ground_z` (fine cells). Сумма `z_height` каждого этажа, который выступает над землёй: этаж занимает `[z, z+z_height)`; целиком под землёй — 0; пересекает землю — только часть в `[ground_z, top)`. Нет здания / packing — `0`.
 
@@ -410,7 +410,7 @@ class AreaThreshold:
 | `kind` | Когда | Клетки порога | Конец `_build_paths` |
 |---|---|---|---|
 | `door` | участок = дом (bbox + число клеток) | проём `entry_point` | `building_entrance` |
-| `gate` | двор + забор | ворота на facing забора (центр грани) | `waypoint` на воротах (`graph_level=area`); участок не `location_type` (C3) |
+| `gate` | двор + забор | ворота на facing забора (центр грани), к **`main_building`** | `waypoint` на воротах (`graph_level=area`); участок не `location_type` (C3) |
 | `parcel_edge` | двор без забора | **то же xy**, что калитка | `waypoint` на крае |
 
 **Подъезд (`StreetApproach`)** — результат луча, не mill-инстанс:
@@ -456,7 +456,7 @@ class AreaLayout:
     connection_edges:  list[ConnectionEdge]
 ```
 
-Здание не обязательно: участок = шаблон любого назначения (дом, таверна, площадь, …), не leftover packing. `building_location is None` — **только** если шаблон **не** даёт NamedLocation (типично `plaza` / сад: состав шаблона без здания). **Если шаблон даёт здание, а generate собрал участок без него** (`building_location is None`, пустой двор) — **критическая ошибка генерации участка**. Не plaza, не silent skip, не «участок без дома допустим». Слои не мешать. `threshold` / `approach` — рантайм assembler; extract пишет граф и `AreaSlotWire.ground_z` (плоскость участка), не kind порога. C20 — только если шаблон даёт здание с входом (здание без `front` — тоже ошибка generate, не этот кейс).
+Здание не обязательно: участок = шаблон любого назначения (дом, таверна, площадь, …), не leftover packing. `building_location is None` — **только** если шаблон **не** даёт `main_building` (типично `plaza` / сад). **Если шаблон даёт `main_building`, а generate собрал участок без него** (`building_location is None`, пустой двор) — **критическая ошибка генерации участка**. Не plaza, не silent skip, не «участок без дома допустим». Слои не мешать. `threshold` / `approach` — рантайм assembler; extract пишет граф и `AreaSlotWire.ground_z` (плоскость участка), не kind порога. C20 — только если главное здание с входом (здание без `front` — тоже ошибка generate, не этот кейс).
 
 ---
 

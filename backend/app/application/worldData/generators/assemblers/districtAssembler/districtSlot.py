@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from app.application.worldData.generators.assemblers.districtAssembler.connectionEntry import ConnectionEntry
 from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.settlement.district.requiredStructure import RequiredStructure
+from app.dataModel.structure.enums.buildingPurpose import AllowedToken
 
 
 @dataclass
@@ -36,6 +37,8 @@ class DistrictSlot:
     district_template:   DistrictTemplateEntry
     entry_nodes:         list[ConnectionEntry] = field(default_factory=list)
     required_structures: list[RequiredStructure] = field(default_factory=list)
+    # Effective packing filter (stamped at materialize). Not district_template.allowed.
+    allowed_structure_types: list[AllowedToken] | None = None
     cell_x:              int = 0
     cell_y:              int = 0
     # structure_type → subjects of this settlement that apply to that type (not wire).

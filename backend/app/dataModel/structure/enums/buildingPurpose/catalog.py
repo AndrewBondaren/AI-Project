@@ -9,8 +9,9 @@ from collections.abc import Iterable
 from enum import StrEnum
 from typing import Union
 
-from . import agrarian as _agrarian
 from . import craft as _craft
+from . import cultivation as _cultivation
+from . import culture as _culture
 from . import defense as _defense
 from . import diplomatic as _diplomatic
 from . import dwelling as _dwelling
@@ -18,27 +19,31 @@ from . import extract as _extract
 from . import factory as _factory
 from . import government as _government
 from . import harbor as _harbor
+from . import husbandry as _husbandry
 from . import knowledge as _knowledge
+from . import logistics as _logistics
 from . import process as _process
 from . import public as _public
 from . import trade as _trade
 from . import transit as _transit
 from . import utility as _utility
 from .family import BuildingPurposeFamily
-from .packs import PurposePack, coerce_purpose_packs
 
-_FAMILY_LEAVES: tuple[tuple[BuildingPurposeFamily, tuple[tuple[str, str], ...]], ...] = (
+_FAMILY_LEAVES: tuple[tuple[BuildingPurposeFamily, tuple[str, ...]], ...] = (
     (BuildingPurposeFamily.DWELLING, _dwelling.LEAVES),
     (BuildingPurposeFamily.PUBLIC, _public.LEAVES),
+    (BuildingPurposeFamily.CULTURE, _culture.LEAVES),
     (BuildingPurposeFamily.GOVERNMENT, _government.LEAVES),
     (BuildingPurposeFamily.KNOWLEDGE, _knowledge.LEAVES),
     (BuildingPurposeFamily.DIPLOMATIC, _diplomatic.LEAVES),
     (BuildingPurposeFamily.TRADE, _trade.LEAVES),
+    (BuildingPurposeFamily.LOGISTICS, _logistics.LEAVES),
     (BuildingPurposeFamily.CRAFT, _craft.LEAVES),
     (BuildingPurposeFamily.FACTORY, _factory.LEAVES),
     (BuildingPurposeFamily.EXTRACT, _extract.LEAVES),
     (BuildingPurposeFamily.PROCESS, _process.LEAVES),
-    (BuildingPurposeFamily.AGRARIAN, _agrarian.LEAVES),
+    (BuildingPurposeFamily.CULTIVATION, _cultivation.LEAVES),
+    (BuildingPurposeFamily.HUSBANDRY, _husbandry.LEAVES),
     (BuildingPurposeFamily.UTILITY, _utility.LEAVES),
     (BuildingPurposeFamily.DEFENSE, _defense.LEAVES),
     (BuildingPurposeFamily.HARBOR, _harbor.LEAVES),
@@ -49,7 +54,7 @@ _FAMILY_LEAVES: tuple[tuple[BuildingPurposeFamily, tuple[tuple[str, str], ...]],
 def _enum_members() -> dict[str, str]:
     members: dict[str, str] = {}
     for _family, leaves in _FAMILY_LEAVES:
-        for key, _display in leaves:
+        for key in leaves:
             members[key.upper()] = key
     return members
 
@@ -112,12 +117,9 @@ DEFAULT_BUILDING_PURPOSES: tuple[BuildingPurpose, ...] = (HOUSE,)
 DEFAULT_PURPOSE_MATCH = BuildingPurposeMatch.LIKE
 
 FAMILY_OF: dict[BuildingPurpose, BuildingPurposeFamily] = {}
-PURPOSE_DISPLAY: dict[BuildingPurpose, str] = {}
 for _family, _leaves in _FAMILY_LEAVES:
-    for _key, _display in _leaves:
-        _leaf = BuildingPurpose(_key)
-        FAMILY_OF[_leaf] = _family
-        PURPOSE_DISPLAY[_leaf] = _display
+    for _key in _leaves:
+        FAMILY_OF[BuildingPurpose(_key)] = _family
 
 _CHILDREN: dict[BuildingPurposeFamily, tuple[BuildingPurpose, ...]] = {}
 for _leaf, _fam in FAMILY_OF.items():
@@ -126,6 +128,18 @@ for _leaf, _fam in FAMILY_OF.items():
 
 def children_of(family: BuildingPurposeFamily) -> tuple[BuildingPurpose, ...]:
     return _CHILDREN.get(family, ())
+
+
+def leaves_for_family(
+    family: BuildingPurposeFamily,
+    enabled: Iterable[BuildingPurpose] | None = None,
+) -> tuple[BuildingPurpose, ...]:
+    """Children of ``family``, optionally ∩ world-enabled leaves."""
+    children = children_of(family)
+    if enabled is None:
+        return children
+    live = set(enabled)
+    return tuple(leaf for leaf in children if leaf in live)
 
 
 def _as_family(token: object) -> BuildingPurposeFamily | None:
@@ -274,59 +288,3 @@ def primary_purpose(types: Iterable[BuildingPurpose]) -> BuildingPurpose:
     for purpose in types:
         return purpose
     return HOUSE
-
-
-def _pack_set(*keys: str) -> frozenset[BuildingPurpose]:
-    return frozenset(BuildingPurpose(key) for key in keys)
-
-
-def _family_set(family: BuildingPurposeFamily) -> frozenset[BuildingPurpose]:
-    return frozenset(children_of(family))
-
-
-_FANTASY_PUBLIC = _pack_set(
-    "town_hall", "plaza", "temple", "shrine", "theater", "library",
-    "bathhouse", "courthouse",
-)
-_FANTASY_TRADE = _pack_set(
-    "shop", "market", "guild", "warehouse", "granary",
-    "bakery", "butcher", "fishmonger", "greengrocer", "apothecary",
-    "tailor", "cobbler", "jeweler", "bookseller", "tavern",
-)
-_MODERN_EXTRAS = _pack_set(
-    "church", "hospital", "school",
-    "cafe", "restaurant", "hypermarket",
-    "embassy", "water_treatment",
-    "academy", "laboratory",
-)
-
-PACK_PURPOSES: dict[PurposePack, frozenset[BuildingPurpose]] = {
-    PurposePack.FANTASY: (
-        _family_set(BuildingPurposeFamily.DWELLING)
-        | _FANTASY_PUBLIC
-        | _FANTASY_TRADE
-        | _family_set(BuildingPurposeFamily.CRAFT)
-        | _family_set(BuildingPurposeFamily.EXTRACT)
-        | _family_set(BuildingPurposeFamily.PROCESS)
-        | _family_set(BuildingPurposeFamily.AGRARIAN)
-        | _family_set(BuildingPurposeFamily.GOVERNMENT)
-        | _family_set(BuildingPurposeFamily.DEFENSE)
-        | _family_set(BuildingPurposeFamily.HARBOR)
-        | _pack_set("academy")
-    ),
-    PurposePack.MAGIC: _pack_set("portal", "temple", "shrine", "arcane_lab", "academy"),
-    PurposePack.STEAMPUNK: (
-        _family_set(BuildingPurposeFamily.CRAFT)
-        | _pack_set("assembly_plant", "water_treatment", "laboratory")
-    ),
-    PurposePack.MODERN: _MODERN_EXTRAS,
-    PurposePack.SCI_FI: _MODERN_EXTRAS | _pack_set("assembly_plant", "portal", "air_dock"),
-}
-
-
-def purposes_for_world(packs: Iterable[PurposePack | str] | None) -> frozenset[BuildingPurpose]:
-    """Omit / empty → canon ``fantasy``. Mix = union. Unknown pack id dropped."""
-    enabled: set[BuildingPurpose] = set()
-    for pack in coerce_purpose_packs(packs):
-        enabled |= PACK_PURPOSES[pack]
-    return frozenset(enabled)

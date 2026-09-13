@@ -6,7 +6,11 @@ import unittest
 
 from types import SimpleNamespace
 
-from app.application.jsonValidation.worldRow import enabled_building_purposes, purpose_packs
+from app.application.jsonValidation.worldRow import (
+    enabled_building_purposes,
+    purpose_pack_registry,
+    purpose_packs,
+)
 from app.dataModel.settlement.district.allowedStructureTypes import (
     allowed_fill_structure_types,
     district_hosts_purpose,
@@ -27,10 +31,13 @@ from app.dataModel.structure.enums.buildingPurpose import (
     BuildingPurposeFamily,
     BuildingPurposeMatch,
     PurposePack,
+    PurposePackEntry,
+    WorldPurposePackRegistry,
     WorldPurposePacks,
     coerce_allowed_list,
     coerce_purpose_list,
     coerce_purpose_match,
+    coerce_purpose_packs,
     expand_allowed,
     primary_purpose,
     purposes_for_world,
@@ -257,7 +264,20 @@ class HostAndFillTest(unittest.TestCase):
 class PurposeTreeAndPacksTest(unittest.TestCase):
     def test_family_of_new_leaves(self) -> None:
         self.assertEqual(FAMILY_OF[BuildingPurpose.CAFE], BuildingPurposeFamily.TRADE)
-        self.assertEqual(FAMILY_OF[BuildingPurpose.CHURCH], BuildingPurposeFamily.PUBLIC)
+        self.assertEqual(
+            FAMILY_OF[BuildingPurpose.WAREHOUSE],
+            BuildingPurposeFamily.LOGISTICS,
+        )
+        self.assertEqual(
+            FAMILY_OF[BuildingPurpose.GRANARY],
+            BuildingPurposeFamily.LOGISTICS,
+        )
+        self.assertNotIn(BuildingPurpose.WAREHOUSE, expand_allowed(["trade"]))
+        self.assertEqual(FAMILY_OF[BuildingPurpose.CHURCH], BuildingPurposeFamily.CULTURE)
+        self.assertEqual(FAMILY_OF[BuildingPurpose.TEMPLE], BuildingPurposeFamily.CULTURE)
+        self.assertEqual(FAMILY_OF[BuildingPurpose.LIBRARY], BuildingPurposeFamily.CULTURE)
+        self.assertEqual(FAMILY_OF[BuildingPurpose.FARM], BuildingPurposeFamily.CULTIVATION)
+        self.assertEqual(FAMILY_OF[BuildingPurpose.LIVESTOCK], BuildingPurposeFamily.HUSBANDRY)
         self.assertEqual(
             FAMILY_OF[BuildingPurpose.COURTHOUSE],
             BuildingPurposeFamily.PUBLIC,
@@ -269,7 +289,10 @@ class PurposeTreeAndPacksTest(unittest.TestCase):
         self.assertEqual(FAMILY_OF[BuildingPurpose.PORTAL], BuildingPurposeFamily.TRANSIT)
         public_leaves = expand_allowed(["public"])
         self.assertIn(BuildingPurpose.COURTHOUSE, public_leaves)
+        self.assertNotIn(BuildingPurpose.TEMPLE, public_leaves)
         self.assertNotIn(BuildingPurpose.PRISON, public_leaves)
+        self.assertIn(BuildingPurpose.TEMPLE, expand_allowed(["culture"]))
+        self.assertNotIn(BuildingPurpose.TOWN_HALL, expand_allowed(["culture"]))
         self.assertIn(BuildingPurpose.PRISON, expand_allowed(["defense"]))
         self.assertFalse(
             purposes_match(
@@ -326,6 +349,7 @@ class PurposeTreeAndPacksTest(unittest.TestCase):
         )
         self.assertNotIn(BuildingPurpose.LIBRARY, expand_allowed(["knowledge"]))
         self.assertNotIn(BuildingPurpose.SCHOOL, expand_allowed(["knowledge"]))
+        self.assertIn(BuildingPurpose.LIBRARY, expand_allowed(["culture"]))
         self.assertFalse(
             purposes_match(
                 [BuildingPurpose.ARCANE_LAB],
@@ -334,11 +358,43 @@ class PurposeTreeAndPacksTest(unittest.TestCase):
             )
         )
 
+    def test_leaves_for_family_intersect_enabled(self) -> None:
+        from app.dataModel.structure.enums.buildingPurpose import leaves_for_family
+        fantasy = purposes_for_world(None)
+        extract = leaves_for_family(BuildingPurposeFamily.EXTRACT, fantasy)
+        self.assertEqual(
+            set(extract),
+            {BuildingPurpose.MINE, BuildingPurpose.QUARRY, BuildingPurpose.LUMBER_CAMP},
+        )
+        culture = leaves_for_family(BuildingPurposeFamily.CULTURE, fantasy)
+        self.assertIn(BuildingPurpose.TEMPLE, culture)
+        self.assertNotIn(BuildingPurpose.CHURCH, culture)
+        modern = purposes_for_world(["modern"])
+        self.assertEqual(
+            set(leaves_for_family(BuildingPurposeFamily.EXTRACT, modern)),
+            {BuildingPurpose.MINE, BuildingPurpose.QUARRY, BuildingPurpose.LUMBER_CAMP},
+        )
+        self.assertNotIn(BuildingPurpose.TEMPLE, modern)
+        self.assertIn(BuildingPurpose.SHOP, modern)
+        self.assertIn(BuildingPurpose.CAFE, modern)
+
+    def test_extract_family_fill_not_trade(self) -> None:
+        catalog_types = ("mine", "quarry", "tavern", "house")
+        self.assertEqual(
+            allowed_fill_structure_types(["extract"], catalog_types),
+            ("mine", "quarry"),
+        )
+
     def test_expand_trade_not_temple(self) -> None:
         leaves = expand_allowed(["trade"])
         self.assertIn(BuildingPurpose.TAVERN, leaves)
         self.assertIn(BuildingPurpose.SHOP, leaves)
+        self.assertNotIn(BuildingPurpose.WAREHOUSE, leaves)
         self.assertNotIn(BuildingPurpose.TEMPLE, leaves)
+        self.assertEqual(
+            set(expand_allowed(["logistics"])),
+            {BuildingPurpose.WAREHOUSE, BuildingPurpose.GRANARY},
+        )
 
     def test_like_family_match(self) -> None:
         self.assertTrue(
@@ -364,7 +420,7 @@ class PurposeTreeAndPacksTest(unittest.TestCase):
         )
         self.assertEqual([row.system_name for row in like], ["tavern_1"])
 
-    def test_omit_packs_is_fantasy(self) -> None:
+    def test_omit_packs_is_base_and_fantasy(self) -> None:
         enabled = purposes_for_world(None)
         self.assertIn(BuildingPurpose.TAVERN, enabled)
         self.assertIn(BuildingPurpose.HOUSE, enabled)
@@ -377,13 +433,35 @@ class PurposeTreeAndPacksTest(unittest.TestCase):
         self.assertNotIn(BuildingPurpose.CAFE, enabled)
         self.assertNotIn(BuildingPurpose.LABORATORY, enabled)
         self.assertNotIn(BuildingPurpose.ARCANE_LAB, enabled)
+        self.assertNotIn(BuildingPurpose.LEGISLATURE, enabled)
+        self.assertIn(BuildingPurpose.WAREHOUSE, enabled)
+        self.assertIn(BuildingPurpose.GRANARY, enabled)
         self.assertEqual(
             WorldPurposePacks.canonical_defaults().root,
-            [PurposePack.FANTASY],
+            [PurposePack.BASE, PurposePack.FANTASY],
         )
+
+    def test_setting_packs_are_extras_on_base(self) -> None:
+        self.assertEqual(
+            coerce_purpose_packs(["modern"]),
+            [PurposePack.BASE, PurposePack.MODERN],
+        )
+        self.assertEqual(
+            coerce_purpose_packs(["base"]),
+            [PurposePack.BASE],
+        )
+        base_only = purposes_for_world(["base"])
+        self.assertIn(BuildingPurpose.HOUSE, base_only)
+        self.assertIn(BuildingPurpose.SHOP, base_only)
+        self.assertIn(BuildingPurpose.WAREHOUSE, base_only)
+        self.assertIn(BuildingPurpose.GRANARY, base_only)
+        self.assertNotIn(BuildingPurpose.TAVERN, base_only)
+        self.assertNotIn(BuildingPurpose.TEMPLE, base_only)
+        self.assertNotIn(BuildingPurpose.CAFE, base_only)
 
     def test_steampunk_magic_union(self) -> None:
         enabled = purposes_for_world(["steampunk", "magic"])
+        self.assertIn(BuildingPurpose.HOUSE, enabled)
         self.assertIn(BuildingPurpose.PORTAL, enabled)
         self.assertIn(BuildingPurpose.ASSEMBLY_PLANT, enabled)
         self.assertIn(BuildingPurpose.SMITHY, enabled)
@@ -391,16 +469,83 @@ class PurposeTreeAndPacksTest(unittest.TestCase):
         self.assertIn(BuildingPurpose.LABORATORY, enabled)
         self.assertIn(BuildingPurpose.ACADEMY, enabled)
         self.assertNotIn(BuildingPurpose.HYPERMARKET, enabled)
-        self.assertNotIn(BuildingPurpose.HOUSE, enabled)
 
     def test_unknown_pack_dropped(self) -> None:
         enabled = purposes_for_world(["fantasy", "nope"])
         self.assertIn(BuildingPurpose.TAVERN, enabled)
         self.assertNotIn(BuildingPurpose.PORTAL, enabled)
+        self.assertEqual(
+            coerce_purpose_packs(["ironhold"]),
+            [PurposePack.BASE, "ironhold"],
+        )
+
+    def test_pack_recipes_use_family_and_leaf_enums(self) -> None:
+        import app.dataModel.structure.enums.buildingPurpose.catalog as catalog_mod
+
+        self.assertFalse(hasattr(catalog_mod, "PACK_PURPOSES"))
+        base = WorldPurposePackRegistry.canonical_defaults().entry_for("base")
+        self.assertIsNotNone(base)
+        assert base is not None
+        self.assertIn(BuildingPurposeFamily.DWELLING, base.allowed)
+        self.assertIn(BuildingPurpose.TOWN_HALL, base.allowed)
+        self.assertNotIn(BuildingPurposeFamily.PUBLIC, base.allowed)
+        self.assertNotIn(BuildingPurposeFamily.TRADE, base.allowed)
+        self.assertTrue(
+            all(
+                isinstance(token, (BuildingPurpose, BuildingPurposeFamily))
+                for token in base.allowed
+            ),
+        )
+        steam = WorldPurposePackRegistry.canonical_defaults().entry_for("steampunk")
+        assert steam is not None
+        self.assertIn(BuildingPurposeFamily.FACTORY, steam.allowed)
+        self.assertIn(BuildingPurposeFamily.UTILITY, steam.allowed)
+
+    def test_custom_pack_overlay_and_unknown_leaf(self) -> None:
+        world = SimpleNamespace(
+            world_uid="w1",
+            purpose_pack_registry=[{
+                "system_pack": "ironhold",
+                "allowed": ["culture", "tavern", "guild", "not_a_leaf"],
+            }],
+            purpose_packs=["ironhold"],
+        )
+        recipes = purpose_pack_registry(world)
+        custom = recipes.entry_for("ironhold")
+        self.assertIsNotNone(custom)
+        assert custom is not None
+        self.assertIn(BuildingPurposeFamily.CULTURE, custom.allowed)
+        self.assertNotIn("not_a_leaf", [str(token) for token in custom.allowed])
+        live = enabled_building_purposes(world)
+        self.assertIn(BuildingPurpose.HOUSE, live)
+        self.assertIn(BuildingPurpose.TEMPLE, live)
+        self.assertIn(BuildingPurpose.TAVERN, live)
+        self.assertNotIn(BuildingPurpose.PORTAL, live)
+        dropped = PurposePackEntry(
+            system_pack="ironhold",
+            allowed=["temple", "not_a_leaf"],
+        )
+        self.assertEqual(dropped.allowed, [BuildingPurpose.TEMPLE])
+
+    def test_world_overlay_cannot_replace_base(self) -> None:
+        world = SimpleNamespace(
+            world_uid="w1",
+            purpose_pack_registry=[{
+                "system_pack": "base",
+                "allowed": ["house"],
+            }],
+        )
+        base = purpose_pack_registry(world).entry_for("base")
+        assert base is not None
+        self.assertIn(BuildingPurposeFamily.DWELLING, base.allowed)
+        self.assertIn(BuildingPurpose.SHOP, enabled_building_purposes(world))
 
     def test_world_row_omit_and_mix(self) -> None:
         empty = SimpleNamespace(world_uid="w1")
-        self.assertEqual(purpose_packs(empty).root, [PurposePack.FANTASY])
+        self.assertEqual(
+            purpose_packs(empty).root,
+            [PurposePack.BASE, PurposePack.FANTASY],
+        )
         self.assertNotIn(
             BuildingPurpose.HYPERMARKET,
             enabled_building_purposes(empty),

@@ -61,7 +61,7 @@ flowchart TD
 | 6 | **CITY-T-5j** | смешение | Дубль extract NL района (topology vs packing) | P2 | **open** |
 | 7 | **CITY-T-5c** | смешение | Planner импортирует `settlementOutdoorUids` (цикл пакета) | P2 | **open** |
 | 8 | **CITY-T-5k** | смешение | Authored-skip в трёх местах | P2 | **open** |
-| 9 | **CITY-T-5l** | смешение | `load_topology_slots` тянет `specialization_extras` из planner | P2 | **open** |
+| 9 | **CITY-T-5l** | смешение | `load_topology_slots` тянет `specialization_extras` из planner | P2 | **resolved** — один `resolve_settlement_specialization`; штамп `allowed` на слот |
 | 10 | **CITY-T-5f** | legacy | `city_graph_for_settlement` без фильтра `GraphLevel.CITY` (A* позже) | P2 | **open** |
 | 11 | **CITY-T-5e** | legacy | Район `system_template_uid` FK на `building_templates` | P3 | **open** |
 | 12 | **CITY-T-5d** | хардкод | Smoke `"medium"` вместо `DistrictDensity` | P3 | **open** |
@@ -269,13 +269,9 @@ Area `uuid4` в `areaPaths.py` — не переносить в этом ID.
 
 ### CITY-T-5l — loader слотов знает рецепт специализаций
 
-**Status:** `open` | **Severity:** low | **P:** P2
+**Status:** `resolved` | **Severity:** low | **P:** P2
 
-[`load_topology_slots`](../backend/app/application/worldData/settlementOutdoor/settlementOutdoorTopology.py) для packing тянет `specialization_extras` из `planner/districts.py` (required types, subject tags). Outdoor-пакет зависит от внутренностей generate.
-
-Freeze JSON не содержит required/tags — их считают заново с мира. Если реестр специализаций мира сменился между topology и packing, слот той же геометрии получит другие required.
-
-**Fix:** либо класть required/tags в `DistrictTopologySlot` (расширение POJO), либо считать extras в assembler при reuse, не в outdoor loader. Не второй проход `plan_district_slots`.
+`load_topology_slots` зовёт тот же `resolve_settlement_specialization` + `slot_allowed_for_template`, что generate. `specialization_extras` удалён. Stamp `DistrictSlot.allowed_structure_types` на reuse. Freeze JSON по-прежнему без tags — пересчёт с мира.
 
 ---
 
@@ -315,7 +311,7 @@ God-object’ов в Settlement → District → Area **по-прежнему н
 2. **P1 хардкод streets:** `link_chain` через POJO.  
 3. **P2 слои:** 5i → 5j → 5c (снять цикл пакета).  
 4. **P2 контракт graph:** 5f до A* world routes.  
-5. **P3:** 5e FK, 5d smoke, 5k/5l/5m polish.  
+5. **P3:** 5e FK, 5d smoke, 5k/5m polish. **5l** resolved (`resolve_settlement_specialization`).  
 **CITY-T-5b** / lazy generate — **не этот срез.** Wiring ноды — **CITY-T-1b / 1e**, Gate: DAG.
 
 Код C23 / city §8 / outdoor C23 **не** откатывать. Спеку topology **не** переписывать.

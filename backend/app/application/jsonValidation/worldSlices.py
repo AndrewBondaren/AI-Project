@@ -61,7 +61,10 @@ from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
 from app.dataModel.structure.building.worldBuildingTemplateRegistry import (
     WorldBuildingTemplateRegistry,
 )
-from app.dataModel.structure.enums.buildingPurpose import WorldPurposePacks
+from app.dataModel.structure.enums.buildingPurpose import (
+    WorldPurposePackRegistry,
+    WorldPurposePacks,
+)
 from app.dataModel.structure.room.worldRoomTypeRegistry import WorldRoomTypeRegistry
 from app.dataModel.terrain.relief.worldReliefGradeObstacle import (
     RELIEF_OBSTACLE_SCALAR_WIRE_KEYS,
@@ -325,6 +328,11 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
     _registry_slice(
         pojo_cls=WorldBuildingTemplateRegistry,
         world_key="building_template_registry",
+        facade=True,
+    ),
+    _registry_slice(
+        pojo_cls=WorldPurposePackRegistry,
+        world_key="purpose_pack_registry",
         facade=True,
     ),
     _registry_slice(

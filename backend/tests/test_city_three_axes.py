@@ -83,6 +83,7 @@ from app.dataModel.structure.building.buildingLayoutTemplate import (
     try_building_layout,
 )
 from app.dataModel.structure.building.buildingTemplateOutline import BuildingTemplateOutline
+from app.dataModel.structure.enums.buildingPurpose import BuildingPurposeFamily
 from app.db.models.buildingTemplate import BuildingTemplateRow
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -171,18 +172,13 @@ class RecipePojoTest(unittest.TestCase):
         assert livestock is not None
         self.assertEqual(extract.subject_kind, "resource")
         self.assertEqual(extract.kind_keys(), ("resource",))
-        self.assertEqual(extract.required_structure_types, ["mine"])
-        self.assertEqual(culture.resolved_structure_types([]), ("temple", "theater"))
-        self.assertEqual(culture.resolved_structure_types(["religion"]), ("temple",))
-        self.assertEqual(culture.resolved_structure_types(["knowledge"]), ("library",))
-        self.assertEqual(
-            culture.resolved_structure_types(["religion", "knowledge"]),
-            ("temple", "library"),
-        )
+        self.assertEqual(extract.allowed_family, BuildingPurposeFamily.EXTRACT)
+        self.assertEqual(culture.allowed_family, BuildingPurposeFamily.CULTURE)
         self.assertEqual(farm.typical_districts[0].district_subtype, "farm")
+        self.assertEqual(farm.allowed_family, BuildingPurposeFamily.CULTIVATION)
         self.assertEqual(livestock.subject_kind, "livestock")
         self.assertEqual(livestock.typical_districts[0].district_subtype, "livestock")
-        self.assertEqual(livestock.required_structure_types, ["livestock"])
+        self.assertEqual(livestock.allowed_family, BuildingPurposeFamily.HUSBANDRY)
 
     def test_bundle_coerces_specialization_string(self) -> None:
         wire = BundleNamedLocation.model_validate({
@@ -228,14 +224,34 @@ class RecipePojoTest(unittest.TestCase):
         entry = SettlementSpecializationEntry.model_validate({
             "system_specialization": "extract",
             "subject_kinds": ["resource", "material"],
-            "required_structure_types": ["mine"],
+            "allowed_family": "extract",
         })
         self.assertEqual(entry.kind_keys(), ("resource", "material"))
         listed = SettlementSpecializationEntry.model_validate({
             "system_specialization": "extract",
             "subject_kind": ["resource", "material"],
+            "allowed_family": "extract",
         })
         self.assertEqual(listed.kind_keys(), ("resource", "material"))
+
+    def test_entry_rejects_legacy_leaf_lists(self) -> None:
+        with self.assertRaises(Exception):
+            SettlementSpecializationEntry.model_validate({
+                "system_specialization": "extract",
+                "allowed_family": "extract",
+                "required_structure_types": ["mine"],
+            })
+        with self.assertRaises(Exception):
+            SettlementSpecializationEntry.model_validate({
+                "system_specialization": "culture",
+                "allowed_family": "culture",
+                "subjects_to_structure_types": {"knowledge": ["library"]},
+            })
+        with self.assertRaises(Exception):
+            SettlementSpecializationEntry.model_validate({
+                "system_specialization": "extract",
+                "allowed_family": "mine",
+            })
 
     def test_geographic_extra_keys_ignored(self) -> None:
         row = LocationTypeSubtypeEntry.model_validate({
@@ -483,7 +499,43 @@ class SpecializationPassTest(unittest.TestCase):
             row.structure_type or row.building_template
             for row in mining.required_structures
         }
-        self.assertIn("mine", mining_req)
+        self.assertEqual(mining.allowed_structure_types, [BuildingPurposeFamily.EXTRACT])
+        self.assertNotIn("mine", mining_req)
+        commercial = next(
+            slot for slot in slots
+            if slot.district_template.system_name == "commercial_quarter"
+        )
+        self.assertEqual(
+            commercial.allowed_structure_types,
+            [BuildingPurposeFamily.TRADE],
+        )
+
+    def test_extract_slot_fill_is_extract_family(self) -> None:
+        world = _world()
+        settlement = _settlement(subtype="city", size="medium")
+        settlement.system_settlement_specializations = ["extract"]
+        skeleton = _skeleton(world, settlement)
+        slots = plan_district_slots(world, settlement, skeleton, None)
+        mining = next(
+            slot for slot in slots
+            if slot.district_template.system_name == "mining_quarter"
+        )
+        catalog = BuildingCatalog.from_layouts([
+            _layout("mine", "mine"),
+            _layout("tavern_1", "tavern"),
+        ])
+        names = candidate_template_names(
+            mining, world, skeleton, catalog=catalog, settlement_uid="loc-1",
+        )
+        self.assertEqual(names, ["mine"])
+        commercial = next(
+            slot for slot in slots
+            if slot.district_template.system_name == "commercial_quarter"
+        )
+        names_c = candidate_template_names(
+            commercial, world, skeleton, catalog=catalog, settlement_uid="loc-1",
+        )
+        self.assertEqual(names_c, ["tavern_1"])
 
     def test_city_typical_districts_before_extract(self) -> None:
         world = _world()
@@ -523,7 +575,7 @@ class SpecializationPassTest(unittest.TestCase):
         names = {slot.district_template.system_name for slot in slots}
         self.assertIn("livestock_quarter", names)
 
-    def test_culture_religion_requires_temple_not_theater(self) -> None:
+    def test_culture_religion_tags_culture_leaves(self) -> None:
         world = _world()
         settlement = _settlement(subtype="city", size="medium")
         settlement.system_settlement_specializations = [
@@ -535,9 +587,19 @@ class SpecializationPassTest(unittest.TestCase):
             for slot in slots
             for row in slot.required_structures
         }
-        self.assertIn("temple", types)
+        self.assertNotIn("temple", types)
         self.assertNotIn("theater", types)
-        self.assertIn("town_hall", types)
+        culture_slot = next(
+            slot for slot in slots
+            if slot.district_template.system_name == "cultural_quarter"
+        )
+        self.assertEqual(
+            culture_slot.allowed_structure_types,
+            [BuildingPurposeFamily.CULTURE],
+        )
+        self.assertEqual(culture_slot.subject_tags.get("temple"), ("religion",))
+        self.assertEqual(culture_slot.subject_tags.get("theater"), ("religion",))
+        self.assertEqual(culture_slot.subject_tags.get("library"), ("religion",))
 
     def test_subject_picks_tagged_mine_drawing(self) -> None:
         catalog = BuildingCatalog.from_layouts([
@@ -568,6 +630,7 @@ class SpecializationPassTest(unittest.TestCase):
             required_structures=[RequiredStructure(
                 building_template="mine", structure_type="mine",
             )],
+            allowed_structure_types=template.allowed_structure_types,
             cell_x=0, cell_y=0,
             subject_tags={"mine": ("iron_ore",)},
         )
@@ -606,6 +669,7 @@ class SpecializationPassTest(unittest.TestCase):
             required_structures=[RequiredStructure(
                 building_template="mine", structure_type="mine",
             )],
+            allowed_structure_types=template.allowed_structure_types,
             cell_x=0, cell_y=0,
             subject_tags={},
         )
@@ -628,6 +692,7 @@ class SpecializationPassTest(unittest.TestCase):
             required_structures=[RequiredStructure(
                 building_template="mine", structure_type="mine",
             )],
+            allowed_structure_types=template.allowed_structure_types,
             cell_x=0, cell_y=0,
             subject_tags={},
         )
@@ -659,6 +724,7 @@ class SpecializationPassTest(unittest.TestCase):
             required_structures=[RequiredStructure(
                 building_template="mine", structure_type="mine",
             )],
+            allowed_structure_types=template.allowed_structure_types,
             cell_x=0, cell_y=0,
             subject_tags={"mine": ("mithril_ore",)},
         )
@@ -696,6 +762,7 @@ class SpecializationPassTest(unittest.TestCase):
             required_structures=[RequiredStructure(
                 building_template="mine", structure_type="mine",
             )],
+            allowed_structure_types=template.allowed_structure_types,
             cell_x=0, cell_y=0,
             subject_tags={"mine": ("not_a_resource",)},
         )
@@ -727,6 +794,7 @@ class TokenPickTest(unittest.TestCase):
         slot = DistrictSlot(
             origin_x=0, origin_y=0, width_fine=40, depth_fine=40, ground_z=0,
             district_template=template,
+            allowed_structure_types=template.allowed_structure_types,
             cell_x=0, cell_y=0,
         )
         world = _world()
@@ -755,6 +823,7 @@ class TokenPickTest(unittest.TestCase):
         slot = DistrictSlot(
             origin_x=0, origin_y=0, width_fine=40, depth_fine=40, ground_z=0,
             district_template=template,
+            allowed_structure_types=template.allowed_structure_types,
             cell_x=1, cell_y=1,
         )
         world = _world()
@@ -893,7 +962,7 @@ class CityT4PlannerTest(unittest.TestCase):
         self.assertIn("civic_center", names)
         self.assertIn("cultural_quarter", names)
 
-    def test_religion_tags_temple_not_theater(self) -> None:
+    def test_religion_tags_culture_family_leaves(self) -> None:
         world = _world()
         settlement = _settlement(subtype="city", size="medium")
         settlement.system_settlement_specializations = [
@@ -902,7 +971,8 @@ class CityT4PlannerTest(unittest.TestCase):
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         tags = slots[0].subject_tags
         self.assertIn("religion", tags.get("temple", ()))
-        self.assertEqual(tags.get("theater", ()), ())
+        self.assertIn("religion", tags.get("theater", ()))
+        self.assertIn("religion", tags.get("library", ()))
 
     def test_extract_multiple_subject_kinds_tag_mine(self) -> None:
         world = _world()
@@ -975,6 +1045,7 @@ class CityT4PlannerTest(unittest.TestCase):
         slot = DistrictSlot(
             origin_x=0, origin_y=0, width_fine=40, depth_fine=40, ground_z=0,
             district_template=template,
+            allowed_structure_types=template.allowed_structure_types,
             cell_x=0, cell_y=0,
         )
         world = _world()

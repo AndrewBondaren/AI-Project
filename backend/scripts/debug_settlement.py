@@ -199,11 +199,13 @@ def test_phase_e_building_cache() -> None:
         origin_x=0, origin_y=0, width_fine=3000, depth_fine=3000, ground_z=0,
         district_template=civic,
         required_structures=list(civic.required_structures or []),
+        allowed_structure_types=civic.allowed_structure_types,
     )
     slot_b = DistrictSlot(
         origin_x=3000, origin_y=0, width_fine=3000, depth_fine=3000, ground_z=0,
         district_template=civic,
         required_structures=list(civic.required_structures or []),
+        allowed_structure_types=civic.allowed_structure_types,
     )
 
     assembler = SettlementAssembler()
