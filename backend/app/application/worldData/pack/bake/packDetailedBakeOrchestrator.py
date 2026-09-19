@@ -177,6 +177,29 @@ class PackDetailedBakeOrchestrator:
         location = next((loc for loc in locations if loc.location_uid == location_uid), None)
         if location is None:
             raise ValueError(f"location_uid not found: {location_uid}")
+        if not location_uid_in_pack_index(writer.paths, location_uid):
+            log_pack_detailed_bake_skip_not_in_index(
+                world.world_uid, location_uid=location_uid,
+            )
+            log_pack_detailed_bake_done(
+                world.world_uid,
+                scope="location",
+                tiles=0,
+                chunks=0,
+                materialize_s=0.0,
+                grade_s=0.0,
+                l2_s=0.0,
+                grade_persist_s=0.0,
+                grade_mill=request.grade_mill,
+                grade_paint=request.grade_paint,
+            )
+            return PackDetailedBakeResult(
+                scope="location",
+                terrain=PersistResult.from_counts(0, 0),
+                location_uid=location_uid,
+                grade_mill=request.grade_mill,
+                grade_paint=request.grade_paint,
+            )
         volume = territory_volume_for_location(world, location)
         if volume is None:
             raise ValueError(

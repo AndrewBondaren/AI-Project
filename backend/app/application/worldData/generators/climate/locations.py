@@ -7,8 +7,7 @@ from app.db.models.namedLocation import NamedLocation
 def static_map_anchors(locations: list[NamedLocation]) -> list[NamedLocation]:
     return [
         loc for loc in locations
-        if loc.map_x is not None and loc.map_y is not None
-        and loc.map_z is not None and not loc.is_mobile
+        if loc.map_x is not None and loc.map_y is not None and not loc.is_mobile
     ]
 
 

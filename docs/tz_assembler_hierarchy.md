@@ -388,7 +388,7 @@ class AreaSlot:
 
 Считает `StructureAreaAssembler` по `building_layout.levels` после translate. Pack-wire: `AreaSlotWire.height` / `z_deep` / `deck` (omit → 0).
 
-`deck` — **ярус** района. SoT: `DistrictTemplateEntry.deck` (city §9.2; omit → 0). `AreaSlot.deck` — копия при packing, не своя настройка участка. Не этаж здания (`LocationLevel`), не `economic_tier`, не climate z-band hive/spire. Канон omit → все участки `0`. Коллизия xy ∩ z (`[ground_z - z_deep, ground_z + height)`) — только если в районе **два+ различных** `deck` среди участков. Один ярус: 2D packing, проверка не бежит. Generate при ударе — warning, не abort. Несколько ярусов на одном чертеже / наложение районов — позже; сейчас у района один `deck`.
+`deck` — **ярус** района. SoT: `DistrictTemplateEntry.deck` (city §9.2; omit → 0). `AreaSlot.deck` — копия при packing, не своя настройка участка. Не этаж здания (`LocationLevel`), не `economic_tier`, не climate z-band hive/spire, не AABB-разведение двух поселений ([`tz_locations.md`](./tz_locations.md) **LOC-T-3**). Канон omit → все участки `0`. Коллизия xy ∩ z (`[ground_z - z_deep, ground_z + height)`) — только если в районе **два+ различных** `deck` среди участков. Один ярус: 2D packing, проверка не бежит. Generate при ударе — warning, не abort. Несколько ярусов на одном чертеже / наложение районов — позже; сейчас у района один `deck`.
 
 ---
 

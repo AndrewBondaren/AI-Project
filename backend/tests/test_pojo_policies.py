@@ -24,6 +24,18 @@ class TestPojoPolicies(unittest.TestCase):
             SceneVolumePolicy.canonical_defaults().scene_xy_radius,
         )
 
+    def test_territory_settlement_separation_defaults(self):
+        policy = TerritoryVolumePolicy.canonical_defaults()
+        fields = TerritoryVolumePolicy.model_fields
+        self.assertEqual(
+            policy.min_settlement_separation_xy,
+            fields["min_settlement_separation_xy"].default,
+        )
+        self.assertEqual(
+            policy.min_settlement_separation_z,
+            fields["min_settlement_separation_z"].default,
+        )
+
     def test_path_heading_policy_corridor_width(self):
         policy = PathHeadingPolicy.canonical_defaults()
         self.assertEqual(policy.position_history_max, 5)

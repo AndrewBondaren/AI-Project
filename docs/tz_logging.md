@@ -68,7 +68,7 @@ backend/logs/{domain}/{service}.log
 | `render` | `dumpLog` | `logs/render/dumpLog.log` | **script** | debug ASCII dump **для разработчика** (не мастер мира, не игрок, не DAG); ticks, heartbeat ≤5 с | [`dumpLog.py`](../backend/app/application/worldData/render/dumpLog.py) · [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) |
 | `terrain` | `terrainParallelLog` | `logs/terrain/terrainParallelLog.log` | server | parallel column / worker ticks | [`terrainParallelLog.py`](../backend/app/application/worldData/terrainParallelLog.py) · [`tz_terrain_generation.md`](./tz_terrain_generation.md) |
 | `climate` | `climateLog` | `logs/climate/climateLog.log` | server | pass INFO, `warn_once` / `debug_once` | [`loggingHelpers.py`](../backend/app/application/worldData/generators/climate/loggingHelpers.py) · [`tz_climate.md`](./tz_climate.md) § Логирование |
-| `jsonValidation` | `resolve` | `logs/jsonValidation/resolve.log` | server | DefaultOnWire / RegistryKey fallback (`json_validation \| …`); settlement size miss → medium | [`resolve.py`](../backend/app/application/jsonValidation/resolve.py) · [`settlementSizeResolve.py`](../backend/app/application/jsonValidation/settlementSizeResolve.py) · [`tz_json_validation.md`](./tz_json_validation.md) §0 RegistryKey |
+| `jsonValidation` | `resolve` | `logs/jsonValidation/resolve.log` | server | DefaultOnWire / RegistryKey fallback (`json_validation \| …`); settlement size miss → medium; **LOC-T-3** settlement volume ERROR | [`resolve.py`](../backend/app/application/jsonValidation/resolve.py) · [`settlementSizeResolve.py`](../backend/app/application/jsonValidation/settlementSizeResolve.py) · [`tz_json_validation.md`](./tz_json_validation.md) §0 RegistryKey · [`tz_locations.md`](./tz_locations.md) **LOC-T-3** |
 | `settlement` | `settlementAssembler` | `logs/settlement/settlementAssembler.log` | server | C22 packing DEBUG/INFO/WARNING; шторм `fit` только файл (L8) | ⬜ хелпер по образцу relief `log.py` / climate `loggingHelpers` · [connections](./tz_structure_connections.md) §5.1.3 «Debug packing» |
 | `structure` | `headroom` | `logs/structure/headroom.log` | server | post-gen ERROR, не abort | [`tz_building_generator.md`](./tz_building_generator.md) § Headroom (образец R44) |
 | `core` | `runtime` | `logs/core/runtime.log` | server | непойманные server-логгеры (uvicorn / fastapi / …); **не** `app.log` | [`loggingConfig.py`](../backend/app/core/loggingConfig.py) |
@@ -132,7 +132,7 @@ backend/logs/{domain}/{service}.log
 | [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) | `pack` / транскрипт `generation/{uid}` |
 | [`tz_map_light_bake.md`](./tz_map_light_bake.md) | `pack` / `packBakeLog` (light compose) |
 | [`tz_terrain_generation.md`](./tz_terrain_generation.md) | `terrain` / `terrainParallelLog` |
-| [`tz_json_validation.md`](./tz_json_validation.md) | `jsonValidation` / `resolve` (DefaultOnWire, size fallback) |
+| [`tz_json_validation.md`](./tz_json_validation.md) | `jsonValidation` / `resolve` (DefaultOnWire, size fallback; **LOC-T-3** uid/size/z) |
 | [`tz_climate.md`](./tz_climate.md) | `climate` / `climateLog` |
 | [`tz_structure_connections.md`](./tz_structure_connections.md) | `settlement` / `settlementAssembler` (C22 packing) |
 | [`tz_building_generator.md`](./tz_building_generator.md) | `structure` / `headroom` |

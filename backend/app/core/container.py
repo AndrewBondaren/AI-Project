@@ -611,7 +611,10 @@ class Container:
 
     def location_service(self) -> NamedLocationService:
         if self._location_service is None:
-            self._location_service = NamedLocationService(repo=self.location_repository())
+            self._location_service = NamedLocationService(
+                repo=self.location_repository(),
+                world_repo=self.world_repository(),
+            )
         return self._location_service
 
     def patch_store_service(self) -> PatchStoreService:

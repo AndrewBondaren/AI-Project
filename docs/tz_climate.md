@@ -1028,19 +1028,22 @@ Surface field в `(gx,gy)` — **референс** для surface band, не co
 
 #### C — co-located cities (edge case)
 
-**Разные города**, одна `(x,y)`:
+**Разные города**, одна `(x,y)`, **разный Z с запасом LOC-T-3** ([`tz_locations.md`](./tz_locations.md) § Разведение поселений). Пример при каноне `settlement_z_above=32`, `n_base=0`, `min_settlement_separation_z=50`:
 
 ```
-(x, y, z=33)  → city_surface      — location_uid A
-(x, y, z=28)  → city_underground  — location_uid B
-(x, y, z=120) → city_aerial       — location_uid C
+(x, y, map_z=0)    → city_surface      — location_uid A   volume Z [0, 32]
+(x, y, map_z=-83)  → city_underground  — location_uid B   volume Z [-83, -51]
+(x, y, map_z=83)   → city_aerial       — location_uid C   volume Z [83, 115]
 ```
+
+`|Δmap_z| = 50` недостаточно. Пины 33 / 28 / 120 без расчёта volume — невалидный пример.
 
 | | B (hive) | C (co-located) |
 |---|---|---|
 | Settlement count | 1 | ≥2 |
 | `location_uid` | одно дерево | разные деревья |
 | Типичность | редкий sci-fi, **штатный** кейс | **edge case** |
+| Import | — | 200 + ERROR лог; карту занимает победитель **LOC-T-3** |
 
 PK `(world_uid, x, y, z)` различает z в обоих кейсах. **Ошибка:** один climate на все z при совпадении `(x,y)`.
 
@@ -1090,7 +1093,7 @@ class VolumeClimateContext:
 ### Зависимости (порядок работ)
 
 1. **Terrain:** tunnel topology (A)  
-2. **Settlement:** multi-z skeleton (B) + co-located validation (C) — [`tz_locations.md`](./tz_locations.md)  
+2. **Settlement:** multi-z skeleton (B) + co-located validation (C) — [`tz_locations.md`](./tz_locations.md) **LOC-T-3** (AABB + запас, не пин)  
 3. **Climate:** `VolumeClimateContext` + resolver (A/B/C)  
 4. **DAG:** volume resolve после settlement/terrain placement  
 
@@ -1197,6 +1200,7 @@ python scripts/initialize_world.py --fixture ../fixtures/world_terrain_test.json
 
 | Дата | Версия | Изменение |
 |---|---|---|
+| 2026-09-19 | 2.6.1 | **LOC-T-3:** co-located example pins 0 / −83 / 83 (volume + Z-gap 50). Пины 33/28/120 сняты. SoT [`tz_locations.md`](./tz_locations.md). |
 | 2026-08-16 | 2.6.1 | **Modification layer:** локальный климат = `climate_delta`, не перепечка light/full/detailed |
 | 2026-08-15 | 2.6.1 | **C14:** технический шов pack не climate wall; field непрерывен в XY. SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) C29 |
 | 2026-07-16 | Pack climate correct resolve: pole+local + z ladder; light `spawn_player` / full `none` / detailed fine+L2 z |
@@ -1229,7 +1233,7 @@ python scripts/initialize_world.py --fixture ../fixtures/world_terrain_test.json
 - [`tz_world_snapshot.md`](./tz_world_snapshot.md) — единый модуль snapshot на ход
 - [`tz_lazy_simulation.md`](./tz_lazy_simulation.md) — LOD зоны; climate per-cell vs field cache
 - [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) — горные реки, seasonal flow vs bootstrap carve; partial bbox после hydrology
-- [`tz_locations.md`](./tz_locations.md) — § «Вертикальное наложение локаций» (co-located settlements)
+- [`tz_locations.md`](./tz_locations.md) — § «Вертикальное наложение» + **LOC-T-3** разведение поселений (co-located)
 - [`tz_city_generation.md`](./tz_city_generation.md) — settlement generation
 - [`tz_assembler_hierarchy.md`](./tz_assembler_hierarchy.md) — settlement z-топология (hive skeleton)
 - [`tz_materials.md`](./tz_materials.md) — §7.1 precipitation liquid

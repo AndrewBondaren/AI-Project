@@ -10,7 +10,7 @@
 | Код | `backend/app/application/jsonValidation/` |
 | Покрытие import | `world` slice: climate scalars, tiers, materials, terrain, hydrology, climate_zones |
 | Покрытие runtime | `worldRow` — те же POJO через `resolve` (warn-only) |
-| Bundle sections | `world` ✅; `connection_*` — JV-0b ✅; races, perks, locations — ⬜ (**LOC-T-1** type←subtype — не `normalize_world`) |
+| Bundle sections | `world` ✅; `connection_*` — JV-0b ✅; races, perks, locations — ⬜ (**LOC-T-1** type←subtype; **LOC-T-3** AABB occupancy — не 422, не `normalize_world`) |
 | JV-0 ENUM gate | JV-0a ✅; JV-0b ✅ bundle connections |
 | REF-W index | ✅ (MVP) |
 | `SCHEMA_ID` в 422 | ✅ |
@@ -678,6 +678,7 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 | JV-8 | races import (SCH-RACE-*) | P3 | ⬜ |
 | **LOC-T-1** | locations: infer `system_location_type` from unique subtype | P2 | ⬜ SoT [`tz_locations.md`](./tz_locations.md); не `normalize_world` |
 | **LOC-T-2** | settlement size rank (`small`…) + rename `system_city_size`; footprint = subtype × rank | P2 | ⬜ SoT [`tz_locations.md`](./tz_locations.md) § Размер поселения |
+| **LOC-T-3** | settlement AABB + gap; import 200 + ERROR occupancy | P2 | ⬜ SoT [`tz_locations.md`](./tz_locations.md) § Разведение поселений; не 422; не `normalize_world` |
 | GV-* | generators → worldRow (см. § Generators — миграция на worldRow) | P1–P3 | ◐ |
 
 **Порядок (архитектура перед фичами):** ~~GV-1~~ ~~GV-2~~ ~~JV-1b~~ ~~JV-2 MVP~~ → **JV-0a → JV-0b** → GV-3… → JV-8.
@@ -701,6 +702,7 @@ def normalize_connection_nodes(rows: list[dict], *, ctx) -> list[dict]: ...
 
 | Версия | Дата | Изменение |
 |--------|------|-----------|
+| — | 2026-09-19 | **LOC-T-3:** import 200 + ERROR `json_validation \| settlement_volume_separation`; occupancy footprint затем `locations[]`. Не 422. SoT [`tz_locations.md`](./tz_locations.md). Код ⬜. |
 | — | 2026-09-08 | **NL parent materials** (POJO-C-10 resolved): `parent_wall_material` / `parent_floor_material` → `MaterialKey`. Omit/`null` → `None`; `""` → reject. Как `dominant_material`. Не скелет, не `MaterialPick`. |
 | — | 2026-09-08 | **PerimeterBarrier.sides** (POJO-C-9 resolved): `list[Facing]` кардиналы. Omit/`[]` = все четыре. Intercardinal/unknown — skip элемента + warning, не 422. |
 | — | 2026-09-08 | **RequiredStructurePosition** (POJO-C-8 resolved): ENUM-E `any`/`center` на `RequiredStructure.position`. `DefaultOnWire` = `ANY`; omit/invalid → `any` + warning. Не `StrictEnumOnWire`. CONN-PACK-2 не этот срез. |

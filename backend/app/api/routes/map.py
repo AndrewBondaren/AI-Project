@@ -159,7 +159,7 @@ async def bake_world_pack(
     world = await world_svc.get_by_id(world_uid)
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
-    locations = await location_svc.get_all(world_uid)
+    locations = await location_svc.list_insert_order(world_uid)
     nodes = await conn_svc.get_nodes(world_uid)
     edges = await conn_svc.get_edges(world_uid)
     mat_ctx = resolve_materialization_context(
@@ -501,7 +501,7 @@ async def refine_from_entry_route(
     world = await world_svc.get_by_id(world_uid)
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
-    locations = await location_svc.get_all(world_uid)
+    locations = await location_svc.list_insert_order(world_uid)
     nodes = await conn_svc.get_nodes(world_uid)
     edges = await conn_svc.get_edges(world_uid)
     try:
@@ -600,7 +600,7 @@ async def refine_chunk_route(
     world = await world_svc.get_by_id(world_uid)
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
-    locations = await location_svc.get_all(world_uid)
+    locations = await location_svc.list_insert_order(world_uid)
     nodes = await conn_svc.get_nodes(world_uid)
     edges = await conn_svc.get_edges(world_uid)
     try:
@@ -668,7 +668,7 @@ async def schedule_chunk_refine_route(
     world = await world_svc.get_by_id(world_uid)
     if world is None:
         raise HTTPException(status_code=404, detail=f"World '{world_uid}' not found")
-    locations = await location_svc.get_all(world_uid)
+    locations = await location_svc.list_insert_order(world_uid)
     nodes = await conn_svc.get_nodes(world_uid)
     edges = await conn_svc.get_edges(world_uid)
     try:

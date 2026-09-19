@@ -24,7 +24,12 @@ from app.dataModel.worldPack.mergeMapCells import (
     merge_layers,
 )
 from app.dataModel.worldPack.packReadPolicy import PackReadPolicy
-from app.dataModel.worldPack.territoryVolume import TerritoryVolume, inside_location_volume
+from app.dataModel.worldPack.territoryVolume import (
+    TerritoryVolume,
+    empty_inclusive,
+    inside_location_volume,
+    volumes_conflict,
+)
 from app.dataModel.worldPack.territoryVolumePolicy import TerritoryVolumePolicy
 from app.dataModel.worldPack.paintedRoadEdge import PaintedRoadEdge
 from app.dataModel.worldPack.worldSeamCopy import WorldSeamCopy
@@ -135,6 +140,8 @@ __all__ = [
     "PackReadPolicy",
     "TerritoryVolume",
     "TerritoryVolumePolicy",
+    "empty_inclusive",
+    "volumes_conflict",
     "TileManifestEntry",
     "WildernessRefineStatus",
     "WorldSeamCopy",

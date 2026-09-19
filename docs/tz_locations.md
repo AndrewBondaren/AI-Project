@@ -369,16 +369,80 @@ L0 debug-карта: глиф footprint поселения — `subtypes[].l0_ma
 
 ### Вертикальное наложение локаций
 
-Две named_locations могут иметь одинаковый (x,y) footprint но разные z — это валидно. Каждая ячейка `(x, y, z)` уникальна и принадлежит ровно одной named_location:
+Две named_locations могут иметь одинаковый (x,y) footprint, но **разный занятый интервал Z с запасом** — это валидно. Каждая ячейка `(x, y, z)` уникальна и принадлежит ровно одной named_location.
 
 ```
-Наземный город:    map_cells (x, y, z=33) → location_uid = "city_surface"
-Подземный город:   map_cells (x, y, z=28) → location_uid = "city_underground"
+Наземный город:    pin map_z=0    → location_uid = "city_surface"
+Подземный город:   pin map_z=-83  → location_uid = "city_underground"
 ```
+
+Числа пина — **пример** при каноне `settlement_z_above=32`, `map_subsurface_depth=0`: volume наземного `[0, 32]`, подземного `[-83, -51]`; пустых клеток между интервалами 50. `|Δmap_z| = 50` **не** достаточный зазор (см. **LOC-T-3** ниже).
 
 - `named_locations.state_uid` — отдельное поле на каждой; наземный и подземный город могут принадлежать разным государствам
-- Вход с поверхности в подземный город — `location_entry_points` на z=33 с `leads_to_level_uid` подземного города
-- Нарративный пример: оккупированная поверхность (государство A) + подземное сопротивление (государство B) — полностью в рамках схемы
+- Вход с поверхности в подземный город — `location_entry_points` на z входного этажа поверхности с `leads_to_level_uid` подземного города
+- Нарративный пример: оккупированная поверхность (государство A) + подземное сопротивление (государство B) — полностью в рамках схемы, если объёмы проходят **LOC-T-3**
+
+### Разведение поселений (**LOC-T-3**)
+
+Два **settlement map-site** (`is_settlement_map_site`: корень поселения, не district/building/geographic) не могут занимать один и тот же объём и не могут стоять **вплотную**. Сверяем AABB `territory_volume` (тот же, что pack WP-21 / `territory_volume_for_location`), не пины и не `deck` района.
+
+`deck` района — packing внутри одного города ([`tz_city_generation.md`](./tz_city_generation.md) §9.2). Не ярус мира, не этот предикат, не climate z-band.
+
+**Объём.** XY — settlement fine footprint (`settlement_fine_rect` → inclusive AABB). Z — от пина: `z0 = max(world_z_min, pin_z − n_base)`, `z1 = pin_z + settlement_z_above`. Omit `map_z` = pin 0. Канон: `n_base` ← `map_subsurface_depth` (default 0), `settlement_z_above=32` (`TerritoryVolumePolicy`).
+
+**Зазор.** Границы AABB **включительные**. Пустые клетки между интервалами оси: если A левее B и интервалы не пересекаются — `x0_B − x1_A − 1`; пересечение или касание граней → `0`. Встык (0 пустых) запрещён на той оси, где требуемый запас > 0.
+
+| Ось | POJO (`TerritoryVolumePolicy`) | Default | Смысл |
+|---|---|---|---|
+| XY | `min_settlement_separation_xy` | **1** | ≥1 пустая fine-клетка между footprint; встык нельзя |
+| Z | `min_settlement_separation_z` | **50** | ≥50 пустых клеток между занятыми интервалами Z |
+
+N+1: overlay тех же полей на политике мира, если задана; иначе `canonical_defaults()`. Литералы `50` / `1` в import/generate **запрещены** (`dataModel-no-hardcode`).
+
+**Предикат (separating axis).** Конфликт, если после запаса пересекаются **X и Y и Z**:
+
+```
+separated_x = empty_x >= min_xy   # то же для y, z с min_z
+conflict    = not separated_x and not separated_y and not separated_z
+```
+
+Один разделённый оси достаточно: соседи по XY на одном `map_z` — ок при `empty_xy ≥ 1`; co-located (один footprint XY) — ок при `empty_z ≥ 50`. Pack-тайл (макро / light) **не** единица разведения: два поселения на одном `Gx,Gy` при достаточном Z-зазоре — норма WP-21.
+
+**Пин ≠ зазор.** При `n_base=0`, `settlement_z_above=32` наземный pin 0 занимает `[0, 32]`. Чтобы подземный/верхний прошёл порог 50, его `z0` (ниже) или `z1` (выше) должен отстоять на `1 + 50` от чужого интервала: верхний pin ≥ `32 + 51` = **83**, не `+50`.
+
+**Гейт.** Мир **создаётся** (import 200, не 422). Обе строки `named_locations` пишутся. Столкновение — **ERROR** в sink [`tz_logging.md`](./tz_logging.md) `jsonValidation` / `resolve`. Не HTTP 422.
+
+Текст **и** `extra` — одна пара на событие. Префикс `json_validation | settlement_volume_separation`. Обязательно **uid, размер, z** обоих; без этого лог неполный.
+
+| Ключ | Что |
+|---|---|
+| `winner_uid` / `loser_uid` | `location_uid` |
+| `winner_name` / `loser_name` | `display_name` |
+| `winner_subtype` / `loser_subtype` | морфология (`city` / `village` / …) |
+| `winner_size` / `loser_size` | ранг (`small` / `medium` / `large`; omit → resolved `medium`) |
+| `winner_side_fine` / `loser_side_fine` | `footprint_side_fine` |
+| `winner_map_z` / `loser_map_z` | пин (omit → 0) |
+| `winner_z0` `winner_z1` / `loser_z0` `loser_z1` | занятый интервал volume |
+| `empty_x` `empty_y` `empty_z` | пустые клетки между AABB |
+| `min_xy` `min_z` | порог из POJO |
+| `reason` | `footprint` \| `declaration_order` |
+
+Пример текста (числа с полей, не литералы в коде):
+
+```text
+json_validation | settlement_volume_separation winner=loc-city-ironhold-002 loser=loc-city-amberport-002 reason=declaration_order size=city/medium side=2000 vs city/medium side=2000 map_z=0 volume_z=[0,32] vs map_z=0 volume_z=[0,32] empty_xy=0 empty_z=0 min_xy=1 min_z=50
+```
+
+**Приоритет (occupancy, не удаление строки):**
+
+1. **Большее** — больше `footprint_side_fine` (абсолют, морфология×ранг×`fine_cells_per_map_cell`, тот же helper generate). Не ранг в одиночку: `city`+`small` (1000) больше `village`+`large` после пола 1000? равны → п.2. `city`+`medium` (2000) бьёт любой 1000.
+2. Одинаковая сторона — **первее в `locations[]`** (меньший индекс bundle). Не `location_uid`, не `created_at`.
+
+Жадный выбор: сортировка победитель-первый, затем посадка; следующий **проигрывает карту**, если его AABB+запас конфликтует с уже принятым. Проигравший: пин в SQL как у мастера; **не** L0 `location_pin`, **не** `territory` mask, **не** C11/C23, пока пин не разведут. Клетка `(x,y,z)` — один occupant.
+
+Create/update одной строки против уже лежащих в мире — тот же предикат и лог; новая строка пишется; occupancy пересчитывается. Bake **не** второй tie-break и не `location_uid`. Не-settlement — leftover WP-21 warning.
+
+**Не этот контракт:** дети одного поселения (district/building) внутри родительского volume; один город на нескольких макро-тайлах (C29).
 
 ---
 
@@ -1439,3 +1503,4 @@ repositories = {
 | Fallback для бездомного + hometown при пустых детях | Если все дочерние `system_home_settlement_uid.depth+1` отфильтрованы `can_start()` — `NoLocationsAvailableError`. Нет fallback на глубину+2 или другой settlement. Требует решения совместно с UI-флоу. |
 | **LOC-T-1** Infer `system_location_type` из уникального subtype | Контракт locked (этот §). Код ⬜: omit type + `subtype=city` сейчас 422 (`BundleNamedLocation` StrictOnWire). Не CITY-T-5. |
 | **LOC-T-2** Ранг размера поселения vs морфология | Контракт locked (§ Размер поселения): omit → medium; type/unknown rank на generate → medium + WARNING фасада. Код: POJO `WorldSettlementSizeRegistry` ⬜ rename SQL `system_city_size`. Не CITY-T-5. План: [`.cursor/plans/loc-t-2-settlement-size.md`](../.cursor/plans/loc-t-2-settlement-size.md). |
+| **LOC-T-3** Разведение поселений (объём + запас) | Контракт locked (§ Разведение поселений): AABB + запас; import **200** + ERROR лог; occupancy: больше `footprint_side_fine`, иначе раньше в `locations[]`. Не 422. Код ⬜. План: [`.cursor/plans/loc-t-3-settlement-volume-separation.md`](../.cursor/plans/loc-t-3-settlement-volume-separation.md). Команда: [`/impl-loc-t-3`](../.cursor/commands/impl-loc-t-3.md). |

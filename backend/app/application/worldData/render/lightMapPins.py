@@ -18,7 +18,6 @@ def pin_is_settlement_site(pin: LocationsIndexPin) -> bool:
     return is_settlement_map_site(
         system_location_type=pin.system_location_type,
         system_location_subtype=pin.system_location_subtype,
-        system_city_size=pin.system_city_size,
     )
 
 

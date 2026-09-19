@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from app.application.worldData.generators.climate.locations import static_map_anchors
 from app.application.worldData.generators.climate.math import dist_sq
 from app.application.worldData.generators.coordinates import (
     fine_to_grid_x,
@@ -33,12 +34,10 @@ def build_zone_field(
     locations: list[NamedLocation],
     cell_m: int,
 ) -> ZoneClimateField:
-    anchors = [
-        loc for loc in locations
-        if loc.map_x is not None and loc.map_y is not None
-        and loc.map_z is not None and not loc.is_mobile
+    zone_list = [
+        loc for loc in static_map_anchors(locations)
+        if loc.system_location_type in ZONE_LOCATION_TYPES
     ]
-    zone_list = [loc for loc in anchors if loc.system_location_type in ZONE_LOCATION_TYPES]
     zone_centers = {
         (
             fine_to_grid_x(zone.map_x, cell_m),

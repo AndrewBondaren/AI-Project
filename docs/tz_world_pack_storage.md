@@ -412,7 +412,7 @@ flowchart TB
 | **WP-18** | Climate L2: **сначала A** (coarse sample, fast); **B** (per-tile fine) — в фоне, когда есть время |
 | **WP-19** | L2: **file-per-location** (territory) + **file-per-tile chunk** (wilderness); overlap — **mask на write**, **priority на read** |
 | **WP-20** | **Layer priority:** patch → **player scene** → **player path** → **city structure** → **location** → **wilderness** → L0 |
-| **WP-21** | Location territory — **3D volume** `(x,y,z)`; на одном macro-tile — **несколько** локаций на **разных z**; mask/merge по `(x,y,z)` |
+| **WP-21** | Location territory — **3D volume** `(x,y,z)`; на одном macro-tile — **несколько** локаций на **разных z**; mask/merge по `(x,y,z)`. Settlement map-site: **LOC-T-3** occupancy (больше footprint / раньше в `locations[]`), не 422 |
 | **WP-22** | **Stale L0 regen (A):** patches + location files сохраняем; wilderness regen **от координат/границы location** наружу — anti-seam |
 | **WP-23** | **Cutover:** **без** dual-read / interim slice на `map_cells`; сразу целевая загрузка мира (Pack + WP-13…21) |
 | **WP-24** | **Уровни импорта** — registry → skeleton → light pack → pack; patches только local session |
@@ -729,8 +729,9 @@ flowchart TB
 |---|---|
 | `territory_volume` | AABB `(x0,y0,z0)…(x1,y1,z1)` в meter grid; из `territory_radius_m` / layout bbox + `map_z` anchor. **Может** пересекать макро-тайлы / chunk faces (C29) |
 | **Span XY нескольких тайлов** | **норма:** один location file; wilderness mask на каждом tile ∩ volume |
-| **Overlap XY, разный Z** | **норма:** два location file на одном tile; wilderness заполняет **z-диапазоны вне** всех location volumes |
-| **Overlap XYZ** | validator warning; tie-break: выше `graph_level` / меньший `location_uid`; master разводит bbox |
+| **Overlap XY, разный Z** | **норма** для pack, если Z-интервалы **с запасом** (**LOC-T-3**): два location file на одном tile; wilderness заполняет **z-диапазоны вне** всех location volumes |
+| **Settlement map-site, XYZ без запаса / встык** | import **200**; ERROR лог; карту занимает победитель **LOC-T-3**. Проигравший в SQL, не L0/C11. SoT [`tz_locations.md`](./tz_locations.md) |
+| **Прочие named_locations, overlap XYZ** | leftover: validator warning; tie-break: выше `graph_level` / меньший `location_uid`; master разводит bbox |
 
 **Mask на write (3D):**
 
@@ -795,7 +796,8 @@ wilderness_chunk.cells = refine_chunk(L0, rect)
 | Location L2 **готов** | wilderness **не пишет** в её `territory_volume` |
 | Тот же `(gx,gy)`, **разный z** | surface city + underground — **разные** location files; wilderness между ними по z |
 | Location L2 **ещё нет**, wilderness в volume | location **перекрывает** при появлении; orphan wilderness bytes — допустимо v1 |
-| Две локации overlap **XYZ** | manifest tie-break; validator warning |
+| Две **settlement** overlap XYZ / встык / Z-зазор меньше порога | occupant = победитель **LOC-T-3**; проигравший не маскирует wilderness и не пишет L0 pin |
+| Две **не-settlement** overlap **XYZ** | leftover: manifest tie-break; validator warning |
 
 **zstd:** каждый файл сжимается **на write** (`TileCodec`); отдельный batch-compress не нужен.
 
@@ -2085,6 +2087,7 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-19 | **LOC-T-3 / WP-21:** settlement AABB + запас; import 200 + ERROR лог; occupancy больше footprint иначе раньше в `locations[]`. Не 422. SoT [`tz_locations.md`](./tz_locations.md). |
 | 2026-09-13 | C11/C23 stage seconds in `packBakeLog` (`settlement_c11_*`, `settlement_topology_*`). |
 | 2026-09-13 | **C8:** city structure pack = full building cells (`StructureLayout`), not facade-only. Furniture remains InteriorAssembler. |
 | 2026-09-06 | **Job boundaries:** после `full_bake` L0 — post-pass `settlement_topology` (C23). Не 4-й mode, не L2, не packing, не compose. `light_bake` topology не делает. |

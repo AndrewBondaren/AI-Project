@@ -126,7 +126,7 @@ class WorldMapBakeOrchestrator:
         tile_m = map_cell_fine_span(world)
         side = resolve_world_map_cells_per_tile(tile_m, world.world_map_cells_per_tile)
         scale = LightGridScale.from_tile(tile_m, side)
-        index = locations_index or build_locations_index(locations)
+        index = locations_index or build_locations_index(locations, world)
 
         bake_ctx = LightGridBakeContext(
             world=world,
@@ -215,7 +215,7 @@ class WorldMapBakeOrchestrator:
             tile_m,
             world.world_map_cells_per_tile,
         )
-        index = locations_index or build_locations_index(locs)
+        index = locations_index or build_locations_index(locs, world)
         bake_ctx = LightGridBakeContext(
             world=world,
             locations=locs,

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 
-from app.application.jsonValidation.worldRow import city_sizes
 from app.application.worldData.pack.bake.lightGrid.bakeContext import LightGridBakeContext
 from app.application.worldData.pack.bake.lightGrid.compose import LightGridCompose
 from app.application.worldData.pack.bake.lightGrid.coords import meters_to_macro_local
@@ -38,7 +37,6 @@ class SettlementContributor:
     def apply(self, compose: LightGridCompose, ctx: LightGridBakeContext) -> None:
         scale = compose.scale
         tile_set = set(ctx.tiles)
-        registry = city_sizes(ctx.world)
         loc_by_uid = {loc.location_uid: loc for loc in ctx.locations}
         pins = ctx.locations_index.locations
         pins_in_tiles = 0
@@ -54,10 +52,8 @@ class SettlementContributor:
                 continue
             pins_in_tiles += 1
 
-            size_key = loc.system_city_size if loc is not None else None
-            entry = registry.entry_for(size_key) if size_key else None
-            count = entry.map_cells_count if entry is not None else None
-            radius = self._footprint.radius_light(count, scale.side)
+            # LOC-T-2 leftover: size row is rank-only; L0 disk uses policy default count.
+            radius = self._footprint.radius_light(None, scale.side)
             radii.append(radius)
 
             for dty in range(-radius, radius + 1):

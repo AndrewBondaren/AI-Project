@@ -13,6 +13,9 @@ class INamedLocationRepository(ABC):
     async def get_by_world(self, world_uid: str) -> list[NamedLocation]: ...
 
     @abstractmethod
+    async def list_by_world_insert_order(self, world_uid: str) -> list[NamedLocation]: ...
+
+    @abstractmethod
     async def get_children(self, parent_uid: str) -> list[NamedLocation]: ...
 
     @abstractmethod

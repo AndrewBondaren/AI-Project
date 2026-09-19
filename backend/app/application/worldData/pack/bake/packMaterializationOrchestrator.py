@@ -229,7 +229,7 @@ class PackMaterializationOrchestrator:
             world, surface_ctx, writer, locations=locations,
         )
 
-        locations_index = build_locations_index(locations)
+        locations_index = build_locations_index(locations, world)
         writer.write_locations_index(locations_index)
 
         relief_templates: dict[str, ReliefTemplate] = {}

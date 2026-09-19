@@ -68,8 +68,10 @@ def territory_volumes_by_location(
     world: World,
     locations: list[NamedLocation],
 ) -> list[tuple[str, TerritoryVolume]]:
+    from app.application.worldData.settlementMapOccupancy import occupancy_locations
+
     out: list[tuple[str, TerritoryVolume]] = []
-    for location in locations:
+    for location in occupancy_locations(world, locations):
         volume = territory_volume_for_location(world, location)
         if volume is not None:
             out.append((location.location_uid, volume))

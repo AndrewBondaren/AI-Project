@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
 
@@ -21,6 +21,8 @@ class TerritoryVolumePolicy(BaseModel):
     pin_map_z_fallback: int = 0
     pin_z_above: int = 2
     settlement_z_above: int = 32
+    min_settlement_separation_xy: int = Field(default=1, ge=0)
+    min_settlement_separation_z: int = Field(default=50, ge=0)
 
     @classmethod
     def canonical_defaults(cls) -> TerritoryVolumePolicy:

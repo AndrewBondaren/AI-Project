@@ -46,6 +46,7 @@ from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volume_for_location,
 )
+from app.application.worldData.settlementMapOccupancy import settlement_map_occupants
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import (
     extract_settlement,
@@ -83,6 +84,13 @@ from app.db.repositories.iNamedLocationRepository import INamedLocationRepositor
 from app.db.repositories.iWorldRepository import IWorldRepository
 
 logger = logging.getLogger(__name__)
+
+
+def _occupant_uids(world: World, locations: list[NamedLocation]) -> set[str]:
+    return {
+        loc.location_uid
+        for loc in settlement_map_occupants(world, enumerate(locations))
+    }
 
 
 class SettlementOutdoorError(Exception):
@@ -249,8 +257,12 @@ class SettlementOutdoorOrchestrator:
             raise SettlementOutdoorPackMissingError(
                 f"World '{world_uid}' has no baked pack"
             )
-        locs = await self._locations.get_by_world(world_uid)
-        targets = [loc for loc in locs if is_settlement_outdoor_target(loc)]
+        locs = await self._locations.list_by_world_insert_order(world_uid)
+        occupant_uids = _occupant_uids(world, locs)
+        targets = [
+            loc for loc in locs
+            if is_settlement_outdoor_target(loc) and loc.location_uid in occupant_uids
+        ]
         ordered = sorted(targets, key=lambda loc: loc.location_uid)
         results: list[TopologyResult] = []
         failed: list[str] = []
@@ -390,6 +402,9 @@ class SettlementOutdoorOrchestrator:
     ) -> MaterializeResult:
         world = await self._require_world(world_uid)
         settlement = await self._require_settlement(world_uid, location_uid)
+        declared = await self._locations.list_by_world_insert_order(world_uid)
+        if settlement.location_uid not in _occupant_uids(world, declared):
+            return MaterializeResult(location_uid=location_uid, status="skipped")
         facade: MapCellQueryFacade = self._facade_for(world_uid)
         if not facade.has_pack_for(world):
             raise SettlementOutdoorPackMissingError(
@@ -559,9 +574,13 @@ class SettlementOutdoorOrchestrator:
     async def materialize_all(
         self, world_uid: str, *, skip_if_initialized: bool = True,
     ) -> MaterializeBatchResult:
-        await self._require_world(world_uid)
-        locs = await self._locations.get_by_world(world_uid)
-        targets = [loc for loc in locs if is_settlement_outdoor_target(loc)]
+        world = await self._require_world(world_uid)
+        locs = await self._locations.list_by_world_insert_order(world_uid)
+        occupant_uids = _occupant_uids(world, locs)
+        targets = [
+            loc for loc in locs
+            if is_settlement_outdoor_target(loc) and loc.location_uid in occupant_uids
+        ]
         return await self._materialize_many(
             world_uid, targets, skip_if_initialized=skip_if_initialized,
         )
@@ -573,14 +592,19 @@ class SettlementOutdoorOrchestrator:
         *,
         skip_if_initialized: bool = True,
     ) -> MaterializeBatchResult:
-        await self._require_world(world_uid)
+        world = await self._require_world(world_uid)
         ancestor = await self._locations.get_by_id(ancestor_uid)
         if ancestor is None or ancestor.world_uid != world_uid:
             raise SettlementOutdoorNotFoundError(
                 f"Location '{ancestor_uid}' not found"
             )
+        declared = await self._locations.list_by_world_insert_order(world_uid)
+        occupant_uids = _occupant_uids(world, declared)
         descendants = await self._locations.list_descendants(ancestor_uid)
-        targets = [loc for loc in descendants if is_settlement_outdoor_target(loc)]
+        targets = [
+            loc for loc in descendants
+            if is_settlement_outdoor_target(loc) and loc.location_uid in occupant_uids
+        ]
         return await self._materialize_many(
             world_uid, targets, skip_if_initialized=skip_if_initialized,
         )
@@ -592,9 +616,14 @@ class SettlementOutdoorOrchestrator:
         *,
         skip_if_initialized: bool = True,
     ) -> MaterializeBatchResult:
-        await self._require_world(world_uid)
+        world = await self._require_world(world_uid)
+        declared = await self._locations.list_by_world_insert_order(world_uid)
+        occupant_uids = _occupant_uids(world, declared)
         locs = await self._locations.list_by_state_uids(world_uid, [state_uid])
-        targets = [loc for loc in locs if is_settlement_outdoor_target(loc)]
+        targets = [
+            loc for loc in locs
+            if is_settlement_outdoor_target(loc) and loc.location_uid in occupant_uids
+        ]
         return await self._materialize_many(
             world_uid, targets, skip_if_initialized=skip_if_initialized,
         )
