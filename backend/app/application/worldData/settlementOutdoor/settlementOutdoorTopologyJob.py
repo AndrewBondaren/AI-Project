@@ -1,23 +1,35 @@
 """Internal C23 topology job — skip, terrain, generator, extract, persist.
 
-Not a public orchestrator. Facade owns pack gates, settlement list, packBakeLog.
+Not a public orchestrator. Facade owns pack gates and settlement-like list.
 """
 
 from __future__ import annotations
+
+import logging
 
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
 )
 from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
+from app.application.worldData.pack.bake.packBakeLog import (
+    log_pack_settlement_topology_batch_done,
+    log_pack_settlement_topology_batch_start,
+    log_pack_settlement_topology_start,
+)
 from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volume_for_location,
 )
 from app.application.worldData.settlementOutdoor.settlementOutdoorContract import (
     SettlementOutdoorError,
+    TopologyBatchResult,
     TopologyResult,
 )
 from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import (
     extract_topology,
+)
+from app.application.worldData.settlementOutdoor.settlementOutdoorLog import (
+    finish_topology,
+    finish_topology_error,
 )
 from app.application.worldData.settlementOutdoor.settlementOutdoorSqlPersist import (
     SettlementOutdoorSqlPersist,
@@ -38,6 +50,8 @@ from app.db.models.world import World
 from app.db.repositories.iConnectionNodeRepository import IConnectionNodeRepository
 from app.db.repositories.iNamedLocationRepository import INamedLocationRepository
 
+logger = logging.getLogger(__name__)
+
 
 class SettlementOutdoorTopologyJob:
 
@@ -52,6 +66,47 @@ class SettlementOutdoorTopologyJob:
         self._sql = sql_persist
         self._generator = generator
         self._nodes = node_repo
+
+    async def plan_batch(
+        self,
+        world: World,
+        settlements: list[NamedLocation],
+        facade: MapCellQueryFacade,
+    ) -> TopologyBatchResult:
+        ordered = sorted(settlements, key=lambda loc: loc.location_uid)
+        results: list[TopologyResult] = []
+        failed: list[str] = []
+        batch_t0 = log_pack_settlement_topology_batch_start(
+            world.world_uid, settlements=len(ordered),
+        )
+        for loc in ordered:
+            log_pack_settlement_topology_start(
+                world.world_uid, location_uid=loc.location_uid,
+            )
+            clock = WallClock()
+            try:
+                result, pipeline = await self.plan_one(world, loc, facade)
+                results.append(finish_topology(
+                    world.world_uid, result, clock, pipeline=pipeline,
+                ))
+            except Exception as exc:
+                logger.exception(
+                    "SettlementOutdoorTopologyJob | settlement=%s failed",
+                    loc.location_uid,
+                )
+                finish_topology_error(
+                    world.world_uid, loc.location_uid, clock,
+                )
+                failed.append(loc.location_uid)
+                results.append(TopologyResult(
+                    location_uid=loc.location_uid,
+                    status="error",
+                    error=str(exc),
+                ))
+        log_pack_settlement_topology_batch_done(
+            world.world_uid, settlements=len(ordered), started_at=batch_t0,
+        )
+        return TopologyBatchResult(results=results, failed_uids=failed)
 
     async def plan_one(
         self,
