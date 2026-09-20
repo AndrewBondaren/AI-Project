@@ -30,15 +30,6 @@ from app.application.worldData.generators.assemblers.settlementAssembler.buildin
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
     assemble_building_catalog,
 )
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.districts import plan_district_slots
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
-    footprint_side_fine,
-)
-from app.application.worldData.generators.coordinates import (
-    map_cell_fine_span,
-    column_surface,
-    settlement_origin_fine,
-)
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.mapOccupancy import (
     plan_footprint_occupancy_cells,
 )
@@ -48,7 +39,10 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.dominantMaterial import (
     resolve_dominant_material,
 )
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.streets import plan_city_street_grid
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.topologyPlan import (
+    plan_city_graph_for_slots,
+    plan_slots_and_city_graph,
+)
 from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import SettlementLayout
 from app.application.worldData.generators.assemblers.settlementAssembler.timings import (
@@ -98,9 +92,12 @@ class SettlementAssembler:
             skeleton.system_location_mood,
         )
         if district_slots is None:
-            district_slots = self._plan_district_slots(
+            planned_slots, planned_nodes, planned_edges = plan_slots_and_city_graph(
                 world, settlement, skeleton, terrain_cells,
             )
+            district_slots = planned_slots
+            if city_graph is None:
+                city_graph = (planned_nodes, planned_edges)
 
         t = time.perf_counter()
         layout_cache = build_layout_cache(
@@ -129,7 +126,7 @@ class SettlementAssembler:
 
         t = time.perf_counter()
         if city_graph is None:
-            city_nodes, city_edges = self._plan_street_grid(
+            city_nodes, city_edges = plan_city_graph_for_slots(
                 world, settlement, skeleton, district_slots, terrain_cells,
             )
         else:
@@ -176,33 +173,6 @@ class SettlementAssembler:
         return city_skeleton_from_settlement(
             settlement,
             economic_tier=TierResolver.resolve(world=world, city=settlement),
-        )
-
-    def _plan_district_slots(
-        self,
-        world:         World,
-        settlement:    NamedLocation,
-        skeleton:      CitySkeleton,
-        terrain_cells: list[MapCell] | None,
-    ) -> list[DistrictSlot]:
-        return plan_district_slots(world, settlement, skeleton, terrain_cells)
-
-    def _plan_street_grid(
-        self,
-        world:          World,
-        settlement:     NamedLocation,
-        skeleton:       CitySkeleton,
-        district_slots: list[DistrictSlot],
-        terrain_cells:  list[MapCell] | None,
-    ):
-        origin = settlement_origin_fine(settlement)
-        side_m = footprint_side_fine(world, skeleton.system_city_size)
-        rng = random.Random(f"{world.world_uid}_{settlement.location_uid}")
-        return plan_city_street_grid(
-            origin.x, origin.y, origin.z, side_m, map_cell_fine_span(world),
-            district_slots, world.world_uid, world, rng, skeleton,
-            surface=column_surface(terrain_cells),
-            settlement_uid=settlement.location_uid,
         )
 
     def _plan_barriers(

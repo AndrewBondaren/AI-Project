@@ -55,11 +55,12 @@ class ChunkRefineWorker:
             new_chunk_refine_job(world_uid, gx, gy, cx, cy, priority=priority),
         )
 
-    def drain_climate_fine(
+    async def drain_climate_fine(
         self,
         world: World,
         surface_ctx: SurfaceTerrainContext | None,
         writer: WorldPackWriter,
+        mat_ctx: MaterializationContext,
         *,
         max_tiles: int = 0,
     ) -> int:
@@ -74,8 +75,8 @@ class ChunkRefineWorker:
             if nxt is None:
                 break
             gx, gy = nxt
-            if self._climate.bake_fine_tile_with_parent(
-                world, surface_ctx, writer, gx, gy, require_parent=True,
+            if await self._climate.bake_fine_tile_with_parent(
+                world, surface_ctx, writer, mat_ctx, gx, gy, require_parent=True,
             ):
                 baked += 1
         return baked
@@ -116,7 +117,7 @@ class ChunkRefineWorker:
                 chunk_cy=cy,
                 cells=result.persist.succeeded,
             )
-        fine_tiles = self.drain_climate_fine(world, surface_ctx, writer)
+        fine_tiles = await self.drain_climate_fine(world, surface_ctx, writer, mat_ctx)
         log_pack_drain_queue_done(world_uid, processed=processed, started_at=drain_t0)
         return processed, fine_tiles
 
@@ -132,7 +133,7 @@ class ChunkRefineWorker:
         max_jobs: int = 1,
     ) -> int:
         if self._jobs is None or max_jobs <= 0:
-            fine = self.drain_climate_fine(world, surface_ctx, writer)
+            fine = await self.drain_climate_fine(world, surface_ctx, writer, mat_ctx)
             return fine
         processed = 0
         while processed < max_jobs:
@@ -156,5 +157,5 @@ class ChunkRefineWorker:
                 cells=result.persist.succeeded,
                 job=job.job_uid,
             )
-        processed += self.drain_climate_fine(world, surface_ctx, writer)
+        processed += await self.drain_climate_fine(world, surface_ctx, writer, mat_ctx)
         return processed

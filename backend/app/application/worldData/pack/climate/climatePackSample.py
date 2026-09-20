@@ -44,13 +44,39 @@ def resolve_pack_zone_sample(
     )
 
 
+def bucket_l2_z_by_light_cell(
+    l2_surface_z: Mapping[tuple[int, int], int],
+    *,
+    origin_x: int,
+    origin_y: int,
+    light_span: int,
+) -> dict[tuple[int, int], int]:
+    """Max fine-cell surface_z per light cell. Keys = light-cell origin on the fine grid."""
+    span = int(light_span)
+    if span <= 0:
+        return {}
+    ox0 = int(origin_x)
+    oy0 = int(origin_y)
+    out: dict[tuple[int, int], int] = {}
+    for (x, y), z in l2_surface_z.items():
+        xi, yi = int(x), int(y)
+        lx = (xi - ox0) // span
+        ly = (yi - oy0) // span
+        key = (ox0 + lx * span, oy0 + ly * span)
+        zi = int(z)
+        prev = out.get(key)
+        if prev is None or zi > prev:
+            out[key] = zi
+    return out
+
+
 def _l2_z_in_light_cell(
     xm: int,
     ym: int,
     l2_surface_z: Mapping[tuple[int, int], int],
     light_m: int,
 ) -> int | None:
-    """Exact meter hit, else max surface_z in light-cell window [xm, xm+light_m)."""
+    """Exact light-origin hit, else max surface_z in light-cell window [xm, xm+light_m)."""
     exact = l2_surface_z.get((int(xm), int(ym)))
     if exact is not None:
         return int(exact)

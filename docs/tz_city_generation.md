@@ -1,6 +1,6 @@
 # ТЗ: Генератор города
 
-**Обновлено:** 2026-09-07 **§9.3** PlacementCondition RegistryKey/`CellZone`; `min_adjacent_cells`; **LOC-T-2** ранг размера (`small`…) ≠ морфология, footprint из контекста; 2026-09-06 **detailed_bake** консьюмер C11 (`generate-settlement`); **§8** topology на `full_bake`; **§1.2.1** subject packing; 2026-09-05 **§1.1 / §1.2** морфология vs специализация; районы `district_type` + `district_subtype`; приоритет списка на городе → специализация; seed чертежа здания = мир+город+клетка footprint (§9.6); 2026-09-04 **CITY-T-2**; 2026-09-03 **CITY-T-1**; **C29** город на шве pack.
+**Обновлено:** 2026-09-20 **C24** packing по району (outdoor); 2026-09-07 **§9.3** PlacementCondition RegistryKey/`CellZone`; `min_adjacent_cells`; **LOC-T-2** ранг размера (`small`…) ≠ морфология, footprint из контекста; 2026-09-06 **detailed_bake** консьюмер C11 (`generate-settlement`); **§8** topology на `full_bake`; **§1.2.1** subject packing; 2026-09-05 **§1.1 / §1.2** морфология vs специализация; районы `district_type` + `district_subtype`; приоритет списка на городе → специализация; seed чертежа здания = мир+город+клетка footprint (§9.6); 2026-09-04 **CITY-T-2**; 2026-09-03 **CITY-T-1**; **C29** город на шве pack.
 
 **Связанные документы:**
 
@@ -14,7 +14,7 @@
 | [tz_structure_connections.md](./tz_structure_connections.md) | Дороги settlement/district (§5) |
 | [tz_terrain_relief.md](./tz_terrain_relief.md) | **C29:** город на техническом шве pack — норма; layout не клип по тайлу |
 | [tz_world_pack_storage.md](./tz_world_pack_storage.md) | WP-19; topology после `full_bake`; **detailed_bake** = pack локации (консьюмер L2 + C11; не алгоритм C22) |
-| [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) | **SoT** persist/оркестрация outdoor на pack. **C23** topology. Не дублировать сюда |
+| [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) | **SoT** persist/оркестрация outdoor на pack. **C23** topology. **C24** packing по району. Не дублировать сюда |
 | [tz_locations.md](./tz_locations.md) | Дерево NL; морфология `city`/`village` ≠ ранг размера **LOC-T-2** ≠ специализация; subtype района; SoT осей — **§1.1–§1.2 здесь** |
 | [tz_building_generator.md](./tz_building_generator.md) | Library: листья `structure_types` vs чертёж; **§2.1** дерево семей / паки мира |
 | [tz_generator_technical_debt.md](./tz_generator_technical_debt.md) | NC/MR smells; **CITY-T-1** контур; **CITY-T-2** пул/uid (**2d** `partial`, **2b** open); **CITY-T-4** планировщик **resolved** |
@@ -51,7 +51,7 @@
 ## 1. Scope
 
 Генератор города строит наполнение поселения — здания, улицы, районы — из скелета города.  
-Скелет — **JSON import** на `NamedLocation`. На **`full_bake`** — топология районов и ворот (§8), без зданий. Застройка — шаг 2 **`detailed_bake`** (C11 поверх L2): packing + **геометрия дома в pack**. Наполнение здания (мебель) — фаза 3, `StructureInteriorAssembler`.
+Скелет — **JSON import** на `NamedLocation`. На **`full_bake`** — топология районов и ворот (§8), без зданий. Застройка — **C11** поверх земли: packing + геометрия дома в pack. Gameplay / смоук: сначала **один район** spawn (**C24**), не весь город и не клип по макро-тайлу. `detailed_bake` без якоря догоняет очередь районов. Наполнение здания (мебель) — фаза 3, `StructureInteriorAssembler`.
 
 `SettlementLayout` — мировые `(x,y)` / meter geometry, **не** клип по макро-тайлу. Поселение на техническом шве pack (ребро двух тайлов / грань чанка) — **валидный** кейс: один settlement, улицы и районы пересекают ребро. Не сдвигать город с шва и не плодить второй скелет «на соседнем тайле». Pack/grade: [`tz_terrain_relief.md`](./tz_terrain_relief.md) **C29**, [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) WP-19.
 
@@ -333,14 +333,14 @@ Occupancy-flood метровой матрицы в патчи **не** дела�
 
 После L0 pack: число и типы районов, входы между ними, `settlement_gate`. Не C22. **Код ✅** C23.
 
-### Фаза 2 — Outdoor layout на `detailed_bake` (C11)
+### Фаза 2 — Outdoor layout (C11 / C24)
 
-Порядок **`detailed_bake` `scope=location`:** (1) L2 terrain (2) поселение **поверх** земли — `materialize`. Debug `generate-settlement` / lazy (позже) — те же вызовы, не второй алгоритм.
+Порядок **`detailed_bake` `scope=location`:** (1) L2 terrain (2) поселение **поверх** земли — `materialize` **без якоря** (очередь районов до C14-complete). Оба шага только если uid — pin в pack `locations_index.json` (occupancy); иначе skip без refine/packing. Debug `generate-settlement` / якорь — **тот же** `materialize` (**C24**: канон `district_uid`; `at=(x,y)` резолвер). Gameplay spawn не ждёт L2 AABB: земля — WP-13, packing — район ног (`at`, пока нет uid).
 
-- Если топология уже в SQL — **reuse** слотов и uid районов (§8), не второй rng типов
-- `SettlementGeneratorService.generate_layout` → packing участков + внутренняя сетка (C22)
+- Если топология уже в SQL — **reuse** слотов и uid районов (§8), не второй rng типов. Нет C23 — **409** из packing, не inline `plan_topology`.
+- Packing участка — `DistrictAssembler` (C22) на слот(ы) очереди
 - После assemble: `SettlementLayout.dominant_material` — authoritative для LLM
-- Эталон: pack city-structure + SQL здания — [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) C11
+- Эталон: pack city-structure + SQL здания — [tz_settlement_outdoor.md](./tz_settlement_outdoor.md) C11 / **C24**
 
 **Точка входа packing:** `backend/app/application/worldData/generators/assemblers/settlementAssembler/`
 
@@ -479,8 +479,8 @@ SQL: NL районов (`system_location_type=district`, parent=settlement, C4/C
 | Уже есть | Topology | Packing (C11) |
 |---|---|---|
 | Authored-дети не-район (таверна / square / gate у города) | **скип** (не этот рецепт) | скип generate |
-| Районы + city gates с этого pass | идемпотентный skip | **reuse** слотов/uid, не второй rng типов |
-| `l.{uid}.settlement.zst` + manifest + дети | skip | skip (C14) |
+| Районы + city gates с этого pass | идемпотентный skip | **reuse** слотов/uid; packing — C24 по району |
+| `structure_status=complete` (packed = перепись C23) | skip | skip (C14) |
 
 ### Зачем
 
@@ -769,14 +769,14 @@ init_mode = "partial"   # full | partial
 | Слой | `full` / `full_bake` | `partial` / lazy | Persist |
 |---|---|---|---|
 | Terrain S→O→C→CL (L0 pack) | ✅ | по необходимости | pack world_map |
-| **Settlement topology** (§8) | ✅ после L0 | если ещё нет — при входе или C11 | SQL районы + city gates |
-| Settlement outdoor packing | нет | если ещё нет — при входе | pack `settlement.zst` (клетки дома C8) + SQL здания |
-| `connection_*` city (ворота, стыки районов) | с topology | с topology или packing | SQL |
-| `connection_*` district (внутренняя сетка) | нет | с packing | SQL |
-| Building `NamedLocation` | нет | с packing, **если ещё не init** | SQL |
+| **Settlement topology** (§8) | ✅ после L0 | если ещё нет — `plan_topology`, затем packing | SQL районы + city gates |
+| Settlement outdoor packing | нет | если ещё нет — **район входа** (C24), остальные в фоне | pack `settlement.zst` кадрами (C8) + SQL здания |
+| `connection_*` city (ворота, стыки районов) | с topology | с topology | SQL |
+| `connection_*` district (внутренняя сетка) | нет | с packing **этого** района | SQL |
+| Building `NamedLocation` | нет | с packing района, **если ещё не init** | SQL |
 | **Наполнение** (фаза 3, InteriorAssembler) | **⬜ STUB** | lazy отдельно | отдельный epic |
 
-**Мастер `detailed_bake` `scope=location`** — не строка `init_mode`. Консьюмер L2 + **C11** на settlement-like (тот же `materialize`, что debug generate-settlement). Без C11 город неиграбелен. Геометрия дома входит в C11. Наполнение (`StructureInteriorAssembler`) не входит.
+**Мастер `detailed_bake` `scope=location`** — не строка `init_mode`. Консьюмер L2 + **C11 без якоря** (очередь районов до complete). Debug / spawn с якорем — **C24**, тот же `materialize`. Без packing район входа неиграбелен. Геометрия дома входит в C11. Наполнение (`StructureInteriorAssembler`) не входит. SoT склейки — [outdoor C24](./tz_settlement_outdoor.md).
 
 ### 11.4 World Snapshot — unified module
 
@@ -882,6 +882,7 @@ DAG может materialize **разные уровни** в разных нод�
 
 ## Changelog
 
+| 2026-09-20 | **C11 pack index:** packing и location L2 только если pin в `locations_index.json`. Нет пина → skip, не 422, ERROR `packBakeLog`. |
 | 2026-09-13 | **CONN-PACK-2 closed:** несколько `position: center` — кластер вокруг home-модуля inner bbox района; рамка по hull; leftover не в проход 2. Канон civic — один `town_hall`. |
 | 2026-09-13 | **`plot_template`:** `required_structures[]` pin чертежа участка, не здания. Leftover JSON `building_template`. Не SQL `building_templates`. |
 | 2026-09-13 | **`logistics`:** семья `warehouse`/`granary` в паке `base` (не `trade`). Хост ткани: port / голый industrial. Не отдельный `PurposePack`. |
@@ -896,6 +897,8 @@ DAG может materialize **разные уровни** в разных нод�
 | 2026-09-12 | **Дерево назначений §2.1 building:** семьи → листья; паки мира mixable union (`fantasy` default). Церковь = `public.church`; телепорт = `transit.portal`. Фильтр района: лист или семья. **Код:** `BuildingPurpose` дерево + `worlds.purpose_packs`; packing ∩ enabled. |
 | 2026-09-12 | **Назначения зданий:** закрытый `BuildingPurpose` (большой специализированный каталог). Чертёж — `structure_types[]`; leftover scalar `structure_type`. Район `allowed_match` like/strict. Pin `building_template` = только `system_name`. Хост settlement-required — membership `allowed_structure_types`. |
 | 2026-09-11 | **§9.4:** `required_structures[].building_template` = pin чертежа (не дыра). Назначение — `BuildingLayoutTemplate.structure_type` (required на чертеже). |
+| 2026-09-20 | **C24 якорь:** канон `district_uid`; `at` = резолвер. SoT outdoor C24. |
+| 2026-09-20 | **C24:** packing по району (якорь uid / `at`); очередь в manifest; тот же zst кадрами. Не клип по макро-тайлу. SoT [tz_settlement_outdoor.md](./tz_settlement_outdoor.md). Код ⬜. |
 | 2026-09-09 | **§9.2 `deck`:** ярус района на чертеже (omit → 0). Участки копируют. |
 | 2026-09-09 | **§9.5.1 `role`:** generate `grid` красит позвоночник / заполнение / аллеи по `DistrictStreetRole`; фасад при равном типе ранжирует роль. Не SQL-колонка. |
 | 2026-09-08 | **§9.3:** wire `min_settlement_size` (leftover `min_city_size` alias); канон порога — `medium`. |

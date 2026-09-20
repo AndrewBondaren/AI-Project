@@ -34,3 +34,8 @@ class LocationsIndexWire(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     locations: list[LocationsIndexPin] = Field(default_factory=list)
+
+    def contains(self, location_uid: str) -> bool:
+        """True if ``location_uid`` is a pin (occupancy winner baked into pack)."""
+        uid = str(location_uid)
+        return any(pin.location_uid == uid for pin in self.locations)

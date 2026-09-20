@@ -73,6 +73,74 @@ def has_frozen_c23_districts(children: list[NamedLocation]) -> bool:
     return all(_frozen_topology_slot(row) is not None for row in districts)
 
 
+class DistrictAnchorError(ValueError):
+    """Invalid packing anchor (both / miss / outside). HTTP 422."""
+
+
+def topology_census(children: list[NamedLocation]) -> list[NamedLocation]:
+    """C23 districts with frozen ``district_topology``, ordered by slot_index."""
+    rows: list[tuple[int, NamedLocation]] = []
+    for child in topology_districts(children):
+        slot = _frozen_topology_slot(child)
+        if slot is None:
+            continue
+        rows.append((slot.slot_index, child))
+    rows.sort(key=lambda item: (item[0], item[1].location_uid))
+    return [child for _, child in rows]
+
+
+def _point_in_district_rect(slot: DistrictTopologySlot, x: int, y: int) -> bool:
+    return (
+        slot.origin_x <= x < slot.origin_x + slot.width_fine
+        and slot.origin_y <= y < slot.origin_y + slot.depth_fine
+    )
+
+
+def resolve_district_uid(
+    census: list[NamedLocation],
+    *,
+    district_uid: str | None = None,
+    at_x: int | None = None,
+    at_y: int | None = None,
+) -> str:
+    """Map canonical ``district_uid`` or world-fine ``at`` onto a C23 census uid."""
+    has_uid = bool(district_uid)
+    has_at_part = at_x is not None or at_y is not None
+    if has_uid and has_at_part:
+        raise DistrictAnchorError("district_uid and at cannot both be set")
+    if has_at_part and (at_x is None or at_y is None):
+        raise DistrictAnchorError("at_x and at_y are required together")
+    if has_uid:
+        for row in census:
+            if row.location_uid == district_uid:
+                return row.location_uid
+        raise DistrictAnchorError(
+            f"district '{district_uid}' is not a C23 census slot"
+        )
+    if at_x is not None and at_y is not None:
+        for row in census:
+            slot = _frozen_topology_slot(row)
+            if slot is None:
+                continue
+            if _point_in_district_rect(slot, at_x, at_y):
+                return row.location_uid
+        raise DistrictAnchorError("at point is outside all C23 district slots")
+    raise DistrictAnchorError("district_uid or at_x+at_y required")
+
+
+def slot_for_census_row(
+    slots: list[DistrictSlot],
+    row: NamedLocation,
+) -> DistrictSlot | None:
+    wire = _frozen_topology_slot(row)
+    if wire is None:
+        return None
+    for slot in slots:
+        if slot.slot_index == wire.slot_index:
+            return slot
+    return None
+
+
 def should_skip_topology(
     children: list[NamedLocation],
     settlement_nodes: list[ConnectionNode],
@@ -148,6 +216,7 @@ def load_topology_slots(
             cell_x=wire.cell_x,
             cell_y=wire.cell_y,
             subject_tags=dict(resolved.subject_tags),
+            slot_index=wire.slot_index,
         ))
     leftover = unhosted_settlement_types(
         list(resolved.required_types),

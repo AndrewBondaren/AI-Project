@@ -9,7 +9,8 @@ from app.api.utils.jsonResolver import JsonResolver
 from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import (
     SettlementOutdoorExtractError,
 )
-from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator import (
+from app.application.worldData.settlementOutdoor.settlementOutdoorContract import (
+    SettlementOutdoorConflictError,
     SettlementOutdoorError,
     SettlementOutdoorNotFoundError,
     SettlementOutdoorPackMissingError,
@@ -21,6 +22,8 @@ router = APIRouter()
 def _http_from_outdoor(exc: SettlementOutdoorError) -> HTTPException:
     if isinstance(exc, SettlementOutdoorNotFoundError):
         return HTTPException(status_code=404, detail=str(exc))
+    if isinstance(exc, SettlementOutdoorConflictError):
+        return HTTPException(status_code=409, detail=str(exc))
     return HTTPException(status_code=422, detail=str(exc))
 
 
@@ -127,14 +130,20 @@ async def generate_settlement(
     world_uid: str,
     location_uid: str,
     skip_if_initialized: bool = Query(default=True),
+    district_uid: str | None = Query(default=None),
+    at_x: int | None = Query(default=None),
+    at_y: int | None = Query(default=None),
     container=Depends(get_container),
 ) -> JSONResponse:
-    """Debug only — outdoor etalon via SettlementOutdoorOrchestrator (C11)."""
+    """Debug only — outdoor etalon via SettlementOutdoorOrchestrator (C11/C24)."""
     try:
         result = await container.settlement_outdoor_orchestrator().materialize(
             world_uid,
             location_uid,
             skip_if_initialized=skip_if_initialized,
+            district_uid=district_uid,
+            at_x=at_x,
+            at_y=at_y,
         )
     except (SettlementOutdoorError, SettlementOutdoorExtractError) as exc:
         raise _http_from_outdoor(

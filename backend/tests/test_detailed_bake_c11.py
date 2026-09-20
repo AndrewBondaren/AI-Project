@@ -14,7 +14,7 @@ from app.application.worldData.persistResult import PersistResult
 from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import (
     SettlementOutdoorExtractError,
 )
-from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator import (
+from app.application.worldData.settlementOutdoor.settlementOutdoorContract import (
     MaterializeResult,
     SettlementOutdoorError,
 )

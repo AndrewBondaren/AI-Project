@@ -99,6 +99,36 @@ def topology_slot_wire(slot: DistrictSlot, *, slot_index: int) -> DistrictTopolo
     )
 
 
+def _district_named_location(
+    settlement: NamedLocation,
+    slot: DistrictSlot,
+    *,
+    slot_index: int,
+) -> NamedLocation:
+    """District NL: drawing key is ``district_topology.template_system_name``, not building FK."""
+    district_type = district_type_entry()
+    template = slot.district_template
+    return NamedLocation(
+        location_uid=district_location_uid(
+            settlement.location_uid, template.system_name, slot_index,
+        ),
+        world_uid=settlement.world_uid,
+        display_name=template.display_name,
+        system_location_type=district_type.system_type,
+        system_location_subtype=template.district_subtype,
+        created_at=settlement.created_at,
+        parent_location_uid=settlement.location_uid,
+        is_outdoor=bool(district_type.is_outdoor),
+        is_accessible=True,
+        is_selectable=True,
+        map_x=slot.origin_x,
+        map_y=slot.origin_y,
+        map_z=slot.ground_z,
+        state_uid=settlement.state_uid,
+        district_topology=topology_slot_wire(slot, slot_index=slot_index).model_dump(mode="json"),
+    )
+
+
 def _city_topology_graph(
     nodes: list[ConnectionNode],
     edges: list[ConnectionEdge],
@@ -119,31 +149,11 @@ def extract_topology(
     nodes: list[ConnectionNode],
     edges: list[ConnectionEdge],
 ) -> ExtractedTopology:
-    district_type = district_type_entry()
     districts: list[NamedLocation] = []
-    for d_index, slot in enumerate(slots):
-        template = slot.district_template
-        d_uid = district_location_uid(
-            settlement.location_uid, template.system_name, d_index,
+    for slot in slots:
+        districts.append(
+            _district_named_location(settlement, slot, slot_index=slot.slot_index),
         )
-        districts.append(NamedLocation(
-            location_uid=d_uid,
-            world_uid=settlement.world_uid,
-            display_name=template.display_name,
-            system_location_type=district_type.system_type,
-            system_location_subtype=template.district_subtype,
-            created_at=settlement.created_at,
-            parent_location_uid=settlement.location_uid,
-            is_outdoor=bool(district_type.is_outdoor),
-            is_accessible=True,
-            is_selectable=True,
-            map_x=slot.origin_x,
-            map_y=slot.origin_y,
-            map_z=slot.ground_z,
-            state_uid=settlement.state_uid,
-            system_template_uid=template.system_name,
-            district_topology=topology_slot_wire(slot, slot_index=d_index).model_dump(mode="json"),
-        ))
     city_nodes, city_edges = _city_topology_graph(nodes, edges)
     return ExtractedTopology(districts=districts, nodes=city_nodes, edges=city_edges)
 
@@ -176,12 +186,18 @@ def _entry_level(
     return None
 
 
-def extract_settlement(settlement: NamedLocation, layout: SettlementLayout) -> ExtractedSettlement:
-    district_type = district_type_entry()
+ALL_GRAPH_LEVELS = frozenset({GraphLevel.CITY, GraphLevel.DISTRICT, GraphLevel.AREA})
+PACKING_GRAPH_LEVELS = frozenset({GraphLevel.DISTRICT, GraphLevel.AREA})
+
+
+def extract_settlement(
+    settlement: NamedLocation,
+    layout: SettlementLayout,
+    *,
+    graph_levels: frozenset[GraphLevel] | None = None,
+) -> ExtractedSettlement:
     building_type = building_type_entry()
-    district_is_outdoor = bool(district_type.is_outdoor)
     building_is_outdoor = bool(building_type.is_outdoor)
-    district_system_type = district_type.system_type
     building_system_type = building_type.system_type
 
     districts: list[NamedLocation] = []
@@ -190,30 +206,12 @@ def extract_settlement(settlement: NamedLocation, layout: SettlementLayout) -> E
     entries: list[LocationEntryPoint] = []
     district_wires: list[DistrictStructureWire] = []
 
-    for d_index, district_layout in enumerate(layout.district_layouts):
+    for district_layout in layout.district_layouts:
         slot = district_layout.slot
-        template = slot.district_template
-        d_uid = district_location_uid(
-            settlement.location_uid, template.system_name, d_index,
+        district_nl = _district_named_location(
+            settlement, slot, slot_index=slot.slot_index,
         )
-        district_nl = NamedLocation(
-            location_uid=d_uid,
-            world_uid=settlement.world_uid,
-            display_name=template.display_name,
-            system_location_type=district_system_type,
-            system_location_subtype=template.district_subtype,
-            created_at=settlement.created_at,
-            parent_location_uid=settlement.location_uid,
-            is_outdoor=district_is_outdoor,
-            is_accessible=True,
-            is_selectable=True,
-            map_x=slot.origin_x,
-            map_y=slot.origin_y,
-            map_z=slot.ground_z,
-            state_uid=settlement.state_uid,
-            system_template_uid=template.system_name,
-            district_topology=topology_slot_wire(slot, slot_index=d_index).model_dump(mode="json"),
-        )
+        d_uid = district_nl.location_uid
         districts.append(district_nl)
         area_wires: list[AreaStructureWire] = []
 
@@ -334,7 +332,7 @@ def extract_settlement(settlement: NamedLocation, layout: SettlementLayout) -> E
         ))
 
     nodes, edges = collect_connection_graph(
-        layout, frozenset({GraphLevel.CITY, GraphLevel.DISTRICT, GraphLevel.AREA}),
+        layout, graph_levels if graph_levels is not None else ALL_GRAPH_LEVELS,
     )
     wire = SettlementStructureWire(
         settlement_uid=settlement.location_uid,

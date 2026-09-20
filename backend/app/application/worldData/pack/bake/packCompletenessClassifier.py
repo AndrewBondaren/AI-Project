@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import json
-
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
     prepare_surface_terrain_context,
 )
 from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
+from app.application.worldData.pack.read.locationsIndexRead import (
+    load_locations_index as load_locations_index_from_paths,
+)
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
 from app.dataModel.worldPack.packCompleteness import (
     PackCompleteness,
@@ -110,8 +111,4 @@ class PackCompletenessClassifier:
 
     @staticmethod
     def load_locations_index(reader) -> LocationsIndexWire | None:
-        path = reader.paths.locations_index_path()
-        if not path.is_file():
-            return None
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        return LocationsIndexWire.model_validate(raw)
+        return load_locations_index_from_paths(reader.paths)

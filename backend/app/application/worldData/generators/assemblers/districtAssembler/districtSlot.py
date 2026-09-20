@@ -43,3 +43,5 @@ class DistrictSlot:
     cell_y:              int = 0
     # structure_type → subjects of this settlement that apply to that type (not wire).
     subject_tags:        dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # C23 freeze index — same key as district_topology.slot_index / C5 uid.
+    slot_index:          int = 0

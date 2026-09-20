@@ -17,6 +17,7 @@ from app.dataModel.worldPack.worldMapCellsPerTile import WORLD_MAP_CELLS_PER_TIL
 PACK_WIRE_VERSION = "1.0.0"
 BakeMode = PackBakeMode  # manifest last L0 mode — not "detailed"
 WildernessRefineStatus = Literal["absent", "partial", "complete"]
+SettlementStructureStatus = Literal["absent", "partial", "complete"]
 ChunkRefineRole = Literal["scene", "background", "path", "location"]
 
 
@@ -49,6 +50,8 @@ class SettlementStructureEntry(BaseModel):
     structure_path: str | None = None
     structure_hash: str | None = None
     bytes: int | None = None
+    structure_status: SettlementStructureStatus = "absent"
+    packed_district_uids: list[str] = Field(default_factory=list)
 
 
 class LocationTerrainEntry(ClimateBakeStatusMixin):

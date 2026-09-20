@@ -29,6 +29,9 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import
 from app.application.worldData.settlementOutdoor.settlementOutdoorSkip import (
     is_settlement_outdoor_target,
 )
+from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
+    district_location_uid,
+)
 from app.dataModel.locations.enums.entryRole import EntryRole
 from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.spatial.facing import Facing
@@ -138,7 +141,13 @@ class TestSettlementOutdoorExtract(unittest.TestCase):
         )
         extracted = extract_settlement(_settlement(), _layout(passages=[passage]))
         self.assertEqual(len(extracted.districts), 1)
+        self.assertIsNone(extracted.districts[0].system_template_uid)
+        self.assertEqual(
+            extracted.districts[0].district_topology["template_system_name"],
+            "core",
+        )
         self.assertEqual(len(extracted.buildings), 1)
+        self.assertEqual(extracted.buildings[0].system_template_uid, "hut")
         self.assertEqual(
             extracted.buildings[0].parent_location_uid,
             extracted.districts[0].location_uid,
@@ -207,6 +216,33 @@ class TestSettlementOutdoorExtract(unittest.TestCase):
         self.assertEqual(len(extracted.wire.districts[0].areas), 1)
         self.assertEqual(extracted.wire.districts[0].areas[0].buildings, [])
         self.assertEqual(extracted.wire.districts[0].areas[0].slot.ground_z, 2)
+
+    def test_extract_uses_slot_index_not_enumerate(self):
+        template = DistrictTemplateEntry(
+            system_name="core",
+            display_name="Core",
+            district_type="civic",
+        )
+        dslot = DistrictSlot(
+            origin_x=0, origin_y=0, width_fine=10, depth_fine=10, ground_z=0,
+            district_template=template,
+            slot_index=2,
+        )
+        aslot = AreaSlot(cells=[(0, 0)], ground_z=0, facing=Facing.SOUTH)
+        area = AreaLayout(
+            slot=aslot,
+            threshold=AreaThreshold(
+                kind=AreaThresholdKind.PARCEL_EDGE, cells=[(0, 0)], z=0,
+            ),
+        )
+        extracted = extract_settlement(
+            _settlement(),
+            SettlementLayout(district_layouts=[DistrictLayout(slot=dslot, area_layouts=[area])]),
+        )
+        expected = district_location_uid("set-1", "core", 2)
+        self.assertEqual(extracted.districts[0].location_uid, expected)
+        self.assertEqual(extracted.wire.districts[0].location_uid, expected)
+        self.assertNotEqual(expected, district_location_uid("set-1", "core", 0))
 
 
 if __name__ == "__main__":

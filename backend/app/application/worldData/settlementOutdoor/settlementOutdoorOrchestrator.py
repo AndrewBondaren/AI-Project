@@ -1,10 +1,12 @@
-"""Outdoor settlement etalon: generate → extract → C19 pack+SQL. Not DAG."""
+"""Outdoor settlement facade: gates and contract order. Not DAG.
+
+C23/C24 bodies live in internal jobs. This module does not import planner
+districts/streets or pack blob framing.
+"""
 
 from __future__ import annotations
 
 import logging
-import random
-from dataclasses import dataclass, field
 
 from app.application.worldData.buildingTemplateLibraryService import BuildingTemplateLibraryService
 from app.application.worldData.generators.assemblers.citySkeleton import (
@@ -13,30 +15,18 @@ from app.application.worldData.generators.assemblers.citySkeleton import (
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
     assemble_building_catalog,
 )
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.districts import (
-    plan_district_slots,
-)
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
-    footprint_side_fine,
-)
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.streets import (
-    plan_city_street_grid,
-)
-from app.application.worldData.generators.assemblers.settlementAssembler.planner.terrain import (
-    column_surface,
-)
 from app.application.worldData.generators.assemblers.settlementAssembler.timings import (
     SettlementAssembleTimings,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
 )
-from app.application.worldData.generators.coordinates import map_cell_fine_span, settlement_origin_fine
 from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_settlement_c11_done,
     log_pack_settlement_c11_start,
+    log_pack_settlement_skip_not_in_index,
     log_pack_settlement_topology_batch_done,
     log_pack_settlement_topology_batch_start,
     log_pack_settlement_topology_done,
@@ -46,36 +36,52 @@ from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volume_for_location,
 )
+from app.application.worldData.pack.read.locationsIndexRead import (
+    location_uid_in_pack_index,
+    location_uids_in_pack_index,
+)
 from app.application.worldData.settlementMapOccupancy import settlement_map_occupants
 from app.application.worldData.pack.read.packReadContext import PackReadContext
-from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import (
-    extract_settlement,
-    extract_topology,
+from app.application.worldData.settlementOutdoor.settlementOutdoorContract import (
+    MaterializeBatchResult,
+    MaterializeResult,
+    SettlementOutdoorConflictError,
+    SettlementOutdoorError,
+    SettlementOutdoorNotFoundError,
+    SettlementOutdoorPackMissingError,
+    TopologyBatchResult,
+    TopologyResult,
+)
+from app.application.worldData.settlementOutdoor.settlementOutdoorPackingJob import (
+    DistrictPackContext,
+    SettlementOutdoorPackingJob,
 )
 from app.application.worldData.settlementOutdoor.settlementOutdoorSkip import (
     is_settlement_outdoor_target,
+    packed_district_uids,
+    packing_queue,
     should_skip_materialize,
 )
 from app.application.worldData.settlementOutdoor.settlementOutdoorSqlPersist import (
     SettlementOutdoorSqlPersist,
 )
 from app.application.worldData.settlementOutdoor.settlementOutdoorTopology import (
+    DistrictAnchorError,
     city_graph_for_settlement,
-    city_nodes_for_settlement,
     has_authored_non_district_children,
     load_topology_slots,
-    should_skip_topology,
+    resolve_district_uid,
+    slot_for_census_row,
+    topology_census,
     topology_districts,
 )
-from app.application.worldData.settlementOutdoor.settlementOutdoorTypes import (
-    is_district_location,
+from app.application.worldData.settlementOutdoor.settlementOutdoorTopologyJob import (
+    SettlementOutdoorTopologyJob,
 )
 from app.application.worldData.settlementOutdoor.settlementPipelineTimings import (
     SettlementPipelineTimings,
     WallClock,
 )
-from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
-from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.db.repositories.iConnectionEdgeRepository import IConnectionEdgeRepository
@@ -85,100 +91,24 @@ from app.db.repositories.iWorldRepository import IWorldRepository
 
 logger = logging.getLogger(__name__)
 
+__all__ = [
+    "MaterializeBatchResult",
+    "MaterializeResult",
+    "SettlementOutdoorConflictError",
+    "SettlementOutdoorError",
+    "SettlementOutdoorNotFoundError",
+    "SettlementOutdoorOrchestrator",
+    "SettlementOutdoorPackMissingError",
+    "TopologyBatchResult",
+    "TopologyResult",
+]
+
 
 def _occupant_uids(world: World, locations: list[NamedLocation]) -> set[str]:
     return {
         loc.location_uid
         for loc in settlement_map_occupants(world, enumerate(locations))
     }
-
-
-class SettlementOutdoorError(Exception):
-    """Outdoor materialize domain error."""
-
-
-class SettlementOutdoorNotFoundError(SettlementOutdoorError):
-    pass
-
-
-class SettlementOutdoorPackMissingError(SettlementOutdoorError):
-    pass
-
-
-@dataclass
-class MaterializeResult:
-    location_uid: str
-    status: str
-    districts: int = 0
-    buildings: int = 0
-    levels: int = 0
-    entry_points: int = 0
-    dominant_material: str | None = None
-    error: str | None = None
-    pipeline_s: SettlementPipelineTimings | None = None
-
-    def to_dict(self) -> dict:
-        payload = {
-            "location_uid": self.location_uid,
-            "status": self.status,
-            "districts": self.districts,
-            "buildings": self.buildings,
-            "levels": self.levels,
-            "entry_points": self.entry_points,
-            "dominant_material": self.dominant_material,
-        }
-        if self.error:
-            payload["error"] = self.error
-        if self.pipeline_s is not None:
-            payload["c11_pipeline"] = self.pipeline_s.as_dict()
-        return payload
-
-
-@dataclass
-class MaterializeBatchResult:
-    results: list[MaterializeResult] = field(default_factory=list)
-    failed_uids: list[str] = field(default_factory=list)
-
-    def to_dict(self) -> dict:
-        return {
-            "results": [r.to_dict() for r in self.results],
-            "failed_uids": self.failed_uids,
-        }
-
-
-@dataclass
-class TopologyResult:
-    location_uid: str
-    status: str
-    districts: int = 0
-    gates: int = 0
-    error: str | None = None
-    pipeline_s: SettlementPipelineTimings | None = None
-
-    def to_dict(self) -> dict:
-        payload = {
-            "location_uid": self.location_uid,
-            "status": self.status,
-            "districts": self.districts,
-            "gates": self.gates,
-        }
-        if self.error:
-            payload["error"] = self.error
-        if self.pipeline_s is not None:
-            payload["topology_pipeline"] = self.pipeline_s.as_dict()
-        return payload
-
-
-@dataclass
-class TopologyBatchResult:
-    results: list[TopologyResult] = field(default_factory=list)
-    failed_uids: list[str] = field(default_factory=list)
-
-    def to_dict(self) -> dict:
-        return {
-            "results": [r.to_dict() for r in self.results],
-            "failed_uids": self.failed_uids,
-        }
 
 
 class SettlementOutdoorOrchestrator:
@@ -198,14 +128,53 @@ class SettlementOutdoorOrchestrator:
     ) -> None:
         self._worlds = world_repo
         self._locations = location_repo
-        self._sql = sql_persist
-        self._generator = generator
         self._writer_for = writer_for
         self._facade_for = facade_for
         self._pack_context_for = pack_context_for
         self._library = library
         self._nodes = node_repo
         self._edges = edge_repo
+        self._generator = generator
+        self._topology = SettlementOutdoorTopologyJob(
+            location_repo, sql_persist, generator, node_repo,
+        )
+        self._packing = SettlementOutdoorPackingJob(
+            generator, sql_persist, self._invalidate,
+        )
+
+    def _require_pack(self, world: World) -> MapCellQueryFacade:
+        facade: MapCellQueryFacade = self._facade_for(world.world_uid)
+        if not facade.has_pack_for(world):
+            raise SettlementOutdoorPackMissingError(
+                f"World '{world.world_uid}' has no baked pack"
+            )
+        return facade
+
+    def _pack_index_uids(self, world: World) -> frozenset[str]:
+        return location_uids_in_pack_index(self._writer_for(world).paths)
+
+    def _c11_targets(
+        self, world: World, locations: list[NamedLocation],
+    ) -> list[NamedLocation]:
+        index_uids = self._pack_index_uids(world)
+        return [
+            loc for loc in locations
+            if is_settlement_outdoor_target(loc) and loc.location_uid in index_uids
+        ]
+
+    def _skipped(
+        self,
+        world_uid: str,
+        location_uid: str,
+        clock: WallClock,
+    ) -> MaterializeResult:
+        setup_s = clock.total()
+        return self._finish_c11(
+            world_uid,
+            MaterializeResult(location_uid=location_uid, status="skipped"),
+            clock,
+            pipeline=SettlementPipelineTimings(setup_s=setup_s),
+        )
 
     @staticmethod
     def _finish_c11(
@@ -252,11 +221,7 @@ class SettlementOutdoorOrchestrator:
 
     async def plan_topology(self, world_uid: str) -> TopologyBatchResult:
         world = await self._require_world(world_uid)
-        facade: MapCellQueryFacade = self._facade_for(world_uid)
-        if not facade.has_pack_for(world):
-            raise SettlementOutdoorPackMissingError(
-                f"World '{world_uid}' has no baked pack"
-            )
+        facade = self._require_pack(world)
         locs = await self._locations.list_by_world_insert_order(world_uid)
         occupant_uids = _occupant_uids(world, locs)
         targets = [
@@ -270,13 +235,25 @@ class SettlementOutdoorOrchestrator:
             world_uid, settlements=len(ordered),
         )
         for loc in ordered:
+            log_pack_settlement_topology_start(
+                world_uid, location_uid=loc.location_uid,
+            )
+            clock = WallClock()
             try:
-                result = await self._plan_topology_one(world, loc, facade)
-                results.append(result)
+                result, pipeline = await self._topology.plan_one(world, loc, facade)
+                results.append(self._finish_topology(
+                    world_uid, result, clock, pipeline=pipeline,
+                ))
             except Exception as exc:
                 logger.exception(
                     "SettlementOutdoorOrchestrator | topology settlement=%s failed",
                     loc.location_uid,
+                )
+                log_pack_settlement_topology_done(
+                    world_uid,
+                    location_uid=loc.location_uid,
+                    status="error",
+                    pipeline=SettlementPipelineTimings(topology_s=clock.total()),
                 )
                 failed.append(loc.location_uid)
                 results.append(TopologyResult(
@@ -289,186 +266,80 @@ class SettlementOutdoorOrchestrator:
         )
         return TopologyBatchResult(results=results, failed_uids=failed)
 
-    async def _plan_topology_one(
-        self,
-        world: World,
-        settlement: NamedLocation,
-        facade: MapCellQueryFacade,
-        *,
-        force: bool = False,
-    ) -> TopologyResult:
-        log_pack_settlement_topology_start(
-            world.world_uid, location_uid=settlement.location_uid,
-        )
-        clock = WallClock()
-        try:
-            children = await self._locations.get_children(settlement.location_uid)
-            world_nodes = await self._nodes.get_by_world(world.world_uid)
-            settlement_nodes = city_nodes_for_settlement(
-                world_nodes, settlement.location_uid,
-            )
-            if not force and should_skip_topology(children, settlement_nodes):
-                setup_s = clock.total()
-                return self._finish_topology(
-                    world.world_uid,
-                    TopologyResult(
-                        location_uid=settlement.location_uid,
-                        status="skipped",
-                        districts=len(topology_districts(children)),
-                    ),
-                    clock,
-                    pipeline=SettlementPipelineTimings(
-                        setup_s=setup_s, topology_s=setup_s,
-                    ),
-                )
-
-            volume = territory_volume_for_location(world, settlement)
-            if volume is None:
-                raise SettlementOutdoorError(
-                    f"Location '{settlement.location_uid}' has no territory volume"
-                )
-            setup_s = clock.lap()
-            terrain_cells = await facade.get_footprint_terrain(
-                world,
-                x0=volume.x0,
-                y0=volume.y0,
-                x1=volume.x1,
-                y1=volume.y1,
-                location_uid=settlement.location_uid,
-            )
-            topo_terrain_s = clock.lap()
-            skeleton = city_skeleton_from_settlement(
-                settlement,
-                economic_tier=TierResolver.resolve(world=world, city=settlement),
-            )
-            slots = plan_district_slots(
-                world, settlement, skeleton, terrain_cells or None,
-            )
-            topo_slots_s = clock.lap()
-            origin = settlement_origin_fine(settlement)
-            rng = random.Random(f"{world.world_uid}_{settlement.location_uid}")
-            city_nodes, city_edges = plan_city_street_grid(
-                origin.x, origin.y, origin.z,
-                footprint_side_fine(world, skeleton.system_city_size),
-                map_cell_fine_span(world),
-                slots, world.world_uid, world, rng, skeleton,
-                surface=column_surface(terrain_cells),
-                settlement_uid=settlement.location_uid,
-            )
-            topo_streets_s = clock.lap()
-            extracted = extract_topology(settlement, slots, city_nodes, city_edges)
-            topo_extract_s = clock.lap()
-            await self._sql.persist_topology(extracted)
-            topo_sql_s = clock.lap()
-            gates = sum(
-                1 for node in city_nodes
-                if node.node_type == ConnectionNodeType.SETTLEMENT_GATE.value
-                and node.graph_level == GraphLevel.CITY.value
-            )
-            return self._finish_topology(
-                world.world_uid,
-                TopologyResult(
-                    location_uid=settlement.location_uid,
-                    status="planned",
-                    districts=len(extracted.districts),
-                    gates=gates,
-                ),
-                clock,
-                pipeline=SettlementPipelineTimings(
-                    setup_s=setup_s,
-                    topo_terrain_s=topo_terrain_s,
-                    topo_slots_s=topo_slots_s,
-                    topo_streets_s=topo_streets_s,
-                    topo_extract_s=topo_extract_s,
-                    topo_sql_s=topo_sql_s,
-                    topology_s=clock.total(),
-                ),
-            )
-        except Exception:
-            log_pack_settlement_topology_done(
-                world.world_uid,
-                location_uid=settlement.location_uid,
-                status="error",
-                pipeline=SettlementPipelineTimings(topology_s=clock.total()),
-            )
-            raise
-
     async def materialize(
         self,
         world_uid: str,
         location_uid: str,
         *,
         skip_if_initialized: bool = True,
+        district_uid: str | None = None,
+        at_x: int | None = None,
+        at_y: int | None = None,
     ) -> MaterializeResult:
         world = await self._require_world(world_uid)
         settlement = await self._require_settlement(world_uid, location_uid)
-        declared = await self._locations.list_by_world_insert_order(world_uid)
-        if settlement.location_uid not in _occupant_uids(world, declared):
-            return MaterializeResult(location_uid=location_uid, status="skipped")
-        facade: MapCellQueryFacade = self._facade_for(world_uid)
-        if not facade.has_pack_for(world):
-            raise SettlementOutdoorPackMissingError(
-                f"World '{world_uid}' has no baked pack"
-            )
+        facade = self._require_pack(world)
         writer: WorldPackWriter = self._writer_for(world)
+        if not location_uid_in_pack_index(writer.paths, settlement.location_uid):
+            log_pack_settlement_skip_not_in_index(
+                world_uid, location_uid=location_uid,
+            )
+            return MaterializeResult(location_uid=location_uid, status="skipped")
         log_pack_settlement_c11_start(world_uid, location_uid=location_uid)
         clock = WallClock()
-        inner_topo: SettlementPipelineTimings | None = None
         try:
             children = await self._locations.get_children(location_uid)
-
             if has_authored_non_district_children(children):
-                setup_s = clock.total()
-                return self._finish_c11(
-                    world_uid,
-                    MaterializeResult(location_uid=location_uid, status="skipped"),
-                    clock,
-                    pipeline=SettlementPipelineTimings(setup_s=setup_s),
+                return self._skipped(world_uid, location_uid, clock)
+
+            has_anchor = bool(district_uid) or at_x is not None or at_y is not None
+            if (
+                skip_if_initialized
+                and not has_anchor
+                and await should_skip_materialize(
+                    settlement, writer, self._locations, children=children,
+                )
+            ):
+                return self._skipped(world_uid, location_uid, clock)
+
+            census = topology_census(children)
+            if not census:
+                raise SettlementOutdoorConflictError(
+                    f"Location '{location_uid}' has no C23 topology census"
                 )
 
-            if skip_if_initialized and await should_skip_materialize(
-                settlement, writer, self._locations,
-            ):
-                setup_s = clock.total()
-                return self._finish_c11(
-                    world_uid,
-                    MaterializeResult(location_uid=location_uid, status="skipped"),
-                    clock,
-                    pipeline=SettlementPipelineTimings(setup_s=setup_s),
-                )
+            packed = packed_district_uids(writer, location_uid)
+            try:
+                if has_anchor:
+                    target_uid = resolve_district_uid(
+                        census,
+                        district_uid=district_uid,
+                        at_x=at_x,
+                        at_y=at_y,
+                    )
+                    queue = [
+                        row for row in census if row.location_uid == target_uid
+                    ]
+                else:
+                    queue = packing_queue(census, packed)
+            except DistrictAnchorError as exc:
+                raise SettlementOutdoorError(str(exc)) from exc
+
+            if has_anchor:
+                target_uid = queue[0].location_uid
+                if await should_skip_materialize(
+                    settlement, writer, self._locations,
+                    district_uid=target_uid, children=children,
+                ):
+                    return self._skipped(world_uid, location_uid, clock)
+            elif not queue:
+                return self._skipped(world_uid, location_uid, clock)
 
             volume = territory_volume_for_location(world, settlement)
             if volume is None:
                 raise SettlementOutdoorError(
                     f"Location '{location_uid}' has no territory volume"
                 )
-
-            tmp = writer.load_settlement_structure_tmp(location_uid)
-            published = writer.has_published_settlement(location_uid)
-
-            if children and not published and tmp is not None:
-                writer.publish_settlement_structure(tmp, territory_volume=volume)
-                self._invalidate(world, facade)
-                setup_s = clock.total()
-                return self._finish_c11(
-                    world_uid,
-                    MaterializeResult(
-                        location_uid=location_uid,
-                        status="recovered_publish",
-                        districts=sum(
-                            1 for c in children
-                            if is_district_location(c.system_location_type)
-                        ),
-                    ),
-                    clock,
-                    pipeline=SettlementPipelineTimings(
-                        setup_s=setup_s, publish_s=setup_s,
-                    ),
-                    encode_bytes=tmp.nbytes,
-                )
-
-            if not children and tmp is not None:
-                tmp.tmp_path.unlink(missing_ok=True)
 
             setup_s = clock.lap()
             terrain_cells = await facade.get_footprint_terrain(
@@ -489,67 +360,83 @@ class SettlementOutdoorOrchestrator:
             )
             world_nodes = await self._nodes.get_by_world(world_uid)
             world_edges = await self._edges.get_by_world(world_uid)
-            district_rows = topology_districts(children)
             frozen_slots = load_topology_slots(
-                world, settlement, skeleton, district_rows,
-            ) if district_rows else None
-            city_graph = None
-            if frozen_slots is not None:
-                city_graph = city_graph_for_settlement(
-                    world_nodes, world_edges, location_uid,
-                )
-                if not city_graph[0]:
-                    frozen_slots = None
-                    city_graph = None
-            if frozen_slots is None:
-                topo_result = await self._plan_topology_one(
-                    world, settlement, facade,
-                    force=bool(district_rows),
-                )
-                inner_topo = topo_result.pipeline_s
-                children = await self._locations.get_children(location_uid)
-                world_nodes = await self._nodes.get_by_world(world_uid)
-                world_edges = await self._edges.get_by_world(world_uid)
-                frozen_slots = load_topology_slots(
-                    world, settlement, skeleton, topology_districts(children),
-                )
-                if frozen_slots is not None:
-                    city_graph = city_graph_for_settlement(
-                        world_nodes, world_edges, location_uid,
-                    )
-            topology_s = clock.lap()
-            assemble = SettlementAssembleTimings()
-            layout = self._generator.generate_layout(
-                world, settlement, terrain_cells or None, catalog=catalog,
-                district_slots=frozen_slots,
-                city_graph=city_graph,
-                timings=assemble,
+                world, settlement, skeleton, topology_districts(children),
             )
-            generate_s = clock.lap()
-            extracted = extract_settlement(settlement, layout)
-            extract_s = clock.lap()
-            tmp_ref = writer.encode_settlement_structure_tmp(location_uid, extracted.wire)
-            encode_s = clock.lap()
-            await self._sql.persist(extracted)
-            sql_s = clock.lap()
-            writer.publish_settlement_structure(tmp_ref, territory_volume=volume)
-            self._invalidate(world, facade)
-            publish_s = clock.lap()
+            if frozen_slots is None:
+                raise SettlementOutdoorConflictError(
+                    f"Location '{location_uid}' has no C23 topology census"
+                )
+            city_graph = city_graph_for_settlement(
+                world_nodes, world_edges, location_uid,
+            )
+            if not city_graph[0]:
+                raise SettlementOutdoorConflictError(
+                    f"Location '{location_uid}' has no C23 city graph"
+                )
+            topology_s = clock.lap()
+
+            census_uids = [row.location_uid for row in census]
+            assemble = SettlementAssembleTimings()
+            buildings = 0
+            levels = 0
+            entry_points = 0
+            generate_s = 0.0
+            extract_s = 0.0
+            encode_s = 0.0
+            sql_s = 0.0
+            publish_s = 0.0
+            encode_bytes = 0
+            dominant_material: str | None = None
+
+            for row in queue:
+                slot = slot_for_census_row(frozen_slots, row)
+                if slot is None:
+                    raise SettlementOutdoorError(
+                        f"C23 slot missing for district '{row.location_uid}'"
+                    )
+                one, nbytes, part = await self._packing.materialize_district(
+                    DistrictPackContext(
+                        world=world,
+                        settlement=settlement,
+                        facade=facade,
+                        writer=writer,
+                        volume=volume,
+                        terrain_cells=terrain_cells,
+                        catalog=catalog,
+                        city_graph=city_graph,
+                        slot=slot,
+                        district_uid=row.location_uid,
+                        census_uids=census_uids,
+                        clock=clock,
+                        assemble=assemble,
+                    ),
+                )
+                buildings += one.buildings
+                levels += one.levels
+                entry_points += one.entry_points
+                generate_s += part.generate_s
+                extract_s += part.extract_s
+                encode_s += part.encode_s
+                sql_s += part.sql_s
+                publish_s += part.publish_s
+                encode_bytes = nbytes
+                dominant_material = one.dominant_material or dominant_material
+
             return self._finish_c11(
                 world_uid,
                 MaterializeResult(
                     location_uid=location_uid,
                     status="published",
-                    districts=len(extracted.districts),
-                    buildings=len(extracted.buildings),
-                    levels=len(extracted.levels),
-                    entry_points=len(extracted.entry_points),
-                    dominant_material=layout.dominant_material,
+                    districts=len(queue),
+                    buildings=buildings,
+                    levels=levels,
+                    entry_points=entry_points,
+                    dominant_material=dominant_material,
                 ),
                 clock,
                 pipeline=SettlementPipelineTimings.from_parts(
                     assemble=assemble,
-                    topology=inner_topo,
                     setup_s=setup_s,
                     terrain_s=terrain_s,
                     catalog_s=catalog_s,
@@ -560,7 +447,7 @@ class SettlementOutdoorOrchestrator:
                     sql_s=sql_s,
                     publish_s=publish_s,
                 ),
-                encode_bytes=tmp_ref.nbytes,
+                encode_bytes=encode_bytes,
             )
         except Exception:
             log_pack_settlement_c11_done(
@@ -575,14 +462,11 @@ class SettlementOutdoorOrchestrator:
         self, world_uid: str, *, skip_if_initialized: bool = True,
     ) -> MaterializeBatchResult:
         world = await self._require_world(world_uid)
+        self._require_pack(world)
         locs = await self._locations.list_by_world_insert_order(world_uid)
-        occupant_uids = _occupant_uids(world, locs)
-        targets = [
-            loc for loc in locs
-            if is_settlement_outdoor_target(loc) and loc.location_uid in occupant_uids
-        ]
         return await self._materialize_many(
-            world_uid, targets, skip_if_initialized=skip_if_initialized,
+            world_uid, self._c11_targets(world, locs),
+            skip_if_initialized=skip_if_initialized,
         )
 
     async def materialize_under(
@@ -598,15 +482,11 @@ class SettlementOutdoorOrchestrator:
             raise SettlementOutdoorNotFoundError(
                 f"Location '{ancestor_uid}' not found"
             )
-        declared = await self._locations.list_by_world_insert_order(world_uid)
-        occupant_uids = _occupant_uids(world, declared)
+        self._require_pack(world)
         descendants = await self._locations.list_descendants(ancestor_uid)
-        targets = [
-            loc for loc in descendants
-            if is_settlement_outdoor_target(loc) and loc.location_uid in occupant_uids
-        ]
         return await self._materialize_many(
-            world_uid, targets, skip_if_initialized=skip_if_initialized,
+            world_uid, self._c11_targets(world, descendants),
+            skip_if_initialized=skip_if_initialized,
         )
 
     async def materialize_state(
@@ -617,15 +497,11 @@ class SettlementOutdoorOrchestrator:
         skip_if_initialized: bool = True,
     ) -> MaterializeBatchResult:
         world = await self._require_world(world_uid)
-        declared = await self._locations.list_by_world_insert_order(world_uid)
-        occupant_uids = _occupant_uids(world, declared)
+        self._require_pack(world)
         locs = await self._locations.list_by_state_uids(world_uid, [state_uid])
-        targets = [
-            loc for loc in locs
-            if is_settlement_outdoor_target(loc) and loc.location_uid in occupant_uids
-        ]
         return await self._materialize_many(
-            world_uid, targets, skip_if_initialized=skip_if_initialized,
+            world_uid, self._c11_targets(world, locs),
+            skip_if_initialized=skip_if_initialized,
         )
 
     async def _materialize_many(

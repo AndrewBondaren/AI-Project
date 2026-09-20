@@ -281,8 +281,8 @@ class EntryRefineOrchestrator:
             )
             climate_fine_tiles += fine_tiles
         else:
-            climate_fine_tiles += self._worker.drain_climate_fine(
-                world, surface_ctx, writer,
+            climate_fine_tiles += await self._worker.drain_climate_fine(
+                world, surface_ctx, writer, mat_ctx,
             )
 
         return ScheduleChunkRefineResult(

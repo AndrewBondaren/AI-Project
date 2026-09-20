@@ -171,6 +171,7 @@ def plan_district_slots(
             cell_x=cell_x,
             cell_y=cell_y,
             subject_tags=subject_tags,
+            slot_index=len(slots),
         ))
         logger.info(
             "DistrictSlot created | cell=(%d,%d) template=%s district_type=%s"

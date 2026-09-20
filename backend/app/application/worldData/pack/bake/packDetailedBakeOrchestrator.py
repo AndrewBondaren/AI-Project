@@ -21,6 +21,7 @@ from app.application.worldData.generators.terrain.types import ColumnRect
 from app.application.worldData.materializationContext import MaterializationContext
 from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_detailed_bake_done,
+    log_pack_detailed_bake_skip_not_in_index,
     log_pack_detailed_bake_start,
 )
 from app.application.worldData.pack.climate.climatePackBakeOrchestrator import (
@@ -31,6 +32,9 @@ from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.locationTerritoryVolumes import (
     territory_volume_for_location,
     territory_volumes_by_location,
+)
+from app.application.worldData.pack.read.locationsIndexRead import (
+    location_uid_in_pack_index,
 )
 from app.application.worldData.pack.read.parentLightLoad import require_parent_light
 from app.application.worldData.pack.refine.fineChunkRunner import FineChunkRunner
@@ -226,8 +230,8 @@ class PackDetailedBakeOrchestrator:
         climate_fine_tiles = 0
         if self._defaults.detailed_include_climate_fine:
             for gx, gy in tiles:
-                if self._climate.bake_fine_tile_with_parent(
-                    world, surface_ctx, writer, gx, gy,
+                if await self._climate.bake_fine_tile_with_parent(
+                    world, surface_ctx, writer, mat_ctx, gx, gy,
                     l2_surface_z=aggregate.meter_surface_z or None,
                     locations=locations,
                     require_parent=True,

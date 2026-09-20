@@ -86,6 +86,10 @@ def _info(msg: str, *args: Any, activity: str, pool_workers: int | None = None, 
     logger.info(msg, *args, extra=_diag_extra(activity=activity, pool_workers=pool_workers, **fields))
 
 
+def _error(msg: str, *args: Any, activity: str, pool_workers: int | None = None, **fields: Any) -> None:
+    logger.error(msg, *args, extra=_diag_extra(activity=activity, pool_workers=pool_workers, **fields))
+
+
 def _debug(msg: str, *args: Any, activity: str, pool_workers: int | None = None, **fields: Any) -> None:
     logger.debug(msg, *args, extra=_diag_extra(activity=activity, pool_workers=pool_workers, **fields))
 
@@ -108,17 +112,21 @@ def log_pack_bake_start(
     tiles_planned: int,
     locations: int,
     terrain_workers: int | None = None,
+    climate_workers: int | None = None,
 ) -> float:
     _info(
-        "pack bake start | world=%s tile_cap=%s tiles_planned=%d locations=%d terrain_workers=%s",
+        "pack bake start | world=%s tile_cap=%s tiles_planned=%d locations=%d "
+        "terrain_workers=%s climate_workers=%s",
         world_uid,
         tile_cap if tile_cap is not None else "none",
         tiles_planned,
         locations,
         terrain_workers if terrain_workers is not None else "-",
+        climate_workers if climate_workers is not None else "-",
         activity="bake_orchestrate",
         world_uid=world_uid,
         terrain_workers=terrain_workers,
+        climate_workers=climate_workers,
     )
     return time.perf_counter()
 
@@ -706,6 +714,94 @@ def log_pack_finalize(world_uid: str, *, pack_path: str, content_hash: str | Non
     )
 
 
+def _climate_tile_part(tile_gx: int | None, tile_gy: int | None) -> str:
+    if tile_gx is None or tile_gy is None:
+        return ""
+    return f" tile=({tile_gx},{tile_gy})"
+
+
+def log_pack_climate_batch_start(
+    world_uid: str,
+    *,
+    phase: str,
+    batch: int,
+    batches_total: int,
+    workers: int,
+    samples: int,
+    tile_gx: int | None = None,
+    tile_gy: int | None = None,
+) -> float:
+    """DEBUG: which thread / logical CPU is sampling a climate row batch."""
+    cpu = current_cpu_core()
+    thread = threading.current_thread()
+    _debug(
+        "pack climate batch start | world=%s phase=%s batch=%d/%d pool_workers=%d "
+        "thread=%s tid=%s cpu=%s samples=%d%s",
+        world_uid,
+        phase,
+        batch,
+        batches_total,
+        workers,
+        thread.name,
+        thread.ident,
+        cpu if cpu is not None else "?",
+        samples,
+        _climate_tile_part(tile_gx, tile_gy),
+        activity="climate_batch",
+        pool_workers=workers,
+        world_uid=world_uid,
+        phase=phase,
+        batch=batch,
+        batches_total=batches_total,
+        samples=samples,
+        tile_gx=tile_gx,
+        tile_gy=tile_gy,
+    )
+    return time.perf_counter()
+
+
+def log_pack_climate_batch_done(
+    world_uid: str,
+    *,
+    phase: str,
+    batch: int,
+    batches_total: int,
+    workers: int,
+    samples: int,
+    started_at: float,
+    tile_gx: int | None = None,
+    tile_gy: int | None = None,
+) -> None:
+    cpu = current_cpu_core()
+    thread = threading.current_thread()
+    elapsed_ms = (time.perf_counter() - started_at) * 1000.0
+    _debug(
+        "pack climate batch done | world=%s phase=%s batch=%d/%d pool_workers=%d "
+        "thread=%s tid=%s cpu=%s samples=%d elapsed_ms=%.1f%s",
+        world_uid,
+        phase,
+        batch,
+        batches_total,
+        workers,
+        thread.name,
+        thread.ident,
+        cpu if cpu is not None else "?",
+        samples,
+        elapsed_ms,
+        _climate_tile_part(tile_gx, tile_gy),
+        activity="climate_batch",
+        pool_workers=workers,
+        world_uid=world_uid,
+        phase=phase,
+        batch=batch,
+        batches_total=batches_total,
+        samples=samples,
+        elapsed_ms=round(elapsed_ms, 1),
+        tile_gx=tile_gx,
+        tile_gy=tile_gy,
+    )
+
+
 def log_pack_climate_coarse_done(
     world_uid: str,
     *,
@@ -908,6 +1004,42 @@ def log_pack_l2_formation_done(
             round(grade_persist_s, 2) if grade_persist_s is not None else None
         ),
         **mill_fields,
+    )
+
+
+def log_pack_detailed_bake_skip_not_in_index(
+    world_uid: str,
+    *,
+    location_uid: str,
+) -> None:
+    _error(
+        "pack detailed_bake error | world=%s location=%s "
+        "not a locations_index pin (occupancy); L2 skipped "
+        "reason=not_in_locations_index",
+        world_uid,
+        location_uid,
+        activity="detailed_bake_skip",
+        world_uid=world_uid,
+        location_uid=location_uid,
+        reason="not_in_locations_index",
+    )
+
+
+def log_pack_settlement_skip_not_in_index(
+    world_uid: str,
+    *,
+    location_uid: str,
+) -> None:
+    _error(
+        "pack settlement error | world=%s location=%s "
+        "not a locations_index pin (occupancy); packing skipped "
+        "reason=not_in_locations_index",
+        world_uid,
+        location_uid,
+        activity="settlement_c11_skip",
+        world_uid=world_uid,
+        location_uid=location_uid,
+        reason="not_in_locations_index",
     )
 
 

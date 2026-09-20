@@ -7,12 +7,14 @@ from app.dataModel.worldPack import (
     CellContribution,
     LayerSlice,
     MapLayerKind,
+    SettlementStructureEntry,
     TerritoryVolume,
     WorldMapCellWire,
     WorldPackManifest,
     inside_location_volume,
     merge_layers,
     resolve_world_map_cells_per_tile,
+    settlement_structure_status_for,
 )
 from app.dataModel.worldPack.hydrologyMaskWire import WorldMapHydrologyRole
 
@@ -75,6 +77,57 @@ class TestWorldPackWire(unittest.TestCase):
         self.assertEqual(restored.world_uid, "w-test")
         self.assertEqual(len(restored.tiles[0].chunks), 1)
         self.assertTrue(restored.location_entry("loc-1") is not None)
+
+
+class TestSettlementStructureEntryC24(unittest.TestCase):
+
+    def test_defaults_absent_and_empty_packed(self):
+        entry = SettlementStructureEntry(
+            location_uid="s1",
+            territory_volume={"x0": 0, "y0": 0, "z0": 0, "x1": 1, "y1": 1, "z1": 0},
+        )
+        self.assertEqual(entry.structure_status, "absent")
+        self.assertEqual(entry.packed_district_uids, [])
+
+    def test_legacy_manifest_without_c24_fields(self):
+        restored = WorldPackManifest.model_validate({
+            "world_uid": "w-legacy",
+            "settlement_structure_entries": [
+                {
+                    "location_uid": "s1",
+                    "territory_volume": {
+                        "x0": 0, "y0": 0, "z0": 0, "x1": 10, "y1": 10, "z1": 0,
+                    },
+                    "structure_path": "locations/l.s1.settlement.zst",
+                    "unknown_future_field": True,
+                },
+            ],
+        })
+        entry = restored.settlement_structure_entry("s1")
+        self.assertIsNotNone(entry)
+        assert entry is not None
+        self.assertEqual(entry.structure_status, "absent")
+        self.assertEqual(entry.packed_district_uids, [])
+        self.assertEqual(entry.structure_path, "locations/l.s1.settlement.zst")
+
+    def test_status_helper_complete_iff_packed_equals_census_and_file(self):
+        census = ["d1", "d2"]
+        self.assertEqual(
+            settlement_structure_status_for([], census, has_file=True),
+            "absent",
+        )
+        self.assertEqual(
+            settlement_structure_status_for(["d1"], census, has_file=True),
+            "partial",
+        )
+        self.assertEqual(
+            settlement_structure_status_for(["d1", "d2"], census, has_file=False),
+            "partial",
+        )
+        self.assertEqual(
+            settlement_structure_status_for(["d1", "d2"], census, has_file=True),
+            "complete",
+        )
 
     def test_world_map_cell_wire(self):
         cell = WorldMapCellWire(tx=1, ty=2, surface_z=100, hydrology_role="river", hydrology_width=3)

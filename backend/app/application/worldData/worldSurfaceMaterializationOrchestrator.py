@@ -19,12 +19,13 @@ from app.application.worldData.pack.bake.packDetailedBakeOrchestrator import (
 from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import (
     SettlementOutdoorExtractError,
 )
-from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator import (
+from app.application.worldData.settlementOutdoor.settlementOutdoorContract import (
     MaterializeResult,
     SettlementOutdoorError,
+)
+from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator import (
     SettlementOutdoorOrchestrator,
 )
-from app.application.worldData.settlementMapOccupancy import settlement_map_occupants
 from app.application.worldData.settlementOutdoor.settlementOutdoorSkip import (
     is_settlement_outdoor_target,
 )
@@ -254,13 +255,6 @@ class WorldSurfaceMaterializationOrchestrator:
         loc = next((item for item in locations if item.location_uid == location_uid), None)
         if loc is None or not is_settlement_outdoor_target(loc):
             return None
-        if getattr(world, "fine_cells_per_map_cell", None) is not None:
-            occupant_uids = {
-                item.location_uid
-                for item in settlement_map_occupants(world, enumerate(locations))
-            }
-            if loc.location_uid not in occupant_uids:
-                return None
         try:
             return await self._outdoor.materialize(
                 world.world_uid,

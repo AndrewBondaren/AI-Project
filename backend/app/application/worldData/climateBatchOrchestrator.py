@@ -29,6 +29,10 @@ from app.application.worldData.generators.assemblers.climateAssembler.passes.pol
 from app.application.worldData.generators.climate.climateGeneratorService import ClimateGeneratorService
 from app.application.worldData.mapCellService import MapCellService
 from app.application.worldData.materializationContext import MaterializationContext
+from app.application.worldData.pack.bake.packBakeLog import (
+    log_pack_climate_batch_done,
+    log_pack_climate_batch_start,
+)
 from app.application.worldData.parallelPolicy import resolve_climate_workers
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
@@ -87,35 +91,79 @@ class ClimateBatchOrchestrator:
 
         batches = split_contiguous_batches(heightmap_cells, workers)
         batches_total = len(batches)
+        weather_indexed = [(i + 1, batch) for i, batch in enumerate(batches)]
 
-        def weather_batch(batch: list[MapCell]) -> list[MapCell]:
-            return run_cell_weather_pass(
+        def weather_batch(item: tuple[int, list[MapCell]]) -> list[MapCell]:
+            batch_idx, batch = item
+            started = log_pack_climate_batch_start(
+                world_uid,
+                phase="weather",
+                batch=batch_idx,
+                batches_total=batches_total,
+                workers=workers,
+                samples=len(batch),
+            )
+            out = run_cell_weather_pass(
                 world, locations, pole_field, anchor_field, batch, self._climate,
             )
+            log_pack_climate_batch_done(
+                world_uid,
+                phase="weather",
+                batch=batch_idx,
+                batches_total=batches_total,
+                workers=workers,
+                samples=len(out),
+                started_at=started,
+            )
+            return out
 
         pool = ChunkComputePool(workers)
-        if batches_total <= 1:
-            weathered_parts = [weather_batch(heightmap_cells)]
-        else:
-            weathered_parts = await pool.map_sync(batches, weather_batch)
+        try:
+            if workers == 1 or batches_total <= 1:
+                weathered_parts = [weather_batch(item) for item in weather_indexed]
+            else:
+                weathered_parts = await pool.map_sync(weather_indexed, weather_batch)
 
-        weathered: list[MapCell] = []
-        for part in weathered_parts:
-            weathered.extend(part)
+            weathered: list[MapCell] = []
+            for part in weathered_parts:
+                weathered.extend(part)
 
-        surface_top = build_surface_top_index(weathered)
-        overlay_batches = split_contiguous_batches(weathered, workers)
+            surface_top = build_surface_top_index(weathered)
+            overlay_batches = split_contiguous_batches(weathered, workers)
+            overlay_total = len(overlay_batches)
+            overlay_indexed = [(i + 1, batch) for i, batch in enumerate(overlay_batches)]
 
-        def overlay_batch(batch: list[MapCell]) -> list[MapCell]:
-            return run_liquid_overlay_batch(world, batch, surface_top)
+            def overlay_batch(item: tuple[int, list[MapCell]]) -> list[MapCell]:
+                batch_idx, batch = item
+                started = log_pack_climate_batch_start(
+                    world_uid,
+                    phase="overlay",
+                    batch=batch_idx,
+                    batches_total=overlay_total,
+                    workers=workers,
+                    samples=len(batch),
+                )
+                out = run_liquid_overlay_batch(world, batch, surface_top)
+                log_pack_climate_batch_done(
+                    world_uid,
+                    phase="overlay",
+                    batch=batch_idx,
+                    batches_total=overlay_total,
+                    workers=workers,
+                    samples=len(out),
+                    started_at=started,
+                )
+                return out
 
-        if len(overlay_batches) <= 1:
-            overlaid = overlay_batch(weathered)
-        else:
-            overlaid_parts = await pool.map_sync(overlay_batches, overlay_batch)
-            overlaid = []
+            if workers == 1 or overlay_total <= 1:
+                overlaid_parts = [overlay_batch(item) for item in overlay_indexed]
+            else:
+                overlaid_parts = await pool.map_sync(overlay_indexed, overlay_batch)
+            overlaid: list[MapCell] = []
             for part in overlaid_parts:
                 overlaid.extend(part)
+        finally:
+            pool.shutdown()
 
         if bootstrap_writer is not None:
             n = await bootstrap_writer.write_climate(overlaid)

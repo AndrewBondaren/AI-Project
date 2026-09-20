@@ -447,9 +447,9 @@ flowchart TB
 **Pack-job локации**, не «terrain_bake». Консьюмер **двух** интерфейсов. Порядок **обязателен**:
 
 1. **Сначала** генерация terrain L2 (refine facade / `FineChunkRunner`) — земля под локацией (`location_terrain`). Mill/paint default **off**.
-2. **Затем** если `scope=location` и uid settlement-like — генерация поселения **поверх** этой земли: тот же C11 `materialize`, что debug `POST …/generate-settlement` (`settlement.zst` + SQL здания, reuse C23).
+2. **Затем** если `scope=location` и uid settlement-like — генерация поселения **поверх** этой земли: тот же C11 `materialize` **без якоря** (очередь районов до complete, **C24**). Debug с якорем — один район.
 
-`scope=wilderness` — только шаг 1. Интерьеры — не этот mode. Topology **не invent** здесь (C23 — шаг full); если freeze нет, C11 сам делает тот же `plan_topology` (уже в `materialize`).
+`scope=wilderness` — только шаг 1. Интерьеры — не этот mode. Topology **не invent** здесь (C23 — шаг full). Freeze нет → C11 **409**, caller сначала `plan_topology`.
 
 Без шага 2 город после detailed **неиграбелен**. HTTP generate-settlement — другой caller того же C11, не второй product-job. Хук шага 2 в коде — ✅.
 
@@ -467,6 +467,7 @@ flowchart TB
 | **full_bake** | L0 на весь `world_bounds` + шов мира. **Шаг 2 того же job:** `plan_topology` (C23). Не внутри `SettlementContributor` | L2; entry refine; C11 / `settlement.zst`; occupancy-flood |
 | **detailed_bake** | **Шаг 1:** L2 refine (консьюмер terrain). **Шаг 2** если `scope=location` settlement-like: C11 `materialize` **поверх** L2. Mill/paint default **off**. C23 уже в SQL — L2 по footprint | L0; шов мира; invent topology отдельным алгоритмом; C22 внутри bake; интерьеры; C11 на wilderness |
 | **entry / WP-13** | scene volume + background rings/path у spawn. **Без** mill/paint (игрок не ждёт grade generate) | часть `POST …/pack/bake?mode=light\|full`; mill/paint |
+| **C24 (не bake)** | packing **одного** района (якорь) или очереди (`detailed_bake` без якоря) в тот же `settlement.zst` | clip layout по макро-тайлу; новый файл на район; inline C23 внутри `materialize` |
 | **on-demand grade (не bake)** | Product: DAG **только** когда сцена требует grade и в pack нет — 1…N чанков (не тайл/мир; mill спекулятивно **дорого**). Debug: `POST …/refine-chunk`. Тот же `FineChunkRunner` (R41) | mill на каждый scene/entry; GradeBakeOrchestrator; `generate_detailed_grade` + ручная запись pack; `detailed_bake` `max_tiles=1` как «один чанк» |
 | **modification** (не bake job) | Patch Store: `terrain_delta` / `climate_delta` в `patch_bounds`. Повторный materialize / patch на объёме с grade → **сброс** stale relief ([`tz_terrain_relief.md`](./tz_terrain_relief.md) § Caller). Не mill в том же fill-only проходе | `POST pack/bake`; rewrite `complete` tile; четвёртый `mode=`; stamp старого grade на новые колонки |
 
@@ -503,7 +504,8 @@ Pack (`world_map.zst`, wilderness chunks, `location_terrain`) = **immutable snap
 |---|---|---|
 | **full_bake** | L0 pack + C23 topology | мастер / init мира |
 | **detailed_bake** | L2, затем C11 на городе; wilderness = L2 | детализация локации / topping |
-| **entry / WP-13** | L2 scene (без C11, без mill) | gameplay spawn |
+| **entry / WP-13** | L2 scene (без C11, без mill) | gameplay spawn **земли** |
+| **C24 district packing** | один район в тот же `settlement.zst` | gameplay spawn **города** (после C23); не bake |
 | **modification** | `map_cell_patches` (`terrain_delta` / `climate_delta` / …) | ход: взрыв, природа, климат в `patch_bounds` |
 
 | Можно | Нельзя |
@@ -1022,7 +1024,7 @@ flowchart LR
 |---|---|
 | **Старт сессии** | blocking P0 вокруг spawn; фон — кольца от spawn |
 | **Переход tile** | новый anchor = точка входа; P0 scene volume; фон — chunks от входа + path ahead |
-| **Вход в локацию** | anchor = entry point; settlement layout — отдельный patch path ([`tz_city_generation.md`](./tz_city_generation.md)) |
+| **Вход в локацию** | anchor = entry point; L2 = WP-13; packing города = outdoor **C24** (район ног), не clip тайла, не eager весь `SettlementLayout` |
 | **Движение** | gameplay на L2+L0 fallback; фон достраивает впереди по пути |
 | **Стоянка** | 1 chunk из head, idle |
 | **Телепорт** | новый anchor; partial queue reorder |
@@ -1357,6 +1359,7 @@ effective_climate(x,y) =
 | `world_map_cells_per_tile` | resolved при bake, см. § L0 |
 | `map_cell_fine_span`, `map_subsurface_depth` | из `WorldTerrainScalars` / `worlds` |
 | `location_terrain_entries[]` | per-location L2 terrain — см. § `LocationTerrainEntry` |
+| `settlement_structure_entries[]` | per-settlement city structure — см. § `SettlementStructureEntry` |
 | `tiles[]` | per macro-tile — см. § `TileManifestEntry` |
 | `world_map_cells`, `wilderness_tiles_total`, `wilderness_chunks_baked` | progress |
 
@@ -1384,6 +1387,22 @@ Fine terrain **одной** `named_location` (file-per-location, WP-19).
 | `terrain_path` | str? | `locations/l.{uid}.terrain.zst` |
 | `terrain_hash` | str? | SHA-256 location terrain blob |
 | `climate_status`, `z_band`, `bytes` | | climate LOD / z-band / размер blob |
+
+#### `SettlementStructureEntry` (`settlement_structure_entries[]`)
+
+Authored outdoor city (**C15** / **C24**). Оглавление packed-районов — здесь, не в сжатом `settlement.zst`. Как `wilderness_refine_status` + `chunks[]` у тайла.
+
+| Поле | Тип | Смысл |
+|---|---|---|
+| `location_uid` | str | uid поселения |
+| `territory_volume` | AABB | footprint volume |
+| `structure_path` | str? | `locations/l.{uid}.settlement.zst` |
+| `structure_hash` | str? | SHA-256 контейнера |
+| `bytes` | int? | размер blob |
+| `structure_status` | enum | `absent` \| `partial` \| `complete` — **C14** |
+| `packed_district_uids` | list[str] | `named_locations.location_uid` районов, уже в blob (пустой packed район всё равно здесь) |
+
+Очередь packing = SQL-перепись C23 − `packed_district_uids`. Не decompress zst. SoT: [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) **C24**.
 
 #### `ChunkRef` (`tiles[].chunks[]`)
 
@@ -2073,9 +2092,9 @@ flowchart LR
 | [`tz_terrain_relief.md`](./tz_terrain_relief.md) | outdoor grade generate (очереди, стрелки); холм ≠ Grade. Bake R36 — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) |
 | [`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) | Pass 1.5, liquid_candidate |
 | [`tz_climate.md`](./tz_climate.md) | SurfaceClimateField, Climate LOD |
-| [`tz_city_generation.md`](./tz_city_generation.md) | CitySkeleton import; **§8 topology** после `full_bake`; packing = C11, product caller = **detailed_bake** |
+| [`tz_city_generation.md`](./tz_city_generation.md) | CitySkeleton import; **§8 topology** после `full_bake`; packing = C11/C24 |
 | [`tz_city_generation_technical_debt.md`](./tz_city_generation_technical_debt.md) | **CITY-T-5** швы после topology-on-bake (не compose, не 4-й mode) |
-| [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) | Outdoor city layer на pack (граф участков); **C23** topology; не `location_terrain`; authored ≠ Patch Store |
+| [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md) | Outdoor city layer; **C23** topology; **C24** packing по району; не `location_terrain` |
 | [`project_data_storage_tz.md`](./project_data_storage_tz.md) | schema patch store |
 | [`tz_world_snapshot.md`](./tz_world_snapshot.md) | pack_hash в snapshot |
 | [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) | техдолг; § **WP-DELETE-1** ↔ WP-FIX-DEBT-10 |
@@ -2087,6 +2106,7 @@ flowchart LR
 
 | Дата | Изменение |
 |---|---|
+| 2026-09-20 | **C24:** `SettlementStructureEntry.packed_district_uids` / `structure_status`; gameplay packing = район, не tile. SoT [`tz_settlement_outdoor.md`](./tz_settlement_outdoor.md). Код ⬜. |
 | 2026-09-19 | **LOC-T-3 / WP-21:** settlement AABB + запас; import 200 + ERROR лог; occupancy больше footprint иначе раньше в `locations[]`. Не 422. SoT [`tz_locations.md`](./tz_locations.md). |
 | 2026-09-13 | C11/C23 stage seconds in `packBakeLog` (`settlement_c11_*`, `settlement_topology_*`). |
 | 2026-09-13 | **C8:** city structure pack = full building cells (`StructureLayout`), not facade-only. Furniture remains InteriorAssembler. |

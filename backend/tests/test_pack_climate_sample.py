@@ -13,6 +13,7 @@ from app.application.worldData.generators.climate.climateAnchor import (
 from app.application.worldData.generators.climate.climateAnchorField import ClimateAnchorField
 from app.application.worldData.generators.climate.climatePoleField import ClimatePoleField
 from app.application.worldData.pack.climate.climatePackSample import (
+    bucket_l2_z_by_light_cell,
     resolve_pack_surface_z,
     sample_pack_climate_at,
 )
@@ -86,6 +87,24 @@ class TestResolvePackSurfaceZ(unittest.TestCase):
             typical_elevation_z=1,
             coarse_surface_z={(0, 0): 3},
             l2_surface_z={(10, 20): 7, (50, 50): 12, (500, 0): 99},
+            light_m=100,
+        )
+        self.assertEqual(z, 12)
+
+    def test_bucket_l2_z_max_by_light_cell(self) -> None:
+        raw = {(10, 20): 7, (50, 50): 12, (500, 0): 99}
+        bucket = bucket_l2_z_by_light_cell(
+            raw, origin_x=0, origin_y=0, light_span=100,
+        )
+        self.assertEqual(bucket[(0, 0)], 12)
+        self.assertEqual(bucket[(500, 0)], 99)
+        z = resolve_pack_surface_z(
+            xm=0,
+            ym=0,
+            tile_m=1000,
+            typical_elevation_z=1,
+            coarse_surface_z={(0, 0): 3},
+            l2_surface_z=bucket,
             light_m=100,
         )
         self.assertEqual(z, 12)

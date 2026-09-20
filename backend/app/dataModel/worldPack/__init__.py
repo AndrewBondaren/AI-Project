@@ -68,6 +68,7 @@ from app.dataModel.worldPack.wildernessRefineStatus import (
     wilderness_refine_status_for_counts,
     wilderness_refine_status_without_expected,
 )
+from app.dataModel.worldPack.settlementStructureStatus import settlement_structure_status_for
 from app.dataModel.worldPack.lightFineTilePolicy import LightFineTilePolicy
 from app.dataModel.worldPack.packCompleteness import (
     PackCompleteness,
@@ -83,6 +84,7 @@ from app.dataModel.worldPack.worldPackManifest import (
     ChunkRefineRole,
     LocationTerrainEntry,
     SettlementStructureEntry,
+    SettlementStructureStatus,
     TileManifestEntry,
     WildernessRefineStatus,
     WorldPackManifest,
@@ -113,6 +115,7 @@ __all__ = [
     "SettlementStructureWire",
     "ShellCellWire",
     "SettlementStructureEntry",
+    "SettlementStructureStatus",
     "GradePipelineStages",
     "LAYER_PRIORITY_ORDER",
     "LayerSlice",
@@ -161,6 +164,7 @@ __all__ = [
     "resolve_light_tile_cap",
     "resolve_world_map_cells_per_tile",
     "resolve_world_map_side",
+    "settlement_structure_status_for",
     "wilderness_refine_status_for_counts",
     "wilderness_refine_status_without_expected",
 ]

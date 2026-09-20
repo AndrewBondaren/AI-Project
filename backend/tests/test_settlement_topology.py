@@ -130,6 +130,16 @@ class TopologyExtractTest(unittest.TestCase):
             all(row.system_location_type == district_type for row in extracted.districts),
         )
         self.assertTrue(all(row.district_topology for row in extracted.districts))
+        self.assertTrue(
+            all(row.system_template_uid is None for row in extracted.districts),
+        )
+        first_topo = DistrictTopologySlot.model_validate(
+            extracted.districts[0].district_topology,
+        )
+        self.assertEqual(
+            first_topo.template_system_name,
+            slots[0].district_template.system_name,
+        )
         expected_uid = district_location_uid(
             settlement.location_uid,
             slots[0].district_template.system_name,
@@ -187,6 +197,10 @@ class TopologyReuseTest(unittest.TestCase):
             for slot in loaded
         ]
         self.assertEqual(planned_keys, loaded_keys)
+        self.assertEqual(
+            [slot.slot_index for slot in loaded],
+            list(range(len(loaded))),
+        )
         service = SettlementGeneratorService()
         packed = service.generate_layout(
             world, settlement, catalog=None,
@@ -201,6 +215,32 @@ class TopologyReuseTest(unittest.TestCase):
         self.assertEqual(
             [node.node_uid for node in packed.connection_nodes],
             [node.node_uid for node in nodes],
+        )
+
+    def test_assembler_without_freeze_matches_topology_plan(self) -> None:
+        world = _world()
+        settlement = _settlement()
+        service = SettlementGeneratorService()
+        slots, nodes, edges = service.plan_slots_and_city_graph(
+            world, settlement, None,
+        )
+        layout = service.generate_layout(world, settlement, catalog=None)
+        planned_keys = [
+            (slot.cell_x, slot.cell_y, slot.district_template.system_name)
+            for slot in slots
+        ]
+        layout_keys = [
+            (item.slot.cell_x, item.slot.cell_y, item.slot.district_template.system_name)
+            for item in layout.district_layouts
+        ]
+        self.assertEqual(planned_keys, layout_keys)
+        self.assertEqual(
+            [node.node_uid for node in layout.connection_nodes],
+            [node.node_uid for node in nodes],
+        )
+        self.assertEqual(
+            [edge.edge_uid for edge in layout.connection_edges],
+            [edge.edge_uid for edge in edges],
         )
 
 

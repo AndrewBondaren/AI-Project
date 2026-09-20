@@ -7,6 +7,9 @@ Skeleton на NamedLocation — фаза 1 (world create).
 
 import logging
 
+from app.application.worldData.generators.assemblers.citySkeleton import (
+    city_skeleton_from_settlement,
+)
 from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
     collect_geometry_fine_cells,
     collect_map_cells_from_layout,
@@ -16,12 +19,16 @@ from app.application.worldData.generators.assemblers.settlementAssembler.layoutC
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.mapOccupancy import (
     plan_footprint_occupancy_cells,
 )
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.topologyPlan import (
+    plan_slots_and_city_graph as plan_slots_and_city_graph_fn,
+)
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementAssembler import (
     SettlementAssembler,
 )
+from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import (
     SettlementLayout,
 )
@@ -54,6 +61,20 @@ class SettlementGeneratorService:
     ) -> list[MapCell]:
         """Только резерв footprint (можно вызвать при world create)."""
         return plan_footprint_occupancy_cells(world, settlement)
+
+    def plan_slots_and_city_graph(
+        self,
+        world: World,
+        settlement: NamedLocation,
+        terrain_cells: list[MapCell] | None = None,
+    ) -> tuple[list[DistrictSlot], list[ConnectionNode], list[ConnectionEdge]]:
+        skeleton = city_skeleton_from_settlement(
+            settlement,
+            economic_tier=TierResolver.resolve(world=world, city=settlement),
+        )
+        return plan_slots_and_city_graph_fn(
+            world, settlement, skeleton, terrain_cells,
+        )
 
     def generate_layout(
         self,

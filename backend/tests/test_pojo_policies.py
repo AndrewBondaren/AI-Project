@@ -9,6 +9,7 @@ from app.dataModel.locations.locationFootprintPolicy import (
 from app.dataModel.terrain.sceneVolumePolicy import SceneVolumePolicy
 from app.dataModel.worldPack.pathHeadingPolicy import PathHeadingPolicy
 from app.dataModel.worldPack.territoryVolumePolicy import TerritoryVolumePolicy
+from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
 
 
 class TestPojoPolicies(unittest.TestCase):
@@ -59,6 +60,20 @@ class TestPojoPolicies(unittest.TestCase):
             system_city_size="village",
         )
         self.assertTrue(named_location_uses_settlement_fine_footprint(loc))
+
+    def test_locations_index_contains_pin(self):
+        wire = LocationsIndexWire(
+            locations=[
+                LocationsIndexPin(
+                    location_uid="loc-city-ironhold-002",
+                    map_x=2,
+                    map_y=2,
+                ),
+            ],
+        )
+        self.assertTrue(wire.contains("loc-city-ironhold-002"))
+        self.assertFalse(wire.contains("loc-city-amberport-002"))
+        self.assertFalse(LocationsIndexWire().contains("loc-city-ironhold-002"))
 
 
 if __name__ == "__main__":

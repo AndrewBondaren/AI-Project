@@ -10,7 +10,7 @@ from app.application.worldData.pack.bake.packDetailedBakeOrchestrator import (
     PackDetailedBakeResult,
 )
 from app.application.worldData.persistResult import PersistResult
-from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator import (
+from app.application.worldData.settlementOutdoor.settlementOutdoorContract import (
     MaterializeResult,
 )
 from app.dataModel.worldPack.packBakeMode import PackBakeApiMode

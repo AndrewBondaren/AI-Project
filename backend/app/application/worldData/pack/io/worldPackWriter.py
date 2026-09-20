@@ -11,7 +11,7 @@ from app.application.worldData.pack.io.packBlobWire import (
     climate_field_payload,
     world_map_tile_payload,
     fine_terrain_chunk_payload,
-    settlement_structure_payload,
+    write_settlement_structure_blob,
 )
 from app.application.worldData.pack.io.packManifestStore import PackManifestStore
 from app.application.worldData.pack.bake.packBakeLog import log_pack_manifest_saved, log_pack_write_blob
@@ -19,7 +19,6 @@ from app.application.worldData.pack.io.tileCodec import (
     PAYLOAD_KIND_CLIMATE,
     PAYLOAD_KIND_WORLD_MAP,
     PAYLOAD_KIND_FINE_TERRAIN,
-    PAYLOAD_KIND_SETTLEMENT_STRUCTURE,
     TileCodec,
 )
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
@@ -40,6 +39,7 @@ from app.dataModel.worldPack.worldPackManifest import (
     ChunkRef,
     ChunkRefineRole,
     SettlementStructureEntry,
+    SettlementStructureStatus,
     TileManifestEntry,
     WildernessRefineStatus,
     WorldPackManifest,
@@ -246,11 +246,12 @@ class WorldPackWriter:
         location_uid: str,
         wire: SettlementStructureWire,
     ) -> SettlementStructureTmpRef:
-        blob = self._codec.encode(
-            PAYLOAD_KIND_SETTLEMENT_STRUCTURE,
-            settlement_structure_payload(wire),
+        published = self._paths.settlement_structure_path(location_uid)
+        existing = published.read_bytes() if published.is_file() else None
+        blob = write_settlement_structure_blob(
+            wire, existing=existing, codec=self._codec,
         )
-        target = self._paths.settlement_structure_path(location_uid)
+        target = published
         tmp = target.with_suffix(target.suffix + ".tmp")
         tmp.parent.mkdir(parents=True, exist_ok=True)
         tmp.write_bytes(blob)
@@ -275,18 +276,29 @@ class WorldPackWriter:
         tmp: SettlementStructureTmpRef,
         *,
         territory_volume,
+        packed_district_uids: list[str] | None = None,
+        structure_status: SettlementStructureStatus | None = None,
     ) -> str:
         target = self._paths.settlement_structure_path(tmp.settlement_uid)
         if not tmp.tmp_path.is_file():
             raise FileNotFoundError(f"settlement structure tmp missing: {tmp.tmp_path}")
         os.replace(tmp.tmp_path, target)
         rel = target.relative_to(self._paths.root).as_posix()
+        prev = self._manifest.settlement_structure_entry(tmp.settlement_uid)
+        packed = packed_district_uids
+        if packed is None:
+            packed = list(prev.packed_district_uids) if prev is not None else []
+        status = structure_status
+        if status is None:
+            status = prev.structure_status if prev is not None else "absent"
         entry = SettlementStructureEntry(
             location_uid=tmp.settlement_uid,
             territory_volume=territory_volume,
             structure_path=rel,
             structure_hash=tmp.content_hash,
             bytes=tmp.nbytes,
+            structure_status=status,
+            packed_district_uids=list(packed),
         )
         self._manifest.settlement_structure_entries = [
             loc for loc in self._manifest.settlement_structure_entries

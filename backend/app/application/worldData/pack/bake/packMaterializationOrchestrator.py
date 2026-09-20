@@ -35,7 +35,10 @@ from app.application.worldData.pack.bake.packBakeFinalize import finalize_pack_o
 from app.application.worldData.pack.bake.packTilePlanner import PackTilePlanner
 from app.application.worldData.pack.read.packReadContext import PackReadContext
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
-from app.application.worldData.parallelPolicy import resolve_terrain_workers
+from app.application.worldData.parallelPolicy import (
+    resolve_climate_workers,
+    resolve_terrain_workers,
+)
 from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
 from app.core.generationLogging import generation_world_log
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
@@ -208,12 +211,14 @@ class PackMaterializationOrchestrator:
         )
         tiles = plan.tile_tuples()
         bake_mode: PackBakeMode = "full" if scope == "full" else "light"
+        climate_workers = resolve_climate_workers(mat_ctx, world)
         bake_t0 = log_pack_bake_start(
             world_uid,
             tile_cap=plan.cap_applied if plan.cap_applied is not None else -1,
             tiles_planned=len(tiles),
             locations=len(locations),
             terrain_workers=resolve_terrain_workers(mat_ctx, world),
+            climate_workers=climate_workers,
         )
         drain = self._defaults.background_drain_per_request
         if self._entry.has_job_repo and drain > 0:
@@ -225,8 +230,8 @@ class PackMaterializationOrchestrator:
         climate_result: PersistResult | None = None
         climate_coarse_samples = 0
         climate_fine_tiles = 0
-        climate_result, climate_coarse_samples = self._climate.bake_coarse(
-            world, surface_ctx, writer, locations=locations,
+        climate_result, climate_coarse_samples = await self._climate.bake_coarse(
+            world, surface_ctx, writer, mat_ctx, locations=locations,
         )
 
         locations_index = build_locations_index(locations, world)
@@ -267,8 +272,8 @@ class PackMaterializationOrchestrator:
             )
         terrain_result = PersistResult.from_counts(world_map_cells, world_map_cells)
 
-        climate_fine_tiles = self._climate.bake_fine_for_l0_policy(
-            world, surface_ctx, writer, tiles, locations,
+        climate_fine_tiles = await self._climate.bake_fine_for_l0_policy(
+            world, surface_ctx, writer, mat_ctx, tiles, locations,
             scope=scope,
             anchor_x=anchor_x,
             anchor_y=anchor_y,
@@ -309,7 +314,7 @@ class PackMaterializationOrchestrator:
             chunks_done=0,
             chunks_total=0,
             terrain_workers=workers,
-            climate_workers=0,
+            climate_workers=climate_workers,
             elapsed_s=elapsed_s,
             world_map_cells=world_map_cells,
             refine_queue_depth=queue_depth,

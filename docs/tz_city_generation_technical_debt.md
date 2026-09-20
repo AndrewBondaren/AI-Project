@@ -26,7 +26,7 @@ metadata:
 | Документ | Что брать оттуда | Что **не** дублировать сюда |
 |---|---|---|
 | [city §8](./tz_city_generation.md) | Что фиксирует topology: имена/N/типы районов, `settlement_gate`, не packing | Текст спеки topology |
-| [outdoor **C23**](./tz_settlement_outdoor.md) | Когда skip topology vs C14 packing; persist SQL NL + city `connection_*`; не zst | C14/C19 протокол pack |
+| [outdoor **C23** / **C24**](./tz_settlement_outdoor.md) | Skip topology vs C14 packed set; packing по району | C14/C19/C24 протокол pack |
 | [pack § Bake modes](./tz_world_pack_storage.md) | `full_bake` = L0 на `world_bounds`, **затем** post-pass topology; `light_bake` topology не делает; packing не bake | Compose contributors, WP-13 |
 | [light bake](./tz_map_light_bake.md) | L0 canvas; `SettlementContributor` = pin-диск, не районы | Маски / hydrology |
 | [connections §5.1](./tz_structure_connections.md) | `_plan_world_routes` **после** ворот | Алгоритм A* (отложен) |
@@ -63,7 +63,7 @@ flowchart TD
 | 8 | **CITY-T-5k** | смешение | Authored-skip в трёх местах | P2 | **open** |
 | 9 | **CITY-T-5l** | смешение | `load_topology_slots` тянет `specialization_extras` из planner | P2 | **resolved** — один `resolve_settlement_specialization`; штамп `allowed` на слот |
 | 10 | **CITY-T-5f** | legacy | `city_graph_for_settlement` без фильтра `GraphLevel.CITY` (A* позже) | P2 | **open** |
-| 11 | **CITY-T-5e** | legacy | Район `system_template_uid` FK на `building_templates` | P3 | **open** |
+| 11 | **CITY-T-5e** | legacy | Район `system_template_uid` FK на `building_templates` | P3 | **resolved** — ключ района только в `district_topology.template_system_name`; колонка здания не пишется |
 | 12 | **CITY-T-5d** | хардкод | Smoke `"medium"` вместо `DistrictDensity` | P3 | **open** |
 | 13 | **CITY-T-5m** | смешение | Bake-фасад: `PackMissing` валит `full_bake`; ошибки uid глотаются | P3 | **open** |
 
@@ -115,7 +115,7 @@ HTTP `generate-settlement` идёт в outdoor-оркестратор — кон
 ### CITY-T-5g — skip packing по «есть дети + city edge»
 
 **Status:** `open` | **Severity:** high | **P:** P1  
-**Склейка:** C14 = skip packing iff **zst + manifest + SQL дети**. Районы C23 **без** zst — **не** C14-skip.  
+**Склейка:** C14 = skip района iff uid в `packed_district_uids`; skip поселения iff `structure_status=complete` (packed = перепись C23) **и** файл + manifest. Районы C23 **без** packed — **не** C14-skip. SoT [outdoor C14/C24](./tz_settlement_outdoor.md).  
 **Bake:** после `full_bake` дети-районы и city gates **есть**, zst города **нет**.
 
 [`needs_settlement_outdoor_persist`](../backend/app/application/worldData/generators/assemblers/settlementAssembler/settlementLayoutExtract.py): если есть любые children **и** любые city edges → `False` (не нужно persist), плюс ещё `needs_settlement_geometry` по map_cells.
@@ -124,7 +124,7 @@ C23 как раз создаёт children + city edges **без** packing. Ст�
 
 Там же литерал `e.graph_level == "city"` — **CITY-T-5h**.
 
-**Fix:** skip legacy persist = тот же контракт, что C14 (zst+manifest+дети) **или** явный scope occupancy-only. Не «нашлись city edges».
+**Fix:** skip legacy persist = тот же контракт, что C14 (`complete` / packed set) **или** явный scope occupancy-only. Не «нашлись city edges».
 
 ---
 
@@ -152,14 +152,12 @@ C23 как раз создаёт children + city edges **без** packing. Ст�
 
 ### CITY-T-5e — FK района на building_templates
 
-**Status:** `open` | **Severity:** low | **P:** P3  
-**Склейка:** C23 пишет `named_locations.system_template_uid` = `DistrictTemplateEntry.system_name`.
+**Status:** `resolved` | **Severity:** high | **P:** P1  
+**Склейка:** C23 писал `named_locations.system_template_uid` = `DistrictTemplateEntry.system_name`.
 
-В [`0001_initial.sql`](../backend/app/db/migrations/0001_initial.sql) `system_template_uid` REFERENCES `building_templates(template_uid)`. Имя чертежа района — не uid здания. Packing-extract делал то же; C23 чаще создаёт такие строки.
+В [`0001_initial.sql`](../backend/app/db/migrations/0001_initial.sql) `system_template_uid` REFERENCES `building_templates(template_uid)`. Имя чертежа района — не uid здания. С `PRAGMA foreign_keys=ON` persist районов падал, packing не стартовал.
 
-SQLite FK часто выключен — риск на recreate с pragma.
-
-**Fix:** колонка шаблона района отдельная / без FK на buildings; или FK на реестр районов мира, если он таблица. Не класть district `system_name` в building uid.
+**Fix:** район не пишет `system_template_uid`. Ключ чертежа — `district_topology.template_system_name` (`DistrictTopologySlot`). Колонка FK — только здание.
 
 ---
 

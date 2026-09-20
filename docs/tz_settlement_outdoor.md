@@ -5,7 +5,7 @@ description: "Outdoor settlement на запечённом World Pack — дер
 
 # ТЗ: Outdoor settlement на Pack
 
-**Статус:** целевая архитектура (согласовано 2026-08-30). **O1–O4 locked (C14–C16, C19–C20), C17–C18, C21, C22, C23** (topology на `full_bake`). Impl-план outdoor: [`.cursor/plans/settlement-outdoor-pack.md`](../.cursor/plans/settlement-outdoor-pack.md). **P13** ядро C21 в коде; leftover generate — **C21-T\*** (§14). План C21: [`.cursor/plans/c21-plot-ground-z.md`](../.cursor/plans/c21-plot-ground-z.md). **C22** SoT: [tz_structure_connections.md](./tz_structure_connections.md) §5.1.3. **C23** SoT: [tz_city_generation.md](./tz_city_generation.md) §8.
+**Статус:** целевая архитектура (согласовано 2026-08-30). **O1–O4 locked (C14–C16, C19–C20), C17–C18, C21, C22, C23** (topology на `full_bake`), **C24** (packing по району, дозапись в тот же zst). Impl-план outdoor: [`.cursor/plans/settlement-outdoor-pack.md`](../.cursor/plans/settlement-outdoor-pack.md). **P13** ядро C21 в коде; leftover generate — **C21-T\*** (§14). План C21: [`.cursor/plans/c21-plot-ground-z.md`](../.cursor/plans/c21-plot-ground-z.md). **C22** SoT: [tz_structure_connections.md](./tz_structure_connections.md) §5.1.3. **C23** SoT: [tz_city_generation.md](./tz_city_generation.md) §8. **C24** код ⬜.
 
 **Зачем отдельный документ:** алгоритм застройки — [`tz_city_generation.md`](./tz_city_generation.md); участок/здание — [`tz_assembler_hierarchy.md`](./tz_assembler_hierarchy.md) и [`tz_building_generator.md`](./tz_building_generator.md); земля/grade — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) и [`tz_terrain_relief.md`](./tz_terrain_relief.md). Здесь только **склейка**: оркестрация, куда писать эталон, дерево имён, экспорт. Алгоритмы не копировать — ссылки на пункты.
 
@@ -21,9 +21,9 @@ description: "Outdoor settlement на запечённом World Pack — дер
 - outdoor-город как **эталон** в pack (граф участков);
 - граф улиц в SQL.
 
-**Предусловие packing (C11):** pack земли есть (`light` или `full`). Topology (**C23**) — **после `full_bake` L0**, не вместо pack и **не** `detailed_bake`.
+**Предусловие packing (C11):** pack земли есть (`light` или `full`); uid поселения — pin в `locations_index.json` (occupancy LOC-T-3). Нет пина → `skipped`, не 422, **ERROR** `packBakeLog` (`reason=not_in_locations_index`); job не abort. Topology (**C23**) — **после `full_bake` L0**, не вместо pack и **не** `detailed_bake`.
 
-**Caller C11 (locked):** `detailed_bake` `scope=location` на settlement-like — **консьюмер** того же `materialize`, что debug `POST …/generate-settlement`. Правка packing не меняет detailed orchestrator. Без этого вызова детализированный город неиграбелен. `scope=wilderness` C11 не зовёт.
+**Caller C11 (locked):** `detailed_bake` `scope=location` на settlement-like — **консьюмер** того же `materialize`, что debug `POST …/generate-settlement`. Правка packing не меняет detailed orchestrator. Без этого вызова детализированный город неиграбелен. `scope=wilderness` C11 не зовёт. Gameplay / смоук с якорем — **C24** (один район); `detailed_bake` без якоря гонит очередь до C14-complete. Землю C11 **не** пишет (C1); L2 spawn — WP-13 `refine_from_entry`, другой job.
 
 ### Вне слоя
 
@@ -106,12 +106,13 @@ full_bake L0
   → (optional) world routes → settlement_gate
 
 Route (debug HTTP) / **`detailed_bake` scope=location** / lazy (позже)
-  → orchestrator.materialize(world_uid, location_uid)   # C11; bake только вызывает
+  → orchestrator.materialize(world_uid, location_uid[, district | at])  # C11/C24
        → SQL: NamedLocation поселения
        → тип: named_location_uses_settlement_fine_footprint
+       → C23 census обязателен (нет районов → 409, не inline topology)
        → terrain: MapCellQueryFacade по footprint (pack + патчи), не get_all мира
-       → generate_layout: reuse topology слотов если есть (C23); packing C22
-       → persist: SQL здания/levels + pack city structure
+       → generate: `DistrictAssembler` на слот(ы) очереди; reuse C23 freeze
+       → persist: SQL здания/levels + дозапись того же settlement.zst (C24)
 ```
 
 | Слой | Делает | Не делает |
@@ -122,9 +123,48 @@ Route (debug HTTP) / **`detailed_bake` scope=location** / lazy (позже)
 | Persist | запись SQL + pack city layer | LLM, HTTP |
 | `MapCellQueryFacade` | read merge | generate |
 
-Идемпотентность packing: skip, если city-structure для `location_uid` уже в pack **и** SQL-дети (C14; не зонд патчей). Topology (C23) skip отдельно: уже районы+gates, или authored не-район дети.
+Идемпотентность packing — **C14** (packed set vs перепись C23), не «файл есть → город готов». Topology (C23) skip отдельно: уже районы+gates, или authored не-район дети.
 
 Debug `POST …/generate-settlement` — тонкая оболочка над **тем же** `materialize` (city §11.5). Не вместо `detailed_bake`: bake — product caller; HTTP — debug/другой caller. DAG позже → тот же метод (Gate: DAG).
+
+### C24 — packing по району (locked product, код ⬜)
+
+Команда: [`/impl-c24`](../.cursor/commands/impl-c24.md). План: [`.cursor/plans/c24-district-packing.md`](../.cursor/plans/c24-district-packing.md).
+
+Единица дозаписи — **район** (слот C23 / `DistrictAssembler`), не макро-тайл pack и не весь город на spawn. Layout в мировых `(x,y)` (C29); клип по `tile_gx/gy` **запрещён**.
+
+| Вызов | Что пакует |
+|---|---|
+| `materialize(uid, district_uid=…)` | **один** район по канону |
+| `materialize(uid, at=(x,y))` | то же: резолв точки в `district_uid`, затем packing |
+| `materialize(uid)` без якоря | мастер / `detailed_bake`: все **оставшиеся** в очереди, до C14-complete |
+| `district_uid` и `at` вместе | **422** |
+| `at` вне всех слотов C23 | **422** |
+| перепись C23 пуста (нет районов с `district_topology`) | **409** — не `plan_topology` внутри packing |
+
+**Якорь (locked):** канон на оркестратор и HTTP — **`district_uid`** = `named_locations.location_uid` района после C23 (C5 uuid5). Тот же ключ в `packed_district_uids`, skip C14 и `parent_location_uid` зданий (C4). `at=(x,y)` — **только резолвер** в этот uid: слот, чей rect `district_topology` (`origin_x/y` + `width_fine`/`depth_fine`) содержит точку. Сетка — world fine, как `map_x/y`. Не `tile_gx/gy`, не `cell_x/cell_y` на wire, не `template_system_name` (чертёж может повторяться на нескольких клетках).
+
+| Caller | Что есть | Что передать |
+|---|---|---|
+| Первый spawn | таверны/зданий ещё нет; точка персонажа или пин города | `at=(x,y)` → резолв |
+| Фон / debug / повтор | район уже в SQL | `district_uid` |
+| Здание уже есть | `parent_location_uid` = район | этот uid |
+
+Быстрый вход игрока: WP-13 (сцена у ног) **плюс** C24 на район spawn (`at` или уже известный uid). Остальные районы — фон, тот же `materialize` с `district_uid`. Не ждать L2 всего AABB локации и не паковать все районы до первого хода.
+
+**Очередь (не сканировать zst):**
+
+| Множество | Где | Смысл |
+|---|---|---|
+| Перепись | SQL: прямые дети-районы с `district_topology` (C23) | какие районы вообще есть |
+| Packed | `SettlementStructureEntry.packed_district_uids` + `structure_status` | те же `location_uid` районов, уже в blob |
+| Очередь | перепись − packed | кого ещё вызывать |
+
+Пустой район после packing (нет домов) **всё равно** в packed — иначе plaza / CITY-T-2 = «ещё не делали». Не выводить готовность из «у города есть дети» (после C23 дети уже есть) и не из внуков-зданий.
+
+**Файл:** один `l.{settlement_uid}.settlement.zst` (C15). Внутри — **кадр (или эквивалент) на район**: дозапись не пережимает уже упакованные районы. 16 слотов v1 ещё терпит полный rewrite; цель — 32–50 районов с геометрией C8, тогда полный rewrite на каждый район **запрещён** как target. Индекс очереди **не** в сжатом теле: SoT packed = manifest (как `wilderness_refine_status` + `chunks[]`). Sidecar `*.index.json` и шапка внутри zstd без manifest — не делать.
+
+`structure_status`: `absent` \| `partial` \| `complete`. `complete` iff packed = перепись C23 и файл на диске.
 
 ### Тайминги C11 / C23
 
@@ -136,7 +176,7 @@ Heartbeat — `packBakeLog` (тот же sink, что L2 `l2_s`). Не `material
 | **`setup_s`** | Skip-проверки, volume, tmp/C14 |
 | **`terrain_s`** | `get_footprint_terrain` |
 | **`catalog_s`** | library + `assemble_building_catalog` |
-| **`topology_s`** | load C23 freeze **или** inline `plan_topology` + reload |
+| **`topology_s`** | load C23 freeze (нет census → 409, не inline plan) |
 | **`generate_s`** | `generate_layout` (wall) |
 | **`assemble_packing_s`** | C22 посадка участков (сумма районов) |
 | **`assemble_area_s`** | `StructureAreaAssembler` / геометрия дома |
@@ -263,17 +303,18 @@ city §11.4 snapshot / regen — по-прежнему [`tz_world_snapshot.md`](
 | **C8** | Pack city structure несёт **полную геометрию дома**: `StructureLayout.cells` (+ small layouts) в `shell_cells`. Фасад не persist-фильтр. L2 / merge читают эти клетки (играбельный LOD). Мебель — `StructureInteriorAssembler`, не этот слой. `location_passages` между комнатами — C20 (не SQL здесь). |
 | **C9** | Persist `location_levels` зданий (из `StructureLayout.levels`): абсолютный `z` / `z_height` / `display_name`. Улицы как уровни — отложить. Yard / small_layouts / пустые barriers — как есть. |
 | **C17** | «Первый этаж» / вход = шаблонный **`z_offset == 0`** (и/или `entry_point.leads_to_level_uid`), **не** `min(z) ≥ surface terrain`. Подземный город: улица и `building.map_z` уже под землёй; offset 0 всё равно входной этаж. Эвристика locations SceneInit (`z ≥ terrain_z`) — **неверна**, не использовать. |
-| **C18** | **Сцена движка ≠ этаж и ≠ одно здание как весь мир.** Персонажа не телепортируют «на участок». `SessionScene.location_uid` — **якорь** в дереве (где персонаж числится), не bounding box симуляции. **Карта:** при входе в здание **добавляем** его оболочку и **оставляем** уже загруженное рядом (улица, соседние участки, окно/дверь наружу). **Контекст событий:** пространство в **радиусе от игрока** (жизнь за окном идёт независимо); величина радиуса — **наружу** (world/engine scalar). Спека радиуса и тиков событий — **другое ТЗ**; этот слой не кодирует «сцена = leaf» и не invent число. Generate поселения по-прежнему пишет полный граф в pack (это эталон, не play-load). |
+| **C18** | **Сцена движка ≠ этаж и ≠ одно здание как весь мир.** Персонажа не телепортируют «на участок». `SessionScene.location_uid` — **якорь** в дереве (где персонаж числится), не bounding box симуляции. **Карта:** при входе в здание **добавляем** его оболочку и **оставляем** уже загруженное рядом (улица, соседние участки, окно/дверь наружу). **Контекст событий:** пространство в **радиусе от игрока** (жизнь за окном идёт независимо); величина радиуса — **наружу** (world/engine scalar). Спека радиуса и тиков событий — **другое ТЗ**; этот слой не кодирует «сцена = leaf» и не invent число. Эталон города — один файл C15; пока C24 `partial`, в pack лежит граф **уже упакованных** районов (не дыра). Play-load — радиус, не «выгрузить весь zst». |
 | **C10** | Дороги = SQL `connection_*` (city/district). Road bed cells в этом слое не обязательны (`collect_edge_cells` сейчас пуст — так и оставить). |
-| **C11** | Ядро packing: `materialize(world_uid, location_uid)`. Product caller — **шаг 2 `detailed_bake`** (после L2, поверх terrain). Debug HTTP — тот же метод. Bake **не** содержит C22. |
+| **C11** | Ядро packing: `materialize(world_uid, location_uid, …)`. Product caller — **шаг 2 `detailed_bake`** (после L2, поверх terrain) **без якоря** = очередь до C14-complete. Debug HTTP — тот же метод. Якорь — **C24** (`district_uid` канон; `at` = резолвер). Bake **не** содержит C22. Только если pin в `locations_index.json`. Землю не пишет (C1). |
 | **C12** | Read карты/bbox **включает** rasterize участков в merge: слой города выше `location_terrain`, ниже patch. Play-bbox — окрестность игрока (**C18**), не «только footprint одного здания». Не отдельный debug-render формат. FineTerrain column-runs для города не использовать. |
 | **C13** | Вне слоя: наполнение здания (`StructureInteriorAssembler`), DAG, growth, LLM-имена, mill/grade, новые города на wilderness, **радиус сцены / event context** (другое ТЗ; здесь только C18). Геометрия дома — C8/C11, не «вне слоя». |
-| **C14** | Skip **packing** iff **и** файл `l.{uid}.settlement.zst` на диске, **и** запись в manifest, **и** в SQL есть дети. Blob без SQL / SQL без blob — не skip. Районы **только** от C23 (без zst) — **не** skip packing. Authored не-район дети у города — C23 (скип topology **и** packing), не эта строка. |
-| **C19** | **O4 locked.** Канон = один layout в RAM → encode `.tmp` (вне SQL write-lock) → одна SQL-транзакция (идемпотентный upsert) → `COMMIT` → `os.replace` + manifest + invalidate reader. Encode/publish не внутри открытой SQL write-tx. После COMMIT pack-retry **без** второго generate (tmp или тот же layout). Crash до COMMIT: стереть tmp, полный повтор. Процесс умер после COMMIT, tmp потерян: не skip; журнал pending **или** детерминированный generate с тем же seed — иначе SQL-имена и геометрия разъедутся. Скорость (parallel C16, batch) — после этого протокола, не вместо. |
+| **C14** | Skip **района** iff uid ∈ `packed_district_uids` **и** файл + строка manifest. Skip **поселения** iff `structure_status=complete` (packed = перепись C23) **и** файл + manifest. Blob без SQL census / SQL без blob — не skip. Районы **только** C23 (packed пуст) — **не** skip packing. Не выводить skip из «есть дети» или city edges (CITY-T-5g). Authored не-район дети у города — C23 (скип topology **и** packing), не эта строка. |
+| **C19** | **O4 locked.** Канон на **шаг C24**: layout **этого** района в RAM → encode `.tmp` (вне SQL write-lock) → SQL upsert зданий / district-графа / levels этого района → `COMMIT` → `os.replace` контейнера zst + manifest (`packed_district_uids`, `structure_status`) + invalidate. Уже упакованные районы **копировать кадрами**, не второй `generate_layout`. Encode/publish не внутри открытой SQL write-tx. После COMMIT pack-retry **без** второго generate этого района (tmp или тот же layout). Crash до COMMIT: стереть tmp, повтор **этого** шага. Процесс умер после COMMIT, tmp потерян: не skip район; журнал pending **или** детерминированный generate того же слота (seed city §9.6). Скорость (parallel C16, batch) — после этого протокола, не вместо. |
 | **C20** | **O3 locked, вариант 1.** Persist `location_levels` + наружные двери → `location_entry_points` (не interior passages). Роли: **`front`** (парадный) и **`service`** (чёрный). Здание: **≥1 `front`**, **≥0 `service`**. Default NPC/игрок идут объявленными входами (предпочтение `front`, если действие не говорит иное — доставка, «чёрный ход»). Ad-hoc (стена, окно, пролом) не запрещён и не нумеруется при generate. Шаблон здания сейчас даёт ≤1+1; N дверей той же роли — без смены контракта. Колонка роли в SQL сейчас нет — добавить при impl (`0001`). |
-| **C15** | **O1 locked:** один pack-файл на поселение `locations/l.{settlement_uid}.settlement.zst` (граф районов/участков внутри). Не файл на участок. Шов тайлов — тот же uid (как WP-19). |
+| **C15** | **O1 locked:** один pack-файл на поселение `locations/l.{settlement_uid}.settlement.zst` (граф районов/участков внутри). Не файл на участок и **не** файл на район. Шов тайлов — тот же uid (как WP-19). Дозапись = кадры внутри этого файла (**C24**), не второй blob. |
 | **C16** | **O2 locked:** ядра достаточно. Отдельные **селекторы uid** (не второй generate): (1) все settlement-like мира; (2) потомки узла дерева локаций (`region` / `territory` — «континент/регион», не новый type); (3) по государству `state_uid` ([tz_states.md](./tz_states.md), опционально вниз по `parent_state_uid`). Каждый uid → тот же `materialize`. |
-| **C23** | **Topology на `full_bake`.** После успешного L0 `full_bake` (pack есть) — pass `settlement_topology` на все settlement-like (C6). `light_bake` **не** делает. Если topology ещё нет (`partial` / вход) — **тот же** pass перед packing (city §11.3). **Не** 4-й bake mode, не L2/mill, не packing, не `SettlementContributor` (пин L0). Planner тот же, что assembler: `plan_district_slots` → `plan_settlement_entries` → `plan_city_street_grid`. **Фиксирует:** имена районов = `display_name` чертежа (город = import; **без LLM**); размер = морфология × `system_settlement_size` → footprint ([locations **LOC-T-2**](./tz_locations.md); код: `system_city_size`); N районов = сетка ∩ рецепт city §1.2; типы = `district_type` + `district_subtype` + чертёж; входы = `through_road` / `paired_exit` + `settlement_gate` + коридоры между районами (`graph_level=city`). **Не фиксирует:** packing участков, внутренняя сетка квартала (C22), здания, `l.{uid}.settlement.zst` (**геометрия дома — C11 packing, не этот pass**), наполнение (`StructureInteriorAssembler`), `graph_level=district`. Persist: SQL NL районов (C4/C5 uid из слота) + city `connection_*`. Не occupancy-flood. **Skip topology:** authored не-район дети (таверна / square / gate у города) → скип topology **и** packing. Районы+gates уже с этого pass → идемпотентный skip topology; packing **reuse**. C14 (zst+manifest+дети) → skip packing. Районы C23 **не** authored C14. World-трассы — после ворот ([connections](./tz_structure_connections.md) §5.1). `init_mode=full` = L0 + этот pass, **не** packing всех городов. Алгоритм SoT: [city §8](./tz_city_generation.md). **Код ✅.** |
+| **C24** | **Packing по району.** Инкремент = слот C23 / `DistrictAssembler`, не макро-тайл. Канон якоря = `district_uid` (`named_locations.location_uid`, тот же ключ packed/C14/C4). `at=(x,y)` только резолвер в uid (fine/world; не `gx/gy`, не чертёж, не `cell_x/y` на HTTP). Оба сразу → 422. Без якоря → очередь до complete. Нет C23 → 409. Первый spawn — `at` (здания ещё нет); дальше uid или parent здания. Очередь = SQL-перепись − `packed_district_uids` в manifest (не decompress zst). Кадры в том же C15-файле; полный rewrite blob на каждый район — не target (32–50 районов + C8). Gameplay spawn = WP-13 + один район; не `detailed_bake` AABB. Клип layout по `gx/gy` запрещён (C29). **Код ⬜.** |
+| **C23** | **Topology на `full_bake`.** После успешного L0 `full_bake` (pack есть) — pass `settlement_topology` на все settlement-like (C6). `light_bake` **не** делает. Если topology ещё нет (`partial` / вход) — caller зовёт **тот же** `plan_topology`, затем packing; `materialize` census не создаёт (C24: 409). **Не** 4-й bake mode, не L2/mill, не packing, не `SettlementContributor` (пин L0). Planner тот же, что assembler: `plan_district_slots` → `plan_settlement_entries` → `plan_city_street_grid`. **Фиксирует:** имена районов = `display_name` чертежа (город = import; **без LLM**); размер = морфология × `system_settlement_size` → footprint ([locations **LOC-T-2**](./tz_locations.md); код: `system_city_size`); N районов = сетка ∩ рецепт city §1.2; типы = `district_type` + `district_subtype` + чертёж; входы = `through_road` / `paired_exit` + `settlement_gate` + коридоры между районами (`graph_level=city`). **Не фиксирует:** packing участков, внутренняя сетка квартала (C22), здания, `l.{uid}.settlement.zst` (**геометрия дома — C11 packing, не этот pass**), наполнение (`StructureInteriorAssembler`), `graph_level=district`. Persist: SQL NL районов (C4/C5 uid из слота) + city `connection_*`. Не occupancy-flood. **Skip topology:** authored не-район дети (таверна / square / gate у города) → скип topology **и** packing. Районы+gates уже с этого pass → идемпотентный skip topology; packing **reuse**. C14-complete (packed = перепись) → skip packing. Районы C23 **не** authored C14. **C24** код ⬜. World-трассы — после ворот ([connections](./tz_structure_connections.md) §5.1). `init_mode=full` = L0 + этот pass, **не** packing всех городов. Алгоритм SoT: [city §8](./tz_city_generation.md). **Код ✅.** |
 
 ---
 
@@ -312,15 +353,15 @@ Persist без ≥1 `front` — ошибка, не писать здание. К
 
 SQL и файлы pack — не один COMMIT. Надёжность = протокол (как WP-12 chunk: `.tmp` → rename → manifest).
 
-**Канон:** один `SettlementLayout` в RAM. Из него и SQL, и blob. Pack-retry после SQL **без** второго generate.
+**Канон:** layout **шага** (один район или мастерский проход очереди) в RAM. Из него SQL этого шага и новый кадр blob. Уже packed районы не generate повторно. Pack-retry после SQL **без** второго generate шага.
 
 **Порядок:**
 
-1. Encode `.tmp` (не в manifest). Долгое — вне SQL write-lock.
-2. Одна SQL-транзакция: идемпотентный upsert дерева / графа / levels / entry_points → `COMMIT`.
-3. `os.replace` → `l.{uid}.settlement.zst`, атомарно manifest, invalidate reader.
+1. Encode `.tmp` контейнера (старые кадры + новый; не в manifest). Долгое — вне SQL write-lock.
+2. Одна SQL-транзакция: идемпотентный upsert зданий / district-графа / levels **этого** района → `COMMIT`.
+3. `os.replace` → `l.{uid}.settlement.zst`, атомарно manifest (`packed_district_uids`, `structure_status`), invalidate reader.
 
-**Recovery:** crash до COMMIT → стереть tmp, полный materialize. После COMMIT, файла нет → дописать pack из tmp/layout, не skip. Процесс умер, tmp потерян → не skip; журнал pending или тот же seed. Skip packing (**C14**) iff файл + manifest + SQL-дети. Районы только от C23 — не skip packing.
+**Recovery:** crash до COMMIT → стереть tmp, повтор шага. После COMMIT, файла нет → дописать pack из tmp, не skip. Процесс умер, tmp потерян → не skip район; журнал pending или тот же seed слота. Skip — **C14** (packed set / `complete`), не «файл есть + дети».
 
 Скорость (parallel C16, batch) — после этого, не вместо.
 
@@ -377,6 +418,7 @@ SQL и файлы pack — не один COMMIT. Надёжность = прот
 | **`MaterializationContext`** | нет (так и надо до CITY-T-3) | Склейка не берёт `free_cores`. Не подключать pool «заодно». |
 | **P12 production path** | **open**, не этот слой | `lazy_settlement` ≠ C11. SoT дыры DAG: [`tz_world_generation_dag.md`](./tz_world_generation_dag.md) § Дыры: settlement. |
 | **C23 topology не в коде** | **resolved** | `plan_topology` после `full_bake` L0; packing reuse слотов. World routes A* — по-прежнему отложен (триггер gates есть). Швы кода — [CITY-T-5](./tz_city_generation_technical_debt.md). |
+| **C24 packing по району** | **open** (код ⬜) | `materialize` всё ещё весь uid; C14 = файл+дети; zst — один JSON кадр. Контракт §5 C24 / таблица C24. |
 
 | ID | Где | Проблема |
 |---|---|---|
@@ -400,8 +442,10 @@ SQL и файлы pack — не один COMMIT. Надёжность = прот
 
 ## Changelog
 
-| Дата | Изменение |
-|---|---|
+| 2026-09-20 | **C24 команда:** `/impl-c24` + план `.cursor/plans/c24-district-packing.md`. Код ⬜. |
+| 2026-09-20 | **C24 якорь:** канон `district_uid`; `at=(x,y)` только резолвер; оба → 422; HTTP без чертежа/`cell_x`. Spawn сначала `at`. |
+| 2026-09-20 | **C24:** packing по району; очередь = C23 SQL − `packed_district_uids` в manifest; тот же `settlement.zst` кадрами; C14 = complete iff packed = перепись. Gameplay = WP-13 + один район. Не клип по тайлу. Код ⬜. |
+| 2026-09-20 | **C11 pack index:** packing / location L2 только если pin в `locations_index.json`. Нет пина → skip, не 422, ERROR `packBakeLog`. C23 без изменений. |
 | 2026-09-09 | **C21 `AreaSlot.height` / `z_deep`:** пролёт выше / ниже `ground_z`. **`deck`:** SoT = `DistrictTemplateEntry.deck` (omit 0); участок копирует. Коллизия xy×z только при 2+ `deck` среди участков. |
 | 2026-09-06 | **C11 caller:** `detailed_bake` scope=location — консьюмер `materialize`; HTTP generate-settlement — тот же контракт. Bake не содержит C22. |
 | 2026-09-06 | **C23 код:** topology после `full_bake` L0; CITY-T-1a на NL; packing reuse. World routes A* не в этом PR. |

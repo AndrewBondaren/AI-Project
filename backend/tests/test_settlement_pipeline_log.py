@@ -12,7 +12,7 @@ from app.application.worldData.pack.bake.packBakeLog import (
     log_pack_settlement_c11_start,
     log_pack_settlement_topology_done,
 )
-from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator import (
+from app.application.worldData.settlementOutdoor.settlementOutdoorContract import (
     MaterializeResult,
 )
 from app.application.worldData.settlementOutdoor.settlementPipelineTimings import (

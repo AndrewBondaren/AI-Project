@@ -201,6 +201,8 @@ Partial return: generator может пересчитать широко, но *
 | `run_cell_weather_pass` | **parallel** batches (`ChunkComputePool`) |
 | `run_liquid_overlay_pass` | `surface_top` index **serial**; overlay per batch **parallel** |
 | `save_pass(climate)` | **strictly serial** |
+| Pack `ClimatePackBakeOrchestrator` coarse/fine samples | **parallel** row batches (`ChunkComputePool` + `resolve_climate_workers`); persist blobs **serial** |
+| Worker / logical CPU | **DEBUG** `log_pack_climate_batch_start` / `_done` (`cpu`, `thread`, `tid`, `pool_workers`) — не INFO, не per-sample `rainfall` |
 
 **Caller contract:** тот же `MaterializationContext(free_cores)` что и `generate_surface`; `ParallelPolicy.resolve_climate_workers` + optional `world.climate_parallel_workers`.
 
@@ -209,6 +211,7 @@ Partial return: generator может пересчитать широко, но *
 | ID | Задача | Статус |
 |---|---|---|
 | CL-PAR-1 | `ClimateBatchOrchestrator` + pool | ✅ |
+| CL-PAR-PACK-1 | Pack climate row batches + DEBUG cpu | ✅ |
 | CL-PAR-DAG-1 | `GenerateClimateNode` → `apply_climate_batch(..., ctx)` | ⬜ |
 
 ### Нода `generate_climate` (спека)
@@ -1200,6 +1203,7 @@ python scripts/initialize_world.py --fixture ../fixtures/world_terrain_test.json
 
 | Дата | Версия | Изменение |
 |---|---|---|
+| 2026-09-20 | 2.6.1 | **CL-PAR-PACK-1:** pack climate coarse/fine — row batches на `ChunkComputePool`; persist serial; worker/cpu **DEBUG**. |
 | 2026-09-19 | 2.6.1 | **LOC-T-3:** co-located example pins 0 / −83 / 83 (volume + Z-gap 50). Пины 33/28/120 сняты. SoT [`tz_locations.md`](./tz_locations.md). |
 | 2026-08-16 | 2.6.1 | **Modification layer:** локальный климат = `climate_delta`, не перепечка light/full/detailed |
 | 2026-08-15 | 2.6.1 | **C14:** технический шов pack не climate wall; field непрерывен в XY. SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) C29 |
