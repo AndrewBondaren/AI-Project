@@ -15,7 +15,7 @@ dist-ssr
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
-.cursor/
+# .cursor/ — moved to .git/info/exclude (local-only ignore)
 .idea
 .DS_Store
 *.suo
