@@ -209,7 +209,7 @@ SettlementAssembler          ✅ фазы A–F
   └── DistrictAssembler      ✅
         └── StructureAreaAssembler  ✅ (StructureContext v1 stub)
               └── StructureAssembler (registry)  ✅
-                    └── StructureGeneratorService  ✅ interior box
+                    └── StructureGeneratorService  ✅ geometry (комнаты/стены/проходы; interior = наполнение, отдельный слой)
         └── DistrictRoadGenerator  ✅ (grid/organic/radial/cul-de-sac/courtyard)
   ⬜ фазы G–H: organic footprint, z-topology
   ⬜ StructureInteriorAssembler (мебель/NPC — нет ТЗ)

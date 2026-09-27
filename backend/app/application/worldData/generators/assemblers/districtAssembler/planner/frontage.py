@@ -32,8 +32,8 @@ from app.dataModel.settlement.enums.districtStreetRole import (
 )
 from app.dataModel.settlement.district.frontageTypeOrder import resolve_frontage_type_order
 from app.dataModel.spatial.facing import CARDINAL_WALL_OUTWARD_DELTA, Facing
-from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
-from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose
+from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.structure.enums.buildingPurpose import BuildingPurposeFamily
 from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
 from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.db.models.connectionEdge import ConnectionEdge
@@ -43,9 +43,12 @@ Coord = tuple[int, int]
 
 _NEIGHBORS = ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1))
 
-def is_plaza(template: BuildingLayoutTemplate) -> bool:
+def is_plaza(template: PlotLayoutTemplate) -> bool:
     """Purpose tag ``plaza`` skips frontage hierarchy (connections §5.1.3)."""
-    return BuildingPurpose.PLAZA in template.structure_types
+    return (
+        template.main_building is None
+        and template.plot_type == BuildingPurposeFamily.PUBLIC
+    )
 
 
 def plot_cells(placement: AreaPlacement) -> set[Coord]:

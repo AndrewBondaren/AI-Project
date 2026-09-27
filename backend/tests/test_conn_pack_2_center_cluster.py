@@ -52,7 +52,8 @@ from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
 from app.dataModel.settlement.enums.districtDensity import DistrictDensity
 from app.dataModel.settlement.enums.districtStreetRole import DistrictStreetRole
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.structure.building.structureCatalog import StructureCatalog
 from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose
 
 
@@ -139,12 +140,19 @@ def _skeleton() -> CitySkeleton:
     )
 
 
-def _layout(system_name: str, purpose: str = "town_hall") -> BuildingLayoutTemplate:
-    return BuildingLayoutTemplate(
+def _layout(system_name: str, purpose: str = "town_hall") -> PlotLayoutTemplate:
+    if purpose == BuildingPurpose.PLAZA.value:
+        return PlotLayoutTemplate(
+            system_name=system_name,
+            display_name=system_name,
+            plot_type="public",
+            occupied_footprint={"width": 4, "depth": 4},
+        )
+    return PlotLayoutTemplate(
         system_name=system_name,
-        structure_type=purpose,
         display_name=system_name,
         occupied_footprint={"width": 4, "depth": 4},
+        main_building={"structure": "00000000-0000-4000-8000-000000000001"},
     )
 
 
@@ -320,7 +328,10 @@ class CenterClusterPass1Test(unittest.TestCase):
         self.assertEqual(leftover_halls, [])
         self.assertNotIn("plaza_1", {row.token.system_name for row in placed_halls})
         plaza = _layout("plaza_1", BuildingPurpose.PLAZA.value)
-        self.assertIn(BuildingPurpose.PLAZA, plaza.structure_types)
+        self.assertIn(
+            BuildingPurpose.PLAZA,
+            StructureCatalog.empty().leaves_of(plaza),
+        )
 
 
 class CenterClusterFrameAlleyTest(unittest.TestCase):

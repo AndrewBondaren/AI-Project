@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+import uuid
 
 from types import SimpleNamespace
 
@@ -23,7 +24,9 @@ from app.dataModel.settlement.district.requiredStructureResolve import (
     union_required_structures,
 )
 from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.structure.building.structureCatalog import StructureCatalog
+from app.dataModel.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.structure.building.buildingTemplateOutline import BuildingTemplateOutline
 from app.dataModel.structure.enums.buildingPurpose import (
     FAMILY_OF,
@@ -46,40 +49,59 @@ from app.dataModel.structure.enums.buildingPurpose import (
 )
 
 
+_STRUCTS: dict[str, StructureTemplate] = {}
+
+
 def _layout(
     system_name: str,
     structure_type: str | list[str] | None = None,
     **kwargs,
-) -> BuildingLayoutTemplate:
-    payload: dict = {
-        "system_name": system_name,
-        "display_name": system_name,
-        "levels": [{"z_offset": 0, "rooms": []}],
-    }
-    if structure_type is not None:
-        if isinstance(structure_type, list):
-            payload["structure_types"] = structure_type
-        else:
-            payload["structure_type"] = structure_type
-    payload.update(kwargs)
-    return BuildingLayoutTemplate.model_validate(payload)
+) -> PlotLayoutTemplate:
+    uid = str(uuid.uuid5(uuid.NAMESPACE_URL, f"test-structure|{system_name}"))
+    _STRUCTS[uid] = StructureTemplate(
+        system_name=uid,
+        display_name=system_name,
+        structure_types=(
+            coerce_purpose_list(structure_type, empty_as_house=True)
+            if structure_type is not None
+            else None
+        ),
+        levels=[{"z_offset": 0, "rooms": []}],
+    )
+    return PlotLayoutTemplate(
+        system_name=system_name,
+        display_name=system_name,
+        main_building={"structure": uid},
+        **kwargs,
+    )
+
+
+def _catalog(*layouts: PlotLayoutTemplate) -> BuildingCatalog:
+    structures = list({
+        str(plot.main_building.structure): _STRUCTS[str(plot.main_building.structure)]
+        for plot in layouts
+        if plot.main_building is not None
+    }.values())
+    return BuildingCatalog.from_layouts(list(layouts), StructureCatalog(structures))
+
+
+def _leaves(plot: PlotLayoutTemplate) -> list[BuildingPurpose]:
+    return list(_STRUCTS[str(plot.main_building.structure)].structure_types)
 
 
 class CoercePurposeTest(unittest.TestCase):
     def test_omit_building_is_house(self) -> None:
         layout = _layout("hut_1")
-        self.assertEqual(layout.structure_types, [BuildingPurpose.HOUSE])
-        self.assertEqual(layout.structure_type, "house")
+        self.assertEqual(_leaves(layout), [BuildingPurpose.HOUSE])
 
     def test_scalar_alias(self) -> None:
-        layout = _layout("tavern_1", "tavern")
-        self.assertEqual(layout.structure_types, [BuildingPurpose.TAVERN])
-        self.assertEqual(layout.structure_type, "tavern")
+        layout = _layout("inn_small", "tavern")
+        self.assertEqual(_leaves(layout), [BuildingPurpose.TAVERN])
 
     def test_array_and_unknown_dropped(self) -> None:
         layout = _layout("combo_1", ["house", "workshop", "blacksmith", "house"])
         self.assertEqual(
-            layout.structure_types,
+            _leaves(layout),
             [BuildingPurpose.HOUSE, BuildingPurpose.WORKSHOP],
         )
 
@@ -103,9 +125,9 @@ class CoercePurposeTest(unittest.TestCase):
 
     def test_drawing_family_tag_dropped_to_house(self) -> None:
         layout = _layout("bad_1", ["trade"])
-        self.assertEqual(layout.structure_types, [BuildingPurpose.HOUSE])
+        self.assertEqual(_leaves(layout), [BuildingPurpose.HOUSE])
         scalar = _layout("bad_2", "trade")
-        self.assertEqual(scalar.structure_types, [BuildingPurpose.HOUSE])
+        self.assertEqual(_leaves(scalar), [BuildingPurpose.HOUSE])
 
 
 class MatchAndUnionTest(unittest.TestCase):
@@ -124,7 +146,10 @@ class MatchAndUnionTest(unittest.TestCase):
         a = _layout("w", ["workshop"])
         b = _layout("h", ["house"])
         self.assertEqual(
-            union_plot_purposes([a, b]),
+            union_plot_purposes([
+                _STRUCTS[str(a.main_building.structure)],
+                _STRUCTS[str(b.main_building.structure)],
+            ]),
             (BuildingPurpose.WORKSHOP, BuildingPurpose.HOUSE),
         )
 
@@ -142,11 +167,11 @@ class MatchAndUnionTest(unittest.TestCase):
 
 class CatalogAndPinTest(unittest.TestCase):
     def test_of_structure_type_membership(self) -> None:
-        catalog = BuildingCatalog.from_layouts([
+        catalog = _catalog(
             _layout("house_1", "house"),
             _layout("combo_1", ["house", "workshop"]),
             _layout("shop_1", "shop"),
-        ])
+        )
         names = [row.system_name for row in catalog.of_structure_type("workshop")]
         self.assertEqual(names, ["combo_1"])
         self.assertEqual(
@@ -155,10 +180,10 @@ class CatalogAndPinTest(unittest.TestCase):
         )
 
     def test_matching_allowed_like_keeps_combo(self) -> None:
-        catalog = BuildingCatalog.from_layouts([
+        catalog = _catalog(
             _layout("combo_1", ["house", "workshop"]),
             _layout("pure_ws", "workshop"),
-        ])
+        )
         like = catalog.matching_allowed(
             catalog.layouts, [BuildingPurpose.WORKSHOP], "like",
         )
@@ -169,25 +194,25 @@ class CatalogAndPinTest(unittest.TestCase):
         self.assertEqual([row.system_name for row in strict], ["pure_ws"])
 
     def test_pin_is_system_name_not_purpose_pool(self) -> None:
-        catalog = BuildingCatalog.from_layouts([
-            _layout("tavern_1", "tavern"),
-            _layout("tavern_2", "tavern"),
-        ])
+        catalog = _catalog(
+            _layout("inn_small", "tavern"),
+            _layout("inn_suite", "tavern"),
+        )
         pool = resolve_required_layouts(
             RequiredStructure(plot_template="x", structure_type="tavern"),
             catalog,
         )
-        self.assertEqual([row.system_name for row in pool], ["tavern_1", "tavern_2"])
+        self.assertEqual([row.system_name for row in pool], ["inn_small", "inn_suite"])
         pin_miss = resolve_required_layouts(
             RequiredStructure(plot_template="tavern"),
             catalog,
         )
         self.assertEqual(pin_miss, ())
         pin_hit = resolve_required_layouts(
-            RequiredStructure(plot_template="tavern_1"),
+            RequiredStructure(plot_template="inn_small"),
             catalog,
         )
-        self.assertEqual([row.system_name for row in pin_hit], ["tavern_1"])
+        self.assertEqual([row.system_name for row in pin_hit], ["inn_small"])
 
 
 class HostAndFillTest(unittest.TestCase):
@@ -411,14 +436,14 @@ class PurposeTreeAndPacksTest(unittest.TestCase):
                 BuildingPurposeMatch.LIKE,
             )
         )
-        catalog = BuildingCatalog.from_layouts([
-            _layout("tavern_1", "tavern"),
+        catalog = _catalog(
+            _layout("inn_small", "tavern"),
             _layout("temple_1", "temple"),
-        ])
+        )
         like = catalog.matching_allowed(
             catalog.layouts, [BuildingPurposeFamily.TRADE], "like",
         )
-        self.assertEqual([row.system_name for row in like], ["tavern_1"])
+        self.assertEqual([row.system_name for row in like], ["inn_small"])
 
     def test_omit_packs_is_base_and_fantasy(self) -> None:
         enabled = purposes_for_world(None)

@@ -18,7 +18,7 @@ from app.application.worldData.generators.structure.passages.archwayValidator im
 )
 from app.application.worldData.generators.structure.passages.doorway import _build_doorway
 from app.application.worldData.generators.structure.passages.entry import _build_entry_point
-from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+from app.dataModel.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.structure.enums.passageType import PassageType
 from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
 from app.application.worldData.generators.structure.staircase.builder import build_staircase
@@ -43,7 +43,7 @@ def build_passages(
     building_uid: str,
     rng: Random,
     world: World | None = None,
-    template: BuildingLayoutTemplate | None = None,
+    template: StructureTemplate | None = None,
     building_tier: str | None = None,
     ground_z: int = 0,
 ) -> list[LocationPassage]:

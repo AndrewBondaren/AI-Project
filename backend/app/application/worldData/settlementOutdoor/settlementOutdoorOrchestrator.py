@@ -9,6 +9,9 @@ from __future__ import annotations
 import logging
 
 from app.application.worldData.buildingTemplateLibraryService import BuildingTemplateLibraryService
+from app.application.worldData.structureTemplateLibraryService import (
+    StructureTemplateLibraryService,
+)
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
 )
@@ -84,6 +87,7 @@ class SettlementOutdoorOrchestrator:
         facade_for,
         pack_context_for,
         library: BuildingTemplateLibraryService,
+        structure_library: StructureTemplateLibraryService,
         node_repo: IConnectionNodeRepository,
         edge_repo: IConnectionEdgeRepository,
     ) -> None:
@@ -98,7 +102,7 @@ class SettlementOutdoorOrchestrator:
         )
         self._packing = SettlementOutdoorPackingJob(
             generator, sql_persist, self._invalidate,
-            library, node_repo, edge_repo,
+            library, structure_library, node_repo, edge_repo,
         )
 
     def _require_pack(self, world: World) -> MapCellQueryFacade:

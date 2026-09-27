@@ -2,7 +2,7 @@
 
 Target (tz_structure_connections.md §5.1.3): cache holds envelopes ``w×h``
 for packing. Interior rooms / ``StructureGeneratorService`` are not this
-scope (city TZ phase 3). Envelope SoT = ``BuildingLayoutTemplate.occupied_footprint``
+scope (city TZ phase 3). Envelope SoT = ``PlotLayoutTemplate.occupied_footprint``
 on the plot drawing.
 
 Tests may inject layouts via ``from_south_map``.
@@ -30,7 +30,8 @@ from app.application.worldData.generators.structure.structureGeneratorService im
 )
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
@@ -114,10 +115,11 @@ class BuildingLayoutCache:
     def ensure(
         self,
         world: World,
-        template: BuildingLayoutTemplate,
+        template: PlotLayoutTemplate,
         facing: Facing = Facing.SOUTH,
         *,
         district: str | None = None,
+        leaves: tuple[BuildingPurpose, ...] = (),
     ) -> StructureLayout | None:
         _ = world
         name = template.system_name
@@ -126,7 +128,9 @@ class BuildingLayoutCache:
         cached = self.get(name, facing)
         if cached is not None:
             return cached
-        layout = _envelope_layout(template, name, facing, district=district)
+        layout = _envelope_layout(
+            template, name, facing, district=district, leaves=leaves,
+        )
         if layout is None:
             return None
         self._layouts[self._key(name, facing)] = layout
@@ -161,16 +165,20 @@ def build_layout_cache(
                 reason=PackingReason.MISSING_TEMPLATE,
             )
             continue
-        cache.ensure(world, template, Facing.SOUTH)
+        cache.ensure(
+            world, template, Facing.SOUTH,
+            leaves=catalog.structures.leaves_of(template),
+        )
     return cache
 
 
 def _envelope_layout(
-    template: BuildingLayoutTemplate,
+    template: PlotLayoutTemplate,
     name: str,
     facing: Facing,
     *,
     district: str | None = None,
+    leaves: tuple[BuildingPurpose, ...] = (),
 ) -> StructureLayout | None:
     """Packing envelope from the plot drawing. Does not generate rooms."""
     spec = template.occupied_footprint
@@ -181,7 +189,7 @@ def _envelope_layout(
             system_name=name,
             facing=facing.value,
             reason=PackingReason.STUB_NO_SHELL,
-            structure_type=",".join(str(p) for p in template.structure_types),
+            structure_type=",".join(str(p) for p in leaves),
         )
         return None
     footprint = OccupiedFootprint(

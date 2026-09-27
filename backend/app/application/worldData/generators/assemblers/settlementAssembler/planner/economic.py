@@ -9,7 +9,7 @@ from app.application.worldData.generators.utils.tierRegistry import (
     tiers_within_rank_delta,
 )
 from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.db.models.world import World
 
 
@@ -36,7 +36,7 @@ def check_district_economic_compat(
 
 
 def building_tier_compatible(
-    building_template: BuildingLayoutTemplate,
+    building_template: PlotLayoutTemplate,
     city_skeleton:     CitySkeleton,
     world:             World,
     delta:             int = 1,

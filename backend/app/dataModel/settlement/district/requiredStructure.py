@@ -12,7 +12,7 @@ from app.dataModel.settlement.enums.requiredStructurePosition import (
     POSITION_CENTER,
     RequiredStructurePosition,
 )
-from app.dataModel.structure.building.buildingLayoutTemplate import DrawingKey
+from app.dataModel.structure.building.plotLayoutTemplate import DrawingKey
 from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose
 
 __all__ = [

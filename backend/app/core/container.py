@@ -47,10 +47,15 @@ from app.db.repositories.sqlite.reliefTemplateRepository import SqliteReliefTemp
 from app.db.repositories.sqlite.reliefGradeRepository import SqliteReliefGradeRepository
 from app.db.repositories.iBuildingTemplateRepository import IBuildingTemplateRepository
 from app.db.repositories.sqlite.buildingTemplateRepository import SqliteBuildingTemplateRepository
+from app.db.repositories.iStructureTemplateRepository import IStructureTemplateRepository
+from app.db.repositories.sqlite.structureTemplateRepository import SqliteStructureTemplateRepository
 from app.application.worldData.worldService import WorldService
 from app.application.worldData.reliefTemplateLibraryService import ReliefTemplateLibraryService
 from app.application.worldData.reliefWorldImportService import ReliefWorldImportService
 from app.application.worldData.buildingTemplateLibraryService import BuildingTemplateLibraryService
+from app.application.worldData.structureTemplateLibraryService import (
+    StructureTemplateLibraryService,
+)
 from app.application.worldData.bundle.registry import build_bundle_handlers
 from app.application.worldData.raceService import RaceService
 from app.application.worldData.worldPerkService import WorldPerkService
@@ -151,6 +156,7 @@ class Container:
         self._relief_template_repository: IReliefTemplateRepository | None = None
         self._relief_grade_repository: IReliefGradeRepository | None = None
         self._building_template_repository: IBuildingTemplateRepository | None = None
+        self._structure_template_repository: IStructureTemplateRepository | None = None
 
         # DOMAIN SERVICES
         self._player_service: PlayerService | None = None
@@ -159,6 +165,7 @@ class Container:
         self._relief_template_library_service: ReliefTemplateLibraryService | None = None
         self._relief_world_import_service: ReliefWorldImportService | None = None
         self._building_template_library_service: BuildingTemplateLibraryService | None = None
+        self._structure_template_library_service: StructureTemplateLibraryService | None = None
         self._race_service: RaceService | None = None
         self._perk_service: WorldPerkService | None = None
         self._location_service: NamedLocationService | None = None
@@ -492,6 +499,11 @@ class Container:
             self._building_template_repository = SqliteBuildingTemplateRepository(db=self._db)
         return self._building_template_repository
 
+    def structure_template_repository(self) -> IStructureTemplateRepository:
+        if self._structure_template_repository is None:
+            self._structure_template_repository = SqliteStructureTemplateRepository(db=self._db)
+        return self._structure_template_repository
+
     def perk_repository(self) -> IWorldPerkRepository:
         if self._perk_repository is None:
             self._perk_repository = SqliteWorldPerkRepository(db=self._db)
@@ -608,6 +620,13 @@ class Container:
                 world_service=self.world_service(),
             )
         return self._building_template_library_service
+
+    def structure_template_library_service(self) -> StructureTemplateLibraryService:
+        if self._structure_template_library_service is None:
+            self._structure_template_library_service = StructureTemplateLibraryService(
+                repo=self.structure_template_repository(),
+            )
+        return self._structure_template_library_service
 
     def location_service(self) -> NamedLocationService:
         if self._location_service is None:
@@ -762,6 +781,7 @@ class Container:
                 facade_for=self.map_cell_query_facade,
                 pack_context_for=lambda uid: self.pack_read_services(uid).context,
                 library=self.building_template_library_service(),
+                structure_library=self.structure_template_library_service(),
                 node_repo=self.connection_node_repository(),
                 edge_repo=self.connection_edge_repository(),
             )

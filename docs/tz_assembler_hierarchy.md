@@ -6,8 +6,8 @@
 SettlementAssembler
     └── DistrictAssembler
             └── StructureAreaAssembler
-                    └── StructureAssembler
-                            └── StructureGenerator (BuildingGeneratorService)
+                    └── BuildingAssembler                  # здание целиком: контекст + оркестрация
+                            └── домен structure           # геометрия: geometry / foundation / roof (interior = наполнение, другой слой)
                                     └── StructureInteriorAssembler
 ```
 
@@ -58,29 +58,45 @@ SettlementAssembler
 **Подробнее:** [tz_city_generation.md](tz_city_generation.md) — раздел 6 (алгоритм заполнения кварталов)
 
 ### StructureAreaAssembler
-**Знает:** `AreaSlot` (клетки **участка** + facing), шаблон, city skeleton, terrain  
+**Знает:** `AreaSlot` (клетки **участка** + facing), **`PlotLayoutTemplate`** (чертёж участка: footprint, забор, `plot_type`, `economic_tier_band`, `main_building: BuildingBodyTemplate | None`, `secondary_buildings` — stub), `StructureCatalog` (резолв `main_building.structure` → `StructureTemplate`), city skeleton, terrain  
+**Владеет зданиями участка:** объявляет `NamedLocation`, резолвит ссылку `structure`, собирает `StructureContext` из полей body + runtime (`facing`, `ground_z`), передаёт `body` + `structure` в `BuildingAssembler`. Ссылка не резолвится → ошибка generate (422), не оболочка.  
 **Делает:**
 - полностью понимает топологию своей зоны: тип — из шаблона, любое назначение (`structure_type`). Не «всегда жилой дом». Примеры геометрии: здание у улицы; двор+забор+здание в глубине; общественная площадь (`plaza`: сады, фонтаны, террасы); только оболочка, если так задан шаблон
 - знает facing area (сторона к улице)
 - **решает порог** (где улица стыкуется с участком) — `_resolve_threshold`: дверь / ворота забора / край участка. Формула «всегда фасад здания» запрещена
-- при наличии здания: координаты из шаблона, `StructureContext` (`ground_z` = `building.map_z` после clamp), вызов `StructureAssembler`. Шаблон даёт здание, участок без NL — **ошибка generate**, не пустой двор
+- при наличии здания: координаты из шаблона, `StructureContext` (`ground_z` = `building.map_z` после clamp), вызов `BuildingAssembler`. Шаблон даёт здание, участок без NL — **ошибка generate**, не пустой двор
 - планировка: двор, забор (`barrier_template_registry`), малые постройки
 - `_build_paths`: улица → **порог** (не обязательно `building_entrance`); θ > 45° — clamp только z
 
 **Источник `StructureContext`:** этот слой. Только он знает достаточно для вывода контекста и порога.  
 **`AreaSlot`:** список (x, y) участка (здание ∪ двор ∪ линия забора) + `ground_z` (**этого** участка) + `facing` + `height` / `z_deep` (пролёт выше / ниже `ground_z`) + `deck` (копия яруса чертежа района). Не копия z района.  
-**Подробнее:** [tz_building_generator.md](tz_building_generator.md) — раздел 11 (StructureAssembler, StructureContext)
+**Подробнее:** [tz_building_generator.md](tz_building_generator.md) — раздел 11 (BuildingAssembler, StructureContext)
 
-### StructureAssembler
-**Знает:** `StructureContext`, terrain_cells  
-**Делает:** фундамент + крыльцо/ступени + крыша поверх interior box  
+### BuildingAssembler
+**Знает:** всё об **одном здании**: `BuildingBodyTemplate` (envelope: тип основания/крыши, материалы, porch), `StructureTemplate` (уже резолвнутая ссылка `body.structure`), `StructureContext` (runtime: `facing`, `ground_z`, `building_band`), terrain_cells  
+**Делает:** владеет контекстом здания и **управляет** его сборкой — сам ничего не строит, три вызова в домен `structure`:
+- геометрия здания (комнаты, стены, проходы, лестницы) → поддомен **structure / geometry** (`StructureGeneratorService`)
+- фундамент + крыльцо/ступени → поддомен **structure / foundation** (`FoundationBuilder`)
+- крыша → поддомен **structure / roof** (`RoofBuilder`)
+
+Порядок и приоритет перезаписи клеток (staircase > foundation; крыша поверх) — §6.5. **Не** знает участок, **не** резолвит ссылки, **не** наполняет интерьер, **не** персистит  
+**В коде:** ABC `BaseBuildingAssembler` + `BUILDING_ASSEMBLER_REGISTRY` (kind → класс: `building` → **`BuildingAssembler`**, `ruins`, `vastHull`, `resourceExtraction`; kind = вид здания, ≠ `structure_type` и ≠ `system_name`). `assemble` = три вызова выше; `attach_envelope` — фундамент + крыша поверх готового layout. Сигнатура §6.5 — контракт ABC для всех kind. Выбор kind по чертежу участка — не в v1: area зовёт `BuildingAssembler`  
 **Может быть вызван вне иерархии** — для кораблей, данжей и других структур, способных к перемещению (`is_mobile=true`).  
 **Подробнее:** [tz_building_generator.md](tz_building_generator.md) — раздел 11
 
-### StructureGenerator (BuildingGeneratorService)
-**Знает:** шаблон, world  
-**Делает:** interior box — комнаты, стены, проходы, wall_openings  
-**Подробнее:** [tz_building_generator.md](tz_building_generator.md) — разделы 3–10
+### Домен `structure` — геометрия здания (три поддомена)
+Домен производит **клетки и объекты геометрии** по заданию `BuildingAssembler`; ни один поддомен не знает ни участок, ни другие поддомены.
+
+**Не путать:** поддомен `geometry` (комнаты как геометрия) ≠ `interior` — наполнение интерьера (мебель, предметы) делает `StructureInteriorAssembler`, отдельный слой ниже.
+
+| Поддомен | Код | Вход | Выход |
+|---|---|---|---|
+| geometry | `StructureGeneratorService.generate_from_template` | `StructureTemplate`, `facing`, `building_band`, `ground_z`, `foundation_depth` | геометрия: комнаты (`NamedLocation`), стены, проходы, wall_openings, лестницы — `StructureLayout`. Раскладка в SOUTH-фрейме шаблона, затем rigid-body поворот под `facing` **до** эмиссии |
+| foundation | `FoundationBuilder` (`structure/foundation/`) | `StructureContext`, terrain surface, `ground_z`, клетки geometry | клетки фундамента / крыльца; v1-типы §6.7 |
+| roof | `RoofBuilder` (`structure/roof/`, `gableRoof.py`) | `StructureContext`, `ground_z`, клетки geometry | клетки крыши; v1-типы §6.7 |
+
+Поддомены foundation / roof — как есть (v1); их развитие — отдельные ТЗ, каркас вызова через `BuildingAssembler` не меняется.  
+**Подробнее:** [tz_building_generator.md](tz_building_generator.md) — разделы 3–10 (geometry), 11.2–11.3 (foundation, roof)
 
 ### StructureInteriorAssembler
 **Знает:** `BuildingLayout` (готовая геометрия), шаблон, world, city skeleton  
@@ -102,8 +118,8 @@ SettlementAssembler
 | Полная городская генерация | `SettlementAssembler` |
 | Отдельный квартал | `DistrictAssembler` |
 | Здание на участке (ручное размещение, редактор) | `StructureAreaAssembler` |
-| Корабль, данж, изолированное здание | `StructureAssembler` |
-| Срез мегаздания (`foundation="none"`, `roof="none"`) | `StructureGenerator` |
+| Корабль, данж, изолированное здание | `BuildingAssembler` |
+| Срез мегаздания (`foundation="none"`, `roof="none"`) | `BuildingAssembler` (foundation/roof → no-op) |
 | Наполнение уже сгенерированного здания (предметы, NPC) | `StructureInteriorAssembler` |
 
 ---
@@ -114,10 +130,10 @@ SettlementAssembler
 SettlementAssembler
   city_skeleton → DistrictAssembler
     district_type + template_slot → StructureAreaAssembler
-      StructureContext (выводится здесь) → StructureAssembler
+      StructureContext (выводится здесь) → BuildingAssembler
         terrain_cells → terrain_surface[x,y] + ground_z
         context + ground_z + foundation_depth → StructureGeneratorService(ground_z, foundation_depth)
-                                                    → StructureLayout (interior box)
+                                                    → StructureLayout (geometry: комнаты, стены, проходы)
         FoundationBuilder(terrain_surface, ground_z) → foundation cells
         RoofBuilder(ground_z)                        → roof cells
         → StructureLayout (полный)
@@ -141,7 +157,7 @@ SettlementAssembler
 
 ---
 
-## 6. Архитектура StructureAssembler
+## 6. Архитектура BuildingAssembler
 
 ### 6.1 StructureContext
 
@@ -158,13 +174,14 @@ class StructureContext:
     porch_material:      str | None = None # fallback: building.parent_floor_material
     porch_has_roof:      bool = False      # навес над крыльцом
     ground_z:            int | None = None # None → building.map_z
+    building_band:       str | None = None # economic tier band участка (PlotLayoutTemplate.economic_tier_band); None → tier мира
 ```
 
 `facing` пробрасывается из `AreaSlot.facing` через `StructureAreaAssembler._derive_context`.
-`None` означает что шаблон сам определяет расположение входа (для изолированных структур без улицы).
+`None` означает что шаблон сам определяет расположение входа (для изолированных структур без улицы) — генератор оставляет SOUTH-фрейм.
 
-`StructureContext` не хранится в шаблоне — шаблон описывает только interior.
-Источник: `StructureAreaAssembler` (из city-пайплайна) или ручной выбор в UI.
+`StructureContext` не хранится в `StructureTemplate` — тот описывает только геометрию. Envelope-поля (`foundation_*`, `roof_*`, `porch_*`) — это поля `BuildingBodyTemplate` участка; runtime-поля (`facing`, `ground_z`, `building_band`) — из `AreaSlot` / `PlotLayoutTemplate` / посадки.
+Источник сборки: `StructureAreaAssembler._derive_context(body, slot, building)` (city-пайплайн) или ручной выбор в UI.
 
 ---
 
@@ -187,7 +204,7 @@ ground_z = context.ground_z ?? building.map_z
 ```python
 terrain_surface: dict[tuple[int,int], int]
 # terrain_surface[x, y] = max z среди terrain-ячеек в колонке (x, y)
-# вычисляется StructureAssembler из terrain_cells
+# вычисляется BuildingAssembler из terrain_cells
 # используется FoundationBuilder для расчёта gap[x,y] = building.map_z - terrain_surface[x,y]
 ```
 
@@ -240,17 +257,21 @@ basement:    z = -5, -4, -3    (ниже фундамента)
 
 ---
 
-### 6.5 Интерфейс StructureAssembler
+### 6.5 Интерфейс BuildingAssembler
+
+Контракт ABC `BaseBuildingAssembler`; ниже — реализация kind `building` (`BuildingAssembler`). Остальные kind (`ruins`, `vastHull`, `resourceExtraction`) обязаны принимать ту же сигнатуру.
 
 ```python
-class StructureAssembler:
+@ASSEMBLER_REGISTRY.register("building")
+class BuildingAssembler(BaseBuildingAssembler):
 
     def assemble(
         self,
         world:         World,
         building:      NamedLocation,
-        template:      dict,
-        context:       StructureContext,
+        body:          BuildingBodyTemplate,   # envelope: foundation/roof/материалы/porch
+        structure:     StructureTemplate,      # резолвнутая body.structure — резолвит caller (area)
+        context:       StructureContext,       # runtime: facing, ground_z, building_band
         terrain_cells: list[MapCell] | None = None,
     ) -> StructureLayout:
         ground_z        = context.ground_z if context.ground_z is not None else building.map_z
@@ -258,9 +279,11 @@ class StructureAssembler:
         fd              = context.foundation_depth if context.foundation_type != "none" else 0
 
         layout = StructureGeneratorService().generate_from_template(
-            world, building, template,
+            world, building, structure,
             ground_z=ground_z,
             foundation_depth=fd,
+            facing=context.facing,
+            building_band=context.building_band,
         )
 
         # Работаем с dict для корректной перезаписи (staircase > foundation > roof)
@@ -317,24 +340,31 @@ structure/
 
 ---
 
-### 6.8 Изменения в StructureGeneratorService (минимальные)
+### 6.8 Контракт StructureGeneratorService
 
 ```python
 def generate_from_template(
     self,
     world:            World,
     building:         NamedLocation,
-    template:         dict,
-    ground_z:         int | None = None,      # новый параметр
-    foundation_depth: int        = 0,          # новый параметр
+    structure:        StructureTemplate,        # только геометрия; участок/body сервис не видит
+    *,
+    ground_z:         int | None = None,
+    foundation_depth: int        = 0,
+    facing:           Facing | None = None,     # None/SOUTH → фрейм шаблона; иначе поворот перед эмиссией
+    building_band:    str | None = None,        # → TierResolver.resolve(building_band=…)
 ) -> StructureLayout: ...
 ```
 
 Внутри:
 1. `ground_z = ground_z if ground_z is not None else building.map_z`
 2. `_compute_level_z`: для `z_offset < 0` вычитать `foundation_depth`
-3. `place_wall_openings(... ground_z=ground_z)` — заменить `level.z < 0` на `level.z < ground_z`
-4. `StaircaseTunnelOrchestrator(... ground_z=ground_z)` — заменить `level.z >= 0` на `level.z >= ground_z`
+3. `place_wall_openings(... ground_z=ground_z)` — `level.z < ground_z`
+4. `StaircaseTunnelOrchestrator(... ground_z=ground_z)` — `level.z >= ground_z`
+5. После раскладки (`layoutEngine`) и до эмиссии `NamedLocation`/клеток/passages — `rotate_instances(rooms, shafts, facing)`: rigid-body поворот вокруг origin входной комнаты, стена главного входа → `facing`, `width↔depth` при 90°/270° (building §8.6)
+6. `building_band` подставляется в каждый `TierResolver.resolve(...)` сервиса; сам сервис band не выводит (нет доступа к участку)
+
+Сервис **не** принимает `dict` и **не** разворачивает участок (`coerce_building_layout`/`interior_of` удалены): bare JSON валидируется `StructureTemplate.model_validate` у caller.
 
 ---
 
@@ -500,29 +530,34 @@ class StructureAreaAssembler:
 
     def assemble(
         self,
-        world:         World,
-        slot:          AreaSlot,
-        template:      dict,
-        city_skeleton: CitySkeleton,
-        terrain_cells: list[MapCell] | None = None,
+        world:             World,
+        slot:              AreaSlot,
+        plot:              PlotLayoutTemplate,        # чертёж участка; здания объявлены здесь
+        city_skeleton:     CitySkeleton,
+        terrain_cells:     list[MapCell] | None = None,
         *,
-        street_xy:     AbstractSet[tuple[int, int]],  # полотно после DistrictAssembler._plan_streets
-        cached_layout: StructureLayout | None = None,
-        building_x:    int | None = None,
-        building_y:    int | None = None,
+        street_xy:         AbstractSet[tuple[int, int]],  # полотно после DistrictAssembler._plan_streets
+        structure_catalog: StructureCatalog,              # резолв plot.main_building.structure
+        cached_layout:     StructureLayout | None = None, # envelope района — только occupied_footprint
+        building_x:        int | None = None,
+        building_y:        int | None = None,
     ) -> AreaLayout:
-        # 1. _resolve_threshold() — топология; без street_xy
-        # 2. slot.ground_z = median_surface_z(двор)
-        # 3. _place_building() — черновой map_z с footprint
-        # 4. measure_street_approach — peek z улицы; луч только при Δz
-        # 5. θ > 45° → clamp_near_z_to_45 в map_z или threshold.z; measure ещё раз
-        # 6. translate + context.ground_z = map_z + envelope
-        # 7. stamp_approach_cells — grade/лестница
-        # 8. _build_paths — только граф
-        # 9. _build_barrier — slot.ground_z
+        # 1. slot.ground_z = median_surface_z(двор); footprint = plot.occupied_footprint (объявленный)
+        # 2. _place_building() — NamedLocation, черновой map_z = медиана поверхности под footprint
+        # 3. body = plot.main_building; None → _shell_layout (plaza, без здания) → шаги 7–9
+        #    structure = structure_catalog.resolve(body.structure); None → GenerationError (422: plot, structure)
+        # 4. context = _derive_context(body, slot, building)  — envelope из body + facing + ground_z + band
+        # 5. layout = BuildingAssembler.assemble(world, building, body, structure, context, terrain_cells)
+        #    внутри: generate (SOUTH-фрейм) → поворот под slot.facing → fit-check (§7.7) → envelope
+        # 6. entry_xy = main_entrance из layout (реальная дверь) → _resolve_threshold(slot, entry_xy, fp_cells)
+        # 7. measure_street_approach; θ > 45° → clamp_near_z_to_45; при Δz → translate_layout(layout, 0, 0, dz)
+        # 8. stamp_approach_cells; _build_paths — только граф
+        # 9. _build_barrier — slot.ground_z; калитка на стороне slot.facing (та же, что дверь)
 ```
 
-Район зовёт assembler участка **после** `_plan_streets` и передаёт `street_xy`. Лог `INFO` на входе: `template.system_name`, `slot.facing`, `len(slot.cells)`.
+Район зовёт assembler участка **после** `_plan_streets` и передаёт `street_xy`. Лог `INFO` на входе: `plot.system_name`, `slot.facing`, `len(slot.cells)`.
+
+Ветка «перенос готового layout из cache» (`_cache_has_rooms` / `translate_layout` из cache) — **удалена**: cache района envelope-only (§7.7), геометрия генерируется на посадке. `cached_layout` остаётся только как источник `occupied_footprint` при отсутствии объявленного.
 
 ---
 
@@ -581,15 +616,20 @@ generators/assemblers/
       areaPaths.py                    # только граф
       areaBarriers.py
 
-  structureAssembler/                 # реализовано
+  buildingAssembler/                  # слой здания (сейчас пакет structureAssembler/ — rename в срезе 5n/5o)
     __init__.py
-    assemblerRegistry.py
-    baseStructureAssembler.py
+    assemblerRegistry.py              # BUILDING_ASSEMBLER_REGISTRY: kind → класс
+    baseBuildingAssembler.py          # ABC (сейчас baseStructureAssembler.py)
     buildingAssembler.py
     ruinsAssembler.py
     resourceExtractionAssembler.py
     vastHullAssembler.py
     structureContext.py               # входной контракт (от StructureAreaAssembler)
+
+generators/structure/                 # домен structure — геометрия, три поддомена
+  structureGeneratorService.py        # geometry (не interior — наполнение это StructureInteriorAssembler)
+  foundation/foundationBuilder.py     # foundation
+  roof/roofBuilder.py, gableRoof.py   # roof
 ```
 
 **Принцип именования:**
@@ -644,29 +684,34 @@ Envelope здания (реальные размеры по x/y/z) нельзя 
 `floor_height` варьируется по комнатам, `floor_count` в метаданных может расходиться
 с фактическим определением. Декларативный envelope рассинхронизируется.
 
-#### Решение: generate-first, place-second
+#### Решение: envelope для packing, генерация геометрии — на посадке участка
 
-`DistrictAssembler` считает **оболочки** кандидатов до посадки (cache), затем сажает по реальным `w`,`h`. Полный интерьер всех домов до района — нет (C22). Порядок посадки — [connections](./tz_structure_connections.md) §5.1.3 «Пайплайн посадки», не bin-pack AABB `DistrictSlot`.
+Packing района работает с **объявленным** `PlotLayoutTemplate.occupied_footprint` (cache envelope-only), не с реальной геометрией: району для расстановки нужен только footprint. Геометрию здания производит `StructureAreaAssembler` → `BuildingAssembler` **при посадке** каждого участка (один generate на участок). Полный интерьер всех домов до района — нет (C22). Порядок посадки — [connections](./tz_structure_connections.md) §5.1.3 «Пайплайн посадки», не bin-pack AABB `DistrictSlot`.
+
+Прежняя формулировка «generate-first, place-second» (cache хранит полные layout, участок переносит из cache) — **отменена** (решение `.cursor/plans/city-t-5n-5o-structure-split.md` §4.0): перенос готового layout невозможен корректно при повороте под `facing`, а идентичные uid комнат при reuse коллизируют на persist.
 
 #### Алгоритм `DistrictAssembler`
 
 ```
 1. Слот уже урезан поселением; якоря в слоте (`SettlementAssembler`). Инстанс барьера района — скип если нет поля / template null. Иначе inner bbox = слот минус прямые района (`sides` + `width_cells`) минус коридор
-2. Кандидаты: allowed_structure_types ∩ тир ∪ required_structures
-3. Cache оболочек (StructureAssembler; интерьер комнат — не этот скоуп)
+2. Кандидаты: allowed_structure_types ∩ тир ∪ required_structures — листья матчатся через plot.main_building.structure (StructureCatalog.leaves_of)
+3. Cache envelope (occupied_footprint участка; ни комнат, ни generate)
 4. Проход 1 — бронь приоритетных во внутреннем bbox (решётка block_size)
 5. Рамка вокруг броней (не сквозь бронь / коридор якорей)
 6. Проход 2 — остальная коллекция
-7. Граф улиц → StructureAreaAssembler из cache (не второй generate)
-8. Не влезло → warning, не exception
+7. Граф улиц → StructureAreaAssembler: generate геометрии на посадке (по slot.facing)
+8. Не влезло в район → warning, не exception
 ```
 
 #### Кэш
 
 - Живёт на уровне сборки одного поселения (`SettlementAssembler.assemble` создаёт и передаёт вниз)
-- Ключ целевой: `(template, facing)` — connections §5.1.3 «Cache и facing». Код сейчас: `system_name`
-- Значение: оболочка / `StructureLayout` (комнатная нарезка — не packing)
-- Один шаблон (+ facing) → не генерировать заново на каждый слот
+- Ключ: `(plot, facing)`; значение — envelope (`occupied_footprint`), не комнаты
+- Кэш **не** хранит `StructureLayout` с комнатами и **не** переносится на участок
+
+#### Fit-check на посадке
+
+Резервация footprint в packing — всегда в SOUTH-фрейме чертежа; `facing` назначается после. При 90°/270° неквадратный чертёж меняет `width↔depth`. После generate: `layout.occupied_footprint ⊆ slot.cells`; не влезло → `packing_warning` (`plot`, `structure`, `facing`) + повторный generate на 180° (footprint тот же); не влезло и в SOUTH → `GenerationError` → 422 с именами (кривой чертёж). Резервация в правильном фрейме — итерация 2.
 
 #### Warning-политика
 

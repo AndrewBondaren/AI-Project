@@ -1,9 +1,10 @@
-"""Plot drawing: envelope + nested main_building. No small outbuildings."""
+"""Plot drawing: envelope + main_building.structure ref into the global library."""
 
 from __future__ import annotations
 
 import json
 import unittest
+import uuid
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -14,18 +15,29 @@ from app.application.worldData.generators.assemblers.settlementAssembler.buildin
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
     assemble_building_catalog,
 )
-from app.dataModel.structure.building.buildingLayoutTemplate import (
-    BuildingLayoutTemplate,
-    interior_of,
+from app.application.worldData.structureTemplateFsImport import load_structure_stdlib
+from app.dataModel.structure.building.plotLayoutTemplate import (
+    PlotLayoutTemplate,
     plot_has_building,
-    try_building_layout,
+    structure_ref_of,
 )
-from app.dataModel.structure.building.buildingTemplateOutline import BuildingTemplateOutline
-from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose
+from app.dataModel.structure.building.structureCatalog import StructureCatalog
+from app.dataModel.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.structure.enums.buildingPurpose import (
+    BuildingPurpose,
+    BuildingPurposeFamily,
+)
 from app.db.models.world import World
 
 _REPO = Path(__file__).resolve().parents[2]
 _TEMPLATES = _REPO / "fixtures" / "templates"
+_STRUCTURES = _REPO / "structures_templates"
+
+
+def _stdlib() -> StructureCatalog:
+    return StructureCatalog(load_structure_stdlib(_STRUCTURES))
+
+TAVERN_1_UID = "5a1f2b3c-4d5e-4f6a-8b7c-9d0e1f2a3b4c"
 
 
 def _world() -> World:
@@ -36,90 +48,133 @@ def _world() -> World:
     )
 
 
-class PlotLayoutContractTest(unittest.TestCase):
-    def test_inn_small_wraps_tavern_1_fixture(self) -> None:
-        plot_raw = json.loads((_TEMPLATES / "inn_small.json").read_text(encoding="utf-8"))
-        tavern_raw = json.loads((_TEMPLATES / "tavern_1.json").read_text(encoding="utf-8"))
-        plot = BuildingLayoutTemplate.model_validate(plot_raw)
-        tavern = BuildingLayoutTemplate.model_validate(tavern_raw)
+def _plot(
+    system_name: str,
+    purpose: str,
+    **fields,
+) -> tuple[PlotLayoutTemplate, StructureTemplate]:
+    uid = str(uuid.uuid5(uuid.NAMESPACE_URL, f"test-structure|{system_name}"))
+    plot = PlotLayoutTemplate(
+        system_name=system_name,
+        display_name=system_name,
+        main_building={"structure": uid},
+        **fields,
+    )
+    structure = StructureTemplate(
+        system_name=uid,
+        display_name=system_name,
+        structure_types=[purpose],
+        levels=[{"z_offset": 0, "rooms": []}],
+    )
+    return plot, structure
 
+
+def _catalog(*pairs: tuple[PlotLayoutTemplate, StructureTemplate]):
+    from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
+
+    return BuildingCatalog.from_layouts(
+        [plot for plot, _s in pairs],
+        StructureCatalog([s for _p, s in pairs]),
+    )
+
+
+class PlotLayoutContractTest(unittest.TestCase):
+    def test_inn_small_references_shared_tavern_structure(self) -> None:
+        plot = PlotLayoutTemplate.model_validate(
+            json.loads((_TEMPLATES / "inn_small.json").read_text(encoding="utf-8"))
+        )
         self.assertEqual(plot.system_name, "inn_small")
-        self.assertEqual(plot.structure_types, [BuildingPurpose.TAVERN])
+        self.assertEqual(plot.plot_type, BuildingPurposeFamily.TRADE)
         self.assertIsNotNone(plot.occupied_footprint)
         self.assertEqual(plot.occupied_footprint.width, 16)
         self.assertEqual(plot.occupied_footprint.depth, 16)
         self.assertTrue(plot_has_building(plot))
-        interior = interior_of(plot)
-        self.assertIsNotNone(interior)
-        self.assertEqual(interior.system_name, "tavern_1")
-        self.assertEqual(interior.levels, interior_of(tavern).levels)
         self.assertIsNotNone(plot.main_building)
-        self.assertFalse(plot.levels)
-        self.assertIsNotNone(tavern.main_building)
-        self.assertFalse(tavern.levels)
+        self.assertEqual(str(structure_ref_of(plot)), TAVERN_1_UID)
 
-    def test_building_key_is_rejected(self) -> None:
+    def test_plot_rejects_legacy_root_levels(self) -> None:
         with self.assertRaises(ValidationError):
-            BuildingLayoutTemplate.model_validate({
-                "system_name": "inn_alias",
-                "structure_types": ["tavern"],
-                "display_name": "Alias",
-                "occupied_footprint": {"width": 4, "depth": 4},
-                "building": {
-                    "system_name": "tavern_1",
-                    "display_name": "Таверна",
-                    "levels": [{"z_offset": 0, "rooms": [{"room_id": "hall"}]}],
-                },
+            PlotLayoutTemplate.model_validate({
+                "system_name": "legacy",
+                "display_name": "Legacy",
+                "levels": [{"z_offset": 0, "rooms": []}],
             })
 
-    def test_try_layout_accepts_plot_without_root_levels(self) -> None:
-        raw = json.loads((_TEMPLATES / "inn_small.json").read_text(encoding="utf-8"))
-        layout = try_building_layout(raw)
-        self.assertIsNotNone(layout)
-        self.assertEqual(layout.system_name, "inn_small")
+    def test_plot_rejects_legacy_body_key(self) -> None:
+        with self.assertRaises(ValidationError):
+            PlotLayoutTemplate.model_validate({
+                "system_name": "legacy",
+                "display_name": "Legacy",
+                "structure_types": ["tavern"],
+                "building": {"system_name": "x"},
+            })
 
-    def test_try_layout_still_skips_outline(self) -> None:
-        outline = BuildingTemplateOutline(
-            system_name="tavern_lib",
-            structure_type="tavern",
-            display_name="Tavern",
-        )
-        self.assertIsNone(try_building_layout(outline.model_dump(mode="json")))
+    def test_structure_rejects_semantic_name(self) -> None:
+        with self.assertRaises(ValidationError):
+            StructureTemplate.model_validate({
+                "system_name": "inn_small",
+                "display_name": "Tavern",
+            })
+
+    def test_structure_accepts_uuid_and_normalizes_lower(self) -> None:
+        template = StructureTemplate.model_validate({
+            "system_name": "5A1F2B3C-4D5E-4F6A-8B7C-9D0E1F2A3B4C",
+            "display_name": "Tavern",
+        })
+        self.assertEqual(str(template.system_name), TAVERN_1_UID)
 
     def test_plaza_plot_has_no_building(self) -> None:
-        plaza = BuildingLayoutTemplate(
+        plaza = PlotLayoutTemplate(
             system_name="plaza_1",
-            structure_type="plaza",
             display_name="Площадь",
-            occupied_footprint={"width": 8, "depth": 8},
+            plot_type=BuildingPurposeFamily.PUBLIC,
         )
         self.assertFalse(plot_has_building(plaza))
-        self.assertIsNone(interior_of(plaza))
-        self.assertIsNotNone(try_building_layout(plaza.model_dump(mode="json")))
+        self.assertIsNone(structure_ref_of(plaza))
 
-    def test_leftover_root_levels_still_count_as_building(self) -> None:
-        leftover = BuildingLayoutTemplate(
-            system_name="town_hall",
-            structure_type="town_hall",
-            display_name="Ратуша",
-            occupied_footprint={"width": 4, "depth": 4},
-            levels=[{"z_offset": 0, "rooms": [{"room_id": "hall"}]}],
+    def test_leaves_of_plaza_rule_and_resolve(self) -> None:
+        plot, structure = _plot("tavern_plot", "tavern")
+        catalog = StructureCatalog([structure])
+        self.assertEqual(catalog.leaves_of(plot), (BuildingPurpose.TAVERN,))
+        plaza = PlotLayoutTemplate(
+            system_name="plaza_1",
+            display_name="Площадь",
+            plot_type=BuildingPurposeFamily.PUBLIC,
         )
-        self.assertTrue(plot_has_building(leftover))
-        self.assertIs(interior_of(leftover), leftover)
+        self.assertEqual(catalog.leaves_of(plaza), (BuildingPurpose.PLAZA,))
+        yard = PlotLayoutTemplate(
+            system_name="yard_1",
+            display_name="Двор",
+            plot_type=BuildingPurposeFamily.DWELLING,
+        )
+        self.assertEqual(catalog.leaves_of(yard), ())
+        self.assertEqual(StructureCatalog.empty().leaves_of(plot), ())
 
-    def test_catalog_inn_small_and_cache_envelope(self) -> None:
-        catalog = assemble_building_catalog(_world())
+    def test_catalog_of_structure_type_via_structure_ref(self) -> None:
+        catalog = _catalog(
+            _plot("inn_small", "tavern"),
+            _plot("town_hall", "town_hall"),
+        )
+        self.assertEqual(
+            [row.system_name for row in catalog.of_structure_type("tavern")],
+            ["inn_small"],
+        )
+
+    def test_canonical_defaults_resolve_in_stdlib(self) -> None:
+        catalog = assemble_building_catalog(_world(), structures=_stdlib())
         inn = catalog.by_system_name("inn_small")
         self.assertIsNotNone(inn)
         self.assertTrue(plot_has_building(inn))
-        self.assertEqual(inn.main_building.system_name, "tavern_1")
-        self.assertEqual(interior_of(inn).system_name, "tavern_1")
-        self.assertFalse(inn.levels)
-        hall = catalog.by_system_name("town_hall")
-        self.assertIsNotNone(hall)
-        self.assertIsNotNone(hall.main_building)
-        self.assertFalse(hall.levels)
+        stdlib_uids = {str(t.system_name) for t in load_structure_stdlib(_STRUCTURES)}
+        for plot in catalog.layouts:
+            ref = structure_ref_of(plot)
+            if ref is not None:
+                self.assertIn(str(ref), stdlib_uids)
+        structures = catalog.structures
+        self.assertIn(
+            BuildingPurpose.TAVERN,
+            structures.leaves_of(inn),
+        )
         cache = BuildingLayoutCache()
         layout = cache.ensure(_world(), inn)
         self.assertIsNotNone(layout)

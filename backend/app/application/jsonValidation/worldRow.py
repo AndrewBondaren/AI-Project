@@ -6,7 +6,10 @@ Runtime DX accessors. Slice-backed resolve → ``worldSlices.resolve_*_world``
 
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+from pydantic import ValidationError
 
 from app.application.jsonValidation.worldSlices import (
     resolve_json_blob_world,
@@ -52,9 +55,9 @@ from app.dataModel.settlement.settlement.worldSettlementSpecializationRegistry i
 from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
     WorldBarrierTemplateRegistry,
 )
-from app.dataModel.structure.building.buildingLayoutTemplate import (
-    BuildingLayoutTemplate,
-    try_building_layout,
+from app.dataModel.structure.building.plotLayoutTemplate import (
+    PlotLayoutTemplate,
+    plot_type_defaulted,
 )
 from app.dataModel.structure.building.worldBuildingLayoutDefaults import canonical_defaults
 from app.dataModel.structure.building.worldBuildingTemplateRegistry import (
@@ -81,6 +84,8 @@ from app.dataModel.terrainMasks import WorldTerrainMasks
 _DEFAULT_PRECIPITATION_LIQUID = WorldClimateScalars.canonical_defaults().precipitation_liquid
 _ENGINE_ECONOMIC_TIERS = WorldEconomyTierRegistry.canonical_engine()
 _ENGINE_MATERIALS = WorldMaterialRegistry.canonical_engine()
+
+logger = logging.getLogger(__name__)
 
 
 def _uid(world: Any) -> str:
@@ -238,29 +243,63 @@ def settlement_specializations(world: Any) -> WorldSettlementSpecializationRegis
         world, WorldSettlementSpecializationRegistry, world_uid=_uid(world),
     )
 
-def world_building_layout_overrides(world: Any) -> list[BuildingLayoutTemplate]:
-    """Layout-shaped registry rows only (not uid pointers, not engine builtins)."""
+def world_building_layout_overrides(world: Any) -> list[PlotLayoutTemplate]:
+    """Plot-shaped registry rows only (not uid pointers, not engine builtins)."""
+    from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import (
+        PackingReason,
+        PackingStep,
+        packing_warning,
+    )
+
     col = slice_column_key(WorldBuildingTemplateRegistry)
     raw = getattr(world, col, None) or []
     if isinstance(raw, dict):
         raw = list(raw.values())
-    out: list[BuildingLayoutTemplate] = []
+    out: list[PlotLayoutTemplate] = []
     for row in raw:
         if not isinstance(row, dict):
             continue
-        layout = try_building_layout(row)
-        if layout is None:
+        if "system_template_uid" in row:
             continue
+        try:
+            layout = PlotLayoutTemplate.model_validate(row)
+        except ValidationError:
+            logger.warning(
+                "world | building_template_registry row not a PlotLayoutTemplate"
+                " world=%s keys=%s",
+                _uid(world),
+                sorted(row.keys()),
+            )
+            continue
+        if plot_type_defaulted(layout):
+            packing_warning(
+                PackingStep.CACHE,
+                district="world",
+                system_name=layout.system_name,
+                reason=PackingReason.PLOT_TYPE_DEFAULTED,
+            )
         out.append(layout)
     return out
 
 
-def building_layout_templates(world: Any) -> list[BuildingLayoutTemplate]:
-    """Engine builtins + world rows that validate as generate layouts (not uid pointers)."""
-    by_name: dict[str, BuildingLayoutTemplate] = {
-        layout.system_name: layout
-        for layout in canonical_defaults()
-    }
+def building_layout_templates(world: Any) -> list[PlotLayoutTemplate]:
+    """Engine builtins + world rows that validate as plot layouts (not uid pointers)."""
+    from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import (
+        PackingReason,
+        PackingStep,
+        packing_warning,
+    )
+
+    by_name: dict[str, PlotLayoutTemplate] = {}
+    for layout in canonical_defaults():
+        if plot_type_defaulted(layout):
+            packing_warning(
+                PackingStep.CACHE,
+                district="defaults",
+                system_name=layout.system_name,
+                reason=PackingReason.PLOT_TYPE_DEFAULTED,
+            )
+        by_name[layout.system_name] = layout
     for layout in world_building_layout_overrides(world):
         by_name[layout.system_name] = layout
     return list(by_name.values())

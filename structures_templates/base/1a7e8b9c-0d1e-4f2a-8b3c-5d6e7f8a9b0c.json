@@ -1,0 +1,32 @@
+{
+  "system_name": "1a7e8b9c-0d1e-4f2a-8b3c-5d6e7f8a9b0c",
+  "display_name": "Плавильня",
+  "structure_types": [
+    "smelter"
+  ],
+  "levels": [
+    {
+      "z_offset": 0,
+      "display_name": "Первый этаж",
+      "rooms": [
+        {
+          "room_id": "hall",
+          "room_type": "common_hall",
+          "display_name": "Зал",
+          "shape_type": "square",
+          "size": {
+            "size_type": "small"
+          },
+          "required": true,
+          "count": 1,
+          "is_public": true,
+          "is_forbidden": false,
+          "entry_point": {
+            "wall": "south",
+            "passage_type": "main_entrance"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "system_name": "4d0b1e2f-3a4b-4c5d-9e6f-8a9b0c1d2e3f",
+  "display_name": "Театр",
+  "structure_types": [
+    "theater"
+  ],
+  "levels": [
+    {
+      "z_offset": 0,
+      "display_name": "Первый этаж",
+      "rooms": [
+        {
+          "room_id": "hall",
+          "room_type": "common_hall",
+          "display_name": "Зал",
+          "shape_type": "square",
+          "size": {
+            "size_type": "small"
+          },
+          "required": true,
+          "count": 1,
+          "is_public": true,
+          "is_forbidden": false,
+          "entry_point": {
+            "wall": "south",
+            "passage_type": "main_entrance"
+          }
+        }
+      ]
+    }
+  ]
+}

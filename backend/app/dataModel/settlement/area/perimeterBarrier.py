@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
         WorldBarrierTemplateRegistry,
     )
-    from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+    from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,7 @@ def resolved_host_sides(barrier: PerimeterBarrier) -> tuple[frozenset[Facing], l
 
 
 def perimeter_barrier_from_template(
-    template: BuildingLayoutTemplate | DistrictTemplateEntry,
+    template: PlotLayoutTemplate | DistrictTemplateEntry,
 ) -> PerimeterBarrier:
     spec = template.perimeter_barrier
     if spec is None:

@@ -1,6 +1,8 @@
-"""Sync snapshot of generate-able building layouts for one settlement assembly.
+"""Sync snapshot of generate-able plot layouts for one settlement assembly.
 
 CITY-T-2b. Not live SQL — caller hydrates, then passes this into assemblers.
+Purpose leaves of a plot come from its ``main_building.structure`` ref via
+``StructureCatalog.leaves_of`` (5o split).
 """
 
 from __future__ import annotations
@@ -10,7 +12,8 @@ from collections.abc import Iterable
 from app.dataModel.flora.enums.cropKind import CropKind
 from app.dataModel.livestock.enums.livestockKind import LivestockKind
 from app.dataModel.resources.enums.resourceKind import ResourceKind
-from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.structure.building.structureCatalog import StructureCatalog
 from app.dataModel.structure.enums.buildingPurpose import (
     AllowedToken,
     BuildingPurpose,
@@ -23,25 +26,34 @@ from app.dataModel.structure.enums.buildingPurpose import (
 class BuildingCatalog:
     """``layouts`` unique by ``system_name`` (later wins). Ordered by ``system_name``."""
 
-    def __init__(self, layouts: Iterable[BuildingLayoutTemplate]) -> None:
-        by_name: dict[str, BuildingLayoutTemplate] = {}
+    def __init__(
+        self,
+        layouts: Iterable[PlotLayoutTemplate],
+        structures: StructureCatalog | None = None,
+    ) -> None:
+        by_name: dict[str, PlotLayoutTemplate] = {}
         for layout in layouts:
             by_name[layout.system_name] = layout
         self._by_name = {name: by_name[name] for name in sorted(by_name)}
-        self.layouts: tuple[BuildingLayoutTemplate, ...] = tuple(self._by_name.values())
+        self.layouts: tuple[PlotLayoutTemplate, ...] = tuple(self._by_name.values())
+        self.structures = structures if structures is not None else StructureCatalog.empty()
 
     @classmethod
-    def from_layouts(cls, layouts: Iterable[BuildingLayoutTemplate]) -> BuildingCatalog:
-        return cls(layouts)
+    def from_layouts(
+        cls,
+        layouts: Iterable[PlotLayoutTemplate],
+        structures: StructureCatalog | None = None,
+    ) -> BuildingCatalog:
+        return cls(layouts, structures)
 
     @classmethod
     def empty(cls) -> BuildingCatalog:
         return cls(())
 
-    def by_system_name(self, name: str) -> BuildingLayoutTemplate | None:
+    def by_system_name(self, name: str) -> PlotLayoutTemplate | None:
         return self._by_name.get(name)
 
-    def of_structure_type(self, structure_type: str | BuildingPurpose) -> tuple[BuildingLayoutTemplate, ...]:
+    def of_structure_type(self, structure_type: str | BuildingPurpose) -> tuple[PlotLayoutTemplate, ...]:
         purpose = (
             structure_type
             if isinstance(structure_type, BuildingPurpose)
@@ -50,15 +62,16 @@ class BuildingCatalog:
         if purpose is None:
             return ()
         return tuple(
-            layout for layout in self.layouts if purpose in layout.structure_types
+            layout for layout in self.layouts
+            if purpose in self.structures.leaves_of(layout)
         )
 
     def matching_allowed(
         self,
-        layouts: Iterable[BuildingLayoutTemplate],
+        layouts: Iterable[PlotLayoutTemplate],
         allowed: Iterable[AllowedToken] | None,
         mode: BuildingPurposeMatch | str | None,
-    ) -> tuple[BuildingLayoutTemplate, ...]:
+    ) -> tuple[PlotLayoutTemplate, ...]:
         """Filter drawings by district allowed + ``like`` / ``strict``."""
         pool = tuple(layouts)
         if allowed is None:
@@ -68,17 +81,17 @@ class BuildingCatalog:
         return tuple(
             layout
             for layout in pool
-            if purposes_match(layout.structure_types, allowed_list, match)
+            if purposes_match(self.structures.leaves_of(layout), allowed_list, match)
         )
 
     @staticmethod
     def prefer_subjects(
-        layouts: tuple[BuildingLayoutTemplate, ...] | list[BuildingLayoutTemplate],
+        layouts: tuple[PlotLayoutTemplate, ...] | list[PlotLayoutTemplate],
         subjects: tuple[str, ...] | list[str] | set[str],
         resource_kinds: tuple[ResourceKind, ...] | list[ResourceKind] | set[ResourceKind] | None = None,
         crop_kinds: tuple[CropKind, ...] | list[CropKind] | set[CropKind] | None = None,
         livestock_kinds: tuple[LivestockKind, ...] | list[LivestockKind] | set[LivestockKind] | None = None,
-    ) -> tuple[BuildingLayoutTemplate, ...]:
+    ) -> tuple[PlotLayoutTemplate, ...]:
         """Prefer instance-tagged drawings; else extract/farm/livestock kind; else untagged."""
         pool = tuple(layouts)
         wanted = {token.strip() for token in subjects if token and token.strip()}
@@ -121,7 +134,7 @@ class BuildingCatalog:
         resource_kinds: tuple[ResourceKind, ...] | list[ResourceKind] | set[ResourceKind] | None = None,
         crop_kinds: tuple[CropKind, ...] | list[CropKind] | set[CropKind] | None = None,
         livestock_kinds: tuple[LivestockKind, ...] | list[LivestockKind] | set[LivestockKind] | None = None,
-    ) -> tuple[BuildingLayoutTemplate, ...]:
+    ) -> tuple[PlotLayoutTemplate, ...]:
         return self.prefer_subjects(
             self.of_structure_type(structure_type),
             subjects, resource_kinds, crop_kinds, livestock_kinds,
@@ -130,5 +143,5 @@ class BuildingCatalog:
     def structure_types(self) -> tuple[str, ...]:
         keys: set[str] = set()
         for layout in self.layouts:
-            keys.update(str(purpose) for purpose in layout.structure_types)
+            keys.update(str(purpose) for purpose in self.structures.leaves_of(layout))
         return tuple(sorted(keys))

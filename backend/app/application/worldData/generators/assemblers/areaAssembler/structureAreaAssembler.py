@@ -54,8 +54,9 @@ from app.application.worldData.generators.structure.structureGeneratorService im
     StructureLayout,
 )
 from app.dataModel.materials import DEFAULT_FLOOR_MATERIAL, DEFAULT_WALL_MATERIAL
-from app.dataModel.structure.building.buildingLayoutTemplate import (
-    BuildingLayoutTemplate,
+from app.dataModel.structure.building.buildingBodyTemplate import BuildingBodyTemplate
+from app.dataModel.structure.building.plotLayoutTemplate import (
+    PlotLayoutTemplate,
     plot_has_building,
 )
 from app.dataModel.structure.enums.passageType import PassageType
@@ -70,7 +71,7 @@ Coord = tuple[int, int]
 
 
 def derive_structure_context(
-    template:      BuildingLayoutTemplate,
+    template:      PlotLayoutTemplate,
     city_skeleton: CitySkeleton,
     slot:          AreaSlot,
     terrain_cells: list[MapCell] | None,
@@ -78,7 +79,7 @@ def derive_structure_context(
     ground_z:      int,
 ) -> StructureContext:
     """
-    v1: default_structure_context из шаблона + facing участка.
+    v1: тело участка (main_building) + facing участка.
     ground_z = building.map_z после clamp. terrain_cells читает envelope на place.
     """
     _ = city_skeleton
@@ -88,22 +89,47 @@ def derive_structure_context(
             len(terrain_cells),
             ground_z,
         )
-    ctx = template.default_structure_context
+    body = template.main_building
+    defaults = BuildingBodyTemplate.model_fields
     return StructureContext(
-        foundation_type=ctx.foundation_type,
-        roof_type=ctx.roof_type,
+        foundation_type=(
+            body.foundation_type
+            if body is not None
+            else defaults["foundation_type"].default
+        ),
+        roof_type=body.roof_type if body is not None else defaults["roof_type"].default,
         facing=slot.facing,
-        foundation_depth=ctx.foundation_depth,
+        foundation_depth=(
+            body.foundation_depth
+            if body is not None
+            else defaults["foundation_depth"].default
+        ),
         ground_z=ground_z,
-        foundation_material=ctx.foundation_material,
-        roof_material=ctx.roof_material,
-        porch_material=ctx.porch_material,
-        porch_has_roof=ctx.porch_has_roof,
+        foundation_material=(
+            body.foundation_material
+            if body is not None
+            else defaults["foundation_material"].default
+        ),
+        roof_material=(
+            body.roof_material
+            if body is not None
+            else defaults["roof_material"].default
+        ),
+        porch_material=(
+            body.porch_material
+            if body is not None
+            else defaults["porch_material"].default
+        ),
+        porch_has_roof=(
+            body.porch_has_roof
+            if body is not None
+            else defaults["porch_has_roof"].default
+        ),
     )
 
 
 def _runtime_footprint(
-    template: BuildingLayoutTemplate,
+    template: PlotLayoutTemplate,
     cached_layout: StructureLayout | None,
 ) -> OccupiedFootprint | None:
     if cached_layout is not None and cached_layout.occupied_footprint is not None:
@@ -195,7 +221,7 @@ class StructureAreaAssembler:
         self,
         world:          World,
         slot:           AreaSlot,
-        template:       BuildingLayoutTemplate,
+        template:       PlotLayoutTemplate,
         city_skeleton:  CitySkeleton,
         terrain_cells:  list[MapCell] | None = None,
         *,
@@ -376,7 +402,7 @@ class StructureAreaAssembler:
         self,
         world:     World,
         slot:      AreaSlot,
-        template:  BuildingLayoutTemplate,
+        template:  PlotLayoutTemplate,
         map_x:     int,
         map_y:     int,
         fp_cells:  list[Coord],
@@ -402,7 +428,7 @@ class StructureAreaAssembler:
         self,
         world:         World,
         slot:          AreaSlot,
-        template:      BuildingLayoutTemplate,
+        template:      PlotLayoutTemplate,
         building:      NamedLocation | None,
         city_skeleton: CitySkeleton,
         rng:           random.Random,

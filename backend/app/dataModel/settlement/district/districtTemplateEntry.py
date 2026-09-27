@@ -18,7 +18,7 @@ from app.dataModel.settlement.district.placementCondition import PlacementCondit
 from app.dataModel.settlement.district.requiredStructure import RequiredStructure
 from app.dataModel.settlement.enums.districtDensity import DistrictDensity
 from app.dataModel.shared.ranges import EconomicTierRange, SizePct
-from app.dataModel.structure.building.buildingLayoutTemplate import DrawingKey
+from app.dataModel.structure.building.plotLayoutTemplate import DrawingKey
 from app.dataModel.structure.enums.buildingPurpose import (
     DEFAULT_PURPOSE_MATCH,
     AllowedToken,

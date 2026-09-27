@@ -650,6 +650,18 @@ CREATE TABLE IF NOT EXISTS relief_templates (
 );
 
 -- ============================================================
+-- structure_templates  (глобальная библиотека геометрии интерьеров, 5o)
+-- template_uid == StructureTemplate.system_name (uuid из JSON, не uuid5)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS structure_templates (
+    template_uid   TEXT PRIMARY KEY,
+    display_name   TEXT NOT NULL,
+    version        TEXT NOT NULL DEFAULT '1.0',
+    data           TEXT NOT NULL,
+    source_file    TEXT
+);
+
+-- ============================================================
 -- named_locations
 -- ============================================================
 CREATE TABLE IF NOT EXISTS named_locations (

@@ -18,7 +18,7 @@ from app.application.worldData.generators.barrier.perimeter import (
     perimeter_ring_bbox,
 )
 from app.dataModel.settlement.area.perimeterBarrier import perimeter_barrier_from_template
-from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 def should_build_area_barrier(
-    building_template: BuildingLayoutTemplate,
+    building_template: PlotLayoutTemplate,
     rng:               Random,
 ) -> bool:
     spec = perimeter_barrier_from_template(building_template)
@@ -43,7 +43,7 @@ def should_build_area_barrier(
 def plan_area_barrier_cells(
     world:             World,
     slot:              AreaSlot,
-    building_template: BuildingLayoutTemplate,
+    building_template: PlotLayoutTemplate,
     building:          NamedLocation | None,
     skeleton:          CitySkeleton,
     rng:               Random,

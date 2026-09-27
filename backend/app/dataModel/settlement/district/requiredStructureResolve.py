@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from app.dataModel.settlement.district.allowedStructureTypes import district_hosts_purpose
 from app.dataModel.settlement.district.requiredStructure import RequiredStructure
 from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.dataModel.structure.enums.buildingPurpose import (
     AllowedToken,
     BuildingPurpose,
@@ -17,7 +17,7 @@ from app.dataModel.structure.enums.buildingPurpose import (
 def resolve_required_layouts(
     required: RequiredStructure,
     catalog: BuildingCatalog,
-) -> tuple[BuildingLayoutTemplate, ...]:
+) -> tuple[PlotLayoutTemplate, ...]:
     """Settlement recipe: pool by purpose. District row: pin ``plot_template``."""
     if required.structure_type is not None:
         return catalog.of_structure_type(required.structure_type)

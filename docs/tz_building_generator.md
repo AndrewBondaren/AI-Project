@@ -209,6 +209,7 @@ Wire включённых id: omit/`[]` → `[base, fantasy]`. `purpose_packs: [
 | `z_height` | int | optional | Высота потолка в z-юнитах. Если не задана — берётся `default_z_height` шаблона |
 | `window_z_offset` | int | optional | Явная высота окон от base_z этажа. Переопределяет `window_z_ratio`. Используется когда нужен точный контроль |
 | `window_z_ratio` | float | optional | Пропорциональная высота окон: `window_z = floor(z_height * ratio)`. Переопределяет `template.window_z_ratio` для этого уровня |
+| `purpose` | `BuildingPurpose` | optional | Назначение **этажа** (лист дерева §2.1) — дефолт для комнат уровня без своего `purpose`. Omit → комнаты уровня без назначения, если не задали своё. Правила — **§3.4b** |
 | `isolated` | bool | optional | Уровень не имеет физического прохода из других уровней. Default: `false` |
 | `access_mechanic` | string[] | optional | Способы доступа к изолированному уровню: `"excavation"`, `"teleport"`. Пустой массив = недостижим без механики. Игнорируется если `isolated: false` |
 | `rooms` | array | required | Список комнат на уровне, минимум 1 |
@@ -259,7 +260,8 @@ level_z = level.z_height ?? max(room_z for room in level.rooms)
 | Поле | Тип | Обязательность | Описание |
 |------|-----|---------------|----------|
 | `room_id` | string | required | Локальный ID внутри шаблона; используется в connections и attach_to |
-| `room_type` | string | required | Смысловой тип: common_hall, kitchen, cellar, corridor, guest_room, etc. Должен существовать в `worlds.room_type_registry` — валидируется при импорте шаблона в мир |
+| `room_type` | string | required | Смысловой тип: common_hall, kitchen, cellar, corridor, guest_room, etc. Должен существовать в `worlds.room_type_registry` — валидируется при импорте шаблона в мир. **Не** назначение (§3.4b): `common_hall` бывает и в таверне, и в ратуше |
+| `purpose` | `BuildingPurpose` | optional | Назначение **комнаты** (лист §2.1). Переопределяет `level.purpose`. Omit → наследует уровень; нет и там → комната **служебная** (без назначения — коридор, кухня, подвал). Правила — **§3.4b** |
 | `display_name` | string | required | Название для `NamedLocation.display_name` |
 | `is_public` | bool | required | Комната доступна для всех. Зависит от контекста здания: холл таверны = true, холл частного дома = false |
 | `is_forbidden` | bool | required | Комната запрещена для входа. Зависит от контекста здания: палуба лайнера = false, палуба военного корабля = true |
@@ -295,6 +297,70 @@ level_z = level.z_height ?? max(room_z for room in level.rooms)
 Генератор обеспечивает периметральное размещение такой комнаты при layout. `attach_to` на комнате с `entry_point`/`back_entry_point` — дополнительный WARNING: архитектурно некорректно, но технически допустимо.
 
 Либо `count`, либо `count_range` — не оба одновременно.
+
+---
+
+### 3.4b Назначение: здание / этаж / комната (locked 2026-09-26)
+
+Три грануляции одного дерева §2.1 — **листья** везде, семьи не пишутся:
+
+| Уровень | Поле | Кто читает | Смысл |
+|---|---|---|---|
+| Здание | `structure_types: BuildingPurpose[]` на теле здания (`StructureTemplate` после 5o; ранее — на участке) | район: `allowed_structure_types` + `like`/`strict`, `required_structures`, паки мира | **Все** функции здания. Порядок значим: первый — primary |
+| Этаж | `levels[].purpose` | генератор (дефолт для комнат), интерьер, LLM-контекст | «Весь второй этаж — жильё» без повторения на каждой комнате |
+| Комната | `levels[].rooms[].purpose` | интерьер (`StructureInteriorAssembler`), LLM scene context, поиск игрока («где лавка») | Функция конкретной комнаты |
+
+**Эффективное назначение комнаты:** `room.purpose ?? level.purpose ?? None`. `None` = служебная комната (коридор, кухня, кладовая, шахта) — принадлежит зданию, функции не несёт. Не ошибка и не warning.
+
+**Правила агрегации (`structure_types` ↔ комнаты):**
+
+```
+derived = упорядоченное множество эффективных purpose всех комнат
+          (порядок объявления levels[], внутри — rooms[]; дубли схлопываются)
+
+structure_types задан явно  → authority для района.
+                              derived ⊄ structure_types → ValidationError
+                              ("room '{room_id}': purpose '{p}' не объявлен в structure_types здания")
+structure_types omit / []   → structure_types = derived; derived пустой → [house] (как раньше)
+```
+
+Явный список **шире** derived — допустимо (здание «умеет» функцию, для которой комната не размечена; пример: `["tavern", "inn"]` при `purpose` только на зале).
+
+**Что не делаем:**
+- Семья в `purpose` комнаты/этажа — `ValidationError` (лист обязателен; семьи — только фильтр района).
+- Неизвестный ключ в `purpose` — `ValidationError` (нового поля leftover нет; для `structure_types` drop-правило сохраняется).
+- Паки мира (`purpose_packs`) режут `structure_types`, не комнаты; т.к. `derived ⊆ structure_types`, отдельного фильтра на комнатах нет.
+- `room_type` не выводится из `purpose` и наоборот: `common_hall` + `purpose: tavern` — зал таверны; `common_hall` + `purpose: civic` — зал ратуши.
+
+**Пример — дом-с-лавкой:**
+
+```json
+{
+  "system_name": "…uuid…",
+  "display_name": "Лавка с жильём",
+  "structure_types": ["shop", "house"],
+  "levels": [
+    { "z_offset": 0, "display_name": "Торговый этаж", "purpose": "shop",
+      "rooms": [ { "room_id": "shop_floor", "room_type": "common_hall", … },
+                 { "room_id": "storage",    "room_type": "storage", "purpose": null, … } ] },
+    { "z_offset": 1, "display_name": "Жильё", "purpose": "house",
+      "rooms": [ { "room_id": "bedroom", "room_type": "bedroom", … } ] }
+  ]
+}
+```
+
+`storage` с явным `null` — служебная, несмотря на `purpose` этажа. `derived = [shop, house]` ⊆ явному списку — ок.
+
+**Потребители по этапам:**
+
+| Этап | Потребитель | Что делает |
+|---|---|---|
+| 5n/5o (этот срез) | POJO `StructureTemplate` | парсит `purpose`, считает derived, валидирует; `room_purposes() -> dict[room_id, BuildingPurpose]` |
+| 5n/5o | район / packing | `structure_types` — как раньше |
+| интерьер (epic `StructureInteriorAssembler`) | персист комнаты | `NamedLocation` комнаты получает назначение (поле/колонка — в ТЗ интерьера, не здесь) |
+| LLM scene context (DAG) | payload | «игрок в лавке на первом этаже дома» — из эффективного purpose комнаты |
+
+`purpose` на комнате **не** участвует в геометрии (layout, проёмы, лестницы). Правила проёмов по `room_type` — OQ-17, отдельно.
 
 ---
 
@@ -1753,19 +1819,24 @@ level_z   = computed via z_height stacking (см. раздел 3.2)
 ## 9. Интерфейс сервиса
 
 ```python
-class BuildingGeneratorService:
+class StructureGeneratorService:
 
     def generate_from_template(
         self,
-        world:    World,
-        building: NamedLocation,
-        template: dict,           # уже загруженный JSON как dict
-    ) -> BuildingLayout: ...
-
-    def validate_template(self, data: dict) -> list[str]:
-        """Возвращает список ошибок валидации. Пустой список = OK."""
-        ...
+        world:            World,
+        building:         NamedLocation,
+        structure:        StructureTemplate,     # §3 — только геометрия; участок/body сервис не видит
+        *,
+        ground_z:         int | None = None,     # None → building.map_z
+        foundation_depth: int        = 0,        # для z_offset < 0
+        facing:           Facing | None = None,  # None/SOUTH → фрейм шаблона; иначе поворот (§8.6)
+        building_band:    str | None = None,     # economic tier band участка → TierResolver (§8.5b)
+    ) -> StructureLayout: ...
 ```
+
+Валидация шаблона — `StructureTemplate.model_validate(data)` у caller (§10): сервис `dict` не принимает и участок (`main_building`) не разворачивает. Полный контракт параметров — [tz_assembler_hierarchy.md](tz_assembler_hierarchy.md) §6.8.
+
+**Ориентация.** Раскладка (§8.6) выполняется в SOUTH-фрейме шаблона (`entry_point.wall` как записано). При `facing ∉ {None, SOUTH}` после раскладки и **до** эмиссии `NamedLocation`/клеток/passages комнаты, шахты лестниц и проёмы поворачиваются rigid-body вокруг origin входной комнаты так, что стена главного входа смотрит на `facing`; при 90°/270° `width↔depth`. Готовый `StructureLayout` не поворачивается (у `rooms[]` нет размеров).
 
 ---
 
@@ -1790,6 +1861,7 @@ class BuildingGeneratorService:
 - `gap_policy` не из `{"clip", "fill", "random"}` → `ValidationError`
 - `building_context` не из `{"indoor", "underground", "nautical"}` → `ValidationError`
 - Нет дублирующихся `room_id` в рамках всего шаблона (не только уровня)
+- `levels[].purpose` / `rooms[].purpose`: значение — лист `BuildingPurpose` (семья или неизвестный ключ → `ValidationError`); при явном `structure_types` — каждый эффективный `purpose` комнаты ∈ `structure_types` → иначе `ValidationError` (§3.4b)
 - `effective_z_height ≥ min_z_height` для каждого уровня
 - Все `shape_type` — валидные значения `ShapeType`; v1: + `is_supported = True`
 - Если `shape_type` — массив: все элементы валидны; в v1 все из `_V1_SHAPES`
@@ -1819,16 +1891,27 @@ class BuildingGeneratorService:
 
 ---
 
-## 11. StructureAssembler
+## 11. BuildingAssembler и домен `structure`
 
-`BuildingGeneratorService` генерирует **interior box** — комнаты, стены, проходы. Он не знает, стоит ли здание на земле, парит в мегаструктуре или является палубой корабля.
+`BuildingAssembler` — слой **здания**: полностью владеет тем, что есть в одном здании (`BuildingBodyTemplate` — envelope, резолвнутая `StructureTemplate`, `StructureContext`), и **управляет** сборкой, сам ничего не строя. Три делегирования в домен `structure` (геометрия):
 
-`StructureAssembler` — обёртка, которая добавляет **фундамент** и **крышу** в зависимости от контекста здания.
+| Поддомен | Код | Делает |
+|---|---|---|
+| geometry | `StructureGeneratorService.generate_from_template` (§3–10) | геометрия здания — комнаты, стены, проходы, лестницы по `StructureTemplate`; не знает, стоит ли здание на земле, парит в мегаструктуре или является палубой корабля |
+| foundation | `FoundationBuilder` (§11.2) | фундамент + крыльцо/ступени под геометрией по `foundation_type` |
+| roof | `RoofBuilder` (§11.3) | крыша над геометрией по `roof_type` |
+
+**Не путать:** поддомен `geometry` ≠ `interior`. Interior — наполнение (мебель, предметы, декор) — отдельный слой `StructureInteriorAssembler` ниже `BuildingAssembler`, не часть этого ТЗ.
+
+`BuildingAssembler` не знает участок, не резолвит ссылку `structure`, не наполняет интерьер, не персистит. В коде — ABC `BaseBuildingAssembler` + реестр kind (`building` → `BuildingAssembler`, `ruins`, `vastHull`, `resourceExtraction`); интерфейс §11.4 — контракт ABC. См. [tz_assembler_hierarchy.md](tz_assembler_hierarchy.md) §2, §6.5.
 
 ```
-BuildingGeneratorService.generate_from_template()  →  interior box
+StructureAreaAssembler   участок: body = plot.main_building; structure = catalog.resolve(body.structure)
            ↓
-StructureAssembler.assemble()                       →  полный BuildingLayout
+BuildingAssembler.assemble(body, structure, context)   →  полный StructureLayout
+           ├─ structure/geometry:   generate_from_template(structure, facing, band)  →  геометрия
+           ├─ structure/foundation: FoundationBuilder(context, terrain).build(geometry)
+           └─ structure/roof:       RoofBuilder(context).build(geometry)
 ```
 
 ---
@@ -1840,13 +1923,18 @@ StructureAssembler.assemble()                       →  полный BuildingLa
 class StructureContext:
     foundation_type:     str              # "none" | "slab" | "perimeter" | "full" | "stilts" | "hull"
     roof_type:           str | list[str]  # строка или список → выбирает по footprint; "auto" = авто
+    facing:              Facing | None = None  # сторона главного входа = AreaSlot.facing; None → фрейм шаблона
     foundation_depth:    int   = 1        # z-юниты вглубь; только для "slab" / "hull"
     slope_step:          float = 1.0      # ячеек shrink за 1 z-юнит; 1.0 ≈ 45°
     foundation_material: str | None = None  # Fallback: building.parent_wall_material
     roof_material:       str | None = None  # Fallback: building.parent_wall_material
     porch_material:      str | None = None  # Fallback: building.parent_floor_material
     porch_has_roof:      bool = False       # Навес над крыльцом → создаёт NamedLocation
+    ground_z:            int | None = None  # None → building.map_z
+    building_band:       str | None = None  # PlotLayoutTemplate.economic_tier_band; None → tier мира
 ```
+
+Envelope-поля (`foundation_*`, `roof_*`, `porch_*`, `slope_step`) — копия полей `BuildingBodyTemplate` участка; runtime-поля (`facing`, `ground_z`, `building_band`) — из посадки (`AreaSlot`, `NamedLocation.map_z`, чертёж участка).
 
 ---
 
@@ -2059,20 +2147,25 @@ L-shape (все rect комнаты): coverage=0.7, aspect=1.3  → hip
 ### 11.4 Интерфейс
 
 ```python
-class StructureAssembler:
+class BuildingAssembler(BaseBuildingAssembler):   # kind "building"; сигнатура — контракт ABC
 
     def assemble(
         self,
         world:         World,
         building:      NamedLocation,
-        template:      dict,
-        context:       StructureContext,
+        body:          BuildingBodyTemplate,   # envelope здания на участке
+        structure:     StructureTemplate,      # body.structure, резолвнутая caller'ом (area / debug route)
+        context:       StructureContext,       # §11.1: envelope из body + runtime
         terrain_cells: list[MapCell] | None = None,
         # terrain_cells актуален только для ground-based зданий.
         # Для корабля, космического корабля, среза мегаздания — None:
         # нет terrain под зданием, foundation_type = "hull" | "none"
-    ) -> BuildingLayout:
-        layout = BuildingGeneratorService().generate_from_template(world, building, template)
+    ) -> StructureLayout:
+        layout = StructureGeneratorService().generate_from_template(
+            world, building, structure,
+            ground_z=context.ground_z, foundation_depth=fd,
+            facing=context.facing, building_band=context.building_band,
+        )
         if context.foundation_type != "none":
             layout.cells.extend(self._generate_foundation(layout, context, terrain_cells))
         if context.roof_type != "none":
@@ -2111,12 +2204,12 @@ terrain_cells = map_cell_repo.get_surface_cells(world_uid, footprint_xy_list)
 
 ### 11.6 Источник контекста
 
-`StructureContext` не хранится в шаблоне — шаблон описывает только interior.  
-Контекст определяется на вызывающем уровне:
+`StructureContext` не хранится в `StructureTemplate` — тот описывает только геометрию (geometry).  
+Контекст собирает вызывающий уровень из двух источников:
 
-- `CityGeneratorService` вызывает `StructureAssembler` с контекстом на основе `location_type` здания и настроек мира
-- При ручном размещении здания — пользователь выбирает контекст в UI
-- `building_template_registry` может хранить рекомендованный контекст (`default_structure_context`) как подсказку — не обязательный
+- **Envelope** — поля `BuildingBodyTemplate` участка (`main_building`: `foundation_type`, `roof_type`, `foundation_depth`, материалы, `porch_*`). Это замена прежнего `default_structure_context` на участке: envelope принадлежит зданию, не чертежу участка и не структуре.
+- **Runtime** — `StructureAreaAssembler` при посадке: `facing = slot.facing`, `ground_z = building.map_z` после clamp, `building_band = plot.economic_tier_band`.
+- При ручном размещении здания (debug route / UI) — caller подставляет body и runtime сам; `BuildingAssembler` источник не различает.
 
 ---
 

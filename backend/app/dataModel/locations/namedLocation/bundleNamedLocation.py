@@ -21,7 +21,7 @@ from app.dataModel.settlement.settlement.settlementSpecializationBind import (
 from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
 from app.dataModel.settlement.settlement.worldLocationMoodRegistry import LocationMoodKey
 from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
-from app.dataModel.structure.building.buildingLayoutTemplate import DrawingKey
+from app.dataModel.structure.building.plotLayoutTemplate import DrawingKey
 
 
 def _skeleton_default(name: str):

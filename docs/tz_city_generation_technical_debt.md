@@ -66,6 +66,8 @@ flowchart TD
 | 11 | **CITY-T-5e** | legacy | Район `system_template_uid` FK на `building_templates` | P3 | **resolved** — ключ района только в `district_topology.template_system_name`; колонка здания не пишется |
 | 12 | **CITY-T-5d** | хардкод | Smoke `"medium"` вместо `DistrictDensity` | P3 | **open** |
 | 13 | **CITY-T-5m** | смешение | Bake-фасад: `PackMissing` валит `full_bake`; ошибки uid глотаются | P3 | **open** |
+| 14 | **CITY-T-5n** | legacy | C11 не гонит generate геометрии здания: envelope-shell без `front` → extract 422 на любом районе | **P1** | **open** |
+| 15 | **CITY-T-5o** | смешение | `BuildingLayoutTemplate` = участок + тело здания в одном классе; `interior_of`/coerce tolerant-to-both → граница слоёв конвенция, не тип | **P1** | **open** |
 
 **Не этот файл / не эти ID:** алгоритм C22 packing (city §6.3); A* highway (connections §5.1); `init_mode`; interiors; CITY-T-1c стены; CITY-T-2b uid library; CITY-T-3 parallel одного generate (мастер); C16 parallel batch (после C19).
 
@@ -168,6 +170,41 @@ C23 как раз создаёт children + city edges **без** packing. Ст�
 [`debug_settlement.py`](../backend/scripts/debug_settlement.py), [`debug_settlement_persist.py`](../backend/scripts/debug_settlement_persist.py): `settlement_density = "medium"`. Поле на NL есть (1a), setattr не падает. Дубль [`DistrictDensity.MEDIUM.wire_value`](../backend/app/dataModel/settlement/enums/districtDensity.py).
 
 Не generate-consumer; ломает правило no-hardcode в harness.
+
+---
+
+### CITY-T-5n — C11 не вызывает generate геометрии здания: здания без `front` входа
+
+**Status:** `open` | **Severity:** blocker — C11 падает на **любом** районе | **P:** P1  
+**План имплементации:** [`.cursor/plans/city-t-5n-5o-structure-split.md`](../.cursor/plans/city-t-5n-5o-structure-split.md) (вместе с 5o).  
+**Воспроизведено:** 2026-09-24, `world-test-002`, `generate-settlement?district_uid=…` → 422 `building … has no front entry` на `civic_center` и `mining_quarter` (layout района собирается, `districts=1`; extract не доходит).
+
+**Термины:** `StructureGeneratorService` производит **геометрию** здания по шаблону (стены, комнаты как layout, пассажи), не «интерьер» — наполнение/мебель = отдельный epic (`StructureInteriorAssembler`). Комнаты живут **только в шаблоне** (`main_building` + `entry_point` → `main_entrance`); `SettlementAssembler` room-agnostic — он не знает и не должен знать о комнатах.
+
+**Цепочка:**
+
+1. [`build_layout_cache`](../backend/app/application/worldData/generators/assemblers/settlementAssembler/buildingCache.py) → `_envelope_layout`: `StructureLayout(cells=[], levels=[], passages=[], rooms=[], occupied_footprint=…)` — конверт packing, **by design C22**.
+2. [`StructureAreaAssembler`](../backend/app/application/worldData/generators/assemblers/areaAssembler/structureAreaAssembler.py): `_cache_has_rooms` → `False` → `_shell_layout` (только клетки пола). `attach_envelope` — foundation+roof поверх готового layout, «does not regenerate rooms». `passages` остаются `[]`.
+3. [`extract_settlement`](../backend/app/application/worldData/settlementOutdoor/settlementOutdoorExtract.py): нет пассажа `main_entrance` с `from_level_uid=None` → `fronts < 1` → `SettlementOutdoorExtractError`. Это проверка **C20** (≥1 `front` на здание; persist без него — ошибка).
+4. Геометрию по шаблону производит `BuildingAssembler.assemble` → `StructureGeneratorService.generate_from_template` (`interior_of` → тело `main_building`, `entry_point` → `main_entrance` passage) — в C11 **не вызывается**. Полные layout в cache попадают только через `from_south_map` — тестовый вход, в проде ноль вызовов.
+
+**Контракты:** **C8** — pack несёт полную геометрию дома (`StructureLayout.cells`); **C20** — ≥1 `front`; city — «геометрия дома входит в C11». Значит generate геометрии обязан идти в C11 до extract — **этого шага нет**.
+
+**Fix (направление, не слайс; сверено с ТЗ и мастером):**
+
+**Границы слоёв:**
+
+- **`StructureAreaAssembler` владеет чертежом участка** (`BuildingLayoutTemplate` — «Plot drawing for packing», `main_building`/`occupied_footprint`/`default_structure_context`). Строения объявлены здесь: `interior_of(plot)` → тело, `plot_has_building` → NL. `StructureContext`, порог, facing — этот слой.
+- **`BuildingAssembler` владеет телом здания** — получает уже резолвнутое `main_building`, не участок. Геометрия (поддомен `structure/geometry`) через сервис + envelope (foundation/roof/porch); комнаты дальше потребляет `StructureInteriorAssembler` — не более.
+- **`StructureGeneratorService` — геометрия по телу.** Сейчас сам делает `coerce_building_layout` + `interior_of` (строки 234–237) — знание об обёртке участка поднять в caller (area/cache-fill); сервис принимает body.
+
+**Механика:** `tz_structure_connections` §5.1.3 — «Cache оболочек (StructureAssembler…)» + «StructureAreaAssembler из cache (не второй generate)»: `build_layout_cache`/`ensure` резолвит `interior_of` чертежа и вызывает `BuildingAssembler.assemble` с **телом** → cache хранит полные layout (ключ — `system_name` участка, значение — layout здания). `_envelope_layout` — stub под замену. `_entry_xy_world` читает `main_entrance` из cache до `resolve_threshold` — с полным cache порог резолвится в реальную дверь. `_shell_layout` — только для чертежей без `main_building` (plaza).
+
+**Открытые точки:**
+
+- `generate_from_template` требует `building: NamedLocation` (db model; uid → seed/`_det_uuid`/`parent_location_uid`, `map_x/y/z`, материалы). На cache-fill здания ещё нет → синтетический NL по чертежу (как `_place_building` фабрикует — dataclass, тривиально).
+- **Uid-коллизия при reuse:** `room.location_uid`/`level_uid` = `_det_uuid(building.location_uid, …)` — при translate на N участков одного чертежа все экземпляры получают идентичные uid → коллизия на persist. `rebind_layout_to_building` сейчас перепривязывает только `cells[].location_uid` — нужен rebind, перегенерирующий uids комнат/уровней/концов пассажей (или генерация uid на этапе bind).
+- Экземпляры одного чертежа получат идентичную геометрию (cache = один generate на чертёж) — подтвердить для v1.
 
 ---
 
@@ -288,6 +325,41 @@ Area `uuid4` в `areaPaths.py` — не переносить в этом ID.
 
 ---
 
+### CITY-T-5o — `BuildingLayoutTemplate`: участок и тело здания в одном классе
+
+**Status:** `open` | **Severity:** high — корень путаницы слоёв CITY-T-5n | **P:** P1  
+**План имплементации:** [`.cursor/plans/city-t-5n-5o-structure-split.md`](../.cursor/plans/city-t-5n-5o-structure-split.md).
+
+**Проблема:** один POJO играет две роли — [`buildingLayoutTemplate.py`](../backend/app/dataModel/structure/building/buildingLayoutTemplate.py):
+
+- **Чертёж участка** (packing root): `structure_types`, `occupied_footprint`, `perimeter_barrier`, `default_structure_context`, `economic_tier*`, `subjects` / `resource_kind` / `crop_kind` / `livestock_kind`, `main_building`.
+- **Тело здания** (generate body): `levels`, `staircases`, `connections`, `default_z_height` — вложено рекурсивно тем же типом (`main_building: BuildingLayoutTemplate`).
+
+Следствия: `interior_of` / `coerce_building_layout` tolerant-to-both → `generate_from_template` сам разворачивает участок (строки 234–237) — знание чужого слоя в сервисе; `_looks_like_plot_or_interior` угадывает тип по форме JSON; сигнатура не выражает «нужно тело, не участок» — граница слоёв остаётся конвенцией.
+
+**Целевой дизайн:**
+
+Три уровня — участок → здание → геометрия:
+
+- **`PlotLayoutTemplate` владеет зданиями участка и их типами** — «что на участке и где ставить»: забор, дорожки, footprint, фильтры назначения. **Ничего про строительство здания** — ни конструкции, ни envelope.
+- **`main_building: BuildingBodyTemplate | None`** — единственный экземпляр, главное здание. Ось «улица → порог → вход» и фасад забора целятся в него.
+- **`secondary_buildings: list[…]`** — прочие здания/пристройки на участке. **Пока stub**: поле в контракте, generate не наполняет; `AreaLayout.small_layouts` остаётся пустым. Формат элемента (голое тело или `{body, placement}`) — определить когда пристройки дойдут до реализации; locked-контракт «пристройки не на чертеже v1» трогать не надо, пока stub.
+- **`BuildingBodyTemplate`** — здание на участке: envelope — **тип основания и тип крыши** (нынешний `default_structure_context` → на body: `foundation_type` / `roof_type` / `foundation_depth` / материалы / `porch_*`) + **`structure: RegistryKey[StructureTemplate]` — всегда ссылка**, не inline.
+- **`StructureTemplate`** — чистая спека геометрии §3: `system_name` (library key), `display_name`, `structure_types` / `subjects` (нужны на теле — фильтрация библиотеки), `levels` / `staircases` / `connections`, `default_z_height`. Живёт в библиотеке. То, что ест `StructureGeneratorService` — сервис не видит ни участок, ни envelope.
+- **Две библиотеки** (консистентно существующей архитектуре): engine stdlib — паки `structures_templates/` на диске; world overlay — `building_templates` + `worlds.building_template_registry` (`system_template_uid` pointer). Резолв `structure`-ref: world overlay → engine stdlib (паттерн purpose_packs). Inline `main_building`-тело в fixtures (`inn_small` ⊃ `tavern_1`) — заменяется на ref; wire-миграция fixtures + sync ТЗ («main_building = тело §3 inline» → ref).
+- `interior_of` → `plot.main_building.structure` (resolved); ветка «root levels = body» умирает вместе с эвристикой — bare body-файл валидируется `StructureTemplate`, не прикидывается участком.
+- Участок передаёт здания вниз: `BuildingAssembler.assemble(world, building, body: BuildingBodyTemplate, context, terrain)` per building (main + secondaries); внутри — сервис получает `body.structure` + envelope из полей body. Runtime `StructureContext` (`ground_z`, `facing`, clamp) — по-прежнему выводит area-слой.
+- **Scope слоя структуры — только геометрия** (так и задумано, ТЗ §11): `BuildingAssembler` + домен `structure` (`geometry` / `foundation` / `roof`) = геометрия + envelope. Ни участка, ни наполнения (`StructureInteriorAssembler`), ни persist.
+- `DrawingKey = RegistryKey[PlotLayoutTemplate]`; wire не ломается — имя класса на проводе не фигурирует, JSON-ключи те же (кроме переноса `default_structure_context` на body — wire-миграция fixtures).
+
+**Blast radius:** ~174 usages в backend + `fixtures/templates/` + ТЗ пинит имя (`tz_building_generator.md` «Шаблон участка: `BuildingLayoutTemplate`», `tz_pojo_city_typing.md`) → sync доков при сплите.
+
+**Открытые поля:** `structure_types` / `subjects` на standalone body — назначение живёт на участке; если библиотечный body нужен с тегами — решить при сплите.
+
+**Связь:** enforce-ит границу «участок ↔ тело» для CITY-T-5n — без сплита она конвенция, не тип. Делать в одном срезе с фиксом 5n.
+
+---
+
 ## Иерархия assembler vs outdoor (вердикт)
 
 God-object’ов в Settlement → District → Area **по-прежнему нет**. После C23 жирнее **оркестратор склейки** (topology + C11 + C16 selectors в одном классе) — это **осознанный** фасад outdoor ТЗ, не generate-бог.
@@ -305,6 +377,7 @@ God-object’ов в Settlement → District → Area **по-прежнему н
 
 ## Порядок работ (не phase-план агента)
 
+0. **P1 блокер C11:** 5n — без generate геометрии любой `generate-settlement` → 422. Гейтит весь C11/C24 smoke. В одном срезе **5o** — сплит `BuildingLayoutTemplate` enforce-ит границу «участок ↔ тело».  
 1. **P1 persist:** 5a + 5g (+ литерал 5h в том же файле persist). Иначе debug/legacy после `full_bake` портит skip.  
 2. **P1 хардкод streets:** `link_chain` через POJO.  
 3. **P2 слои:** 5i → 5j → 5c (снять цикл пакета).  
@@ -322,3 +395,5 @@ God-object’ов в Settlement → District → Area **по-прежнему н
 |---|---|
 | 2026-09-06 | **detailed_bake** консьюмер C11 (хук ⬜). Topology по-прежнему только full. |
 | 2026-09-06 | Файл открыт: ревью после C23 — dual persist (5a/5g), generate reuse (5b), хардкоды (5h/5d), смешение call site/extract/uids/skip/loader/bake report (5i–5m). SoT продукта — city §8, склейка C23, bake modes. |
+| 2026-09-24 | **CITY-T-5n** зафиксирован (воспроизведено на `world-test-002`): C11 extract «has no front entry» на любом районе — cache = envelope-only, `StructureGeneratorService` не вызывается в C11-пути. |
+| 2026-09-24 | **CITY-T-5o** зафиксирован: `BuildingLayoutTemplate` смешивает чертёж участка и тело здания → целевой сплит `PlotLayoutTemplate` / `BuildingBodyTemplate`. Границы подтверждены мастером: участок — area-слой, тело — `BuildingAssembler`, сервису — только геометрия тела. |

@@ -52,16 +52,16 @@ from app.dataModel.settlement.district.structurePlacement import (
 )
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose, expand_allowed
 from app.db.models.world import World
 
 
 def _tier_pool(
-    layouts: tuple[BuildingLayoutTemplate, ...] | list[BuildingLayoutTemplate],
+    layouts: tuple[PlotLayoutTemplate, ...] | list[PlotLayoutTemplate],
     skeleton: CitySkeleton,
     world: World,
-) -> list[BuildingLayoutTemplate]:
+) -> list[PlotLayoutTemplate]:
     return [
         layout for layout in layouts
         if building_tier_compatible(layout, skeleton, world)
@@ -73,7 +73,7 @@ def _subjects_for(slot: DistrictSlot, structure_type: str) -> tuple[str, ...]:
 
 
 def _subject_catalog(
-    layouts: list[BuildingLayoutTemplate],
+    layouts: list[PlotLayoutTemplate],
     structure_type: str,
 ) -> str | None:
     if any(layout.resource_kind is not None for layout in layouts):
@@ -88,7 +88,7 @@ def _subject_catalog(
     return None
 
 
-def _fallback_pool(world: World, catalog: str, layouts: list[BuildingLayoutTemplate]) -> list[str]:
+def _fallback_pool(world: World, catalog: str, layouts: list[PlotLayoutTemplate]) -> list[str]:
     if catalog == "resource":
         wanted = {layout.resource_kind for layout in layouts if layout.resource_kind is not None}
         return sorted(
@@ -140,7 +140,7 @@ def _resolve_subjects(
     slot: DistrictSlot,
     world: World,
     structure_type: str,
-    layouts: list[BuildingLayoutTemplate],
+    layouts: list[PlotLayoutTemplate],
     settlement_uid: str | None,
 ) -> tuple[str, ...]:
     """Named tokens stay; empty extract/farm/livestock → world RNG (§1.2.1)."""
@@ -228,21 +228,21 @@ def _livestock_kinds_for(world: World, subjects: tuple[str, ...]) -> tuple[Lives
 
 
 def _choose_layout(
-    layouts: list[BuildingLayoutTemplate],
+    layouts: list[PlotLayoutTemplate],
     rng: random.Random,
     subjects: tuple[str, ...],
     resource_kinds: tuple[ResourceKind, ...] = (),
     crop_kinds: tuple[CropKind, ...] = (),
     livestock_kinds: tuple[LivestockKind, ...] = (),
-) -> BuildingLayoutTemplate:
+) -> PlotLayoutTemplate:
     pool = list(BuildingCatalog.prefer_subjects(
         layouts, subjects, resource_kinds, crop_kinds, livestock_kinds,
     ))
     return rng.choice(pool)
 
 
-def _purpose_keys(layout: BuildingLayoutTemplate) -> set[str]:
-    return {str(purpose) for purpose in layout.structure_types}
+def _purpose_keys(catalog: BuildingCatalog, layout: PlotLayoutTemplate) -> set[str]:
+    return {str(purpose) for purpose in catalog.structures.leaves_of(layout)}
 
 
 def _required_type_keys(required: RequiredStructure) -> set[str]:
@@ -252,23 +252,24 @@ def _required_type_keys(required: RequiredStructure) -> set[str]:
 
 
 def _layouts_enabled(
-    layouts: tuple[BuildingLayoutTemplate, ...] | list[BuildingLayoutTemplate],
+    catalog: BuildingCatalog,
+    layouts: tuple[PlotLayoutTemplate, ...] | list[PlotLayoutTemplate],
     enabled: frozenset[BuildingPurpose],
-) -> list[BuildingLayoutTemplate]:
+) -> list[PlotLayoutTemplate]:
     return [
         layout for layout in layouts
-        if any(purpose in enabled for purpose in layout.structure_types)
+        if any(purpose in enabled for purpose in catalog.structures.leaves_of(layout))
     ]
 
 
 def _match_allowed(
     catalog: BuildingCatalog,
-    layouts: tuple[BuildingLayoutTemplate, ...] | list[BuildingLayoutTemplate],
+    layouts: tuple[PlotLayoutTemplate, ...] | list[PlotLayoutTemplate],
     allowed: list | None,
     match,
     enabled: frozenset[BuildingPurpose],
-) -> list[BuildingLayoutTemplate]:
-    live = _layouts_enabled(layouts, enabled)
+) -> list[PlotLayoutTemplate]:
+    live = _layouts_enabled(catalog, layouts, enabled)
     if not allowed:
         return live
     filtered = [purpose for purpose in expand_allowed(allowed) if purpose in enabled]
@@ -355,7 +356,7 @@ def _pick_layout_picks(
                 reason=PackingReason.LEFTOVER,
             )
             continue
-        found: tuple[BuildingLayoutTemplate, ...] | list[BuildingLayoutTemplate] = (
+        found: tuple[PlotLayoutTemplate, ...] | list[PlotLayoutTemplate] = (
             resolve_required_layouts(req, catalog)
         )
         if not found:
@@ -385,7 +386,10 @@ def _pick_layout_picks(
             )
             continue
         type_keys = _required_type_keys(req)
-        stype = next(iter(type_keys), layouts[0].structure_type)
+        stype = next(
+            iter(type_keys),
+            next(iter(catalog.structures.leaves_of(layouts[0])), None),
+        )
         subjects = _resolve_subjects(slot, world, stype, layouts, settlement_uid)
         chosen = _choose_layout(
             layouts, rng, subjects,
@@ -393,7 +397,7 @@ def _pick_layout_picks(
             _crop_kinds_for(world, subjects),
             _livestock_kinds_for(world, subjects),
         )
-        skip_fill_types |= _purpose_keys(chosen)
+        skip_fill_types |= _purpose_keys(catalog, chosen)
         if chosen.system_name in seen_names:
             continue
         seen_names.add(chosen.system_name)
@@ -433,7 +437,7 @@ def _pick_layout_picks(
             _crop_kinds_for(world, subjects),
             _livestock_kinds_for(world, subjects),
         )
-        skip_fill_types |= _purpose_keys(chosen)
+        skip_fill_types |= _purpose_keys(catalog, chosen)
         if chosen.system_name in seen_names:
             continue
         seen_names.add(chosen.system_name)

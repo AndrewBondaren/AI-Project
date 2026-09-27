@@ -1,8 +1,6 @@
 {
   "system_name": "mine",
-  "structure_types": [
-    "mine"
-  ],
+  "plot_type": "extract",
   "display_name": "Шахта",
   "occupied_footprint": {
     "min_x": 0,
@@ -15,36 +13,7 @@
     "max": "quality"
   },
   "main_building": {
-    "system_name": "mine_main",
-    "structure_types": [
-      "mine"
-    ],
-    "display_name": "Шахта",
-    "levels": [
-      {
-        "z_offset": 0,
-        "display_name": "Первый этаж",
-        "rooms": [
-          {
-            "room_id": "hall",
-            "room_type": "common_hall",
-            "display_name": "Зал",
-            "shape_type": "square",
-            "size": {
-              "size_type": "small"
-            },
-            "required": true,
-            "count": 1,
-            "is_public": true,
-            "is_forbidden": false,
-            "entry_point": {
-              "wall": "south",
-              "passage_type": "main_entrance"
-            }
-          }
-        ]
-      }
-    ]
+    "structure": "9e5c6f7a-8b9c-4d0e-8f1a-3b4c5d6e7f8a"
   },
   "resource_kind": "ore"
 }

@@ -133,6 +133,7 @@ def _outdoor(
         facade_for=lambda _uid: facade,
         pack_context_for=MagicMock(),
         library=MagicMock(),
+        structure_library=MagicMock(list_all=AsyncMock(return_value=[])),
         node_repo=MagicMock(),
         edge_repo=MagicMock(),
     )

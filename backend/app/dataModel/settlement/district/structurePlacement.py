@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.dataModel.settlement.district.requiredStructure import RequiredStructure
-from app.dataModel.structure.building.buildingLayoutTemplate import DrawingKey
+from app.dataModel.structure.building.plotLayoutTemplate import DrawingKey
 
 # SoT fallbacks when no map key exists (not Field defaults on the maps).
 COUNT_WITHOUT_KEY = 1

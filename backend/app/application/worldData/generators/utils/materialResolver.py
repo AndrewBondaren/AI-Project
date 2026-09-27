@@ -5,7 +5,7 @@ from app.application.jsonValidation import economic_tiers, materials
 from app.application.worldData.generators.utils.tierRegistry import median_system_tier, tiers_sorted
 from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
-from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+from app.dataModel.structure.building.structureTemplate import StructureTemplate
 from app.db.models.world import World
 
 from app.dataModel.materials import (
@@ -81,15 +81,16 @@ def resolve_room_materials(
     rng: Random,
     room_id: str = "",
     building_tier: str | None = None,
-    template: BuildingLayoutTemplate | None = None,
+    template: StructureTemplate | None = None,
 ) -> tuple[str, str]:
     """Возвращает (wall_material, floor_material) для комнаты."""
+    _ = template
     effective = TierResolver.resolve(
         world=world,
         room_tier=room_tier,
         template_tier=template_tier,
         building_tier=building_tier,
-        building_band=TierResolver.band_from_template(template),
+        building_band=None,
         rng=rng,
     )
 

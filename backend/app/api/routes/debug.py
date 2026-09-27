@@ -18,7 +18,10 @@ from app.application.worldData.facingArrows import FACING_ARROW
 from app.application.worldData.generators.structure.gridRenderer import render_all_levels
 from app.dataModel.materials import DEFAULT_FLOOR_MATERIAL, DEFAULT_WALL_MATERIAL
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.building.buildingLayoutTemplate import coerce_building_layout
+from app.application.worldData.structureTemplateLibraryService import (
+    StructureTemplateLibraryService,
+)
+from app.dataModel.structure.building.structureTemplate import StructureTemplate
 from app.db.models.namedLocation import NamedLocation
 from datetime import datetime, timezone
 
@@ -64,8 +67,21 @@ async def debug_generate_structure(
     if not isinstance(template, dict):
         raise HTTPException(status_code=422, detail="Template must be a JSON object")
 
+    structure_uid = template.get("structure_uid")
+    if structure_uid is not None:
+        service: StructureTemplateLibraryService = (
+            container.structure_template_library_service()
+        )
+        row = await service.find_by_uid(str(structure_uid))
+        if row is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Structure template '{structure_uid}' not found",
+            )
+        template = row.data if isinstance(row.data, dict) else {}
+
     try:
-        layout_template = coerce_building_layout(template)
+        layout_template = StructureTemplate.model_validate(template)
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.errors()) from exc
 

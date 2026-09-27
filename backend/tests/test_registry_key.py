@@ -135,8 +135,8 @@ class TestRegistryKey(unittest.TestCase):
             SettlementSkeleton,
         )
         from app.dataModel.shared.ranges import EconomicTierRange
-        from app.dataModel.structure.building.buildingLayoutTemplate import (
-            BuildingLayoutTemplate,
+        from app.dataModel.structure.building.plotLayoutTemplate import (
+            PlotLayoutTemplate,
         )
 
         skeleton = SettlementSkeleton(economic_tier="standard")
@@ -173,7 +173,7 @@ class TestRegistryKey(unittest.TestCase):
         )
         self.assertIs(
             registry_key_target(
-                BuildingLayoutTemplate.model_fields["economic_tier"].annotation,
+                PlotLayoutTemplate.model_fields["economic_tier"].annotation,
             ),
             WorldEconomyTierRegistry,
         )
@@ -319,48 +319,47 @@ class TestRegistryKey(unittest.TestCase):
             DistrictTemplateEntry,
         )
         from app.dataModel.settlement.district.requiredStructure import RequiredStructure
-        from app.dataModel.structure.building.buildingLayoutTemplate import (
-            BuildingLayoutTemplate,
+        from app.dataModel.structure.building.plotLayoutTemplate import (
             DrawingKey,
+            PlotLayoutTemplate,
         )
 
-        self.assertIs(registry_key_target(DrawingKey), BuildingLayoutTemplate)
+        self.assertIs(registry_key_target(DrawingKey), PlotLayoutTemplate)
         self.assertIs(
             registry_key_target(
-                BuildingLayoutTemplate.model_fields["system_name"].annotation,
+                PlotLayoutTemplate.model_fields["system_name"].annotation,
             ),
-            BuildingLayoutTemplate,
+            PlotLayoutTemplate,
         )
         self.assertIs(
             registry_key_target(
                 RequiredStructure.model_fields["plot_template"].annotation,
             ),
-            BuildingLayoutTemplate,
+            PlotLayoutTemplate,
         )
-        layout = BuildingLayoutTemplate(
-            system_name="tavern_1",
-            structure_type="tavern",
+        layout = PlotLayoutTemplate(
+            system_name="inn_small",
             display_name="Inn",
         )
         self.assertIsInstance(layout.system_name, RegistryKey)
-        pin = RequiredStructure(plot_template="tavern_1")
+        pin = RequiredStructure(plot_template="inn_small")
         self.assertIsInstance(pin.plot_template, RegistryKey)
         district = DistrictTemplateEntry(
             system_name="inn_row",
             display_name="Inns",
             district_type="commercial",
-            plot_counts={"tavern_1": 3},
+            plot_counts={"inn_small": 3},
         )
         key = next(iter(district.plot_counts or {}))
         self.assertIsInstance(key, RegistryKey)
-        self.assertEqual(district.plot_counts["tavern_1"], 3)
+        self.assertEqual(district.plot_counts["inn_small"], 3)
         aliased = DistrictTemplateEntry(
             system_name="inn_row",
             display_name="Inns",
             district_type="commercial",
-            structure_counts={"tavern_1": 2},
+            structure_counts={"inn_small": 2},
         )
-        self.assertEqual(aliased.plot_counts["tavern_1"], 2)
+        self.assertEqual(aliased.plot_counts["inn_small"], 2)
         with self.assertRaises(Exception):
             RequiredStructure(plot_template="")
 

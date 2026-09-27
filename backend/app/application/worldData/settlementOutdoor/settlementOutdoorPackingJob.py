@@ -11,6 +11,9 @@ from dataclasses import dataclass
 from app.application.worldData.buildingTemplateLibraryService import (
     BuildingTemplateLibraryService,
 )
+from app.application.worldData.structureTemplateLibraryService import (
+    StructureTemplateLibraryService,
+)
 from app.application.worldData.generators.assemblers.citySkeleton import (
     city_skeleton_from_settlement,
 )
@@ -19,6 +22,7 @@ from app.application.worldData.generators.assemblers.districtAssembler.districtS
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import (
     assemble_building_catalog,
+    assemble_structure_catalog,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
@@ -97,6 +101,7 @@ class SettlementOutdoorPackingJob:
         sql_persist: SettlementOutdoorSqlPersist,
         invalidate: Callable[[World, MapCellQueryFacade], None],
         library: BuildingTemplateLibraryService,
+        structure_library: StructureTemplateLibraryService,
         node_repo: IConnectionNodeRepository,
         edge_repo: IConnectionEdgeRepository,
     ) -> None:
@@ -104,6 +109,7 @@ class SettlementOutdoorPackingJob:
         self._sql = sql_persist
         self._invalidate = invalidate
         self._library = library
+        self._structure_library = structure_library
         self._nodes = node_repo
         self._edges = edge_repo
 
@@ -134,7 +140,11 @@ class SettlementOutdoorPackingJob:
         )
         terrain_s = clock.lap()
         library_layouts = await self._library.layouts_for_world(world)
-        catalog = assemble_building_catalog(world, library_layouts)
+        structure_rows = await self._structure_library.list_all()
+        catalog = assemble_building_catalog(
+            world, library_layouts,
+            structures=assemble_structure_catalog(structure_rows),
+        )
         catalog_s = clock.lap()
         skeleton = city_skeleton_from_settlement(
             settlement,

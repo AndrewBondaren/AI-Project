@@ -88,7 +88,7 @@ app/application/worldData/generators/
     terrainGeneratorService.py
     passes/surfacePass.py, gapAnalysisPass.py, columnFillPass.py
   road/                                       ← district road graph, layouts, width policy
-  structure/                                  ← interior box from template
+  structure/                                  ← geometry from StructureTemplate (не interior-наполнение)
   assemblers/settlementAssembler/             ← city skeleton → district → area → structure
   assemblers/districtAssembler/               ← district + DistrictRoadGenerator
 ```

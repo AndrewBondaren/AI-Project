@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import unittest
+import uuid
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
+
+from pydantic import ValidationError
 
 from app.application.jsonValidation.facade import normalize_world
 from app.application.jsonValidation.worldRow import (
@@ -13,6 +17,7 @@ from app.application.jsonValidation.worldRow import (
     location_types,
 )
 from app.application.worldData.buildingTemplateLibraryService import BuildingTemplateLibraryService
+from app.application.worldData.structureTemplateFsImport import load_structure_stdlib
 from app.application.worldData.generators.assemblers.citySkeleton import (
     city_skeleton_from_settlement,
 )
@@ -78,10 +83,9 @@ from app.dataModel.settlement.district.requiredStructureResolve import (
 )
 from app.dataModel.resources.enums.resourceKind import ResourceKind
 from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.dataModel.structure.building.buildingLayoutTemplate import (
-    BuildingLayoutTemplate,
-    try_building_layout,
-)
+from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.structure.building.structureCatalog import StructureCatalog
+from app.dataModel.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.structure.building.buildingTemplateOutline import BuildingTemplateOutline
 from app.dataModel.structure.enums.buildingPurpose import BuildingPurposeFamily
 from app.db.models.buildingTemplate import BuildingTemplateRow
@@ -89,13 +93,37 @@ from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
-def _layout(system_name: str, structure_type: str) -> BuildingLayoutTemplate:
-    return BuildingLayoutTemplate(
-        system_name=system_name,
-        structure_type=structure_type,
+_STRUCTS: dict[str, StructureTemplate] = {}
+_STRUCTURES_ROOT = Path(__file__).resolve().parents[2] / "structures_templates"
+
+
+def _stdlib() -> StructureCatalog:
+    return StructureCatalog(load_structure_stdlib(_STRUCTURES_ROOT))
+
+
+def _layout(system_name: str, structure_type: str, **fields) -> PlotLayoutTemplate:
+    uid = str(uuid.uuid5(uuid.NAMESPACE_URL, f"test-structure|{system_name}"))
+    _STRUCTS[uid] = StructureTemplate(
+        system_name=uid,
         display_name=system_name,
+        structure_types=[structure_type],
         levels=[{"z_offset": 0, "rooms": []}],
     )
+    return PlotLayoutTemplate(
+        system_name=system_name,
+        display_name=system_name,
+        main_building={"structure": uid},
+        **fields,
+    )
+
+
+def _catalog(*layouts: PlotLayoutTemplate) -> BuildingCatalog:
+    structures = list({
+        str(plot.main_building.structure): _STRUCTS[str(plot.main_building.structure)]
+        for plot in layouts
+        if plot.main_building is not None
+    }.values())
+    return BuildingCatalog.from_layouts(list(layouts), StructureCatalog(structures))
 
 
 def _world(**kwargs) -> World:
@@ -277,16 +305,16 @@ class AllowedAndRequiredTest(unittest.TestCase):
         )
 
     def test_resolve_required_type_then_name(self) -> None:
-        catalog = BuildingCatalog.from_layouts([
-            _layout("tavern_1", "tavern"),
-            _layout("tavern_2", "tavern"),
+        catalog = _catalog(
+            _layout("inn_small", "tavern"),
+            _layout("inn_suite", "tavern"),
             _layout("town_hall", "town_hall"),
-        ])
+        )
         as_type = resolve_required_layouts(
             RequiredStructure(plot_template="x", structure_type="tavern"),
             catalog,
         )
-        self.assertEqual([row.system_name for row in as_type], ["tavern_1", "tavern_2"])
+        self.assertEqual([row.system_name for row in as_type], ["inn_small", "inn_suite"])
         pin_not_purpose = resolve_required_layouts(
             RequiredStructure(plot_template="tavern"),
             catalog,
@@ -315,15 +343,13 @@ class AllowedAndRequiredTest(unittest.TestCase):
 
 class CatalogAndRngTest(unittest.TestCase):
     def test_catalog_order_and_last_wins(self) -> None:
-        catalog = BuildingCatalog.from_layouts([
-            _layout("b_inn", "tavern"),
-            _layout("a_hall", "civic"),
-            BuildingLayoutTemplate(
-                system_name="b_inn",
-                structure_type="tavern",
-                display_name="override",
-            ),
-        ])
+        b_inn = _layout("b_inn", "tavern")
+        override = PlotLayoutTemplate(
+            system_name="b_inn",
+            display_name="override",
+            main_building={"structure": str(b_inn.main_building.structure)},
+        )
+        catalog = _catalog(b_inn, _layout("a_hall", "civic"), override)
         self.assertEqual([row.system_name for row in catalog.layouts], ["a_hall", "b_inn"])
         self.assertEqual(catalog.by_system_name("b_inn").display_name, "override")
         self.assertEqual(
@@ -331,23 +357,24 @@ class CatalogAndRngTest(unittest.TestCase):
             ["b_inn"],
         )
 
-    def test_try_building_layout_skips_outline(self) -> None:
+    def test_outline_dump_rejected_as_plot_layout(self) -> None:
         outline = BuildingTemplateOutline(
             system_name="tavern_lib",
             structure_type="tavern",
             display_name="Tavern",
         )
-        self.assertIsNone(try_building_layout(outline.model_dump(mode="json")))
+        with self.assertRaises(ValidationError):
+            PlotLayoutTemplate.model_validate(outline.model_dump(mode="json"))
 
     def test_assemble_catalog_path3_builtins(self) -> None:
-        catalog = assemble_building_catalog(_world())
+        catalog = assemble_building_catalog(_world(), structures=_stdlib())
         self.assertIsNotNone(catalog.by_system_name("town_hall"))
         self.assertIsNotNone(catalog.by_system_name("inn_small"))
 
     def test_cell_rng_stable_and_independent(self) -> None:
         a = settlement_cell_rng("w", "c", 1, 2, SettlementCellRngRole.BUILDINGS)
         b = settlement_cell_rng("w", "c", 1, 2, "buildings")
-        pool = ["tavern_1", "tavern_2", "tavern_3"]
+        pool = ["inn_small", "inn_suite", "inn_xl"]
         self.assertEqual(a.choice(pool), b.choice(pool))
         other_cell = settlement_cell_rng("w", "c", 1, 3, SettlementCellRngRole.BUILDINGS)
         same_cell_districts = settlement_cell_rng(
@@ -408,7 +435,7 @@ class JsonValidationRecipeTest(unittest.TestCase):
 
 class LibraryHydrateTest(unittest.IsolatedAsyncioTestCase):
     async def test_layouts_for_world_skips_outline(self) -> None:
-        layout = _layout("tavern_1", "tavern")
+        layout = _layout("inn_small", "tavern")
         outline = BuildingTemplateOutline(
             system_name="tavern_outline",
             structure_type="tavern",
@@ -417,7 +444,7 @@ class LibraryHydrateTest(unittest.IsolatedAsyncioTestCase):
         rows = {
             "uid-ok": BuildingTemplateRow(
                 template_uid="uid-ok",
-                system_name="tavern_1",
+                system_name="inn_small",
                 display_name="Tavern",
                 structure_type="tavern",
                 data=layout.model_dump(mode="json"),
@@ -441,7 +468,7 @@ class LibraryHydrateTest(unittest.IsolatedAsyncioTestCase):
             ],
         )
         got = await service.layouts_for_world(world)
-        self.assertEqual([row.system_name for row in got], ["tavern_1"])
+        self.assertEqual([row.system_name for row in got], ["inn_small"])
 
 
 class DistrictSelectTest(unittest.TestCase):
@@ -520,10 +547,10 @@ class SpecializationPassTest(unittest.TestCase):
             slot for slot in slots
             if slot.district_template.system_name == "mining_quarter"
         )
-        catalog = BuildingCatalog.from_layouts([
+        catalog = _catalog(
             _layout("mine", "mine"),
-            _layout("tavern_1", "tavern"),
-        ])
+            _layout("inn_small", "tavern"),
+        )
         names = candidate_template_names(
             mining, world, skeleton, catalog=catalog, settlement_uid="loc-1",
         )
@@ -535,7 +562,7 @@ class SpecializationPassTest(unittest.TestCase):
         names_c = candidate_template_names(
             commercial, world, skeleton, catalog=catalog, settlement_uid="loc-1",
         )
-        self.assertEqual(names_c, ["tavern_1"])
+        self.assertEqual(names_c, ["inn_small"])
 
     def test_city_typical_districts_before_extract(self) -> None:
         world = _world()
@@ -602,21 +629,10 @@ class SpecializationPassTest(unittest.TestCase):
         self.assertEqual(culture_slot.subject_tags.get("library"), ("religion",))
 
     def test_subject_picks_tagged_mine_drawing(self) -> None:
-        catalog = BuildingCatalog.from_layouts([
-            BuildingLayoutTemplate(
-                system_name="mine_generic",
-                structure_type="mine",
-                display_name="Mine",
-                levels=[{"z_offset": 0, "rooms": []}],
-            ),
-            BuildingLayoutTemplate(
-                system_name="iron_mine_1",
-                structure_type="mine",
-                display_name="Iron mine",
-                subjects=["iron_ore"],
-                levels=[{"z_offset": 0, "rooms": []}],
-            ),
-        ])
+        catalog = _catalog(
+            _layout("mine_generic", "mine"),
+            _layout("iron_mine_1", "mine", subjects=["iron_ore"]),
+        )
         template = DistrictTemplateEntry(
             system_name="mining_quarter",
             display_name="Mine",
@@ -647,15 +663,9 @@ class SpecializationPassTest(unittest.TestCase):
         self.assertEqual(names, ["iron_mine_1"])
 
     def test_empty_extract_picks_world_ore_not_canonical(self) -> None:
-        catalog = BuildingCatalog.from_layouts([
-            BuildingLayoutTemplate(
-                system_name="mine",
-                structure_type="mine",
-                display_name="Mine",
-                resource_kind=ResourceKind.ORE,
-                levels=[{"z_offset": 0, "rooms": []}],
-            ),
-        ])
+        catalog = _catalog(
+            _layout("mine", "mine", resource_kind=ResourceKind.ORE),
+        )
         template = DistrictTemplateEntry(
             system_name="mining_quarter",
             display_name="Mine",
@@ -702,15 +712,9 @@ class SpecializationPassTest(unittest.TestCase):
         self.assertEqual(again.subject_tags.get("mine"), slot.subject_tags.get("mine"))
 
     def test_named_extract_subject_is_not_swapped(self) -> None:
-        catalog = BuildingCatalog.from_layouts([
-            BuildingLayoutTemplate(
-                system_name="mine",
-                structure_type="mine",
-                display_name="Mine",
-                resource_kind=ResourceKind.ORE,
-                levels=[{"z_offset": 0, "rooms": []}],
-            ),
-        ])
+        catalog = _catalog(
+            _layout("mine", "mine", resource_kind=ResourceKind.ORE),
+        )
         template = DistrictTemplateEntry(
             system_name="mining_quarter",
             display_name="Mine",
@@ -740,15 +744,9 @@ class SpecializationPassTest(unittest.TestCase):
         self.assertEqual(slot.subject_tags.get("mine"), ("mithril_ore",))
 
     def test_unknown_named_subject_is_kept(self) -> None:
-        catalog = BuildingCatalog.from_layouts([
-            BuildingLayoutTemplate(
-                system_name="mine",
-                structure_type="mine",
-                display_name="Mine",
-                resource_kind=ResourceKind.ORE,
-                levels=[{"z_offset": 0, "rooms": []}],
-            ),
-        ])
+        catalog = _catalog(
+            _layout("mine", "mine", resource_kind=ResourceKind.ORE),
+        )
         template = DistrictTemplateEntry(
             system_name="mining_quarter",
             display_name="Mine",
@@ -780,11 +778,11 @@ class SpecializationPassTest(unittest.TestCase):
 
 class TokenPickTest(unittest.TestCase):
     def test_one_drawing_per_type_not_per_file(self) -> None:
-        catalog = BuildingCatalog.from_layouts([
-            _layout("tavern_1", "tavern"),
-            _layout("tavern_2", "tavern"),
-            _layout("tavern_3", "tavern"),
-        ])
+        catalog = _catalog(
+            _layout("inn_small", "tavern"),
+            _layout("inn_suite", "tavern"),
+            _layout("inn_xl", "tavern"),
+        )
         template = DistrictTemplateEntry(
             system_name="inn_row",
             display_name="Inns",
@@ -804,7 +802,7 @@ class TokenPickTest(unittest.TestCase):
             slot, world, skeleton, catalog=catalog, rng=rng,
         )
         self.assertEqual(len(names), 1)
-        self.assertIn(names[0], {"tavern_1", "tavern_2", "tavern_3"})
+        self.assertIn(names[0], {"inn_small", "inn_suite", "inn_xl"})
         rng2 = settlement_cell_rng("w1", "loc-1", 0, 0, SettlementCellRngRole.BUILDINGS)
         names2 = candidate_template_names(
             slot, world, skeleton, catalog=catalog, rng=rng2,
@@ -812,13 +810,13 @@ class TokenPickTest(unittest.TestCase):
         self.assertEqual(names, names2)
 
     def test_plot_counts_copies_chosen_drawing(self) -> None:
-        catalog = BuildingCatalog.from_layouts([_layout("tavern_1", "tavern")])
+        catalog = _catalog(_layout("inn_small", "tavern"))
         template = DistrictTemplateEntry(
             system_name="inn_row",
             display_name="Inns",
             district_type="commercial",
             allowed_structure_types=["tavern"],
-            plot_counts={"tavern_1": 3},
+            plot_counts={"inn_small": 3},
         )
         slot = DistrictSlot(
             origin_x=0, origin_y=0, width_fine=40, depth_fine=40, ground_z=0,
@@ -839,11 +837,11 @@ class TokenPickTest(unittest.TestCase):
             rooms=[],
             occupied_footprint=OccupiedFootprint(min_x=0, min_y=0, width=4, depth=4),
         )
-        cache = BuildingLayoutCache.from_south_map({"tavern_1": layout})
+        cache = BuildingLayoutCache.from_south_map({"inn_small": layout})
         rng = settlement_cell_rng("w1", "loc-1", 1, 1, SettlementCellRngRole.BUILDINGS)
         tokens = build_tokens(slot, cache, world, skeleton, catalog=catalog, rng=rng)
         self.assertEqual(len(tokens), 3)
-        self.assertEqual({token.system_name for token in tokens}, {"tavern_1"})
+        self.assertEqual({token.system_name for token in tokens}, {"inn_small"})
 
 
 class Path3GenerateTest(unittest.TestCase):
@@ -945,7 +943,7 @@ class CityT4PlannerTest(unittest.TestCase):
             slot for slot in slots
             if slot.district_template.system_name == "civic_center"
         )
-        catalog = assemble_building_catalog(world)
+        catalog = assemble_building_catalog(world, structures=_stdlib())
         names = pick_layout_names(center, world, skeleton, catalog)
         self.assertIn("town_hall", names)
         self.assertNotIn("mine", names)
@@ -1009,20 +1007,13 @@ class CityT4PlannerTest(unittest.TestCase):
 
     def test_cache_envelope_from_plot_footprint_not_assembler_key(self) -> None:
         cache = BuildingLayoutCache()
-        missing_fp = BuildingLayoutTemplate(
-            system_name="town_hall",
-            structure_type="town_hall",
-            display_name="Town hall",
-            levels=[{"z_offset": 0, "rooms": []}],
-        )
+        missing_fp = _layout("town_hall", "town_hall")
         self.assertIsNone(cache.ensure(_world(), missing_fp))
         self.assertNotIn("town_hall", cache)
-        template = BuildingLayoutTemplate(
-            system_name="town_hall",
-            structure_type="town_hall",
-            display_name="Town hall",
+        template = _layout(
+            "town_hall",
+            "town_hall",
             occupied_footprint={"width": 4, "depth": 4},
-            levels=[{"z_offset": 0, "rooms": []}],
         )
         layout = cache.ensure(_world(), template)
         self.assertIsNotNone(layout)
@@ -1031,11 +1022,11 @@ class CityT4PlannerTest(unittest.TestCase):
         self.assertIn("town_hall", cache)
 
     def test_tokens_rng_stable_for_same_cell(self) -> None:
-        catalog = BuildingCatalog.from_layouts([
-            _layout("tavern_1", "tavern"),
-            _layout("tavern_2", "tavern"),
-            _layout("tavern_3", "tavern"),
-        ])
+        catalog = _catalog(
+            _layout("inn_small", "tavern"),
+            _layout("inn_suite", "tavern"),
+            _layout("inn_xl", "tavern"),
+        )
         template = DistrictTemplateEntry(
             system_name="inn_row",
             display_name="Inns",

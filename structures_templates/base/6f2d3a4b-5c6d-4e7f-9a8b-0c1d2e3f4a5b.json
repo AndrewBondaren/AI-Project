@@ -1,0 +1,32 @@
+{
+  "system_name": "6f2d3a4b-5c6d-4e7f-9a8b-0c1d2e3f4a5b",
+  "display_name": "Ферма",
+  "structure_types": [
+    "farm"
+  ],
+  "levels": [
+    {
+      "z_offset": 0,
+      "display_name": "Первый этаж",
+      "rooms": [
+        {
+          "room_id": "hall",
+          "room_type": "common_hall",
+          "display_name": "Зал",
+          "shape_type": "square",
+          "size": {
+            "size_type": "small"
+          },
+          "required": true,
+          "count": 1,
+          "is_public": true,
+          "is_forbidden": false,
+          "entry_point": {
+            "wall": "south",
+            "passage_type": "main_entrance"
+          }
+        }
+      ]
+    }
+  ]
+}

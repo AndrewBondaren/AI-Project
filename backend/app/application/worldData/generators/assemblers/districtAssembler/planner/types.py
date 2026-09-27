@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 
 Rect = tuple[int, int, int, int]
 
@@ -125,7 +125,7 @@ class StreetFrameContext:
 @dataclass
 class AreaPlacement:
     area_slot: AreaSlot
-    template: BuildingLayoutTemplate
+    template: PlotLayoutTemplate
     building_x: int
     building_y: int
     facing: Facing = Facing.SOUTH

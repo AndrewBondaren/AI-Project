@@ -10,9 +10,9 @@ from app.application.importResult import ImportResult
 from app.application.jsonValidation.worldRow import crops, livestock, resource_types
 from app.application.worldData.bundle.errors import BundleValidationError
 from app.application.worldData.worldService import WorldService
-from app.dataModel.structure.building.buildingLayoutTemplate import (
-    BuildingLayoutTemplate,
-    try_building_layout,
+from app.dataModel.structure.building.plotLayoutTemplate import (
+    PlotLayoutTemplate,
+    plot_type_defaulted,
 )
 from app.dataModel.structure.building.buildingTemplateOutline import BuildingTemplateOutline
 from app.dataModel.structure.building.buildingTemplateRegistryEntry import (
@@ -54,9 +54,17 @@ class BuildingTemplateLibraryService:
         self._repo = repo
         self._worlds = world_service
 
-    async def layouts_for_world(self, world) -> list[BuildingLayoutTemplate]:
-        """Hydrate uid registry rows to generate layouts. Outline-only → warning, skip."""
-        layouts: list[BuildingLayoutTemplate] = []
+    async def layouts_for_world(self, world) -> list[PlotLayoutTemplate]:
+        """Hydrate uid registry rows to plot layouts. Outline-only → warning, skip."""
+        from pydantic import ValidationError
+
+        from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import (
+            PackingReason,
+            PackingStep,
+            packing_warning,
+        )
+
+        layouts: list[PlotLayoutTemplate] = []
         world_uid = getattr(world, "world_uid", "?")
         for entry in _registry_entries(world):
             row = await self._repo.get_by_uid(entry.system_template_uid)
@@ -68,8 +76,9 @@ class BuildingTemplateLibraryService:
                 )
                 continue
             data = row.data if isinstance(row.data, dict) else {}
-            layout = try_building_layout(data)
-            if layout is None:
+            try:
+                layout = PlotLayoutTemplate.model_validate(data)
+            except ValidationError:
                 logger.warning(
                     "building | outline-only skip template_uid=%s system_name=%s world=%s",
                     entry.system_template_uid,
@@ -77,6 +86,13 @@ class BuildingTemplateLibraryService:
                     world_uid,
                 )
                 continue
+            if plot_type_defaulted(layout):
+                packing_warning(
+                    PackingStep.CACHE,
+                    district="library",
+                    system_name=layout.system_name,
+                    reason=PackingReason.PLOT_TYPE_DEFAULTED,
+                )
             layouts.append(layout)
         return layouts
 

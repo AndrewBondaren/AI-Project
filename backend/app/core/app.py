@@ -31,6 +31,7 @@ def make_lifespan(db: Database):
     from app.db.models.reliefGradeInstance import ReliefGradeInstanceRow
     from app.db.models.reliefGradeSystem import ReliefGradeSystemRow
     from app.db.models.buildingTemplate import BuildingTemplateRow
+    from app.db.models.structureTemplate import StructureTemplateRow
     from app.db.repositories.sqlite.pendingRepository import SqlitePendingRepository
 
     _models = [
@@ -38,7 +39,7 @@ def make_lifespan(db: Database):
         Race, WorldPerk, NamedLocation, LocationLevel, LocationEntryPoint, MapCell,
         ConnectionNode, ConnectionEdge, ConnectionEdgeCell,
         State, SessionPending, ReliefTemplateRow, BuildingTemplateRow,
-        ReliefGradeSystemRow, ReliefGradeInstanceRow,
+        ReliefGradeSystemRow, ReliefGradeInstanceRow, StructureTemplateRow,
     ]
 
     @asynccontextmanager
@@ -101,6 +102,7 @@ def create_app():
     from app.api.routes.connections import router as connections_router
     from app.api.routes.debug import router as debug_router
     from app.api.routes.reliefTemplates import router as relief_templates_router
+    from app.api.routes.structureTemplates import router as structure_templates_router
 
     app.include_router(chat_router, prefix="/api")
     app.include_router(settings_router, prefix="/api")
@@ -115,6 +117,7 @@ def create_app():
     app.include_router(connections_router, prefix="/api")
     app.include_router(debug_router, prefix="/api")
     app.include_router(relief_templates_router, prefix="/api")
+    app.include_router(structure_templates_router, prefix="/api")
 
     return app
 

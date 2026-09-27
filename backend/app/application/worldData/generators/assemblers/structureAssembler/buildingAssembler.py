@@ -10,7 +10,7 @@ from app.application.worldData.generators.structure.structureGeneratorService im
     StructureGeneratorService,
     StructureLayout,
 )
-from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+from app.dataModel.structure.building.structureTemplate import StructureTemplate
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -61,7 +61,7 @@ class BuildingAssembler(BaseStructureAssembler):
         self,
         world: World,
         building: NamedLocation,
-        template: BuildingLayoutTemplate,
+        template: StructureTemplate,
         context: StructureContext,
         terrain_cells: list[MapCell] | None = None,
     ) -> StructureLayout:

@@ -9,11 +9,7 @@ from random import Random
 logger = logging.getLogger(__name__)
 
 from app.dataModel.materials import DEFAULT_WALL_MATERIAL
-from app.dataModel.structure.building.buildingLayoutTemplate import (
-    BuildingLayoutTemplate,
-    coerce_building_layout,
-    interior_of,
-)
+from app.dataModel.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.structure.enums.passageType import PassageType
 from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.generators.structure.cellBuilder import build_level_cells
@@ -100,7 +96,7 @@ def _make_seed(world_uid: str, building_uid: str) -> int:
     return int(hashlib.md5(raw).hexdigest()[:8], 16)
 
 
-def _resolve_z_heights(template: BuildingLayoutTemplate) -> dict[int, int]:
+def _resolve_z_heights(template: StructureTemplate) -> dict[int, int]:
     """z_offset → effective z_height."""
     default = template.default_z_height
     return {
@@ -109,7 +105,7 @@ def _resolve_z_heights(template: BuildingLayoutTemplate) -> dict[int, int]:
     }
 
 
-def _resolve_template_z_heights(template: BuildingLayoutTemplate) -> dict[int, int | None]:
+def _resolve_template_z_heights(template: StructureTemplate) -> dict[int, int | None]:
     """z_offset → explicit z_height from template (None if not specified at all)."""
     template_default = template.default_z_height
     return {
@@ -126,7 +122,7 @@ def _compute_level_z(building_map_z: int, z_offset: int, z_heights: dict[int, in
     return building_map_z - foundation_depth - sum(z_heights[k] for k in range(z_offset, 0))
 
 
-def _build_levels(template: BuildingLayoutTemplate, building: NamedLocation,
+def _build_levels(template: StructureTemplate, building: NamedLocation,
                   z_heights: dict[int, int], foundation_depth: int = 0) -> dict[int, LocationLevel]:
     return {
         level_def["z_offset"]: LocationLevel(
@@ -146,7 +142,7 @@ def _build_levels(template: BuildingLayoutTemplate, building: NamedLocation,
 # Level layout ordering — propagate staircase anchors across levels
 
 def _staircase_layout_order(
-    template: BuildingLayoutTemplate,
+    template: StructureTemplate,
     room_z_offsets: dict[str, int],
 ) -> list[int]:
     """
@@ -227,14 +223,10 @@ class StructureGeneratorService:
         self,
         world: World,
         building: NamedLocation,
-        template: BuildingLayoutTemplate | dict,
+        template: StructureTemplate,
         ground_z: int | None = None,
         foundation_depth: int = 0,
     ) -> StructureLayout:
-        template = coerce_building_layout(template)
-        body = interior_of(template)
-        if body is not None:
-            template = body
         logger.info(
             "generate_from_template | start building=%s template=%s",
             building.location_uid, template.system_name,
@@ -284,7 +276,7 @@ class StructureGeneratorService:
 
     def _instantiate_rooms(
         self,
-        template: BuildingLayoutTemplate,
+        template: StructureTemplate,
         building: NamedLocation,
         levels: dict[int, LocationLevel],
         world: World,
@@ -305,7 +297,7 @@ class StructureGeneratorService:
                 building_tier=TierResolver.resolve(
                     world=world,
                     building=building,
-                    building_band=TierResolver.band_from_template(template),
+                    building_band=None,
                     rng=rng,
                 ),
                 template_z_height=template_z_heights.get(z_offset),
@@ -322,7 +314,7 @@ class StructureGeneratorService:
             building_tier=TierResolver.resolve(
                 world=world,
                 building=building,
-                building_band=TierResolver.band_from_template(template),
+                building_band=None,
                 rng=rng,
             ),
         )
@@ -348,7 +340,7 @@ class StructureGeneratorService:
 
     def _layout_rooms(
         self,
-        template: BuildingLayoutTemplate,
+        template: StructureTemplate,
         building: NamedLocation,
         all_rooms: list[_RoomInstance],
         room_z_offsets: dict[str, int],
@@ -427,7 +419,7 @@ class StructureGeneratorService:
     def _build_synth_conns(
         self,
         connections: list[dict],
-        template: BuildingLayoutTemplate,
+        template: StructureTemplate,
         z_offset: int,
         room_z_offsets: dict[str, int],
         shaft_by_staircase: dict[str, list[_RoomInstance]],
@@ -456,7 +448,7 @@ class StructureGeneratorService:
     def _place_level_shafts(
         self,
         z_offset: int,
-        template: BuildingLayoutTemplate,
+        template: StructureTemplate,
         all_rooms: list[_RoomInstance],
         room_z_offsets: dict[str, int],
         shaft_by_staircase: dict[str, list[_RoomInstance]],
@@ -501,7 +493,7 @@ class StructureGeneratorService:
     def _propagate_trapdoor_starts(
         self,
         z_offset: int,
-        template: BuildingLayoutTemplate,
+        template: StructureTemplate,
         room_z_offsets: dict[str, int],
         all_placed_by_id: dict[str, _RoomInstance],
         level_start: dict[int, tuple[int, int]],
@@ -533,7 +525,7 @@ class StructureGeneratorService:
 
     def _generate_cells(
         self,
-        template: BuildingLayoutTemplate,
+        template: StructureTemplate,
         building: NamedLocation,
         levels: dict[int, LocationLevel],
         all_rooms: list[_RoomInstance],
@@ -570,7 +562,7 @@ class StructureGeneratorService:
 
     def _run_passages(
         self,
-        template: BuildingLayoutTemplate,
+        template: StructureTemplate,
         building: NamedLocation,
         levels: dict[int, LocationLevel],
         all_rooms: list[_RoomInstance],
@@ -592,7 +584,7 @@ class StructureGeneratorService:
             building_tier=TierResolver.resolve(
                 world=world,
                 building=building,
-                building_band=TierResolver.band_from_template(template),
+                building_band=None,
                 rng=rng,
             ),
             ground_z=ground_z,
@@ -605,7 +597,7 @@ class StructureGeneratorService:
 
     def _place_wall_openings(
         self,
-        template: BuildingLayoutTemplate,
+        template: StructureTemplate,
         building: NamedLocation,
         levels: dict[int, LocationLevel],
         all_rooms: list[_RoomInstance],
@@ -618,7 +610,7 @@ class StructureGeneratorService:
         building_tier = TierResolver.resolve(
             world=world,
             building=building,
-            building_band=TierResolver.band_from_template(template),
+            building_band=None,
             rng=rng,
         )
 

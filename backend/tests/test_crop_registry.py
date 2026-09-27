@@ -16,7 +16,7 @@ from app.application.worldData.buildingTemplateLibraryService import (
 from app.dataModel.flora.enums.cropKind import CropKind
 from app.dataModel.flora.worldCropsRegistry import WorldCropsRegistry
 from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.dataModel.structure.building.buildingTemplateOutline import BuildingTemplateOutline
 from app.dataModel.structure.building.worldBuildingLayoutDefaults import canonical_defaults
 from app.db.models.world import World
@@ -28,14 +28,14 @@ def _layout(
     *,
     crop_kind: CropKind | None = None,
     subjects: list[str] | None = None,
-) -> BuildingLayoutTemplate:
-    return BuildingLayoutTemplate(
+) -> PlotLayoutTemplate:
+    del structure_type
+    return PlotLayoutTemplate(
         system_name=system_name,
-        structure_type=structure_type,
         display_name=system_name,
         crop_kind=crop_kind,
         subjects=subjects or [],
-        levels=[{"z_offset": 0, "rooms": []}],
+        main_building={"structure": "00000000-0000-4000-8000-000000000002"},
     )
 
 

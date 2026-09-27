@@ -190,7 +190,11 @@ class DistrictAssembler:
 
         for placement in placements:
             facing = placement.area_slot.facing
-            layout = cache.ensure(world, placement.template, facing, district=district)
+            layout = cache.ensure(
+                world, placement.template, facing,
+                district=district,
+                leaves=catalog.structures.leaves_of(placement.template),
+            )
             res = placement.reservation
             if layout is None or layout.occupied_footprint is None or res is None:
                 continue

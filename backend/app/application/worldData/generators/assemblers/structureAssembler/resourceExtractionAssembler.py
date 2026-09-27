@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from app.application.worldData.generators.assemblers.structureAssembler.assemblerRegistry import ASSEMBLER_REGISTRY
 from app.application.worldData.generators.assemblers.structureAssembler.baseStructureAssembler import BaseStructureAssembler
 from app.application.worldData.generators.structure.structureGeneratorService import StructureLayout
-from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+from app.dataModel.structure.building.structureTemplate import StructureTemplate
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -34,7 +34,7 @@ class ResourceExtractionAssembler(BaseStructureAssembler):
         self,
         world: World,
         building: NamedLocation,
-        template: BuildingLayoutTemplate,
+        template: StructureTemplate,
         context: ResourceExtractionContext,
         terrain_cells: list[MapCell] | None = None,
     ) -> StructureLayout:
