@@ -1,6 +1,6 @@
 from typing import Type
 
-from app.application.worldData.generators.assemblers.structureAssembler.baseStructureAssembler import BaseStructureAssembler
+from app.application.worldData.generators.assemblers.buildingAssembler.baseBuildingAssembler import BaseBuildingAssembler
 
 
 class AssemblerRegistry:
@@ -10,19 +10,19 @@ class AssemblerRegistry:
     """
 
     def __init__(self) -> None:
-        self._assemblers: dict[str, Type[BaseStructureAssembler]] = {}
+        self._assemblers: dict[str, Type[BaseBuildingAssembler]] = {}
 
     def register(self, kind: str):
-        def decorator(cls: Type[BaseStructureAssembler]) -> Type[BaseStructureAssembler]:
+        def decorator(cls: Type[BaseBuildingAssembler]) -> Type[BaseBuildingAssembler]:
             if kind in self._assemblers:
                 raise ValueError(f"Assembler for kind={kind!r} already registered")
-            if not issubclass(cls, BaseStructureAssembler):
-                raise TypeError(f"{cls.__name__} must subclass BaseStructureAssembler")
+            if not issubclass(cls, BaseBuildingAssembler):
+                raise TypeError(f"{cls.__name__} must subclass BaseBuildingAssembler")
             self._assemblers[kind] = cls
             return cls
         return decorator
 
-    def get(self, kind: str) -> BaseStructureAssembler:
+    def get(self, kind: str) -> BaseBuildingAssembler:
         if kind not in self._assemblers:
             raise KeyError(
                 f"No assembler registered for kind={kind!r}. "
@@ -30,8 +30,8 @@ class AssemblerRegistry:
             )
         return self._assemblers[kind]()
 
-    def all(self) -> dict[str, Type[BaseStructureAssembler]]:
+    def all(self) -> dict[str, Type[BaseBuildingAssembler]]:
         return dict(self._assemblers)
 
 
-ASSEMBLER_REGISTRY = AssemblerRegistry()
+BUILDING_ASSEMBLER_REGISTRY = AssemblerRegistry()

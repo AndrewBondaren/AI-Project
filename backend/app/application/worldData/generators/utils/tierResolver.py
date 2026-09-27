@@ -4,7 +4,6 @@ from random import Random
 from app.application.jsonValidation import economic_tiers
 from app.application.worldData.generators.utils.economicTierBands import materialize_band
 from app.application.worldData.generators.utils.tierRegistry import median_system_tier
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -161,17 +160,3 @@ class TierResolver:
 
         logger.debug("TierResolver.resolve | applied=None source=none")
         return None
-
-    @staticmethod
-    def band_from_template(template: PlotLayoutTemplate | None) -> str | None:
-        "economic_tier_band from plot layout POJO."
-        if template is None:
-            return None
-        band = template.economic_tier_band
-        if band is not None:
-            logger.debug(
-                "TierResolver.band_from_template | template=%r band=%r",
-                template.system_name,
-                band,
-            )
-        return band

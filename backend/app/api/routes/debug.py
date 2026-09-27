@@ -49,6 +49,7 @@ async def debug_generate_structure(
     map_z: int = 0,
     wall_material: str = DEFAULT_WALL_MATERIAL,
     floor_material: str = DEFAULT_FLOOR_MATERIAL,
+    building_band: str | None = None,
     verbose: bool = False,
     file: UploadFile | None = File(default=None),
     path: str | None = Form(default=None),
@@ -107,7 +108,9 @@ async def debug_generate_structure(
     gen_logger = logging.getLogger("app.application.worldData.generators")
     gen_logger.addHandler(capture)
     try:
-        layout = _structure_generator.generate_from_template(world, building, layout_template)
+        layout = _structure_generator.generate_from_template(
+            world, building, layout_template, building_band=building_band,
+        )
     finally:
         gen_logger.removeHandler(capture)
 

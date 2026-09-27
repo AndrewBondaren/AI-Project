@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from app.application.worldData.generators.structure.cellBuilder import _wall_cell
 from app.application.worldData.generators.structure.cellFactory import _floor_cell
-from app.application.worldData.generators.assemblers.structureAssembler.structureContext import StructureContext
 from app.dataModel.materials import DEFAULT_WALL_MATERIAL
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+
+if TYPE_CHECKING:
+    from app.application.worldData.generators.assemblers.buildingAssembler.structureContext import StructureContext
 
 _NEIGHBORS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 

@@ -1,10 +1,12 @@
 import logging
 from dataclasses import dataclass
 
-from app.application.worldData.generators.assemblers.structureAssembler.assemblerRegistry import ASSEMBLER_REGISTRY
-from app.application.worldData.generators.assemblers.structureAssembler.baseStructureAssembler import BaseStructureAssembler
+from app.application.worldData.generators.assemblers.buildingAssembler.assemblerRegistry import BUILDING_ASSEMBLER_REGISTRY
+from app.application.worldData.generators.assemblers.buildingAssembler.baseBuildingAssembler import BaseBuildingAssembler
 from app.application.worldData.generators.structure.structureGeneratorService import StructureLayout
 from app.dataModel.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.structure.building.buildingBodyTemplate import BuildingBodyTemplate
+from app.application.worldData.generators.assemblers.buildingAssembler.structureContext import StructureContext
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -20,8 +22,8 @@ class RuinsContext:
     ground_z:            int | None = None   # None → resolved from building.map_z
 
 
-@ASSEMBLER_REGISTRY.register("ruins")
-class RuinsAssembler(BaseStructureAssembler):
+@BUILDING_ASSEMBLER_REGISTRY.register("ruins")
+class RuinsAssembler(BaseBuildingAssembler):
     """
     Генерирует базовую структуру через исходный ассемблер (по base_structure_type),
     затем применяет decay-пасс: удаляет/повреждает ячейки согласно decay_level и ruin_style.
@@ -31,12 +33,13 @@ class RuinsAssembler(BaseStructureAssembler):
         self,
         world: World,
         building: NamedLocation,
-        template: StructureTemplate,
-        context: RuinsContext,
+        body: BuildingBodyTemplate,
+        structure: StructureTemplate,
+        context: StructureContext,
         terrain_cells: list[MapCell] | None = None,
     ) -> StructureLayout:
         logger.info(
             "RuinsAssembler | template=%s building=%s",
-            template.system_name, building.location_uid,
+            structure.system_name, building.location_uid,
         )
         raise NotImplementedError

@@ -1,10 +1,12 @@
 import logging
 from dataclasses import dataclass
 
-from app.application.worldData.generators.assemblers.structureAssembler.assemblerRegistry import ASSEMBLER_REGISTRY
-from app.application.worldData.generators.assemblers.structureAssembler.baseStructureAssembler import BaseStructureAssembler
+from app.application.worldData.generators.assemblers.buildingAssembler.assemblerRegistry import BUILDING_ASSEMBLER_REGISTRY
+from app.application.worldData.generators.assemblers.buildingAssembler.baseBuildingAssembler import BaseBuildingAssembler
 from app.application.worldData.generators.structure.structureGeneratorService import StructureLayout
 from app.dataModel.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.structure.building.buildingBodyTemplate import BuildingBodyTemplate
+from app.application.worldData.generators.assemblers.buildingAssembler.structureContext import StructureContext
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -21,8 +23,8 @@ class VastHullContext:
     deck_count:     int = 1                  # количество палуб/этажей
 
 
-@ASSEMBLER_REGISTRY.register("vastHull")
-class VastHullAssembler(BaseStructureAssembler):
+@BUILDING_ASSEMBLER_REGISTRY.register("vastHull")
+class VastHullAssembler(BaseBuildingAssembler):
     """
     Генерирует замкнутую корпусную структуру без привязки к terrain и без фундамента.
     Охватывает любой тип крупного подвижного корпуса: корабль, космический корабль, дирижабль.
@@ -33,12 +35,13 @@ class VastHullAssembler(BaseStructureAssembler):
         self,
         world: World,
         building: NamedLocation,
-        template: StructureTemplate,
-        context: VastHullContext,
+        body: BuildingBodyTemplate,
+        structure: StructureTemplate,
+        context: StructureContext,
         terrain_cells: list[MapCell] | None = None,
     ) -> StructureLayout:
         logger.info(
             "VastHullAssembler | template=%s building=%s",
-            template.system_name, building.location_uid,
+            structure.system_name, building.location_uid,
         )
         raise NotImplementedError

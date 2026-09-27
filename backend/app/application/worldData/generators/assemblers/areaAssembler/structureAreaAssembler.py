@@ -34,10 +34,10 @@ from app.application.worldData.generators.assemblers.areaAssembler.streetApproac
     StreetApproach,
 )
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
-from app.application.worldData.generators.assemblers.structureAssembler.buildingAssembler import (
+from app.application.worldData.generators.assemblers.buildingAssembler.buildingAssembler import (
     BuildingAssembler,
 )
-from app.application.worldData.generators.assemblers.structureAssembler.structureContext import (
+from app.application.worldData.generators.assemblers.buildingAssembler.structureContext import (
     StructureContext,
 )
 from app.application.worldData.generators.coordinates.approachZ import clamp_near_z_to_45
@@ -105,6 +105,7 @@ def derive_structure_context(
             else defaults["foundation_depth"].default
         ),
         ground_z=ground_z,
+        building_band=template.economic_tier_band,
         foundation_material=(
             body.foundation_material
             if body is not None

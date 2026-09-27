@@ -12,7 +12,7 @@ from app.application.worldData.generators.assemblers.areaAssembler.streetApproac
     StreetApproach,
 )
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
-from app.application.worldData.generators.assemblers.structureAssembler.structureContext import (
+from app.application.worldData.generators.assemblers.buildingAssembler.structureContext import (
     StructureContext,
 )
 from app.application.worldData.generators.terrain.relief.geom.geomResolve import partition_height

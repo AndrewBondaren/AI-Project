@@ -1,6 +1,6 @@
-"""Side-effect imports register StructureAssembler implementations."""
+"""Side-effect imports register BuildingAssembler implementations."""
 
-from app.application.worldData.generators.assemblers.structureAssembler import (
+from app.application.worldData.generators.assemblers.buildingAssembler import (
     buildingAssembler,
     resourceExtractionAssembler,
     ruinsAssembler,

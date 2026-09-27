@@ -15,3 +15,4 @@ class StructureContext:
     porch_material:      str | None = None
     porch_has_roof:      bool = False
     ground_z:            int | None = None  # None → resolved from building.map_z
+    building_band:       str | None = None  # PlotLayoutTemplate.economic_tier_band

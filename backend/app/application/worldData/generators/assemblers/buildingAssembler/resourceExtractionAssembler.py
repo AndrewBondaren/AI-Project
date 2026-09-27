@@ -1,10 +1,12 @@
 import logging
 from dataclasses import dataclass
 
-from app.application.worldData.generators.assemblers.structureAssembler.assemblerRegistry import ASSEMBLER_REGISTRY
-from app.application.worldData.generators.assemblers.structureAssembler.baseStructureAssembler import BaseStructureAssembler
+from app.application.worldData.generators.assemblers.buildingAssembler.assemblerRegistry import BUILDING_ASSEMBLER_REGISTRY
+from app.application.worldData.generators.assemblers.buildingAssembler.baseBuildingAssembler import BaseBuildingAssembler
 from app.application.worldData.generators.structure.structureGeneratorService import StructureLayout
 from app.dataModel.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.structure.building.buildingBodyTemplate import BuildingBodyTemplate
+from app.application.worldData.generators.assemblers.buildingAssembler.structureContext import StructureContext
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -22,8 +24,8 @@ class ResourceExtractionContext:
     ground_z:             int | None = None        # None → resolved from building.map_z
 
 
-@ASSEMBLER_REGISTRY.register("resourceExtraction")
-class ResourceExtractionAssembler(BaseStructureAssembler):
+@BUILDING_ASSEMBLER_REGISTRY.register("resourceExtraction")
+class ResourceExtractionAssembler(BaseBuildingAssembler):
     """
     Генерирует подземную структуру (шахту/карьер/скважину) без крыши.
     При has_surface_building=True дополнительно генерирует наземную надстройку.
@@ -34,12 +36,13 @@ class ResourceExtractionAssembler(BaseStructureAssembler):
         self,
         world: World,
         building: NamedLocation,
-        template: StructureTemplate,
-        context: ResourceExtractionContext,
+        body: BuildingBodyTemplate,
+        structure: StructureTemplate,
+        context: StructureContext,
         terrain_cells: list[MapCell] | None = None,
     ) -> StructureLayout:
         logger.info(
             "ResourceExtractionAssembler | template=%s building=%s",
-            template.system_name, building.location_uid,
+            structure.system_name, building.location_uid,
         )
         raise NotImplementedError

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from app.application.worldData.generators.structure.cellFactory import _roof_cell
 from app.application.worldData.generators.structure.roof.gableRoof import GableRoof, _shrink_roof_loop
-from app.application.worldData.generators.assemblers.structureAssembler.structureContext import StructureContext
 from app.dataModel.materials import DEFAULT_WALL_MATERIAL
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+
+if TYPE_CHECKING:
+    from app.application.worldData.generators.assemblers.buildingAssembler.structureContext import StructureContext
 
 _SUPPORTED = {"flat", "gable", "hull"}
 

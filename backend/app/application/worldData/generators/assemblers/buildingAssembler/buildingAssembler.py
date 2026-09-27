@@ -1,16 +1,18 @@
 import logging
+from dataclasses import replace
 
-from app.application.worldData.generators.assemblers.structureAssembler.assemblerRegistry import ASSEMBLER_REGISTRY
-from app.application.worldData.generators.assemblers.structureAssembler.baseStructureAssembler import BaseStructureAssembler
+from app.application.worldData.generators.assemblers.buildingAssembler.assemblerRegistry import BUILDING_ASSEMBLER_REGISTRY
+from app.application.worldData.generators.assemblers.buildingAssembler.baseBuildingAssembler import BaseBuildingAssembler
 from app.application.worldData.generators.coordinates.columnSurface import column_surface
 from app.application.worldData.generators.structure.foundation.foundationBuilder import FoundationBuilder
 from app.application.worldData.generators.structure.roof.roofBuilder import RoofBuilder
-from app.application.worldData.generators.assemblers.structureAssembler.structureContext import StructureContext
+from app.application.worldData.generators.assemblers.buildingAssembler.structureContext import StructureContext
 from app.application.worldData.generators.structure.structureGeneratorService import (
     StructureGeneratorService,
     StructureLayout,
 )
 from app.dataModel.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.structure.building.buildingBodyTemplate import BuildingBodyTemplate
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -18,8 +20,8 @@ from app.db.models.world import World
 logger = logging.getLogger(__name__)
 
 
-@ASSEMBLER_REGISTRY.register("building")
-class BuildingAssembler(BaseStructureAssembler):
+@BUILDING_ASSEMBLER_REGISTRY.register("building")
+class BuildingAssembler(BaseBuildingAssembler):
     """
     Assembler for above-ground structures: interior + optional foundation + optional roof.
 
@@ -61,20 +63,32 @@ class BuildingAssembler(BaseStructureAssembler):
         self,
         world: World,
         building: NamedLocation,
-        template: StructureTemplate,
+        body: BuildingBodyTemplate,
+        structure: StructureTemplate,
         context: StructureContext,
         terrain_cells: list[MapCell] | None = None,
     ) -> StructureLayout:
         logger.info(
             "BuildingAssembler | template=%s building=%s",
-            template.system_name, building.location_uid,
+            structure.system_name, building.location_uid,
+        )
+        context = replace(
+            context,
+            foundation_type=body.foundation_type,
+            roof_type=body.roof_type,
+            foundation_depth=body.foundation_depth,
+            foundation_material=body.foundation_material,
+            roof_material=body.roof_material,
+            porch_material=body.porch_material,
+            porch_has_roof=body.porch_has_roof,
         )
         ground_z = context.ground_z if context.ground_z is not None else building.map_z
         fd = context.foundation_depth if context.foundation_type != "none" else 0
 
         layout = StructureGeneratorService().generate_from_template(
-            world, building, template,
+            world, building, structure,
             ground_z=ground_z,
             foundation_depth=fd,
+            building_band=context.building_band,
         )
         return self.attach_envelope(world, building, layout, context, terrain_cells)
