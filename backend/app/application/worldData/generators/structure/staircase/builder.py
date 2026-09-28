@@ -5,7 +5,7 @@ Staircase builder — оркестратор.
 создаёт и возвращает LocationPassage.
 """
 import logging
-import uuid
+from app.utils.deterministicIds import det_uuid as _det_uuid
 
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.staircase.straight  import StraightBuilder
@@ -28,10 +28,6 @@ _BUILDERS: dict[StaircaseType, type[StaircaseBuilder]] = {
     StaircaseType.VERTICAL_LADDER:          VerticalLadderBuilder,
     StaircaseType.EXTERNAL_VERTICAL_LADDER: ExternalVerticalLadderBuilder,
 }
-
-
-def _det_uuid(*parts: str) -> str:
-    return str(uuid.uuid5(uuid.NAMESPACE_DNS, "|".join(parts)))
 
 
 def build_staircase(

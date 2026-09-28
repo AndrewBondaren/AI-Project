@@ -31,6 +31,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.timings
     SettlementAssembleTimings,
 )
 from app.application.worldData.generators.utils.tierResolver import TierResolver
+from app.application.worldData.generators.structure.errors import GenerationError
 from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
 from app.application.worldData.pack.read.locationTerritoryVolumes import (
@@ -187,23 +188,25 @@ class SettlementOutdoorPackingJob:
                 raise SettlementOutdoorError(
                     f"C23 slot missing for district '{row.location_uid}'"
                 )
-            one, nbytes, part = await self.materialize_district(
-                DistrictPackContext(
-                    world=world,
-                    settlement=settlement,
-                    facade=facade,
-                    writer=writer,
-                    volume=volume,
-                    terrain_cells=terrain_cells,
-                    catalog=catalog,
-                    city_graph=city_graph,
-                    slot=slot,
-                    district_uid=row.location_uid,
-                    census_uids=census_uids,
-                    clock=clock,
-                    assemble=assemble,
-                ),
+            ctx = DistrictPackContext(
+                world=world,
+                settlement=settlement,
+                facade=facade,
+                writer=writer,
+                volume=volume,
+                terrain_cells=terrain_cells,
+                catalog=catalog,
+                city_graph=city_graph,
+                slot=slot,
+                district_uid=row.location_uid,
+                census_uids=census_uids,
+                clock=clock,
+                assemble=assemble,
             )
+            try:
+                one, nbytes, part = await self.materialize_district(ctx)
+            except GenerationError as exc:
+                raise SettlementOutdoorError(str(exc)) from exc
             buildings += one.buildings
             levels += one.levels
             entry_points += one.entry_points

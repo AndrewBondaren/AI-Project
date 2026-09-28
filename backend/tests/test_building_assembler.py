@@ -141,7 +141,7 @@ class BuildingAssemblerTests(unittest.TestCase):
             BuildingAssembler().assemble(self.world, self.building, self.body, self.structure, context)
         effective = attach.call_args.args[3]
         self.assertEqual((effective.foundation_type, effective.roof_type), ("none", "none"))
-        self.assertEqual((effective.ground_z, effective.building_band, effective.facing), (7, "rich", Facing.SOUTH))
+        self.assertEqual((effective.ground_z, effective.building_band, effective.facing), (7, "rich", None))
         self.assertEqual((context.foundation_type, context.roof_type), ("slab", "gable"))
 
     def test_registry_keeps_all_kinds_with_new_contract(self):

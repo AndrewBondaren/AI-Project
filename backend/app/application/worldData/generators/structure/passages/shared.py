@@ -1,7 +1,7 @@
 ﻿"""
 Shared helpers for passage builders.
 """
-import uuid
+from app.utils.deterministicIds import det_uuid as _det_uuid
 
 from app.dataModel.spatial.facing import Facing, parse_facing_or_default
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
@@ -12,10 +12,6 @@ _WALL_DIRS: dict[Facing, tuple[int, int]] = {
     Facing.EAST:  (1,  0),
     Facing.WEST:  (-1, 0),
 }
-
-
-def _det_uuid(*parts: str) -> str:
-    return str(uuid.uuid5(uuid.NAMESPACE_DNS, "|".join(parts)))
 
 
 def _shared_segment(r1: _RoomInstance, r2: _RoomInstance) -> list[tuple[int, int]]:

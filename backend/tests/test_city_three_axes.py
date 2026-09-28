@@ -6,7 +6,7 @@ import unittest
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from pydantic import ValidationError
 
@@ -40,7 +40,11 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.districts import (
     plan_district_slots,
+    slot_allowed_for_template,
+    SettlementSpecializationResolve,
 )
+from app.application.worldData.generators.assemblers.districtAssembler.planner.frontage import is_plaza
+from app.application.worldData.generators.structure.errors import GenerationError
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
 )
@@ -548,7 +552,7 @@ class SpecializationPassTest(unittest.TestCase):
             if slot.district_template.system_name == "mining_quarter"
         )
         catalog = _catalog(
-            _layout("mine", "mine"),
+            _layout("mine", "mine", plot_type="extract"),
             _layout("inn_small", "tavern"),
         )
         names = candidate_template_names(
@@ -844,7 +848,77 @@ class TokenPickTest(unittest.TestCase):
         self.assertEqual({token.system_name for token in tokens}, {"inn_small"})
 
 
+class StructureCatalogPackingTest(unittest.TestCase):
+    def picks(self, catalog, *, allowed=None, stamp=None, required=(), match="like"):
+        world = _world()
+        template = DistrictTemplateEntry(
+            system_name="catalog-district", display_name="District", district_type="commercial",
+            allowed_structure_types=allowed, allowed_match=match,
+        )
+        slot = DistrictSlot(
+            0, 0, 40, 40, 0, template,
+            allowed_structure_types=stamp, required_structures=list(required),
+        )
+        return candidate_template_names(slot, world, _skeleton(world, _settlement(subtype="city")), catalog)
+
+    def test_explicit_allowed_uses_structure_despite_plot_family_and_stamp(self):
+        tavern = _layout("tavern-on-dwelling", "tavern", plot_type="dwelling")
+        house = _layout("house-on-trade", "house", plot_type="trade")
+        catalog = _catalog(tavern, house)
+        self.assertEqual(self.picks(catalog, allowed=["tavern"], stamp=[BuildingPurposeFamily.EXTRACT]), [tavern.system_name])
+        self.assertEqual(self.picks(catalog, allowed=["trade"]), [tavern.system_name])
+        self.assertEqual(catalog.of_structure_type("tavern"), (tavern,))
+
+    def test_family_stamp_filters_plot_family_for_fill_and_required(self):
+        trade = _layout("trade-house", "house", plot_type="trade")
+        dwelling = _layout("dwelling-tavern", "tavern", plot_type="dwelling")
+        catalog = _catalog(trade, dwelling)
+        for required in ((), (RequiredStructure(plot_template=trade.system_name),)):
+            with self.subTest(required=required):
+                self.assertEqual(self.picks(catalog, stamp=[BuildingPurposeFamily.TRADE], required=required), [trade.system_name])
+
+    def test_explicit_filter_has_priority_over_specialization_stamp(self):
+        resolved = SettlementSpecializationResolve((), (), (), {}, {("commercial", None): (BuildingPurposeFamily.EXTRACT,)})
+        for allowed in (["tavern"], []):
+            template = DistrictTemplateEntry(
+                system_name="override", display_name="Override", district_type="commercial",
+                allowed_structure_types=allowed,
+            )
+            self.assertEqual(slot_allowed_for_template(template, resolved), template.allowed_structure_types)
+
+    def test_unresolved_ref_fails_instead_of_disappearing_from_pool(self):
+        plot = _layout("missing-structure", "tavern")
+        with self.assertRaises(GenerationError) as ctx:
+            self.picks(BuildingCatalog([plot], StructureCatalog.empty()), allowed=["tavern"])
+        self.assertIn(plot.system_name, str(ctx.exception))
+        self.assertIn(str(plot.main_building.structure), str(ctx.exception))
+
+    def test_structure_leaves_preserve_strict_matching_and_world_pack_filter(self):
+        mixed = _layout("mixed", "tavern")
+        uid = str(mixed.main_building.structure)
+        _STRUCTS[uid] = StructureTemplate(
+            system_name=uid, display_name="Mixed", structure_types=["tavern", "house"],
+        )
+        catalog = _catalog(mixed)
+        self.assertEqual(self.picks(catalog, allowed=["tavern"]), ["mixed"])
+        self.assertEqual(self.picks(catalog, allowed=["tavern"], match="strict"), [])
+        modern = _layout("modern-market", "hypermarket", plot_type="trade")
+        self.assertEqual(self.picks(_catalog(modern), stamp=[BuildingPurposeFamily.TRADE]), [])
+
+    def test_public_plots_keep_plaza_frontage_and_empty_plaza_requirement(self):
+        empty = PlotLayoutTemplate(system_name="plaza", display_name="Plaza", plot_type="public")
+        built = _layout("public-house", "house", plot_type="public")
+        self.assertTrue(is_plaza(empty))
+        self.assertTrue(is_plaza(built))
+        self.assertFalse(is_plaza(_layout("private-house", "house")))
+        self.assertEqual(
+            self.picks(_catalog(empty), allowed=[], required=[RequiredStructure(plot_template="plaza", structure_type="plaza")]),
+            ["plaza"],
+        )
+
+
 class Path3GenerateTest(unittest.TestCase):
+    @patch.dict("os.environ", {"STRUCTURES_TEMPLATES_ROOT": str(_STRUCTURES_ROOT)})
     def test_generate_layout_catalog_none_replay_same_drawings(self) -> None:
         world = _world(
             fine_cells_per_map_cell=16,

@@ -44,11 +44,8 @@ Coord = tuple[int, int]
 _NEIGHBORS = ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1))
 
 def is_plaza(template: PlotLayoutTemplate) -> bool:
-    """Purpose tag ``plaza`` skips frontage hierarchy (connections §5.1.3)."""
-    return (
-        template.main_building is None
-        and template.plot_type == BuildingPurposeFamily.PUBLIC
-    )
+    """Public plots skip frontage hierarchy, including plots with a building."""
+    return template.plot_type == BuildingPurposeFamily.PUBLIC
 
 
 def plot_cells(placement: AreaPlacement) -> set[Coord]:

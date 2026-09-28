@@ -324,6 +324,8 @@ def slot_allowed_for_template(
     template: DistrictTemplateEntry,
     resolved: SettlementSpecializationResolve,
 ) -> list[AllowedToken] | None:
+    if template.allowed_structure_types is not None:
+        return template.allowed_structure_types
     have = (template.district_subtype or "").strip() or None
     families = resolved.family_by_district.get((template.district_type, have))
     if families:

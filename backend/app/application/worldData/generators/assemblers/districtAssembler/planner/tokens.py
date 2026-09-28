@@ -30,6 +30,7 @@ from app.application.worldData.generators.coordinates.settlementCellRng import (
     SettlementCellRngRole,
     settlement_cell_rng,
 )
+from app.application.worldData.generators.structure.errors import GenerationError
 from app.application.jsonValidation.worldRow import (
     crops,
     enabled_building_purposes,
@@ -53,7 +54,7 @@ from app.dataModel.settlement.district.structurePlacement import (
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
 from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose, expand_allowed
+from app.dataModel.structure.enums.buildingPurpose import FAMILY_OF, BuildingPurpose, expand_allowed
 from app.db.models.world import World
 
 
@@ -342,7 +343,20 @@ def _pick_layout_picks(
     skip_fill_types: set[str] = set()
 
     enabled = enabled_building_purposes(world)
-    allowed = slot.allowed_structure_types
+    for plot in catalog.layouts:
+        body = plot.main_building
+        if body is not None and catalog.structures.resolve(body.structure) is None:
+            raise GenerationError(
+                f"Plot '{plot.system_name}': structure '{body.structure}' not found"
+            )
+
+    allowed = slot.district_template.allowed_structure_types
+    if allowed is None and slot.allowed_structure_types is not None:
+        families = {FAMILY_OF[purpose] for purpose in expand_allowed(slot.allowed_structure_types)}
+        catalog = BuildingCatalog(
+            (plot for plot in catalog.layouts if plot.plot_type in families),
+            catalog.structures,
+        )
     match = slot.district_template.allowed_match
     district = slot.district_template.system_name
 

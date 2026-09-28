@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import uuid
+from app.utils.deterministicIds import det_uuid as _uuid5
 
 from app.dataModel.locations.enums.entryRole import EntryRole
 from app.dataModel.spatial.facing import Facing
-
-
-def _uuid5(*parts: str) -> str:
-    return str(uuid.uuid5(uuid.NAMESPACE_DNS, "|".join(parts)))
 
 
 def district_location_uid(settlement_uid: str, system_name: str, index: int) -> str:

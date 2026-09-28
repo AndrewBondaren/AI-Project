@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase, TestCase
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.api.routes.locations import _http_from_outdoor
 from app.application.worldData.pack.io.packBlobWire import (
@@ -27,6 +27,9 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorContract impor
 from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator import (
     SettlementOutdoorOrchestrator,
 )
+from app.application.worldData.settlementOutdoor.settlementOutdoorPackingJob import SettlementOutdoorPackingJob
+from app.application.worldData.generators.structure.errors import GenerationError
+from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
 from app.application.worldData.settlementOutdoor.settlementOutdoorSkip import (
     packing_queue,
     should_skip_materialize,
@@ -332,6 +335,42 @@ class C24FrameTests(TestCase):
 
 
 class C24OrchestratorHttpTests(IsolatedAsyncioTestCase):
+
+    async def test_generation_error_in_queue_maps_to_422_before_publish(self):
+        world = World(world_uid="w1", name="t", created_at="2026-09-29")
+        facade = MagicMock(get_footprint_terrain=AsyncMock(return_value=[]))
+        writer, sql = MagicMock(), MagicMock()
+        failure = GenerationError("Plot 'plot-1': structure 'structure-1' not found")
+        generator = MagicMock()
+        generator.generate_layout.side_effect = failure
+        job = SettlementOutdoorPackingJob(
+            generator, sql, MagicMock(),
+            MagicMock(layouts_for_world=AsyncMock(return_value=[])),
+            MagicMock(list_all=AsyncMock(return_value=[])),
+            MagicMock(get_by_world=AsyncMock(return_value=[])),
+            MagicMock(get_by_world=AsyncMock(return_value=[])),
+        )
+        module = "app.application.worldData.settlementOutdoor.settlementOutdoorPackingJob"
+        slot = MagicMock()
+        clock = MagicMock()
+        clock.lap.return_value = 0.0
+        with (
+            patch(module + ".territory_volume_for_location", return_value=SimpleNamespace(**_volume())),
+            patch(module + ".assemble_building_catalog", return_value=BuildingCatalog.empty()),
+            patch(module + ".assemble_structure_catalog"),
+            patch(module + ".load_topology_slots", return_value=[slot]),
+            patch(module + ".city_graph_for_settlement", return_value=([MagicMock()], [])),
+            patch(module + ".slot_for_census_row", return_value=slot),
+            self.assertRaises(SettlementOutdoorError) as ctx,
+        ):
+            await job.run_queue(world, _settlement(), facade, writer, _census(), _census()[:1], clock)
+        self.assertIs(ctx.exception.__cause__, failure)
+        http = _http_from_outdoor(ctx.exception)
+        self.assertEqual(http.status_code, 422)
+        self.assertEqual(http.detail, str(failure))
+        writer.encode_settlement_structure_tmp.assert_not_called()
+        writer.publish_settlement_structure.assert_not_called()
+        sql.persist.assert_not_called()
 
     def _orch(self, *, children: list[NamedLocation], paths: WorldPackPaths):
         world = World(world_uid="w1", name="t", created_at="2026-01-01T00:00:00")

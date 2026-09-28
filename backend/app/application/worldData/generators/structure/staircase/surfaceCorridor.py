@@ -6,7 +6,7 @@ Surface corridor — соединяет внешний якорь лестниц
 from __future__ import annotations
 
 import logging
-import uuid
+from app.utils.deterministicIds import det_uuid as _det_uuid
 
 from app.dataModel.structure.enums.buildingElement import StructureElement
 from app.application.worldData.generators.structure.cellBuilder import _interior, _wall_cell
@@ -21,10 +21,6 @@ from app.db.models.locationPassage import LocationPassage
 
 logger = logging.getLogger(__name__)
 
-
-
-def _det_uuid(*parts: str) -> str:
-    return str(uuid.uuid5(uuid.NAMESPACE_DNS, "|".join(parts)))
 
 
 class SurfaceCorridorBuilder:

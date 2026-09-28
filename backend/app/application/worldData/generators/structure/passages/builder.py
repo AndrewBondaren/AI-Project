@@ -20,6 +20,7 @@ from app.application.worldData.generators.structure.passages.doorway import _bui
 from app.application.worldData.generators.structure.passages.entry import _build_entry_point
 from app.dataModel.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.structure.enums.passageType import PassageType
+from app.dataModel.structure.enums.staircaseType import StaircaseType
 from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
 from app.application.worldData.generators.structure.staircase.builder import build_staircase
 from app.dataModel.spatial.facing import Facing, NS_FACINGS, parse_facing_or_default

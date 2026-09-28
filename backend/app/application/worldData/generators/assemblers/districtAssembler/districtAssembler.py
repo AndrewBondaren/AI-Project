@@ -81,7 +81,6 @@ from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import
     WorldConnectionTypeRegistry,
 )
 from app.dataModel.settlement.district.districtConnection import street_classes_for
-from app.dataModel.spatial.facing import Facing
 from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
@@ -234,12 +233,6 @@ class DistrictAssembler:
         area_layouts: list[AreaLayout] = []
         for placement in placements:
             local_street = touching_street_xy(plot_cells(placement), street_xy)
-            cached = cache.get(
-                placement.template.system_name,
-                placement.area_slot.facing,
-            )
-            if cached is None:
-                cached = cache.get(placement.template.system_name, Facing.SOUTH)
             packing_info(
                 district, "area",
                 template=placement.template.system_name,
@@ -253,7 +246,7 @@ class DistrictAssembler:
                 city_skeleton,
                 terrain_cells,
                 street_xy=local_street,
-                cached_layout=cached,
+                structure_catalog=catalog.structures,
                 building_x=placement.building_x,
                 building_y=placement.building_y,
             )

@@ -1,6 +1,6 @@
 ﻿import hashlib
 import logging
-import uuid
+from app.utils.deterministicIds import det_uuid as _det_uuid
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -86,10 +86,6 @@ def compute_occupied_footprint(
 
 # ---------------------------------------------------------------------------
 # Seed + z helpers
-
-def _det_uuid(namespace: str, *parts: str) -> str:
-    return str(uuid.uuid5(uuid.NAMESPACE_DNS, namespace + "|" + "|".join(parts)))
-
 
 def _make_seed(world_uid: str, building_uid: str) -> int:
     raw = (world_uid + building_uid).encode()

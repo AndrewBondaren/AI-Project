@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import logging
-import uuid
+from app.utils.deterministicIds import det_uuid as _det_uuid
 
 from app.dataModel.structure.enums.passageType import PassageType
 from app.application.worldData.generators.structure.passages.wallBreachPlacer import WallBreachPlacer
@@ -22,10 +22,6 @@ from app.db.models.locationPassage import LocationPassage
 logger = logging.getLogger(__name__)
 
 _NEIGHBORS = ((1, 0), (-1, 0), (0, 1), (0, -1))
-
-
-def _det_uuid(*parts: str) -> str:
-    return str(uuid.uuid5(uuid.NAMESPACE_DNS, "|".join(parts)))
 
 
 class StaircaseTunnelOrchestrator:

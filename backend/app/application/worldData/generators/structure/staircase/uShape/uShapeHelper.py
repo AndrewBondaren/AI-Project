@@ -3,7 +3,7 @@ U-shape staircase — вспомогательные функции.
 ТЗ: docs/tz_staircase_generation.md §0 «Правила распределения flat»
 """
 import logging
-import random
+from random import Random
 from dataclasses import dataclass
 
 from app.dataModel.spatial.facing import Facing, NS_FACINGS, parse_facing
@@ -58,6 +58,8 @@ def _compute_fr_anchor(
     prev_fr_anchor: tuple[int, int] | None = None,
     cells: dict | None = None,
     z_lo: int = 0,
+    *,
+    rng: Random,
 ) -> tuple[tuple[int, int], tuple[int, int], tuple[int, int]]:
     """
     Returns (fr_anchor, far_anchor, turn_vector).
@@ -86,7 +88,7 @@ def _compute_fr_anchor(
         same = [c for c in choices if c[0] == prev_fr_anchor]
         fr, tv = same[0] if same else choices[0]
     else:
-        first, second = random.choice(choices), None
+        first, second = rng.choice(choices), None
         second = choices[1] if choices[0] is first else choices[0]
         # Prefer a free corner; fall back to the other if first is occupied.
         if cells is not None and not _is_anchor_free(first[0], z_lo, cells):
@@ -108,6 +110,8 @@ def _compute_u_params(
     prev_fr_anchor: tuple[int, int] | None = None,
     cells: dict | None = None,
     z_lo: int = 0,
+    *,
+    rng: Random,
 ) -> UShapeParams:
     facing = _as_facing(facing)
     march_depth     = (d - 1) if facing in _NS else (w - 1)
@@ -159,7 +163,7 @@ def _compute_u_params(
     else:
         march_flat = [march_depth_mid + 1 - s for s in march_steps[:-1]] + [0]
 
-    fr_anchor, far_anchor, turn_vector = _compute_fr_anchor(ax, ay, w, d, facing, prev_fr_anchor, cells=cells, z_lo=z_lo)
+    fr_anchor, far_anchor, turn_vector = _compute_fr_anchor(ax, ay, w, d, facing, prev_fr_anchor, cells=cells, z_lo=z_lo, rng=rng)
 
     return UShapeParams(
         facing=facing,
