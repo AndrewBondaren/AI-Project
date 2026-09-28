@@ -235,21 +235,19 @@ def test_phase_area_barriers() -> None:
     )
 
     from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
-    from app.dataModel.structure.building.buildingLayoutTemplate import BuildingLayoutTemplate
+    from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 
     assert should_build_area_barrier(
-        BuildingLayoutTemplate(
+        PlotLayoutTemplate(
             system_name="probe_fence",
-            structure_type="building",
             display_name="probe",
             perimeter_barrier=PerimeterBarrier(template="stone_fence", probability=1.0),
         ),
         Random(0),
     )
     assert not should_build_area_barrier(
-        BuildingLayoutTemplate(
+        PlotLayoutTemplate(
             system_name="probe_open",
-            structure_type="building",
             display_name="probe",
             perimeter_barrier=PerimeterBarrier(template=None, probability=0),
         ),
