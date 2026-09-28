@@ -2,6 +2,7 @@
 
 import unittest
 from dataclasses import replace
+from random import Random
 from unittest.mock import patch
 
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
@@ -11,11 +12,13 @@ from app.application.worldData.generators.assemblers.buildingAssembler.buildingA
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from app.application.worldData.generators.utils.tierResolver import TierResolver
+from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.structure.building.buildingBodyTemplate import BuildingBodyTemplate
 from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.dataModel.structure.building.structureTemplate import StructureTemplate
 from app.db.models.namedLocation import NamedLocation
+from app.db.models.locationLevel import LocationLevel
 from app.db.models.world import World
 
 
@@ -80,6 +83,50 @@ class BuildingAssemblerTests(unittest.TestCase):
                 calls = [c for c in resolve.call_args_list if c.kwargs.get("building") is self.building]
                 self.assertEqual(len(calls), 4)
                 self.assertTrue(all(c.kwargs["building_band"] == band for c in calls))
+                material_calls = [c for c in resolve.call_args_list if "template_tier" in c.kwargs and "building_tier" in c.kwargs]
+                self.assertTrue(material_calls)
+                self.assertTrue(all(c.kwargs["building_band"] == band for c in material_calls))
+
+    def test_room_material_resolver_uses_band_without_explicit_tier(self):
+        for band, expected in (("rich", "high_stone"), ("poor", "low_stone"), (None, "median_stone")):
+            with self.subTest(band=band):
+                self.assertEqual(
+                    resolve_room_materials(self.world, None, None, Random(0), building_band=band),
+                    (expected, expected),
+                )
+        for field in ("room_tier", "template_tier", "building_tier"):
+            with self.subTest(explicit_tier=field):
+                tiers = {"room_tier": None, "template_tier": None, "building_tier": None}
+                tiers[field] = "low"
+                self.assertEqual(
+                    resolve_room_materials(self.world, rng=Random(0), building_band="rich", **tiers),
+                    ("low_stone", "low_stone"),
+                )
+
+    def test_band_reaches_room_and_shaft_materials(self):
+        structure = self.structure.model_copy(deep=True)
+        upper = dict(structure.levels[0], z_offset=1)
+        upper["rooms"] = [dict(upper["rooms"][0], room_id="upper_hall")]
+        structure.levels.append(upper)
+        structure.staircases.append({
+            "staircase_id": "stairs", "staircase_type": "u_shape",
+            "stops": ["hall", "upper_hall"],
+        })
+        levels = {
+            z: LocationLevel(str(z), self.building.location_uid, 7 + 3 * z, 3, str(z))
+            for z in (0, 1)
+        }
+        for band, expected in (("rich", "high_stone"), ("poor", "low_stone"), (None, "median_stone")):
+            with self.subTest(band=band), patch.object(TierResolver, "resolve", wraps=TierResolver.resolve) as resolve:
+                rooms, _, shafts = StructureGeneratorService()._instantiate_rooms(
+                    structure, self.building, levels, self.world, Random(0), building_band=band,
+                )
+                self.assertEqual(len(shafts["stairs"]), 2)
+                self.assertEqual(len(rooms), 4)
+                self.assertTrue(all((r.wall_material, r.floor_material) == (expected, expected) for r in rooms))
+                material_calls = [c for c in resolve.call_args_list if "template_tier" in c.kwargs and "building_tier" in c.kwargs]
+                self.assertEqual(len(material_calls), 3)
+                self.assertTrue(all(c.kwargs["building_band"] == band for c in material_calls))
 
     def test_explicit_building_tier_overrides_band(self):
         self.building.system_economic_tier = "low"

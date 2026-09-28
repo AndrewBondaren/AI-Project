@@ -53,6 +53,8 @@ def instantiate_shaft_rooms(
     world: World,
     rng: Random,
     building_tier: str | None = None,
+    *,
+    building_band: str | None = None,
 ) -> list[_RoomInstance]:
     """
     Returns flat list of shaft _RoomInstances.
@@ -112,6 +114,7 @@ def instantiate_shaft_rooms(
         wall_mat, floor_mat = resolve_room_materials(
             world, None, None, rng, room_id=staircase_id,
             building_tier=building_tier, template=template,
+            building_band=building_band,
         )
 
         for idx, z_off in enumerate(z_offsets):

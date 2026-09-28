@@ -123,6 +123,8 @@ def instantiate_level_rooms(
     rng: Random,
     building_tier: str | None = None,
     template_z_height: int | None = None,
+    *,
+    building_band: str | None = None,
 ) -> list[_RoomInstance]:
     instances: list[_RoomInstance] = []
 
@@ -146,6 +148,7 @@ def instantiate_level_rooms(
         wall_mat, floor_mat = resolve_room_materials(
             world, room_tier, template_tier, rng, room_id=room_id,
             building_tier=building_tier, template=template,
+            building_band=building_band,
         )
 
         for idx in range(count):

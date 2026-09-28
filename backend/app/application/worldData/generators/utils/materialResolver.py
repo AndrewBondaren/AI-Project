@@ -82,6 +82,8 @@ def resolve_room_materials(
     room_id: str = "",
     building_tier: str | None = None,
     template: StructureTemplate | None = None,
+    *,
+    building_band: str | None = None,
 ) -> tuple[str, str]:
     """Возвращает (wall_material, floor_material) для комнаты."""
     _ = template
@@ -90,7 +92,7 @@ def resolve_room_materials(
         room_tier=room_tier,
         template_tier=template_tier,
         building_tier=building_tier,
-        building_band=None,
+        building_band=building_band,
         rng=rng,
     )
 

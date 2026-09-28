@@ -309,6 +309,7 @@ class StructureGeneratorService:
                     rng=rng,
                 ),
                 template_z_height=template_z_heights.get(z_offset),
+                building_band=building_band,
             )
             for room in level_rooms:
                 room_z_offsets[room.room_id] = z_offset
@@ -319,6 +320,7 @@ class StructureGeneratorService:
 
         shaft_rooms = instantiate_shaft_rooms(
             template, room_z_offsets, levels, world, rng,
+            building_band=building_band,
             building_tier=TierResolver.resolve(
                 world=world,
                 building=building,
