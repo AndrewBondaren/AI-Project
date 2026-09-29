@@ -544,6 +544,133 @@ LLM **не** придумывает детали — только читает e
 
 ---
 
+
+## ID-14 — Bounded NPC reaction turn (ограничение автономии NPC в интерактивной сцене)
+
+**Status:** `open` | **Priority:** P0 | **Layer:** engine / narrative
+
+### Проблема
+
+В сцене с несколькими NPC независимые LLM-реакции легко образуют рекурсивную цепочку:
+
+```
+player → NPC A → NPC B → NPC A → NPC C → ...
+```
+
+Даже если такая цепочка логически допустима, для интерактивной RPG она создаёт три проблемы:
+
+1. растёт число LLM-вызовов и стоимость inference;
+2. игрок долго ждёт завершения автономного диалога;
+3. NPC начинают играть сцену между собой, отнимая agency и темп у игрока.
+
+### Инвариант интерактивного хода
+
+**По умолчанию одно сообщение / действие игрока открывает не более одного NPC reaction beat.**
+
+```
+PLAYER INPUT
+    → intent
+    → engine / DAG
+    → eligible NPC reactions
+    → resolve / validate / commit
+    → scene aggregation + narration
+    → TURN CLOSED
+    → wait for player
+```
+
+Выход NPC в текущем reaction beat **не имеет права автоматически открыть новый полноценный NPC LLM-turn в рамках того же player turn**.
+
+Новые события (реплика NPC A, жест NPC B, изменение состояния) могут быть зафиксированы движком и восприняты другими NPC, но их следующая семантически нетривиальная LLM-реакция откладывается до следующего разрешённого beat / сообщения игрока.
+
+### Настройка
+
+Черновой world/session setting:
+
+```
+npc_autonomous_reaction_beats_per_player_turn = 1
+```
+
+| Значение | Семантика |
+|---:|---|
+| `0` | NPC не получают автономного продолжения диалога |
+| `1` | **default:** один общий reaction beat после player intent |
+| `N > 1` | разрешить до N последовательных reaction beats (опциональный режим) |
+
+Это **общий бюджет сцены**, а не N вызовов на каждого NPC.
+
+### Multi-NPC сцена
+
+Присутствие NPC в сцене само по себе не означает LLM-call.
+
+До LLM движок фильтрует кандидатов:
+
+```
+present
+  → perceived event?
+  → event relevant?
+  → motivation to react?
+  → semantic reasoning required?
+  → NPC LLM call
+```
+
+В одном разрешённом beat несколько релевантных NPC могут получить отдельные role/knowledge projections и сформировать независимые proposals. После этого proposals агрегируются и разрешаются движком, а player-facing сцена склеивается отдельно.
+
+```
+                 ┌→ NPC A context → proposal ─┐
+PLAYER → INTENT ─┼→ NPC B context → proposal ─┼→ resolve → aggregate → narrator → STOP
+                 └→ NPC C context → proposal ─┘
+```
+
+### Не путать с background simulation
+
+Ограничение относится к **интерактивному LLM-нарративу**, а не к существованию мира.
+
+Background simulation может продолжать отношения, экономику, распространение информации, встречи и другие процессы без участия игрока. Это не требует разыгрывать каждый NPC↔NPC обмен отдельными LLM-вызовами.
+
+```
+continuous simulation != continuous interactive narration
+```
+
+Движок может агрегировать фоновые взаимодействия в события / patches / beliefs и поднимать LLM только по существующим trigger/relevance правилам.
+
+### Forced consequences
+
+Физические и детерминированные последствия текущего beat не считаются новым NPC-turn:
+
+- персонаж упал после уже разрешённого удара;
+- дверь закрылась;
+- NPC услышал уже произнесённую реплику;
+- committed action изменил позицию / состояние.
+
+Но такое последствие **не должно рекурсивно запускать новый NPC cognition call** после исчерпания бюджета текущего player turn.
+
+### Связь с существующим
+
+| Сущность | Роль |
+|---|---|
+| ID-4 Scene notebook | хранит volatile state текущей сцены / turn |
+| ID-9 Director vs Narrator | NPC proposals и финальная склейка сцены — разные обязанности |
+| R-3 ambient NPC LLM each tick | bounded turn дополняет запрет массовых бессмысленных LLM-вызовов |
+| [tz_lazy_simulation.md](./tz_lazy_simulation.md) | relevance / essential NPC triggers до LLM |
+| [tz_engine_flow.md](./tz_engine_flow.md) | turn budget должен enforcement-иться orchestration слоем, а не prompt-инструкцией |
+
+### Ключевой принцип
+
+> **NPC presence ≠ NPC LLM call. Simulation may be continuous; interactive narration is bounded by the player's turn.**
+
+Ограничение должно быть **engine invariant**, а не просьбой к LLM «не продолжать слишком долго».
+
+### Открыто
+
+- Где хранить budget: `SceneContext`, session settings или world preset.
+- Как маркировать `turn_id` / `reaction_beat_id` в DAG.
+- Нужен ли отдельный emergency/interrupt budget для событий, которые обязаны немедленно получить семантическую реакцию.
+- Должен ли narrator получать только committed results текущего beat или также краткий deferred-reactions hint (скорее нет в v1).
+- Политика параллельных NPC calls: parallel snapshot vs deterministic ordering при конфликтующих proposals.
+
+---
+
+
 ## Rejected / deferred (сознательно не брать)
 
 | ID | Идея | Решение | Причина |
@@ -563,7 +690,7 @@ LLM **не** придумывает детали — только читает e
 | Phase | IDs | Зависимости |
 |---|---|---|
 | **A — Пресеты** | ID-6, ID-10 | JSON validation v0.1+ |
-| **B — Engine UX** | ID-9, ID-4 | Scene/narration DAG (когда topology готов) |
+| **B — Engine UX** | ID-9, ID-4, **ID-14** | Scene/narration DAG (когда topology готов) |
 | **C — Социальный слой** | ID-3, ID-1, ID-2 | EventBus, `world_history` |
 | **D — Сюжет** | ID-5, ID-8, **ID-13** | ID-3, plot TaskTypes, `world_history` |
 | **E — Master tools** | ID-7 | world snapshot |
@@ -590,3 +717,4 @@ LLM **не** придумывает детали — только читает e
 | 0.2 | 2026-07 | ID-13: Event Graph Hash — lazy disclosure сюжета |
 | 0.3 | 2026-07 | ID-13: происхождение (independent engineering); § LLM ergonomics review |
 | 0.4 | 2026-07 | ID-13: инварианты (событие в движке); событие ≠ лор |
+| 0.5 | 2026-09 | ID-14: bounded NPC reaction turn — default 1 beat per player turn, anti-loop invariant |
