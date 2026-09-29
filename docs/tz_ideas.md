@@ -302,26 +302,171 @@ LlamaBrain: authority hierarchy, canonical facts immutable.
 
 ---
 
-## ID-9 — Director vs Narrator (разделение LLM-ролей)
+## ID-9 — Configurable LLM roles (Intent / NPC / Background Planner / Narrator)
 
 **Status:** `open` | **Priority:** P0 | **Layer:** engine
 
 ### Принцип
 
-Один промпт «и механика, и prose» → drift. Разные ноды / temperature / contracts.
+LLM в движке — не одна универсальная роль. Выделяются как минимум четыре функционально разные роли с отдельными контрактами, политиками контекста и настраиваемым model/provider.
 
-| Роль | Ноды (целевые) | Задача |
+| Роль | Назначение | Экземпляры |
 |---|---|---|
-| **Director** | `intent_detection`, event/plot nodes, essential NPC background | Intent, structured actions, patches |
-| **Narrator** | `scene_narration`, combat render | Prose из validated facts + perception |
+| **Intent** | Первый разбор player input: намерения, действия, прямая речь и другие элементы → structured intent для DAG | 1 на player input |
+| **NPC** | Поведение конкретного NPC в активной сцене: диалог, намерения, действия, интерпретация происходящего | 0..N на scene beat |
+| **Background Planner / GM** | Планирование событий и развития мира вне scope непосредственной сцены | по trigger/schedule |
+| **Narrator** | Финальная агрегация уже разрешённой сцены в player-facing narration | 1 на завершённый scene beat |
 
-### Референс
+### Общий flow
 
-MnesOS: LangGraph Director + Narrator, air-gapped narration.
+```
+PLAYER INPUT
+    ↓
+INTENT LLM
+    ↓ validated structured intent
+ENGINE / DAG
+    ↓
+perception + knowledge + action context
+    ↓
+NPC LLM A ─┐
+NPC LLM B ─┼→ proposals → ENGINE RESOLUTION / COMMIT
+NPC LLM C ─┘                         ↓
+                                  NARRATOR LLM
+                                      ↓
+                                    PLAYER
 
-### Связь
+BACKGROUND PLANNER / GM
+    ↓ world-level proposals
+ENGINE validate / commit
+```
 
-- [tz_engine_flow.md](./tz_engine_flow.md) — pre_llm / llm / post_llm уже разделяют фазы; Director/Narrator — **внутри llm-фазы** по контракту.
+### Intent role
+
+Intent — boundary между свободным языком игрока и формальным DAG.
+
+Обязанности:
+- классифицировать player input;
+- сохранить порядок действий;
+- сохранить прямую речь verbatim;
+- отделить intent от результата;
+- вернуть строго структурированный contract;
+- не считать заявленный игроком outcome свершившимся фактом.
+
+Результат Intent LLM — **candidate IR**, который проходит deterministic validation до исполнения.
+
+### NPC role
+
+NPC — параметризуемая роль, а не отдельный тип модели на каждого персонажа.
+
+```
+role = NPC, actor = npc_A
+role = NPC, actor = npc_B
+role = NPC, actor = npc_C
+```
+
+Один и тот же model/provider может обслуживать несколько NPC, но каждый вызов получает отдельную actor-specific projection.
+
+NPC context должен включать только разрешённые конкретному actor данные: perception, beliefs, memories, personality, relationships, needs и релевантные результаты сцены.
+
+**Запрещено:** передавать NPC canonical secrets, мысли игрока, private state других NPC или знания Background Planner / GM, если NPC не получил их через simulation/perception/information layer.
+
+Число NPC-вызовов регулируется отдельно ID-14 (bounded NPC reaction turn): присутствие NPC в сцене не означает обязательный LLM-call.
+
+### Background Planner / GM role
+
+Работает **вне scope непосредственной сцены** и смотрит на более широкий world state.
+
+Задачи могут включать:
+- предложение фоновых/world events;
+- развитие существующих конфликтов;
+- создание narrative pressure/opportunities;
+- долгосрочное планирование для мира/фракций/значимых акторов.
+
+Planner не коммитит реальность напрямую:
+
+```
+LLM proposal → engine validation → commit/reject
+```
+
+Знания Planner не должны автоматически попадать в NPC или Narrator context.
+
+### Narrator role
+
+Narrator получает результат уже обработанной сцены и формирует цельное player-facing представление.
+
+Основной вход:
+- committed results;
+- player-visible observations;
+- разрешённые действия/реплики в правильном порядке;
+- verbatim direct speech, где требуется;
+- presentation/style context.
+
+Narrator **не является authority для world state** и не должен создавать новые факты, действия NPC или последствия, которых нет в разрешённом результате сцены.
+
+### Конфигурация ролей
+
+Каждая роль должна иметь независимую конфигурацию. Конкретная wire/schema форма определяется при impl, но концептуально:
+
+```
+INTENT
+  model/provider: configurable
+  contract: IntentResult
+  context_policy: player_input
+
+NPC
+  model/provider: configurable
+  contract: NpcProposal
+  context_policy: actor_private
+
+BACKGROUND_PLANNER
+  model/provider: configurable
+  contract: WorldEventProposal
+  context_policy: world_planning
+
+NARRATOR
+  model/provider: configurable
+  contract: SceneNarration
+  context_policy: player_visible_scene
+```
+
+Пользователь может:
+- назначить одну локальную модель на все роли;
+- назначить разные локальные модели;
+- смешивать local + cloud;
+- использовать более дешёвую/быструю модель для Intent и более сильную для отдельных ролей.
+
+### Role = security / knowledge boundary
+
+Роль определяет **не только prompt, model и temperature**, но и то, какие категории данных вообще разрешено помещать в запрос.
+
+```
+Role
+  → task contract
+  → model/provider
+  → context policy
+  → knowledge permissions
+  → output schema
+  → validation policy
+```
+
+Поэтому агрегация контекста должна быть role-aware: знания, действия и результаты могут агрегироваться отдельно, а затем projection собирает только допустимый для конкретной роли набор.
+
+### Связь с существующим
+
+- [tz_engine_flow.md](./tz_engine_flow.md) — pre_llm / llm / post_llm; роли специализируют llm-фазу.
+- [tz_perception.md](./tz_perception.md) + ID-1/ID-3 — ограничивают knowledge projection NPC.
+- ID-4 Scene notebook — volatile scene state для NPC/Narrator.
+- ID-13 Event Graph Hash — role-specific transport исторических событий.
+- **ID-14 Bounded NPC reaction turn** — ограничивает число/цепочки вызовов NPC role.
+
+### Открыто
+
+- Registry/config schema для role → provider/model/settings.
+- Где хранить role-specific DSL/prompts и их версии.
+- Общий ли repair loop для всех ролей или отдельная policy на contract.
+- Fallback модели/provider на роль.
+- Допускаются ли custom roles от world preset/master и какие permissions им можно выдавать.
+
 
 ---
 
@@ -718,3 +863,4 @@ continuous simulation != continuous interactive narration
 | 0.3 | 2026-07 | ID-13: происхождение (independent engineering); § LLM ergonomics review |
 | 0.4 | 2026-07 | ID-13: инварианты (событие в движке); событие ≠ лор |
 | 0.5 | 2026-09 | ID-14: bounded NPC reaction turn — default 1 beat per player turn, anti-loop invariant |
+| 0.6 | 2026-09 | ID-9 expanded: configurable LLM roles — Intent, NPC, Background Planner / GM, Narrator; role-specific context/knowledge boundaries |
