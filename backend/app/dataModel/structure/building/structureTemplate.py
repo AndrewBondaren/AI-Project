@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.registryKey import RegistryKey
+from app.dataModel.structure.building.roomConnection import RoomConnection
 from app.dataModel.structure.room.entryPoint import EntryPoint
 from app.dataModel.structure.enums.buildingPurpose import (
     DEFAULT_BUILDING_PURPOSES,
@@ -108,6 +109,15 @@ class StructureTemplate(BaseModel):
                 "structure_types",
                 derived or list(DEFAULT_BUILDING_PURPOSES),
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_connections(self) -> StructureTemplate:
+        for index, conn in enumerate(self.connections):
+            try:
+                RoomConnection.model_validate(conn)
+            except ValidationError as exc:
+                raise ValueError(f"connections[{index}]: {exc}") from exc
         return self
 
     @model_validator(mode="after")

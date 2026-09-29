@@ -6,9 +6,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from random import Random
 
+from pydantic import ValidationError
+
 logger = logging.getLogger(__name__)
 
 from app.dataModel.materials import DEFAULT_WALL_MATERIAL
+from app.dataModel.structure.building.roomConnection import RoomConnection
 from app.dataModel.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.structure.enums.passageType import PassageType
 from app.dataModel.spatial.facing import Facing
@@ -247,13 +250,18 @@ class StructureGeneratorService:
             structure, building, levels, world, rng, template_z_heights,
             building_band=building_band,
         )
-        self._layout_rooms(structure, building, all_rooms, room_z_offsets, shaft_by_staircase)
+        connections = self._resolve_connections(structure)
+        self._layout_rooms(
+            structure, building, all_rooms, room_z_offsets, shaft_by_staircase, connections,
+        )
 
-        cells_dict, room_uids = self._generate_cells(structure, building, levels, all_rooms, world)
+        cells_dict, room_uids = self._generate_cells(
+            structure, building, levels, all_rooms, world, connections,
+        )
 
         passages = self._run_passages(
             structure, building, levels, all_rooms, room_z_offsets, cells_dict, world, rng,
-            ground_z=ground_z, building_band=building_band,
+            connections, ground_z=ground_z, building_band=building_band,
         )
 
         connect_corridors(
@@ -349,6 +357,19 @@ class StructureGeneratorService:
         )
         return all_rooms, room_z_offsets, shaft_by_staircase
 
+    @staticmethod
+    def _resolve_connections(template: StructureTemplate) -> list[RoomConnection]:
+        """Runtime boundary: wire dicts → RoomConnection (GenerationError on bad wire)."""
+        resolved: list[RoomConnection] = []
+        for index, raw in enumerate(template.connections):
+            try:
+                resolved.append(RoomConnection.model_validate(raw))
+            except ValidationError as exc:
+                raise GenerationError(
+                    f"Structure '{template.system_name}' connections[{index}]: {exc}"
+                ) from exc
+        return resolved
+
     # ------------------------------------------------------------------
     # Phase: layout
 
@@ -359,12 +380,12 @@ class StructureGeneratorService:
         all_rooms: list[_RoomInstance],
         room_z_offsets: dict[str, int],
         shaft_by_staircase: dict[str, list[_RoomInstance]],
+        connections: list[RoomConnection],
     ) -> None:
         """Steps 4-5: place rooms on XY per level; mutates all_rooms in-place."""
         logger.info("=== PHASE: layout (order propagation) ===")
         bx = building.map_x or 0
         by = building.map_y or 0
-        connections = template.connections
 
         layout_order = _staircase_layout_order(template, room_z_offsets)
         level_start: dict[int, tuple[int, int]] = {layout_order[0]: (bx, by)}
@@ -432,12 +453,12 @@ class StructureGeneratorService:
 
     def _build_synth_conns(
         self,
-        connections: list[dict],
+        connections: list[RoomConnection],
         template: StructureTemplate,
         z_offset: int,
         room_z_offsets: dict[str, int],
         shaft_by_staircase: dict[str, list[_RoomInstance]],
-    ) -> list[dict]:
+    ) -> list[RoomConnection]:
         """Synthetic archway connections: shaft ↔ to_room for the current level."""
         synth = list(connections)
         for sc in template.staircases:
@@ -452,11 +473,11 @@ class StructureGeneratorService:
                 if room_z_offsets.get(stop_id) != z_offset:
                     continue
                 if i < len(shaft_list):
-                    synth.append({
-                        "from_room":    shaft_list[i].room_id,
-                        "to_room":      stop_id,
-                        "passage_type": PassageType.ARCHWAY,
-                    })
+                    synth.append(RoomConnection(
+                        from_room=shaft_list[i].room_id,
+                        to_room=stop_id,
+                        passage_type=PassageType.ARCHWAY,
+                    ))
         return synth
 
     def _place_level_shafts(
@@ -544,10 +565,10 @@ class StructureGeneratorService:
         levels: dict[int, LocationLevel],
         all_rooms: list[_RoomInstance],
         world: World,
+        connections: list[RoomConnection],
     ) -> tuple[dict[tuple, MapCell], dict[str, str]]:
         """Steps 6-8: assign UIDs, generate cells per level."""
         logger.info("=== PHASE: cell generation ===")
-        connections = template.connections
         wall_mat    = building.parent_wall_material or DEFAULT_WALL_MATERIAL
 
         room_uids: dict[str, str] = {
@@ -584,6 +605,7 @@ class StructureGeneratorService:
         cells_dict: dict[tuple, MapCell],
         world: World,
         rng: Random,
+        connections: list[RoomConnection],
         ground_z: int,
         building_band: str | None = None,
     ) -> list[LocationPassage]:
@@ -592,7 +614,7 @@ class StructureGeneratorService:
             if r.staircase_type:
                 logger.info("pre-passages room staircase_type: %r  %r", r.room_id, r.staircase_type)
         passages = build_passages(
-            cells_dict, all_rooms, template.connections,
+            cells_dict, all_rooms, connections,
             levels, room_z_offsets,
             world.world_uid, building.location_uid, rng,
             world=world, template=template,

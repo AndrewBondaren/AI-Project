@@ -17,7 +17,7 @@ from collections import deque
 
 from app.application.worldData.generators.structure.errors import GenerationError
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.enums.passageType import PassageType
+from app.dataModel.structure.building.roomConnection import RoomConnection
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 
 logger = logging.getLogger(__name__)
@@ -113,39 +113,29 @@ def _spiral_search(room: _RoomInstance, placed: list[_RoomInstance],
 # ---------------------------------------------------------------------------
 # Graph helpers
 
-def _build_graph(rooms: list[_RoomInstance], connections: list[dict]) -> dict[str, set[str]]:
+def _build_graph(rooms: list[_RoomInstance], connections: list[RoomConnection]) -> dict[str, set[str]]:
     """Intra-level adjacency graph (doorway/archway only, no staircases)."""
     ids = {r.room_id for r in rooms}
     graph: dict[str, set[str]] = {r.room_id: set() for r in rooms}
     for conn in connections:
-        fr, tr = conn["from_room"], conn["to_room"]
-        ptype = PassageType.from_wire(conn.get("passage_type"))
-        if ptype is not PassageType.STAIRCASE and fr in ids and tr in ids:
-            graph[fr].add(tr)
-            graph[tr].add(fr)
+        if conn.from_room in ids and conn.to_room in ids:
+            graph[conn.from_room].add(conn.to_room)
+            graph[conn.to_room].add(conn.from_room)
     return graph
 
 
-def _find_start(rooms: list[_RoomInstance], connections: list[dict],
+def _find_start(rooms: list[_RoomInstance],
                 graph: dict[str, set[str]]) -> _RoomInstance:
     for r in rooms:
         if r.entry_point:
             return r
-    ids = {r.room_id for r in rooms}
-    for conn in connections:
-        if PassageType.from_wire(conn.get("passage_type")) is PassageType.STAIRCASE:
-            for candidate_id in (conn.get("to_room"), conn.get("from_room")):
-                if candidate_id in ids:
-                    r = _by_id(rooms, candidate_id)
-                    if r:
-                        return r
     return max(rooms, key=lambda r: len(graph.get(r.room_id, set())))
 
 
 # ---------------------------------------------------------------------------
 # Mode A — BFS
 
-def _layout_mode_a(rooms: list[_RoomInstance], connections: list[dict],
+def _layout_mode_a(rooms: list[_RoomInstance], connections: list[RoomConnection],
                    bx: int, by: int) -> None:
     if not rooms:
         return
@@ -165,7 +155,7 @@ def _layout_mode_a(rooms: list[_RoomInstance], connections: list[dict],
 
     if not queue:
         # Classic init: no pre-placed rooms — choose start and set its origin.
-        start = _find_start(rooms, connections, graph)
+        start = _find_start(rooms, graph)
         logger.info("layout mode_a | start_room=%s total=%d", start.room_id, len(rooms))
         start.origin_x, start.origin_y = bx, by
         placed.append(start)
@@ -487,7 +477,7 @@ def _clip_to_bounds(rooms: list[_RoomInstance], bounds: tuple[int, int, int, int
 
 def layout_level(
     rooms: list[_RoomInstance],
-    connections: list[dict],
+    connections: list[RoomConnection],
     building_x: int,
     building_y: int,
     bounds: tuple[int, int, int, int] | None = None,

@@ -18,6 +18,7 @@ from app.application.worldData.generators.structure.passages.archwayValidator im
 )
 from app.application.worldData.generators.structure.passages.doorway import _build_doorway
 from app.application.worldData.generators.structure.passages.entry import _build_entry_point
+from app.dataModel.structure.building.roomConnection import RoomConnection
 from app.dataModel.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.structure.enums.passageType import PassageType
 from app.dataModel.structure.enums.staircaseType import StaircaseType
@@ -37,7 +38,7 @@ _NEIGHBORS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 def build_passages(
     cells: dict[tuple, MapCell],
     rooms: list[_RoomInstance],
-    connections: list[dict],
+    connections: list[RoomConnection],
     levels: dict[int, LocationLevel],
     room_z_offsets: dict[str, int],
     world_uid: str,
@@ -71,25 +72,19 @@ def build_passages(
             level_unions[z] |= r.get_footprint()
 
     # --- Pass 1: doorway / archway (horizontal, same-level) ---
-    staircase_conns: list[dict] = []
 
     for conn in connections:
-        ptype = PassageType.from_wire(conn.get("passage_type"), default=PassageType.DOORWAY)
-        if ptype == PassageType.STAIRCASE:
-            staircase_conns.append(conn)
-            continue
-
-        fr_list = placed_by_id.get(conn["from_room"], [])
-        to_list = placed_by_id.get(conn["to_room"], [])
+        fr_list = placed_by_id.get(conn.from_room, [])
+        to_list = placed_by_id.get(conn.to_room, [])
         if not fr_list or not to_list:
             continue
 
-        fr_offset = room_z_offsets[conn["from_room"]]
-        to_offset = room_z_offsets[conn["to_room"]]
+        fr_offset = room_z_offsets[conn.from_room]
+        to_offset = room_z_offsets[conn.to_room]
         fr_level  = levels[fr_offset]
         to_level  = levels[to_offset]
 
-        if ptype == PassageType.ARCHWAY:
+        if conn.passage_type is PassageType.ARCHWAY:
             same_level_rooms = [r for r in rooms if room_z_offsets.get(r.room_id) == fr_offset]
             for fr in fr_list:
                 for to in to_list:
@@ -162,8 +157,10 @@ def build_passages(
                 # Archway on fr_z level: shaft_fr ↔ fr_room (only for i==0).
                 # Segments i>0 reuse the previous segment's to_z archway.
                 if i == 0 and shaft_fr is not None and shaft_fr.placed:
-                    arch_conn_fr = {"from_room": shaft_fr.room_id, "to_room": fr_stop_id,
-                                    "width": _arch_width}
+                    arch_conn_fr = RoomConnection(
+                        from_room=shaft_fr.room_id, to_room=fr_stop_id,
+                        passage_type=PassageType.ARCHWAY, width=_arch_width,
+                    )
                     same_level_rooms_fr = [r for r in rooms
                                            if room_z_offsets.get(r.room_id) == fr_offset]
                     p = _build_archway(arch_conn_fr, shaft_fr, fr_room, fr_level, fr_level,
@@ -176,8 +173,10 @@ def build_passages(
 
                 # Archway on to_z level: shaft_to ↔ to_room.
                 if shaft_to is not None and shaft_to.placed:
-                    arch_conn = {"from_room": shaft_to.room_id, "to_room": to_stop_id,
-                                 "width": _arch_width}
+                    arch_conn = RoomConnection(
+                        from_room=shaft_to.room_id, to_room=to_stop_id,
+                        passage_type=PassageType.ARCHWAY, width=_arch_width,
+                    )
                     same_level_rooms = [r for r in rooms
                                         if room_z_offsets.get(r.room_id) == to_offset]
                     p = _build_archway(arch_conn, shaft_to, to_room, to_level, to_level,
@@ -223,36 +222,6 @@ def build_passages(
                         ep = orchestrator.connect(anchor, _lower_room, _lower_level, sc_id=sc_id)
                         if ep:
                             passages.append(ep)
-
-    # Old schema (backward compat): connections[passage_type=staircase].
-    elif staircase_conns:
-        staircase_conns.sort(
-            key=lambda c: min(
-                room_z_offsets.get(c["from_room"], 0),
-                room_z_offsets.get(c["to_room"], 0),
-            )
-        )
-        for conn in staircase_conns:
-            fr_list = placed_by_id.get(conn["from_room"], [])
-            to_list = placed_by_id.get(conn["to_room"], [])
-            if not fr_list or not to_list:
-                continue
-
-            fr_offset = room_z_offsets[conn["from_room"]]
-            to_offset = room_z_offsets[conn["to_room"]]
-            fr_level  = levels[fr_offset]
-            to_level  = levels[to_offset]
-            mat       = conn.get("step_material") or fr_list[0].floor_material
-
-            p, sc_builder = build_staircase(
-                conn, fr_list[0], to_list[0], fr_level, to_level,
-                cells, world_uid, building_uid, mat,
-                passage_height=passage_height,
-            )
-            if p:
-                passages.append(p)
-                if sc_builder:
-                    passages.extend(sc_builder.extra_passages)
 
     # --- Post-generation headroom check (catches cross-segment conflicts) ---
     PassageHeightChecker(cells, passage_height).check_all_stair_headrooms(clearance=passage_height)

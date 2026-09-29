@@ -21,6 +21,7 @@ z_height: pass 3 walls are repeated for every z in [z_base, z_base + z_height - 
 """
 from app.application.worldData.generators.structure.cellFactory import _floor_cell
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
+from app.dataModel.structure.building.roomConnection import RoomConnection
 from app.dataModel.structure.enums.buildingElement import StructureElement
 from app.db.models.mapCell import MapCell
 
@@ -85,7 +86,7 @@ def pass2_floors(
 
 def pass3_interior_walls(
     rooms: list[_RoomInstance],
-    connections: list[dict],
+    connections: list[RoomConnection],
     z: int,
     world_uid: str,
     building_uid: str,
@@ -117,7 +118,7 @@ def pass3_interior_walls(
 
 def build_level_cells(
     rooms: list[_RoomInstance],
-    connections: list[dict],
+    connections: list[RoomConnection],
     z: int,
     z_height: int,
     world_uid: str,
