@@ -435,6 +435,78 @@ NARRATOR
 - смешивать local + cloud;
 - использовать более дешёвую/быструю модель для Intent и более сильную для отдельных ролей.
 
+### Model-specific DSL + default fallback
+
+Для одной и той же LLM-роли допускаются разные DSL/instruction profiles под разные модели или семейства моделей. Это позволяет адаптировать формулировку инструкции под особенности конкретной модели, **не меняя семантику роли и её output contract**.
+
+Концептуальная структура:
+
+```
+INTENT
+  ├── exact/<model>.dsl
+  ├── family/<family>.dsl
+  └── default.dsl
+
+NPC
+  ├── exact/<model>.dsl
+  ├── family/<family>.dsl
+  └── default.dsl
+
+BACKGROUND_PLANNER
+  └── default.dsl
+
+NARRATOR
+  ├── family/<family>.dsl
+  └── default.dsl
+```
+
+Resolver выбирает наиболее специфичный доступный DSL:
+
+```
+role + exact model
+    ↓ not found
+role + model family/type
+    ↓ not found
+role + default DSL
+```
+
+**Инвариант:** отсутствие model-specific DSL не должно блокировать роль, если для неё существует `default.dsl`.
+
+Model-specific DSL может оптимизировать:
+- формат и жёсткость инструкции;
+- особенности tool/structured-output поведения модели;
+- repair hints;
+- примеры и служебные формулировки;
+- известные особенности instruction following конкретного семейства.
+
+Model-specific DSL **не должен** менять:
+- authority роли;
+- разрешённые категории знаний/context permissions;
+- смысл output contract;
+- engine validation rules;
+- canonical semantics полей.
+
+Таким образом:
+
+```
+Role contract / permissions = stable engine API
+DSL profile               = model adapter
+```
+
+Это позволяет заменить модель без изменения DAG и доменной логики, а новую/неизвестную модель подключить через role default DSL.
+
+### DSL resolver / versioning
+
+При impl нужен отдельный deterministic resolver, чтобы выбор DSL был воспроизводимым и попадал в execution trace:
+
+```
+resolve_dsl(role, provider, model, family)
+    → selected_profile
+    → profile_version/hash
+```
+
+Для debug/replay желательно логировать как минимум `role`, фактический `provider/model`, выбранный DSL profile и его version/hash.
+
 ### Role = security / knowledge boundary
 
 Роль определяет **не только prompt, model и temperature**, но и то, какие категории данных вообще разрешено помещать в запрос.
@@ -462,7 +534,8 @@ Role
 ### Открыто
 
 - Registry/config schema для role → provider/model/settings.
-- Где хранить role-specific DSL/prompts и их версии.
+- Формат хранения model-specific DSL profiles и role default DSL.
+- Как определяется model family/type для fallback resolver.
 - Общий ли repair loop для всех ролей или отдельная policy на contract.
 - Fallback модели/provider на роль.
 - Допускаются ли custom roles от world preset/master и какие permissions им можно выдавать.
@@ -864,3 +937,4 @@ continuous simulation != continuous interactive narration
 | 0.4 | 2026-07 | ID-13: инварианты (событие в движке); событие ≠ лор |
 | 0.5 | 2026-09 | ID-14: bounded NPC reaction turn — default 1 beat per player turn, anti-loop invariant |
 | 0.6 | 2026-09 | ID-9 expanded: configurable LLM roles — Intent, NPC, Background Planner / GM, Narrator; role-specific context/knowledge boundaries |
+| 0.7 | 2026-09 | ID-9: model-specific DSL profiles + deterministic fallback exact model → family/type → role default |
