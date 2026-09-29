@@ -49,7 +49,7 @@ def build_passages(
     ground_z: int = 0,
 ) -> list[LocationPassage]:
     logger.info("=== PHASE: build_passages ===")
-    passage_height: int = world.default_passage_height if world is not None else 2
+    passage_height: int = world.default_passage_height if world is not None else World.default_passage_height
     passages: list[LocationPassage] = []
     deferred_arch: list[tuple[list, int, str]] = []
 
@@ -275,7 +275,7 @@ def build_passages(
         if room.entry_point:
             p = _build_entry_point(room, room.entry_point, level,
                                    same_level_union, cells, world_uid, building_uid,
-                                   passage_height=passage_height)
+                                   passage_height=passage_height, template=template)
             if p:
                 passages.append(p)
 
@@ -283,7 +283,7 @@ def build_passages(
             p = _build_entry_point(room, room.back_entry_point, level,
                                    same_level_union, cells, world_uid, building_uid,
                                    passage_height=passage_height,
-                                   suffix="_back")
+                                   suffix="_back", template=template)
             if p:
                 passages.append(p)
 

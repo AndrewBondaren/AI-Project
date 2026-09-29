@@ -41,6 +41,61 @@ router = APIRouter(prefix="/debug", tags=["debug"])
 _structure_generator = StructureGeneratorService()
 
 
+@router.post("/worlds/{world_uid}/generate-structure-rotations")
+async def debug_generate_structure_rotations(
+    world_uid: str,
+    map_x: int = 0,
+    map_y: int = 0,
+    map_z: int = 0,
+    plot_uid: str | None = None,
+    verbose: bool = False,
+    file: UploadFile | None = File(default=None),
+    path: str | None = Form(default=None),
+    container=Depends(get_container),
+) -> JSONResponse:
+    from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+    from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import assemble_structure_catalog
+    from app.application.worldData.debugStructureRotations import generate_rotations
+
+    if plot_uid is not None:
+        if file is not None or path is not None:
+            raise HTTPException(422, "Provide plot_uid or file/path, not both")
+        row = await container.building_template_library_service().find_by_uid(plot_uid)
+        if row is None:
+            raise HTTPException(404, f"Plot '{plot_uid}' not found")
+        raw = row.data
+    else:
+        raw = await JsonResolver.resolve(file=file, path=path)
+        if isinstance(raw, dict) and "plot_uid" in raw:
+            row = await container.building_template_library_service().find_by_uid(str(raw["plot_uid"]))
+            if row is None:
+                raise HTTPException(404, f"Plot '{raw['plot_uid']}' not found")
+            raw = row.data
+    try:
+        plot = PlotLayoutTemplate.model_validate(raw)
+    except ValidationError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    if plot.main_building is None:
+        raise HTTPException(422, f"Plot '{plot.system_name}' has no main_building")
+    world = await container.world_service().get_by_id(world_uid)
+    if world is None:
+        raise HTTPException(404, f"World '{world_uid}' not found")
+    rows = await container.structure_template_library_service().list_all()
+    structure = assemble_structure_catalog(rows).resolve(plot.main_building.structure)
+    if structure is None:
+        raise HTTPException(422, f"Plot '{plot.system_name}': structure '{plot.main_building.structure}' not found")
+    building = NamedLocation(
+        location_uid=f"debug-building-{world_uid}", world_uid=world_uid,
+        display_name="[Debug] " + plot.display_name, system_location_type="building",
+        created_at=datetime.now(timezone.utc).isoformat(), map_x=map_x, map_y=map_y, map_z=map_z,
+        parent_wall_material=DEFAULT_WALL_MATERIAL, parent_floor_material=DEFAULT_FLOOR_MATERIAL,
+    )
+    return JSONResponse(generate_rotations(
+        world, building, structure, plot.economic_tier_band,
+        lambda: _LogCapture(logging.DEBUG if verbose else logging.WARNING),
+    ))
+
+
 @router.post("/worlds/{world_uid}/generate-structure")
 async def debug_generate_structure(
     world_uid: str,

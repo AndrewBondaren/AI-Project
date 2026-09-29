@@ -1,4 +1,5 @@
 from app.dataModel.structure.room.roomTypeEntry import RoomTypeEntry
 from app.dataModel.structure.room.worldRoomTypeRegistry import WorldRoomTypeRegistry
 
-__all__ = ["RoomTypeEntry", "WorldRoomTypeRegistry"]
+__all__ = ["EntryPoint", "RoomTypeEntry", "WorldRoomTypeRegistry"]
+from app.dataModel.structure.room.entryPoint import EntryPoint

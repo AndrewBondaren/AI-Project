@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 from app.dataModel.materials import DEFAULT_WALL_MATERIAL
 from app.dataModel.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.structure.enums.passageType import PassageType
+from app.dataModel.spatial.facing import Facing
+from app.application.worldData.generators.structure.structureOrientation import entry_orientation, validate_facing
 from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.generators.structure.cellBuilder import build_level_cells
 from app.application.worldData.generators.structure.errors import GenerationError, UnsupportedShapeError
@@ -224,7 +226,9 @@ class StructureGeneratorService:
         ground_z: int | None = None,
         foundation_depth: int = 0,
         building_band: str | None = None,
+        facing: Facing | None = None,
     ) -> StructureLayout:
+        validate_facing(facing, structure.system_name)
         logger.info(
             "generate_from_template | start building=%s template=%s",
             building.location_uid, structure.system_name,
@@ -265,6 +269,10 @@ class StructureGeneratorService:
         )
 
         _post_process(cells_dict)
+
+        if facing is not None:
+            orientation = entry_orientation(all_rooms, passages, structure.system_name, facing)
+            orientation.apply(cells_dict, passages, all_rooms)
 
         result = self._assemble_result(building, levels, all_rooms, room_uids, cells_dict, passages)
         logger.info(

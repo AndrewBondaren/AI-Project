@@ -5,8 +5,10 @@
 """
 import logging
 from random import Random
+from pydantic import ValidationError
 
-from app.application.worldData.generators.structure.errors import UnsupportedShapeError
+from app.application.worldData.generators.structure.errors import GenerationError, UnsupportedShapeError
+from app.dataModel.structure.room.entryPoint import EntryPoint
 from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.shapeResolver import SizeShapeResolver
@@ -130,6 +132,17 @@ def instantiate_level_rooms(
 
     for room_def in level_def["rooms"]:
         room_id = room_def["room_id"]
+        entries: dict[str, EntryPoint | None] = {}
+        for field in ("entry_point", "back_entry_point"):
+            value = room_def.get(field)
+            try:
+                entries[field] = EntryPoint.model_validate(value) if value is not None else None
+            except ValidationError as exc:
+                raise GenerationError(
+                    f"Structure '{template.system_name}', room '{room_id}' {field}: {exc}"
+                ) from exc
+        entry_point = entries["entry_point"]
+        back_entry_point = entries["back_entry_point"]
         required = room_def["required"]
 
         # Resolve count
@@ -171,10 +184,11 @@ def instantiate_level_rooms(
                 economic_tier=room_def.get("economic_tier"),
                 attach_to=room_def.get("attach_to"),
                 attach_wall=room_def.get("attach_wall"),
-                perimeter_required=room_def.get("perimeter_required", False),
+                perimeter_required=bool(room_def.get("perimeter_required", False)
+                                        or entry_point is not None or back_entry_point is not None),
                 underground_fallback=room_def.get("underground_fallback", False),
-                entry_point=room_def.get("entry_point"),
-                back_entry_point=room_def.get("back_entry_point"),
+                entry_point=entry_point,
+                back_entry_point=back_entry_point,
                 shape_params=shape_params,
                 staircase_type=room_def.get("staircase_type"),
                 facing=room_def.get("facing"),

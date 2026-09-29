@@ -285,6 +285,11 @@ level_z = level.z_height ?? max(room_z for room in level.rooms)
 
 **Правило `perimeter_required` + entry_point:**
 
+Форсинг флага реализован в `roomFactory.instantiate_level_rooms`: после валидации
+входов любой ненулевой `entry_point` / `back_entry_point` задаёт
+`_RoomInstance.perimeter_required=True`, включая явно переданное `false`.
+Ниже WARNING остаётся требованием ТЗ: фабрика пока его не эмитирует.
+
 ```
 если room.entry_point OR room.back_entry_point объявлены:
     effective_perimeter_required = True   -- всегда, независимо от поля
@@ -453,6 +458,19 @@ else:
 
 ### 3.6 Поля entry_point / back_entry_point (на комнате)
 
+Оба поля используют `dataModel/structure/room/EntryPoint` — frozen Pydantic-модель
+с `extra="forbid"`. `wall` и `passage_type` обязательны; стена — только кардинальная,
+тип прохода — только `main_entrance` или `service_entrance`, `width >= 1`.
+`StructureTemplate` валидирует входы при импорте, сохраняя комнаты словарями;
+`roomFactory` повторно валидирует их на runtime-границе и передаёт в `_RoomInstance`
+экземпляры `EntryPoint`. Ошибка импорта — `ValidationError` с room_id;
+ошибка runtime-границы — `GenerationError` с uid структуры и room_id.
+
+Wire-ключ высоты — **`door_height`**. Прежнее чтение `height` было ошибкой;
+этот ключ не является алиасом и отклоняется как неизвестный. `door_height=None`
+означает авто-резолв. `panel_material` и `access_type` типизированы, но их
+потребление builder/assembler в плане EntryPoint не реализуется.
+
 | Поле | Тип | Описание |
 |------|-----|----------|
 | `wall` | string | Стена: `north`, `south`, `east`, `west` |
@@ -466,6 +484,11 @@ else:
 На **корне шаблона здания** (C22, не на комнате): `max_front_entries` int, default `1`; `max_service_entries` int, default `0` (`1`, если объявлен `back_entry_point`). >1 → раскладка по отрезку стыка с улицей, приём как окна §3.10. SoT: [tz_structure_connections.md](./tz_structure_connections.md) §5.1.3.
 
 **Авто-резолв `door_height`:**
+
+Формула реализована для обоих входов в `passages/entry.py`; `z_height` берётся из
+`room.z_height`. Поля `StructureTemplate`: `door_height_ratio` (default `0.75`,
+`0 < ratio <= 1`) и `door_height_max` (default `5`, `>= 1`). Явная высота не
+ограничивается cap: к ней применяется нижний предел мира и проверка потолка.
 
 ```
 если door_height задан явно:
@@ -488,7 +511,19 @@ else:
 
 `world.default_passage_height` — жёсткий нижний предел: дверь не может быть ниже даже если авто-резолв даёт меньшее значение.
 
-Валидация: `door_height >= world.default_passage_height` и `door_height < z_height` → иначе `ValidationError`.
+Runtime-валидация: `door_height >= world.default_passage_height` и
+`door_height < room.z_height` → иначе `GenerationError` с uid структуры и room_id.
+Поэтому пример `z=2 → 2` показывает результат формулы, но при нижнем пределе мира 2
+такой вход отклоняется: проём достигает потолка.
+
+**Регрессия EntryPoint E4, 2026-09-29.** Sweep всех 13 файлов
+`structures_templates/base/`, `facing=None`, координаты `(0,0,0)`,
+`world_uid="entry-sweep-world"`, `building_uid="entry-sweep-" + structure.system_name`:
+исключений нет. Текущий код и baseline `edb16a7` дают одинаковые 8 ERROR-сообщений
+(7 у `5a1f2b3c-…`, 1 у `6b2f3c4d-…`), без добавленных или удалённых сообщений.
+Это сравнительный прогон с фиксированными uid, а не воспроизведение прежних 36 ERROR
+из §7 п.11 плана CITY-T-5n/5o: параметры того прогона не сохранены. Существующие
+ошибки геометрии сохраняются и не исправляются планом EntryPoint.
 
 **Центрирование:** `entry_point` всегда центрируется на указанной стене.
 
@@ -604,7 +639,7 @@ mid = len(shared_segment) // 2
 | `staircase_id` | string | optional | Локальный ID для отладки и логов. Авто: `"staircase_{from}_{to}"` |
 | `staircase_type` | string | optional | Тип лестницы (см. раздел 3.9). Авто-резолв по `z_height` если не задан |
 | `size` | object | optional | Размер shaft (см. раздел 3.5). Авто-резолв если не задан |
-| `facing` | string | optional | Сторона выхода shaft к `to_room`. `"north"`, `"south"`, `"east"`, `"west"`. Авто-резолв по позиции to_room если не задан |
+| `facing` | string | optional | Для u_shape — направление первого подъёма, от entry к far end; entry = opposite(facing). Текущее чтение: шаблон, иначе NORTH; расхождение с целевым авто-детектом — staircase §2, сверка S0 |
 | `has_walls` | bool | optional | Shaft замкнут стенами. Default: `true`. При `false` — shaft обязан быть внутри здания. |
 | `outside` | bool | optional | Только при `has_walls: true`. Default: `false`. При `true` — shaft edge-mounted: три стороны снаружи, внешние стены заменяются на floor, facing-сторона через archway к зданию. |
 | `in_a_room` | bool | optional | Shaft embedded внутри помещения. Default: `false`. Несовместим с `outside: true`. |
@@ -620,10 +655,10 @@ mid = len(shared_segment) // 2
 → оба сегмента выровнены по XY (одна непрерывная шахта)
 ```
 
-Shaft позиционируется так, чтобы `facing`-сторона shaft прилегала к стене `to_room`.
+У u_shape к комнате примыкает entry-сторона shaft, противоположная facing (staircase §2, сверка S0).
 Архитектурное следствие: shaft всегда смежен с комнатой назначения, никогда не стоит посреди уровня.
 
-Якоря (`fr_anchor`, `to_anchor`) всегда на `facing`-стороне shaft.
+У u_shape `fr_anchor` находится на near/entry стороне; `to_anchor` — floor комнаты на z_top вне шахты. Их точный контракт — staircase §6.
 
 **Размещение shaft по `outside`:**
 
@@ -1445,6 +1480,10 @@ floor_material = rng.choice(find_candidates("floor"))
 
 ### 8.6 Layout: размещение комнат
 
+Вся раскладка и все builders работают в авторском фрейме `StructureTemplate`.
+Ориентация здания применяется одним проходом после post-process, непосредственно перед
+`_assemble_result` (§9); перестановка комнат или повторный запуск builders после поворота не выполняются.
+
 Два режима — определяются наличием `attach_to` на уровне:
 
 ---
@@ -1653,6 +1692,10 @@ room.y_max <= footprint.y_max + expansion
 
 ### 8.7 Cells
 
+Финальный поворот (§9) преобразует ключи `cells_dict` и `MapCell.x/y`, `system_facing`
+и каждую грань `railing_sides`. Z, материалы и uid сохраняются. `display_facing` генератор
+структур не заполняет. `occupied_footprint` вычисляется из финальных повёрнутых клеток.
+
 Генерация ячеек — три отдельных прохода. Комнаты **не генерируют стен** — только пол.
 
 **Проход 1 — внешний контур здания**
@@ -1742,6 +1785,10 @@ Shared segment = один ряд ячеек на границе footprint дву
 
 ### 8.8 Passages (LocationPassage)
 
+Перед сборкой результата общий поворот (§9) преобразует обе XY-точки каждого
+прохода; отсутствующая внешняя точка остаётся `None`. У `LocationPassage` нет
+поля facing. Ссылки на уровни, тип прохода и `is_bidirectional` сохраняются.
+
 Каждый connection → один `LocationPassage`:
 - `from_x/from_y` — центр дверного проёма в from_room
 - `to_x/to_y` — центр дверного проёма в to_room
@@ -1829,14 +1876,25 @@ class StructureGeneratorService:
         *,
         ground_z:         int | None = None,     # None → building.map_z
         foundation_depth: int        = 0,        # для z_offset < 0
-        facing:           Facing | None = None,  # None/SOUTH → фрейм шаблона; иначе поворот (§8.6)
+        facing:           Facing | None = None,  # None → авторский фрейм; кардинал → направление главного входа
         building_band:    str | None = None,     # economic tier band участка → TierResolver (§8.5b)
     ) -> StructureLayout: ...
 ```
 
 Валидация шаблона — `StructureTemplate.model_validate(data)` у caller (§10): сервис `dict` не принимает и участок (`main_building`) не разворачивает. Полный контракт параметров — [tz_assembler_hierarchy.md](tz_assembler_hierarchy.md) §6.8.
 
-**Ориентация.** Раскладка (§8.6) выполняется в SOUTH-фрейме шаблона (`entry_point.wall` как записано). При `facing ∉ {None, SOUTH}` после раскладки и **до** эмиссии `NamedLocation`/клеток/passages комнаты, шахты лестниц и проёмы поворачиваются rigid-body вокруг origin входной комнаты так, что стена главного входа смотрит на `facing`; при 90°/270° `width↔depth`. Готовый `StructureLayout` не поворачивается (у `rooms[]` нет размеров).
+**Ориентация (вариант B).** `facing=None` сохраняет авторский фрейм. Явный `facing`
+допускает только `CARDINAL_FACINGS`; диагональ → `GenerationError` до генерации.
+Нужен ровно один размещённый `main_entrance`; отсутствие или несколько входов →
+`GenerationError` с uid структуры и room_id кандидатов. Pivot — исходный origin входной
+комнаты, угол — разница между её `entry_point.wall` и запрошенным facing (включая SOUTH).
+Четверть-оборот: `(dx,dy) → (−dy,dx)`, east=+X, north=+Y.
+После post-process перед `_assemble_result` единым проходом поворачиваются cells (§8.7),
+обе XY-точки passages (поля facing у них нет), origin/bbox и `extra_cells` всех размещённых
+комнат и шахт. Origin становится минимальным углом повёрнутого bbox; при нечётном числе
+четверть-оборотов width/depth меняются местами. `NamedLocation` создаются уже повёрнутыми.
+Uid, Z, stops, материалы и свойства проходов сохраняются. `StructureTemplate` не мутируется.
+Builders лестниц работают в авторском фрейме; их собственный facing не заменяется facing здания.
 
 ---
 

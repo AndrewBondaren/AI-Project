@@ -32,7 +32,7 @@ class StructureAreaAssemblerTests(unittest.TestCase):
                     "room_id": "hall", "display_name": "Hall", "room_type": "common_hall",
                     "shape_type": "square", "size": {"width_range": [5, 5]},
                     "required": True, "is_public": True, "is_forbidden": False,
-                    "entry_point": {"wall": "south"},
+                    "entry_point": {"wall": "south", "passage_type": "main_entrance"},
                 }],
             }],
         )

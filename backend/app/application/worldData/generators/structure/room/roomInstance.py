@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from app.dataModel.structure.room.entryPoint import EntryPoint
 
 from app.application.worldData.generators.structure.shapes import room_footprint
 
@@ -44,8 +45,8 @@ class _RoomInstance:
     attach_wall:         str | None = None
     perimeter_required:  bool = False
     underground_fallback: bool = False
-    entry_point:         dict | None = None
-    back_entry_point:    dict | None = None
+    entry_point:         EntryPoint | None = None
+    back_entry_point:    EntryPoint | None = None
     shape_params:        dict = field(default_factory=dict)
 
     wall_openings: list[dict] = field(default_factory=list)

@@ -18,11 +18,12 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.registryKey import RegistryKey
+from app.dataModel.structure.room.entryPoint import EntryPoint
 from app.dataModel.structure.enums.buildingPurpose import (
     DEFAULT_BUILDING_PURPOSES,
     BuildingPurpose,
@@ -31,6 +32,8 @@ from app.dataModel.structure.enums.buildingPurpose import (
 )
 
 DEFAULT_Z_HEIGHT = 3
+DEFAULT_DOOR_HEIGHT_RATIO = 0.75
+DEFAULT_DOOR_HEIGHT_MAX = 5
 
 
 def _leaf_purpose(raw: Any, context: str) -> BuildingPurpose:
@@ -56,6 +59,12 @@ class StructureTemplate(BaseModel):
     )
     default_z_height: DefaultOnWire[int] = constrained_field(
         default=DEFAULT_Z_HEIGHT, greater_equals=1,
+    )
+    door_height_ratio: DefaultOnWire[float] = constrained_field(
+        default=DEFAULT_DOOR_HEIGHT_RATIO, greater=0, lesser_equals=1,
+    )
+    door_height_max: DefaultOnWire[int] = constrained_field(
+        default=DEFAULT_DOOR_HEIGHT_MAX, greater_equals=1,
     )
     levels: DefaultOnWire[list[dict[str, Any]]] = Field(default_factory=list)
     staircases: DefaultOnWire[list[dict[str, Any]]] = Field(default_factory=list)
@@ -99,6 +108,27 @@ class StructureTemplate(BaseModel):
                 "structure_types",
                 derived or list(DEFAULT_BUILDING_PURPOSES),
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_entry_points(self) -> StructureTemplate:
+        for level in self.levels:
+            rooms = level.get("rooms")
+            if not isinstance(rooms, list):
+                continue
+            for room in rooms:
+                if not isinstance(room, dict):
+                    continue
+                for field in ("entry_point", "back_entry_point"):
+                    entry = room.get(field)
+                    if entry is None:
+                        continue
+                    try:
+                        EntryPoint.model_validate(entry)
+                    except ValidationError as exc:
+                        raise ValueError(
+                            f"room '{room.get('room_id')}' {field}: {exc}"
+                        ) from exc
         return self
 
     @field_validator("system_name", mode="after")
