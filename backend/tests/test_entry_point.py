@@ -11,6 +11,7 @@ from app.dataModel.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.structure.enums.entryAccessType import EntryAccessType
 from app.dataModel.structure.enums.passageType import PassageType
 from app.dataModel.structure.room import EntryPoint
+from tests.structureWire import room_wire, level_wire
 
 
 class EntryPointTests(unittest.TestCase):
@@ -50,9 +51,9 @@ class EntryPointTests(unittest.TestCase):
             wire = {
                 "system_name": "00000000-0000-4000-8000-000000000001",
                 "display_name": "Test",
-                "levels": [{"rooms": [{"room_id": "hall", field: {
+                "levels": [level_wire(rooms=[room_wire(**{field: {
                     "wall": "west", "passage_type": "service_entrance",
-                }}]}],
+                }})])],
             }
             original = deepcopy(wire)
             structure = StructureTemplate.model_validate(wire)

@@ -9,11 +9,16 @@ from pydantic import ValidationError
 from app.dataModel.structure.building.structureCatalog import StructureCatalog
 from app.dataModel.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose
+from tests.structureWire import room_wire, level_wire
 
 _UID = "00000000-0000-4000-8000-0000000000aa"
 
 
 def _structure(**kwargs) -> StructureTemplate:
+    if "levels" in kwargs:
+        kwargs["levels"] = [level_wire(**(level | {
+            "rooms": [room_wire(**room) for room in level["rooms"]],
+        })) for level in kwargs["levels"]]
     return StructureTemplate.model_validate({
         "system_name": _UID,
         "display_name": "Test",

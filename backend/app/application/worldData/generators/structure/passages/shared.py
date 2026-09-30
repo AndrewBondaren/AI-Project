@@ -3,7 +3,7 @@ Shared helpers for passage builders.
 """
 from app.utils.deterministicIds import det_uuid as _det_uuid
 
-from app.dataModel.spatial.facing import Facing, parse_facing_or_default
+from app.dataModel.spatial.facing import Facing
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 
 _WALL_DIRS: dict[Facing, tuple[int, int]] = {
@@ -44,11 +44,11 @@ def _doorway_facing(shared: list[tuple[int, int]]) -> Facing:
 
 def _exterior_cells_on_wall(
     room: _RoomInstance,
-    direction: str | Facing,
+    direction: Facing,
     all_union: set[tuple[int, int]],
 ) -> list[tuple[int, int]]:
-    facing = parse_facing_or_default(direction, default=Facing.SOUTH)
-    dx, dy = _WALL_DIRS[facing]
+    # EntryPoint has already validated this cardinal at the template boundary.
+    dx, dy = _WALL_DIRS[direction]
     fp = room.get_footprint()
     result: set[tuple[int, int]] = set()
     for (x, y) in fp:

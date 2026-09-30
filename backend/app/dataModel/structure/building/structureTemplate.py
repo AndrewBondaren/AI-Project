@@ -25,6 +25,7 @@ from app.dataModel.constrainedField import constrained_field
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.structure.building.roomConnection import RoomConnection
 from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
+from app.dataModel.structure.building.levelDef import LevelDef, validate_room_ids
 from app.dataModel.structure.room.entryPoint import EntryPoint
 from app.dataModel.structure.enums.buildingPurpose import (
     DEFAULT_BUILDING_PURPOSES,
@@ -110,6 +111,17 @@ class StructureTemplate(BaseModel):
                 "structure_types",
                 derived or list(DEFAULT_BUILDING_PURPOSES),
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_levels(self) -> StructureTemplate:
+        parsed = []
+        for index, level in enumerate(self.levels):
+            try:
+                parsed.append(LevelDef.model_validate(level))
+            except ValidationError as exc:
+                raise ValueError(f"levels[{index}]: {exc}") from exc
+        validate_room_ids(parsed)
         return self
 
     @model_validator(mode="after")

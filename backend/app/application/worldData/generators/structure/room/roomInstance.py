@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from app.dataModel.structure.room.entryPoint import EntryPoint
+from app.dataModel.structure.enums.attachWall import AttachWall
 
 from app.application.worldData.generators.structure.shapes import room_footprint
 
@@ -42,7 +43,7 @@ class _RoomInstance:
 
     # Опциональные поля из room_def
     attach_to:           str | None = None
-    attach_wall:         str | None = None
+    attach_wall:         AttachWall = AttachWall.BOTH
     perimeter_required:  bool = False
     underground_fallback: bool = False
     entry_point:         EntryPoint | None = None

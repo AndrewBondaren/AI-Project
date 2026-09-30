@@ -272,7 +272,7 @@ level_z = level.z_height ?? max(room_z for room in level.rooms)
 | `count_range` | [int, int] | conditional | Диапазон кол-ва (только при `required: false`) |
 | `perimeter_required` | bool | optional | Комната должна касаться внешней стены здания. Default: `false`. Принудительно `true` если объявлен `entry_point` или `back_entry_point` (см. правило ниже) |
 | `attach_to` | string | optional | `room_id` комнаты-хоста (коридора); эта комната прикрепляется вдоль его стены |
-| `attach_wall` | string | conditional | Обязателен если `attach_to` задан. `"north"`, `"south"`, `"east"`, `"west"`, `"both"`, `"any"` |
+| `attach_wall` | string | optional | `StrictEnumOnWire[AttachWall]`: `"north"`, `"south"`, `"east"`, `"west"`, `"both"`, `"any"`. Отсутствующее или некорректное значение → `both` (решение мастера 2026-09-30); при `attach_to` отсутствие, а также любая подмена заданного значения сопровождаются ERROR на runtime-границе через централизированный лог |
 | `passage_type` | string | optional | Тип прохода к комнате-хосту при `attach_to`. Default: `"doorway"`. Заменяет явный connection entry. |
 | `max_overhang` | int | optional | Макс. выступ за границы ground floor footprint в ячейках. Default: `0`. Разрешён только для `room_type: "balcony"`. Без `has_column`: не более 2. С `has_column`: не более 4 |
 | `has_column` | bool | optional | Балкон опирается на колонны. Увеличивает лимит `max_overhang` до 4. Генератор размещает ячейки `column` на ground floor под выступающими углами балкона |
@@ -302,6 +302,22 @@ level_z = level.z_height ?? max(room_z for room in level.rooms)
 Генератор обеспечивает периметральное размещение такой комнаты при layout. `attach_to` на комнате с `entry_point`/`back_entry_point` — дополнительный WARNING: архитектурно некорректно, но технически допустимо.
 
 Либо `count`, либо `count_range` — не оба одновременно.
+
+**POJO-границы (срез 6.3, 2026-09-30).** `StructureTemplate.levels` и вложенные
+`rooms` сохраняют исходные dict. Импорт проверяет `LevelDef` / `RoomDef` /
+`SizeSpec` / `ShapeParams`; генератор повторно парсит их перед генерацией.
+Нарушенные required-условия отклоняются на импорте, на runtime-границе дают
+`GenerationError` с контекстом. Дубли `room_id` запрещены во всём шаблоне;
+`attach_to` должен существовать на том же уровне. Битая runtime-ссылка приводит
+к пропуску комнаты и зависимых прикреплений с ERROR, остальные комнаты генерируются.
+POJO не эмитируют лог: отметки подмен обрабатывает `StructureGeneratorService`.
+
+Сохранены текущие defaults: `count=1`, `isolated=false`, `access_mechanic=[]`,
+`arm_corner/stem_wall=any`; отсутствующий `shape_type` сохраняет вывод формы из size.
+Некорректный `z_height` (включая `0`) заменяется на наследование высоты шаблона,
+с ERROR при генерации; отсутствие или `null` — штатное наследование без лога.
+Диапазоны L/T обязательны, в том числе если соответствующая форма — один из
+элементов массива `shape_type`; геометрический алгоритм и порядок RNG не менялись.
 
 ---
 
@@ -454,6 +470,16 @@ else:
 
 Валидация: `stem_width_range[1] < size.width_range[0]` → иначе `ValidationError` (стержень шире балки).
 
+**Внутренняя граница геометрии (6.4, решение мастера 2026-09-30):** wire-дефолт
+`stem_wall="any"` по-прежнему выбирается через RNG в фабрике. Если до геометрии
+дошло отсутствующее, неразрешённое или некорректное направление, генерация
+продолжается с `SOUTH` и централизованным ERROR. Единственный защитный дефолт
+хранится в `ResolvedStemWall` (`StrictEnumOnWire[Facing]`); POJO не логирует.
+Фабрика нормализует направление один раз с контекстом template/room, чтобы
+повторные footprint-запросы не дублировали ERROR. Прямой вызов геометрии также
+защищён и сообщает координаты. Известный mixed-array L/T баг этим не исправлен,
+его прежний RNG-поток и геометрия сохранены.
+
 ---
 
 ### 3.6 Поля entry_point / back_entry_point (на комнате)
@@ -488,11 +514,13 @@ Wire-ключ высоты — **`door_height`**. Прежнее чтение `h
 Формула реализована для обоих входов в `passages/entry.py`; `z_height` берётся из
 `room.z_height`. Поля `StructureTemplate`: `door_height_ratio` (default `0.75`,
 `0 < ratio <= 1`) и `door_height_max` (default `5`, `>= 1`). Явная высота не
-ограничивается cap: к ней применяется нижний предел мира и проверка потолка.
+ограничивается cap и не clamp'ится к пределу мира: значение ниже
+`world.default_passage_height` — ошибка автора, оно отбрасывается и заменяется
+авто-резолвом (решение мастера 2026-09-30).
 
 ```
-если door_height задан явно:
-    door_height = max(door_height, world.default_passage_height)
+если door_height задан явно и door_height >= world.default_passage_height:
+    использовать door_height
 иначе:
     если z_height <= 3:
         door_height = z_height - 1
@@ -509,7 +537,7 @@ Wire-ключ высоты — **`door_height`**. Прежнее чтение `h
   z=20 → max(5, 2) = 5    (cap)
 ```
 
-`world.default_passage_height` — жёсткий нижний предел: дверь не может быть ниже даже если авто-резолв даёт меньшее значение.
+`world.default_passage_height` — жёсткий нижний предел: дверь не может быть ниже даже если авто-резолв даёт меньшее значение. Явное `door_height` ниже предела мира — не валидно и заменяется авто-резолвом, а не поднимается до предела (автор задал ошибочную высоту → комната получает пропорциональный проём, а не минимальную щель).
 
 Runtime-валидация: `door_height >= world.default_passage_height` и
 `door_height < room.z_height` → иначе `GenerationError` с uid структуры и room_id.
@@ -596,7 +624,7 @@ porch_material = context.porch_material ?? building.parent_floor_material
 | `passage_type` | string | `doorway`, `archway`. `staircase` запрещён — используй `staircases[]`. Любое значение вне `{doorway, archway}` (включая `staircase` и мусор) не валит импорт: `RoomConnection` коерсит в `doorway`; ERROR-лог — на границе генератора (`_resolve_connections`), попадает в generation-транскрипт — толерантность к битым шаблонам (решение мастера 2026-09-29) |
 | `required` | bool | Если обе комнаты сгенерированы — проход обязателен |
 | `width` | int | optional. Ширина проёма в ячейках. Default: `1` |
-| `door_height` | int | optional. Явная высота проёма. Если не задана — тот же авто-резолв что в `entry_point`. Финальное значение всегда `max(resolved, world.default_passage_height)` |
+| `door_height` | int | optional. Явная высота проёма. Если не задана или ниже `world.default_passage_height` — тот же авто-резолв что в `entry_point`, но `z_height` берётся `min(from_room.z_height, to_room.z_height)` — проём живёт в стене обеих комнат, формула высокой комнаты не должна пробить потолок низкой (решение мастера 2026-09-30). Финальное значение всегда `>= world.default_passage_height` |
 | `frame_material` | string\|null | optional. Материал дверной коробки / арки. Fallback: `wall_material` from_room |
 | `panel_material` | string\|null | optional. Только для `doorway`. Материал дверного полотна. Fallback: `economic_tier` → `material_registry`. `null` = проём без двери |
 

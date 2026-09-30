@@ -121,6 +121,7 @@ class BuildingAssemblerTests(unittest.TestCase):
                 rooms, _, shafts = StructureGeneratorService()._instantiate_rooms(
                     structure, self.building, levels, self.world, Random(0),
                     StructureGeneratorService._resolve_staircases(structure),
+                    definitions=StructureGeneratorService._resolve_levels(structure),
                     building_band=band,
                 )
                 self.assertEqual(len(shafts["stairs"]), 2)

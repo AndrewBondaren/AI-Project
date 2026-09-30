@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 from app.dataModel.materials import DEFAULT_WALL_MATERIAL
 from app.dataModel.structure.building.roomConnection import RoomConnection
 from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
+from app.dataModel.structure.building.levelDef import LevelDef
 from app.dataModel.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.structure.enums.passageType import PassageType
 from app.dataModel.spatial.facing import Facing
@@ -98,21 +99,21 @@ def _make_seed(world_uid: str, building_uid: str) -> int:
     return int(hashlib.md5(raw).hexdigest()[:8], 16)
 
 
-def _resolve_z_heights(template: StructureTemplate) -> dict[int, int]:
+def _resolve_z_heights(template: StructureTemplate, definitions: list[LevelDef]) -> dict[int, int]:
     """z_offset → effective z_height."""
     default = template.default_z_height
     return {
-        level_def["z_offset"]: level_def.get("z_height") or default
-        for level_def in template.levels
+        level_def.z_offset: level_def.z_height if level_def.z_height is not None else default
+        for level_def in definitions
     }
 
 
-def _resolve_template_z_heights(template: StructureTemplate) -> dict[int, int | None]:
+def _resolve_template_z_heights(template: StructureTemplate, definitions: list[LevelDef]) -> dict[int, int | None]:
     """z_offset → explicit z_height from template (None if not specified at all)."""
     template_default = template.default_z_height
     return {
-        level_def["z_offset"]: level_def.get("z_height") or template_default
-        for level_def in template.levels
+        level_def.z_offset: level_def.z_height if level_def.z_height is not None else template_default
+        for level_def in definitions
     }
 
 
@@ -124,19 +125,19 @@ def _compute_level_z(building_map_z: int, z_offset: int, z_heights: dict[int, in
     return building_map_z - foundation_depth - sum(z_heights[k] for k in range(z_offset, 0))
 
 
-def _build_levels(template: StructureTemplate, building: NamedLocation,
+def _build_levels(definitions: list[LevelDef], building: NamedLocation,
                   z_heights: dict[int, int], foundation_depth: int = 0) -> dict[int, LocationLevel]:
     return {
-        level_def["z_offset"]: LocationLevel(
-            level_uid=_det_uuid(building.location_uid, f"level_{level_def['z_offset']}"),
+        level_def.z_offset: LocationLevel(
+            level_uid=_det_uuid(building.location_uid, f"level_{level_def.z_offset}"),
             location_uid=building.location_uid,
-            z=_compute_level_z(building.map_z, level_def["z_offset"], z_heights, foundation_depth),
-            z_height=z_heights[level_def["z_offset"]],
-            display_name=level_def["display_name"],
-            isolated=level_def.get("isolated", False),
-            access_mechanic=level_def.get("access_mechanic", []),
+            z=_compute_level_z(building.map_z, level_def.z_offset, z_heights, foundation_depth),
+            z_height=z_heights[level_def.z_offset],
+            display_name=level_def.display_name,
+            isolated=level_def.isolated,
+            access_mechanic=level_def.access_mechanic,
         )
-        for level_def in template.levels
+        for level_def in definitions
     }
 
 
@@ -144,7 +145,7 @@ def _build_levels(template: StructureTemplate, building: NamedLocation,
 # Level layout ordering — propagate staircase anchors across levels
 
 def _staircase_layout_order(
-    template: StructureTemplate,
+    definitions: list[LevelDef],
     staircases: list[StaircaseSpec],
     room_z_offsets: dict[str, int],
 ) -> list[int]:
@@ -154,7 +155,7 @@ def _staircase_layout_order(
     so we can propagate anchor positions.
     Unreachable levels are appended at the end in template order.
     """
-    all_z = [level_def["z_offset"] for level_def in template.levels]
+    all_z = [level_def.z_offset for level_def in definitions]
     adj: dict[int, list[int]] = {z: [] for z in all_z}
     for sc in staircases:
         stops = sc.stops
@@ -243,24 +244,25 @@ class StructureGeneratorService:
 
         rng = Random(_make_seed(world.world_uid, building.location_uid))
 
-        z_heights = _resolve_z_heights(structure)
-        template_z_heights = _resolve_template_z_heights(structure)
-        levels    = _build_levels(structure, building, z_heights, foundation_depth)
+        definitions = self._resolve_levels(structure, building.location_uid)
+        z_heights = _resolve_z_heights(structure, definitions)
+        template_z_heights = _resolve_template_z_heights(structure, definitions)
+        levels    = _build_levels(definitions, building, z_heights, foundation_depth)
         logger.info("levels resolved: %s", {z: (l.z, l.z_height) for z, l in levels.items()})
 
         staircases = self._resolve_staircases(structure)
         all_rooms, room_z_offsets, shaft_by_staircase = self._instantiate_rooms(
-            structure, building, levels, world, rng, staircases, template_z_heights,
+            structure, building, levels, world, rng, staircases, template_z_heights, definitions=definitions,
             building_band=building_band,
         )
         connections = self._resolve_connections(structure)
         self._layout_rooms(
             structure, building, all_rooms, room_z_offsets, shaft_by_staircase,
-            connections, staircases,
+            connections, staircases, definitions=definitions,
         )
 
         cells_dict, room_uids = self._generate_cells(
-            structure, building, levels, all_rooms, world, connections,
+            structure, building, levels, all_rooms, world, connections, definitions,
         )
 
         passages = self._run_passages(
@@ -277,7 +279,7 @@ class StructureGeneratorService:
 
         self._place_wall_openings(
             structure, building, levels, all_rooms, cells_dict, world, rng,
-            ground_z=ground_z, building_band=building_band,
+            ground_z=ground_z, building_band=building_band, definitions=definitions,
         )
 
         _post_process(cells_dict)
@@ -306,6 +308,7 @@ class StructureGeneratorService:
         staircases: list[StaircaseSpec],
         template_z_heights: dict[int, int | None] | None = None,
         *,
+        definitions: list[LevelDef],
         building_band: str | None = None,
     ) -> tuple[list[_RoomInstance], dict[str, int], dict[str, list[_RoomInstance]]]:
         """Steps 2-3: instantiate template rooms + shaft rooms per level."""
@@ -314,8 +317,8 @@ class StructureGeneratorService:
         all_rooms: list[_RoomInstance] = []
         room_z_offsets: dict[str, int] = {}
 
-        for level_def in template.levels:
-            z_offset    = level_def["z_offset"]
+        for level_def in definitions:
+            z_offset    = level_def.z_offset
             level       = levels[z_offset]
             level_rooms = instantiate_level_rooms(
                 level_def, template, level.z_height, z_offset, world, rng,
@@ -361,6 +364,51 @@ class StructureGeneratorService:
             len(shaft_rooms), len(shaft_by_staircase),
         )
         return all_rooms, room_z_offsets, shaft_by_staircase
+
+    @staticmethod
+    def _resolve_levels(template: StructureTemplate, building_uid: str | None = None) -> list[LevelDef]:
+        """Runtime boundary: parse again; broken attachment references degrade with ERROR."""
+        resolved: list[LevelDef] = []
+        seen: set[str] = set()
+        for index, raw in enumerate(template.levels):
+            try:
+                level = LevelDef.model_validate(raw)
+            except ValidationError as exc:
+                raise GenerationError(
+                    f"Structure '{template.system_name}' building '{building_uid}' levels[{index}]: {exc}"
+                ) from exc
+            if level.height_substitution is not None:
+                logger.error(
+                    "Structure '%s' building '%s' level %s: z_height=%s — fallback to template default %s",
+                    template.system_name, building_uid, level.z_offset,
+                    level.height_substitution, template.default_z_height,
+                )
+            for room in level.rooms:
+                if room.room_id in seen:
+                    raise GenerationError(f"Structure '{template.system_name}': duplicate room_id '{room.room_id}'")
+                seen.add(room.room_id)
+                for field, original in room.substitutions:
+                    logger.error(
+                        "Structure '%s' building '%s' room '%s': %s=%s — fallback to %r",
+                        template.system_name, building_uid, room.room_id,
+                        field, original, getattr(room, field).value,
+                    )
+            rooms = list(level.rooms)
+            # Repeat to remove dependent attachments whose host was skipped as well.
+            while True:
+                local_ids = {room.room_id for room in rooms}
+                invalid = [room for room in rooms if room.attach_to is not None and room.attach_to not in local_ids]
+                if not invalid:
+                    break
+                for room in invalid:
+                    logger.error(
+                        "Structure '%s' building '%s' room '%s': attach_to=%r missing on level %s — skipping room",
+                        template.system_name, building_uid, room.room_id, room.attach_to, level.z_offset,
+                    )
+                invalid_ids = {room.room_id for room in invalid}
+                rooms = [room for room in rooms if room.room_id not in invalid_ids]
+            resolved.append(level.model_copy(update={"rooms": rooms}))
+        return resolved
 
     @staticmethod
     def _resolve_connections(template: StructureTemplate) -> list[RoomConnection]:
@@ -409,13 +457,14 @@ class StructureGeneratorService:
         shaft_by_staircase: dict[str, list[_RoomInstance]],
         connections: list[RoomConnection],
         staircases: list[StaircaseSpec],
+        definitions: list[LevelDef],
     ) -> None:
         """Steps 4-5: place rooms on XY per level; mutates all_rooms in-place."""
         logger.info("=== PHASE: layout (order propagation) ===")
         bx = building.map_x or 0
         by = building.map_y or 0
 
-        layout_order = _staircase_layout_order(template, staircases, room_z_offsets)
+        layout_order = _staircase_layout_order(definitions, staircases, room_z_offsets)
         level_start: dict[int, tuple[int, int]] = {layout_order[0]: (bx, by)}
         all_placed_by_id: dict[str, _RoomInstance] = {}
         level_footprint_bounds: dict[int, tuple[int, int, int, int]] = {}
@@ -594,6 +643,7 @@ class StructureGeneratorService:
         all_rooms: list[_RoomInstance],
         world: World,
         connections: list[RoomConnection],
+        definitions: list[LevelDef],
     ) -> tuple[dict[tuple, MapCell], dict[str, str]]:
         """Steps 6-8: assign UIDs, generate cells per level."""
         logger.info("=== PHASE: cell generation ===")
@@ -606,8 +656,8 @@ class StructureGeneratorService:
         }
 
         cells_dict: dict[tuple, MapCell] = {}
-        for level_def in template.levels:
-            z_offset    = level_def["z_offset"]
+        for level_def in definitions:
+            z_offset    = level_def.z_offset
             level       = levels[z_offset]
             level_rooms = [r for r in all_rooms if r.z_offset == z_offset and r.placed]
             before      = len(cells_dict)
@@ -672,6 +722,8 @@ class StructureGeneratorService:
         rng: Random,
         ground_z: int,
         building_band: str | None = None,
+        *,
+        definitions: list[LevelDef],
     ) -> None:
         logger.info("=== PHASE: wall openings ===")
         building_tier = TierResolver.resolve(
@@ -681,8 +733,8 @@ class StructureGeneratorService:
             rng=rng,
         )
 
-        for level_def in template.levels:
-            z_offset    = level_def["z_offset"]
+        for level_def in definitions:
+            z_offset    = level_def.z_offset
             level       = levels[z_offset]
             level_rooms = [
                 r for r in all_rooms

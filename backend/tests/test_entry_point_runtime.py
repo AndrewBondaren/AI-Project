@@ -69,7 +69,8 @@ class EntryPointRuntimeTests(unittest.TestCase):
 
     def instantiate(self, template):
         world, _ = test_world_building()
-        return instantiate_level_rooms(template.levels[0], template, 5, 0, world, Random(42))
+        level = StructureGeneratorService._resolve_levels(template)[0]
+        return instantiate_level_rooms(level, template, 5, 0, world, Random(42))
 
     def test_both_entries_are_typed_and_force_boolean_perimeter(self):
         for field in ("entry_point", "back_entry_point"):

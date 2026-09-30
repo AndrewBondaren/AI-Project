@@ -148,6 +148,10 @@ def build_passages(
                 # Interior width of shaft along the entry wall (perpendicular to facing).
                 _shaft_ref = shaft_fr or shaft_to
                 if _shaft_ref is not None:
+                    # Internal arch-axis convention: an unspecified shaft facing
+                    # uses the N/S axis, so clear width is measured along X.
+                    # StaircaseSpec validates supplied cardinals; this NORTH
+                    # does not fill the optional wire field or orient the shaft.
                     _facing = parse_facing_or_default(_shaft_ref.facing, default=Facing.NORTH)
                     _arch_width = (
                         (_shaft_ref.width - 2) if _facing in NS_FACINGS

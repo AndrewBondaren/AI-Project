@@ -1,3 +1,4 @@
+from app.dataModel.structure.room.sizeSpec import SizeSpec
 from app.application.worldData.generators.structure.shapeType import ShapeType
 
 _SQUARE_SIZE_TYPES: frozenset[str] = frozenset({
@@ -10,13 +11,13 @@ class SizeShapeResolver:
     """Выводит ShapeType из size-определения когда shape_type явно не задан."""
 
     @classmethod
-    def from_size_def(cls, size: dict) -> ShapeType:
-        size_type = size.get("size_type")
+    def from_size_def(cls, size: SizeSpec) -> ShapeType:
+        size_type = size.size_type
         if size_type:
             return cls.from_size_type(size_type)
         return cls.from_ranges(
-            size.get("width_range", [1, 1]),
-            size.get("depth_range"),
+            size.width_range,
+            size.depth_range,
         )
 
     @classmethod

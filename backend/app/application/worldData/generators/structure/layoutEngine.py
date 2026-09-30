@@ -371,7 +371,7 @@ def _layout_mode_b(
             logger.warning("layout mode_b | host=%r not placed — skipping %d attached room(s)", host_id, len(group))
             continue
 
-        attach_wall = group[0].attach_wall or "both"
+        attach_wall = group[0].attach_wall
 
         try:
             side = Facing(attach_wall)

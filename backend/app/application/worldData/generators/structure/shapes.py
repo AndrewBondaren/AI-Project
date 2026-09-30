@@ -10,8 +10,23 @@ Coordinate convention:
 """
 
 import math
+import logging
 
-from app.dataModel.spatial.facing import Facing, parse_facing_or_default
+from app.dataModel.spatial.facing import Facing
+from app.dataModel.structure.room.shapeParams import ResolvedStemWall
+
+logger = logging.getLogger(__name__)
+
+
+def resolve_stem_wall(value: object, *, context: str) -> Facing:
+    """Recover an unresolved internal direction without losing generation."""
+    resolved = ResolvedStemWall.model_validate({"stem_wall": value})
+    if resolved.substituted:
+        logger.error(
+            "%s: unresolved/invalid stem_wall=%r — fallback to %s; generation continues",
+            context, value, resolved.stem_wall.value,
+        )
+    return resolved.stem_wall
 
 
 def footprint_rectangle(x0: int, y0: int, width: int, depth: int) -> set[tuple[int, int]]:
@@ -91,7 +106,7 @@ def footprint_l_shape(
 
 def footprint_t_shape(
     x0: int, y0: int, width: int, depth: int,
-    stem_width: int, stem_wall: str,
+    stem_width: int, stem_wall: str | Facing | None,
 ) -> set[tuple[int, int]]:
     """
     Horizontal beam (width × depth) ∪ stem centred on stem_wall.
@@ -105,7 +120,9 @@ def footprint_t_shape(
 
     stem_cx = x0 + width // 2
     stem_cy = y0 + depth // 2
-    wall = parse_facing_or_default(stem_wall, default=Facing.SOUTH)
+    wall = resolve_stem_wall(
+        stem_wall, context=f"t_shape origin=({x0},{y0}) size={width}x{depth}",
+    )
 
     if wall == Facing.SOUTH:
         sx = stem_cx - stem_width // 2
@@ -165,6 +182,6 @@ def room_footprint(
         return footprint_t_shape(
             x0, y0, width, depth,
             stem_width=p.get("stem_width", max(2, width // 3)),
-            stem_wall=p.get("stem_wall", Facing.SOUTH.value),
+            stem_wall=p.get("stem_wall"),
         )
     raise ValueError(f"Unknown shape_type: {shape_type!r}")

@@ -111,7 +111,7 @@ def _layout(system_name: str, structure_type: str, **fields) -> PlotLayoutTempla
         system_name=uid,
         display_name=system_name,
         structure_types=[structure_type],
-        levels=[{"z_offset": 0, "rooms": []}],
+        levels=[],
     )
     return PlotLayoutTemplate(
         system_name=system_name,
