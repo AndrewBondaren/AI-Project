@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 from app.dataModel.materials import DEFAULT_WALL_MATERIAL
 from app.dataModel.structure.building.roomConnection import RoomConnection
+from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
 from app.dataModel.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.structure.enums.passageType import PassageType
 from app.dataModel.spatial.facing import Facing
@@ -144,6 +145,7 @@ def _build_levels(template: StructureTemplate, building: NamedLocation,
 
 def _staircase_layout_order(
     template: StructureTemplate,
+    staircases: list[StaircaseSpec],
     room_z_offsets: dict[str, int],
 ) -> list[int]:
     """
@@ -154,8 +156,8 @@ def _staircase_layout_order(
     """
     all_z = [level_def["z_offset"] for level_def in template.levels]
     adj: dict[int, list[int]] = {z: [] for z in all_z}
-    for sc in template.staircases:
-        stops = sc.get("stops", [])
+    for sc in staircases:
+        stops = sc.stops
         for i in range(len(stops) - 1):
             fr_z = room_z_offsets.get(stops[i])
             to_z = room_z_offsets.get(stops[i + 1])
@@ -246,13 +248,15 @@ class StructureGeneratorService:
         levels    = _build_levels(structure, building, z_heights, foundation_depth)
         logger.info("levels resolved: %s", {z: (l.z, l.z_height) for z, l in levels.items()})
 
+        staircases = self._resolve_staircases(structure)
         all_rooms, room_z_offsets, shaft_by_staircase = self._instantiate_rooms(
-            structure, building, levels, world, rng, template_z_heights,
+            structure, building, levels, world, rng, staircases, template_z_heights,
             building_band=building_band,
         )
         connections = self._resolve_connections(structure)
         self._layout_rooms(
-            structure, building, all_rooms, room_z_offsets, shaft_by_staircase, connections,
+            structure, building, all_rooms, room_z_offsets, shaft_by_staircase,
+            connections, staircases,
         )
 
         cells_dict, room_uids = self._generate_cells(
@@ -261,7 +265,7 @@ class StructureGeneratorService:
 
         passages = self._run_passages(
             structure, building, levels, all_rooms, room_z_offsets, cells_dict, world, rng,
-            connections, ground_z=ground_z, building_band=building_band,
+            connections, staircases, ground_z=ground_z, building_band=building_band,
         )
 
         connect_corridors(
@@ -299,6 +303,7 @@ class StructureGeneratorService:
         levels: dict[int, LocationLevel],
         world: World,
         rng: Random,
+        staircases: list[StaircaseSpec],
         template_z_heights: dict[int, int | None] | None = None,
         *,
         building_band: str | None = None,
@@ -331,7 +336,7 @@ class StructureGeneratorService:
             logger.info("instantiate | z_offset=%d rooms=%d", z_offset, len(level_rooms))
 
         shaft_rooms = instantiate_shaft_rooms(
-            template, room_z_offsets, levels, world, rng,
+            template, staircases, room_z_offsets, levels, world, rng,
             building_band=building_band,
             building_tier=TierResolver.resolve(
                 world=world,
@@ -379,6 +384,19 @@ class StructureGeneratorService:
                 ) from exc
         return resolved
 
+    @staticmethod
+    def _resolve_staircases(template: StructureTemplate) -> list[StaircaseSpec]:
+        """Runtime boundary: wire dicts → StaircaseSpec (GenerationError on bad wire)."""
+        resolved: list[StaircaseSpec] = []
+        for index, raw in enumerate(template.staircases):
+            try:
+                resolved.append(StaircaseSpec.model_validate(raw))
+            except ValidationError as exc:
+                raise GenerationError(
+                    f"Structure '{template.system_name}' staircases[{index}]: {exc}"
+                ) from exc
+        return resolved
+
     # ------------------------------------------------------------------
     # Phase: layout
 
@@ -390,13 +408,14 @@ class StructureGeneratorService:
         room_z_offsets: dict[str, int],
         shaft_by_staircase: dict[str, list[_RoomInstance]],
         connections: list[RoomConnection],
+        staircases: list[StaircaseSpec],
     ) -> None:
         """Steps 4-5: place rooms on XY per level; mutates all_rooms in-place."""
         logger.info("=== PHASE: layout (order propagation) ===")
         bx = building.map_x or 0
         by = building.map_y or 0
 
-        layout_order = _staircase_layout_order(template, room_z_offsets)
+        layout_order = _staircase_layout_order(template, staircases, room_z_offsets)
         level_start: dict[int, tuple[int, int]] = {layout_order[0]: (bx, by)}
         all_placed_by_id: dict[str, _RoomInstance] = {}
         level_footprint_bounds: dict[int, tuple[int, int, int, int]] = {}
@@ -406,7 +425,7 @@ class StructureGeneratorService:
             level_rooms = [r for r in all_rooms if r.z_offset == z_offset]
 
             synth_conns = self._build_synth_conns(
-                connections, template, z_offset, room_z_offsets, shaft_by_staircase,
+                connections, staircases, z_offset, room_z_offsets, shaft_by_staircase,
             )
 
             parent_bounds = level_footprint_bounds.get(z_offset - 1) if z_offset > 0 else None
@@ -417,14 +436,14 @@ class StructureGeneratorService:
                     all_placed_by_id[r.room_id] = r
 
             self._place_level_shafts(
-                z_offset, template, all_rooms, room_z_offsets,
+                z_offset, staircases, all_rooms, room_z_offsets,
                 shaft_by_staircase, all_placed_by_id, level_start,
             )
             self._propagate_trapdoor_starts(
-                z_offset, template, room_z_offsets, all_placed_by_id, level_start,
+                z_offset, staircases, room_z_offsets, all_placed_by_id, level_start,
             )
 
-            trim_corridor_rooms(all_rooms, template)
+            trim_corridor_rooms(all_rooms, staircases)
 
             placed_rooms_this = [r for r in all_rooms if r.z_offset == z_offset and r.placed]
             if placed_rooms_this:
@@ -463,18 +482,18 @@ class StructureGeneratorService:
     def _build_synth_conns(
         self,
         connections: list[RoomConnection],
-        template: StructureTemplate,
+        staircases: list[StaircaseSpec],
         z_offset: int,
         room_z_offsets: dict[str, int],
         shaft_by_staircase: dict[str, list[_RoomInstance]],
     ) -> list[RoomConnection]:
         """Synthetic archway connections: shaft ↔ to_room for the current level."""
         synth = list(connections)
-        for sc in template.staircases:
-            if not requires_shaft(sc.get("staircase_type")):
+        for sc in staircases:
+            if not requires_shaft(sc.staircase_type):
                 continue
-            sc_id      = sc.get("staircase_id", "staircase")
-            stops      = sc.get("stops", [])
+            sc_id      = sc.staircase_id
+            stops      = sc.stops
             shaft_list = shaft_by_staircase.get(sc_id, [])
             for i, stop_id in enumerate(stops):
                 if i == 0:
@@ -492,7 +511,7 @@ class StructureGeneratorService:
     def _place_level_shafts(
         self,
         z_offset: int,
-        template: StructureTemplate,
+        staircases: list[StaircaseSpec],
         all_rooms: list[_RoomInstance],
         room_z_offsets: dict[str, int],
         shaft_by_staircase: dict[str, list[_RoomInstance]],
@@ -500,11 +519,11 @@ class StructureGeneratorService:
         level_start: dict[int, tuple[int, int]],
     ) -> None:
         """AdjacentShaftPlacer for fr_z shaft instances; propagates level_start to to_z levels."""
-        for sc in template.staircases:
-            if not requires_shaft(sc.get("staircase_type")):
+        for sc in staircases:
+            if not requires_shaft(sc.staircase_type):
                 continue
-            sc_id  = sc.get("staircase_id", "staircase")
-            stops  = sc.get("stops", [])
+            sc_id  = sc.staircase_id
+            stops  = sc.stops
             if not stops or room_z_offsets.get(stops[0]) != z_offset:
                 continue
 
@@ -537,17 +556,17 @@ class StructureGeneratorService:
     def _propagate_trapdoor_starts(
         self,
         z_offset: int,
-        template: StructureTemplate,
+        staircases: list[StaircaseSpec],
         room_z_offsets: dict[str, int],
         all_placed_by_id: dict[str, _RoomInstance],
         level_start: dict[int, tuple[int, int]],
     ) -> None:
         """No-shaft staircases (trapdoor): align target level to the placed anchor room."""
-        for sc in template.staircases:
-            if requires_shaft(sc.get("staircase_type")):
+        for sc in staircases:
+            if requires_shaft(sc.staircase_type):
                 continue
-            sc_id = sc.get("staircase_id", "?")
-            stops = sc.get("stops", [])
+            sc_id = sc.staircase_id
+            stops = sc.stops
             for i in range(len(stops) - 1):
                 for anchor_id, target_id in ((stops[i], stops[i + 1]),
                                               (stops[i + 1], stops[i])):
@@ -615,6 +634,7 @@ class StructureGeneratorService:
         world: World,
         rng: Random,
         connections: list[RoomConnection],
+        staircases: list[StaircaseSpec],
         ground_z: int,
         building_band: str | None = None,
     ) -> list[LocationPassage]:
@@ -626,7 +646,7 @@ class StructureGeneratorService:
             cells_dict, all_rooms, connections,
             levels, room_z_offsets,
             world.world_uid, building.location_uid, rng,
-            world=world, template=template,
+            world=world, template=template, staircases=staircases,
             building_tier=TierResolver.resolve(
                 world=world,
                 building=building,

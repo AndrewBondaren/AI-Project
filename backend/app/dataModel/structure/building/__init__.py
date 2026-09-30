@@ -9,6 +9,7 @@ from app.dataModel.structure.building.plotLayoutTemplate import (
 )
 from app.dataModel.structure.building.occupiedFootprint import OccupiedFootprintSpec
 from app.dataModel.structure.building.roomConnection import RoomConnection
+from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
 from app.dataModel.structure.building.buildingTemplateOutline import BuildingTemplateOutline
 from app.dataModel.structure.building.buildingTemplateRegistryEntry import BuildingTemplateRegistryEntry
 from app.dataModel.structure.building.buildingTemplateRoomSlot import BuildingTemplateRoomSlot
@@ -32,6 +33,7 @@ __all__ = [
     "OccupiedFootprintSpec",
     "PlotLayoutTemplate",
     "RoomConnection",
+    "StaircaseSpec",
     "StructureCatalog",
     "StructureKey",
     "StructureTemplate",

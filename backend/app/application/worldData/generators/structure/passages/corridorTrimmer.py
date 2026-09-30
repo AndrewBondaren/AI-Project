@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
 
 logger = logging.getLogger(__name__)
 
@@ -16,14 +16,14 @@ _MIN_CORRIDOR_LENGTH = 3
 
 
 def trim_corridor_rooms(
-    all_rooms: list[_RoomInstance],
-    template:  StructureTemplate,
+    all_rooms:  list[_RoomInstance],
+    staircases: list[StaircaseSpec],
 ) -> None:
     """
     Shorten each corridor room to the extent of its last attached room.
     Mutates room.depth / room.width / room.origin_y / room.origin_x in-place.
     """
-    corridor_to_sc = _build_corridor_to_staircase(template)
+    corridor_to_sc = _build_corridor_to_staircase(staircases)
     shaft_by_sc    = _build_shaft_by_staircase(all_rooms)
     placed         = [r for r in all_rooms if r.placed]
 
@@ -160,12 +160,11 @@ def _apply(
 # ---------------------------------------------------------------------------
 # Build helpers
 
-def _build_corridor_to_staircase(template: StructureTemplate) -> dict[str, str]:
+def _build_corridor_to_staircase(staircases: list[StaircaseSpec]) -> dict[str, str]:
     result: dict[str, str] = {}
-    for sc in template.staircases:
-        sc_id = sc.get("staircase_id", "?")
-        for stop in sc.get("stops", [])[1:]:
-            result[stop] = sc_id
+    for sc in staircases:
+        for stop in sc.stops[1:]:
+            result[stop] = sc.staircase_id
     return result
 
 

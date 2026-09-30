@@ -459,7 +459,7 @@ class UShapeBuilder(StaircaseBuilder):
                 self.conn_label, prev_anchor,
             )
 
-        staircase_id = (self.sc_entry or {}).get("staircase_id") or self.conn_label
+        staircase_id = self.sc_entry.staircase_id
         rng = scoped_rng(self.building_uid, staircase_id, "fr_anchor")
         params = _compute_u_params(ax, ay, w, d, facing, self.z_height, self.conn_label,
                                    prev_fr_anchor=prev_anchor,

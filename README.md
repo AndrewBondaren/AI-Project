@@ -61,14 +61,12 @@ curl.exe "http://localhost:8000/api/worlds/world-test-003/map/bootstrap-tiles?sc
 curl.exe "http://localhost:8000/api/worlds/world-test-003/map/loading-progress"
 
 # 2. Инициализация города (C11/C24 packing)
-# generate-settlement = packing поселения поверх готового pack (light/full).
-# Требует C23 topology (делает full_bake). Без якоря — очередь всех
-# незапакованных районов до complete; уже упакованные районы пропускаются
-# (packed_district_uids в manifest). Якорь = ровно один район:
-#   district_uid — канонический uid района (named_locations)
-#   at_x + at_y  — world-fine координаты, резолвер мапит на район (spawn-кейс)
-# Оба якоря сразу → 422. Нет topology → 409. Результат дозаписывается
-# кадрами в тот же locations/l.{uid}.settlement.zst.
+generate-settlement = packing поселения поверх готового pack (light/full).
+Требует C23 topology (делает full_bake). Без якоря — очередь всех незапакованных районов до complete; уже упакованные районы пропускаются
+(packed_district_uids в manifest). Якорь = ровно один район:
+district_uid — канонический uid района (named_locations)
+at_x + at_y  — world-fine координаты, резолвер мапит на район (spawn-кейс)
+Оба якоря сразу → 422. Нет topology → 409. Результат дозаписывается кадрами в тот же locations/l.{uid}.settlement.zst.
 
 # список локаций — взять location_uid
 curl.exe "http://localhost:8000/api/worlds/world-test-003/locations"

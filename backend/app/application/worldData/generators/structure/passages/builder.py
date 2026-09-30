@@ -19,6 +19,7 @@ from app.application.worldData.generators.structure.passages.archwayValidator im
 from app.application.worldData.generators.structure.passages.doorway import _build_doorway
 from app.application.worldData.generators.structure.passages.entry import _build_entry_point
 from app.dataModel.structure.building.roomConnection import RoomConnection
+from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
 from app.dataModel.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.structure.enums.passageType import PassageType
 from app.dataModel.structure.enums.staircaseType import StaircaseType
@@ -46,6 +47,7 @@ def build_passages(
     rng: Random,
     world: World | None = None,
     template: StructureTemplate | None = None,
+    staircases: list[StaircaseSpec] | None = None,
     building_tier: str | None = None,
     ground_z: int = 0,
 ) -> list[LocationPassage]:
@@ -107,9 +109,9 @@ def build_passages(
 
     # --- Pass 2: staircases ---
 
-    # New schema: iterate template["staircases"] and build per segment using shaft instances.
+    # Iterate resolved staircases[] specs and build per segment using shaft instances.
 
-    if template is not None and template.staircases:
+    if staircases:
         shaft_by_id: dict[str, list[_RoomInstance]] = {}
         for r in rooms:
             if r.is_shaft and r.staircase_id:
@@ -117,10 +119,10 @@ def build_passages(
         for lst in shaft_by_id.values():
             lst.sort(key=lambda r: r.instance_idx)
 
-        for sc in template.staircases:
-            sc_id   = sc.get("staircase_id", "staircase")
-            sc_type = StaircaseType.parse_template(sc.get("staircase_type"))
-            stops   = sc.get("stops", [])
+        for sc in staircases:
+            sc_id   = sc.staircase_id
+            sc_type = sc.staircase_type
+            stops   = sc.stops
             shaft_list = shaft_by_id.get(sc_id, [])
 
             for i in range(len(stops) - 1):
@@ -138,7 +140,7 @@ def build_passages(
 
                 fr_level = levels[fr_offset]
                 to_level = levels[to_offset]
-                mat      = sc.get("step_material") or fr_room.floor_material
+                mat      = sc.step_material or fr_room.floor_material
 
                 shaft_fr = shaft_list[i] if i < len(shaft_list) else None
                 shaft_to = shaft_list[i + 1] if i + 1 < len(shaft_list) else None
@@ -202,7 +204,7 @@ def build_passages(
                     passages.append(p)
                     if sc_builder:
                         passages.extend(sc_builder.extra_passages)
-                    if sc_type == StaircaseType.EXTERNAL_VERTICAL_LADDER or (sc_type == StaircaseType.VERTICAL_LADDER and sc.get("on_the_edge", False)):
+                    if sc_type == StaircaseType.EXTERNAL_VERTICAL_LADDER or (sc_type == StaircaseType.VERTICAL_LADDER and sc.on_the_edge):
                         _upper_room  = to_room  if to_level.z > fr_level.z else fr_room
                         _upper_level = to_level if to_level.z > fr_level.z else fr_level
                         _lower_room  = fr_room  if to_level.z > fr_level.z else to_room

@@ -13,6 +13,7 @@ from app.application.worldData.generators.structure.staircase.uShape    import U
 from app.application.worldData.generators.structure.staircase.spiral    import SpiralBuilder
 from app.application.worldData.generators.structure.staircase.verticalLadder  import VerticalLadderBuilder, ExternalVerticalLadderBuilder
 from app.application.worldData.generators.structure.staircase.base      import StaircaseBuilder
+from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
 from app.dataModel.structure.enums.staircaseType import StaircaseType
 from app.dataModel.structure.enums.passageType import PassageType
 from app.db.models.locationLevel import LocationLevel
@@ -31,7 +32,7 @@ _BUILDERS: dict[StaircaseType, type[StaircaseBuilder]] = {
 
 
 def build_staircase(
-    conn_or_entry: dict,
+    sc: StaircaseSpec,
     fr: _RoomInstance,
     to: _RoomInstance,
     fr_level: LocationLevel,
@@ -44,31 +45,20 @@ def build_staircase(
     shaft: "_RoomInstance | None" = None,
     passage_height: int,
 ) -> "tuple[LocationPassage | None, StaircaseBuilder | None]":
-    is_new_schema = shaft is not None or "staircase_id" in conn_or_entry
-    if is_new_schema:
-        # New schema: staircase_type and id come from sc_entry (staircases[] array)
-        stair_type_raw = conn_or_entry.get("staircase_type")
-        sc_id      = conn_or_entry.get("staircase_id", "?")
-        conn_label = f"{sc_id}  {fr.room_id}->{to.room_id}"
-    else:
-        # Old schema: type inferred from to.staircase_type + underground check
-        conn_label        = f"{conn_or_entry['from_room']}->{conn_or_entry['to_room']}"
-        going_underground = (fr.z_offset >= 0 and to.z_offset < 0)
-        coming_up         = (fr.z_offset <  0 and to.z_offset >= 0)
-        stair_type_raw = "trapdoor" if (going_underground or coming_up) else getattr(to, "staircase_type", None)
-
-    stair_type = StaircaseType.parse_template(stair_type_raw)
+    sc_id      = sc.staircase_id
+    conn_label = f"{sc_id}  {fr.room_id}->{to.room_id}"
+    stair_type = sc.staircase_type
     logger.info("build_staircase: %s  stair_type=%r  z_height=%d",
-                conn_label, stair_type_raw, abs(to_level.z - fr_level.z))
+                conn_label, stair_type, abs(to_level.z - fr_level.z))
 
-    if stair_type is None or stair_type not in _BUILDERS:
-        logger.error("staircase %s: unknown staircase_type=%r", conn_label, stair_type_raw)
+    if stair_type not in _BUILDERS:
+        logger.error("staircase %s: unknown staircase_type=%r", conn_label, stair_type)
         return None, None
 
     builder = _BUILDERS[stair_type](
         fr, to, fr_level, to_level, cells, world_uid, building_uid, mat, conn_label,
         shaft=shaft,
-        sc_entry=conn_or_entry,
+        sc_entry=sc,
         passage_height=passage_height,
     )
 
@@ -82,12 +72,8 @@ def build_staircase(
 
     fx, fy = fr_anchor
     tx, ty = to_anchor
-    if is_new_schema:
-        passage_uid = _det_uuid(building_uid, "stair", conn_or_entry.get("staircase_id", "?"),
-                                fr.room_id, to.room_id)
-    else:
-        passage_uid = _det_uuid(building_uid, "stair",
-                                conn_or_entry["from_room"], conn_or_entry["to_room"])
+    passage_uid = _det_uuid(building_uid, "stair", sc.staircase_id,
+                            fr.room_id, to.room_id)
     passage = LocationPassage(
         passage_uid=passage_uid,
         world_uid=world_uid,

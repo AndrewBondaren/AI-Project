@@ -12,6 +12,7 @@ from random import Random
 
 from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
+from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
 from app.dataModel.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.structure.enums.staircaseType import (
     StaircaseType,
@@ -31,23 +32,24 @@ from app.db.models.world import World
 logger = logging.getLogger(__name__)
 
 
-def _resolve_shaft_size(sc_entry: dict, staircase_type: StaircaseType) -> tuple[int, int]:
-    size = sc_entry.get("size") or {}
-    size_type = size.get("size_type")
-    if size_type:
-        footprint = staircase_footprint_min(size_type)
-        if footprint is not None:
-            return footprint
-    if "width_range" in size:
-        w = size["width_range"][0]
-        d = size.get("depth_range", size["width_range"])[0]
-        return w, d
+def _resolve_shaft_size(sc: StaircaseSpec, staircase_type: StaircaseType) -> tuple[int, int]:
+    size = sc.size
+    if size is not None:
+        if size.size_type:
+            footprint = staircase_footprint_min(size.size_type)
+            if footprint is not None:
+                return footprint
+        if size.width_range:
+            w = size.width_range[0]
+            d = (size.depth_range or size.width_range)[0]
+            return w, d
     fallback_key = default_shaft_size_type(staircase_type)
     return staircase_footprint_min(fallback_key) or default_shaft_footprint_min()
 
 
 def instantiate_shaft_rooms(
     template: StructureTemplate,
+    staircases: list[StaircaseSpec],
     room_z_offsets: dict[str, int],
     levels: dict[int, LocationLevel],
     world: World,
@@ -63,10 +65,10 @@ def instantiate_shaft_rooms(
     """
     result: list[_RoomInstance] = []
 
-    for sc in template.staircases:
-        staircase_id = sc.get("staircase_id", "staircase")
-        staircase_type = StaircaseType.parse_template(sc.get("staircase_type"))
-        stops = sc.get("stops", [])
+    for sc in staircases:
+        staircase_id = sc.staircase_id
+        staircase_type = sc.staircase_type
+        stops = sc.stops
 
         if not requires_shaft(staircase_type):
             continue
@@ -137,7 +139,7 @@ def instantiate_shaft_rooms(
                 wall_material=wall_mat,
                 floor_material=floor_mat,
                 staircase_type=staircase_type.value,
-                facing=sc.get("facing"),
+                facing=sc.facing,
                 is_shaft=True,
                 staircase_id=staircase_id,
             ))

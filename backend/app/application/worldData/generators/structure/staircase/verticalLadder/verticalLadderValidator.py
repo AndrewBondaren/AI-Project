@@ -7,6 +7,7 @@ import logging
 from app.application.worldData.generators.structure.cellBuilder import _interior
 from app.dataModel.structure.enums.buildingElement import StructureElement
 from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
+from app.db.models.world import World
 from app.application.worldData.generators.structure.staircase.validator import StaircaseValidator
 from app.application.worldData.generators.structure.staircase.verticalLadder.verticalLadderHelper import (
     _NEIGHBORS,
@@ -129,7 +130,7 @@ class VerticalLadderValidator(StaircaseValidator):
         fr_footprint   = kwargs.get("fr_footprint")
         to_footprint   = kwargs.get("to_footprint")
         on_the_edge    = kwargs.get("on_the_edge", False)
-        passage_height = kwargs.get("passage_height", 2)
+        passage_height = kwargs.get("passage_height", World.default_passage_height)
         self._check_anchor_xy(fr_anchor, to_anchor, conn_label)
         self._check_fr_footprint(ax, ay, fr_footprint, on_the_edge, conn_label)
         self._check_ladder_cell(ax, ay, z_top, cells, conn_label)

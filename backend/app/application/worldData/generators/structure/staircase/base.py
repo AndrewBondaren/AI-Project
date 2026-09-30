@@ -8,6 +8,7 @@ from app.application.worldData.generators.structure.cellBuilder import _interior
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _void_cell, _window_cell
 from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
+from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
 from app.dataModel.structure.enums.buildingElement import StructureElement
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.mapCell import MapCell
@@ -39,7 +40,7 @@ class StaircaseBuilder(ABC):
         conn_label: str,
         *,
         shaft: _RoomInstance | None = None,
-        sc_entry: dict | None = None,
+        sc_entry: StaircaseSpec,
         passage_height: int,
     ) -> None:
         # Нормализация: fr = нижняя комната (меньший z), to = верхняя
@@ -56,8 +57,8 @@ class StaircaseBuilder(ABC):
         self.building_uid = building_uid
         self.mat          = mat
         self.conn_label   = conn_label
-        self.shaft           = shaft          # shaft instance (new schema); None = old schema
-        self.sc_entry        = sc_entry       # raw staircases[] entry; None = old schema
+        self.shaft           = shaft          # shaft instance; None = no-shaft staircase (ladder)
+        self.sc_entry        = sc_entry       # resolved staircases[] spec
         self.passage_height  = passage_height
         self.z_height        = abs(to_level.z - fr_level.z)
         self.z_lo            = min(fr_level.z, to_level.z)

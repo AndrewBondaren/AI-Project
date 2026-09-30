@@ -119,7 +119,9 @@ class BuildingAssemblerTests(unittest.TestCase):
         for band, expected in (("rich", "high_stone"), ("poor", "low_stone"), (None, "median_stone")):
             with self.subTest(band=band), patch.object(TierResolver, "resolve", wraps=TierResolver.resolve) as resolve:
                 rooms, _, shafts = StructureGeneratorService()._instantiate_rooms(
-                    structure, self.building, levels, self.world, Random(0), building_band=band,
+                    structure, self.building, levels, self.world, Random(0),
+                    StructureGeneratorService._resolve_staircases(structure),
+                    building_band=band,
                 )
                 self.assertEqual(len(shafts["stairs"]), 2)
                 self.assertEqual(len(rooms), 4)

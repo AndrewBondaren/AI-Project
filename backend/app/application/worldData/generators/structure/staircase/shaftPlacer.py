@@ -11,6 +11,7 @@ import logging
 from abc import ABC, abstractmethod
 
 from app.dataModel.spatial.facing import Facing, parse_facing
+from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
 from app.application.worldData.generators.structure.layoutEngine import (
     _try_adjacent, _place_next_to_any, _DIRECTIONS,
 )
@@ -134,12 +135,10 @@ class EdgeMountedShaftPlacer(ShaftPlacer):
         return True
 
 
-def make_shaft_placer(sc_entry: dict) -> ShaftPlacer:
-    """Выбирает стратегию по флагам sc_entry."""
-    in_a_room = sc_entry.get("in_a_room", False)
-    outside = sc_entry.get("outside", False)
-    if in_a_room:
+def make_shaft_placer(sc: StaircaseSpec) -> ShaftPlacer:
+    """Выбирает стратегию по флагам записи staircases[]."""
+    if sc.in_a_room:
         return EmbeddedShaftPlacer()
-    if outside:
+    if sc.outside:
         return EdgeMountedShaftPlacer()
     return AdjacentShaftPlacer()
