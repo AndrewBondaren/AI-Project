@@ -65,7 +65,7 @@ metadata:
 | Геометрия карты: диск footprint, `location_pin` = **индекс** в `locations_index[]`, координаты пина | pack light tile + `locations_index.json` | WP-9 зеркало якорей, не полный `NamedLocation` | L0 mosaic / dump |
 | Порядок пинов в индексе | pack bake | стабилен, пока не light/full bake | клетка → uid |
 
-**Стык (locked):** HTTP `GET …/render-world-grid` (и tile-grids) уже грузит мир из SQL. На том же запросе — `named_locations` мира. Overlay **по `location_uid`** на существующий список пинов pack: type/subtype/size с SQL **перекрывают** поля пина. Порядок массива **не** менять (`location_pin` на клетке сломается). План имплементации: [`.cursor/plans/l0-identity-sql-overlay.md`](../.cursor/plans/l0-identity-sql-overlay.md).
+**Стык (locked):** HTTP `GET …/render-world-grid` (и tile-grids) уже грузит мир из SQL. На том же запросе — `named_locations` мира. Overlay **по `location_uid`** на существующий список пинов pack: type/subtype/size с SQL **перекрывают** поля пина. Порядок массива **не** менять (`location_pin` на клетке сломается). План имплементации: [`.cursor/plans/l0-identity-sql-overlay-done.md`](../.cursor/plans/l0-identity-sql-overlay-done.md).
 
 ```
 pack tiles + locations_index          named_locations (SQL)

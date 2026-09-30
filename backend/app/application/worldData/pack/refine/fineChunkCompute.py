@@ -1,7 +1,7 @@
 """One ColumnRect worker: discover+paint then one column fill (R41 / C28).
 
 Discover on the ready heightmap, then one fill.
-Plan: ``.cursor/plans/relief-pipeline-v2.md``.
+Plan: ``.cursor/plans/relief-pipeline-v2-done.md``.
 """
 
 from __future__ import annotations

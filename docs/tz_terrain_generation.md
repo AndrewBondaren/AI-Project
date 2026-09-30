@@ -1263,7 +1263,7 @@ app/api/routes/map.py                  ← debug harness: POST …/generate-* (�
 ```
 
 **Tech debt / smells:** `tz_generator_technical_debt.md`  
-**Coordinate implementation plan:** `.cursor/plans/coordinate-spaces.md`
+**Coordinate implementation plan:** `.cursor/plans/coordinate-spaces-done.md`
 
 ---
 

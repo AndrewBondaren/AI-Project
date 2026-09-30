@@ -5,7 +5,7 @@ description: "Outdoor settlement на запечённом World Pack — дер
 
 # ТЗ: Outdoor settlement на Pack
 
-**Статус:** целевая архитектура (согласовано 2026-08-30). **O1–O4 locked (C14–C16, C19–C20), C17–C18, C21, C22, C23** (topology на `full_bake`), **C24** (packing по району, дозапись в тот же zst). Impl-план outdoor: [`.cursor/plans/settlement-outdoor-pack.md`](../.cursor/plans/settlement-outdoor-pack.md). **P13** ядро C21 в коде; leftover generate — **C21-T\*** (§14). План C21: [`.cursor/plans/c21-plot-ground-z.md`](../.cursor/plans/c21-plot-ground-z.md). **C22** SoT: [tz_structure_connections.md](./tz_structure_connections.md) §5.1.3. **C23** SoT: [tz_city_generation.md](./tz_city_generation.md) §8. **C24** код ⬜.
+**Статус:** целевая архитектура (согласовано 2026-08-30). **O1–O4 locked (C14–C16, C19–C20), C17–C18, C21, C22, C23** (topology на `full_bake`), **C24** (packing по району, дозапись в тот же zst). Impl-план outdoor: [`.cursor/plans/settlement-outdoor-pack-done.md`](../.cursor/plans/settlement-outdoor-pack-done.md). **P13** ядро C21 в коде; leftover generate — **C21-T\*** (§14). План C21: [`.cursor/plans/c21-plot-ground-z-done.md`](../.cursor/plans/c21-plot-ground-z-done.md). **C22** SoT: [tz_structure_connections.md](./tz_structure_connections.md) §5.1.3. **C23** SoT: [tz_city_generation.md](./tz_city_generation.md) §8. **C24** код ⬜.
 
 **Зачем отдельный документ:** алгоритм застройки — [`tz_city_generation.md`](./tz_city_generation.md); участок/здание — [`tz_assembler_hierarchy.md`](./tz_assembler_hierarchy.md) и [`tz_building_generator.md`](./tz_building_generator.md); земля/grade — [`tz_world_pack_storage.md`](./tz_world_pack_storage.md) и [`tz_terrain_relief.md`](./tz_terrain_relief.md). Здесь только **склейка**: оркестрация, куда писать эталон, дерево имён, экспорт. Алгоритмы не копировать — ссылки на пункты.
 
@@ -129,7 +129,7 @@ Debug `POST …/generate-settlement` — тонкая оболочка над **
 
 ### C24 — packing по району (locked product, код ⬜)
 
-Команда: [`/impl-c24`](../.cursor/commands/impl-c24.md). План: [`.cursor/plans/c24-district-packing.md`](../.cursor/plans/c24-district-packing.md).
+Команда: [`/impl-c24`](../.cursor/commands/impl-c24.md). План: [`.cursor/plans/c24-district-packing-done.md`](../.cursor/plans/c24-district-packing-done.md).
 
 Единица дозаписи — **район** (слот C23 / `DistrictAssembler`), не макро-тайл pack и не весь город на spawn. Layout в мировых `(x,y)` (C29); клип по `tile_gx/gy` **запрещён**.
 
@@ -258,7 +258,7 @@ Orchestrator и route используют policy. Нода `lazy_settlement` с
 
 ## 10. Слои имплементации (после замка §13)
 
-Порядок **архитектуры**, не vertical slice продукта. План: [`.cursor/plans/settlement-outdoor-pack.md`](../.cursor/plans/settlement-outdoor-pack.md). Код — когда мастер скажет «делай».
+Порядок **архитектуры**, не vertical slice продукта. План: [`.cursor/plans/settlement-outdoor-pack-done.md`](../.cursor/plans/settlement-outdoor-pack-done.md). Код — когда мастер скажет «делай».
 
 1. POJO/wire city-structure (district → area refs, Area persist).
 2. Pack I/O слоя + merge + `get_volume(footprint)` на facade.
@@ -320,7 +320,7 @@ city §11.4 snapshot / regen — по-прежнему [`tz_world_snapshot.md`](
 
 ## 13. Вопросы — закрыты
 
-Блокеров нет. **O1** → C15, **O2** → C16, **O3** → C20, **O4** → C14/C19. План: [`.cursor/plans/settlement-outdoor-pack.md`](../.cursor/plans/settlement-outdoor-pack.md).
+Блокеров нет. **O1** → C15, **O2** → C16, **O3** → C20, **O4** → C14/C19. План: [`.cursor/plans/settlement-outdoor-pack-done.md`](../.cursor/plans/settlement-outdoor-pack-done.md).
 
 ### O2 — locked (C16)
 
@@ -375,7 +375,7 @@ SQL и файлы pack — не один COMMIT. Надёжность = прот
 
 ### P13 — High: район не должен выравнивать здания
 
-**Статус:** `partial` (ядро C21 в коде, 2026-08-31). **C21 не переоткрывать.** Остаток generate — **C21-T\*** ниже, не новый контракт. План: [`.cursor/plans/c21-plot-ground-z.md`](../.cursor/plans/c21-plot-ground-z.md).
+**Статус:** `partial` (ядро C21 в коде, 2026-08-31). **C21 не переоткрывать.** Остаток generate — **C21-T\*** ниже, не новый контракт. План: [`.cursor/plans/c21-plot-ground-z-done.md`](../.cursor/plans/c21-plot-ground-z-done.md).
 
 **Было (закрыто кодом):** одна z на район — `max(z)` AABB → все `AreaSlot`; cache без `dz`; забор через `DEFAULT_PARCEL_MARGIN_M` / `expand_bbox`.
 
@@ -442,7 +442,7 @@ SQL и файлы pack — не один COMMIT. Надёжность = прот
 
 ## Changelog
 
-| 2026-09-20 | **C24 команда:** `/impl-c24` + план `.cursor/plans/c24-district-packing.md`. Код ⬜. |
+| 2026-09-20 | **C24 команда:** `/impl-c24` + план `.cursor/plans/c24-district-packing-done.md`. Код ⬜. |
 | 2026-09-20 | **C24 якорь:** канон `district_uid`; `at=(x,y)` только резолвер; оба → 422; HTTP без чертежа/`cell_x`. Spawn сначала `at`. |
 | 2026-09-20 | **C24:** packing по району; очередь = C23 SQL − `packed_district_uids` в manifest; тот же `settlement.zst` кадрами; C14 = complete iff packed = перепись. Gameplay = WP-13 + один район. Не клип по тайлу. Код ⬜. |
 | 2026-09-20 | **C11 pack index:** packing / location L2 только если pin в `locations_index.json`. Нет пина → skip, не 422, ERROR `packBakeLog`. C23 без изменений. |
@@ -460,7 +460,7 @@ SQL и файлы pack — не один COMMIT. Надёжность = прот
 | 2026-09-01 | C22: число токенов — SoT connections §5.1.3 «Число токенов»; city только поля + ссылки. |
 | 2026-08-31 | **C22:** касание 4-сосед; счёт район×нитка; max_*_entries; третья улица игнор; cache (template, facing); skip unknown keys. |
 | 2026-08-31 | **C21-T1:** порог кейс 3 = участок=дом → `door`; крыльцо TODO. P13 `partial`; leftover **C21-T1…T10**. C21 не переоткрыт. |
-| 2026-08-30 | **C21:** участок ≠ здание; порог = assembler (`door`/`gate`/`parcel_edge`). План: `.cursor/plans/c21-plot-ground-z.md`. |
+| 2026-08-30 | **C21:** участок ≠ здание; порог = assembler (`door`/`gate`/`parcel_edge`). План: `.cursor/plans/c21-plot-ground-z-done.md`. |
 | 2026-08-30 | **O3 → C20:** variant 1; `front`≥1, `service`≥0; default объявленные двери; ad-hoc не запрещён. |
 | 2026-08-30 | **O4 → C14/C19:** SQL+pack протокол; skip только согласованная пара. |
 | 2026-08-30 | **C18:** сцена = радиус вокруг игрока; карта = здание + рядом; не телепорт. |

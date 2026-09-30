@@ -593,7 +593,7 @@ porch_material = context.porch_material ?? building.parent_floor_material
 |------|-----|----------|
 | `from_room` | string | `room_id` источника |
 | `to_room` | string | `room_id` цели. Оба должны быть на одном `z_offset`. |
-| `passage_type` | string | `doorway`, `archway`. `staircase` запрещён — используй `staircases[]`. |
+| `passage_type` | string | `doorway`, `archway`. `staircase` запрещён — используй `staircases[]`. Любое значение вне `{doorway, archway}` (включая `staircase` и мусор) не валит импорт: `RoomConnection` коерсит в `doorway`; ERROR-лог — на границе генератора (`_resolve_connections`), попадает в generation-транскрипт — толерантность к битым шаблонам (решение мастера 2026-09-29) |
 | `required` | bool | Если обе комнаты сгенерированы — проход обязателен |
 | `width` | int | optional. Ширина проёма в ячейках. Default: `1` |
 | `door_height` | int | optional. Явная высота проёма. Если не задана — тот же авто-резолв что в `entry_point`. Финальное значение всегда `max(resolved, world.default_passage_height)` |

@@ -58,7 +58,7 @@ def pick_barrier_template_type(
     skeleton: CitySkeleton,
     rng:      Random,
 ) -> str | None:
-    """v1 эвристика — polish pass: `.cursor/plans/settlement-assembler.md` § pick_barrier_template_type."""
+    """v1 эвристика — polish pass: `.cursor/plans/settlement-assembler-done.md` § pick_barrier_template_type."""
     registry = economic_tiers(world).root
     uid = world.world_uid
     tier = skeleton.economic_tier or "standard"

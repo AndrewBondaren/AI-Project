@@ -17,7 +17,7 @@ Use this skill when the user asks to run the migrated source command `impl-city-
 
 ## Прочитать до первой правки
 
-1. [`.cursor/plans/city-three-axes-transition.md`](../plans/city-three-axes-transition.md) — **архитектура и порядок слоёв** (не отклоняться).
+1. [`.cursor/plans/city-three-axes-transition-done.md`](../plans/city-three-axes-transition-done.md) — **архитектура и порядок слоёв** (не отклоняться).
 2. [`docs/tz_city_generation.md`](../../docs/tz_city_generation.md) **§1.1 и §9.6** — продукт.
 3. CITY-T-2a…2d в [`docs/tz_generator_technical_debt.md`](../../docs/tz_generator_technical_debt.md).
 4. Правила: `layer-boundaries.mdc`, `assembler-hierarchy.mdc`, `dataModel-no-hardcode.mdc`, `pojo-world-row-wire.mdc`, `json-validation-architecture.mdc`, `project-context.mdc` (DAG / backend / commit).

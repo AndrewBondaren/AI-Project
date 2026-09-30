@@ -50,7 +50,7 @@ Target: `detailed_bake` `scope=location` **один job**:
 
 ## Что сдать мастеру
 
-Файл [`.cursor/plans/detailed-bake-c11.md`](../plans/detailed-bake-c11.md) (создать). Структура:
+Файл [`.cursor/plans/detailed-bake-c11-done.md`](../plans/detailed-bake-c11-done.md) (создать). Структура:
 
 1. **Целевое состояние** — кто caller, кто интерфейс (`materialize`, refine), инварианты (порядок L2→C11; bake не знает `DistrictSlot`).
 2. **Контракты** — сигнатура хука (где: `materialize_pack_detailed` vs конец `_bake_location_scope`); нужен ли outdoor на `PackDetailedBakeOrchestrator` или только surface facade; как прокинуть `world_uid`; skip_if_initialized; settlement-like = `named_location_uses_settlement_fine_footprint`.

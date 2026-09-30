@@ -1,7 +1,7 @@
 """
 SettlementAssembler — оркестратор генерации поселения.
 
-План реализации по фазам: `.cursor/plans/settlement-assembler.md`
+План реализации по фазам: `.cursor/plans/settlement-assembler-done.md`
 
 Текущий статус (v1):
   ✅ Фаза A — CitySkeleton, district slots, entry_nodes, city/district connection graph

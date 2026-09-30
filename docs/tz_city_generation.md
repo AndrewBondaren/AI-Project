@@ -7,10 +7,10 @@
 | Документ | Роль |
 |---|---|
 | [tz_assembler_hierarchy.md](./tz_assembler_hierarchy.md) | Stack Settlement → District → Area → Structure |
-| [.cursor/plans/settlement-assembler.md](../.cursor/plans/settlement-assembler.md) | Фазы A–H impl, acceptance |
-| [.cursor/plans/city-three-axes-transition.md](../.cursor/plans/city-three-axes-transition.md) | Три оси §1.1 слои A–F (сделано в коде) |
+| [.cursor/plans/settlement-assembler-done.md](../.cursor/plans/settlement-assembler-done.md) | Фазы A–H impl, acceptance |
+| [.cursor/plans/city-three-axes-transition-done.md](../.cursor/plans/city-three-axes-transition-done.md) | Три оси §1.1 слои A–F (сделано в коде) |
 | [.cursor/plans/settlement-specialization-districts.md](../.cursor/plans/settlement-specialization-districts.md) | §1.2 CITY-T-2d: специализация, `district_subtype`, приоритет районов |
-| [.cursor/plans/city-t-4-planner-debt.md](../.cursor/plans/city-t-4-planner-debt.md) | CITY-T-4 планировщик после 2d — **сделано** (`/impl-city-t-4`) |
+| [.cursor/plans/city-t-4-planner-debt-done.md](../.cursor/plans/city-t-4-planner-debt-done.md) | CITY-T-4 планировщик после 2d — **сделано** (`/impl-city-t-4`) |
 | [tz_structure_connections.md](./tz_structure_connections.md) | Дороги settlement/district (§5) |
 | [tz_terrain_relief.md](./tz_terrain_relief.md) | **C29:** город на техническом шве pack — норма; layout не клип по тайлу |
 | [tz_world_pack_storage.md](./tz_world_pack_storage.md) | WP-19; topology после `full_bake`; **detailed_bake** = pack локации (консьюмер L2 + C11; не алгоритм C22) |
@@ -355,7 +355,7 @@ Occupancy-flood метровой матрицы в патчи **не** дела�
 ## 6. Алгоритм размещения зданий (v1)
 
 > **Impl:** не монолитный алгоритм §6.2–6.3, а pipeline `SettlementAssembler` → `DistrictAssembler` → `StructureAreaAssembler`.  
-> Smoke: `backend/scripts/debug_settlement.py`. Детали фаз: `.cursor/plans/settlement-assembler.md`.
+> Smoke: `backend/scripts/debug_settlement.py`. Детали фаз: `.cursor/plans/settlement-assembler-done.md`.
 
 ### 6.1 Входные данные
 
@@ -923,7 +923,7 @@ DAG может materialize **разные уровни** в разных нод�
 | 2026-09-06 | **Extract resources:** ENUM-E `resource_kind` (`ore`/`stone`/`timber`/`liquid`) + N+1 `resource_type_registry`. Шаблон здания: `resource_kind`; layout-shaped `subjects` — REF-W + kind match. |
 | 2026-09-06 | **§1.2 subjects:** несколько видов на роли (`subject_kind` строка\|список) и на bind (`subjects` список или карта kind→токены). |
 | 2026-09-05 | **CITY-T-4** resolved (`/impl-city-t-4` A–G): POJO zone/rank/conditions; один resolve; cache=tokens; Bind-only coerce; skip unknown assembler. Не reopen §1.2. Recreate DB (`district_zone_preference`). |
-| 2026-09-05 | **CITY-T-4** команда `/impl-city-t-4` + план `city-t-4-planner-debt.md` (слои A–G). Не reopen §1.2. |
+| 2026-09-05 | **CITY-T-4** команда `/impl-city-t-4` + план `city-t-4-planner-debt-done.md` (слои A–G). Не reopen §1.2. |
 | 2026-09-05 | **§1.2 subjects:** N+1 руды/культуры/изделия/домены на роли (`subjects`, `subject_kind`, `subjects_to_structure_types`); чертёж здания `subjects`. |
 | 2026-09-05 | **§1.2:** морфология (`city`/`village`) ≠ специализация на шаблоне поселения (`extract`/`process`/…). Районы: `district_type` + `district_subtype`. Приоритет: список на городе → специализация → морфология. Реестр §4.1. |
 | 2026-09-05 | **§1.1** три оси: тип поселения (рецепт районов + обязательные типы зданий) ≠ тип района ≠ `structure_type` / чертёж библиотеки. Клетка = footprint, не макротайл. §9.4/§9.6/seed под оси. **CITY-T-2d**. |

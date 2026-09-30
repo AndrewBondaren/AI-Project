@@ -365,7 +365,7 @@ L0 debug-карта: глиф footprint поселения — `subtypes[].l0_ma
 
 Слой: typed helper на `WorldLocationTypeRegistry` + fill в import/`NamedLocationService` (world уже в bundle до `locations`). **Не** в генераторах. **Не** `world.fetch` внутри Pydantic-модели. `normalize_world` локации не трогает — это не world-slice.
 
-Код ⬜ — план: [`.cursor/plans/infer-location-type-from-subtype.md`](../.cursor/plans/infer-location-type-from-subtype.md).
+Код ⬜ — план: [`.cursor/plans/infer-location-type-from-subtype-done.md`](../.cursor/plans/infer-location-type-from-subtype-done.md).
 
 ### Вертикальное наложение локаций
 
@@ -1502,5 +1502,5 @@ repositories = {
 | Ранги доступа в `is_forbidden`-зонах | `location_faction_access.min_rank` — не реализовано; отложено до системы рангов фракций |
 | Fallback для бездомного + hometown при пустых детях | Если все дочерние `system_home_settlement_uid.depth+1` отфильтрованы `can_start()` — `NoLocationsAvailableError`. Нет fallback на глубину+2 или другой settlement. Требует решения совместно с UI-флоу. |
 | **LOC-T-1** Infer `system_location_type` из уникального subtype | Контракт locked (этот §). Код ⬜: omit type + `subtype=city` сейчас 422 (`BundleNamedLocation` StrictOnWire). Не CITY-T-5. |
-| **LOC-T-2** Ранг размера поселения vs морфология | Контракт locked (§ Размер поселения): omit → medium; type/unknown rank на generate → medium + WARNING фасада. Код: POJO `WorldSettlementSizeRegistry` ⬜ rename SQL `system_city_size`. Не CITY-T-5. План: [`.cursor/plans/loc-t-2-settlement-size.md`](../.cursor/plans/loc-t-2-settlement-size.md). |
-| **LOC-T-3** Разведение поселений (объём + запас) | Контракт locked (§ Разведение поселений): AABB + запас; import **200** + ERROR лог; occupancy: больше `footprint_side_fine`, иначе раньше в `locations[]`. Не 422. Код ⬜. План: [`.cursor/plans/loc-t-3-settlement-volume-separation.md`](../.cursor/plans/loc-t-3-settlement-volume-separation.md). Команда: [`/impl-loc-t-3`](../.cursor/commands/impl-loc-t-3.md). |
+| **LOC-T-2** Ранг размера поселения vs морфология | Контракт locked (§ Размер поселения): omit → medium; type/unknown rank на generate → medium + WARNING фасада. Код: POJO `WorldSettlementSizeRegistry` ⬜ rename SQL `system_city_size`. Не CITY-T-5. План: [`.cursor/plans/loc-t-2-settlement-size-done.md`](../.cursor/plans/loc-t-2-settlement-size-done.md). |
+| **LOC-T-3** Разведение поселений (объём + запас) | Контракт locked (§ Разведение поселений): AABB + запас; import **200** + ERROR лог; occupancy: больше `footprint_side_fine`, иначе раньше в `locations[]`. Не 422. Код ⬜. План: [`.cursor/plans/loc-t-3-settlement-volume-separation-done.md`](../.cursor/plans/loc-t-3-settlement-volume-separation-done.md). Команда: [`/impl-loc-t-3`](../.cursor/commands/impl-loc-t-3.md). |

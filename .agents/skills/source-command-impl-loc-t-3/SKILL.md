@@ -17,7 +17,7 @@ Use this skill when the user asks to run the migrated source command `impl-loc-t
 
 ## Прочитать до первой правки
 
-1. [`.cursor/plans/loc-t-3-settlement-volume-separation.md`](../plans/loc-t-3-settlement-volume-separation.md) — **архитектура и порядок**; не отклоняться.
+1. [`.cursor/plans/loc-t-3-settlement-volume-separation-done.md`](../plans/loc-t-3-settlement-volume-separation-done.md) — **архитектура и порядок**; не отклоняться.
 2. [`docs/tz_locations.md`](../../docs/tz_locations.md) § **Разведение поселений (LOC-T-3)** — продукт (предикат, приоритет, **таблица лога**).
 3. [`docs/tz_world_pack_storage.md`](../../docs/tz_world_pack_storage.md) WP-21 (occupancy, не 422).
 4. [`docs/tz_logging.md`](../../docs/tz_logging.md) sink `jsonValidation` / `resolve`.

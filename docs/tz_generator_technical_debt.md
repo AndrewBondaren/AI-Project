@@ -21,15 +21,15 @@
 | [tz_terrain_hydrology.md](./tz_terrain_hydrology.md) | Гидрология: моря, озёра, реки (target) |
 | [tz_climate.md](./tz_climate.md) | Продуктовое ТЗ climate (pole/local tiers) |
 | [tz_world_pack_storage.md](./tz_world_pack_storage.md) | World Pack; § WP-FIX-DEBT (в т.ч. WP-DELETE-1 → DEBT-10); terrain mask carry |
-| `.cursor/plans/full-bake-seam-halo-shoulder.md` | отдельные шаги: шов мира L0 · halo grid-соседа · T-10 |
-| `.cursor/plans/settlement-assembler.md` | Phase-план settlement |
-| `.cursor/plans/c21-plot-ground-z.md` | C21 / P13; **NC-2** parcel + barrier без `DEFAULT_PARCEL_MARGIN_M` |
-| `.cursor/plans/grade-detailed-location-render.md` | L2 location grade ASCII impl |
-| `.cursor/plans/r36u-grade-detailed-migrate.md` | R36u migrate L0 ribbon → detailed geometry |
-| `.cursor/plans/r36u-post-impl-debt.md` | R36u-T-1…T-10 post-impl polish |
-| `.cursor/plans/r36v-grade-chunk-pool.md` | R36v pool sample → stitch → materialize; post-impl **R36v-T-*** |
-| `.cursor/plans/detailed-grade-volume-canal.md` | Post-R36w GradeFormation apply; **R36i-T**; post-impl **T-4…T-15** ✅ |
-| `.cursor/plans/relief-pipeline-v2.md` | R41 discover в worker; **R41-T-1…T-12** ✅; слой 5 ravine ✅; shore онтология+paint ✅; **ShorePlugin тело ✅**; v1 sample/stitch срезан |
+| `.cursor/plans/full-bake-seam-halo-shoulder-done.md` | отдельные шаги: шов мира L0 · halo grid-соседа · T-10 |
+| `.cursor/plans/settlement-assembler-done.md` | Phase-план settlement |
+| `.cursor/plans/c21-plot-ground-z-done.md` | C21 / P13; **NC-2** parcel + barrier без `DEFAULT_PARCEL_MARGIN_M` |
+| `.cursor/plans/grade-detailed-location-render-done.md` | L2 location grade ASCII impl |
+| `.cursor/plans/r36u-grade-detailed-migrate-done.md` | R36u migrate L0 ribbon → detailed geometry |
+| `.cursor/plans/r36u-post-impl-debt-done.md` | R36u-T-1…T-10 post-impl polish |
+| `.cursor/plans/r36v-grade-chunk-pool-done.md` | R36v pool sample → stitch → materialize; post-impl **R36v-T-*** |
+| `.cursor/plans/detailed-grade-volume-canal-done.md` | Post-R36w GradeFormation apply; **R36i-T**; post-impl **T-4…T-15** ✅ |
+| `.cursor/plans/relief-pipeline-v2-done.md` | R41 discover в worker; **R41-T-1…T-12** ✅; слой 5 ravine ✅; shore онтология+paint ✅; **ShorePlugin тело ✅**; v1 sample/stitch срезан |
 
 ---
 
@@ -146,7 +146,7 @@ LOCATION_FINE_GRID     x, y, z    interior — v2, отложено
 | NC-1h | low | `needs_geometry` только `system_building_element`; barriers-only → re-gen | расширить heuristic или doc limitation |
 | NC-1i | — | leftover `_m` вне hub | **не этот ряд** — отдельный ID **NC-10** |
 
-**Refs:** `.cursor/plans/coordinate-spaces.md`
+**Refs:** `.cursor/plans/coordinate-spaces-done.md`
 
 ---
 
@@ -185,7 +185,7 @@ Hub и settlement-слоты уже без метров: `WORLD_FINE_GRID`, `fin
 ### NC-2 — `AreaSlot.cells` ≠ «участок с двором»
 
 **Status:** `open` | **Severity:** medium | **P:** P1  
-**Impl:** [`.cursor/plans/c21-plot-ground-z.md`](../.cursor/plans/c21-plot-ground-z.md) §2.2b (C21 / P13, тот же pass).
+**Impl:** [`.cursor/plans/c21-plot-ground-z-done.md`](../.cursor/plans/c21-plot-ground-z-done.md) §2.2b (C21 / P13, тот же pass).
 
 Docstring `AreaSlot`: «здание + двор + забор». `_make_area_slot` заполняет **только bbox `occupied_footprint`**.  
 Area barrier: `DEFAULT_PARCEL_MARGIN_M = 1` в `dataModel/settlement/area/perimeterBarrier.py` + `expand_bbox` в `areaBarriers` — workaround «забор снаружи дома». Константа **не** поле `PerimeterBarrier` (`template` + `probability` — [tz_locations.md](./tz_locations.md)).
@@ -292,7 +292,7 @@ Generate (`SettlementAssembler` → `DistrictAssembler`: cache → pass1 → р�
 | **CITY-T-1a** | **high** | **P1** | ~~import ignore / нет колонок~~ | **resolved** (C23): `BundleNamedLocation` overlay из `SettlementSkeleton`; колонки `0001`; `city_skeleton_from_settlement` читает поля NL |
 | **CITY-T-1b** | high | DAG | Два persist: debug `SettlementOutdoorOrchestrator` (pack + SQL-дерево + connections) vs `lazy_settlement` → только `map_cells` `insert_bulk_ignore`. Игрок и harness видят разный город | Persist/wiring **ноды** — Gate: DAG (агент ноды не трогает). Reuse freeze в generate — **[CITY-T-5b](./tz_city_generation_technical_debt.md)** (интерфейс, не нода) |
 | **CITY-T-1c** | medium | P2 | Два движка стен поселения: `shrink_slot_by_settlement_barrier` (C22 поле) vs `plan_settlement_barriers` (эвристика size/tier, поле не читает). Перекрывает [NC-3](#nc-3--три-barrier-pipeline-разная-gate-политика) | Клетки периметра из инстанса `PerimeterBarrier`; эвристика — только omit/null. Зоны без общей xy — city C22 |
-| **CITY-T-1d** | low | P2 | Документы отстают: шапка city TZ (packing=AABB, persist=map_cells only, C22-поля=⬜); §6.3 «код сейчас»; connections §5.1 «packing→overlay»; нет `.cursor/plans/settlement-assembler.md`; `assembler-hierarchy.mdc` ещё пишет NotImplemented на area | Синхрон шапки/§6.3/connections; план или снять ссылку; правило hierarchy |
+| **CITY-T-1d** | low | P2 | Документы отстают: шапка city TZ (packing=AABB, persist=map_cells only, C22-поля=⬜); §6.3 «код сейчас»; connections §5.1 «packing→overlay»; нет `.cursor/plans/settlement-assembler-done.md`; `assembler-hierarchy.mdc` ещё пишет NotImplemented на area | Синхрон шапки/§6.3/connections; план или снять ссылку; правило hierarchy |
 | **CITY-T-1e** | medium | DAG | `SettlementLayout.dominant_material` post-assemble есть. На `NamedLocation` не пишется. `lazy_settlement` в `NodeResult` material не кладёт → LLM «мраморные стены» не из layout | Persist опционально (§3.1); payload — DAG (`tz_engine_flow.md`) |
 | **CITY-T-1f** | info | — | `street_layout` кроме `grid`: `NotImplementedError`. Canonical templates все `grid`. **CONN-PACK-1** | Не слайс 1a. Не выдавать organic/radial в registry, пока нет generate |
 
@@ -355,7 +355,7 @@ GIL: cache interior CPU-heavy → тот же backlog ProcessPool, что TR-PAR
 ### CITY-T-4 — планировщик после 2d: смешение и хардкоды
 
 **Status:** `resolved` | **Severity:** high | **P:** P1 (4e — N+1 типов районов) / P2 (остальное)
-**Имплементация:** [`.cursor/plans/city-t-4-planner-debt.md`](../.cursor/plans/city-t-4-planner-debt.md) → `/impl-city-t-4` (2026-09-05).
+**Имплементация:** [`.cursor/plans/city-t-4-planner-debt-done.md`](../.cursor/plans/city-t-4-planner-debt-done.md) → `/impl-city-t-4` (2026-09-05).
 **Контекст:** 2026-09-05, ревью кода после [CITY-T-2d](#city-t-2--пул-шаблонов-мира--packing). Оси: смешанные ответственности · хардкоды (дубль POJO / политика только в assembler). **Не** reopen рецепт §1.2 (роли + subjects в реестре). **Не** CITY-T-3.
 
 Канон в `dataModel` (`WorldSettlementSpecializationRegistry.canonical_defaults`, specialized district drawings) — SoT, не этот ID.
@@ -786,7 +786,7 @@ Smoke: `test_climate_*` (11 tests) в `debug_settlement.py`.
 ### BUNDLE-2 — `WorldBundleService` → section handlers по доменам
 
 **Severity:** medium · **P:** P2 · **Status:** **resolved** (2026-07-30)  
-**Product SoT:** [`tz_world_bundle.md`](./tz_world_bundle.md) (WB-1…WB-15) · plan [`.cursor/plans/bundle-2-section-handlers.md`](../.cursor/plans/bundle-2-section-handlers.md)
+**Product SoT:** [`tz_world_bundle.md`](./tz_world_bundle.md) (WB-1…WB-15) · plan [`.cursor/plans/bundle-2-section-handlers-done.md`](../.cursor/plans/bundle-2-section-handlers-done.md)
 
 **Сделано:** `WorldBundleService` = thin facade (no FastAPI); `build_bundle_handlers` + entity/library kinds; skeleton keys `race_templates` / `perk_templates` / `building_templates` / `relief_templates`; global `race_templates` / `perk_templates` SQL + world pointer registries; HY-S-2 via two connection handlers; remap skips library UIDs.
 
@@ -1066,7 +1066,7 @@ Nodes typed (`ResolvedConnectionNode`), edges — `asdict(ConnectionEdge)`. Не
 
 **Scope:** `dataModel/terrain/relief`, `generators/terrain/relief`, mountains stamp, library/import, bundle R35, bake preload / road_shoulder, JV relief accessors.  
 **Refs:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) R8/R20–R36q · audits 2026-07-30 (×2) · **SOLID+dataModel 2026-08-02** · **canal R36p/q audit 2026-08-05** · **BUNDLE-2** · **RELIEF-BAR-1**.  
-**Plan фиксов (round 1–2):** [`.cursor/plans/relief-tech-debt-fixes.md`](../.cursor/plans/relief-tech-debt-fixes.md).  
+**Plan фиксов (round 1–2):** [`.cursor/plans/relief-tech-debt-fixes-done.md`](../.cursor/plans/relief-tech-debt-fixes-done.md).  
 **Не в scope здесь:** UI R30; climb gameplay; DAG nodes; full barrier materialize (→ RELIEF-BAR-1); footprint scan для R36n в bake (helper `obstacleClearance` есть — wire gap later).
 
 **Verdict (god-object):** 500+ LOC **relief generator** god-class нет. Round-1 + round-2 — **resolved**.  
@@ -1211,7 +1211,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 **Не смешивать с B5:** T-61 adapters, T-62 `_ORTHO`, T-63 `EMPTY_DRAW`, T-65 double log, T-66 event split.
 
 **Не долг:** sample без `ordered` (Q6); `reliefEvents` SoT; silent-path logs (T-60).  
-**Agent pointer:** [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).
+**Agent pointer:** [`.cursor/plans/relief-dev-plan-done.md`](../.cursor/plans/relief-dev-plan-done.md).
 
 ### roadShoulderApply split (T-30 / T-52)
 
@@ -1261,7 +1261,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 ### Приоритетный backlog (sync relief waves)
 
-**Product SoT:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Порядок · [`.cursor/plans/relief-dev-plan.md`](../.cursor/plans/relief-dev-plan.md).  
+**Product SoT:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Порядок · [`.cursor/plans/relief-dev-plan-done.md`](../.cursor/plans/relief-dev-plan-done.md).  
 **Post-B2/B3 review map:** § [Post-B2/B3 review](#post-b2b3-review-god--dry--srp-2026-08-06) выше.
 
 1. ~~**Wave B1 — Q6** dilate shoulder sample~~ ✅  
@@ -1271,7 +1271,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 5. ~~**Wave C — RELIEF-BAR-1**~~ ✅ (`ribbonFence` + `ribbonBarrierApply`)
 6. ~~**Wave D —** `open_land` / `shore`~~ ✅ (`ribbonGradeApply` + contributors)
 7. ~~**Wave D polish**~~ ✅ (`contextRibbonApply` / `ribbonSampleUtil` / `ribbon_intents`+`ref_cells` / BAR-1 once)
-8. ~~**Post-R36w —** GradeFormation apply~~ ✅ ([план](../.cursor/plans/detailed-grade-volume-canal.md); § R36i-T)
+8. ~~**Post-R36w —** GradeFormation apply~~ ✅ ([план](../.cursor/plans/detailed-grade-volume-canal-done.md); § R36i-T)
    ~~**Post-impl (не Wave E):** **R36i-T-4…T-11**~~ ✅ — § [R36i-T post-impl](#r36i-t--gradeformation-apply--post-impl-smells)
    ~~**R36i-T-12**~~ ✅ — write-set `reconcile` (R36j uid ↔ `cell_refs`)
    ~~**R36i-T-13…T-15**~~ ✅ — T-12 leftovers (`of` / drop-log / sorted refs)
@@ -1296,7 +1296,7 @@ IDs **RELIEF-T-28…T-41** — open backlog; resolved не удалять.
 
 ### Legacy L0 grade — inventory (R36u migrate off)
 
-**Статус:** §A outdoor grade writers + §C upsample helper **removed** (R36u-T-8). Pure generators (§B) reuse on detailed. **Не трогать:** terrain mask carry (`system_terrain`), hydro hard corridor, facing upsample, `surface_z` upsample. Agent plan: [`.cursor/plans/r36u-grade-detailed-migrate.md`](../.cursor/plans/r36u-grade-detailed-migrate.md).
+**Статус:** §A outdoor grade writers + §C upsample helper **removed** (R36u-T-8). Pure generators (§B) reuse on detailed. **Не трогать:** terrain mask carry (`system_terrain`), hydro hard corridor, facing upsample, `surface_z` upsample. Agent plan: [`.cursor/plans/r36u-grade-detailed-migrate-done.md`](../.cursor/plans/r36u-grade-detailed-migrate-done.md).
 
 #### A. L0 compose writers (stamp `system_grade_uid` на light) — **removed**
 
@@ -1349,9 +1349,9 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 ### R36u post-impl smells (R36u-T)
 
-**Контекст:** 2026-08-13 — migrate shipped ([`.cursor/plans/r36u-grade-detailed-migrate.md`](../.cursor/plans/r36u-grade-detailed-migrate.md)); ревью 6 осей. **Scope:** только outdoor grade. **Не трогать:** terrain mask carry / hydro corridor / facing / `surface_z`.
+**Контекст:** 2026-08-13 — migrate shipped ([`.cursor/plans/r36u-grade-detailed-migrate-done.md`](../.cursor/plans/r36u-grade-detailed-migrate-done.md)); ревью 6 осей. **Scope:** только outdoor grade. **Не трогать:** terrain mask carry / hydro corridor / facing / `surface_z`.
 
-**Agent pointer:** [`.cursor/plans/r36u-post-impl-debt.md`](../.cursor/plans/r36u-post-impl-debt.md).
+**Agent pointer:** [`.cursor/plans/r36u-post-impl-debt-done.md`](../.cursor/plans/r36u-post-impl-debt-done.md).
 
 | ID | Severity | Status | P | Ось | Smell | Target |
 |---|---|---|---|---|---|---|
@@ -1373,7 +1373,7 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 ### R36v post-impl smells (R36v-T)
 
-**Контекст:** 2026-08-13 — T-11 shipped ([`.cursor/plans/r36v-grade-chunk-pool.md`](../.cursor/plans/r36v-grade-chunk-pool.md)); ревью 6 осей + `materialize_segment_meter`. **Scope:** только outdoor grade generate/persist на detailed. **Не трогать:** terrain mask carry / hydro corridor / facing / `surface_z`; DAG `modify_terrain`.
+**Контекст:** 2026-08-13 — T-11 shipped ([`.cursor/plans/r36v-grade-chunk-pool-done.md`](../.cursor/plans/r36v-grade-chunk-pool-done.md)); ревью 6 осей + `materialize_segment_meter`. **Scope:** только outdoor grade generate/persist на detailed. **Не трогать:** terrain mask carry / hydro corridor / facing / `surface_z`; DAG `modify_terrain`.
 
 **Не долг:** stamp → `columnFillPass.system_grade_uid` → pack column → SQL instance — **конвейер одного writer’а**, не dual-write геометрии. Три caller’а `persist_relief_grades(..., replace_world=False)` — один persist.
 
@@ -1395,7 +1395,7 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 **Fix order:** ~~T-1 → T-13~~ ✅. **Не трогать:** mask carry; DAG node.
 
-**Agent pointer:** [`.cursor/plans/r36v-grade-chunk-pool.md`](../.cursor/plans/r36v-grade-chunk-pool.md); bake SoT [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) R36v / **R36w**.
+**Agent pointer:** [`.cursor/plans/r36v-grade-chunk-pool-done.md`](../.cursor/plans/r36v-grade-chunk-pool-done.md); bake SoT [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) R36v / **R36w**.
 
 ### R36w — worker stitch (resolved)
 
@@ -1409,7 +1409,7 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 **Не трогать:** mask carry; DAG; L0 grade writer. **Не** remap после persist. **Не** SW-волна как SoT порядка.
 
-Шов `full_bake` / halo `grid_neighbor` / T-10 — [план](../.cursor/plans/full-bake-seam-halo-shoulder.md) ✅. Lookup только `WorldBounds` / `PackJobUid` / `Facing` / `ReliefContext`.
+Шов `full_bake` / halo `grid_neighbor` / T-10 — [план](../.cursor/plans/full-bake-seam-halo-shoulder-done.md) ✅. Lookup только `WorldBounds` / `PackJobUid` / `Facing` / `ReliefContext`.
 
 ### FineChunkRunner layers (resolved)
 
@@ -1423,7 +1423,7 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 ### R36i-T — volume z / canal on detailed
 
-**Контекст:** 2026-08-14 apply shipped — [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Post-R36w. Plan: [`.cursor/plans/detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md).
+**Контекст:** 2026-08-14 apply shipped — [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Post-R36w. Plan: [`.cursor/plans/detailed-grade-volume-canal-done.md`](../.cursor/plans/detailed-grade-volume-canal-done.md).
 
 | ID | Severity | Status | P | Ось | Smell | Target |
 |---|---|---|---|---|---|---|
@@ -1461,7 +1461,7 @@ L0 harness deleted (`test_relief_road_shoulder_sample`, `test_relief_bar1`, `tes
 
 **Fix order:** **T-25** первым (полный pack occupancy). ~~T-1…T-12~~ ✅. ~~**T-17**~~ ✅ (COUPLE + валидатор не из z — не заменяет T-25). ~~**T-18**~~ ✅. ~~**T-19**~~ ✅. ~~**T-20…T-23**~~ ✅. ~~**T-24**~~ ✅. ~~**T-13…T-16**~~ ✅. T-2 (BAR-1) не блокирует C28. **Не трогать:** Wave E; DAG; mask carry; parent `surface_z` upsample; `refresh_tile_gaps` из worker; voxel-ditch writer без plugin; Volume/`GradeFormation`; склеивать Rim/Front/Seam обратно в один `core.py`; Occupancy v1.
 
-**Agent pointer:** [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md). Очередь SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Осталось — v2 vs L2 volume. Volume не форкать.
+**Agent pointer:** [`.cursor/plans/relief-pipeline-v2-done.md`](../.cursor/plans/relief-pipeline-v2-done.md). Очередь SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Осталось — v2 vs L2 volume. Volume не форкать.
 
 ### R41-T — pipeline v2 post-impl smells
 
@@ -1950,7 +1950,7 @@ Classify/`dz` pick смотрят дальний конец полного сл�
 
 **Fix order:** ~~T-4 → T-8 → T-5 / T-6 → T-7; T-9 / T-10 / T-11~~ ✅. ~~**T-12**~~ ✅. ~~**T-13…T-15**~~ ✅. **Не трогать:** Wave E; DAG; mask carry; voxel-ditch; BAR-1 (T-2). Graph stitch — ~~T-3b~~ ✅. System — ~~**T-3c**~~ ✅ (не этот apply).
 
-**Agent pointer:** [`.cursor/plans/detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md); SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Post-R36w.
+**Agent pointer:** [`.cursor/plans/detailed-grade-volume-canal-done.md`](../.cursor/plans/detailed-grade-volume-canal-done.md); SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Post-R36w.
 
 ### R36i-T-12 — write-set reconcile — shipped
 
@@ -2033,7 +2033,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 **Fix order (рекомендация):** ~~T-1 → T-3 → T-2 → T-5 → T-6; T-7/T-8~~ ✅; ~~**T-4**~~ ✅ (Facing pack wire, 2026-08-12).
 
-**Agent pointer:** [`.cursor/plans/grade-detailed-location-render.md`](../.cursor/plans/grade-detailed-location-render.md); SoT [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md).
+**Agent pointer:** [`.cursor/plans/grade-detailed-location-render-done.md`](../.cursor/plans/grade-detailed-location-render-done.md); SoT [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md).
 
 ---
 
@@ -2053,7 +2053,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 | 2026-09-07 | **NC-10** open: leftover `_m` / «метры» вне coordinate hub (горы, гидрология, pack `light_m`/`tile_m`, `sparse_meter_hydro`) после rename на fine grid. Не NC-1a/c/g, не NC-2 parcel. Слайс по кластеру. |
 | 2026-09-06 | **CITY-T-5** open: швы после C23 — [`tz_city_generation_technical_debt.md`](./tz_city_generation_technical_debt.md). **1a** resolved. Не reopen §8 / C22. |
 | 2026-09-05 | **CITY-T-4** **resolved** (`/impl-city-t-4` слои A–G): POJO rank/zone/conditions; один resolve; cache=`pick_layout_names`; Bind-only coerce; skip unknown assembler; `max_per` type+subtype. **2a** civic flood ✅; **2c** tokens `BUILDINGS` ✅; leftover **2b**. **MR-8** ✅. Не reopen §1.2 |
-| 2026-09-05 | **CITY-T-4** команда `/impl-city-t-4` + план слоёв A–G (`city-t-4-planner-debt.md`). Не reopen §1.2, не 2b. |
+| 2026-09-05 | **CITY-T-4** команда `/impl-city-t-4` + план слоёв A–G (`city-t-4-planner-debt-done.md`). Не reopen §1.2, не 2b. |
 | 2026-09-05 | **CITY-T-4** open: ревью после 2d — смешение (`plan_district_slots`, placement, cache≠tokens, coerce×3) и хардкоды (`CITY_SIZE_ORDER`, zone preference, assembler `"building"`, `max_per` по type). **2d/2a/2c** → `partial`. **MR-8**. Не reopen рецепт §1.2 |
 | 2026-09-05 | **CITY-T-3** open, **owner: мастер:** как безопасно параллелить generate **одного** поселения (cache freeze → районы; packing внутри района serial; persist C19 serial; один pool). Не C16 batch, не TR-PAR земля. Агент не слайс |
 | 2026-09-05 | **CITY-T-2d:** SoT §1.2 — `typical_districts` на городе, затем specialization registry, затем морфология; `district_subtype`. Код всё ещё только city/village typical. |
@@ -2071,13 +2071,13 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 | 2026-08-18 | **Слой 7 срез v1 ✅:** sample/stitch/`planned` удалены. Next **R41-T-9…T-12** |
 | 2026-08-18 | **T-3c слой 6 ✅:** `emit_relief_grade_systems` после merge; persist `systems`; intra-chunk = slot; C29 тело 8 + UF refine. Next слой 7 |
 | 2026-08-18 | **T-3c шов locked** в [`tz_terrain_relief.md`](./tz_terrain_relief.md) § T-3c на шве чанков (catalog ≠ вершина; UF тайла; макро-шов двух bake — не слой 6) |
-| 2026-08-18 | **ShorePlugin тело ✅** (банк + полоса; дно iff `grades_channel_bed`; terrace min с envelope). Next **T-3c**. Команда: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md) |
-| 2026-08-18 | **Shore онтология+paint ✅.** Команда агенту: [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md) |
+| 2026-08-18 | **ShorePlugin тело ✅** (банк + полоса; дно iff `grades_channel_bed`; terrace min с envelope). Next **T-3c**. Команда: [`.cursor/plans/relief-pipeline-v2-done.md`](../.cursor/plans/relief-pipeline-v2-done.md) |
+| 2026-08-18 | **Shore онтология+paint ✅.** Команда агенту: [`.cursor/plans/relief-pipeline-v2-done.md`](../.cursor/plans/relief-pipeline-v2-done.md) |
 | 2026-08-17 | **R41-T-5…T-8 resolved:** ТЗ `z >` (равная z = L); inherit только орто; `stamp_min_abs_dz`; classify/stamp = коридор после C41 |
 | 2026-08-17 | **Очередь SoT в ТЗ:** [`tz_terrain_relief.md`](./tz_terrain_relief.md) § Осталось — v2 vs L2 volume (apply закрыт; ~~T-5…T-8~~ ✅ → слой 5) |
 | 2026-08-17 | **R41-T-2…T-4 resolved:** apply=`DiscoveredFront`; occupancy cap = L_tpl (envelope = halo); ravine flood = bank, open_land не глотает берег |
 | 2026-08-17 | **R41-T-2…T-12 open:** post-impl v2 (C40 spec≠L2-only; cap_front pick; ravine flood шире claims; walk `>` vs TZ `≥`; inherit 4 vs 8; R37 не на envelope; три L; fat facade; DRY/hardcode/leftover). SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) C40 |
-| 2026-08-17 | **R41-T-1:** v1 sample/stitch/`planned` deprecated vs R41; impl [`.cursor/plans/relief-pipeline-v2.md`](../.cursor/plans/relief-pipeline-v2.md). T-3b occupancy не SoT; каталог `face_key` живой |
+| 2026-08-17 | **R41-T-1:** v1 sample/stitch/`planned` deprecated vs R41; impl [`.cursor/plans/relief-pipeline-v2-done.md`](../.cursor/plans/relief-pipeline-v2-done.md). T-3b occupancy не SoT; каталог `face_key` живой |
 | 2026-08-15 | **C28 T-3b resolved:** `stitch_planned_segments`; sample до пула; rim-canonical. T-3c System later. SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-08-15 | **C29:** шов технический (климат / дороги / шаг / локация·город); T-3b rim = механизм C29. SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
 | 2026-08-15 | **C28 TZ lock:** topology → entity → stamp; T-3 split (T-3a omit / T-3b graph / T-3c System). SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
@@ -2085,7 +2085,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 | 2026-08-15 | **R36i-T-12 resolved:** `reconciled()` на write-set; clip режет `cell_refs`; `merge_grade_instances` last-wins поля как upsert |
 | 2026-08-15 | **R36i-T-4…T-11 resolved:** write-set на `GradeFormation`/`DetailedGradeResult`; volume vs canal-cut; `apply_grade_uids`; `merged_with`+`clipped_to_rect`; `CorridorColumn`; `cell_center_m`; слои corridor/canalCut/result. T-2/T-3 remain |
 | 2026-08-15 | **R36i-T-4…T-11 open:** GradeFormation post-impl (write-set split; corridor god; MeterGradeSurface/commit SRP; dual merge; wrote[i]↔columns / cut bool / registry or; Coord/rect DRY; 0.5 + empty surface; god-module). T-1 остаётся ✅ |
-| 2026-08-14 | **R36i-T-1 resolved:** GradeFormation apply (z overlay + canal + uid); T-2/T-3 remain out of apply. План [`detailed-grade-volume-canal.md`](../.cursor/plans/detailed-grade-volume-canal.md) |
+| 2026-08-14 | **R36i-T-1 resolved:** GradeFormation apply (z overlay + canal + uid); T-2/T-3 remain out of apply. План [`detailed-grade-volume-canal-done.md`](../.cursor/plans/detailed-grade-volume-canal-done.md) |
 | 2026-08-14 | **FCR-T-1 resolved:** FineChunkRunner = `FineTileContext` + prep + `compute_rect` + persist; grade в ColumnRect worker |
 | 2026-08-14 | **R36w edge test:** два bake смежных тайлов, семена на owner-грани → один uid (`test_two_tile_bakes_along_seam_one_uid`); bind: rim оси sample → грань оси; `< 2` chunk-родителей грани → void ≠ C18 |
 | 2026-08-14 | **R36w TZ:** каталог граней + заранее uid (`world`+tile+`face_key`); T-1…T-3 open; SoT [`tz_terrain_relief.md`](./tz_terrain_relief.md) |
@@ -2116,7 +2116,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 | 2026-08-06 | **Post-B2/B3 SRP review → T-64…T-66:** false `clearance_skip`; double `empty_sample` log; EVENT монотокен; map → Wave B4/B5 |
 | 2026-08-06 | **Wave B2/B3 — T-60/T-56 resolved:** `reliefEvents.py`; silent bake/grade paths → `relief_warning`/`relief_debug` |
 | 2026-08-06 | **Wave B1 / Q6 shipped:** footprint-edge `sample_shoulder_cells`; apply drops `ordered_road_light` |
-| 2026-08-06 | **Relief dev plan sync:** Wave A shipped; backlog → Wave B (Q6→T-60/T-56→T-54) → C BAR-1 → D consumers → E later; pointer `relief-dev-plan.md` |
+| 2026-08-06 | **Relief dev plan sync:** Wave A shipped; backlog → Wave B (Q6→T-60/T-56→T-54) → C BAR-1 → D consumers → E later; pointer `relief-dev-plan-done.md` |
 | 2026-08-06 | **Post-split review → T-60…T-63 open:** silent bake logs; Intent/emit glue; `_ORTHO`≠Facing; `CanalDrawResult(False,…)` vs `EMPTY_DRAW`. T-56 loci уточнены |
 | 2026-08-06 | **T-30/T-52 bake split shipped:** sample / materialize / stamp / intent + thin apply facade; god-orchestrator gone |
 | 2026-08-06 | **T-30/T-52 split plan locked:** phases 0–5 (contracts → materialize_seed → stamp → sample → intent → thin apply); leave canal/grade helpers as-is |
@@ -2140,9 +2140,9 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 | 2026-08-02 | **RELIEF-T-28…T-41:** SOLID+dataModel audit (god/SRP/DRY/wire keys/values); R36n obstacle POJO = clean win; backlog sync |
 | 2026-07-31 | **R36** locked in TZ: SLOPE h/L/θ triangle; Geom-A\|B bake; backlog #1 = normalize POJO + materialize |
 | 2026-07-30 | **BUNDLE-2 resolved:** handlers facade; library race/perk/building/relief; schema `race_templates`/`perk_templates`; HY-S-2 closed |
-| 2026-07-30 | **BUNDLE-2 SoT:** [`tz_world_bundle.md`](./tz_world_bundle.md) WB-1…WB-10 + plan `bundle-2-section-handlers.md`; debt symptom sync |
+| 2026-07-30 | **BUNDLE-2 SoT:** [`tz_world_bundle.md`](./tz_world_bundle.md) WB-1…WB-10 + plan `bundle-2-section-handlers-done.md`; debt symptom sync |
 | 2026-07-30 | **RELIEF-T-12 / T-16…T-27** fix wave: width bake, ImportResult, bake_seed, preload WARN, typed edge policy, knobs SoT, FS split, RoadShoulderIntent; T-26 accepted (wire letters) |
-| 2026-07-30 | **RELIEF-T-16…T-27** + plan `relief-tech-debt-fixes.md`: re-audit (width dead, bundle HTTP/api, seed, knobs SoT, …) |
+| 2026-07-30 | **RELIEF-T-16…T-27** + plan `relief-tech-debt-fixes-done.md`: re-audit (width dead, bundle HTTP/api, seed, knobs SoT, …) |
 | 2026-07-30 | **RELIEF-T-7/T-9/T-14:** domain_root enforce; road_shoulder bake wire + intents; schedule hole → SLOPE; T-15 accepted |
 | 2026-07-30 | **RELIEF-T polish:** T-1…T-6/T-8/T-10/T-11/T-13 resolved; BUNDLE-2 ReliefSection partial; T-7/T-9/T-12/T-14/T-15 open |
 | 2026-07-30 | **BUNDLE-2** + **RELIEF-T-1…T-15:** post-impl audit (god-object/layers/dataModel); section handlers; R21≠Mode D; FastAPI в services; dual ReliefGradeDecision |

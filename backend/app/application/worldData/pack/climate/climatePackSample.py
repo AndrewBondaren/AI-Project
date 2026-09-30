@@ -1,6 +1,6 @@
 """Shared pack climate sample — pole+local zone + z ladder + weather_at_elevation.
 
-See ``.cursor/plans/pack-climate-correct-resolve.md`` and ``docs/tz_climate.md``.
+See ``.cursor/plans/pack-climate-correct-resolve-done.md`` and ``docs/tz_climate.md``.
 """
 
 from __future__ import annotations

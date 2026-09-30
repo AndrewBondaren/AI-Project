@@ -6,7 +6,7 @@ metadata:
   type: project
 ---
 
-> **План имплементации агента:** [`.cursor/plans/world-data-storage-migration.md`](../.cursor/plans/world-data-storage-migration.md)
+> **План имплементации агента:** [`.cursor/plans/world-data-storage-migration-done.md`](../.cursor/plans/world-data-storage-migration-done.md)
 
 ## Назначение
 
@@ -471,7 +471,7 @@ flowchart TB
 | **on-demand grade (не bake)** | Product: DAG **только** когда сцена требует grade и в pack нет — 1…N чанков (не тайл/мир; mill спекулятивно **дорого**). Debug: `POST …/refine-chunk`. Тот же `FineChunkRunner` (R41) | mill на каждый scene/entry; GradeBakeOrchestrator; `generate_detailed_grade` + ручная запись pack; `detailed_bake` `max_tiles=1` как «один чанк» |
 | **modification** (не bake job) | Patch Store: `terrain_delta` / `climate_delta` в `patch_bounds`. Повторный materialize / patch на объёме с grade → **сброс** stale relief ([`tz_terrain_relief.md`](./tz_terrain_relief.md) § Caller). Не mill в том же fill-only проходе | `POST pack/bake`; rewrite `complete` tile; четвёртый `mode=`; stamp старого grade на новые колонки |
 
-**Шов мира (тор AABB, L0):** при `full_bake` крайние макро-тайлы bounds, у которых нет соседа в прямоугольнике, смыкаются с **антагонистом** и шов **ставится на макро-тайлах**. Lookup **только** [`WorldBounds`](../backend/app/dataModel/worldPack/worldBounds.py): `grid_neighbor` (внутри AABB) / `antagonist_tile` (wrap); сторона = [`Facing`](../backend/app/dataModel/spatial/facing.py) + `CARDINAL_WALL_OUTWARD_DELTA`. Идентичность тайла = [`PackJobUid.tile_uid`](../backend/app/dataModel/worldPack/packJobUid.py) + `pack_job_seed`. Это топология L0 world map, не `face_key` / не outdoor grade. **`detailed_bake` шов мира не считает и не пишет.** Смежность внутри AABB — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **R36w**. Не magma **antipode**. Impl — [`.cursor/plans/full-bake-seam-halo-shoulder.md`](../.cursor/plans/full-bake-seam-halo-shoulder.md) ✅.
+**Шов мира (тор AABB, L0):** при `full_bake` крайние макро-тайлы bounds, у которых нет соседа в прямоугольнике, смыкаются с **антагонистом** и шов **ставится на макро-тайлах**. Lookup **только** [`WorldBounds`](../backend/app/dataModel/worldPack/worldBounds.py): `grid_neighbor` (внутри AABB) / `antagonist_tile` (wrap); сторона = [`Facing`](../backend/app/dataModel/spatial/facing.py) + `CARDINAL_WALL_OUTWARD_DELTA`. Идентичность тайла = [`PackJobUid.tile_uid`](../backend/app/dataModel/worldPack/packJobUid.py) + `pack_job_seed`. Это топология L0 world map, не `face_key` / не outdoor grade. **`detailed_bake` шов мира не считает и не пишет.** Смежность внутри AABB — [`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **R36w**. Не magma **antipode**. Impl — [`.cursor/plans/full-bake-seam-halo-shoulder-done.md`](../.cursor/plans/full-bake-seam-halo-shoulder-done.md) ✅.
 
 **Технический шов (chunk / tile rim / `ColumnRect`) — не продукт.** Нарезка джоб и pack-blob. Климат, полотно дороги, **локация/город** и шаг сетки **проходят** ребро как один мир ([`tz_terrain_relief_v1_superseded.md`](./tz_terrain_relief_v1_superseded.md) **C29**). `territory_volume` **может** пересекать макро-тайлы: один `locations/l.{uid}.terrain.zst`, wilderness mask на каждом пересечённом тайле. WP-19 — куда писать клетку, не стена и не второй `location_uid`. Шов мира (антагонисты) — другая топология; внутри AABB сосед = `grid_neighbor`.
 
@@ -1555,7 +1555,7 @@ sequenceDiagram
 
 **Тесты backlog:** integration WP-A6, WP-A13; unit tie-break multi-location; golden patch-over-L2.
 
-**Инженерные фиксы (WP-FIX):** § ниже. Детальный чеклист: [`.cursor/plans/world-pack-fixes.md`](../.cursor/plans/world-pack-fixes.md).
+**Инженерные фиксы (WP-FIX):** § ниже. Детальный чеклист: [`.cursor/plans/world-pack-fixes-done.md`](../.cursor/plans/world-pack-fixes-done.md).
 
 ---
 
@@ -1687,7 +1687,7 @@ sequenceDiagram
 
 | Шаг | Действие |
 |---|---|
-| 1 | Impl L1–L7 по [plan](../.cursor/plans/world-data-storage-migration.md) |
+| 1 | Impl L1–L7 по [plan](../.cursor/plans/world-data-storage-migration-done.md) |
 | 2 | Smoke WP-A1…A14 на pack (debug HTTP / tests), **до** drop schema |
 | 3 | **Один PR:** код + `0001_initial.sql` drop `map_cells` + `map_cell_patches` / jobs |
 | 4 | Recreate local DB |
@@ -2143,7 +2143,7 @@ flowchart LR
 | 2026-07 | WP-26: legacy freeze — map_cells/materialize-stack/TR-PERF вне scope Pack migration |
 | 2026-07 | WP-MERGE: статус merge v1 + приоритет доработок MERGE-1…9 |
 | 2026-07 | WP-25: сессия=world+character; characters/import ✅; starter_characters + npcs — backlog spec only |
-| 2026-07 | Ссылка на fix backlog: `.cursor/plans/world-pack-fixes.md` (FIX-01…33) |
+| 2026-07 | Ссылка на fix backlog: `.cursor/plans/world-pack-fixes-done.md` (FIX-01…33) |
 | 2026-07-10 | **WP-FIX:** FIX-01…30 ✅, FIX-32/33 ✅; merge v2 field-wise; L1–L7 ✅ |
 | 2026-07-10 | **WP-MERGE v2:** статус слоёв; MERGE-1/4/7 ✅; WP-FIX-DEBT-1…9 |
 | 2026-07-10 | **WP-FIX-REVIEW:** REVIEW-5/6 — `PackDebugReadFacade`, `PackLoadingProgressFacade`, `MapCellReadService` |

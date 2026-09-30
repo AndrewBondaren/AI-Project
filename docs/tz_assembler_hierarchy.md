@@ -661,7 +661,7 @@ map_cell_fine_span = World.fine_cells_per_map_cell   # через generators/coo
 
 Один район может занимать всю глобальную ячейку: `width_fine = depth_fine = map_cell_fine_span`.
 
-**Координаты:** hub `generators/coordinates/` — WORLD_SURFACE_GRID vs WORLD_FINE_GRID ([`.cursor/plans/coordinate-spaces.md`](../.cursor/plans/coordinate-spaces.md)).
+**Координаты:** hub `generators/coordinates/` — WORLD_SURFACE_GRID vs WORLD_FINE_GRID ([`.cursor/plans/coordinate-spaces-done.md`](../.cursor/plans/coordinate-spaces-done.md)).
 
 ---
 

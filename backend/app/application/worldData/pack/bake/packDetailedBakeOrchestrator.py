@@ -1,7 +1,7 @@
 """detailed_bake — offline L2 for location territory and/or wilderness tiles.
 
 Single shared refine loop; scope policies select tiles/rects/volumes/role.
-See docs/tz_world_pack_storage.md § Bake modes; .cursor/plans/detailed-bake-smell-fixes.md.
+See docs/tz_world_pack_storage.md § Bake modes; .cursor/plans/detailed-bake-smell-fixes-done.md.
 """
 
 from __future__ import annotations

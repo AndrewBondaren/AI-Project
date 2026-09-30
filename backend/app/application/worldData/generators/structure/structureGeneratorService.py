@@ -362,6 +362,15 @@ class StructureGeneratorService:
         """Runtime boundary: wire dicts → RoomConnection (GenerationError on bad wire)."""
         resolved: list[RoomConnection] = []
         for index, raw in enumerate(template.connections):
+            if isinstance(raw, dict) and "passage_type" in raw:
+                parsed = PassageType.from_wire(raw["passage_type"])
+                if parsed not in (PassageType.DOORWAY, PassageType.ARCHWAY):
+                    logger.error(
+                        "Structure '%s' connections[%d]: passage_type %r is not "
+                        "doorway/archway — fallback to doorway "
+                        "(stairs belong in staircases[])",
+                        template.system_name, index, raw["passage_type"],
+                    )
             try:
                 resolved.append(RoomConnection.model_validate(raw))
             except ValidationError as exc:

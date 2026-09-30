@@ -17,7 +17,7 @@ Use this skill when the user asks to run the migrated source command `impl-c24`.
 
 ## Прочитать до первой правки
 
-1. [`.cursor/plans/c24-district-packing.md`](../plans/c24-district-packing.md) — **архитектура, границы классов, порядок**; не отклоняться.
+1. [`.cursor/plans/c24-district-packing-done.md`](../plans/c24-district-packing-done.md) — **архитектура, границы классов, порядок**; не отклоняться.
 2. [`docs/tz_settlement_outdoor.md`](../../docs/tz_settlement_outdoor.md) §5 **C24** (якорь, очередь, кадры) + таблица **C14 / C15 / C19 / C11**.
 3. [`docs/tz_city_generation.md`](../../docs/tz_city_generation.md) фаза 2 / §11.3 (без якоря = очередь; spawn = район ног).
 4. [`docs/tz_world_pack_storage.md`](../../docs/tz_world_pack_storage.md) `SettlementStructureEntry` (`packed_district_uids`, `structure_status`).

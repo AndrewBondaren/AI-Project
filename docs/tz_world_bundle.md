@@ -13,7 +13,7 @@ metadata:
 > **Relief R35:** [`tz_terrain_relief.md`](./tz_terrain_relief.md).  
 > **Building templates:** [`tz_building_generator.md`](./tz_building_generator.md) §5–6.  
 > **Smell:** [`tz_generator_technical_debt.md`](./tz_generator_technical_debt.md) § BUNDLE-2.  
-> **План имплементации (после утверждения):** [`.cursor/plans/bundle-2-section-handlers.md`](../.cursor/plans/bundle-2-section-handlers.md).
+> **План имплементации (после утверждения):** [`.cursor/plans/bundle-2-section-handlers-done.md`](../.cursor/plans/bundle-2-section-handlers-done.md).
 
 ## Назначение
 

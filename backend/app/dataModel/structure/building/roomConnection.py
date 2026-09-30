@@ -1,4 +1,6 @@
 """Horizontal room-to-room connection wire contract — building generator §3.7."""
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire, StrictOnWire
@@ -25,12 +27,14 @@ class RoomConnection(BaseModel):
     step_material:    DefaultOnWire[str | None] = None
     railing_material: DefaultOnWire[str | None] = None
 
-    @field_validator("passage_type")
+    @field_validator("passage_type", mode="before")
     @classmethod
-    def _horizontal_type(cls, value: PassageType) -> PassageType:
-        if value not in (PassageType.DOORWAY, PassageType.ARCHWAY):
-            raise ValueError("connection passage_type must be doorway or archway")
-        return value
+    def _horizontal_type(cls, value: Any) -> Any:
+        """Non-horizontal wire falls back to doorway (§3.7); boundary logs ERROR."""
+        parsed = PassageType.from_wire(value)
+        if parsed in (PassageType.DOORWAY, PassageType.ARCHWAY):
+            return parsed
+        return PassageType.DOORWAY
 
     @model_validator(mode="after")
     def _resolve_width_default(self) -> "RoomConnection":
