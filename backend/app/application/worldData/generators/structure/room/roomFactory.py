@@ -64,11 +64,17 @@ def _resolve_size(
     return width, depth, room_z
 
 
-def _resolve_shape_params(room_def: RoomDef, rng: Random) -> dict:
+def _resolve_shape_params(room_def: RoomDef, chosen_shape: ShapeType, rng: Random) -> dict:
     raw = room_def.shape_params
     params: dict = {}
 
-    if room_def.shape_type in ("l_shape", ["l_shape"]):
+    if chosen_shape is ShapeType.L_SHAPE:
+        if raw is None or raw.arm_width_range is None or raw.arm_depth_range is None:
+            logger.error(
+                "Room '%s': incomplete shape_params for %s — using footprint defaults",
+                room_def.room_id, chosen_shape.value,
+            )
+            return params
         awr = raw.arm_width_range
         adr = raw.arm_depth_range
         corner = raw.arm_corner
@@ -80,7 +86,13 @@ def _resolve_shape_params(room_def: RoomDef, rng: Random) -> dict:
             "arm_corner": corner,
         }
 
-    elif room_def.shape_type in ("t_shape", ["t_shape"]):
+    elif chosen_shape is ShapeType.T_SHAPE:
+        if raw is None or raw.stem_width_range is None:
+            logger.error(
+                "Room '%s': incomplete shape_params for %s — using footprint defaults",
+                room_def.room_id, chosen_shape.value,
+            )
+            return params
         swr = raw.stem_width_range
         wall = raw.stem_wall
         if wall == "any":
@@ -132,10 +144,9 @@ def instantiate_level_rooms(
             count = rng.randint(cr[0], cr[1])
 
         shape = _resolve_shape(room_def, rng)
-        shape_params = _resolve_shape_params(room_def, rng)
-        if shape is ShapeType.T_SHAPE:
+        shape_params = _resolve_shape_params(room_def, shape, rng)
+        if shape is ShapeType.T_SHAPE and "stem_wall" in shape_params:
             # Normalize once per definition, before repeated footprint queries.
-            # Mixed shape arrays keep their current RNG/geometry behavior.
             shape_params["stem_wall"] = resolve_stem_wall(
                 shape_params.get("stem_wall"),
                 context=f"Structure '{template.system_name}' room '{room_id}'",

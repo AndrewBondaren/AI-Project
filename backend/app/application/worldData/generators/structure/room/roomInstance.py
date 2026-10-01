@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from app.dataModel.structure.room.entryPoint import EntryPoint
 from app.dataModel.structure.room.wallOpeningSpec import WallOpeningSpec
 from app.dataModel.structure.enums.attachWall import AttachWall
+from app.dataModel.spatial.facing import Facing
 
 from app.application.worldData.generators.structure.shapes import room_footprint
 
@@ -41,6 +42,8 @@ class _RoomInstance:
     facing:         str | None = None
     is_shaft:       bool = False
     staircase_id:   str | None = None
+    embedded_host_key: str | None = None
+    embedded_entry: Facing | None = None
 
     # Опциональные поля из room_def
     attach_to:           str | None = None

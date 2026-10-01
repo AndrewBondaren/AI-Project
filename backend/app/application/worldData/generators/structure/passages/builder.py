@@ -163,17 +163,30 @@ def build_passages(
                 # Archway on fr_z level: shaft_fr ↔ fr_room (only for i==0).
                 # Segments i>0 reuse the previous segment's to_z archway.
                 if i == 0 and shaft_fr is not None and shaft_fr.placed:
+                    entry_host = fr_room
+                    embedded_wall = None
+                    if shaft_fr.embedded_host_key is not None:
+                        entry_host = next(r for r in rooms if r.uid_key == shaft_fr.embedded_host_key
+                                          and r.z_offset == shaft_fr.z_offset)
+                        x, y = shaft_fr.origin_x, shaft_fr.origin_y
+                        side = shaft_fr.embedded_entry
+                        if side in NS_FACINGS:
+                            wall_y = y + shaft_fr.depth - 1 if side == Facing.NORTH else y
+                            embedded_wall = [(wx, wall_y) for wx in range(x + 1, x + shaft_fr.width - 1)]
+                        else:
+                            wall_x = x + shaft_fr.width - 1 if side == Facing.EAST else x
+                            embedded_wall = [(wall_x, wy) for wy in range(y + 1, y + shaft_fr.depth - 1)]
                     arch_conn_fr = RoomConnection(
-                        from_room=shaft_fr.room_id, to_room=fr_stop_id,
+                        from_room=shaft_fr.room_id, to_room=entry_host.room_id,
                         passage_type=PassageType.ARCHWAY, width=_arch_width,
                     )
                     same_level_rooms_fr = [r for r in rooms
                                            if room_z_offsets.get(r.room_id) == fr_offset]
-                    p = _build_archway(arch_conn_fr, shaft_fr, fr_room, fr_level, fr_level,
+                    p = _build_archway(arch_conn_fr, shaft_fr, entry_host, fr_level, fr_level,
                                        cells, world_uid, building_uid,
                                        passage_height=passage_height,
                                        other_rooms=same_level_rooms_fr,
-                                       deferred=deferred_arch)
+                                       deferred=deferred_arch, shared_cells=embedded_wall)
                     if p:
                         passages.append(p)
 

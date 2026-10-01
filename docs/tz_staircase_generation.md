@@ -282,7 +282,8 @@ AdjacentShaftPlacer/EdgeMountedShaftPlacer читают его с fallback NORTH
 
 ### `embed_in: "room_id"` (только при `in_a_room: true`)
 
-Явно указывает room_id родителя. Fallback: самая большая комната на том же z + WARNING.
+Явно указывает room_id родителя. Fallback: самая большая размещённая не-shaft комната
+на том же z + ERROR (решение v1 §6.11, 2026-10-01); равные площади — по uid_key.
 Хост-комната — на уровне `stops[0]` (z_lo): якорь входа должен быть достижим из неё.
 
 ### `embed_at: "north_east" | "north_west" | "south_east" | "south_west" | "center"` (только при `in_a_room: true`, v1)
@@ -300,9 +301,21 @@ AdjacentShaftPlacer/EdgeMountedShaftPlacer читают его с fallback NORTH
 Проём в шахту на z_lo — `archway` со стороны входа (как переход `has_walls: true`).
 На верхних уровнях шахта проходит сквозь комнаты на тех же XY — семантика хоста верхних этажей: TODO.
 
-> **TODO (функционал не реализован):** `EmbeddedShaftPlacer` и потребление `embed_in`/`embed_at`
-> отсутствуют — `place()` = `raise NotImplementedError`. Дописать: выбор позиции по `embed_at`,
-> слияние общих стен, проём на z_lo, проверка вместимости хоста, multi-level поведение.
+**Реализовано v1 (2026-10-01, §6.11):** `EmbeddedShaftPlacer` потребляет
+`embed_in`/`embed_at`. Auto-угол использует
+`scoped_rng(building_uid, staircase_id, "embed_at")` с сортированными intercardinal-углами;
+для center сторона входа выбирается отдельно через `"embed_entry"`.
+Угол совмещает две внешние стороны со стенами хоста; center оставляет вокруг
+footprint минимум одну клетку interior хоста перед его стенами.
+Fit проверяется по фактическому footprint; пересечение с другой комнатой уровня
+или невместимость → ERROR + `AdjacentShaftPlacer` относительно `stops[0]`.
+Угловой вход направлен в interior хоста: сохраняется opposite(facing), если эта
+сторона обращена внутрь, иначе выбирается внутренняя N/S-сторона.
+Runtime-facing шахты согласуется с выбранным входом (opposite entry) и наследуется
+её верхними экземплярами; wire-спека не меняется.
+Арка на z_lo ведёт к фактическому host, включая fallback-host и `embed_in != stops[0]`,
+и прорезает только выбранную стену шахты. Origin наследуется верхними экземплярами
+существующим механизмом; семантика pass-through через верхние комнаты остаётся TODO.
 
 ---
 
@@ -1202,10 +1215,13 @@ class ShaftPlacer(ABC):
 
 ### EmbeddedShaftPlacer (`in_a_room: true`)
 
-1. Shaft размещается **внутри** `embed_in` комнаты (shaft.origin ⊂ interior(embed_in)).
-2. to_room = embed_in — shaft находится внутри него; archway не нужен.
-3. `level_start` для to_z не зависит от shaft (to_room уже является embed_in).
-4. Shaft генерирует только ступени и стойки — внешние стены не нужны (они принадлежат embed_in).
+1. Shaft размещается внутри host на z_lo: угол или center по §2 embed_at.
+2. Нижняя archway соединяет шахту с фактическим host по одной выбранной стене.
+3. Origin и runtime-facing наследуются верхними shaft-экземплярами;
+   `level_start` для to_z распространяется существующим механизмом.
+4. `cellBuilder` строит периметр шахты; общие стены угла и хоста сливаются по XY.
+   Stair-builder заменяет interior шахты ступенями/void; host-пол вне шахты сохраняется.
+5. Host-семантика верхних уровней (pass-through внутри комнат) остаётся вне v1.
 
 ### EdgeMountedShaftPlacer (`outside: true`)
 
@@ -1224,6 +1240,7 @@ Shaft не объявляется в `levels[].rooms` шаблона и не п�
 ## 12. Открытые вопросы
 
 - [ ] `spiral`: формула при `z_height > n` (более одного оборота)?
-- [ ] `in_a_room: true` + layout: как layout engine резервирует место внутри родителя?
+- [x] `in_a_room: true` на z_lo: EmbeddedShaftPlacer + периметр cellBuilder (§2, v1).
+- [ ] Embedded pass-through: host-семантика комнат верхних уровней.
 - [ ] `has_walls: false`: нужен ли railing по краям?
 - [ ] Материалы по типам (дерево/камень/металл).

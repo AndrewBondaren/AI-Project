@@ -490,6 +490,7 @@ class StructureGeneratorService:
             self._place_level_shafts(
                 z_offset, staircases, all_rooms, room_z_offsets,
                 shaft_by_staircase, all_placed_by_id, level_start,
+                building_uid=building.location_uid,
             )
             self._propagate_trapdoor_starts(
                 z_offset, staircases, room_z_offsets, all_placed_by_id, level_start,
@@ -569,8 +570,10 @@ class StructureGeneratorService:
         shaft_by_staircase: dict[str, list[_RoomInstance]],
         all_placed_by_id: dict[str, _RoomInstance],
         level_start: dict[int, tuple[int, int]],
+        *,
+        building_uid: str = "",
     ) -> None:
-        """AdjacentShaftPlacer for fr_z shaft instances; propagates level_start to to_z levels."""
+        """Place fr_z shafts using their strategy; propagate origins to upper levels."""
         for sc in staircases:
             if not requires_shaft(sc.staircase_type):
                 continue
@@ -586,13 +589,15 @@ class StructureGeneratorService:
 
             shaft_fr        = shaft_list[0]
             placed_on_level = [r for r in all_rooms if r.z_offset == z_offset and r.placed]
-            placer          = make_shaft_placer(sc)
+            placer          = make_shaft_placer(sc, building_uid=building_uid)
             success         = placer.place(shaft_fr, fr_room, placed_on_level)
 
             if success:
                 for shaft_other in shaft_list[1:]:
                     shaft_other.origin_x = shaft_fr.origin_x
                     shaft_other.origin_y = shaft_fr.origin_y
+                    if shaft_fr.embedded_entry is not None:
+                        shaft_other.facing = shaft_fr.facing
                 for i in range(1, len(stops)):
                     to_stop_z = room_z_offsets.get(stops[i])
                     if to_stop_z is not None and to_stop_z not in level_start:

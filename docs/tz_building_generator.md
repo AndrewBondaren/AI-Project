@@ -670,9 +670,9 @@ mid = len(shared_segment) // 2
 | `facing` | string | optional | Для u_shape — направление первого подъёма, от entry к far end; entry = opposite(facing). Текущее чтение: шаблон, иначе NORTH; расхождение с целевым авто-детектом — staircase §2, сверка S0 |
 | `has_walls` | bool | optional | Shaft замкнут стенами. Default: `true`. При `false` — shaft обязан быть внутри здания. |
 | `outside` | bool | optional | Только при `has_walls: true`. Default: `false`. При `true` — shaft edge-mounted: три стороны снаружи, внешние стены заменяются на floor, facing-сторона через archway к зданию. |
-| `in_a_room` | bool | optional | Shaft embedded внутри помещения. Default: `false`. Несовместим с `outside: true`. Потребление — TODO (staircase §2) |
-| `embed_in` | string | conditional | `room_id` родителя при `in_a_room: true` (fallback: самая большая комната на z_lo; потребление — TODO, staircase §2) |
-| `embed_at` | string | conditional | Позиция шахты внутри `embed_in`: intercardinal-угол (`north_east` … `south_west`) или `center` (v1; потребление — TODO, staircase §2) |
+| `in_a_room` | bool | optional | Shaft embedded внутри помещения на z_lo. Default: `false`. Несовместим с `outside: true`. Реализовано v1, staircase §2 |
+| `embed_in` | string | conditional | `room_id` родителя при `in_a_room: true`; отсутствующий/неразмещённый хост → самая большая размещённая комната на z_lo + ERROR (staircase §2) |
+| `embed_at` | string | conditional | Позиция шахты внутри `embed_in`: intercardinal-угол (`north_east` … `south_west`) или `center`; отсутствие → deterministic auto-угол. Невместимость/пересечение → ERROR + adjacent fallback (v1, staircase §2) |
 | `stops` | string[] | required | Упорядоченный список `room_id` снизу вверх. Минимум 2 элемента. Генератор создаёт один shaft-сегмент на каждую соседнюю пару. |
 
 **Правило `stops`:**

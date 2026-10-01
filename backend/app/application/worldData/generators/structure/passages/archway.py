@@ -38,8 +38,9 @@ def _build_archway(
     passage_height: int,
     other_rooms: list | None = None,
     deferred: list | None = None,
+    shared_cells: list[tuple[int, int]] | None = None,
 ) -> LocationPassage | None:
-    shared = _shared_segment(fr, to)
+    shared = _shared_segment(fr, to) if shared_cells is None else shared_cells
     if not shared:
         logger.warning("archway %r->%r: no shared wall found", conn.from_room, conn.to_room)
         return None

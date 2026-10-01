@@ -51,7 +51,7 @@ class FacingDefaultsTests(unittest.TestCase):
         self.assertTrue(invalid.substituted)
         self.assertFalse(valid.substituted)
 
-    def test_mixed_array_keeps_geometry_and_logs_once_before_repeated_footprints(self):
+    def test_invalid_internal_stem_logs_once_before_repeated_footprints(self):
         template = simple_structure()
         wire = template.levels[0]["rooms"][0]
         wire.update(shape_type=["t_shape", "t_shape"],
@@ -59,15 +59,17 @@ class FacingDefaultsTests(unittest.TestCase):
                     size={"width_range": [6, 6], "depth_range": [4, 4]})
         level = StructureGeneratorService._resolve_levels(template)[0]
         world, _ = test_world_building()
-        # The old mixed-array path resolved no shape params and consumed no RNG
-        # for them. Keep that path; only add a deterministic diagnostic fallback.
+        # Bypass the wire validator to exercise the defensive facing boundary.
+        definition = level.rooms[0]
+        invalid_params = definition.shape_params.model_copy(update={"stem_wall": "bad"})
+        level = level.model_copy(update={"rooms": [definition.model_copy(update={"shape_params": invalid_params})]})
         rng = Random(42)
         with tempfile.TemporaryDirectory() as directory:
             with generation_world_log(world.world_uid, mode="test", root=directory) as path:
                 instances = instantiate_level_rooms(level, template, 5, 0, world, rng)
                 instance = instances[0]
                 self.assertIs(instance.shape_params["stem_wall"], Facing.SOUTH)
-                self.assertNotIn("stem_width", instance.shape_params)
+                self.assertIn(instance.shape_params["stem_width"], (2, 3))
                 instance.origin_x = instance.origin_y = 0
                 footprint = instance.get_footprint()
                 self.assertEqual(footprint, instance.get_footprint())
@@ -76,4 +78,4 @@ class FacingDefaultsTests(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertIn(str(template.system_name), errors[0]["msg"])
         self.assertIn("hall", errors[0]["msg"])
-        self.assertEqual(footprint, footprint_t_shape(0, 0, 6, 4, 2, Facing.SOUTH))
+        self.assertEqual(footprint, footprint_t_shape(0, 0, 6, 4, instance.shape_params["stem_width"], Facing.SOUTH))
