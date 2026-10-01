@@ -103,7 +103,7 @@ def build_passages(
                     if fr.get_footprint() & to.get_footprint():
                         p = _build_doorway(conn, fr, to, fr_level, to_level,
                                            cells, world_uid, building_uid,
-                                           passage_height=passage_height)
+                                           passage_height=passage_height, template=template)
                         if p:
                             passages.append(p)
 

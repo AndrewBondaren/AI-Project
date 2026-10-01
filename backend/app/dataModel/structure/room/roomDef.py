@@ -1,6 +1,4 @@
 """Typed room boundary; StructureTemplate retains original room dictionaries."""
-from typing import Any
-
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, ValidationError, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire, StrictEnumOnWire
@@ -10,6 +8,7 @@ from app.dataModel.structure.enums.passageType import PassageType
 from app.dataModel.structure.room.entryPoint import EntryPoint
 from app.dataModel.structure.room.shapeParams import ShapeParams
 from app.dataModel.structure.room.sizeSpec import PositiveRange, SizeSpec
+from app.dataModel.structure.room.wallOpeningSpec import WallOpeningSpec
 
 
 class RoomDef(BaseModel):
@@ -40,7 +39,7 @@ class RoomDef(BaseModel):
     passage_type: DefaultOnWire[PassageType] = PassageType.DOORWAY
     max_overhang: DefaultOnWire[int] = Field(default=0, ge=0)
     has_column: DefaultOnWire[bool] = False
-    wall_openings: DefaultOnWire[list[dict[str, Any]]] = Field(default_factory=list)
+    wall_openings: DefaultOnWire[list[WallOpeningSpec]] = Field(default_factory=list)
     _attach_wall_substitution: tuple[str, str] | None = PrivateAttr(default=None)
 
     @model_validator(mode="wrap")

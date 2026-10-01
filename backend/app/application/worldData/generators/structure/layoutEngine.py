@@ -405,7 +405,7 @@ def _layout_mode_b(
     for host_id, group in by_host.items():
         host = _by_id(all_placed, host_id)
         if host is None or not host.placed:
-            logger.warning("layout mode_b | host=%r not placed — skipping %d attached room(s)", host_id, len(group))
+            logger.error("layout mode_b | host=%r not placed — skipping %d attached room(s)", host_id, len(group))
             continue
 
         attach_wall = group[0].attach_wall

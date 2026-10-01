@@ -279,7 +279,7 @@ level_z = level.z_height ?? max(room_z for room in level.rooms)
 | `economic_tier` | string | optional | Переопределяет экономический уровень для этой комнаты. Если не задан — берётся из шаблона |
 | `entry_point` | object | optional | Главный (парадный) вход. Только одна комната в шаблоне v1. Persist: `entry_role=front`. Здание без front — ошибка (**C20**) |
 | `back_entry_point` | object | optional | Чёрный вход. Только одна комната. 0 допустимо. Persist: `entry_role=service` |
-| `wall_openings` | array | optional | Отверстия в стенах комнаты: окна, бойницы, люки, иллюминаторы и др. (см. раздел 3.10) |
+| `wall_openings` | array | optional | Параметры проёмов в стенах комнаты: `opening_type`, `frame_material`, `glass_material`, `window_z` (см. §3.10–3.11). Только параметры — позиции, количество и распределение по сторонам всегда алгоритмические. Отсутствующий или невалидный параметр → auto-resolve по алгоритму + ERROR на runtime-границе |
 | `underground_fallback` | bool | optional | Если комнату невозможно разместить на текущем уровне — перенести на уровень ниже. Default: `false`. Уместно для складских, подсобных, кладовых, котельных |
 | `shape_params` | object | conditional | Параметры специфичные для формы. Обязателен для `l_shape` и `t_shape`. Игнорируется для остальных |
 
@@ -1088,7 +1088,35 @@ TopWallZAdjuster — v2 (открытые верхние стены / парап
 
 ### 3.11 Алгоритмическая генерация: какие комнаты получают проёмы
 
-Генератор сам решает, какие проёмы ставить. Шаблон (v2, опционально) переопределяет только: тип проёма (`opening_type`), материал рамы (`frame_material`), материал стекла (`glass_material`), высоту (`window_z`).
+Генератор сам решает, какие проёмы ставить. Шаблон переопределяет только параметры
+проёмов через `wall_openings` на комнате: `opening_type`, `frame_material`,
+`glass_material`, `window_z`.
+
+**Граница authored/algorithmic (решение мастера 2026-10-01):**
+
+| Аспект | Источник |
+|---|---|
+| Количество, позиции, распределение по сторонам и сегментам | **всегда алгоритмически** (Правила 1–3). Поля позиционирования на wire не существует — автор не задаёт «окно в третьей ячейке северной стены» |
+| `opening_type`, `frame_material`, `glass_material`, `window_z` | authored `wall_openings` → override алгоритмического резолва |
+| Каждый параметр: отсутствует или невалиден | auto-resolve по алгоритму (`opening_type` → правило room_type, материалы → resolve_material по тиру, `window_z` → `window_z_ratio`/`window_z_offset` уровня/шаблона) + **ERROR** в централизованный транскрипт |
+
+Варианты стратегии расстановки XY (`zone_center`, `edges`, `every_n`, `none` и т.п.)
+— **v2+, поля `placement` на wire нет**; текущий единственный алгоритм —
+zone-center Правила 2. Добавление `placement` требует реестра XY-стратегий рядом
+с `ZADJUSTER_BY_TYPE`.
+
+**Реализация v1 (2026-10-01, срез §6.7):** `WallOpeningSpec` на границе
+`RoomDef` потребляется в `wallOpening.py`. Первая запись применяется ко всем
+алгоритмическим проёмам комнаты; записи сверх первой игнорируются с ERROR.
+Пустая спека `{}`, отсутствие массива и omitted/None-поля — легальный тихий
+auto-resolve. Невалидный заданный параметр → auto-resolve + ERROR на runtime-границе;
+dataModel только сохраняет отметку подмены. Неизвестные поля спеки запрещены.
+`window_z` задаёт нижнюю z проёма от `level.z`; высота проёма —
+`max(1, int(room.z_height * 0.4))`. Если проём не вмещается в высоту комнаты,
+используется автоматический ZAdjuster с ERROR. Default opening_type пока WINDOW
+(OQ-17); fallback рамы — `room.wall_material`, стекла — resolve_material по тиру.
+Потребление template/level `window_z_ratio`/`window_z_offset` остаётся вне этого среза:
+автоматический z сохраняет текущий `ZADJUSTER_BY_TYPE[element]`.
 
 **Общие фильтры (до правил по room_type):**
 

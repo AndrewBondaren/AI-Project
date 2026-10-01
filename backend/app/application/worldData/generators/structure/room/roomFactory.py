@@ -109,6 +109,17 @@ def instantiate_level_rooms(
 
     for room_def in level_def.rooms:
         room_id = room_def.room_id
+        for index, spec in enumerate(room_def.wall_openings):
+            for name, original in spec.substitutions:
+                logger.error(
+                    "Structure '%s' room '%s': wall_openings[%d].%s=%s — auto-resolve",
+                    template.system_name, room_id, index, name, original,
+                )
+        if len(room_def.wall_openings) > 1:
+            logger.error(
+                "Structure '%s' room '%s': wall_openings entries after first ignored (%d)",
+                template.system_name, room_id, len(room_def.wall_openings) - 1,
+            )
         entry_point = room_def.entry_point
         back_entry_point = room_def.back_entry_point
         required = room_def.required
@@ -167,6 +178,7 @@ def instantiate_level_rooms(
                 shape_params=shape_params,
                 staircase_type=room_def.staircase_type,
                 facing=room_def.facing,
+                wall_openings=list(room_def.wall_openings),
             ))
             logger.info("factory | %r staircase_type=%r", room_id, room_def.staircase_type)
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from app.dataModel.structure.room.entryPoint import EntryPoint
+from app.dataModel.structure.room.wallOpeningSpec import WallOpeningSpec
 from app.dataModel.structure.enums.attachWall import AttachWall
 
 from app.application.worldData.generators.structure.shapes import room_footprint
@@ -50,7 +51,7 @@ class _RoomInstance:
     back_entry_point:    EntryPoint | None = None
     shape_params:        dict = field(default_factory=dict)
 
-    wall_openings: list[dict] = field(default_factory=list)
+    wall_openings: list[WallOpeningSpec] = field(default_factory=list)
 
     # Stairwell mutation: extra cells added to base footprint at generation time.
     # Used to widen the entry end of a corridor so a standard staircase can fit.

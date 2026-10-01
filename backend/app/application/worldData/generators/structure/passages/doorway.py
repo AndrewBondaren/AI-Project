@@ -4,6 +4,8 @@ Doorway passage builder.
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.doorPlacer import DoorPlacer
 from app.dataModel.structure.building.roomConnection import RoomConnection
+from app.dataModel.structure.building.structureTemplate import StructureTemplate
+from app.application.worldData.generators.structure.passages.doorHeight import resolve_door_height
 from app.application.worldData.generators.structure.passages.shared import (
     _det_uuid, _doorway_facing, _shared_segment,
 )
@@ -22,6 +24,8 @@ def _build_doorway(
     world_uid: str,
     building_uid: str,
     passage_height: int,
+    *,
+    template: StructureTemplate | None = None,
 ) -> LocationPassage | None:
     import logging
     logger = logging.getLogger(__name__)
@@ -38,7 +42,10 @@ def _build_doorway(
     mat = conn.frame_material or fr.wall_material
     z = fr_level.z
 
-    height  = max(conn.door_height or passage_height, passage_height)
+    height = resolve_door_height(
+        min(fr.z_height, to.z_height), conn.door_height, passage_height, template,
+        context=f"connection '{conn.from_room}->{conn.to_room}'",
+    )
     facing  = _doorway_facing(shared)
     label   = f"{conn.from_room}->{conn.to_room}"
     placer  = DoorPlacer(cells, world_uid, building_uid)

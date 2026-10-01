@@ -2,13 +2,10 @@
 Entry-point passage builder (main entrance / service entrance).
 """
 import logging
-from math import floor
 
 from app.dataModel.structure.room.entryPoint import EntryPoint
-from app.dataModel.structure.building.structureTemplate import (
-    DEFAULT_DOOR_HEIGHT_MAX, DEFAULT_DOOR_HEIGHT_RATIO, StructureTemplate,
-)
-from app.application.worldData.generators.structure.errors import GenerationError
+from app.dataModel.structure.building.structureTemplate import StructureTemplate
+from app.application.worldData.generators.structure.passages.doorHeight import resolve_door_height
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.doorPlacer import DoorPlacer
 from app.application.worldData.generators.structure.passages.shared import (
@@ -25,22 +22,10 @@ def _resolve_entry_height(
     room: _RoomInstance, ep: EntryPoint, passage_height: int,
     template: StructureTemplate | None,
 ) -> int:
-    if ep.door_height is not None:
-        height = ep.door_height
-    elif room.z_height <= 3:
-        height = room.z_height - 1
-    else:
-        ratio = template.door_height_ratio if template is not None else DEFAULT_DOOR_HEIGHT_RATIO
-        cap = template.door_height_max if template is not None else DEFAULT_DOOR_HEIGHT_MAX
-        height = min(floor(room.z_height * ratio), cap)
-    height = max(height, passage_height)
-    if not passage_height <= height < room.z_height:
-        uid = template.system_name if template is not None else "<unspecified>"
-        raise GenerationError(
-            f"Structure '{uid}', room '{room.room_id}': door_height={height} "
-            f"must satisfy {passage_height} <= door_height < z_height={room.z_height}"
-        )
-    return height
+    return resolve_door_height(
+        room.z_height, ep.door_height, passage_height, template,
+        context=f"room '{room.room_id}'",
+    )
 
 
 def _build_entry_point(

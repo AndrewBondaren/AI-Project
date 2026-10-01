@@ -103,7 +103,7 @@ class EntryPointRuntimeTests(unittest.TestCase):
         instance = room()
         instance.z_height = 8
         level = LocationLevel("level", "building", 0, 8, "Ground")
-        for height, expected in ((None, 5), (1, 2), (4, 4)):
+        for height, expected in ((None, 5), (1, 5), (4, 4)):
             for material in (None, "stone"):
                 entry = EntryPoint(wall="east", passage_type="service_entrance",
                                    width=2, door_height=height, frame_material=material)
