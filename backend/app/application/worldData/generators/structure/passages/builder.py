@@ -166,16 +166,23 @@ def build_passages(
                     entry_host = fr_room
                     embedded_wall = None
                     if shaft_fr.embedded_host_key is not None:
-                        entry_host = next(r for r in rooms if r.uid_key == shaft_fr.embedded_host_key
-                                          and r.z_offset == shaft_fr.z_offset)
-                        x, y = shaft_fr.origin_x, shaft_fr.origin_y
-                        side = shaft_fr.embedded_entry
-                        if side in NS_FACINGS:
-                            wall_y = y + shaft_fr.depth - 1 if side == Facing.NORTH else y
-                            embedded_wall = [(wx, wall_y) for wx in range(x + 1, x + shaft_fr.width - 1)]
+                        found = next((r for r in rooms if r.uid_key == shaft_fr.embedded_host_key
+                                      and r.z_offset == shaft_fr.z_offset), None)
+                        if found is None:
+                            logger.warning(
+                                "staircase %r: embedded host uid=%r missing on z=%d — arch to fr_room",
+                                sc_id, shaft_fr.embedded_host_key, shaft_fr.z_offset,
+                            )
                         else:
-                            wall_x = x + shaft_fr.width - 1 if side == Facing.EAST else x
-                            embedded_wall = [(wall_x, wy) for wy in range(y + 1, y + shaft_fr.depth - 1)]
+                            entry_host = found
+                            x, y = shaft_fr.origin_x, shaft_fr.origin_y
+                            side = shaft_fr.embedded_entry
+                            if side in NS_FACINGS:
+                                wall_y = y + shaft_fr.depth - 1 if side == Facing.NORTH else y
+                                embedded_wall = [(wx, wall_y) for wx in range(x + 1, x + shaft_fr.width - 1)]
+                            else:
+                                wall_x = x + shaft_fr.width - 1 if side == Facing.EAST else x
+                                embedded_wall = [(wall_x, wy) for wy in range(y + 1, y + shaft_fr.depth - 1)]
                     arch_conn_fr = RoomConnection(
                         from_room=shaft_fr.room_id, to_room=entry_host.room_id,
                         passage_type=PassageType.ARCHWAY, width=_arch_width,
