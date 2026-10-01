@@ -1664,13 +1664,25 @@ while sum(widths) > corridor_length и actual_count > 0:
 Прикреплённые комнаты не переносятся в "следующую строку" — только вдоль стен коридора.  
 При `attach_wall: "both"` — чередуются по обе стороны.
 
-`"any"` — генератор выбирает сторону по позиции лестницы в коридоре:
+`"any"` на хосте `room_type="corridor"` — все комнаты группы размещаются на одной
+осевой стороне, с учётом лестниц (срез 6.6, решения A1–A5):
 ```
-staircase.position IN (north, northeast, northwest) → attach_wall = "south"
-staircase.position IN (south, southeast, southwest) → attach_wall = "north"
-staircase.position IN (east, west, center)          → attach_wall = rng.choice(["north", "south"])
-staircase-connection к коридору отсутствует         → attach_wall = rng.choice(["north", "south"])
-```  
+sides = (north, south) если corridor.depth >= corridor.width, иначе (east, west)
+occupied = стороны sc.facing всех staircases, где corridor.room_id входит в sc.stops
+           и существует shaft этой лестницы на z_offset коридора
+free = sides минус occupied, спроецированные на выбранную ось
+если свободна ровно одна сторона → выбрать её
+иначе → scoped_rng(building_uid, corridor.room_id, str(z_offset), "attach_wall").choice(sides)
+```
+Источник стороны — `StaircaseSpec.facing`, preferred-направление AdjacentShaftPlacer;
+старое `staircase.position` больше не используется. Шахты на момент выбора могут
+ещё не иметь координат. `facing=None` и кардинал вне оси не занимают сторону;
+внутренние intercardinal-значения проецируются на ось (wire остаётся cardinal-only).
+Несколько лестниц объединяют занятые стороны. При обеих занятых сторонах или
+отсутствии лестницы выбор детерминирован и не потребляет общий RNG генерации.
+Ось берётся по фактическим размерам хоста после clipping; квадрат использует N/S.
+Для некоридорного хоста `any` сохраняет прежнее чередование, как `both`;
+семантика `both` и явных направлений не меняется. Fit-проверки плейсера сохраняются.
 Дверной проём — на стене комнаты, смежной с коридором.
 
 **Ограничение верхних этажей (overhang rule):**

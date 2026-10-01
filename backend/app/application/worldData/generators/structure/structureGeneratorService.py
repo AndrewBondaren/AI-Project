@@ -478,7 +478,10 @@ class StructureGeneratorService:
             )
 
             parent_bounds = level_footprint_bounds.get(z_offset - 1) if z_offset > 0 else None
-            layout_level(level_rooms, synth_conns, start_x, start_y, bounds=parent_bounds)
+            layout_level(
+                level_rooms, synth_conns, start_x, start_y, bounds=parent_bounds,
+                staircases=staircases, building_uid=building.location_uid,
+            )
 
             for r in level_rooms:
                 if r.placed:

@@ -16,9 +16,12 @@ import logging
 from collections import deque
 
 from app.application.worldData.generators.structure.errors import GenerationError
-from app.dataModel.spatial.facing import Facing
+from app.dataModel.spatial.facing import Facing, GRID_OUTWARD_DELTA
+from app.dataModel.structure.enums.attachWall import AttachWall
 from app.dataModel.structure.building.roomConnection import RoomConnection
+from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
+from app.utils.deterministicIds import scoped_rng
 
 logger = logging.getLogger(__name__)
 
@@ -343,16 +346,49 @@ def _place_rooms_on_side(
             room.origin_x = room.origin_y = None
 
 
+def _corridor_attach_side(
+    host: _RoomInstance,
+    rooms: list[_RoomInstance],
+    staircases: list[StaircaseSpec],
+    building_uid: str,
+) -> Facing:
+    """Resolve corridor ANY per §6.6 A1–A5, before shafts are placed."""
+    vertical = host.depth >= host.width
+    sides = (Facing.NORTH, Facing.SOUTH) if vertical else (Facing.EAST, Facing.WEST)
+    shaft_ids = {
+        room.staircase_id for room in rooms
+        if room.is_shaft and room.z_offset == host.z_offset
+    }
+    occupied: set[Facing] = set()
+    for sc in staircases:
+        if host.room_id not in sc.stops or sc.staircase_id not in shaft_ids or sc.facing is None:
+            continue
+        dx, dy = GRID_OUTWARD_DELTA[sc.facing]
+        component = dy if vertical else dx
+        # Project intercardinals onto the host axis; a perpendicular cardinal
+        # occupies neither candidate side. Wire validation remains unchanged.
+        if component:
+            occupied.add(sides[0] if component > 0 else sides[1])
+    free = [side for side in sides if side not in occupied]
+    if len(free) == 1:
+        return free[0]
+    return scoped_rng(building_uid, host.room_id, str(host.z_offset), "attach_wall").choice(sides)
+
+
 def _layout_mode_b(
     rooms: list[_RoomInstance],
     all_placed: list[_RoomInstance],
     bounds: tuple[int, int, int, int] | None = None,
+    *,
+    staircases: list[StaircaseSpec],
+    building_uid: str,
 ) -> None:
     """
     bounds = (x_min, y_min, x_max, y_max) of the level below.
 
     attach_wall values: "north", "south", "east", "west" — explicit side.
-    "both" / "any" — auto-detect from host orientation:
+    Corridor "any" — one axial side, avoiding the staircase sides (§6.6).
+    "both" / non-corridor "any" — unchanged alternating placement:
       horizontal host (width >= depth) → north + south
       vertical host   (depth > width)  → east  + west
     """
@@ -372,6 +408,11 @@ def _layout_mode_b(
             continue
 
         attach_wall = group[0].attach_wall
+
+        if attach_wall == AttachWall.ANY and host.room_type == "corridor":
+            side = _corridor_attach_side(host, rooms, staircases, building_uid)
+            _place_rooms_on_side(side, group, host, all_placed, bounds)
+            continue
 
         try:
             side = Facing(attach_wall)
@@ -481,6 +522,9 @@ def layout_level(
     building_x: int,
     building_y: int,
     bounds: tuple[int, int, int, int] | None = None,
+    *,
+    staircases: list[StaircaseSpec],
+    building_uid: str,
 ) -> None:
     """
     Places all rooms on a level in-place.
@@ -511,4 +555,7 @@ def layout_level(
                 logger.warning("layout re-place after clip | room=%r skipped", room.room_id)
 
     all_placed = [r for r in rooms if r.placed]
-    _layout_mode_b(rooms, all_placed, bounds=bounds)
+    _layout_mode_b(
+        rooms, all_placed, bounds=bounds,
+        staircases=staircases, building_uid=building_uid,
+    )
