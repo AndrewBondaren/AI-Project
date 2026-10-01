@@ -134,6 +134,13 @@ def instantiate_level_rooms(
             )
         entry_point = room_def.entry_point
         back_entry_point = room_def.back_entry_point
+        if (room_def.perimeter_required_explicitly_disabled
+                and (entry_point is not None or back_entry_point is not None)):
+            logger.warning(
+                "Structure '%s' room '%s': perimeter_required=false ignored — "
+                "entry_point/back_entry_point requires perimeter",
+                template.system_name, room_id,
+            )
         required = room_def.required
 
         # Resolve count

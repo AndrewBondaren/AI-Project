@@ -12,7 +12,7 @@ Use this skill when the user asks to run the migrated source command `impl-embed
 
 ## Прочитать до первой правки
 
-1. [`.cursor/plans/entry-point-pojo.md`](../plans/entry-point-pojo.md) — **§6.11** (контракт + решения v1 — не менять без уточнения мастера).
+1. [`.cursor/plans/entry-point-pojo-done.md`](../plans/entry-point-pojo-done.md) — **§6.11** (контракт + решения v1 — не менять без уточнения мастера).
 2. [`docs/tz_staircase_generation.md`](../../docs/tz_staircase_generation.md) — §2 `in_a_room`/`embed_in`/`embed_at` + TODO-блок (снять после реализации); §1 stops-модель; `tz_building_generator.md` §673–675 (wire-поля).
 3. Код: `staircase/shaftPlacer.py` (stub + `AdjacentShaftPlacer`/`EdgeMountedShaftPlacer` как образцы), `structureGeneratorService._place_level_shafts` (~563: `placer.place(shaft_fr, fr_room, placed_on_level)`; `fr_room` = `stops[0]`, host = `embed_in` — lookup по `placed_on_level`), `passages/builder.py` ~163–178 (z_lo archway shaft↔fr_room через shared wall), `cellBuilder.py` (pass2 пропускает `is_shaft`, pass3 красит периметр — **разметка работает без правок**, угловая шахта внутри хоста сама даёт стены и слияние), `utils/deterministicIds.scoped_rng`.
 4. Правила: `dataModel-no-hardcode.mdc`, `layer-boundaries.mdc`, `plan-before-code.mdc`, `project-context.mdc` (не стартовать backend, не коммитить).

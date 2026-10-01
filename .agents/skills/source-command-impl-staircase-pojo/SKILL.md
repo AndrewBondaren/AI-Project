@@ -17,7 +17,7 @@ Use this skill when the user asks to run the migrated source command `impl-stair
 
 ## Прочитать до первой правки
 
-1. [`.cursor/plans/entry-point-pojo.md`](../plans/entry-point-pojo.md) — **§6.2 инвентарь** (файлы/места) + **§6.5** баг №3; §6.1 — статус сделанного `RoomConnection` (образец среза); §1–2 — паттерн.
+1. [`.cursor/plans/entry-point-pojo-done.md`](../plans/entry-point-pojo-done.md) — **§6.2 инвентарь** (файлы/места) + **§6.5** баг №3; §6.1 — статус сделанного `RoomConnection` (образец среза); §1–2 — паттерн.
 2. [`docs/tz_building_generator.md`](../../docs/tz_building_generator.md) §3.7b (поля `staircases[]`, defaults, `stops`), §3.7 (фолбэк `staircase`→`doorway` — уже сделан в 6.1).
 3. [`docs/tz_staircase_generation.md`](../../docs/tz_staircase_generation.md) — типы лестниц, ladder-поля, shaft-контракт.
 4. Образцы реализации (уже в коде): `dataModel/structure/building/roomConnection.py` (**ближайший образец** — тот же домен), `dataModel/structure/room/entryPoint.py`, `StructureTemplate._validate_connections`/`_validate_entry_points`, `StructureGeneratorService._resolve_connections`, `tests/test_room_connection.py`.

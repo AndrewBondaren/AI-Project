@@ -12,7 +12,7 @@ Use this skill when the user asks to run the migrated source command `impl-attac
 
 ## Прочитать до первой правки
 
-1. [`.cursor/plans/entry-point-pojo.md`](../plans/entry-point-pojo.md) — **§6.6** (решения A1–A5 — контракт среза), статусы 6.1–6.4 (сданы).
+1. [`.cursor/plans/entry-point-pojo-done.md`](../plans/entry-point-pojo-done.md) — **§6.6** (решения A1–A5 — контракт среза), статусы 6.1–6.4 (сданы).
 2. [`docs/tz_building_generator.md`](../../docs/tz_building_generator.md) — модал-B правило «any» (~§1667): комнаты на стороне, противоположной лестнице; решённый вопрос §15. Замечание: ТЗ пишет `staircase.position` — поле старой connection-схемы; маппинг на новую схему зафиксирован в §6.6 плана (A1: `sc.facing`).
 3. Код: `layoutEngine._layout_mode_b` (~строка 374: `Facing(attach_wall)` → except → auto-detect), `structureGeneratorService._layout_rooms` (передача staircases), `staircase/shaftPlacer.py` (`AdjacentShaftPlacer`: shaft ставится в направлении `sc.facing` от fr_room-стопа), `passages/corridorTrimmer.py` (`_build_corridor_to_staircase` — образец маппинга corridor→staircase по stops), `utils/deterministicIds.py` (`scoped_rng`).
 4. Правила: `dataModel-no-hardcode.mdc`, `layer-boundaries.mdc`, `plan-before-code.mdc` (один срез за заход → отчёт → «ок» мастера), `project-context.mdc` (не стартовать backend, не коммитить).

@@ -288,7 +288,9 @@ level_z = level.z_height ?? max(room_z for room in level.rooms)
 Форсинг флага реализован в `roomFactory.instantiate_level_rooms`: после валидации
 входов любой ненулевой `entry_point` / `back_entry_point` задаёт
 `_RoomInstance.perimeter_required=True`, включая явно переданное `false`.
-Ниже WARNING остаётся требованием ТЗ: фабрика пока его не эмитирует.
+При явно заданном `perimeter_required: false` фабрика пишет один WARNING
+на определение комнаты, независимо от count и количества входов (A2, 2026-10-01).
+Отсутствующее поле и явное `true` не вызывают эту диагностику.
 
 ```
 если room.entry_point OR room.back_entry_point объявлены:

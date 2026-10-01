@@ -17,7 +17,7 @@ Use this skill when the user asks to run the migrated source command `impl-rooms
 
 ## Прочитать до первой правки
 
-1. [`.cursor/plans/entry-point-pojo.md`](../plans/entry-point-pojo.md) — **§6.3 инвентарь** (файлы/места; номера строк могли съехать после 6.1/6.2); §6.1/§6.2 — статусы сделанных срезов (`RoomConnection`, `StaircaseSpec` — **образцы среза**); §4 — найденные расхождения.
+1. [`.cursor/plans/entry-point-pojo-done.md`](../plans/entry-point-pojo-done.md) — **§6.3 инвентарь** (файлы/места; номера строк могли съехать после 6.1/6.2); §6.1/§6.2 — статусы сделанных срезов (`RoomConnection`, `StaircaseSpec` — **образцы среза**); §4 — найденные расхождения.
 2. [`docs/tz_building_generator.md`](../../docs/tz_building_generator.md) §3.4 (levels), §3.5 (`size` — три взаимоисключающие формы), §3.5b (`shape_params` l_shape/t_shape), §3.7 (entry_point/back_entry_point — уже POJO), §2.1/purpose (room_purposes — CITY-T-5n/5o).
 3. Образцы реализации (уже в коде): `dataModel/structure/building/roomConnection.py`, `dataModel/structure/building/staircaseSpec.py` (вкл. `ShaftSize` — тот же паттерн size-форм), `dataModel/structure/room/entryPoint.py`, `StructureTemplate._validate_connections`/`_validate_staircases`, `StructureGeneratorService._resolve_connections`/`_resolve_staircases`, `tests/test_room_connection.py`, `tests/test_staircase_spec.py`.
 4. Правила (нарушение = стоп): `dataModel-no-hardcode.mdc`, `layer-boundaries.mdc`, `plan-before-code.mdc` (**один срез за заход**: отчёт → «ок» мастера), `project-context.mdc` (DAG / backend / commit / schema = только `0001`), логирование — emit только из `app.application.worldData.generators.*`, **не** из `app.dataModel.*`.

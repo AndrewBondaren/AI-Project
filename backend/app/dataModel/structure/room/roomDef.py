@@ -66,6 +66,11 @@ class RoomDef(BaseModel):
     def substitutions(self) -> tuple[tuple[str, str], ...]:
         return (self._attach_wall_substitution,) if self._attach_wall_substitution else ()
 
+    @property
+    def perimeter_required_explicitly_disabled(self) -> bool:
+        """Distinguish authored false from the omitted-field default."""
+        return "perimeter_required" in self.model_fields_set and not self.perimeter_required
+
     @model_validator(mode="after")
     def _conditional_fields(self) -> "RoomDef":
         if "count" in self.model_fields_set and self.count_range is not None:

@@ -12,7 +12,7 @@ Use this skill when the user asks to run the migrated source command `impl-host-
 
 ## Прочитать до первой правки
 
-1. [`.cursor/plans/entry-point-pojo.md`](../plans/entry-point-pojo.md) — **§6.8** (scope среза), статусы 6.1–6.7 (сданы).
+1. [`.cursor/plans/entry-point-pojo-done.md`](../plans/entry-point-pojo-done.md) — **§6.8** (scope среза), статусы 6.1–6.7 (сданы).
 2. Код: `layoutEngine._layout_mode_b` — точка `logger.warning("layout mode_b | host=%r not placed — skipping %d attached room(s)")` (~строка 408); `structureGeneratorService._layout_rooms` — upstream fixed-point фильтр невалидных `attach_to` (комнаты с отвалившимся хостом отсекаются раньше); доктрина ERROR — см. `roomFactory` (`wall_openings` substitutions → `logger.error`) и `_attach_wall_substitution` → runtime-лог.
 3. Правила: `dataModel-no-hardcode.mdc`, `layer-boundaries.mdc`, `plan-before-code.mdc` (один срез → отчёт → «ок» мастера), `project-context.mdc` (не стартовать backend, не коммитить).
 
