@@ -32,7 +32,7 @@ if   len(free) == 1:              attach_wall = free[0]
 elif len(free) == 2:              attach_wall = scoped_rng.choice(sides)   # обе свободны
 else (обе заняты/нет лестницы):   attach_wall = scoped_rng.choice(sides)
 
-scoped_rng(building_uid, corridor.room_id, str(z_offset), "attach_wall")
+scoped_rng(building_uid, corridor.room_id, str(z_offset), AttachWall.ANY.value)
 ```
 
 - `sc.facing` — сторона, куда Adjacent-плейсер ставит шахту от коридор-стопа; facing `None` → лестница не занимает сторону (в occupied не входит).

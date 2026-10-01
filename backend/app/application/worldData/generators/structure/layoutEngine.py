@@ -372,7 +372,8 @@ def _corridor_attach_side(
     free = [side for side in sides if side not in occupied]
     if len(free) == 1:
         return free[0]
-    return scoped_rng(building_uid, host.room_id, str(host.z_offset), "attach_wall").choice(sides)
+    rng = scoped_rng(building_uid, host.room_id, str(host.z_offset), AttachWall.ANY.value)
+    return rng.choice(sides)
 
 
 def _layout_mode_b(

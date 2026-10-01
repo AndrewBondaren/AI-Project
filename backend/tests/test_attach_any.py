@@ -77,7 +77,7 @@ class AttachAnyTests(unittest.TestCase):
                     for pairs in cases:
                         with self.subTest(width=width, uid=uid, z=z, pairs=len(pairs)):
                             host, guests = scenario(width, depth, z=z)
-                            expected = scoped_rng(uid, host.room_id, str(z), "attach_wall").choice(sides)
+                            expected = scoped_rng(uid, host.room_id, str(z), AttachWall.ANY.value).choice(sides)
                             place(host, guests, pairs, uid)
                             self.assert_side(host, guests, expected)
 
@@ -145,7 +145,7 @@ class AttachAnyTests(unittest.TestCase):
                                          display_name="ANY", levels=levels, staircases=staircases)
             original = deepcopy(template.model_dump())
             expected = Facing.SOUTH if has_staircase else scoped_rng(
-                building.location_uid, "corridor", "0", "attach_wall").choice((Facing.NORTH, Facing.SOUTH))
+                building.location_uid, "corridor", "0", AttachWall.ANY.value).choice((Facing.NORTH, Facing.SOUTH))
             def capture(*args, **kwargs):
                 _layout_mode_b(*args, **kwargs)
                 if args[0][0].z_offset == 0:

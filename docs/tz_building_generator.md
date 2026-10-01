@@ -1672,7 +1672,7 @@ occupied = стороны sc.facing всех staircases, где corridor.room_id
            и существует shaft этой лестницы на z_offset коридора
 free = sides минус occupied, спроецированные на выбранную ось
 если свободна ровно одна сторона → выбрать её
-иначе → scoped_rng(building_uid, corridor.room_id, str(z_offset), "attach_wall").choice(sides)
+иначе → scoped_rng(building_uid, corridor.room_id, str(z_offset), AttachWall.ANY).choice(sides)
 ```
 Источник стороны — `StaircaseSpec.facing`, preferred-направление AdjacentShaftPlacer;
 старое `staircase.position` больше не используется. Шахты на момент выбора могут
