@@ -43,6 +43,7 @@ class _RoomInstance:
     staircase_type: str | None = None
     facing:         str | None = None
     is_shaft:       bool = False
+    shaft_has_walls: bool = True  # factory copies StaircaseSpec.has_walls
     staircase_id:   str | None = None
     embedded_host_key: str | None = None
     embedded_entry: Facing | None = None

@@ -63,7 +63,7 @@ class UShapeFacingTests(unittest.TestCase):
         shaft.facing = Facing.NORTH
         fr, to = room("hall"), room("upper", z=1)
         low, top = LocationLevel("lo", "building", 0, 6, "Low"), LocationLevel("hi", "building", 6, 6, "Top")
-        sc = StaircaseSpec(staircase_id="stairs", stops=["hall", "upper"], facing=Facing.NORTH)
+        sc = StaircaseSpec(staircase_id="stairs", stops=["hall", "upper"], facing=Facing.NORTH, has_walls=True)
         cells = self.floors(shaft.get_footprint(), Facing.EAST)
         builder = UShapeBuilder(fr, to, low, top, cells, "world", "building", "stone", "test",
                                 shaft=shaft, sc_entry=sc, passage_height=2)
@@ -81,7 +81,7 @@ class UShapeFacingTests(unittest.TestCase):
             s.is_shaft = True
             s.staircase_id = "stairs"
             s.facing = Facing.NORTH
-        sc = StaircaseSpec(staircase_id="stairs", stops=["hall", "upper"], facing=Facing.NORTH)
+        sc = StaircaseSpec(staircase_id="stairs", stops=["hall", "upper"], facing=Facing.NORTH, has_walls=True)
         levels = {0: LocationLevel("lo", "building", 0, 6, "Low"),
                   1: LocationLevel("hi", "building", 6, 6, "Top")}
         cells = self.floors(shaft.get_footprint(), Facing.EAST)

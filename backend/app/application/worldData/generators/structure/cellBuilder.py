@@ -60,6 +60,20 @@ def _wall_cell(x: int, y: int, z: int, world_uid: str, building_uid: str,
 # ---------------------------------------------------------------------------
 # Pass 2
 
+def _open_shaft_perimeter(rooms: list[_RoomInstance]) -> set[tuple[int, int]]:
+    """Remove shaft partitions inside the building, preserving its exterior shell."""
+    placed = [r for r in rooms if r.placed]
+    open_shafts = [r for r in placed if r.is_shaft and not r.shaft_has_walls]
+    if not open_shafts:
+        return set()
+    union = set().union(*(r.get_footprint() for r in placed))
+    building_interior = _interior(union)
+    opened = set()
+    for shaft in open_shafts:
+        fp = shaft.get_footprint()
+        opened |= (fp - _interior(fp)) & building_interior
+    return opened
+
 def pass2_floors(
     rooms: list[_RoomInstance],
     z: int,
@@ -76,9 +90,11 @@ def pass2_floors(
         if not room.placed or room.is_shaft:
             continue
         loc_uid = room_uids[room.uid_key]
-        holes = set().union(*(shaft.get_footprint() for shaft in rooms
-                              if shaft.placed and shaft.is_shaft
-                              and shaft.embedded_host_key == room.uid_key))
+        holes = set().union(*(
+            shaft.get_footprint() if shaft.shaft_has_walls else _interior(shaft.get_footprint())
+            for shaft in rooms if shaft.placed and shaft.is_shaft
+            and shaft.embedded_host_key == room.uid_key
+        ))
         for (x, y) in room.get_footprint() - holes:
             cells.append(_floor_cell(x, y, z, world_uid, loc_uid, room.floor_material))
     return cells
@@ -96,7 +112,8 @@ def pass3_interior_walls(
     wall_material: str,
 ) -> list[MapCell]:
     """
-    Walls for every perimeter cell of every room (footprint minus interior).
+    Walls for every perimeter cell, except partitions of open shafts.
+    Exterior building walls are preserved even where shared with an open shaft.
     Covers both shared perimeter (between adjacent rooms) and unshared perimeter
     (outer face of a room with no neighbour on that side).
     Pass 2 placed floor at every footprint cell; this overwrites perimeter cells with wall.
@@ -104,12 +121,13 @@ def pass3_interior_walls(
     """
     placed = [r for r in rooms if r.placed]
     seen: dict[tuple[int, int], MapCell] = {}
+    opened = _open_shaft_perimeter(placed)
 
     for room in placed:
         fp = room.get_footprint()
         interior = _interior(fp)
         for (x, y) in fp:
-            if (x, y) not in interior:
+            if (x, y) not in interior and (x, y) not in opened:
                 if (x, y) not in seen:
                     seen[(x, y)] = _wall_cell(x, y, z, world_uid, building_uid, wall_material)
 

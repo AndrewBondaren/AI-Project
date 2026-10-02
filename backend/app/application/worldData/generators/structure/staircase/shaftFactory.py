@@ -141,6 +141,7 @@ def instantiate_shaft_rooms(
                 staircase_type=staircase_type.value,
                 facing=sc.facing,
                 is_shaft=True,
+                shaft_has_walls=sc.has_walls,
                 staircase_id=staircase_id,
             ))
             logger.info(

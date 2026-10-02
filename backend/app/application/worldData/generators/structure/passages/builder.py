@@ -174,7 +174,7 @@ def build_passages(
 
                 # Archway on fr_z level: shaft_fr ↔ fr_room (only for i==0).
                 # Segments i>0 reuse the previous segment's to_z archway.
-                if i == 0 and shaft_fr is not None and shaft_fr.placed:
+                if sc.has_walls and i == 0 and shaft_fr is not None and shaft_fr.placed:
                     entry_host = fr_room
                     embedded_wall = None
                     if shaft_fr.embedded_host_key is not None:
@@ -210,7 +210,7 @@ def build_passages(
                         passages.append(p)
 
                 # Archway on to_z level: shaft_to ↔ to_room.
-                if shaft_to is not None and shaft_to.placed:
+                if sc.has_walls and shaft_to is not None and shaft_to.placed:
                     upper_wall = None
                     if shaft_to.embedded_host_key is not None:
                         side = opposite(Facing(shaft_fr.facing)) if sc_type is StaircaseType.U_SHAPE else shaft_to.embedded_entry
