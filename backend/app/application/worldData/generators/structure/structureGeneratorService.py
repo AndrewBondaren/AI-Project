@@ -22,6 +22,7 @@ from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.generators.structure.cellBuilder import build_level_cells
 from app.application.worldData.generators.structure.errors import GenerationError, UnsupportedShapeError
 from app.application.worldData.generators.structure.layoutEngine import layout_level
+from app.application.worldData.generators.structure.staircase.embeddedUpperLayout import prepare_embedded_upper
 from app.application.worldData.generators.structure.passages import build_passages
 from app.application.worldData.generators.structure.room.roomFactory import instantiate_level_rooms
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
@@ -180,7 +181,25 @@ def _staircase_layout_order(
     for z in all_z:
         if z not in visited:
             order.append(z)
-    return order
+    # Embedded hosts must exist before their aligned upper stops (also cellar -> ground).
+    dependencies: dict[int, set[int]] = {z: set() for z in order}
+    for sc in staircases:
+        if sc.in_a_room:
+            for source, target in zip(sc.stops, sc.stops[1:]):
+                fr_z, to_z = room_z_offsets.get(source), room_z_offsets.get(target)
+                if fr_z in dependencies and to_z in dependencies and fr_z != to_z:
+                    dependencies[to_z].add(fr_z)
+    pending = list(order)
+    ordered = []
+    while pending:
+        ready = next((z for z in pending if dependencies[z] <= set(ordered)), None)
+        if ready is None:
+            # A cyclic authored contract will be diagnosed per room by upper placement.
+            ordered.extend(pending)
+            break
+        ordered.append(ready)
+        pending.remove(ready)
+    return ordered
 
 
 # ---------------------------------------------------------------------------
@@ -478,6 +497,10 @@ class StructureGeneratorService:
             )
 
             parent_bounds = level_footprint_bounds.get(z_offset - 1) if z_offset > 0 else None
+            prepare_embedded_upper(
+                z_offset, all_rooms, staircases, shaft_by_staircase,
+                parent_bounds, building.location_uid,
+            )
             layout_level(
                 level_rooms, synth_conns, start_x, start_y, bounds=parent_bounds,
                 staircases=staircases, building_uid=building.location_uid,
@@ -571,7 +594,7 @@ class StructureGeneratorService:
         all_placed_by_id: dict[str, _RoomInstance],
         level_start: dict[int, tuple[int, int]],
         *,
-        building_uid: str = "",
+        building_uid: str,
     ) -> None:
         """Place fr_z shafts using their strategy; propagate origins to upper levels."""
         for sc in staircases:
@@ -594,6 +617,8 @@ class StructureGeneratorService:
 
             if success:
                 for shaft_other in shaft_list[1:]:
+                    if shaft_other.layout_excluded:
+                        continue
                     shaft_other.origin_x = shaft_fr.origin_x
                     shaft_other.origin_y = shaft_fr.origin_y
                     if shaft_fr.embedded_entry is not None:

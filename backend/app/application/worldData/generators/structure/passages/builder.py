@@ -25,7 +25,9 @@ from app.dataModel.structure.enums.passageType import PassageType
 from app.dataModel.structure.enums.staircaseType import StaircaseType
 from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
 from app.application.worldData.generators.structure.staircase.builder import build_staircase
-from app.dataModel.spatial.facing import Facing, NS_FACINGS, parse_facing_or_default
+from app.application.worldData.generators.structure.staircase.uShape.facingResolver import resolve_u_shape_facing
+from app.application.worldData.generators.structure.staircase.embeddedUpperLayout import embedded_wall as shaft_entry_wall
+from app.dataModel.spatial.facing import Facing, NS_FACINGS, parse_facing_or_default, opposite
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
 from app.db.models.mapCell import MapCell
@@ -145,6 +147,16 @@ def build_passages(
                 shaft_fr = shaft_list[i] if i < len(shaft_list) else None
                 shaft_to = shaft_list[i + 1] if i + 1 < len(shaft_list) else None
 
+                if sc_type is StaircaseType.U_SHAPE and shaft_fr is not None and shaft_fr.placed:
+                    fallback = sc.facing or parse_facing_or_default(shaft_fr.facing, default=Facing.NORTH)
+                    facing = resolve_u_shape_facing(
+                        shaft_fr.get_footprint(), cells, max(fr_level.z, to_level.z), fallback,
+                    )
+                    # Resolve before arches so their width and the U path use one axis.
+                    shaft_fr.facing = facing
+                    if shaft_to is not None:
+                        shaft_to.facing = facing
+
                 # Interior width of shaft along the entry wall (perpendicular to facing).
                 _shaft_ref = shaft_fr or shaft_to
                 if _shaft_ref is not None:
@@ -199,6 +211,11 @@ def build_passages(
 
                 # Archway on to_z level: shaft_to ↔ to_room.
                 if shaft_to is not None and shaft_to.placed:
+                    upper_wall = None
+                    if shaft_to.embedded_host_key is not None:
+                        side = opposite(Facing(shaft_fr.facing)) if sc_type is StaircaseType.U_SHAPE else shaft_to.embedded_entry
+                        shaft_to.embedded_entry = side
+                        upper_wall = shaft_entry_wall(shaft_to, side)
                     arch_conn = RoomConnection(
                         from_room=shaft_to.room_id, to_room=to_stop_id,
                         passage_type=PassageType.ARCHWAY, width=_arch_width,
@@ -209,7 +226,7 @@ def build_passages(
                                        cells, world_uid, building_uid,
                                        passage_height=passage_height,
                                        other_rooms=same_level_rooms,
-                                       deferred=deferred_arch)
+                                       deferred=deferred_arch, shared_cells=upper_wall)
                     if p:
                         passages.append(p)
 

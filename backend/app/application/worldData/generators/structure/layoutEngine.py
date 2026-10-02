@@ -16,6 +16,9 @@ import logging
 from collections import deque
 
 from app.application.worldData.generators.structure.errors import GenerationError
+from app.application.worldData.generators.structure.layoutEntry import (
+    blocks_entries, entries_exterior, resolve_entry_walls,
+)
 from app.dataModel.spatial.facing import Facing, GRID_OUTWARD_DELTA
 from app.dataModel.structure.enums.attachWall import AttachWall
 from app.dataModel.structure.building.roomConnection import RoomConnection
@@ -46,6 +49,9 @@ def _by_id(rooms: list[_RoomInstance], room_id: str) -> _RoomInstance | None:
 
 def _interior_overlaps(a: _RoomInstance, b: _RoomInstance) -> bool:
     """True if interiors (bbox shrunk by 1) of two placed rooms intersect."""
+    if ((a.is_shaft and a.embedded_host_key == b.uid_key)
+            or (b.is_shaft and b.embedded_host_key == a.uid_key)):
+        return False
     ax0 = a.origin_x + 1;  ax1 = a.origin_x + a.width  - 2
     ay0 = a.origin_y + 1;  ay1 = a.origin_y + a.depth  - 2
     bx0 = b.origin_x + 1;  bx1 = b.origin_x + b.width  - 2
@@ -54,7 +60,27 @@ def _interior_overlaps(a: _RoomInstance, b: _RoomInstance) -> bool:
 
 
 def _has_conflict(room: _RoomInstance, placed: list[_RoomInstance]) -> bool:
-    return any(_interior_overlaps(room, p) for p in placed if p is not room)
+    return (any(_interior_overlaps(room, p) for p in placed if p is not room)
+            or blocks_entries(room, placed))
+
+
+def _try_position(room: _RoomInstance, origin: tuple[int, int],
+                  placed: list[_RoomInstance], *, fallback: bool = False) -> bool:
+    room.origin_x, room.origin_y = origin
+    if not _has_conflict(room, placed):
+        if room.entry_point is None and room.back_entry_point is None:
+            return True
+        union = room.get_footprint() | set().union(*(p.get_footprint() for p in placed))
+        if entries_exterior(room, union):
+            return True
+        if fallback:
+            try:
+                resolve_entry_walls(room, union)
+                return True
+            except GenerationError:
+                pass
+    room.origin_x = room.origin_y = None
+    return False
 
 
 def _origin_adjacent(room: _RoomInstance, anchor: _RoomInstance, direction: Facing) -> tuple[int, int]:
@@ -73,19 +99,31 @@ def _origin_adjacent(room: _RoomInstance, anchor: _RoomInstance, direction: Faci
 
 def _try_adjacent(room: _RoomInstance, anchor: _RoomInstance, direction: Facing,
                   placed: list[_RoomInstance]) -> bool:
-    x0, y0 = _origin_adjacent(room, anchor, direction)
-    room.origin_x, room.origin_y = x0, y0
-    if _has_conflict(room, placed):
-        room.origin_x = room.origin_y = None
-        return False
-    return True
+    return _try_position(room, _origin_adjacent(room, anchor, direction), placed)
 
 
 def _place_next_to_any(room: _RoomInstance, placed: list[_RoomInstance]) -> bool:
-    """Try all directions against all placed rooms. First success wins."""
+    """Try the authored edge, including shifted slots, before perimeter fallback."""
+    placed = [p for p in placed if p is not room and p.placed]
+    walls = [ep.wall for ep in (room.entry_point, room.back_entry_point) if ep is not None]
+    directions = tuple(dict.fromkeys([*walls, *_DIRECTIONS]))
+    candidates = []
     for anchor in placed:
-        for direction in _DIRECTIONS:
-            if _try_adjacent(room, anchor, direction, placed):
+        for direction in directions:
+            x, y = _origin_adjacent(room, anchor, direction)
+            candidates.append((x, y))
+            # Retain the existing origin preference, then scan along this edge.
+            # At least three shared cells leave a non-corner doorway candidate.
+            horizontal = direction in (Facing.NORTH, Facing.SOUTH)
+            low = 3 - (room.width if horizontal else room.depth)
+            high = (anchor.width if horizontal else anchor.depth) - 3
+            if walls:
+                for shift in sorted(range(low, high + 1), key=lambda n: (abs(n), n)):
+                    if shift:
+                        candidates.append((x + shift, y) if horizontal else (x, y + shift))
+    for fallback in (False, True) if walls else (False,):
+        for origin in dict.fromkeys(candidates):
+            if _try_position(room, origin, placed, fallback=fallback):
                 return True
     return False
 
@@ -96,6 +134,7 @@ def _spiral_search(room: _RoomInstance, placed: list[_RoomInstance],
     ox, oy = origin
     step_x = max(r.width  for r in placed) if placed else room.width
     step_y = max(r.depth for r in placed) if placed else room.depth
+    fallback_candidates = []
 
     for radius in range(1, 30):
         candidates = []
@@ -106,9 +145,13 @@ def _spiral_search(room: _RoomInstance, placed: list[_RoomInstance],
             for dx in (-radius, radius):
                 candidates.append((ox + dx * step_x, oy + dy * step_y))
         for x0, y0 in candidates:
-            room.origin_x, room.origin_y = x0, y0
-            if not _has_conflict(room, placed):
+            if room.entry_point or room.back_entry_point:
+                fallback_candidates.append((x0, y0))
+            if _try_position(room, (x0, y0), placed):
                 return True
+    for origin in fallback_candidates:
+        if _try_position(room, origin, placed, fallback=True):
+            return True
     room.origin_x = room.origin_y = None
     return False
 
@@ -188,6 +231,8 @@ def _layout_mode_a(rooms: list[_RoomInstance], connections: list[RoomConnection]
 
             if placed_ok:
                 placed.append(nbr)
+            elif nbr.entry_point or nbr.back_entry_point:
+                raise GenerationError(f"Room {nbr.room_id!r}: no exterior perimeter for entrance")
             elif not nbr.required:
                 logger.warning("layout mode_a | room=%r z=%d skipped — no space", nbr.room_id, nbr.z_offset)
             else:
@@ -202,7 +247,7 @@ def _layout_mode_a(rooms: list[_RoomInstance], connections: list[RoomConnection]
         oy = ref.origin_y if ref else by
         if _spiral_search(room, placed, (ox, oy)):
             placed.append(room)
-        elif room.required:
+        elif room.required or room.entry_point or room.back_entry_point:
             raise GenerationError(f"Room {room.room_id!r}: isolated, no space")
         else:
             logger.warning("layout mode_a | room=%r z=%d skipped — isolated, no space", room.room_id, room.z_offset)
@@ -441,6 +486,8 @@ def _clip_to_bounds(rooms: list[_RoomInstance], bounds: tuple[int, int, int, int
     """
     x_min, y_min, x_max, y_max = bounds
     for room in rooms:
+        if room.layout_locked:
+            continue
         if not room.placed:
             continue
         # East overhang
@@ -535,7 +582,8 @@ def layout_level(
     Mode A rooms are clipped to bounds BEFORE mode B runs, so attached rooms
     are positioned relative to already-corrected host dimensions.
     """
-    mode_a_rooms = [r for r in rooms if r.attach_to is None]
+    rooms = [r for r in rooms if not r.layout_excluded]
+    mode_a_rooms = [r for r in rooms if r.attach_to is None or r.layout_locked]
     _layout_mode_a(mode_a_rooms, connections, building_x, building_y)
 
     # Clip mode A rooms to parent bounds before attaching mode B rooms to them.
@@ -550,7 +598,7 @@ def layout_level(
                 already_placed.append(room)
                 logger.info("layout re-place after clip | room=%r placed at (%d,%d)",
                             room.room_id, room.origin_x, room.origin_y)
-            elif room.required:
+            elif room.required or room.entry_point or room.back_entry_point:
                 raise GenerationError(f"Room {room.room_id!r}: no space after clip re-place")
             else:
                 logger.warning("layout re-place after clip | room=%r skipped", room.room_id)
@@ -560,3 +608,7 @@ def layout_level(
         rooms, all_placed, bounds=bounds,
         staircases=staircases, building_uid=building_uid,
     )
+    union = set().union(*(r.get_footprint() for r in rooms if r.placed))
+    for room in rooms:
+        if room.placed:
+            resolve_entry_walls(room, union)

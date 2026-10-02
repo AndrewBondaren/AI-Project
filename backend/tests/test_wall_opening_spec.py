@@ -14,6 +14,7 @@ from app.dataModel.structure.room.wallOpeningSpec import WallOpeningSpec
 from app.dataModel.structure.enums.buildingElement import StructureElement, WALL_OPENING_ELEMENTS
 from app.application.worldData.generators.structure.cellFactory import _opening_cell
 from app.application.worldData.generators.structure.passages.wallOpening import place_wall_openings
+from app.application.worldData.generators.structure.passages.wallOpeningResolver import compute_exterior_wall_profiles
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.mapCell import MapCell
@@ -87,7 +88,7 @@ class WallOpeningSpecTests(unittest.TestCase):
         self.assertEqual(len(captured.records), 1)
         self.assertIn("ignored", captured.output[0])
 
-    def place(self, spec, height=5, base=10, ground=0, shaft=False):
+    def place(self, spec, height=5, base=10, ground=0, shaft=False, profile_height=None):
         r = room(width=7, depth=7)
         r.z_height = height
         r.is_shaft = shaft
@@ -98,7 +99,11 @@ class WallOpeningSpecTests(unittest.TestCase):
                  for x, y in r.get_footprint() for z in range(base, base + height)}
         level = LocationLevel(level_uid="level", location_uid="building",
                               z=base, z_height=height, display_name="Test")
-        with patch(OPENING_LOGGER + "._opening_cell", wraps=_opening_cell) as opening:
+        profiles = compute_exterior_wall_profiles([r], r.get_footprint(), base)
+        if profile_height is not None:
+            profiles[r.uid_key].z_height = profile_height
+        with patch(OPENING_LOGGER + "._opening_cell", wraps=_opening_cell) as opening, \
+             patch(OPENING_LOGGER + ".compute_exterior_wall_profiles", return_value=profiles):
             place_wall_openings([r], r.get_footprint(), cells, level, world, "building", Random(1), ground)
         return cells, opening.call_args_list
 
@@ -123,6 +128,24 @@ class WallOpeningSpecTests(unittest.TestCase):
         with self.assertNoLogs(OPENING_LOGGER, level="ERROR"):
             _, calls = self.place(dict(window_z=3))
         self.assertEqual({c.args[2] for c in calls}, {13, 14})
+
+    def test_reduced_profile_uses_same_height_for_geometry_and_override_bounds(self):
+        with self.assertLogs(OPENING_LOGGER, level="ERROR") as captured:
+            _, calls = self.place(dict(window_z=5), height=10, profile_height=5)
+        self.assertEqual(len(captured.records), 1)
+        self.assertIn("z_height=5", captured.output[0])
+        self.assertEqual({c.args[2] for c in calls}, {11, 12})
+        with self.assertNoLogs(OPENING_LOGGER, level="ERROR"):
+            _, calls = self.place(dict(window_z=3), height=10, profile_height=5)
+        self.assertEqual({c.args[2] for c in calls}, {13, 14})
+
+    def test_taller_profile_cannot_raise_room_ceiling(self):
+        with self.assertLogs(OPENING_LOGGER, level="ERROR"):
+            _, calls = self.place(dict(window_z=4), height=5, profile_height=10)
+        self.assertEqual({c.args[2] for c in calls}, {11, 12})
+        with self.assertNoLogs(OPENING_LOGGER, level="ERROR"):
+            _, calls = self.place({}, height=5, profile_height=10)
+        self.assertEqual({c.args[2] for c in calls}, {11, 12})
 
     def test_underground_skip(self):
         cells, calls = self.place(dict(opening_type="vent", window_z=0), base=3, ground=4)

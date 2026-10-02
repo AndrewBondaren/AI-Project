@@ -153,15 +153,17 @@ def place_wall_openings(
         )
 
         zadjuster = ZADJUSTER_BY_TYPE[element]
-        z_list = zadjuster.resolve(level.z, profile.z_height)
+        # The profile may narrow usable wall height, but cannot raise the room ceiling.
+        z_height = min(room.z_height, profile.z_height)
+        z_list = zadjuster.resolve(level.z, z_height)
         if spec.window_z is not None:
             # Reuse the element's proportional opening height, changing only its base.
             wh = len(z_list)
-            if spec.window_z >= room.z_height or spec.window_z + wh > room.z_height:
+            if spec.window_z >= z_height or spec.window_z + wh > z_height:
                 logger.error(
                     "Building '%s' room '%s': wall_openings[0].window_z=%d "
                     "does not fit z_height=%d (opening height=%d) — auto-resolve",
-                    building_uid, room.room_id, spec.window_z, room.z_height, wh,
+                    building_uid, room.room_id, spec.window_z, z_height, wh,
                 )
             else:
                 start = level.z + spec.window_z

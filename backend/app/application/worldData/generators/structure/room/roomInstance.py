@@ -36,6 +36,8 @@ class _RoomInstance:
     # Layout — проставляются в _layoutEngine
     origin_x: int | None = None
     origin_y: int | None = None
+    layout_locked: bool = False  # aligned embedded upper host / inherited shaft
+    layout_excluded: bool = False  # failed placement contract; never retry elsewhere
 
     # Stairwell
     staircase_type: str | None = None

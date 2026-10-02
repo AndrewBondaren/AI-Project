@@ -669,7 +669,7 @@ mid = len(shared_segment) // 2
 | `staircase_id` | string | optional | Локальный ID для отладки и логов. Авто: `"staircase_{from}_{to}"` |
 | `staircase_type` | string | optional | Тип лестницы (см. раздел 3.9). Авто-резолв по `z_height` если не задан |
 | `size` | object | optional | Размер shaft (см. раздел 3.5). Авто-резолв если не задан |
-| `facing` | string | optional | Для u_shape — направление первого подъёма, от entry к far end; entry = opposite(facing). Текущее чтение: шаблон, иначе NORTH; расхождение с целевым авто-детектом — staircase §2, сверка S0 |
+| `facing` | string | optional | Для u_shape — направление первого подъёма, от entry к far end; entry = opposite(facing). Auto: opposite направления с максимальным числом наружных floor-ячеек на z_top; score=0 → шаблон/runtime fallback (staircase §2, B2) |
 | `has_walls` | bool | optional | Shaft замкнут стенами. Default: `true`. При `false` — shaft обязан быть внутри здания. |
 | `outside` | bool | optional | Только при `has_walls: true`. Default: `false`. При `true` — shaft edge-mounted: три стороны снаружи, внешние стены заменяются на floor, facing-сторона через archway к зданию. |
 | `in_a_room` | bool | optional | Shaft embedded внутри помещения на z_lo. Default: `false`. Несовместим с `outside: true`. Реализовано v1, staircase §2 |
@@ -1114,7 +1114,11 @@ zone-center Правила 2. Добавление `placement` требует р
 auto-resolve. Невалидный заданный параметр → auto-resolve + ERROR на runtime-границе;
 dataModel только сохраняет отметку подмены. Неизвестные поля спеки запрещены.
 `window_z` задаёт нижнюю z проёма от `level.z`; высота проёма —
-`max(1, int(room.z_height * 0.4))`. Если проём не вмещается в высоту комнаты,
+`max(1, int(available_z_height * 0.4))`, где
+`available_z_height = min(room.z_height, profile.z_height)` — одна доступная высота
+для геометрии и проверки `window_z` (C6, 2026-10-02).
+Сегодня профиль равен высоте комнаты; его сокращение ограничивает проём,
+а увеличение не поднимает потолок комнаты. Если проём не вмещается в доступную высоту,
 используется автоматический ZAdjuster с ERROR. Default opening_type пока WINDOW
 (OQ-17); fallback рамы — `room.wall_material`, стекла — resolve_material по тиру.
 Потребление template/level `window_z_ratio`/`window_z_offset` остаётся вне этого среза:
@@ -1647,6 +1651,18 @@ entry_point.wall = "west"  → левый столбец
 ```
 
 `perimeter_required` форсируется автоматически для всех комнат с `entry_point` / `back_entry_point`.
+
+Реализация A1 проверяет доступный наружный проём по реальному footprint:
+снаружи стены нет клетки другого помещения, изнутри есть floor, доступных
+кандидатов достаточно для ширины входа. Уже подходящая BFS-позиция сохраняется;
+при неуспехе сначала перебираются направления authored-входов и смещения вдоль
+смежной стены, затем остальные стороны. Последующие комнаты не могут перекрыть
+доступный вход ранее размещённой комнаты. Изолированные комнаты используют ту
+же проверку; после clipping и mode B выполняется итоговая проверка входов.
+При fallback сторона меняется в runtime-копии EntryPoint для построения реального
+проёма; wire-шаблон остаётся неизменным. Отсутствие доступного периметра для входа
+вызывает GenerationError, включая optional-комнаты. Периметр определяется по
+footprint, а не только по общему bbox: наружные стены в уступах тоже доступны.
 
 **Пример — первый этаж таверны:**
 ```

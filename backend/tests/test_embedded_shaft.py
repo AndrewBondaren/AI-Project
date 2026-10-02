@@ -23,6 +23,14 @@ BUILDER = "app.application.worldData.generators.structure.passages.builder"
 
 
 class EmbeddedShaftTests(unittest.TestCase):
+    def test_factory_requires_building_uid(self):
+        spec = StaircaseSpec(staircase_id="stairs", stops=["host", "upper"], in_a_room=True)
+        with self.assertRaises(TypeError):
+            make_shaft_placer(spec)
+        placer = make_shaft_placer(spec, building_uid="building")
+        self.assertIsInstance(placer, EmbeddedShaftPlacer)
+        self.assertEqual(placer.building_uid, "building")
+
     def scenario(self, at="north_east", embed_in="host", width=15, depth=13):
         host = room("host", x=10, y=20, width=width, depth=depth)
         shaft = room("shaft", x=None, y=None, width=5, depth=5)
@@ -128,7 +136,9 @@ class EmbeddedShaftTests(unittest.TestCase):
             rooms.append(room_wire(room_id="host", size={"width_range": [18, 18], "depth_range": [18, 18]}))
         return StructureTemplate(system_name="00000000-0000-4000-8000-000000000011",
             display_name="Embedded", default_z_height=6,
-            levels=[level_wire(rooms=rooms), level_wire(z_offset=1, rooms=[room_wire(room_id="upper")])],
+            levels=[level_wire(rooms=rooms), level_wire(z_offset=1, rooms=[room_wire(room_id="upper",
+                size={"width_range": [35 if distinct_host else 18] * 2, "depth_range": [18, 18]})])],
+            connections=[dict(from_room="hall", to_room="host", passage_type="doorway")] if distinct_host else [],
             staircases=[dict(staircase_id="stairs", staircase_type="u_shape", stops=["hall", "upper"],
                 size={"width_range": [5, 5], "depth_range": [5, 5]}, has_walls=True,
                 in_a_room=True, embed_in="host" if distinct_host else "hall", embed_at=at)])
@@ -143,7 +153,7 @@ class EmbeddedShaftTests(unittest.TestCase):
                 original = deepcopy(template.model_dump())
                 captured = []
                 def arch(*args, **kwargs):
-                    if kwargs.get("shared_cells") is not None:
+                    if kwargs.get("shared_cells") is not None and args[1].z_offset == 0:
                         captured.append((args[0], args[1], args[2], list(kwargs["shared_cells"])))
                     return _build_archway(*args, **kwargs)
                 with patch(BUILDER + "._build_archway", side_effect=arch):

@@ -205,7 +205,7 @@ class EdgeMountedShaftPlacer(ShaftPlacer):
         return True
 
 
-def make_shaft_placer(sc: StaircaseSpec, *, building_uid: str = "") -> ShaftPlacer:
+def make_shaft_placer(sc: StaircaseSpec, *, building_uid: str) -> ShaftPlacer:
     """Выбирает стратегию по флагам записи staircases[]."""
     if sc.in_a_room:
         return EmbeddedShaftPlacer(sc, building_uid)

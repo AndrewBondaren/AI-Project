@@ -17,6 +17,7 @@ from app.application.worldData.generators.structure.staircase.base import Stairc
 from app.application.worldData.generators.structure.staircase.uShape.uShapeValidator import (
     UShapeValidator,
 )
+from app.application.worldData.generators.structure.staircase.uShape.facingResolver import resolve_u_shape_facing
 from app.application.worldData.generators.structure.staircase.facingHelper import (
     _V_TO_FACING,
 )
@@ -431,6 +432,12 @@ class UShapeBuilder(StaircaseBuilder):
             to_int = _interior(self.to.get_footprint())
             interior = list(fr_int & to_int) or list(to_int)
             facing = parse_facing(self.to.facing) or Facing.NORTH
+
+        fallback = self.sc_entry.facing or facing
+        facing = resolve_u_shape_facing(
+            self.shaft.get_footprint() if self.shaft is not None else self.to.get_footprint(),
+            self.cells, self.z_top, fallback,
+        )
 
         xs = sorted(x for x, _ in interior)
         ys = sorted(y for _, y in interior)

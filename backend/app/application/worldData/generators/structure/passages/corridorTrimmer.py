@@ -28,6 +28,8 @@ def trim_corridor_rooms(
     placed         = [r for r in all_rooms if r.placed]
 
     for corridor in placed:
+        if corridor.layout_locked:
+            continue
         if corridor.room_type != "corridor":
             continue
         sc_id = corridor_to_sc.get(corridor.room_id)

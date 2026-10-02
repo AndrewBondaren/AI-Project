@@ -76,7 +76,10 @@ def pass2_floors(
         if not room.placed or room.is_shaft:
             continue
         loc_uid = room_uids[room.uid_key]
-        for (x, y) in room.get_footprint():
+        holes = set().union(*(shaft.get_footprint() for shaft in rooms
+                              if shaft.placed and shaft.is_shaft
+                              and shaft.embedded_host_key == room.uid_key))
+        for (x, y) in room.get_footprint() - holes:
             cells.append(_floor_cell(x, y, z, world_uid, loc_uid, room.floor_material))
     return cells
 
