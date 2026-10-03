@@ -61,19 +61,34 @@ Band — **входной язык намерения** в шаблонах. П�
 
 ---
 
-## 4. `TierResolver` — каскад effective tier
+## 4. Каскад effective tier
 
-Модуль: `backend/app/application/worldData/generators/utils/tierResolver.py`
+Целевой механизм — `LocationContext.extend()` по канонической цепочке
+([tz_cascade_context.md](tz_cascade_context.md) §2, §4). `TierResolver`
+(`backend/app/application/worldData/generators/utils/tierResolver.py`)
+— существующая частная реализация усечённого каскада; перенос на
+`LocationContext` — по плану `cascade-context-resolution.md`, вызовы
+помечаются TODO до зачистки.
 
 Порядок (от частного к общему):
 
 ```
-room_tier  →  building.system_economic_tier  →  district.system_economic_tier  →  city.system_economic_tier
+room_tier
+  → building.system_economic_tier
+  → area: plot.economic_tier → plot.economic_tier_band → plot.economic_tier_range
+  → district: NL.system_economic_tier (stamped) / district_template.economic_tier_range
+  → city.system_economic_tier
 ```
+
+Порядок каналов на уровне: `economic_tier` → `band` → `range`.
+`economic_tier_range` — materialize-канал: ближайший к унаследованному
+тиру (anchor) внутри `[min, max]`; без anchor — rng внутри range.
+Фильтрация размещения по range (`planner/economic.py`) — отдельная
+механика отбора шаблонов, не часть каскада.
 
 Если на всех уровнях `null` → `median_system_tier(world.economic_tier_registry)` + **WARNING** в лог (см. [tz_locations.md](tz_locations.md), поле `named_locations.system_economic_tier`).
 
-Explicit `system_tier` на более глубоком уровне **перебивает** наследование с родителя.
+Explicit `system_tier` на более глубоком уровне **перебивает** наследование с родителя; null-звенья каскад пропускает до ближайшего non-null предка.
 
 ---
 

@@ -1,4 +1,4 @@
-# ТЗ: каскадный резолв параметров локаций — `ResolvedLocationContext`
+# ТЗ: каскадный резолв параметров локаций — `LocationContext`
 
 Отдельное доменное ТЗ. Доменный контракт: как параметры с семантикой
 «null → наследует от предка» попадают к консьюмерам без ручной проводки
@@ -17,18 +17,24 @@ consumer resolved-контекста).
 вызова**. Это даёт повторяющийся класс багов: звено цепочки можно забыть,
 и механизм молча деградирует до дефолта.
 
-Фактические сбои на 2026-10:
+Фактические сбои на 2026-10 (аудит call sites, факт кода):
 
-- `system_economic_tier` никогда не записывается на district/building NL —
-  authored-канал поля жив только на settlement;
-- `structureGeneratorService` вызывает `TierResolver` без district/city —
-  каскад §4 внутри структуры усечён до `building + band`;
-- `TierResolver.resolve` вызывается 4 раза на здание с rng —
-  `materialize_band` может дать разные тиры в разных фазах одного здания;
+- `system_economic_tier` никогда не записывается на district/building/room
+  NL — authored-канал поля жив только на settlement;
+- `structureGeneratorService` вызывает `TierResolver` 4 раза на здание
+  (rooms, shafts, passages, openings) без district/city, с rng;
+- дополнительно тир резолвится **per room** (`materialResolver.
+  resolve_room_materials`) и **per opening** (`wallOpening.glass_tier`),
+  каждый со своим rng — возможны разные тиры внутри одного здания;
+- канал `template_tier` **мёртв**: `roomFactory` всегда передаёт
+  `template_tier=None`, `PlotLayoutTemplate.economic_tier` нигде не
+  читается — до структуры доходит только `economic_tier_band`;
+- `DistrictTemplateEntry` имеет только `economic_tier_range`, district NL
+  создаётся без тира; building NL пересоздаётся в `_place_building` при
+  каждом assemble — без `parent_location_uid` и `system_economic_tier`;
 - `parent_wall_material` / `parent_floor_material` резолвятся ad-hoc
   `or`-цепочками в точках потребления (`structureGeneratorService`,
-  `foundationBuilder`, `roofBuilder`), без цепочки предков и без единого
-  дефолта.
+  `foundationBuilder`, `roofBuilder`), без цепочки и без единого дефолта.
 
 Дальнейшие каскадируемые параметры — это не единицы, а доменное
 пространство: расы/виды населения, культура, язык, религия, фракция;
@@ -44,32 +50,39 @@ law/customs, magic/tech level. Порядок — 15–25 параметров, 
 
 ## 2. Каскадная цепочка и полиморфные звенья
 
-Канонический порядок уровней:
+Каноническая цепочка (решение мастера 2026-10-03):
 
 ```
-world → settlement(city) → district → building → room → (cell)
+world → settlement → district → area → building → room
 ```
 
-Но «звено» — **не только `NamedLocation`**. В коде три параллельные
-иерархии, все с семантикой наследования:
+Критерий уровня — **собственные потребители параметра** (городские стены
+и дороги, дороги/стены района, забор и двор участка, структура, материалы
+комнаты), а не наличие authored-поля. Иерархия зафиксирована enum'ом
+`CascadeLevel` (`dataModel`) — она в контракте, не в голове caller'а.
 
-| Иерархия | Звенья | Примеры |
-|---|---|---|
-| **NL-родословная** (persist) | `parent_location_uid` вверх | `system_economic_tier`, `parent_wall_material`, `parent_floor_material` |
-| **Модели генерации** (transient) | `SettlementSkeleton → DistrictSlot/DistrictLayout → AreaSlot/AreaLayout → building probe → RoomInstance` | `skeleton.system_city_size or settlement.system_city_size or "hamlet"` — ad-hoc каскад уже сегодня |
-| **Шаблонные каналы** | `world registry → level template → instance` | `plot.economic_tier` / `_band` / `_range`, `district_template.economic_tier_range`, `rooms[].economic_tier`, `outline.default_*_material` |
+Соответствие уровней объектам и каналам тира (частное → общее):
 
-**Звено цепочки — полиморфный источник полей**, а не NL. Движок принимает
-упорядоченный список звеньев (частное → общее); каждое звено — адаптер
-над конкретным объектом (`NamedLocation`, `SettlementSkeleton`,
-`DistrictSlot`, `RoomInstance`, `PlotLayoutTemplate`, …). Дескриптор
-параметра объявляет, **из каких типов звеньев и как** читать authored-поле
-и шаблонные каналы; движок не знает, где звено было NL, а где —
-объектом генерации или шаблоном.
+| Уровень | Звено | Каналы тира | NL / stamp |
+|---|---|---|---|
+| world | `World` | — (root пустой, без materialize/default) | — |
+| settlement | city `NamedLocation` / `SettlementSkeleton` | `system_economic_tier` / `economic_tier` | да / **да** |
+| district | `DistrictSlot` + `DistrictTemplateEntry` | `economic_tier_range` (materialize) | да / **да** |
+| area | `AreaSlot` + `PlotLayoutTemplate` | `economic_tier` → `economic_tier_band` → `economic_tier_range` | нет (transient) / — |
+| building | building `NamedLocation` (+ `BuildingBodyTemplate`, своего тира нет) | `system_economic_tier` | да / **да** |
+| room | `RoomDef` / `_RoomInstance` → room `NamedLocation` | `rooms[].economic_tier` | да / **да** |
+
+**Звено цепочки — полиморфный адаптер**, а не NL. Каждое звено
+(`NamedLocation`, `SettlementSkeleton`, `DistrictSlot` +
+`DistrictTemplateEntry`, `AreaSlot` + `PlotLayoutTemplate`, `RoomDef`,
+`EmptyLink`) объявляет `level` и реализует `cascade_value(field)` —
+чтение своего authored-поля и шаблонных каналов. `EmptyLink(level)` —
+явное пустое звено для caller'ов без объекта уровня (debug-роут) —
+уровень не пропускается молча.
 
 Граница scope — точка, где появляется новое звено: world import/skeleton →
-settlement assemble → district assemble → area/building → structure
-generate (room). Caller знает только свои звенья, не чужие.
+settlement assemble → district → area/building → structure generate
+(room). Caller знает только свои звенья, не чужие.
 
 ---
 
@@ -82,27 +95,33 @@ generate (room). Caller знает только свои звенья, не чу
 
 ```python
 class LocationContext(ContextModel):
+    level: CascadeLevel
     economic_tier: Annotated[EconomyTierKey | None, Cascade(
         field="system_economic_tier",      # authored-поле на звене
-        materialize=band_to_tier,          # band → tier (rng), опционально
-        default=median_tier,               # конец цепочки + WARNING
+        default=DefaultPolicy.REGISTRY_MEDIAN,  # median + WARNING
     )] = None
-    race_mix: Annotated[RaceMix | None, Cascade(
-        field="population_composition",
-        default=world_race_profile,
-    )] = None
-    wall_material: Annotated[MaterialKey | None, Cascade(
-        field="parent_wall_material",
-        default=canonical_wall_default,
-    )] = None
+    # будущие поля — та же форма:
+    # wall_material: Annotated[MaterialKey | None, Cascade(
+    #     field="parent_wall_material",
+    #     default=DefaultPolicy.CANONICAL_DEFAULT,
+    # )] = None
 ```
 
 | Элемент `Cascade` | Назначение |
 |---|---|
 | `field` | Имя authored-поля, которое адаптер звена читает (`system_economic_tier`, `parent_wall_material`, …) |
-| `materialize` | Опциональный пост-процессор при пустом authored-поле (band → tier через rng); может быть `None` |
-| `default` | Доменный дефолт конца цепочки (функция от `world`; median + WARNING для тира, canonical default для материалов) |
+| `default` | `DefaultPolicy` — ссылка на **политику POJO** (`REGISTRY_MEDIAN`, `CANONICAL_DEFAULT`, `NONE_IS_ERROR`); реализацию держит POJO домена поля (для тира — `WorldEconomyTierRegistry`: median + WARNING). Callables и литералы в dataModel не живут — движок знает только, как вызвать политику с `world` (`dataModel-no-hardcode.mdc`) |
 | `fold` | Опциональный полный per-param resolver — для параметров, которым first-non-null недостаточно (точечно, не режим движка) |
+| `levels` | Опционально (v1 не использует): с каких уровней поле вообще может прийти — per-field иерархия для будущих полей (climate anchor и пр.) |
+
+Materialize (band → tier, range → tier через rng) объявляется **не
+callable в модели**, а привязкой по имени поля внутри `contextResolver`
+— локальная привязка движка, не публичный реестр; `materialize_band`
+остаётся в application.
+
+`CascadeLevel` — enum (`world, settlement, district, area, building,
+room`), порядок значений = иерархия; `ctx.level` — уровень текущего
+контекста.
 
 Новый каскадируемый параметр — **новая аннотированная строка в модели**,
 не resolver-класс, не запись в стороннем реестре и не копия каскада в
@@ -130,25 +149,43 @@ walker'а вверх по `parent_location_uid` нет: каждый assembler �
 ```
 settlement_ctx = LocationContext.root(world).extend(settlement_link)
 district_ctx   = settlement_ctx.extend(district_link)
-building_ctx   = district_ctx.extend(building_link)
+area_ctx       = district_ctx.extend(area_link)
+building_ctx   = area_ctx.extend(building_link)
 room_ctx       = building_ctx.extend(room_link)   # rooms[].economic_tier и т.п.
 ```
 
-`extend()`:
+`extend(*links)`:
 
+0. **Валидация уровня:** `link.level` строго ниже `ctx.level`; пропуск
+   уровня и повтор уровня — **ошибка** (повтор = второй резолв на scope).
+   Caller без объекта уровня передаёт `EmptyLink(level)` явно.
 1. Проходит по полям `LocationContext`, читает `Cascade`-метаданные.
 2. Для каждого поля — first non-null по новым звеньям (через
-   `link.cascade_value(field)`), иначе наследует текущее значение родителя.
-3. Пусто после всех звеньев → `materialize` (если объявлен), затем
-   `default`.
-4. Возвращает **новый замороженный** `LocationContext` + provenance:
-   `ctx.provenance[param] = (level, source)` — какой уровень/канал дал
-   значение.
+   `link.cascade_value(field)`), иначе наследует текущее значение
+   родительского ctx.
+3. Пусто после всех звеньев → `materialize` (привязка по имени поля,
+   band/range → tier через rng caller'а), затем `default` через
+   `DefaultPolicy` POJO.
+4. Возвращает **новый замороженный** `LocationContext` с новым `level` +
+   provenance: `ctx.provenance[param] = (CascadeLevel, source)` — какой
+   уровень/канал дал значение.
 
-Адаптер звена — `link.cascade_value(field) -> value | None`:
+Адаптер звена — `link.level` + `link.cascade_value(field) -> value | None`:
 полиморфизм живёт на звене (NL читает `system_economic_tier`, шаблон —
-`economic_tier`/`_band`, skeleton — alias-поле), матрицы
-«параметр × тип звена» нет.
+`economic_tier`/`_band`/`_range`, skeleton — alias-поле), матрицы
+«параметр × тип звена» нет. Звено без нужного поля → `None`, не ошибка.
+
+**Семантика materialize тира:** порядок каналов на уровне
+`economic_tier` → `band` → `range`. Range разворачивается как
+**ближайший к унаследованному тиру (anchor)** внутри `[min, max]`; если
+унаследованного нет — rng внутри range. `materialize_band` — rng.choice
+по tiers_for_band.
+
+**rng:** единственный rng-вход контекста — materialize тира, **один раз
+на scope**. rng подаёт caller, отдельный
+`Random(_make_seed(world_uid, <scope_uid>, "tier"))` для каждого scope
+с materialize (district, area, building) — rng не разделяется с
+геометрией/размещением.
 
 **Инварианты:**
 
@@ -156,8 +193,11 @@ room_ctx       = building_ctx.extend(room_link)   # rooms[].economic_tier и т.
   генерацию уровня (settlement → district → building) и передаётся вниз.
   Повторный резолв того же параметра внутри scope запрещён — именно он
   сегодня даёт rng-дрейф тира между фазами.
-- **Консьюмер не резолвит.** Consumer получает `ctx.effective_*` и не
-  имеет доступа к цепочке, rng и реестру в обход контекста.
+- **Консьюмер не резолвит.** Consumer читает `ctx.<param>` и не имеет
+  доступа к цепочке, rng и реестру в обход контекста.
+- **`root(world)` — пустой ctx уровня `world`**: у world нет authored
+  тира, materialize/default на root не выполняется (WARNING на root
+  недопустим).
 - **Отсутствие значения после полного каскада + domain default — баг
   caller'а**, ошибка/exception, не молчаливый дефолт у консьюмера
   (то же правило, что для экономического контекста в §11.2
@@ -171,9 +211,14 @@ room_ctx       = building_ctx.extend(room_link)   # rooms[].economic_tier и т.
 
 **v1 — архитектурно чистый движок + один тестовый параметр:**
 
-| Параметр | Authored-поле | Шаблонные источники | Materialize | Domain default |
-|---|---|---|---|---|
-| `economic_tier` | `NL.system_economic_tier` | `plot.economic_tier`, `plot.economic_tier_band`, `plot.economic_tier_range`; `rooms[].economic_tier` (уровень комнаты) | `materialize_band` (§5 tz_economic_tier) | `median_system_tier` + WARNING (§4 tz_economic_tier) |
+| Параметр | `Cascade` | Источники по уровням | Domain default |
+|---|---|---|---|
+| `economic_tier` | `field="system_economic_tier"`, `default=REGISTRY_MEDIAN` | room: `rooms[].economic_tier`; building: NL поле; area: `plot.economic_tier` → `_band` → `_range`; district: `district_template.economic_tier_range` (materialize); settlement: NL поле / skeleton `economic_tier` | `median_system_tier` + WARNING (`DefaultPolicy.REGISTRY_MEDIAN`, POJO `WorldEconomyTierRegistry`) |
+
+Каскад тира — полный: room → building NL → area (plot) → district
+(range) → settlement → `REGISTRY_MEDIAN`. Мёртвый сегодня канал
+`plot.economic_tier` оживает через area-звено — это целевой фикс, не
+расширение.
 
 Ширина покрытия не является целью v1 — важна чистота движка: один
 параметр доказывает fold-семантику, provenance и одиночный rng-вход.
@@ -187,27 +232,38 @@ building barriers fallback, tz_city §«Fallback»), `race_mix` /
 `population_composition`, культура/язык/фракция, `settlement_density`,
 climate anchor, торговый профиль/валюта, law/magic/tech level.
 
-Каскад тира при миграции должен покрывать **все** звенья §4
-(room → template → building → district → city → bands → median), включая
-сейчас отсутствующую передачу district/city в structure-вызовы.
+Каскад тира при миграции покрывает **всю** каноническую цепочку §2
+(room → building → area(plot) → district(range) → settlement →
+`REGISTRY_MEDIAN`), включая сейчас отсутствующие звенья area и district
+в structure-вызовах.
 
 ---
 
 ## 6. Границы и не-scope
 
-- **Persist resolved-значений на NL — принято (гибрид).** Механизм
-  резолва transient; но `system_economic_tier` **записывается** на
-  district/building NL в момент создания (там, где происходит резолв).
-  Поле проектировалось как хранимый ref — это материализация
-  наследования, а не подмена authored. Остальные параметры persist'ить
-  запрещено: отдельных колонок у них нет, и вводить их — расширение
-  schema, отдельное решение.
+- **Persist — каждая NL цепочки получает stamped resolved тир**
+  (решение мастера): settlement, district, building, room — при
+  создании NL `system_economic_tier` = `ctx.economic_tier` (authored
+  остаётся как есть; null → materialized/median → записывается).
+  Area NL нет — transient. Поле на settlement становится
+  authored-или-materialized: такие поля проще и правильнее хранить,
+  общий тир города может меняться в обе стороны. Остальные параметры
+  persist'ить запрещено: отдельных колонок у них нет, и вводить их —
+  расширение schema, отдельное решение.
   **Перегенерация:** stamped-тир — первое authored-звено каскада →
   здание сохраняет тир между генерациями (тир — часть идентичности
   артефакта, детерминизм, повторного rng-materialize нет). Правки
   тира предков **не распространяются** на уже сгенерированные NL:
   перенаследование требует явного обнуления поля / отдельной политики
   re-materialize — вне scope v1, зафиксировано как доменное правило.
+  **Поток чтения stamped (Q4 плана, решает мастер):** `_place_building`
+  пересоздаёт building NL при каждом assemble → stamped-значение из БД
+  само не читается; варианты: caller с репозиторием подаёт существующий
+  NL первым звеном, либо §8.4 откладывается в follow-up.
+- **Потребители district/settlement-уровня в v1 не переводятся на ctx**
+  (решение мастера): барьеры, дороги, стены читают тир как сейчас (из
+  `CitySkeleton`); v1 строит ctx и stamp'ит. Перевод — follow-up
+  отдельным планом.
 - **Судьба `TierResolver`:** после миграции его каскад становится fold'ом
   `economic_tier` внутри `extend`. Класс не удаляется в этом scope — на
   месте вызовов оставляется `# TODO: перенести на LocationContext` для
@@ -230,7 +286,7 @@ climate anchor, торговый профиль/валюта, law/magic/tech lev
   механизм является его источником. Шаги S5–S6 того плана могут идти по
   transient-контракту, но production-подключение resolved-контекста
   корректно только после каскадного резолва building scope.
-- Фикс «запись `system_economic_tier` на district/building NL при
+- Фикс «запись `system_economic_tier` на каждой NL цепочки при
   создании» — частный случай materialize-решения §6, решается в рамках
   этого механизма, а не отдельным ad-hoc присвоением.
 
@@ -284,3 +340,7 @@ climate anchor, торговый профиль/валюта, law/magic/tech lev
 - Перегенерация того же NL: stamped `max` — первое звено → тот же тир
   без повторного materialize/rng; изменение тира district/city между
   генерациями **не меняет** stamped-значение.
+- Зависит от потока чтения stamped NL (Q4 плана — открыто): сейчас
+  `_place_building` пересоздаёт NL заново, stamped-значение из БД не
+  читается — кейс выполним только если caller подаёт существующий NL
+  первым звеном.
