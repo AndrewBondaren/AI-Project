@@ -256,10 +256,13 @@ climate anchor, торговый профиль/валюта, law/magic/tech lev
   тира предков **не распространяются** на уже сгенерированные NL:
   перенаследование требует явного обнуления поля / отдельной политики
   re-materialize — вне scope v1, зафиксировано как доменное правило.
-  **Поток чтения stamped (Q4 плана, решает мастер):** `_place_building`
-  пересоздаёт building NL при каждом assemble → stamped-значение из БД
-  само не читается; варианты: caller с репозиторием подаёт существующий
-  NL первым звеном, либо §8.4 откладывается в follow-up.
+  **Поток чтения stamped (принято):** `_place_building` пересоздаёт
+  building NL при каждом assemble — поэтому caller с репозиторием
+  (packing job / persist service) читает существующий NL по
+  `location_uid` и подаёт его в `structureAreaAssembler` первым звеном
+  building ctx; stamped-значение из БД участвует в каскаде.
+  Побочный баг (не scope): `_place_building` не ставит
+  `parent_location_uid`.
 - **Потребители district/settlement-уровня в v1 не переводятся на ctx**
   (решение мастера): барьеры, дороги, стены читают тир как сейчас (из
   `CitySkeleton`); v1 строит ctx и stamp'ит. Перевод — follow-up
@@ -340,7 +343,7 @@ climate anchor, торговый профиль/валюта, law/magic/tech lev
 - Перегенерация того же NL: stamped `max` — первое звено → тот же тир
   без повторного materialize/rng; изменение тира district/city между
   генерациями **не меняет** stamped-значение.
-- Зависит от потока чтения stamped NL (Q4 плана — открыто): сейчас
-  `_place_building` пересоздаёт NL заново, stamped-значение из БД не
-  читается — кейс выполним только если caller подаёт существующий NL
-  первым звеном.
+- Поток чтения stamped NL принят: caller читает существующий building
+  NL по `location_uid` и подаёт его первым звеном building ctx — без
+  этого `_place_building` пересоздаёт NL и stamped-значение не
+  доходило бы (§6).
