@@ -9,6 +9,7 @@ from app.dataModel.spatial.facing import (
     Facing, parse_facing,
 )
 from app.dataModel.structure.enums.passageType import PassageType
+from app.dataModel.structure.enums.attachWall import AttachWall
 from app.db.models.locationPassage import LocationPassage
 from app.db.models.mapCell import MapCell
 
@@ -69,6 +70,21 @@ class StructureOrientation:
                 room.origin_x, room.origin_y, room.width, room.depth,
             )
             room.extra_cells = {self.point(x, y) for x, y in room.extra_cells}
+            if room.entry_point is not None:
+                room.entry_point = room.entry_point.model_copy(
+                    update={"wall": self.facing(room.entry_point.wall)},
+                )
+            if room.back_entry_point is not None:
+                room.back_entry_point = room.back_entry_point.model_copy(
+                    update={"wall": self.facing(room.back_entry_point.wall)},
+                )
+            if room.is_shaft:
+                if room.facing is not None:
+                    room.facing = self.facing(room.facing).value
+                if room.embedded_entry is not None:
+                    room.embedded_entry = self.facing(room.embedded_entry)
+            if room.attach_wall in CARDINAL_FACINGS:
+                room.attach_wall = AttachWall(self.facing(room.attach_wall.value))
 
 
 def validate_facing(facing: Facing | None, structure_uid: str) -> None:
