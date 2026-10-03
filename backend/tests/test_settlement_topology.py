@@ -41,9 +41,9 @@ from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
-from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
-from app.dataModel.settlement.district.districtTopologySlot import DistrictTopologySlot
-from app.dataModel.settlement.enums.districtDensity import DistrictDensity
+from app.dataModel.locations.settlement.area.perimeterBarrier import PerimeterBarrier
+from app.dataModel.locations.settlement.district.districtTopologySlot import DistrictTopologySlot
+from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World

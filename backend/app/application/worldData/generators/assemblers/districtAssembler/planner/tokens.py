@@ -40,21 +40,21 @@ from app.application.jsonValidation.worldRow import (
 from app.dataModel.flora.enums.cropKind import CropKind
 from app.dataModel.livestock.enums.livestockKind import LivestockKind
 from app.dataModel.resources.enums.resourceKind import ResourceKind
-from app.dataModel.settlement.district.allowedStructureTypes import (
+from app.dataModel.locations.settlement.district.allowedStructureTypes import (
     allowed_fill_structure_types,
 )
-from app.dataModel.settlement.district.requiredStructure import RequiredStructure
-from app.dataModel.settlement.district.requiredStructureResolve import (
+from app.dataModel.locations.settlement.district.requiredStructure import RequiredStructure
+from app.dataModel.locations.settlement.district.requiredStructureResolve import (
     resolve_required_layouts,
 )
-from app.dataModel.settlement.district.structurePlacement import (
+from app.dataModel.locations.settlement.district.structurePlacement import (
     resolve_plot_count,
     resolve_plot_priority,
 )
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.dataModel.structure.enums.buildingPurpose import FAMILY_OF, BuildingPurpose, expand_allowed
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.enums.buildingPurpose import FAMILY_OF, BuildingPurpose, expand_allowed
 from app.db.models.world import World
 
 

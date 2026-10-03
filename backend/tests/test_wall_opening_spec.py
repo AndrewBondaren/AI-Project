@@ -10,8 +10,8 @@ from unittest.mock import patch
 from pydantic import ValidationError
 
 from app.core.generationLogging import generation_world_log
-from app.dataModel.structure.room.wallOpeningSpec import WallOpeningSpec
-from app.dataModel.structure.enums.buildingElement import StructureElement, WALL_OPENING_ELEMENTS
+from app.dataModel.locations.structure.room.wallOpeningSpec import WallOpeningSpec
+from app.dataModel.locations.structure.enums.buildingElement import StructureElement, WALL_OPENING_ELEMENTS
 from app.application.worldData.generators.structure.cellFactory import _opening_cell
 from app.application.worldData.generators.structure.passages.wallOpening import place_wall_openings
 from app.application.worldData.generators.structure.passages.wallOpeningResolver import compute_exterior_wall_profiles

@@ -8,8 +8,8 @@ from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
-from app.dataModel.settlement.district.cellZone import CellZone
-from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
+from app.dataModel.locations.settlement.district.cellZone import CellZone
+from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
 from app.dataModel.terrain.worldTerrainRegistry import TerrainKey
 
 

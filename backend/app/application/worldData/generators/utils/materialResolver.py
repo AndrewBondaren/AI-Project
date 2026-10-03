@@ -5,7 +5,7 @@ from app.application.jsonValidation import economic_tiers, materials
 from app.application.worldData.generators.utils.tierRegistry import median_system_tier, tiers_sorted
 from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.db.models.world import World
 
 from app.dataModel.materials import (

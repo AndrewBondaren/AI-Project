@@ -148,7 +148,7 @@ def staircase_footprint_min(size_type: str) -> tuple[int, int] | None:
 
 def default_shaft_footprint_min() -> tuple[int, int]:
     """Fallback footprint when size_type is unknown — sq_small preset."""
-    from app.dataModel.structure.enums.staircaseType import default_shaft_size_type
+    from app.dataModel.locations.structure.enums.staircaseType import default_shaft_size_type
 
     footprint = staircase_footprint_min(default_shaft_size_type("u_shape"))
     return footprint if footprint is not None else (5, 5)

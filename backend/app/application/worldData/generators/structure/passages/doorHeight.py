@@ -3,7 +3,7 @@ import logging
 from math import floor
 
 from app.application.worldData.generators.structure.errors import GenerationError
-from app.dataModel.structure.building.structureTemplate import (
+from app.dataModel.locations.structure.building.structureTemplate import (
     DEFAULT_DOOR_HEIGHT_MAX, DEFAULT_DOOR_HEIGHT_RATIO, StructureTemplate,
 )
 

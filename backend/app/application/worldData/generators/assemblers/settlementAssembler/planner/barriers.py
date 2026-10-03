@@ -22,7 +22,7 @@ from app.application.worldData.generators.road.blockSize import block_size_for_d
 from app.application.worldData.generators.barrier.material import pick_barrier_material
 from app.application.worldData.generators.barrier.perimeter import perimeter_ring_bbox
 from app.application.worldData.generators.utils.tierRegistry import tier_rank
-from app.dataModel.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
+from app.dataModel.locations.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World

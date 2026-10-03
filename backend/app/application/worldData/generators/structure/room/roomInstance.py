@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from app.dataModel.structure.room.entryPoint import EntryPoint
-from app.dataModel.structure.room.wallOpeningSpec import WallOpeningSpec
-from app.dataModel.structure.enums.attachWall import AttachWall
+from app.dataModel.locations.structure.room.entryPoint import EntryPoint
+from app.dataModel.locations.structure.room.wallOpeningSpec import WallOpeningSpec
+from app.dataModel.locations.structure.enums.attachWall import AttachWall
 from app.dataModel.spatial.facing import Facing
 
 from app.application.worldData.generators.structure.shapes import room_footprint

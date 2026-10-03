@@ -25,10 +25,10 @@ from app.application.worldData.generators.road.layouts.radialLayout import gener
 from app.application.worldData.generators.assemblers.districtAssembler.planner.types import (
     StreetFrameContext,
 )
-from app.dataModel.settlement.district.districtConnection import street_classes_for
+from app.dataModel.locations.settlement.district.districtConnection import street_classes_for
 from app.dataModel.roads.enums.streetLayout import StreetLayout
 from app.application.worldData.generators.road.connectionPolicy import paint_for_connection
-from app.dataModel.settlement.enums.districtStreetRole import DistrictStreetRole
+from app.dataModel.locations.settlement.enums.districtStreetRole import DistrictStreetRole
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.world import World

@@ -4,8 +4,8 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, ValidationError, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
-from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose
-from app.dataModel.structure.room.roomDef import RoomDef
+from app.dataModel.locations.structure.enums.buildingPurpose import BuildingPurpose
+from app.dataModel.locations.structure.room.roomDef import RoomDef
 
 
 class LevelDef(BaseModel):

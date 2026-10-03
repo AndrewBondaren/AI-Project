@@ -2,7 +2,7 @@
 from app.dataModel.spatial.facing import (
     CARDINAL_WALL_OUTWARD_DELTA, CARDINAL_DELTA_TO_FACING, Facing, opposite,
 )
-from app.dataModel.structure.enums.buildingElement import StructureElement
+from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 
 
 def resolve_u_shape_facing(footprint: set[tuple[int, int]], cells: dict,

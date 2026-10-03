@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, PrivateAttr, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire
 from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing, coerce_facing_wire
-from app.dataModel.structure.room.sizeSpec import PositiveRange
+from app.dataModel.locations.structure.room.sizeSpec import PositiveRange
 
 
 class ShapeParams(BaseModel):

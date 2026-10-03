@@ -8,8 +8,8 @@ from app.application.worldData.generators.structure.cellBuilder import _interior
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _void_cell, _window_cell
 from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
-from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
-from app.dataModel.structure.enums.buildingElement import StructureElement
+from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
+from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.mapCell import MapCell
 

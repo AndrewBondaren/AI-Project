@@ -10,16 +10,16 @@ from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.flora.enums.cropKind import CropKind
 from app.dataModel.livestock.enums.livestockKind import LivestockKind
 from app.dataModel.resources.enums.resourceKind import ResourceKind
-from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
+from app.dataModel.locations.settlement.area.perimeterBarrier import PerimeterBarrier
 from app.dataModel.shared.ranges import EconomicTierRange, IntMinMax
-from app.dataModel.structure.building.plotLayoutTemplate import DrawingKey
-from app.dataModel.structure.building.buildingTemplateRoomSlot import BuildingTemplateRoomSlot
-from app.dataModel.structure.enums.buildingPurpose import (
+from app.dataModel.locations.structure.building.plotLayoutTemplate import DrawingKey
+from app.dataModel.locations.structure.building.buildingTemplateRoomSlot import BuildingTemplateRoomSlot
+from app.dataModel.locations.structure.enums.buildingPurpose import (
     BuildingPurpose,
     coerce_purpose_list,
     primary_purpose,
 )
-from app.dataModel.structure.materialPick import MaterialPick
+from app.dataModel.locations.structure.materialPick import MaterialPick
 
 
 class BuildingTemplateOutline(BaseModel):

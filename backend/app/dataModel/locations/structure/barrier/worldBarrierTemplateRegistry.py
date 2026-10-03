@@ -8,9 +8,9 @@ from pydantic import RootModel
 
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.shared.ranges import IntMinMax
-from app.dataModel.structure.materialPick import MaterialPick
-import app.dataModel.structure.barrier.barrierTemplateEntry as _entry_mod
-from app.dataModel.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
+from app.dataModel.locations.structure.materialPick import MaterialPick
+import app.dataModel.locations.structure.barrier.barrierTemplateEntry as _entry_mod
+from app.dataModel.locations.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
 
 
 class WorldBarrierTemplateRegistry(RootModel[list[BarrierTemplateEntry]]):

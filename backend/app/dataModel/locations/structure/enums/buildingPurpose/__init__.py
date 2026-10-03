@@ -1,6 +1,6 @@
 """Building purpose catalog — families, leaves, world packs.
 
-Public import path stays ``app.dataModel.structure.enums.buildingPurpose``.
+Public import path stays ``app.dataModel.locations.structure.enums.buildingPurpose``.
 tz_building_generator.md §2.1.
 """
 

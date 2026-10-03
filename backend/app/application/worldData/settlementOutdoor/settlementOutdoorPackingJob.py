@@ -63,7 +63,7 @@ from app.application.worldData.settlementOutdoor.settlementPipelineTimings impor
     SettlementPipelineTimings,
     WallClock,
 )
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
 from app.dataModel.worldPack.settlementStructureStatus import (
     settlement_structure_status_for,
 )

@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.enums.buildingPurpose import (
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.enums.buildingPurpose import (
     BuildingPurpose,
     BuildingPurposeFamily,
 )

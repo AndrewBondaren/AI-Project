@@ -6,7 +6,7 @@ import unittest
 
 from app.application.jsonValidation import settlementSizeResolve as _size_resolve
 from app.application.jsonValidation.settlementSizeResolve import resolve_settlement_size_key
-from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import (
+from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     WorldSettlementSizeRegistry,
 )
 

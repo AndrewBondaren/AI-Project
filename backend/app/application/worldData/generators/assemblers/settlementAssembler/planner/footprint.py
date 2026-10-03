@@ -25,8 +25,8 @@ from app.application.worldData.generators.coordinates.types import (
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.settlement.settlement.settlementFootprint import (
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.settlement.settlement.settlementFootprint import (
     resolve_settlement_footprint_multiplier,
 )
 from app.db.models.namedLocation import NamedLocation

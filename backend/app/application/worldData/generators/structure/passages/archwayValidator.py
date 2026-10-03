@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 
-from app.dataModel.structure.enums.buildingElement import (
+from app.dataModel.locations.structure.enums.buildingElement import (
     StructureElement, _WALKABLE_ELEMENTS,
 )
 

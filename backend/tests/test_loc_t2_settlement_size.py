@@ -8,14 +8,14 @@ from app.dataModel.locations.locationType.locationTypeSubtypeEntry import Locati
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
-from app.dataModel.settlement.settlement.settlementFootprint import (
+from app.dataModel.locations.settlement.settlement.settlementFootprint import (
     SettlementFootprintError,
     resolve_settlement_footprint_multiplier,
     settlement_size_registry_issues,
     village_city_footprint_invariant_holds,
 )
-from app.dataModel.settlement.settlement.settlementSizeEntry import SettlementSizeEntry
-from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import (
+from app.dataModel.locations.settlement.settlement.settlementSizeEntry import SettlementSizeEntry
+from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     WorldSettlementSizeRegistry,
 )
 

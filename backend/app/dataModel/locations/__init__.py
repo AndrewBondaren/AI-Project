@@ -1,6 +1,8 @@
 """
-SCH-WORLD-LOC-TYPE — `worlds.location_type_registry` (N1-W-07).
+Домен «локации» — корень: идентичность NL, типы, каскадный контекст,
+поддомены `settlement/` и `structure/` (см. docs/tz_locations.md §Package layout).
 
+SCH-WORLD-LOC-TYPE — `worlds.location_type_registry` (N1-W-07).
 Эталон: fixtures/world_template.json (legacy map), docs/tz_locations.md (target array).
 """
 

@@ -3,8 +3,8 @@ Doorway passage builder.
 """
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.doorPlacer import DoorPlacer
-from app.dataModel.structure.building.roomConnection import RoomConnection
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.building.roomConnection import RoomConnection
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.application.worldData.generators.structure.passages.doorHeight import resolve_door_height
 from app.application.worldData.generators.structure.passages.shared import (
     _det_uuid, _doorway_facing, _shared_segment,

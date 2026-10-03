@@ -42,30 +42,30 @@ from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import
     WorldConnectionTypeRegistry,
 )
 from app.dataModel.roads.worldRoadSettings import WorldRoadSettings
-from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
     WorldDistrictTemplateRegistry,
 )
-from app.dataModel.settlement.district.worldDistrictZonePreference import (
+from app.dataModel.locations.settlement.district.worldDistrictZonePreference import (
     WorldDistrictZonePreference,
 )
-from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import (
+from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     WorldSettlementSizeRegistry,
 )
-from app.dataModel.settlement.settlement.worldLocationMoodRegistry import WorldLocationMoodRegistry
-from app.dataModel.settlement.settlement.worldSettlementSpecializationRegistry import (
+from app.dataModel.locations.settlement.settlement.worldLocationMoodRegistry import WorldLocationMoodRegistry
+from app.dataModel.locations.settlement.settlement.worldSettlementSpecializationRegistry import (
     WorldSettlementSpecializationRegistry,
 )
-from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
+from app.dataModel.locations.structure.barrier.worldBarrierTemplateRegistry import (
     WorldBarrierTemplateRegistry,
 )
-from app.dataModel.structure.building.worldBuildingTemplateRegistry import (
+from app.dataModel.locations.structure.building.worldBuildingTemplateRegistry import (
     WorldBuildingTemplateRegistry,
 )
-from app.dataModel.structure.enums.buildingPurpose import (
+from app.dataModel.locations.structure.enums.buildingPurpose import (
     WorldPurposePackRegistry,
     WorldPurposePacks,
 )
-from app.dataModel.structure.room.worldRoomTypeRegistry import WorldRoomTypeRegistry
+from app.dataModel.locations.structure.room.worldRoomTypeRegistry import WorldRoomTypeRegistry
 from app.dataModel.terrain.relief.worldReliefGradeObstacle import (
     RELIEF_OBSTACLE_SCALAR_WIRE_KEYS,
     WorldReliefGradeObstacleScalars,

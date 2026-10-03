@@ -6,7 +6,7 @@ from typing import ClassVar
 
 from pydantic import RootModel
 
-from app.dataModel.structure.building.buildingTemplateRegistryEntry import BuildingTemplateRegistryEntry
+from app.dataModel.locations.structure.building.buildingTemplateRegistryEntry import BuildingTemplateRegistryEntry
 
 
 class WorldBuildingTemplateRegistry(RootModel[list[BuildingTemplateRegistryEntry]]):

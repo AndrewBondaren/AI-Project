@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 
 from app.application.jsonValidation.resolve import resolve_model
-from app.dataModel.settlement.area.perimeterBarrier import (
+from app.dataModel.locations.settlement.area.perimeterBarrier import (
     PerimeterBarrier,
     resolved_host_sides,
 )
@@ -38,7 +38,7 @@ class TestPerimeterBarrierSides(unittest.TestCase):
         self.assertEqual(barrier.sides, [Facing.NORTH, Facing.WEST])
 
     def test_skip_intercardinal_and_unknown_keeps_rest(self) -> None:
-        log = "app.dataModel.settlement.area.perimeterBarrier"
+        log = "app.dataModel.locations.settlement.area.perimeterBarrier"
         with self.assertLogs(log, level="WARNING") as captured:
             barrier = PerimeterBarrier(
                 sides=["north", "north_east", "nope", "south"],
@@ -53,7 +53,7 @@ class TestPerimeterBarrierSides(unittest.TestCase):
         self.assertEqual(skipped, [])
 
     def test_skip_all_means_all_cardinals(self) -> None:
-        log = "app.dataModel.settlement.area.perimeterBarrier"
+        log = "app.dataModel.locations.settlement.area.perimeterBarrier"
         with self.assertLogs(log, level="WARNING") as captured:
             barrier = PerimeterBarrier(sides=["north_east", "nope"])
         self.assertEqual(barrier.sides, [])

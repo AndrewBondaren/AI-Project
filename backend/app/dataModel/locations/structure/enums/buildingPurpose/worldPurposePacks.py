@@ -6,7 +6,7 @@ from typing import Any, ClassVar
 
 from pydantic import RootModel, field_validator
 
-from app.dataModel.structure.enums.buildingPurpose.packs import (
+from app.dataModel.locations.structure.enums.buildingPurpose.packs import (
     PurposePack,
     coerce_purpose_packs,
 )

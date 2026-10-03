@@ -75,7 +75,7 @@ from app.dataModel.annotationPolicy import (
 )
 from app.dataModel.registryKey import RegistryKey, registry_key_target
 from app.dataModel.roads import RoadSettingsEntry, WorldRoadSettings
-from app.dataModel.settlement import (
+from app.dataModel.locations.settlement import (
     CellZone,
     SettlementSizeEntry,
     SettlementSizeKey,
@@ -101,13 +101,13 @@ from app.dataModel.settlement import (
     WorldSettlementSpecializationRegistry,
     block_size_for_density,
 )
-from app.dataModel.settlement.settlement.settlementFootprint import (
+from app.dataModel.locations.settlement.settlement.settlementFootprint import (
     SettlementFootprintError,
     resolve_settlement_footprint_multiplier,
     settlement_size_registry_issues,
     village_city_footprint_invariant_holds,
 )
-from app.dataModel.structure import (
+from app.dataModel.locations.structure import (
     BarrierTemplateEntry,
     BarrierTemplateKey,
     BuildingTemplateOutline,

@@ -7,10 +7,10 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from app.dataModel.spatial.facing import CARDINAL_FACINGS
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.enums.entryAccessType import EntryAccessType
-from app.dataModel.structure.enums.passageType import PassageType
-from app.dataModel.structure.room import EntryPoint
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.enums.entryAccessType import EntryAccessType
+from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.structure.room import EntryPoint
 from tests.structureWire import room_wire, level_wire
 
 

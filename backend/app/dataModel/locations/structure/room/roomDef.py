@@ -8,13 +8,13 @@ from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTi
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
 from app.dataModel.cascade.cascadeSpec import CascadeChannel
-from app.dataModel.structure.enums.attachWall import AttachWall
-from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose
-from app.dataModel.structure.enums.passageType import PassageType
-from app.dataModel.structure.room.entryPoint import EntryPoint
-from app.dataModel.structure.room.shapeParams import ShapeParams
-from app.dataModel.structure.room.sizeSpec import PositiveRange, SizeSpec
-from app.dataModel.structure.room.wallOpeningSpec import WallOpeningSpec
+from app.dataModel.locations.structure.enums.attachWall import AttachWall
+from app.dataModel.locations.structure.enums.buildingPurpose import BuildingPurpose
+from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.structure.room.entryPoint import EntryPoint
+from app.dataModel.locations.structure.room.shapeParams import ShapeParams
+from app.dataModel.locations.structure.room.sizeSpec import PositiveRange, SizeSpec
+from app.dataModel.locations.structure.room.wallOpeningSpec import WallOpeningSpec
 
 
 class RoomDef(BaseModel):

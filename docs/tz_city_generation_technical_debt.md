@@ -167,7 +167,7 @@ C23 как раз создаёт children + city edges **без** packing. Ст�
 
 **Status:** `open` | **Severity:** low | **P:** P3
 
-[`debug_settlement.py`](../backend/scripts/debug_settlement.py), [`debug_settlement_persist.py`](../backend/scripts/debug_settlement_persist.py): `settlement_density = "medium"`. Поле на NL есть (1a), setattr не падает. Дубль [`DistrictDensity.MEDIUM.wire_value`](../backend/app/dataModel/settlement/enums/districtDensity.py).
+[`debug_settlement.py`](../backend/scripts/debug_settlement.py), [`debug_settlement_persist.py`](../backend/scripts/debug_settlement_persist.py): `settlement_density = "medium"`. Поле на NL есть (1a), setattr не падает. Дубль [`DistrictDensity.MEDIUM.wire_value`](../backend/app/dataModel/locations/settlement/enums/districtDensity.py).
 
 Не generate-consumer; ломает правило no-hardcode в harness.
 
@@ -330,7 +330,7 @@ Area `uuid4` в `areaPaths.py` — не переносить в этом ID.
 **Status:** `open` | **Severity:** high — корень путаницы слоёв CITY-T-5n | **P:** P1  
 **План имплементации:** [`.cursor/plans/city-t-5n-5o-structure-split.md`](../.cursor/plans/city-t-5n-5o-structure-split.md).
 
-**Проблема:** один POJO играет две роли — [`buildingLayoutTemplate.py`](../backend/app/dataModel/structure/building/buildingLayoutTemplate.py):
+**Проблема:** один POJO играет две роли — [`buildingLayoutTemplate.py`](../backend/app/dataModel/locations/structure/building/buildingLayoutTemplate.py):
 
 - **Чертёж участка** (packing root): `structure_types`, `occupied_footprint`, `perimeter_barrier`, `default_structure_context`, `economic_tier*`, `subjects` / `resource_kind` / `crop_kind` / `livestock_kind`, `main_building`.
 - **Тело здания** (generate body): `levels`, `staircases`, `connections`, `default_z_height` — вложено рекурсивно тем же типом (`main_building: BuildingLayoutTemplate`).

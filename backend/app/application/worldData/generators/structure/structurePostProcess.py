@@ -5,7 +5,7 @@
 уже в финальном состоянии. Каждая функция мутирует cells_dict на месте.
 """
 import logging
-from app.dataModel.structure.enums.buildingElement import StructureElement
+from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 from app.db.models.mapCell import MapCell
 
 logger = logging.getLogger(__name__)

@@ -13,11 +13,11 @@ from app.dataModel.registryKey import RegistryKey
 from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing, parse_facing
 
 if TYPE_CHECKING:
-    from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-    from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
+    from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+    from app.dataModel.locations.structure.barrier.worldBarrierTemplateRegistry import (
         WorldBarrierTemplateRegistry,
     )
-    from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+    from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 
 logger = logging.getLogger(__name__)
 

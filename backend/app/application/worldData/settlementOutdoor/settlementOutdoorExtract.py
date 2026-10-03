@@ -29,11 +29,11 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
 )
 from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.dataModel.locations.enums.entryRole import EntryRole
-from app.dataModel.settlement.district.districtTopologySlot import (
+from app.dataModel.locations.settlement.district.districtTopologySlot import (
     DistrictTopologyEntry,
     DistrictTopologySlot,
 )
-from app.dataModel.structure.enums.passageType import PassageType
+from app.dataModel.locations.structure.enums.passageType import PassageType
 from app.dataModel.worldPack.settlementStructureWire import (
     AreaSlotWire,
     AreaStructureWire,

@@ -9,12 +9,12 @@ from pydantic import ValidationError
 
 from app.core.generationLogging import generation_world_log
 from app.dataModel.annotationPolicy import field_policy, wire_enum_class, WireFieldPolicy
-from app.dataModel.structure.building.levelDef import LevelDef
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.enums.attachWall import AttachWall
-from app.dataModel.structure.room.roomDef import RoomDef
-from app.dataModel.structure.room.sizeSpec import SizeSpec
-from app.dataModel.structure.room.entryPoint import EntryPoint
+from app.dataModel.locations.structure.building.levelDef import LevelDef
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.enums.attachWall import AttachWall
+from app.dataModel.locations.structure.room.roomDef import RoomDef
+from app.dataModel.locations.structure.room.sizeSpec import SizeSpec
+from app.dataModel.locations.structure.room.entryPoint import EntryPoint
 from app.application.worldData.generators.structure.errors import GenerationError
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from tests.structureWire import room_wire, level_wire

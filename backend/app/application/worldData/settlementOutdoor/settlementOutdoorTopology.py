@@ -23,8 +23,8 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorTypes import (
 )
 from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
 from app.dataModel.connections.enums.graphLevel import GraphLevel
-from app.dataModel.settlement.district.districtTopologySlot import DistrictTopologySlot
-from app.dataModel.settlement.district.requiredStructureResolve import (
+from app.dataModel.locations.settlement.district.districtTopologySlot import DistrictTopologySlot
+from app.dataModel.locations.settlement.district.requiredStructureResolve import (
     unhosted_settlement_types,
     union_required_structures,
 )

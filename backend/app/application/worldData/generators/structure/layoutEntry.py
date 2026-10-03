@@ -2,7 +2,7 @@
 import logging
 
 from app.dataModel.spatial.facing import Facing, CARDINAL_WALL_OUTWARD_DELTA
-from app.dataModel.structure.room.entryPoint import EntryPoint
+from app.dataModel.locations.structure.room.entryPoint import EntryPoint
 from app.application.worldData.generators.structure.errors import GenerationError
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 

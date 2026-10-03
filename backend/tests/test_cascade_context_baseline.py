@@ -33,9 +33,9 @@ from app.dataModel.materials.enums.materialCategory import MaterialCategory
 from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
 from app.dataModel.materials.worldMaterialRegistry import WorldMaterialRegistry
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from tests.structureWire import level_wire, room_wire

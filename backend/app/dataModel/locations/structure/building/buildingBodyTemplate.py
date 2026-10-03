@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
-from app.dataModel.structure.building.structureTemplate import StructureKey
+from app.dataModel.locations.structure.building.structureTemplate import StructureKey
 
 DEFAULT_FOUNDATION_TYPE = "slab"
 DEFAULT_ROOF_TYPE = "gable"

@@ -6,7 +6,7 @@ from typing import ClassVar
 
 from pydantic import RootModel
 
-from app.dataModel.structure.room.roomTypeEntry import RoomTypeEntry
+from app.dataModel.locations.structure.room.roomTypeEntry import RoomTypeEntry
 
 _CANONICAL_ENTRIES: tuple[RoomTypeEntry, ...] = (
     RoomTypeEntry(system_room="entrance", glossary_ref="room_entrance"),

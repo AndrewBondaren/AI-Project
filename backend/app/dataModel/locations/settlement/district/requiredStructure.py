@@ -7,13 +7,13 @@ from typing import Any
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
-from app.dataModel.settlement.enums.requiredStructurePosition import (
+from app.dataModel.locations.settlement.enums.requiredStructurePosition import (
     POSITION_ANY,
     POSITION_CENTER,
     RequiredStructurePosition,
 )
-from app.dataModel.structure.building.plotLayoutTemplate import DrawingKey
-from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose
+from app.dataModel.locations.structure.building.plotLayoutTemplate import DrawingKey
+from app.dataModel.locations.structure.enums.buildingPurpose import BuildingPurpose
 
 __all__ = [
     "POSITION_ANY",

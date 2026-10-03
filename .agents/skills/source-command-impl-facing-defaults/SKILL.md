@@ -14,7 +14,7 @@ Use this skill when the user asks to run the migrated source command `impl-facin
 
 1. [`.cursor/plans/entry-point-pojo-done.md`](../plans/entry-point-pojo-done.md) — **§6.4** (три места), статусы §6.1–6.3 (сданы — образцы), §4 расхождения.
 2. [`docs/tz_building_generator.md`](../../docs/tz_building_generator.md) §3.5b (`stem_wall`/`arm_corner` — default `"any"` на wire), §3.6 (`entry_point.wall` required), staircase `facing` — [`docs/tz_staircase_generation.md`](../../docs/tz_staircase_generation.md).
-3. Образцы сданных срезов: `dataModel/structure/building/{roomConnection,staircaseSpec,levelDef}.py`, `dataModel/structure/room/{roomDef,shapeParams,entryPoint}.py`, `StructureGeneratorService._resolve_{connections,staircases,levels}` — паттерн границ и логирования.
+3. Образцы сданных срезов: `dataModel/locations/structure/building/{roomConnection,staircaseSpec,levelDef}.py`, `dataModel/locations/structure/room/{roomDef,shapeParams,entryPoint}.py`, `StructureGeneratorService._resolve_{connections,staircases,levels}` — паттерн границ и логирования.
 4. Правила (нарушение = стоп): `dataModel-no-hardcode.mdc`, `layer-boundaries.mdc`, `plan-before-code.mdc` (один срез за заход), `project-context.mdc` (не стартовать backend, не коммитить без явной команды).
 
 ## Контекст состояния (факт после 6.3)

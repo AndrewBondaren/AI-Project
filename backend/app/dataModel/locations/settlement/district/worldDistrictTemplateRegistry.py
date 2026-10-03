@@ -8,12 +8,12 @@ from pydantic import RootModel
 
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.roads.enums.streetLayout import StreetLayout
-from app.dataModel.settlement.district.districtConnection import DistrictConnection
-import app.dataModel.settlement.district.districtTemplateEntry as _entry_mod
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.settlement.district.placementCondition import PlacementCondition
-from app.dataModel.settlement.district.requiredStructure import POSITION_CENTER, RequiredStructure
-from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import (
+from app.dataModel.locations.settlement.district.districtConnection import DistrictConnection
+import app.dataModel.locations.settlement.district.districtTemplateEntry as _entry_mod
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.settlement.district.placementCondition import PlacementCondition
+from app.dataModel.locations.settlement.district.requiredStructure import POSITION_CENTER, RequiredStructure
+from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     WorldSettlementSizeRegistry,
 )
 

@@ -16,8 +16,8 @@ from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
 from app.dataModel.registryKey import RegistryKey, registry_key_target
-from app.dataModel.settlement.settlement.settlementSizeEntry import SettlementSizeEntry
-from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import (
+from app.dataModel.locations.settlement.settlement.settlementSizeEntry import SettlementSizeEntry
+from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     SettlementSizeKey,
     WorldSettlementSizeRegistry,
 )
@@ -26,7 +26,7 @@ from app.dataModel.economy.economyTier.worldEconomyTierRegistry import (
     EconomyTierKey,
     WorldEconomyTierRegistry,
 )
-from app.dataModel.settlement.district.placementCondition import PlacementCondition
+from app.dataModel.locations.settlement.district.placementCondition import PlacementCondition
 from app.dataModel.terrain.terrainRegistryEntry import TerrainRegistryEntry
 from app.dataModel.terrain.worldTerrainRegistry import TerrainKey, WorldTerrainRegistry
 
@@ -131,11 +131,11 @@ class TestRegistryKey(unittest.TestCase):
         from app.dataModel.locations.namedLocation.bundleNamedLocation import (
             BundleNamedLocation,
         )
-        from app.dataModel.settlement.settlement.settlementSkeleton import (
+        from app.dataModel.locations.settlement.settlement.settlementSkeleton import (
             SettlementSkeleton,
         )
         from app.dataModel.shared.ranges import EconomicTierRange
-        from app.dataModel.structure.building.plotLayoutTemplate import (
+        from app.dataModel.locations.structure.building.plotLayoutTemplate import (
             PlotLayoutTemplate,
         )
 
@@ -188,8 +188,8 @@ class TestRegistryKey(unittest.TestCase):
             MaterialKey,
             WorldMaterialRegistry,
         )
-        from app.dataModel.settlement.enums.districtDensity import DistrictDensity
-        from app.dataModel.settlement.settlement.settlementSkeleton import (
+        from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
+        from app.dataModel.locations.settlement.settlement.settlementSkeleton import (
             SettlementSkeleton,
         )
 
@@ -315,11 +315,11 @@ class TestRegistryKey(unittest.TestCase):
         self.assertIsNone(cleared.economic_tier)
 
     def test_drawing_key_is_layout_identity(self) -> None:
-        from app.dataModel.settlement.district.districtTemplateEntry import (
+        from app.dataModel.locations.settlement.district.districtTemplateEntry import (
             DistrictTemplateEntry,
         )
-        from app.dataModel.settlement.district.requiredStructure import RequiredStructure
-        from app.dataModel.structure.building.plotLayoutTemplate import (
+        from app.dataModel.locations.settlement.district.requiredStructure import RequiredStructure
+        from app.dataModel.locations.structure.building.plotLayoutTemplate import (
             DrawingKey,
             PlotLayoutTemplate,
         )
@@ -374,21 +374,21 @@ class TestRegistryKey(unittest.TestCase):
         from app.dataModel.locations.namedLocation.bundleNamedLocation import (
             BundleNamedLocation,
         )
-        from app.dataModel.settlement.district.districtConnection import (
+        from app.dataModel.locations.settlement.district.districtConnection import (
             DEFAULT_CONNECTION_TYPE,
             DistrictConnection,
         )
-        from app.dataModel.settlement.district.districtTemplateEntry import (
+        from app.dataModel.locations.settlement.district.districtTemplateEntry import (
             DistrictTemplateEntry,
         )
-        from app.dataModel.settlement.district.districtTopologySlot import (
+        from app.dataModel.locations.settlement.district.districtTopologySlot import (
             DistrictTopologyEntry,
         )
-        from app.dataModel.settlement.district.frontageTypeOrder import (
+        from app.dataModel.locations.settlement.district.frontageTypeOrder import (
             FrontageTypeOrder,
         )
-        from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
-        from app.dataModel.settlement.settlement.settlementSkeleton import (
+        from app.dataModel.locations.settlement.enums.districtEntryRole import DistrictEntryRole
+        from app.dataModel.locations.settlement.settlement.settlementSkeleton import (
             SettlementSkeleton,
         )
         from app.dataModel.spatial.facing import Facing
@@ -504,13 +504,13 @@ class TestRegistryKey(unittest.TestCase):
         from app.dataModel.locations.namedLocation.bundleNamedLocation import (
             BundleNamedLocation,
         )
-        from app.dataModel.settlement.settlement.locationMoodEntry import (
+        from app.dataModel.locations.settlement.settlement.locationMoodEntry import (
             LocationMoodEntry,
         )
-        from app.dataModel.settlement.settlement.settlementSkeleton import (
+        from app.dataModel.locations.settlement.settlement.settlementSkeleton import (
             SettlementSkeleton,
         )
-        from app.dataModel.settlement.settlement.worldLocationMoodRegistry import (
+        from app.dataModel.locations.settlement.settlement.worldLocationMoodRegistry import (
             LocationMoodKey,
             WorldLocationMoodRegistry,
         )
@@ -559,13 +559,13 @@ class TestRegistryKey(unittest.TestCase):
             SettlementSkeleton(system_location_mood="")
 
     def test_specialization_identity_and_bind_are_branded(self) -> None:
-        from app.dataModel.settlement.settlement.settlementSpecializationBind import (
+        from app.dataModel.locations.settlement.settlement.settlementSpecializationBind import (
             SettlementSpecializationBind,
         )
-        from app.dataModel.settlement.settlement.settlementSpecializationEntry import (
+        from app.dataModel.locations.settlement.settlement.settlementSpecializationEntry import (
             SettlementSpecializationEntry,
         )
-        from app.dataModel.settlement.settlement.worldSettlementSpecializationRegistry import (
+        from app.dataModel.locations.settlement.settlement.worldSettlementSpecializationRegistry import (
             SettlementSpecializationKey,
             WorldSettlementSpecializationRegistry,
         )
@@ -614,20 +614,20 @@ class TestRegistryKey(unittest.TestCase):
 
     def test_district_template_identity_and_refs_are_branded(self) -> None:
         from app.application.jsonValidation.resolve import resolve_model
-        from app.dataModel.settlement.district.districtTemplateEntry import (
+        from app.dataModel.locations.settlement.district.districtTemplateEntry import (
             DistrictTemplateEntry,
         )
-        from app.dataModel.settlement.district.districtTopologySlot import (
+        from app.dataModel.locations.settlement.district.districtTopologySlot import (
             DistrictTopologySlot,
         )
-        from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+        from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
             DistrictTemplateKey,
             WorldDistrictTemplateRegistry,
         )
-        from app.dataModel.settlement.settlement.settlementSpecializationEntry import (
+        from app.dataModel.locations.settlement.settlement.settlementSpecializationEntry import (
             SettlementSpecializationEntry,
         )
-        from app.dataModel.settlement.settlement.typicalDistrictRef import (
+        from app.dataModel.locations.settlement.settlement.typicalDistrictRef import (
             TypicalDistrictRef,
         )
 
@@ -756,11 +756,11 @@ class TestRegistryKey(unittest.TestCase):
 
     def test_barrier_template_identity_and_perimeter_ref_are_branded(self) -> None:
         from app.application.jsonValidation.resolve import resolve_model
-        from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
-        from app.dataModel.structure.barrier.barrierTemplateEntry import (
+        from app.dataModel.locations.settlement.area.perimeterBarrier import PerimeterBarrier
+        from app.dataModel.locations.structure.barrier.barrierTemplateEntry import (
             BarrierTemplateEntry,
         )
-        from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
+        from app.dataModel.locations.structure.barrier.worldBarrierTemplateRegistry import (
             BarrierTemplateKey,
             WorldBarrierTemplateRegistry,
         )

@@ -23,7 +23,7 @@ from app.application.worldData.generators.structure.structureGeneratorService im
     OccupiedFootprint,
 )
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
 from app.db.models.world import World
 
 __all__ = [

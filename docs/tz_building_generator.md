@@ -486,7 +486,7 @@ else:
 
 ### 3.6 Поля entry_point / back_entry_point (на комнате)
 
-Оба поля используют `dataModel/structure/room/EntryPoint` — frozen Pydantic-модель
+Оба поля используют `dataModel/locations/structure/room/EntryPoint` — frozen Pydantic-модель
 с `extra="forbid"`. `wall` и `passage_type` обязательны; стена — только кардинальная,
 тип прохода — только `main_entrance` или `service_entrance`, `width >= 1`.
 `StructureTemplate` валидирует входы при импорте, сохраняя комнаты словарями;

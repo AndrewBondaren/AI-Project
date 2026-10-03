@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
-from app.dataModel.structure.enums.passageType import PassageType
+from app.dataModel.locations.structure.enums.passageType import PassageType
 
 DEFAULT_DOORWAY_WIDTH = 1
 DEFAULT_ARCHWAY_WIDTH = 2

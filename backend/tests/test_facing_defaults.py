@@ -7,7 +7,7 @@ from random import Random
 
 from app.core.generationLogging import generation_world_log
 from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing
-from app.dataModel.structure.room.shapeParams import ResolvedStemWall
+from app.dataModel.locations.structure.room.shapeParams import ResolvedStemWall
 from app.application.worldData.generators.structure.shapes import footprint_t_shape, room_footprint
 from app.application.worldData.generators.structure.room.roomFactory import instantiate_level_rooms
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService

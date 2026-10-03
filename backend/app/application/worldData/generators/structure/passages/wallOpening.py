@@ -13,7 +13,7 @@ import math
 from random import Random
 
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.room.wallOpeningSpec import WallOpeningSpec
+from app.dataModel.locations.structure.room.wallOpeningSpec import WallOpeningSpec
 from app.application.worldData.generators.structure.cellFactory import _opening_cell
 from app.application.worldData.generators.utils.materialResolver import resolve_material
 from app.application.worldData.generators.utils.tierResolver import TierResolver
@@ -23,7 +23,7 @@ from app.application.worldData.generators.structure.passages.wallOpeningResolver
     compute_exterior_wall_profiles,
 )
 from app.application.worldData.generators.structure.passages.wallZAdjuster import ZADJUSTER_BY_TYPE
-from app.dataModel.structure.enums.buildingElement import (
+from app.dataModel.locations.structure.enums.buildingElement import (
     DOOR_BUILDING_ELEMENTS,
     StructureElement,
 )

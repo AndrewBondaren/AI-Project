@@ -12,9 +12,9 @@ from random import Random
 
 from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
-from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.enums.staircaseType import (
+from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.enums.staircaseType import (
     StaircaseType,
     default_shaft_size_type,
     requires_shaft,
@@ -22,7 +22,7 @@ from app.dataModel.structure.enums.staircaseType import (
 from app.application.worldData.generators.structure.staircase.uShape.uShapeHelper import (
     u_shape_march_depth,
 )
-from app.dataModel.structure.enums.staircaseSize import (
+from app.dataModel.locations.structure.enums.staircaseSize import (
     default_shaft_footprint_min,
     staircase_footprint_min,
 )

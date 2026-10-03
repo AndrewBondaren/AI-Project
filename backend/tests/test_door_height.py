@@ -12,8 +12,8 @@ from app.application.worldData.generators.structure.passages.doorHeight import r
 from app.application.worldData.generators.structure.passages.entry import _resolve_entry_height
 from app.application.worldData.generators.structure.passages.doorway import _build_doorway
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
-from app.dataModel.structure.room.entryPoint import EntryPoint
-from app.dataModel.structure.building.roomConnection import RoomConnection
+from app.dataModel.locations.structure.room.entryPoint import EntryPoint
+from app.dataModel.locations.structure.building.roomConnection import RoomConnection
 from app.db.models.locationLevel import LocationLevel
 from tests.structureWire import room_wire
 from tests.test_structure_orientation import simple_structure, test_world_building

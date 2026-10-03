@@ -10,9 +10,9 @@ from app.application.worldData.debugStructureRotations import RotationProbe, com
 from app.application.worldData.generators.structure.errors import GenerationError
 from app.application.worldData.generators.structure.structureOrientation import StructureOrientation, entry_orientation
 from app.dataModel.spatial.facing import Facing, CARDINAL_FACINGS
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.enums.attachWall import AttachWall
-from app.dataModel.structure.room.entryPoint import EntryPoint
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.enums.attachWall import AttachWall
+from app.dataModel.locations.structure.room.entryPoint import EntryPoint
 from app.db.models.mapCell import MapCell
 from app.db.models.locationPassage import LocationPassage
 from app.db.models.namedLocation import NamedLocation

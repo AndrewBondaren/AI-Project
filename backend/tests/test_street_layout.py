@@ -7,8 +7,8 @@ import unittest
 from app.application.jsonValidation.resolve import resolve_model
 from app.dataModel.annotationPolicy import unwrap_wire_type
 from app.dataModel.roads.enums.streetLayout import StreetLayout
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
     WorldDistrictTemplateRegistry,
 )
 

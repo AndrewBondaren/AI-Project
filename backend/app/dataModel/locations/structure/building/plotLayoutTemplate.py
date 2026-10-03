@@ -23,13 +23,13 @@ from app.dataModel.flora.enums.cropKind import CropKind
 from app.dataModel.livestock.enums.livestockKind import LivestockKind
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.resources.enums.resourceKind import ResourceKind
-from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
+from app.dataModel.locations.settlement.area.perimeterBarrier import PerimeterBarrier
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 from app.dataModel.shared.ranges import EconomicTierRange
-from app.dataModel.structure.building.buildingBodyTemplate import BuildingBodyTemplate
-from app.dataModel.structure.building.occupiedFootprint import OccupiedFootprintSpec
-from app.dataModel.structure.building.structureTemplate import StructureKey
-from app.dataModel.structure.enums.buildingPurpose import BuildingPurposeFamily
+from app.dataModel.locations.structure.building.buildingBodyTemplate import BuildingBodyTemplate
+from app.dataModel.locations.structure.building.occupiedFootprint import OccupiedFootprintSpec
+from app.dataModel.locations.structure.building.structureTemplate import StructureKey
+from app.dataModel.locations.structure.enums.buildingPurpose import BuildingPurposeFamily
 
 _LEGACY_BODY_KEYS = (
     "levels",

@@ -5,8 +5,8 @@ Subdomains: settlement (city registries + skeleton), district, area.
 Эталон: docs/tz_city_generation.md, docs/tz_assembler_hierarchy.md.
 """
 
-from app.dataModel.settlement.area import PerimeterBarrier, resolved_host_sides
-from app.dataModel.settlement.enums import (
+from app.dataModel.locations.settlement.area import PerimeterBarrier, resolved_host_sides
+from app.dataModel.locations.settlement.enums import (
     DEFAULT_BLOCK_SIZE_FINE,
     DistrictDensity,
     DistrictStreetRole,
@@ -15,7 +15,7 @@ from app.dataModel.settlement.enums import (
     RequiredStructurePosition,
     block_size_for_density,
 )
-from app.dataModel.settlement.settlement import (
+from app.dataModel.locations.settlement.settlement import (
     LocationMoodEntry,
     LocationMoodKey,
     SettlementSizeEntry,
@@ -29,7 +29,7 @@ from app.dataModel.settlement.settlement import (
     WorldSettlementSizeRegistry,
     WorldSettlementSpecializationRegistry,
 )
-from app.dataModel.settlement.district import (
+from app.dataModel.locations.settlement.district import (
     COUNT_WITHOUT_KEY,
     CellZone,
     DistrictConnection,

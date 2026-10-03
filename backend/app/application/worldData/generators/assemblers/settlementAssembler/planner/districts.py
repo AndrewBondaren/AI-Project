@@ -43,13 +43,13 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.settlement.district.requiredStructureResolve import (
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.settlement.district.requiredStructureResolve import (
     unhosted_settlement_types,
     union_required_structures,
 )
-from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
-from app.dataModel.structure.enums.buildingPurpose import (
+from app.dataModel.locations.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
+from app.dataModel.locations.structure.enums.buildingPurpose import (
     AllowedToken,
     BuildingPurposeFamily,
     leaves_for_family,

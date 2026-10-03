@@ -11,8 +11,8 @@ from app.application.worldData.generators.structure.structureGeneratorService im
     StructureGeneratorService,
     StructureLayout,
 )
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.building.buildingBodyTemplate import BuildingBodyTemplate
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.building.buildingBodyTemplate import BuildingBodyTemplate
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World

@@ -15,10 +15,10 @@ from app.application.worldData.buildingTemplateLibraryService import (
 )
 from app.dataModel.livestock.enums.livestockKind import LivestockKind
 from app.dataModel.livestock.worldLivestockRegistry import WorldLivestockRegistry
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.dataModel.structure.building.buildingTemplateOutline import BuildingTemplateOutline
-from app.dataModel.structure.building.worldBuildingLayoutDefaults import canonical_defaults
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.building.buildingTemplateOutline import BuildingTemplateOutline
+from app.dataModel.locations.structure.building.worldBuildingLayoutDefaults import canonical_defaults
 from app.db.models.world import World
 
 

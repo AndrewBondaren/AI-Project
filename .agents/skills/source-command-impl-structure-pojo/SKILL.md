@@ -20,7 +20,7 @@ Use this skill when the user asks to run the migrated source command `impl-struc
 1. [`.cursor/plans/entry-point-pojo-done.md`](../plans/entry-point-pojo-done.md) — **§6 инвентарь** (что чинить, по файлам/строкам); §1–2 — паттерн `EntryPoint` как образец; §4 — найденные расхождения.
 2. [`docs/tz_building_generator.md`](../../docs/tz_building_generator.md) §3.6 (entry_point — сделано), §3.7 (connections: поля, `door_height`, запрет `staircase`), §3.7b (staircases).
 3. [`docs/tz_staircase_generation.md`](../../docs/tz_staircase_generation.md) — поля `staircases[]` / ladder.
-4. Образец реализации (уже в коде): `dataModel/structure/room/entryPoint.py`, `dataModel/structure/enums/entryAccessType.py`, `StructureTemplate._validate_entry_points`, `roomFactory` parse → `GenerationError`.
+4. Образец реализации (уже в коде): `dataModel/locations/structure/room/entryPoint.py`, `dataModel/locations/structure/enums/entryAccessType.py`, `StructureTemplate._validate_entry_points`, `roomFactory` parse → `GenerationError`.
 5. Правила (нарушение = стоп): `dataModel-no-hardcode.mdc`, `layer-boundaries.mdc`, `plan-before-code.mdc` (**один срез за заход**: отчёт → «ок» мастера → следующий), `project-context.mdc` (DAG / backend / commit / schema = только `0001`).
 
 План важнее догадок. Противоречие план↔ТЗ — остановиться и спросить мастера.

@@ -6,15 +6,15 @@ import unittest
 
 from app.dataModel.annotationPolicy import unwrap_wire_type
 from app.dataModel.registryKey import RegistryKey
-from app.dataModel.settlement.district.cellZone import CellZone
-from app.dataModel.settlement.district.placementCondition import (
+from app.dataModel.locations.settlement.district.cellZone import CellZone
+from app.dataModel.locations.settlement.district.placementCondition import (
     PlacementCondition,
     PlacementConditionType,
 )
-from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
     WorldDistrictTemplateRegistry,
 )
-from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import (
+from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     WorldSettlementSizeRegistry,
 )
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry

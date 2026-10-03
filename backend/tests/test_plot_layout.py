@@ -16,14 +16,14 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     assemble_building_catalog,
 )
 from app.application.worldData.structureTemplateFsImport import load_structure_stdlib
-from app.dataModel.structure.building.plotLayoutTemplate import (
+from app.dataModel.locations.structure.building.plotLayoutTemplate import (
     PlotLayoutTemplate,
     plot_has_building,
     structure_ref_of,
 )
-from app.dataModel.structure.building.structureCatalog import StructureCatalog
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.enums.buildingPurpose import (
+from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.enums.buildingPurpose import (
     BuildingPurpose,
     BuildingPurposeFamily,
 )
@@ -70,7 +70,7 @@ def _plot(
 
 
 def _catalog(*pairs: tuple[PlotLayoutTemplate, StructureTemplate]):
-    from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
+    from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
 
     return BuildingCatalog.from_layouts(
         [plot for plot, _s in pairs],

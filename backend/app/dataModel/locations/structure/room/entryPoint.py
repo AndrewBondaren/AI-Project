@@ -6,8 +6,8 @@ from app.dataModel.annotationPolicy import (
 )
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing
-from app.dataModel.structure.enums.entryAccessType import EntryAccessType
-from app.dataModel.structure.enums.passageType import PassageType
+from app.dataModel.locations.structure.enums.entryAccessType import EntryAccessType
+from app.dataModel.locations.structure.enums.passageType import PassageType
 
 
 class EntryPoint(BaseModel):

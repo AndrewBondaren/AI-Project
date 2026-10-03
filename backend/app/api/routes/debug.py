@@ -21,7 +21,7 @@ from app.dataModel.spatial.facing import Facing
 from app.application.worldData.structureTemplateLibraryService import (
     StructureTemplateLibraryService,
 )
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.db.models.namedLocation import NamedLocation
 from datetime import datetime, timezone
 
@@ -53,7 +53,7 @@ async def debug_generate_structure_rotations(
     path: str | None = Form(default=None),
     container=Depends(get_container),
 ) -> JSONResponse:
-    from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+    from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
     from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import assemble_structure_catalog
     from app.application.worldData.debugStructureRotations import generate_rotations
 

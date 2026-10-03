@@ -11,11 +11,11 @@ from pydantic import ValidationError
 logger = logging.getLogger(__name__)
 
 from app.dataModel.materials import DEFAULT_WALL_MATERIAL
-from app.dataModel.structure.building.roomConnection import RoomConnection
-from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
-from app.dataModel.structure.building.levelDef import LevelDef
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.enums.passageType import PassageType
+from app.dataModel.locations.structure.building.roomConnection import RoomConnection
+from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
+from app.dataModel.locations.structure.building.levelDef import LevelDef
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.enums.passageType import PassageType
 from app.dataModel.spatial.facing import Facing
 from app.application.worldData.generators.structure.structureOrientation import entry_orientation, validate_facing
 from app.application.worldData.generators.utils.tierResolver import TierResolver
@@ -29,7 +29,7 @@ from app.application.worldData.generators.structure.room.roomInstance import _Ro
 from app.application.worldData.generators.structure.staircase.shaftFactory import (
     instantiate_shaft_rooms,
 )
-from app.dataModel.structure.enums.staircaseType import (
+from app.dataModel.locations.structure.enums.staircaseType import (
     requires_shaft,
 )
 from app.application.worldData.generators.structure.staircase.shaftPlacer import make_shaft_placer

@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from app.application.worldData.generators.assemblers.districtAssembler.connectionEntry import ConnectionEntry
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.settlement.district.requiredStructure import RequiredStructure
-from app.dataModel.structure.enums.buildingPurpose import AllowedToken
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.settlement.district.requiredStructure import RequiredStructure
+from app.dataModel.locations.structure.enums.buildingPurpose import AllowedToken
 
 
 @dataclass

@@ -9,18 +9,18 @@ from typing import ClassVar
 from pydantic import RootModel
 
 from app.dataModel.registryKey import RegistryKey
-from app.dataModel.structure.enums.buildingPurpose.catalog import (
+from app.dataModel.locations.structure.enums.buildingPurpose.catalog import (
     AllowedToken,
     BuildingPurpose,
     BuildingPurposeFamily,
     expand_allowed,
 )
-import app.dataModel.structure.enums.buildingPurpose.purposePackEntry as _entry_mod
-from app.dataModel.structure.enums.buildingPurpose.packs import (
+import app.dataModel.locations.structure.enums.buildingPurpose.purposePackEntry as _entry_mod
+from app.dataModel.locations.structure.enums.buildingPurpose.packs import (
     PurposePack,
     coerce_purpose_packs,
 )
-from app.dataModel.structure.enums.buildingPurpose.purposePackEntry import PurposePackEntry
+from app.dataModel.locations.structure.enums.buildingPurpose.purposePackEntry import PurposePackEntry
 
 logger = logging.getLogger(__name__)
 

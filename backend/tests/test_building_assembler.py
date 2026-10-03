@@ -14,9 +14,9 @@ from app.application.worldData.generators.structure.structureGeneratorService im
 from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.building.buildingBodyTemplate import BuildingBodyTemplate
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.building.buildingBodyTemplate import BuildingBodyTemplate
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.world import World

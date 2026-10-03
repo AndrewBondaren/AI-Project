@@ -4,7 +4,7 @@ import logging
 from app.application.worldData.generators.structure.cellBuilder import _interior
 from app.application.worldData.generators.structure.layoutEngine import _interior_overlaps
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
-from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
+from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
 from app.dataModel.spatial.facing import Facing, CARDINAL_WALL_OUTWARD_DELTA, opposite
 
 logger = logging.getLogger(__name__)

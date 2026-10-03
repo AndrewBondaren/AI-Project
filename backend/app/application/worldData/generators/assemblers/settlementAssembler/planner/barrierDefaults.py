@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.application.jsonValidation import barrier_templates
-from app.dataModel.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
+from app.dataModel.locations.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
 
 
 def lookup_barrier_template(

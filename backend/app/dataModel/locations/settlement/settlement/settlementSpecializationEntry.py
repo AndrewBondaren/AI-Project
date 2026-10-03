@@ -8,11 +8,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire, StrictOnWire
 from app.dataModel.registryKey import RegistryKey
-from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
-from app.dataModel.structure.enums.buildingPurpose.family import BuildingPurposeFamily
+from app.dataModel.locations.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
+from app.dataModel.locations.structure.enums.buildingPurpose.family import BuildingPurposeFamily
 
 if TYPE_CHECKING:
-    from app.dataModel.settlement.settlement.worldSettlementSpecializationRegistry import (
+    from app.dataModel.locations.settlement.settlement.worldSettlementSpecializationRegistry import (
         WorldSettlementSpecializationRegistry,
     )
 

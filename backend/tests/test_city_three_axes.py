@@ -60,38 +60,38 @@ from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
 from app.dataModel.locations.namedLocation import BundleNamedLocation
-from app.dataModel.settlement.enums.districtDensity import DistrictDensity
-from app.dataModel.settlement.settlement.settlementSizeEntry import SettlementSizeEntry
-from app.dataModel.settlement.settlement.settlementSkeleton import SettlementSkeleton
-from app.dataModel.settlement.settlement.settlementSpecializationBind import (
+from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
+from app.dataModel.locations.settlement.settlement.settlementSizeEntry import SettlementSizeEntry
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
+from app.dataModel.locations.settlement.settlement.settlementSpecializationBind import (
     SettlementSpecializationBind,
 )
-from app.dataModel.settlement.settlement.settlementSpecializationEntry import (
+from app.dataModel.locations.settlement.settlement.settlementSpecializationEntry import (
     SettlementSpecializationEntry,
 )
-from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import (
+from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     WorldSettlementSizeRegistry,
 )
-from app.dataModel.settlement.settlement.worldSettlementSpecializationRegistry import (
+from app.dataModel.locations.settlement.settlement.worldSettlementSpecializationRegistry import (
     WorldSettlementSpecializationRegistry,
 )
-from app.dataModel.settlement.district.cellZone import CellZone
-from app.dataModel.settlement.district.allowedStructureTypes import (
+from app.dataModel.locations.settlement.district.cellZone import CellZone
+from app.dataModel.locations.settlement.district.allowedStructureTypes import (
     allowed_fill_structure_types,
 )
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.settlement.district.requiredStructure import RequiredStructure
-from app.dataModel.settlement.district.requiredStructureResolve import (
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.settlement.district.requiredStructure import RequiredStructure
+from app.dataModel.locations.settlement.district.requiredStructureResolve import (
     resolve_required_layouts,
     union_required_structures,
 )
 from app.dataModel.resources.enums.resourceKind import ResourceKind
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.dataModel.structure.building.structureCatalog import StructureCatalog
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.building.buildingTemplateOutline import BuildingTemplateOutline
-from app.dataModel.structure.enums.buildingPurpose import BuildingPurposeFamily
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.building.buildingTemplateOutline import BuildingTemplateOutline
+from app.dataModel.locations.structure.enums.buildingPurpose import BuildingPurposeFamily
 from app.db.models.buildingTemplate import BuildingTemplateRow
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World

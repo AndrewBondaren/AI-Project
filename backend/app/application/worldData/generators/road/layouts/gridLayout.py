@@ -25,8 +25,8 @@ from app.application.worldData.generators.road.connectionPolicy import Connectio
 from app.application.worldData.generators.road.widthResolver import resolve_width
 from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
 from app.dataModel.connections.enums.graphLevel import GraphLevel
-from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
-from app.dataModel.settlement.enums.districtStreetRole import DistrictStreetRole
+from app.dataModel.locations.settlement.enums.districtEntryRole import DistrictEntryRole
+from app.dataModel.locations.settlement.enums.districtStreetRole import DistrictStreetRole
 from app.dataModel.spatial.facing import Facing, is_latitudinal_edge, is_meridional_edge
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode

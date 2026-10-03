@@ -7,7 +7,7 @@ import logging
 from app.utils.deterministicIds import scoped_rng
 
 from app.dataModel.spatial.facing import Facing, parse_facing
-from app.dataModel.structure.enums.buildingElement import StructureElement
+from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 from app.application.worldData.generators.structure.cellBuilder import _interior
 from app.application.worldData.generators.structure.cellFactory import (
     _stair_cell, _stair_anchor_cell, _stair_floor_cell,

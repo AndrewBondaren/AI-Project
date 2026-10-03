@@ -7,6 +7,27 @@ metadata:
   originSessionId: 633eddca-8d16-4119-94ab-ef548d071851
 ---
 
+## Package layout
+
+`dataModel/locations/` — корень домена «локации»: одна сущность
+`named_locations` покрывает всю иерархию `ScopeLevel`
+(settlement → district → area → building → room), поэтому поддомены
+живут под одним зонтиком, а не соседними корнями.
+
+| Подпакет | Содержание |
+|---|---|
+| `namedLocation/` | `BundleNamedLocation` — wire-модель NL |
+| `context/` | `ScopeLevel` (локационная ось), `LocationContext`, `cascadeParams` |
+| `locationType/` | `worlds.location_type_registry` POJO |
+| `enums/` | `borderCategory`, `entryRole`, `geographicSubtype` |
+| `locationFootprintPolicy.py` | политика fine-footprint |
+| `settlement/` | поселение/район/участок: skeleton, district/area templates, enums |
+| `structure/` | структуры: building/room/barrier шаблоны, enums (вкл. `buildingPurpose`) |
+
+`dataModel/cascade/` — домен-нейтральный механизм каскада (любая ось
+`ScopeAxis`), **не** часть домена: локационная ось и параметры
+объявлены в `locations/context/`.
+
 ## Два уровня карты
 
 **Уровень 1 — `map_cells`** — сырая матрица местности (sparse 3D grid):

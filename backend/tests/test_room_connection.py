@@ -8,13 +8,13 @@ from app.application.worldData.generators.structure.errors import GenerationErro
 from app.application.worldData.generators.structure.structureGeneratorService import (
     StructureGeneratorService,
 )
-from app.dataModel.structure.building.roomConnection import (
+from app.dataModel.locations.structure.building.roomConnection import (
     DEFAULT_ARCHWAY_WIDTH,
     DEFAULT_DOORWAY_WIDTH,
     RoomConnection,
 )
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.enums.passageType import PassageType
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.enums.passageType import PassageType
 
 _VALID = {"from_room": "hall", "to_room": "kitchen", "passage_type": "doorway"}
 _UID = "00000000-0000-4000-8000-000000000007"

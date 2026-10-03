@@ -10,10 +10,10 @@ from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.shared.ranges import IntMinMax
-from app.dataModel.structure.materialPick import MaterialPick
+from app.dataModel.locations.structure.materialPick import MaterialPick
 
 if TYPE_CHECKING:
-    from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
+    from app.dataModel.locations.structure.barrier.worldBarrierTemplateRegistry import (
         WorldBarrierTemplateRegistry,
     )
 

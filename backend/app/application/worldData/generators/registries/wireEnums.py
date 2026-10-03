@@ -17,13 +17,13 @@ from app.dataModel.roads.enums.bridgeSubtype import BridgeSubtype
 from app.dataModel.roads.enums.gapPolicy import GapPolicy
 from app.dataModel.roads.enums.sidewalkSide import SidewalkSide
 from app.dataModel.roads.enums.streetLayout import StreetLayout
-from app.dataModel.settlement.enums.districtDensity import DistrictDensity
-from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
+from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
+from app.dataModel.locations.settlement.enums.districtEntryRole import DistrictEntryRole
 from app.dataModel.shared.enums.measurementSystem import MeasurementSystem
 from app.dataModel.shared.enums.statConflictMode import StatConflictMode
-from app.dataModel.structure.enums.buildingContext import BuildingContext
-from app.dataModel.structure.enums.passageType import PassageType
-from app.dataModel.structure.enums.staircaseType import StaircaseType
+from app.dataModel.locations.structure.enums.buildingContext import BuildingContext
+from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.structure.enums.staircaseType import StaircaseType
 from app.dataModel.terrain.enums.cellStateCategory import CellStateCategory
 
 __all__ = [

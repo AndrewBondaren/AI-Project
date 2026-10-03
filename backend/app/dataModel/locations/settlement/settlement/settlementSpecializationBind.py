@@ -7,7 +7,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
-from app.dataModel.settlement.settlement.worldSettlementSpecializationRegistry import (
+from app.dataModel.locations.settlement.settlement.worldSettlementSpecializationRegistry import (
     SettlementSpecializationKey,
 )
 

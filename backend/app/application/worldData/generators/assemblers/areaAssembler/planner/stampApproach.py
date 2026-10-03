@@ -18,7 +18,7 @@ from app.application.worldData.generators.assemblers.buildingAssembler.structure
 from app.application.worldData.generators.terrain.relief.geom.geomResolve import partition_height
 from app.application.worldData.generators.utils.materialResolver import resolve_material
 from app.dataModel.materials import DEFAULT_FLOOR_MATERIAL, DEFAULT_ROAD_MATERIAL
-from app.dataModel.structure.enums.buildingElement import StructureElement
+from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation

@@ -6,15 +6,15 @@ import unittest
 
 from app.application.jsonValidation.resolve import resolve_model
 from app.dataModel.annotationPolicy import unwrap_wire_type
-from app.dataModel.settlement.district.requiredStructure import (
+from app.dataModel.locations.settlement.district.requiredStructure import (
     POSITION_ANY,
     POSITION_CENTER,
     RequiredStructure,
 )
-from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
     WorldDistrictTemplateRegistry,
 )
-from app.dataModel.settlement.enums.requiredStructurePosition import (
+from app.dataModel.locations.settlement.enums.requiredStructurePosition import (
     RequiredStructurePosition,
 )
 

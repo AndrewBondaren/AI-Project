@@ -7,8 +7,8 @@ from typing import ClassVar
 from pydantic import RootModel
 
 from app.dataModel.registryKey import RegistryKey
-from app.dataModel.settlement.settlement import settlementSizeEntry as _size_entry_mod
-from app.dataModel.settlement.settlement.settlementSizeEntry import SettlementSizeEntry
+from app.dataModel.locations.settlement.settlement import settlementSizeEntry as _size_entry_mod
+from app.dataModel.locations.settlement.settlement.settlementSizeEntry import SettlementSizeEntry
 
 
 class WorldSettlementSizeRegistry(RootModel[list[SettlementSizeEntry]]):

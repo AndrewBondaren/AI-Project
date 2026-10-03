@@ -12,14 +12,14 @@ from app.application.worldData.generators.assemblers.settlementAssembler.packing
     PackingStep,
     packing_warning,
 )
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.dataModel.structure.building.plotLayoutTemplate import (
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.locations.structure.building.plotLayoutTemplate import (
     PlotLayoutTemplate,
     plot_type_defaulted,
 )
-from app.dataModel.structure.building.structureCatalog import StructureCatalog
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.building.worldBuildingLayoutDefaults import canonical_defaults
+from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.building.worldBuildingLayoutDefaults import canonical_defaults
 from app.db.models.structureTemplate import StructureTemplateRow
 
 logger = logging.getLogger(__name__)

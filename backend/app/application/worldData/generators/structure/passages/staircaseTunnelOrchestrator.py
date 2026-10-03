@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from app.utils.deterministicIds import det_uuid as _det_uuid
 
-from app.dataModel.structure.enums.passageType import PassageType
+from app.dataModel.locations.structure.enums.passageType import PassageType
 from app.application.worldData.generators.structure.passages.wallBreachPlacer import WallBreachPlacer
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.staircase.surfaceCorridor import SurfaceCorridorBuilder

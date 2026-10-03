@@ -9,9 +9,9 @@ from app.application.worldData.generators.structure.staircase.uShape.uShape impo
 from app.application.worldData.generators.structure.staircase.uShape.uShapeHelper import _compute_u_params
 from app.application.worldData.generators.structure.passages.builder import build_passages
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
-from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
+from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
 from app.dataModel.spatial.facing import CARDINAL_WALL_OUTWARD_DELTA, Facing, opposite
-from app.dataModel.structure.enums.buildingElement import StructureElement
+from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 from app.db.models.mapCell import MapCell
 from app.db.models.locationLevel import LocationLevel
 from tests.test_u_shape_orientation_baseline import room

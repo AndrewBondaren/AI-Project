@@ -20,7 +20,7 @@ Use this skill when the user asks to run the migrated source command `impl-stair
 1. [`.cursor/plans/entry-point-pojo-done.md`](../plans/entry-point-pojo-done.md) — **§6.2 инвентарь** (файлы/места) + **§6.5** баг №3; §6.1 — статус сделанного `RoomConnection` (образец среза); §1–2 — паттерн.
 2. [`docs/tz_building_generator.md`](../../docs/tz_building_generator.md) §3.7b (поля `staircases[]`, defaults, `stops`), §3.7 (фолбэк `staircase`→`doorway` — уже сделан в 6.1).
 3. [`docs/tz_staircase_generation.md`](../../docs/tz_staircase_generation.md) — типы лестниц, ladder-поля, shaft-контракт.
-4. Образцы реализации (уже в коде): `dataModel/structure/building/roomConnection.py` (**ближайший образец** — тот же домен), `dataModel/structure/room/entryPoint.py`, `StructureTemplate._validate_connections`/`_validate_entry_points`, `StructureGeneratorService._resolve_connections`, `tests/test_room_connection.py`.
+4. Образцы реализации (уже в коде): `dataModel/locations/structure/building/roomConnection.py` (**ближайший образец** — тот же домен), `dataModel/locations/structure/room/entryPoint.py`, `StructureTemplate._validate_connections`/`_validate_entry_points`, `StructureGeneratorService._resolve_connections`, `tests/test_room_connection.py`.
 5. Правила (нарушение = стоп): `dataModel-no-hardcode.mdc`, `layer-boundaries.mdc`, `plan-before-code.mdc` (**один срез за заход**: отчёт → «ок» мастера), `project-context.mdc` (DAG / backend / commit / schema = только `0001`), логирование — один фасад `loggingConfig`: emit из `app.application.worldData.generators.*` (транскрипт + core/runtime), **не** из `app.dataModel.*`.
 
 План важнее догадок. Противоречие план↔ТЗ — остановиться и спросить мастера.

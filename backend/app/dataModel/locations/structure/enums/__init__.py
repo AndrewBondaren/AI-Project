@@ -1,4 +1,4 @@
-from app.dataModel.structure.enums.buildingPurpose import (
+from app.dataModel.locations.structure.enums.buildingPurpose import (
     DEFAULT_BUILDING_PURPOSES,
     DEFAULT_PURPOSE_MATCH,
     HOUSE,
@@ -18,7 +18,7 @@ from app.dataModel.structure.enums.buildingPurpose import (
     purposes_match,
     union_plot_purposes,
 )
-from app.dataModel.structure.enums.buildingElement import (
+from app.dataModel.locations.structure.enums.buildingElement import (
     DOOR_BUILDING_ELEMENTS,
     OUTDOOR_SHELL_ELEMENTS,
     PASSABLE_BUILDING_ELEMENTS,
@@ -29,9 +29,9 @@ from app.dataModel.structure.enums.buildingElement import (
     WALL_BUILDING_ELEMENTS,
     WALL_OPENING_ELEMENTS,
 )
-from app.dataModel.structure.enums.passageType import PassageType
-from app.dataModel.structure.enums.roomSize import RoomSize, RoomSizePreset
-from app.dataModel.structure.enums.staircaseSize import (
+from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.structure.enums.roomSize import RoomSize, RoomSizePreset
+from app.dataModel.locations.structure.enums.staircaseSize import (
     SPIRAL_SIZE_PRESETS,
     STRAIGHT_SIZE_PRESETS,
     USHAPE_SIZE_PRESETS,
@@ -43,7 +43,7 @@ from app.dataModel.structure.enums.staircaseSize import (
     default_shaft_footprint_min,
     staircase_footprint_min,
 )
-from app.dataModel.structure.enums.staircaseType import (
+from app.dataModel.locations.structure.enums.staircaseType import (
     StaircaseType,
     StaircaseTypeSpec,
     default_shaft_size_type,

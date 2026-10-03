@@ -10,10 +10,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 
 _FIXTURES_TEMPLATES = (
-    Path(__file__).resolve().parents[5] / "fixtures" / "templates"
+    Path(__file__).resolve().parents[6] / "fixtures" / "templates"
 )
 
 

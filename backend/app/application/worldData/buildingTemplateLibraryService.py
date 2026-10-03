@@ -10,12 +10,12 @@ from app.application.importResult import ImportResult
 from app.application.jsonValidation.worldRow import crops, livestock, resource_types
 from app.application.worldData.bundle.errors import BundleValidationError
 from app.application.worldData.worldService import WorldService
-from app.dataModel.structure.building.plotLayoutTemplate import (
+from app.dataModel.locations.structure.building.plotLayoutTemplate import (
     PlotLayoutTemplate,
     plot_type_defaulted,
 )
-from app.dataModel.structure.building.buildingTemplateOutline import BuildingTemplateOutline
-from app.dataModel.structure.building.buildingTemplateRegistryEntry import (
+from app.dataModel.locations.structure.building.buildingTemplateOutline import BuildingTemplateOutline
+from app.dataModel.locations.structure.building.buildingTemplateRegistryEntry import (
     BuildingTemplateRegistryEntry,
 )
 from app.db.models.buildingTemplate import BuildingTemplateRow

@@ -1,6 +1,6 @@
 """Re-export district density / block size contract from dataModel."""
 
-from app.dataModel.settlement.enums.districtDensity import (
+from app.dataModel.locations.settlement.enums.districtDensity import (
     DEFAULT_BLOCK_SIZE_FINE,
     DistrictDensity,
     block_size_for_density,

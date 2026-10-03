@@ -5,9 +5,9 @@ from __future__ import annotations
 import unittest
 
 from app.dataModel.locations.namedLocation import BundleNamedLocation
-from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
-from app.dataModel.settlement.enums.districtDensity import DistrictDensity
-from app.dataModel.settlement.settlement.settlementSkeleton import SettlementSkeleton
+from app.dataModel.locations.settlement.area.perimeterBarrier import PerimeterBarrier
+from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 
 
 class BundleNamedLocationWireTests(unittest.TestCase):

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 
 Rect = tuple[int, int, int, int]
 

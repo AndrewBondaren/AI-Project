@@ -7,12 +7,12 @@ from typing import ClassVar
 from pydantic import RootModel
 
 from app.dataModel.registryKey import RegistryKey
-import app.dataModel.settlement.settlement.settlementSpecializationEntry as _entry_mod
-from app.dataModel.settlement.settlement.settlementSpecializationEntry import (
+import app.dataModel.locations.settlement.settlement.settlementSpecializationEntry as _entry_mod
+from app.dataModel.locations.settlement.settlement.settlementSpecializationEntry import (
     SettlementSpecializationEntry,
 )
-from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
-from app.dataModel.structure.enums.buildingPurpose.family import BuildingPurposeFamily
+from app.dataModel.locations.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
+from app.dataModel.locations.structure.enums.buildingPurpose.family import BuildingPurposeFamily
 
 
 class WorldSettlementSpecializationRegistry(RootModel[list[SettlementSpecializationEntry]]):

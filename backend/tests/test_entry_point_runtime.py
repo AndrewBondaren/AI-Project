@@ -8,8 +8,8 @@ from app.application.worldData.generators.structure.errors import GenerationErro
 from app.application.worldData.generators.structure.room.roomFactory import instantiate_level_rooms
 from app.application.worldData.generators.structure.passages.entry import _build_entry_point, _resolve_entry_height
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.room.entryPoint import EntryPoint
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.room.entryPoint import EntryPoint
 from app.db.models.locationLevel import LocationLevel
 from tests.test_structure_orientation import simple_structure, test_world_building
 from tests.test_u_shape_orientation_baseline import room

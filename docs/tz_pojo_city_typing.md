@@ -1,7 +1,7 @@
 # dataModel — типизация city POJO (`str` → RegistryKey / ENUM-E)
 
 **Тип:** инженерное ТЗ / living registry. Не алгоритм generate.  
-**Scope:** POJO города в `backend/app/dataModel/settlement/` + зеркала (`CitySkeleton`, `BundleNamedLocation` overlay, `EconomicTierRange`, layout `economic_tier`).  
+**Scope:** POJO города в `backend/app/dataModel/locations/settlement/` + зеркала (`CitySkeleton`, `BundleNamedLocation` overlay, `EconomicTierRange`, layout `economic_tier`).
 **Не это ТЗ:** дубли литералов SoT — [`tz_datamodel_pojo_discrepancies.md`](./tz_datamodel_pojo_discrepancies.md) (`POJO-D-*`); nested generate `list[dict]` — **POJO-D-16**.  
 **Словарь wire:** [`tz_json_validation.md`](./tz_json_validation.md) §0 `RegistryKey[R]` / ENUM-E / REF-W.  
 **Продукт города:** [`tz_city_generation.md`](./tz_city_generation.md).  

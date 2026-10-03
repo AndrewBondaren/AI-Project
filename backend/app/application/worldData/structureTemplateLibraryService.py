@@ -17,7 +17,7 @@ from app.application.worldData.structureTemplateErrors import (
     StructureTemplateNotFoundError,
     StructureTemplateValidationError,
 )
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.db.models.structureTemplate import StructureTemplateRow
 from app.db.repositories.iStructureTemplateRepository import IStructureTemplateRepository
 

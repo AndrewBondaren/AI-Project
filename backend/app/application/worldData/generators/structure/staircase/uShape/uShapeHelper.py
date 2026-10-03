@@ -7,7 +7,7 @@ from random import Random
 from dataclasses import dataclass
 
 from app.dataModel.spatial.facing import Facing, NS_FACINGS, parse_facing
-from app.dataModel.structure.enums.buildingElement import StructureElement
+from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 from app.application.worldData.generators.structure.staircase.facingHelper import _V_INIT
 
 _NS = NS_FACINGS

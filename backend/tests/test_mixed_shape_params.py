@@ -12,8 +12,8 @@ from app.application.worldData.generators.structure.shapes import (
 )
 from app.application.worldData.generators.structure.shapeType import ShapeType
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
-from app.dataModel.structure.room.roomDef import RoomDef
-from app.dataModel.structure.building.levelDef import LevelDef
+from app.dataModel.locations.structure.room.roomDef import RoomDef
+from app.dataModel.locations.structure.building.levelDef import LevelDef
 from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing
 from tests.structureWire import room_wire
 from tests.test_structure_orientation import simple_structure, test_world_building

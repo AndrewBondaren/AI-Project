@@ -14,7 +14,7 @@ Use this skill when the user asks to run the migrated source command `impl-wall-
 
 1. [`.cursor/plans/entry-point-pojo-done.md`](../plans/entry-point-pojo-done.md) — **§6.7** (контракт среза), статусы 6.1–6.6 (сданы; паттерны подмен: `_attach_wall_substitution` в RoomDef, `ResolvedStemWall`).
 2. [`docs/tz_building_generator.md`](../../docs/tz_building_generator.md) — §3.2 поле `wall_openings` (~§282), **§3.10–3.11**: граница authored/algorithmic (позиции/количество — всегда алгоритм; authored = только `opening_type`/`frame_material`/`glass_material`/`window_z`; невалидное/отсутствие → auto-resolve + ERROR), статус-блок «не реализовано», `window_z_ratio`/`window_z_offset` на template/level (~§186, §210).
-3. Код: `passages/wallOpening.py` (`place_wall_openings` — единственный потребитель: `element = StructureElement.WINDOW` хардкод OQ-17, `_GLASS_USE_TYPE`, `zadjuster.resolve`, `_opening_cell`), `passages/wallZAdjuster.py` (`ZADJUSTER_BY_TYPE`, `ProportionalWindowHeight`, `MiddleCellZAdjuster`), `dataModel/structure/room/roomDef.py` (`wall_openings: list[dict]` + substitution-паттерн), `dataModel/structure/enums/buildingElement.py` (`WALL_OPENING_ELEMENTS`), `room/roomFactory.py` (создание `_RoomInstance`), `room/roomInstance.py` (`wall_openings: list[dict]`), `cellFactory._opening_cell`.
+3. Код: `passages/wallOpening.py` (`place_wall_openings` — единственный потребитель: `element = StructureElement.WINDOW` хардкод OQ-17, `_GLASS_USE_TYPE`, `zadjuster.resolve`, `_opening_cell`), `passages/wallZAdjuster.py` (`ZADJUSTER_BY_TYPE`, `ProportionalWindowHeight`, `MiddleCellZAdjuster`), `dataModel/locations/structure/room/roomDef.py` (`wall_openings: list[dict]` + substitution-паттерн), `dataModel/locations/structure/enums/buildingElement.py` (`WALL_OPENING_ELEMENTS`), `room/roomFactory.py` (создание `_RoomInstance`), `room/roomInstance.py` (`wall_openings: list[dict]`), `cellFactory._opening_cell`.
 4. Правила: `dataModel-no-hardcode.mdc`, `layer-boundaries.mdc`, `plan-before-code.mdc` (один срез → отчёт → «ок» мастера), `project-context.mdc` (не стартовать backend, не коммитить).
 
 ## Цель
@@ -23,7 +23,7 @@ Use this skill when the user asks to run the migrated source command `impl-wall-
 
 ## Спецификация (контракт §3.11 ТЗ — не менять)
 
-**POJO `WallOpeningSpec`** (`dataModel/structure/room/wallOpeningSpec.py`, frozen, extra=forbid):
+**POJO `WallOpeningSpec`** (`dataModel/locations/structure/room/wallOpeningSpec.py`, frozen, extra=forbid):
 
 | Поле | Тип | Дефолт / fallback |
 |---|---|---|

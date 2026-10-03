@@ -13,7 +13,7 @@ import math
 import logging
 
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.room.shapeParams import ResolvedStemWall
+from app.dataModel.locations.structure.room.shapeParams import ResolvedStemWall
 
 logger = logging.getLogger(__name__)
 

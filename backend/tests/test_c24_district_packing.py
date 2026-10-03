@@ -29,7 +29,7 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorOrchestrator i
 )
 from app.application.worldData.settlementOutdoor.settlementOutdoorPackingJob import SettlementOutdoorPackingJob
 from app.application.worldData.generators.structure.errors import GenerationError
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
 from app.application.worldData.settlementOutdoor.settlementOutdoorSkip import (
     packing_queue,
     should_skip_materialize,
@@ -45,7 +45,7 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorTypes import (
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
-from app.dataModel.settlement.district.districtTopologySlot import DistrictTopologySlot
+from app.dataModel.locations.settlement.district.districtTopologySlot import DistrictTopologySlot
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.worldPack.settlementStructureWire import (
     AreaSlotWire,

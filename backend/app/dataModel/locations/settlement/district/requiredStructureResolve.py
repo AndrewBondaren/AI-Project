@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from app.dataModel.settlement.district.allowedStructureTypes import district_hosts_purpose
-from app.dataModel.settlement.district.requiredStructure import RequiredStructure
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.dataModel.structure.enums.buildingPurpose import (
+from app.dataModel.locations.settlement.district.allowedStructureTypes import district_hosts_purpose
+from app.dataModel.locations.settlement.district.requiredStructure import RequiredStructure
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.enums.buildingPurpose import (
     AllowedToken,
     BuildingPurpose,
 )

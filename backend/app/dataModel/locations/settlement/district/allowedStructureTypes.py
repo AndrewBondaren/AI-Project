@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 
-from app.dataModel.structure.enums.buildingPurpose import (
+from app.dataModel.locations.structure.enums.buildingPurpose import (
     AllowedToken,
     BuildingPurpose,
     BuildingPurposeMatch,

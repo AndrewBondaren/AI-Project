@@ -1,10 +1,10 @@
-from app.dataModel.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
-from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
+from app.dataModel.locations.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
+from app.dataModel.locations.structure.barrier.worldBarrierTemplateRegistry import (
     BarrierTemplateKey,
     WorldBarrierTemplateRegistry,
 )
-from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
-import app.dataModel.settlement.area.perimeterBarrier as _pb_mod
+from app.dataModel.locations.settlement.area.perimeterBarrier import PerimeterBarrier
+import app.dataModel.locations.settlement.area.perimeterBarrier as _pb_mod
 
 _pb_mod.WorldBarrierTemplateRegistry = WorldBarrierTemplateRegistry
 PerimeterBarrier.model_rebuild()

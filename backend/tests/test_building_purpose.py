@@ -12,23 +12,23 @@ from app.application.jsonValidation.worldRow import (
     purpose_pack_registry,
     purpose_packs,
 )
-from app.dataModel.settlement.district.allowedStructureTypes import (
+from app.dataModel.locations.settlement.district.allowedStructureTypes import (
     allowed_fill_structure_types,
     district_hosts_purpose,
 )
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.settlement.district.requiredStructure import RequiredStructure
-from app.dataModel.settlement.district.requiredStructureResolve import (
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.settlement.district.requiredStructure import RequiredStructure
+from app.dataModel.locations.settlement.district.requiredStructureResolve import (
     resolve_required_layouts,
     unhosted_settlement_types,
     union_required_structures,
 )
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.dataModel.structure.building.structureCatalog import StructureCatalog
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.building.buildingTemplateOutline import BuildingTemplateOutline
-from app.dataModel.structure.enums.buildingPurpose import (
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.building.buildingTemplateOutline import BuildingTemplateOutline
+from app.dataModel.locations.structure.enums.buildingPurpose import (
     FAMILY_OF,
     BuildingPurpose,
     BuildingPurposeFamily,
@@ -384,7 +384,7 @@ class PurposeTreeAndPacksTest(unittest.TestCase):
         )
 
     def test_leaves_for_family_intersect_enabled(self) -> None:
-        from app.dataModel.structure.enums.buildingPurpose import leaves_for_family
+        from app.dataModel.locations.structure.enums.buildingPurpose import leaves_for_family
         fantasy = purposes_for_world(None)
         extract = leaves_for_family(BuildingPurposeFamily.EXTRACT, fantasy)
         self.assertEqual(
@@ -505,7 +505,7 @@ class PurposeTreeAndPacksTest(unittest.TestCase):
         )
 
     def test_pack_recipes_use_family_and_leaf_enums(self) -> None:
-        import app.dataModel.structure.enums.buildingPurpose.catalog as catalog_mod
+        import app.dataModel.locations.structure.enums.buildingPurpose.catalog as catalog_mod
 
         self.assertFalse(hasattr(catalog_mod, "PACK_PURPOSES"))
         base = WorldPurposePackRegistry.canonical_defaults().entry_for("base")

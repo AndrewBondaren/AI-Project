@@ -29,9 +29,9 @@ from app.application.worldData.generators.structure.structureGeneratorService im
     StructureLayout,
 )
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.enums.buildingPurpose import BuildingPurpose
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 

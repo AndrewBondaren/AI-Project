@@ -14,7 +14,7 @@ Use this skill when the user asks to run the migrated source command `impl-door-
 
 1. [`.cursor/plans/entry-point-pojo-done.md`](../plans/entry-point-pojo-done.md) — **§6.9** (таблица «сейчас → надо», контракт общего резолвера), статусы 6.1–6.8 (сданы).
 2. [`docs/tz_building_generator.md`](../../docs/tz_building_generator.md) — §505–543 (entry `door_height`: авто-резолв, формула, «явное ниже предела → авто-резолв, не clamp»), §627 (connections: тот же резолв, `z_height = min(from_room.z_height, to_room.z_height)`), §186–188 (`door_height_ratio` default 0.75, `door_height_max` default 5 на `StructureTemplate`).
-3. Код: `passages/entry.py` (`_resolve_entry_height` — clamp `max(height, passage_height)` применён и к явному), `passages/doorway.py:41` (`max(conn.door_height or passage_height, passage_height)`), `passages/builder.py` (`build_passages` уже принимает `template`, вызов `_build_doorway` ~строка 104), `dataModel/structure/building/roomConnection.py` (`conn.door_height`), `entryPoint.py` (`ep.door_height`), `DEFAULT_DOOR_HEIGHT_RATIO/MAX` — найти где объявлены.
+3. Код: `passages/entry.py` (`_resolve_entry_height` — clamp `max(height, passage_height)` применён и к явному), `passages/doorway.py:41` (`max(conn.door_height or passage_height, passage_height)`), `passages/builder.py` (`build_passages` уже принимает `template`, вызов `_build_doorway` ~строка 104), `dataModel/locations/structure/building/roomConnection.py` (`conn.door_height`), `entryPoint.py` (`ep.door_height`), `DEFAULT_DOOR_HEIGHT_RATIO/MAX` — найти где объявлены.
 4. Правила: `dataModel-no-hardcode.mdc`, `layer-boundaries.mdc`, `plan-before-code.mdc` (один срез → отчёт → «ок» мастера), `project-context.mdc` (не стартовать backend, не коммитить).
 
 ## Цель

@@ -20,9 +20,9 @@ from app.application.worldData.generators.structure.layoutEntry import (
     blocks_entries, entries_exterior, resolve_entry_walls,
 )
 from app.dataModel.spatial.facing import Facing, GRID_OUTWARD_DELTA
-from app.dataModel.structure.enums.attachWall import AttachWall
-from app.dataModel.structure.building.roomConnection import RoomConnection
-from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
+from app.dataModel.locations.structure.enums.attachWall import AttachWall
+from app.dataModel.locations.structure.building.roomConnection import RoomConnection
+from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.utils.deterministicIds import scoped_rng
 

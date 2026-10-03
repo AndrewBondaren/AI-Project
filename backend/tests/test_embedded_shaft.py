@@ -9,9 +9,9 @@ from app.application.worldData.generators.structure.staircase.shaftPlacer import
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from app.application.worldData.generators.structure.cellBuilder import _interior, pass3_interior_walls
 from app.application.worldData.generators.structure.passages.archway import _build_archway
-from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.enums.buildingElement import StructureElement
+from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 from app.dataModel.spatial.facing import Facing, INTERCARDINAL_FACINGS, CARDINAL_FACINGS
 from app.utils.deterministicIds import scoped_rng, det_uuid
 from tests.structureWire import room_wire, level_wire

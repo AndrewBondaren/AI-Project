@@ -4,8 +4,8 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field, AfterValidator, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire
-from app.dataModel.structure.enums.roomSize import RoomSize, RoomSizePreset
-from app.dataModel.structure.enums.staircaseSize import StaircaseSizePreset, all_staircase_size_presets
+from app.dataModel.locations.structure.enums.roomSize import RoomSize, RoomSizePreset
+from app.dataModel.locations.structure.enums.staircaseSize import StaircaseSizePreset, all_staircase_size_presets
 
 DEFAULT_EXPLICIT_Z_RANGE = (3, 3)
 

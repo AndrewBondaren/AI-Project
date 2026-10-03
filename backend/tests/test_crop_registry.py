@@ -15,10 +15,10 @@ from app.application.worldData.buildingTemplateLibraryService import (
 )
 from app.dataModel.flora.enums.cropKind import CropKind
 from app.dataModel.flora.worldCropsRegistry import WorldCropsRegistry
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.dataModel.structure.building.buildingTemplateOutline import BuildingTemplateOutline
-from app.dataModel.structure.building.worldBuildingLayoutDefaults import canonical_defaults
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.building.buildingTemplateOutline import BuildingTemplateOutline
+from app.dataModel.locations.structure.building.worldBuildingLayoutDefaults import canonical_defaults
 from app.db.models.world import World
 
 

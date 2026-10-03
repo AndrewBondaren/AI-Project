@@ -3,7 +3,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, ValidationError, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire
-from app.dataModel.structure.enums.buildingElement import StructureElement, WALL_OPENING_ELEMENTS
+from app.dataModel.locations.structure.enums.buildingElement import StructureElement, WALL_OPENING_ELEMENTS
 
 
 class WallOpeningSpec(BaseModel):

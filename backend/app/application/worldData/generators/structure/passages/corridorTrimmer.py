@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
-from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
+from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
 
 logger = logging.getLogger(__name__)
 

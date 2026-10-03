@@ -21,7 +21,7 @@ from app.application.worldData.generators.road.blockSize import block_size_for_d
 from app.application.worldData.generators.road.connectionPolicy import (
     sidewalk_of,
 )
-from app.dataModel.settlement.district.districtConnection import street_classes_for
+from app.dataModel.locations.settlement.district.districtConnection import street_classes_for
 from app.application.worldData.generators.road.sidewalkWidthResolver import resolve_sidewalk_width
 from app.application.worldData.generators.road.roadTravelResolver import effective_travel_modifier
 from app.application.worldData.generators.road.widthResolver import resolve_width
@@ -31,10 +31,10 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
 )
 from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
 from app.dataModel.connections.enums.graphLevel import GraphLevel
-from app.dataModel.settlement.enums.districtDensity import DistrictDensity
-from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
+from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
+from app.dataModel.locations.settlement.enums.districtEntryRole import DistrictEntryRole
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.settlement.district.districtConnection import street_classes_for
+from app.dataModel.locations.settlement.district.districtConnection import street_classes_for
 from app.dataModel.materials import DEFAULT_ROAD_MATERIAL
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode

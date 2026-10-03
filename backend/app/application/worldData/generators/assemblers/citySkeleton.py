@@ -5,16 +5,16 @@ from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import
 )
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 from app.dataModel.materials.worldMaterialRegistry import MaterialKey
-from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
-from app.dataModel.settlement.enums.districtDensity import DistrictDensity
-from app.dataModel.settlement.settlement.settlementSkeleton import SettlementSkeleton
-from app.dataModel.settlement.settlement.settlementSpecializationBind import (
+from app.dataModel.locations.settlement.area.perimeterBarrier import PerimeterBarrier
+from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
+from app.dataModel.locations.settlement.settlement.settlementSpecializationBind import (
     SettlementSpecializationBind,
 )
-from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
-from app.dataModel.settlement.settlement.worldLocationMoodRegistry import LocationMoodKey
-from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
-from app.dataModel.structure.building.plotLayoutTemplate import DrawingKey
+from app.dataModel.locations.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
+from app.dataModel.locations.settlement.settlement.worldLocationMoodRegistry import LocationMoodKey
+from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
+from app.dataModel.locations.structure.building.plotLayoutTemplate import DrawingKey
 from app.db.models.namedLocation import NamedLocation
 
 

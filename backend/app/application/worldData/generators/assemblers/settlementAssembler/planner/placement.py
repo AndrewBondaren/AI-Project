@@ -15,13 +15,13 @@ from app.application.worldData.generators.utils.tierRegistry import (
     tier_at_least,
     tier_at_most,
 )
-from app.dataModel.settlement.district.cellZone import CellZone
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.settlement.district.placementCondition import (
+from app.dataModel.locations.settlement.district.cellZone import CellZone
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.settlement.district.placementCondition import (
     PlacementCondition,
     PlacementConditionType,
 )
-from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
+from app.dataModel.locations.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World

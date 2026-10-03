@@ -26,13 +26,13 @@ from app.application.jsonValidation.worldSlices import (
     slice_for_pojo,
 )
 from app.dataModel import WorldHydrology, WorldMaterialRegistry, WorldTerrainRegistry
-from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
     WorldDistrictTemplateRegistry,
 )
-from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
+from app.dataModel.locations.structure.barrier.worldBarrierTemplateRegistry import (
     WorldBarrierTemplateRegistry,
 )
-from app.dataModel.structure.enums.buildingPurpose import (
+from app.dataModel.locations.structure.enums.buildingPurpose import (
     BuildingPurpose,
     BuildingPurposeFamily,
     WorldPurposePackRegistry,

@@ -7,7 +7,7 @@ from typing import ClassVar
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire
-from app.dataModel.settlement.district.cellZone import CellZone
+from app.dataModel.locations.settlement.district.cellZone import CellZone
 
 
 class DistrictZonePreferenceEntry(BaseModel):

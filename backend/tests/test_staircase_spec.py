@@ -10,9 +10,9 @@ from app.application.worldData.generators.structure.errors import GenerationErro
 from app.application.worldData.generators.structure.structureGeneratorService import (
     StructureGeneratorService,
 )
-from app.dataModel.structure.building.staircaseSpec import ShaftSize, StaircaseSpec
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.enums.staircaseType import StaircaseType
+from app.dataModel.locations.structure.building.staircaseSpec import ShaftSize, StaircaseSpec
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.enums.staircaseType import StaircaseType
 
 _VALID = {"stops": ["hall", "corridor"]}
 _UID = "00000000-0000-4000-8000-000000000009"

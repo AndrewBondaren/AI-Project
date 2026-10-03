@@ -10,7 +10,7 @@ from app.dataModel.spatial.facing import (
     INTERCARDINAL_FACINGS,
     coerce_facing_wire,
 )
-from app.dataModel.structure.enums.staircaseType import StaircaseType
+from app.dataModel.locations.structure.enums.staircaseType import StaircaseType
 
 EMBED_AT_CENTER = "center"
 _EMBED_AT_KEYS = frozenset(

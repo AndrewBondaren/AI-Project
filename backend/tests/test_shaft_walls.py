@@ -8,7 +8,7 @@ from app.application.worldData.generators.structure.cellBuilder import (
     _interior, pass2_floors, pass3_interior_walls,
 )
 from app.application.worldData.generators.structure.passages.archway import _build_archway
-from app.dataModel.structure.enums.buildingElement import StructureElement
+from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 from tests import test_embedded_shaft
 from tests.test_structure_orientation import test_world_building
 from tests.test_u_shape_orientation_baseline import room

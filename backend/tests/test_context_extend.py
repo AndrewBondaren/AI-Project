@@ -20,16 +20,16 @@ from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.namedLocation.bundleNamedLocation import (
     BundleNamedLocation,
 )
-from app.dataModel.settlement.district.districtTemplateEntry import (
+from app.dataModel.locations.settlement.district.districtTemplateEntry import (
     DistrictTemplateEntry,
 )
-from app.dataModel.settlement.settlement.settlementSkeleton import (
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import (
     SettlementSkeleton,
 )
-from app.dataModel.structure.building.plotLayoutTemplate import (
+from app.dataModel.locations.structure.building.plotLayoutTemplate import (
     PlotLayoutTemplate,
 )
-from app.dataModel.structure.room.roomDef import RoomDef
+from app.dataModel.locations.structure.room.roomDef import RoomDef
 from app.db.models.world import World
 
 

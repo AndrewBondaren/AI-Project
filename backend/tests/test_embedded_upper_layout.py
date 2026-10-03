@@ -12,8 +12,8 @@ from app.application.worldData.generators.structure.cellBuilder import pass2_flo
 from app.application.worldData.generators.structure.passages.corridorTrimmer import trim_corridor_rooms
 from app.core.generationLogging import generation_world_log
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
-from app.dataModel.structure.enums.buildingElement import StructureElement
+from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
+from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 from tests import test_embedded_shaft
 from tests.test_structure_orientation import test_world_building
 from tests.test_u_shape_orientation_baseline import room

@@ -7,8 +7,8 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
     DistrictTemplateKey,
 )
 

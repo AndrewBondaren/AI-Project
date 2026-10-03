@@ -5,12 +5,12 @@ Structure templates ≠ settlement layout; settlement references structure via t
 Эталон: docs/tz_building_generator.md, docs/tz_locations.md § structure generation.
 """
 
-from app.dataModel.structure.barrier import (
+from app.dataModel.locations.structure.barrier import (
     BarrierTemplateEntry,
     BarrierTemplateKey,
     WorldBarrierTemplateRegistry,
 )
-from app.dataModel.structure.building import (
+from app.dataModel.locations.structure.building import (
     BuildingBodyTemplate,
     BuildingCatalog,
     BuildingTemplateOutline,
@@ -27,7 +27,7 @@ from app.dataModel.structure.building import (
     plot_type_defaulted,
     structure_ref_of,
 )
-from app.dataModel.structure.enums import (
+from app.dataModel.locations.structure.enums import (
     DEFAULT_BUILDING_PURPOSES,
     DEFAULT_PURPOSE_MATCH,
     HOUSE,
@@ -65,8 +65,8 @@ from app.dataModel.structure.enums import (
     requires_shaft,
     staircase_footprint_min,
 )
-from app.dataModel.structure.materialPick import MaterialPick
-from app.dataModel.structure.room import RoomTypeEntry, WorldRoomTypeRegistry
+from app.dataModel.locations.structure.materialPick import MaterialPick
+from app.dataModel.locations.structure.room import RoomTypeEntry, WorldRoomTypeRegistry
 
 __all__ = [
     "BarrierTemplateEntry",

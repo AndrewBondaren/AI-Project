@@ -23,7 +23,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.packing
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.barrierDefaults import (
     lookup_barrier_template,
 )
-from app.dataModel.settlement.area.perimeterBarrier import (
+from app.dataModel.locations.settlement.area.perimeterBarrier import (
     PerimeterBarrier,
     resolved_host_sides,
 )

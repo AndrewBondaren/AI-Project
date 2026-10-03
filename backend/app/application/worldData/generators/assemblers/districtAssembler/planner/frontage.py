@@ -22,18 +22,18 @@ from app.application.worldData.generators.road.connectionPolicy import sidewalk_
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
 )
-from app.dataModel.settlement.district.districtConnection import (
+from app.dataModel.locations.settlement.district.districtConnection import (
     DistrictConnection,
     street_classes_for,
 )
-from app.dataModel.settlement.enums.districtStreetRole import (
+from app.dataModel.locations.settlement.enums.districtStreetRole import (
     DistrictStreetRole,
     frontage_role_rank,
 )
-from app.dataModel.settlement.district.frontageTypeOrder import resolve_frontage_type_order
+from app.dataModel.locations.settlement.district.frontageTypeOrder import resolve_frontage_type_order
 from app.dataModel.spatial.facing import CARDINAL_WALL_OUTWARD_DELTA, Facing
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.dataModel.structure.enums.buildingPurpose import BuildingPurposeFamily
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.enums.buildingPurpose import BuildingPurposeFamily
 from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
 from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.db.models.connectionEdge import ConnectionEdge

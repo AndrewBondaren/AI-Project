@@ -13,7 +13,7 @@ Use this skill when the user asks to run the migrated source command `impl-orien
 ## Прочитать до первой правки
 
 1. [`.cursor/plans/orientation-runtime-facing.md`](../plans/orientation-runtime-facing.md) — **весь план** (3 шага: ТЗ → код → тест).
-2. Код: `backend/app/application/worldData/generators/structure/structureOrientation.py` — `StructureOrientation.apply` (~строка 45, цикл по `rooms` после origin/bbox); `backend/app/application/worldData/generators/structure/room/roomInstance.py` — поля `_RoomInstance`: `facing: str | None`, `embedded_entry: Facing | None`, `attach_wall: AttachWall`, `entry_point`/`back_entry_point: EntryPoint | None`; `backend/app/dataModel/structure/room/entryPoint.py` — `EntryPoint` **frozen pydantic**, `wall: StrictOnWire[Facing]` (кардинальная валидация).
+2. Код: `backend/app/application/worldData/generators/structure/structureOrientation.py` — `StructureOrientation.apply` (~строка 45, цикл по `rooms` после origin/bbox); `backend/app/application/worldData/generators/structure/room/roomInstance.py` — поля `_RoomInstance`: `facing: str | None`, `embedded_entry: Facing | None`, `attach_wall: AttachWall`, `entry_point`/`back_entry_point: EntryPoint | None`; `backend/app/dataModel/locations/structure/room/entryPoint.py` — `EntryPoint` **frozen pydantic**, `wall: StrictOnWire[Facing]` (кардинальная валидация).
 3. ТЗ: `docs/tz_building_generator.md` §9 «Ориентация (вариант B)» (~строки 2016–2027) и §8.6 (~1548) — контракт поворота; сейчас там перечислены cells/passages/origin, runtime facing-поля не упомянуты.
 4. Правила: `dataModel-no-hardcode.mdc`, `layer-boundaries.mdc`, `code-gates.mdc` (один шаг → отчёт → «ок» мастера), `project-context.mdc` (не стартовать backend, не коммитить).
 

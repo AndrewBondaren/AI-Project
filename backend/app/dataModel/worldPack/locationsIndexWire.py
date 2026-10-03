@@ -6,7 +6,7 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
+from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
 
 
 class LocationsIndexPin(BaseModel):

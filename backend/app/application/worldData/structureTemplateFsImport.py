@@ -18,7 +18,7 @@ from app.application.worldData.structureTemplateLibraryService import (
     DOMAIN_ROOT,
     resolve_structures_domain_root,
 )
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.db.models.structureTemplate import StructureTemplateRow
 
 logger = logging.getLogger(__name__)

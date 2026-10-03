@@ -17,8 +17,8 @@ from app.application.worldData.generators.barrier.perimeter import (
     gate_on_facing_edge,
     perimeter_ring_bbox,
 )
-from app.dataModel.settlement.area.perimeterBarrier import perimeter_barrier_from_template
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.settlement.area.perimeterBarrier import perimeter_barrier_from_template
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World

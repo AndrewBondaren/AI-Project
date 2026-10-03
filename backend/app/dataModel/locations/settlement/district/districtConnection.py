@@ -13,7 +13,7 @@ from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import
     ConnectionTypeKey,
     WorldConnectionTypeRegistry,
 )
-from app.dataModel.settlement.enums.districtStreetRole import DistrictStreetRole
+from app.dataModel.locations.settlement.enums.districtStreetRole import DistrictStreetRole
 
 logger = logging.getLogger(__name__)
 

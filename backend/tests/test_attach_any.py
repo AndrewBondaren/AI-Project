@@ -6,9 +6,9 @@ from unittest.mock import patch
 from app.application.worldData.generators.structure.layoutEngine import _layout_mode_b
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.enums.attachWall import AttachWall
+from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.enums.attachWall import AttachWall
 from app.utils.deterministicIds import scoped_rng
 from tests.structureWire import room_wire, level_wire
 from tests.test_u_shape_orientation_baseline import room

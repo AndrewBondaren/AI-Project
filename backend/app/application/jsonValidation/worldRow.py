@@ -40,30 +40,30 @@ from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import
     WorldConnectionTypeRegistry,
 )
 from app.dataModel.hydrology.rivers import RiverTypeClassify as PojoRiverTypeClassify
-from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
     WorldDistrictTemplateRegistry,
 )
-from app.dataModel.settlement.district.worldDistrictZonePreference import (
+from app.dataModel.locations.settlement.district.worldDistrictZonePreference import (
     WorldDistrictZonePreference,
 )
-from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import (
+from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     WorldSettlementSizeRegistry,
 )
-from app.dataModel.settlement.settlement.worldSettlementSpecializationRegistry import (
+from app.dataModel.locations.settlement.settlement.worldSettlementSpecializationRegistry import (
     WorldSettlementSpecializationRegistry,
 )
-from app.dataModel.structure.barrier.worldBarrierTemplateRegistry import (
+from app.dataModel.locations.structure.barrier.worldBarrierTemplateRegistry import (
     WorldBarrierTemplateRegistry,
 )
-from app.dataModel.structure.building.plotLayoutTemplate import (
+from app.dataModel.locations.structure.building.plotLayoutTemplate import (
     PlotLayoutTemplate,
     plot_type_defaulted,
 )
-from app.dataModel.structure.building.worldBuildingLayoutDefaults import canonical_defaults
-from app.dataModel.structure.building.worldBuildingTemplateRegistry import (
+from app.dataModel.locations.structure.building.worldBuildingLayoutDefaults import canonical_defaults
+from app.dataModel.locations.structure.building.worldBuildingTemplateRegistry import (
     WorldBuildingTemplateRegistry,
 )
-from app.dataModel.structure.enums.buildingPurpose import (
+from app.dataModel.locations.structure.enums.buildingPurpose import (
     BuildingPurpose,
     WorldPurposePackRegistry,
     WorldPurposePacks,

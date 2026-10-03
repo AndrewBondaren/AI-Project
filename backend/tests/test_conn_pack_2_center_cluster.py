@@ -40,21 +40,21 @@ from app.application.worldData.generators.assemblers.districtAssembler.planner.t
 )
 from app.application.worldData.generators.road.connectionPolicy import paint_for_connection
 from app.application.worldData.generators.road.layouts.gridLayout import generate_grid
-from app.dataModel.settlement.district.districtConnection import (
+from app.dataModel.locations.settlement.district.districtConnection import (
     DistrictConnection,
     street_classes_for,
 )
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.settlement.district.requiredStructure import POSITION_CENTER
-from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.settlement.district.requiredStructure import POSITION_CENTER
+from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
     WorldDistrictTemplateRegistry,
 )
-from app.dataModel.settlement.enums.districtDensity import DistrictDensity
-from app.dataModel.settlement.enums.districtStreetRole import DistrictStreetRole
+from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
+from app.dataModel.locations.settlement.enums.districtStreetRole import DistrictStreetRole
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
-from app.dataModel.structure.building.structureCatalog import StructureCatalog
-from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog
+from app.dataModel.locations.structure.enums.buildingPurpose import BuildingPurpose
 
 
 _STEP = 80

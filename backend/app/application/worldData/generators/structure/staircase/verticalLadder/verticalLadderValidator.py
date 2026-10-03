@@ -5,7 +5,7 @@ Vertical ladder validator.
 import logging
 
 from app.application.worldData.generators.structure.cellBuilder import _interior
-from app.dataModel.structure.enums.buildingElement import StructureElement
+from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
 from app.db.models.world import World
 from app.application.worldData.generators.structure.staircase.validator import StaircaseValidator

@@ -18,14 +18,14 @@ from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import
 )
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.roads.enums.streetLayout import StreetLayout
-from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
-from app.dataModel.settlement.district.districtConnection import DistrictConnection
-from app.dataModel.settlement.district.placementCondition import PlacementCondition
-from app.dataModel.settlement.district.requiredStructure import RequiredStructure
-from app.dataModel.settlement.enums.districtDensity import DistrictDensity
+from app.dataModel.locations.settlement.area.perimeterBarrier import PerimeterBarrier
+from app.dataModel.locations.settlement.district.districtConnection import DistrictConnection
+from app.dataModel.locations.settlement.district.placementCondition import PlacementCondition
+from app.dataModel.locations.settlement.district.requiredStructure import RequiredStructure
+from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
 from app.dataModel.shared.ranges import EconomicTierRange, SizePct
-from app.dataModel.structure.building.plotLayoutTemplate import DrawingKey
-from app.dataModel.structure.enums.buildingPurpose import (
+from app.dataModel.locations.structure.building.plotLayoutTemplate import DrawingKey
+from app.dataModel.locations.structure.enums.buildingPurpose import (
     DEFAULT_PURPOSE_MATCH,
     AllowedToken,
     BuildingPurposeMatch,
@@ -34,7 +34,7 @@ from app.dataModel.structure.enums.buildingPurpose import (
 )
 
 if TYPE_CHECKING:
-    from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+    from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
         WorldDistrictTemplateRegistry,
     )
 

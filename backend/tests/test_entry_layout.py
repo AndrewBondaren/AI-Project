@@ -6,8 +6,8 @@ from app.application.worldData.generators.structure.errors import GenerationErro
 from app.application.worldData.generators.structure.layoutEngine import layout_level, _place_next_to_any
 from app.application.worldData.generators.structure.layoutEntry import entries_exterior
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.room.entryPoint import EntryPoint
-from app.dataModel.structure.building.roomConnection import RoomConnection
+from app.dataModel.locations.structure.room.entryPoint import EntryPoint
+from app.dataModel.locations.structure.building.roomConnection import RoomConnection
 from tests.test_u_shape_orientation_baseline import room
 from tests.test_structure_orientation import simple_structure, test_world_building
 from app.application.worldData.debugStructureRotations import RotationProbe

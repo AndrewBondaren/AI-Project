@@ -4,8 +4,8 @@ import unittest
 from tests.test_u_shape_orientation_baseline import room
 from app.application.worldData.generators.structure.staircase.verticalLadder.verticalLadder import VerticalLadderBuilder
 from app.application.worldData.generators.structure.staircase.verticalLadder.externalVerticalLadder import ExternalVerticalLadderBuilder
-from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
-from app.dataModel.structure.enums.staircaseType import StaircaseType
+from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
+from app.dataModel.locations.structure.enums.staircaseType import StaircaseType
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.mapCell import MapCell
 

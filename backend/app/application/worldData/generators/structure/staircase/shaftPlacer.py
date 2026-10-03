@@ -13,7 +13,7 @@ from abc import ABC, abstractmethod
 from app.dataModel.spatial.facing import (
     Facing, parse_facing, opposite, CARDINAL_FACINGS, INTERCARDINAL_FACINGS,
 )
-from app.dataModel.structure.building.staircaseSpec import StaircaseSpec, EMBED_AT_CENTER
+from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec, EMBED_AT_CENTER
 from app.application.worldData.generators.structure.cellBuilder import _interior
 from app.utils.deterministicIds import scoped_rng
 from app.application.worldData.generators.structure.layoutEngine import (

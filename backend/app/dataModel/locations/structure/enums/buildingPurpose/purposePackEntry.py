@@ -9,14 +9,14 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.registryKey import RegistryKey
-from app.dataModel.structure.enums.buildingPurpose.catalog import (
+from app.dataModel.locations.structure.enums.buildingPurpose.catalog import (
     AllowedToken,
     coerce_allowed_list,
 )
-from app.dataModel.structure.enums.buildingPurpose.packs import normalize_pack_id
+from app.dataModel.locations.structure.enums.buildingPurpose.packs import normalize_pack_id
 
 if TYPE_CHECKING:
-    from app.dataModel.structure.enums.buildingPurpose.worldPurposePackRegistry import (
+    from app.dataModel.locations.structure.enums.buildingPurpose.worldPurposePackRegistry import (
         WorldPurposePackRegistry,
     )
 

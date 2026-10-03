@@ -18,11 +18,11 @@ from app.application.worldData.generators.structure.passages.archwayValidator im
 )
 from app.application.worldData.generators.structure.passages.doorway import _build_doorway
 from app.application.worldData.generators.structure.passages.entry import _build_entry_point
-from app.dataModel.structure.building.roomConnection import RoomConnection
-from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.structure.enums.passageType import PassageType
-from app.dataModel.structure.enums.staircaseType import StaircaseType
+from app.dataModel.locations.structure.building.roomConnection import RoomConnection
+from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.structure.enums.staircaseType import StaircaseType
 from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
 from app.application.worldData.generators.structure.staircase.builder import build_staircase
 from app.application.worldData.generators.structure.staircase.uShape.facingResolver import resolve_u_shape_facing

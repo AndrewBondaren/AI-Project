@@ -166,7 +166,7 @@ def test_phase_e_building_cache() -> None:
         build_layout_cache,
         collect_building_template_names,
     )
-    from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+    from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
         WorldDistrictTemplateRegistry,
     )
 
@@ -234,8 +234,8 @@ def test_phase_area_barriers() -> None:
         lookup_building_template,
     )
 
-    from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
-    from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+    from app.dataModel.locations.settlement.area.perimeterBarrier import PerimeterBarrier
+    from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 
     assert should_build_area_barrier(
         PlotLayoutTemplate(
@@ -289,7 +289,7 @@ def test_phase_area_barriers() -> None:
 
 def test_phase_b_travel_and_sidewalk() -> None:
     """road_tier_bonus resolver + per-district has_sidewalk on city entry links."""
-    from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+    from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
         WorldDistrictTemplateRegistry,
     )
     from app.application.worldData.generators.road.connectionPolicy import resolve_has_sidewalk

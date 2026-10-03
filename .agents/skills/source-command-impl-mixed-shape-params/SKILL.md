@@ -13,7 +13,7 @@ Use this skill when the user asks to run the migrated source command `impl-mixed
 ## Прочитать до первой правки
 
 1. [`.cursor/plans/entry-point-pojo-done.md`](../plans/entry-point-pojo-done.md) — **§6.10** (scope среза), статусы 6.1–6.9 (сданы).
-2. Код: `room/roomFactory.py` — `_resolve_shape` (~строка 26: `rng.choice(raw)` для массива), `_resolve_shape_params` (~строка 67: ветки по `room_def.shape_type` — **объявленному** значению), порядок вызовов в `instantiate_level_rooms` (~строки 130–140: shape → size → params → `resolve_stem_wall` постпроход); `shapes.py` — `room_footprint` dispatch (~строка 174: дефолты `arm_width=width//3`, `arm_corner="northeast"` при пустых params); `dataModel/structure/room/roomDef.py` `_conditional_fields` (~строка 85: `shape_params` обязательны если `"l_shape"`/`"t_shape"` **в массиве** — authored params гарантированно есть).
+2. Код: `room/roomFactory.py` — `_resolve_shape` (~строка 26: `rng.choice(raw)` для массива), `_resolve_shape_params` (~строка 67: ветки по `room_def.shape_type` — **объявленному** значению), порядок вызовов в `instantiate_level_rooms` (~строки 130–140: shape → size → params → `resolve_stem_wall` постпроход); `shapes.py` — `room_footprint` dispatch (~строка 174: дефолты `arm_width=width//3`, `arm_corner="northeast"` при пустых params); `dataModel/locations/structure/room/roomDef.py` `_conditional_fields` (~строка 85: `shape_params` обязательны если `"l_shape"`/`"t_shape"` **в массиве** — authored params гарантированно есть).
 3. Правила: `dataModel-no-hardcode.mdc`, `layer-boundaries.mdc`, `plan-before-code.mdc` (один срез → отчёт → «ок» мастера), `project-context.mdc` (не стартовать backend, не коммитить).
 
 ## Цель

@@ -7,12 +7,12 @@ import logging
 from random import Random
 
 from app.application.worldData.generators.structure.errors import UnsupportedShapeError
-from app.dataModel.structure.room.roomDef import RoomDef
-from app.dataModel.structure.building.levelDef import LevelDef
+from app.dataModel.locations.structure.room.roomDef import RoomDef
+from app.dataModel.locations.structure.building.levelDef import LevelDef
 from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.shapeResolver import SizeShapeResolver
-from app.dataModel.structure.building.structureTemplate import StructureTemplate
+from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.spatial.facing import CARDINAL_FACINGS
 from app.application.worldData.generators.structure.shapeType import ShapeType, _V1_SHAPES
 from app.application.worldData.generators.structure.shapes import resolve_stem_wall

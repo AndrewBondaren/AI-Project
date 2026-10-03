@@ -8,8 +8,8 @@ from app.application.worldData.generators.utils.tierRegistry import (
     tier_rank,
     tiers_within_rank_delta,
 )
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.structure.building.plotLayoutTemplate import PlotLayoutTemplate
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.db.models.world import World
 
 

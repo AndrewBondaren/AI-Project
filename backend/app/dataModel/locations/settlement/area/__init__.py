@@ -1,4 +1,4 @@
-from app.dataModel.settlement.area.perimeterBarrier import (
+from app.dataModel.locations.settlement.area.perimeterBarrier import (
     PerimeterBarrier,
     perimeter_barrier_from_template,
     resolved_host_sides,

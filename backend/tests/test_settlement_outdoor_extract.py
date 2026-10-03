@@ -33,9 +33,9 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
     district_location_uid,
 )
 from app.dataModel.locations.enums.entryRole import EntryRole
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.structure.enums.passageType import PassageType
+from app.dataModel.locations.structure.enums.passageType import PassageType
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
 from app.db.models.mapCell import MapCell

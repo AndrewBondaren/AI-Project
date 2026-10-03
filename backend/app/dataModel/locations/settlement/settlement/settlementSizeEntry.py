@@ -10,7 +10,7 @@ from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.registryKey import RegistryKey
 
 if TYPE_CHECKING:
-    from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import (
+    from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
         WorldSettlementSizeRegistry,
     )
 

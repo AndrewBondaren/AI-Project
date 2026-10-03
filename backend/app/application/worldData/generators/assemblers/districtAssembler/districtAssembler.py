@@ -80,8 +80,8 @@ from app.application.worldData.generators.structure.structureGeneratorService im
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
 )
-from app.dataModel.settlement.district.districtConnection import street_classes_for
-from app.dataModel.structure.building.buildingCatalog import BuildingCatalog
+from app.dataModel.locations.settlement.district.districtConnection import street_classes_for
+from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 

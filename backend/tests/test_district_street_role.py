@@ -16,17 +16,17 @@ from app.application.worldData.generators.road.connectionPolicy import paint_for
 from app.application.worldData.generators.road.layouts.gridLayout import generate_grid
 from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
 from app.dataModel.connections.enums.graphLevel import GraphLevel
-from app.dataModel.settlement.district.districtConnection import (
+from app.dataModel.locations.settlement.district.districtConnection import (
     DistrictConnection,
     street_classes_for,
 )
-from app.dataModel.settlement.district.districtTemplateEntry import DistrictTemplateEntry
-from app.dataModel.settlement.district.worldDistrictTemplateRegistry import (
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
+from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
     WorldDistrictTemplateRegistry,
 )
-from app.dataModel.settlement.enums.districtDensity import DistrictDensity
-from app.dataModel.settlement.enums.districtEntryRole import DistrictEntryRole
-from app.dataModel.settlement.enums.districtStreetRole import DistrictStreetRole
+from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
+from app.dataModel.locations.settlement.enums.districtEntryRole import DistrictEntryRole
+from app.dataModel.locations.settlement.enums.districtStreetRole import DistrictStreetRole
 from app.dataModel.spatial.facing import Facing
 from app.db.models.connectionNode import ConnectionNode
 
@@ -89,7 +89,7 @@ class TestDistrictStreetClasses(unittest.TestCase):
 
     def test_unknown_role_skipped(self) -> None:
         with self.assertLogs(
-            "app.dataModel.settlement.district.districtConnection",
+            "app.dataModel.locations.settlement.district.districtConnection",
             level="WARNING",
         ) as captured:
             classes = street_classes_for(_template(

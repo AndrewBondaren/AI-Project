@@ -188,7 +188,7 @@ Hub и settlement-слоты уже без метров: `WORLD_FINE_GRID`, `fin
 **Impl:** [`.cursor/plans/c21-plot-ground-z-done.md`](../.cursor/plans/c21-plot-ground-z-done.md) §2.2b (C21 / P13, тот же pass).
 
 Docstring `AreaSlot`: «здание + двор + забор». `_make_area_slot` заполняет **только bbox `occupied_footprint`**.  
-Area barrier: `DEFAULT_PARCEL_MARGIN_M = 1` в `dataModel/settlement/area/perimeterBarrier.py` + `expand_bbox` в `areaBarriers` — workaround «забор снаружи дома». Константа **не** поле `PerimeterBarrier` (`template` + `probability` — [tz_locations.md](./tz_locations.md)).
+Area barrier: `DEFAULT_PARCEL_MARGIN_M = 1` в `dataModel/locations/settlement/area/perimeterBarrier.py` + `expand_bbox` в `areaBarriers` — workaround «забор снаружи дома». Константа **не** поле `PerimeterBarrier` (`template` + `probability` — [tz_locations.md](./tz_locations.md)).
 
 **Замок (не слайс):**
 
@@ -860,8 +860,8 @@ if ptype is PassageType.STAIRCASE:
 | Shim | Статус |
 |---|---|
 | `generators/utils/facing.py` | удалён → `dataModel.spatial.facing` |
-| `generators/structure/structureElement.py` | удалён → `dataModel.structure.enums.buildingElement` |
-| `generators/structure/staircase/staircaseType.py` | удалён → `dataModel.structure.enums.staircaseType` |
+| `generators/structure/structureElement.py` | удалён → `dataModel.locations.structure.enums.buildingElement` |
+| `generators/structure/staircase/staircaseType.py` | удалён → `dataModel.locations.structure.enums.staircaseType` |
 | `generators/structure/staircase/staircaseSize.py` | удалён (call sites уже на dataModel) |
 | `generators/structure/room/roomSize.py` | удалён (call sites уже на dataModel) |
 
@@ -881,7 +881,7 @@ if ptype is PassageType.STAIRCASE:
 |---|---|---|
 | `HydrologyScope`, `HydrologyCellRole` | `generators/hydrology/types.py` | pipeline hydrology; dataModel — когда стабилизируем HY-S-3 API |
 | `AnchorSource` | `climate/climateAnchor.py` | climate pipeline |
-| `CellZone` | `dataModel/settlement/district/cellZone.py` | ✅ wire+planner (CITY-T-4e) |
+| `CellZone` | `dataModel/locations/settlement/district/cellZone.py` | ✅ wire+planner (CITY-T-4e) |
 | `CoordinateSpace` | `coordinates/space.py` | теги координатных систем |
 | `PoleMode` | `climate/climatePole.py` | ✅ удалён; `ClimatePoleMode` из dataModel |
 
@@ -923,7 +923,7 @@ Parse на location/edge/policy — не на map cell. Bottleneck — LLM + gri
 
 **Generators (HY-5):**
 
-1. ✅ `PassageType`, `StaircaseType`, `StructureElement` → `dataModel/structure/enums/`
+1. ✅ `PassageType`, `StaircaseType`, `StructureElement` → `dataModel/locations/structure/enums/`
 2. ✅ Roads/settlement graph enums → `dataModel`; `streets.py` slice
 3. ✅ `wireEnums.py` — pure re-export barrel
 4. ✅ Удалить shims: `facing`, `structureElement`, `staircaseType`, `staircaseSize`, `roomSize`

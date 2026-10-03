@@ -23,11 +23,11 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.registryKey import RegistryKey
-from app.dataModel.structure.building.roomConnection import RoomConnection
-from app.dataModel.structure.building.staircaseSpec import StaircaseSpec
-from app.dataModel.structure.building.levelDef import LevelDef, validate_room_ids
-from app.dataModel.structure.room.entryPoint import EntryPoint
-from app.dataModel.structure.enums.buildingPurpose import (
+from app.dataModel.locations.structure.building.roomConnection import RoomConnection
+from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
+from app.dataModel.locations.structure.building.levelDef import LevelDef, validate_room_ids
+from app.dataModel.locations.structure.room.entryPoint import EntryPoint
+from app.dataModel.locations.structure.enums.buildingPurpose import (
     DEFAULT_BUILDING_PURPOSES,
     BuildingPurpose,
     BuildingPurposeFamily,
