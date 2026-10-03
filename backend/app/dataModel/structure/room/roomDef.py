@@ -1,7 +1,12 @@
 """Typed room boundary; StructureTemplate retains original room dictionaries."""
+from typing import Annotated
+
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, ValidationError, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire, StrictEnumOnWire
+from app.dataModel.locations.context.cascadeLevel import CascadeLevel
+from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
+from app.dataModel.locations.context.cascadeSpec import CascadeChannel
 from app.dataModel.structure.enums.attachWall import AttachWall
 from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose
 from app.dataModel.structure.enums.passageType import PassageType
@@ -24,7 +29,13 @@ class RoomDef(BaseModel):
     shape_type: DefaultOnWire[str | list[str] | None] = None
     count: DefaultOnWire[int] = Field(default=1, ge=1)
     count_range: DefaultOnWire[PositiveRange | None] = None
-    economic_tier: DefaultOnWire[str | None] = None
+    # Top of the `economic_tier` chain — the `below` edge to the room NL
+    # is declared on the NL side (NamedLocation may import RoomDef,
+    # not vice versa — tz_cascade_context §2).
+    economic_tier: Annotated[
+        DefaultOnWire[str | None],
+        CascadeChannel(ECONOMIC_TIER, CascadeLevel.ROOM),
+    ] = None
     attach_to: DefaultOnWire[str | None] = None
     attach_wall: StrictEnumOnWire[AttachWall] = AttachWall.BOTH
     perimeter_required: DefaultOnWire[bool] = False

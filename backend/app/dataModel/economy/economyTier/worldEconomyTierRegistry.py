@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
+import logging
+from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import RootModel
 
@@ -12,6 +13,11 @@ from app.dataModel.economy.economyTier.economyTierEntry import (
     road_modifiers_for,
 )
 from app.dataModel.registryKey import RegistryKey
+
+if TYPE_CHECKING:
+    from app.dataModel.locations.context.cascadeSpec import DefaultPolicy
+
+logger = logging.getLogger(__name__)
 
 
 class WorldEconomyTierRegistry(RootModel[list[EconomyTierEntry]]):
@@ -38,6 +44,27 @@ class WorldEconomyTierRegistry(RootModel[list[EconomyTierEntry]]):
 
     def sorted_by_base_value(self) -> list[EconomyTierEntry]:
         return sorted(self.root, key=lambda e: e.base_value)
+
+    def resolve_default(self, policy: DefaultPolicy) -> EconomyTierKey:
+        """Domain policy for the cascade; no builtin tier fallback (§3, §5)."""
+        # locations package re-exports settlement models that reference this
+        # registry. Load the metadata at invocation, after model initialization.
+        from app.dataModel.locations.context.cascadeSpec import DefaultPolicy
+
+        match policy:
+            case DefaultPolicy.REGISTRY_MEDIAN:
+                tiers = self.sorted_by_base_value()
+                if not tiers:
+                    raise ValueError("economic_tier: cannot resolve median of an empty registry")
+                tier = tiers[len(tiers) // 2].system_tier
+                logger.warning("economic_tier: no value in cascade; using registry median %r", tier)
+                return tier
+            case DefaultPolicy.NONE_IS_ERROR:
+                raise ValueError("economic_tier: no value after the cascade")
+            case DefaultPolicy.CANONICAL_DEFAULT:
+                raise ValueError(f"economic_tier: unsupported default policy {policy!r}")
+            case _:
+                raise ValueError(f"economic_tier: unsupported default policy {policy!r}")
 
 
 type EconomyTierKey = RegistryKey[WorldEconomyTierRegistry]

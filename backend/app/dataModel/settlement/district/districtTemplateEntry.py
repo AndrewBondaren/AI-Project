@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.locations.context.cascadeLevel import CascadeLevel
+from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
+from app.dataModel.locations.context.cascadeSpec import (
+    CascadeChannel,
+    ChannelKind,
+)
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     ConnectionTypeKey,
 )
@@ -47,7 +53,16 @@ class DistrictTemplateEntry(BaseModel):
     size_pct: DefaultOnWire[SizePct | None] = None
     allowed_structure_types: DefaultOnWire[list[AllowedToken] | None] = None
     allowed_match: DefaultOnWire[BuildingPurposeMatch] = DEFAULT_PURPOSE_MATCH
-    economic_tier_range: DefaultOnWire[EconomicTierRange | None] = None
+    # District-level RANGE channel for `economic_tier`. Both district
+    # edges (to district/settlement NL) are declared on the NL side —
+    # NamedLocation already transitively imports this template, the
+    # reverse would cycle (tz_cascade_context §2).
+    economic_tier_range: Annotated[
+        DefaultOnWire[EconomicTierRange | None],
+        CascadeChannel(
+            ECONOMIC_TIER, CascadeLevel.DISTRICT, kind=ChannelKind.RANGE,
+        ),
+    ] = None
     density: DefaultOnWire[DistrictDensity | None] = None
     street_layout: DefaultOnWire[StreetLayout] = StreetLayout.GRID
     connections: DefaultOnWire[list[DistrictConnection] | None] = None

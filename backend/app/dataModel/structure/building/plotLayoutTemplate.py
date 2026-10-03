@@ -7,11 +7,18 @@ no ``levels`` / ``staircases`` / ``connections`` of its own.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.locations.context.cascadeLevel import CascadeLevel
+from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
+from app.dataModel.locations.context.cascadeSpec import (
+    CascadeChannel,
+    CascadeLink,
+    ChannelKind,
+)
 from app.dataModel.flora.enums.cropKind import CropKind
 from app.dataModel.livestock.enums.livestockKind import LivestockKind
 from app.dataModel.registryKey import RegistryKey
@@ -43,9 +50,28 @@ class PlotLayoutTemplate(BaseModel):
     system_name: StrictOnWire[RegistryKey[PlotLayoutTemplate]]
     display_name: StrictOnWire[str]
     plot_type: DefaultOnWire[BuildingPurposeFamily] = BuildingPurposeFamily.DWELLING
-    economic_tier: DefaultOnWire[EconomyTierKey | None] = None
-    economic_tier_band: DefaultOnWire[str | None] = None
-    economic_tier_range: DefaultOnWire[EconomicTierRange | None] = None
+    # Area-level cascade channels for `economic_tier`, chained by edges
+    # tier → band → range; `model=None` — self-links (tz_cascade_context
+    # §2). Outer neighbours (building NL above, district NL below) are
+    # declared on the NL side — this module may not import NamedLocation.
+    economic_tier: Annotated[
+        DefaultOnWire[EconomyTierKey | None],
+        CascadeChannel(
+            ECONOMIC_TIER, CascadeLevel.AREA,
+            below=CascadeLink(None, "economic_tier_band", CascadeLevel.AREA),
+        ),
+    ] = None
+    economic_tier_band: Annotated[
+        DefaultOnWire[str | None],
+        CascadeChannel(
+            ECONOMIC_TIER, CascadeLevel.AREA, kind=ChannelKind.BAND,
+            below=CascadeLink(None, "economic_tier_range", CascadeLevel.AREA),
+        ),
+    ] = None
+    economic_tier_range: Annotated[
+        DefaultOnWire[EconomicTierRange | None],
+        CascadeChannel(ECONOMIC_TIER, CascadeLevel.AREA, kind=ChannelKind.RANGE),
+    ] = None
     perimeter_barrier: DefaultOnWire[PerimeterBarrier] = Field(
         default_factory=PerimeterBarrier,
     )

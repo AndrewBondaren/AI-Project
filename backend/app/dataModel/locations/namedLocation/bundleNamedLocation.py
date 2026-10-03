@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire, IgnoreOnWire, StrictOnWire
+from app.dataModel.locations.context.cascadeLevel import CascadeLevel
+from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
+from app.dataModel.locations.context.cascadeSpec import CascadeChannel, CascadeLink
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     ConnectionTypeKey,
 )
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 from app.dataModel.materials.worldMaterialRegistry import MaterialKey
 from app.dataModel.settlement.area.perimeterBarrier import PerimeterBarrier
+from app.dataModel.settlement.district.districtTemplateEntry import (
+    DistrictTemplateEntry,
+)
 from app.dataModel.settlement.enums.districtDensity import DistrictDensity
 from app.dataModel.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.dataModel.settlement.settlement.settlementSpecializationBind import (
@@ -21,7 +27,11 @@ from app.dataModel.settlement.settlement.settlementSpecializationBind import (
 from app.dataModel.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
 from app.dataModel.settlement.settlement.worldLocationMoodRegistry import LocationMoodKey
 from app.dataModel.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
-from app.dataModel.structure.building.plotLayoutTemplate import DrawingKey
+from app.dataModel.structure.building.plotLayoutTemplate import (
+    DrawingKey,
+    PlotLayoutTemplate,
+)
+from app.dataModel.structure.room.roomDef import RoomDef
 
 
 def _skeleton_default(name: str):
@@ -56,7 +66,32 @@ class BundleNamedLocation(BaseModel):
     system_climate_zone: DefaultOnWire[str | None] = None
     state_uid: DefaultOnWire[str | None] = None
     system_city_size: DefaultOnWire[SettlementSizeKey | None] = None
-    system_economic_tier: DefaultOnWire[EconomyTierKey | None] = _skeleton_default(
+    # Cascade channels for `economic_tier` — the stamped/authored node at
+    # four levels; each edge declared once, where imports allow
+    # (tz_cascade_context §2). Neighbours on the other side of an edge
+    # are materialized by the contract verifier.
+    system_economic_tier: Annotated[
+        DefaultOnWire[EconomyTierKey | None],
+        CascadeChannel(
+            ECONOMIC_TIER, CascadeLevel.ROOM,
+            above=CascadeLink(RoomDef, "economic_tier", CascadeLevel.ROOM),
+            below=CascadeLink(None, "system_economic_tier", CascadeLevel.BUILDING),
+        ),
+        CascadeChannel(
+            ECONOMIC_TIER, CascadeLevel.BUILDING,
+            below=CascadeLink(PlotLayoutTemplate, "economic_tier", CascadeLevel.AREA),
+        ),
+        CascadeChannel(
+            ECONOMIC_TIER, CascadeLevel.DISTRICT,
+            above=CascadeLink(PlotLayoutTemplate, "economic_tier_range", CascadeLevel.AREA),
+            below=CascadeLink(DistrictTemplateEntry, "economic_tier_range", CascadeLevel.DISTRICT),
+        ),
+        CascadeChannel(
+            ECONOMIC_TIER, CascadeLevel.SETTLEMENT,
+            above=CascadeLink(DistrictTemplateEntry, "economic_tier_range", CascadeLevel.DISTRICT),
+            below=CascadeLink(SettlementSkeleton, "economic_tier", CascadeLevel.SETTLEMENT),
+        ),
+    ] = _skeleton_default(
         "economic_tier",
     )
     typical_districts: DefaultOnWire[list[TypicalDistrictRef] | None] = None

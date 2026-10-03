@@ -61,6 +61,60 @@ world → settlement → district → area → building → room
 комнаты), а не наличие authored-поля. Иерархия зафиксирована enum'ом
 `CascadeLevel` (`dataModel`) — она в контракте, не в голове caller'а.
 
+**Уточнение мастера 2026-10-03: связь полей, а не реестр типов.**
+Строковый `CascadeLevel`, независимый `cascade_value(field: str)` и
+таблица «уровень → типы POJO» не обеспечивают связь объекта с контрактом:
+`CascadeLevel` — **чистая ось порядка** scope'ов и не знает, какие модели
+кормят уровень (источники различаются между параметрами: district может
+давать `economic_tier` из одного POJO, а `race_mix` — из другого).
+
+Контракт — **двусвязный список полей**, объявленный на самих
+полях-источниках, в том же стиле, что wire-политики (`DefaultOnWire`):
+
+- `CascadeChannel(param, level, above, below, kind)` — метаданные в
+  `Annotated` поля-источника: «это поле — канал параметра `param` на
+  уровне `level`»;
+- `param` — **сам объект `Cascade`** (объявлен единожды в
+  `cascadeParams`), связь по identity, не по строке; переименование
+  константы ломает импорт, а не деградирует в наследование;
+- `above` / `below` — `CascadeLink(model, field, level)`: типизированные
+  указатели на соседние узлы (`prev`/`next` связного списка); порядок
+  внутри уровня и между уровнями задаётся рёбрами, а не скрытым
+  порядком таблицы;
+- **каждое ребро объявляется ровно один раз** — на той стороне, чей
+  модуль может импортировать соседа без циклического импорта
+  (POJO-граф уже переплетён: NL↔Skeleton↔Plot); проверка контракта
+  достраивает обратное направление — как ORM `backref`, в проверенном
+  графе у каждого узла известны оба соседа. Дублированная декларация
+  одного ребра с двух сторон допустима только если согласована —
+  рассогласование есть ошибка контракта;
+- `model=None` в `CascadeLink` — ссылка на собственную модель (класс
+  не может сослаться на себя внутри своего тела);
+- проверка контракта проходит по рёбрам: имя поля резолвится в
+  `model_fields` указанной модели, типы концов совместимы (kind-aware:
+  `VALUE`↔`VALUE` один базовый тип; `BAND`/`RANGE` — входы materialize),
+  ребро соединяет только узлы одного уровня или соседних рангов,
+  цепочка непрерывна от верха до world (один top, один bottom,
+  без ветвлений и сирот).
+
+Изменение/удаление поля или несовместимое изменение его типа должно
+обнаруживаться проверкой контракта, а не превращаться в `None`,
+наследование или median. «У модели нет канала» и «объявленное поле имеет
+значение null» — разные состояния. Звено проверяется по своим
+метаданным («объявляет ли тип канал для этого уровня»), не по
+isinstance-таблице: новый POJO-тип становится валидным звеном просто
+аннотировав поле.
+
+Wire-политика (`StrictOnWire`/`DefaultOnWire`/`IgnoreOnWire`)
+ортогональна каскаду: она — политика импорта, к моменту резолва уже
+отработала; движок читает готовое значение поля POJO.
+
+Runtime `DistrictSlot` остаётся объектом application: связь с данными
+района проходит через его typed `DistrictTemplateEntry`. Ссылки из
+dataModel на application/db не вводятся; преобразование
+persistence/runtime объектов к исходным POJO — обязанность границы
+caller, а не движка каскада.
+
 Соответствие уровней объектам и каналам тира (частное → общее):
 
 | Уровень | Звено | Каналы тира | NL / stamp |
@@ -72,13 +126,10 @@ world → settlement → district → area → building → room
 | building | building `NamedLocation` (+ `BuildingBodyTemplate`, своего тира нет) | `system_economic_tier` | да / **да** |
 | room | `RoomDef` / `_RoomInstance` → room `NamedLocation` | `rooms[].economic_tier` | да / **да** |
 
-**Звено цепочки — полиморфный адаптер**, а не NL. Каждое звено
-(`NamedLocation`, `SettlementSkeleton`, `DistrictSlot` +
-`DistrictTemplateEntry`, `AreaSlot` + `PlotLayoutTemplate`, `RoomDef`,
-`EmptyLink`) объявляет `level` и реализует `cascade_value(field)` —
-чтение своего authored-поля и шаблонных каналов. `EmptyLink(level)` —
-явное пустое звено для caller'ов без объекта уровня (debug-роут) —
-уровень не пропускается молча.
+**Звено цепочки — `{level, obj}`** без собственной логики чтения:
+движок сам проходит каналы типа объекта по `CascadeChannel`-метаданным.
+`EmptyLink(level)` (`obj=None`) — явное пустое звено для caller'ов без
+объекта уровня (debug-роут) — уровень не пропускается молча.
 
 Граница scope — точка, где появляется новое звено: world import/skeleton →
 settlement assemble → district → area/building → structure generate
@@ -93,26 +144,30 @@ settlement assemble → district → area/building → structure generate
 каскадируемый параметр — **поле модели с `Cascade`-метаданными в
 `Annotated`**, объявленное один раз, рядом с типом:
 
+Параметр объявляется **один раз** — объектом `Cascade` в
+`cascadeParams` (dataModel). Поле контекста и все каналы-источники
+ссылаются на **тот же объект**: связь по identity (`is`), не по строке.
+
 ```python
+# cascadeParams.py
+ECONOMIC_TIER = Cascade(
+    field="system_economic_tier",         # каноническое authored/stamp-поле
+    default=DefaultPolicy.REGISTRY_MEDIAN,  # median + WARNING
+)
+
 class LocationContext(ContextModel):
     level: CascadeLevel
-    economic_tier: Annotated[EconomyTierKey | None, Cascade(
-        field="system_economic_tier",      # authored-поле на звене
-        default=DefaultPolicy.REGISTRY_MEDIAN,  # median + WARNING
-    )] = None
+    economic_tier: Annotated[EconomyTierKey | None, ECONOMIC_TIER] = None
     # будущие поля — та же форма:
-    # wall_material: Annotated[MaterialKey | None, Cascade(
-    #     field="parent_wall_material",
-    #     default=DefaultPolicy.CANONICAL_DEFAULT,
-    # )] = None
+    # wall_material: Annotated[MaterialKey | None, WALL_MATERIAL] = None
 ```
 
 | Элемент `Cascade` | Назначение |
 |---|---|
-| `field` | Имя authored-поля, которое адаптер звена читает (`system_economic_tier`, `parent_wall_material`, …) |
+| `field` | Имя канонического authored/stamp-поля параметра (`system_economic_tier`, `parent_wall_material`, …) — объявлено один раз, проверяется верификатором против `model_fields` источников |
 | `default` | `DefaultPolicy` — ссылка на **политику POJO** (`REGISTRY_MEDIAN`, `CANONICAL_DEFAULT`, `NONE_IS_ERROR`); реализацию держит POJO домена поля (для тира — `WorldEconomyTierRegistry`: median + WARNING). Callables и литералы в dataModel не живут — движок знает только, как вызвать политику с `world` (`dataModel-no-hardcode.mdc`) |
 | `fold` | Опциональный полный per-param resolver — для параметров, которым first-non-null недостаточно (точечно, не режим движка) |
-| `levels` | Опционально (v1 не использует): с каких уровней поле вообще может прийти — per-field иерархия для будущих полей (climate anchor и пр.) |
+| `levels` | Опционально (v1 не использует): ограничение подмножества уровней для будущих полей (climate anchor и пр.); покрытие уровней каналами проверяется непрерывностью цепочки рёбер |
 
 Materialize (band → tier, range → tier через rng) объявляется **не
 callable в модели**, а привязкой по имени поля внутри `contextResolver`
