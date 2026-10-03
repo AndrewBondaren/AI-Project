@@ -59,12 +59,20 @@ world → settlement → district → area → building → room
 Критерий уровня — **собственные потребители параметра** (городские стены
 и дороги, дороги/стены района, забор и двор участка, структура, материалы
 комнаты), а не наличие authored-поля. Иерархия зафиксирована enum'ом
-`CascadeLevel` (`dataModel`) — она в контракте, не в голове caller'а.
+`ScopeLevel` (`dataModel`) — она в контракте, не в голове caller'а.
+
+`ScopeLevel` — **локационная ось**, не «ось вообще»: каждый домен со
+своей иерархией scope'ов (фракции, магия, эры) объявляет собственный
+enum на базе `ScopeAxis` (StrEnum-миксин с `rank`). Каскад — механизм
+поверх **любой** оси: параметр привязан к своей через `Cascade.axis`
+(`ECONOMIC_TIER.axis is ScopeLevel`), канал на чужой оси — ошибка
+контракта. Новый параметр на локационной оси (race_mix, культура) —
+новая аннотация поля без правок enum'а; новый домен — новый enum оси.
 
 **Уточнение мастера 2026-10-03: связь полей, а не реестр типов.**
-Строковый `CascadeLevel`, независимый `cascade_value(field: str)` и
+Строковый `ScopeLevel`, независимый `cascade_value(field: str)` и
 таблица «уровень → типы POJO» не обеспечивают связь объекта с контрактом:
-`CascadeLevel` — **чистая ось порядка** scope'ов и не знает, какие модели
+`ScopeLevel` — **чистая ось порядка** scope'ов и не знает, какие модели
 кормят уровень (источники различаются между параметрами: district может
 давать `economic_tier` из одного POJO, а `race_mix` — из другого).
 
@@ -139,13 +147,19 @@ settlement assemble → district → area/building → structure generate
 
 ## 3. `LocationContext` и аннотация `Cascade`
 
-Контракт — конкретная typed Pydantic-модель `LocationContext`
-(`dataModel/locations/context/` рядом с `namedLocation/`). Каждый
+Механизм — домен-нейтральный пакет `dataModel/cascade/`
+(`cascadeSpec` — словарь объявлений, `cascadeGraph` — интроспекция и
+упорядочение графа, `cascadeVerify` — целостная проверка). Домен
+объявляет только своё: ось (`ScopeLevel`), параметры (`cascadeParams`),
+контекст и каналы на полях — `dataModel/locations/context/` рядом с
+`namedLocation/`.
+
+Контракт — конкретная typed Pydantic-модель `LocationContext`. Каждый
 каскадируемый параметр — **поле модели с `Cascade`-метаданными в
 `Annotated`**, объявленное один раз, рядом с типом:
 
 Параметр объявляется **один раз** — объектом `Cascade` в
-`cascadeParams` (dataModel). Поле контекста и все каналы-источники
+`cascadeParams` (dataModel домена). Поле контекста и все каналы-источники
 ссылаются на **тот же объект**: связь по identity (`is`), не по строке.
 
 ```python
@@ -153,10 +167,12 @@ settlement assemble → district → area/building → structure generate
 ECONOMIC_TIER = Cascade(
     field="system_economic_tier",         # каноническое authored/stamp-поле
     default=DefaultPolicy.REGISTRY_MEDIAN,  # median + WARNING
+    axis=ScopeLevel,
+    input_types=((ChannelKind.RANGE, EconomicTierRange),),
 )
 
 class LocationContext(ContextModel):
-    level: CascadeLevel
+    level: ScopeLevel
     economic_tier: Annotated[EconomyTierKey | None, ECONOMIC_TIER] = None
     # будущие поля — та же форма:
     # wall_material: Annotated[MaterialKey | None, WALL_MATERIAL] = None
@@ -168,13 +184,15 @@ class LocationContext(ContextModel):
 | `default` | `DefaultPolicy` — ссылка на **политику POJO** (`REGISTRY_MEDIAN`, `CANONICAL_DEFAULT`, `NONE_IS_ERROR`); реализацию держит POJO домена поля (для тира — `WorldEconomyTierRegistry`: median + WARNING). Callables и литералы в dataModel не живут — движок знает только, как вызвать политику с `world` (`dataModel-no-hardcode.mdc`) |
 | `fold` | Опциональный полный per-param resolver — для параметров, которым first-non-null недостаточно (точечно, не режим движка) |
 | `levels` | Опционально (v1 не использует): ограничение подмножества уровней для будущих полей (climate anchor и пр.); покрытие уровней каналами проверяется непрерывностью цепочки рёбер |
+| `axis` | Ось scope'ов параметра (`type[ScopeAxis]` — для locations `ScopeLevel`); канал на чужой оси — ошибка контракта |
+| `input_types` | Ожидаемый тип поля для materialize-kinds (`RANGE` → `EconomicTierRange`); kinds без записи — str-совместимые wire-ключи (`VALUE`, `BAND`) |
 
 Materialize (band → tier, range → tier через rng) объявляется **не
 callable в модели**, а привязкой по имени поля внутри `contextResolver`
 — локальная привязка движка, не публичный реестр; `materialize_band`
 остаётся в application.
 
-`CascadeLevel` — enum (`world, settlement, district, area, building,
+`ScopeLevel` — enum (`world, settlement, district, area, building,
 room`), порядок значений = иерархия; `ctx.level` — уровень текущего
 контекста.
 
@@ -202,39 +220,50 @@ walker'а вверх по `parent_location_uid` нет: каждый assembler �
 своего родителя, он его сам создал:
 
 ```
-settlement_ctx = LocationContext.root(world).extend(settlement_link)
-district_ctx   = settlement_ctx.extend(district_link)
-area_ctx       = district_ctx.extend(area_link)
-building_ctx   = area_ctx.extend(building_link)
-room_ctx       = building_ctx.extend(room_link)   # rooms[].economic_tier и т.п.
+settlement_ctx = extend(LocationContext.root(world), settlement_link)
+district_ctx   = extend(settlement_ctx, district_link)
+area_ctx       = extend(district_ctx, area_link)
+building_ctx   = extend(area_ctx, building_link)
+room_ctx       = extend(building_ctx, room_link)   # rooms[].economic_tier и т.п.
 ```
 
-`extend(*links)`:
+`extend(ctx, *links, rng)`:
 
-0. **Валидация уровня:** `link.level` строго ниже `ctx.level`; пропуск
-   уровня и повтор уровня — **ошибка** (повтор = второй резолв на scope).
+0. **Валидация уровня:** все звенья одного `link.level`, строго ниже
+   `ctx.level`; пропуск уровня и повтор уровня — **ошибка** (повтор =
+   второй резолв на scope). Ось звена обязана совпадать с осью ctx.
    Caller без объекта уровня передаёт `EmptyLink(level)` явно.
+   `check_link` подтверждает, что тип объекта объявляет канал для этого
+   уровня — таблицы типов нет.
 1. Проходит по полям `LocationContext`, читает `Cascade`-метаданные.
-2. Для каждого поля — first non-null по новым звеньям (через
-   `link.cascade_value(field)`), иначе наследует текущее значение
-   родительского ctx.
-3. Пусто после всех звеньев → `materialize` (привязка по имени поля,
-   band/range → tier через rng caller'а), затем `default` через
-   `DefaultPolicy` POJO.
-4. Возвращает **новый замороженный** `LocationContext` с новым `level` +
-   provenance: `ctx.provenance[param] = (CascadeLevel, source)` — какой
-   уровень/канал дал значение.
+2. Для каждого параметра движок идёт по **связному списку полей**
+   (`ordered_chain(param)`) — но только по узлам нового уровня:
+   first non-null `VALUE` побеждает; `BAND`/`RANGE` materialize
+   **на месте узла** с якорем = унаследованное значение родительского
+   ctx; `None`-канал — пропуск, не отсутствие.
+3. Ни один узел уровня не дал значения → наследуется значение
+   родительского ctx (оно уже свёрнуто с узлами пройденных уровней).
+4. Совсем пусто (нет authored и нет наследия) → `default` через
+   `DefaultPolicy` POJO. Default-source **не является якорем** для
+   materialize ниже и не предупреждает повторно — он provisional.
+5. Возвращает **новый замороженный** `LocationContext` с новым `level` +
+   provenance: `ctx.provenance[param] = (axis member, "Model.field"
+   | "default:<policy>")` — какой уровень/канал дал значение.
 
-Адаптер звена — `link.level` + `link.cascade_value(field) -> value | None`:
-полиморфизм живёт на звене (NL читает `system_economic_tier`, шаблон —
-`economic_tier`/`_band`/`_range`, skeleton — alias-поле), матрицы
-«параметр × тип звена» нет. Звено без нужного поля → `None`, не ошибка.
+Звено — `Link(level, obj)`: caller сам конвертирует runtime/persist
+объект в source-POJO до вызова; движок не знает имён полей — только
+граф каналов. Именно per-scope резолв (узлы уровня ходятся ровно на
+его границе) делает materialize **однократным**: band на area
+materialize-ится на границе area и никогда не перебрасывается
+более глубокими scope.
 
 **Семантика materialize тира:** порядок каналов на уровне
 `economic_tier` → `band` → `range`. Range разворачивается как
 **ближайший к унаследованному тиру (anchor)** внутри `[min, max]`; если
-унаследованного нет — rng внутри range. `materialize_band` — rng.choice
-по tiers_for_band.
+унаследованного нет (включая provisional default) — rng внутри range.
+`materialize_band` — anchor-предпочтение ближайшего тира в band,
+иначе rng.choice по tiers_for_band. Materialize без rng там, где он
+нужен (нет anchor), — ошибка caller'а, не silent skip.
 
 **rng:** единственный rng-вход контекста — materialize тира, **один раз
 на scope**. rng подаёт caller, отдельный

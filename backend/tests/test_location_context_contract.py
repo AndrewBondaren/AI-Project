@@ -14,15 +14,21 @@ from pydantic import BaseModel, ValidationError
 from app.dataModel.annotationPolicy import DefaultOnWire
 from app.dataModel.economy.economyTier.economyTierEntry import EconomyTierEntry
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import WorldEconomyTierRegistry
-from app.dataModel.locations.context.cascadeLevel import CascadeLevel
+from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
-from app.dataModel.locations.context.cascadeSpec import (
-    Cascade,
-    CascadeChannel,
-    ChannelKind,
-    DefaultPolicy,
+from app.dataModel.cascade.cascadeGraph import (
     cascade_channels,
     check_link,
+)
+from app.dataModel.cascade.cascadeSpec import (
+    Cascade,
+    CascadeChannel,
+    CascadeLink,
+    ChannelKind,
+    DefaultPolicy,
+    ScopeAxis,
+)
+from app.dataModel.cascade.cascadeVerify import (
     verify_cascade_contract,
 )
 from app.dataModel.locations.context.locationContext import LocationContext
@@ -44,16 +50,17 @@ def registry(values):
 
 class LocationContextContractTests(unittest.TestCase):
     def test_canonical_level_order_and_rank(self):
-        self.assertEqual([level.value for level in CascadeLevel],
+        self.assertEqual([level.value for level in ScopeLevel],
                          ["world", "settlement", "district", "area", "building", "room"])
-        self.assertEqual([level.rank for level in CascadeLevel], list(range(6)))
-        self.assertIs(CascadeLevel("building"), CascadeLevel.BUILDING)
+        self.assertEqual([level.rank for level in ScopeLevel], list(range(6)))
+        self.assertIs(ScopeLevel("building"), ScopeLevel.BUILDING)
 
     def test_cascade_metadata_is_frozen_and_has_extension_slots(self):
         spec = Cascade("test_field", DefaultPolicy.NONE_IS_ERROR,
-                       fold="test_fold", levels=(CascadeLevel.WORLD, CascadeLevel.AREA))
+                       axis=ScopeLevel,
+                       fold="test_fold", levels=(ScopeLevel.WORLD, ScopeLevel.AREA))
         self.assertEqual(spec.fold, "test_fold")
-        self.assertEqual(spec.levels, (CascadeLevel.WORLD, CascadeLevel.AREA))
+        self.assertEqual(spec.levels, (ScopeLevel.WORLD, ScopeLevel.AREA))
         with self.assertRaises(FrozenInstanceError):
             spec.field = "changed"
         tier_spec = LocationContext.model_fields["economic_tier"].metadata
@@ -63,22 +70,22 @@ class LocationContextContractTests(unittest.TestCase):
 
     def test_only_v1_fields_and_branded_tier(self):
         self.assertEqual(set(LocationContext.model_fields), {"level", "economic_tier", "provenance"})
-        context = LocationContext(level=CascadeLevel.BUILDING, economic_tier="custom_tier",
-                                  provenance={"economic_tier": (CascadeLevel.AREA, "economic_tier")})
+        context = LocationContext(level=ScopeLevel.BUILDING, economic_tier="custom_tier",
+                                  provenance={"economic_tier": (ScopeLevel.AREA, "economic_tier")})
         self.assertIsInstance(context.economic_tier, RegistryKey)
-        self.assertEqual(context.provenance["economic_tier"], (CascadeLevel.AREA, "economic_tier"))
+        self.assertEqual(context.provenance["economic_tier"], (ScopeLevel.AREA, "economic_tier"))
         with self.assertRaises(ValidationError):
-            LocationContext(level=CascadeLevel.WORLD, wall_material="stone")
+            LocationContext(level=ScopeLevel.WORLD, wall_material="stone")
         with self.assertRaises(ValidationError):
-            LocationContext(level=CascadeLevel.BUILDING, economic_tier="")
+            LocationContext(level=ScopeLevel.BUILDING, economic_tier="")
         with self.assertRaises(ValidationError):
             LocationContext(level="unknown")
         with self.assertRaises(ValidationError):
-            LocationContext(level=CascadeLevel.BUILDING, provenance={"economic_tier": ("unknown", "authored")})
+            LocationContext(level=ScopeLevel.BUILDING, provenance={"economic_tier": ("unknown", "authored")})
 
     def test_model_fields_are_frozen(self):
-        context = LocationContext(level=CascadeLevel.BUILDING, economic_tier="custom")
-        for name, value in (("level", CascadeLevel.ROOM), ("economic_tier", "changed"), ("provenance", {})):
+        context = LocationContext(level=ScopeLevel.BUILDING, economic_tier="custom")
+        for name, value in (("level", ScopeLevel.ROOM), ("economic_tier", "changed"), ("provenance", {})):
             with self.subTest(field=name), self.assertRaises(ValidationError) as error:
                 setattr(context, name, value)
             self.assertEqual(error.exception.errors()[0]["type"], "frozen_instance")
@@ -89,7 +96,7 @@ class LocationContextContractTests(unittest.TestCase):
             with self.assertNoLogs(level="WARNING"):
                 first, second = LocationContext.root(world), LocationContext.root(world)
         default.assert_not_called()
-        self.assertIs(first.level, CascadeLevel.WORLD)
+        self.assertIs(first.level, ScopeLevel.WORLD)
         self.assertIsNone(first.economic_tier)
         self.assertEqual(first.provenance, {})
         self.assertIsNot(first.provenance, second.provenance)
@@ -133,26 +140,26 @@ class LocationContextContractTests(unittest.TestCase):
         models = (RoomDef, BundleNamedLocation, PlotLayoutTemplate,
                   DistrictTemplateEntry, SettlementSkeleton)
         expected = {
-            CascadeLevel.ROOM: {
+            ScopeLevel.ROOM: {
                 (RoomDef, "economic_tier"),
                 (BundleNamedLocation, "system_economic_tier"),
             },
-            CascadeLevel.BUILDING: {
+            ScopeLevel.BUILDING: {
                 (BundleNamedLocation, "system_economic_tier")},
-            CascadeLevel.AREA: {
+            ScopeLevel.AREA: {
                 (PlotLayoutTemplate, "economic_tier"),
                 (PlotLayoutTemplate, "economic_tier_band"),
                 (PlotLayoutTemplate, "economic_tier_range"),
             },
-            CascadeLevel.DISTRICT: {
+            ScopeLevel.DISTRICT: {
                 (BundleNamedLocation, "system_economic_tier"),
                 (DistrictTemplateEntry, "economic_tier_range"),
             },
-            CascadeLevel.SETTLEMENT: {
+            ScopeLevel.SETTLEMENT: {
                 (BundleNamedLocation, "system_economic_tier"),
                 (SettlementSkeleton, "economic_tier"),
             },
-            CascadeLevel.WORLD: set(),
+            ScopeLevel.WORLD: set(),
         }
         for level, wanted in expected.items():
             found = {
@@ -186,11 +193,11 @@ class LocationContextContractTests(unittest.TestCase):
         nl = BundleNamedLocation(
             location_uid="x", display_name="x", system_location_type="building",
         )
-        check_link(CascadeLevel.BUILDING, nl)
+        check_link(ScopeLevel.BUILDING, nl)
         with self.assertRaises(TypeError):
-            check_link(CascadeLevel.AREA, nl)
+            check_link(ScopeLevel.AREA, nl)
         with self.assertRaises(TypeError):
-            check_link(CascadeLevel.WORLD, nl)
+            check_link(ScopeLevel.WORLD, nl)
 
     def test_nullable_field_is_a_channel_not_absence(self):
         # A declared channel with a null value keeps cascading; a model
@@ -198,24 +205,42 @@ class LocationContextContractTests(unittest.TestCase):
         self.assertTrue(cascade_channels(PlotLayoutTemplate, ECONOMIC_TIER))
         self.assertEqual(
             cascade_channels(
-                PlotLayoutTemplate, level=CascadeLevel.WORLD), ())
+                PlotLayoutTemplate, level=ScopeLevel.WORLD), ())
 
     def test_contract_detects_param_without_channels(self):
         class FakeContext(BaseModel):
             ghost: Annotated[
                 str | None,
                 Cascade(field="ghost", default=DefaultPolicy.NONE_IS_ERROR,
-                        levels=(CascadeLevel.AREA,)),
+                        axis=ScopeLevel, levels=(ScopeLevel.AREA,)),
             ] = None
 
         with self.assertRaisesRegex(ValueError, "no channel declares it"):
             verify_cascade_contract(FakeContext)
 
+    def test_channel_on_foreign_axis_errors(self):
+        class OtherAxis(ScopeAxis):
+            ROOT = "root"
+            CHILD = "child"
+
+        class FakeSource(BaseModel):
+            name: Annotated[
+                DefaultOnWire[str | None],
+                CascadeChannel(ECONOMIC_TIER, OtherAxis.CHILD),
+            ] = None
+
+        try:
+            with self.assertRaisesRegex(ValueError, "foreign axis"):
+                verify_cascade_contract(LocationContext)
+        finally:
+            del FakeSource
+            gc.collect()
+
     def test_incompatible_channel_type_errors(self):
         class FakeSource(BaseModel):
             amount: Annotated[
                 DefaultOnWire[int | None],
-                CascadeChannel(ECONOMIC_TIER, CascadeLevel.DISTRICT),
+                CascadeChannel(ECONOMIC_TIER, ScopeLevel.DISTRICT),
             ] = None
 
         try:
@@ -225,9 +250,32 @@ class LocationContextContractTests(unittest.TestCase):
             del FakeSource
             gc.collect()
 
+    def test_value_edge_ends_with_different_types_error(self):
+        # `str` and `RegistryKey` both pass the kind check, but the
+        # chain bottom carries `EconomyTierKey` — a VALUE edge requires
+        # one base type (tz_cascade_context §2).
+        class FakeSource(BaseModel):
+            tier: Annotated[
+                DefaultOnWire[str | None],
+                CascadeChannel(
+                    ECONOMIC_TIER, ScopeLevel.SETTLEMENT,
+                    above=CascadeLink(
+                        SettlementSkeleton, "economic_tier",
+                        ScopeLevel.SETTLEMENT),
+                ),
+            ] = None
+
+        try:
+            with self.assertRaisesRegex(ValueError, "different types"):
+                verify_cascade_contract(LocationContext)
+        finally:
+            del FakeSource
+            gc.collect()
+
     def test_contract_modules_have_no_application_or_db_imports(self):
         root = Path(__file__).resolve().parents[1] / "app" / "dataModel"
         paths = list((root / "locations" / "context").glob("*.py"))
+        paths.extend((root / "cascade").glob("*.py"))
         paths.append(root / "economy" / "economyTier" / "worldEconomyTierRegistry.py")
         for path in paths:
             tree = ast.parse(path.read_text(encoding="utf-8"))

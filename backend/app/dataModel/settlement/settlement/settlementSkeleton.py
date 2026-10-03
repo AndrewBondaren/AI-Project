@@ -7,9 +7,9 @@ from typing import Annotated, ClassVar, Literal
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire
-from app.dataModel.locations.context.cascadeLevel import CascadeLevel
+from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
-from app.dataModel.locations.context.cascadeSpec import CascadeChannel
+from app.dataModel.cascade.cascadeSpec import CascadeChannel
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     ConnectionTypeKey,
 )
@@ -66,7 +66,7 @@ class SettlementSkeleton(BaseModel):
     # NamedLocation.system_economic_tier is materialized by the verifier.
     economic_tier: Annotated[
         DefaultOnWire[EconomyTierKey | None],
-        CascadeChannel(ECONOMIC_TIER, CascadeLevel.SETTLEMENT),
+        CascadeChannel(ECONOMIC_TIER, ScopeLevel.SETTLEMENT),
     ] = None
     architectural_style: DefaultOnWire[str | None] = None
     dominant_material: DefaultOnWire[MaterialKey | None] = None

@@ -5,10 +5,18 @@ the import instead of silently degrading to inherit/default
 (tz_cascade_context §3).
 """
 
-from app.dataModel.locations.context.cascadeSpec import Cascade, DefaultPolicy
+from app.dataModel.cascade.cascadeSpec import (
+    Cascade,
+    ChannelKind,
+    DefaultPolicy,
+)
+from app.dataModel.locations.context.scopeLevel import ScopeLevel
+from app.dataModel.shared.ranges import EconomicTierRange
 
 ECONOMIC_TIER = Cascade(
     # Canonical authored/stamp field on NamedLocation-derived sources.
     field="system_economic_tier",
     default=DefaultPolicy.REGISTRY_MEDIAN,
+    axis=ScopeLevel,
+    input_types=((ChannelKind.RANGE, EconomicTierRange),),
 )

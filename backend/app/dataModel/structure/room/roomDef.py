@@ -4,9 +4,10 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, ValidationError, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire, StrictEnumOnWire
-from app.dataModel.locations.context.cascadeLevel import CascadeLevel
+from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
+from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
-from app.dataModel.locations.context.cascadeSpec import CascadeChannel
+from app.dataModel.cascade.cascadeSpec import CascadeChannel
 from app.dataModel.structure.enums.attachWall import AttachWall
 from app.dataModel.structure.enums.buildingPurpose import BuildingPurpose
 from app.dataModel.structure.enums.passageType import PassageType
@@ -33,8 +34,8 @@ class RoomDef(BaseModel):
     # is declared on the NL side (NamedLocation may import RoomDef,
     # not vice versa — tz_cascade_context §2).
     economic_tier: Annotated[
-        DefaultOnWire[str | None],
-        CascadeChannel(ECONOMIC_TIER, CascadeLevel.ROOM),
+        DefaultOnWire[EconomyTierKey | None],
+        CascadeChannel(ECONOMIC_TIER, ScopeLevel.ROOM),
     ] = None
     attach_to: DefaultOnWire[str | None] = None
     attach_wall: StrictEnumOnWire[AttachWall] = AttachWall.BOTH

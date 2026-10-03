@@ -12,9 +12,9 @@ from typing import Annotated, Any
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
-from app.dataModel.locations.context.cascadeLevel import CascadeLevel
+from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
-from app.dataModel.locations.context.cascadeSpec import (
+from app.dataModel.cascade.cascadeSpec import (
     CascadeChannel,
     CascadeLink,
     ChannelKind,
@@ -57,20 +57,20 @@ class PlotLayoutTemplate(BaseModel):
     economic_tier: Annotated[
         DefaultOnWire[EconomyTierKey | None],
         CascadeChannel(
-            ECONOMIC_TIER, CascadeLevel.AREA,
-            below=CascadeLink(None, "economic_tier_band", CascadeLevel.AREA),
+            ECONOMIC_TIER, ScopeLevel.AREA,
+            below=CascadeLink(None, "economic_tier_band", ScopeLevel.AREA),
         ),
     ] = None
     economic_tier_band: Annotated[
         DefaultOnWire[str | None],
         CascadeChannel(
-            ECONOMIC_TIER, CascadeLevel.AREA, kind=ChannelKind.BAND,
-            below=CascadeLink(None, "economic_tier_range", CascadeLevel.AREA),
+            ECONOMIC_TIER, ScopeLevel.AREA, kind=ChannelKind.BAND,
+            below=CascadeLink(None, "economic_tier_range", ScopeLevel.AREA),
         ),
     ] = None
     economic_tier_range: Annotated[
         DefaultOnWire[EconomicTierRange | None],
-        CascadeChannel(ECONOMIC_TIER, CascadeLevel.AREA, kind=ChannelKind.RANGE),
+        CascadeChannel(ECONOMIC_TIER, ScopeLevel.AREA, kind=ChannelKind.RANGE),
     ] = None
     perimeter_barrier: DefaultOnWire[PerimeterBarrier] = Field(
         default_factory=PerimeterBarrier,

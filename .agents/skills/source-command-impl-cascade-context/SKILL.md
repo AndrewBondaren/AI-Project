@@ -18,7 +18,7 @@ Use this skill when the user asks to run the migrated source command `impl-casca
 ## Прочитать до первой правки
 
 1. [`.cursor/plans/cascade-context-resolution.md`](../plans/cascade-context-resolution.md) — **контракт, порядок шагов, проверки**; не отклоняться. S0 закрыт — решения мастера не пересогласовывать.
-2. [`docs/tz_cascade_context.md`](../../docs/tz_cascade_context.md) — целиком (цепочка, `Cascade`/`CascadeLevel`/`DefaultPolicy`, `extend`, persist, кейсы §8).
+2. [`docs/tz_cascade_context.md`](../../docs/tz_cascade_context.md) — целиком (цепочка, `Cascade`/`ScopeLevel`/`DefaultPolicy`, `extend`, persist, кейсы §8).
 3. [`docs/tz_economic_tier.md`](../../docs/tz_economic_tier.md) §4 (каскад с area/range), §9 (поля).
 4. [`docs/tz_locations.md`](../../docs/tz_locations.md) — семантика `named_locations.system_economic_tier` («null → наследует от parent»).
 5. Существующий код точек потребления: `generators/utils/tierResolver.py`, `utils/materialResolver.py`, `structure/structureGeneratorService.py` (4 вызова), `structure/room/roomFactory.py`, `structure/passages/wallOpening.py`, `assemblers/settlementAssembler`, `assemblers/areaAssembler/structureAreaAssembler.py` (`_place_building`), `settlementOutdoor/settlementOutdoorExtract.py`, `structureContext.py` (`building_band`).
@@ -53,7 +53,7 @@ stamp `system_economic_tier` на каждой NL цепочки, потреби
 
 ## Порядок — строго по шагам плана
 
-S1 (baseline-тесты) → S2 (dataModel: `CascadeLevel`, `Cascade`,
+S1 (baseline-тесты) → S2 (dataModel: `ScopeLevel`, `Cascade`,
 `LocationContext`) → S3 (`context/cascadeLink` адаптеры + `extend()` +
 `EmptyLink`) → S4 (проводка caller'ов; если дифф не ревьюится — S4a/S4b
 по плану) → S5 (приёмка + пометки).

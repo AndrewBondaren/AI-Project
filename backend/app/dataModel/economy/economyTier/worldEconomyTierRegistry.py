@@ -15,7 +15,7 @@ from app.dataModel.economy.economyTier.economyTierEntry import (
 from app.dataModel.registryKey import RegistryKey
 
 if TYPE_CHECKING:
-    from app.dataModel.locations.context.cascadeSpec import DefaultPolicy
+    from app.dataModel.cascade.cascadeSpec import DefaultPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ class WorldEconomyTierRegistry(RootModel[list[EconomyTierEntry]]):
         """Domain policy for the cascade; no builtin tier fallback (§3, §5)."""
         # locations package re-exports settlement models that reference this
         # registry. Load the metadata at invocation, after model initialization.
-        from app.dataModel.locations.context.cascadeSpec import DefaultPolicy
+        from app.dataModel.cascade.cascadeSpec import DefaultPolicy
 
         match policy:
             case DefaultPolicy.REGISTRY_MEDIAN:

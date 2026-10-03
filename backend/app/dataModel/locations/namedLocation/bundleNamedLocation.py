@@ -7,9 +7,9 @@ from typing import Annotated, Any
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire, IgnoreOnWire, StrictOnWire
-from app.dataModel.locations.context.cascadeLevel import CascadeLevel
+from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
-from app.dataModel.locations.context.cascadeSpec import CascadeChannel, CascadeLink
+from app.dataModel.cascade.cascadeSpec import CascadeChannel, CascadeLink
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     ConnectionTypeKey,
 )
@@ -73,23 +73,23 @@ class BundleNamedLocation(BaseModel):
     system_economic_tier: Annotated[
         DefaultOnWire[EconomyTierKey | None],
         CascadeChannel(
-            ECONOMIC_TIER, CascadeLevel.ROOM,
-            above=CascadeLink(RoomDef, "economic_tier", CascadeLevel.ROOM),
-            below=CascadeLink(None, "system_economic_tier", CascadeLevel.BUILDING),
+            ECONOMIC_TIER, ScopeLevel.ROOM,
+            above=CascadeLink(RoomDef, "economic_tier", ScopeLevel.ROOM),
+            below=CascadeLink(None, "system_economic_tier", ScopeLevel.BUILDING),
         ),
         CascadeChannel(
-            ECONOMIC_TIER, CascadeLevel.BUILDING,
-            below=CascadeLink(PlotLayoutTemplate, "economic_tier", CascadeLevel.AREA),
+            ECONOMIC_TIER, ScopeLevel.BUILDING,
+            below=CascadeLink(PlotLayoutTemplate, "economic_tier", ScopeLevel.AREA),
         ),
         CascadeChannel(
-            ECONOMIC_TIER, CascadeLevel.DISTRICT,
-            above=CascadeLink(PlotLayoutTemplate, "economic_tier_range", CascadeLevel.AREA),
-            below=CascadeLink(DistrictTemplateEntry, "economic_tier_range", CascadeLevel.DISTRICT),
+            ECONOMIC_TIER, ScopeLevel.DISTRICT,
+            above=CascadeLink(PlotLayoutTemplate, "economic_tier_range", ScopeLevel.AREA),
+            below=CascadeLink(DistrictTemplateEntry, "economic_tier_range", ScopeLevel.DISTRICT),
         ),
         CascadeChannel(
-            ECONOMIC_TIER, CascadeLevel.SETTLEMENT,
-            above=CascadeLink(DistrictTemplateEntry, "economic_tier_range", CascadeLevel.DISTRICT),
-            below=CascadeLink(SettlementSkeleton, "economic_tier", CascadeLevel.SETTLEMENT),
+            ECONOMIC_TIER, ScopeLevel.SETTLEMENT,
+            above=CascadeLink(DistrictTemplateEntry, "economic_tier_range", ScopeLevel.DISTRICT),
+            below=CascadeLink(SettlementSkeleton, "economic_tier", ScopeLevel.SETTLEMENT),
         ),
     ] = _skeleton_default(
         "economic_tier",

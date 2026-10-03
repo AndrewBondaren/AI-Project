@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, Annotated, Any
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
-from app.dataModel.locations.context.cascadeLevel import CascadeLevel
+from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
-from app.dataModel.locations.context.cascadeSpec import (
+from app.dataModel.cascade.cascadeSpec import (
     CascadeChannel,
     ChannelKind,
 )
@@ -60,7 +60,7 @@ class DistrictTemplateEntry(BaseModel):
     economic_tier_range: Annotated[
         DefaultOnWire[EconomicTierRange | None],
         CascadeChannel(
-            ECONOMIC_TIER, CascadeLevel.DISTRICT, kind=ChannelKind.RANGE,
+            ECONOMIC_TIER, ScopeLevel.DISTRICT, kind=ChannelKind.RANGE,
         ),
     ] = None
     density: DefaultOnWire[DistrictDensity | None] = None
