@@ -77,12 +77,16 @@ from app.application.worldData.generators.road.streetCells import (
     rasterize_street_xy,
 )
 from app.application.worldData.generators.structure.structureGeneratorService import StructureLayout
+from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
+    district_location_uid,
+)
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
 )
 from app.dataModel.locations.settlement.district.districtConnection import street_classes_for
 from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
 from app.db.models.mapCell import MapCell
+from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
@@ -106,6 +110,7 @@ class DistrictAssembler:
         settlement_uid:  str | None = None,
         catalog:         BuildingCatalog | None = None,
         timings:         SettlementAssembleTimings | None = None,
+        existing_buildings: dict[str, NamedLocation] | None = None,
     ) -> DistrictLayout:
         packing_t0 = time.perf_counter()
         template = slot.district_template
@@ -230,6 +235,9 @@ class DistrictAssembler:
         )
 
         area_assembler = StructureAreaAssembler()
+        d_uid = district_location_uid(
+            settlement_uid, template.system_name, slot.slot_index,
+        )
         area_layouts: list[AreaLayout] = []
         for placement in placements:
             local_street = touching_street_xy(plot_cells(placement), street_xy)
@@ -249,6 +257,9 @@ class DistrictAssembler:
                 structure_catalog=catalog.structures,
                 building_x=placement.building_x,
                 building_y=placement.building_y,
+                district_ctx=slot.district_ctx,
+                district_uid=d_uid,
+                existing_buildings=existing_buildings,
             )
             area_layouts.append(layout)
 

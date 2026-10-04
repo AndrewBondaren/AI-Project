@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from app.dataModel.locations.context.locationContext import LocationContext
 from app.dataModel.spatial.facing import Facing
 
 
@@ -15,4 +16,6 @@ class StructureContext:
     porch_material:      str | None = None
     porch_has_roof:      bool = False
     ground_z:            int | None = None  # None → resolved from building.map_z
-    building_band:       str | None = None  # PlotLayoutTemplate.economic_tier_band
+    # Building-scope cascade ctx — effective economic_tier for all
+    # structure phases (tz_cascade_context §4, cascade-migration M2).
+    location_ctx:        LocationContext | None = None

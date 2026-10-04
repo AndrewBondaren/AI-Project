@@ -72,7 +72,7 @@ class StructureAreaAssemblerTests(unittest.TestCase):
         self.assertIs(calls[0][0], area.building_location)
         self.assertIs(calls[0][1], self.structure)
         self.assertNotIn("facing", calls[0][2])
-        self.assertEqual(calls[0][2]["building_band"], "rich")
+        self.assertEqual(calls[0][2]["ctx"].economic_tier, "exceptional")
         entry = self.entry(area.building_layout)
         self.assertEqual(area.threshold.kind, AreaThresholdKind.DOOR)
         self.assertEqual(area.threshold.cells, [(entry.to_x, entry.to_y)])

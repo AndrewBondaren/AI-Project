@@ -71,6 +71,7 @@ class SettlementAssembler:
         district_slots: list[DistrictSlot] | None = None,
         city_graph: tuple[list[ConnectionNode], list[ConnectionEdge]] | None = None,
         timings: SettlementAssembleTimings | None = None,
+        existing_buildings: dict[str, NamedLocation] | None = None,
     ) -> SettlementLayout:
         wall0 = time.perf_counter()
         ctx = settlement_context(world, settlement)
@@ -95,7 +96,7 @@ class SettlementAssembler:
         )
         if district_slots is None:
             planned_slots, planned_nodes, planned_edges = plan_slots_and_city_graph(
-                world, settlement, skeleton, terrain_cells,
+                world, settlement, skeleton, terrain_cells, ctx,
             )
             district_slots = planned_slots
             if city_graph is None:
@@ -123,6 +124,7 @@ class SettlementAssembler:
                 settlement_uid=settlement.location_uid,
                 catalog=catalog,
                 timings=timings,
+                existing_buildings=existing_buildings,
             )
             district_layouts.append(layout)
 

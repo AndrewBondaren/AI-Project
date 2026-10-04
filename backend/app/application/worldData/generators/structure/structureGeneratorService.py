@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 
+from app.dataModel.locations.context.locationContext import LocationContext
 from app.dataModel.materials import DEFAULT_WALL_MATERIAL
 from app.dataModel.locations.structure.building.roomConnection import RoomConnection
 from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
@@ -261,6 +262,7 @@ class StructureGeneratorService:
         ground_z: int | None = None,
         foundation_depth: int = 0,
         building_band: str | None = None,
+        ctx: LocationContext | None = None,
         facing: Facing | None = None,
     ) -> StructureLayout:
         validate_facing(facing, structure.system_name)
@@ -282,7 +284,7 @@ class StructureGeneratorService:
         staircases = self._resolve_staircases(structure)
         all_rooms, room_z_offsets, shaft_by_staircase = self._instantiate_rooms(
             structure, building, levels, world, rng, staircases, template_z_heights, definitions=definitions,
-            building_band=building_band,
+            building_band=building_band, ctx=ctx,
         )
         connections = self._resolve_connections(structure)
         self._layout_rooms(
@@ -292,12 +294,13 @@ class StructureGeneratorService:
 
         cells_dict, room_uids = self._generate_cells(
             structure, building, levels, all_rooms, world, connections, definitions,
-            rng=rng, building_band=building_band,
+            rng=rng, building_band=building_band, ctx=ctx,
         )
 
         passages = self._run_passages(
             structure, building, levels, all_rooms, room_z_offsets, cells_dict, world, rng,
             connections, staircases, ground_z=ground_z, building_band=building_band,
+            ctx=ctx,
         )
 
         connect_corridors(
@@ -309,7 +312,8 @@ class StructureGeneratorService:
 
         self._place_wall_openings(
             structure, building, levels, all_rooms, cells_dict, world, rng,
-            ground_z=ground_z, building_band=building_band, definitions=definitions,
+            ground_z=ground_z, building_band=building_band, ctx=ctx,
+            definitions=definitions,
         )
 
         _post_process(cells_dict)
@@ -340,6 +344,7 @@ class StructureGeneratorService:
         *,
         definitions: list[LevelDef],
         building_band: str | None = None,
+        ctx: LocationContext | None = None,
     ) -> tuple[list[_RoomInstance], dict[str, int], dict[str, list[_RoomInstance]]]:
         """Steps 2-3: instantiate template rooms + shaft rooms per level."""
         logger.info("=== PHASE: instantiate rooms ===")
@@ -352,11 +357,15 @@ class StructureGeneratorService:
             level       = levels[z_offset]
             level_rooms = instantiate_level_rooms(
                 level_def, template, level.z_height, z_offset, world, rng,
-                building_tier=TierResolver.resolve(
-                    world=world,
-                    building=building,
-                    building_band=building_band,
-                    rng=rng,
+                building_tier=(
+                    ctx.economic_tier
+                    if ctx is not None
+                    else TierResolver.resolve(
+                        world=world,
+                        building=building,
+                        building_band=building_band,
+                        rng=rng,
+                    )
                 ),
                 template_z_height=template_z_heights.get(z_offset),
                 building_band=building_band,
@@ -371,11 +380,15 @@ class StructureGeneratorService:
         shaft_rooms = instantiate_shaft_rooms(
             template, staircases, room_z_offsets, levels, world, rng,
             building_band=building_band,
-            building_tier=TierResolver.resolve(
-                world=world,
-                building=building,
-                building_band=building_band,
-                rng=rng,
+            building_tier=(
+                ctx.economic_tier
+                if ctx is not None
+                else TierResolver.resolve(
+                    world=world,
+                    building=building,
+                    building_band=building_band,
+                    rng=rng,
+                )
             ),
         )
         for sr in shaft_rooms:
@@ -690,6 +703,7 @@ class StructureGeneratorService:
         definitions: list[LevelDef],
         rng: Random | None = None,
         building_band: str | None = None,
+        ctx: LocationContext | None = None,
     ) -> tuple[dict[tuple, MapCell], dict[str, str]]:
         """Steps 6-8: assign UIDs, generate cells per level."""
         logger.info("=== PHASE: cell generation ===")
@@ -697,12 +711,15 @@ class StructureGeneratorService:
 
         # §8.7.1 — building economic context for the wall material selector.
         # A dedicated stream keeps the shared generation RNG unperturbed.
-        tier_rng = Random(
-            _make_seed(world.world_uid, f"{building.location_uid}#wall-tier"))
-        economic_tier = TierResolver.resolve(
-            world=world, building=building,
-            building_band=building_band, rng=tier_rng,
-        )
+        if ctx is not None:
+            economic_tier = ctx.economic_tier
+        else:
+            tier_rng = Random(
+                _make_seed(world.world_uid, f"{building.location_uid}#wall-tier"))
+            economic_tier = TierResolver.resolve(
+                world=world, building=building,
+                building_band=building_band, rng=tier_rng,
+            )
         band = EconomicTierBand.from_wire(band_of(world, economic_tier))
         if economic_tier is None or band is None:
             raise GenerationError(
@@ -771,6 +788,7 @@ class StructureGeneratorService:
         staircases: list[StaircaseSpec],
         ground_z: int,
         building_band: str | None = None,
+        ctx: LocationContext | None = None,
     ) -> list[LocationPassage]:
         """Steps 9-11: build passages (mutates cells_dict for door/staircase cells)."""
         for r in all_rooms:
@@ -781,11 +799,15 @@ class StructureGeneratorService:
             levels, room_z_offsets,
             world.world_uid, building.location_uid, rng,
             world=world, template=template, staircases=staircases,
-            building_tier=TierResolver.resolve(
-                world=world,
-                building=building,
-                building_band=building_band,
-                rng=rng,
+            building_tier=(
+                ctx.economic_tier
+                if ctx is not None
+                else TierResolver.resolve(
+                    world=world,
+                    building=building,
+                    building_band=building_band,
+                    rng=rng,
+                )
             ),
             ground_z=ground_z,
         )
@@ -807,14 +829,19 @@ class StructureGeneratorService:
         ground_z: int,
         building_band: str | None = None,
         *,
+        ctx: LocationContext | None = None,
         definitions: list[LevelDef],
     ) -> None:
         logger.info("=== PHASE: wall openings ===")
-        building_tier = TierResolver.resolve(
-            world=world,
-            building=building,
-            building_band=building_band,
-            rng=rng,
+        building_tier = (
+            ctx.economic_tier
+            if ctx is not None
+            else TierResolver.resolve(
+                world=world,
+                building=building,
+                building_band=building_band,
+                rng=rng,
+            )
         )
 
         for level_def in definitions:

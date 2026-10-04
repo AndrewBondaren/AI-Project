@@ -89,6 +89,6 @@ class BuildingAssembler(BaseBuildingAssembler):
             world, building, structure,
             ground_z=ground_z,
             foundation_depth=fd,
-            building_band=context.building_band,
+            ctx=context.location_ctx,
         )
         return self.attach_envelope(world, building, layout, context, terrain_cells)

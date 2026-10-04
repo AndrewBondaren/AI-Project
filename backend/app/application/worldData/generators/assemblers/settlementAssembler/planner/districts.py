@@ -40,6 +40,11 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     column_surface,
     resolve_district_pin_z,
 )
+from app.application.worldData.context.locationScope import district_context
+from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
+    district_location_uid,
+)
+from app.dataModel.locations.context.locationContext import LocationContext
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
@@ -71,10 +76,11 @@ class SettlementSpecializationResolve:
 
 
 def plan_district_slots(
-    world:         World,
-    settlement:    NamedLocation,
-    skeleton:      CitySkeleton,
-    terrain_cells: list[MapCell] | None,
+    world:          World,
+    settlement:     NamedLocation,
+    skeleton:       CitySkeleton,
+    terrain_cells:  list[MapCell] | None,
+    settlement_ctx: LocationContext | None = None,
 ) -> list[DistrictSlot]:
     """
     v1: равномерная прямоугольная сетка глобальных ячеек footprint.
@@ -159,6 +165,7 @@ def plan_district_slots(
             allowed,
             enabled,
         )
+        slot_index = len(slots)
         slots.append(DistrictSlot(
             origin_x=origin_x,
             origin_y=origin_y,
@@ -171,7 +178,21 @@ def plan_district_slots(
             cell_x=cell_x,
             cell_y=cell_y,
             subject_tags=subject_tags,
-            slot_index=len(slots),
+            slot_index=slot_index,
+            district_ctx=(
+                district_context(
+                    world,
+                    settlement_ctx,
+                    template,
+                    district_uid=district_location_uid(
+                        settlement.location_uid,
+                        template.system_name,
+                        slot_index,
+                    ),
+                )
+                if settlement_ctx is not None
+                else None
+            ),
         ))
         logger.info(
             "DistrictSlot created | cell=(%d,%d) template=%s district_type=%s"

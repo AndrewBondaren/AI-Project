@@ -40,6 +40,15 @@ from app.application.worldData.generators.assemblers.buildingAssembler.buildingA
 from app.application.worldData.generators.assemblers.buildingAssembler.structureContext import (
     StructureContext,
 )
+from app.application.worldData.context.locationScope import (
+    area_context,
+    building_context,
+    empty_location_chain,
+)
+from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
+    area_uid as _area_uid,
+    building_location_uid as _building_location_uid,
+)
 from app.application.worldData.generators.coordinates.approachZ import clamp_near_z_to_45
 from app.application.worldData.generators.coordinates.columnSurface import (
     column_surface,
@@ -51,6 +60,8 @@ from app.application.worldData.generators.structure.structureGeneratorService im
     OccupiedFootprint,
     StructureLayout,
 )
+from app.dataModel.locations.context.locationContext import LocationContext
+from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.materials import DEFAULT_FLOOR_MATERIAL, DEFAULT_WALL_MATERIAL
 from app.dataModel.locations.structure.building.buildingBodyTemplate import BuildingBodyTemplate
 from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog
@@ -69,16 +80,25 @@ Coord = tuple[int, int]
 
 
 def derive_structure_context(
+    world:         World,
     template:      PlotLayoutTemplate,
     city_skeleton: CitySkeleton,
     slot:          AreaSlot,
     terrain_cells: list[MapCell] | None,
     *,
     ground_z:      int,
+    district_ctx:  LocationContext,
+    area_uid:      str,
+    building:      NamedLocation,
 ) -> StructureContext:
     """
     v1: тело участка (main_building), геометрия в авторском фрейме.
     ground_z = building.map_z на посадке. terrain_cells читает envelope.
+
+    ``district_ctx`` — resolved district-scope cascade ctx; ``building``
+    — NL-звено building-уровня (persisted row при перегенерации, иначе
+    свежий in-memory NL из ``_place_building``). Effective tier всех
+    structure-фаз — ``context.location_ctx.economic_tier`` (§4).
     """
     _ = city_skeleton
     if terrain_cells:
@@ -87,6 +107,9 @@ def derive_structure_context(
             len(terrain_cells),
             ground_z,
         )
+    area_ctx = area_context(
+        world, district_ctx, template, area_uid=area_uid,
+    )
     body = template.main_building
     defaults = BuildingBodyTemplate.model_fields
     return StructureContext(
@@ -103,7 +126,7 @@ def derive_structure_context(
             else defaults["foundation_depth"].default
         ),
         ground_z=ground_z,
-        building_band=template.economic_tier_band,
+        location_ctx=building_context(world, area_ctx, building),
         foundation_material=(
             body.foundation_material
             if body is not None
@@ -190,6 +213,9 @@ class StructureAreaAssembler:
         street_xy:      Set[Coord] = frozenset(),
         building_x:     int | None = None,
         building_y:     int | None = None,
+        district_ctx:   LocationContext | None = None,
+        district_uid:   str | None = None,
+        existing_buildings: dict[str, NamedLocation] | None = None,
     ) -> AreaLayout:
         bx = building_x if building_x is not None else (
             min(c[0] for c in slot.cells) if slot.cells else 0
@@ -237,9 +263,41 @@ class StructureAreaAssembler:
                 raise GenerationError(
                     f"Plot '{template.system_name}': structure '{body.structure}' not found"
                 )
+            slot_cells = list(slot.cells) or [(0, 0)]
+            area_uid = (
+                _area_uid(
+                    district_uid,
+                    min(c[0] for c in slot_cells),
+                    min(c[1] for c in slot_cells),
+                    slot.facing,
+                )
+                if district_uid is not None
+                else f"{building.location_uid}#area"
+            )
+            link = building
+            if district_uid is not None and existing_buildings:
+                b_uid = _building_location_uid(
+                    area_uid, template.system_name, bx, by,
+                )
+                link = existing_buildings.get(b_uid) or building
+                if link is not building and link.system_economic_tier:
+                    # Authored building tier survives regeneration:
+                    # the persisted row is the cascade link AND its
+                    # authored stamp is carried onto the re-extracted NL.
+                    building = replace(
+                        building,
+                        system_economic_tier=link.system_economic_tier,
+                    )
             context = derive_structure_context(
-                template, city_skeleton, slot, terrain_cells,
+                world, template, city_skeleton, slot, terrain_cells,
                 ground_z=int(building.map_z),
+                district_ctx=(
+                    district_ctx
+                    if district_ctx is not None
+                    else empty_location_chain(world, ScopeLevel.DISTRICT)
+                ),
+                area_uid=area_uid,
+                building=link,
             )
             building_layout = BuildingAssembler().assemble(
                 world, building, body, structure, context, terrain_cells,

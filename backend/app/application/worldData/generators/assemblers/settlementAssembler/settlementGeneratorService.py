@@ -74,7 +74,7 @@ class SettlementGeneratorService:
             economic_tier=ctx.economic_tier,
         )
         return plan_slots_and_city_graph_fn(
-            world, settlement, skeleton, terrain_cells,
+            world, settlement, skeleton, terrain_cells, ctx,
         )
 
     def generate_layout(
@@ -87,11 +87,12 @@ class SettlementGeneratorService:
         district_slots: list[DistrictSlot] | None = None,
         city_graph: tuple[list[ConnectionNode], list[ConnectionEdge]] | None = None,
         timings: SettlementAssembleTimings | None = None,
+        existing_buildings: dict[str, NamedLocation] | None = None,
     ) -> SettlementLayout:
         return self._assembler.assemble(
             world, settlement, terrain_cells, catalog=catalog,
             district_slots=district_slots, city_graph=city_graph,
-            timings=timings,
+            timings=timings, existing_buildings=existing_buildings,
         )
 
     def collect_map_cells(

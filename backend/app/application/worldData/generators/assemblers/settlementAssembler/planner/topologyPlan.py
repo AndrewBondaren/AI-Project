@@ -28,6 +28,7 @@ from app.application.worldData.generators.coordinates import (
     map_cell_fine_span,
     settlement_origin_fine,
 )
+from app.dataModel.locations.context.locationContext import LocationContext
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.mapCell import MapCell
@@ -59,8 +60,11 @@ def plan_slots_and_city_graph(
     settlement: NamedLocation,
     skeleton: CitySkeleton,
     terrain_cells: list[MapCell] | None,
+    settlement_ctx: LocationContext | None = None,
 ) -> tuple[list[DistrictSlot], list[ConnectionNode], list[ConnectionEdge]]:
-    slots = plan_district_slots(world, settlement, skeleton, terrain_cells)
+    slots = plan_district_slots(
+        world, settlement, skeleton, terrain_cells, settlement_ctx,
+    )
     nodes, edges = plan_city_graph_for_slots(
         world, settlement, skeleton, slots, terrain_cells,
     )

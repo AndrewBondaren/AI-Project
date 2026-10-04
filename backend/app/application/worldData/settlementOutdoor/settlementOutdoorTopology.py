@@ -18,10 +18,12 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     resolve_settlement_specialization,
     slot_allowed_for_template,
 )
+from app.application.worldData.context.locationScope import district_context
 from app.application.worldData.settlementOutdoor.settlementOutdoorTypes import (
     is_district_location,
 )
 from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
+from app.dataModel.locations.context.locationContext import LocationContext
 from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.dataModel.locations.settlement.district.districtTopologySlot import DistrictTopologySlot
 from app.dataModel.locations.settlement.district.requiredStructureResolve import (
@@ -157,6 +159,7 @@ def load_topology_slots(
     settlement: NamedLocation,
     skeleton: CitySkeleton,
     districts: list[NamedLocation],
+    settlement_ctx: LocationContext | None = None,
 ) -> list[DistrictSlot] | None:
     rows = [child for child in districts if child.district_topology]
     if len(rows) != len(districts) or not rows:
@@ -217,6 +220,17 @@ def load_topology_slots(
             cell_y=wire.cell_y,
             subject_tags=dict(resolved.subject_tags),
             slot_index=wire.slot_index,
+            district_ctx=(
+                district_context(
+                    world,
+                    settlement_ctx,
+                    template,
+                    district=row,
+                    district_uid=row.location_uid,
+                )
+                if settlement_ctx is not None
+                else None
+            ),
         ))
     leftover = unhosted_settlement_types(
         list(resolved.required_types),

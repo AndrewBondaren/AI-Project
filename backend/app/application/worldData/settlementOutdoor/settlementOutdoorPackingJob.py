@@ -75,6 +75,7 @@ from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.db.repositories.iConnectionEdgeRepository import IConnectionEdgeRepository
 from app.db.repositories.iConnectionNodeRepository import IConnectionNodeRepository
+from app.db.repositories.iNamedLocationRepository import INamedLocationRepository
 
 
 @dataclass
@@ -105,6 +106,7 @@ class SettlementOutdoorPackingJob:
         structure_library: StructureTemplateLibraryService,
         node_repo: IConnectionNodeRepository,
         edge_repo: IConnectionEdgeRepository,
+        location_repo: INamedLocationRepository | None = None,
     ) -> None:
         self._generator = generator
         self._sql = sql_persist
@@ -113,6 +115,7 @@ class SettlementOutdoorPackingJob:
         self._structure_library = structure_library
         self._nodes = node_repo
         self._edges = edge_repo
+        self._locations = location_repo
 
     async def run_queue(
         self,
@@ -156,6 +159,7 @@ class SettlementOutdoorPackingJob:
         world_edges = await self._edges.get_by_world(world.world_uid)
         frozen_slots = load_topology_slots(
             world, settlement, skeleton, topology_districts(children),
+            settlement_ctx,
         )
         if frozen_slots is None:
             raise SettlementOutdoorConflictError(
@@ -250,12 +254,19 @@ class SettlementOutdoorPackingJob:
         ctx: DistrictPackContext,
     ) -> tuple[MaterializeResult, int, SettlementPipelineTimings]:
         location_uid = ctx.settlement.location_uid
+        existing_buildings = None
+        if self._locations is not None:
+            existing_buildings = {
+                nl.location_uid: nl
+                for nl in await self._locations.get_children(ctx.district_uid)
+            }
         layout = self._generator.generate_layout(
             ctx.world, ctx.settlement, ctx.terrain_cells or None,
             catalog=ctx.catalog,
             district_slots=[ctx.slot],
             city_graph=ctx.city_graph,
             timings=ctx.assemble,
+            existing_buildings=existing_buildings,
         )
         generate_s = ctx.clock.lap()
         extracted = extract_settlement(

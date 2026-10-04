@@ -125,6 +125,11 @@ def _district_named_location(
         map_y=slot.origin_y,
         map_z=slot.ground_z,
         state_uid=settlement.state_uid,
+        system_economic_tier=(
+            slot.district_ctx.economic_tier
+            if slot.district_ctx is not None
+            else None
+        ),
         district_topology=topology_slot_wire(slot, slot_index=slot_index).model_dump(mode="json"),
     )
 

@@ -16,6 +16,7 @@ from pathlib import Path
 from random import Random
 from unittest.mock import patch
 
+from app.application.worldData.context.locationScope import empty_location_chain
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
 from app.application.worldData.generators.assemblers.areaAssembler.structureAreaAssembler import derive_structure_context
 from app.application.worldData.generators.assemblers.buildingAssembler.structureContext import StructureContext
@@ -28,6 +29,7 @@ from app.application.worldData.generators.structure.roof.roofBuilder import Roof
 from app.application.worldData.generators.utils import materialResolver
 from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.dataModel.economy.economyTier.economyTierEntry import EconomyTierEntry
+from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import WorldEconomyTierRegistry
 from app.dataModel.materials.enums.materialCategory import MaterialCategory
 from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
@@ -178,21 +180,28 @@ class CascadeContextBaselineTests(unittest.TestCase):
         self.assertEqual({m["tier"] for m in result["materials"] if m["use"] == "window_glass"}, {"t8", "t9"})
         self.assertEqual(result["geometry_sha256"], snapshot()["geometry_sha256"])
 
-    def test_plot_authored_tier_and_range_are_dead_but_band_is_forwarded(self):
+    def test_plot_authored_tier_wins_over_range_and_band_at_area_scope(self):
+        # M2: the formerly dead plot channels are live — the authored
+        # economic_tier VALUE resolves at the area boundary and beats
+        # the template's range and band (tz_cascade_context §4).
         world, building, structure = fixture()
         settlement = replace(building, location_uid="city", system_location_type="settlement", system_economic_tier="t1")
         skeleton = city_skeleton_from_settlement(settlement, economic_tier="t1")
         slot = AreaSlot(cells=[(20, 30)], ground_z=7, facing=Facing.SOUTH)
-        contexts = []
+        district_ctx = empty_location_chain(world, ScopeLevel.DISTRICT)
+        tiers = []
         for tier in ("t2", "t9"):
             plot = PlotLayoutTemplate(
                 system_name="plot", display_name="Plot", economic_tier=tier,
                 economic_tier_range={"min": "t6", "max": "t9"}, economic_tier_band="common",
                 main_building={"structure": structure.system_name},
             )
-            contexts.append(derive_structure_context(plot, skeleton, slot, None, ground_z=7))
-        self.assertEqual(contexts[0], contexts[1])
-        self.assertEqual(contexts[0].building_band, "common")
+            context = derive_structure_context(
+                world, plot, skeleton, slot, None, ground_z=7,
+                district_ctx=district_ctx, area_uid="area", building=building,
+            )
+            tiers.append(context.location_ctx.economic_tier)
+        self.assertEqual(tiers, ["t2", "t9"])
         # The helper's template_tier channel works; roomFactory never supplies it.
         self.assertEqual(materialResolver.resolve_room_materials(world, None, "t2", Random(0)),
                          ("wall_t2", "floor_t2"))

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from app.application.worldData.generators.assemblers.districtAssembler.connectionEntry import ConnectionEntry
+from app.dataModel.locations.context.locationContext import LocationContext
 from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.locations.settlement.district.requiredStructure import RequiredStructure
 from app.dataModel.locations.structure.enums.buildingPurpose import AllowedToken
@@ -45,3 +46,6 @@ class DistrictSlot:
     subject_tags:        dict[str, tuple[str, ...]] = field(default_factory=dict)
     # C23 freeze index — same key as district_topology.slot_index / C5 uid.
     slot_index:          int = 0
+    # District-scope cascade ctx — stamped at slot creation (planner /
+    # topology reload); consumed by StructureAreaAssembler (M2).
+    district_ctx:        LocationContext | None = None

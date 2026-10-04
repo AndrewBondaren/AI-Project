@@ -103,6 +103,7 @@ class SettlementOutdoorOrchestrator:
         self._packing = SettlementOutdoorPackingJob(
             generator, sql_persist, self._invalidate,
             library, structure_library, node_repo, edge_repo,
+            location_repo,
         )
 
     def _require_pack(self, world: World) -> MapCellQueryFacade:
