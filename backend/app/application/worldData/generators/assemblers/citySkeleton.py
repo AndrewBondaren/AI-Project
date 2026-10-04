@@ -62,13 +62,18 @@ def _branded_resolved_aliases(*, economic_tier: str | None) -> dict[str, Economy
     return branded
 
 
+def settlement_skeleton_pojo(settlement: NamedLocation) -> SettlementSkeleton:
+    """NL → ``SettlementSkeleton`` source POJO (authored wire fields)."""
+    return SettlementSkeleton.model_validate(_skeleton_wire_from_location(settlement))
+
+
 def city_skeleton_from_settlement(
     settlement: NamedLocation,
     *,
     economic_tier: str | None,
 ) -> "CitySkeleton":
     """Mirror SettlementSkeleton onto runtime CitySkeleton (assembler §7.1)."""
-    pojo = SettlementSkeleton.model_validate(_skeleton_wire_from_location(settlement))
+    pojo = settlement_skeleton_pojo(settlement)
     payload: dict = {}
     for field in dataclass_fields(CitySkeleton):
         name = field.name

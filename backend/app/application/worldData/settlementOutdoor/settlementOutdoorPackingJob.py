@@ -30,7 +30,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
 from app.application.worldData.generators.assemblers.settlementAssembler.timings import (
     SettlementAssembleTimings,
 )
-from app.application.worldData.generators.utils.tierResolver import TierResolver
+from app.application.worldData.context.locationScope import settlement_context
 from app.application.worldData.generators.structure.errors import GenerationError
 from app.application.worldData.mapCellQueryFacade import MapCellQueryFacade
 from app.application.worldData.pack.io.worldPackWriter import WorldPackWriter
@@ -147,9 +147,10 @@ class SettlementOutdoorPackingJob:
             structures=assemble_structure_catalog(structure_rows),
         )
         catalog_s = clock.lap()
+        settlement_ctx = settlement_context(world, settlement)
         skeleton = city_skeleton_from_settlement(
             settlement,
-            economic_tier=TierResolver.resolve(world=world, city=settlement),
+            economic_tier=settlement_ctx.economic_tier,
         )
         world_nodes = await self._nodes.get_by_world(world.world_uid)
         world_edges = await self._edges.get_by_world(world.world_uid)

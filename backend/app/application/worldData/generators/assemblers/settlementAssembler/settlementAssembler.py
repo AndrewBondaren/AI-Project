@@ -43,11 +43,12 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     plan_city_graph_for_slots,
     plan_slots_and_city_graph,
 )
-from app.application.worldData.generators.utils.tierResolver import TierResolver
+from app.application.worldData.context.locationScope import settlement_context
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import SettlementLayout
 from app.application.worldData.generators.assemblers.settlementAssembler.timings import (
     SettlementAssembleTimings,
 )
+from app.dataModel.locations.context.locationContext import LocationContext
 from app.dataModel.locations.structure.building.buildingCatalog import BuildingCatalog
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
@@ -72,7 +73,8 @@ class SettlementAssembler:
         timings: SettlementAssembleTimings | None = None,
     ) -> SettlementLayout:
         wall0 = time.perf_counter()
-        skeleton = self._build_skeleton(world, settlement)
+        ctx = settlement_context(world, settlement)
+        skeleton = self._build_skeleton(world, settlement, ctx)
         catalog = catalog or assemble_building_catalog(world)
         logger.info(
             "SettlementAssembler | settlement=%s size=%s density=%s tier=%s",
@@ -169,10 +171,16 @@ class SettlementAssembler:
 
         return replace(layout, dominant_material=dominant_material)
 
-    def _build_skeleton(self, world: World, settlement: NamedLocation) -> CitySkeleton:
+    def _build_skeleton(
+        self,
+        world:      World,
+        settlement: NamedLocation,
+        ctx:        LocationContext | None = None,
+    ) -> CitySkeleton:
+        ctx = ctx if ctx is not None else settlement_context(world, settlement)
         return city_skeleton_from_settlement(
             settlement,
-            economic_tier=TierResolver.resolve(world=world, city=settlement),
+            economic_tier=ctx.economic_tier,
         )
 
     def _plan_barriers(

@@ -28,7 +28,7 @@ from app.application.worldData.generators.assemblers.districtAssembler.districtS
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementAssembler import (
     SettlementAssembler,
 )
-from app.application.worldData.generators.utils.tierResolver import TierResolver
+from app.application.worldData.context.locationScope import settlement_context
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import (
     SettlementLayout,
 )
@@ -68,9 +68,10 @@ class SettlementGeneratorService:
         settlement: NamedLocation,
         terrain_cells: list[MapCell] | None = None,
     ) -> tuple[list[DistrictSlot], list[ConnectionNode], list[ConnectionEdge]]:
+        ctx = settlement_context(world, settlement)
         skeleton = city_skeleton_from_settlement(
             settlement,
-            economic_tier=TierResolver.resolve(world=world, city=settlement),
+            economic_tier=ctx.economic_tier,
         )
         return plan_slots_and_city_graph_fn(
             world, settlement, skeleton, terrain_cells,

@@ -17,7 +17,7 @@ Use this skill when the user asks to run the migrated source command `impl-casca
 
 ## Прочитать до первой правки
 
-1. [`.cursor/plans/cascade-context-resolution.md`](../plans/cascade-context-resolution.md) — **контракт, порядок шагов, проверки**; не отклоняться. S0 закрыт — решения мастера не пересогласовывать. **S4/S5 замещены [`.cursor/plans/cascade-migration.md`](../plans/cascade-migration.md)** — проводка caller'ов и зачистка идут по нему (M1–M6, включая удаление `TierResolver`).
+1. [`.cursor/plans/cascade-context-resolution.md`](../plans/cascade-context-resolution.md) — **контракт, порядок шагов, проверки**; не отклоняться. S0 закрыт — решения мастера не пересогласовывать. **S4/S5 замещены [`.cursor/plans/cascade-migration.md`](../plans/cascade-migration.md)** — проводка caller'ов и зачистка идут по нему (M1–M6, включая удаление `TierResolver`); для них отдельная команда **`/impl-cascade-migration`**.
 2. [`docs/tz_cascade_context.md`](../../docs/tz_cascade_context.md) — целиком (цепочка, `Cascade`/`ScopeLevel`/`DefaultPolicy`, `extend`, persist, кейсы §8).
 3. [`docs/tz_economic_tier.md`](../../docs/tz_economic_tier.md) §4 (каскад с area/range), §9 (поля).
 4. [`docs/tz_locations.md`](../../docs/tz_locations.md) — семантика `named_locations.system_economic_tier` («null → наследует от parent»).

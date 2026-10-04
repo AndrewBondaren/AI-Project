@@ -21,7 +21,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
     SettlementGeneratorService,
 )
 from app.application.worldData.generators.coordinates import map_cell_fine_span, settlement_origin_fine
-from app.application.worldData.generators.utils.tierResolver import TierResolver
+from app.application.worldData.context.locationScope import settlement_context
 from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import (
     extract_topology,
 )
@@ -87,7 +87,7 @@ def _settlement() -> NamedLocation:
 def _skeleton(world: World, settlement: NamedLocation):
     return city_skeleton_from_settlement(
         settlement,
-        economic_tier=TierResolver.resolve(world=world, city=settlement),
+        economic_tier=settlement_context(world, settlement).economic_tier,
     )
 
 

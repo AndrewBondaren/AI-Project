@@ -52,7 +52,7 @@ from app.application.worldData.generators.coordinates.settlementCellRng import (
     SettlementCellRngRole,
     settlement_cell_rng,
 )
-from app.application.worldData.generators.utils.tierResolver import TierResolver
+from app.application.worldData.context.locationScope import settlement_context
 from app.dataModel.locations.locationType.locationTypeSubtypeEntry import (
     LocationTypeSubtypeEntry,
 )
@@ -162,7 +162,7 @@ def _settlement(*, subtype: str | None, size: str = "medium", loc_type: str = "s
 def _skeleton(world: World, settlement: NamedLocation):
     return city_skeleton_from_settlement(
         settlement,
-        economic_tier=TierResolver.resolve(world=world, city=settlement),
+        economic_tier=settlement_context(world, settlement).economic_tier,
     )
 
 
