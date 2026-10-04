@@ -39,6 +39,25 @@ Use this skill when the user asks to run the migrated source command `impl-casca
 stamp `system_economic_tier` на каждой NL цепочки, потребители
 структуры читают `ctx.economic_tier` вместо `TierResolver`.
 
+## Правило размещения (любые каскадные работы)
+
+- **Механизм один, домен-нейтрален, дублировать запрещено.** Он живёт в
+  `dataModel/cascade/` (`cascadeSpec` — словарь объявлений,
+  `cascadeGraph` — граф/`ordered_chain`, `cascadeVerify` — проверка) и
+  `application/worldData/context/` (`extend`, `Link`/`EmptyLink`).
+  Новый домен не получает свой `cascadeGraph` — механизм не копируется
+  и не выносится «под потребителя».
+- **Домен объявляет только своё:** `ScopeAxis`-enum оси,
+  `Cascade`-параметры в своём `cascadeParams`, `CascadeChannel` на
+  полях своих POJO, контекст-модель, materialize/default-привязки в
+  application. Локационные куски — `dataModel/locations/context/`
+  (`ScopeLevel`, `ECONOMIC_TIER`, `LocationContext`).
+- **Тип materialize-входа — `Cascade.input_types`** (`RANGE` →
+  `EconomicTierRange`), не хардкод доменного типа в generic-графе.
+- Новый параметр на существующей оси — `Cascade` + каналы; enum оси,
+  граф и движок не трогаются. Новый домен — своя ось; механизм
+  поднимать никуда не надо, он уже в `dataModel/cascade/`.
+
 ## Жёсткие запреты
 
 - Не удалять `TierResolver` — у оставшихся city-вызовов `# TODO: перенести на LocationContext`.
