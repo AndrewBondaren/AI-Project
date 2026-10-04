@@ -11,7 +11,9 @@ from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.cascadeParams import (
     CITY_SIZE,
     ECONOMIC_TIER,
+    FLOOR_MATERIAL,
     SETTLEMENT_DENSITY,
+    WALL_MATERIAL,
 )
 from app.dataModel.cascade.cascadeSpec import CascadeChannel, CascadeLink
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
@@ -121,8 +123,67 @@ class BundleNamedLocation(BaseModel):
     map_z: DefaultOnWire[int | None] = None
     is_mobile: DefaultOnWire[bool] = False
     system_template_uid: DefaultOnWire[str | None] = None
-    parent_wall_material: DefaultOnWire[MaterialKey | None] = None
-    parent_floor_material: DefaultOnWire[MaterialKey | None] = None
+    # `wall_material` chain — stamped/authored NL node at every scope
+    # (room is the top, settlement the bottom); each self-edge is
+    # declared once on the deeper side, the `above` direction is
+    # materialized by the verifier (cascade-migration M9).
+    parent_wall_material: Annotated[
+        DefaultOnWire[MaterialKey | None],
+        CascadeChannel(
+            WALL_MATERIAL, ScopeLevel.ROOM,
+            below=CascadeLink(
+                None, "parent_wall_material", ScopeLevel.BUILDING,
+            ),
+        ),
+        CascadeChannel(
+            WALL_MATERIAL, ScopeLevel.BUILDING,
+            below=CascadeLink(
+                None, "parent_wall_material", ScopeLevel.AREA,
+            ),
+        ),
+        CascadeChannel(
+            WALL_MATERIAL, ScopeLevel.AREA,
+            below=CascadeLink(
+                None, "parent_wall_material", ScopeLevel.DISTRICT,
+            ),
+        ),
+        CascadeChannel(
+            WALL_MATERIAL, ScopeLevel.DISTRICT,
+            below=CascadeLink(
+                None, "parent_wall_material", ScopeLevel.SETTLEMENT,
+            ),
+        ),
+        CascadeChannel(WALL_MATERIAL, ScopeLevel.SETTLEMENT),
+    ] = None
+    # `floor_material` chain — same shape (M9).
+    parent_floor_material: Annotated[
+        DefaultOnWire[MaterialKey | None],
+        CascadeChannel(
+            FLOOR_MATERIAL, ScopeLevel.ROOM,
+            below=CascadeLink(
+                None, "parent_floor_material", ScopeLevel.BUILDING,
+            ),
+        ),
+        CascadeChannel(
+            FLOOR_MATERIAL, ScopeLevel.BUILDING,
+            below=CascadeLink(
+                None, "parent_floor_material", ScopeLevel.AREA,
+            ),
+        ),
+        CascadeChannel(
+            FLOOR_MATERIAL, ScopeLevel.AREA,
+            below=CascadeLink(
+                None, "parent_floor_material", ScopeLevel.DISTRICT,
+            ),
+        ),
+        CascadeChannel(
+            FLOOR_MATERIAL, ScopeLevel.DISTRICT,
+            below=CascadeLink(
+                None, "parent_floor_material", ScopeLevel.SETTLEMENT,
+            ),
+        ),
+        CascadeChannel(FLOOR_MATERIAL, ScopeLevel.SETTLEMENT),
+    ] = None
     is_outdoor: DefaultOnWire[bool | None] = None
     is_sheltered: DefaultOnWire[bool] = False
     is_transit: DefaultOnWire[bool] = False

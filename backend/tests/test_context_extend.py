@@ -46,11 +46,12 @@ def _world():
 
 
 def _nl(tier=None, uid="nl", location_type="building", size=None,
-        density=None):
+        density=None, wall=None, floor=None):
     return BundleNamedLocation(
         location_uid=uid, display_name=uid,
         system_location_type=location_type, system_economic_tier=tier,
         system_city_size=size, settlement_density=density,
+        parent_wall_material=wall, parent_floor_material=floor,
     )
 
 
@@ -334,6 +335,94 @@ class ExtendResolutionTests(unittest.TestCase):
             empty.provenance["settlement_density"],
             (ScopeLevel.WORLD, "default:canonical_default"),
         )
+
+    def test_wall_material_inherits_and_deeper_authored_wins(self):
+        # M9: settlement NL authored material inherits down; a deeper
+        # authored node (building NL, then room NL) overrides it.
+        ctx = extend(
+            LocationContext.root(_world()),
+            Link(ScopeLevel.SETTLEMENT,
+                 _nl(uid="c", location_type="settlement", wall="granite")),
+        )
+        self.assertEqual(ctx.wall_material, "granite")
+        district = extend(ctx, EmptyLink(ScopeLevel.DISTRICT))
+        district = extend(district, EmptyLink(ScopeLevel.AREA))
+        plain = extend(district, Link(ScopeLevel.BUILDING, _nl()))
+        self.assertEqual(plain.wall_material, "granite")
+        self.assertEqual(
+            plain.provenance["wall_material"],
+            (ScopeLevel.SETTLEMENT,
+             "BundleNamedLocation.parent_wall_material"),
+        )
+        building = extend(
+            district, Link(ScopeLevel.BUILDING, _nl(wall="oak")),
+        )
+        self.assertEqual(building.wall_material, "oak")
+        room = extend(
+            building, Link(ScopeLevel.ROOM, _nl(wall="marble")),
+        )
+        self.assertEqual(room.wall_material, "marble")
+        self.assertEqual(
+            room.provenance["wall_material"],
+            (ScopeLevel.ROOM,
+             "BundleNamedLocation.parent_wall_material"),
+        )
+
+    def test_floor_material_inherits_and_deeper_authored_wins(self):
+        # M9: same chain for `parent_floor_material` — wall and floor
+        # resolve independently.
+        ctx = extend(
+            LocationContext.root(_world()),
+            Link(ScopeLevel.SETTLEMENT,
+                 _nl(uid="c", location_type="settlement",
+                     wall="granite", floor="basalt")),
+        )
+        ctx = extend(ctx, EmptyLink(ScopeLevel.DISTRICT))
+        ctx = extend(ctx, EmptyLink(ScopeLevel.AREA))
+        ctx = extend(
+            ctx,
+            Link(ScopeLevel.BUILDING, _nl(floor="oak_floor")),
+        )
+        self.assertEqual(ctx.wall_material, "granite")
+        self.assertEqual(ctx.floor_material, "oak_floor")
+        self.assertEqual(
+            ctx.provenance["floor_material"],
+            (ScopeLevel.BUILDING,
+             "BundleNamedLocation.parent_floor_material"),
+        )
+
+    def test_material_defaults_are_canonical_and_silent(self):
+        # M9: no authored node anywhere → the dataModel canonical
+        # construction defaults, without a material warning (the tier
+        # median warning is a separate parameter's default).
+        with self.assertLogs(level="WARNING") as captured:
+            ctx = extend(
+                LocationContext.root(_world()),
+                EmptyLink(ScopeLevel.SETTLEMENT),
+            )
+        self.assertFalse(
+            [r for r in captured.records
+             if "material" in r.getMessage()],
+        )
+        self.assertEqual(ctx.wall_material, "stone")
+        self.assertEqual(ctx.floor_material, "wood")
+        self.assertEqual(
+            ctx.provenance["wall_material"],
+            (ScopeLevel.WORLD, "default:canonical_default"),
+        )
+        self.assertEqual(
+            ctx.provenance["floor_material"],
+            (ScopeLevel.WORLD, "default:canonical_default"),
+        )
+        # The provisional default does not re-resolve: a deeper authored
+        # node still overrides it.
+        ctx = extend(ctx, EmptyLink(ScopeLevel.DISTRICT))
+        ctx = extend(ctx, EmptyLink(ScopeLevel.AREA))
+        ctx = extend(
+            ctx, Link(ScopeLevel.BUILDING, _nl(wall="iron")),
+        )
+        self.assertEqual(ctx.wall_material, "iron")
+        self.assertEqual(ctx.floor_material, "wood")
 
     def test_area_tier_beats_band_and_range(self):
         ctx = _chain_to_building(LocationContext.root(_world()))

@@ -39,3 +39,19 @@ SETTLEMENT_DENSITY = Cascade(
     axis=ScopeLevel,
     levels=(ScopeLevel.SETTLEMENT, ScopeLevel.DISTRICT),
 )
+
+WALL_MATERIAL = Cascade(
+    # NL `parent_wall_material` chain — the same field is the channel
+    # node at every scope; a deeper authored NL overrides a shallower
+    # one, ordering is by scope level (cascade-migration M9).
+    field="parent_wall_material",
+    default=DefaultPolicy.CANONICAL_DEFAULT,
+    axis=ScopeLevel,
+)
+
+FLOOR_MATERIAL = Cascade(
+    # Same NL chain for `parent_floor_material` (M9).
+    field="parent_floor_material",
+    default=DefaultPolicy.CANONICAL_DEFAULT,
+    axis=ScopeLevel,
+)

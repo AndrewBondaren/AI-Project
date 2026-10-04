@@ -11,6 +11,9 @@ from app.application.worldData.generators.assemblers.areaAssembler.streetApproac
     ApproachForm,
     StreetApproach,
 )
+from app.application.worldData.context.locationScope import (
+    debug_building_context,
+)
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
 from app.application.worldData.generators.assemblers.buildingAssembler.structureContext import (
     StructureContext,
@@ -39,9 +42,14 @@ def approach_material(
     if kind == AreaThresholdKind.DOOR:
         # TODO(C21): porch / tambour — нет геометрии в здании. Когда клетки
         # крыльца появятся, материал подъезда = context.porch_material.
-        _ = context
-        if building is not None and building.parent_floor_material:
-            return building.parent_floor_material
+        # M9: the building floor material comes from the cascade ctx;
+        # callers without a chain still honor the building NL's authored
+        # material via the building-scope link (§8.4).
+        loc_ctx = context.location_ctx if context is not None else None
+        if loc_ctx is None and building is not None:
+            loc_ctx = debug_building_context(world, building)
+        if loc_ctx is not None:
+            return loc_ctx.floor_material
         return resolve_material(
             world, "floor", skeleton.economic_tier, rng, DEFAULT_FLOOR_MATERIAL,
         )

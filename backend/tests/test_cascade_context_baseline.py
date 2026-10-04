@@ -216,15 +216,29 @@ class CascadeContextBaselineTests(unittest.TestCase):
         self.assertEqual(materialResolver.resolve_room_materials(world, "t2", Random(0)),
                          ("wall_t2", "floor_t2"))
 
-    def test_envelope_material_priority_and_city_barrier_tier_are_outside_cascade(self):
+    def test_envelope_material_priority_uses_ctx_wall_material(self):
+        # M9: explicit envelope material wins; otherwise the builder
+        # consumes `ctx.wall_material` (the building NL channel here) —
+        # no `or parent_wall_material` chain remains.
         world, building, _ = fixture()
+        loc_ctx = _building_ctx(world, building)
+        self.assertEqual(loc_ctx.wall_material, "parent_wall")
         for explicit in (False, True):
-            context = StructureContext("slab", "flat", foundation_material="foundation" if explicit else None,
-                                       roof_material="roof" if explicit else None)
+            context = StructureContext(
+                "slab", "flat",
+                foundation_material="foundation" if explicit else None,
+                roof_material="roof" if explicit else None,
+                location_ctx=loc_ctx,
+            )
             self.assertEqual(FoundationBuilder(world, building, context, {}, 7).mat,
                              "foundation" if explicit else "parent_wall")
             self.assertEqual(RoofBuilder(world, building, context, 7).mat,
                              "roof" if explicit else "parent_wall")
+        # A context without a chain still resolves through the building
+        # NL link (the debug fallback — §8.4).
+        context = StructureContext("slab", "flat")
+        self.assertEqual(FoundationBuilder(world, building, context, {}, 7).mat,
+                         "parent_wall")
         settlement = replace(building, system_location_type="settlement", system_economic_tier="t1")
         skeleton = SettlementAssembler()._build_skeleton(world, settlement)
         self.assertEqual(skeleton.economic_tier, "t1")

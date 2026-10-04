@@ -32,7 +32,9 @@ from app.application.worldData.generators.utils.tierRegistry import (
 from app.dataModel.locations.context.cascadeParams import (
     CITY_SIZE,
     ECONOMIC_TIER,
+    FLOOR_MATERIAL,
     SETTLEMENT_DENSITY,
+    WALL_MATERIAL,
 )
 from app.dataModel.cascade.cascadeGraph import (
     check_link,
@@ -46,6 +48,7 @@ from app.dataModel.locations.context.locationContext import LocationContext
 from app.dataModel.locations.settlement.enums.districtDensity import (
     DistrictDensity,
 )
+from app.dataModel.materials import CONSTRUCTION_MATERIAL_DEFAULTS
 from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     WorldSettlementSizeRegistry,
 )
@@ -224,6 +227,11 @@ def _resolve_default(param: Cascade, world):
     if param is SETTLEMENT_DENSITY:
         # Canonical enum default (dataModel policy, not a literal).
         return DistrictDensity.default()
+    if param is WALL_MATERIAL:
+        # Canonical construction default (dataModel policy, M9).
+        return CONSTRUCTION_MATERIAL_DEFAULTS.wall
+    if param is FLOOR_MATERIAL:
+        return CONSTRUCTION_MATERIAL_DEFAULTS.floor
     raise ValueError(
         f"no default policy bound for param {param.field!r}"
     )

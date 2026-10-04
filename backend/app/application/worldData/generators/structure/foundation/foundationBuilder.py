@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from app.application.worldData.context.locationScope import (
+    debug_building_context,
+)
 from app.application.worldData.generators.structure.cellBuilder import _wall_cell
 from app.application.worldData.generators.structure.cellFactory import _floor_cell
-from app.dataModel.materials import DEFAULT_WALL_MATERIAL
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -60,11 +62,12 @@ class FoundationBuilder:
         self.context         = context
         self.terrain_surface = terrain_surface
         self.ground_z        = ground_z
-        self.mat = (
-            context.foundation_material
-            or building.parent_wall_material
-            or DEFAULT_WALL_MATERIAL
+        # Callers without a chain still honor the building NL's authored
+        # material — the NL is the building-scope link (§8.4, M9).
+        loc_ctx = context.location_ctx or debug_building_context(
+            world, building,
         )
+        self.mat = context.foundation_material or loc_ctx.wall_material
 
     def build(self, cells: list[MapCell]) -> list[MapCell]:
         footprint = {(c.x, c.y) for c in cells if c.z == self.ground_z}

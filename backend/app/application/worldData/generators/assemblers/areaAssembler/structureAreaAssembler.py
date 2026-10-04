@@ -62,7 +62,6 @@ from app.application.worldData.generators.structure.structureGeneratorService im
 )
 from app.dataModel.locations.context.locationContext import LocationContext
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
-from app.dataModel.materials import DEFAULT_FLOOR_MATERIAL, DEFAULT_WALL_MATERIAL
 from app.dataModel.locations.structure.building.buildingBodyTemplate import BuildingBodyTemplate
 from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog
 from app.dataModel.locations.structure.building.plotLayoutTemplate import (
@@ -293,10 +292,14 @@ class StructureAreaAssembler:
             )
             # §8.4 / M5: every new NL in the chain carries its effective
             # tier; a persisted authored stamp surfaces unchanged (the
-            # persisted link wins the building scope).
+            # persisted link wins the building scope). M9: the resolved
+            # parent materials stamp the same way — the NL columns hold
+            # the effective material for the assembler and LLM context.
             building = replace(
                 building,
                 system_economic_tier=context.location_ctx.economic_tier,
+                parent_wall_material=context.location_ctx.wall_material,
+                parent_floor_material=context.location_ctx.floor_material,
             )
             building_layout = BuildingAssembler().assemble(
                 world, building, body, structure, context, terrain_cells,
@@ -430,8 +433,6 @@ class StructureAreaAssembler:
             map_y=map_y,
             map_z=map_z,
             system_template_uid=template_name,
-            parent_wall_material=DEFAULT_WALL_MATERIAL,
-            parent_floor_material=DEFAULT_FLOOR_MATERIAL,
         )
 
     def _build_barrier(

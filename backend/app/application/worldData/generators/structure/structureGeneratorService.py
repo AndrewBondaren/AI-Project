@@ -11,7 +11,6 @@ from pydantic import ValidationError
 logger = logging.getLogger(__name__)
 
 from app.dataModel.locations.context.locationContext import LocationContext
-from app.dataModel.materials import DEFAULT_WALL_MATERIAL
 from app.dataModel.locations.structure.building.roomConnection import RoomConnection
 from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
 from app.dataModel.locations.structure.building.levelDef import LevelDef
@@ -310,7 +309,7 @@ class StructureGeneratorService:
         connect_corridors(
             all_rooms, cells_dict, levels,
             world.world_uid, building.location_uid,
-            building.parent_wall_material or DEFAULT_WALL_MATERIAL,
+            ctx.wall_material,
             world.default_passage_height,
         )
 
@@ -689,7 +688,7 @@ class StructureGeneratorService:
     ) -> tuple[dict[tuple, MapCell], dict[str, str]]:
         """Steps 6-8: assign UIDs, generate cells per level."""
         logger.info("=== PHASE: cell generation ===")
-        wall_mat    = building.parent_wall_material or DEFAULT_WALL_MATERIAL
+        wall_mat    = ctx.wall_material
 
         # §8.7.1 — building economic context for the wall material selector.
         economic_tier = ctx.economic_tier if ctx is not None else None

@@ -18,7 +18,9 @@ from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.cascadeParams import (
     CITY_SIZE,
     ECONOMIC_TIER,
+    FLOOR_MATERIAL,
     SETTLEMENT_DENSITY,
+    WALL_MATERIAL,
 )
 from app.dataModel.locations.settlement.enums.districtDensity import (
     DistrictDensity,
@@ -78,17 +80,21 @@ class LocationContextContractTests(unittest.TestCase):
     def test_only_v1_fields_and_branded_tier(self):
         self.assertEqual(set(LocationContext.model_fields),
                          {"level", "economic_tier", "system_city_size",
-                          "settlement_density", "provenance"})
+                          "settlement_density", "wall_material",
+                          "floor_material", "provenance"})
         context = LocationContext(level=ScopeLevel.BUILDING, economic_tier="custom_tier",
                                   system_city_size="custom_size",
                                   settlement_density="dense",
+                                  wall_material="stone", floor_material="wood",
                                   provenance={"economic_tier": (ScopeLevel.AREA, "economic_tier")})
         self.assertIsInstance(context.economic_tier, RegistryKey)
         self.assertIsInstance(context.system_city_size, RegistryKey)
         self.assertIsInstance(context.settlement_density, DistrictDensity)
+        self.assertIsInstance(context.wall_material, RegistryKey)
+        self.assertIsInstance(context.floor_material, RegistryKey)
         self.assertEqual(context.provenance["economic_tier"], (ScopeLevel.AREA, "economic_tier"))
         with self.assertRaises(ValidationError):
-            LocationContext(level=ScopeLevel.WORLD, wall_material="stone")
+            LocationContext(level=ScopeLevel.WORLD, dominant_material="stone")
         with self.assertRaises(ValidationError):
             LocationContext(level=ScopeLevel.BUILDING, economic_tier="")
         with self.assertRaises(ValidationError):
@@ -117,7 +123,9 @@ class LocationContextContractTests(unittest.TestCase):
         self.assertEqual(first.model_dump(mode="json"),
                          {"level": "world", "economic_tier": None,
                           "system_city_size": None,
-                          "settlement_density": None, "provenance": {}})
+                          "settlement_density": None,
+                          "wall_material": None, "floor_material": None,
+                          "provenance": {}})
 
     def test_default_median_sorts_and_uses_upper_middle_with_warning(self):
         for entries, expected in (([("high", 90), ("low", 0), ("medium", 10)], "medium"),
@@ -230,6 +238,28 @@ class LocationContextContractTests(unittest.TestCase):
                 (SettlementSkeleton, "settlement_density"),
             },
         )
+        # M9: `parent_*_material` — the same NL field is the channel
+        # node at every non-world scope (room is the top).
+        for param, field in (
+            (WALL_MATERIAL, "parent_wall_material"),
+            (FLOOR_MATERIAL, "parent_floor_material"),
+        ):
+            found = {
+                level: {
+                    (model, name)
+                    for model in (BundleNamedLocation,)
+                    for name, _ in cascade_channels(model, param, level)
+                }
+                for level in ScopeLevel
+            }
+            for level in (
+                ScopeLevel.SETTLEMENT, ScopeLevel.DISTRICT,
+                ScopeLevel.AREA, ScopeLevel.BUILDING, ScopeLevel.ROOM,
+            ):
+                self.assertEqual(
+                    found[level], {(BundleNamedLocation, field)},
+                    (param.field, level.value),
+                )
 
     def test_channel_kinds_are_declared(self):
         kinds = {
@@ -255,8 +285,16 @@ class LocationContextContractTests(unittest.TestCase):
             location_uid="x", display_name="x", system_location_type="building",
         )
         check_link(ScopeLevel.BUILDING, nl)
+        # The NL declares material channels at every non-world scope
+        # (M9) — a model with a narrower chain is what absence means.
+        room = RoomDef(
+            room_id="r1", display_name="Room", room_type="hall",
+            is_public=True, is_forbidden=False, required=True,
+            size={"width_range": [5, 5], "depth_range": [5, 5]},
+        )
+        check_link(ScopeLevel.ROOM, room)
         with self.assertRaises(TypeError):
-            check_link(ScopeLevel.AREA, nl)
+            check_link(ScopeLevel.BUILDING, room)
         with self.assertRaises(TypeError):
             check_link(ScopeLevel.WORLD, nl)
 

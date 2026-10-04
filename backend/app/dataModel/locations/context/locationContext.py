@@ -1,4 +1,4 @@
-"""Frozen transient context — tz_cascade_context §3–§5 (v1: tier only)."""
+"""Frozen transient context — tz_cascade_context §3–§5."""
 
 from typing import Annotated
 
@@ -9,9 +9,12 @@ from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.cascadeParams import (
     CITY_SIZE,
     ECONOMIC_TIER,
+    FLOOR_MATERIAL,
     SETTLEMENT_DENSITY,
+    WALL_MATERIAL,
 )
 from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
+from app.dataModel.materials.worldMaterialRegistry import MaterialKey
 from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     SettlementSizeKey,
 )
@@ -34,6 +37,14 @@ class LocationContext(BaseModel):
     settlement_density: Annotated[
         DistrictDensity | None,
         SETTLEMENT_DENSITY,
+    ] = None
+    wall_material: Annotated[
+        MaterialKey | None,
+        WALL_MATERIAL,
+    ] = None
+    floor_material: Annotated[
+        MaterialKey | None,
+        FLOOR_MATERIAL,
     ] = None
     provenance: dict[str, tuple[ScopeLevel, str]] = Field(default_factory=dict)
 
