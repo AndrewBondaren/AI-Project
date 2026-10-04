@@ -36,6 +36,19 @@ from tests.test_u_shape_orientation_baseline import room
 _NEIGHBOURS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 _BASELINE_TEMPLATE_ID = "00000000-0000-4000-8000-000000000021"
 
+# Wire rows for world.material_registry — canonical fixture rows carry no
+# "construction" tags, so without these every resolve falls back to defaults.
+_WORLD_MATERIALS = [
+    {"system_material": "oak", "display_name": "Oak",
+     "material_category": "solid", "tags": ["construction"],
+     "use_type": ["wall", "floor"], "economic_tier": "basic",
+     "structural_strength": 0.3},
+    {"system_material": "granite", "display_name": "Granite",
+     "material_category": "solid", "tags": ["construction"],
+     "use_type": ["wall", "floor"], "economic_tier": "standard",
+     "structural_strength": 0.9},
+]
+
 
 def _walls(cells):
     return {(c.x, c.y, c.z): c for c in cells
@@ -154,12 +167,13 @@ class WallMaterialBaselineTests(unittest.TestCase):
 
     def test_full_generation_uniform_wall_material_despite_room_materials(self):
         world, building = test_world_building()
+        world.material_registry = _WORLD_MATERIALS
         building.parent_wall_material = "iron"
         probe = RotationProbe()
         first = probe.generate_from_template(world, building, self._two_room_template())
         room_materials = {r.room_id: r.wall_material
                           for r in probe.runtime_rooms if not r.is_shaft}
-        self.assertEqual(room_materials, {"hall": "wood", "chamber": "stone"})
+        self.assertEqual(room_materials, {"hall": "oak", "chamber": "granite"})
 
         walls = _walls(first.cells)
         self.assertTrue(walls)
@@ -168,11 +182,11 @@ class WallMaterialBaselineTests(unittest.TestCase):
         doors = [c for c in first.cells
                  if c.system_building_element == StructureElement.DOOR]
         self.assertTrue(doors)
-        self.assertEqual({c.system_material for c in doors}, {"wood"})
+        self.assertEqual({c.system_material for c in doors}, {"oak"})
 
         floor_mats = {c.system_material for c in first.cells
                       if c.system_building_element == StructureElement.FLOOR}
-        self.assertEqual(floor_mats, {"wood", "stone"})
+        self.assertEqual(floor_mats, {"oak", "granite"})
 
         second = RotationProbe().generate_from_template(
             world, building, self._two_room_template())
@@ -181,6 +195,7 @@ class WallMaterialBaselineTests(unittest.TestCase):
 
     def test_rotation_preserves_material_assignment(self):
         world, building = test_world_building()
+        world.material_registry = _WORLD_MATERIALS
         building.parent_wall_material = "iron"
         base_probe = RotationProbe()
         base = base_probe.generate_from_template(
