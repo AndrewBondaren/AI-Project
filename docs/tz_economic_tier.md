@@ -216,7 +216,12 @@ economic_tier_band
 
 ## 11. Политики строительных материалов
 
-Статус: целевой контракт по принятым решениям мастера; ещё не реализован.
+Статус: реализовано 2026-10-04 (план
+`.cursor/plans/structure-wall-materials-done.md`): `MaterialPolicyConsumer`,
+`DefaultMaterialPolicyConsumer` и helper `defaultMaterialPolicy` живут в
+`app/application/economy/materialPolicies/`, контракты — в
+`app/dataModel/economy/materialPolicies/`, первый caller — selector
+`generators/structure/wallMaterials.py` (прямое подключение с TODO про DAG).
 Нерешённые вопросы §11.5 не имеют неявных defaults.
 
 ### 11.1 Ответственность слоя

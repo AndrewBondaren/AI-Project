@@ -368,7 +368,7 @@ climate anchor, торговый профиль/валюта, law/magic/tech lev
 
 ## 7. Связь с существующими планами
 
-- `structure-wall-materials.md`: consumer политики материалов требует
+- `structure-wall-materials-done.md`: consumer политики материалов требует
   resolved экономический контекст (§11.2 tz_economic_tier) — этот
   механизм является его источником. Шаги S5–S6 того плана могут идти по
   transient-контракту, но production-подключение resolved-контекста

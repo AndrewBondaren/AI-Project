@@ -81,7 +81,9 @@ class BuildingAssemblerTests(unittest.TestCase):
                 self.assertEqual(layout.rooms[0].parent_floor_material, expected)
                 self.assertTrue(layout.cells)
                 calls = [c for c in resolve.call_args_list if c.kwargs.get("building") is self.building]
-                self.assertEqual(len(calls), 4)
+                # +1 since S6: wall material selector resolves the building
+                # economic context (dedicated RNG stream, same band input).
+                self.assertEqual(len(calls), 5)
                 self.assertTrue(all(c.kwargs["building_band"] == band for c in calls))
                 material_calls = [c for c in resolve.call_args_list if "template_tier" in c.kwargs and "building_tier" in c.kwargs]
                 self.assertTrue(material_calls)
