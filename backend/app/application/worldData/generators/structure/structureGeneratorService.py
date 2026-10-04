@@ -18,8 +18,16 @@ from app.dataModel.locations.structure.building.structureTemplate import Structu
 from app.dataModel.locations.structure.enums.passageType import PassageType
 from app.dataModel.spatial.facing import Facing
 from app.application.worldData.generators.structure.structureOrientation import entry_orientation, validate_facing
+from app.application.jsonValidation import materials
+from app.application.worldData.generators.utils.economicTierBands import band_of
 from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.generators.structure.cellBuilder import build_level_cells
+from app.application.worldData.generators.structure.wallMaterials import (
+    select_wall_materials,
+)
+from app.application.worldData.generators.structure.wallRegions import (
+    classify_wall_regions,
+)
 from app.application.worldData.generators.structure.errors import GenerationError, UnsupportedShapeError
 from app.application.worldData.generators.structure.layoutEngine import layout_level
 from app.application.worldData.generators.structure.staircase.embeddedUpperLayout import prepare_embedded_upper
@@ -32,6 +40,8 @@ from app.application.worldData.generators.structure.staircase.shaftFactory impor
 from app.dataModel.locations.structure.enums.staircaseType import (
     requires_shaft,
 )
+from app.dataModel.economy.enums.economicTierBand import EconomicTierBand
+from app.dataModel.economy.materialPolicies import BuildingEconomicContext
 from app.application.worldData.generators.structure.staircase.shaftPlacer import make_shaft_placer
 from app.application.worldData.generators.structure.passages.wallOpening import place_wall_openings
 from app.application.worldData.generators.structure.passages.corridorTrimmer import trim_corridor_rooms
@@ -282,6 +292,7 @@ class StructureGeneratorService:
 
         cells_dict, room_uids = self._generate_cells(
             structure, building, levels, all_rooms, world, connections, definitions,
+            rng=rng, building_band=building_band,
         )
 
         passages = self._run_passages(
@@ -677,10 +688,33 @@ class StructureGeneratorService:
         world: World,
         connections: list[RoomConnection],
         definitions: list[LevelDef],
+        rng: Random | None = None,
+        building_band: str | None = None,
     ) -> tuple[dict[tuple, MapCell], dict[str, str]]:
         """Steps 6-8: assign UIDs, generate cells per level."""
         logger.info("=== PHASE: cell generation ===")
         wall_mat    = building.parent_wall_material or DEFAULT_WALL_MATERIAL
+
+        # §8.7.1 — building economic context for the wall material selector.
+        # A dedicated stream keeps the shared generation RNG unperturbed.
+        tier_rng = Random(
+            _make_seed(world.world_uid, f"{building.location_uid}#wall-tier"))
+        economic_tier = TierResolver.resolve(
+            world=world, building=building,
+            building_band=building_band, rng=tier_rng,
+        )
+        band = EconomicTierBand.from_wire(band_of(world, economic_tier))
+        if economic_tier is None or band is None:
+            raise GenerationError(
+                f"Structure '{template.system_name}': wall material policy "
+                f"requires a resolved economic context "
+                f"(tier={economic_tier!r}, band={band})")
+        wall_context = BuildingEconomicContext(
+            economic_tier=economic_tier, band=band)
+        material_strengths = {
+            e.system_material: e.structural_strength
+            for e in materials(world).root
+        }
 
         room_uids: dict[str, str] = {
             room.uid_key: _det_uuid(building.location_uid, room.uid_key)
@@ -693,10 +727,27 @@ class StructureGeneratorService:
             z_offset    = level_def.z_offset
             level       = levels[z_offset]
             level_rooms = [r for r in all_rooms if r.z_offset == z_offset and r.placed]
+            regions = classify_wall_regions(
+                level_rooms, level.z, level.z + level.z_height - 1)
+            plan = select_wall_materials(
+                regions, {r.uid_key: r for r in level_rooms},
+                wall_mat, material_strengths, wall_context)
+            for failure in plan.failures:
+                logger.warning(
+                    "wall_material | z_offset=%d cells=%d failure=%s: %s"
+                    " — using building material",
+                    z_offset, len(failure.region.cells),
+                    failure.failure.value, failure.reason,
+                )
+            cell_materials = {
+                (x, y): choice.system_material
+                for choice in plan.choices for x, y in choice.region.cells
+            }
             before      = len(cells_dict)
             for cell in build_level_cells(
                 level_rooms, connections, level.z, level.z_height,
                 world.world_uid, building.location_uid, wall_mat, room_uids,
+                cell_materials,
             ):
                 cells_dict[(cell.x, cell.y, cell.z)] = cell
             logger.info("cells | z_offset=%d generated=%d", z_offset, len(cells_dict) - before)

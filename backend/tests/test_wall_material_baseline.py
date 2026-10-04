@@ -55,6 +55,14 @@ def _walls(cells):
             if c.system_building_element == StructureElement.WALL}
 
 
+def _partition_body(hall, chamber):
+    """Shared-column cells bounded on all 4 sides — the interior partition."""
+    shared = hall.get_footprint() & chamber.get_footprint()
+    union = hall.get_footprint() | chamber.get_footprint()
+    return {(x, y) for x, y in shared
+            if all((x + dx, y + dy) in union for dx, dy in _NEIGHBOURS)}
+
+
 def _split(cells):
     """(geometry, materials) — geometry drops only ``system_material``."""
     geometry, materials = {}, {}
@@ -165,19 +173,27 @@ class WallMaterialBaselineTests(unittest.TestCase):
                               passage_type="doorway")],
         )
 
-    def test_full_generation_uniform_wall_material_despite_room_materials(self):
+    def test_full_generation_partition_room_material_shell_building_material(self):
+        # Post-S6 contract: exterior shell → building material; the shared
+        # partition is decided by the §11 policy layer (default building
+        # band WEALTHY → min strength → oak).
         world, building = test_world_building()
         world.material_registry = _WORLD_MATERIALS
         building.parent_wall_material = "iron"
         probe = RotationProbe()
         first = probe.generate_from_template(world, building, self._two_room_template())
-        room_materials = {r.room_id: r.wall_material
-                          for r in probe.runtime_rooms if not r.is_shaft}
+        rooms = {r.room_id: r
+                 for r in probe.runtime_rooms if not r.is_shaft}
+        room_materials = {key: r.wall_material for key, r in rooms.items()}
         self.assertEqual(room_materials, {"hall": "oak", "chamber": "granite"})
 
         walls = _walls(first.cells)
         self.assertTrue(walls)
-        self.assertEqual({c.system_material for c in walls.values()}, {"iron"})
+        body = _partition_body(rooms["hall"], rooms["chamber"])
+        self.assertTrue(body)
+        for (x, y, z), cell in walls.items():
+            expected = "oak" if (x, y) in body else "iron"
+            self.assertEqual(cell.system_material, expected, (x, y, z))
 
         doors = [c for c in first.cells
                  if c.system_building_element == StructureElement.DOOR]

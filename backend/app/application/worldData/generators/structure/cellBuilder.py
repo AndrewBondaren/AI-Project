@@ -110,6 +110,7 @@ def pass3_interior_walls(
     world_uid: str,
     building_uid: str,
     wall_material: str,
+    cell_materials: dict[tuple[int, int], str] | None = None,
 ) -> list[MapCell]:
     """
     Walls for every perimeter cell, except partitions of open shafts.
@@ -118,10 +119,13 @@ def pass3_interior_walls(
     (outer face of a room with no neighbour on that side).
     Pass 2 placed floor at every footprint cell; this overwrites perimeter cells with wall.
     Passage builder later replaces specific wall cells with door/archway cells.
+    `cell_materials` (XY → material, from the §8.7.1 selector) overrides the
+    building `wall_material` per cell; cells absent from it keep the default.
     """
     placed = [r for r in rooms if r.placed]
     seen: dict[tuple[int, int], MapCell] = {}
     opened = _open_shaft_perimeter(placed)
+    overrides = cell_materials or {}
 
     for room in placed:
         fp = room.get_footprint()
@@ -129,7 +133,9 @@ def pass3_interior_walls(
         for (x, y) in fp:
             if (x, y) not in interior and (x, y) not in opened:
                 if (x, y) not in seen:
-                    seen[(x, y)] = _wall_cell(x, y, z, world_uid, building_uid, wall_material)
+                    seen[(x, y)] = _wall_cell(
+                        x, y, z, world_uid, building_uid,
+                        overrides.get((x, y), wall_material))
 
     return list(seen.values())
 
@@ -146,11 +152,14 @@ def build_level_cells(
     building_uid: str,
     wall_material: str,
     room_uids: dict[str, str],
+    cell_materials: dict[tuple[int, int], str] | None = None,
 ) -> list[MapCell]:
     """
     Run all 3 passes and return combined cell list.
     Walls (Pass 1 + Pass 3) are generated for every z in [z, z + z_height - 1].
     Floor (Pass 2) is generated only at the base z.
+    `cell_materials` (XY → material, from the §8.7.1 selector) overrides the
+    building `wall_material` per cell.
     """
     cells: list[MapCell] = []
 
@@ -159,6 +168,6 @@ def build_level_cells(
 
     # Walls for every z in the room's full height span
     for z_layer in range(z, z + z_height):
-        cells.extend(pass3_interior_walls(rooms, connections, z_layer, world_uid, building_uid, wall_material))
+        cells.extend(pass3_interior_walls(rooms, connections, z_layer, world_uid, building_uid, wall_material, cell_materials))
 
     return cells
