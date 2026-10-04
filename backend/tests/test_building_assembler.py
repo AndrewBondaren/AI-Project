@@ -77,7 +77,6 @@ class BuildingAssemblerTests(unittest.TestCase):
         )
 
     def test_plot_band_selects_room_material_through_real_generation(self):
-        tiers = {"rich": "high", "poor": "low", None: "median"}
         for band, expected in (("rich", "high_stone"), ("poor", "low_stone"), (None, "median_stone")):
             with self.subTest(band=band), patch.object(TierResolver, "resolve", wraps=TierResolver.resolve) as resolve:
                 layout = BuildingAssembler().assemble(
@@ -87,28 +86,17 @@ class BuildingAssemblerTests(unittest.TestCase):
                 self.assertEqual(layout.rooms[0].parent_wall_material, expected)
                 self.assertEqual(layout.rooms[0].parent_floor_material, expected)
                 self.assertTrue(layout.cells)
-                calls = [c for c in resolve.call_args_list if c.kwargs.get("building") is self.building]
-                # M2: the building tier arrives resolved via the cascade ctx —
-                # generate_from_template no longer calls TierResolver per site.
-                self.assertFalse(calls)
-                material_calls = [c for c in resolve.call_args_list if "template_tier" in c.kwargs and "building_tier" in c.kwargs]
-                self.assertTrue(material_calls)
-                self.assertTrue(all(c.kwargs["building_tier"] == tiers[band] for c in material_calls))
+                # M3+M4: no TierResolver call anywhere in the generation
+                # path — the effective tier arrives via the cascade ctx.
+                self.assertFalse(resolve.call_args_list)
 
-    def test_room_material_resolver_uses_band_without_explicit_tier(self):
-        for band, expected in (("rich", "high_stone"), ("poor", "low_stone"), (None, "median_stone")):
-            with self.subTest(band=band):
+    def test_room_material_resolver_uses_effective_tier(self):
+        # M4: the helper is a pure consumer — no tier cascade inside.
+        for tier, expected in (("high", "high_stone"), ("low", "low_stone"), (None, "median_stone")):
+            with self.subTest(tier=tier):
                 self.assertEqual(
-                    resolve_room_materials(self.world, None, None, Random(0), building_band=band),
+                    resolve_room_materials(self.world, tier, Random(0)),
                     (expected, expected),
-                )
-        for field in ("room_tier", "template_tier", "building_tier"):
-            with self.subTest(explicit_tier=field):
-                tiers = {"room_tier": None, "template_tier": None, "building_tier": None}
-                tiers[field] = "low"
-                self.assertEqual(
-                    resolve_room_materials(self.world, rng=Random(0), building_band="rich", **tiers),
-                    ("low_stone", "low_stone"),
                 )
 
     def test_band_reaches_room_and_shaft_materials(self):
@@ -130,14 +118,14 @@ class BuildingAssemblerTests(unittest.TestCase):
                     structure, self.building, levels, self.world, Random(0),
                     StructureGeneratorService._resolve_staircases(structure),
                     definitions=StructureGeneratorService._resolve_levels(structure),
-                    building_band=band,
+                    ctx=self.context(band).location_ctx,
                 )
                 self.assertEqual(len(shafts["stairs"]), 2)
                 self.assertEqual(len(rooms), 4)
                 self.assertTrue(all((r.wall_material, r.floor_material) == (expected, expected) for r in rooms))
-                material_calls = [c for c in resolve.call_args_list if "template_tier" in c.kwargs and "building_tier" in c.kwargs]
-                self.assertEqual(len(material_calls), 3)
-                self.assertTrue(all(c.kwargs["building_band"] == band for c in material_calls))
+                # M4: the room/shaft factories feed the already-resolved
+                # room-scope tier — zero resolver calls.
+                self.assertFalse(resolve.call_args_list)
 
     def test_explicit_building_tier_overrides_band(self):
         self.building.system_economic_tier = "low"
@@ -166,8 +154,9 @@ class BuildingAssemblerTests(unittest.TestCase):
                     self.world, self.building, self.body, self.structure, self.context("rich"),
                 )
 
-    def test_direct_generator_accepts_structure_and_band(self):
+    def test_direct_generator_accepts_structure_and_ctx(self):
         layout = StructureGeneratorService().generate_from_template(
-            self.world, self.building, structure=self.structure, building_band="rich",
+            self.world, self.building, structure=self.structure,
+            ctx=self.context("rich").location_ctx,
         )
         self.assertEqual(layout.rooms[0].parent_wall_material, "high_stone")

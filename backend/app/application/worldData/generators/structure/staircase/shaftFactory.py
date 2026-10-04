@@ -10,8 +10,11 @@ Trapdoor staircases: no shaft needed — vertical-only, no shaft footprint.
 import logging
 from random import Random
 
+from app.application.worldData.context.locationScope import empty_location_chain
 from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
+from app.dataModel.locations.context.locationContext import LocationContext
+from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.locations.structure.enums.staircaseType import (
@@ -54,15 +57,16 @@ def instantiate_shaft_rooms(
     levels: dict[int, LocationLevel],
     world: World,
     rng: Random,
-    building_tier: str | None = None,
     *,
-    building_band: str | None = None,
+    ctx: LocationContext | None = None,
 ) -> list[_RoomInstance]:
     """
     Returns flat list of shaft _RoomInstances.
     Each instance has a unique room_id: 'shaft_{staircase_id}_{idx}'.
     All instances for the same staircase are identified by staircase_id prefix.
     """
+    ctx = ctx or empty_location_chain(world, ScopeLevel.BUILDING)
+    shaft_tier = ctx.economic_tier
     result: list[_RoomInstance] = []
 
     for sc in staircases:
@@ -114,9 +118,7 @@ def instantiate_shaft_rooms(
                 )
 
         wall_mat, floor_mat = resolve_room_materials(
-            world, None, None, rng, room_id=staircase_id,
-            building_tier=building_tier, template=template,
-            building_band=building_band,
+            world, shaft_tier, rng, room_id=staircase_id,
         )
 
         for idx, z_off in enumerate(z_offsets):
@@ -138,6 +140,7 @@ def instantiate_shaft_rooms(
                 required=True,
                 wall_material=wall_mat,
                 floor_material=floor_mat,
+                economic_tier=shaft_tier,
                 staircase_type=staircase_type.value,
                 facing=sc.facing,
                 is_shaft=True,

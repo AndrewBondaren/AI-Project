@@ -16,7 +16,6 @@ from app.dataModel.spatial.facing import Facing
 from app.dataModel.locations.structure.room.wallOpeningSpec import WallOpeningSpec
 from app.application.worldData.generators.structure.cellFactory import _opening_cell
 from app.application.worldData.generators.utils.materialResolver import resolve_material
-from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.wallOpeningResolver import (
     ExteriorWallProfile,
@@ -116,7 +115,6 @@ def place_wall_openings(
     building_uid: str,
     rng: Random,
     ground_z: int = 0,
-    building_tier: str | None = None,
 ) -> None:
     # §3.11: underground levels get no openings
     if level.z < ground_z:
@@ -141,12 +139,9 @@ def place_wall_openings(
         frame_mat = spec.frame_material or room.wall_material
 
         glass_use = _GLASS_USE_TYPE.get(element)
-        glass_tier = TierResolver.resolve(
-            world=world,
-            room_tier=room.economic_tier,
-            building_tier=building_tier,
-            rng=rng,
-        )
+        # room.economic_tier already carries the resolved room-scope
+        # cascade value (tz_cascade_context §4, cascade-migration M3).
+        glass_tier = room.economic_tier
         glass_mat = spec.glass_material or (
             resolve_material(world, glass_use, glass_tier, rng, glass_use)
             if glass_use else None

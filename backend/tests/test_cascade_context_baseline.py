@@ -16,7 +16,13 @@ from pathlib import Path
 from random import Random
 from unittest.mock import patch
 
-from app.application.worldData.context.locationScope import empty_location_chain
+from app.application.worldData.context.cascadeLink import EmptyLink
+from app.application.worldData.context.contextResolver import extend
+from app.application.worldData.context.locationScope import (
+    area_context,
+    building_context,
+    empty_location_chain,
+)
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
 from app.application.worldData.generators.assemblers.areaAssembler.structureAreaAssembler import derive_structure_context
 from app.application.worldData.generators.assemblers.buildingAssembler.structureContext import StructureContext
@@ -87,6 +93,21 @@ def fixture():
     return world, building, structure
 
 
+def _building_ctx(world, building, band=None):
+    """Real cascade chain for the baseline probe: empty settlement /
+    district, plot band materialized at AREA, building NL as the link."""
+    district = empty_location_chain(world, ScopeLevel.DISTRICT)
+    if band is None:
+        area = extend(district, EmptyLink(ScopeLevel.AREA))
+    else:
+        plot = PlotLayoutTemplate(
+            system_name="baseline-plot", display_name="Plot",
+            economic_tier_band=band,
+        )
+        area = area_context(world, district, plot, area_uid="baseline-area")
+    return building_context(world, area, building)
+
+
 def snapshot(*, band=None, building_tier=None):
     world, building, structure = fixture()
     building.system_economic_tier = building_tier
@@ -128,7 +149,10 @@ def snapshot(*, band=None, building_tier=None):
                                         side_effect=lambda *a, **k: record_rooms(original_rooms, *a, **k)))
         stack.enter_context(patch.object(service, "instantiate_shaft_rooms",
                                         side_effect=lambda *a, **k: record_rooms(original_shafts, *a, **k)))
-        layout = service.StructureGeneratorService().generate_from_template(world, building, structure, building_band=band)
+        layout = service.StructureGeneratorService().generate_from_template(
+            world, building, structure,
+            ctx=_building_ctx(world, building, band),
+        )
 
     geometry = sorted((c.x, c.y, c.z, c.system_building_element, c.system_facing) for c in layout.cells)
     passages = sorted((p.system_passage_type, p.from_x, p.from_y, p.to_x, p.to_y)
@@ -142,40 +166,48 @@ def snapshot(*, band=None, building_tier=None):
 
 
 class CascadeContextBaselineTests(unittest.TestCase):
-    def test_null_building_uses_median_in_every_phase_and_does_not_stamp_rooms(self):
+    def test_null_building_uses_median_everywhere_and_stamps_rooms(self):
         result = snapshot()
-        phases = [row["tier"] for row in result["tiers"] if row["caller"] in
-                  ("_instantiate_rooms", "_run_passages", "_place_wall_openings")]
-        # Two floor calls + shaft call + passages + openings: four code sites, five calls.
-        self.assertEqual(phases, ["t5"] * 5)
+        # M3: service phases no longer resolve — the building ctx carries
+        # the effective tier; resolve calls remain only inside the legacy
+        # material helper (removed in M4).
+        self.assertFalse([row for row in result["tiers"] if row["caller"] in
+                          ("_instantiate_rooms", "_run_passages", "_place_wall_openings")])
         self.assertEqual((result["cell_count"], result["passage_count"]), (437, 2))
         self.assertEqual(result["geometry_sha256"],
                          "4fd5a07f79d97aec173a38db42ba536b040c5376d9decf79e2f7faefe2e86ff4")
         self.assertTrue(all(not row["city_supplied"] and not row["district_supplied"]
                             for row in result["tiers"]))
-        self.assertEqual([r["tier"] for r in result["rooms"]], [None, "t9", None, None])
+        # The room instance now carries the resolved room-scope tier —
+        # authored "t9" for the upper room, building tier elsewhere.
+        self.assertEqual([r["tier"] for r in result["rooms"]], ["t5", "t9", "t5", "t5"])
         self.assertEqual([r["wall"] for r in result["rooms"]], ["wall_t5", "wall_t9", "wall_t5", "wall_t5"])
         self.assertEqual([r["floor"] for r in result["rooms"]], ["floor_t5", "floor_t9", "floor_t5", "floor_t5"])
-        self.assertEqual(set(result["named_location_tiers"]), {None})
+        self.assertEqual(set(result["named_location_tiers"]), {"t5", "t9"})
         self.assertEqual({m["tier"] for m in result["materials"] if m["use"] == "window_glass"}, {"t5", "t9"})
 
-    def test_band_repeated_resolve_and_shared_rng_snapshot_are_reproducible(self):
+    def test_band_materializes_once_at_area_scope_and_is_reproducible(self):
         first = snapshot(band="common")
         self.assertEqual(first, snapshot(band="common"))
-        phases = [row["tier"] for row in first["tiers"] if row["caller"] in
-                  ("_instantiate_rooms", "_run_passages", "_place_wall_openings")]
-        self.assertEqual(phases, ["t1", "t1", "t2", "t2", "t2"])
-        self.assertEqual((first["cell_count"], first["passage_count"]), (488, 2))
+        self.assertFalse([row for row in first["tiers"] if row["caller"] in
+                          ("_instantiate_rooms", "_run_passages", "_place_wall_openings")])
+        # One materialization at the area boundary (deterministic scope
+        # seed → "t2"): every non-authored room shares the tier — the old
+        # repeated-resolve spread (t1 → t2 across call sites, shared-rng
+        # geometry perturbation) is gone.
+        tier = first["rooms"][0]["tier"]
+        self.assertEqual(tier, "t2")
+        self.assertEqual([r["tier"] for r in first["rooms"]], [tier, "t9", tier, tier])
+        self.assertEqual((first["cell_count"], first["passage_count"]), (437, 2))
         self.assertEqual(first["geometry_sha256"],
-                         "b17ab566a2931a41f398bc896c81cb2b925896ffdab643e1da56a0456418e0c8")
+                         "4fd5a07f79d97aec173a38db42ba536b040c5376d9decf79e2f7faefe2e86ff4")
         self.assertEqual([r["wall"] for r in first["rooms"]],
-                         ["wall_t1", "wall_t9", "wall_t2", "wall_t2"])
-        self.assertNotEqual(first["geometry_sha256"], snapshot()["geometry_sha256"])
+                         [f"wall_{tier}", "wall_t9", f"wall_{tier}", f"wall_{tier}"])
 
     def test_authored_building_wins_and_room_override_reaches_glass(self):
         result = snapshot(band="common", building_tier="t8")
-        self.assertEqual({row["tier"] for row in result["tiers"] if row["caller"] in
-                          ("_instantiate_rooms", "_run_passages", "_place_wall_openings")}, {"t8"})
+        self.assertFalse([row for row in result["tiers"] if row["caller"] in
+                          ("_instantiate_rooms", "_run_passages", "_place_wall_openings")])
         self.assertEqual([r["wall"] for r in result["rooms"]], ["wall_t8", "wall_t9", "wall_t8", "wall_t8"])
         self.assertEqual({m["tier"] for m in result["materials"] if m["use"] == "window_glass"}, {"t8", "t9"})
         self.assertEqual(result["geometry_sha256"], snapshot()["geometry_sha256"])
@@ -202,8 +234,8 @@ class CascadeContextBaselineTests(unittest.TestCase):
             )
             tiers.append(context.location_ctx.economic_tier)
         self.assertEqual(tiers, ["t2", "t9"])
-        # The helper's template_tier channel works; roomFactory never supplies it.
-        self.assertEqual(materialResolver.resolve_room_materials(world, None, "t2", Random(0)),
+        # M4: the helper consumes the effective tier verbatim.
+        self.assertEqual(materialResolver.resolve_room_materials(world, "t2", Random(0)),
                          ("wall_t2", "floor_t2"))
 
     def test_envelope_material_priority_and_city_barrier_tier_are_outside_cascade(self):

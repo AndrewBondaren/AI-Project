@@ -6,7 +6,13 @@
 import logging
 from random import Random
 
+from app.application.worldData.context.locationScope import (
+    empty_location_chain,
+    room_context,
+)
 from app.application.worldData.generators.structure.errors import UnsupportedShapeError
+from app.dataModel.locations.context.locationContext import LocationContext
+from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.structure.room.roomDef import RoomDef
 from app.dataModel.locations.structure.building.levelDef import LevelDef
 from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
@@ -112,11 +118,12 @@ def instantiate_level_rooms(
     z_offset: int,
     world: World,
     rng: Random,
-    building_tier: str | None = None,
-    template_z_height: int | None = None,
     *,
-    building_band: str | None = None,
+    ctx: LocationContext | None = None,
+    building_uid: str = "room",
+    template_z_height: int | None = None,
 ) -> list[_RoomInstance]:
+    ctx = ctx or empty_location_chain(world, ScopeLevel.BUILDING)
     instances: list[_RoomInstance] = []
 
     for room_def in level_def.rooms:
@@ -160,12 +167,13 @@ def instantiate_level_rooms(
             )
         width, depth, room_z = _resolve_size(room_def, shape, level_z_height, rng, template_z_height)
 
-        room_tier = room_def.economic_tier
-        template_tier = None
+        room_ctx = room_context(
+            world, ctx, room_def,
+            room_uid=f"{building_uid}|{room_id}",
+        )
+        room_tier = room_ctx.economic_tier
         wall_mat, floor_mat = resolve_room_materials(
-            world, room_tier, template_tier, rng, room_id=room_id,
-            building_tier=building_tier, template=template,
-            building_band=building_band,
+            world, room_tier, rng, room_id=room_id,
         )
 
         for idx in range(count):
@@ -185,7 +193,7 @@ def instantiate_level_rooms(
                 required=required,
                 wall_material=wall_mat,
                 floor_material=floor_mat,
-                economic_tier=room_def.economic_tier,
+                economic_tier=room_tier,
                 attach_to=room_def.attach_to,
                 attach_wall=room_def.attach_wall,
                 perimeter_required=bool(room_def.perimeter_required

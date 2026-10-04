@@ -5,6 +5,7 @@ from copy import deepcopy
 from dataclasses import asdict, replace
 import logging
 
+from app.application.worldData.context.locationScope import debug_building_context
 from app.application.worldData.facingArrows import FACING_ARROW
 from app.application.worldData.generators.structure.errors import GenerationError
 from app.application.worldData.generators.structure.gridRenderer import render_all_levels
@@ -68,15 +69,16 @@ def rotation_payload(layout, probe):
     }
 
 
-def generate_rotations(world, building, structure, building_band, capture_factory):
+def generate_rotations(world, building, structure, plot, capture_factory):
     logger = logging.getLogger("app.application.worldData.generators")
+    ctx = debug_building_context(world, building, plot)
 
     def run(facing):
         probe = RotationProbe()
         capture = capture_factory()
         logger.addHandler(capture)
         try:
-            layout = probe.generate_from_template(world, building, structure, facing=facing, building_band=building_band)
+            layout = probe.generate_from_template(world, building, structure, facing=facing, ctx=ctx)
             return layout, probe, {"status": "ok", **rotation_payload(layout, probe), "warnings": capture.records}
         except GenerationError as exc:
             return None, probe, {"status": "error", "error": str(exc), "warnings": capture.records}

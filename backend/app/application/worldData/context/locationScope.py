@@ -26,6 +26,7 @@ from app.dataModel.locations.settlement.district.districtTemplateEntry import (
 from app.dataModel.locations.structure.building.plotLayoutTemplate import (
     PlotLayoutTemplate,
 )
+from app.dataModel.locations.structure.room.roomDef import RoomDef
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -112,6 +113,44 @@ def building_context(
             make_scope_seed(world.world_uid, building.location_uid, "tier"),
         ),
     )
+
+
+def room_context(
+    world: World,
+    ctx: LocationContext,
+    room_def: RoomDef,
+    *,
+    room_uid: str,
+) -> LocationContext:
+    """Building ctx + room_def link → room-scope ctx."""
+    return extend(
+        ctx,
+        Link(ScopeLevel.ROOM, room_def),
+        rng=Random(make_scope_seed(world.world_uid, room_uid, "tier")),
+    )
+
+
+def debug_building_context(
+    world: World,
+    building: NamedLocation,
+    plot: PlotLayoutTemplate | None = None,
+) -> LocationContext:
+    """Ad-hoc building ctx for debug/test callers without a real chain.
+
+    Empty scopes stand in for settlement/district; a probe plot — when
+    given — materializes the area scope through the real cascade
+    (§4 EmptyLink; cascade-migration M5 debug contract).
+    """
+    ctx = empty_location_chain(world, ScopeLevel.DISTRICT)
+    ctx = (
+        area_context(
+            world, ctx, plot,
+            area_uid=f"{building.location_uid}#area",
+        )
+        if plot is not None
+        else extend(ctx, EmptyLink(ScopeLevel.AREA))
+    )
+    return building_context(world, ctx, building)
 
 
 def empty_location_chain(world: World, up_to: ScopeLevel) -> LocationContext:

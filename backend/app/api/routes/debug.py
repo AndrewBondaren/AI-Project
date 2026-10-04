@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import get_container
 from app.api.utils.jsonResolver import JsonResolver
+from app.application.worldData.context.locationScope import debug_building_context
 from app.application.worldData.generators.structure.structureGeneratorService import (
     StructureGeneratorService,
 )
@@ -91,7 +92,7 @@ async def debug_generate_structure_rotations(
         parent_wall_material=DEFAULT_WALL_MATERIAL, parent_floor_material=DEFAULT_FLOOR_MATERIAL,
     )
     return JSONResponse(generate_rotations(
-        world, building, structure, plot.economic_tier_band,
+        world, building, structure, plot,
         lambda: _LogCapture(logging.DEBUG if verbose else logging.WARNING),
     ))
 
@@ -104,7 +105,6 @@ async def debug_generate_structure(
     map_z: int = 0,
     wall_material: str = DEFAULT_WALL_MATERIAL,
     floor_material: str = DEFAULT_FLOOR_MATERIAL,
-    building_band: str | None = None,
     verbose: bool = False,
     file: UploadFile | None = File(default=None),
     path: str | None = Form(default=None),
@@ -164,7 +164,8 @@ async def debug_generate_structure(
     gen_logger.addHandler(capture)
     try:
         layout = _structure_generator.generate_from_template(
-            world, building, layout_template, building_band=building_band,
+            world, building, layout_template,
+            ctx=debug_building_context(world, building),
         )
     finally:
         gen_logger.removeHandler(capture)

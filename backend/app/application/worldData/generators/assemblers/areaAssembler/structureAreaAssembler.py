@@ -280,14 +280,6 @@ class StructureAreaAssembler:
                     area_uid, template.system_name, bx, by,
                 )
                 link = existing_buildings.get(b_uid) or building
-                if link is not building and link.system_economic_tier:
-                    # Authored building tier survives regeneration:
-                    # the persisted row is the cascade link AND its
-                    # authored stamp is carried onto the re-extracted NL.
-                    building = replace(
-                        building,
-                        system_economic_tier=link.system_economic_tier,
-                    )
             context = derive_structure_context(
                 world, template, city_skeleton, slot, terrain_cells,
                 ground_z=int(building.map_z),
@@ -298,6 +290,13 @@ class StructureAreaAssembler:
                 ),
                 area_uid=area_uid,
                 building=link,
+            )
+            # §8.4 / M5: every new NL in the chain carries its effective
+            # tier; a persisted authored stamp surfaces unchanged (the
+            # persisted link wins the building scope).
+            building = replace(
+                building,
+                system_economic_tier=context.location_ctx.economic_tier,
             )
             building_layout = BuildingAssembler().assemble(
                 world, building, body, structure, context, terrain_cells,

@@ -3,9 +3,7 @@ from random import Random
 
 from app.application.jsonValidation import economic_tiers, materials
 from app.application.worldData.generators.utils.tierRegistry import median_system_tier, tiers_sorted
-from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
-from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.db.models.world import World
 
 from app.dataModel.materials import (
@@ -76,26 +74,15 @@ def resolve_material(
 
 def resolve_room_materials(
     world: World,
-    room_tier: str | None,
-    template_tier: str | None,
+    effective_tier: str | None,
     rng: Random,
     room_id: str = "",
-    building_tier: str | None = None,
-    template: StructureTemplate | None = None,
-    *,
-    building_band: str | None = None,
 ) -> tuple[str, str]:
-    """Возвращает (wall_material, floor_material) для комнаты."""
-    _ = template
-    effective = TierResolver.resolve(
-        world=world,
-        room_tier=room_tier,
-        template_tier=template_tier,
-        building_tier=building_tier,
-        building_band=building_band,
-        rng=rng,
-    )
+    """Возвращает (wall_material, floor_material) для комнаты.
 
-    wall  = resolve_material(world, "wall",  effective, rng, DEFAULT_WALL_MATERIAL,  context=room_id)
-    floor = resolve_material(world, "floor", effective, rng, DEFAULT_FLOOR_MATERIAL, context=room_id)
+    ``effective_tier`` — уже resolved room-scope значение каскада;
+    резолва здесь нет (tz_cascade_context §4, cascade-migration M4).
+    """
+    wall  = resolve_material(world, "wall",  effective_tier, rng, DEFAULT_WALL_MATERIAL,  context=room_id)
+    floor = resolve_material(world, "floor", effective_tier, rng, DEFAULT_FLOOR_MATERIAL, context=room_id)
     return wall, floor

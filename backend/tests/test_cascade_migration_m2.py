@@ -14,6 +14,7 @@ Covers tz_cascade_context §4/§8.4 for the migration slice:
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 from unittest.mock import patch
 
 from app.application.worldData.context.locationScope import (
@@ -278,6 +279,49 @@ class BuildingScopeTest(unittest.TestCase):
         self.assertEqual(
             area.building_location.system_economic_tier, "poor",
         )
+
+    def test_fresh_building_nl_stamped_and_stable_on_regeneration(self):
+        # M5 §8.4: every new NL in the chain carries the effective tier;
+        # fed back as a persisted row it pins the same value (no re-roll).
+        world = self.world
+        slot = AreaSlot(
+            [(x, y) for x in range(20, 25) for y in range(30, 35)],
+            7, Facing.SOUTH,
+        )
+        plot = self.plot.model_copy(update={"economic_tier_band": "rich"})
+        area = StructureAreaAssembler().assemble(
+            world, slot, plot, self.skeleton, None,
+            structure_catalog=self.catalog,
+            building_x=20, building_y=30,
+            district_ctx=self._district_ctx(),
+            district_uid="m2-district-uid",
+        )
+        stamped = area.building_location
+        self.assertEqual(stamped.system_economic_tier, "exceptional")
+
+        a_uid = area_uid("m2-district-uid", 20, 30, Facing.SOUTH)
+        b_uid = building_location_uid(a_uid, plot.system_name, 20, 30)
+        # extract_settlement rewrites the probe uid to the persisted uid.
+        persisted = replace(stamped, location_uid=b_uid)
+        generate = StructureGeneratorService.generate_from_template
+        seen = {}
+
+        def capture(service, w, building, structure, **kwargs):
+            seen["ctx"] = kwargs.get("ctx")
+            return generate(service, w, building, structure, **kwargs)
+
+        with patch.object(
+            StructureGeneratorService, "generate_from_template", capture,
+        ):
+            StructureAreaAssembler().assemble(
+                world, slot, plot, self.skeleton, None,
+                structure_catalog=self.catalog,
+                building_x=20, building_y=30,
+                district_ctx=self._district_ctx(),
+                district_uid="m2-district-uid",
+                existing_buildings={b_uid: persisted},
+            )
+        self.assertEqual(seen["ctx"].economic_tier, "exceptional")
 
     def test_area_scope_materializes_once_per_scope(self):
         world = self.world
