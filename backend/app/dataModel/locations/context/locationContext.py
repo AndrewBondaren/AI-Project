@@ -6,7 +6,15 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
-from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
+from app.dataModel.locations.context.cascadeParams import (
+    CITY_SIZE,
+    ECONOMIC_TIER,
+    SETTLEMENT_DENSITY,
+)
+from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
+from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
+    SettlementSizeKey,
+)
 
 
 class LocationContext(BaseModel):
@@ -18,6 +26,14 @@ class LocationContext(BaseModel):
         # The param object from cascadeParams — the same instance the
         # source channels reference by identity.
         ECONOMIC_TIER,
+    ] = None
+    system_city_size: Annotated[
+        SettlementSizeKey | None,
+        CITY_SIZE,
+    ] = None
+    settlement_density: Annotated[
+        DistrictDensity | None,
+        SETTLEMENT_DENSITY,
     ] = None
     provenance: dict[str, tuple[ScopeLevel, str]] = Field(default_factory=dict)
 

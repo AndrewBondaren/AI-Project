@@ -15,7 +15,14 @@ from app.dataModel.annotationPolicy import DefaultOnWire
 from app.dataModel.economy.economyTier.economyTierEntry import EconomyTierEntry
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import WorldEconomyTierRegistry
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
-from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
+from app.dataModel.locations.context.cascadeParams import (
+    CITY_SIZE,
+    ECONOMIC_TIER,
+    SETTLEMENT_DENSITY,
+)
+from app.dataModel.locations.settlement.enums.districtDensity import (
+    DistrictDensity,
+)
 from app.dataModel.cascade.cascadeGraph import (
     cascade_channels,
     check_link,
@@ -69,10 +76,16 @@ class LocationContextContractTests(unittest.TestCase):
         self.assertIsNone(tier_spec[0].levels)
 
     def test_only_v1_fields_and_branded_tier(self):
-        self.assertEqual(set(LocationContext.model_fields), {"level", "economic_tier", "provenance"})
+        self.assertEqual(set(LocationContext.model_fields),
+                         {"level", "economic_tier", "system_city_size",
+                          "settlement_density", "provenance"})
         context = LocationContext(level=ScopeLevel.BUILDING, economic_tier="custom_tier",
+                                  system_city_size="custom_size",
+                                  settlement_density="dense",
                                   provenance={"economic_tier": (ScopeLevel.AREA, "economic_tier")})
         self.assertIsInstance(context.economic_tier, RegistryKey)
+        self.assertIsInstance(context.system_city_size, RegistryKey)
+        self.assertIsInstance(context.settlement_density, DistrictDensity)
         self.assertEqual(context.provenance["economic_tier"], (ScopeLevel.AREA, "economic_tier"))
         with self.assertRaises(ValidationError):
             LocationContext(level=ScopeLevel.WORLD, wall_material="stone")
@@ -102,7 +115,9 @@ class LocationContextContractTests(unittest.TestCase):
         self.assertIsNot(first.provenance, second.provenance)
         self.assertIs(first._world, world)
         self.assertEqual(first.model_dump(mode="json"),
-                         {"level": "world", "economic_tier": None, "provenance": {}})
+                         {"level": "world", "economic_tier": None,
+                          "system_city_size": None,
+                          "settlement_density": None, "provenance": {}})
 
     def test_default_median_sorts_and_uses_upper_middle_with_warning(self):
         for entries, expected in (([("high", 90), ("low", 0), ("medium", 10)], "medium"),
@@ -131,10 +146,20 @@ class LocationContextContractTests(unittest.TestCase):
     # --- S2a: linked list of fields — identity param, typed edges ---
 
     def test_param_identity_binds_context_and_channels(self):
+        declared = [
+            meta
+            for info in LocationContext.model_fields.values()
+            for meta in info.metadata
+            if isinstance(meta, Cascade)
+        ]
         for model in (BundleNamedLocation, SettlementSkeleton,
                       DistrictTemplateEntry, PlotLayoutTemplate, RoomDef):
             for _name, channel in cascade_channels(model):
-                self.assertIs(channel.param, ECONOMIC_TIER)
+                self.assertTrue(
+                    any(channel.param is param for param in declared),
+                    f"{model.__name__}.{_name}: channel param not "
+                    "declared on LocationContext",
+                )
 
     def test_channels_cover_the_whole_chain_per_level(self):
         models = (RoomDef, BundleNamedLocation, PlotLayoutTemplate,
@@ -169,6 +194,42 @@ class LocationContextContractTests(unittest.TestCase):
                     model, ECONOMIC_TIER, level)
             }
             self.assertEqual(found, wanted, level.value)
+
+    def test_scoped_params_cover_their_declared_levels(self):
+        # CITY_SIZE — settlement-only; SETTLEMENT_DENSITY — the
+        # district-first pair (cascade-migration M7/M8).
+        self.assertEqual(
+            {
+                (model, field)
+                for model in (BundleNamedLocation, SettlementSkeleton)
+                for field, _ in cascade_channels(model, CITY_SIZE)
+            },
+            {
+                (BundleNamedLocation, "system_city_size"),
+                (SettlementSkeleton, "system_city_size"),
+            },
+        )
+        density = {
+            level: {
+                (model, field)
+                for model in (BundleNamedLocation, SettlementSkeleton,
+                              DistrictTemplateEntry)
+                for field, _ in cascade_channels(
+                    model, SETTLEMENT_DENSITY, level)
+            }
+            for level in ScopeLevel
+        }
+        self.assertEqual(
+            density[ScopeLevel.DISTRICT],
+            {(DistrictTemplateEntry, "density")},
+        )
+        self.assertEqual(
+            density[ScopeLevel.SETTLEMENT],
+            {
+                (BundleNamedLocation, "settlement_density"),
+                (SettlementSkeleton, "settlement_density"),
+            },
+        )
 
     def test_channel_kinds_are_declared(self):
         kinds = {

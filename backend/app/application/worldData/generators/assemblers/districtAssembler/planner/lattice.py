@@ -49,5 +49,9 @@ def slot_rect(slot: DistrictSlot) -> Rect:
 
 
 def district_step(slot: DistrictSlot, skeleton: CitySkeleton) -> int:
-    density = slot.district_template.density or skeleton.settlement_density
-    return block_size_for_density(density)
+    ctx = slot.district_ctx
+    if ctx is not None:
+        return block_size_for_density(ctx.settlement_density)
+    return block_size_for_density(
+        slot.district_template.density or skeleton.settlement_density
+    )

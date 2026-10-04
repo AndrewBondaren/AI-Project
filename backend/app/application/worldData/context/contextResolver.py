@@ -29,7 +29,11 @@ from app.application.worldData.generators.utils.tierRegistry import (
     tier_rank,
     tiers_sorted,
 )
-from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
+from app.dataModel.locations.context.cascadeParams import (
+    CITY_SIZE,
+    ECONOMIC_TIER,
+    SETTLEMENT_DENSITY,
+)
 from app.dataModel.cascade.cascadeGraph import (
     check_link,
     ordered_chain,
@@ -39,6 +43,12 @@ from app.dataModel.cascade.cascadeSpec import (
     ChannelKind,
 )
 from app.dataModel.locations.context.locationContext import LocationContext
+from app.dataModel.locations.settlement.enums.districtDensity import (
+    DistrictDensity,
+)
+from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
+    WorldSettlementSizeRegistry,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -208,6 +218,12 @@ def _resolve_default(param: Cascade, world):
                 "the registry median"
             )
         return economic_tiers(world).resolve_default(param.default)
+    if param is CITY_SIZE:
+        # Canonical rank (dataModel policy, not world registry).
+        return WorldSettlementSizeRegistry.default_system_size()
+    if param is SETTLEMENT_DENSITY:
+        # Canonical enum default (dataModel policy, not a literal).
+        return DistrictDensity.default()
     raise ValueError(
         f"no default policy bound for param {param.field!r}"
     )

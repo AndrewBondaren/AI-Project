@@ -303,7 +303,9 @@ class TestRegistryKey(unittest.TestCase):
             dominant_material="stone",
             system_location_mood="prosperous",
         )
-        skeleton = city_skeleton_from_settlement(loc, economic_tier="quality")
+        skeleton = city_skeleton_from_settlement(
+            loc, economic_tier="quality", settlement_density=None,
+        )
         self.assertIsInstance(skeleton.economic_tier, RegistryKey)
         self.assertEqual(skeleton.economic_tier, "quality")
         self.assertIsNone(skeleton.dominant_material)
@@ -311,7 +313,9 @@ class TestRegistryKey(unittest.TestCase):
         self.assertEqual(skeleton.system_city_size, "small")
         self.assertIsInstance(skeleton.system_location_mood, RegistryKey)
         self.assertEqual(skeleton.system_location_mood, "prosperous")
-        cleared = city_skeleton_from_settlement(loc, economic_tier=None)
+        cleared = city_skeleton_from_settlement(
+            loc, economic_tier=None, settlement_density=None,
+        )
         self.assertIsNone(cleared.economic_tier)
 
     def test_drawing_key_is_layout_identity(self) -> None:

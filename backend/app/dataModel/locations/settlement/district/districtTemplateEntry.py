@@ -8,7 +8,10 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
-from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
+from app.dataModel.locations.context.cascadeParams import (
+    ECONOMIC_TIER,
+    SETTLEMENT_DENSITY,
+)
 from app.dataModel.cascade.cascadeSpec import (
     CascadeChannel,
     ChannelKind,
@@ -63,7 +66,13 @@ class DistrictTemplateEntry(BaseModel):
             ECONOMIC_TIER, ScopeLevel.DISTRICT, kind=ChannelKind.RANGE,
         ),
     ] = None
-    density: DefaultOnWire[DistrictDensity | None] = None
+    # District-level VALUE channel for `settlement_density` — the
+    # chain top (district-first): edges are declared on the NL side,
+    # same import constraint as `economic_tier_range` (§2).
+    density: Annotated[
+        DefaultOnWire[DistrictDensity | None],
+        CascadeChannel(SETTLEMENT_DENSITY, ScopeLevel.DISTRICT),
+    ] = None
     street_layout: DefaultOnWire[StreetLayout] = StreetLayout.GRID
     connections: DefaultOnWire[list[DistrictConnection] | None] = None
     required_structures: DefaultOnWire[list[RequiredStructure] | None] = None

@@ -12,7 +12,6 @@ from app.application.worldData.generators.assemblers.buildingAssembler.assembler
 from app.application.worldData.generators.assemblers.buildingAssembler.buildingAssembler import BuildingAssembler
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
-from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.spatial.facing import Facing
@@ -78,7 +77,7 @@ class BuildingAssemblerTests(unittest.TestCase):
 
     def test_plot_band_selects_room_material_through_real_generation(self):
         for band, expected in (("rich", "high_stone"), ("poor", "low_stone"), (None, "median_stone")):
-            with self.subTest(band=band), patch.object(TierResolver, "resolve", wraps=TierResolver.resolve) as resolve:
+            with self.subTest(band=band):
                 layout = BuildingAssembler().assemble(
                     self.world, self.building, self.body, self.structure, self.context(band),
                 )
@@ -86,9 +85,6 @@ class BuildingAssemblerTests(unittest.TestCase):
                 self.assertEqual(layout.rooms[0].parent_wall_material, expected)
                 self.assertEqual(layout.rooms[0].parent_floor_material, expected)
                 self.assertTrue(layout.cells)
-                # M3+M4: no TierResolver call anywhere in the generation
-                # path — the effective tier arrives via the cascade ctx.
-                self.assertFalse(resolve.call_args_list)
 
     def test_room_material_resolver_uses_effective_tier(self):
         # M4: the helper is a pure consumer — no tier cascade inside.
@@ -113,7 +109,7 @@ class BuildingAssemblerTests(unittest.TestCase):
             for z in (0, 1)
         }
         for band, expected in (("rich", "high_stone"), ("poor", "low_stone"), (None, "median_stone")):
-            with self.subTest(band=band), patch.object(TierResolver, "resolve", wraps=TierResolver.resolve) as resolve:
+            with self.subTest(band=band):
                 rooms, _, shafts = StructureGeneratorService()._instantiate_rooms(
                     structure, self.building, levels, self.world, Random(0),
                     StructureGeneratorService._resolve_staircases(structure),
@@ -123,9 +119,6 @@ class BuildingAssemblerTests(unittest.TestCase):
                 self.assertEqual(len(shafts["stairs"]), 2)
                 self.assertEqual(len(rooms), 4)
                 self.assertTrue(all((r.wall_material, r.floor_material) == (expected, expected) for r in rooms))
-                # M4: the room/shaft factories feed the already-resolved
-                # room-scope tier — zero resolver calls.
-                self.assertFalse(resolve.call_args_list)
 
     def test_explicit_building_tier_overrides_band(self):
         self.building.system_economic_tier = "low"

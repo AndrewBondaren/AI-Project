@@ -125,18 +125,19 @@ def footprint_gate_coordinates(
 def settlement_grid_rect(
     world:             World,
     settlement:        NamedLocation,
-    system_city_size:  str | None = None,
+    system_city_size:  str | None,
 ):
+    """``system_city_size`` — resolved ctx/authored rank key; canonical
+    default happens inside ``resolve_settlement_size_key`` (M7)."""
     cell_m = map_cell_fine_span(world)
-    size = system_city_size if system_city_size is not None else settlement.system_city_size
-    side_m = footprint_side_fine(world, size)
+    side_m = footprint_side_fine(world, system_city_size)
     return _settlement_grid_rect(settlement, cell_m, side_m)
 
 
 def footprint_grid_rect(
     world:             World,
     settlement:        NamedLocation,
-    system_city_size:  str | None = None,
+    system_city_size:  str | None,
 ) -> tuple[int, int, int, int]:
     """
     Прямоугольник footprint в индексах global map grid [gx0, gx1) × [gy0, gy1).
@@ -166,17 +167,16 @@ def cell_in_footprint_grid(
 def settlement_fine_rect(
     world:             World,
     settlement:        NamedLocation,
-    system_city_size:  str | None = None,
+    system_city_size:  str | None,
 ):
-    size = system_city_size if system_city_size is not None else settlement.system_city_size
-    side_m = footprint_side_fine(world, size)
+    side_m = footprint_side_fine(world, system_city_size)
     return _settlement_fine_rect(settlement, side_m)
 
 
 def footprint_fine_rect(
     world:             World,
     settlement:        NamedLocation,
-    system_city_size:  str | None = None,
+    system_city_size:  str | None,
 ) -> tuple[int, int, int, int, int]:
     """Footprint в WORLD_FINE_GRID [ox, oy) × [x1, y1) и ground z.
 

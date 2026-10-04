@@ -136,7 +136,11 @@ def verify_cascade_contract(context_model: type[BaseModel]) -> None:
                 )
         covered = {link.level for link in chain_nodes}
         root = next(iter(param.axis))
-        expected = param.levels or (set(param.axis) - {root})
+        expected = (
+            set(param.levels)
+            if param.levels is not None
+            else set(param.axis) - {root}
+        )
         missing_levels = expected - covered
         if missing_levels:
             errors.append(

@@ -45,10 +45,12 @@ def _world():
     )
 
 
-def _nl(tier=None, uid="nl", location_type="building"):
+def _nl(tier=None, uid="nl", location_type="building", size=None,
+        density=None):
     return BundleNamedLocation(
         location_uid=uid, display_name=uid,
         system_location_type=location_type, system_economic_tier=tier,
+        system_city_size=size, settlement_density=density,
     )
 
 
@@ -61,11 +63,14 @@ def _room(tier=None):
     )
 
 
-def _skeleton(tier=None):
-    return SettlementSkeleton(economic_tier=tier)
+def _skeleton(tier=None, size=None, density=None):
+    return SettlementSkeleton(
+        economic_tier=tier, system_city_size=size,
+        settlement_density=density,
+    )
 
 
-def _dte(tier_range=None):
+def _dte(tier_range=None, density=None):
     bounds = (
         None if tier_range is None
         else {"min": tier_range[0], "max": tier_range[1]}
@@ -73,6 +78,7 @@ def _dte(tier_range=None):
     return DistrictTemplateEntry(
         system_name="d1", display_name="District",
         district_type="residential", economic_tier_range=bounds,
+        density=density,
     )
 
 
@@ -212,6 +218,122 @@ class ExtendResolutionTests(unittest.TestCase):
             Link(ScopeLevel.SETTLEMENT, _skeleton("t0")),
         )
         self.assertEqual(ctx2.economic_tier, "t5")
+
+    def test_city_size_nl_beats_skeleton_and_inherits_down(self):
+        # M7: CITY_SIZE resolves only at the settlement scope — the
+        # authored NL node sits above the skeleton node; deeper scopes
+        # inherit the value unchanged.
+        ctx = extend(
+            LocationContext.root(_world()),
+            Link(ScopeLevel.SETTLEMENT, _nl(uid="c", size="large")),
+            Link(ScopeLevel.SETTLEMENT, _skeleton(size="small")),
+        )
+        self.assertEqual(ctx.system_city_size, "large")
+        self.assertEqual(
+            ctx.provenance["system_city_size"],
+            (ScopeLevel.SETTLEMENT,
+             "BundleNamedLocation.system_city_size"),
+        )
+        ctx = extend(ctx, EmptyLink(ScopeLevel.DISTRICT))
+        ctx = extend(ctx, Link(ScopeLevel.AREA, _plot()))
+        ctx = extend(ctx, Link(ScopeLevel.BUILDING, _nl()))
+        self.assertEqual(ctx.system_city_size, "large")
+
+    def test_city_size_skeleton_feeds_and_default_is_canonical(self):
+        ctx = extend(
+            LocationContext.root(_world()),
+            Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),
+            Link(ScopeLevel.SETTLEMENT, _skeleton(size="small")),
+        )
+        self.assertEqual(ctx.system_city_size, "small")
+        self.assertEqual(
+            ctx.provenance["system_city_size"],
+            (ScopeLevel.SETTLEMENT, "SettlementSkeleton.system_city_size"),
+        )
+        with self.assertLogs(level="WARNING") as captured:
+            empty = extend(
+                LocationContext.root(_world()),
+                EmptyLink(ScopeLevel.SETTLEMENT),
+            )
+        # The tier default warns; the canonical size default is silent.
+        self.assertFalse(
+            [r for r in captured.records
+             if "city_size" in r.getMessage()],
+        )
+        self.assertEqual(empty.system_city_size, "medium")
+        self.assertEqual(
+            empty.provenance["system_city_size"],
+            (ScopeLevel.WORLD, "default:canonical_default"),
+        )
+
+    def test_density_nl_beats_skeleton_and_inherits_down(self):
+        # M8: NL authored density sits above the skeleton node at the
+        # settlement scope; deeper scopes inherit unchanged.
+        ctx = extend(
+            LocationContext.root(_world()),
+            Link(ScopeLevel.SETTLEMENT,
+                 _nl(uid="c", density="dense")),
+            Link(ScopeLevel.SETTLEMENT, _skeleton(density="sparse")),
+        )
+        self.assertEqual(ctx.settlement_density, "dense")
+        self.assertEqual(
+            ctx.provenance["settlement_density"],
+            (ScopeLevel.SETTLEMENT,
+             "BundleNamedLocation.settlement_density"),
+        )
+        ctx = extend(ctx, EmptyLink(ScopeLevel.DISTRICT))
+        ctx = extend(ctx, Link(ScopeLevel.AREA, _plot()))
+        self.assertEqual(ctx.settlement_density, "dense")
+
+    def test_density_district_template_overrides_settlement(self):
+        # M8 district-first: an authored district template density is
+        # the chain top — it beats the settlement value; a template
+        # without density leaves the inherited value standing.
+        ctx = extend(
+            LocationContext.root(_world()),
+            Link(ScopeLevel.SETTLEMENT,
+                 _nl(uid="c", density="sparse")),
+            Link(ScopeLevel.SETTLEMENT, _skeleton(density="medium")),
+        )
+        self.assertEqual(ctx.settlement_density, "sparse")
+        district = extend(
+            ctx, Link(ScopeLevel.DISTRICT, _dte(density="dense")),
+        )
+        self.assertEqual(district.settlement_density, "dense")
+        self.assertEqual(
+            district.provenance["settlement_density"],
+            (ScopeLevel.DISTRICT, "DistrictTemplateEntry.density"),
+        )
+        plain = extend(ctx, Link(ScopeLevel.DISTRICT, _dte()))
+        self.assertEqual(plain.settlement_density, "sparse")
+
+    def test_density_skeleton_feeds_and_default_is_canonical(self):
+        ctx = extend(
+            LocationContext.root(_world()),
+            Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),
+            Link(ScopeLevel.SETTLEMENT, _skeleton(density="sparse")),
+        )
+        self.assertEqual(ctx.settlement_density, "sparse")
+        self.assertEqual(
+            ctx.provenance["settlement_density"],
+            (ScopeLevel.SETTLEMENT,
+             "SettlementSkeleton.settlement_density"),
+        )
+        with self.assertLogs(level="WARNING") as captured:
+            empty = extend(
+                LocationContext.root(_world()),
+                EmptyLink(ScopeLevel.SETTLEMENT),
+            )
+        # The tier default warns; the canonical density default is silent.
+        self.assertFalse(
+            [r for r in captured.records
+             if "density" in r.getMessage()],
+        )
+        self.assertEqual(empty.settlement_density, "medium")
+        self.assertEqual(
+            empty.provenance["settlement_density"],
+            (ScopeLevel.WORLD, "default:canonical_default"),
+        )
 
     def test_area_tier_beats_band_and_range(self):
         ctx = _chain_to_building(LocationContext.root(_world()))

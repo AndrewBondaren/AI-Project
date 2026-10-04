@@ -2,7 +2,7 @@
 Общий доступ к worlds.economic_tier_registry: сортировка и ordinal-сравнение.
 
 Не заменяет:
-  - TierResolver — каскад room → building → district → city
+  - LocationContext/extend() — каскад room → building → district → city
   - economicTierBands — нормализация N тиров в abstract bands (poor…rich)
   - materialResolver — выбор материала с fallback вниз по base_value
 """

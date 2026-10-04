@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 def _city_has_sidewalk(skeleton: CitySkeleton) -> bool:
     """Perimeter/inter-district city roads: sidewalk unless settlement is sparse."""
-    density = DistrictDensity.from_wire(skeleton.settlement_density) or DistrictDensity.default()
+    density = skeleton.settlement_density or DistrictDensity.default()
     return density is not DistrictDensity.SPARSE
 
 

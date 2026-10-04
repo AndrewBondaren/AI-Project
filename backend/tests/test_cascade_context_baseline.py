@@ -7,7 +7,6 @@ remain outside v1. Run this module as a script to save the full local snapshot.
 from __future__ import annotations
 
 import hashlib
-import inspect
 import json
 import unittest
 from contextlib import ExitStack
@@ -21,7 +20,9 @@ from app.application.worldData.context.contextResolver import extend
 from app.application.worldData.context.locationScope import (
     area_context,
     building_context,
+    debug_building_context,
     empty_location_chain,
+    settlement_context,
 )
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
 from app.application.worldData.generators.assemblers.areaAssembler.structureAreaAssembler import derive_structure_context
@@ -33,7 +34,6 @@ from app.application.worldData.generators.structure import structureGeneratorSer
 from app.application.worldData.generators.structure.foundation.foundationBuilder import FoundationBuilder
 from app.application.worldData.generators.structure.roof.roofBuilder import RoofBuilder
 from app.application.worldData.generators.utils import materialResolver
-from app.application.worldData.generators.utils.tierResolver import TierResolver
 from app.dataModel.economy.economyTier.economyTierEntry import EconomyTierEntry
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import WorldEconomyTierRegistry
@@ -111,22 +111,10 @@ def _building_ctx(world, building, band=None):
 def snapshot(*, band=None, building_tier=None):
     world, building, structure = fixture()
     building.system_economic_tier = building_tier
-    tier_trace, material_trace, room_trace = [], [], []
-    original_tier = TierResolver.resolve
+    material_trace, room_trace = [], []
     original_material = materialResolver.resolve_material
     original_rooms = service.instantiate_level_rooms
     original_shafts = service.instantiate_shaft_rooms
-
-    def resolve_tier(*args, **kwargs):
-        frame = inspect.currentframe().f_back
-        while frame.f_code.co_filename == inspect.getfile(patch):
-            frame = frame.f_back
-        caller = frame.f_code.co_name
-        value = original_tier(*args, **kwargs)
-        tier_trace.append({"caller": caller, "tier": value, "room_tier": kwargs.get("room_tier"),
-                           "city_supplied": kwargs.get("city") is not None,
-                           "district_supplied": kwargs.get("district") is not None})
-        return value
 
     def resolve_material(world, use_type, effective_tier, rng, default, context=""):
         value = original_material(world, use_type, effective_tier, rng, default, context)
@@ -141,7 +129,6 @@ def snapshot(*, band=None, building_tier=None):
         return rooms
 
     with ExitStack() as stack:
-        stack.enter_context(patch.object(TierResolver, "resolve", side_effect=resolve_tier))
         stack.enter_context(patch.object(materialResolver, "resolve_material", side_effect=resolve_material))
         stack.enter_context(patch("app.application.worldData.generators.structure.passages.wallOpening.resolve_material",
                                   side_effect=resolve_material))
@@ -158,7 +145,7 @@ def snapshot(*, band=None, building_tier=None):
     passages = sorted((p.system_passage_type, p.from_x, p.from_y, p.to_x, p.to_y)
                       for p in layout.passages)
     return {
-        "tiers": tier_trace, "materials": material_trace, "rooms": room_trace,
+        "materials": material_trace, "rooms": room_trace,
         "named_location_tiers": [r.system_economic_tier for r in layout.rooms],
         "cell_count": len(layout.cells), "passage_count": len(layout.passages),
         "geometry_sha256": hashlib.sha256(json.dumps([geometry, passages]).encode()).hexdigest(),
@@ -168,16 +155,9 @@ def snapshot(*, band=None, building_tier=None):
 class CascadeContextBaselineTests(unittest.TestCase):
     def test_null_building_uses_median_everywhere_and_stamps_rooms(self):
         result = snapshot()
-        # M3: service phases no longer resolve — the building ctx carries
-        # the effective tier; resolve calls remain only inside the legacy
-        # material helper (removed in M4).
-        self.assertFalse([row for row in result["tiers"] if row["caller"] in
-                          ("_instantiate_rooms", "_run_passages", "_place_wall_openings")])
         self.assertEqual((result["cell_count"], result["passage_count"]), (437, 2))
         self.assertEqual(result["geometry_sha256"],
                          "4fd5a07f79d97aec173a38db42ba536b040c5376d9decf79e2f7faefe2e86ff4")
-        self.assertTrue(all(not row["city_supplied"] and not row["district_supplied"]
-                            for row in result["tiers"]))
         # The room instance now carries the resolved room-scope tier —
         # authored "t9" for the upper room, building tier elsewhere.
         self.assertEqual([r["tier"] for r in result["rooms"]], ["t5", "t9", "t5", "t5"])
@@ -189,8 +169,6 @@ class CascadeContextBaselineTests(unittest.TestCase):
     def test_band_materializes_once_at_area_scope_and_is_reproducible(self):
         first = snapshot(band="common")
         self.assertEqual(first, snapshot(band="common"))
-        self.assertFalse([row for row in first["tiers"] if row["caller"] in
-                          ("_instantiate_rooms", "_run_passages", "_place_wall_openings")])
         # One materialization at the area boundary (deterministic scope
         # seed → "t2"): every non-authored room shares the tier — the old
         # repeated-resolve spread (t1 → t2 across call sites, shared-rng
@@ -206,8 +184,6 @@ class CascadeContextBaselineTests(unittest.TestCase):
 
     def test_authored_building_wins_and_room_override_reaches_glass(self):
         result = snapshot(band="common", building_tier="t8")
-        self.assertFalse([row for row in result["tiers"] if row["caller"] in
-                          ("_instantiate_rooms", "_run_passages", "_place_wall_openings")])
         self.assertEqual([r["wall"] for r in result["rooms"]], ["wall_t8", "wall_t9", "wall_t8", "wall_t8"])
         self.assertEqual({m["tier"] for m in result["materials"] if m["use"] == "window_glass"}, {"t8", "t9"})
         self.assertEqual(result["geometry_sha256"], snapshot()["geometry_sha256"])
@@ -218,7 +194,9 @@ class CascadeContextBaselineTests(unittest.TestCase):
         # the template's range and band (tz_cascade_context §4).
         world, building, structure = fixture()
         settlement = replace(building, location_uid="city", system_location_type="settlement", system_economic_tier="t1")
-        skeleton = city_skeleton_from_settlement(settlement, economic_tier="t1")
+        skeleton = city_skeleton_from_settlement(
+            settlement, economic_tier="t1", settlement_density=None,
+        )
         slot = AreaSlot(cells=[(20, 30)], ground_z=7, facing=Facing.SOUTH)
         district_ctx = empty_location_chain(world, ScopeLevel.DISTRICT)
         tiers = []
@@ -252,14 +230,31 @@ class CascadeContextBaselineTests(unittest.TestCase):
         self.assertEqual(skeleton.economic_tier, "t1")
         self.assertEqual(_pick_template_material(world, BarrierTemplateEntry(system_type="test"), skeleton, Random(0)), "wall_t1")
 
-    def test_warning_only_on_missing_authored_tier(self):
+    def test_warning_only_when_chain_lacks_value(self):
+        # M6: the engine warns once at the first scope that falls back
+        # to the registry median — even when a deeper authored link
+        # later overrides the provisional default.
         world, building, _ = fixture()
-        with self.assertLogs(TierResolver.__module__, level="WARNING") as captured:
-            self.assertEqual(TierResolver.resolve(world=world, building=building), "t5")
+        log_target = WorldEconomyTierRegistry.__module__
+        with self.assertLogs(log_target, level="WARNING") as captured:
+            self.assertEqual(
+                debug_building_context(world, building).economic_tier, "t5",
+            )
         self.assertEqual(len(captured.records), 1)
         building.system_economic_tier = "t8"
-        with self.assertNoLogs(TierResolver.__module__, level="WARNING"):
-            self.assertEqual(TierResolver.resolve(world=world, building=building), "t8")
+        with self.assertLogs(log_target, level="WARNING") as captured:
+            ctx = debug_building_context(world, building)
+        self.assertEqual(len(captured.records), 1)
+        self.assertEqual(ctx.economic_tier, "t8")
+        # A value at the first scope resolves without any default.
+        settlement = replace(
+            building, location_uid="city",
+            system_location_type="settlement", system_economic_tier="t8",
+        )
+        with self.assertNoLogs(log_target, level="WARNING"):
+            self.assertEqual(
+                settlement_context(world, settlement).economic_tier, "t8",
+            )
 
 
 if __name__ == "__main__":

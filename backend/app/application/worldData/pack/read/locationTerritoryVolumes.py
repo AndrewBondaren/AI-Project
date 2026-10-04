@@ -22,7 +22,7 @@ def _settlement_territory_volume(world: World, location: NamedLocation) -> Terri
     if location.map_x is None or location.map_y is None:
         return None
     policy = TerritoryVolumePolicy.canonical_defaults()
-    rect = settlement_fine_rect(world, location)
+    rect = settlement_fine_rect(world, location, location.system_city_size)
     x0, y0, x1, y1 = _inclusive_xy_bounds(int(rect.x0), int(rect.y0), int(rect.x1), int(rect.y1))
     ground_z = int(rect.z)
     depth = n_base(world)

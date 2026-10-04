@@ -154,6 +154,7 @@ class SettlementOutdoorPackingJob:
         skeleton = city_skeleton_from_settlement(
             settlement,
             economic_tier=settlement_ctx.economic_tier,
+            settlement_density=settlement_ctx.settlement_density,
         )
         world_nodes = await self._nodes.get_by_world(world.world_uid)
         world_edges = await self._edges.get_by_world(world.world_uid)

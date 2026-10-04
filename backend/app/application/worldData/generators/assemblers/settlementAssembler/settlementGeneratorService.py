@@ -60,7 +60,9 @@ class SettlementGeneratorService:
         settlement: NamedLocation,
     ) -> list[MapCell]:
         """Только резерв footprint (можно вызвать при world create)."""
-        return plan_footprint_occupancy_cells(world, settlement)
+        return plan_footprint_occupancy_cells(
+            world, settlement, settlement.system_city_size,
+        )
 
     def plan_slots_and_city_graph(
         self,
@@ -72,6 +74,7 @@ class SettlementGeneratorService:
         skeleton = city_skeleton_from_settlement(
             settlement,
             economic_tier=ctx.economic_tier,
+            settlement_density=ctx.settlement_density,
         )
         return plan_slots_and_city_graph_fn(
             world, settlement, skeleton, terrain_cells, ctx,

@@ -29,7 +29,7 @@ def _surface_terrain(world: World) -> str:
 def plan_footprint_occupancy_cells(
     world:            World,
     settlement:       NamedLocation,
-    system_city_size: str | None = None,
+    system_city_size: str | None,
 ) -> list[MapCell]:
     """
     Маркирует global map cells под footprint поселения.

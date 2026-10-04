@@ -8,7 +8,11 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
-from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
+from app.dataModel.locations.context.cascadeParams import (
+    CITY_SIZE,
+    ECONOMIC_TIER,
+    SETTLEMENT_DENSITY,
+)
 from app.dataModel.cascade.cascadeSpec import CascadeChannel
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     ConnectionTypeKey,
@@ -70,8 +74,19 @@ class SettlementSkeleton(BaseModel):
     ] = None
     architectural_style: DefaultOnWire[str | None] = None
     dominant_material: DefaultOnWire[MaterialKey | None] = None
-    settlement_density: DefaultOnWire[DistrictDensity | None] = None
-    system_city_size: DefaultOnWire[SettlementSizeKey | None] = None
+    # Bottom of the `settlement_density` chain — the `above` edges
+    # from the NL and district-template nodes are materialized by
+    # the verifier.
+    settlement_density: Annotated[
+        DefaultOnWire[DistrictDensity | None],
+        CascadeChannel(SETTLEMENT_DENSITY, ScopeLevel.SETTLEMENT),
+    ] = None
+    # Bottom of the `system_city_size` chain — mirrors the NL column;
+    # the `above` edge from the NL node is materialized by the verifier.
+    system_city_size: Annotated[
+        DefaultOnWire[SettlementSizeKey | None],
+        CascadeChannel(CITY_SIZE, ScopeLevel.SETTLEMENT),
+    ] = None
     system_location_mood: DefaultOnWire[LocationMoodKey | None] = None
     frontage_type_order: DefaultOnWire[list[ConnectionTypeKey] | None] = None
     plot_counts: DefaultOnWire[dict[DrawingKey, int] | None] = Field(

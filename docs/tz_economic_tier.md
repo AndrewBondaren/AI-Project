@@ -63,30 +63,45 @@ Band — **входной язык намерения** в шаблонах. П�
 
 ## 4. Каскад effective tier
 
-Целевой механизм — `LocationContext.extend()` по канонической цепочке
-([tz_cascade_context.md](tz_cascade_context.md) §2, §4). `TierResolver`
-(`backend/app/application/worldData/generators/utils/tierResolver.py`)
-— существующая частная реализация усечённого каскада; перенос на
-`LocationContext` — по плану `cascade-context-resolution.md`, вызовы
-помечаются TODO до зачистки.
+Механизм — `LocationContext.extend()` по канонической цепочке scope
+([tz_cascade_context.md](tz_cascade_context.md) §2, §4). Реализация —
+`contextResolver.extend()` + caller-side helpers в
+`application/worldData/context/locationScope.py`
+(`settlement_context` / `district_context` / `area_context` /
+`building_context` / `room_context`). Легаси `TierResolver` удалён
+(cascade-migration M6).
 
-Порядок (от частного к общему):
+Эффективный приоритет (от частного к общему):
 
 ```
-room_tier
-  → building.system_economic_tier
+room: RoomDef.economic_tier
+  → building: NL.system_economic_tier
   → area: plot.economic_tier → plot.economic_tier_band → plot.economic_tier_range
   → district: NL.system_economic_tier (stamped) / district_template.economic_tier_range
-  → city.system_economic_tier
+  → settlement: NL.system_economic_tier / SettlementSkeleton.economic_tier
 ```
 
-Порядок каналов на уровне: `economic_tier` → `band` → `range`.
-`economic_tier_range` — materialize-канал: ближайший к унаследованному
-тиру (anchor) внутри `[min, max]`; без anchor — rng внутри range.
-Фильтрация размещения по range (`planner/economic.py`) — отдельная
-механика отбора шаблонов, не часть каскада.
+Резолв идёт сверху вниз по границам scope: на каждой границе
+materialize-канал разворачивается один раз (scope-seeded rng), authored
+VALUE на своём scope бьёт унаследованное значение. Порядок каналов на
+уровне: `economic_tier` → `band` → `range`. `economic_tier_range` —
+materialize-канал: ближайший к унаследованному тиру (anchor) внутри
+`[min, max]`; без anchor — rng внутри range. Фильтрация размещения по
+range (`planner/economic.py`) — отдельная механика отбора шаблонов, не
+часть каскада.
 
-Если на всех уровнях `null` → `median_system_tier(world.economic_tier_registry)` + **WARNING** в лог (см. [tz_locations.md](tz_locations.md), поле `named_locations.system_economic_tier`).
+Если ни один scope не дал значения → `DefaultPolicy.REGISTRY_MEDIAN`
+(`economic_tiers(world).resolve_default`) + один **WARNING** при первом
+default-резолве; deeper scopes не пере-варнят (см. [tz_locations.md](tz_locations.md),
+поле `named_locations.system_economic_tier`).
+
+**Persist-решение (зафиксировано):** каждая новая `NamedLocation` цепочки
+stamp'ится effective tier'ом своего ctx — settlement NL при создании,
+district NL в `settlementOutdoorExtract._district_named_location`,
+building NL в `StructureAreaAssembler.assemble`, room NL в
+`_room_to_named_location`. При перегенерации persisted NL идёт первым
+link'ом своего scope → stamped/ authored тир сохраняется без re-roll
+(tz_cascade_context §8.4).
 
 Explicit `system_tier` на более глубоком уровне **перебивает** наследование с родителя; null-звенья каскад пропускает до ближайшего non-null предка.
 
@@ -99,7 +114,7 @@ Explicit `system_tier` на более глубоком уровне **пере�
 Мастер задаёт конкретные имена: город `"standard"`, район `economic_tier_range: {min, max}`, здание `"premium"`.
 
 ```
-TierResolver → effective system_tier → tierRegistry (материалы, placement, поля registry)
+LocationContext → effective system_tier → tierRegistry (материалы, placement, поля registry)
 ```
 
 `economicTierBands` не участвует, пока правило явно привязано к `system_tier`.
@@ -163,7 +178,7 @@ economic_tier_band
 | `tier_entry` | `None` — поля registry недоступны |
 | `tier_rank` | **0** (как самый бедный) — сравнения `tier_at_least` / `tier_at_most` могут дать ложный результат |
 | `band_of` | `None` |
-| `TierResolver`, все null | `median_system_tier` + WARNING |
+| каскад `extend()`, все null | `REGISTRY_MEDIAN` default + один WARNING при первом резолве |
 | `materialResolver` | нет кандидатов по tier → fallback вниз по `base_value` → любой подходящий материал → hard default + WARNING |
 | `sidewalkWidthResolver` | нет полей в entry → hardcoded default по имени / `_DEFAULT_WIDTH = 2` |
 
@@ -175,17 +190,20 @@ economic_tier_band
 
 | Место | Утилита |
 |---|---|
-| `settlementAssembler._build_skeleton` | `TierResolver.resolve(city=…)` |
+| `locationScope.py` | scope-boundary ctx: `settlement_context` … `room_context`, scope-seeded rng |
+| `contextResolver.extend()` | движок каскада: VALUE/BAND/RANGE каналы, `materialize_band`, `_materialize_tier_range`, `resolve_default` |
+| `settlementAssembler._build_skeleton` | `settlement_context(...).economic_tier` |
+| `structureGeneratorService.py` и structure-фазы | `ctx.economic_tier` (building/room scope) |
+| `StructureAreaAssembler` | `derive_structure_context` → `location_ctx`; stamp building NL |
 | `planner/placement.py` | `tier_at_least`, `tier_at_most` |
-| `materialResolver.py` | `median_system_tier`, `tiers_sorted`, fallback вниз |
+| `materialResolver.py` | `resolve_material`/`resolve_room_materials` — чистый консьюмер effective tier; `median_system_tier` только как material-default при `effective_tier=None`, `tiers_sorted`, fallback вниз |
 | `sidewalkWidthResolver.py` | `tier_entry` + `band_of` fallback |
-| `structureGeneratorService.py` | `TierResolver.resolve(world, building, band, rng)` |
-| `economicTierBands.py` | `materialize_band`, `band_of` в sidewalk fallback |
+| `economicTierBands.py` | `materialize_band` (вызывается только из `contextResolver`), `band_of` в sidewalk fallback |
 
 Соседи (не дублировать):
 
-- `TierResolver` — только каскад «откуда взять tier».
-- `materialResolver` — выбор материала + fallback.
+- `LocationContext`/`extend()` — единственный путь «откуда взять tier» до консьюмеров.
+- `materialResolver` — выбор материала + fallback (резолва тира внутри нет).
 - `economicTierBands` — только N→5 bands; формула §3 не сливать с `tier_rank`.
 
 ---
@@ -209,7 +227,7 @@ economic_tier_band
 ## 10. Roadmap
 
 1. Подключить `economicTierBands` в `sidewalkWidthResolver` (fallback через `band_of`, не по raw имени tier).
-2. Реализовать разворот `economic_tier_band` в `TierResolver` / отдельном `BandResolver`.
+2. ~~Реализовать разворот `economic_tier_band`~~ — сделано: `materialize_band` вызывается движком `contextResolver.extend()` на границе scope (BAND-канал, anchor = унаследованный тир).
 3. `plan_area_placements` / `buildingCache`: `economic_tier_range` + ±1 через `building_tier_compatible` и `tier_rank`.
 4. **Validator** при import и в редакторе миров (§6) — после стабилизации fallback-тестов.
 5. При включении validator: рассмотреть `tier_rank(unknown) → -1` или явный `is_known_tier()`, чтобы сравнения не маскировали битые ref.
@@ -247,9 +265,9 @@ Typed-вход содержит кандидатов с material identity, `stru
 реестра материалов и происхождением, optional явно заданную policy и resolved
 экономический контекст здания. Контекст здания определяется существующим
 каскадом §4, band — существующим отображением реестра мира из §3. Контекст
-обязателен и резолвится полным каскадом §4: room_tier → template_tier →
-building.system_economic_tier → building_tier → district → city →
-band-каскад → median_system_tier + WARNING. Отсутствие контекста после
+обязателен и резолвится полным каскадом §4 через `LocationContext.extend()`:
+settlement → district → area → building → room; band/range materialize на
+своей границе; пустая цепочка → REGISTRY_MEDIAN + WARNING. Отсутствие контекста после
 полного каскада — баг caller'а и повод для ошибки, а не для молчаливого
 выбора band консьюмером.
 

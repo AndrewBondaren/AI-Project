@@ -71,8 +71,14 @@ def city_skeleton_from_settlement(
     settlement: NamedLocation,
     *,
     economic_tier: str | None,
+    settlement_density: DistrictDensity | str | None,
 ) -> "CitySkeleton":
-    """Mirror SettlementSkeleton onto runtime CitySkeleton (assembler §7.1)."""
+    """Mirror SettlementSkeleton onto runtime CitySkeleton (assembler §7.1).
+
+    ``economic_tier`` and ``settlement_density`` come resolved from the
+    settlement ``LocationContext`` — the skeleton carries effective
+    values, not the raw NL column copy.
+    """
     pojo = settlement_skeleton_pojo(settlement)
     payload: dict = {}
     for field in dataclass_fields(CitySkeleton):
@@ -82,6 +88,9 @@ def city_skeleton_from_settlement(
             continue
         payload[name] = _copy_pojo_value(getattr(pojo, name))
     payload.update(_branded_resolved_aliases(economic_tier=economic_tier))
+    payload["settlement_density"] = DistrictDensity.from_wire(
+        settlement_density,
+    )
     return CitySkeleton(**payload)
 
 

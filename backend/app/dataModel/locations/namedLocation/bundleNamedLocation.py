@@ -8,7 +8,11 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire, IgnoreOnWire, StrictOnWire
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
-from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
+from app.dataModel.locations.context.cascadeParams import (
+    CITY_SIZE,
+    ECONOMIC_TIER,
+    SETTLEMENT_DENSITY,
+)
 from app.dataModel.cascade.cascadeSpec import CascadeChannel, CascadeLink
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     ConnectionTypeKey,
@@ -65,7 +69,18 @@ class BundleNamedLocation(BaseModel):
     owner_uid: DefaultOnWire[str | None] = None
     system_climate_zone: DefaultOnWire[str | None] = None
     state_uid: DefaultOnWire[str | None] = None
-    system_city_size: DefaultOnWire[SettlementSizeKey | None] = None
+    # Settlement-scope `system_city_size` node — top of the chain
+    # (authored NL beats the skeleton node; the `above` materialize is
+    # unnecessary: nothing overrides the settlement NL at its own level).
+    system_city_size: Annotated[
+        DefaultOnWire[SettlementSizeKey | None],
+        CascadeChannel(
+            CITY_SIZE, ScopeLevel.SETTLEMENT,
+            below=CascadeLink(
+                SettlementSkeleton, "system_city_size", ScopeLevel.SETTLEMENT,
+            ),
+        ),
+    ] = None
     # Cascade channels for `economic_tier` — the stamped/authored node at
     # four levels; each edge declared once, where imports allow
     # (tz_cascade_context §2). Neighbours on the other side of an edge
@@ -117,7 +132,21 @@ class BundleNamedLocation(BaseModel):
     dominant_material: DefaultOnWire[MaterialKey | None] = _skeleton_default(
         "dominant_material",
     )
-    settlement_density: DefaultOnWire[DistrictDensity | None] = _skeleton_default(
+    # Settlement-scope `settlement_density` node — the district
+    # template sits above (district-first), the skeleton node below.
+    settlement_density: Annotated[
+        DefaultOnWire[DistrictDensity | None],
+        CascadeChannel(
+            SETTLEMENT_DENSITY, ScopeLevel.SETTLEMENT,
+            above=CascadeLink(
+                DistrictTemplateEntry, "density", ScopeLevel.DISTRICT,
+            ),
+            below=CascadeLink(
+                SettlementSkeleton, "settlement_density",
+                ScopeLevel.SETTLEMENT,
+            ),
+        ),
+    ] = _skeleton_default(
         "settlement_density",
     )
     frontage_type_order: DefaultOnWire[list[ConnectionTypeKey] | None] = (

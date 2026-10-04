@@ -54,7 +54,7 @@ def needs_settlement_geometry(
     """
     if not _is_settlement_location(settlement):
         return False
-    rect = settlement_fine_rect(world, settlement)
+    rect = settlement_fine_rect(world, settlement, settlement.system_city_size)
     for cell in existing_cells:
         if not cell.system_building_element:
             continue

@@ -20,3 +20,22 @@ ECONOMIC_TIER = Cascade(
     axis=ScopeLevel,
     input_types=((ChannelKind.RANGE, EconomicTierRange),),
 )
+
+CITY_SIZE = Cascade(
+    # Settlement rank lives only at the settlement scope — deeper
+    # scopes inherit it (cascade-migration M7, tz_cascade §5).
+    field="system_city_size",
+    default=DefaultPolicy.CANONICAL_DEFAULT,
+    axis=ScopeLevel,
+    levels=(ScopeLevel.SETTLEMENT,),
+)
+
+SETTLEMENT_DENSITY = Cascade(
+    # District-first chain — the district template is the deepest
+    # (top) node and beats the settlement value; deeper scopes
+    # inherit (cascade-migration M8, tz_cascade §5).
+    field="settlement_density",
+    default=DefaultPolicy.CANONICAL_DEFAULT,
+    axis=ScopeLevel,
+    levels=(ScopeLevel.SETTLEMENT, ScopeLevel.DISTRICT),
+)

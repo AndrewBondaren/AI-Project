@@ -138,11 +138,11 @@ class SettlementAssembler:
         if timings is not None:
             timings.streets_s += time.perf_counter() - t
         t = time.perf_counter()
-        barrier_cells = self._plan_barriers(world, settlement, skeleton)
+        barrier_cells = self._plan_barriers(world, settlement, skeleton, ctx)
         if timings is not None:
             timings.barriers_s += time.perf_counter() - t
         t = time.perf_counter()
-        occupancy_cells = plan_footprint_occupancy_cells(world, settlement, skeleton.system_city_size)
+        occupancy_cells = plan_footprint_occupancy_cells(world, settlement, ctx.system_city_size)
         if timings is not None:
             timings.occupancy_s += time.perf_counter() - t
 
@@ -183,6 +183,7 @@ class SettlementAssembler:
         return city_skeleton_from_settlement(
             settlement,
             economic_tier=ctx.economic_tier,
+            settlement_density=ctx.settlement_density,
         )
 
     def _plan_barriers(
@@ -190,6 +191,7 @@ class SettlementAssembler:
         world:      World,
         settlement: NamedLocation,
         skeleton:   CitySkeleton,
+        ctx:        LocationContext,
     ) -> list[MapCell]:
         rng = random.Random(f"{world.world_uid}_{settlement.location_uid}_barriers")
-        return plan_settlement_barriers(world, settlement, skeleton, rng)
+        return plan_settlement_barriers(world, settlement, skeleton, rng, ctx)

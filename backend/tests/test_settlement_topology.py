@@ -85,9 +85,11 @@ def _settlement() -> NamedLocation:
 
 
 def _skeleton(world: World, settlement: NamedLocation):
+    ctx = settlement_context(world, settlement)
     return city_skeleton_from_settlement(
         settlement,
-        economic_tier=settlement_context(world, settlement).economic_tier,
+        economic_tier=ctx.economic_tier,
+        settlement_density=ctx.settlement_density,
     )
 
 

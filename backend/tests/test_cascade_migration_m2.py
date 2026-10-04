@@ -188,7 +188,7 @@ class DistrictScopeTest(unittest.TestCase):
         # The stamped value sits below the range — a fresh roll could
         # never produce it, so equality proves the stamp is the link.
         skeleton = city_skeleton_from_settlement(
-            settlement, economic_tier="standard",
+            settlement, economic_tier="standard", settlement_density=None,
         )
         loaded = load_topology_slots(
             world, settlement, skeleton, [stamped],
@@ -202,7 +202,7 @@ class BuildingScopeTest(unittest.TestCase):
     def setUp(self):
         self.world = _world()
         self.skeleton = city_skeleton_from_settlement(
-            _settlement(), economic_tier="standard",
+            _settlement(), economic_tier="standard", settlement_density=None,
         )
         self.structure = StructureTemplate(
             system_name="00000000-0000-4000-8000-0000000000b1",
