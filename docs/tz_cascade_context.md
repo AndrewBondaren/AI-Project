@@ -200,25 +200,33 @@ class LocationContext(ContextModel):
 | Элемент `Cascade` | Назначение |
 |---|---|
 | `field` | Имя канонического authored/stamp-поля параметра (`system_economic_tier`, `parent_wall_material`, …) — объявлено один раз, проверяется верификатором против `model_fields` источников |
-| `default` | `DefaultPolicy` — ссылка на **политику POJO** (`REGISTRY_MEDIAN`, `CANONICAL_DEFAULT`, `NONE_IS_ERROR`); реализацию держит POJO домена поля (для тира — `WorldEconomyTierRegistry`: median). Callables и литералы в dataModel не живут — движок знает только, как вызвать политику с `world` (`dataModel-no-hardcode.mdc`). WARNING о provisional default эмитит движок — §4 «Логирование» |
-| `fold` | Опциональный полный per-param resolver — для параметров, которым first-non-null недостаточно (точечно, не режим движка) |
+| `default` | `DefaultPolicy` — ссылка на **политику POJO** (`REGISTRY_MEDIAN`, `CANONICAL_DEFAULT`, `NONE_IS_ERROR`); *что* политика разворачивает — объявлено на том же `Cascade` (`default_value` / `default_registry`), не веткой в движке. WARNING о provisional default эмитит движок — §4 «Логирование» |
+| `default_value` | Обязателен ⟺ `CANONICAL_DEFAULT`, запрещён иначе: значение дефолта, подтянутое **из POJO домена** (`DistrictDensity.default()`, `CONSTRUCTION_MATERIAL_DEFAULTS.*`) — литералы запрещены (`dataModel-no-hardcode`); тип сверяется верификатором с аннотацией поля контекста (`model_copy` не валидирует) |
+| `default_registry` | Обязателен ⟺ `REGISTRY_MEDIAN`, запрещён иначе: **имя** world-реестра (`"economic_tiers"`); движок резолвит имя через таблицу `_REGISTRIES` → accessor `world → registry`, медиану считает POJO реестра (`resolve_default`) |
+| `materialize` | **Имя** резолвера materialize-входов (`BAND`/`RANGE` → значение), обязательно при не-`VALUE` каналах параметра; binding `имя → callable` — таблица `_MATERIALIZE` в движке, callable живёт в доменном модуле (`economicTierBands.materialize_tier_input`) |
+| `fold` | Опциональный derived-resolver по **имени** — для параметров, которым first-non-null недостаточно (точечно, не режим движка); binding `имя → callable` — таблица `_FOLDS` в движке, callable в доменном модуле (`materialResolver.fold_dominant_material`) |
 | `levels` | Опционально (v1 не использует): ограничение подмножества уровней для будущих полей (climate anchor и пр.); покрытие уровней каналами проверяется непрерывностью цепочки рёбер |
 | `axis` | Ось scope'ов параметра (`type[ScopeAxis]` — для locations `ScopeLevel`); канал на чужой оси — ошибка контракта |
 | `input_types` | Ожидаемый тип поля для materialize-kinds (`RANGE` → `EconomicTierRange`); kinds без записи — str-совместимые wire-ключи (`VALUE`, `BAND`) |
 
-Materialize (band → tier, range → tier через rng) объявляется **не
-callable в модели**, а привязкой по имени поля внутри `contextResolver`
-— локальная привязка движка, не публичный реестр; `materialize_band`
-остаётся в application.
+Привязки — **именами, не callable в модели**: `materialize`, `fold` и
+`default_registry` — строки на `Cascade`, резолвимые движком через
+локальные таблицы (`_MATERIALIZE`, `_FOLDS`, `_REGISTRIES`) — не
+публичный реестр. Сами callable живут в доменных модулях
+(`economicTierBands`, `materialResolver`), не в движке; веток
+`param is X` в движке нет — декларация параметра самодостаточна, её
+покрытие привязками проверяет верификатор.
 
 `ScopeLevel` — enum (`world, settlement, district, area, building,
 room`), порядок значений = иерархия; `ctx.level` — уровень текущего
 контекста.
 
-Новый каскадируемый параметр — **новая аннотированная строка в модели**,
-не resolver-класс, не запись в стороннем реестре и не копия каскада в
-сервисе. Метаданные живут у поля: тип, источник, дефолт видны в одном
-месте.
+Новый каскадируемый параметр — объект `Cascade` в `cascadeParams`
+(поле, ось, дефолт и имена привязок) + **одна аннотированная строка в
+модели** — не resolver-класс и не копия каскада в сервисе; materialize/
+fold/registry-политика добавляют ровно одну строку в таблице движка
+(имя → доменный callable). Метаданные живут у поля и в `cascadeParams`:
+тип, источник, дефолт, привязки видны в одном месте.
 
 **Режим v1:** `first-non-null` по цепочке + опциональный `materialize`.
 Сложная семантика — только через `fold` конкретного параметра; режимов
@@ -262,9 +270,12 @@ room_ctx       = extend(building_ctx, room_link)   # rooms[].economic_tier и т
    ctx; `None`-канал — пропуск, не отсутствие.
 3. Ни один узел уровня не дал значения → наследуется значение
    родительского ctx (оно уже свёрнуто с узлами пройденных уровней).
-4. Совсем пусто (нет authored и нет наследия) → `default` через
-   `DefaultPolicy` POJO. Default-source **не является якорем** для
-   materialize ниже и не предупреждает повторно — он provisional.
+4. Совсем пусто (нет authored и нет наследия) → `default` по политике:
+   `CANONICAL_DEFAULT` → `param.default_value` (объявлен в
+   `cascadeParams`); `REGISTRY_MEDIAN` → именованный реестр
+   (`param.default_registry` → `_REGISTRIES` → `resolve_default`).
+   Default-source **не является якорем** для materialize ниже и не
+   предупреждает повторно — он provisional.
 5. Возвращает **новый замороженный** `LocationContext` с новым `level` +
    provenance: `ctx.provenance[param] = (axis member, "Model.field"
    | "default:<policy>")` — какой уровень/канал дал значение.
@@ -276,8 +287,10 @@ room_ctx       = extend(building_ctx, room_link)   # rooms[].economic_tier и т
 materialize-ится на границе area и никогда не перебрасывается
 более глубокими scope.
 
-**Семантика materialize тира:** порядок каналов на уровне
-`economic_tier` → `band` → `range`. Range разворачивается как
+**Семантика materialize тира** (`materialize_tier_input` в
+`economicTierBands` — движок вызывает по имени `param.materialize`):
+порядок каналов на уровне `economic_tier` → `band` → `range`. Range
+разворачивается как
 **ближайший к унаследованному тиру (anchor)** внутри `[min, max]`; если
 унаследованного нет (включая provisional default) — rng внутри range.
 `materialize_band` — anchor-предпочтение ближайшего тира в band,
@@ -335,7 +348,9 @@ materialize-ится на границе area и никогда не переб�
 
 Ширина покрытия не является целью v1 — важна чистота движка: один
 параметр доказывает fold-семантику, provenance и одиночный rng-вход.
-Остальные поля добавляются строками с `Cascade` без правок движка.
+Остальные поля добавляются строками в `cascadeParams` (плюс одна строка
+binding-таблицы для materialize/fold/registry-политик) без правок
+механизма движка.
 
 **Кандидаты на последующие поля (не scope v1):** `wall_material` /
 `floor_material` (`NL.parent_*_material`, ad-hoc `or`-цепочки в
