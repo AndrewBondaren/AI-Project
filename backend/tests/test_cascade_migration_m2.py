@@ -108,7 +108,7 @@ def _district_template(range_: dict | None = None) -> DistrictTemplateEntry:
 
 def _district_row(tier: str | None) -> NamedLocation:
     return NamedLocation(
-        location_uid=district_location_uid("m2-hold", "m2-district", 0),
+        location_uid=district_location_uid("m2-world", "m2-hold", "m2-district", 0),
         world_uid="m2-world",
         display_name="District",
         system_location_type=district_type_entry().system_type,
@@ -171,7 +171,7 @@ class DistrictScopeTest(unittest.TestCase):
         template = district_templates(world)[0]
         stamped = NamedLocation(
             location_uid=district_location_uid(
-                settlement.location_uid, template.system_name, 0,
+                world.world_uid, settlement.location_uid, template.system_name, 0,
             ),
             world_uid=world.world_uid,
             display_name="District",
@@ -247,8 +247,8 @@ class BuildingScopeTest(unittest.TestCase):
             [(x, y) for x in range(20, 25) for y in range(30, 35)],
             7, Facing.SOUTH,
         )
-        a_uid = area_uid("m2-district-uid", 20, 30, Facing.SOUTH)
-        b_uid = building_location_uid(a_uid, self.plot.system_name, 20, 30)
+        a_uid = area_uid(world.world_uid, "m2-district-uid", 20, 30, Facing.SOUTH)
+        b_uid = building_location_uid(world.world_uid, a_uid, self.plot.system_name, 20, 30)
         persisted = NamedLocation(
             location_uid=b_uid,
             world_uid=world.world_uid,
@@ -299,8 +299,8 @@ class BuildingScopeTest(unittest.TestCase):
         stamped = area.building_location
         self.assertEqual(stamped.system_economic_tier, "exceptional")
 
-        a_uid = area_uid("m2-district-uid", 20, 30, Facing.SOUTH)
-        b_uid = building_location_uid(a_uid, plot.system_name, 20, 30)
+        a_uid = area_uid(world.world_uid, "m2-district-uid", 20, 30, Facing.SOUTH)
+        b_uid = building_location_uid(world.world_uid, a_uid, plot.system_name, 20, 30)
         # extract_settlement rewrites the probe uid to the persisted uid.
         persisted = replace(stamped, location_uid=b_uid)
         generate = StructureGeneratorService.generate_from_template

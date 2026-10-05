@@ -143,6 +143,7 @@ class TopologyExtractTest(unittest.TestCase):
             slots[0].district_template.system_name,
         )
         expected_uid = district_location_uid(
+            world.world_uid,
             settlement.location_uid,
             slots[0].district_template.system_name,
             0,

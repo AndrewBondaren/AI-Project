@@ -253,32 +253,34 @@ class StructureAreaAssembler:
         building_layout: StructureLayout | None = None
         context: StructureContext | None = None
         if want_building:
+            slot_cells = list(slot.cells) or [(0, 0)]
+            area_uid = (
+                _area_uid(
+                    world.world_uid, district_uid,
+                    min(c[0] for c in slot_cells),
+                    min(c[1] for c in slot_cells),
+                    slot.facing,
+                )
+                if district_uid is not None
+                else None
+            )
             building = self._place_building(
                 world, slot, template, bx, by, fp_cells, surface,
+                area_uid=area_uid,
             )
+            if area_uid is None:
+                area_uid = f"{building.location_uid}#area"
             body = template.main_building
             structure = structure_catalog.resolve(body.structure)
             if structure is None:
                 raise GenerationError(
                     f"Plot '{template.system_name}': structure '{body.structure}' not found"
                 )
-            slot_cells = list(slot.cells) or [(0, 0)]
-            area_uid = (
-                _area_uid(
-                    district_uid,
-                    min(c[0] for c in slot_cells),
-                    min(c[1] for c in slot_cells),
-                    slot.facing,
-                )
-                if district_uid is not None
-                else f"{building.location_uid}#area"
-            )
             link = building
-            if district_uid is not None and existing_buildings:
-                b_uid = _building_location_uid(
-                    area_uid, template.system_name, bx, by,
+            if existing_buildings:
+                link = (
+                    existing_buildings.get(building.location_uid) or building
                 )
-                link = existing_buildings.get(b_uid) or building
             context = derive_structure_context(
                 world, template, city_skeleton, slot, terrain_cells,
                 ground_z=int(building.map_z),
@@ -420,11 +422,23 @@ class StructureAreaAssembler:
         map_y:     int,
         fp_cells:  list[Coord],
         surface:   dict[Coord, int],
+        *,
+        area_uid:  str | None = None,
     ) -> NamedLocation:
         template_name = template.system_name
         map_z = median_surface_z(fp_cells, surface, slot.ground_z)
+        # Single minting point of the building uid (DET-1 D4): the
+        # canonical det-id when the district chain is known; the readable
+        # fallback only stands in debug/standalone layouts.
+        location_uid = (
+            _building_location_uid(
+                world.world_uid, area_uid, template_name, map_x, map_y,
+            )
+            if area_uid is not None
+            else f"{world.world_uid}-{template_name}-{map_x}-{map_y}"
+        )
         return NamedLocation(
-            location_uid=f"{world.world_uid}-{template_name}-{map_x}-{map_y}",
+            location_uid=location_uid,
             world_uid=world.world_uid,
             display_name=template.display_name,
             system_location_type="building",

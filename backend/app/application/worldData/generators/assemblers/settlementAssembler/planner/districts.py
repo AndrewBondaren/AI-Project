@@ -185,6 +185,7 @@ def plan_district_slots(
                     settlement_ctx,
                     template,
                     district_uid=district_location_uid(
+                        world.world_uid,
                         settlement.location_uid,
                         template.system_name,
                         slot_index,

@@ -151,8 +151,6 @@ _EXEMPT = (
 # Temporary whitelist — migrate per plan step; a file drops out of _TODO
 # when its step lands (stale entries fail the gate).
 _TODO = {
-    # step 2 — settlement identity
-    "application/worldData/settlementOutdoor/settlementOutdoorUids.py": 2,
     # step 3 — structure generator
     "application/worldData/generators/structure/structureGeneratorService.py": 3,
     "application/worldData/generators/structure/staircase/uShape/uShape.py": 3,

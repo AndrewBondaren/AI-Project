@@ -69,7 +69,7 @@ def _make_node(
     node_type_wire = node_type.value if isinstance(node_type, ConnectionNodeType) else node_type
     graph_wire = graph_level.value if isinstance(graph_level, GraphLevel) else graph_level
     return ConnectionNode(
-        node_uid=city_connection_node_uid(settlement_uid, tag, x, y, z),
+        node_uid=city_connection_node_uid(world_uid, settlement_uid, tag, x, y, z),
         x=x, y=y, z=z,
         node_type=node_type_wire,
         graph_level=graph_wire,

@@ -845,7 +845,17 @@ THEN
 
 ## Точки входа
 
-### `location_entry_points`
+### `location_entry_points` — прежняя схема
+
+**Целевой SoT:** [переходы](./tz_location_transitions.md) §2–§4, §8.1.
+Схема и правила чтения ниже — legacy до переключения callers. Новые входы —
+Transition с builtin `main_entrance`/`service_entrance` через `behaves_as`;
+`b.owner` — входимая локация, отдельной оси `entry_role` нет.
+Стороны — `transition_sides`; внешнее пространство может быть `surface`
+без NL. Parent/child не требуется. Discovery, pathfinding и выбор входа —
+контекст движка, вне текущей миграции генератора.
+Таблица удаляется после переключения callers.
+
 ```sql
 location_entry_points (
   entry_uid,
@@ -949,7 +959,7 @@ transition_sides; правила прибытия и проекции назна
 
 ```sql
 location_passages (
-  passage_uid, world_id,
+  passage_uid, world_uid,
   from_level_uid, from_x, from_y,   -- позиция входа (уровень + локальные координаты)
   to_level_uid,   to_x,   to_y,     -- позиция выхода
   is_bidirectional,
@@ -962,7 +972,13 @@ location_passages (
 - Горизонтальные (дверь, коридор): from_level.z = to_level.z
 - Нет `travel_ticks` — interior-переходы логические, без временной стоимости
 
-### `worlds.passage_type_registry` (N+1)
+### `worlds.passage_type_registry` (N+1) — прежний реестр
+
+Целевой реестр — `worlds.transition_type_registry` с обязательным
+`behaves_as: TransitionType`, единый для проходов и входов
+([SoT](./tz_location_transitions.md) §3.1).
+Пример ниже — legacy, его поля не копируются в новый реестр.
+
 ```json
 [
   { "system_type": "door",      "display_type": "Дверь"               },

@@ -45,13 +45,25 @@ Pathfinding, сцена (WP-13), LLM-нарратив и игровые дейс
   не требование хранить любой портал как пару статических точек.
   Единственная сущность домена.
 - **Endpoint** — «где стоишь, когда проходишь»: клетка `(x, y, z)` в
-  глобальных координатах `map_cells` + опциональный `level_uid`
-  (`NULL` = открытое пространство / terrain, не уровень локации).
+  глобальных координатах `map_cells` с явным пространством: `surface`
+  (поверхность/terrain, значение по умолчанию) либо `level`
+  (уровень локации, требует `level_uid`). `surface` не означает z=0:
+  координата z по-прежнему задаётся явно.
   **Хост endpoint'а** (локация, в чьём пространстве клетка) — `level.location_uid`
-  при `level_uid`, иначе `host_location_uid` endpoint'а (NL territory /
-  settlement / district; `NULL` = дикая местность без NL). Хост **явный**, по
-  координатам не выводится (тот же принцип, что `parent_location_uid`,
-  `tz_locations` § Scope = позиция в parent-цепочке).
+  при пространстве level; для surface ссылка `host_location_uid` может
+  указывать существующую NL (territory / settlement / district), но не
+  обязательна. Surface без NL — полноценная сторона перехода, не ошибка
+  и не повод создавать фиктивную локацию. `surface` — значение вида
+  пространства, не строка вместо UID в FK. Если ссылка на host задана,
+  она явная, по координатам не выводится. Host не является parent.
+  **Решение мастера 2026-10-05:** `surface` — семантическое назначение;
+  объявление выхода в surface не требует от автора указания фиксированной
+  точки. Алгоритм сам должен искать ближайший допустимый выход среди
+  возможных комбинаций генератора (лестница, тоннель и т.д.). У wilderness
+  мало семантических привязок, поэтому конкретное решение не задаётся
+  обязательным host/parent. Алгоритм поиска, критерий близости и сборка
+  выбранного выхода — TODO, сейчас не приоритет
+  ([SURFACE-T-1](./tz_generator_technical_debt.md#surface-t-1--поиск-выхода-в-surface-среди-комбинаций-генератора)).
 - **Side (сторона)** — состояние одной стороны перехода: видимость,
   доступность, overrides сложности. У перехода **ровно две** стороны `a` / `b`.
 - **Тип перехода** — единственная ось классификации: форма **и** семантика
@@ -101,12 +113,13 @@ transitions
   type_params           JSON   -- параметры builtin-типа; portal: реализация graph|coordinate, typed назначение(я), blocked_behavior_override (§3.4)
   display_name, glossary_ref, tag_refs
   -- endpoint a
+  a_space               'surface' | 'level', default 'surface'
   a_level_uid           FK location_levels, nullable
-  a_host_location_uid   FK named_locations, nullable   -- хост при a_level_uid IS NULL
-  a_x, a_y, a_z         int (глобальные map_cells)
+  a_host_location_uid   FK named_locations, nullable   -- optional существующая NL для surface
+  a_x, a_y, a_z         int (глобальные map_cells материализованного прохода, не обязательные координаты объявления surface)
   a_node_uid            FK connection_nodes, nullable   -- endpoint лежит на узле графа (portal graph-типа, ворота, порог) — К7
   -- endpoint b
-  b_level_uid, b_host_location_uid, b_x, b_y, b_z, b_node_uid
+  b_space, b_level_uid, b_host_location_uid, b_x, b_y, b_z, b_node_uid
   -- конкретный endpoint b у физических проходов и coordinate-портала;
   -- у портала с назначением-локацией статическая клетка b не обязательна:
   -- источник назначения — typed portal params, не фиктивные b_x/b_y/b_z
@@ -115,7 +128,7 @@ transitions
 
 transition_sides
   (transition_uid, side) PK, side ∈ {'a','b'}
-  owner_location_uid    FK named_locations   -- чей это «вход» с этой стороны (=host endpoint'а, но может быть глубже: комната)
+  owner_location_uid    FK named_locations, nullable   -- чей это «вход»; NULL для wilderness без NL, не для корневой NL
   is_discovered         bool
   is_accessible         bool
   entry_difficulty_override  int nullable 0–100
@@ -130,6 +143,11 @@ transition_sides
 «дикая местность». Полная SQL/POJO-проекция такого назначения и стороны b
 закрывается по §10 до реализации схемы.
 
+Аналогично `surface` само по себе не определяет конкретную точку выхода.
+Геометрия фактически выбранного прохода и семантическое объявление выхода
+в surface — разные данные; последнее не заполняется фиктивными xyz.
+Поиск и материализация решения относятся к отложенному SURFACE-T-1.
+
 **Инварианты:**
 
 1. Две стороны всегда есть (даже у `fall` — у стороны `b` `is_accessible`
@@ -139,9 +157,14 @@ transition_sides
    обратный — **не** вторая строка, а флип флага игровым действием
    (`tz_structure_connections` §4.1). Для остальных типов флаг игнорируется
    и писаться должен `true` (дефолт), не как маркер «это вход» (К2).
-3. `a_level_uid IS NULL AND a_host_location_uid IS NULL` ⇒ дикая местность;
-   допустимо только для `origin='runtime'` (пролом, ad-hoc) и для
-   endpoint'ов на terrain вне любого NL.
+3. Пространство endpoint'а явно: `surface` по умолчанию либо `level` с
+   обязательным `level_uid`. Для surface без NL host/owner FK могут быть
+   NULL; семантика этой стороны — **surface**, а не неопределённое
+   отсутствие пространства (решение мастера 2026-10-05).
+   Отсутствие parent у существующей локации — другой случай: корневая NL
+   сохраняет свой UID и может быть host/owner перехода.
+   Сам проход не требует отношений parent/child между сторонами,
+   не создаёт их и не проверяет иерархию для разрешения движения.
 4. Тип из реестра поверх закрытого enum движка. Генератор сравнивает тип
    через engine-enum (как HY-5), реестр расширяет display.
 7. Здание: **≥1** `main_entrance` со стороной `b.owner = building`, **≥0**
@@ -252,8 +275,13 @@ Builtin = закрытый enum движка (`TransitionType`) с флагам�
 | **cross-branch** | хосты в разных ветках дерева | люк: подвал таверны (parent — район города) ↔ пещера (parent — лес) |
 | **to-wild** | одна сторона без NL | дверь дома на улицу без NL, пролом в стене наружу |
 
-Класс **вычисляется** из endpoint'ов, не хранится. Cross-branch — именно тот
-случай, ради которого parent и переход разведены.
+Класс **вычисляется** при необходимости для анализа, не хранится и не
+является условием работоспособности двери/прохода. Переходу нужны стороны,
+геометрия и состояние; отношения parent/child для движения не требуются.
+Cross-branch — именно тот случай, ради которого parent и переход разведены.
+Принадлежность интерьера одному зданию для выбора pack берётся из
+материализованного building layout/ссылок levels, не означает обязательное
+родство всех соединённых локаций.
 
 Для портала с назначением-локацией отсутствие конкретного endpoint b
 не требует выдумывать клетку ради классификации: host/назначение читаются
@@ -279,7 +307,12 @@ Builtin = закрытый enum движка (`TransitionType`) с флагам�
 Хранится объявленное назначение; фактическое положение персонажа после
 прохода не подменяет его. В частности, локацию нельзя автоматически
 заменить её центром, ближайшим входом или выбранной клеткой.
-Точное правило прибытия в локацию остаётся открытым (§10).
+Задание назначения портала в генераторе и точное правило прибытия в
+локацию отложены мастером 2026-10-05 как неприоритетный техдолг
+[`PORTAL-T-1`](./tz_generator_technical_debt.md#portal-t-1--задание-назначения-портала-в-генераторе-и-прибытие-в-локацию).
+Обязательные «места прибытия» на целевых локациях не согласованы и не
+вводятся этим ТЗ. Возврат к вопросу — отдельно; не реализовывать fallback
+под видом временного решения.
 
 Итак, две реализации — **graph/coordinate**, а не **location/point**.
 Вид ссылки на назначение сам по себе не определяет механизм перемещения.
@@ -339,10 +372,10 @@ Runtime-переход внутри здания (пролом в стене к�
 | **Структурный генератор** — наружная дверь | `LocationPassage(from=NULL, to=level, is_bidirectional=False, type=main_entrance)` → extract → `LocationEntryPoint(entry_role)` | `Transition(type=main_entrance|service_entrance, a=(street cell, host=district/settlement NL), b=(level, cell))`; `b.owner=building`; тип — из `EntryPoint.passage_type` шаблона как сейчас; `is_bidirectional` не пишется (дефолт) |
 | Структурный генератор — внутренние | `LocationPassage` в pack | `Transition` в pack, класс intra-location, обе стороны `owner=building` (или room), типы `door/doorway/archway/staircase` |
 | **Settlement topology (C23)** — `settlement_gate` | `connection_nodes.node_type=settlement_gate` | узел графа остаётся (`graph_level=city`), получает `transition_uid` → `Transition(type=main_entrance|service_entrance, a=outside (host=territory), b=inside (host=settlement))`; `b.owner=settlement` |
-| Барьер участка (`perimeter_barrier`) — калитка | нет | `AreaAssembler`: `Transition(type=gate)` sibling district↔area **только при наличии барьера** (К7); без барьера переход не создаётся. Граф улиц (`building_entrance`/`yard_path`) — независимо |
+| Барьер участка (`perimeter_barrier`) — калитка | нет | `AreaAssembler`: `Transition(type=gate)` между конкретными сторонами барьера **только при наличии барьера** (К7); без барьера переход не создаётся. Outdoor endpoint'ы могут иметь пространство surface без area NL. Существующие host refs optional; создание area NL и отношения district↔area не являются prerequisite прохода. Граф улиц (`building_entrance`/`yard_path`) — независимо |
 | **Порталы** (`tz_structure_connections` §4.1) | `portal_*` колонки на `connection_nodes` | Одна абстракция `Transition(type=portal)`, реализации `graph` / `coordinate` (§3.4); объявленное назначение может быть локацией. Graph-маршрут блокируется специальным барьером; coordinate переносит между точками без графа. Node refs — конкретные привязки, не универсальная модель назначения. Множественность назначений — §10. Всегда SQL |
 | **`location_complex`** (крипта, шахта) | — | уровни комплекса = `location_levels`; вход — `Transition(type=main_entrance|hidden_entrance, b.owner=complex)` cross-branch из подвала здания / с поверхности леса; parent комплекса — по смыслу (лес/гора), не по входу |
-| **Ad-hoc** (O3) | «можно добавить entry после успеха» | `Transition(type=breach, origin=runtime)` создаётся движком после успешного действия; обе стороны `is_discovered=true` для совершившего |
+| **Ad-hoc** (O3) | «можно добавить entry после успеха» | `Transition(type=breach, origin=runtime)` создаётся движком после успешного действия; персональное discovery — отдельная тема вне scope генератора, не интерпретировать глобальный bool как состояние конкретного персонажа |
 | **`fall`** | в реестре passage | `Transition(type=fall, is_bidirectional=false, origin=runtime)` |
 | **WP-13 `location_entry`** | «ближайший discovered entry» | якорь = ближайший переход `entry=true` с `b.owner=location`, `b.is_discovered AND b.is_accessible`, предпочтение `main_entrance` |
 | **Pathfinding** | три таблицы | один граф: terrain A* + `transitions` (SQL) + pack-переходы внутри здания |
@@ -356,13 +389,13 @@ Runtime-переход внутри здания (пролом в стене к�
 | **К1** ✅ решено | Два словаря типов в **разных ТЗ**: `tz_building_generator` §3.6 (`main_entrance/service_entrance` — шаблон здания, enum `PassageType`) и `tz_locations` § `passage_type_registry` (`door/…/portal/fall`) — ни один не содержит другой; `entry_role` на `location_entry_points` дублирует `main/service` третьим словарём. | `passageType.py`, `tz_locations` § passage_type_registry, `tz_settlement_outdoor` C20, `settlementOutdoorExtract._role_for_passage` | **Один** реестр = объединение (§3.1); `main_entrance`/`service_entrance` — **типы** с `entry=true`, отдельной оси «роль» нет. `entry_role` удаляется, `_role_for_passage` не нужен. `tz_locations` реестр дополнить, C20 переписать в типах. |
 | **К2** ✅ решено | Наружная дверь здания записывается `is_bidirectional=False` как маркер «вход». | `generators/structure/passages/entry.py:83` | Флаг читают **только** `directional`-типы (`portal`, `fall`); остальные игнорируют и пишут дефолт `true`. `entry.py` — убрать явный `False`. |
 | **К3** ✅ решено | C20 вариант 1: «interior `location_passages` не писать в SQL» vs требование единого графа переходов для движка. | `tz_settlement_outdoor` C20, `settlementOutdoorSqlPersist` | §4: одна модель, два яруса; **исключение — порталы** обоих видов (`graph` / `coordinate`, инвариант 9) и всё рантайм-изменяемое: всегда SQL. C20 переписать. |
-| **К4** ✅ решено; уточнено 2026-10-05 | Портал живёт на `connection_nodes` (`portal_type`, `portal_destinations`, `portal_bidirectional`, `portal_is_active`) — дублирование домена переходов. | `tz_structure_connections` §4.1, DDL `connection_nodes` | Портал = `Transition(type=portal)`, две реализации graph/coordinate (§3.4); назначения не ограничены статическими точками, локация допустима. `portal_*` колонки удалить; node остаётся графовой привязкой. Форма связи node↔portal и нескольких назначений уточняется в §10. **Первый функциональный шаг плана** (§11 T1). |
+| **К4** ✅ решено; уточнено 2026-10-05 | Портал живёт на `connection_nodes` (`portal_type`, `portal_destinations`, `portal_bidirectional`, `portal_is_active`) — дублирование домена переходов. | `tz_structure_connections` §4.1, DDL `connection_nodes` | Портал = `Transition(type=portal)`, две реализации graph/coordinate (§3.4); назначения не ограничены статическими точками, локация допустима. `portal_*` колонки удалить; node остаётся графовой привязкой. Форма связи node↔portal и нескольких назначений уточняется в §10. Operational перенос отложен вместе с контрактами §10; существующие node/import поля сохраняются до отдельной миграции (§11). |
 | **К5** | `location_entry_points` знает, **чья** это дверь (`location_uid`) и **куда** ведёт (`leads_to_level_uid`), но **не знает, в чьём пространстве стоит клетка снаружи**: для люка в подвале таверны строка пещеры хранит `(x,y,z)` подвала, а «это подвал таверны» можно узнать только поиском `map_cells` по координатам — при z-стекинге на одной клетке могут быть и подвал, и пещера (тот же запрет, что для `parent_location_uid`: overlap ≠ containment). | DDL, `LocationEntryPoint`, extract | В `Transition` хост **обоих** endpoint'ов явный (`a_level_uid`/`a_host_location_uid`, `b_*`). Отдельная таблица входов не нужна: «входы локации X» = `transitions WHERE entry=true AND b.owner = X`. Таблицу удалить, repo переписать на этот запрос. |
 | **К6** ✅ решено | Координаты: `location_passages.from_x/from_y` — **локальные** для уровня (offset = `MIN(map_cells.x/y)`, нигде не хранится — `tz_locations` отложенное «Coordinate bridging»); `location_entry_points.x/y/z` — **глобальные**. Один endpoint не может быть в двух системах. | `tz_locations` §1623, DDL | Endpoint — только **глобальные** `map_cells` координаты (z у уровней уже абсолютный). Локальные координаты — закрыть tech debt, не тащить в новую модель. |
 | **К7** ✅ решено | На пути улица → дом три разных объекта трёх доменов, которые нельзя склеивать: (1) **дверь здания** `main_entrance` — structure generator, есть всегда (C20); (2) **калитка участка** `gate` — `AreaAssembler`/территория, существует **только если** по периметру участка есть `perimeter_barrier` (wall / fence); нет барьера — нет перехода, двор открыт; (3) **граф улиц** `building_entrance` + `yard_path` — connections, существует **независимо** от (1) и (2): это маршрутизация, не проход. | `tz_structure_connections` §5.1.3, `tz_assembler_hierarchy` §69, §442, `tz_city_generation` §perimeter_barrier | Граф не обязан иметь узел на каждую дверь и переход не обязан иметь узел. `a_node_uid`/`b_node_uid` — конкретные optional ссылки (координаты сверяются на persist). Node обязателен у settlement_gate и назначения портала вида node; назначение-локация не подменяется node (§3.4). `yard_path` при наличии барьера проходит через клетку `gate`. |
 | **К8** ✅ решено | `transition_type_registry` (N+1, мастер) vs builtin-поведение (`entry`, `directional`, вертикаль, portal-механика). Открытый реестр не может нести поведение. | `tz_locations` § passage_type_registry | N+1 запись **обязана** ссылаться на закрытый тип движка (`behaves_as: TransitionType`); поведение, флаги и `type_params`-модель — только от builtin; запись без `behaves_as` — ошибка импорта. |
 | **К9** ✅ решено (частично дубль) | `location_levels.access_mechanic` и переходы оба отвечают на «как попасть», но на разные вопросы. | DDL `location_levels`, `LocationLevel`, `tz_building_generator` §214 | **Механика доступа отвечает: закрыт ли данный проход и чем открывается** → поле `access_mechanic` на `Transition` (инвариант 8), общий закрытый enum механик. `location_levels.access_mechanic` остаётся только для `isolated` уровней без переходов — «ребра нет; по этой механике движок его создаст». `tz_building_generator` §214 и `tz_locations` § location_levels — зафиксировать границу. |
-| **К10** (мелочь) | Расхождение имени колонки между ТЗ и схемой: в `tz_locations` § `location_passages` схема записана как `passage_uid, world_id, …`, а в `0001_initial.sql` и dataclass `LocationPassage` колонка называется `world_uid` — как и во всех остальных таблицах (`named_locations.world_uid`, `connection_nodes.world_uid`). Поведения не меняет; это опечатка в ТЗ, которая при копировании в новую DDL `transitions` дала бы вторую конвенцию имён. | `tz_locations` §940, DDL `location_passages`, `db/models/locationPassage.py` | **Одна конвенция — `world_uid`**, везде: колонка, POJO, формула детерминированного uid. Причина не косметическая: все uid и rng генерации выводятся из `world_uid` (`settlement_cell_rng(world.world_uid, …)`, `_det_uuid(building_uid, …)`, `Random(f"{world.world_uid}_{scope_uid}_…")`); второе имя в одном из слоёв = второй источник seed, и повторная генерация мира по тому же seed даст другие `transition_uid` — pack и SQL разойдутся. Инвариант 10. При T0 исправить `tz_locations` § `location_passages`. |
+| **К10** (мелочь) | Расхождение имени колонки между ТЗ и схемой: в `tz_locations` § `location_passages` схема записана как `passage_uid, world_id, …`, а в `0001_initial.sql` и dataclass `LocationPassage` колонка называется `world_uid` — как и во всех остальных таблицах (`named_locations.world_uid`, `connection_nodes.world_uid`). Поведения не меняет; это опечатка в ТЗ, которая при копировании в новую DDL `transitions` дала бы вторую конвенцию имён. | `tz_locations` §940, DDL `location_passages`, `db/models/locationPassage.py` | **Одна конвенция — `world_uid`**, везде: колонка, POJO, формула детерминированного uid. Причина не косметическая: все uid и rng генерации выводятся из `world_uid` (`settlement_cell_rng(world.world_uid, …)`, `_det_uuid(building_uid, …)`, `Random(f"{world.world_uid}_{scope_uid}_…")`); второе имя в одном из слоёв = второй источник seed, и повторная генерация мира по тому же seed даст другие `transition_uid` — pack и SQL разойдутся. Инвариант 10. При документационной синхронизации исправить `tz_locations` § `location_passages`. |
 
 ---
 
@@ -389,6 +422,27 @@ Runtime-переход внутри здания (пролом в стене к�
 | LLM scene context | `display_name` стороны, тип, хост обоих endpoint'ов | «люк в погребе Ржавого Якоря ведёт в Сырую пещеру» без вывода по координатам |
 | Game actions | `is_active`, `is_bidirectional`, `side.is_accessible`, `origin=runtime` create | запечатать/открыть/взломать/проломить — патчи полей, не новые таблицы |
 
+### 8.1 CRUD переходов — application/persist, не генератор
+
+**Решение мастера 2026-10-05:** для создания и изменения существующих
+переходов нужны CRUD-операции. Генератор материализует данные; управление
+сохранённым состоянием выполняет application-сервис через repository:
+
+- **Create:** сохранить переход и обе стороны атомарно, проверить ссылки,
+  тип и параметры до записи.
+- **Read:** получить переход по UID и выборки по локации/уровню/узлу
+  согласно поддержанным видам назначения.
+- **Update:** явно изменить поля перехода/сторон через один контракт
+  валидации; изменение рабочего состояния не подменять перегенерацией.
+- **Delete:** удалить SQL-переход и связанные стороны атомарно, обработать
+  зависимые ссылки согласно FK/доменному контракту.
+
+Операции применяются к SQL-ярусу; read-only pack генератором или CRUD
+«на месте» не редактируется. CRUD не означает автоматический reset
+пользовательских изменений при regenerate. Политика согласования
+повторной генерации и существующего состояния определяется отдельно,
+а не скрытыми side effects generator/persist.
+
 ---
 
 ## 9. Вне scope этого ТЗ
@@ -399,6 +453,13 @@ Runtime-переход внутри здания (пролом в стене к�
 - Магма-телепорт, climate/terrain переходы по terrain-категориям.
 - Генерация самого `location_complex` (отдельное ТЗ после
   `nl-typed-host-payload`).
+- Персональное discovery персонажей — отдельная большая тема, не scope
+  данного генератора (решение мастера 2026-10-05). Генератор не определяет
+  общую/персональную видимость и не создаёт систему player-state.
+- Выбор session/scene якоря WP-13 — обязанность потребителя (§8), не
+  генератора. Правила ранжирования входов не являются его входным gate.
+- Обратная совместимость старого JSON bundle импорта — задача import-слоя,
+  не генератора; конвертация старого формата не согласована.
 
 ## 10. Открытые вопросы
 
@@ -410,32 +471,62 @@ Runtime-переход внутри здания (пролом в стене к�
    По §4 — intra-location → pack; но комплекс может генерироваться поуровнево
    (lazy). Решить вместе с ТЗ `location_complex`.
 4. **Назначение портала:** точная typed форма ссылки на локацию/узел/точку,
-   допустимые сочетания с graph/coordinate; правило прибытия в локацию.
-   Общая абстракция и две реализации утверждены (§3.4); правило «ближайший
-   вход»/«центр»/автоматический resolver не утверждено.
+   допустимые сочетания с graph/coordinate. **Задание назначения в
+   генераторе портала и правило прибытия в локацию — отложенный техдолг
+   PORTAL-T-1, P3**, решение мастера 2026-10-05. Не приоритет текущей работы.
+   Общая абстракция и две реализации утверждены (§3.4); обязательные места
+   прибытия/«ближайший вход»/«центр»/автоматический resolver не утверждены.
 5. **Множественность и стороны:** хранение нескольких объявленных назначений,
    их выбор, связь node↔portal и состояние стороны b при назначении-локации.
    Это не обязательный набор статических Transition на каждую клетку назначения.
+   **Отложено, не приоритет** (решение мастера 2026-10-05).
 6. **Идентичность портала:** stable UID при изменении назначения; проекция
    endpoint b в SQL/POJO без обязательных фиктивных xyz; поведение обратного
-   прохода для назначения-локации. Эти контракты нужны до T1.
+   прохода для назначения-локации. **Идентичность изменяемого портала и
+   обратный проход отложены, не приоритет** (решение мастера 2026-10-05).
+   Зависимые реализации не начинать в текущем заходе; независимые
+   контракты переходов не блокируются этим обсуждением.
 7. **Доступность стороны:** `is_accessible` — управляемое движком состояние
    (§2 инв. 8), не направленность. Требуется определить проверку исходной/
    целевой стороны при проходе; пример fall с недоступной b не является
    основанием автоматически менять обе стороны на true.
+   **Уточнение правила отложено, не приоритет** (решение мастера 2026-10-05).
+8. **Закрыто:** nullable owner wilderness допустим (§2 инв. 3).
+   Явное значение пространства без NL — `surface` по умолчанию.
+   Отсутствие parent корневой локации не означает отсутствие её UID/host.
+9. **Закрыто:** дверь/калитка — проход, ей не нужны отношения parent/child.
+   Area NL не создаётся только ради host FK перехода; outdoor стороны
+   могут использовать surface (§1, §5). Parent здания не меняется.
+10. **Изменения существующих переходов:** нужны CRUD в application/persist
+    (§8.1), не логика изменения состояния внутри генератора.
+11. **Surface — принято; алгоритм отложен:** генератор должен самостоятельно
+    искать ближайший допустимый выход из возможных комбинаций (лестница,
+    тоннель и т.д.). Критерий близости, допустимость комбинаций и их сборка
+    — TODO SURFACE-T-1, P3; не приоритет текущей работы. Surface не требует
+    ручного объявления фиксированных xyz или наличия NL в wilderness.
 
-## 11. Порядок имплементации (каркас плана, детали — `.cursor/plans/`)
+## 11. Границы и порядок текущей имплементации
 
-По слоям: контракт → схема → writers → readers → зачистка. Порталы — первым
-шагом (решение мастера, К4): это единственный сегодня **рантайм-изменяемый**
-переход, на нём проверяется, что модель несёт направленность/активность.
+Детальная последовательность и зависимости — в согласованном
+[плане location-transitions](../.cursor/plans/location-transitions.md).
+Текущая поставка: контракт физических переходов и реестр, SQL со сторонами,
+application CRUD, structural/outdoor producers, interior pack и чтение данных.
+Порядок: контракт → аддитивная схема/реестр → validation/repository/CRUD →
+подготовка pack/extract → structural API → проверка write/read →
+переключение production → gates → объединённое чтение → зачистка legacy.
 
-| # | Шаг | Слои | Done |
-|---|---|---|---|
-| T0 | ТЗ-sync: `tz_locations` (реестр §3.1, удалить § `location_entry_points`, К10), `tz_structure_connections` §4.1 → ссылка сюда, `tz_settlement_outdoor` C20 в типах | docs | ссылки сходятся |
-| **T1** | **Порталы → `Transition`** (К4): общий builtin portal, params для обеих реализаций graph/coordinate и объявленного назначения (§3.4); закрыть portal-контракты §10 до DDL; `transitions` + отдельная `transition_sides` **без** удаления старых таблиц; перенести `portal_*` с node в домен переходов; writer `StructureAreaAssembler(portal)`; game actions — патчи перехода | dataModel, `0001`, db/models, persist, actions | обе реализации и назначение-локация представлены без обязательной статической точки; портал живёт в SQL-ярусе transitions |
-| T2 | Наружные входы: structure generator пишет `Transition(main|service_entrance)` с явными хостами `a`; extract/persist → `transitions`; `location_entry_points` удалить; C20 инвариант на типах; `entry.py` без `is_bidirectional=False` (К2) | generator passages, `settlementOutdoorExtract/SqlPersist`, repo | C6/C20 smoke = baseline, таблица входов удалена |
-| T3 | `location_passages` → `transitions` (rename + глобальные координаты, К6); pack-ярус пишет тот же POJO | `0001`, db/models, structure passages builder, pack writer | один POJO в SQL и pack |
-| T4 | C23 `settlement_gate` → `Transition(main|service_entrance, b.owner=settlement)` + `transition_uid` на узле; `building_entrance` узел — опциональная ссылка (К7) | topology planner, connections persist | ворота = переход |
-| T5 | Readers: WP-13 якорь, repo `entries_of(location)`, pathfinding-слой читают `transitions` | pack/refine, repos | старые чтения удалены |
-| T6 | Runtime-типы `breach`/`fall`/`hidden_entrance` создание из game actions (`origin=runtime`) | actions / engine — **DAG gate** | по общему правилу DAG |
+Портал остаётся общей абстракцией с обеими реализациями (§3.4).
+Прежний каркас «порталы первым функциональным шагом» заменён решениями
+мастера 2026-10-05: operational portal producer, destination projection,
+перенос `portal_*` и исполнение возвращаются отдельно после отложенных
+контрактов §10. До этого существующие node/import поля сохраняются.
+
+Surface — явное пространство по умолчанию, без обязательной NL или ручных xyz.
+Поиск ближайшего допустимого выхода и сборка комбинаций генератора —
+SURFACE-T-1, не приоритет. Parent/child не prerequisite прохода.
+
+WP-13 выбор якоря, navigation/traversal, discovery, DAG/game actions,
+новый bundle import/conversion и lazy-комплексы — отдельные темы,
+не блокирующие приёмку текущего generator/storage/CRUD scope.
+Legacy passage/entry таблицы удаляются после переключения действующих
+callers и готовности чтения SQL/pack.

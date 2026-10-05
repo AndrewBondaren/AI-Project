@@ -236,7 +236,7 @@ class DistrictAssembler:
 
         area_assembler = StructureAreaAssembler()
         d_uid = district_location_uid(
-            settlement_uid, template.system_name, slot.slot_index,
+            world.world_uid, settlement_uid, template.system_name, slot.slot_index,
         )
         area_layouts: list[AreaLayout] = []
         for placement in placements:

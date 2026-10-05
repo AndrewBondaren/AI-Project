@@ -230,6 +230,14 @@ Orchestrator и route используют policy. Нода `lazy_settlement` с
 
 ## 8. Дерево локаций (контракт persist)
 
+**Уточнение переходов, 2026-10-06:** целевой контракт — [Transition SoT](./tz_location_transitions.md)
+§2–§5, §8.1. Упоминания `location_entry_points`/`location_passages`
+в прежнем persist ниже — legacy до переключения callers. Наружные переходы
+пишутся в SQL `transitions` + `transition_sides`, interior одного здания —
+в pack тем же POJO. Дерево NL сохраняется, parent/child не условие прохода;
+area NL ради FK не создаётся, внешнее пространство — `surface`.
+Алгоритм поиска выхода отложен, не входит в текущую миграцию.
+
 Районы **писать сразу** в `named_locations` (`system_location_type=district`, parent=settlement). Здание: `parent_location_uid` = район.
 
 Это контракт extract/persist, не отдельный инвариант мира и не «исключение для локаций». Нет района в выходе assembler — сломан extract.
@@ -310,7 +318,7 @@ city §11.4 snapshot / regen — по-прежнему [`tz_world_snapshot.md`](
 | **C13** | Вне слоя: наполнение здания (`StructureInteriorAssembler`), DAG, growth, LLM-имена, mill/grade, новые города на wilderness, **радиус сцены / event context** (другое ТЗ; здесь только C18). Геометрия дома — C8/C11, не «вне слоя». |
 | **C14** | Skip **района** iff uid ∈ `packed_district_uids` **и** файл + строка manifest. Skip **поселения** iff `structure_status=complete` (packed = перепись C23) **и** файл + manifest. Blob без SQL census / SQL без blob — не skip. Районы **только** C23 (packed пуст) — **не** skip packing. Не выводить skip из «есть дети» или city edges (CITY-T-5g). Authored не-район дети у города — C23 (скип topology **и** packing), не эта строка. |
 | **C19** | **O4 locked.** Канон на **шаг C24**: layout **этого** района в RAM → encode `.tmp` (вне SQL write-lock) → SQL upsert зданий / district-графа / levels этого района → `COMMIT` → `os.replace` контейнера zst + manifest (`packed_district_uids`, `structure_status`) + invalidate. Уже упакованные районы **копировать кадрами**, не второй `generate_layout`. Encode/publish не внутри открытой SQL write-tx. После COMMIT pack-retry **без** второго generate этого района (tmp или тот же layout). Crash до COMMIT: стереть tmp, повтор **этого** шага. Процесс умер после COMMIT, tmp потерян: не skip район; журнал pending **или** детерминированный generate того же слота (seed city §9.6). Скорость (parallel C16, batch) — после этого протокола, не вместо. |
-| **C20** | **O3 locked, вариант 1.** Persist `location_levels` + наружные двери → `location_entry_points` (не interior passages). Роли: **`front`** (парадный) и **`service`** (чёрный). Здание: **≥1 `front`**, **≥0 `service`**. Default NPC/игрок идут объявленными входами (предпочтение `front`, если действие не говорит иное — доставка, «чёрный ход»). Ad-hoc (стена, окно, пролом) не запрещён и не нумеруется при generate. Шаблон здания сейчас даёт ≤1+1; N дверей той же роли — без смены контракта. Колонка роли в SQL сейчас нет — добавить при impl (`0001`). |
+| **C20** | **O3 locked, уточнено Transition SoT.** Persist `location_levels` и наружные входы → SQL `transitions` + `transition_sides`; interior одного здания → pack тем же POJO (§4 SoT). Здание: ≥1 builtin `MAIN_ENTRANCE` через `behaves_as`, ≥0 `SERVICE_ENTRANCE`; прочие entry-типы не заменяют main. `b.owner` — входимое здание; наружная сторона может быть `surface` без NL. Отдельной роли/колонки `entry_role` нет. Default предпочтение парадного и ad-hoc действия остаются контекстом потребителя, генератор их алгоритмы не реализует. N входов одного типа не меняют контракт. |
 | **C15** | **O1 locked:** один pack-файл на поселение `locations/l.{settlement_uid}.settlement.zst` (граф районов/участков внутри). Не файл на участок и **не** файл на район. Шов тайлов — тот же uid (как WP-19). Дозапись = кадры внутри этого файла (**C24**), не второй blob. |
 | **C16** | **O2 locked:** ядра достаточно. Отдельные **селекторы uid** (не второй generate): (1) все settlement-like мира; (2) потомки узла дерева локаций (`region` / `territory` — «континент/регион», не новый type); (3) по государству `state_uid` ([tz_states.md](./tz_states.md), опционально вниз по `parent_state_uid`). Каждый uid → тот же `materialize`. |
 | **C24** | **Packing по району.** Инкремент = слот C23 / `DistrictAssembler`, не макро-тайл. Канон якоря = `district_uid` (`named_locations.location_uid`, тот же ключ packed/C14/C4). `at=(x,y)` только резолвер в uid (fine/world; не `gx/gy`, не чертёж, не `cell_x/y` на HTTP). Оба сразу → 422. Без якоря → очередь до complete. Нет C23 → 409. Первый spawn — `at` (здания ещё нет); дальше uid или parent здания. Очередь = SQL-перепись − `packed_district_uids` в manifest (не decompress zst). Кадры в том же C15-файле; полный rewrite blob на каждый район — не target (32–50 районов + C8). Gameplay spawn = WP-13 + один район; не `detailed_bake` AABB. Клип layout по `gx/gy` запрещён (C29). **Код ⬜.** |
@@ -336,7 +344,11 @@ city §11.4 snapshot / regen — по-прежнему [`tz_world_snapshot.md`](
 
 ### O3 — locked (C20)
 
-Вариант **1:** `location_levels` + наружные двери → `location_entry_points`. Interior `location_passages` не писать.
+Вариант **1**, уточнённый Transition: `location_levels` + наружные входы →
+SQL `transitions`/`transition_sides`; interior одного здания → pack тем же POJO.
+[SoT](./tz_location_transitions.md) §3.1, §4.
+`front`/`service` ниже — прежние роли; целевые builtin-типы —
+`MAIN_ENTRANCE`/`SERVICE_ENTRANCE` через `behaves_as`, без отдельного `entry_role`.
 
 | Роль (system) | Смысл | Кардинальность |
 |---|---|---|
@@ -347,7 +359,7 @@ city §11.4 snapshot / regen — по-прежнему [`tz_world_snapshot.md`](
 
 Default: NPC/игрок пользуются объявленными входами; среди них предпочтение `front`, пока действие не требует иного (`service`, ad-hoc). Ad-hoc (стена, окно, пролом) не запрещён, при generate не нумеруется. После успеха событие может **добавить** entry.
 
-Persist без ≥1 `front` — ошибка, не писать здание. Колонка `entry_role` в SQL — при impl в `0001`.
+Persist без ≥1 builtin `MAIN_ENTRANCE` через `behaves_as` — ошибка, не писать здание. Колонка `entry_role` в legacy-таблицу не добавляется.
 
 ### O4 — locked (C14 / C19)
 
@@ -412,7 +424,7 @@ SQL и файлы pack — не один COMMIT. Надёжность = прот
 | **P2 leftover persist** | **open** | `SettlementPersistService` / occupancy в патчи ещё живы. HTTP outdoor их не зовёт; эталон = C1. Два писателя эталона — риск. После C23: parent зданий и ложный skip — **[CITY-T-5a/5g](./tz_city_generation_technical_debt.md)**. |
 | **P3 occupancy flood** | **open** (не HTTP default) | `plan_footprint_occupancy_cells` в assembler. C7: на карте — L0 pin, не метровая матрица в патчи. |
 | **P4 flatten cells** | **open** (не эталон) | `collect_geometry_fine_cells` flatten всего города. C2/C8: эталон = граф участков; клетки дома — поле здания в pack, не dump всего settlement |
-| **P9 `entry_role`** | **open** | C20: `front`/`service`; колонки в `0001` ещё нет. |
+| **P9 `entry_role`** | **superseded** | C20: main/service — builtin-типы через `behaves_as`; отдельная колонка роли не добавляется. |
 | **P10 слой города в merge** | **open** | C12: rasterize участков в merge выше `location_terrain`, ниже patch. `MapLayerKind` city — leftover. |
 | **C19 recovery journal** | **open** | После COMMIT tmp потерян: ТЗ требует pending или тот же seed. Журнала pending в коде нет. |
 | **`MaterializationContext`** | нет (так и надо до CITY-T-3) | Склейка не берёт `free_cores`. Не подключать pool «заодно». |
@@ -431,7 +443,7 @@ SQL и файлы pack — не один COMMIT. Надёжность = прот
 | **P6** | `DistrictLayout` / `AreaLayout` | Нет district `NamedLocation`, нет area uid — extract не из чего взять без синтеза |
 | **P7** | `StructureAreaAssembler._place_building` | Building NL без parent; uid/created_at/материалы — черновые литералы |
 | **P8** | Facade | Нет `get_volume(footprint bbox)` для terrain assembler; route обходит через `get_all` |
-| **P9** | `location_entry_points` | Таблица есть; нет dataclass/repo/persist; нет `entry_role` (`front`/`service`, C20) — колонка в `0001` при impl |
+| **P9** | legacy `location_entry_points` | Прежний backlog заменён Transition SoT/C20; новый SQL persist — `transitions` + `transition_sides`, interior — pack. Legacy-таблица сохраняется до переключения callers. |
 | **P10** | `MapLayerKind` | Нет слоя города; `FineTerrainZRun` без `system_building_element` — walls в location_terrain некуда и нельзя |
 | **P11** | pack WP-3 / city §11.5 текст | Ещё описывают settlement → patches / map_cells; указатели на это ТЗ есть, инвариант WP-3 не переписан |
 | **P12** | `lazy_settlement` | Литералы size как type; `get_by_world` клеток. Вне слоя (DAG gate), но сломает production path пока не вызовут C11 |

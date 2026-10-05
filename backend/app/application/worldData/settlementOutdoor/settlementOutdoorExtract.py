@@ -25,7 +25,6 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
     building_location_uid,
     district_location_uid,
     entry_uid,
-    level_uid,
 )
 from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.dataModel.locations.enums.entryRole import EntryRole
@@ -110,6 +109,7 @@ def _district_named_location(
     template = slot.district_template
     return NamedLocation(
         location_uid=district_location_uid(
+            settlement.world_uid,
             settlement.location_uid, template.system_name, slot_index,
         ),
         world_uid=settlement.world_uid,
@@ -176,15 +176,15 @@ def _role_for_passage(passage: LocationPassage) -> EntryRole | None:
 
 def _entry_level(
     new_levels: list[LocationLevel],
-    old_to_new: dict[str, str],
     passage: LocationPassage,
     building: NamedLocation,
 ) -> LocationLevel | None:
-    mapped = old_to_new.get(passage.to_level_uid)
-    if mapped:
-        found = next((lv for lv in new_levels if lv.level_uid == mapped), None)
-        if found is not None:
-            return found
+    found = next(
+        (lv for lv in new_levels if lv.level_uid == passage.to_level_uid),
+        None,
+    )
+    if found is not None:
+        return found
     ground = building.map_z
     if ground is not None:
         return next((lv for lv in new_levels if lv.z == ground), None)
@@ -227,7 +227,9 @@ def extract_settlement(
                 slot_cells = [(0, 0)]
             min_x = min(x for x, _ in slot_cells)
             min_y = min(y for _, y in slot_cells)
-            a_uid = area_uid(d_uid, min_x, min_y, area_slot.facing)
+            a_uid = area_uid(
+                settlement.world_uid, d_uid, min_x, min_y, area_slot.facing,
+            )
             probe = area.building_location
 
             if probe is None:
@@ -251,7 +253,9 @@ def extract_settlement(
             bx = int(probe.map_x or 0)
             by = int(probe.map_y or 0)
             template_name = probe.system_template_uid or "building"
-            b_uid = building_location_uid(a_uid, template_name, bx, by)
+            b_uid = building_location_uid(
+                settlement.world_uid, a_uid, template_name, bx, by,
+            )
             building = replace(
                 probe,
                 location_uid=b_uid,
@@ -265,12 +269,11 @@ def extract_settlement(
             buildings.append(building)
 
             old_levels = list(area.building_layout.levels) if area.building_layout else []
-            new_levels: list[LocationLevel] = []
-            old_to_new: dict[str, str] = {}
-            for lv in old_levels:
-                nid = level_uid(b_uid, lv.z)
-                old_to_new[lv.level_uid] = nid
-                new_levels.append(replace(lv, level_uid=nid, location_uid=b_uid))
+            # Level uid is minted once at structure generation (D3) —
+            # extract rebinds the parent column only, never re-mints.
+            new_levels = [
+                replace(lv, location_uid=b_uid) for lv in old_levels
+            ]
             levels_out.extend(new_levels)
 
             fronts = 0
@@ -279,13 +282,15 @@ def extract_settlement(
                 role = _role_for_passage(passage)
                 if role is None:
                     continue
-                target = _entry_level(new_levels, old_to_new, passage, building)
+                target = _entry_level(new_levels, passage, building)
                 if target is None:
                     continue
                 if role == EntryRole.FRONT:
                     fronts += 1
                 entries.append(LocationEntryPoint(
-                    entry_uid=entry_uid(b_uid, role, passage.passage_uid),
+                    entry_uid=entry_uid(
+                        settlement.world_uid, b_uid, role, passage.passage_uid,
+                    ),
                     location_uid=b_uid,
                     x=passage.to_x,
                     y=passage.to_y,

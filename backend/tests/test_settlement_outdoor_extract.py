@@ -239,10 +239,12 @@ class TestSettlementOutdoorExtract(unittest.TestCase):
             _settlement(),
             SettlementLayout(district_layouts=[DistrictLayout(slot=dslot, area_layouts=[area])]),
         )
-        expected = district_location_uid("set-1", "core", 2)
+        expected = district_location_uid("w1", "set-1", "core", 2)
         self.assertEqual(extracted.districts[0].location_uid, expected)
         self.assertEqual(extracted.wire.districts[0].location_uid, expected)
-        self.assertNotEqual(expected, district_location_uid("set-1", "core", 0))
+        self.assertNotEqual(
+            expected, district_location_uid("w1", "set-1", "core", 0),
+        )
 
 
 if __name__ == "__main__":

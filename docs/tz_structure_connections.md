@@ -984,7 +984,9 @@ connection_edge_cells (
 `cells` вынесены в отдельную таблицу `connection_edge_cells` — у порталов записей нет.  
 Портальные данные хранятся в `transitions` + `transition_sides`; `connection_nodes`
 сохраняет роль/координаты графового узла (§4.1). Schema выше — целевой контракт,
-перенос старых `portal_*` выполняется по плану location-transitions.
+перенос старых `portal_*` отложен до отдельной portal-миграции после
+контрактов [Transition SoT](./tz_location_transitions.md) §10.
+Текущий generator/storage/CRUD план сохраняет эти node/import поля.
 
 ---
 
