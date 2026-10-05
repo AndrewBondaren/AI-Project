@@ -17,7 +17,7 @@ Use this skill when the user asks to run the migrated source command `impl-casca
 
 ## Прочитать до первой правки
 
-1. [`.cursor/plans/cascade-migration.md`](../plans/cascade-migration.md) — **единственный SoT по шагам**: инвентарь старых точек, M1–M6, форма шага параметра, M7–M10, проверки. Не отклоняться.
+1. [`.cursor/plans/cascade-migration-done.md`](../plans/cascade-migration-done.md) — **единственный SoT по шагам**: инвентарь старых точек, M1–M6, форма шага параметра, M7–M10, проверки. Не отклоняться.
 2. [`.cursor/plans/cascade-params-matrix.md`](../plans/cascade-params-matrix.md) — сверочная матрица параметров (родитель/наследник по уровням).
 3. [`docs/tz_cascade_context.md`](../../docs/tz_cascade_context.md) — §4 (движок/`extend`), §6 (stamp на NL), §7 (потребители), §8 (кейсы).
 4. [`docs/tz_economic_tier.md`](../../docs/tz_economic_tier.md) §4 (каскад), §9 (поля).
@@ -108,5 +108,5 @@ M6 (зачистка: `tierResolver.py`, `building_band`, acceptance).
 
 ## Старт
 
-Прочитай `cascade-migration.md` целиком + файлы точек из инвентаря.
+Прочитай `cascade-migration-done.md` целиком + файлы точек из инвентаря.
 Затем шаг M1.

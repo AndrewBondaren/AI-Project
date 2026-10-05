@@ -194,6 +194,99 @@ named_locations (
 -- Инвариант: is_public=true AND is_forbidden=true — невалидная комбинация; движок логирует WARNING
 ```
 
+#### Payload per type — NL как typed host (**NL-P1**, целевое)
+
+`NamedLocation` — **generic host**: identity, иерархия, geometry/occupancy,
+generic-флаги и generic stamped-каналы каскада. Type-семантика живёт в
+**payload по `payload_kind`**, а не плоскими колонками на NL-строке.
+
+```text
+named_locations
+  …generic колонки…                -- как сейчас, минус settlement overlay
+  location_payload TEXT            -- JSON, валидируется payload-моделью
+```
+
+**Привязка:** `location_type_registry[].payload_kind` (новое поле,
+`null` = generic без payload) → builtin payload-контракт в коде.
+Type-ключи — данные мастера (N+1); payload-контракты — код. Мастер может
+объявить `system_type:"elven_city", payload_kind:"settlement"` — получает
+settlement-семантику без смены имени типа. `subtype` остаётся рецептом
+морфологии внутри типа (`city`/`village` — один `SettlementPayload`).
+
+**Граница полей:**
+
+| Класс | Где | Поля |
+|---|---|---|
+| generic identity/content/access/geometry | NL-колонки | `location_uid`, `display_name`, `system_location_type/subtype`, `parent_location_uid`, descriptions, glossary/tag refs, discovery/access/state флаги, `owner_uid`, `system_climate_zone`, mood-пара, `map_x/y/z`, `is_outdoor/sheltered/transit`, `is_mobile`, `system_template_uid`, `hills`, `created_at` |
+| generic stamped cascade-каналы | NL-колонки | `system_economic_tier`, `parent_wall_material`, `parent_floor_material` — stamped-узлы для локации **любого** типа на любом scope (room данжа тоже имеет tier) |
+| type-specific (authored + type-stamped) | `location_payload` JSON | по `payload_kind` — см. таблицу ниже |
+
+**Payload-контракты (builtin):**
+
+| `payload_kind` | Модель | Поля |
+|---|---|---|
+| `settlement` | `SettlementPayload` (ныне `SettlementSkeleton`) | `system_city_size`, `settlement_density`, `dominant_material`, `architectural_style`, `frontage_type_order`, `plot_counts`, `plot_priority`, `perimeter_barrier`, `typical_districts`, `system_settlement_specializations` |
+| `district` | `DistrictPayload` | `district_topology` (C23 stamped freeze) |
+| `dungeon` | `DungeonPayload` | будущее; данж — **свой `system_type`** (не subtype поселения), свои subtypes (`crypt`/`mine`/…), своя scope-ось `DUNGEON→LEVEL→ROOM` в каскаде |
+| `null` | — | geographic / climate_pole / declare-only типы |
+
+**Правила:**
+
+- Payload = authored (import) + type-stamped (результаты генерации домена
+  типа: `district_topology`, `system_city_size`). Generic stamped-каналы
+  каскада остаются на NL — cascade-узлы type-параметров переезжают на
+  payload-класс, дубль «NL→skeleton» исчезает.
+- SQL-запросов по payload-полям нет (как и сейчас по overlay); при
+  появлении — `json_extract` или проекционная колонка точечно.
+- Wire-ключи `locations[]` не меняются: type-поля валидируются payload-моделью,
+  выбранной по `payload_kind` типа строки.
+- Граничное поле `architectural_style` — сейчас settlement-authored; если
+  станет generic для зданий — промоутится на NL отдельным решением.
+
+#### Scope = позиция в parent-цепочке (**NL-P1**, целевое)
+
+Вложенность локаций — **произвольное дерево** `parent_location_uid`, не
+фиксированная линейная ось: wilderness-ветки (`region → territory →
+forest → glade → cave`) и urban-ветки (`… → settlement → district →
+building → room`) — одно дерево; данж может висеть под городом или под
+лесом. Допустимые формы вложенности — **данные мастера**: `parent_types`
+в `location_type_registry` (`forest → glade/cave`, …).
+
+Следствие для каскада (`tz_cascade_context.md` §2): порядок scope'ов при
+`extend()` задаётся **реальной цепочкой предков**, а не enum-порядком.
+`ScopeLevel` деградирует до семантических тегов узлов; проверка контракта
+использует scope-DAG «кто кого может содержать» (код-контракт, согласован
+с `parent_types`) вместо rank-adjacency. Generic stamped-каналы NL
+(`system_economic_tier`, `parent_*_material`) становятся level-agnostic —
+одна декларация, работает на любом scope-позиции; settlement-каналы
+остаются привязаны к тегу `SETTLEMENT` и переезжают на payload-класс.
+
+**Требования parent-цепочки:**
+
+- `parent_location_uid` — **явное семантическое ребро** (authored на
+  import или назначенное генератором в момент размещения, когда домен
+  знает смыслового хоста). Никогда не выводится из координат: spatial
+  overlap ≠ containment.
+- **z-стекинг независим:** одна колонка `(x,y)` на разных `z` — разные
+  ветки. Таверна на z=0 — саблокация леса; пещерная сеть под ней —
+  саблокация горы рядом; лес и гора могут не пересекаться.
+- **Маска без NL — не scope-узел.** `terrain_masks.declared_*` сами по
+  себе не звенья: лес-маска без именованной локации прозрачна для
+  цепочки (`world → mountain-NL → cave`; лес не входит). NL над маской
+  (`location_uid` на declare entry) — вот scope-узел; генератор,
+  ставящий POI внутрь маски, либо использует существующий NL маски,
+  либо создаёт его, когда объекту нужен semantic parent.
+- `parent_types` в реестре — схема легальных веток («building/POI может
+  висеть под geographic» — объявляется мастером, не кодом).
+- **Глубина и смешение веток произвольны:** `forest → ruins → building →
+  dungeon → level → room` — одна цепочка. `system_type:"ruins"` может
+  нести `payload_kind:"settlement"` (мёртвый город с семантикой
+  поселения) — payload_kind отделяет контракт данных от имени типа.
+- **Semantic parent ≠ physical entry.** `parent_location_uid` задаёт
+  каскадную ветку; физический вход в подземелье — `location_entry_points`
+  (`leads_to_level_uid` + anchor на здании/клетке). Входов может быть
+  несколько (здание в руинах + расщелина в лесу), parent — один.
+
 ---
 
 ## Размер поселения (**LOC-T-2**)

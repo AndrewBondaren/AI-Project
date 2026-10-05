@@ -4,22 +4,14 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from random import Random
 
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtLayout import DistrictLayout
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import SettlementLayout
-from app.application.worldData.generators.climate.loggingHelpers import warn_once
 from app.application.worldData.generators.structure.structureGeneratorService import StructureLayout
-from app.application.worldData.generators.utils.materialResolver import resolve_material
+from app.dataModel.locations.context.locationContext import LocationContext
 from app.db.models.mapCell import MapCell
-from app.db.models.world import World
-
-from app.dataModel.materials import DEFAULT_DOMINANT_MATERIAL
 
 logger = logging.getLogger(__name__)
-
-_USE_TYPE = "wall"
 
 
 def _append_cell_materials(materials: list[str], cells: list[MapCell]) -> None:
@@ -73,34 +65,20 @@ def _district_dominants(layout: SettlementLayout) -> list[str]:
     return dominants
 
 
-def _default_from_economic_tier(
-    world: World,
-    economic_tier: str,
-    rng: Random,
-) -> str:
-    return resolve_material(
-        world,
-        _USE_TYPE,
-        economic_tier,
-        rng,
-        DEFAULT_DOMINANT_MATERIAL,
-    )
-
-
 def resolve_dominant_material(
-    world: World,
     layout: SettlementLayout,
-    skeleton: CitySkeleton,
+    ctx: LocationContext,
     *,
     settlement_uid: str = "",
-) -> str:
+) -> str | None:
     """
     После assemble: доминирующий материал города для LLM.
 
     1. По каждому району — mode материалов из layout (edges.material, MapCell.system_material).
     2. Город — mode district-dominants; если районов без материалов — mode city-level (стены, дороги).
-    3. Fallback: economic_tier → material_registry (wall).
-    4. Fallback: hard default + warn_once.
+    3. Fallback — ``ctx.dominant_material``: каскад authored
+       (NL/skeleton) → fold (tier→material_registry) → canonical
+       default (cascade-migration M10).
     """
     district_modes = _district_dominants(layout)
     if district_modes:
@@ -126,24 +104,11 @@ def resolve_dominant_material(
             )
             return resolved
 
-    tier = skeleton.economic_tier
-    if tier:
-        rng = Random(f"{world.world_uid}_{settlement_uid}_dominant_material")
-        resolved = _default_from_economic_tier(world, tier, rng)
-        logger.info(
-            "resolve_dominant_material | settlement=%s source=economic_tier tier=%r material=%r",
-            settlement_uid,
-            tier,
-            resolved,
-        )
-        return resolved
-
-    warn_once(
-        world.world_uid,
-        "dominant_material_no_tier",
-        "resolve_dominant_material: no layout materials and no economic_tier for settlement=%s,"
-        " using fallback %r",
+    resolved = ctx.dominant_material
+    logger.info(
+        "resolve_dominant_material | settlement=%s source=cascade material=%r provenance=%r",
         settlement_uid,
-        DEFAULT_DOMINANT_MATERIAL,
+        resolved,
+        ctx.provenance.get("dominant_material"),
     )
-    return DEFAULT_DOMINANT_MATERIAL
+    return resolved

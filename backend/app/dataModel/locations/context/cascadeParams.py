@@ -55,3 +55,17 @@ FLOOR_MATERIAL = Cascade(
     default=DefaultPolicy.CANONICAL_DEFAULT,
     axis=ScopeLevel,
 )
+
+DOMINANT_MATERIAL = Cascade(
+    # Settlement-only authored chain (NL node beats the skeleton node);
+    # deeper scopes inherit. First `Cascade.fold` consumer (M10): the
+    # tier→material_registry pick sits between the authored chain and
+    # the canonical default; layout-derived dominants stay outside the
+    # chain — they are post-assemble statistics over generated cells,
+    # applied by the assembler on top of the ctx value (tz_city §3.1).
+    field="dominant_material",
+    default=DefaultPolicy.CANONICAL_DEFAULT,
+    axis=ScopeLevel,
+    levels=(ScopeLevel.SETTLEMENT,),
+    fold="dominant_material",
+)

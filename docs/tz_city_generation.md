@@ -194,7 +194,7 @@ LLM описывает → только из скелета (ограничен�
 | `system_settlement_size` | string | `NamedLocation` | ранг → `settlement_size_registry`; footprint — subtype × ранг (**LOC-T-2**). Код: `system_city_size` | ⬜ LOC-T-2 |
 | `system_settlement_specializations` | string[] | JSON import, optional | Ключи §4.1. Пусто / omit — нет вторичного рецепта районов. Несколько = union. Не `system_location_subtype` | ⬜ §1.2 |
 | `typical_districts` | object[] | JSON import, optional | Приоритет 1: `{ "district_type", "district_subtype"?, "system_name"? }`. Pin `system_name` — `DistrictTemplateKey`. Omit/`null`/`""` → нет пина (подбор по type/subtype); blank на resolve — warning. Пусто — сразу приоритет 2–3. [POJO-C-4](./tz_pojo_city_typing.md) | ⬜ §1.2 |
-| `dominant_material` | `MaterialKey` | post-assemble | ref → `material_registry`; **не** import | ✅ `resolve_dominant_material` |
+| `dominant_material` | `MaterialKey` | post-assemble | ref → `material_registry`; authored import — fallback-канал каскада (§3.1) | ✅ `resolve_dominant_material` |
 | `architectural_style` | string | JSON import | ref → `architectural_style_registry`; для LLM | ✅ read |
 | `settlement_density` | `DistrictDensity` | JSON import | ENUM-E `sparse` / `medium` / `dense` | ✅ read (NC-9) |
 | `frontage_type_order` | `list[ConnectionTypeKey] \| None` | JSON import, optional | Иерархия `connection_type` для парадного (C22). Элементы — ключи `connection_type_registry`. Как `settlement_density`: import → `CitySkeleton`; SQL — JSON на NL. `null`/`[]` = дефолт движка. Район может переопределить. Контракт — [tz_pojo_city_typing.md](./tz_pojo_city_typing.md) **POJO-C-5** | ⬜ connections §5.1.3 |
@@ -210,7 +210,7 @@ LLM описывает → только из скелета (ограничен�
 - `system_settlement_size` → относительный масштаб (контекст = морфология; LOC-T-2)
 - `system_settlement_specializations` / `typical_districts` → чем живёт город и какие кварталы мастер зафиксировал (когда поля появятся на скелете)
 
-**`dominant_material`** — не из import; вычисляется **после** `SettlementAssembler.assemble` (§3.1), хранится на `SettlementLayout.dominant_material`.
+**`dominant_material`** — вычисляется **после** `SettlementAssembler.assemble` (§3.1), хранится на `SettlementLayout.dominant_material`. Authored-поле на import — нижний fallback-канал каскада, не источник напрямую.
 
 ### 3.1 `dominant_material` (post-assemble)
 
@@ -223,10 +223,12 @@ LLM описывает → только из скелета (ограничен�
    - `barrier_cells[].system_material`
    - `area_layouts`: building/small `cells[].system_material`, `barrier_cells`
 2. **Город** — mode district-dominants; если в районах материалов нет — mode city-level (`connection_edges`, `barrier_cells` поселения).
-3. **Fallback** — `economic_tier` города → `material_registry` (`use_type=wall`, как barriers).
-4. **Fallback** — `stone` + `warn_once`, если tier отсутствует.
+3. **Fallback** — `LocationContext.dominant_material` (каскад, `tz_cascade_context` §4; cascade-migration M10):
+   - authored `dominant_material` на NL поселения → на `SettlementSkeleton` (chain, authored бьёт fold);
+   - `Cascade.fold`: `economic_tier` города → `material_registry` (`use_type=wall`, как barriers; rng seed по поселению);
+   - `CANONICAL_DEFAULT` — `CONSTRUCTION_MATERIAL_DEFAULTS.dominant` (`stone`).
 
-Import `dominant_material` на `NamedLocation` **игнорируется** генератором — иначе LLM-описание может не совпадать с фактической застройкой.
+Derived mode **всегда выше** authored/fold: LLM-описание обязано совпадать с фактической застройкой — поэтому authored-значение участвует только когда в layout материалов нет вовсе.
 
 **Граница ответственности:** генератор отдаёт `SettlementLayout.dominant_material`. Прокидывание в LLM payload — **DAG** (`lazy_settlement` / scene nodes, см. `tz_engine_flow.md`, `tz_world_generation_dag.md`); пишется вместе с остальным DAG. Persist на `NamedLocation` — ⬜ (цикл §11.5), опционально для offline/скелета до layout.
 

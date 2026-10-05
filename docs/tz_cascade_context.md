@@ -143,6 +143,25 @@ caller, а не движка каскада.
 settlement assemble → district → area/building → structure generate
 (room). Caller знает только свои звенья, не чужие.
 
+**Целевая модель scope (NL-P1, решение): порядок = parent-цепочка.**
+
+Линейная ось выше — settlement-only частный случай. Вложенность
+локаций — произвольное дерево `parent_location_uid` (лес → поляна →
+пещера; данж под городом или под лесом — один тип, разный путь), схема
+допустимой вложенности — `parent_types` в `location_type_registry`
+(`tz_locations.md` §«Payload per type»). Целевое:
+
+- **порядок звеньев** — порядок предков в реальной цепочке при `extend()`,
+  не enum-rank;
+- `ScopeLevel` — **семантические теги** узлов (`SETTLEMENT`, `DISTRICT`,
+  `DUNGEON`, `LEVEL`, `GEOGRAPHIC`…), расширяется без смены порядка;
+- проверка контракта: rank-adjacency → **scope-DAG** «уровень A может
+  содержать уровень B» (код-аналог `parent_types`); покрытие — по
+  `param.levels` (уже поддержано), «все уровни оси» не требуется;
+- NL-каналы generic-параметров — **level-agnostic**: одна декларация
+  `CascadeChannel(param)` вместо повтора на каждый уровень; тег scope
+  NL берётся из `system_location_type`/`payload_kind` на рантайме.
+
 ---
 
 ## 3. `LocationContext` и аннотация `Cascade`

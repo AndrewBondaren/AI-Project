@@ -8,6 +8,7 @@ from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTi
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.cascadeParams import (
     CITY_SIZE,
+    DOMINANT_MATERIAL,
     ECONOMIC_TIER,
     FLOOR_MATERIAL,
     SETTLEMENT_DENSITY,
@@ -45,6 +46,10 @@ class LocationContext(BaseModel):
     floor_material: Annotated[
         MaterialKey | None,
         FLOOR_MATERIAL,
+    ] = None
+    dominant_material: Annotated[
+        MaterialKey | None,
+        DOMINANT_MATERIAL,
     ] = None
     provenance: dict[str, tuple[ScopeLevel, str]] = Field(default_factory=dict)
 

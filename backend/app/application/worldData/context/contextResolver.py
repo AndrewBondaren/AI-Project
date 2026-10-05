@@ -32,8 +32,12 @@ from app.application.worldData.generators.utils.tierRegistry import (
     tier_rank,
     tiers_sorted,
 )
+from app.application.worldData.generators.utils.materialResolver import (
+    resolve_material,
+)
 from app.dataModel.locations.context.cascadeParams import (
     CITY_SIZE,
+    DOMINANT_MATERIAL,
     ECONOMIC_TIER,
     FLOOR_MATERIAL,
     SETTLEMENT_DENSITY,
@@ -51,7 +55,10 @@ from app.dataModel.locations.context.locationContext import LocationContext
 from app.dataModel.locations.settlement.enums.districtDensity import (
     DistrictDensity,
 )
-from app.dataModel.materials import CONSTRUCTION_MATERIAL_DEFAULTS
+from app.dataModel.materials import (
+    CONSTRUCTION_MATERIAL_DEFAULTS,
+    DEFAULT_DOMINANT_MATERIAL,
+)
 from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     WorldSettlementSizeRegistry,
 )
@@ -95,12 +102,8 @@ def extend(
     provenance = dict(ctx.provenance)
     update = {"level": level}
     params: dict[str, str] = {}
-    for name, info in LocationContext.model_fields.items():
-        param = next(
-            (m for m in info.metadata if isinstance(m, Cascade)), None,
-        )
-        if param is None:
-            continue
+
+    def _resolve_field(name: str, param: Cascade) -> None:
         inherited_source = ctx.provenance.get(name)
         value, source = _resolve(
             param, level, objects, getattr(ctx, name),
@@ -112,15 +115,20 @@ def extend(
                 # re-warn at every empty scope.
                 value, source = getattr(ctx, name), inherited_source
             else:
-                value = _resolve_default(param, ctx._world)
-                source = (next(iter(param.axis)),
-                          f"default:{param.default.value}")
-                log_default_applied(
-                    param=param.field,
-                    level=level.value,
-                    policy=param.default,
-                    value=value,
-                )
+                if param.fold is not None:
+                    value, source = _apply_fold(
+                        param, level, objects, update, ctx._world,
+                    )
+                if source is None:
+                    value = _resolve_default(param, ctx._world)
+                    source = (next(iter(param.axis)),
+                              f"default:{param.default.value}")
+                    log_default_applied(
+                        param=param.field,
+                        level=level.value,
+                        policy=param.default,
+                        value=value,
+                    )
         update[name] = value
         provenance[name] = source
         parent = (
@@ -134,6 +142,27 @@ def extend(
             else "none"
         )
         params[name] = f"{value} parent={parent} child={child}"
+
+    cascade_fields = [
+        (name, param)
+        for name, info in LocationContext.model_fields.items()
+        for param in (
+            next(
+                (m for m in info.metadata if isinstance(m, Cascade)),
+                None,
+            ),
+        )
+        if param is not None
+    ]
+    # Fold params resolve in a second pass — their resolver reads this
+    # level's freshly resolved values (e.g. the dominant-material pick
+    # uses the tier resolved at this same scope).
+    for name, param in cascade_fields:
+        if param.fold is None:
+            _resolve_field(name, param)
+    for name, param in cascade_fields:
+        if param.fold is not None:
+            _resolve_field(name, param)
     update["provenance"] = provenance
     new_ctx = ctx.model_copy(update=update)
     new_ctx._world = ctx._world
@@ -235,6 +264,34 @@ def _materialize_tier_range(world, raw, anchor, rng):
     )
 
 
+def _apply_fold(param, level, objects, resolved, world):
+    """``Cascade.fold`` binding — the per-param derived resolver that
+    sits between the authored chain and the domain default, for params
+    whose semantics is not pure first-non-null (tz_cascade_context §3,
+    cascade-migration M10). Bound by identity, like ``_materialize``
+    and ``_resolve_default`` — no callable lives in dataModel."""
+    if param is DOMINANT_MATERIAL:
+        if world is None:
+            raise ValueError("dominant_material: fold requires world")
+        # Same seed formula as the retired resolve-site rng — bit-exact
+        # pick parity; per-param stream, never shared with tier
+        # materialize (§4).
+        scope_uid = next(
+            (obj.location_uid for obj in objects
+             if getattr(obj, "location_uid", None)),
+            "",
+        )
+        fold_rng = Random(
+            f"{world.world_uid}_{scope_uid}_dominant_material"
+        )
+        picked = resolve_material(
+            world, "wall", resolved.get("economic_tier"), fold_rng,
+            DEFAULT_DOMINANT_MATERIAL,
+        )
+        return picked, (level, f"fold:{param.fold}")
+    raise ValueError(f"no fold bound for param {param.field!r}")
+
+
 def _resolve_default(param: Cascade, world):
     """Domain default through the POJO policy; the engine logs the
     fallback (cascadeLog) — REGISTRY_MEDIAN warns once per chain
@@ -257,6 +314,9 @@ def _resolve_default(param: Cascade, world):
         return CONSTRUCTION_MATERIAL_DEFAULTS.wall
     if param is FLOOR_MATERIAL:
         return CONSTRUCTION_MATERIAL_DEFAULTS.floor
+    if param is DOMINANT_MATERIAL:
+        # Canonical construction default (dataModel policy, M10).
+        return CONSTRUCTION_MATERIAL_DEFAULTS.dominant
     raise ValueError(
         f"no default policy bound for param {param.field!r}"
     )

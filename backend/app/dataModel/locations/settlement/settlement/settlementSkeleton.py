@@ -10,6 +10,7 @@ from app.dataModel.annotationPolicy import DefaultOnWire
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.cascadeParams import (
     CITY_SIZE,
+    DOMINANT_MATERIAL,
     ECONOMIC_TIER,
     SETTLEMENT_DENSITY,
 )
@@ -45,7 +46,9 @@ type NamedLocationSkeletonColumn = Literal["system_economic_tier"]
 class SettlementSkeleton(BaseModel):
     """
     CitySkeleton master-data view — tz_city_generation.md §3, tz_assembler_hierarchy.md §7.1.
-    `dominant_material` on import ignored by generator (post-assemble authoritative).
+    `dominant_material` is a cascade channel: authored import value is
+    a fallback below the post-assemble layout-derived dominant
+    (tz_city_generation.md §3.1, cascade-migration M10).
     """
 
     model_config = ConfigDict(extra="ignore", frozen=True, populate_by_name=True)
@@ -73,7 +76,12 @@ class SettlementSkeleton(BaseModel):
         CascadeChannel(ECONOMIC_TIER, ScopeLevel.SETTLEMENT),
     ] = None
     architectural_style: DefaultOnWire[str | None] = None
-    dominant_material: DefaultOnWire[MaterialKey | None] = None
+    # Bottom of the `dominant_material` chain — the `above` edge from
+    # the settlement NL node is materialized by the verifier (M10).
+    dominant_material: Annotated[
+        DefaultOnWire[MaterialKey | None],
+        CascadeChannel(DOMINANT_MATERIAL, ScopeLevel.SETTLEMENT),
+    ] = None
     # Bottom of the `settlement_density` chain — the `above` edges
     # from the NL and district-template nodes are materialized by
     # the verifier.

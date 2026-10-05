@@ -17,7 +17,7 @@ Use this skill when the user asks to run the migrated source command `impl-casca
 
 ## Прочитать до первой правки
 
-1. [`.cursor/plans/cascade-context-resolution.md`](../plans/cascade-context-resolution.md) — **контракт, порядок шагов, проверки**; не отклоняться. S0 закрыт — решения мастера не пересогласовывать. **S4/S5 замещены [`.cursor/plans/cascade-migration.md`](../plans/cascade-migration.md)** — проводка caller'ов и зачистка идут по нему (M1–M6, включая удаление `TierResolver`); для них отдельная команда **`/impl-cascade-migration`**.
+1. [`.cursor/plans/cascade-context-resolution.md`](../plans/cascade-context-resolution.md) — **контракт, порядок шагов, проверки**; не отклоняться. S0 закрыт — решения мастера не пересогласовывать. **S4/S5 замещены [`.cursor/plans/cascade-migration-done.md`](../plans/cascade-migration-done.md)** — проводка caller'ов и зачистка идут по нему (M1–M6, включая удаление `TierResolver`); для них отдельная команда **`/impl-cascade-migration`**.
 2. [`docs/tz_cascade_context.md`](../../docs/tz_cascade_context.md) — целиком (цепочка, `Cascade`/`ScopeLevel`/`DefaultPolicy`, `extend`, persist, кейсы §8).
 3. [`docs/tz_economic_tier.md`](../../docs/tz_economic_tier.md) §4 (каскад с area/range), §9 (поля).
 4. [`docs/tz_locations.md`](../../docs/tz_locations.md) — семантика `named_locations.system_economic_tier` («null → наследует от parent»).
@@ -60,7 +60,7 @@ stamp `system_economic_tier` на каждой NL цепочки, потреби
 
 ## Жёсткие запреты
 
-- `TierResolver` удаляется в M6 плана `cascade-migration` — до него (M1–M5) не трогать целиком, только точечно заменять вызовы.
+- `TierResolver` удаляется в M6 плана `cascade-migration-done` — до него (M1–M5) не трогать целиком, только точечно заменять вызовы.
 - Не переводить потребители settlement/district-уровня (барьеры, дороги, стены) на ctx — follow-up.
 - Не трогать `foundationBuilder`/`roofBuilder` и `or`-цепочки материалов — параметры вне scope v1.
 - Не добавлять поля `LocationContext` сверх `economic_tier`, `level`, `provenance` — новые параметры отдельным решением.
@@ -74,7 +74,7 @@ stamp `system_economic_tier` на каждой NL цепочки, потреби
 
 S1 (baseline-тесты) → S2 (dataModel: `ScopeLevel`, `Cascade`,
 `LocationContext`) → S3 (`context/cascadeLink` адаптеры + `extend()` +
-`EmptyLink`) → **M1–M6 плана `cascade-migration`** (проводка caller'ов
+`EmptyLink`) → **M1–M6 плана `cascade-migration-done`** (проводка caller'ов
 по слоям потока + зачистка `TierResolver`/`building_band`; S4/S5
 старого плана замещены).
 

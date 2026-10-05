@@ -154,7 +154,7 @@ class SettlementAssembler:
             barrier_cells=barrier_cells,
         )
         dominant_material = resolve_dominant_material(
-            world, layout, skeleton, settlement_uid=settlement.location_uid,
+            layout, ctx, settlement_uid=settlement.location_uid,
         )
 
         logger.info(

@@ -30,28 +30,47 @@ from app.dataModel.locations.structure.building.plotLayoutTemplate import (
     PlotLayoutTemplate,
 )
 from app.dataModel.locations.structure.room.roomDef import RoomDef
+from app.dataModel.materials.enums.materialCategory import MaterialCategory
+from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
+from app.dataModel.materials.worldMaterialRegistry import WorldMaterialRegistry
 from app.db.models.world import World
 
 
-def _world():
+def _world(with_materials=False):
     tiers = WorldEconomyTierRegistry([
         EconomyTierEntry(system_tier=f"t{i}", display_tier=f"Tier {i}",
                          base_value=i * 10)
         for i in range(10)
     ])
+    materials = None
+    if with_materials:
+        materials = WorldMaterialRegistry([
+            MaterialRegistryEntry(
+                system_material=f"{use}_{entry.system_tier}",
+                display_name=f"{use} {entry.system_tier}",
+                material_category=MaterialCategory.SOLID,
+                tags=["construction"], use_type=[use],
+                economic_tier=entry.system_tier,
+            )
+            for entry in tiers.root for use in ("wall", "floor")
+        ])
     return World(
         world_uid="ctx-world", name="Ctx", created_at="2026-10-03",
         economic_tier_registry=tiers.model_dump(mode="json"),
+        material_registry=(
+            materials.model_dump(mode="json") if materials else None
+        ),
     )
 
 
 def _nl(tier=None, uid="nl", location_type="building", size=None,
-        density=None, wall=None, floor=None):
+        density=None, wall=None, floor=None, dominant=None):
     return BundleNamedLocation(
         location_uid=uid, display_name=uid,
         system_location_type=location_type, system_economic_tier=tier,
         system_city_size=size, settlement_density=density,
         parent_wall_material=wall, parent_floor_material=floor,
+        dominant_material=dominant,
     )
 
 
@@ -64,10 +83,10 @@ def _room(tier=None):
     )
 
 
-def _skeleton(tier=None, size=None, density=None):
+def _skeleton(tier=None, size=None, density=None, dominant=None):
     return SettlementSkeleton(
         economic_tier=tier, system_city_size=size,
-        settlement_density=density,
+        settlement_density=density, dominant_material=dominant,
     )
 
 
@@ -393,8 +412,10 @@ class ExtendResolutionTests(unittest.TestCase):
 
     def test_material_defaults_are_canonical_and_silent(self):
         # M9: no authored node anywhere → the dataModel canonical
-        # construction defaults, without a material warning (the tier
-        # median warning is a separate parameter's default).
+        # construction defaults — no cascade `default_applied` warning
+        # for the parent_* params (the tier median warning is a
+        # separate parameter's default; the M10 dominant-material fold
+        # may legitimately warn from the registry pick itself).
         with self.assertLogs(level="WARNING") as captured:
             ctx = extend(
                 LocationContext.root(_world()),
@@ -402,7 +423,8 @@ class ExtendResolutionTests(unittest.TestCase):
             )
         self.assertFalse(
             [r for r in captured.records
-             if "material" in r.getMessage()],
+             if "parent_wall_material" in r.getMessage()
+             or "parent_floor_material" in r.getMessage()],
         )
         self.assertEqual(ctx.wall_material, "stone")
         self.assertEqual(ctx.floor_material, "wood")
@@ -423,6 +445,89 @@ class ExtendResolutionTests(unittest.TestCase):
         )
         self.assertEqual(ctx.wall_material, "iron")
         self.assertEqual(ctx.floor_material, "wood")
+
+    def test_dominant_material_nl_beats_skeleton_and_inherits(self):
+        # M10: settlement-only authored chain — the NL node sits above
+        # the skeleton node; deeper scopes inherit unchanged.
+        ctx = extend(
+            LocationContext.root(_world()),
+            Link(ScopeLevel.SETTLEMENT,
+                 _nl(uid="c", dominant="marble")),
+            Link(ScopeLevel.SETTLEMENT, _skeleton(dominant="granite")),
+        )
+        self.assertEqual(ctx.dominant_material, "marble")
+        self.assertEqual(
+            ctx.provenance["dominant_material"],
+            (ScopeLevel.SETTLEMENT,
+             "BundleNamedLocation.dominant_material"),
+        )
+        ctx = extend(ctx, EmptyLink(ScopeLevel.DISTRICT))
+        ctx = extend(ctx, EmptyLink(ScopeLevel.AREA))
+        ctx = extend(ctx, Link(ScopeLevel.BUILDING, _nl()))
+        self.assertEqual(ctx.dominant_material, "marble")
+
+    def test_dominant_material_skeleton_feeds_below_nl(self):
+        ctx = extend(
+            LocationContext.root(_world()),
+            Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),
+            Link(ScopeLevel.SETTLEMENT, _skeleton(dominant="granite")),
+        )
+        self.assertEqual(ctx.dominant_material, "granite")
+        self.assertEqual(
+            ctx.provenance["dominant_material"],
+            (ScopeLevel.SETTLEMENT,
+             "SettlementSkeleton.dominant_material"),
+        )
+
+    def test_dominant_material_fold_picks_by_resolved_tier(self):
+        # M10 — first `Cascade.fold`: with no authored node the fold
+        # picks a registry wall material for the tier resolved at this
+        # same scope (provenance records the fold, not a default).
+        ctx = extend(
+            LocationContext.root(_world(with_materials=True)),
+            Link(ScopeLevel.SETTLEMENT,
+                 _nl("t4", "c", "settlement")),
+        )
+        self.assertEqual(ctx.dominant_material, "wall_t4")
+        self.assertEqual(
+            ctx.provenance["dominant_material"],
+            (ScopeLevel.SETTLEMENT, "fold:dominant_material"),
+        )
+        # The same chain resolves identically — the fold rng stream is
+        # seeded per scope, never shared with tier materialize.
+        again = extend(
+            LocationContext.root(_world(with_materials=True)),
+            Link(ScopeLevel.SETTLEMENT,
+                 _nl("t4", "c", "settlement")),
+        )
+        self.assertEqual(again.dominant_material, "wall_t4")
+
+    def test_dominant_material_authored_beats_fold(self):
+        ctx = extend(
+            LocationContext.root(_world(with_materials=True)),
+            Link(ScopeLevel.SETTLEMENT,
+                 _nl("t4", "c", "settlement", dominant="marble")),
+        )
+        self.assertEqual(ctx.dominant_material, "marble")
+        self.assertEqual(
+            ctx.provenance["dominant_material"],
+            (ScopeLevel.SETTLEMENT,
+             "BundleNamedLocation.dominant_material"),
+        )
+
+    def test_dominant_material_fold_falls_back_to_canonical(self):
+        # No authored and no registry pick (empty material registry) —
+        # resolve_material's own fallback lands on the canonical
+        # construction default through the fold.
+        ctx = extend(
+            LocationContext.root(_world()),
+            EmptyLink(ScopeLevel.SETTLEMENT),
+        )
+        self.assertEqual(ctx.dominant_material, "stone")
+        self.assertEqual(
+            ctx.provenance["dominant_material"],
+            (ScopeLevel.SETTLEMENT, "fold:dominant_material"),
+        )
 
     def test_area_tier_beats_band_and_range(self):
         ctx = _chain_to_building(LocationContext.root(_world()))

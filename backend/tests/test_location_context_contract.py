@@ -17,6 +17,7 @@ from app.dataModel.economy.economyTier.worldEconomyTierRegistry import WorldEcon
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.cascadeParams import (
     CITY_SIZE,
+    DOMINANT_MATERIAL,
     ECONOMIC_TIER,
     FLOOR_MATERIAL,
     SETTLEMENT_DENSITY,
@@ -81,20 +82,23 @@ class LocationContextContractTests(unittest.TestCase):
         self.assertEqual(set(LocationContext.model_fields),
                          {"level", "economic_tier", "system_city_size",
                           "settlement_density", "wall_material",
-                          "floor_material", "provenance"})
+                          "floor_material", "dominant_material",
+                          "provenance"})
         context = LocationContext(level=ScopeLevel.BUILDING, economic_tier="custom_tier",
                                   system_city_size="custom_size",
                                   settlement_density="dense",
                                   wall_material="stone", floor_material="wood",
+                                  dominant_material="granite",
                                   provenance={"economic_tier": (ScopeLevel.AREA, "economic_tier")})
         self.assertIsInstance(context.economic_tier, RegistryKey)
         self.assertIsInstance(context.system_city_size, RegistryKey)
         self.assertIsInstance(context.settlement_density, DistrictDensity)
         self.assertIsInstance(context.wall_material, RegistryKey)
         self.assertIsInstance(context.floor_material, RegistryKey)
+        self.assertIsInstance(context.dominant_material, RegistryKey)
         self.assertEqual(context.provenance["economic_tier"], (ScopeLevel.AREA, "economic_tier"))
         with self.assertRaises(ValidationError):
-            LocationContext(level=ScopeLevel.WORLD, dominant_material="stone")
+            LocationContext(level=ScopeLevel.WORLD, unknown_param="stone")
         with self.assertRaises(ValidationError):
             LocationContext(level=ScopeLevel.BUILDING, economic_tier="")
         with self.assertRaises(ValidationError):
@@ -125,6 +129,7 @@ class LocationContextContractTests(unittest.TestCase):
                           "system_city_size": None,
                           "settlement_density": None,
                           "wall_material": None, "floor_material": None,
+                          "dominant_material": None,
                           "provenance": {}})
 
     def test_default_median_sorts_and_uses_upper_middle_silently(self):
@@ -260,6 +265,22 @@ class LocationContextContractTests(unittest.TestCase):
                     found[level], {(BundleNamedLocation, field)},
                     (param.field, level.value),
                 )
+        # M10: `dominant_material` — settlement-only authored pair
+        # (NL node beats the skeleton node); the fold is declared on
+        # the param, not as a channel.
+        self.assertEqual(
+            {
+                (model, field)
+                for model in (BundleNamedLocation, SettlementSkeleton)
+                for field, _ in cascade_channels(model, DOMINANT_MATERIAL)
+            },
+            {
+                (BundleNamedLocation, "dominant_material"),
+                (SettlementSkeleton, "dominant_material"),
+            },
+        )
+        self.assertEqual(DOMINANT_MATERIAL.fold, "dominant_material")
+        self.assertEqual(DOMINANT_MATERIAL.levels, (ScopeLevel.SETTLEMENT,))
 
     def test_channel_kinds_are_declared(self):
         kinds = {

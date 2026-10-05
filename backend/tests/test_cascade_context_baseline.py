@@ -30,6 +30,12 @@ from app.application.worldData.generators.assemblers.buildingAssembler.structure
 from app.application.worldData.generators.assemblers.citySkeleton import city_skeleton_from_settlement
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementAssembler import SettlementAssembler
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.barriers import _pick_template_material
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.dominantMaterial import (
+    resolve_dominant_material,
+)
+from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import (
+    SettlementLayout,
+)
 from app.application.worldData.generators.structure import structureGeneratorService as service
 from app.application.worldData.generators.structure.foundation.foundationBuilder import FoundationBuilder
 from app.application.worldData.generators.structure.roof.roofBuilder import RoofBuilder
@@ -44,6 +50,7 @@ from app.dataModel.spatial.facing import Facing
 from app.dataModel.locations.structure.barrier.barrierTemplateEntry import BarrierTemplateEntry
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
+from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from tests.structureWire import level_wire, room_wire
@@ -243,6 +250,47 @@ class CascadeContextBaselineTests(unittest.TestCase):
         skeleton = SettlementAssembler()._build_skeleton(world, settlement)
         self.assertEqual(skeleton.economic_tier, "t1")
         self.assertEqual(_pick_template_material(world, BarrierTemplateEntry(system_type="test"), skeleton, Random(0)), "wall_t1")
+
+    def test_dominant_material_layout_modes_beat_cascade_fallback(self):
+        # M10: the layout-derived modes still win over the ctx value —
+        # the authored→fold→default cascade is the final fallback; the
+        # old tier→registry→literal chain inside the resolver is gone.
+        world, building, _ = fixture()
+        settlement = replace(
+            building, system_location_type="settlement",
+            system_economic_tier="t1",
+        )
+        empty = SettlementLayout(district_layouts=[])
+        ctx = settlement_context(world, settlement)
+        self.assertEqual(
+            ctx.provenance["dominant_material"],
+            (ScopeLevel.SETTLEMENT, "fold:dominant_material"),
+        )
+        self.assertEqual(
+            resolve_dominant_material(empty, ctx, settlement_uid="s"),
+            ctx.dominant_material,
+        )
+        # Authored settlement material beats the fold pick and is
+        # itself beaten by a city-level layout mode.
+        authored = settlement_context(
+            world, replace(settlement, dominant_material="marble"),
+        )
+        self.assertEqual(authored.dominant_material, "marble")
+        layout = SettlementLayout(
+            district_layouts=[],
+            connection_edges=[
+                ConnectionEdge(
+                    edge_uid="e1", from_node_uid="a", to_node_uid="b",
+                    connection_type="road", graph_level="city",
+                    world_uid=world.world_uid, material="road_mat",
+                ),
+            ],
+        )
+        self.assertEqual(
+            resolve_dominant_material(layout, authored,
+                                      settlement_uid="s"),
+            "road_mat",
+        )
 
     def test_warning_only_when_chain_lacks_value(self):
         # M6: the engine warns once at the first scope that falls back

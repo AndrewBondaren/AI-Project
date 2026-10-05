@@ -10,6 +10,7 @@ from app.dataModel.annotationPolicy import DefaultOnWire, IgnoreOnWire, StrictOn
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.context.cascadeParams import (
     CITY_SIZE,
+    DOMINANT_MATERIAL,
     ECONOMIC_TIER,
     FLOOR_MATERIAL,
     SETTLEMENT_DENSITY,
@@ -190,9 +191,18 @@ class BundleNamedLocation(BaseModel):
     created_at: DefaultOnWire[str | None] = None
 
     architectural_style: DefaultOnWire[str | None] = _skeleton_default("architectural_style")
-    dominant_material: DefaultOnWire[MaterialKey | None] = _skeleton_default(
-        "dominant_material",
-    )
+    # Settlement-scope `dominant_material` node — top of the chain;
+    # the authored NL value beats the skeleton node (M10).
+    dominant_material: Annotated[
+        DefaultOnWire[MaterialKey | None],
+        CascadeChannel(
+            DOMINANT_MATERIAL, ScopeLevel.SETTLEMENT,
+            below=CascadeLink(
+                SettlementSkeleton, "dominant_material",
+                ScopeLevel.SETTLEMENT,
+            ),
+        ),
+    ] = _skeleton_default("dominant_material")
     # Settlement-scope `settlement_density` node — the district
     # template sits above (district-first), the skeleton node below.
     settlement_density: Annotated[
