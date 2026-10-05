@@ -286,6 +286,14 @@ building → room`) — одно дерево; данж может висеть 
   каскадную ветку; физический вход в подземелье — `location_entry_points`
   (`leads_to_level_uid` + anchor на здании/клетке). Входов может быть
   несколько (здание в руинах + расщелина в лесу), parent — один.
+- **Lazy NL для procedural-масок (решено).** Генератор, ставящий объект
+  внутрь маски без NL (`declared_*` без `location_uid`), **эмитит**
+  synthetic NL маски — объект пишет persist-слой, генератор не пишет SQL
+  (сужение правила «generators не пишут в named_locations»: запрет на
+  persist-вызовы, не на emit). Fallback: маски-хоста нет → parent =
+  ближайший предок-NL. Synthetic NL — кандидат на U13-именование;
+  `display_name` — placeholder до него. Выбор parent при overlapping
+  масках — явный, в момент размещения.
 
 ---
 

@@ -102,11 +102,11 @@ def verify_cascade_contract(context_model: type[BaseModel]) -> None:
                 )
             above_of[lower] = upper
             below_of[upper] = lower
-            gap = upper.level.rank - lower.level.rank
-            if gap < 0 or gap > 1:
+            if not upper.level.scope_adjacent(lower.level):
                 errors.append(
                     f"edge {_describe(upper)} → {_describe(lower)} "
-                    "skips a level or points upward"
+                    "connects scopes that may not neighbour "
+                    "(scope-DAG, tz_cascade_context §2)"
                 )
         tops = [link for link in chain_nodes if link not in above_of]
         bottoms = [link for link in chain_nodes if link not in below_of]
