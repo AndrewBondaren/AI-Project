@@ -1,63 +1,246 @@
-"""3c-RNG: UUID compatibility and staircase-scoped replay."""
+"""DET-1 — canonical formula, three roots, closed kinds, source gate.
 
-import importlib
+SoT: docs/project_data_storage_tz.md § «Детерминированные uid и rng».
+Plan: .cursor/plans/deterministic-ids.md.
+
+Gate: uuid5/uuid4/Random(/random.seed/hashlib-seed и импорт legacy
+``app.utils.deterministicIds`` вне ``application/worldData/ids`` запрещены;
+текущие нарушители сидят в ``_TODO`` до своего шага плана, постоянные
+исключения (content_hash, runtime ids вне worldData) — в ``_EXEMPT``.
+"""
+
+import hashlib
 import json
+import re
 import unittest
 from dataclasses import replace
 from pathlib import Path
-from random import Random
 from unittest.mock import patch
-from uuid import NAMESPACE_DNS, uuid5
+from uuid import NAMESPACE_DNS, UUID, uuid5
 
 from app.application.worldData.generators.structure.staircase.uShape.uShapeHelper import _compute_fr_anchor, _compute_u_params
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
+from app.application.worldData.ids import (
+    LibraryKind,
+    UidKind,
+    entity_rng,
+    entity_uid,
+    library_uid,
+    runtime_uid,
+    seed_int,
+    seed_rng,
+    seed_root,
+    seed_uid,
+)
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
-from app.utils.deterministicIds import det_uuid, scoped_rng
 
 
-class DeterministicIdsTests(unittest.TestCase):
-    def test_uuid_formula_and_existing_imports_are_compatible(self):
-        modules = (
-            ("generators.structure.structureGeneratorService", "_det_uuid"),
-            ("generators.structure.passages.shared", "_det_uuid"),
-            ("generators.structure.passages.staircaseTunnelOrchestrator", "_det_uuid"),
-            ("generators.structure.staircase.builder", "_det_uuid"),
-            ("generators.structure.staircase.surfaceCorridor", "_det_uuid"),
-            ("settlementOutdoor.settlementOutdoorUids", "_uuid5"),
+class DetIdsContractTests(unittest.TestCase):
+    def test_canonical_format_sorted_keys(self):
+        uid = entity_uid(
+            "w1", UidKind.TRANSITION,
+            b=(12, 4, -1), a=(12, 4, 0), type="hatch",
         )
-        for parts in (("a", "b"), ("building", "level_0"), ("city", "district|core|2"), ("дом", "room", "0")):
-            expected = str(uuid5(NAMESPACE_DNS, "|".join(parts)))
-            self.assertEqual(det_uuid(*parts), expected)
-            for module, name in modules:
-                with self.subTest(module=module, parts=parts):
-                    helper = getattr(importlib.import_module("app.application.worldData." + module), name)
-                    self.assertIs(helper, det_uuid)
-                    self.assertEqual(helper(*parts), expected)
+        self.assertEqual(
+            uid,
+            str(uuid5(
+                NAMESPACE_DNS,
+                "w1|transition|a=12,4,0|b=12,4,-1|type=hatch",
+            )),
+        )
 
-    def test_rng_replays_and_is_independent_of_other_streams(self):
-        parts = ("building", "stairs", "fr_anchor")
-        first = scoped_rng(*parts)
+    def test_key_order_does_not_change_uid(self):
+        a = entity_uid("w", UidKind.AREA, min_x=1, min_y=2, facing=Facing.NORTH)
+        b = entity_uid("w", UidKind.AREA, facing=Facing.NORTH, min_y=2, min_x=1)
+        self.assertEqual(a, b)
+
+    def test_normalization(self):
+        uid = entity_uid("w", UidKind.LEVEL, z_offset=2, flag=True)
+        self.assertEqual(
+            uid,
+            str(uuid5(NAMESPACE_DNS, "w|level|flag=1|z_offset=2")),
+        )
+
+    def test_none_and_unsupported_values_rejected(self):
+        with self.assertRaises(ValueError):
+            entity_uid("w", UidKind.LEVEL, z_offset=None)
+        with self.assertRaises(ValueError):
+            entity_uid("w", UidKind.LEVEL, z_offset={"x": 1})
+
+    def test_unknown_kind_rejected(self):
+        with self.assertRaises(ValueError):
+            entity_uid("w", "no-such-kind")
+
+    def test_seed_root_and_int(self):
+        world = World(world_uid="w-123", name="W", created_at="2026-01-01")
+        self.assertEqual(seed_root(world), "w-123")
+        self.assertEqual(
+            seed_int(world),
+            int(hashlib.md5(b"w-123").hexdigest()[:8], 16),
+        )
+        with self.assertRaises(ValueError):
+            seed_root(object())
+
+    def test_rng_replay_and_stream_isolation(self):
+        keys = {"building": "b", "staircase": "s", "tag": "fr_anchor"}
+        first = entity_rng("w", UidKind.STAIR, **keys)
         expected = [first.random() for _ in range(8)]
-        other = scoped_rng("other-building", "stairs", "fr_anchor")
+        other = entity_rng("w", UidKind.STAIR, **{**keys, "building": "other"})
         for _ in range(100):
             other.random()
-        replay = scoped_rng(*parts)
+        replay = entity_rng("w", UidKind.STAIR, **keys)
         self.assertEqual(expected, [replay.random() for _ in range(8)])
-        self.assertNotEqual(expected[0], scoped_rng("other-building", "stairs", "fr_anchor").random())
-        self.assertEqual(expected[0], Random(det_uuid(*parts)).random())
+        self.assertNotEqual(
+            expected[0],
+            entity_rng("w", UidKind.STAIR, **{**keys, "building": "x"}).random(),
+        )
+
+    def test_seed_rng_replay(self):
+        a = seed_rng("seed", UidKind.RELIEF_PICK, site="tile:0,0", k=1)
+        b = seed_rng("seed", UidKind.RELIEF_PICK, site="tile:0,0", k=1)
+        self.assertEqual(a.random(), b.random())
+
+    def test_seed_uid(self):
+        self.assertEqual(
+            seed_uid("seed", UidKind.GRADE_FACE, site="tile:0,0|face:V|1,2"),
+            str(uuid5(
+                NAMESPACE_DNS,
+                "seed|grade_face|site=tile:0,0|face:V|1,2",
+            )),
+        )
+
+    def test_library_uid(self):
+        a = library_uid(LibraryKind.BUILDING_TEMPLATES, "house")
+        self.assertEqual(a, library_uid(LibraryKind.BUILDING_TEMPLATES, "house"))
+        self.assertNotEqual(
+            a, library_uid(LibraryKind.RELIEF_TEMPLATES, "house"),
+        )
+        UUID(a)
+
+    def test_runtime_uid(self):
+        a, b = runtime_uid(), runtime_uid()
+        self.assertNotEqual(a, b)
+        UUID(a)
+
+
+_BANNED = (
+    ("uuid5", re.compile(r"\buuid5\(")),
+    ("uuid4", re.compile(r"\buuid4\(")),
+    ("Random(", re.compile(r"\bRandom\(")),
+    ("random.seed", re.compile(r"\brandom\.seed\(")),
+    ("hashlib", re.compile(r"\bhashlib\.(md5|sha1|sha256)\(")),
+    ("legacy helper import", re.compile(r"app\.utils\.deterministicIds")),
+)
+
+# Permanent exceptions — not entity/rng identity sites.
+_EXEMPT = (
+    "application/worldData/deriveWorldUid.py",                 # world_uid derivation
+    "application/worldData/pack/io/",                          # content_hash integrity
+    "application/worldData/pack/import_/packImportService.py", # content_hash
+    "application/chat/chatService.py",                         # runtime ids (D8)
+    "application/worldData/playerService.py",                  # runtime ids (D8)
+    "application/worldData/gameSessionService.py",             # runtime ids (D8)
+    "core/logMiddleware.py",                                   # request id
+)
+
+# Temporary whitelist — migrate per plan step; a file drops out of _TODO
+# when its step lands (stale entries fail the gate).
+_TODO = {
+    # step 2 — settlement identity
+    "application/worldData/settlementOutdoor/settlementOutdoorUids.py": 2,
+    # step 3 — structure generator
+    "application/worldData/generators/structure/structureGeneratorService.py": 3,
+    "application/worldData/generators/structure/staircase/uShape/uShape.py": 3,
+    "application/worldData/generators/structure/staircase/shaftPlacer.py": 3,
+    "application/worldData/generators/structure/staircase/surfaceCorridor.py": 3,
+    "application/worldData/generators/structure/staircase/builder.py": 3,
+    "application/worldData/generators/structure/passages/staircaseTunnelOrchestrator.py": 3,
+    "application/worldData/generators/structure/passages/shared.py": 3,
+    "application/worldData/generators/structure/layoutEngine.py": 3,
+    # step 4 — cascade context rng
+    "application/worldData/context/locationScope.py": 4,
+    "application/worldData/context/contextResolver.py": 4,
+    "application/worldData/generators/utils/materialResolver.py": 4,
+    # step 5 — planner/topology rng
+    "application/worldData/generators/assemblers/settlementAssembler/settlementAssembler.py": 5,
+    "application/worldData/generators/assemblers/settlementAssembler/planner/topologyPlan.py": 5,
+    "application/worldData/generators/assemblers/districtAssembler/districtAssembler.py": 5,
+    "application/worldData/generators/assemblers/districtAssembler/planner/frontage.py": 5,
+    "application/worldData/generators/assemblers/areaAssembler/structureAreaAssembler.py": 5,
+    "application/worldData/generators/coordinates/settlementCellRng.py": 5,
+    "application/worldData/generators/road/districtRoadGenerator.py": 5,
+    # step 6 — connection_node_uid
+    "application/worldData/generators/road/layouts/gridLayout.py": 6,
+    "application/worldData/generators/assemblers/areaAssembler/planner/areaPaths.py": 6,
+    # step 7 — pack/grade/seed
+    "application/worldData/generators/climate/math.py": 7,
+    "application/worldData/generators/terrain/relief/geom/seededHash.py": 7,
+    "application/worldData/generators/terrain/relief/volume/gradeInstanceFactory.py": 7,
+    "application/worldData/generators/terrain/mountains/rangeGapFilter.py": 7,
+    # step 8 — runtime_uid / library_uid
+    "application/worldData/buildingTemplateLibraryService.py": 8,
+    "application/worldData/reliefTemplateLibraryService.py": 8,
+    "application/worldData/bundleRemapService.py": 8,
+    "dataModel/perks/perkTemplateOutline.py": 8,
+    "dataModel/races/raceTemplateOutline.py": 8,
+    "db/repositories/sqlite/chunkRefineJobRepository.py": 8,
+    # step 9 — delete legacy helper
+    "utils/deterministicIds.py": 9,
+}
+
+
+class SourceGateTests(unittest.TestCase):
+    def test_no_det_id_formula_outside_ids(self):
+        app_root = Path(__file__).resolve().parents[1] / "app"
+        violations: dict[str, list[str]] = {}
+        for path in sorted(app_root.rglob("*.py")):
+            rel = path.relative_to(app_root).as_posix()
+            if rel.startswith("application/worldData/ids/"):
+                continue
+            text = path.read_text(encoding="utf-8")
+            hits = sorted(
+                {name for name, rx in _BANNED if rx.search(text)}
+            )
+            if hits:
+                violations[rel] = hits
+
+        unexpected = {
+            rel: hits for rel, hits in violations.items()
+            if rel not in _TODO and not rel.startswith(_EXEMPT)
+        }
+        stale = [rel for rel in _TODO if rel not in violations]
+        self.assertEqual(
+            unexpected, {},
+            "det-id formula sites outside worldData/ids — route through the "
+            f"helper or register a plan step in _TODO: {unexpected}",
+        )
+        self.assertEqual(
+            stale, [],
+            f"stale _TODO entries — remove after the step lands: {stale}",
+        )
+
+
+class StaircaseReplayTests(unittest.TestCase):
+    """Formula-agnostic: generation must replay anchors and cells."""
 
     def test_anchor_keeps_free_corner_fallback_and_previous_corner(self):
         args = (10, 20, 3, 3, Facing.NORTH)
-        selected, _, _ = _compute_fr_anchor(*args, rng=scoped_rng("b", "s"))
+        rng = entity_rng("b", UidKind.STAIR, tag="s")
+        selected, _, _ = _compute_fr_anchor(*args, rng=rng)
         cells = {(*selected, 0): MapCell("w", *selected, 0, system_building_element=StructureElement.WALL)}
-        fallback, _, _ = _compute_fr_anchor(*args, cells=cells, rng=scoped_rng("b", "s"))
+        fallback, _, _ = _compute_fr_anchor(
+            *args, cells=cells, rng=entity_rng("b", UidKind.STAIR, tag="s"),
+        )
         self.assertNotEqual(selected, fallback)
-        previous, _, _ = _compute_fr_anchor(*args, prev_fr_anchor=selected, cells=cells, rng=scoped_rng("different"))
+        previous, _, _ = _compute_fr_anchor(
+            *args, prev_fr_anchor=selected, cells=cells,
+            rng=entity_rng("b", UidKind.STAIR, tag="other"),
+        )
         self.assertEqual(previous, selected)
 
     def test_generate_replays_u_shape_anchors_and_cells(self):
@@ -102,3 +285,7 @@ class DeterministicIdsTests(unittest.TestCase):
             [replace(room, created_at="") for room in after.rooms],
         )
         self.assertEqual(structure.model_dump(), original)
+
+
+if __name__ == "__main__":
+    unittest.main()

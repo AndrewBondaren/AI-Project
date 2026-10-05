@@ -61,7 +61,7 @@ N+1: движок определяет встроенные типы со спе
 | `mountain_river` | подтип: круче, пороги; segment from classifier (U17); graph via **`riverConnectionEmit`** (U18) | partial (steep bed) | `world` |
 | `lake_shoreline` | **routing / travel** тип для берега озера в connection graph; **declare контур** — `world.hydrology.declared_lakes[]` (U20, U23) | partial (shore bands via hydrology) | `world` |
 | `coastline` | **routing / travel** тип для берега моря; **declare polyline** — `world.hydrology.declared_coastlines[]` (U21, U23) | partial (shore bands via hydrology) | `world` |
-| `portal` | мгновенный переход; не ребро — связи хранятся на узле (см. 4.1) | — | — |
+| `portal` | абстракция перехода с реализациями graph/coordinate; данные в Transition, node — графовая привязка (см. 4.1) | — | — |
 
 **Реки — geometry vs routing:** declare geometry — `declared_rivers[]` ([`tz_terrain_hydrology.md`](./tz_terrain_hydrology.md) U27). Routing polyline — **`ConnectionEdge`** после carve/**emit** (autoresolve). **`NamedLocation` optional** — только если мастер дал имя. См. [`tz_locations.md`](./tz_locations.md), U9/U11.
 
@@ -363,50 +363,45 @@ effective_degradation_rate = base_degradation
 
 ### 4.1 Портал
 
-Портал — перемещение из точки A в точку B без физического пути. Не использует рёбра графа.  
-Связи хранятся непосредственно на узле портала.
+**SoT:** [`tz_location_transitions.md`](./tz_location_transitions.md)
+§1, §2 инв. 9 и §3.4. Портал — общая абстракция
+`Transition(type=portal)` с двумя обязательными реализациями:
 
-**Типы порталов (`portal_type`):**
+- **`graph`:** перемещение учитывает граф. Специальный барьер, на который
+  наталкивается маршрут графа портала, может заблокировать сам переход.
+  Это не модель «сначала успешный телепорт на node, затем обычное движение
+  до первого препятствия».
+- **`coordinate`:** буквальный перенос между конкретными точками A и B.
+  Граф полностью игнорируется; специальные барьеры, блокирующие графовое
+  портальное перемещение, не блокируют эту реализацию. Общие active,
+  direction и access-состояния перехода сохраняют силу.
 
-| Тип | Описание |
-|---|---|
-| `coordinate` | Телепорт напрямую на (x, y, z); граф полностью игнорируется |
-| `graph` | Телепорт на узел графа; дальнейшее движение идёт по рёбрам от этого узла — барьер на ребре означает, что персонаж застревает у точки выхода |
+**Назначение** может быть локацией как местом назначения, а не только
+конкретными xyz или node UID. Реализация портала и вид ссылки на назначение
+не смешиваются: реализации — graph/coordinate, не location/point.
+Статическая клетка выхода не обязательна для объявления назначения-локации.
+Правило прибытия и typed wire-контракт фиксируются в transitions §10 до кода;
+центр локации, ближайший вход или автоматический resolver не являются
+утверждённым fallback.
 
-**Свойства портала на `ConnectionNode`:**
+Направленность, активность, объявленные назначения и параметры реализации
+хранятся в SQL-ярусе transitions, состояние сторон — в отдельной
+`transition_sides`. Узел с `node_type="portal"` и `location_uid` — привязка
+к графу, не вторая сущность поведения портала. `portal_*` колонки node
+удаляются при реализации; множественность назначений и форма связи с node
+уточняются в transitions §10, не ограничиваются одним `transition_uid`.
 
-```python
-portal_type:              str        # "coordinate" | "graph"
-portal_destinations:      list[dict] # список точек назначения
-bidirectional:            bool       # портал работает в обе стороны
-is_active:                bool       # портал включён; False = портал не работает
-blocked_behavior_override: str | None  # переопределяет world.mechanics_settings["portal_blocked_behavior"]; None = использовать мировую настройку
-```
+Через **игровые действия** можно перенаправлять портал, запечатывать/
+открывать обратный проход, активировать/деактивировать и менять
+`blocked_behavior_override`. При блокировке graph-маршрута override
+переопределяет `world.mechanics_settings["portal_blocked_behavior"]`:
+`random_portal`, `before_portal` или `random_effect`; значения и семантика
+описаны в transitions §3.4. Для coordinate этот graph-specific механизм
+не применяется. `is_accessible` — состояние, управляемое движком;
+оно не заменяет проверку барьера на графовом маршруте.
 
-Все поля выше могут быть изменены через **игровое действие** (game action) в рантайме:
-- `portal_destinations` — перенаправить портал
-- `bidirectional` — запечатать / открыть обратный проход
-- `is_active` — активировать / деактивировать портал
-- `blocked_behavior_override` — изменить поведение при заблокированном выходе
-
-Каждый элемент `portal_destinations`:
-```json
-{ "type": "coordinate", "x": 100, "y": 200, "z": 0 }
-{ "type": "graph", "node_uid": "node_abc123" }
-```
-
-**Поведение при заблокированном выходе** (только для `graph`-порталов; настройка механик мира):
-
-| `portal_blocked_behavior` | Описание |
-|---|---|
-| `random_portal` | Персонаж выбрасывается в случайный портал сети |
-| `before_portal` | Персонаж возвращается перед порталом входа |
-| `random_effect` | Случайно применяется один из вариантов выше |
-
-Хранится в `world.mechanics_settings["portal_blocked_behavior"]`.
-
-Узлы портала имеют `node_type="portal"` + `location_uid` (NamedLocation портала).  
-Порталы генерируются как `structure_type="portal"` через `StructureAreaAssembler`.
+Порталы генерируются как `structure_type="portal"` через
+`StructureAreaAssembler`; обе реализации всегда SQL, даже внутри здания.
 
 ### 4.2 Мост
 
@@ -948,14 +943,9 @@ connection_nodes (
     node_type       TEXT NOT NULL,   -- "intersection"|"settlement_gate"|"portal"|"building_entrance"|"location_hub"
     location_uid    TEXT REFERENCES named_locations(location_uid),
     graph_level     TEXT NOT NULL,
-    world_uid       TEXT NOT NULL REFERENCES worlds(world_uid),
-
-    -- только для node_type="portal"
-    portal_type                  TEXT,        -- "coordinate" | "graph"
-    portal_destinations          TEXT,        -- JSON: list[dict]
-    portal_bidirectional         INTEGER,     -- 0 | 1
-    portal_is_active             INTEGER,     -- 0 | 1
-    portal_blocked_behavior_override TEXT     -- "random_portal"|"before_portal"|"random_effect"|null
+    world_uid       TEXT NOT NULL REFERENCES worlds(world_uid)
+    -- Данные портала — transitions + transition_sides, не portal_* на node.
+    -- Форма связи node↔portal уточняется в tz_location_transitions §10.
 )
 
 connection_edges (
@@ -992,7 +982,9 @@ connection_edge_cells (
 ```
 
 `cells` вынесены в отдельную таблицу `connection_edge_cells` — у порталов записей нет.  
-Portal-поля на `connection_nodes` заполняются только при `node_type="portal"`, иначе `null`.
+Портальные данные хранятся в `transitions` + `transition_sides`; `connection_nodes`
+сохраняет роль/координаты графового узла (§4.1). Schema выше — целевой контракт,
+перенос старых `portal_*` выполняется по плану location-transitions.
 
 ---
 
