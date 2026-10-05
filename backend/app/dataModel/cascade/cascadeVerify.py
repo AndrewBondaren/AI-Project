@@ -6,9 +6,12 @@ param declared on the context against the channel graph materialized by
 import validation) — the engine walks only a verified chain.
 """
 
+from enum import Enum
+
 from pydantic import BaseModel
 
 from app.dataModel.cascade.cascadeGraph import (
+    _base_types,
     _channels_of,
     _declared_edges,
     _describe,
@@ -19,6 +22,8 @@ from app.dataModel.cascade.cascadeSpec import (
     Cascade,
     CascadeChannel,
     CascadeLink,
+    ChannelKind,
+    DefaultPolicy,
 )
 
 
@@ -38,8 +43,8 @@ def verify_cascade_contract(context_model: type[BaseModel]) -> None:
     """
     errors: list[str] = []
     params = {
-        meta
-        for info in context_model.model_fields.values()
+        meta: name
+        for name, info in context_model.model_fields.items()
         for meta in info.metadata
         if isinstance(meta, Cascade)
     }
@@ -57,11 +62,14 @@ def verify_cascade_contract(context_model: type[BaseModel]) -> None:
                 continue
             nodes[key] = channel
             owners[key] = model
-    for param in params:
+    for param, ctx_field in params.items():
         chain_nodes = {
             link: channel
             for (p, link), channel in nodes.items() if p is param
         }
+        errors.extend(
+            _binding_errors(param, context_model, ctx_field, chain_nodes)
+        )
         if not chain_nodes:
             errors.append(
                 f"param field='{param.field}': no channel declares it"
@@ -157,3 +165,75 @@ def verify_cascade_contract(context_model: type[BaseModel]) -> None:
             )
     if errors:
         raise ValueError("cascade contract violated: " + "; ".join(errors))
+
+
+def _binding_errors(
+    param: Cascade,
+    context_model: type[BaseModel],
+    ctx_field: str,
+    chain_nodes: dict[CascadeLink, CascadeChannel],
+) -> list[str]:
+    """A param's declaration must be self-contained: the default is a
+    declared value (``default_value``) or a named registry
+    (``default_registry``), materialize inputs carry a declared resolver
+    name — no param-specific branch may live in the engine."""
+    label = f"param field='{param.field}'"
+    errors: list[str] = []
+    if param.default is DefaultPolicy.CANONICAL_DEFAULT:
+        if param.default_value is None:
+            errors.append(
+                f"{label}: CANONICAL_DEFAULT requires default_value"
+            )
+        elif not _default_value_ok(context_model, ctx_field, param):
+            errors.append(
+                f"{label}: default_value {param.default_value!r} "
+                f"incompatible with context field '{ctx_field}' type"
+            )
+    elif param.default_value is not None:
+        errors.append(
+            f"{label}: default_value declared but policy is "
+            f"{param.default.value}"
+        )
+    if param.default is DefaultPolicy.REGISTRY_MEDIAN:
+        if param.default_registry is None:
+            errors.append(
+                f"{label}: REGISTRY_MEDIAN requires default_registry"
+            )
+    elif param.default_registry is not None:
+        errors.append(
+            f"{label}: default_registry declared but policy is "
+            f"{param.default.value}"
+        )
+    has_materialize_inputs = any(
+        channel.kind is not ChannelKind.VALUE
+        for channel in chain_nodes.values()
+    )
+    if has_materialize_inputs and param.materialize is None:
+        errors.append(
+            f"{label}: non-VALUE channels require materialize name"
+        )
+    if not has_materialize_inputs and param.materialize is not None:
+        errors.append(
+            f"{label}: materialize declared but no BAND/RANGE channels"
+        )
+    return errors
+
+
+def _default_value_ok(
+    context_model: type[BaseModel], field: str, param: Cascade,
+) -> bool:
+    for base in _base_types(context_model, field):
+        if not isinstance(base, type):
+            continue
+        # Enum fields require the real member — a literal string would
+        # be a silent fork of the POJO default. Str-keyed aliases
+        # (RegistryKey[X]) are runtime-indistinguishable, any str
+        # qualifies.
+        expected = (
+            str
+            if issubclass(base, str) and not issubclass(base, Enum)
+            else base
+        )
+        if isinstance(param.default_value, expected):
+            return True
+    return False

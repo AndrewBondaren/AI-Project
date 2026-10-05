@@ -131,6 +131,18 @@ class Cascade:
     # Optional resolver name, bound by the application engine, never an
     # application callable imported into this dataModel contract.
     fold: str | None = None
+    # Optional resolver name for materialize-input kinds (BAND/RANGE) —
+    # bound by the application engine like ``fold``; required when the
+    # param declares non-VALUE channels.
+    materialize: str | None = None
+    # The canonical default itself for CANONICAL_DEFAULT — a value
+    # pulled from the domain POJO at declaration (cascadeParams), never
+    # a literal (dataModel-no-hardcode). Verified against the context
+    # field's annotation — ``model_copy`` does not re-validate.
+    default_value: object | None = None
+    # Named world registry for REGISTRY_MEDIAN (e.g. "economic_tiers") —
+    # a name bound by the application engine's registry table.
+    default_registry: str | None = None
     # Optional restriction to a subset of levels for future parameters.
     levels: tuple[ScopeAxis, ...] | None = None
     # Expected field types for materialize-input kinds — the domain
