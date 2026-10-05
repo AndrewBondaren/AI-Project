@@ -27,7 +27,8 @@ class HostNotPlacedTests(unittest.TestCase):
                 guest.attach_to = host.room_id
                 placed = [] if missing else [host]
                 with self.assertLogs(LAYOUT, level="WARNING") as captured:
-                    _layout_mode_b([host, guest], placed, staircases=[], building_uid="test")
+                    _layout_mode_b([host, guest], placed, staircases=[],
+                                   building_uid="test", world_uid="w")
                 self.assertEqual(len(captured.records), 1)
                 self.assertEqual(captured.records[0].levelno, logging.ERROR)
                 self.assertIn("host='host' not placed", captured.records[0].getMessage())

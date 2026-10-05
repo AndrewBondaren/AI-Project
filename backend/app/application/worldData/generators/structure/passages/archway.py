@@ -17,8 +17,9 @@ from app.application.worldData.generators.structure.passages.archwayValidator im
 from app.dataModel.locations.structure.building.roomConnection import RoomConnection
 from app.dataModel.locations.structure.enums.passageType import PassageType
 from app.application.worldData.generators.structure.passages.shared import (
-    _center_slice, _det_uuid, _shared_segment,
+    _center_slice, _shared_segment,
 )
+from app.application.worldData.ids import UidKind, entity_uid
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
 from app.db.models.mapCell import MapCell
@@ -80,7 +81,10 @@ def _build_archway(
         validate_archway_through(cells, arch_cells, z_base, conn_label)
 
     cx, cy = arch_cells[len(arch_cells) // 2]
-    passage_uid = _det_uuid(building_uid, "arch", conn.from_room, conn.to_room)
+    passage_uid = entity_uid(
+        world_uid, UidKind.PASSAGE,
+        parent=building_uid, type="arch", a=conn.from_room, b=conn.to_room,
+    )
     return LocationPassage(
         passage_uid=passage_uid,
         world_uid=world_uid,

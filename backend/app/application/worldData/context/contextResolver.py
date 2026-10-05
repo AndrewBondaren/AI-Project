@@ -10,7 +10,7 @@ materialization happen once: a band authored at area materializes at
 the area boundary and is never re-rolled by deeper scopes.
 
 One resolution per scope: the caller supplies the rng for the scope
-(``Random(_make_seed(world_uid, scope_uid, param))``); a materialize
+(``entity_rng(world_uid, UidKind.CASCADE, scope=scope_uid, param=…)``); a materialize
 channel that needs it (no anchor) requires it — missing rng is a
 caller bug, never a silent skip.
 """

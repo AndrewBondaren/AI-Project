@@ -17,7 +17,7 @@ from app.dataModel.locations.structure.enums.buildingElement import StructureEle
 from tests import test_embedded_shaft
 from tests.test_structure_orientation import test_world_building
 from tests.test_u_shape_orientation_baseline import room
-from app.utils.deterministicIds import det_uuid
+from app.application.worldData.ids import UidKind, entity_uid
 
 LOGGER = "app.application.worldData.generators.structure.staircase.embeddedUpperLayout"
 
@@ -42,7 +42,7 @@ class EmbeddedUpperLayoutTests(unittest.TestCase):
         rooms = [lower, target, *shafts, *extras]
         prepare_embedded_upper(1, rooms, [spec], {"stairs": shafts}, bounds, "building")
         layout_level([r for r in rooms if r.z_offset == 1], [], 90, 90, bounds,
-                     staircases=[spec], building_uid="building")
+                     staircases=[spec], building_uid="building", world_uid="w")
 
     def test_host_is_fixed_above_source_and_not_repositioned_or_clipped(self):
         lower, target, shafts, spec = self.scenario()
@@ -196,5 +196,9 @@ class EmbeddedUpperLayoutTests(unittest.TestCase):
         self.assertIn("target not created", errors[0]["msg"])
         self.assertFalse(next(r for r in probe.runtime_rooms if r.room_id == "upper").placed)
         self.assertFalse(any(p.system_passage_type == "staircase" for p in result.passages))
-        self.assertFalse(any(r.location_uid == det_uuid(building.location_uid, "upper_0")
-                             for r in result.rooms))
+        self.assertFalse(any(
+            r.location_uid == entity_uid(
+                world.world_uid, UidKind.ROOM,
+                parent=building.location_uid, key="upper_0",
+            )
+            for r in result.rooms))

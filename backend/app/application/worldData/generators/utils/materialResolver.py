@@ -2,6 +2,7 @@ import logging
 from random import Random
 
 from app.application.jsonValidation import economic_tiers, materials
+from app.application.worldData.ids import UidKind, entity_rng
 from app.application.worldData.generators.utils.tierRegistry import median_system_tier, tiers_sorted
 from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
 from app.db.models.world import World
@@ -80,9 +81,8 @@ def fold_dominant_material(
 ) -> str:
     """Cascade fold for ``dominant_material`` (tz_cascade_context §3,
     cascade-migration M10): tier → material_registry pick between the
-    authored chain and the canonical default. Same seed formula as the
-    retired resolve-site rng — bit-exact pick parity; per-param stream,
-    never shared with tier materialize (§4)."""
+    authored chain and the canonical default. Per-param stream over
+    ``UidKind.CASCADE``, never shared with tier materialize (§4)."""
     if world is None:
         raise ValueError("dominant_material: fold requires world")
     scope_uid = next(
@@ -90,8 +90,9 @@ def fold_dominant_material(
          if getattr(obj, "location_uid", None)),
         "",
     )
-    fold_rng = Random(
-        f"{world.world_uid}_{scope_uid}_dominant_material"
+    fold_rng = entity_rng(
+        world.world_uid, UidKind.CASCADE,
+        scope=scope_uid, param="dominant_material",
     )
     return resolve_material(
         world, "wall", resolved.get("economic_tier"), fold_rng,

@@ -151,19 +151,6 @@ _EXEMPT = (
 # Temporary whitelist — migrate per plan step; a file drops out of _TODO
 # when its step lands (stale entries fail the gate).
 _TODO = {
-    # step 3 — structure generator
-    "application/worldData/generators/structure/structureGeneratorService.py": 3,
-    "application/worldData/generators/structure/staircase/uShape/uShape.py": 3,
-    "application/worldData/generators/structure/staircase/shaftPlacer.py": 3,
-    "application/worldData/generators/structure/staircase/surfaceCorridor.py": 3,
-    "application/worldData/generators/structure/staircase/builder.py": 3,
-    "application/worldData/generators/structure/passages/staircaseTunnelOrchestrator.py": 3,
-    "application/worldData/generators/structure/passages/shared.py": 3,
-    "application/worldData/generators/structure/layoutEngine.py": 3,
-    # step 4 — cascade context rng
-    "application/worldData/context/locationScope.py": 4,
-    "application/worldData/context/contextResolver.py": 4,
-    "application/worldData/generators/utils/materialResolver.py": 4,
     # step 5 — planner/topology rng
     "application/worldData/generators/assemblers/settlementAssembler/settlementAssembler.py": 5,
     "application/worldData/generators/assemblers/settlementAssembler/planner/topologyPlan.py": 5,

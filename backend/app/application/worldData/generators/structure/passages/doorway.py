@@ -7,8 +7,9 @@ from app.dataModel.locations.structure.building.roomConnection import RoomConnec
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.application.worldData.generators.structure.passages.doorHeight import resolve_door_height
 from app.application.worldData.generators.structure.passages.shared import (
-    _det_uuid, _doorway_facing, _shared_segment,
+    _doorway_facing, _shared_segment,
 )
+from app.application.worldData.ids import UidKind, entity_uid
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
 from app.db.models.mapCell import MapCell
@@ -61,7 +62,10 @@ def _build_doorway(
     door_cells = placed
 
     cx, cy = door_cells[len(door_cells) // 2]
-    passage_uid = _det_uuid(building_uid, "door", conn.from_room, conn.to_room)
+    passage_uid = entity_uid(
+        world_uid, UidKind.PASSAGE,
+        parent=building_uid, type="door", a=conn.from_room, b=conn.to_room,
+    )
     return LocationPassage(
         passage_uid=passage_uid,
         world_uid=world_uid,

@@ -74,6 +74,7 @@ class World:
     danger_level_registry:          dict = json_col(default_factory=dict)
     road_type_registry:             dict = json_col(default_factory=dict)
     passage_type_registry:          dict = json_col(default_factory=dict)
+    transition_type_registry:       list = json_col(default_factory=list)
     location_type_registry:         dict = json_col(default_factory=dict)
     settlement_specialization_registry: list = json_col(default_factory=list)
     location_state_registry:        dict = json_col(default_factory=dict)

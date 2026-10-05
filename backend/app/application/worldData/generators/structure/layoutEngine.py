@@ -24,7 +24,7 @@ from app.dataModel.locations.structure.enums.attachWall import AttachWall
 from app.dataModel.locations.structure.building.roomConnection import RoomConnection
 from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
-from app.utils.deterministicIds import scoped_rng
+from app.application.worldData.ids import UidKind, entity_rng
 
 logger = logging.getLogger(__name__)
 
@@ -396,6 +396,7 @@ def _corridor_attach_side(
     rooms: list[_RoomInstance],
     staircases: list[StaircaseSpec],
     building_uid: str,
+    world_uid: str,
 ) -> Facing:
     """Resolve corridor ANY per §6.6 A1–A5, before shafts are placed."""
     vertical = host.depth >= host.width
@@ -417,7 +418,11 @@ def _corridor_attach_side(
     free = [side for side in sides if side not in occupied]
     if len(free) == 1:
         return free[0]
-    rng = scoped_rng(building_uid, host.room_id, str(host.z_offset), AttachWall.ANY.value)
+    rng = entity_rng(
+        world_uid, UidKind.STRUCTURE,
+        building=building_uid, room=host.room_id, z_offset=host.z_offset,
+        tag=AttachWall.ANY,
+    )
     return rng.choice(sides)
 
 
@@ -428,6 +433,7 @@ def _layout_mode_b(
     *,
     staircases: list[StaircaseSpec],
     building_uid: str,
+    world_uid: str,
 ) -> None:
     """
     bounds = (x_min, y_min, x_max, y_max) of the level below.
@@ -456,7 +462,8 @@ def _layout_mode_b(
         attach_wall = group[0].attach_wall
 
         if attach_wall == AttachWall.ANY and host.room_type == "corridor":
-            side = _corridor_attach_side(host, rooms, staircases, building_uid)
+            side = _corridor_attach_side(
+                host, rooms, staircases, building_uid, world_uid)
             _place_rooms_on_side(side, group, host, all_placed, bounds)
             continue
 
@@ -573,6 +580,7 @@ def layout_level(
     *,
     staircases: list[StaircaseSpec],
     building_uid: str,
+    world_uid: str,
 ) -> None:
     """
     Places all rooms on a level in-place.
@@ -607,6 +615,7 @@ def layout_level(
     _layout_mode_b(
         rooms, all_placed, bounds=bounds,
         staircases=staircases, building_uid=building_uid,
+        world_uid=world_uid,
     )
     union = set().union(*(r.get_footprint() for r in rooms if r.placed))
     for room in rooms:

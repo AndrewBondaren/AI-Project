@@ -3,17 +3,17 @@
 Caller-side glue of the cascade contract: runtime/persist objects
 (``NamedLocation`` dataclass) are converted to their source POJO here,
 and the per-scope materialize rng is seeded once per scope+param
-(``Random(make_scope_seed(world_uid, scope_uid, param))``). The engine
+(``scope_rng(world_uid, scope_uid, param)``). The engine
 stays generic (``contextResolver.extend``); these factories are the
 location domain's boundary wiring — one per scope level.
 """
 
-import hashlib
 from dataclasses import asdict
 from random import Random
 
 from app.application.worldData.context.cascadeLink import EmptyLink, Link
 from app.application.worldData.context.contextResolver import extend
+from app.application.worldData.ids import UidKind, entity_rng
 from app.application.worldData.generators.assemblers.citySkeleton import (
     settlement_skeleton_pojo,
 )
@@ -36,10 +36,9 @@ def named_location_pojo(location: NamedLocation) -> BundleNamedLocation:
     return BundleNamedLocation.model_validate(asdict(location))
 
 
-def make_scope_seed(world_uid: str, scope_uid: str, param: str) -> int:
-    """Seed of the scope's materialize rng — one per scope+param (§4)."""
-    raw = (world_uid + scope_uid + param).encode()
-    return int(hashlib.md5(raw).hexdigest()[:8], 16)
+def scope_rng(world_uid: str, scope_uid: str, param: str) -> Random:
+    """Stream of the scope's materialize rng — one per scope+param (§4)."""
+    return entity_rng(world_uid, UidKind.CASCADE, scope=scope_uid, param=param)
 
 
 def settlement_context(
@@ -51,11 +50,7 @@ def settlement_context(
         LocationContext.root(world),
         Link(ScopeLevel.SETTLEMENT, named_location_pojo(settlement)),
         Link(ScopeLevel.SETTLEMENT, settlement_skeleton_pojo(settlement)),
-        rng=Random(
-            make_scope_seed(
-                world.world_uid, settlement.location_uid, "tier",
-            ),
-        ),
+        rng=scope_rng(world.world_uid, settlement.location_uid, "tier"),
     )
 
 
@@ -81,7 +76,7 @@ def district_context(
     return extend(
         ctx,
         *links,
-        rng=Random(make_scope_seed(world.world_uid, district_uid, "tier")),
+        rng=scope_rng(world.world_uid, district_uid, "tier"),
     )
 
 
@@ -96,7 +91,7 @@ def area_context(
     return extend(
         ctx,
         Link(ScopeLevel.AREA, plot),
-        rng=Random(make_scope_seed(world.world_uid, area_uid, "tier")),
+        rng=scope_rng(world.world_uid, area_uid, "tier"),
     )
 
 
@@ -109,9 +104,7 @@ def building_context(
     return extend(
         ctx,
         Link(ScopeLevel.BUILDING, named_location_pojo(building)),
-        rng=Random(
-            make_scope_seed(world.world_uid, building.location_uid, "tier"),
-        ),
+        rng=scope_rng(world.world_uid, building.location_uid, "tier"),
     )
 
 
@@ -126,7 +119,7 @@ def room_context(
     return extend(
         ctx,
         Link(ScopeLevel.ROOM, room_def),
-        rng=Random(make_scope_seed(world.world_uid, room_uid, "tier")),
+        rng=scope_rng(world.world_uid, room_uid, "tier"),
     )
 
 

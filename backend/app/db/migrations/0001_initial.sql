@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS worlds (
     danger_level_registry       TEXT,
     road_type_registry          TEXT,
     passage_type_registry       TEXT,
+    transition_type_registry    TEXT,
     location_type_registry      TEXT,
     settlement_specialization_registry TEXT,
     location_state_registry     TEXT,
@@ -859,6 +860,67 @@ CREATE TABLE IF NOT EXISTS location_passages (
     FOREIGN KEY (from_level_uid) REFERENCES location_levels(level_uid),
     FOREIGN KEY (to_level_uid)   REFERENCES location_levels(level_uid)
 );
+
+-- ============================================================
+-- transitions (additive physical aggregate; legacy passages remain until F1)
+-- Defaults/behavior are supplied by the Transition POJO, not by a second SQL registry.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS transitions (
+    transition_uid         TEXT PRIMARY KEY NOT NULL,
+    world_uid              TEXT NOT NULL REFERENCES worlds(world_uid),
+    system_transition_type TEXT NOT NULL CHECK (length(system_transition_type) > 0),
+    origin                 TEXT NOT NULL CHECK (origin IN ('authored', 'generated', 'runtime')),
+    is_bidirectional       INTEGER NOT NULL CHECK (is_bidirectional IN (0, 1)),
+    is_active              INTEGER NOT NULL CHECK (is_active IN (0, 1)),
+    access_mechanic         TEXT NOT NULL CHECK (json_valid(access_mechanic) AND json_type(access_mechanic) = 'array'),
+    type_params            TEXT NOT NULL CHECK (json_valid(type_params) AND json_type(type_params) = 'object'),
+    display_name           TEXT,
+    glossary_ref           TEXT,
+    tag_refs               TEXT NOT NULL CHECK (json_valid(tag_refs) AND json_type(tag_refs) = 'array'),
+    a_space                TEXT NOT NULL CHECK (a_space IN ('surface', 'level')),
+    a_level_uid            TEXT REFERENCES location_levels(level_uid),
+    a_host_location_uid    TEXT REFERENCES named_locations(location_uid),
+    a_node_uid             TEXT REFERENCES connection_nodes(node_uid),
+    a_x                    INTEGER,
+    a_y                    INTEGER,
+    a_z                    INTEGER,
+    b_space                TEXT NOT NULL CHECK (b_space IN ('surface', 'level')),
+    b_level_uid            TEXT REFERENCES location_levels(level_uid),
+    b_host_location_uid    TEXT REFERENCES named_locations(location_uid),
+    b_node_uid             TEXT REFERENCES connection_nodes(node_uid),
+    b_x                    INTEGER,
+    b_y                    INTEGER,
+    b_z                    INTEGER,
+    CHECK ((a_space = 'surface' AND a_level_uid IS NULL) OR
+           (a_space = 'level' AND a_level_uid IS NOT NULL AND a_x IS NOT NULL AND a_y IS NOT NULL AND a_z IS NOT NULL)),
+    CHECK ((b_space = 'surface' AND b_level_uid IS NULL) OR
+           (b_space = 'level' AND b_level_uid IS NOT NULL AND b_x IS NOT NULL AND b_y IS NOT NULL AND b_z IS NOT NULL)),
+    CHECK ((a_x IS NULL AND a_y IS NULL AND a_z IS NULL) OR
+           (typeof(a_x) = 'integer' AND typeof(a_y) = 'integer' AND typeof(a_z) = 'integer')),
+    CHECK ((b_x IS NULL AND b_y IS NULL AND b_z IS NULL) OR
+           (typeof(b_x) = 'integer' AND typeof(b_y) = 'integer' AND typeof(b_z) = 'integer'))
+);
+
+CREATE TABLE IF NOT EXISTS transition_sides (
+    transition_uid            TEXT NOT NULL REFERENCES transitions(transition_uid) ON DELETE CASCADE,
+    side                      TEXT NOT NULL CHECK (side IN ('a', 'b')),
+    owner_location_uid        TEXT REFERENCES named_locations(location_uid),
+    is_discovered             INTEGER NOT NULL CHECK (is_discovered IN (0, 1)),
+    is_accessible             INTEGER NOT NULL CHECK (is_accessible IN (0, 1)),
+    entry_difficulty_override INTEGER CHECK (entry_difficulty_override IS NULL OR
+                                           (typeof(entry_difficulty_override) = 'integer' AND entry_difficulty_override BETWEEN 0 AND 100)),
+    guard_level_override      INTEGER CHECK (guard_level_override IS NULL OR
+                                           (typeof(guard_level_override) = 'integer' AND guard_level_override BETWEEN 0 AND 100)),
+    display_name              TEXT,
+    PRIMARY KEY (transition_uid, side)
+);
+
+CREATE INDEX IF NOT EXISTS idx_transitions_world ON transitions(world_uid);
+CREATE INDEX IF NOT EXISTS idx_transitions_a_level ON transitions(world_uid, a_level_uid);
+CREATE INDEX IF NOT EXISTS idx_transitions_b_level ON transitions(world_uid, b_level_uid);
+CREATE INDEX IF NOT EXISTS idx_transitions_a_node ON transitions(world_uid, a_node_uid);
+CREATE INDEX IF NOT EXISTS idx_transitions_b_node ON transitions(world_uid, b_node_uid);
+CREATE INDEX IF NOT EXISTS idx_transition_sides_owner ON transition_sides(owner_location_uid, side, transition_uid);
 
 -- ============================================================
 -- location_states

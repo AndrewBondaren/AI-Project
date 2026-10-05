@@ -4,6 +4,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, ValidationError, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.locations.enums.accessMechanic import AccessMechanic
 from app.dataModel.locations.structure.enums.buildingPurpose import BuildingPurpose
 from app.dataModel.locations.structure.room.roomDef import RoomDef
 
@@ -15,7 +16,7 @@ class LevelDef(BaseModel):
     display_name: StrictOnWire[str]
     z_height: DefaultOnWire[Annotated[int, Field(ge=1)] | None] = None
     isolated: DefaultOnWire[bool] = False
-    access_mechanic: DefaultOnWire[list[str]] = Field(default_factory=list)
+    access_mechanic: DefaultOnWire[list[AccessMechanic]] = Field(default_factory=list)
     rooms: StrictOnWire[list[RoomDef]] = Field(min_length=1)
     purpose: DefaultOnWire[BuildingPurpose | None] = None
     window_z_offset: DefaultOnWire[int | None] = None

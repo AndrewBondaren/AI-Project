@@ -15,7 +15,7 @@ from app.dataModel.spatial.facing import (
 )
 from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec, EMBED_AT_CENTER
 from app.application.worldData.generators.structure.cellBuilder import _interior
-from app.utils.deterministicIds import scoped_rng
+from app.application.worldData.ids import UidKind, entity_rng
 from app.application.worldData.generators.structure.layoutEngine import (
     _try_adjacent, _place_next_to_any, _DIRECTIONS,
 )
@@ -70,9 +70,10 @@ class AdjacentShaftPlacer(ShaftPlacer):
 class EmbeddedShaftPlacer(ShaftPlacer):
     """Embed a shaft on z_lo; runtime metadata identifies its host and entrance."""
 
-    def __init__(self, spec: StaircaseSpec, building_uid: str):
+    def __init__(self, spec: StaircaseSpec, building_uid: str, world_uid: str):
         self.spec = spec
         self.building_uid = building_uid
+        self.world_uid = world_uid
 
     def place(self, shaft, fr_room, placed_rooms):
         sc = self.spec
@@ -87,8 +88,11 @@ class EmbeddedShaftPlacer(ShaftPlacer):
             host = min(candidates, key=lambda r: (-len(r.get_footprint()), r.uid_key)) if candidates else None
         position = sc.embed_at
         if position is None:
-            position = scoped_rng(self.building_uid, sc.staircase_id, "embed_at").choice(
-                sorted(INTERCARDINAL_FACINGS))
+            position = entity_rng(
+                self.world_uid, UidKind.STAIR,
+                building=self.building_uid, staircase=sc.staircase_id,
+                tag="embed_at",
+            ).choice(sorted(INTERCARDINAL_FACINGS))
         shaft.embedded_host_key = None
         shaft.embedded_entry = None
         if host is not None:
@@ -119,8 +123,11 @@ class EmbeddedShaftPlacer(ShaftPlacer):
                             and r.z_offset == shaft.z_offset)
             if fits and not conflicts:
                 if position == EMBED_AT_CENTER:
-                    entry = scoped_rng(self.building_uid, sc.staircase_id, "embed_entry").choice(
-                        sorted(CARDINAL_FACINGS))
+                    entry = entity_rng(
+                        self.world_uid, UidKind.STAIR,
+                        building=self.building_uid, staircase=sc.staircase_id,
+                        tag="embed_entry",
+                    ).choice(sorted(CARDINAL_FACINGS))
                 else:
                     inward = (Facing.SOUTH if north else Facing.NORTH,
                               Facing.WEST if east else Facing.EAST)
@@ -205,10 +212,12 @@ class EdgeMountedShaftPlacer(ShaftPlacer):
         return True
 
 
-def make_shaft_placer(sc: StaircaseSpec, *, building_uid: str) -> ShaftPlacer:
+def make_shaft_placer(
+    sc: StaircaseSpec, *, building_uid: str, world_uid: str,
+) -> ShaftPlacer:
     """Выбирает стратегию по флагам записи staircases[]."""
     if sc.in_a_room:
-        return EmbeddedShaftPlacer(sc, building_uid)
+        return EmbeddedShaftPlacer(sc, building_uid, world_uid)
     if sc.outside:
         return EdgeMountedShaftPlacer()
     return AdjacentShaftPlacer()

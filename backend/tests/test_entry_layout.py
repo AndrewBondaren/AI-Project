@@ -25,7 +25,8 @@ def unplaced(name, **kwargs):
 
 def layout(rooms, pairs=()):
     connections = [RoomConnection(from_room=a, to_room=b, passage_type="doorway") for a, b in pairs]
-    layout_level(rooms, connections, 10, 20, staircases=[], building_uid="entry-layout")
+    layout_level(rooms, connections, 10, 20, staircases=[],
+                 building_uid="entry-layout", world_uid="w")
 
 
 class EntryLayoutTests(unittest.TestCase):

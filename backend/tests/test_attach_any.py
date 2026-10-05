@@ -9,7 +9,7 @@ from app.dataModel.spatial.facing import Facing
 from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.locations.structure.enums.attachWall import AttachWall
-from app.utils.deterministicIds import scoped_rng
+from app.application.worldData.ids import UidKind, entity_rng
 from tests.structureWire import room_wire, level_wire
 from tests.test_u_shape_orientation_baseline import room
 from tests.test_structure_orientation import test_world_building
@@ -38,7 +38,8 @@ def staircase(facing, ident="stairs", z=0, stops=None):
 def place(host, attached, pairs=(), building_uid="attach-test"):
     specs = [spec for spec, _ in pairs]
     shafts = [shaft for _, shaft in pairs if shaft is not None]
-    _layout_mode_b([host, *attached, *shafts], [host], staircases=specs, building_uid=building_uid)
+    _layout_mode_b([host, *attached, *shafts], [host], staircases=specs,
+                   building_uid=building_uid, world_uid="w")
 
 
 class AttachAnyTests(unittest.TestCase):
@@ -62,7 +63,7 @@ class AttachAnyTests(unittest.TestCase):
         ):
             with self.subTest(width=width, depth=depth, facing=facing):
                 host, guests = scenario(width, depth)
-                with patch(LAYOUT + ".scoped_rng", side_effect=AssertionError("one free side needs no RNG")):
+                with patch(LAYOUT + ".entity_rng", side_effect=AssertionError("one free side needs no RNG")):
                     place(host, guests, [staircase(facing)])
                 self.assert_side(host, guests, expected)
 
@@ -77,7 +78,11 @@ class AttachAnyTests(unittest.TestCase):
                     for pairs in cases:
                         with self.subTest(width=width, uid=uid, z=z, pairs=len(pairs)):
                             host, guests = scenario(width, depth, z=z)
-                            expected = scoped_rng(uid, host.room_id, str(z), AttachWall.ANY.value).choice(sides)
+                            expected = entity_rng(
+                                "w", UidKind.STRUCTURE, building=uid,
+                                room=host.room_id, z_offset=z,
+                                tag=AttachWall.ANY,
+                            ).choice(sides)
                             place(host, guests, pairs, uid)
                             self.assert_side(host, guests, expected)
 
@@ -144,8 +149,11 @@ class AttachAnyTests(unittest.TestCase):
             template = StructureTemplate(system_name="00000000-0000-4000-8000-000000000066",
                                          display_name="ANY", levels=levels, staircases=staircases)
             original = deepcopy(template.model_dump())
-            expected = Facing.SOUTH if has_staircase else scoped_rng(
-                building.location_uid, "corridor", "0", AttachWall.ANY.value).choice((Facing.NORTH, Facing.SOUTH))
+            expected = Facing.SOUTH if has_staircase else entity_rng(
+                world.world_uid, UidKind.STRUCTURE,
+                building=building.location_uid, room="corridor", z_offset=0,
+                tag=AttachWall.ANY,
+            ).choice((Facing.NORTH, Facing.SOUTH))
             def capture(*args, **kwargs):
                 _layout_mode_b(*args, **kwargs)
                 if args[0][0].z_offset == 0:

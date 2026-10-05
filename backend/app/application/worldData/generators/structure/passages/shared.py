@@ -1,8 +1,6 @@
 ﻿"""
 Shared helpers for passage builders.
 """
-from app.utils.deterministicIds import det_uuid as _det_uuid
-
 from app.dataModel.spatial.facing import Facing
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 

@@ -162,9 +162,9 @@ def snapshot(*, band=None, building_tier=None):
 class CascadeContextBaselineTests(unittest.TestCase):
     def test_null_building_uses_median_everywhere_and_stamps_rooms(self):
         result = snapshot()
-        self.assertEqual((result["cell_count"], result["passage_count"]), (437, 2))
+        self.assertEqual((result["cell_count"], result["passage_count"]), (417, 2))
         self.assertEqual(result["geometry_sha256"],
-                         "4fd5a07f79d97aec173a38db42ba536b040c5376d9decf79e2f7faefe2e86ff4")
+                         "8d5466848c8c7aff38b187fca33f1ec2d703e48d4df66e41a1a381de3a403f1d")
         # The room instance now carries the resolved room-scope tier —
         # authored "t9" for the upper room, building tier elsewhere.
         self.assertEqual([r["tier"] for r in result["rooms"]], ["t5", "t9", "t5", "t5"])
@@ -177,15 +177,15 @@ class CascadeContextBaselineTests(unittest.TestCase):
         first = snapshot(band="common")
         self.assertEqual(first, snapshot(band="common"))
         # One materialization at the area boundary (deterministic scope
-        # seed → "t2"): every non-authored room shares the tier — the old
+        # seed → "t3"): every non-authored room shares the tier — the old
         # repeated-resolve spread (t1 → t2 across call sites, shared-rng
         # geometry perturbation) is gone.
         tier = first["rooms"][0]["tier"]
-        self.assertEqual(tier, "t2")
+        self.assertEqual(tier, "t3")
         self.assertEqual([r["tier"] for r in first["rooms"]], [tier, "t9", tier, tier])
-        self.assertEqual((first["cell_count"], first["passage_count"]), (437, 2))
+        self.assertEqual((first["cell_count"], first["passage_count"]), (417, 2))
         self.assertEqual(first["geometry_sha256"],
-                         "4fd5a07f79d97aec173a38db42ba536b040c5376d9decf79e2f7faefe2e86ff4")
+                         "8d5466848c8c7aff38b187fca33f1ec2d703e48d4df66e41a1a381de3a403f1d")
         self.assertEqual([r["wall"] for r in first["rooms"]],
                          [f"wall_{tier}", "wall_t9", f"wall_{tier}", f"wall_{tier}"])
 

@@ -9,9 +9,9 @@
 from __future__ import annotations
 
 import logging
-from app.utils.deterministicIds import det_uuid as _det_uuid
 
 from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.application.worldData.ids import UidKind, entity_uid
 from app.application.worldData.generators.structure.passages.wallBreachPlacer import WallBreachPlacer
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.staircase.surfaceCorridor import SurfaceCorridorBuilder
@@ -88,7 +88,11 @@ class StaircaseTunnelOrchestrator:
             "tunnel_orchestrator %r: archway at (%d,%d) z=%d..%d (anchor=%s, room=%r)",
             sc_id, wx, wy, z_lo, z_hi - 1, anchor, room.room_id,
         )
-        passage_uid = _det_uuid(self.building_uid, PassageType.ARCHWAY.value, sc_id, room.room_id)
+        passage_uid = entity_uid(
+            self.world_uid, UidKind.PASSAGE,
+            parent=self.building_uid, type=PassageType.ARCHWAY,
+            staircase=sc_id, room=room.room_id,
+        )
         return LocationPassage(
             passage_uid=passage_uid,
             world_uid=self.world_uid,
@@ -141,7 +145,11 @@ class StaircaseTunnelOrchestrator:
             return None
 
         bx, by = breach_xy
-        passage_uid = _det_uuid(self.building_uid, "underground_tunnel", sc_id, room.room_id)
+        passage_uid = entity_uid(
+            self.world_uid, UidKind.PASSAGE,
+            parent=self.building_uid, type="underground_tunnel",
+            staircase=sc_id, room=room.room_id,
+        )
         return LocationPassage(
             passage_uid=passage_uid,
             world_uid=self.world_uid,

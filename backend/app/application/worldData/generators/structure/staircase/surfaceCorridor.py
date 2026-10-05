@@ -6,8 +6,8 @@ Surface corridor — соединяет внешний якорь лестниц
 from __future__ import annotations
 
 import logging
-from app.utils.deterministicIds import det_uuid as _det_uuid
 
+from app.application.worldData.ids import UidKind, entity_uid
 from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 from app.application.worldData.generators.structure.cellBuilder import _interior, _wall_cell
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _open_cell
@@ -87,7 +87,11 @@ class SurfaceCorridorBuilder:
         wall_cell_xy = self._place_corridor(path, to_fp)
 
         wx, wy = wall_cell_xy if wall_cell_xy else path[-1]
-        passage_uid = _det_uuid(self.building_uid, "surface_corridor", sc_id, to_room.room_id)
+        passage_uid = entity_uid(
+            self.world_uid, UidKind.PASSAGE,
+            parent=self.building_uid, type="surface_corridor",
+            staircase=sc_id, room=to_room.room_id,
+        )
         return LocationPassage(
             passage_uid=passage_uid,
             world_uid=self.world_uid,

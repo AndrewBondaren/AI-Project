@@ -13,7 +13,7 @@ from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSp
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 from app.dataModel.spatial.facing import Facing, INTERCARDINAL_FACINGS, CARDINAL_FACINGS
-from app.utils.deterministicIds import scoped_rng, det_uuid
+from app.application.worldData.ids import UidKind, entity_rng, entity_uid
 from tests.structureWire import room_wire, level_wire
 from tests.test_structure_orientation import test_world_building
 from tests.test_u_shape_orientation_baseline import room
@@ -27,7 +27,7 @@ class EmbeddedShaftTests(unittest.TestCase):
         spec = StaircaseSpec(staircase_id="stairs", stops=["host", "upper"], in_a_room=True)
         with self.assertRaises(TypeError):
             make_shaft_placer(spec)
-        placer = make_shaft_placer(spec, building_uid="building")
+        placer = make_shaft_placer(spec, building_uid="building", world_uid="world")
         self.assertIsInstance(placer, EmbeddedShaftPlacer)
         self.assertEqual(placer.building_uid, "building")
 
@@ -46,7 +46,9 @@ class EmbeddedShaftTests(unittest.TestCase):
         for corner, origin in origins.items():
             with self.subTest(corner=corner):
                 host, shaft, spec = self.scenario(corner.value)
-                self.assertTrue(make_shaft_placer(spec, building_uid="building").place(shaft, host, [host]))
+                self.assertTrue(make_shaft_placer(
+                    spec, building_uid="building", world_uid="world",
+                ).place(shaft, host, [host]))
                 self.assertEqual((shaft.origin_x, shaft.origin_y), origin)
                 self.assertLessEqual(shaft.get_footprint(), host.get_footprint())
                 shared_wall = (shaft.get_footprint() - _interior(shaft.get_footprint())) & (
@@ -62,21 +64,27 @@ class EmbeddedShaftTests(unittest.TestCase):
 
     def test_center_entirely_interior_with_four_separate_walls_and_keyed_entry(self):
         host, shaft, spec = self.scenario("center")
-        self.assertTrue(EmbeddedShaftPlacer(spec, "building").place(shaft, host, [host]))
+        self.assertTrue(EmbeddedShaftPlacer(spec, "building", "world").place(shaft, host, [host]))
         self.assertEqual((shaft.origin_x, shaft.origin_y), (15, 24))
         self.assertLessEqual(shaft.get_footprint(), _interior(host.get_footprint()))
-        expected = scoped_rng("building", "stairs", "embed_entry").choice(sorted(CARDINAL_FACINGS))
+        expected = entity_rng(
+            "world", UidKind.STAIR,
+            building="building", staircase="stairs", tag="embed_entry",
+        ).choice(sorted(CARDINAL_FACINGS))
         self.assertEqual(shaft.embedded_entry, expected)
         walls = pass3_interior_walls([host, shaft], [], 0, "world", "building", "stone")
         positions = {(c.x, c.y) for c in walls}
         self.assertLessEqual(shaft.get_footprint() - _interior(shaft.get_footprint()), positions)
 
     def test_omitted_position_uses_stable_corner_order_and_scoped_rng(self):
-        expected = scoped_rng("building", "stairs", "embed_at").choice(sorted(INTERCARDINAL_FACINGS))
+        expected = entity_rng(
+            "world", UidKind.STAIR,
+            building="building", staircase="stairs", tag="embed_at",
+        ).choice(sorted(INTERCARDINAL_FACINGS))
         host, shaft, spec = self.scenario(None)
         other_host, other_shaft, other_spec = self.scenario(expected.value)
-        EmbeddedShaftPlacer(spec, "building").place(shaft, host, [host])
-        EmbeddedShaftPlacer(other_spec, "building").place(other_shaft, other_host, [other_host])
+        EmbeddedShaftPlacer(spec, "building", "world").place(shaft, host, [host])
+        EmbeddedShaftPlacer(other_spec, "building", "world").place(other_shaft, other_host, [other_host])
         self.assertEqual(shaft, other_shaft)
 
     def test_missing_unplaced_or_wrong_level_host_uses_largest_nonshaft_room(self):
@@ -87,7 +95,7 @@ class EmbeddedShaftTests(unittest.TestCase):
                 unplaced = room("unplaced", x=None, y=None, width=30, depth=30)
                 wrong_level = room("wrong_level", x=100, z=1, width=40, depth=40)
                 with self.assertLogs(PLACER, "ERROR") as captured:
-                    self.assertTrue(EmbeddedShaftPlacer(spec, "building").place(
+                    self.assertTrue(EmbeddedShaftPlacer(spec, "building", "world").place(
                         shaft, small, [small, unplaced, wrong_level, host]))
                 self.assertEqual(len(captured.records), 1)
                 self.assertEqual(shaft.embedded_host_key, host.uid_key)
@@ -101,7 +109,7 @@ class EmbeddedShaftTests(unittest.TestCase):
                 rooms.append(blocker)
             with self.assertLogs(PLACER, "ERROR"), patch.object(
                     AdjacentShaftPlacer, "place", return_value=True) as adjacent:
-                self.assertTrue(EmbeddedShaftPlacer(spec, "building").place(shaft, host, rooms))
+                self.assertTrue(EmbeddedShaftPlacer(spec, "building", "world").place(shaft, host, rooms))
             adjacent.assert_called_once_with(shaft, host, rooms)
             self.assertIsNone(shaft.embedded_host_key)
             self.assertIsNone(shaft.embedded_entry)
@@ -109,7 +117,7 @@ class EmbeddedShaftTests(unittest.TestCase):
     def test_tight_center_uses_real_adjacent_fallback(self):
         host, shaft, spec = self.scenario("center", width=7, depth=7)
         with self.assertLogs(PLACER, "ERROR") as captured:
-            self.assertTrue(EmbeddedShaftPlacer(spec, "building").place(shaft, host, [host]))
+            self.assertTrue(EmbeddedShaftPlacer(spec, "building", "world").place(shaft, host, [host]))
         self.assertEqual(len(captured.records), 1)
         self.assertIsNone(shaft.embedded_host_key)
         self.assertFalse(_interior(shaft.get_footprint()) & _interior(host.get_footprint()))
@@ -122,7 +130,8 @@ class EmbeddedShaftTests(unittest.TestCase):
         starts = {}
         StructureGeneratorService()._place_level_shafts(
             0, [spec], [host, shaft, upper], {"host": 0, "upper": 1},
-            {spec.staircase_id: [shaft, upper]}, {"host": host}, starts, building_uid="building")
+            {spec.staircase_id: [shaft, upper]}, {"host": host}, starts,
+            building_uid="building", world_uid="world")
         self.assertTrue(upper.placed)
         self.assertEqual((upper.origin_x, upper.origin_y), (shaft.origin_x, shaft.origin_y))
         self.assertEqual(upper.facing, shaft.facing)
@@ -167,5 +176,9 @@ class EmbeddedShaftTests(unittest.TestCase):
                 self.assertEqual(conn.to_room, host.room_id)
                 self.assertEqual(len(wall), 3)
                 self.assertTrue(len({x for x, y in wall}) == 1 or len({y for x, y in wall}) == 1)
-                uid = det_uuid(building.location_uid, "arch", shaft.room_id, host.room_id)
+                uid = entity_uid(
+                    world.world_uid, UidKind.PASSAGE,
+                    parent=building.location_uid, type="arch",
+                    a=shaft.room_id, b=host.room_id,
+                )
                 self.assertTrue(any(p.passage_uid == uid for p in first.passages))

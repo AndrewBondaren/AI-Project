@@ -4,7 +4,8 @@ U-shape staircase.
 """
 from __future__ import annotations
 import logging
-from app.utils.deterministicIds import scoped_rng
+
+from app.application.worldData.ids import UidKind, entity_rng
 
 from app.dataModel.spatial.facing import Facing, parse_facing
 from app.dataModel.locations.structure.enums.buildingElement import StructureElement
@@ -467,7 +468,10 @@ class UShapeBuilder(StaircaseBuilder):
             )
 
         staircase_id = self.sc_entry.staircase_id
-        rng = scoped_rng(self.building_uid, staircase_id, "fr_anchor")
+        rng = entity_rng(
+            self.world_uid, UidKind.STAIR,
+            building=self.building_uid, staircase=staircase_id, tag="fr_anchor",
+        )
         params = _compute_u_params(ax, ay, w, d, facing, self.z_height, self.conn_label,
                                    prev_fr_anchor=prev_anchor,
                                    cells=self.cells, z_lo=self.z_lo, rng=rng)

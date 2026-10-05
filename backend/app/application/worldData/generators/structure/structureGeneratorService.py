@@ -1,6 +1,4 @@
-﻿import hashlib
-import logging
-from app.utils.deterministicIds import det_uuid as _det_uuid
+﻿import logging
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -23,6 +21,10 @@ from app.application.worldData.context.locationScope import (
     debug_building_context,
 )
 from app.application.worldData.generators.utils.economicTierBands import band_of
+from app.application.worldData.ids import UidKind, entity_rng, entity_uid
+from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
+    level_uid as _level_uid,
+)
 from app.application.worldData.generators.structure.cellBuilder import build_level_cells
 from app.application.worldData.generators.structure.wallMaterials import (
     select_wall_materials,
@@ -105,12 +107,7 @@ def compute_occupied_footprint(
 
 
 # ---------------------------------------------------------------------------
-# Seed + z helpers
-
-def _make_seed(world_uid: str, building_uid: str) -> int:
-    raw = (world_uid + building_uid).encode()
-    return int(hashlib.md5(raw).hexdigest()[:8], 16)
-
+# z helpers
 
 def _resolve_z_heights(template: StructureTemplate, definitions: list[LevelDef]) -> dict[int, int]:
     """z_offset → effective z_height."""
@@ -142,7 +139,8 @@ def _build_levels(definitions: list[LevelDef], building: NamedLocation,
                   z_heights: dict[int, int], foundation_depth: int = 0) -> dict[int, LocationLevel]:
     return {
         level_def.z_offset: LocationLevel(
-            level_uid=_det_uuid(building.location_uid, f"level_{level_def.z_offset}"),
+            level_uid=_level_uid(
+                building.world_uid, building.location_uid, level_def.z_offset),
             location_uid=building.location_uid,
             z=_compute_level_z(building.map_z, level_def.z_offset, z_heights, foundation_depth),
             z_height=z_heights[level_def.z_offset],
@@ -274,7 +272,8 @@ class StructureGeneratorService:
 
         ground_z = ground_z if ground_z is not None else building.map_z
 
-        rng = Random(_make_seed(world.world_uid, building.location_uid))
+        rng = entity_rng(
+            world.world_uid, UidKind.STRUCTURE, building=building.location_uid)
         # Callers without a real chain still honor the building NL's own
         # authored tier — the NL is the building-scope link (§8.4).
         ctx = ctx or debug_building_context(world, building)
@@ -510,6 +509,7 @@ class StructureGeneratorService:
             layout_level(
                 level_rooms, synth_conns, start_x, start_y, bounds=parent_bounds,
                 staircases=staircases, building_uid=building.location_uid,
+                world_uid=building.world_uid,
             )
 
             for r in level_rooms:
@@ -520,6 +520,7 @@ class StructureGeneratorService:
                 z_offset, staircases, all_rooms, room_z_offsets,
                 shaft_by_staircase, all_placed_by_id, level_start,
                 building_uid=building.location_uid,
+                world_uid=building.world_uid,
             )
             self._propagate_trapdoor_starts(
                 z_offset, staircases, room_z_offsets, all_placed_by_id, level_start,
@@ -601,6 +602,7 @@ class StructureGeneratorService:
         level_start: dict[int, tuple[int, int]],
         *,
         building_uid: str,
+        world_uid: str,
     ) -> None:
         """Place fr_z shafts using their strategy; propagate origins to upper levels."""
         for sc in staircases:
@@ -618,7 +620,8 @@ class StructureGeneratorService:
 
             shaft_fr        = shaft_list[0]
             placed_on_level = [r for r in all_rooms if r.z_offset == z_offset and r.placed]
-            placer          = make_shaft_placer(sc, building_uid=building_uid)
+            placer          = make_shaft_placer(
+                sc, building_uid=building_uid, world_uid=world_uid)
             success         = placer.place(shaft_fr, fr_room, placed_on_level)
 
             if success:
@@ -706,7 +709,10 @@ class StructureGeneratorService:
         }
 
         room_uids: dict[str, str] = {
-            room.uid_key: _det_uuid(building.location_uid, room.uid_key)
+            room.uid_key: entity_uid(
+                world.world_uid, UidKind.ROOM,
+                parent=building.location_uid, key=room.uid_key,
+            )
             for room in all_rooms
             if room.placed and not room.is_shaft
         }

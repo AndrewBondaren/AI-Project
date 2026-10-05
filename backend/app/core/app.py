@@ -21,6 +21,8 @@ def make_lifespan(db: Database):
     from app.db.models.namedLocation import NamedLocation
     from app.db.models.locationLevel import LocationLevel
     from app.db.models.locationEntryPoint import LocationEntryPoint
+    from app.db.models.transition import TransitionRow
+    from app.db.models.transitionSide import TransitionSideRow
     from app.db.models.mapCell import MapCell
     from app.db.models.connectionNode import ConnectionNode
     from app.db.models.connectionEdge import ConnectionEdge
@@ -37,6 +39,7 @@ def make_lifespan(db: Database):
     _models = [
         World, GameSession, Player, Npc, Turn, Message, NodeExecutionLog,
         Race, WorldPerk, NamedLocation, LocationLevel, LocationEntryPoint, MapCell,
+        TransitionRow, TransitionSideRow,
         ConnectionNode, ConnectionEdge, ConnectionEdgeCell,
         State, SessionPending, ReliefTemplateRow, BuildingTemplateRow,
         ReliefGradeSystemRow, ReliefGradeInstanceRow, StructureTemplateRow,

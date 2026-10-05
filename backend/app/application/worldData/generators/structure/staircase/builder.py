@@ -5,8 +5,8 @@ Staircase builder — оркестратор.
 создаёт и возвращает LocationPassage.
 """
 import logging
-from app.utils.deterministicIds import det_uuid as _det_uuid
 
+from app.application.worldData.ids import UidKind, entity_uid
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.staircase.straight  import StraightBuilder
 from app.application.worldData.generators.structure.staircase.uShape    import UShapeBuilder
@@ -72,8 +72,11 @@ def build_staircase(
 
     fx, fy = fr_anchor
     tx, ty = to_anchor
-    passage_uid = _det_uuid(building_uid, "stair", sc.staircase_id,
-                            fr.room_id, to.room_id)
+    passage_uid = entity_uid(
+        world_uid, UidKind.PASSAGE,
+        parent=building_uid, type="stair", staircase=sc.staircase_id,
+        a=fr.room_id, b=to.room_id,
+    )
     passage = LocationPassage(
         passage_uid=passage_uid,
         world_uid=world_uid,

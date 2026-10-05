@@ -9,8 +9,9 @@ from app.application.worldData.generators.structure.passages.doorHeight import r
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.passages.doorPlacer import DoorPlacer
 from app.application.worldData.generators.structure.passages.shared import (
-    _det_uuid, _exterior_cells_on_wall,
+    _exterior_cells_on_wall,
 )
+from app.application.worldData.ids import UidKind, entity_uid
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
 from app.db.models.mapCell import MapCell
@@ -69,7 +70,10 @@ def _build_entry_point(
     door_cells = placed
 
     cx, cy = door_cells[len(door_cells) // 2]
-    passage_uid = _det_uuid(building_uid, f"entry{suffix}", room.room_id)
+    passage_uid = entity_uid(
+        world_uid, UidKind.PASSAGE,
+        parent=building_uid, type=f"entry{suffix}", room=room.room_id,
+    )
     return LocationPassage(
         passage_uid=passage_uid,
         world_uid=world_uid,
