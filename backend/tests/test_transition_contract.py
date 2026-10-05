@@ -24,8 +24,8 @@ def _wire(system_type: str = "door", **fields) -> dict:
     return {
         "transition_uid": "transition-1", "world_uid": "world-1",
         "system_transition_type": system_type,
-        "a": {"x": 123, "y": -45, "z": 28},
-        "b": {"space": "level", "level_uid": "level-1", "x": 124, "y": -45, "z": 28},
+        "source": {"x": 123, "y": -45, "z": 28},
+        "destination": {"space": "level", "level_uid": "level-1", "x": 124, "y": -45, "z": 28},
         **fields,
     }
 
@@ -38,9 +38,9 @@ class TransitionContractTest(unittest.TestCase):
         self.assertIsNone(endpoint.level_uid)
         self.assertIsNone(endpoint.host_location_uid)
         self.assertEqual(endpoint.identity_keys(), {"space": "surface", "geometry": "symbolic"})
-        symbolic = Transition.model_validate(_wire(a={}))
-        self.assertIsNone(symbolic.a.geometry)
-        self.assertIsNone(symbolic.side_a.owner_location_uid)
+        symbolic = Transition.model_validate(_wire(source={}))
+        self.assertIsNone(symbolic.source.geometry)
+        self.assertIsNone(symbolic.source_side.owner_location_uid)
 
     def test_concrete_global_geometry_and_identity_refs(self) -> None:
         endpoint = TransitionEndpoint(
@@ -77,16 +77,16 @@ class TransitionContractTest(unittest.TestCase):
 
     def test_two_sides_have_independent_state_and_nullable_owners(self) -> None:
         transition = Transition.model_validate(_wire(
-            side_a={"is_accessible": False},
-            side_b={"owner_location_uid": "building", "entry_difficulty_override": 0},
+            source_side={"is_accessible": False},
+            destination_side={"owner_location_uid": "building", "entry_difficulty_override": 0},
         ))
-        self.assertFalse(transition.side_a.is_accessible)
-        self.assertTrue(transition.side_b.is_accessible)
-        self.assertIsNone(transition.side_a.owner_location_uid)
-        self.assertEqual(transition.side_b.entry_difficulty_override, 0)
-        self.assertIsNone(transition.side_b.guard_level_override)
-        self.assertIsNone(transition.b.host_location_uid)
-        for wire in (_wire(side_a=None), _wire(side_b=None), _wire(side_c={})):
+        self.assertFalse(transition.source_side.is_accessible)
+        self.assertTrue(transition.destination_side.is_accessible)
+        self.assertIsNone(transition.source_side.owner_location_uid)
+        self.assertEqual(transition.destination_side.entry_difficulty_override, 0)
+        self.assertIsNone(transition.destination_side.guard_level_override)
+        self.assertIsNone(transition.destination.host_location_uid)
+        for wire in (_wire(source_side=None), _wire(destination_side=None), _wire(side_c={})):
             with self.subTest(wire=wire), self.assertRaises(ValidationError):
                 Transition.model_validate(wire)
 
@@ -100,22 +100,22 @@ class TransitionContractTest(unittest.TestCase):
 
     def test_hidden_b_default_only_preserves_explicit_discovery_and_access(self) -> None:
         hidden = Transition.model_validate(_wire("hidden_entrance"))
-        self.assertTrue(hidden.side_a.is_discovered)
-        self.assertFalse(hidden.side_b.is_discovered)
-        self.assertTrue(hidden.side_b.is_accessible)
+        self.assertTrue(hidden.source_side.is_discovered)
+        self.assertFalse(hidden.destination_side.is_discovered)
+        self.assertTrue(hidden.destination_side.is_accessible)
         explicit = Transition.model_validate(_wire(
-            "hidden_entrance", side_b={"is_discovered": True, "is_accessible": False},
+            "hidden_entrance", destination_side={"is_discovered": True, "is_accessible": False},
         ))
-        self.assertTrue(explicit.side_b.is_discovered)
-        self.assertFalse(explicit.side_b.is_accessible)
+        self.assertTrue(explicit.destination_side.is_discovered)
+        self.assertFalse(explicit.destination_side.is_accessible)
 
     def test_direction_defaults_and_fall_access_state(self) -> None:
         door = Transition.model_validate(_wire())
         self.assertTrue(door.is_bidirectional)
         self.assertTrue(door.is_active)
-        fall = Transition.model_validate(_wire("fall", side_b={"is_accessible": False}))
+        fall = Transition.model_validate(_wire("fall", destination_side={"is_accessible": False}))
         self.assertFalse(fall.is_bidirectional)
-        self.assertFalse(fall.side_b.is_accessible)
+        self.assertFalse(fall.destination_side.is_accessible)
         for wire in (_wire(is_bidirectional=False), _wire("fall", is_bidirectional=True)):
             with self.assertRaises(ValidationError):
                 Transition.model_validate(wire)
@@ -146,7 +146,7 @@ class TransitionContractTest(unittest.TestCase):
         ])
         context = {"transition_type_registry": registry}
         hidden = Transition.model_validate(_wire("secret_stair"), context=context)
-        self.assertFalse(hidden.side_b.is_discovered)
+        self.assertFalse(hidden.destination_side.is_discovered)
         gate = Transition.model_validate(
             _wire("iron_gate", type_params={"width_cells": 3}), context=context,
         )
@@ -166,9 +166,9 @@ class TransitionContractTest(unittest.TestCase):
             access_mechanic=["key", "lockpick"],
             type_params={"staircase_type": "u_shape"},
             display_name="Лестница", glossary_ref="stair_lore", tag_refs=["stone"],
-            side_a={"owner_location_uid": "room-a", "is_discovered": False,
+            source_side={"owner_location_uid": "room-source", "is_discovered": False,
                     "entry_difficulty_override": 100, "display_name": "Нижний выход"},
-            side_b={"owner_location_uid": "room-b", "is_accessible": False,
+            destination_side={"owner_location_uid": "room-destination", "is_accessible": False,
                     "guard_level_override": 0},
         ))
         wire = transition.model_dump(mode="json")
@@ -195,10 +195,10 @@ class TransitionContractTest(unittest.TestCase):
 
     def test_identity_is_separate_from_state_and_keeps_a_b_order(self) -> None:
         transition = Transition.model_validate(_wire())
-        changed = Transition.model_validate(_wire(side_a={"is_discovered": False}))
-        self.assertEqual(transition.a.identity_keys(), changed.a.identity_keys())
-        self.assertNotEqual(transition.a.identity_keys(), transition.b.identity_keys())
-        self.assertFalse(any(value is None for value in transition.a.identity_keys().values()))
+        changed = Transition.model_validate(_wire(source_side={"is_discovered": False}))
+        self.assertEqual(transition.source.identity_keys(), changed.source.identity_keys())
+        self.assertNotEqual(transition.source.identity_keys(), transition.destination.identity_keys())
+        self.assertFalse(any(value is None for value in transition.source.identity_keys().values()))
 
 
 if __name__ == "__main__":

@@ -850,7 +850,7 @@ THEN
 **Целевой SoT:** [переходы](./tz_location_transitions.md) §2–§4, §8.1.
 Схема и правила чтения ниже — legacy до переключения callers. Новые входы —
 Transition с builtin `main_entrance`/`service_entrance` через `behaves_as`;
-`b.owner` — входимая локация, отдельной оси `entry_role` нет.
+`destination_side.owner` — входимая локация, отдельной оси `entry_role` нет.
 Стороны — `transition_sides`; внешнее пространство может быть `surface`
 без NL. Parent/child не требуется. Discovery, pathfinding и выбор входа —
 контекст движка, вне текущей миграции генератора.

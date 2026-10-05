@@ -50,10 +50,10 @@ class Transition(BaseModel):
     transition_uid: StrictOnWire[Annotated[str, Field(min_length=1)]]
     world_uid: StrictOnWire[Annotated[str, Field(min_length=1)]]
     system_transition_type: StrictOnWire[TransitionTypeKey]
-    a: StrictOnWire[TransitionEndpoint]
-    b: StrictOnWire[TransitionEndpoint]
-    side_a: DefaultOnWire[TransitionSide] = Field(default_factory=TransitionSide)
-    side_b: DefaultOnWire[TransitionSide] = Field(default_factory=TransitionSide)
+    source: StrictOnWire[TransitionEndpoint]
+    destination: StrictOnWire[TransitionEndpoint]
+    source_side: DefaultOnWire[TransitionSide] = Field(default_factory=TransitionSide)
+    destination_side: DefaultOnWire[TransitionSide] = Field(default_factory=TransitionSide)
     origin: DefaultEnumOnWire[TransitionOrigin] = TransitionOrigin.GENERATED
     is_bidirectional: DefaultOnWire[bool] = True
     is_active: DefaultOnWire[bool] = True
@@ -73,9 +73,9 @@ class Transition(BaseModel):
         builtin = _builtin(value["system_transition_type"], info)
         data = dict(value)
         if builtin == TransitionType.HIDDEN_ENTRANCE:
-            side = data.get("side_b", {})
+            side = data.get("destination_side", {})
             if isinstance(side, dict):
-                data["side_b"] = {"is_discovered": False, **side}
+                data["destination_side"] = {"is_discovered": False, **side}
         if builtin == TransitionType.FALL:
             data.setdefault("is_bidirectional", False)
         return data
@@ -85,7 +85,7 @@ class Transition(BaseModel):
     def _typed_params(cls, value: Any, info: ValidationInfo) -> PhysicalTransitionParams:
         system_type = info.data.get("system_transition_type")
         if system_type is None:
-            raise ValueError("type_params require a valid system_transition_type")
+            raise ValueError("type_params require source valid system_transition_type")
         model = params_model_for(_builtin(system_type, info))
         wire = value.model_dump() if isinstance(value, PhysicalTransitionParams) else value
         return model.model_validate(wire)

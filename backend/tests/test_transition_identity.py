@@ -15,66 +15,66 @@ class TransitionIdentityTest(unittest.TestCase):
     def setUp(self) -> None:
         self.registry = WorldTransitionTypeRegistry.canonical_engine()
         self.system_type = self.registry.require("main_entrance")
-        self.a = TransitionEndpoint(x=123, y=-45, z=28)
-        self.b = TransitionEndpoint(space="level", level_uid="level-b", x=124, y=-45, z=28)
+        self.source = TransitionEndpoint(x=123, y=-45, z=28)
+        self.destination = TransitionEndpoint(space="level", level_uid="level-destination", x=124, y=-45, z=28)
 
     def test_fixed_key_contract_uses_shared_helper(self) -> None:
         expected_keys = {
             "type": self.system_type,
-            "a_space": "surface", "a_x": 123, "a_y": -45, "a_z": 28,
-            "a_geometry": "concrete",
-            "b_space": "level", "b_level_uid": "level-b",
-            "b_x": 124, "b_y": -45, "b_z": 28, "b_geometry": "concrete",
+            "source_space": "surface", "source_x": 123, "source_y": -45, "source_z": 28,
+            "source_geometry": "concrete",
+            "destination_space": "level", "destination_level_uid": "level-destination",
+            "destination_x": 124, "destination_y": -45, "destination_z": 28, "destination_geometry": "concrete",
         }
         with patch(
             "app.application.worldData.transitions.transitionIdentity.entity_uid",
             wraps=entity_uid,
         ) as mint:
-            uid = transition_uid("world", self.system_type, self.a, self.b)
+            uid = transition_uid("world", self.system_type, self.source, self.destination)
         mint.assert_called_once_with("world", UidKind.TRANSITION, **expected_keys)
         self.assertEqual(uid, entity_uid("world", UidKind.TRANSITION, **expected_keys))
         self.assertEqual(UUID(uid).version, 5)
 
     def test_repeat_and_wire_field_order_do_not_change_identity(self) -> None:
-        uid = transition_uid("world", self.system_type, self.a, self.b)
+        uid = transition_uid("world", self.system_type, self.source, self.destination)
         reordered = TransitionEndpoint.model_validate({"z": 28, "y": -45, "x": 123})
-        self.assertEqual(uid, transition_uid("world", self.system_type, reordered, self.b))
-        self.assertEqual(uid, transition_uid("world", self.system_type, self.a, self.b))
+        self.assertEqual(uid, transition_uid("world", self.system_type, reordered, self.destination))
+        self.assertEqual(uid, transition_uid("world", self.system_type, self.source, self.destination))
 
     def test_side_order_is_not_sorted_or_discarded(self) -> None:
         self.assertNotEqual(
-            transition_uid("world", self.system_type, self.a, self.b),
-            transition_uid("world", self.system_type, self.b, self.a),
+            transition_uid("world", self.system_type, self.source, self.destination),
+            transition_uid("world", self.system_type, self.destination, self.source),
         )
 
     def test_world_type_and_final_coordinates_distinguish_identity(self) -> None:
-        base = transition_uid("world", self.system_type, self.a, self.b)
+        base = transition_uid("world", self.system_type, self.source, self.destination)
         variants = [
-            transition_uid("other-world", self.system_type, self.a, self.b),
-            transition_uid("world", self.registry.require("service_entrance"), self.a, self.b),
+            transition_uid("other-world", self.system_type, self.source, self.destination),
+            transition_uid("world", self.registry.require("service_entrance"), self.source, self.destination),
         ]
-        for side in ("a", "b"):
-            endpoint = self.a if side == "a" else self.b
+        for side in ("source", "destination"):
+            endpoint = self.source if side == "source" else self.destination
             for coordinate in ("x", "y", "z"):
                 wire = endpoint.model_dump()
                 wire[coordinate] += 10
                 moved = TransitionEndpoint.model_validate(wire)
-                a, b = (moved, self.b) if side == "a" else (self.a, moved)
-                variants.append(transition_uid("world", self.system_type, a, b))
+                source, destination = (moved, self.destination) if side == "source" else (self.source, moved)
+                variants.append(transition_uid("world", self.system_type, source, destination))
         self.assertNotIn(base, variants)
         self.assertEqual(len(set(variants)), len(variants))
 
     def test_explicit_refs_and_space_are_identity_inputs(self) -> None:
         endpoints = [
-            self.a,
-            TransitionEndpoint(x=123, y=-45, z=28, host_location_uid="host-a"),
-            TransitionEndpoint(x=123, y=-45, z=28, host_location_uid="host-b"),
-            TransitionEndpoint(x=123, y=-45, z=28, node_uid="node-a"),
-            TransitionEndpoint(x=123, y=-45, z=28, node_uid="node-b"),
-            TransitionEndpoint(space="level", level_uid="level-a", x=123, y=-45, z=28),
-            TransitionEndpoint(space="level", level_uid="level-b", x=123, y=-45, z=28),
+            self.source,
+            TransitionEndpoint(x=123, y=-45, z=28, host_location_uid="host-source"),
+            TransitionEndpoint(x=123, y=-45, z=28, host_location_uid="host-destination"),
+            TransitionEndpoint(x=123, y=-45, z=28, node_uid="node-source"),
+            TransitionEndpoint(x=123, y=-45, z=28, node_uid="node-destination"),
+            TransitionEndpoint(space="level", level_uid="level-source", x=123, y=-45, z=28),
+            TransitionEndpoint(space="level", level_uid="level-destination", x=123, y=-45, z=28),
         ]
-        ids = {transition_uid("world", self.system_type, endpoint, self.b) for endpoint in endpoints}
+        ids = {transition_uid("world", self.system_type, endpoint, self.destination) for endpoint in endpoints}
         self.assertEqual(len(ids), len(endpoints))
 
     def test_symbolic_surface_marker_has_no_none_or_fake_xyz(self) -> None:
@@ -83,18 +83,18 @@ class TransitionIdentityTest(unittest.TestCase):
             "app.application.worldData.transitions.transitionIdentity.entity_uid",
             wraps=entity_uid,
         ) as mint:
-            symbolic_uid = transition_uid("world", self.system_type, symbolic, self.b)
+            symbolic_uid = transition_uid("world", self.system_type, symbolic, self.destination)
         keys = mint.call_args.kwargs
-        self.assertEqual(keys["a_geometry"], "symbolic")
-        self.assertEqual({key for key in keys if key.startswith("a_")},
-                         {"a_space", "a_geometry"})
+        self.assertEqual(keys["source_geometry"], "symbolic")
+        self.assertEqual({key for key in keys if key.startswith("source_")},
+                         {"source_space", "source_geometry"})
         self.assertNotIn(None, keys.values())
         self.assertNotEqual(symbolic_uid, transition_uid(
-            "world", self.system_type, TransitionEndpoint(x=0, y=0, z=0), self.b,
+            "world", self.system_type, TransitionEndpoint(x=0, y=0, z=0), self.destination,
         ))
         self.assertEqual(symbolic_uid, transition_uid(
             "world", self.system_type,
-            TransitionEndpoint.model_validate({"host_location_uid": None, "node_uid": None}), self.b,
+            TransitionEndpoint.model_validate({"host_location_uid": None, "node_uid": None}), self.destination,
         ))
 
     def test_custom_system_key_keeps_its_own_identity(self) -> None:
@@ -103,15 +103,15 @@ class TransitionIdentityTest(unittest.TestCase):
         ])
         custom_key = registry.require("royal_entry")
         self.assertNotEqual(
-            transition_uid("world", custom_key, self.a, self.b),
-            transition_uid("world", self.system_type, self.a, self.b),
+            transition_uid("world", custom_key, self.source, self.destination),
+            transition_uid("world", self.system_type, self.source, self.destination),
         )
 
     def test_aggregate_and_serialized_projection_preserve_uid_without_remint(self) -> None:
-        uid = transition_uid("world", self.system_type, self.a, self.b)
+        uid = transition_uid("world", self.system_type, self.source, self.destination)
         aggregate = Transition(
             transition_uid=uid, world_uid="world", system_transition_type=self.system_type,
-            a=self.a, b=self.b,
+            source=self.source, destination=self.destination,
         )
         with patch(
             "app.application.worldData.transitions.transitionIdentity.entity_uid",
@@ -123,19 +123,19 @@ class TransitionIdentityTest(unittest.TestCase):
         self.assertEqual(uid, from_json.transition_uid)
         changed = Transition.model_validate({
             **aggregate.model_dump(mode="json"),
-            "side_b": {"is_discovered": False, "is_accessible": False,
+            "destination_side": {"is_discovered": False, "is_accessible": False,
                        "entry_difficulty_override": 75},
             "display_name": "Новое имя", "is_active": False,
         })
         self.assertEqual(uid, transition_uid(
-            changed.world_uid, changed.system_transition_type, changed.a, changed.b,
+            changed.world_uid, changed.system_transition_type, changed.source, changed.destination,
         ))
 
     def test_runtime_creation_uses_existing_random_helper(self) -> None:
-        a, b = runtime_uid(), runtime_uid()
-        self.assertNotEqual(a, b)
-        self.assertEqual(UUID(a).version, 4)
-        self.assertEqual(UUID(b).version, 4)
+        source, destination = runtime_uid(), runtime_uid()
+        self.assertNotEqual(source, destination)
+        self.assertEqual(UUID(source).version, 4)
+        self.assertEqual(UUID(destination).version, 4)
 
 
 if __name__ == "__main__":

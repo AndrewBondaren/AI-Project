@@ -13,8 +13,8 @@ type SideOverride = Annotated[StrictInt, Field(ge=0, le=100)]
 
 
 class TransitionSideId(StrEnum):
-    A = "a"
-    B = "b"
+    SOURCE = "source"
+    DESTINATION = "destination"
 
 
 class TransitionSide(BaseModel):

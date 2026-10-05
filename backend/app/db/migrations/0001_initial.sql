@@ -863,7 +863,7 @@ CREATE TABLE IF NOT EXISTS location_passages (
 
 -- ============================================================
 -- transitions (additive physical aggregate; legacy passages remain until F1)
--- Defaults/behavior are supplied by the Transition POJO, not by a second SQL registry.
+-- Defaults/behavior are supplied by the Transition POJO, not by source second SQL registry.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS transitions (
     transition_uid         TEXT PRIMARY KEY NOT NULL,
@@ -877,33 +877,33 @@ CREATE TABLE IF NOT EXISTS transitions (
     display_name           TEXT,
     glossary_ref           TEXT,
     tag_refs               TEXT NOT NULL CHECK (json_valid(tag_refs) AND json_type(tag_refs) = 'array'),
-    a_space                TEXT NOT NULL CHECK (a_space IN ('surface', 'level')),
-    a_level_uid            TEXT REFERENCES location_levels(level_uid),
-    a_host_location_uid    TEXT REFERENCES named_locations(location_uid),
-    a_node_uid             TEXT REFERENCES connection_nodes(node_uid),
-    a_x                    INTEGER,
-    a_y                    INTEGER,
-    a_z                    INTEGER,
-    b_space                TEXT NOT NULL CHECK (b_space IN ('surface', 'level')),
-    b_level_uid            TEXT REFERENCES location_levels(level_uid),
-    b_host_location_uid    TEXT REFERENCES named_locations(location_uid),
-    b_node_uid             TEXT REFERENCES connection_nodes(node_uid),
-    b_x                    INTEGER,
-    b_y                    INTEGER,
-    b_z                    INTEGER,
-    CHECK ((a_space = 'surface' AND a_level_uid IS NULL) OR
-           (a_space = 'level' AND a_level_uid IS NOT NULL AND a_x IS NOT NULL AND a_y IS NOT NULL AND a_z IS NOT NULL)),
-    CHECK ((b_space = 'surface' AND b_level_uid IS NULL) OR
-           (b_space = 'level' AND b_level_uid IS NOT NULL AND b_x IS NOT NULL AND b_y IS NOT NULL AND b_z IS NOT NULL)),
-    CHECK ((a_x IS NULL AND a_y IS NULL AND a_z IS NULL) OR
-           (typeof(a_x) = 'integer' AND typeof(a_y) = 'integer' AND typeof(a_z) = 'integer')),
-    CHECK ((b_x IS NULL AND b_y IS NULL AND b_z IS NULL) OR
-           (typeof(b_x) = 'integer' AND typeof(b_y) = 'integer' AND typeof(b_z) = 'integer'))
+    source_space                TEXT NOT NULL CHECK (source_space IN ('surface', 'level')),
+    source_level_uid            TEXT REFERENCES location_levels(level_uid),
+    source_host_location_uid    TEXT REFERENCES named_locations(location_uid),
+    source_node_uid             TEXT REFERENCES connection_nodes(node_uid),
+    source_x                    INTEGER,
+    source_y                    INTEGER,
+    source_z                    INTEGER,
+    destination_space                TEXT NOT NULL CHECK (destination_space IN ('surface', 'level')),
+    destination_level_uid            TEXT REFERENCES location_levels(level_uid),
+    destination_host_location_uid    TEXT REFERENCES named_locations(location_uid),
+    destination_node_uid             TEXT REFERENCES connection_nodes(node_uid),
+    destination_x                    INTEGER,
+    destination_y                    INTEGER,
+    destination_z                    INTEGER,
+    CHECK ((source_space = 'surface' AND source_level_uid IS NULL) OR
+           (source_space = 'level' AND source_level_uid IS NOT NULL AND source_x IS NOT NULL AND source_y IS NOT NULL AND source_z IS NOT NULL)),
+    CHECK ((destination_space = 'surface' AND destination_level_uid IS NULL) OR
+           (destination_space = 'level' AND destination_level_uid IS NOT NULL AND destination_x IS NOT NULL AND destination_y IS NOT NULL AND destination_z IS NOT NULL)),
+    CHECK ((source_x IS NULL AND source_y IS NULL AND source_z IS NULL) OR
+           (typeof(source_x) = 'integer' AND typeof(source_y) = 'integer' AND typeof(source_z) = 'integer')),
+    CHECK ((destination_x IS NULL AND destination_y IS NULL AND destination_z IS NULL) OR
+           (typeof(destination_x) = 'integer' AND typeof(destination_y) = 'integer' AND typeof(destination_z) = 'integer'))
 );
 
 CREATE TABLE IF NOT EXISTS transition_sides (
     transition_uid            TEXT NOT NULL REFERENCES transitions(transition_uid) ON DELETE CASCADE,
-    side                      TEXT NOT NULL CHECK (side IN ('a', 'b')),
+    side                      TEXT NOT NULL CHECK (side IN ('source', 'destination')),
     owner_location_uid        TEXT REFERENCES named_locations(location_uid),
     is_discovered             INTEGER NOT NULL CHECK (is_discovered IN (0, 1)),
     is_accessible             INTEGER NOT NULL CHECK (is_accessible IN (0, 1)),
@@ -916,10 +916,10 @@ CREATE TABLE IF NOT EXISTS transition_sides (
 );
 
 CREATE INDEX IF NOT EXISTS idx_transitions_world ON transitions(world_uid);
-CREATE INDEX IF NOT EXISTS idx_transitions_a_level ON transitions(world_uid, a_level_uid);
-CREATE INDEX IF NOT EXISTS idx_transitions_b_level ON transitions(world_uid, b_level_uid);
-CREATE INDEX IF NOT EXISTS idx_transitions_a_node ON transitions(world_uid, a_node_uid);
-CREATE INDEX IF NOT EXISTS idx_transitions_b_node ON transitions(world_uid, b_node_uid);
+CREATE INDEX IF NOT EXISTS idx_transitions_source_level ON transitions(world_uid, source_level_uid);
+CREATE INDEX IF NOT EXISTS idx_transitions_destination_level ON transitions(world_uid, destination_level_uid);
+CREATE INDEX IF NOT EXISTS idx_transitions_source_node ON transitions(world_uid, source_node_uid);
+CREATE INDEX IF NOT EXISTS idx_transitions_destination_node ON transitions(world_uid, destination_node_uid);
 CREATE INDEX IF NOT EXISTS idx_transition_sides_owner ON transition_sides(owner_location_uid, side, transition_uid);
 
 -- ============================================================

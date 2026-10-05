@@ -20,7 +20,7 @@ class TransitionRows:
 def validate_transition_row_projection() -> None:
     """A new POJO field must be projected, never silently dropped by intersection."""
     endpoint_names = {side.value for side in TransitionSideId}
-    side_names = {f"side_{side}" for side in TransitionSideId}
+    side_names = {f"{side}_side" for side in TransitionSideId}
     scalar_names = Transition.model_fields.keys() - endpoint_names - side_names
     endpoint_columns = {f"{side}_{name}" for side in TransitionSideId
                         for name in TransitionEndpoint.model_fields}
@@ -37,15 +37,16 @@ def to_transition_rows(transition: Transition) -> TransitionRows:
     wire = transition.model_dump(mode="json")
     scalar_fields = {field.name for field in fields(TransitionRow)} & Transition.model_fields.keys()
     projected = {name: wire[name] for name in scalar_fields}
-    for side, endpoint in ((TransitionSideId.A, transition.a), (TransitionSideId.B, transition.b)):
+    for side, endpoint in ((TransitionSideId.SOURCE, transition.source),
+                           (TransitionSideId.DESTINATION, transition.destination)):
         projected.update({f"{side}_{name}": value
                           for name, value in endpoint.model_dump(mode="json").items()})
     row = TransitionRow(**projected)
     sides = tuple(
         TransitionSideRow(transition_uid=transition.transition_uid, side=side.value,
                           **state.model_dump(mode="json"))
-        for side, state in ((TransitionSideId.A, transition.side_a),
-                            (TransitionSideId.B, transition.side_b))
+        for side, state in ((TransitionSideId.SOURCE, transition.source_side),
+                            (TransitionSideId.DESTINATION, transition.destination_side))
     )
     return TransitionRows(row, sides)
 
@@ -60,7 +61,7 @@ def from_transition_rows(
         raise ValueError("transition aggregate requires exactly two sides")
     by_side = {TransitionSideId(side.side): side for side in sides}
     if set(by_side) != set(TransitionSideId):
-        raise ValueError("transition aggregate requires sides a and b")
+        raise ValueError("transition aggregate requires sides source and destination")
     if any(side.transition_uid != row.transition_uid for side in sides):
         raise ValueError("side belongs to another transition")
     scalar_fields = {field.name for field in fields(TransitionRow)} & Transition.model_fields.keys()
@@ -68,6 +69,6 @@ def from_transition_rows(
     for side in TransitionSideId:
         wire[side.value] = {name: getattr(row, f"{side}_{name}")
                             for name in TransitionEndpoint.model_fields}
-        wire[f"side_{side}"] = {name: getattr(by_side[side], name)
+        wire[f"{side}_side"] = {name: getattr(by_side[side], name)
                                 for name in TransitionSide.model_fields}
     return Transition.model_validate(wire, context={"transition_type_registry": registry})

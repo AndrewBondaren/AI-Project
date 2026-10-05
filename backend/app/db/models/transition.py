@@ -19,17 +19,17 @@ class TransitionRow:
     display_name: str | None
     glossary_ref: str | None
     tag_refs: list[str] = field(metadata={"db_type": "json_list"})
-    a_space: str
-    a_level_uid: str | None
-    a_host_location_uid: str | None
-    a_node_uid: str | None
-    a_x: int | None
-    a_y: int | None
-    a_z: int | None
-    b_space: str
-    b_level_uid: str | None
-    b_host_location_uid: str | None
-    b_node_uid: str | None
-    b_x: int | None
-    b_y: int | None
-    b_z: int | None
+    source_space: str
+    source_level_uid: str | None
+    source_host_location_uid: str | None
+    source_node_uid: str | None
+    source_x: int | None
+    source_y: int | None
+    source_z: int | None
+    destination_space: str
+    destination_level_uid: str | None
+    destination_host_location_uid: str | None
+    destination_node_uid: str | None
+    destination_x: int | None
+    destination_y: int | None
+    destination_z: int | None

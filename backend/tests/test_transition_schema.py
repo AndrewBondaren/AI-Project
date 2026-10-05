@@ -54,15 +54,15 @@ class TransitionSchemaTest(unittest.IsolatedAsyncioTestCase):
                   registry=None, **wire) -> Transition:
         registry = registry or self.registry
         key = registry.require(system_type)
-        a = TransitionEndpoint() if symbolic else TransitionEndpoint(
+        source = TransitionEndpoint() if symbolic else TransitionEndpoint(
             x=123, y=-45, z=28, host_location_uid="host", node_uid="node",
         )
-        b = TransitionEndpoint(space="level", level_uid="level", x=124, y=-45, z=28)
+        destination = TransitionEndpoint(space="level", level_uid="level", x=124, y=-45, z=28)
         return Transition.model_validate({
-            "transition_uid": transition_uid("world", key, a, b),
+            "transition_uid": transition_uid("world", key, source, destination),
             "world_uid": "world", "system_transition_type": key,
-            "a": a, "b": b,
-            "side_b": {"owner_location_uid": "building", "entry_difficulty_override": 0},
+            "source": source, "destination": destination,
+            "destination_side": {"owner_location_uid": "building", "entry_difficulty_override": 0},
             **wire,
         }, context={"transition_type_registry": registry})
 
@@ -107,7 +107,7 @@ class TransitionSchemaTest(unittest.IsolatedAsyncioTestCase):
             system_type="staircase", type_params={"staircase_type": "spiral"},
             access_mechanic=["key", "lockpick"], origin="authored", is_active=False,
             display_name="Лестница", glossary_ref="stairs", tag_refs=["stone"],
-            side_a={"is_accessible": False, "is_discovered": False,
+            source_side={"is_accessible": False, "is_discovered": False,
                     "guard_level_override": 100, "display_name": "Улица"},
         )
         self.assertEqual(aggregate, await self.stored_aggregate(aggregate))
@@ -118,10 +118,10 @@ class TransitionSchemaTest(unittest.IsolatedAsyncioTestCase):
         aggregate = self.aggregate(symbolic=True)
         restored = await self.stored_aggregate(aggregate)
         self.assertEqual(aggregate, restored)
-        self.assertIsNone(restored.a.geometry)
-        self.assertIsNone(restored.a.host_location_uid)
-        self.assertIsNone(restored.side_a.owner_location_uid)
-        async with self.db.conn.execute("SELECT a_x, a_y, a_z, access_mechanic, type_params, tag_refs FROM transitions") as cursor:
+        self.assertIsNone(restored.source.geometry)
+        self.assertIsNone(restored.source.host_location_uid)
+        self.assertIsNone(restored.source_side.owner_location_uid)
+        async with self.db.conn.execute("SELECT source_x, source_y, source_z, access_mechanic, type_params, tag_refs FROM transitions") as cursor:
             row = await cursor.fetchone()
         self.assertEqual(tuple(row), (None, None, None, "[]", "{}", "[]"))
 
@@ -134,11 +134,11 @@ class TransitionSchemaTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_sql_rejects_partial_or_invalid_geometry_and_space(self) -> None:
         row = to_transition_rows(self.aggregate(symbolic=True)).transition
-        for change in ({"a_x": 1}, {"a_x": 1, "a_y": 2},
-                       {"a_x": 1.5, "a_y": 2, "a_z": 3},
-                       {"a_space": "unknown"}, {"a_level_uid": "level"},
-                       {"a_space": "level", "a_level_uid": "level"},
-                       {"b_level_uid": None}, {"b_x": None}):
+        for change in ({"source_x": 1}, {"source_x": 1, "source_y": 2},
+                       {"source_x": 1.5, "source_y": 2, "source_z": 3},
+                       {"source_space": "unknown"}, {"source_level_uid": "level"},
+                       {"source_space": "level", "source_level_uid": "level"},
+                       {"destination_level_uid": None}, {"destination_x": None}):
             with self.subTest(change=change), self.assertRaises(sqlite3.IntegrityError):
                 await self.insert(replace(row, **change))
 
@@ -159,11 +159,11 @@ class TransitionSchemaTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_foreign_keys_cover_world_levels_hosts_nodes_and_owners(self) -> None:
         rows = to_transition_rows(self.aggregate())
-        for field in ("world_uid", "a_level_uid", "b_level_uid", "a_host_location_uid",
-                      "b_host_location_uid", "a_node_uid", "b_node_uid"):
+        for field in ("world_uid", "source_level_uid", "destination_level_uid", "source_host_location_uid",
+                      "destination_host_location_uid", "source_node_uid", "destination_node_uid"):
             change = {field: "missing"}
-            if field == "a_level_uid":
-                change["a_space"] = "level"
+            if field == "source_level_uid":
+                change["source_space"] = "level"
             with self.subTest(field=field), self.assertRaises(sqlite3.IntegrityError):
                 await self.insert(replace(rows.transition, **change))
         await self.insert(rows.transition)
@@ -212,8 +212,8 @@ class TransitionSchemaTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue({"portal_type", "portal_destinations", "portal_bidirectional"} <= columns)
         async with self.db.conn.execute("PRAGMA index_list(transitions)") as cursor:
             names = {row["name"] for row in await cursor.fetchall()}
-        self.assertTrue({"idx_transitions_a_level", "idx_transitions_b_level",
-                         "idx_transitions_a_node", "idx_transitions_b_node"} <= names)
+        self.assertTrue({"idx_transitions_source_level", "idx_transitions_destination_level",
+                         "idx_transitions_source_node", "idx_transitions_destination_node"} <= names)
         async with self.db.conn.execute("PRAGMA index_info(idx_transition_sides_owner)") as cursor:
             self.assertEqual([row["name"] for row in await cursor.fetchall()],
                              ["owner_location_uid", "side", "transition_uid"])

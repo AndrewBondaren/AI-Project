@@ -64,7 +64,7 @@ class TransitionEndpoint(BaseModel):
     def identity_keys(self) -> dict[str, str | int]:
         """Canonical C3 input: no None, display, side state or inferred refs.
 
-        The wrapper prefixes these keys with a/b, preserving endpoint order.
+        The wrapper prefixes these keys with source/destination, preserving endpoint order.
         A real (0, 0, 0) differs from symbolic surface.
         """
         marker = EndpointIdentityGeometry(
