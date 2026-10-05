@@ -82,13 +82,16 @@ transitions
   is_bidirectional      bool   -- одна строка на переход; смысл ТОЛЬКО у типов с directional=true (portal, fall); остальные игнорируют (решено)
   origin                'authored' | 'generated' | 'runtime'   -- кто создал (import / generator / game action)
   is_active             bool   -- переход работает (портал выключен, дверь замурована)
+  access_mechanic       JSON list[str]  -- проход ЗАКРЫТ; перечисленные механики его открывают (lockpick, key, excavation, teleport, …); [] = открыт (К9)
+  type_params           JSON   -- параметры builtin-типа, pydantic per type (§7); portal: portal_type graph|coordinate, blocked_behavior_override
   display_name, glossary_ref, tag_refs
   -- endpoint a
   a_level_uid           FK location_levels, nullable
   a_host_location_uid   FK named_locations, nullable   -- хост при a_level_uid IS NULL
   a_x, a_y, a_z         int (глобальные map_cells)
+  a_node_uid            FK connection_nodes, nullable   -- endpoint лежит на узле графа (portal graph-типа, ворота, порог) — К7
   -- endpoint b
-  b_level_uid, b_host_location_uid, b_x, b_y, b_z   -- симметрично
+  b_level_uid, b_host_location_uid, b_x, b_y, b_z, b_node_uid   -- симметрично
   -- вертикаль implicit: a_z ≠ b_z
 
 transition_sides

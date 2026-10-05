@@ -7,6 +7,7 @@ from app.dataModel.materials.materialRegistryEntry import MaterialRegistryEntry
 from app.db.models.world import World
 
 from app.dataModel.materials import (
+    DEFAULT_DOMINANT_MATERIAL,
     DEFAULT_FLOOR_MATERIAL,
     DEFAULT_WALL_MATERIAL,
 )
@@ -70,6 +71,32 @@ def resolve_material(
         return default
 
     return rng.choice(found)
+
+
+def fold_dominant_material(
+    world:    World,
+    objects,
+    resolved: dict,
+) -> str:
+    """Cascade fold for ``dominant_material`` (tz_cascade_context §3,
+    cascade-migration M10): tier → material_registry pick between the
+    authored chain and the canonical default. Same seed formula as the
+    retired resolve-site rng — bit-exact pick parity; per-param stream,
+    never shared with tier materialize (§4)."""
+    if world is None:
+        raise ValueError("dominant_material: fold requires world")
+    scope_uid = next(
+        (obj.location_uid for obj in objects
+         if getattr(obj, "location_uid", None)),
+        "",
+    )
+    fold_rng = Random(
+        f"{world.world_uid}_{scope_uid}_dominant_material"
+    )
+    return resolve_material(
+        world, "wall", resolved.get("economic_tier"), fold_rng,
+        DEFAULT_DOMINANT_MATERIAL,
+    )
 
 
 def resolve_room_materials(

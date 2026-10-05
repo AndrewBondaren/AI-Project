@@ -26,14 +26,10 @@ from app.application.worldData.context.cascadeLog import (
     log_scope_resolve,
 )
 from app.application.worldData.generators.utils.economicTierBands import (
-    materialize_band,
-)
-from app.application.worldData.generators.utils.tierRegistry import (
-    tier_rank,
-    tiers_sorted,
+    materialize_tier_input,
 )
 from app.application.worldData.generators.utils.materialResolver import (
-    resolve_material,
+    fold_dominant_material,
 )
 from app.dataModel.locations.context.cascadeParams import (
     CITY_SIZE,
@@ -57,7 +53,6 @@ from app.dataModel.locations.settlement.enums.districtDensity import (
 )
 from app.dataModel.materials import (
     CONSTRUCTION_MATERIAL_DEFAULTS,
-    DEFAULT_DOMINANT_MATERIAL,
 )
 from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     WorldSettlementSizeRegistry,
@@ -220,48 +215,7 @@ def _materialize(param, kind, raw, anchor, world, rng):
         raise ValueError(
             f"no materialize bound for param {param.field!r} kind={kind}"
         )
-    if world is None:
-        raise ValueError("economic_tier: materialize requires world")
-    if kind is ChannelKind.BAND:
-        if anchor is None and rng is None:
-            raise ValueError(
-                "economic_tier: band materialize without anchor "
-                "requires rng"
-            )
-        return materialize_band(world, raw, rng, anchor_tier=anchor)
-    if kind is ChannelKind.RANGE:
-        return _materialize_tier_range(world, raw, anchor, rng)
-    raise ValueError(f"economic_tier: unknown channel kind {kind}")
-
-
-def _materialize_tier_range(world, raw, anchor, rng):
-    """EconomicTierRange → tier: nearest to the inherited anchor inside
-    ``[min, max]``; without anchor — rng pick (tz_cascade_context §4)."""
-    registry = economic_tiers(world).root
-    lo = tier_rank(registry, raw.min, world_uid=world.world_uid)
-    hi = tier_rank(registry, raw.max, world_uid=world.world_uid)
-    candidates = [
-        entry.system_tier
-        for index, entry in enumerate(tiers_sorted(registry))
-        if lo <= index <= hi
-    ]
-    if not candidates:
-        return None
-    if anchor is None:
-        if rng is None:
-            raise ValueError(
-                "economic_tier: range materialize without anchor "
-                "requires rng"
-            )
-        return rng.choice(candidates)
-    anchor_rank = tier_rank(registry, anchor, world_uid=world.world_uid)
-    return min(
-        candidates,
-        key=lambda tier: abs(
-            tier_rank(registry, tier, world_uid=world.world_uid)
-            - anchor_rank
-        ),
-    )
+    return materialize_tier_input(world, kind, raw, anchor, rng)
 
 
 def _apply_fold(param, level, objects, resolved, world):
@@ -271,23 +225,9 @@ def _apply_fold(param, level, objects, resolved, world):
     cascade-migration M10). Bound by identity, like ``_materialize``
     and ``_resolve_default`` — no callable lives in dataModel."""
     if param is DOMINANT_MATERIAL:
-        if world is None:
-            raise ValueError("dominant_material: fold requires world")
-        # Same seed formula as the retired resolve-site rng — bit-exact
-        # pick parity; per-param stream, never shared with tier
-        # materialize (§4).
-        scope_uid = next(
-            (obj.location_uid for obj in objects
-             if getattr(obj, "location_uid", None)),
-            "",
-        )
-        fold_rng = Random(
-            f"{world.world_uid}_{scope_uid}_dominant_material"
-        )
-        picked = resolve_material(
-            world, "wall", resolved.get("economic_tier"), fold_rng,
-            DEFAULT_DOMINANT_MATERIAL,
-        )
+        picked = fold_dominant_material(world, objects, resolved)
+        if picked is None:
+            return None, None
         return picked, (level, f"fold:{param.fold}")
     raise ValueError(f"no fold bound for param {param.field!r}")
 
