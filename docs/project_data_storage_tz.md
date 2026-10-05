@@ -1261,6 +1261,58 @@ Lookup: `alias → { category, system_name, current_value }`.
 - **Валидация при записи** — перед сохранением нового стата/скилла/резиста alias проверяется против текущего AliasRegistry; коллизия блокирует сохранение с явной ошибкой: `Alias "Fr" уже используется: стат "Fire"`
 - **Обновление в памяти** — после любого изменения схемы (добавить/переименовать/удалить стат/скилл/резист) AliasRegistry обновляется немедленно; коллизия никогда не попадает в БД
 
+### Детерминированные uid и rng (**DET-1**, cross-cutting)
+
+Повторная генерация мира с тем же входом даёт **те же** uid сущностей и те
+же rng-потоки — ссылки между SQL, pack-файлами и якорями сцены переживают
+regenerate. Это достигается **одной** конвенцией формулы, принуждённой
+кодом, а не договорённостью.
+
+**Единственное место формулы:** `app/application/worldData/ids/` — helper
+домена **worldData**, **вне всех генераторов** (`worldData/generators/**`
+только импортируют его). Не `app/utils/` (это не общая утилита, а контракт
+домена мира), не `dataModel/` (формула — application-слой; сегодняшний
+`dataModel/worldPack/packJobUid.py` — переезжает/становится тонкой обёрткой),
+не внутри генератора/ассемблера/persist-сервиса. Вне helper'а
+`uuid.uuid5(...)`, `uuid4()` для generated-сущностей, `Random(f"...")`,
+`random.seed(...)` — **запрещены** (правило `.cursor/rules/deterministic-ids.mdc`;
+grep-тест на `uuid5(` / `Random(f` вне helper'а). Текущий
+`app/utils/deterministicIds.py` → переносится в `worldData/ids/`.
+
+**Два корня — разные функции одного helper'а, не две конвенции:**
+
+| Корень | Функции | Что выводится | Правило |
+|---|---|---|---|
+| `world_uid` | `entity_uid(world_uid, kind, **keys)`, `entity_rng(world_uid, kind, **keys)` | **идентичность сущностей**: `named_locations`, `location_levels`, `transitions`, `connection_nodes/edges`, district/area/building uid; rng каскада (fold, materialize) | «**что это**» — пересев мира не меняет идентичность локаций |
+| `world_seed` | `seed_uid(world_seed, kind, **keys)`, `seed_rng(world_seed, kind, **keys)` | **воспроизводимость bake**: pack job-uid (tile/chunk/edge), relief grade instance, terrain/climate rng | «**как сгенерировано**» — другой seed = другой рельеф при тех же локациях |
+
+Uid сущности от `world_seed` или bake-rng от `world_uid` — ошибка контракта.
+
+**Контракт функций:**
+
+- `kind: UidKind` — **закрытый** `StrEnum` тегов доменов (`district`, `area`,
+  `building`, `level`, `transition`, `city_node`, `tile`, `chunk`, …). Свободная
+  строка запрещена — защита от коллизий одинаковых тегов в разных доменах.
+- `**keys` — именованные параметры; сериализация `k=v` в **отсортированном**
+  порядке ключей → порядок передачи не влияет на uid. Строка читаема в логе:
+  `"<world_uid>|transition|a=12,4,0|b=12,4,-1|type=hatch"`.
+- Нормализация значений: `StrEnum` → `.value`, `int` → `str`, кортеж → через
+  запятую; `None` — **ошибка**, не `"None"`.
+- Иерархия — через ключ `parent=<uid>` (building от area, level от building):
+  цепочка всё равно упирается в корень.
+- Тонкие типизированные обёртки per домен (`entry_uid(...)`, `level_uid(...)`,
+  `transition_uid(...)`) **остаются** — они фиксируют *какие* ключи обязательны;
+  ядро фиксирует *формат*. Обёртка не имеет права собирать строку сама.
+- `origin='runtime'`-сущности (созданы игровым действием) — `uuid4`, через
+  `runtime_uid()` того же helper'а; генерацией не воспроизводятся.
+
+**Смена формулы = смена всех uid.** Внедрение — **одним шагом** на все
+домены: recreate SQL (schema-policy) + пересборка pack (`l.{uid}.*.zst`,
+tiles). Не мигрировать по доменам — иначе период с двумя формулами.
+
+Потребители-SoT: `tz_location_transitions.md` инв. 10, `tz_settlement_outdoor`
+extract uids, `tz_world_pack_storage` job-uid, `tz_cascade_context` §4 rng.
+
 ---
 
 ## Система миграции (общая)

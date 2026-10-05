@@ -31,14 +31,6 @@ from app.application.worldData.generators.utils.economicTierBands import (
 from app.application.worldData.generators.utils.materialResolver import (
     fold_dominant_material,
 )
-from app.dataModel.locations.context.cascadeParams import (
-    CITY_SIZE,
-    DOMINANT_MATERIAL,
-    ECONOMIC_TIER,
-    FLOOR_MATERIAL,
-    SETTLEMENT_DENSITY,
-    WALL_MATERIAL,
-)
 from app.dataModel.cascade.cascadeGraph import (
     check_link,
     ordered_chain,
@@ -46,44 +38,66 @@ from app.dataModel.cascade.cascadeGraph import (
 from app.dataModel.cascade.cascadeSpec import (
     Cascade,
     ChannelKind,
+    DefaultPolicy,
 )
 from app.dataModel.locations.context.locationContext import LocationContext
-from app.dataModel.locations.settlement.enums.districtDensity import (
-    DistrictDensity,
+
+
+# Cascade-annotated fields of the context model — computed once: the
+# model is frozen, the scan would be identical on every ``extend()``.
+_CASCADE_FIELDS: tuple[tuple[str, Cascade], ...] = tuple(
+    (name, param)
+    for name, info in LocationContext.model_fields.items()
+    for param in (
+        next(
+            (m for m in info.metadata if isinstance(m, Cascade)),
+            None,
+        ),
+    )
+    if param is not None
 )
-from app.dataModel.materials import (
-    CONSTRUCTION_MATERIAL_DEFAULTS,
-)
-from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
-    WorldSettlementSizeRegistry,
-)
+
+
+# Resolver bindings — the single place where names declared on
+# ``Cascade`` (tz_cascade_context §3) meet their callables. Domain
+# callables live in their own modules; the engine holds pointers, not
+# logic.
+_MATERIALIZE = {
+    "economic_tier": materialize_tier_input,
+}
+_FOLDS = {
+    "dominant_material": fold_dominant_material,
+}
+_REGISTRIES = {
+    "economic_tiers": economic_tiers,
+}
+
+
+def _check_bindings() -> None:
+    """Every resolver/registry name declared on a ``Cascade`` param of
+    the context model must resolve to a callable — declaration and
+    binding table are two facts that must not silently disagree."""
+    for _name, param in _CASCADE_FIELDS:
+        for name, table, what in (
+            (param.materialize, _MATERIALIZE, "materialize"),
+            (param.fold, _FOLDS, "fold"),
+            (param.default_registry, _REGISTRIES, "default_registry"),
+        ):
+            if name is not None and name not in table:
+                raise ValueError(
+                    f"{what} {name!r} of param {param.field!r} "
+                    "has no binding"
+                )
+
+
+_check_bindings()
 
 
 def extend(
     ctx: LocationContext, *links: Link, rng: Random | None = None,
 ) -> LocationContext:
     """Add one scope level of links; return a new resolved context."""
-    levels = {link.level for link in links}
-    if len(levels) != 1:
-        raise ValueError(
-            "extend() takes links of exactly one scope level"
-        )
-    level = levels.pop()
-    if type(level) is not type(ctx.level):
-        raise ValueError(
-            f"link axis {type(level).__name__} does not match "
-            f"context axis {type(ctx.level).__name__}"
-        )
-    if level.rank <= ctx.level.rank:
-        raise ValueError(
-            f"level {level.value} is not strictly below "
-            f"{ctx.level.value}"
-        )
-    if level.rank > ctx.level.rank + 1:
-        raise ValueError(
-            f"level {level.value} skips a level after "
-            f"{ctx.level.value}"
-        )
+    level = _check_level(ctx, links)
     objects = []
     for link in links:
         if link.obj is None:
@@ -96,7 +110,7 @@ def extend(
 
     provenance = dict(ctx.provenance)
     update = {"level": level}
-    params: dict[str, str] = {}
+    params: dict[str, tuple] = {}
 
     def _resolve_field(name: str, param: Cascade) -> None:
         inherited_source = ctx.provenance.get(name)
@@ -111,9 +125,16 @@ def extend(
                 value, source = getattr(ctx, name), inherited_source
             else:
                 if param.fold is not None:
-                    value, source = _apply_fold(
-                        param, level, objects, update, ctx._world,
-                    )
+                    fold = _FOLDS.get(param.fold)
+                    if fold is None:
+                        raise ValueError(
+                            f"no fold bound for param {param.field!r}"
+                        )
+                    picked = fold(ctx._world, objects, update)
+                    if picked is not None:
+                        value, source = (
+                            picked, (level, f"fold:{param.fold}"),
+                        )
                 if source is None:
                     value = _resolve_default(param, ctx._world)
                     source = (next(iter(param.axis)),
@@ -126,36 +147,15 @@ def extend(
                     )
         update[name] = value
         provenance[name] = source
-        parent = (
-            f"{inherited_source[0].value}.{inherited_source[1]}"
-            if inherited_source is not None
-            else "none"
-        )
-        child = (
-            f"{source[0].value}.{source[1]}"
-            if source != inherited_source
-            else "none"
-        )
-        params[name] = f"{value} parent={parent} child={child}"
+        params[name] = (value, inherited_source, source)
 
-    cascade_fields = [
-        (name, param)
-        for name, info in LocationContext.model_fields.items()
-        for param in (
-            next(
-                (m for m in info.metadata if isinstance(m, Cascade)),
-                None,
-            ),
-        )
-        if param is not None
-    ]
     # Fold params resolve in a second pass — their resolver reads this
     # level's freshly resolved values (e.g. the dominant-material pick
     # uses the tier resolved at this same scope).
-    for name, param in cascade_fields:
+    for name, param in _CASCADE_FIELDS:
         if param.fold is None:
             _resolve_field(name, param)
-    for name, param in cascade_fields:
+    for name, param in _CASCADE_FIELDS:
         if param.fold is not None:
             _resolve_field(name, param)
     update["provenance"] = provenance
@@ -191,9 +191,17 @@ def _resolve(param, level, objects, inherited, inherited_source, world, rng):
             continue
         if channel.kind is ChannelKind.VALUE:
             return raw, (node.level, f"{owner.__name__}.{node.field}")
-        materialized = _materialize(
-            param, channel.kind, raw, anchor, world, rng,
+        resolver = (
+            _MATERIALIZE.get(param.materialize)
+            if param.materialize
+            else None
         )
+        if resolver is None:
+            raise ValueError(
+                f"no materialize bound for param {param.field!r} "
+                f"kind={channel.kind}"
+            )
+        materialized = resolver(world, channel.kind, raw, anchor, rng)
         if materialized is not None:
             return materialized, (node.level,
                                   f"{owner.__name__}.{node.field}")
@@ -210,53 +218,55 @@ def _link_object(
     return None
 
 
-def _materialize(param, kind, raw, anchor, world, rng):
-    if param is not ECONOMIC_TIER:
-        raise ValueError(
-            f"no materialize bound for param {param.field!r} kind={kind}"
-        )
-    return materialize_tier_input(world, kind, raw, anchor, rng)
-
-
-def _apply_fold(param, level, objects, resolved, world):
-    """``Cascade.fold`` binding — the per-param derived resolver that
-    sits between the authored chain and the domain default, for params
-    whose semantics is not pure first-non-null (tz_cascade_context §3,
-    cascade-migration M10). Bound by identity, like ``_materialize``
-    and ``_resolve_default`` — no callable lives in dataModel."""
-    if param is DOMINANT_MATERIAL:
-        picked = fold_dominant_material(world, objects, resolved)
-        if picked is None:
-            return None, None
-        return picked, (level, f"fold:{param.fold}")
-    raise ValueError(f"no fold bound for param {param.field!r}")
-
-
 def _resolve_default(param: Cascade, world):
-    """Domain default through the POJO policy; the engine logs the
-    fallback (cascadeLog) — REGISTRY_MEDIAN warns once per chain
-    (missing after the whole cascade = caller bug)."""
-    if param is ECONOMIC_TIER:
+    """Domain default through the declared policy: canonical values are
+    declared on the param (``default_value``), registry policies resolve
+    through the named world registry (``default_registry`` →
+    ``_REGISTRIES``). The engine logs the fallback (cascadeLog) —
+    REGISTRY_MEDIAN warns once per chain (missing after the whole
+    cascade = caller bug)."""
+    if param.default is DefaultPolicy.CANONICAL_DEFAULT:
+        return param.default_value
+    if param.default is DefaultPolicy.REGISTRY_MEDIAN:
         if world is None:
             raise ValueError(
-                "economic_tier: no cascade value and no world for "
+                f"{param.field}: no cascade value and no world for "
                 "the registry median"
             )
-        return economic_tiers(world).resolve_default(param.default)
-    if param is CITY_SIZE:
-        # Canonical rank (dataModel policy, not world registry).
-        return WorldSettlementSizeRegistry.default_system_size()
-    if param is SETTLEMENT_DENSITY:
-        # Canonical enum default (dataModel policy, not a literal).
-        return DistrictDensity.default()
-    if param is WALL_MATERIAL:
-        # Canonical construction default (dataModel policy, M9).
-        return CONSTRUCTION_MATERIAL_DEFAULTS.wall
-    if param is FLOOR_MATERIAL:
-        return CONSTRUCTION_MATERIAL_DEFAULTS.floor
-    if param is DOMINANT_MATERIAL:
-        # Canonical construction default (dataModel policy, M10).
-        return CONSTRUCTION_MATERIAL_DEFAULTS.dominant
+        accessor = _REGISTRIES.get(param.default_registry or "")
+        if accessor is None:
+            raise ValueError(
+                f"no registry bound for param {param.field!r} "
+                f"({param.default_registry!r})"
+            )
+        return accessor(world).resolve_default(param.default)
     raise ValueError(
         f"no default policy bound for param {param.field!r}"
     )
+
+
+def _check_level(ctx: LocationContext, links: tuple[Link, ...]):
+    """All links carry exactly one scope level, strictly below
+    ``ctx.level`` and adjacent to it on the same axis."""
+    levels = {link.level for link in links}
+    if len(levels) != 1:
+        raise ValueError(
+            "extend() takes links of exactly one scope level"
+        )
+    level = levels.pop()
+    if type(level) is not type(ctx.level):
+        raise ValueError(
+            f"link axis {type(level).__name__} does not match "
+            f"context axis {type(ctx.level).__name__}"
+        )
+    if level.rank <= ctx.level.rank:
+        raise ValueError(
+            f"level {level.value} is not strictly below "
+            f"{ctx.level.value}"
+        )
+    if level.rank > ctx.level.rank + 1:
+        raise ValueError(
+            f"level {level.value} skips a level after "
+            f"{ctx.level.value}"
+        )
+    return level

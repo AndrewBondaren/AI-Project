@@ -19,23 +19,46 @@ def log_scope_resolve(
     *,
     level: str,
     objects: list[str],
-    params: dict[str, str],
+    params: dict[str, tuple],
 ) -> None:
     """DEBUG per ``extend()`` boundary — level, link object types and
     the per-param handoff ``value parent=<src|none> child=<src|none>``:
     ``parent=none`` — the param is its own top parent; ``child=none`` —
-    nothing fed it at this boundary (pure inheritance)."""
+    nothing fed it at this boundary (pure inheritance).
+
+    ``params`` carries the raw resolution record per field —
+    ``(value, inherited_source, new_source)``; the ``parent=``/``child=``
+    presentation is shaped here, not in the engine.
+    """
+    formatted = {
+        name: _format_handoff(value, inherited, source)
+        for name, (value, inherited, source) in params.items()
+    }
     logger.debug(
         "cascade scope | level=%s objects=%s params=%s",
         level,
         ",".join(objects) if objects else "-",
-        params or "-",
+        formatted or "-",
         extra={
             "activity": "scope_resolve",
             "scope_level": level,
-            "params": params or None,
+            "params": formatted or None,
         },
     )
+
+
+def _format_handoff(value, inherited_source, source) -> str:
+    parent = (
+        f"{inherited_source[0].value}.{inherited_source[1]}"
+        if inherited_source is not None
+        else "none"
+    )
+    child = (
+        f"{source[0].value}.{source[1]}"
+        if source != inherited_source
+        else "none"
+    )
+    return f"{value} parent={parent} child={child}"
 
 
 def log_default_applied(
