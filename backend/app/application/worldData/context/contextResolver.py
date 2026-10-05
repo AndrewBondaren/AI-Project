@@ -15,13 +15,16 @@ channel that needs it (no anchor) requires it — missing rng is a
 caller bug, never a silent skip.
 """
 
-import logging
 from random import Random
 
 from pydantic import BaseModel
 
 from app.application.jsonValidation import economic_tiers
 from app.application.worldData.context.cascadeLink import Link
+from app.application.worldData.context.cascadeLog import (
+    log_default_applied,
+    log_scope_resolve,
+)
 from app.application.worldData.generators.utils.economicTierBands import (
     materialize_band,
 )
@@ -52,8 +55,6 @@ from app.dataModel.materials import CONSTRUCTION_MATERIAL_DEFAULTS
 from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     WorldSettlementSizeRegistry,
 )
-
-logger = logging.getLogger(__name__)
 
 
 def extend(
@@ -93,6 +94,7 @@ def extend(
 
     provenance = dict(ctx.provenance)
     update = {"level": level}
+    params: dict[str, str] = {}
     for name, info in LocationContext.model_fields.items():
         param = next(
             (m for m in info.metadata if isinstance(m, Cascade)), None,
@@ -113,12 +115,34 @@ def extend(
                 value = _resolve_default(param, ctx._world)
                 source = (next(iter(param.axis)),
                           f"default:{param.default.value}")
+                log_default_applied(
+                    param=param.field,
+                    level=level.value,
+                    policy=param.default,
+                    value=value,
+                )
         update[name] = value
         provenance[name] = source
+        parent = (
+            f"{inherited_source[0].value}.{inherited_source[1]}"
+            if inherited_source is not None
+            else "none"
+        )
+        child = (
+            f"{source[0].value}.{source[1]}"
+            if source != inherited_source
+            else "none"
+        )
+        params[name] = f"{value} parent={parent} child={child}"
     update["provenance"] = provenance
     new_ctx = ctx.model_copy(update=update)
     new_ctx._world = ctx._world
     new_ctx._links = stored
+    log_scope_resolve(
+        level=level.value,
+        objects=[type(obj).__name__ for obj in objects],
+        params=params,
+    )
     return new_ctx
 
 
@@ -212,8 +236,9 @@ def _materialize_tier_range(world, raw, anchor, rng):
 
 
 def _resolve_default(param: Cascade, world):
-    """Domain default through the POJO policy — REGISTRY_MEDIAN warns
-    on the registry (missing after the whole cascade = caller bug)."""
+    """Domain default through the POJO policy; the engine logs the
+    fallback (cascadeLog) — REGISTRY_MEDIAN warns once per chain
+    (missing after the whole cascade = caller bug)."""
     if param is ECONOMIC_TIER:
         if world is None:
             raise ValueError(

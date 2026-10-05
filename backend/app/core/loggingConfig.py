@@ -95,6 +95,11 @@ _PREFIX_ROUTES: tuple[tuple[str, str, str], ...] = tuple(
                 "climateLog",
             ),
             (
+                "app.application.worldData.context",
+                "cascade",
+                "cascadeLog",
+            ),
+            (
                 "app.application.jsonValidation",
                 "jsonValidation",
                 "resolve",
@@ -120,6 +125,7 @@ SERVER_SINKS: frozenset[tuple[str, str]] = frozenset({
     ("jsonValidation", "resolve"),
     ("settlement", "settlementAssembler"),
     ("structure", "headroom"),
+    ("cascade", "cascadeLog"),
     ("core", "runtime"),
 })
 

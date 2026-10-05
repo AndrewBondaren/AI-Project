@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import RootModel
@@ -16,8 +15,6 @@ from app.dataModel.registryKey import RegistryKey
 
 if TYPE_CHECKING:
     from app.dataModel.cascade.cascadeSpec import DefaultPolicy
-
-logger = logging.getLogger(__name__)
 
 
 class WorldEconomyTierRegistry(RootModel[list[EconomyTierEntry]]):
@@ -57,7 +54,6 @@ class WorldEconomyTierRegistry(RootModel[list[EconomyTierEntry]]):
                 if not tiers:
                     raise ValueError("economic_tier: cannot resolve median of an empty registry")
                 tier = tiers[len(tiers) // 2].system_tier
-                logger.warning("economic_tier: no value in cascade; using registry median %r", tier)
                 return tier
             case DefaultPolicy.NONE_IS_ERROR:
                 raise ValueError("economic_tier: no value after the cascade")

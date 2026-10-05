@@ -532,8 +532,7 @@ class ExtendResolutionTests(unittest.TestCase):
         self.assertEqual(ctx.economic_tier, "t5")
 
     def test_median_warns_once_at_first_empty_scope(self):
-        module = ("app.dataModel.economy.economyTier"
-                  ".worldEconomyTierRegistry")
+        module = "app.application.worldData.context.cascadeLog"
         ctx = extend(
             LocationContext.root(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),

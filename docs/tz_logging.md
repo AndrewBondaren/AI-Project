@@ -71,6 +71,7 @@ backend/logs/{domain}/{service}.log
 | `jsonValidation` | `resolve` | `logs/jsonValidation/resolve.log` | server | DefaultOnWire / RegistryKey fallback (`json_validation \| …`); settlement size miss → medium; **LOC-T-3** settlement volume ERROR | [`resolve.py`](../backend/app/application/jsonValidation/resolve.py) · [`settlementSizeResolve.py`](../backend/app/application/jsonValidation/settlementSizeResolve.py) · [`tz_json_validation.md`](./tz_json_validation.md) §0 RegistryKey · [`tz_locations.md`](./tz_locations.md) **LOC-T-3** |
 | `settlement` | `settlementAssembler` | `logs/settlement/settlementAssembler.log` | server | C22 packing DEBUG/INFO/WARNING; шторм `fit` только файл (L8) | ⬜ хелпер по образцу relief `log.py` / climate `loggingHelpers` · [connections](./tz_structure_connections.md) §5.1.3 «Debug packing» |
 | `structure` | `headroom` | `logs/structure/headroom.log` | server | post-gen ERROR, не abort | [`tz_building_generator.md`](./tz_building_generator.md) § Headroom (образец R44) |
+| `cascade` | `cascadeLog` | `logs/cascade/cascadeLog.log` | server | `scope_resolve` DEBUG на границу scope (parent/child по provenance на параметр); `default_applied` — WARNING для `REGISTRY_MEDIAN` (один раз на цепочку), DEBUG для canonical-дефолтов | [`cascadeLog.py`](../backend/app/application/worldData/context/cascadeLog.py) · [`contextResolver.py`](../backend/app/application/worldData/context/contextResolver.py) · [`tz_cascade_context.md`](./tz_cascade_context.md) §4 |
 | `core` | `runtime` | `logs/core/runtime.log` | server | непойманные server-логгеры (uvicorn / fastapi / …); **не** `app.log` | [`loggingConfig.py`](../backend/app/core/loggingConfig.py) |
 | `script` | `detailedBake` | `logs/script/detailedBake.log` | script | poll HTTP, summary скрипта | [`detailed_bake.py`](../backend/scripts/detailed_bake.py) |
 | `script` | `lightAndFullBake` | `logs/script/lightAndFullBake.log` | script | light→full smoke | [`light_and_full_bake.py`](../backend/scripts/light_and_full_bake.py) |
@@ -96,6 +97,7 @@ backend/logs/{domain}/{service}.log
 | `app.application.worldData.generators.climate` / climate assembler | `climate` | `climateLog` |
 | `app.application.jsonValidation` | `jsonValidation` | `resolve` |
 | `app.application.worldData.generators.assemblers` (кроме `climateAssembler` → `climate`) | `settlement` | `settlementAssembler` |
+| `app.application.worldData.context` | `cascade` | `cascadeLog` |
 | `backend/scripts/{stem}.py` после `ensure_script_logging` | `script` | camelCase stem |
 | непойманный (профиль server) | `core` | `runtime` |
 
@@ -145,6 +147,7 @@ backend/logs/{domain}/{service}.log
 
 | Дата | Изменение |
 |---|---|
+| 2026-10-05 | Консьюмер `cascade` / `cascadeLog`: `scope_resolve` DEBUG на `extend()`, `default_applied` WARNING (`REGISTRY_MEDIAN`, один раз на цепочку) — эмиссия в движке, не в POJO-политике. |
 | 2026-09-20 | `packBakeLog` ERROR: C11 / location L2, uid не pin `locations_index` (`reason=not_in_locations_index`); skip, не abort. |
 | 2026-09-13 | `packBakeLog`: heartbeat C11/C23 (`settlement_c11_*`, `settlement_topology_*`). |
 | 2026-09-07 | Консьюмер `jsonValidation` / `resolve`: DefaultOnWire + settlement size fallback (`medium`). |

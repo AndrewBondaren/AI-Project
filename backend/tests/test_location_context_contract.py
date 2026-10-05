@@ -127,19 +127,19 @@ class LocationContextContractTests(unittest.TestCase):
                           "wall_material": None, "floor_material": None,
                           "provenance": {}})
 
-    def test_default_median_sorts_and_uses_upper_middle_with_warning(self):
+    def test_default_median_sorts_and_uses_upper_middle_silently(self):
+        # The POJO policy returns the median without logging — the
+        # cascade engine emits the warning (cascade/cascadeLog).
         for entries, expected in (([("high", 90), ("low", 0), ("medium", 10)], "medium"),
                                   ([("high", 90), ("low", 0)], "high"),
                                   ([("only", 20)], "only")):
             with self.subTest(entries=entries):
                 tiers = registry(entries)
                 original = list(tiers.root)
-                with self.assertLogs(WorldEconomyTierRegistry.__module__, level="WARNING") as logged:
+                with self.assertNoLogs(level="WARNING"):
                     tier = tiers.resolve_default(DefaultPolicy.REGISTRY_MEDIAN)
                 self.assertEqual(tier, expected)
                 self.assertIsInstance(tier, RegistryKey)
-                self.assertEqual(len(logged.records), 1)
-                self.assertIn(expected, logged.output[0])
                 self.assertEqual(tiers.root, original)
 
     def test_missing_registry_or_unsupported_policy_is_an_error(self):

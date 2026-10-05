@@ -249,7 +249,7 @@ class CascadeContextBaselineTests(unittest.TestCase):
         # to the registry median — even when a deeper authored link
         # later overrides the provisional default.
         world, building, _ = fixture()
-        log_target = WorldEconomyTierRegistry.__module__
+        log_target = "app.application.worldData.context.cascadeLog"
         with self.assertLogs(log_target, level="WARNING") as captured:
             self.assertEqual(
                 debug_building_context(world, building).economic_tier, "t5",

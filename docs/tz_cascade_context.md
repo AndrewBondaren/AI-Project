@@ -181,7 +181,7 @@ class LocationContext(ContextModel):
 | Элемент `Cascade` | Назначение |
 |---|---|
 | `field` | Имя канонического authored/stamp-поля параметра (`system_economic_tier`, `parent_wall_material`, …) — объявлено один раз, проверяется верификатором против `model_fields` источников |
-| `default` | `DefaultPolicy` — ссылка на **политику POJO** (`REGISTRY_MEDIAN`, `CANONICAL_DEFAULT`, `NONE_IS_ERROR`); реализацию держит POJO домена поля (для тира — `WorldEconomyTierRegistry`: median + WARNING). Callables и литералы в dataModel не живут — движок знает только, как вызвать политику с `world` (`dataModel-no-hardcode.mdc`) |
+| `default` | `DefaultPolicy` — ссылка на **политику POJO** (`REGISTRY_MEDIAN`, `CANONICAL_DEFAULT`, `NONE_IS_ERROR`); реализацию держит POJO домена поля (для тира — `WorldEconomyTierRegistry`: median). Callables и литералы в dataModel не живут — движок знает только, как вызвать политику с `world` (`dataModel-no-hardcode.mdc`). WARNING о provisional default эмитит движок — §4 «Логирование» |
 | `fold` | Опциональный полный per-param resolver — для параметров, которым first-non-null недостаточно (точечно, не режим движка) |
 | `levels` | Опционально (v1 не использует): ограничение подмножества уровней для будущих полей (climate anchor и пр.); покрытие уровней каналами проверяется непрерывностью цепочки рёбер |
 | `axis` | Ось scope'ов параметра (`type[ScopeAxis]` — для locations `ScopeLevel`); канал на чужой оси — ошибка контракта |
@@ -289,6 +289,16 @@ materialize-ится на границе area и никогда не переб�
 - **Provenance обязателен** в контексте: WARNING «взято с уровня X /
   domain default» вместо silent median.
 
+**Логирование** (sink `cascade`/`cascadeLog` —
+[`tz_logging.md`](tz_logging.md) §Каталог; эмиссия только через доменный
+хелпер `cascadeLog` в движке, не из POJO и не голым `getLogger`):
+
+| Событие | Уровень | Когда |
+|---|---|---|
+| `scope_resolve` | DEBUG | конец каждого `extend()`: `level`, типы link-объектов и по каждому параметру `value parent=<уровень.Model.поле или none> child=<уровень.Model.поле или default:<policy> или none>`; `parent=none` — параметр сам главный родитель (нет наследованного источника), `child=none` — на этой границе ребёнка нет (чистое наследование) |
+| `default_applied` | WARNING | первый scope, где параметр встал на provisional default политики `REGISTRY_MEDIAN` — один раз на цепочку (provisional default не переварнивается на нижних scope); поля: `param`, `level`, `policy`, `value` |
+| `default_applied` | DEBUG | то же для тихих политик (`CANONICAL_DEFAULT` и пр. без WARNING) |
+
 ---
 
 ## 5. Параметры v1 и кандидаты на расширение
@@ -297,7 +307,7 @@ materialize-ится на границе area и никогда не переб�
 
 | Параметр | `Cascade` | Источники по уровням | Domain default |
 |---|---|---|---|
-| `economic_tier` | `field="system_economic_tier"`, `default=REGISTRY_MEDIAN` | room: `rooms[].economic_tier`; building: NL поле; area: `plot.economic_tier` → `_band` → `_range`; district: `district_template.economic_tier_range` (materialize); settlement: NL поле / skeleton `economic_tier` | `median_system_tier` + WARNING (`DefaultPolicy.REGISTRY_MEDIAN`, POJO `WorldEconomyTierRegistry`) |
+| `economic_tier` | `field="system_economic_tier"`, `default=REGISTRY_MEDIAN` | room: `rooms[].economic_tier`; building: NL поле; area: `plot.economic_tier` → `_band` → `_range`; district: `district_template.economic_tier_range` (materialize); settlement: NL поле / skeleton `economic_tier` | `median_system_tier`; WARNING от движка (`DefaultPolicy.REGISTRY_MEDIAN`, POJO `WorldEconomyTierRegistry`) |
 
 Каскад тира — полный: room → building NL → area (plot) → district
 (range) → settlement → `REGISTRY_MEDIAN`. Мёртвый сегодня канал
