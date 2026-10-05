@@ -1,4 +1,24 @@
-﻿pip install fastapi uvicorn httpx pydantic
+﻿# AI-Project
+
+## Philosophy
+
+An interesting game in this project is the combination of three independent components:
+
+**Game = Engine × World × LLM**
+
+- **Engine** provides persistent state, rules, causality, simulation, physical space, actions, time, memory, and constraints. The world exists independently of the language model.
+- **World** provides authored meaning: history, characters, conflicts, creatures, cities, mechanics, and narrative hooks. Interesting content is subjective, so the engine is intended to support author-created worlds instead of enforcing one universal setting.
+- **LLM** provides interpretation, variability, character decisions, free-form interaction, and narration where deterministic code is not enough. The engine does not try to make an LLM smarter; it controls the environment in which the model operates: what it can know, its role, model-specific DSL/instructions, input/output contracts, available tools, validation, mutation authority, model assignment, and when an LLM call is needed.
+
+The core principle is:
+
+> **The goal is not to build a good LLM. The goal is to build a good environment for any sufficiently capable LLM.**
+
+The engine maintains a consistent reality and its consequences. The world author decides what makes that reality interesting. The LLM gets relative freedom to act and create narrative inside those boundaries without replacing the world or its rules.
+
+---
+
+pip install fastapi uvicorn httpx pydantic
 
 # Install project for dev
 1. python -m venv .venv
