@@ -52,6 +52,15 @@ class TestWorldMapHydrologyRoleMerge(unittest.TestCase):
 
 class TestWorldPackWire(unittest.TestCase):
 
+    def test_building_shell_legacy_has_no_interior_claim(self):
+        from app.dataModel.worldPack.settlementStructureWire import BuildingShellWire
+
+        shell = BuildingShellWire.model_validate({
+            "location_uid": "house", "shell_cells": [{"x": 1, "y": 2, "z": 3}],
+        })
+        self.assertIsNone(shell.interior_transitions)
+        self.assertEqual(BuildingShellWire.model_validate_json(shell.model_dump_json()), shell)
+
     def test_manifest_roundtrip_json(self):
         manifest = WorldPackManifest(
             world_uid="w-test",

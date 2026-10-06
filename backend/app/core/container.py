@@ -1,4 +1,13 @@
+from collections.abc import Mapping
+
 from app.core.settingsService import SettingsService
+from app.application.jsonValidation.worldRow import transition_types
+from app.application.worldData.transitions.transitionService import TransitionService
+from app.db.models.connectionNode import ConnectionNode
+from app.db.models.locationLevel import LocationLevel
+from app.db.models.namedLocation import NamedLocation
+from app.db.repositories.iTransitionRepository import TransitionRepositoryContext
+from app.db.repositories.sqlite.transitionRepository import SqliteTransitionRepository
 from app.application.llm.clients.qwenClient import QwenClient
 from app.application.llm.clients.openAIClient import OpenAIClient
 from app.application.llm.clients.anthropicClient import AnthropicClient
@@ -589,6 +598,15 @@ class Container:
         if self._world_service is None:
             self._world_service = WorldService(repo=self.world_repository())
         return self._world_service
+
+    def transition_service(
+        self, world: World, *, levels: Mapping[str, LocationLevel],
+        locations: Mapping[str, NamedLocation], nodes: Mapping[str, ConnectionNode],
+    ) -> TransitionService:
+        # A fresh world-bound scope prevents reuse of another world's registry/reference snapshot.
+        registry = transition_types(world)
+        context = TransitionRepositoryContext(world.world_uid, registry, levels, locations, nodes)
+        return TransitionService(SqliteTransitionRepository(self._db, context), registry)
 
     def relief_template_library_service(self) -> ReliefTemplateLibraryService:
         if self._relief_template_library_service is None:

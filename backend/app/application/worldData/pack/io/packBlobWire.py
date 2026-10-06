@@ -15,10 +15,12 @@ from app.application.worldData.pack.io.tileCodec import (
 from app.dataModel.worldPack.climateFieldWire import ClimateFieldWire
 from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
 from app.dataModel.worldPack.settlementStructureWire import (
+    BuildingShellWire,
     DistrictStructureWire,
     SettlementStructureWire,
     ShellCellWire,
 )
+from app.dataModel.locations.transitions.worldTransitionTypeRegistry import WorldTransitionTypeRegistry
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
 
 SETTLEMENT_STRUCTURE_FRAMES_MAGIC = b"SSF1"
@@ -58,8 +60,12 @@ def settlement_structure_payload(wire: SettlementStructureWire) -> dict:
     return wire.model_dump(mode="json")
 
 
-def parse_settlement_structure_payload(payload: dict) -> SettlementStructureWire:
-    return SettlementStructureWire.model_validate(payload)
+def parse_settlement_structure_payload(
+    payload: dict, *, registry: WorldTransitionTypeRegistry | None = None,
+) -> SettlementStructureWire:
+    return SettlementStructureWire.model_validate(
+        payload, context={"transition_type_registry": registry},
+    )
 
 
 def _compress_record(payload: dict, codec: TileCodec) -> bytes:
@@ -110,11 +116,12 @@ def write_settlement_structure_blob(
     *,
     existing: bytes | None,
     codec: TileCodec,
+    registry: WorldTransitionTypeRegistry | None = None,
 ) -> bytes:
     if not existing:
         return encode_settlement_structure_frames(wire, codec)
     if not is_settlement_structure_framed(existing):
-        old = parse_settlement_structure_blob(existing, codec)
+        old = parse_settlement_structure_blob(existing, codec, registry=registry)
         merged = SettlementStructureWire(
             settlement_uid=wire.settlement_uid or old.settlement_uid,
             barrier_cells=list(old.barrier_cells or wire.barrier_cells),
@@ -130,6 +137,7 @@ def write_settlement_structure_blob(
 def parse_settlement_structure_blob(
     data: bytes,
     codec: TileCodec,
+    *, registry: WorldTransitionTypeRegistry | None = None,
 ) -> SettlementStructureWire:
     if len(data) < BLOB_HEADER_SIZE:
         raise ValueError("blob too short for header")
@@ -141,16 +149,18 @@ def parse_settlement_structure_blob(
     rest = data[BLOB_HEADER_SIZE:]
     if rest.startswith(SETTLEMENT_STRUCTURE_FRAMES_MAGIC):
         return _parse_frames(
-            rest[len(SETTLEMENT_STRUCTURE_FRAMES_MAGIC):], codec,
+            rest[len(SETTLEMENT_STRUCTURE_FRAMES_MAGIC):], codec, registry=registry,
         )
     raw = codec.decompress(rest)
     payload = orjson.loads(raw)
     if not isinstance(payload, dict):
         raise ValueError("payload must be a JSON object")
-    return parse_settlement_structure_payload(payload)
+    return parse_settlement_structure_payload(payload, registry=registry)
 
 
-def _parse_frames(body: bytes, codec: TileCodec) -> SettlementStructureWire:
+def _parse_frames(
+    body: bytes, codec: TileCodec, *, registry: WorldTransitionTypeRegistry | None = None,
+) -> SettlementStructureWire:
     records: list[dict] = []
     offset = 0
     while offset < len(body):
@@ -169,7 +179,9 @@ def _parse_frames(body: bytes, codec: TileCodec) -> SettlementStructureWire:
     if not records:
         raise ValueError("settlement structure frames missing header")
     header = records[0]
-    districts = [DistrictStructureWire.model_validate(row) for row in records[1:]]
+    districts = [DistrictStructureWire.model_validate(
+        row, context={"transition_type_registry": registry},
+    ) for row in records[1:]]
     cells = [
         ShellCellWire.model_validate(row)
         for row in header.get("barrier_cells", [])
@@ -179,3 +191,23 @@ def _parse_frames(body: bytes, codec: TileCodec) -> SettlementStructureWire:
         barrier_cells=cells,
         districts=districts,
     )
+
+
+class InteriorTransitionsRebuildRequired(ValueError):
+    """The requested building was packed with the legacy shell-only contract."""
+
+
+def parse_building_interior_transitions_blob(
+    data: bytes, codec: TileCodec, *, building_uid: str,
+    registry: WorldTransitionTypeRegistry,
+) -> BuildingShellWire:
+    """Read the complete building from the settlement container, without a level index."""
+    wire = parse_settlement_structure_blob(data, codec, registry=registry)
+    for district in wire.districts:
+        for area in district.areas:
+            for building in area.buildings:
+                if building.location_uid == building_uid:
+                    if building.interior_transitions is None:
+                        raise InteriorTransitionsRebuildRequired(f"building {building_uid!r} requires interior transition pack rebuild")
+                    return building
+    raise KeyError(building_uid)
