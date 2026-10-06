@@ -1271,20 +1271,29 @@ regenerate. Это достигается **одной** конвенцией ф
 **Единственное место формулы:** `app/application/worldData/ids/` — helper
 домена **worldData**, **вне всех генераторов** (`worldData/generators/**`
 только импортируют его). Не `app/utils/` (это не общая утилита, а контракт
-домена мира), не `dataModel/` (формула — application-слой; сегодняшний
-`dataModel/worldPack/packJobUid.py` — переезжает/становится тонкой обёрткой),
-не внутри генератора/ассемблера/persist-сервиса. Вне helper'а
-`uuid.uuid5(...)`, `uuid4()` для generated-сущностей, `Random(f"...")`,
-`random.seed(...)` — **запрещены** (правило `.cursor/rules/deterministic-ids.mdc`;
-grep-тест на `uuid5(` / `Random(f` вне helper'а). Текущий
-`app/utils/deterministicIds.py` → переносится в `worldData/ids/`.
+домена мира), не `dataModel/` (формула — application-слой;
+`dataModel/worldPack/packJobUid.py` остаётся **wire-композитором** job/site
+строк — он не хэширует uid), не внутри генератора/ассемблера/persist-сервиса.
+Вне helper'а `uuid.uuid5(...)`, `uuid4()` для generated-сущностей,
+`Random(f"...")`, `random.seed(...)`, `hashlib.*` для uid/seed —
+**запрещены** (правило `.cursor/rules/deterministic-ids.mdc`; source-gate в
+`tests/test_deterministic_ids.py` сканирует `app/**`, исключения — `_EXEMPT`).
+Legacy `app/utils/deterministicIds.py` — **удалён** (миграция выполнена,
+`.cursor/plans/deterministic-ids-done.md`).
 
-**Два корня — разные функции одного helper'а, не две конвенции:**
+**Три корня — разные функции одного helper'а, не три конвенции:**
 
 | Корень | Функции | Что выводится | Правило |
 |---|---|---|---|
-| `world_uid` | `entity_uid(world_uid, kind, **keys)`, `entity_rng(world_uid, kind, **keys)` | **идентичность сущностей**: `named_locations`, `location_levels`, `transitions`, `connection_nodes/edges`, district/area/building uid; rng каскада (fold, materialize) | «**что это**» — пересев мира не меняет идентичность локаций |
-| `world_seed` | `seed_uid(world_seed, kind, **keys)`, `seed_rng(world_seed, kind, **keys)` | **воспроизводимость bake**: pack job-uid (tile/chunk/edge), relief grade instance, terrain/climate rng | «**как сгенерировано**» — другой seed = другой рельеф при тех же локациях |
+| `world_uid` | `entity_uid(world_uid, kind, **keys)`, `entity_rng(world_uid, kind, **keys)` | **идентичность сущностей**: `named_locations`, `location_levels`, `transitions`, `connection_nodes/edges`, district/area/building uid, relief grade/grade-system uid; rng каскада (fold, materialize) | «**что это**» — пересев мира не меняет идентичность локаций |
+| `world_seed` | `seed_uid(world_seed, kind, **keys)`, `seed_rng(world_seed, kind, **keys)` | **воспроизводимость bake**: pack job-uid (tile/chunk/edge), grade catalog face/interior uid, relief pick/kind-roll rng | «**как сгенерировано**» — другой seed = другой рельеф при тех же локациях |
+| — | `library_uid(library: LibraryKind, system_name)` | **глобальные библиотеки шаблонов** (`building_templates`, `relief_templates`) — без мирового корня | один шаблон = один uid на всю инсталляцию |
+
+`world_seed` пока = `seed_root(world)` = `str(world.world_uid)` (interim до
+колонки `World.seed` — `tz_terrain_relief.md` §334); числовой noise-seed —
+`seed_int(world)` (наследует legacy md5-вывод, bit-compat). Relief grade
+instance uid — корень `world_uid` (D5: grade — сущность мира); grade
+catalog/interior — `seed_uid` (R36w bake-репродукция).
 
 Uid сущности от `world_seed` или bake-rng от `world_uid` — ошибка контракта.
 
@@ -1306,9 +1315,10 @@ Uid сущности от `world_seed` или bake-rng от `world_uid` — ош
 - `origin='runtime'`-сущности (созданы игровым действием) — `uuid4`, через
   `runtime_uid()` того же helper'а; генерацией не воспроизводятся.
 
-**Смена формулы = смена всех uid.** Внедрение — **одним шагом** на все
-домены: recreate SQL (schema-policy) + пересборка pack (`l.{uid}.*.zst`,
-tiles). Не мигрировать по доменам — иначе период с двумя формулами.
+**Смена формулы = смена всех uid.** Миграция выполнена атомарно по доменам
+(`.cursor/plans/deterministic-ids-done.md`); при следующей смене формулы —
+снова recreate SQL (schema-policy) + пересборка pack (`l.{uid}.*.zst`, tiles)
++ реимпорт библиотек (`library_uid` сменил namespace URL → DNS).
 
 Потребители-SoT: `tz_location_transitions.md` инв. 10, `tz_settlement_outdoor`
 extract uids, `tz_world_pack_storage` job-uid, `tz_cascade_context` §4 rng.

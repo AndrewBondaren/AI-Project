@@ -1,12 +1,12 @@
 """DET-1 — canonical formula, three roots, closed kinds, source gate.
 
 SoT: docs/project_data_storage_tz.md § «Детерминированные uid и rng».
-Plan: .cursor/plans/deterministic-ids.md.
+Plan: .cursor/plans/deterministic-ids-done.md.
 
 Gate: uuid5/uuid4/Random(/random.seed/hashlib-seed и импорт legacy
 ``app.utils.deterministicIds`` вне ``application/worldData/ids`` запрещены;
-текущие нарушители сидят в ``_TODO`` до своего шага плана, постоянные
-исключения (content_hash, runtime ids вне worldData) — в ``_EXEMPT``.
+постоянные исключения (content_hash, runtime ids вне worldData, dataModel
+authored fallback) — в ``_EXEMPT``.
 """
 
 import hashlib
@@ -152,14 +152,6 @@ _EXEMPT = (
     "dataModel/races/raceTemplateOutline.py",
 )
 
-# Temporary whitelist — migrate per plan step; a file drops out of _TODO
-# when its step lands (stale entries fail the gate).
-_TODO = {
-    # step 9 — delete legacy helper
-    "utils/deterministicIds.py": 9,
-}
-
-
 class SourceGateTests(unittest.TestCase):
     def test_no_det_id_formula_outside_ids(self):
         app_root = Path(__file__).resolve().parents[1] / "app"
@@ -177,17 +169,12 @@ class SourceGateTests(unittest.TestCase):
 
         unexpected = {
             rel: hits for rel, hits in violations.items()
-            if rel not in _TODO and not rel.startswith(_EXEMPT)
+            if not rel.startswith(_EXEMPT)
         }
-        stale = [rel for rel in _TODO if rel not in violations]
         self.assertEqual(
             unexpected, {},
             "det-id formula sites outside worldData/ids — route through the "
-            f"helper or register a plan step in _TODO: {unexpected}",
-        )
-        self.assertEqual(
-            stale, [],
-            f"stale _TODO entries — remove after the step lands: {stale}",
+            f"helper or register a documented _EXEMPT: {unexpected}",
         )
 
 
