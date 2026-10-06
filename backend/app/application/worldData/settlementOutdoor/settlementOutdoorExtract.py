@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import (
     SettlementLayout,
@@ -33,10 +33,12 @@ from app.dataModel.locations.settlement.district.districtTopologySlot import (
     DistrictTopologySlot,
 )
 from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.transitions.transition import Transition
 from app.dataModel.worldPack.settlementStructureWire import (
     AreaSlotWire,
     AreaStructureWire,
     BuildingShellWire,
+    BuildingInteriorTransitionsWire,
     DistrictStructureWire,
     SettlementStructureWire,
 )
@@ -61,6 +63,8 @@ class ExtractedSettlement:
     nodes: list[ConnectionNode]
     edges: list[ConnectionEdge]
     wire: SettlementStructureWire
+    sql_transitions: list[Transition] = field(default_factory=list)
+    pack_by_building: dict[str, BuildingInteriorTransitionsWire] = field(default_factory=dict)
 
 
 @dataclass
@@ -68,6 +72,8 @@ class ExtractedTopology:
     districts: list[NamedLocation]
     nodes: list[ConnectionNode]
     edges: list[ConnectionEdge]
+    sql_transitions: list[Transition] = field(default_factory=list)
+    pack_by_building: dict[str, BuildingInteriorTransitionsWire] = field(default_factory=dict)
 
 
 def topology_slot_wire(slot: DistrictSlot, *, slot_index: int) -> DistrictTopologySlot:
