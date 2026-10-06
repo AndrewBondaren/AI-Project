@@ -21,6 +21,7 @@ from app.application.worldData.generators.hydrology.rivers.resolveDeclaredRiverP
     resolve_declared_river_intents,
 )
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
+from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
 
 FINE_PER_CELL = 1000
 
@@ -84,6 +85,24 @@ class TestCoarseMasterInput(unittest.TestCase):
         result = HydrologyGeneratorService().apply(w, [], hm)
         self.assertGreater(result.cells_modified, 0)
         self.assertTrue(set(result.cell_index.by_cell) <= set(hm.surface_z))
+
+    def test_river_into_lake_keeps_lake_cells(self):
+        river_into_lake = {**RIVER_ENDPOINTS, "source": _wp(9000, 9000), "mouth": _wp(5000, 5000)}
+        lake_only = HydrologyGeneratorService().apply(
+            _world({"declared_lakes": [LAKE]}), [], _flat_heightmap(10, 10),
+        )
+        with_river = HydrologyGeneratorService().apply(
+            _world({"declared_lakes": [LAKE], "declared_rivers": [river_into_lake]}),
+            [],
+            _flat_heightmap(10, 10),
+        )
+
+        def cells(result, role):
+            return {c for c, e in result.cell_index.by_cell.items() if e.role == role}
+
+        self.assertTrue(cells(lake_only, HydrologyCellRole.LAKE))
+        self.assertEqual(cells(with_river, HydrologyCellRole.LAKE), cells(lake_only, HydrologyCellRole.LAKE))
+        self.assertTrue(cells(with_river, HydrologyCellRole.RIVER_BED))
 
 
 class TestRiverIntentSpace(unittest.TestCase):

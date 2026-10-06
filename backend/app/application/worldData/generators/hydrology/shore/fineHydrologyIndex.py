@@ -78,7 +78,7 @@ def apply_declared_fine_river_carves(
             type_classify,
             space=CoordinateSpace.WORLD_FINE_GRID,
         ):
-            carved = carve_river_segment(hm, segment, depth_step=1)
+            carved = carve_river_segment(hm, segment, depth_step=1, occupied=merged_hydro)
             merged_hydro.update(carved)
             surface_z.update(hm.surface_z)
 

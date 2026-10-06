@@ -15,6 +15,7 @@ from app.application.worldData.generators.hydrology.types import (
 )
 from app.application.worldData.generators.terrain.types import SurfaceHeightmap
 from app.dataModel.hydrology.enums.hydrologyCellRole import HydrologyCellRole
+from app.dataModel.hydrology.mapCellHydrology import MapCellHydrology
 
 
 def _flat(z: int = 10) -> SurfaceHeightmap:
@@ -63,6 +64,31 @@ class TestRiverBedCarve(unittest.TestCase):
         self.assertEqual(hm.surface_z[(4, 3)], 9)
         self.assertEqual(carved[(4, 3)].role, HydrologyCellRole.RIVER_BED)
         self.assertEqual(carved[(4, 3)].connection_edge_uid, "ce-test")
+
+    def test_carve_keeps_open_water_at_mouth(self):
+        hm = _flat()
+        segment = RiverSegment(
+            polyline_cells=[(3, 3), (4, 3), (5, 3)],
+            connection_type="river",
+            edge_uid="ce-test",
+            declared=True,
+        )
+        occupied = {(5, 3): MapCellHydrology(role=HydrologyCellRole.LAKE)}
+        carved = carve_river_segment(hm, segment, depth_step=1, occupied=occupied)
+        self.assertEqual(set(carved), {(3, 3), (4, 3)})
+        self.assertEqual(hm.surface_z[(5, 3)], 10)
+
+    def test_carve_overwrites_shore(self):
+        hm = _flat()
+        segment = RiverSegment(
+            polyline_cells=[(3, 3), (4, 3)],
+            connection_type="river",
+            edge_uid="ce-test",
+            declared=True,
+        )
+        occupied = {(4, 3): MapCellHydrology(role=HydrologyCellRole.SHORE)}
+        carved = carve_river_segment(hm, segment, depth_step=1, occupied=occupied)
+        self.assertEqual(carved[(4, 3)].role, HydrologyCellRole.RIVER_BED)
 
 
 if __name__ == "__main__":
