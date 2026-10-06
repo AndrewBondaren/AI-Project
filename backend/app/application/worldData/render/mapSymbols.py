@@ -121,25 +121,19 @@ def render_map_legend(
 ) -> str:
     role_part = " ".join(f"{sym}={name}" for name, sym in ROLE_SYMBOLS.items())
     terrain_part = " ".join(f"{sym}={name}" for name, sym in TERRAIN_SYMBOLS.items())
-    registry = location_types or WorldLocationTypeRegistry.canonical_engine()
-    settlement = registry.entry_for("settlement")
-    if settlement is None:
-        settlement = WorldLocationTypeRegistry.canonical_engine().entry_for("settlement")
+    from app.dataModel.locations.payloadKind import PayloadKind
+
+    registry = location_types if location_types is not None else WorldLocationTypeRegistry.canonical_engine()
     parts: list[str] = []
-    seen: set[str] = set()
-    for entry in (settlement.subtypes if settlement is not None else []):
-        if not entry.l0_map_symbol or entry.system_subtype in seen:
+    seen: set[tuple[str, str]] = set()
+    for location_type in registry.root:
+        if location_type.payload_kind is not PayloadKind.SETTLEMENT:
             continue
-        seen.add(entry.system_subtype)
-        parts.append(f"{entry.l0_map_symbol}={entry.system_subtype}")
-    if not parts:
-        engine_settlement = WorldLocationTypeRegistry.canonical_engine().entry_for(
-            "settlement",
-        )
-        for entry in engine_settlement.subtypes if engine_settlement is not None else []:
-            if not entry.l0_map_symbol or entry.system_subtype in seen:
+        for entry in location_type.subtypes:
+            identity = (location_type.system_type, entry.system_subtype)
+            if not entry.l0_map_symbol or identity in seen:
                 continue
-            seen.add(entry.system_subtype)
+            seen.add(identity)
             parts.append(f"{entry.l0_map_symbol}={entry.system_subtype}")
     if not parts:
         parts.append(f"{SETTLEMENT_FOOTPRINT_SYMBOL}=city")

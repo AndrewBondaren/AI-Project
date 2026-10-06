@@ -1,4 +1,7 @@
 from fastapi import HTTPException
+from dataclasses import asdict
+from app.application.jsonValidation.worldRow import location_types
+from app.application.worldData.locationPayloadAccess import payload_field_names
 
 from app.application.importResult import ImportError, ImportResult
 from app.application.import_helpers import with_default_created_at
@@ -47,21 +50,33 @@ class NamedLocationService:
     _IMMUTABLE = frozenset({"location_uid", "world_uid"})
 
     @staticmethod
-    def _from_wire(row: dict, *, world_uid: str) -> NamedLocation:
-        wire = BundleNamedLocation.model_validate(with_default_created_at(row))
+    def _from_wire(row: dict, *, world_uid: str, world: World | None = None) -> NamedLocation:
+        wire = BundleNamedLocation.model_validate(
+            with_default_created_at(row),
+            context={"location_type_registry": location_types(world)} if world is not None else None,
+        )
         return NamedLocation(**{**wire.to_db_fields(), "world_uid": world_uid})
 
     async def create(self, world_uid: str, data: dict) -> NamedLocation:
-        loc = self._from_wire(data, world_uid=world_uid)
+        loc = self._from_wire(data, world_uid=world_uid, world=await self._world(world_uid))
         await self._emit_occupancy(world_uid, incoming=loc, replace_uid=None)
         await self._repo.create(loc)
         return loc
 
     async def update(self, world_uid: str, location_uid: str, data: dict) -> NamedLocation:
         loc = await self.get_by_id(world_uid, location_uid)
-        for key, value in data.items():
-            if hasattr(loc, key) and key not in self._IMMUTABLE:
-                setattr(loc, key, value)
+        world = await self._world(world_uid)
+        generic = {key: value for key, value in asdict(loc).items()
+                   if key not in payload_field_names()}
+        if loc.location_payload is None:
+            # Preserve existing legacy values while this row moves to payload.
+            generic["location_payload"] = self._from_wire(
+                asdict(loc), world_uid=world_uid, world=world,
+            ).location_payload
+        updates = {key: value for key, value in data.items()
+                   if key not in self._IMMUTABLE and key != "created_at"}
+        generic.update(updates)
+        loc = self._from_wire(generic, world_uid=world_uid, world=world)
         await self._emit_occupancy(world_uid, incoming=loc, replace_uid=location_uid)
         await self._repo.update(loc)
         return loc
@@ -77,16 +92,16 @@ class NamedLocationService:
     async def import_from_json(self, world_uid: str, data: list[dict]) -> ImportResult:
         prepared: list[tuple[int, NamedLocation]] = []
         errors: list[ImportError] = []
+        world = await self._world(world_uid)
         for index, row in enumerate(data):
             try:
-                prepared.append((index, self._from_wire(row, world_uid=world_uid)))
+                prepared.append((index, self._from_wire(row, world_uid=world_uid, world=world)))
             except Exception as exc:
                 errors.append(ImportError(
                     index=index,
                     message=str(exc),
                     entity_id=row.get("location_uid") if isinstance(row, dict) else None,
                 ))
-        world = await self._world(world_uid)
         if world is not None and prepared:
             indexed = await self._indexed_for_import(world_uid, prepared)
             picked = pick_occupants(world, indexed)

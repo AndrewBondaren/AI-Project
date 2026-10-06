@@ -232,7 +232,7 @@ class TestWorldMapPackRenderer(unittest.TestCase):
         self.assertIn("river_bed", legend)
         self.assertIn("u=city", legend)
         self.assertIn("n=village", legend)
-        self.assertIn("d=dungeon", legend)
+        self.assertIn("c=crypt", legend)
         self.assertIn("g=underground_city", legend)
         self.assertIn("not a location mark", legend)
 
@@ -332,16 +332,16 @@ class TestWorldMapPackRenderer(unittest.TestCase):
             ),
         ]
         self.assertEqual(wire_symbol(cell, pins=pins), "n")
-        dungeon = [
+        crypt = [
             LocationsIndexPin(
                 location_uid="d1",
                 map_x=0,
                 map_y=0,
-                system_location_type="settlement",
-                system_location_subtype="dungeon",
+                system_location_type="location_complex",
+                system_location_subtype="crypt",
             ),
         ]
-        self.assertEqual(wire_symbol(cell, pins=dungeon), "d")
+        self.assertEqual(wire_symbol(cell, pins=crypt), "c")
 
 
 if __name__ == "__main__":

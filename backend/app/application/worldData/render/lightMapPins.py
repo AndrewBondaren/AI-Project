@@ -12,18 +12,20 @@ from app.application.worldData.pack.read.packRenderReadFacade import PackTileLig
 from app.application.worldData.render.lightMosaicFrame import MosaicFrame
 from app.dataModel.locations.locationFootprintPolicy import is_settlement_map_site
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin
+from app.dataModel.locations.locationType.worldLocationTypeRegistry import WorldLocationTypeRegistry
 
 
-def pin_is_settlement_site(pin: LocationsIndexPin) -> bool:
+def pin_is_settlement_site(pin: LocationsIndexPin, *, registry: WorldLocationTypeRegistry | None = None) -> bool:
     return is_settlement_map_site(
         system_location_type=pin.system_location_type,
         system_location_subtype=pin.system_location_subtype,
+        registry=registry,
     )
 
 
-def location_mark_pins(pins: Iterable[LocationsIndexPin]) -> list[LocationsIndexPin]:
+def location_mark_pins(pins: Iterable[LocationsIndexPin], *, registry: WorldLocationTypeRegistry | None = None) -> list[LocationsIndexPin]:
     """Named locations that keep ``@`` — not city footprint sites."""
-    return [pin for pin in pins if not pin_is_settlement_site(pin)]
+    return [pin for pin in pins if not pin_is_settlement_site(pin, registry=registry)]
 
 
 def pin_macro(pin: LocationsIndexPin, tile_size_m: int) -> tuple[int, int]:

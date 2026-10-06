@@ -175,8 +175,9 @@ settlement assemble → district → area/building → structure generate
   не входит в verifier каскада;
 - значения шаблона и дефолты — в source-POJO; `None` продолжает
   наследование, ненулевое значение экземпляра участвует в каскаде.
-  Доменный default не подставляется по имени поля в движке. Миграция
-  текущего default-контракта описана отдельно в S1c плана;
+  Доменный default не подставляется по имени поля в движке. Terminal
+  default объявлен через `CascadeDefault(model, field)`; caller передаёт
+  экземпляр этого POJO при создании корневого контекста;
 - `WALL_MATERIAL` / `FLOOR_MATERIAL` (цепочки только из NL-узлов) —
   **level-agnostic**: одна декларация с маркером «repeat on every tag».
   Новый маркер и обработка в verifier / `ordered_chain` / `_resolve` —
@@ -199,6 +200,12 @@ S1 — целостность linked list и удаление проверки �
 S1b — generic разворачивание и вычисление runtime-цепочки;
 S1c — источники дефолтов в POJO; S2 — повторяемые NL-каналы материалов.
 Parent-обход и lazy NL над масками в эти шаги не входят.
+
+**Промежуточный этап P3 typed payload:** type-поля уже хранятся в
+`location_payload` и читаются typed-адаптерами. До P4 `source_wire`
+проецирует payload-значения в прежние NL source-поля только в памяти;
+metadata linked list и приоритет каналов сохраняются. Это мост к
+переносу каналов на payload, а не второй persist-источник значений.
 
 ---
 
@@ -238,18 +245,17 @@ class LocationContext(ContextModel):
 | Элемент `Cascade` | Назначение |
 |---|---|
 | `field` | Имя канонического authored/stamp-поля параметра (`system_economic_tier`, `parent_wall_material`, …) — объявлено один раз, проверяется верификатором против `model_fields` источников |
-| `default` | `DefaultPolicy` — ссылка на **политику POJO** (`REGISTRY_MEDIAN`, `CANONICAL_DEFAULT`, `NONE_IS_ERROR`); *что* политика разворачивает — объявлено на том же `Cascade` (`default_value` / `default_registry`), не веткой в движке. WARNING о provisional default эмитит движок — §4 «Логирование» |
-| `default_value` | Обязателен ⟺ `CANONICAL_DEFAULT`, запрещён иначе: значение дефолта, подтянутое **из POJO домена** (`DistrictDensity.default()`, `CONSTRUCTION_MATERIAL_DEFAULTS.*`) — литералы запрещены (`dataModel-no-hardcode`); тип сверяется верификатором с аннотацией поля контекста (`model_copy` не валидирует) |
-| `default_registry` | Обязателен ⟺ `REGISTRY_MEDIAN`, запрещён иначе: **имя** world-реестра (`"economic_tiers"`); движок резолвит имя через таблицу `_REGISTRIES` → accessor `world → registry`, медиану считает POJO реестра (`resolve_default`) |
+| `default` | `DefaultPolicy` — метка семантики terminal default для provenance и логирования (`REGISTRY_MEDIAN`, `CANONICAL_DEFAULT`, `NONE_IS_ERROR`). Не выбирает обработчик значения в движке. WARNING о provisional default эмитит движок — §4 «Логирование» |
+| `default_source` | `CascadeDefault(model, field)` — типизированная ссылка на обычное или computed-поле POJO. Обязательна для политик дефолта, запрещена при `NONE_IS_ERROR`. Caller передаёт экземпляр POJO; verifier проверяет наличие поля и совместимость типа с полем контекста. Дефолтные значения и вычисления принадлежат самому POJO |
 | `materialize` | **Имя** резолвера materialize-входов (`BAND`/`RANGE` → значение), обязательно при не-`VALUE` каналах параметра; binding `имя → callable` — таблица `_MATERIALIZE` в движке, callable живёт в доменном модуле (`economicTierBands.materialize_tier_input`) |
 | `fold` | Опциональный derived-resolver по **имени** — для параметров, которым first-non-null недостаточно (точечно, не режим движка); binding `имя → callable` — таблица `_FOLDS` в движке, callable в доменном модуле (`materialResolver.fold_dominant_material`) |
 | `levels` | Опционально (v1 не использует): ограничение подмножества уровней для будущих полей (climate anchor и пр.); покрытие уровней каналами проверяется непрерывностью цепочки рёбер |
 | `axis` | Ось scope'ов параметра (`type[ScopeAxis]` — для locations `ScopeLevel`); канал на чужой оси — ошибка контракта |
 | `input_types` | Ожидаемый тип поля для materialize-kinds (`RANGE` → `EconomicTierRange`); kinds без записи — str-совместимые wire-ключи (`VALUE`, `BAND`) |
 
-Привязки — **именами, не callable в модели**: `materialize`, `fold` и
-`default_registry` — строки на `Cascade`, резолвимые движком через
-локальные таблицы (`_MATERIALIZE`, `_FOLDS`, `_REGISTRIES`) — не
+Привязки операций — **именами, не callable в модели**: `materialize` и
+`fold` — строки на `Cascade`, резолвимые движком через
+локальные таблицы (`_MATERIALIZE`, `_FOLDS`) — не
 публичный реестр. Сами callable живут в доменных модулях
 (`economicTierBands`, `materialResolver`), не в движке; веток
 `param is X` в движке нет — декларация параметра самодостаточна, её
@@ -262,8 +268,10 @@ room`); порядок декларации значений не задаёт �
 Новый каскадируемый параметр — объект `Cascade` в `cascadeParams`
 (поле, ось, дефолт и имена привязок) + **одна аннотированная строка в
 модели** — не resolver-класс и не копия каскада в сервисе; materialize/
-fold/registry-политика добавляют ровно одну строку в таблице движка
-(имя → доменный callable). Метаданные живут у поля и в `cascadeParams`:
+fold добавляют ровно одну строку в таблице операций движка
+(имя → доменный callable). Default-source добавляется декларацией
+поля POJO и ссылкой на него, без таблицы дефолтов движка.
+Метаданные живут у поля и в `cascadeParams`:
 тип, источник, дефолт, привязки видны в одном месте.
 
 **Режим v1:** `first-non-null` по цепочке + опциональный `materialize`.
@@ -285,7 +293,7 @@ walker'а вверх по `parent_location_uid` нет: каждый assembler �
 своего родителя, он его сам создал:
 
 ```
-settlement_ctx = extend(LocationContext.root(world), settlement_link)
+settlement_ctx = extend(root_context(world), settlement_link)
 district_ctx   = extend(settlement_ctx, district_link)
 area_ctx       = extend(district_ctx, area_link)
 building_ctx   = extend(area_ctx, building_link)
@@ -320,15 +328,28 @@ room_ctx       = extend(building_ctx, room_link)   # rooms[].economic_tier и т
    (включая уже вычисленный fold или provisional default).
    Расширение создаёт отдельное состояние узлов; sibling-контексты
    не меняют результаты друг друга или родителя.
-4. До миграции S1c: совсем пусто (нет authored и нет наследия) → `default` по политике:
-   `CANONICAL_DEFAULT` → `param.default_value` (объявлен в
-   `cascadeParams`); `REGISTRY_MEDIAN` → именованный реестр
-   (`param.default_registry` → `_REGISTRIES` → `resolve_default`).
+4. Совсем пусто (нет authored и нет наследия) → движок читает поле
+   `param.default_source` из переданного caller'ом POJO. Значение может
+   быть задано шаблоном, дефолтом модели или computed-полем. Нет ссылки,
+   нет единственного подходящего экземпляра или поле вернуло `None` →
+   ошибка. Движок не выбирает доменные значения и реестры.
    Default-source **не является якорем** для materialize ниже и не
    предупреждает повторно — он provisional.
 5. Возвращает **новый замороженный** `LocationContext` с новым `level` +
    provenance: `ctx.provenance[param] = (axis member, "Model.field"
    | "default:<policy>")` — какой уровень/канал дал значение.
+
+`LocationContext.root(world, default_sources=(pojo, ...))` сохраняет
+источники приватно и не читает их поля. Bare root без источников допустим,
+пока каскад не потребует terminal default. Location-caller использует
+`root_context(world)`: передаёт `LocationCascadeDefaults` с world-реестром
+тира. Канонические значения объявлены обычными полями этого POJO;
+`economic_tier` — computed-поле, вычисляющее медиану только при чтении.
+Ненулевое authored-значение и наследие не вызывают этот fallback.
+Nullable authored-поля сохраняют `None`: terminal default не подставляется
+в каждое звено и не перекрывает наследование. Дочерние контексты сохраняют
+переданные источники; provenance provisional default предотвращает
+повторные вычисления и WARNING при последующих пустых границах.
 
 Звено — `Link(level, obj)`: caller сам конвертирует runtime/persist
 объект в source-POJO до вызова; движок не знает имён полей — только

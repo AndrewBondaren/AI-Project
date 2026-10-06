@@ -68,7 +68,7 @@ class WorldMapPackRenderer:
             list(pins.locations) if pins is not None else []
         )
         self._location_types = location_types
-        self._location_mark_pins = location_mark_pins(self._pins)
+        self._location_mark_pins = location_mark_pins(self._pins, registry=location_types)
         self._pin_macros = pin_macros(self._location_mark_pins, self._tile_m)
 
     def tile_count(self) -> int:

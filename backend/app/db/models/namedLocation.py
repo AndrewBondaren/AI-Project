@@ -55,3 +55,4 @@ class NamedLocation:
     plot_priority:              dict | None = json_nullable_col()
     perimeter_barrier:          dict | None = json_nullable_col()
     district_topology:          dict | None = json_nullable_col()
+    location_payload:           dict | None = json_nullable_col()

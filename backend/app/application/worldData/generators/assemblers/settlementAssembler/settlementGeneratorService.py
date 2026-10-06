@@ -5,6 +5,7 @@ Skeleton на NamedLocation — фаза 1 (world create).
 Полная геометрия — SettlementAssembler + map_cells persist при первом входе.
 """
 
+from app.application.worldData.locationPayloadAccess import settlement_payload
 import logging
 
 from app.application.worldData.generators.assemblers.citySkeleton import (
@@ -62,7 +63,7 @@ class SettlementGeneratorService:
     ) -> list[MapCell]:
         """Только резерв footprint (можно вызвать при world create)."""
         return plan_footprint_occupancy_cells(
-            world, settlement, settlement.system_city_size,
+            world, settlement, settlement_payload(settlement).system_city_size,
         )
 
     def plan_slots_and_city_graph(

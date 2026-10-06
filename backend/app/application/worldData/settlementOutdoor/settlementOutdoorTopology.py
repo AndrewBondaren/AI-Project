@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.application.worldData.locationPayloadAccess import district_payload
+
 import logging
 
 from pydantic import ValidationError
@@ -60,10 +62,8 @@ def has_city_settlement_gates(nodes: list[ConnectionNode]) -> bool:
 
 
 def _frozen_topology_slot(row: NamedLocation) -> DistrictTopologySlot | None:
-    if not row.district_topology:
-        return None
     try:
-        return DistrictTopologySlot.model_validate(row.district_topology)
+        return district_payload(row).district_topology
     except ValidationError:
         return None
 
@@ -161,12 +161,12 @@ def load_topology_slots(
     districts: list[NamedLocation],
     settlement_ctx: LocationContext | None = None,
 ) -> list[DistrictSlot] | None:
-    rows = [child for child in districts if child.district_topology]
+    rows = [child for child in districts if district_payload(child).district_topology is not None]
     if len(rows) != len(districts) or not rows:
         return None
     parsed: list[tuple[DistrictTopologySlot, NamedLocation]] = []
     for row in rows:
-        parsed.append((DistrictTopologySlot.model_validate(row.district_topology), row))
+        parsed.append((district_payload(row).district_topology, row))
     parsed.sort(key=lambda item: item[0].slot_index)
     templates = district_templates(world)
     enabled = enabled_building_purposes(world)

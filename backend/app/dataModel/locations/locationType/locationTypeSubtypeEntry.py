@@ -21,6 +21,8 @@ class LocationTypeSubtypeEntry(BaseModel):
     required_structure_types: DefaultOnWire[list[str]] = Field(default_factory=list)
     # Settlement morphology × rank (LOC-T-2). Empty on geographic / district / building subtypes.
     footprint_by_size: DefaultOnWire[dict[str, float]] = Field(default_factory=dict)
+    # Recipe default for an instance's SettlementPayload; no generation gate here.
+    is_inhabited: DefaultOnWire[bool] = True
 
     def has_district_recipe(self) -> bool:
         """Non-empty typical district types → recipe path; empty → legacy district select."""

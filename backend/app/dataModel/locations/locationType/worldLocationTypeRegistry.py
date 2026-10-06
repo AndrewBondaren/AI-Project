@@ -8,6 +8,7 @@ from pydantic import RootModel
 
 from app.dataModel.locations.locationType.locationTypeEntry import LocationTypeEntry
 from app.dataModel.locations.locationType.locationTypeSubtypeEntry import LocationTypeSubtypeEntry
+from app.dataModel.locations.payloadKind import PayloadKind
 from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     WorldSettlementSizeRegistry,
 )
@@ -20,7 +21,7 @@ _LARGE = _SIZE.root[-1].system_size
 # tz_locations.md § Размер поселения (LOC-T-2) — metres on settlement subtypes only.
 _FOOTPRINT_VILLAGE: dict[str, float] = {_SMALL: 0.25, _MEDIUM: 0.50, _LARGE: 0.75}
 _FOOTPRINT_CITY: dict[str, float] = {_SMALL: 1.00, _MEDIUM: 2.00, _LARGE: 4.00}
-_FOOTPRINT_DUNGEON: dict[str, float] = {_SMALL: 0.25, _MEDIUM: 0.50, _LARGE: 1.00}
+_FOOTPRINT_COMPLEX: dict[str, float] = {_SMALL: 0.25, _MEDIUM: 0.50, _LARGE: 1.00}
 _FOOTPRINT_UNDERGROUND_CITY: dict[str, float] = dict(_FOOTPRINT_CITY)
 
 # tz_locations.md § location_type_registry — full hierarchy + subtypes (engine SoT).
@@ -45,6 +46,7 @@ _ENGINE_ENTRIES: tuple[LocationTypeEntry, ...] = (
     LocationTypeEntry(
         system_type="settlement",
         display_type="Поселение",
+        payload_kind=PayloadKind.SETTLEMENT,
         parent_types=["territory"],
         is_outdoor=True,
         subtypes=[
@@ -64,11 +66,6 @@ _ENGINE_ENTRIES: tuple[LocationTypeEntry, ...] = (
                 footprint_by_size=dict(_FOOTPRINT_VILLAGE),
             ),
             LocationTypeSubtypeEntry(
-                system_subtype="dungeon",
-                l0_map_symbol="d",
-                footprint_by_size=dict(_FOOTPRINT_DUNGEON),
-            ),
-            LocationTypeSubtypeEntry(
                 system_subtype="underground_city",
                 l0_map_symbol="g",
                 typical_district_types=["civic", "residential"],
@@ -77,9 +74,44 @@ _ENGINE_ENTRIES: tuple[LocationTypeEntry, ...] = (
         ],
     ),
     LocationTypeEntry(
+        system_type="location_complex",
+        display_type="Комплекс",
+        payload_kind=PayloadKind.SETTLEMENT,
+        parent_types=["territory", "geographic", "settlement", None],
+        is_outdoor=True,
+        subtypes=[
+            LocationTypeSubtypeEntry(
+                system_subtype="crypt", l0_map_symbol="c", is_inhabited=False,
+                typical_district_types=["civic"],
+                footprint_by_size=dict(_FOOTPRINT_COMPLEX),
+            ),
+            LocationTypeSubtypeEntry(
+                system_subtype="mine", l0_map_symbol="m", is_inhabited=False,
+                typical_district_types=["industrial"],
+                footprint_by_size=dict(_FOOTPRINT_COMPLEX),
+            ),
+            LocationTypeSubtypeEntry(
+                system_subtype="ruins", l0_map_symbol="r", is_inhabited=False,
+                typical_district_types=["civic", "residential"],
+                footprint_by_size=dict(_FOOTPRINT_CITY),
+            ),
+            LocationTypeSubtypeEntry(
+                system_subtype="fortress", l0_map_symbol="f", is_inhabited=False,
+                typical_district_types=["civic", "residential"],
+                footprint_by_size=dict(_FOOTPRINT_VILLAGE),
+            ),
+            LocationTypeSubtypeEntry(
+                system_subtype="lair", l0_map_symbol="l", is_inhabited=False,
+                typical_district_types=["residential"],
+                footprint_by_size=dict(_FOOTPRINT_COMPLEX),
+            ),
+        ],
+    ),
+    LocationTypeEntry(
         system_type="district",
         display_type="Район",
-        parent_types=["settlement"],
+        payload_kind=PayloadKind.DISTRICT,
+        parent_types=["settlement", "location_complex"],
         is_outdoor=True,
         subtypes=[
             LocationTypeSubtypeEntry(system_subtype="extract"),
@@ -93,7 +125,7 @@ _ENGINE_ENTRIES: tuple[LocationTypeEntry, ...] = (
     LocationTypeEntry(
         system_type="building",
         display_type="Строение",
-        parent_types=["settlement", "district"],
+        parent_types=["settlement", "location_complex", "district"],
         is_outdoor=False,
         subtypes=[
             LocationTypeSubtypeEntry(system_subtype="residential"),
@@ -224,6 +256,8 @@ def _overlay_location_type(
         display_type=world.display_type,
         parent_types=list(parent_types),
         is_outdoor=is_outdoor,
+        payload_kind=(world.payload_kind if "payload_kind" in world.model_fields_set
+                      else engine.payload_kind),
         subtypes=subtypes,
     )
 
@@ -251,4 +285,6 @@ def _overlay_subtype(
         typical_district_types=list(world.typical_district_types),
         required_structure_types=list(world.required_structure_types),
         footprint_by_size=merged_footprint,
+        is_inhabited=(world.is_inhabited if "is_inhabited" in world.model_fields_set
+                      else engine.is_inhabited),
     )

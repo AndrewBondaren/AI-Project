@@ -144,12 +144,12 @@ class TopologyExtractTest(unittest.TestCase):
         self.assertTrue(
             all(row.system_location_type == district_type for row in extracted.districts),
         )
-        self.assertTrue(all(row.district_topology for row in extracted.districts))
+        self.assertTrue(all(row.location_payload["district_topology"] for row in extracted.districts))
         self.assertTrue(
             all(row.system_template_uid is None for row in extracted.districts),
         )
         first_topo = DistrictTopologySlot.model_validate(
-            extracted.districts[0].district_topology,
+            extracted.districts[0].location_payload["district_topology"],
         )
         self.assertEqual(
             first_topo.template_system_name,

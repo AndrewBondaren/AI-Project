@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.dataModel.locations.settlement.district.districtPayload import DistrictPayload
+
 from dataclasses import dataclass, field, replace
 
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.topologyPlan import SettlementTopologyPlan
@@ -136,7 +138,9 @@ def _district_named_location(
             if slot.district_ctx is not None
             else None
         ),
-        district_topology=topology_slot_wire(slot, slot_index=slot_index).model_dump(mode="json"),
+        location_payload=DistrictPayload(
+            district_topology=topology_slot_wire(slot, slot_index=slot_index),
+        ).model_dump(mode="json"),
     )
 
 

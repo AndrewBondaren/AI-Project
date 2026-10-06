@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.application.worldData.locationPayloadAccess import settlement_payload
+
 from app.application.worldData.settlementMapOccupancy import occupancy_locations
 from app.dataModel.worldPack.locationsIndexWire import LocationsIndexPin, LocationsIndexWire
 from app.db.models.namedLocation import NamedLocation
@@ -26,7 +28,7 @@ def build_locations_index(
                 display_name=loc.display_name,
                 system_location_type=loc.system_location_type,
                 system_location_subtype=loc.system_location_subtype,
-                system_city_size=loc.system_city_size,
+                system_city_size=settlement_payload(loc).system_city_size,
             ),
         )
     return LocationsIndexWire(locations=pins)

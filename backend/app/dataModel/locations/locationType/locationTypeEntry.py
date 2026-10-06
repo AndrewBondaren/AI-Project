@@ -6,6 +6,7 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
 from app.dataModel.locations.locationType.locationTypeSubtypeEntry import LocationTypeSubtypeEntry
+from app.dataModel.locations.payloadKind import PayloadKind
 
 
 class LocationTypeEntry(BaseModel):
@@ -21,8 +22,10 @@ class LocationTypeEntry(BaseModel):
     )
     parent_types: DefaultOnWire[list[str | None]] = Field(default_factory=list)
     is_outdoor: DefaultOnWire[bool | None] = None
+    payload_kind: DefaultOnWire[PayloadKind | None] = None
     subtypes: DefaultOnWire[list[LocationTypeSubtypeEntry]] = Field(default_factory=list)
 
     def fixture_identity(self) -> LocationTypeEntry:
         """world_template row: system/display only (JV fills the rest)."""
-        return LocationTypeEntry(system_type=self.system_type, display_type=self.display_type)
+        return LocationTypeEntry(system_type=self.system_type, display_type=self.display_type,
+                                 payload_kind=self.payload_kind)

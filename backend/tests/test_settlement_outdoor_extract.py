@@ -270,7 +270,7 @@ class TestSettlementOutdoorExtract(unittest.TestCase):
         self.assertEqual(len(extracted.districts), 1)
         self.assertIsNone(extracted.districts[0].system_template_uid)
         self.assertEqual(
-            extracted.districts[0].district_topology["template_system_name"],
+            extracted.districts[0].location_payload["district_topology"]["template_system_name"],
             "core",
         )
         self.assertEqual(len(extracted.buildings), 1)

@@ -71,7 +71,7 @@ _FOLDS = {
 
 
 def _check_bindings(model: type[BaseModel]) -> None:
-    """Every resolver/registry name declared on a ``Cascade`` param of
+    """Every operation name declared on a ``Cascade`` param of
     the context model must resolve to a callable — declaration and
     binding table are two facts that must not silently disagree."""
     for _name, param in _cascade_fields(model):

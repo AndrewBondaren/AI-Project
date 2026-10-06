@@ -14,6 +14,7 @@ SettlementAssembler — оркестратор генерации поселен
 
 ТЗ: docs/tz_assembler_hierarchy.md, tz_city_generation.md, tz_structure_connections.md §5
 """
+from app.application.worldData.locationPayloadAccess import settlement_payload
 import logging
 import time
 from dataclasses import replace
@@ -80,8 +81,8 @@ class SettlementAssembler:
         logger.info(
             "SettlementAssembler | settlement=%s size=%s density=%s tier=%s",
             settlement.location_uid,
-            settlement.system_city_size,
-            settlement.settlement_density,
+            settlement_payload(settlement).system_city_size,
+            settlement_payload(settlement).settlement_density,
             skeleton.economic_tier,
         )
         logger.info(

@@ -1,4 +1,5 @@
 from dataclasses import dataclass, fields as dataclass_fields
+from app.application.worldData.locationPayloadAccess import settlement_payload
 
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     ConnectionTypeKey,
@@ -24,9 +25,11 @@ def _nl_attr_for_skeleton_field(name: str) -> str:
 
 def _skeleton_wire_from_location(settlement: NamedLocation) -> dict:
     payload: dict = {}
+    stored = settlement_payload(settlement)
     for name in SettlementSkeleton.model_fields:
         attr = _nl_attr_for_skeleton_field(name)
-        value = getattr(settlement, attr)
+        value = (getattr(stored, name) if name in type(stored).model_fields
+                 else getattr(settlement, attr))
         if value is not None:
             payload[name] = value
     return payload

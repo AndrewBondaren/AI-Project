@@ -212,6 +212,67 @@ Type-ключи — данные мастера (N+1); payload-контракт�
 settlement-семантику без смены имени типа. `subtype` остаётся рецептом
 морфологии внутри типа (`city`/`village` — один `SettlementPayload`).
 
+**P1 — контракт модели:** `PayloadKind` перечисляет builtin-контракты
+`settlement` / `district`; неизвестное значение на `LocationTypeEntry`
+отклоняется валидацией. `LocationPayload.model_for(kind)` возвращает
+модель, `LocationPayload.validate(kind, value)` — валидированный POJO.
+Для известного kind `None` создаёт пустой payload с дефолтами модели;
+для `kind=None` допустим только `value=None`. Dispatch не зависит от
+имени типа локации. `fixture_identity()` сохраняет `payload_kind`;
+при overlay world→engine отсутствующее поле наследует engine-контракт,
+а явно заданное значение (включая `null`) имеет приоритет.
+
+Payload-модели используют общие определения полей со старым skeleton
+(`SettlementPayloadFields`), сохраняя wire-имена и legacy aliases
+`structure_counts` / `structure_priority`. Generic `economic_tier` и
+`system_location_mood` остаются в skeleton, не входят в settlement payload.
+До P4 каскадные аннотации остаются на skeleton; новые payload-модели
+не создают дополнительных узлов каскада. Перенос import/persist и SQL —
+следующие шаги, наличие POJO ещё не означает сохранение payload в БД.
+
+**P1b — выбор pipeline:** `is_settlement_map_site` проверяет
+`entry.payload_kind == settlement`; `uses_settlement_fine_footprint`
+допускает settlement и district payload. Subtype и size rank не выбирают
+pipeline; неизвестный type и generic type не проходят этот gate.
+Policy принимает `registry=WorldLocationTypeRegistry`; без аргумента
+использует builtin engine registry. World-caller передаёт результат
+`location_types(world)`: occupancy, territory volumes, C6/packing,
+detailed bake, layout geometry и L0 contributor учитывают world-контракт.
+Renderer использует переданный ему registry для отбора location marks
+и легенды всех типов с settlement payload. Legacy тип `city` больше
+не является исключением; мастер может объявить его с нужным payload_kind.
+
+**P2a — хранилище:** в `0001_initial.sql` и DB-модели `NamedLocation`
+добавлено `location_payload`: nullable TEXT JSON / `dict | None` через
+`json_nullable_col`. `None` хранится как SQL NULL, пустой объект — как
+`{}`; они различаются при чтении. Legacy type-колонки сохраняются до
+переноса import/persist-потребителей P3 и cascade-каналов P4, затем
+удаляются в P2b. На этом шаге импортер ещё пишет прежние колонки.
+Схема проверяется на новой временной БД из основной миграции; существующая
+dev БД этим шагом не пересоздаётся.
+
+**P3 — перенос потребителей:** плоские wire-ключи `locations[]` сохраняются.
+`BundleNamedLocation` выбирает payload-модель через registry из validation
+context (без world — builtin registry), валидирует type-поля и aliases
+ею; `to_db_fields()` сериализует их только внутри `location_payload`.
+Generic tier, mood и parent materials сохраняются на NL. Recipe default
+`is_inhabited` применяется при импорте, явное значение имеет приоритет.
+CRUD проходит тот же контракт, частичное обновление сливает текущий payload
+и новые поля, включая явную очистку поля до `None`.
+
+`settlement_payload` / `district_payload` валидируют сохранённый JSON при
+чтении. При `location_payload=None` они читают legacy-колонки; при наличии
+payload он имеет полный приоритет, включая отсутствующие nullable поля.
+Этот fallback удаляется вместе с legacy-колонками в P2b. Skeleton,
+footprint/occupancy, locations index и topology читают payload через эти
+адаптеры. Новые district freezes создаются в `DistrictPayload`, persist
+выполняет read–validate–merge перед записью в своей транзакции.
+
+До P4 `source_wire` проецирует значения payload в прежние NL cascade-поля
+только в памяти; старые `CascadeChannel`-аннотации и приоритеты сохраняются.
+Type-колонки при новом импорте не дублируются. Удаление плоских source-полей
+и перенос cascade metadata — следующий шаг P4.
+
 **Граница полей:**
 
 | Класс | Где | Поля |
@@ -224,7 +285,7 @@ settlement-семантику без смены имени типа. `subtype` �
 
 | `payload_kind` | Модель | Поля |
 |---|---|---|
-| `settlement` | `SettlementPayload` (ныне `SettlementSkeleton`) | `system_city_size`, `settlement_density`, `dominant_material`, `architectural_style`, `frontage_type_order`, `plot_counts`, `plot_priority`, `perimeter_barrier`, `typical_districts`, `system_settlement_specializations`, `is_inhabited: bool = True` |
+| `settlement` | `SettlementPayload` | `system_city_size`, `settlement_density`, `dominant_material`, `architectural_style`, `frontage_type_order`, `plot_counts`, `plot_priority`, `perimeter_barrier`, `typical_districts`, `system_settlement_specializations`, `is_inhabited: bool = True` |
 | `district` | `DistrictPayload` | `district_topology` (C23 stamped freeze) |
 | `null` | — | building / room / region / territory / geographic / climate_pole / declare-only типы |
 
@@ -255,6 +316,12 @@ Subtype `dungeon` у `settlement` удаляется; `underground_city` ост�
 решение перед P6 (contract error или игнор). Lazy-settlement DAG-нода
 также должна учитывать живость; её wiring и economy planner — leftovers,
 не входят в эту имплементацию и остаются под gate DAG.
+
+На `LocationTypeSubtypeEntry` поле `is_inhabited: bool = True` хранит
+рецептурный default будущего экземпляра. Пять builtin-рецептов комплекса
+задают `False`; world-overlay сохраняет engine default при отсутствии
+поля и допускает явный `True`. Применение рецепта к payload экземпляра
+будет подключено при миграции импортера; P1 определяет и валидирует данные.
 
 **Правила:**
 

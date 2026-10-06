@@ -228,6 +228,65 @@ class RuntimeLinkedListTests(unittest.TestCase):
         self.assertEqual(root._links, {})
         self.assertEqual(root._node_results, {})
 
+    def test_terminal_default_reads_supplied_pojo_value(self):
+        axis, _, _, root = self._fixture()
+        defaults = type(root._default_sources[0])
+        root._default_sources = (defaults(signal="caller-default"),)
+        first = extend(root, EmptyLink(axis.FIRST))
+        leaf = extend(extend(first, EmptyLink(axis.MIDDLE)), EmptyLink(axis.LEAF))
+        self.assertEqual(leaf.signal, "caller-default")
+        self.assertEqual(leaf.provenance["signal"],
+                         (axis.ROOT, "default:canonical_default"))
+
+    def test_missing_and_ambiguous_default_objects_are_rejected(self):
+        for count in (0, 2):
+            axis, _, _, root = self._fixture()
+            root._default_sources = root._default_sources * count
+            with self.subTest(count=count), self.assertRaisesRegex(
+                ValueError, f"got {count}",
+            ):
+                extend(root, EmptyLink(axis.FIRST))
+
+    def test_none_terminal_default_is_rejected(self):
+        axis, _, _, root = self._fixture()
+        defaults = type(root._default_sources[0])
+        root._default_sources = (defaults.model_construct(signal=None),)
+        with self.assertRaisesRegex(ValueError, "returned None"):
+            extend(root, EmptyLink(axis.FIRST))
+
+    def test_authored_chain_does_not_require_terminal_default(self):
+        axis, _, source, root = self._fixture()
+        root._default_sources = ()
+        first = extend(root, Link(axis.FIRST, source(signal="authored")))
+        self.assertEqual(extend(first, EmptyLink(axis.MIDDLE)).signal, "authored")
+
+    def test_location_default_median_is_lazy(self):
+        world = _world()
+        with patch.object(WorldEconomyTierRegistry, "resolve_default") as median:
+            root = root_context(world)
+            ctx = extend(root, Link(ScopeLevel.SETTLEMENT, _nl("t7")))
+            self.assertEqual(ctx.economic_tier, "t7")
+            median.assert_not_called()
+
+    def test_location_default_median_is_read_once(self):
+        world = _world()
+        original = WorldEconomyTierRegistry.resolve_default
+        calls = []
+
+        def resolve(registry, policy):
+            calls.append(policy)
+            return original(registry, policy)
+
+        with patch.object(WorldEconomyTierRegistry, "resolve_default", resolve):
+            root = root_context(world)
+            self.assertEqual(calls, [])
+            with self.assertLogs(level="WARNING"):
+                first = extend(root, EmptyLink(ScopeLevel.SETTLEMENT))
+            with self.assertNoLogs(level="WARNING"):
+                district = extend(first, EmptyLink(ScopeLevel.DISTRICT))
+            self.assertEqual(district.economic_tier, first.economic_tier)
+            self.assertEqual(calls, [DefaultPolicy.REGISTRY_MEDIAN])
+
     def test_incomplete_prefix_cannot_skip_declared_boundary(self):
         axis, _, source, root = self._fixture()
         first = extend(root, Link(axis.FIRST, source(signal="first")))

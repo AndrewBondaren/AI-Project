@@ -133,7 +133,7 @@ class SettlementOutdoorOrchestrator:
         at_y: int | None = None,
     ) -> MaterializeResult:
         world = await self._require_world(world_uid)
-        settlement = await self._require_settlement(world_uid, location_uid)
+        settlement = await self._require_settlement(world, location_uid)
         facade = self._require_pack(world)
         writer: WorldPackWriter = self._writer_for(world)
         if not location_uid_in_pack_index(writer.paths, settlement.location_uid):
@@ -192,7 +192,7 @@ class SettlementOutdoorOrchestrator:
         world = await self._world_with_pack(world_uid)
         locs = await self._locations.list_by_world_insert_order(world_uid)
         return await self._materialize_many(
-            world_uid, packing_targets(locs, self._index_uids(world)),
+            world_uid, packing_targets(locs, self._index_uids(world), world=world),
             skip_if_initialized=skip_if_initialized,
         )
 
@@ -212,7 +212,7 @@ class SettlementOutdoorOrchestrator:
         self._require_pack(world)
         descendants = await self._locations.list_descendants(ancestor_uid)
         return await self._materialize_many(
-            world_uid, packing_targets(descendants, self._index_uids(world)),
+            world_uid, packing_targets(descendants, self._index_uids(world), world=world),
             skip_if_initialized=skip_if_initialized,
         )
 
@@ -226,7 +226,7 @@ class SettlementOutdoorOrchestrator:
         world = await self._world_with_pack(world_uid)
         locs = await self._locations.list_by_state_uids(world_uid, [state_uid])
         return await self._materialize_many(
-            world_uid, packing_targets(locs, self._index_uids(world)),
+            world_uid, packing_targets(locs, self._index_uids(world), world=world),
             skip_if_initialized=skip_if_initialized,
         )
 
@@ -273,14 +273,14 @@ class SettlementOutdoorOrchestrator:
         return world
 
     async def _require_settlement(
-        self, world_uid: str, location_uid: str,
+        self, world: World, location_uid: str,
     ) -> NamedLocation:
         loc = await self._locations.get_by_id(location_uid)
-        if loc is None or loc.world_uid != world_uid:
+        if loc is None or loc.world_uid != world.world_uid:
             raise SettlementOutdoorNotFoundError(
                 f"Location '{location_uid}' not found"
             )
-        if not is_settlement_outdoor_target(loc):
+        if not is_settlement_outdoor_target(loc, world=world):
             raise SettlementOutdoorError(
                 f"Location '{location_uid}' is not a settlement outdoor target"
             )

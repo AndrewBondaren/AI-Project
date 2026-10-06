@@ -1,5 +1,6 @@
 """Flatten SettlementLayout → map_cells for persist."""
 
+from app.application.worldData.locationPayloadAccess import settlement_payload
 import logging
 from dataclasses import replace
 
@@ -15,14 +16,15 @@ from app.dataModel.locations.locationFootprintPolicy import named_location_uses_
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+from app.application.jsonValidation.worldRow import location_types
 from app.application.worldData.transitions.transitionIdentity import transition_uid
 from app.dataModel.locations.transitions.transitionSide import TransitionSideId
 
 logger = logging.getLogger(__name__)
 
 
-def _is_settlement_location(settlement: NamedLocation) -> bool:
-    return named_location_uses_settlement_fine_footprint(settlement)
+def _is_settlement_location(settlement: NamedLocation, world: World) -> bool:
+    return named_location_uses_settlement_fine_footprint(settlement, registry=location_types(world))
 
 
 def rebind_layout_to_building(
@@ -73,9 +75,9 @@ def needs_settlement_geometry(
 
     Проверяет только WORLD_FINE_GRID: system_building_element в fine-grid rect footprint.
     """
-    if not _is_settlement_location(settlement):
+    if not _is_settlement_location(settlement, world):
         return False
-    rect = settlement_fine_rect(world, settlement, settlement.system_city_size)
+    rect = settlement_fine_rect(world, settlement, settlement_payload(settlement).system_city_size)
     for cell in existing_cells:
         if not cell.system_building_element:
             continue

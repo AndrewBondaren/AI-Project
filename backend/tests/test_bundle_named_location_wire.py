@@ -41,7 +41,7 @@ class BundleNamedLocationWireTests(unittest.TestCase):
         })
         self.assertEqual(wire.to_db_fields()["display_description"], "Narrative for LLM.")
 
-    def test_settlement_skeleton_overlay_reaches_db_fields(self) -> None:
+    def test_settlement_fields_reach_payload_storage(self) -> None:
         density = DistrictDensity.MEDIUM.wire_value
         barrier = PerimeterBarrier(template="stone_fence", probability=1.0)
         wire = BundleNamedLocation.model_validate({
@@ -56,6 +56,9 @@ class BundleNamedLocationWireTests(unittest.TestCase):
             "plot_priority": {"inn_small": 1},
         })
         fields = wire.to_db_fields()
+        self.assertNotIn("settlement_density", fields)
+        self.assertNotIn("plot_counts", fields)
+        fields = fields["location_payload"]
         self.assertEqual(fields["settlement_density"], density)
         self.assertEqual(fields["architectural_style"], "gothic")
         self.assertEqual(
@@ -80,7 +83,7 @@ class BundleNamedLocationWireTests(unittest.TestCase):
         self.assertEqual(wire.plot_counts["inn_small"], 2)
         self.assertEqual(wire.plot_priority["inn_small"], 1)
         fields = wire.to_db_fields()
-        self.assertEqual(fields["plot_counts"]["inn_small"], 2)
+        self.assertEqual(fields["location_payload"]["plot_counts"]["inn_small"], 2)
         self.assertNotIn("structure_counts", fields)
 
 

@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import gc
 
-from pydantic import BaseModel, ValidationError, create_model
+from pydantic import BaseModel, ValidationError, computed_field, create_model
 
 from app.dataModel.annotationPolicy import DefaultOnWire
 from app.dataModel.economy.economyTier.economyTierEntry import EconomyTierEntry
@@ -34,6 +34,7 @@ from app.dataModel.cascade.cascadeGraph import (
 from app.dataModel.cascade.cascadeSpec import (
     Cascade,
     CascadeChannel,
+    CascadeDefault,
     CascadeLink,
     ChannelKind,
     DefaultPolicy,
@@ -250,6 +251,55 @@ class LinkedListContractTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(ValueError, "foreign axis"):
                 verify_cascade_contract(context)
+
+
+class DefaultSourceContractTests(unittest.TestCase):
+    def _verify(self, defaults, field="signal", policy=DefaultPolicy.CANONICAL_DEFAULT):
+        axis = ScopeAxis("DefaultAxis", {"SOURCE": "source"})
+        param = Cascade("signal", policy, axis=axis,
+                        default_source=(CascadeDefault(defaults, field)
+                                        if defaults is not None else None))
+        source = create_model("DefaultChannel", signal=(Annotated[
+            str | None, CascadeChannel(param, axis.SOURCE),
+        ], None))
+        context = create_model("DefaultContext", signal=(Annotated[
+            str | None, param,
+        ], None))
+        with patch("app.dataModel.cascade.cascadeVerify._source_models",
+                   return_value={source}):
+            verify_cascade_contract(context)
+
+    def test_ordinary_and_computed_pojo_fields_are_supported(self):
+        class ComputedDefaults(BaseModel):
+            @computed_field
+            @property
+            def signal(self) -> str:
+                return "computed"
+
+        self._verify(create_model("PlainDefaults", signal=(str, "plain")))
+        self._verify(ComputedDefaults)
+
+    def test_missing_default_source_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "requires default_source"):
+            self._verify(None)
+
+    def test_non_pojo_default_source_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "POJO model"):
+            self._verify(str)
+
+    def test_missing_default_field_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "no field 'missing'"):
+            self._verify(create_model("PlainDefaults", signal=(str, "plain")),
+                         field="missing")
+
+    def test_incompatible_default_field_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "type incompatible"):
+            self._verify(create_model("WrongDefaults", signal=(int, 1)))
+
+    def test_error_policy_forbids_a_default_source(self):
+        with self.assertRaisesRegex(ValueError, "NONE_IS_ERROR forbids"):
+            self._verify(create_model("PlainDefaults", signal=(str, "plain")),
+                         policy=DefaultPolicy.NONE_IS_ERROR)
 
 
 class LocationContextContractTests(unittest.TestCase):

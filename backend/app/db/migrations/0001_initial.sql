@@ -709,6 +709,7 @@ CREATE TABLE IF NOT EXISTS named_locations (
     plot_priority           TEXT,
     perimeter_barrier       TEXT,
     district_topology       TEXT,
+    location_payload        TEXT,              -- typed payload JSON; contract via location_type_registry[].payload_kind
     created_at              TEXT NOT NULL,
     FOREIGN KEY (world_uid)            REFERENCES worlds(world_uid),
     FOREIGN KEY (parent_location_uid) REFERENCES named_locations(location_uid),

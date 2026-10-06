@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationInfo, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, IgnoreOnWire, StrictOnWire
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
@@ -39,6 +39,10 @@ from app.dataModel.locations.structure.building.plotLayoutTemplate import (
     PlotLayoutTemplate,
 )
 from app.dataModel.locations.structure.room.roomDef import RoomDef
+from app.dataModel.locations.locationPayload import LocationPayload
+from app.dataModel.locations.locationType.worldLocationTypeRegistry import WorldLocationTypeRegistry
+from app.dataModel.locations.settlement.settlement.settlementPayload import SettlementPayload
+from app.dataModel.locations.settlement.district.districtPayload import DistrictPayload
 
 
 def _skeleton_default(name: str):
@@ -189,6 +193,40 @@ class BundleNamedLocation(BaseModel):
     is_sheltered: DefaultOnWire[bool] = False
     is_transit: DefaultOnWire[bool] = False
     created_at: DefaultOnWire[str | None] = None
+    location_payload: DefaultOnWire[SettlementPayload | DistrictPayload | None] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def bind_payload(cls, raw, info: ValidationInfo):
+        if not isinstance(raw, dict):
+            return raw
+        values = dict(raw)
+        registry = (info.context or {}).get("location_type_registry")
+        if registry is None:
+            registry = WorldLocationTypeRegistry.canonical_engine()
+        entry = registry.entry_for(values.get("system_location_type"))
+        kind = entry.payload_kind if entry is not None else None
+        nested = values.get("location_payload")
+        if kind is None:
+            LocationPayload.validate(None, nested)
+            return values
+        model = LocationPayload.model_for(kind)
+        payload = nested.model_dump() if isinstance(nested, BaseModel) else dict(nested or {})
+        # Flat import keys and aliases remain the wire API. Pick only fields
+        # declared by the chosen POJO, not a parallel list in the importer.
+        for name, field in model.model_fields.items():
+            aliases = (field.validation_alias.choices
+                       if isinstance(field.validation_alias, AliasChoices) else ())
+            for key in (name, *aliases):
+                if key in values:
+                    payload[name] = values[key]
+                    break
+        if "is_inhabited" in model.model_fields and "is_inhabited" not in payload:
+            recipe = registry.subtype_for(entry.system_type, values.get("system_location_subtype"))
+            if recipe is not None:
+                payload["is_inhabited"] = recipe.is_inhabited
+        values["location_payload"] = model.model_validate(payload)
+        return values
 
     architectural_style: DefaultOnWire[str | None] = _skeleton_default("architectural_style")
     # Settlement-scope `dominant_material` node — top of the chain;
@@ -237,4 +275,6 @@ class BundleNamedLocation(BaseModel):
 
     def to_db_fields(self) -> dict[str, Any]:
         """Wire → ``NamedLocation`` kwargs."""
-        return self.model_dump(exclude_none=True)
+        payload_fields = {name for model in LocationPayload.models().values()
+                          for name in model.model_fields}
+        return self.model_dump(mode="json", exclude_none=True, exclude=payload_fields)

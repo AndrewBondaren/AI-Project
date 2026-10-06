@@ -9,9 +9,10 @@ location domain's boundary wiring — one per scope level.
 """
 
 from dataclasses import asdict
+from app.application.worldData.locationPayloadAccess import source_wire
 from random import Random
 
-from app.application.jsonValidation import economic_tiers
+from app.application.jsonValidation import economic_tiers, location_types
 
 from app.application.worldData.context.cascadeLink import EmptyLink, Link
 from app.application.worldData.context.contextResolver import extend, scope_sequence
@@ -34,9 +35,10 @@ from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
-def named_location_pojo(location: NamedLocation) -> BundleNamedLocation:
+def named_location_pojo(location: NamedLocation, *, world: World | None = None) -> BundleNamedLocation:
     """Persist/runtime ``NamedLocation`` → its source POJO (§2)."""
-    return BundleNamedLocation.model_validate(asdict(location))
+    return BundleNamedLocation.model_validate(source_wire(location, asdict(location)),
+        context={"location_type_registry": location_types(world)} if world is not None else None)
 
 
 def scope_rng(world_uid: str, scope_uid: str, param: str) -> Random:
@@ -59,7 +61,7 @@ def settlement_context(
     """World root + settlement links → resolved settlement-scope ctx."""
     return extend(
         root_context(world),
-        Link(ScopeLevel.SETTLEMENT, named_location_pojo(settlement)),
+        Link(ScopeLevel.SETTLEMENT, named_location_pojo(settlement, world=world)),
         Link(ScopeLevel.SETTLEMENT, settlement_skeleton_pojo(settlement)),
         rng=scope_rng(world.world_uid, settlement.location_uid, "tier"),
     )
@@ -82,7 +84,7 @@ def district_context(
     if district is not None:
         links.insert(
             0,
-            Link(ScopeLevel.DISTRICT, named_location_pojo(district)),
+            Link(ScopeLevel.DISTRICT, named_location_pojo(district, world=world)),
         )
     return extend(
         ctx,
@@ -114,7 +116,7 @@ def building_context(
     """Area ctx + building NL link → building-scope ctx."""
     return extend(
         ctx,
-        Link(ScopeLevel.BUILDING, named_location_pojo(building)),
+        Link(ScopeLevel.BUILDING, named_location_pojo(building, world=world)),
         rng=scope_rng(world.world_uid, building.location_uid, "tier"),
     )
 

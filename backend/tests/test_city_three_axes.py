@@ -169,14 +169,15 @@ def _skeleton(world: World, settlement: NamedLocation):
 
 
 class RecipePojoTest(unittest.TestCase):
-    def test_engine_city_village_dungeon_recipes(self) -> None:
+    def test_engine_city_village_complex_recipes(self) -> None:
         engine = WorldLocationTypeRegistry.canonical_engine()
         city = engine.subtype_for("settlement", "city")
         village = engine.subtype_for("settlement", "village")
-        dungeon = engine.subtype_for("settlement", "dungeon")
+        crypt = engine.subtype_for("location_complex", "crypt")
         underground = engine.subtype_for("settlement", "underground_city")
         assert city is not None and village is not None
-        assert dungeon is not None and underground is not None
+        assert crypt is not None and underground is not None
+        self.assertIsNone(engine.subtype_for("settlement", "dungeon"))
         self.assertEqual(
             city.typical_district_types,
             ["civic", "commercial", "residential", "industrial", "port"],
@@ -186,7 +187,7 @@ class RecipePojoTest(unittest.TestCase):
         self.assertEqual(village.typical_district_types, ["civic", "residential"])
         self.assertEqual(village.required_structure_types, [])
         self.assertTrue(village.has_district_recipe())
-        self.assertFalse(dungeon.has_district_recipe())
+        self.assertTrue(crypt.has_district_recipe())
         self.assertEqual(underground.typical_district_types, ["civic", "residential"])
 
     def test_engine_district_subtypes_and_specialization_subjects(self) -> None:
@@ -222,7 +223,7 @@ class RecipePojoTest(unittest.TestCase):
             "system_settlement_specializations": ["extract"],
             "typical_districts": [{"district_type": "civic"}],
         })
-        fields = wire.to_db_fields()
+        fields = wire.to_db_fields()["location_payload"]
         self.assertEqual(
             fields["system_settlement_specializations"][0]["system_specialization"],
             "extract",

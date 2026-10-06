@@ -1,90 +1,48 @@
-"""Settlement vs pin territory — type/subtype, not size rank (LOC-T-2)."""
-
-from __future__ import annotations
-
-from functools import lru_cache
+"""Footprint pipeline selection by payload contract — tz_locations §Payload per type."""
 
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import WorldLocationTypeRegistry
-
-_LEGACY_FOOTPRINT_SYSTEM_TYPES = frozenset({"city"})
-
-
-@lru_cache(maxsize=1)
-def _footprint_system_types() -> frozenset[str]:
-    return frozenset({"settlement", "district"}) | _LEGACY_FOOTPRINT_SYSTEM_TYPES
+from app.dataModel.locations.payloadKind import PayloadKind
 
 
-@lru_cache(maxsize=1)
-def _settlement_subtypes() -> frozenset[str]:
-    entry = WorldLocationTypeRegistry.canonical_engine().entry_for(
-        WorldLocationTypeRegistry.SYSTEM_TYPE_SETTLEMENT,
-    )
-    if entry is None:
-        return frozenset()
-    return frozenset(s.system_subtype for s in entry.subtypes)
+def _payload_kind(system_type: str | None, registry: WorldLocationTypeRegistry | None):
+    resolved = registry if registry is not None else WorldLocationTypeRegistry.canonical_engine()
+    entry = resolved.entry_for((system_type or "").strip().lower())
+    return entry.payload_kind if entry is not None else None
 
 
 def uses_settlement_fine_footprint(
-    *,
-    system_location_type: str | None,
+    *, system_location_type: str | None,
     system_location_subtype: str | None = None,
+    registry: WorldLocationTypeRegistry | None = None,
 ) -> bool:
-    """True when territory uses settlement assembler fine-grid rect, not pin box.
-
-    Size rank (``small`` / ``medium`` / ``large``) is not a settlement signal.
-    """
-    loc_type = (system_location_type or "").strip().lower()
-    if loc_type in _footprint_system_types():
-        return True
-    subtype = (system_location_subtype or "").strip().lower()
-    if subtype and subtype in _settlement_subtypes():
-        return True
-    return False
+    """Settlement roots and district payloads use the assembler fine grid."""
+    return _payload_kind(system_location_type, registry) in (
+        PayloadKind.SETTLEMENT, PayloadKind.DISTRICT,
+    )
 
 
-def named_location_uses_settlement_fine_footprint(location: object) -> bool:
-    """``NamedLocation`` / bundle row — typed fields via getattr for tests."""
+def named_location_uses_settlement_fine_footprint(
+    location: object, *, registry: WorldLocationTypeRegistry | None = None,
+) -> bool:
     return uses_settlement_fine_footprint(
         system_location_type=getattr(location, "system_location_type", None),
-        system_location_subtype=getattr(location, "system_location_subtype", None),
+        registry=registry,
     )
 
 
 def is_settlement_map_site(
-    *,
-    system_location_type: str | None,
+    *, system_location_type: str | None,
     system_location_subtype: str | None = None,
+    registry: WorldLocationTypeRegistry | None = None,
 ) -> bool:
-    """L0 city footprint: settlement root, not district/building/room or geography."""
-    if not uses_settlement_fine_footprint(
-        system_location_type=system_location_type,
-        system_location_subtype=system_location_subtype,
-    ):
-        return False
-    loc_type = (system_location_type or "").strip().lower()
-    if not loc_type:
-        return True
-    engine = WorldLocationTypeRegistry.canonical_engine()
-    entry = engine.entry_for(loc_type)
-    if entry is None:
-        return True
-    settlement = engine.entry_for(WorldLocationTypeRegistry.SYSTEM_TYPE_SETTLEMENT)
-    if settlement is not None and entry.system_type == settlement.system_type:
-        return True
-    nested = {
-        e.system_type
-        for key in (
-            WorldLocationTypeRegistry.SYSTEM_TYPE_SETTLEMENT,
-            WorldLocationTypeRegistry.SYSTEM_TYPE_DISTRICT,
-            WorldLocationTypeRegistry.SYSTEM_TYPE_BUILDING,
-        )
-        if (e := engine.entry_for(key)) is not None
-    }
-    return not any(p in nested for p in (entry.parent_types or []) if p)
+    """A settlement payload selects the root pipeline, regardless of type name."""
+    return _payload_kind(system_location_type, registry) is PayloadKind.SETTLEMENT
 
 
-def named_location_is_settlement_map_site(location: object) -> bool:
+def named_location_is_settlement_map_site(
+    location: object, *, registry: WorldLocationTypeRegistry | None = None,
+) -> bool:
     return is_settlement_map_site(
         system_location_type=getattr(location, "system_location_type", None),
-        system_location_subtype=getattr(location, "system_location_subtype", None),
+        registry=registry,
     )

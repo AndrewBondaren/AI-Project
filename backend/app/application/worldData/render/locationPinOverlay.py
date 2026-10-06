@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.application.worldData.locationPayloadAccess import settlement_payload
+
 from collections.abc import Sequence
 
 from app.application.worldData.render.mapSymbols import SETTLEMENT_FOOTPRINT_SYMBOL
@@ -29,7 +31,7 @@ def overlay_location_pins(
                 update={
                     "system_location_type": loc.system_location_type,
                     "system_location_subtype": loc.system_location_subtype,
-                    "system_city_size": loc.system_city_size,
+                    "system_city_size": settlement_payload(loc).system_city_size,
                     "display_name": loc.display_name,
                 },
             ),

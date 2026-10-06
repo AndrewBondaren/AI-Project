@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.application.worldData.locationPayloadAccess import settlement_payload
+
 from collections.abc import Iterable
 from dataclasses import dataclass
 
@@ -11,7 +13,7 @@ from app.application.jsonValidation.settlementVolumeSeparation import (
     REASON_FOOTPRINT,
     log_settlement_volume_separation,
 )
-from app.application.jsonValidation.worldRow import city_sizes
+from app.application.jsonValidation.worldRow import city_sizes, location_types
 from app.application.worldData.pack.read.locationTerritoryVolumes import (
     settlement_footprint_side_fine,
     territory_volume_for_location,
@@ -63,7 +65,7 @@ def _size_key(world: World, location: NamedLocation) -> str:
     return str(
         resolve_settlement_size_key(
             city_sizes(world),
-            location.system_city_size,
+            settlement_payload(location).system_city_size,
             world_uid=getattr(world, "world_uid", "") or "",
         )
     )
@@ -78,7 +80,7 @@ def pick_occupants(
     resolved = policy or TerritoryVolumePolicy.canonical_defaults()
     candidates: list[_Candidate] = []
     for declaration_index, location in locations_with_index:
-        if not named_location_is_settlement_map_site(location):
+        if not named_location_is_settlement_map_site(location, registry=location_types(world)):
             continue
         volume = territory_volume_for_location(world, location)
         side = settlement_footprint_side_fine(world, location)
@@ -162,7 +164,7 @@ def occupancy_locations(
     return [
         loc
         for loc in locations
-        if not named_location_is_settlement_map_site(loc)
+        if not named_location_is_settlement_map_site(loc, registry=location_types(world))
         or loc.location_uid in occupant_uids
     ]
 

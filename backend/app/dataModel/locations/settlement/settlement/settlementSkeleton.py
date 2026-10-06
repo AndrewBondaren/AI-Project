@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, ClassVar, Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import ConfigDict
 
 from app.dataModel.annotationPolicy import DefaultOnWire
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
@@ -15,20 +15,12 @@ from app.dataModel.locations.context.cascadeParams import (
     SETTLEMENT_DENSITY,
 )
 from app.dataModel.cascade.cascadeSpec import CascadeChannel
-from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
-    ConnectionTypeKey,
-)
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 from app.dataModel.materials.worldMaterialRegistry import MaterialKey
-from app.dataModel.locations.settlement.area.perimeterBarrier import PerimeterBarrier
 from app.dataModel.locations.settlement.enums.districtDensity import DistrictDensity
-from app.dataModel.locations.settlement.settlement.settlementSpecializationBind import (
-    SettlementSpecializationBind,
-)
-from app.dataModel.locations.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
+from app.dataModel.locations.settlement.settlement.settlementPayload import SettlementPayloadFields
 from app.dataModel.locations.settlement.settlement.worldLocationMoodRegistry import LocationMoodKey
 from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import SettlementSizeKey
-from app.dataModel.locations.structure.building.plotLayoutTemplate import DrawingKey
 
 type SettlementSkeletonNlOverlayField = Literal[
     "architectural_style",
@@ -43,7 +35,7 @@ type SettlementSkeletonNlAliasedField = Literal["economic_tier"]
 type NamedLocationSkeletonColumn = Literal["system_economic_tier"]
 
 
-class SettlementSkeleton(BaseModel):
+class SettlementSkeleton(SettlementPayloadFields):
     """
     CitySkeleton master-data view — tz_city_generation.md §3, tz_assembler_hierarchy.md §7.1.
     `dominant_material` is a cascade channel: authored import value is
@@ -75,7 +67,6 @@ class SettlementSkeleton(BaseModel):
         DefaultOnWire[EconomyTierKey | None],
         CascadeChannel(ECONOMIC_TIER, ScopeLevel.SETTLEMENT),
     ] = None
-    architectural_style: DefaultOnWire[str | None] = None
     # Bottom of the `dominant_material` chain — the `above` edge from
     # the settlement NL node is materialized by the verifier (M10).
     dominant_material: Annotated[
@@ -96,20 +87,6 @@ class SettlementSkeleton(BaseModel):
         CascadeChannel(CITY_SIZE, ScopeLevel.SETTLEMENT),
     ] = None
     system_location_mood: DefaultOnWire[LocationMoodKey | None] = None
-    frontage_type_order: DefaultOnWire[list[ConnectionTypeKey] | None] = None
-    plot_counts: DefaultOnWire[dict[DrawingKey, int] | None] = Field(
-        default=None,
-        validation_alias=AliasChoices("plot_counts", "structure_counts"),
-    )
-    plot_priority: DefaultOnWire[dict[DrawingKey, int] | None] = Field(
-        default=None,
-        validation_alias=AliasChoices("plot_priority", "structure_priority"),
-    )
-    perimeter_barrier: DefaultOnWire[PerimeterBarrier | None] = None
-    typical_districts: DefaultOnWire[list[TypicalDistrictRef] | None] = None
-    system_settlement_specializations: DefaultOnWire[
-        list[SettlementSpecializationBind] | None
-    ] = None
 
 
 _overlay_unknown = set(SettlementSkeleton.NAMED_LOCATION_OVERLAY_FIELDS) - set(

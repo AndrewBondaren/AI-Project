@@ -253,7 +253,7 @@ class WorldSurfaceMaterializationOrchestrator:
         if not location_uid:
             return None
         loc = next((item for item in locations if item.location_uid == location_uid), None)
-        if loc is None or not is_settlement_outdoor_target(loc):
+        if loc is None or not is_settlement_outdoor_target(loc, world=world):
             return None
         try:
             return await self._outdoor.materialize(
