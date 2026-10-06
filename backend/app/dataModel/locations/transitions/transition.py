@@ -85,7 +85,7 @@ class Transition(BaseModel):
     def _typed_params(cls, value: Any, info: ValidationInfo) -> PhysicalTransitionParams:
         system_type = info.data.get("system_transition_type")
         if system_type is None:
-            raise ValueError("type_params require source valid system_transition_type")
+            raise ValueError("type_params require a valid system_transition_type")
         model = params_model_for(_builtin(system_type, info))
         wire = value.model_dump() if isinstance(value, PhysicalTransitionParams) else value
         return model.model_validate(wire)
