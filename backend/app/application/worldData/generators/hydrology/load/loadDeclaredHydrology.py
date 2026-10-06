@@ -5,9 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.application.jsonValidation.worldRow import hydrology as read_hydrology
-from app.application.worldData.generators.coordinates.convert import (
-    map_cell_fine_span,
-)
 from app.application.worldData.generators.hydrology.basins.basinKindResolver import (
     resolve_lake_basin_role,
 )
@@ -74,35 +71,34 @@ def build_river_system_index(rivers: list[DeclaredRiver]) -> RiverSystemIndex:
     )
 
 
-def _waypoint_meter(wp: HydrologyWaypoint) -> tuple[int, int]:
-    """World fine grid — meter coords (1 m cell), not macro tile index."""
+def _waypoint_fine(wp: HydrologyWaypoint) -> tuple[int, int]:
+    """World fine-grid cell (x, y); not a coarse map-cell index."""
     return int(wp.x), int(wp.y)
 
 
 def _path_to_segments(
     points: list[HydrologyWaypoint],
-    cell_m: int,
     *,
     closed: bool = False,
 ) -> list[tuple[tuple[int, int], tuple[int, int]]]:
     if len(points) < 2:
         return []
-    grid_pts = [_waypoint_meter(p) for p in points]
+    fine_pts = [_waypoint_fine(p) for p in points]
     segments: list[tuple[tuple[int, int], tuple[int, int]]] = []
-    for i in range(len(grid_pts) - 1):
-        segments.append((grid_pts[i], grid_pts[i + 1]))
-    if closed and len(grid_pts) >= 3:
-        segments.append((grid_pts[-1], grid_pts[0]))
+    for i in range(len(fine_pts) - 1):
+        segments.append((fine_pts[i], fine_pts[i + 1]))
+    if closed and len(fine_pts) >= 3:
+        segments.append((fine_pts[-1], fine_pts[0]))
     return segments
 
 
-def _segments_from_declared_river(river: DeclaredRiver, cell_m: int) -> list[DeclaredRiverEdge]:
+def _segments_from_declared_river(river: DeclaredRiver) -> list[DeclaredRiverEdge]:
     if river.declare_mode != RiverDeclareMode.SEGMENTS:
         return []
     edges: list[DeclaredRiverEdge] = []
     for index, seg in enumerate(river.segments):
-        a = _waypoint_meter(seg.from_wp)
-        b = _waypoint_meter(seg.to_wp)
+        a = _waypoint_fine(seg.from_wp)
+        b = _waypoint_fine(seg.to_wp)
         edges.append(DeclaredRiverEdge(
             edge_uid=f"dr-{river.location_uid}-{index}",
             segment=(a, b),
@@ -119,7 +115,6 @@ def load_declared_hydrology(
 ) -> LoadedDeclaredHydrology:
     """Read POJO declare from world; segments mode → edges at import (A3 hybrid)."""
     pojo = read_hydrology(world)
-    cell_m = map_cell_fine_span(world)
     loc_map = {loc.location_uid: loc for loc in locations}
     coastlines = _coerce_declared_coastlines(list(pojo.declared_coastlines))
     lakes = _coerce_declared_lakes(list(pojo.declared_lakes))
@@ -127,11 +122,11 @@ def load_declared_hydrology(
 
     coastline_segments: list[tuple[tuple[int, int], tuple[int, int]]] = []
     for entry in coastlines:
-        coastline_segments.extend(_path_to_segments(list(entry.path), cell_m))
+        coastline_segments.extend(_path_to_segments(list(entry.path)))
 
     lake_specs: list[LakeSpec] = []
     for entry in lakes:
-        segments = _path_to_segments(list(entry.shoreline), cell_m, closed=True)
+        segments = _path_to_segments(list(entry.shoreline), closed=True)
         if not segments:
             continue
         for group in _group_segments(segments):
@@ -153,7 +148,7 @@ def load_declared_hydrology(
         if river.system_role == RiverSystemRole.SYSTEM:
             continue
         if river.declare_mode == RiverDeclareMode.SEGMENTS:
-            river_edges.extend(_segments_from_declared_river(river, cell_m))
+            river_edges.extend(_segments_from_declared_river(river))
         elif river.declare_mode in (RiverDeclareMode.ENDPOINTS, RiverDeclareMode.VIA_LOCATIONS):
             river_intents.append(river)
 
