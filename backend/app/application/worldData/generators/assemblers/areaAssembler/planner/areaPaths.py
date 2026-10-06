@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import uuid
-
+from app.application.worldData.connectionUids import connection_node_uid
 from app.application.worldData.generators.assemblers.areaAssembler.areaThreshold import (
     AreaThreshold,
     AreaThresholdKind,
@@ -47,7 +46,10 @@ def _make_node(
     location_uid: str | None = None,
 ) -> ConnectionNode:
     return ConnectionNode(
-        node_uid=f"a_{tag}_{x}_{y}_{z}_{uuid.uuid4().hex[:8]}",
+        node_uid=connection_node_uid(
+            world_uid, level=GraphLevel.AREA, node_type=node_type,
+            x=x, y=y, z=z, tag=tag, parent=location_uid,
+        ),
         x=x,
         y=y,
         z=z,

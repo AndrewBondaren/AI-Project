@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import random
 
+from app.application.worldData.ids import UidKind, seed_rng
 from app.dataModel.terrainMasks.mountain.enums import mountain_kind_profile
 from app.dataModel.terrainMasks.mountain.specs import MountainRangeSpec, MountainSpec
 from app.dataModel.terrainMasks.worldTerrainMasks import MountainsCategoryPolicy
@@ -83,7 +84,7 @@ def filter_auto_by_range_gap(
     seed: int,
 ) -> list[MountainEntry]:
     """Drop auto entries that fall inside gap vs reserved+kept auto. Declare untouched."""
-    rng = random.Random(seed)
+    rng = seed_rng(str(seed), UidKind.TERRAIN, tag="range_gap")
     kept: list[MountainEntry] = []
     obstacles = list(reserved)
     for entry in auto:

@@ -5,16 +5,14 @@ Format SoT: ``PackJobUid``. This module only reads world → seed namespace.
 
 from __future__ import annotations
 
+from app.application.worldData.ids import seed_root
 from app.dataModel.worldPack.packJobUid import PackJobUid
 from app.db.models.world import World
 
 
 def pack_job_seed(world: World) -> str:
     """Pack job-uid namespace. Not climate ``world_seed`` (int) and not relief pick."""
-    uid = getattr(world, "world_uid", None)
-    if not uid:
-        raise ValueError("pack_job_seed requires world.world_uid")
-    return str(uid)
+    return seed_root(world)
 
 
 def macro_tile_site(tile_gx: int, tile_gy: int) -> str:

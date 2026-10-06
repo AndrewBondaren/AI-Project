@@ -1,8 +1,8 @@
 """Shared climate math helpers (DR-5 / CL-12)."""
 
-import hashlib
 import math
 
+from app.application.worldData.ids import seed_int
 from app.db.models.world import World
 
 
@@ -20,4 +20,4 @@ def dist_sq(x1: int, y1: int, x2: int, y2: int) -> int:
 
 
 def world_seed(world: World) -> int:
-    return int(hashlib.md5(world.world_uid.encode()).hexdigest()[:8], 16)
+    return seed_int(world)

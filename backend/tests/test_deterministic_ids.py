@@ -151,22 +151,6 @@ _EXEMPT = (
 # Temporary whitelist — migrate per plan step; a file drops out of _TODO
 # when its step lands (stale entries fail the gate).
 _TODO = {
-    # step 5 — planner/topology rng
-    "application/worldData/generators/assemblers/settlementAssembler/settlementAssembler.py": 5,
-    "application/worldData/generators/assemblers/settlementAssembler/planner/topologyPlan.py": 5,
-    "application/worldData/generators/assemblers/districtAssembler/districtAssembler.py": 5,
-    "application/worldData/generators/assemblers/districtAssembler/planner/frontage.py": 5,
-    "application/worldData/generators/assemblers/areaAssembler/structureAreaAssembler.py": 5,
-    "application/worldData/generators/coordinates/settlementCellRng.py": 5,
-    "application/worldData/generators/road/districtRoadGenerator.py": 5,
-    # step 6 — connection_node_uid
-    "application/worldData/generators/road/layouts/gridLayout.py": 6,
-    "application/worldData/generators/assemblers/areaAssembler/planner/areaPaths.py": 6,
-    # step 7 — pack/grade/seed
-    "application/worldData/generators/climate/math.py": 7,
-    "application/worldData/generators/terrain/relief/geom/seededHash.py": 7,
-    "application/worldData/generators/terrain/relief/volume/gradeInstanceFactory.py": 7,
-    "application/worldData/generators/terrain/mountains/rangeGapFilter.py": 7,
     # step 8 — runtime_uid / library_uid
     "application/worldData/buildingTemplateLibraryService.py": 8,
     "application/worldData/reliefTemplateLibraryService.py": 8,

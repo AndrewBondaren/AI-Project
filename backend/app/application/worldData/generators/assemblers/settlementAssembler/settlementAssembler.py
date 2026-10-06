@@ -15,7 +15,6 @@ SettlementAssembler — оркестратор генерации поселен
 ТЗ: docs/tz_assembler_hierarchy.md, tz_city_generation.md, tz_structure_connections.md §5
 """
 import logging
-import random
 import time
 from dataclasses import replace
 
@@ -36,6 +35,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.barriers import (
     plan_settlement_barriers,
 )
+from app.application.worldData.ids import UidKind, entity_rng
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.dominantMaterial import (
     resolve_dominant_material,
 )
@@ -193,5 +193,6 @@ class SettlementAssembler:
         skeleton:   CitySkeleton,
         ctx:        LocationContext,
     ) -> list[MapCell]:
-        rng = random.Random(f"{world.world_uid}_{settlement.location_uid}_barriers")
+        rng = entity_rng(
+            world.world_uid, UidKind.BARRIER, settlement=settlement.location_uid)
         return plan_settlement_barriers(world, settlement, skeleton, rng, ctx)

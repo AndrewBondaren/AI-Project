@@ -6,8 +6,6 @@ function from the generator wrapper and from assembler fallback.
 
 from __future__ import annotations
 
-import random
-
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
@@ -28,6 +26,7 @@ from app.application.worldData.generators.coordinates import (
     map_cell_fine_span,
     settlement_origin_fine,
 )
+from app.application.worldData.ids import UidKind, entity_rng
 from app.dataModel.locations.context.locationContext import LocationContext
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
@@ -44,7 +43,8 @@ def plan_city_graph_for_slots(
     terrain_cells: list[MapCell] | None,
 ) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
     origin = settlement_origin_fine(settlement)
-    rng = random.Random(f"{world.world_uid}_{settlement.location_uid}")
+    rng = entity_rng(
+        world.world_uid, UidKind.TOPOLOGY, settlement=settlement.location_uid)
     return plan_city_street_grid(
         origin.x, origin.y, origin.z,
         footprint_side_fine(world, skeleton.system_city_size),

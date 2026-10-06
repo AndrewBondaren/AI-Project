@@ -35,6 +35,8 @@ from app.dataModel.spatial.facing import CARDINAL_WALL_OUTWARD_DELTA, Facing
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.dataModel.locations.structure.enums.buildingPurpose import BuildingPurposeFamily
 from app.dataModel.connections.enums.connectionNodeType import ConnectionNodeType
+from app.application.worldData.connectionUids import connection_node_uid
+from app.application.worldData.ids import UidKind, entity_rng
 from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
@@ -133,6 +135,7 @@ def apply_frontage(
     known_types: frozenset[str],
     rng: random.Random,
     settlement_uid: str,
+    world_uid: str,
     edge_roles: dict[str, DistrictStreetRole] | None = None,
 ) -> list[str]:
     """Set AreaSlot.facing from abutting streets. Type then role; equal-rank tie-break."""
@@ -216,14 +219,16 @@ def apply_frontage(
                 counts={str(k): thread_plot_count[k] for k, _ct in tied},
             )
         else:
-            seed = f"{settlement_uid}_{placement.building_x}_{placement.building_y}"
-            local = random.Random(seed)
+            local = entity_rng(
+                world_uid, UidKind.FRONTAGE,
+                settlement=settlement_uid,
+                x=placement.building_x, y=placement.building_y,
+            )
             winner = local.choice([k for k, _ct in tied])
             packing_info(
                 PackingStep.FRONTAGE, district=district,
                 template=placement.template.system_name,
                 reason=PackingReason.RNG,
-                seed=seed,
             )
         placement.area_slot.facing = facing_from_street(list(cells), thread_xy[winner])
     _ = by_uid
@@ -380,7 +385,11 @@ def _node_at(
         if node.x == x and node.y == y:
             return node
     return ConnectionNode(
-        node_uid=f"n_alley_{x}_{y}",
+        node_uid=connection_node_uid(
+            world_uid, level=GraphLevel.DISTRICT,
+            node_type=ConnectionNodeType.INTERSECTION,
+            x=x, y=y, z=0, tag="alley",
+        ),
         x=x,
         y=y,
         z=0,

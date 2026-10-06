@@ -1,4 +1,4 @@
-import random
+from app.application.worldData.ids import UidKind, entity_rng
 import time
 
 from app.application.jsonValidation import connection_types
@@ -126,9 +126,10 @@ class DistrictAssembler:
             slot.cell_y,
             SettlementCellRngRole.BUILDINGS,
         )
-        rng = random.Random(
-            f"{world.world_uid}_{settlement_uid}_{slot.cell_x}_{slot.cell_y}"
-            f"_{slot.origin_x}_{slot.origin_y}",
+        rng = entity_rng(
+            world.world_uid, UidKind.TOPOLOGY,
+            settlement=settlement_uid, cell_x=slot.cell_x, cell_y=slot.cell_y,
+            x=slot.origin_x, y=slot.origin_y,
         )
 
         inner, _widths, _reason = inner_bbox_for_slot(slot, world)
@@ -190,6 +191,7 @@ class DistrictAssembler:
             placements, nodes, edges, edge_xy, street_xy,
             slot, city_skeleton, known, rng, settlement_uid,
             edge_roles=edge_roles,
+            world_uid=world.world_uid,
         )
 
         for placement in placements:
@@ -292,7 +294,11 @@ class DistrictAssembler:
         frame:         StreetFrameContext | None = None,
     ) -> DistrictStreetGraph:
         generator = DistrictRoadGenerator()
-        rng = random.Random(f"{slot.origin_x}_{slot.origin_y}")
+        rng = entity_rng(
+            world.world_uid, UidKind.TOPOLOGY,
+            district=slot.district_template.system_name, index=slot.slot_index,
+            x=slot.origin_x, y=slot.origin_y,
+        )
         return generator.generate(
             slot, city_skeleton, world, rng, surface=surface, frame=frame,
         )

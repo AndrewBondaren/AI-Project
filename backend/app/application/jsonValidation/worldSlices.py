@@ -66,6 +66,7 @@ from app.dataModel.locations.structure.enums.buildingPurpose import (
     WorldPurposePacks,
 )
 from app.dataModel.locations.structure.room.worldRoomTypeRegistry import WorldRoomTypeRegistry
+from app.dataModel.locations.transitions.worldTransitionTypeRegistry import WorldTransitionTypeRegistry
 from app.dataModel.terrain.relief.worldReliefGradeObstacle import (
     RELIEF_OBSTACLE_SCALAR_WIRE_KEYS,
     WorldReliefGradeObstacleScalars,
@@ -292,6 +293,11 @@ WORLD_SLICES: tuple[WorldSlice, ...] = (
     _registry_slice(
         pojo_cls=WorldConnectionTypeRegistry,
         world_key="connection_type_registry",
+        facade=True,
+    ),
+    _registry_slice(
+        pojo_cls=WorldTransitionTypeRegistry,
+        world_key="transition_type_registry",
         facade=True,
     ),
     _registry_slice(

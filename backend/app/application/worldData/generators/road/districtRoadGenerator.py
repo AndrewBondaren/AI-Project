@@ -27,6 +27,7 @@ from app.application.worldData.generators.assemblers.districtAssembler.planner.t
 )
 from app.dataModel.locations.settlement.district.districtConnection import street_classes_for
 from app.dataModel.roads.enums.streetLayout import StreetLayout
+from app.application.worldData.ids import UidKind, entity_rng
 from app.application.worldData.generators.road.connectionPolicy import paint_for_connection
 from app.dataModel.locations.settlement.enums.districtStreetRole import DistrictStreetRole
 from app.db.models.connectionEdge import ConnectionEdge
@@ -63,7 +64,11 @@ class DistrictRoadGenerator:
         frame:     StreetFrameContext | None = None,
     ) -> DistrictStreetGraph:
         if rng is None:
-            rng = random.Random()
+            rng = entity_rng(
+                world.world_uid, UidKind.TOPOLOGY,
+                district=slot.district_template.system_name,
+                index=slot.slot_index, x=slot.origin_x, y=slot.origin_y,
+            )
 
         template      = slot.district_template
         street_layout = StreetLayout.for_generator(template.street_layout)

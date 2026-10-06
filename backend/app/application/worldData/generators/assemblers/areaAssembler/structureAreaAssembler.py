@@ -45,6 +45,7 @@ from app.application.worldData.context.locationScope import (
     building_context,
     empty_location_chain,
 )
+from app.application.worldData.ids import UidKind, entity_rng
 from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
     area_uid as _area_uid,
     building_location_uid as _building_location_uid,
@@ -236,7 +237,11 @@ class StructureAreaAssembler:
         fallback_z = slot.ground_z
         want_building = plot_has_building(template)
 
-        rng = random.Random(f"{world.world_uid}_{bx}_{by}_barrier")
+        rng = entity_rng(
+            world.world_uid, UidKind.BARRIER,
+            x=bx, y=by,
+            **({"district": district_uid} if district_uid is not None else {}),
+        )
         has_barrier = should_build_area_barrier(template, rng)
         fp = _runtime_footprint(template)
         fp_cells: list[Coord] = _footprint_cells(fp, bx, by) if fp is not None else []

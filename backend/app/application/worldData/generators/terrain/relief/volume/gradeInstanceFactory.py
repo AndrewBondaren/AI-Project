@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from datetime import datetime, timezone
 
 from app.application.worldData.generators.terrain.relief.log.log import (
@@ -11,6 +10,7 @@ from app.application.worldData.generators.terrain.relief.log.log import (
 from app.application.worldData.generators.terrain.relief.volume.volumeMaterialize import (
     RibbonVolumePlan,
 )
+from app.application.worldData.ids import UidKind, entity_uid, seed_uid
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 from app.dataModel.terrain.relief.reliefGradeInstance import ReliefGradeInstance
 from app.dataModel.terrain.relief.reliefGradeSystem import ReliefGradeSystem
@@ -20,33 +20,18 @@ WHY_SIDE_ATTACH = "side_attach"
 WHY_T3C_SAME_VERTEX = "t3c_same_vertex"
 
 
-def _uid_digest(key: str) -> str:
-    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
-    return (
-        f"{digest[:8]}-{digest[8:12]}-{digest[12:16]}-"
-        f"{digest[16:20]}-{digest[20:32]}"
-    )
-
-
 def make_seeded_uid(*, world_seed: str, site_id: str) -> str:
     """R36w catalog / interior uid — namespace ``world_seed``, not cell seed."""
-    return _uid_digest(UID_PART_SEP.join((world_seed, site_id)))
+    return seed_uid(world_seed, UidKind.GRADE, site=site_id)
 
 
 def make_grade_uid(*, world_uid: str, site_id: str, seed: tuple[int, int]) -> str:
     """Deterministic uid for re-bake upsert (legacy mint; catalog uses ``make_seeded_uid``)."""
-    return _uid_digest(
-        UID_PART_SEP.join((world_uid, site_id, f"{seed[0]},{seed[1]}"))
-    )
+    return entity_uid(world_uid, UidKind.GRADE, site=site_id, seed=seed)
 
 
 def make_grade_system_uid(*, world_uid: str, site_id: str) -> str:
-    key = UID_PART_SEP.join((world_uid, "grade_system", site_id))
-    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
-    return (
-        f"{digest[:8]}-{digest[8:12]}-{digest[12:16]}-"
-        f"{digest[16:20]}-{digest[20:32]}"
-    )
+    return entity_uid(world_uid, UidKind.GRADE_SYSTEM, site=site_id)
 
 
 def build_ribbon_grade_instance(

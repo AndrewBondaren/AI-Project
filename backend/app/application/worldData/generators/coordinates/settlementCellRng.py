@@ -5,6 +5,8 @@ from __future__ import annotations
 import random
 from enum import StrEnum
 
+from app.application.worldData.ids import UidKind, entity_rng
+
 
 class SettlementCellRngRole(StrEnum):
     BUILDINGS = "buildings"
@@ -19,5 +21,8 @@ def settlement_cell_rng(
     cell_y: int,
     role: SettlementCellRngRole | str,
 ) -> random.Random:
-    suffix = SettlementCellRngRole(role).value
-    return random.Random(f"{world_uid}_{location_uid}_{cell_x}_{cell_y}_{suffix}")
+    role = SettlementCellRngRole(role)
+    return entity_rng(
+        world_uid, UidKind.CELL,
+        location=location_uid, cell_x=cell_x, cell_y=cell_y, role=role,
+    )

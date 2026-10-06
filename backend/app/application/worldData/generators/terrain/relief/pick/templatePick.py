@@ -13,6 +13,7 @@ from app.application.worldData.generators.terrain.relief.log.log import (
     relief_warning,
 )
 from app.application.worldData.generators.terrain.relief.geom.seededHash import seeded_index
+from app.application.worldData.ids import UidKind
 from app.dataModel.terrain.relief.enums import ReliefContext, ReliefPickMode, ReliefSideKind
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
 from app.dataModel.terrain.relief.worldReliefPickPolicy import (
@@ -161,8 +162,8 @@ def pick_template(
 
     # random
     idx = seeded_index(
-        f"{world_seed}|relief_pick|{ctx}|{site_id}",
-        len(candidates),
+        world_seed, UidKind.RELIEF_PICK, len(candidates),
+        context=ctx, site=site_id,
     )
     uid = candidates[idx].system_template_uid
     relief_info(

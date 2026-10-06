@@ -39,6 +39,7 @@ from app.dataModel.climate.worldClimateScalars import WorldClimateScalars
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
 )
+from app.dataModel.locations.transitions.worldTransitionTypeRegistry import WorldTransitionTypeRegistry
 from app.dataModel.hydrology.rivers import RiverTypeClassify as PojoRiverTypeClassify
 from app.dataModel.locations.settlement.district.worldDistrictTemplateRegistry import (
     WorldDistrictTemplateRegistry,
@@ -319,6 +320,12 @@ def barrier_template_defaults() -> list[dict]:
 def connection_types(world: Any) -> WorldConnectionTypeRegistry:
     return resolve_registry_list_world(
         world, WorldConnectionTypeRegistry, world_uid=_uid(world),
+    )
+
+
+def transition_types(world: Any) -> WorldTransitionTypeRegistry:
+    return resolve_registry_list_world(
+        world, WorldTransitionTypeRegistry, world_uid=_uid(world),
     )
 
 

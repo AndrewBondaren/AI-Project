@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.application.worldData.generators.terrain.relief.log.log import relief_debug
 from app.application.worldData.generators.terrain.relief.geom.seededHash import seeded_u01
+from app.application.worldData.ids import UidKind
 from app.dataModel.terrain.relief.enums import ReliefSideKind
 
 
@@ -25,10 +26,11 @@ def kind_roll(
         kind = ReliefSideKind.SHEER
         reason = "slope_weight=0"
     else:
-        key = f"{world_seed}|{context}|{template_uid}|{site_id}"
-        if side_index is not None:
-            key += f"|{side_index}"
-        u = seeded_u01(key)
+        u = seeded_u01(
+            world_seed, UidKind.KIND_ROLL,
+            context=context, template=template_uid, site=site_id,
+            **({"side": side_index} if side_index is not None else {}),
+        )
         kind = ReliefSideKind.SHEER if u < sheer_weight else ReliefSideKind.SLOPE
         reason = f"u={u:.6f}<sheer={sheer_weight}"
 

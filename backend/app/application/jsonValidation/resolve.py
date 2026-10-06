@@ -345,6 +345,13 @@ def resolve_model(
         _log_resolve_transform(label or model_cls.__name__, raw, result, ctx)
         return result
     except ValidationError as exc:
+        # Cross-field POJO invariants cannot be repaired by constructing an
+        # unchecked instance. Preserve import paths / runtime row rejection.
+        model_errors = [error for error in exc.errors() if not error["loc"]]
+        if model_errors:
+            for error in model_errors:
+                _record_strict_error(ctx, ctx.path_prefix if ctx is not None else (), error["msg"])
+            return model_cls.model_construct(**payload)
         logger.warning(
             "json_validation | %s model_validate failed (%s issues); retry field-wise",
             label or model_cls.__name__,
@@ -481,10 +488,20 @@ def resolve_root_list(
             continue
 
         row_ctx = ctx.child(index) if ctx is not None else None
+        if row_ctx is not None:
+            # A partial world write replaces a supplied registry collection;
+            # each supplied row is complete, not a partial entry patch.
+            row_ctx.partial = False
         before_errors = len(ctx.errors) if ctx is not None else 0
-        entries.append(
-            resolve_model(entry_cls, item, label=f"{label}[{index}]", ctx=row_ctx),
-        )
+        try:
+            entry = resolve_model(entry_cls, item, label=f"{label}[{index}]", ctx=row_ctx)
+        except StrictFieldError as exc:
+            logger.warning(
+                "json_validation | world=%s %s[%s] invalid row (%s); skipped",
+                world_uid or "?", label, index, exc,
+            )
+            continue
+        entries.append(entry)
         if ctx is not None and ctx.mode == ResolveMode.IMPORT and len(ctx.errors) > before_errors:
             entries.pop()
 
