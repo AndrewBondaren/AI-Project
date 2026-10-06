@@ -7,17 +7,12 @@ the import instead of silently degrading to inherit/default
 
 from app.dataModel.cascade.cascadeSpec import (
     Cascade,
+    CascadeDefault,
     ChannelKind,
     DefaultPolicy,
 )
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
-from app.dataModel.locations.settlement.enums.districtDensity import (
-    DistrictDensity,
-)
-from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
-    WorldSettlementSizeRegistry,
-)
-from app.dataModel.materials import CONSTRUCTION_MATERIAL_DEFAULTS
+from app.dataModel.locations.context.locationCascadeDefaults import LocationCascadeDefaults
 from app.dataModel.shared.ranges import EconomicTierRange
 
 ECONOMIC_TIER = Cascade(
@@ -27,7 +22,7 @@ ECONOMIC_TIER = Cascade(
     axis=ScopeLevel,
     input_types=((ChannelKind.RANGE, EconomicTierRange),),
     materialize="economic_tier",
-    default_registry="economic_tiers",
+    default_source=CascadeDefault(LocationCascadeDefaults, "economic_tier"),
 )
 
 CITY_SIZE = Cascade(
@@ -37,8 +32,7 @@ CITY_SIZE = Cascade(
     default=DefaultPolicy.CANONICAL_DEFAULT,
     axis=ScopeLevel,
     levels=(ScopeLevel.SETTLEMENT,),
-    # Canonical rank (dataModel policy, not world registry).
-    default_value=WorldSettlementSizeRegistry.default_system_size(),
+    default_source=CascadeDefault(LocationCascadeDefaults, "system_city_size"),
 )
 
 SETTLEMENT_DENSITY = Cascade(
@@ -49,7 +43,7 @@ SETTLEMENT_DENSITY = Cascade(
     default=DefaultPolicy.CANONICAL_DEFAULT,
     axis=ScopeLevel,
     levels=(ScopeLevel.SETTLEMENT, ScopeLevel.DISTRICT),
-    default_value=DistrictDensity.default(),
+    default_source=CascadeDefault(LocationCascadeDefaults, "settlement_density"),
 )
 
 WALL_MATERIAL = Cascade(
@@ -59,7 +53,7 @@ WALL_MATERIAL = Cascade(
     field="parent_wall_material",
     default=DefaultPolicy.CANONICAL_DEFAULT,
     axis=ScopeLevel,
-    default_value=CONSTRUCTION_MATERIAL_DEFAULTS.wall,
+    default_source=CascadeDefault(LocationCascadeDefaults, "wall_material"),
 )
 
 FLOOR_MATERIAL = Cascade(
@@ -67,7 +61,7 @@ FLOOR_MATERIAL = Cascade(
     field="parent_floor_material",
     default=DefaultPolicy.CANONICAL_DEFAULT,
     axis=ScopeLevel,
-    default_value=CONSTRUCTION_MATERIAL_DEFAULTS.floor,
+    default_source=CascadeDefault(LocationCascadeDefaults, "floor_material"),
 )
 
 DOMINANT_MATERIAL = Cascade(
@@ -82,5 +76,5 @@ DOMINANT_MATERIAL = Cascade(
     axis=ScopeLevel,
     levels=(ScopeLevel.SETTLEMENT,),
     fold="dominant_material",
-    default_value=CONSTRUCTION_MATERIAL_DEFAULTS.dominant,
+    default_source=CascadeDefault(LocationCascadeDefaults, "dominant_material"),
 )

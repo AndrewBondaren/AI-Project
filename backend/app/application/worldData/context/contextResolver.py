@@ -17,7 +17,6 @@ from random import Random
 
 from pydantic import BaseModel
 
-from app.application.jsonValidation import economic_tiers
 from app.application.worldData.context.cascadeLink import Link
 from app.application.worldData.context.cascadeLog import (
     log_default_applied,
@@ -37,7 +36,6 @@ from app.dataModel.cascade.cascadeGraph import (
 from app.dataModel.cascade.cascadeSpec import (
     Cascade,
     ChannelKind,
-    DefaultPolicy,
 )
 from app.dataModel.locations.context.locationContext import LocationContext
 
@@ -70,9 +68,6 @@ _MATERIALIZE = {
 _FOLDS = {
     "dominant_material": fold_dominant_material,
 }
-_REGISTRIES = {
-    "economic_tiers": economic_tiers,
-}
 
 
 def _check_bindings(model: type[BaseModel]) -> None:
@@ -83,7 +78,6 @@ def _check_bindings(model: type[BaseModel]) -> None:
         for name, table, what in (
             (param.materialize, _MATERIALIZE, "materialize"),
             (param.fold, _FOLDS, "fold"),
-            (param.default_registry, _REGISTRIES, "default_registry"),
         ):
             if name is not None and name not in table:
                 raise ValueError(
@@ -142,7 +136,7 @@ def extend(
                             picked, (level, f"fold:{param.fold}"),
                         )
                 if source is None:
-                    value = _resolve_default(param, ctx._world)
+                    value = _resolve_default(param, ctx._default_sources)
                     source = (path[0],
                               f"default:{param.default.value}")
                     log_default_applied(
@@ -211,31 +205,21 @@ def _resolve(param, level, sources, results, inherited, inherited_source,
     return inherited, inherited_source
 
 
-def _resolve_default(param: Cascade, world):
-    """Domain default through the declared policy: canonical values are
-    declared on the param (``default_value``), registry policies resolve
-    through the named world registry (``default_registry`` →
-    ``_REGISTRIES``). The engine logs the fallback (cascadeLog) —
-    REGISTRY_MEDIAN warns once per chain (missing after the whole
-    cascade = caller bug)."""
-    if param.default is DefaultPolicy.CANONICAL_DEFAULT:
-        return param.default_value
-    if param.default is DefaultPolicy.REGISTRY_MEDIAN:
-        if world is None:
-            raise ValueError(
-                f"{param.field}: no cascade value and no world for "
-                "the registry median"
-            )
-        accessor = _REGISTRIES.get(param.default_registry or "")
-        if accessor is None:
-            raise ValueError(
-                f"no registry bound for param {param.field!r} "
-                f"({param.default_registry!r})"
-            )
-        return accessor(world).resolve_default(param.default)
-    raise ValueError(
-        f"no default policy bound for param {param.field!r}"
-    )
+def _resolve_default(param: Cascade, sources: tuple[BaseModel, ...]):
+    """Read the declared terminal POJO field; domain values stay in POJOs."""
+    pointer = param.default_source
+    if pointer is None:
+        raise ValueError(f"{param.field}: no value after the cascade")
+    matches = [obj for obj in sources if isinstance(obj, pointer.model)]
+    if len(matches) != 1:
+        raise ValueError(
+            f"{param.field}: expected one default source {pointer.model.__name__}, "
+            f"got {len(matches)}"
+        )
+    value = getattr(matches[0], pointer.field)
+    if value is None:
+        raise ValueError(f"{param.field}: terminal default source returned None")
+    return value
 
 
 def _check_level(ctx: LocationContext, links: tuple[Link, ...], path):

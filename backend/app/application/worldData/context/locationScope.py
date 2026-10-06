@@ -11,6 +11,8 @@ location domain's boundary wiring — one per scope level.
 from dataclasses import asdict
 from random import Random
 
+from app.application.jsonValidation import economic_tiers
+
 from app.application.worldData.context.cascadeLink import EmptyLink, Link
 from app.application.worldData.context.contextResolver import extend, scope_sequence
 from app.application.worldData.ids import UidKind, entity_rng
@@ -18,6 +20,7 @@ from app.application.worldData.generators.assemblers.citySkeleton import (
     settlement_skeleton_pojo,
 )
 from app.dataModel.locations.context.locationContext import LocationContext
+from app.dataModel.locations.context.locationCascadeDefaults import LocationCascadeDefaults
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.namedLocation import BundleNamedLocation
 from app.dataModel.locations.settlement.district.districtTemplateEntry import (
@@ -41,13 +44,21 @@ def scope_rng(world_uid: str, scope_uid: str, param: str) -> Random:
     return entity_rng(world_uid, UidKind.CASCADE, scope=scope_uid, param=param)
 
 
+def root_context(world: World) -> LocationContext:
+    """Caller boundary: world accessor → typed, lazily read default POJO."""
+    return LocationContext.root(
+        world,
+        default_sources=(LocationCascadeDefaults(tier_registry=economic_tiers(world)),),
+    )
+
+
 def settlement_context(
     world: World,
     settlement: NamedLocation,
 ) -> LocationContext:
     """World root + settlement links → resolved settlement-scope ctx."""
     return extend(
-        LocationContext.root(world),
+        root_context(world),
         Link(ScopeLevel.SETTLEMENT, named_location_pojo(settlement)),
         Link(ScopeLevel.SETTLEMENT, settlement_skeleton_pojo(settlement)),
         rng=scope_rng(world.world_uid, settlement.location_uid, "tier"),
@@ -152,7 +163,7 @@ def empty_location_chain(world: World, up_to: ScopeLevel) -> LocationContext:
     For callers that genuinely own no upper scopes (hand-built/debug
     inputs); each level is declared, never skipped silently.
     """
-    ctx = LocationContext.root(world)
+    ctx = root_context(world)
     path = scope_sequence(ctx)
     if up_to not in path:
         raise ValueError(f"no declared cascade boundary for {up_to.value}")

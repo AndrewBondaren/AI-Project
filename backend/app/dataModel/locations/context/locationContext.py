@@ -63,10 +63,13 @@ class LocationContext(BaseModel):
     # ancestors. These are opaque transient state, not wire fields.
     _scope_path: tuple = PrivateAttr(default=())
     _node_results: dict = PrivateAttr(default_factory=dict)
+    _default_sources: tuple[BaseModel, ...] = PrivateAttr(default=())
 
     @classmethod
-    def root(cls, world: object) -> "LocationContext":
+    def root(cls, world: object, *,
+             default_sources: tuple[BaseModel, ...] = ()) -> "LocationContext":
         """Start at world with no resolution, materialization or default/logging."""
         context = cls(level=ScopeLevel.WORLD)
         context._world = world
+        context._default_sources = default_sources
         return context

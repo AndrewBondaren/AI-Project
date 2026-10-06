@@ -121,7 +121,11 @@ def _base_types(model: type[BaseModel], field: str) -> frozenset:
     """Normalized field types for edge-end comparison: wire policies
     unwrapped, aliases peeled, union members reduced to their origin,
     ``None`` dropped."""
-    annotation = unwrap_wire_type(model.model_fields[field].annotation)
+    if field in model.model_fields:
+        annotation = model.model_fields[field].annotation
+    else:
+        annotation = model.model_computed_fields[field].return_type
+    annotation = unwrap_wire_type(annotation)
     found = set()
     for arg in _union_args(annotation):
         inner = get_origin(_resolve_alias(arg)) or _resolve_alias(arg)

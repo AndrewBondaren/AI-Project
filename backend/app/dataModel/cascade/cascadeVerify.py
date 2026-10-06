@@ -6,8 +6,6 @@ param declared on the context against the channel graph materialized by
 import validation) — the engine walks only a verified chain.
 """
 
-from enum import Enum
-
 from pydantic import BaseModel
 
 from app.dataModel.cascade.cascadeGraph import (
@@ -168,36 +166,23 @@ def _binding_errors(
     chain_nodes: dict[CascadeLink, CascadeChannel],
 ) -> list[str]:
     """A param's declaration must be self-contained: the default is a
-    declared value (``default_value``) or a named registry
-    (``default_registry``), materialize inputs carry a declared resolver
+    typed field of a source POJO; materialize inputs carry a declared resolver
     name — no param-specific branch may live in the engine."""
     label = f"param field='{param.field}'"
     errors: list[str] = []
-    if param.default is DefaultPolicy.CANONICAL_DEFAULT:
-        if param.default_value is None:
-            errors.append(
-                f"{label}: CANONICAL_DEFAULT requires default_value"
-            )
-        elif not _default_value_ok(context_model, ctx_field, param):
-            errors.append(
-                f"{label}: default_value {param.default_value!r} "
-                f"incompatible with context field '{ctx_field}' type"
-            )
-    elif param.default_value is not None:
-        errors.append(
-            f"{label}: default_value declared but policy is "
-            f"{param.default.value}"
-        )
-    if param.default is DefaultPolicy.REGISTRY_MEDIAN:
-        if param.default_registry is None:
-            errors.append(
-                f"{label}: REGISTRY_MEDIAN requires default_registry"
-            )
-    elif param.default_registry is not None:
-        errors.append(
-            f"{label}: default_registry declared but policy is "
-            f"{param.default.value}"
-        )
+    source = param.default_source
+    if param.default is DefaultPolicy.NONE_IS_ERROR:
+        if source is not None:
+            errors.append(f"{label}: NONE_IS_ERROR forbids default_source")
+    elif source is None:
+        errors.append(f"{label}: {param.default.value} requires default_source")
+    elif not isinstance(source.model, type) or not issubclass(source.model, BaseModel):
+        errors.append(f"{label}: default_source must refer to a POJO model")
+    elif (source.field not in source.model.model_fields
+          and source.field not in source.model.model_computed_fields):
+        errors.append(f"{label}: default_source has no field '{source.field}'")
+    elif _base_types(source.model, source.field) != _base_types(context_model, ctx_field):
+        errors.append(f"{label}: default_source field type incompatible with context")
     has_materialize_inputs = any(
         channel.kind is not ChannelKind.VALUE
         for channel in chain_nodes.values()
@@ -212,22 +197,3 @@ def _binding_errors(
         )
     return errors
 
-
-def _default_value_ok(
-    context_model: type[BaseModel], field: str, param: Cascade,
-) -> bool:
-    for base in _base_types(context_model, field):
-        if not isinstance(base, type):
-            continue
-        # Enum fields require the real member — a literal string would
-        # be a silent fork of the POJO default. Str-keyed aliases
-        # (RegistryKey[X]) are runtime-indistinguishable, any str
-        # qualifies.
-        expected = (
-            str
-            if issubclass(base, str) and not issubclass(base, Enum)
-            else base
-        )
-        if isinstance(param.default_value, expected):
-            return True
-    return False

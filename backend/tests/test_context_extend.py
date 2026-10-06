@@ -11,14 +11,14 @@ from pydantic import BaseModel, create_model
 from app.application.worldData.context.cascadeLink import EmptyLink, Link
 from app.application.worldData.context.contextResolver import extend, scope_sequence
 from app.application.worldData.context.runtimeChain import bind_chain
-from app.application.worldData.context.locationScope import empty_location_chain
+from app.application.worldData.context.locationScope import empty_location_chain, root_context
 from app.dataModel.economy.economyTier.economyTierEntry import EconomyTierEntry
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import (
     WorldEconomyTierRegistry,
 )
 from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
 from app.dataModel.cascade.cascadeSpec import (
-    Cascade, CascadeChannel, CascadeLink, DefaultPolicy, ScopeAxis,
+    Cascade, CascadeChannel, CascadeDefault, CascadeLink, DefaultPolicy, ScopeAxis,
 )
 from app.dataModel.cascade.cascadeGraph import ordered_scopes
 from app.dataModel.locations.context.locationContext import LocationContext
@@ -133,24 +133,24 @@ def _chain_to_building(ctx, **stamps):
 
 class ExtendSequenceTests(unittest.TestCase):
     def test_repeated_level_fails(self):
-        ctx = extend(LocationContext.root(_world()),
+        ctx = extend(root_context(_world()),
                      Link(ScopeLevel.SETTLEMENT, _nl(uid="c")))
         with self.assertRaisesRegex(ValueError, "strictly below"):
             extend(ctx, Link(ScopeLevel.SETTLEMENT, _nl(uid="c2")))
 
     def test_skipped_level_fails(self):
         with self.assertRaisesRegex(ValueError, "skips a level"):
-            extend(LocationContext.root(_world()),
+            extend(root_context(_world()),
                    Link(ScopeLevel.DISTRICT, _nl(uid="d")))
 
     def test_level_above_context_fails(self):
-        ctx = _chain_to_building(LocationContext.root(_world()))
+        ctx = _chain_to_building(root_context(_world()))
         with self.assertRaisesRegex(ValueError, "strictly below"):
             extend(ctx, Link(ScopeLevel.SETTLEMENT, _nl(uid="c")))
 
     def test_mixed_levels_in_one_extend_fails(self):
         with self.assertRaisesRegex(ValueError, "exactly one"):
-            extend(LocationContext.root(_world()),
+            extend(root_context(_world()),
                    Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),
                    Link(ScopeLevel.DISTRICT, _nl(uid="d")))
 
@@ -160,7 +160,7 @@ class ExtendSequenceTests(unittest.TestCase):
             CHAPTER = "chapter"
 
         with self.assertRaisesRegex(ValueError, "axis"):
-            extend(LocationContext.root(_world()),
+            extend(root_context(_world()),
                    Link(FactionScope.CHAPTER, _nl(uid="x")))
 
     def test_object_without_channel_fails(self):
@@ -168,12 +168,12 @@ class ExtendSequenceTests(unittest.TestCase):
             note: str = "x"
 
         with self.assertRaisesRegex(TypeError, "no cascade channel"):
-            extend(LocationContext.root(_world()),
+            extend(root_context(_world()),
                    Link(ScopeLevel.SETTLEMENT, PlainPojo()))
 
     def test_object_at_wrong_level_fails(self):
         with self.assertRaisesRegex(TypeError, "no cascade channel"):
-            extend(LocationContext.root(_world()),
+            extend(root_context(_world()),
                    Link(ScopeLevel.SETTLEMENT, _room("t9")))
 
 
@@ -184,9 +184,10 @@ class RuntimeLinkedListTests(unittest.TestCase):
             "LEAF": "leaf", "FIRST": "first", "ROOT": "root",
             "MIDDLE": "middle",
         })
+        defaults = create_model("SignalDefaults", signal=(str, "fallback"))
         param = Cascade(
             field="signal", default=DefaultPolicy.CANONICAL_DEFAULT,
-            axis=axis, default_value="fallback",
+            axis=axis, default_source=CascadeDefault(defaults, "signal"),
             levels=(axis.FIRST, axis.MIDDLE, axis.LEAF),
         )
         source = create_model("SignalSource", signal=(Annotated[
@@ -209,7 +210,9 @@ class RuntimeLinkedListTests(unittest.TestCase):
             level=(axis, ...),
             signal=(Annotated[str | None, param], None),
         )
-        return axis, param, source, context(level=axis.ROOT)
+        root = context(level=axis.ROOT)
+        root._default_sources = (defaults(),)
+        return axis, param, source, root
 
     def test_new_parameter_and_reordered_enum_use_declared_links(self):
         axis, _, source, root = self._fixture()
@@ -320,7 +323,7 @@ class RuntimeLinkedListTests(unittest.TestCase):
         with patch.dict(contextResolver._MATERIALIZE,
                         {"economic_tier": resolver}):
             settlement = extend(
-                LocationContext.root(_world()), EmptyLink(ScopeLevel.SETTLEMENT),
+                root_context(_world()), EmptyLink(ScopeLevel.SETTLEMENT),
             )
             district = extend(
                 settlement, Link(ScopeLevel.DISTRICT, _dte(("t2", "t5"))),
@@ -338,13 +341,13 @@ class RuntimeLinkedListTests(unittest.TestCase):
 
 class ExtendResolutionTests(unittest.TestCase):
     def test_root_does_not_resolve_or_materialize(self):
-        ctx = LocationContext.root(_world())
+        ctx = root_context(_world())
         self.assertIsNone(ctx.economic_tier)
         self.assertEqual(ctx.provenance, {})
         self.assertIs(ctx.level, ScopeLevel.WORLD)
 
     def test_room_explicit_beats_everything(self):
-        ctx = _chain_to_building(LocationContext.root(_world()),
+        ctx = _chain_to_building(root_context(_world()),
                                  city="t1", building="t8")
         ctx = extend(ctx, Link(ScopeLevel.ROOM, _room("t9")),
                      rng=Random(0))
@@ -355,7 +358,7 @@ class ExtendResolutionTests(unittest.TestCase):
         )
 
     def test_null_authored_continues_inheritance(self):
-        ctx = _chain_to_building(LocationContext.root(_world()),
+        ctx = _chain_to_building(root_context(_world()),
                                  building="t8")
         ctx = extend(ctx, Link(ScopeLevel.ROOM, _room()), rng=Random(0))
         self.assertEqual(ctx.economic_tier, "t8")
@@ -368,7 +371,7 @@ class ExtendResolutionTests(unittest.TestCase):
     def test_empty_link_does_not_block_inheritance(self):
         world = _world()
         ctx = extend(
-            LocationContext.root(world),
+            root_context(world),
             Link(ScopeLevel.SETTLEMENT, _nl("t1", "c", "settlement")),
         )
         ctx = extend(ctx, EmptyLink(ScopeLevel.DISTRICT))
@@ -383,7 +386,7 @@ class ExtendResolutionTests(unittest.TestCase):
         )
 
     def test_upper_anchor_propagates_through_null_levels(self):
-        ctx = _chain_to_building(LocationContext.root(_world()),
+        ctx = _chain_to_building(root_context(_world()),
                                  city="t2")
         ctx = extend(ctx, Link(ScopeLevel.ROOM, _room()), rng=Random(0))
         self.assertEqual(ctx.economic_tier, "t2")
@@ -392,13 +395,13 @@ class ExtendResolutionTests(unittest.TestCase):
         # Both settlement link objects feed the level; the NL stamp is
         # declared above the skeleton in the chain.
         ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),
             Link(ScopeLevel.SETTLEMENT, _skeleton("t0")),
         )
         self.assertEqual(ctx.economic_tier, "t0")
         ctx2 = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl("t5", "c")),
             Link(ScopeLevel.SETTLEMENT, _skeleton("t0")),
         )
@@ -409,7 +412,7 @@ class ExtendResolutionTests(unittest.TestCase):
         # authored NL node sits above the skeleton node; deeper scopes
         # inherit the value unchanged.
         ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl(uid="c", size="large")),
             Link(ScopeLevel.SETTLEMENT, _skeleton(size="small")),
         )
@@ -426,7 +429,7 @@ class ExtendResolutionTests(unittest.TestCase):
 
     def test_city_size_skeleton_feeds_and_default_is_canonical(self):
         ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),
             Link(ScopeLevel.SETTLEMENT, _skeleton(size="small")),
         )
@@ -437,7 +440,7 @@ class ExtendResolutionTests(unittest.TestCase):
         )
         with self.assertLogs(level="WARNING") as captured:
             empty = extend(
-                LocationContext.root(_world()),
+                root_context(_world()),
                 EmptyLink(ScopeLevel.SETTLEMENT),
             )
         # The tier default warns; the canonical size default is silent.
@@ -455,7 +458,7 @@ class ExtendResolutionTests(unittest.TestCase):
         # M8: NL authored density sits above the skeleton node at the
         # settlement scope; deeper scopes inherit unchanged.
         ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT,
                  _nl(uid="c", density="dense")),
             Link(ScopeLevel.SETTLEMENT, _skeleton(density="sparse")),
@@ -475,7 +478,7 @@ class ExtendResolutionTests(unittest.TestCase):
         # the chain top — it beats the settlement value; a template
         # without density leaves the inherited value standing.
         ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT,
                  _nl(uid="c", density="sparse")),
             Link(ScopeLevel.SETTLEMENT, _skeleton(density="medium")),
@@ -494,7 +497,7 @@ class ExtendResolutionTests(unittest.TestCase):
 
     def test_density_skeleton_feeds_and_default_is_canonical(self):
         ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),
             Link(ScopeLevel.SETTLEMENT, _skeleton(density="sparse")),
         )
@@ -506,7 +509,7 @@ class ExtendResolutionTests(unittest.TestCase):
         )
         with self.assertLogs(level="WARNING") as captured:
             empty = extend(
-                LocationContext.root(_world()),
+                root_context(_world()),
                 EmptyLink(ScopeLevel.SETTLEMENT),
             )
         # The tier default warns; the canonical density default is silent.
@@ -524,7 +527,7 @@ class ExtendResolutionTests(unittest.TestCase):
         # M9: settlement NL authored material inherits down; a deeper
         # authored node (building NL, then room NL) overrides it.
         ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT,
                  _nl(uid="c", location_type="settlement", wall="granite")),
         )
@@ -556,7 +559,7 @@ class ExtendResolutionTests(unittest.TestCase):
         # M9: same chain for `parent_floor_material` — wall and floor
         # resolve independently.
         ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT,
                  _nl(uid="c", location_type="settlement",
                      wall="granite", floor="basalt")),
@@ -583,7 +586,7 @@ class ExtendResolutionTests(unittest.TestCase):
         # may legitimately warn from the registry pick itself).
         with self.assertLogs(level="WARNING") as captured:
             ctx = extend(
-                LocationContext.root(_world()),
+                root_context(_world()),
                 EmptyLink(ScopeLevel.SETTLEMENT),
             )
         self.assertFalse(
@@ -615,7 +618,7 @@ class ExtendResolutionTests(unittest.TestCase):
         # M10: settlement-only authored chain — the NL node sits above
         # the skeleton node; deeper scopes inherit unchanged.
         ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT,
                  _nl(uid="c", dominant="marble")),
             Link(ScopeLevel.SETTLEMENT, _skeleton(dominant="granite")),
@@ -633,7 +636,7 @@ class ExtendResolutionTests(unittest.TestCase):
 
     def test_dominant_material_skeleton_feeds_below_nl(self):
         ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),
             Link(ScopeLevel.SETTLEMENT, _skeleton(dominant="granite")),
         )
@@ -649,7 +652,7 @@ class ExtendResolutionTests(unittest.TestCase):
         # picks a registry wall material for the tier resolved at this
         # same scope (provenance records the fold, not a default).
         ctx = extend(
-            LocationContext.root(_world(with_materials=True)),
+            root_context(_world(with_materials=True)),
             Link(ScopeLevel.SETTLEMENT,
                  _nl("t4", "c", "settlement")),
         )
@@ -661,7 +664,7 @@ class ExtendResolutionTests(unittest.TestCase):
         # The same chain resolves identically — the fold rng stream is
         # seeded per scope, never shared with tier materialize.
         again = extend(
-            LocationContext.root(_world(with_materials=True)),
+            root_context(_world(with_materials=True)),
             Link(ScopeLevel.SETTLEMENT,
                  _nl("t4", "c", "settlement")),
         )
@@ -669,7 +672,7 @@ class ExtendResolutionTests(unittest.TestCase):
 
     def test_dominant_material_authored_beats_fold(self):
         ctx = extend(
-            LocationContext.root(_world(with_materials=True)),
+            root_context(_world(with_materials=True)),
             Link(ScopeLevel.SETTLEMENT,
                  _nl("t4", "c", "settlement", dominant="marble")),
         )
@@ -685,7 +688,7 @@ class ExtendResolutionTests(unittest.TestCase):
         # resolve_material's own fallback lands on the canonical
         # construction default through the fold.
         ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             EmptyLink(ScopeLevel.SETTLEMENT),
         )
         self.assertEqual(ctx.dominant_material, "stone")
@@ -695,9 +698,9 @@ class ExtendResolutionTests(unittest.TestCase):
         )
 
     def test_area_tier_beats_band_and_range(self):
-        ctx = _chain_to_building(LocationContext.root(_world()))
+        ctx = _chain_to_building(root_context(_world()))
         area_ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),
         )
         area_ctx = extend(area_ctx, EmptyLink(ScopeLevel.DISTRICT))
@@ -711,7 +714,7 @@ class ExtendResolutionTests(unittest.TestCase):
 
     def test_district_nl_stamp_beats_dte_range(self):
         ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),
         )
         ctx = extend(
@@ -724,7 +727,7 @@ class ExtendResolutionTests(unittest.TestCase):
 
     def test_range_materializes_nearest_to_anchor(self):
         ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl("t1", "c", "settlement")),
         )
         ctx = extend(
@@ -741,7 +744,7 @@ class ExtendResolutionTests(unittest.TestCase):
     def test_band_materializes_once_with_caller_rng(self):
         rng = Mock(wraps=Random(7))
         ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),
         )
         ctx = extend(ctx, EmptyLink(ScopeLevel.DISTRICT))
@@ -756,7 +759,7 @@ class ExtendResolutionTests(unittest.TestCase):
 
     def test_band_anchored_pick_is_deterministic(self):
         ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl("t9", "c", "settlement")),
         )
         ctx = extend(ctx, EmptyLink(ScopeLevel.DISTRICT))
@@ -770,7 +773,7 @@ class ExtendResolutionTests(unittest.TestCase):
     def test_materialize_does_not_reroll_at_deeper_scope(self):
         rng = Mock(wraps=Random(11))
         ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),
         )
         ctx = extend(ctx, EmptyLink(ScopeLevel.DISTRICT))
@@ -788,7 +791,7 @@ class ExtendResolutionTests(unittest.TestCase):
 
     def test_materialize_without_rng_is_a_caller_bug(self):
         ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),
         )
         ctx = extend(ctx, EmptyLink(ScopeLevel.DISTRICT))
@@ -796,7 +799,7 @@ class ExtendResolutionTests(unittest.TestCase):
             extend(ctx, Link(ScopeLevel.AREA, _plot(band="common")))
 
     def test_empty_chain_uses_registry_median_with_warning(self):
-        ctx = _chain_to_building(LocationContext.root(_world()))
+        ctx = _chain_to_building(root_context(_world()))
         ctx = extend(ctx, Link(ScopeLevel.ROOM, _room()), rng=Random(0))
         # Where the default was applied: at the first scope boundary.
         self.assertEqual(ctx.economic_tier, "t5")
@@ -804,18 +807,18 @@ class ExtendResolutionTests(unittest.TestCase):
     def test_median_warns_once_at_first_empty_scope(self):
         module = "app.application.worldData.context.cascadeLog"
         ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),
         )
         with self.assertLogs(module, level="WARNING") as captured:
-            extend(LocationContext.root(_world()),
+            extend(root_context(_world()),
                    Link(ScopeLevel.SETTLEMENT, _nl(uid="c")))
         self.assertEqual(len(captured.records), 1)
         self.assertEqual(ctx.economic_tier, "t5")
 
     def test_provenance_records_default_source(self):
         ctx = extend(
-            LocationContext.root(_world()),
+            root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),
         )
         self.assertEqual(
