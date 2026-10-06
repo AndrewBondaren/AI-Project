@@ -1,4 +1,3 @@
-import uuid
 from datetime import datetime, timezone
 
 from app.db.database import Database
@@ -60,11 +59,12 @@ def new_chunk_refine_job(
     cx: int,
     cy: int,
     *,
+    job_uid: str,
     priority: float,
 ) -> ChunkRefineJob:
     now = _utc_now()
     return ChunkRefineJob(
-        job_uid=str(uuid.uuid4()),
+        job_uid=job_uid,
         world_uid=world_uid,
         gx=gx,
         gy=gy,

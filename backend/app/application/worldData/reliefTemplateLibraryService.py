@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import logging
 import os
-import uuid
 from dataclasses import asdict
 from pathlib import Path
 
+from app.application.worldData.ids import LibraryKind, library_uid
 from app.application.worldData.reliefErrors import ReliefNotFoundError, ReliefValidationError
 from app.application.worldData.reliefGeomWarn import warn_template_invalid_geom
 from app.dataModel.terrain.relief.reliefTemplate import ReliefTemplate
@@ -21,12 +21,11 @@ from app.db.repositories.iReliefTemplateRepository import IReliefTemplateReposit
 logger = logging.getLogger(__name__)
 
 DOMAIN_ROOT = "relief_templates"
-_UID_NS = uuid.NAMESPACE_URL
 _ENV_ROOT = "RELIEF_TEMPLATES_ROOT"
 
 
 def relief_template_uid(system_name: str) -> str:
-    return str(uuid.uuid5(_UID_NS, f"relief_templates|{system_name}"))
+    return library_uid(LibraryKind.RELIEF_TEMPLATES, system_name)
 
 
 def resolve_relief_domain_root() -> Path:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.application.worldData.ids import runtime_uid
 from app.application.worldData.materializationContext import MaterializationContext
 from app.application.worldData.generators.terrain.passes.surfaceTerrainContext import (
     SurfaceTerrainContext,
@@ -52,7 +53,10 @@ class ChunkRefineWorker:
         if await self._jobs.has_pending(world_uid, gx, gy, cx, cy):
             return
         await self._jobs.upsert(
-            new_chunk_refine_job(world_uid, gx, gy, cx, cy, priority=priority),
+            new_chunk_refine_job(
+                world_uid, gx, gy, cx, cy,
+                job_uid=runtime_uid(), priority=priority,
+            ),
         )
 
     async def drain_climate_fine(

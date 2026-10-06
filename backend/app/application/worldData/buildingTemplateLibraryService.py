@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import logging
-import uuid
 from datetime import datetime, timezone
 
 from app.application.importResult import ImportResult
+from app.application.worldData.ids import LibraryKind, library_uid
 from app.application.jsonValidation.worldRow import crops, livestock, resource_types
 from app.application.worldData.bundle.errors import BundleValidationError
 from app.application.worldData.worldService import WorldService
@@ -22,11 +22,10 @@ from app.db.models.buildingTemplate import BuildingTemplateRow
 from app.db.repositories.iBuildingTemplateRepository import IBuildingTemplateRepository
 
 logger = logging.getLogger(__name__)
-_UID_NS = uuid.NAMESPACE_URL
 
 
 def building_template_uid(system_name: str) -> str:
-    return str(uuid.uuid5(_UID_NS, f"building_templates|{system_name}"))
+    return library_uid(LibraryKind.BUILDING_TEMPLATES, system_name)
 
 
 def _registry_entries(world) -> list[BuildingTemplateRegistryEntry]:

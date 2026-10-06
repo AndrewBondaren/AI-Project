@@ -146,18 +146,15 @@ _EXEMPT = (
     "application/worldData/playerService.py",                  # runtime ids (D8)
     "application/worldData/gameSessionService.py",             # runtime ids (D8)
     "core/logMiddleware.py",                                   # request id
+    # dataModel cannot import application/worldData/ids (layer) — authored
+    # fallback mint; system_name is UNIQUE in perk/race_templates (step 8)
+    "dataModel/perks/perkTemplateOutline.py",
+    "dataModel/races/raceTemplateOutline.py",
 )
 
 # Temporary whitelist — migrate per plan step; a file drops out of _TODO
 # when its step lands (stale entries fail the gate).
 _TODO = {
-    # step 8 — runtime_uid / library_uid
-    "application/worldData/buildingTemplateLibraryService.py": 8,
-    "application/worldData/reliefTemplateLibraryService.py": 8,
-    "application/worldData/bundleRemapService.py": 8,
-    "dataModel/perks/perkTemplateOutline.py": 8,
-    "dataModel/races/raceTemplateOutline.py": 8,
-    "db/repositories/sqlite/chunkRefineJobRepository.py": 8,
     # step 9 — delete legacy helper
     "utils/deterministicIds.py": 9,
 }

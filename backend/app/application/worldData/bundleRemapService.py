@@ -7,11 +7,11 @@ library rows are shared; only entity sections remap.
 from __future__ import annotations
 
 import copy
-import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from app.application.worldData.ids import runtime_uid
 from app.dataModel.worldBundle.bundleSections import BundleSection
 
 
@@ -117,7 +117,7 @@ def _build_uid_map(data: dict[str, Any]) -> dict[str, str]:
 
     def register(old: str) -> str:
         if old not in uid_map:
-            uid_map[old] = str(uuid.uuid4())
+            uid_map[old] = runtime_uid()
         return uid_map[old]
 
     register(data[BundleSection.WORLD]["world_uid"])
