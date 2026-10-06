@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
@@ -37,10 +38,15 @@ def carve_river_segment(
     segment: RiverSegment,
     *,
     depth_step: int,
+    occupied: Mapping[tuple[int, int], MapCellHydrology] | None = None,
 ) -> dict[tuple[int, int], MapCellHydrology]:
+    """River bed on polyline cells; open water already in ``occupied`` (mouth lake/sea) is kept."""
     by_cell: dict[tuple[int, int], MapCellHydrology] = {}
     for cell in segment.polyline_cells:
         if cell not in heightmap.surface_z:
+            continue
+        existing = occupied.get(cell) if occupied else None
+        if existing is not None and existing.role is not None and existing.role.is_open_water_role():
             continue
         z = heightmap.surface_z[cell]
         heightmap.surface_z[cell] = max(0, z - depth_step)
@@ -83,7 +89,7 @@ def generate_rivers(
 
     for segment in river_segments:
         depth = _channel_depth_step(segment.connection_type, type_classify)
-        carved = carve_river_segment(heightmap, segment, depth_step=depth)
+        carved = carve_river_segment(heightmap, segment, depth_step=depth, occupied=occupied_cells)
         merged.update(carved)
         for cell in carved:
             xs.append(cell[0])
@@ -100,7 +106,7 @@ def generate_rivers(
             if any(cell in merged for cell in segment.polyline_cells):
                 continue
             depth = _channel_depth_step(segment.connection_type, type_classify)
-            carved = carve_river_segment(heightmap, segment, depth_step=depth)
+            carved = carve_river_segment(heightmap, segment, depth_step=depth, occupied=occupied_cells)
             merged.update(carved)
             river_segments.append(segment)
             for cell in carved:
