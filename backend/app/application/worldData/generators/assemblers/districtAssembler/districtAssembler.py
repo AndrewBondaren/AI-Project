@@ -172,7 +172,10 @@ class DistrictAssembler:
             deck=slot.district_template.deck,
         )
 
-        add_alleys(slot, placements, nodes, edges, world.world_uid, edge_roles)
+        add_alleys(
+            slot, placements, nodes, edges, world.world_uid, edge_roles,
+            surface=surface,
+        )
 
         plot_mask: set[tuple[int, int]] = set()
         for placement in placements:
