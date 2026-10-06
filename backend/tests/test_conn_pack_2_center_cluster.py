@@ -15,7 +15,7 @@ from app.application.worldData.generators.assemblers.districtAssembler.planner.c
     frame_blocked_rects,
     reservation_modules,
 )
-from app.application.worldData.generators.assemblers.districtAssembler.planner.frontage import (
+from app.application.worldData.generators.assemblers.districtAssembler.planner.alleys import (
     add_alleys,
 )
 from app.application.worldData.generators.assemblers.districtAssembler.planner.lattice import (

@@ -16,8 +16,10 @@ from app.application.worldData.generators.assemblers.districtAssembler.planner.a
     origin_in_reservation,
     placements_from_reservations,
 )
-from app.application.worldData.generators.assemblers.districtAssembler.planner.frontage import (
+from app.application.worldData.generators.assemblers.districtAssembler.planner.alleys import (
     add_alleys,
+)
+from app.application.worldData.generators.assemblers.districtAssembler.planner.frontage import (
     apply_frontage,
     plot_cells,
     touching_street_xy,
