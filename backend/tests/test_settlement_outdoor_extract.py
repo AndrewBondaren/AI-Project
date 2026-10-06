@@ -39,7 +39,6 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorSkip import (
 from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
     district_location_uid,
 )
-from app.dataModel.locations.enums.entryRole import EntryRole
 from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.spatial.facing import Facing
 from app.dataModel.locations.transitions.transitionType import TransitionType
@@ -285,7 +284,6 @@ class TestSettlementOutdoorExtract(unittest.TestCase):
         self.assertTrue(extracted.sql_transitions[0].destination_side.is_discovered)
         self.assertEqual(extracted.wire.settlement_uid, "set-1")
         self.assertEqual(len(extracted.wire.districts), 1)
-        self.assertEqual(extracted.entry_points, [])
         self.assertIn(extracted.buildings[0].location_uid, extracted.pack_by_building)
         self.assertIsNotNone(extracted.wire.districts[0].areas[0].buildings[0].interior_transitions)
 
@@ -335,7 +333,6 @@ class TestSettlementOutdoorExtract(unittest.TestCase):
         district = DistrictLayout(slot=dslot, area_layouts=[area])
         extracted = extract_settlement(_settlement(), SettlementLayout(district_layouts=[district]))
         self.assertEqual(len(extracted.buildings), 0)
-        self.assertEqual(len(extracted.entry_points), 0)
         self.assertEqual(len(extracted.wire.districts[0].areas), 1)
         self.assertEqual(extracted.wire.districts[0].areas[0].buildings, [])
         self.assertEqual(extracted.wire.districts[0].areas[0].slot.ground_z, 2)

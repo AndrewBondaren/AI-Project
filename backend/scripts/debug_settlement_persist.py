@@ -118,8 +118,6 @@ async def test_persist_outdoor_inprocess() -> None:
         for building in extracted.buildings:
             restored = reader.read_building_interior_transitions(settlement.location_uid, building.location_uid, registry=registry)
             assert restored.interior_transitions == extracted.pack_by_building[building.location_uid]
-        async with db.conn.execute("SELECT count(*) FROM location_entry_points") as cursor:
-            assert (await cursor.fetchone())[0] == 0, "legacy entry dual-write"
     finally:
         if db is not None:
             await db.disconnect()

@@ -72,12 +72,3 @@ class StructureTransitionsTest(unittest.TestCase):
         validate_transitions(self.world.world_uid, bound.transitions,
             levels={level.level_uid: level for level in bound.levels}, locations={target.location_uid: target},
             nodes={}, registry=WorldTransitionTypeRegistry.canonical_engine())
-
-    def test_passages_are_fresh_outward_snapshots_with_same_uid(self):
-        legacy = self.layout.passages
-        self.assertIsInstance(legacy, tuple)
-        self.assertEqual([item.passage_uid for item in legacy], [item.transition_uid for item in self.layout.transitions])
-        legacy[0].to_x = 999
-        self.assertNotEqual(self.layout.passages[0].to_x, 999)
-        with self.assertRaises(AttributeError):
-            self.layout.passages = []

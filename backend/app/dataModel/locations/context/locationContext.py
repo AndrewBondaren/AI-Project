@@ -58,6 +58,11 @@ class LocationContext(BaseModel):
     # is a context parameter nor serialized; dataModel has no app/db deps.
     _world: object | None = PrivateAttr(default=None)
     _links: dict = PrivateAttr(default_factory=dict)
+    # Derived from declared links, never from enum order; runtime node
+    # results preserve the snapshot and one-time materialization of
+    # ancestors. These are opaque transient state, not wire fields.
+    _scope_path: tuple = PrivateAttr(default=())
+    _node_results: dict = PrivateAttr(default_factory=dict)
 
     @classmethod
     def root(cls, world: object) -> "LocationContext":

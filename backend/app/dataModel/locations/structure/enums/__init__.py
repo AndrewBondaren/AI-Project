@@ -29,7 +29,6 @@ from app.dataModel.locations.structure.enums.buildingElement import (
     WALL_BUILDING_ELEMENTS,
     WALL_OPENING_ELEMENTS,
 )
-from app.dataModel.locations.structure.enums.passageType import PassageType
 from app.dataModel.locations.structure.enums.roomSize import RoomSize, RoomSizePreset
 from app.dataModel.locations.structure.enums.staircaseSize import (
     SPIRAL_SIZE_PRESETS,
@@ -73,7 +72,6 @@ __all__ = [
     "DOOR_BUILDING_ELEMENTS",
     "OUTDOOR_SHELL_ELEMENTS",
     "PASSABLE_BUILDING_ELEMENTS",
-    "PassageType",
     "RoomSize",
     "RoomSizePreset",
     "SPIRAL_SIZE_PRESETS",

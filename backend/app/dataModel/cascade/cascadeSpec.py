@@ -44,8 +44,8 @@ class ScopeAxis(StrEnum):
 
     Members identify scopes; cascade channel order is declared by
     field links, independently of enum declaration order or location
-    containment. ``rank`` remains for existing scope-boundary callers
-    until the runtime migration (tz_cascade_context §2, §4).
+    containment. ``rank`` exposes declaration position for compatibility;
+    the resolver derives its path from field links (tz_cascade_context §2, §4).
 
     Every domain enum inherits this mixin instead of a shared closed
     list.

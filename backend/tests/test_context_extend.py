@@ -3,18 +3,24 @@
 import gc
 import unittest
 from random import Random
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
+from typing import Annotated
 
-from pydantic import BaseModel
+from pydantic import BaseModel, create_model
 
 from app.application.worldData.context.cascadeLink import EmptyLink, Link
-from app.application.worldData.context.contextResolver import extend
+from app.application.worldData.context.contextResolver import extend, scope_sequence
+from app.application.worldData.context.runtimeChain import bind_chain
+from app.application.worldData.context.locationScope import empty_location_chain
 from app.dataModel.economy.economyTier.economyTierEntry import EconomyTierEntry
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import (
     WorldEconomyTierRegistry,
 )
 from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
-from app.dataModel.cascade.cascadeSpec import ScopeAxis
+from app.dataModel.cascade.cascadeSpec import (
+    Cascade, CascadeChannel, CascadeLink, DefaultPolicy, ScopeAxis,
+)
+from app.dataModel.cascade.cascadeGraph import ordered_scopes
 from app.dataModel.locations.context.locationContext import LocationContext
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
 from app.dataModel.locations.namedLocation.bundleNamedLocation import (
@@ -169,6 +175,165 @@ class ExtendSequenceTests(unittest.TestCase):
         with self.assertRaisesRegex(TypeError, "no cascade channel"):
             extend(LocationContext.root(_world()),
                    Link(ScopeLevel.SETTLEMENT, _room("t9")))
+
+
+class RuntimeLinkedListTests(unittest.TestCase):
+    def _fixture(self):
+        # No reliance on the locations enum, field names or model table.
+        axis = ScopeAxis("SignalScope", {
+            "LEAF": "leaf", "FIRST": "first", "ROOT": "root",
+            "MIDDLE": "middle",
+        })
+        param = Cascade(
+            field="signal", default=DefaultPolicy.CANONICAL_DEFAULT,
+            axis=axis, default_value="fallback",
+            levels=(axis.FIRST, axis.MIDDLE, axis.LEAF),
+        )
+        source = create_model("SignalSource", signal=(Annotated[
+            str | None,
+            CascadeChannel(param, axis.LEAF,
+                           below=CascadeLink(None, "signal", axis.MIDDLE)),
+            CascadeChannel(param, axis.MIDDLE,
+                           below=CascadeLink(None, "signal", axis.FIRST)),
+            CascadeChannel(param, axis.FIRST),
+        ], None))
+        # Override inherited parameter fields with plain fields, then add
+        # a new metadata-bound parameter to the context.
+        plain = {
+            name: (str | None, None)
+            for name, info in LocationContext.model_fields.items()
+            if any(isinstance(meta, Cascade) for meta in info.metadata)
+        }
+        context = create_model(
+            "SignalContext", __base__=LocationContext, **plain,
+            level=(axis, ...),
+            signal=(Annotated[str | None, param], None),
+        )
+        return axis, param, source, context(level=axis.ROOT)
+
+    def test_new_parameter_and_reordered_enum_use_declared_links(self):
+        axis, _, source, root = self._fixture()
+        ctx = extend(root, Link(axis.FIRST, source(signal="first")))
+        self.assertEqual(scope_sequence(ctx),
+                         (axis.ROOT, axis.FIRST, axis.MIDDLE, axis.LEAF))
+        ctx = extend(ctx, EmptyLink(axis.MIDDLE))
+        leaf = extend(ctx, Link(axis.LEAF, source(signal="leaf")))
+        self.assertEqual(leaf.signal, "leaf")
+        self.assertEqual(leaf.provenance["signal"],
+                         (axis.LEAF, "SignalSource.signal"))
+        self.assertEqual(ctx.signal, "first")
+        self.assertEqual(root._links, {})
+        self.assertEqual(root._node_results, {})
+
+    def test_incomplete_prefix_cannot_skip_declared_boundary(self):
+        axis, _, source, root = self._fixture()
+        first = extend(root, Link(axis.FIRST, source(signal="first")))
+        with self.assertRaisesRegex(ValueError, "skips a level"):
+            extend(first, EmptyLink(axis.LEAF))
+
+    def test_iterator_keeps_all_declared_nodes_including_empty_ones(self):
+        axis, param, source, _ = self._fixture()
+        parent = source(signal="first")
+        chain = list(bind_chain(param, {axis.FIRST: (parent,)}))
+        self.assertEqual([bound.node.level for bound in chain],
+                         [axis.LEAF, axis.MIDDLE, axis.FIRST])
+        self.assertEqual([bound.obj for bound in chain], [None, None, parent])
+
+    def test_none_and_pojo_default_values_feed_the_chain(self):
+        axis, _, source, root = self._fixture()
+        first = extend(root, Link(axis.FIRST, source(signal="first")))
+        middle = extend(first, Link(axis.MIDDLE, source()))
+        self.assertEqual(middle.signal, "first")
+        self.assertEqual(middle.provenance["signal"],
+                         (axis.FIRST, "SignalSource.signal"))
+        # Values obtained from model defaults are read like template values.
+        source.model_fields["signal"].default = "pojo-default"
+        source.model_rebuild(force=True)
+        leaf = extend(middle, Link(axis.LEAF, source()))
+        self.assertEqual(leaf.signal, "pojo-default")
+
+    def test_ancestor_nodes_are_snapshots(self):
+        axis, _, source, root = self._fixture()
+        parent = source(signal="original")
+        first = extend(root, Link(axis.FIRST, parent))
+        parent.signal = "mutated-after-resolution"
+        middle = extend(first, EmptyLink(axis.MIDDLE))
+        self.assertEqual(middle.signal, "original")
+        self.assertEqual(middle.provenance["signal"],
+                         (axis.FIRST, "SignalSource.signal"))
+
+    def test_child_contexts_have_independent_node_results(self):
+        axis, _, source, root = self._fixture()
+        first = extend(root, Link(axis.FIRST, source(signal="first")))
+        left = extend(first, Link(axis.MIDDLE, source(signal="left")))
+        right = extend(first, Link(axis.MIDDLE, source(signal="right")))
+        self.assertEqual((first.signal, left.signal, right.signal),
+                         ("first", "left", "right"))
+        self.assertEqual(extend(left, EmptyLink(axis.LEAF)).signal, "left")
+        self.assertEqual(extend(right, EmptyLink(axis.LEAF)).signal, "right")
+
+    def test_multiple_objects_for_same_channel_are_ambiguous(self):
+        axis, _, source, root = self._fixture()
+        with self.assertRaisesRegex(ValueError, "ambiguous source objects"):
+            extend(root, Link(axis.FIRST, source(signal="one")),
+                   Link(axis.FIRST, source(signal="two")))
+        self.assertEqual(root._node_results, {})
+
+    def test_ambiguous_scope_order_does_not_use_enum_as_tie_breaker(self):
+        class AdditionalAxis(ScopeAxis):
+            ROOT = "root"
+            FIRST = "first"
+            OTHER = "other"
+
+        # Test the declaration mechanism directly: unrelated field chains
+        # do not establish which scope follows the shared root.
+        left_param = Cascade(
+            "left", DefaultPolicy.NONE_IS_ERROR, AdditionalAxis,
+            levels=(AdditionalAxis.FIRST,),
+        )
+        right_param = Cascade(
+            "right", DefaultPolicy.NONE_IS_ERROR, AdditionalAxis,
+            levels=(AdditionalAxis.OTHER,),
+        )
+        sources = create_model(
+            "IndependentSources",
+            left=(Annotated[str | None,
+                            CascadeChannel(left_param, AdditionalAxis.FIRST)], None),
+            right=(Annotated[str | None,
+                             CascadeChannel(right_param, AdditionalAxis.OTHER)], None),
+        )
+        with patch("app.dataModel.cascade.cascadeGraph._source_models",
+                   return_value={sources}):
+            with self.assertRaisesRegex(ValueError, "ambiguous or cyclic"):
+                ordered_scopes((left_param, right_param), AdditionalAxis.ROOT)
+
+    def test_empty_chain_to_root_stays_unresolved(self):
+        root = empty_location_chain(_world(), ScopeLevel.WORLD)
+        self.assertIs(root.level, ScopeLevel.WORLD)
+        self.assertEqual(root.provenance, {})
+        self.assertEqual(root._node_results, {})
+
+    def test_materialize_is_called_once_per_new_scope_node(self):
+        from app.application.worldData.context import contextResolver
+
+        resolver = Mock(wraps=contextResolver._MATERIALIZE["economic_tier"])
+        with patch.dict(contextResolver._MATERIALIZE,
+                        {"economic_tier": resolver}):
+            settlement = extend(
+                LocationContext.root(_world()), EmptyLink(ScopeLevel.SETTLEMENT),
+            )
+            district = extend(
+                settlement, Link(ScopeLevel.DISTRICT, _dte(("t2", "t5"))),
+                rng=Random(17),
+            )
+            area = extend(district, Link(ScopeLevel.AREA, _plot(band="common")))
+            self.assertEqual(resolver.call_count, 2)
+            building = extend(area, EmptyLink(ScopeLevel.BUILDING))
+            room = extend(building, Link(ScopeLevel.ROOM, _room()))
+            self.assertEqual(resolver.call_count, 2)
+        self.assertEqual(room.economic_tier, area.economic_tier)
+        self.assertEqual(room.provenance["economic_tier"],
+                         area.provenance["economic_tier"])
 
 
 class ExtendResolutionTests(unittest.TestCase):

@@ -22,7 +22,6 @@ from app.dataModel.locations.settlement.enums.districtEntryRole import DistrictE
 from app.dataModel.shared.enums.measurementSystem import MeasurementSystem
 from app.dataModel.shared.enums.statConflictMode import StatConflictMode
 from app.dataModel.locations.structure.enums.buildingContext import BuildingContext
-from app.dataModel.locations.structure.enums.passageType import PassageType
 from app.dataModel.locations.structure.enums.staircaseType import StaircaseType
 from app.dataModel.terrain.enums.cellStateCategory import CellStateCategory
 
@@ -42,7 +41,6 @@ __all__ = [
     "HydrologyConnectionType",
     "MaterialCategory",
     "MeasurementSystem",
-    "PassageType",
     "PortalType",
     "SeasonKey",
     "SidewalkSide",

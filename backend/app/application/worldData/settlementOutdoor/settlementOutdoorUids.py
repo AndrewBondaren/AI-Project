@@ -7,7 +7,6 @@ they fix *which* keys are required; the formula lives in the helper only.
 from __future__ import annotations
 
 from app.application.worldData.ids import UidKind, entity_uid
-from app.dataModel.locations.enums.entryRole import EntryRole
 from app.dataModel.spatial.facing import Facing
 
 
@@ -60,13 +59,4 @@ def level_uid(world_uid: str, building_uid: str, z_offset: int) -> str:
     """Minted once at structure generation (D3) — extract keeps it."""
     return entity_uid(
         world_uid, UidKind.LEVEL, parent=building_uid, z_offset=z_offset,
-    )
-
-
-def entry_uid(
-    world_uid: str, building_uid: str, role: EntryRole, passage_uid: str,
-) -> str:
-    return entity_uid(
-        world_uid, UidKind.ENTRY,
-        parent=building_uid, role=role, passage=passage_uid,
     )

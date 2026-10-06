@@ -84,12 +84,6 @@ class StructureLayout:
     rooms:               list[NamedLocation]
     occupied_footprint:  OccupiedFootprint | None = None
 
-    @property
-    def passages(self):
-        """Temporary outward snapshot for legacy extraction/debug; never mutable layout state."""
-        from app.application.worldData.generators.structure.legacyPassageProjection import legacy_passages
-        return legacy_passages(self.transitions)
-
 
 def compute_occupied_footprint(
     cells:    list[MapCell],

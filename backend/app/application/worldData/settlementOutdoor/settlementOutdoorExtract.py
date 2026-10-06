@@ -26,12 +26,10 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
     district_location_uid,
 )
 from app.dataModel.connections.enums.graphLevel import GraphLevel
-from app.dataModel.locations.enums.entryRole import EntryRole
 from app.dataModel.locations.settlement.district.districtTopologySlot import (
     DistrictTopologyEntry,
     DistrictTopologySlot,
 )
-from app.dataModel.locations.structure.enums.passageType import PassageType
 from app.dataModel.locations.transitions.transition import Transition
 from app.dataModel.worldPack.settlementStructureWire import (
     AreaSlotWire,
@@ -43,9 +41,7 @@ from app.dataModel.worldPack.settlementStructureWire import (
 )
 from app.db.models.connectionEdge import ConnectionEdge
 from app.db.models.connectionNode import ConnectionNode
-from app.db.models.locationEntryPoint import LocationEntryPoint
 from app.db.models.locationLevel import LocationLevel
-from app.db.models.locationPassage import LocationPassage
 from app.db.models.namedLocation import NamedLocation
 from app.db.repositories.iTransitionRepository import TransitionRepositoryContext
 from app.dataModel.locations.transitions.worldTransitionTypeRegistry import WorldTransitionTypeRegistry
@@ -62,7 +58,6 @@ class ExtractedSettlement:
     districts: list[NamedLocation]
     buildings: list[NamedLocation]
     levels: list[LocationLevel]
-    entry_points: list[LocationEntryPoint]
     nodes: list[ConnectionNode]
     edges: list[ConnectionEdge]
     wire: SettlementStructureWire
@@ -179,34 +174,6 @@ def extract_topology(
         sql_transitions=projection.sql_transitions, transition_context=context)
 
 
-def _role_for_passage(passage: LocationPassage) -> EntryRole | None:
-    if passage.from_level_uid is not None:
-        return None
-    pt = PassageType.from_wire(passage.system_passage_type)
-    if pt == PassageType.MAIN_ENTRANCE:
-        return EntryRole.FRONT
-    if pt == PassageType.SERVICE_ENTRANCE:
-        return EntryRole.SERVICE
-    return None
-
-
-def _entry_level(
-    new_levels: list[LocationLevel],
-    passage: LocationPassage,
-    building: NamedLocation,
-) -> LocationLevel | None:
-    found = next(
-        (lv for lv in new_levels if lv.level_uid == passage.to_level_uid),
-        None,
-    )
-    if found is not None:
-        return found
-    ground = building.map_z
-    if ground is not None:
-        return next((lv for lv in new_levels if lv.z == ground), None)
-    return None
-
-
 ALL_GRAPH_LEVELS = frozenset({GraphLevel.CITY, GraphLevel.DISTRICT, GraphLevel.AREA})
 PACKING_GRAPH_LEVELS = frozenset({GraphLevel.DISTRICT, GraphLevel.AREA})
 
@@ -225,7 +192,6 @@ def extract_settlement(
     districts: list[NamedLocation] = []
     buildings: list[NamedLocation] = []
     levels_out: list[LocationLevel] = []
-    entries: list[LocationEntryPoint] = []
     district_wires: list[DistrictStructureWire] = []
     transitions: list[Transition] = []
     scopes: list[BuildingTransitionScope] = []
@@ -359,7 +325,6 @@ def extract_settlement(
         districts=districts,
         buildings=buildings,
         levels=levels_out,
-        entry_points=entries,
         nodes=nodes,
         edges=edges,
         wire=wire,

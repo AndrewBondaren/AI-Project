@@ -12,7 +12,7 @@ from dataclasses import asdict
 from random import Random
 
 from app.application.worldData.context.cascadeLink import EmptyLink, Link
-from app.application.worldData.context.contextResolver import extend
+from app.application.worldData.context.contextResolver import extend, scope_sequence
 from app.application.worldData.ids import UidKind, entity_rng
 from app.application.worldData.generators.assemblers.citySkeleton import (
     settlement_skeleton_pojo,
@@ -153,9 +153,12 @@ def empty_location_chain(world: World, up_to: ScopeLevel) -> LocationContext:
     inputs); each level is declared, never skipped silently.
     """
     ctx = LocationContext.root(world)
-    for scope in ScopeLevel:
-        if scope is ScopeLevel.WORLD:
-            continue
+    path = scope_sequence(ctx)
+    if up_to not in path:
+        raise ValueError(f"no declared cascade boundary for {up_to.value}")
+    if up_to is ctx.level:
+        return ctx
+    for scope in path[1:]:
         ctx = extend(ctx, EmptyLink(scope))
         if scope is up_to:
             break

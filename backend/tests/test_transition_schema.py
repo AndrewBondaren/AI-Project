@@ -203,10 +203,14 @@ class TransitionSchemaTest(unittest.IsolatedAsyncioTestCase):
             with self.subTest(sides=sides), self.assertRaises(ValueError):
                 from_transition_rows(rows.transition, sides, registry=self.registry)
 
-    async def test_indexes_and_legacy_schema_remain(self) -> None:
+    async def test_current_schema_indexes_and_deferred_portal_fields(self) -> None:
         async with self.db.conn.execute("SELECT name FROM sqlite_master WHERE type='table'") as cursor:
             tables = {row[0] for row in await cursor.fetchall()}
-        self.assertTrue({"transitions", "transition_sides", "location_passages", "location_entry_points"} <= tables)
+        self.assertTrue({"transitions", "transition_sides"} <= tables)
+        self.assertFalse({"location_passages", "location_entry_points"} & tables)
+        async with self.db.conn.execute("PRAGMA table_info(worlds)") as cursor:
+            world_columns = {row["name"] for row in await cursor.fetchall()}
+        self.assertNotIn("passage_type_registry", world_columns)
         async with self.db.conn.execute("PRAGMA table_info(connection_nodes)") as cursor:
             columns = {row["name"] for row in await cursor.fetchall()}
         self.assertTrue({"portal_type", "portal_destinations", "portal_bidirectional"} <= columns)

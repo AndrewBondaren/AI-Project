@@ -83,14 +83,14 @@ class TransitionOutdoorPersistTest(unittest.IsolatedAsyncioTestCase):
 
     async def counts(self):
         async with self.db.conn.execute("SELECT (SELECT count(*) FROM transitions), "
-                "(SELECT count(*) FROM transition_sides), (SELECT count(*) FROM location_entry_points)") as cursor:
+                "(SELECT count(*) FROM transition_sides)") as cursor:
             return tuple(await cursor.fetchone())
 
     async def test_materialize_repeat_preserves_crud_and_pack_partition(self):
         result, nbytes, _ = await self.job.materialize_district(self.ctx)
         self.assertEqual((result.buildings, result.levels, result.entry_points), (1, 1, 1))
         self.assertGreater(nbytes, 0)
-        self.assertEqual(await self.counts(), (1, 2, 0))
+        self.assertEqual(await self.counts(), (1, 2))
         extracted = extract_settlement(self.settlement, self.layout)
         repo = SqliteTransitionRepository(self.db, extracted.transition_context)
         main = extracted.sql_transitions[0]
@@ -98,7 +98,7 @@ class TransitionOutdoorPersistTest(unittest.IsolatedAsyncioTestCase):
             "destination_side": {"is_discovered": False, "is_accessible": False, "entry_difficulty_override": 0}})
         await self.job.materialize_district(self.ctx)
         self.assertEqual(await repo.get(main.transition_uid), modified)
-        self.assertEqual(await self.counts(), (1, 2, 0))
+        self.assertEqual(await self.counts(), (1, 2))
         restored = WorldPackReader(self.paths).read_building_interior_transitions(
             "set-1", "probe-hut-0-0", registry=extracted.transition_context.registry)
         self.assertEqual(restored.interior_transitions, extracted.pack_by_building["probe-hut-0-0"])
@@ -114,7 +114,7 @@ class TransitionOutdoorPersistTest(unittest.IsolatedAsyncioTestCase):
         building.transitions[0] = physical_transition("w1", TransitionType.MAIN_ENTRANCE,
             old.source, old.destination.model_copy(update={"x": 3}), "probe-hut-0-0")
         await self.job.materialize_district(self.ctx)
-        self.assertEqual(await self.counts(), (2, 4, 0))
+        self.assertEqual(await self.counts(), (2, 4))
         repo = SqliteTransitionRepository(self.db, extract_settlement(self.settlement, self.layout).transition_context)
         self.assertEqual(await repo.get(old.transition_uid), old)
 
@@ -148,7 +148,7 @@ class TransitionOutdoorPersistTest(unittest.IsolatedAsyncioTestCase):
         await self.db.conn.commit()
         with self.assertRaises(sqlite3.IntegrityError):
             await self.job.materialize_district(self.ctx)
-        self.assertEqual(await self.counts(), (0, 0, 0))
+        self.assertEqual(await self.counts(), (0, 0))
         self.assertIsNone(await self.nodes.get_by_id("entry-node"))
         self.assertEqual(await self.locations.get_children("set-1"), [])
         self.assertFalse(self.paths.settlement_structure_path("set-1").exists())
@@ -157,11 +157,11 @@ class TransitionOutdoorPersistTest(unittest.IsolatedAsyncioTestCase):
         await self.db.conn.commit()
         await self.job.materialize_district(self.ctx)
         self.assertTrue(self.paths.settlement_structure_path("set-1").exists())
-        self.assertEqual(await self.counts(), (1, 2, 0))
+        self.assertEqual(await self.counts(), (1, 2))
 
     async def test_topology_without_transitions_remains_valid(self):
         topology = extract_topology(self.settlement, SettlementTopologyPlan([self.ctx.slot], [], [], []))
         self.assertEqual(topology.sql_transitions, [])
         await self.persist.persist_topology(topology)
         await self.persist.persist_topology(topology)
-        self.assertEqual(await self.counts(), (0, 0, 0))
+        self.assertEqual(await self.counts(), (0, 0))

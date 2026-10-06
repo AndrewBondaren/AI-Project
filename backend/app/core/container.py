@@ -47,10 +47,6 @@ from app.db.repositories.iStateRepository import IStateRepository
 from app.db.repositories.sqlite.stateRepository import SqliteStateRepository
 from app.db.repositories.iLocationLevelRepository import ILocationLevelRepository
 from app.db.repositories.sqlite.locationLevelRepository import SqliteLocationLevelRepository
-from app.db.repositories.iLocationEntryPointRepository import ILocationEntryPointRepository
-from app.db.repositories.sqlite.locationEntryPointRepository import (
-    SqliteLocationEntryPointRepository,
-)
 from app.db.repositories.iReliefTemplateRepository import IReliefTemplateRepository
 from app.db.repositories.iReliefGradeRepository import IReliefGradeRepository
 from app.db.repositories.sqlite.reliefTemplateRepository import SqliteReliefTemplateRepository
@@ -157,7 +153,6 @@ class Container:
         self._perk_repository: IWorldPerkRepository | None = None
         self._location_repository: INamedLocationRepository | None = None
         self._location_level_repository: ILocationLevelRepository | None = None
-        self._location_entry_point_repository: ILocationEntryPointRepository | None = None
         self._map_cell_repository: IMapCellRepository | None = None
         self._connection_node_repository: IConnectionNodeRepository | None = None
         self._connection_edge_repository: IConnectionEdgeRepository | None = None
@@ -528,13 +523,6 @@ class Container:
         if self._location_level_repository is None:
             self._location_level_repository = SqliteLocationLevelRepository(db=self._db)
         return self._location_level_repository
-
-    def location_entry_point_repository(self) -> ILocationEntryPointRepository:
-        if self._location_entry_point_repository is None:
-            self._location_entry_point_repository = SqliteLocationEntryPointRepository(
-                db=self._db,
-            )
-        return self._location_entry_point_repository
 
     def map_cell_repository(self) -> IMapCellRepository:
         if self._map_cell_repository is None:

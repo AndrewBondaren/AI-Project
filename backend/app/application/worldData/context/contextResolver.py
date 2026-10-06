@@ -1,13 +1,10 @@
 """Generic cascade resolver — tz_cascade_context §4.
 
-``extend()`` is the single generic engine: it validates the link
-sequence against the scope axis, accumulates the provided source POJOs,
-and re-resolves every ``Cascade`` parameter — but only the nodes of
-the **new** level are walked. Each chain node is resolved exactly
-once, at the boundary of its own scope; the inherited resolved value
-is both the materialize anchor and the fallback. That is what makes
-materialization happen once: a band authored at area materializes at
-the area boundary and is never re-rolled by deeper scopes.
+``extend()`` derives scope boundaries from declared field links and
+binds each parameter's linked list to the accumulated source POJOs.
+One iterator walks that runtime chain in declared priority order.
+Ancestor node results are snapshots: only new scope nodes are evaluated,
+so materialization never re-rolls when the context is extended.
 
 One resolution per scope: the caller supplies the rng for the scope
 (``entity_rng(world_uid, UidKind.CASCADE, scope=scope_uid, param=…)``); a materialize
@@ -15,6 +12,7 @@ channel that needs it (no anchor) requires it — missing rng is a
 caller bug, never a silent skip.
 """
 
+from functools import lru_cache
 from random import Random
 
 from pydantic import BaseModel
@@ -25,6 +23,7 @@ from app.application.worldData.context.cascadeLog import (
     log_default_applied,
     log_scope_resolve,
 )
+from app.application.worldData.context.runtimeChain import bind_chain
 from app.application.worldData.generators.utils.economicTierBands import (
     materialize_tier_input,
 )
@@ -33,7 +32,7 @@ from app.application.worldData.generators.utils.materialResolver import (
 )
 from app.dataModel.cascade.cascadeGraph import (
     check_link,
-    ordered_chain,
+    ordered_scopes,
 )
 from app.dataModel.cascade.cascadeSpec import (
     Cascade,
@@ -43,19 +42,22 @@ from app.dataModel.cascade.cascadeSpec import (
 from app.dataModel.locations.context.locationContext import LocationContext
 
 
-# Cascade-annotated fields of the context model — computed once: the
-# model is frozen, the scan would be identical on every ``extend()``.
-_CASCADE_FIELDS: tuple[tuple[str, Cascade], ...] = tuple(
-    (name, param)
-    for name, info in LocationContext.model_fields.items()
-    for param in (
-        next(
-            (m for m in info.metadata if isinstance(m, Cascade)),
-            None,
-        ),
+@lru_cache
+def _cascade_fields(model: type[BaseModel]) -> tuple[tuple[str, Cascade], ...]:
+    """Discover parameters on the calling context, without a field table."""
+    return tuple(
+        (name, meta)
+        for name, info in model.model_fields.items()
+        for meta in info.metadata
+        if isinstance(meta, Cascade)
     )
-    if param is not None
-)
+
+
+def scope_sequence(ctx: LocationContext):
+    """Declared scope path shared by the resolver and empty-scope callers."""
+    return ctx._scope_path or ordered_scopes(
+        tuple(param for _, param in _cascade_fields(type(ctx))), ctx.level,
+    )
 
 
 # Resolver bindings — the single place where names declared on
@@ -73,11 +75,11 @@ _REGISTRIES = {
 }
 
 
-def _check_bindings() -> None:
+def _check_bindings(model: type[BaseModel]) -> None:
     """Every resolver/registry name declared on a ``Cascade`` param of
     the context model must resolve to a callable — declaration and
     binding table are two facts that must not silently disagree."""
-    for _name, param in _CASCADE_FIELDS:
+    for _name, param in _cascade_fields(model):
         for name, table, what in (
             (param.materialize, _MATERIALIZE, "materialize"),
             (param.fold, _FOLDS, "fold"),
@@ -90,14 +92,17 @@ def _check_bindings() -> None:
                 )
 
 
-_check_bindings()
+_check_bindings(LocationContext)
 
 
 def extend(
     ctx: LocationContext, *links: Link, rng: Random | None = None,
 ) -> LocationContext:
     """Add one scope level of links; return a new resolved context."""
-    level = _check_level(ctx, links)
+    fields = _cascade_fields(type(ctx))
+    _check_bindings(type(ctx))
+    path = scope_sequence(ctx)
+    level = _check_level(ctx, links, path)
     objects = []
     for link in links:
         if link.obj is None:
@@ -107,6 +112,7 @@ def extend(
 
     stored = dict(ctx._links)
     stored[level] = tuple(objects)
+    node_results = dict(ctx._node_results)
 
     provenance = dict(ctx.provenance)
     update = {"level": level}
@@ -115,7 +121,7 @@ def extend(
     def _resolve_field(name: str, param: Cascade) -> None:
         inherited_source = ctx.provenance.get(name)
         value, source = _resolve(
-            param, level, objects, getattr(ctx, name),
+            param, level, stored, node_results, getattr(ctx, name),
             inherited_source, ctx._world, rng,
         )
         if source is None:
@@ -137,7 +143,7 @@ def extend(
                         )
                 if source is None:
                     value = _resolve_default(param, ctx._world)
-                    source = (next(iter(param.axis)),
+                    source = (path[0],
                               f"default:{param.default.value}")
                     log_default_applied(
                         param=param.field,
@@ -152,16 +158,18 @@ def extend(
     # Fold params resolve in a second pass — their resolver reads this
     # level's freshly resolved values (e.g. the dominant-material pick
     # uses the tier resolved at this same scope).
-    for name, param in _CASCADE_FIELDS:
+    for name, param in fields:
         if param.fold is None:
             _resolve_field(name, param)
-    for name, param in _CASCADE_FIELDS:
+    for name, param in fields:
         if param.fold is not None:
             _resolve_field(name, param)
     update["provenance"] = provenance
     new_ctx = ctx.model_copy(update=update)
     new_ctx._world = ctx._world
     new_ctx._links = stored
+    new_ctx._scope_path = path
+    new_ctx._node_results = node_results
     log_scope_resolve(
         level=level.value,
         objects=[type(obj).__name__ for obj in objects],
@@ -174,48 +182,33 @@ def _is_default(source) -> bool:
     return bool(source) and source[1].startswith("default:")
 
 
-def _resolve(param, level, objects, inherited, inherited_source, world, rng):
-    """Walk the new level's chain nodes; materialize once, anchored to
-    the inherited value; fall through to inheritance."""
+def _resolve(param, level, sources, results, inherited, inherited_source,
+             world, rng):
+    """Walk one bound chain; reuse ancestor snapshots, evaluate new nodes."""
     # A provisional default is not an authored anchor — a deeper
     # materialize rolls instead of clamping to the median.
     anchor = None if _is_default(inherited_source) else inherited
-    for owner, node, channel in ordered_chain(param):
-        if node.level is not level:
-            continue
-        obj = _link_object(objects, owner)
-        if obj is None:
-            continue
-        raw = getattr(obj, node.field)
-        if raw is None:
-            continue
-        if channel.kind is ChannelKind.VALUE:
-            return raw, (node.level, f"{owner.__name__}.{node.field}")
-        resolver = (
-            _MATERIALIZE.get(param.materialize)
-            if param.materialize
-            else None
-        )
-        if resolver is None:
-            raise ValueError(
-                f"no materialize bound for param {param.field!r} "
-                f"kind={channel.kind}"
+    for bound in bind_chain(param, sources):
+        key = (param, bound.node)
+        if bound.node.level is level and key not in results:
+            raw = (
+                getattr(bound.obj, bound.node.field)
+                if bound.obj is not None else None
             )
-        materialized = resolver(world, channel.kind, raw, anchor, rng)
-        if materialized is not None:
-            return materialized, (node.level,
-                                  f"{owner.__name__}.{node.field}")
+            value = raw
+            if raw is not None and bound.channel.kind is not ChannelKind.VALUE:
+                resolver = _MATERIALIZE.get(param.materialize)
+                if resolver is None:
+                    raise ValueError(
+                        f"no materialize bound for param {param.field!r} "
+                        f"kind={bound.channel.kind}"
+                    )
+                value = resolver(world, bound.channel.kind, raw, anchor, rng)
+            results[key] = (value, bound.source if value is not None else None)
+        value, source = results.get(key, (None, None))
+        if value is not None:
+            return value, source
     return inherited, inherited_source
-
-
-def _link_object(
-    objects: tuple[BaseModel, ...] | list[BaseModel],
-    owner: type[BaseModel],
-) -> BaseModel | None:
-    for obj in objects or ():
-        if isinstance(obj, owner):
-            return obj
-    return None
 
 
 def _resolve_default(param: Cascade, world):
@@ -245,7 +238,7 @@ def _resolve_default(param: Cascade, world):
     )
 
 
-def _check_level(ctx: LocationContext, links: tuple[Link, ...]):
+def _check_level(ctx: LocationContext, links: tuple[Link, ...], path):
     """All links carry exactly one scope level, strictly below
     ``ctx.level`` and adjacent to it on the same axis."""
     levels = {link.level for link in links}
@@ -259,12 +252,16 @@ def _check_level(ctx: LocationContext, links: tuple[Link, ...]):
             f"link axis {type(level).__name__} does not match "
             f"context axis {type(ctx.level).__name__}"
         )
-    if level.rank <= ctx.level.rank:
+    if level not in path:
+        raise ValueError(f"level {level.value} has no declared cascade boundary")
+    current_index = path.index(ctx.level)
+    next_index = path.index(level)
+    if next_index <= current_index:
         raise ValueError(
             f"level {level.value} is not strictly below "
             f"{ctx.level.value}"
         )
-    if level.rank > ctx.level.rank + 1:
+    if next_index > current_index + 1:
         raise ValueError(
             f"level {level.value} skips a level after "
             f"{ctx.level.value}"

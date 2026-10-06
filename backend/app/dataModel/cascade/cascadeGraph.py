@@ -247,3 +247,44 @@ def ordered_chain(
     return tuple(
         (owners[link], link, chain_nodes[link]) for link in order
     )
+
+
+def ordered_scopes(
+    params: tuple[Cascade, ...], root: ScopeAxis,
+) -> tuple[ScopeAxis, ...]:
+    """Derive scope boundaries from the declared field chains.
+
+    Chains run override→fallback; scope propagation runs in the reverse
+    direction. Parameters with narrower coverage contribute constraints,
+    not extra scopes. Ambiguous or contradictory declarations are errors;
+    enum order never breaks a tie.
+    """
+    parents: dict[ScopeAxis, set[ScopeAxis]] = {root: set()}
+    for param in params:
+        if param.axis is not type(root):
+            raise ValueError("cascade parameter is on a foreign axis")
+        previous = None
+        for _, node, _ in reversed(ordered_chain(param)):
+            scope = node.level
+            if type(scope) is not type(root):
+                raise ValueError("cascade channel is on a foreign axis")
+            parents.setdefault(scope, set())
+            if scope is not root:
+                parents[scope].add(root)
+            if previous is not None and previous is not scope:
+                parents[scope].add(previous)
+            previous = scope
+    result: list[ScopeAxis] = []
+    while parents:
+        ready = [scope for scope, dependencies in parents.items()
+                 if not dependencies]
+        if len(ready) != 1:
+            raise ValueError(
+                "cascade scope order is ambiguous or cyclic in declared links"
+            )
+        scope = ready[0]
+        result.append(scope)
+        del parents[scope]
+        for dependencies in parents.values():
+            dependencies.discard(scope)
+    return tuple(result)

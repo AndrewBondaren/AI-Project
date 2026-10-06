@@ -66,7 +66,6 @@ CREATE TABLE IF NOT EXISTS worlds (
     cell_state_registry         TEXT,
     danger_level_registry       TEXT,
     road_type_registry          TEXT,
-    passage_type_registry       TEXT,
     transition_type_registry    TEXT,
     location_type_registry      TEXT,
     settlement_specialization_registry TEXT,
@@ -797,29 +796,6 @@ CREATE TABLE IF NOT EXISTS location_levels (
 );
 
 -- ============================================================
--- location_entry_points
--- ============================================================
-CREATE TABLE IF NOT EXISTS location_entry_points (
-    entry_uid                  TEXT PRIMARY KEY,
-    location_uid               TEXT NOT NULL,
-    x                          INTEGER NOT NULL,
-    y                          INTEGER NOT NULL,
-    z                          INTEGER NOT NULL,
-    leads_to_level_uid         TEXT,
-    display_name               TEXT NOT NULL,
-    entry_role                 TEXT NOT NULL DEFAULT 'front'
-                               CHECK (entry_role IN ('front', 'service')),
-    entry_difficulty_override  INTEGER,
-    guard_level_override       INTEGER,
-    is_discovered              INTEGER NOT NULL DEFAULT 0,
-    is_accessible              INTEGER NOT NULL DEFAULT 1,
-    glossary_ref               TEXT,
-    tag_refs                   TEXT,
-    FOREIGN KEY (location_uid)       REFERENCES named_locations(location_uid) ON DELETE CASCADE,
-    FOREIGN KEY (leads_to_level_uid) REFERENCES location_levels(level_uid)
-);
-
--- ============================================================
 -- roads
 -- ============================================================
 CREATE TABLE IF NOT EXISTS roads (
@@ -840,29 +816,7 @@ CREATE TABLE IF NOT EXISTS roads (
 );
 
 -- ============================================================
--- location_passages (переходы между уровнями / комнатами)
--- ============================================================
-CREATE TABLE IF NOT EXISTS location_passages (
-    passage_uid         TEXT PRIMARY KEY,
-    world_uid           TEXT NOT NULL,
-    to_level_uid        TEXT NOT NULL,
-    to_x                INTEGER NOT NULL,
-    to_y                INTEGER NOT NULL,
-    system_passage_type TEXT NOT NULL,
-    from_level_uid      TEXT,        -- NULL = внешнее пространство (entry_point снаружи)
-    from_x              INTEGER,
-    from_y              INTEGER,
-    is_bidirectional    INTEGER NOT NULL DEFAULT 1,
-    display_name        TEXT,
-    glossary_ref        TEXT,
-    tag_refs            TEXT,
-    FOREIGN KEY (world_uid)      REFERENCES worlds(world_uid),
-    FOREIGN KEY (from_level_uid) REFERENCES location_levels(level_uid),
-    FOREIGN KEY (to_level_uid)   REFERENCES location_levels(level_uid)
-);
-
--- ============================================================
--- transitions (additive physical aggregate; legacy passages remain until F1)
+-- transitions (physical aggregate shared by generator, SQL and pack)
 -- Defaults/behavior are supplied by the Transition POJO, not by source second SQL registry.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS transitions (
@@ -1362,8 +1316,6 @@ CREATE INDEX IF NOT EXISTS idx_named_locations_public   ON named_locations (worl
 CREATE INDEX IF NOT EXISTS idx_map_cell_patches_location_z ON map_cell_patches (world_uid, location_uid, z);
 
 CREATE INDEX IF NOT EXISTS idx_location_levels_location ON location_levels (location_uid);
-CREATE INDEX IF NOT EXISTS idx_location_passages_from   ON location_passages (from_level_uid);
-CREATE INDEX IF NOT EXISTS idx_location_passages_to     ON location_passages (to_level_uid);
 
 CREATE INDEX IF NOT EXISTS idx_map_cell_patches_location ON map_cell_patches (world_uid, location_uid, z);
 CREATE INDEX IF NOT EXISTS idx_map_cell_patches_xy       ON map_cell_patches (world_uid, x, y);

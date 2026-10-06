@@ -96,12 +96,10 @@ class TransitionRegistryWireTest(unittest.TestCase):
             ))
         self.assertEqual(registry.keys(), {"valid"})
 
-    def test_legacy_world_fields_are_not_converted(self) -> None:
-        data = {"passage_type_registry": {"old": {"display_name": "Old"}},
-                "connection_type_registry": [{"system_connection_type": "portal", "display_name": "Портал"}],
+    def test_deferred_portal_registry_is_not_converted(self) -> None:
+        data = {"connection_type_registry": [{"system_connection_type": "portal", "display_name": "Портал"}],
                 "transition_type_registry": [_row()]}
         normalized = normalize_world(data, partial=True)
-        self.assertEqual(normalized["passage_type_registry"], data["passage_type_registry"])
         self.assertEqual(normalized["connection_type_registry"], data["connection_type_registry"])
 
 

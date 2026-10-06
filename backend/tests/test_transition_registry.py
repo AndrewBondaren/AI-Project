@@ -7,7 +7,6 @@ import unittest
 from pydantic import ValidationError
 
 from app.dataModel.annotationPolicy import WireFieldPolicy, field_policy, wire_enum_class
-from app.dataModel.locations.structure.enums.passageType import PassageType
 from app.dataModel.locations.transitions.transitionType import TransitionType, TransitionVertical
 from app.dataModel.locations.transitions.transitionTypeEntry import TransitionTypeEntry
 from app.dataModel.locations.transitions.worldTransitionTypeRegistry import (
@@ -159,12 +158,6 @@ class TransitionRegistryTest(unittest.TestCase):
         self.assertIsNone(registry.type_for("missing"))
         with self.assertRaisesRegex(RuntimeError, "missing"):
             registry.require("missing")
-
-    def test_legacy_generator_vocabulary_still_works(self) -> None:
-        for member in PassageType:
-            with self.subTest(member=member):
-                self.assertIs(PassageType.from_wire(member.value), member)
-                self.assertIs(TransitionType(member.value), TransitionType[member.name])
 
 
 if __name__ == "__main__":
