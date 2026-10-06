@@ -11,7 +11,7 @@ from app.dataModel.worldPack.parentLightTile import ParentLightTile
 def hydro_mask_from_parent(
     parent: ParentLightTile,
 ) -> dict[tuple[int, int], MapCellHydrology]:
-    """Expand L0 hydrology_role (+ width) to meter cells via ``to_fine_role``."""
+    """Expand L0 hydrology_role (+ width) to fine cells via ``to_fine_role``."""
     out: dict[tuple[int, int], MapCellHydrology] = {}
     tile_m = parent.tile_m
     side = parent.side
@@ -29,7 +29,7 @@ def hydro_mask_from_parent(
             if fine is None:
                 continue
             entry = MapCellHydrology(role=fine)
-            # Paint meters covered by this light cell.
+            # Paint fine cells covered by this light cell.
             for dty in range(light_m):
                 for dtx in range(light_m):
                     lx = tx * light_m + dtx
@@ -39,7 +39,7 @@ def hydro_mask_from_parent(
                     xm, ym = world_fine_xy(parent.gx, parent.gy, lx, ly, tile_m)
                     out[(xm, ym)] = entry
 
-            # Dilate river width in meters (hydrology_width on wire).
+            # Dilate river width in fine cells (hydrology_width on wire).
             if role is WorldMapHydrologyRole.RIVER and cell.hydrology_width:
                 radius = max(0, int(cell.hydrology_width) - 1)
                 if radius <= 0:
@@ -66,13 +66,13 @@ def hydro_mask_from_parent(
 
 def merge_hydro_hard_corridor(
     parent: ParentLightTile,
-    sparse_meter_hydro: dict[tuple[int, int], MapCellHydrology] | None,
+    sparse_fine_hydro: dict[tuple[int, int], MapCellHydrology] | None,
 ) -> dict[tuple[int, int], MapCellHydrology]:
     """L0 mask is SoT; sparse declared carves kept only inside corridor."""
     mask = hydro_mask_from_parent(parent)
-    if not sparse_meter_hydro:
+    if not sparse_fine_hydro:
         return mask
-    for key, entry in sparse_meter_hydro.items():
+    for key, entry in sparse_fine_hydro.items():
         if key in mask:
             mask[key] = entry
     return mask

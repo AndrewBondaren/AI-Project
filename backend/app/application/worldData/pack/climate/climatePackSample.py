@@ -100,7 +100,7 @@ def resolve_pack_surface_z(
     tile_m: int,
     typical_elevation_z: int,
     coarse_surface_z: Mapping[tuple[int, int], int] | None = None,
-    meter_z_overrides: Mapping[tuple[int, int], int] | None = None,
+    fine_z_overrides: Mapping[tuple[int, int], int] | None = None,
     parent_light: ParentLightTile | None = None,
     l2_surface_z: Mapping[tuple[int, int], int] | None = None,
     light_m: int | None = None,
@@ -122,8 +122,8 @@ def resolve_pack_surface_z(
         cell = parent_light.cell_at(tx, ty)
         if cell is not None:
             return int(cell.surface_z)
-    if meter_z_overrides:
-        hit = meter_z_overrides.get((int(xm), int(ym)))
+    if fine_z_overrides:
+        hit = fine_z_overrides.get((int(xm), int(ym)))
         if hit is not None:
             return int(hit)
     mgx = int(fine_to_grid_x(xm, tile_m))
@@ -144,7 +144,7 @@ def sample_pack_climate_at(
     ym: int,
     tile_m: int,
     coarse_surface_z: Mapping[tuple[int, int], int] | None = None,
-    meter_z_overrides: Mapping[tuple[int, int], int] | None = None,
+    fine_z_overrides: Mapping[tuple[int, int], int] | None = None,
     parent_light: ParentLightTile | None = None,
     l2_surface_z: Mapping[tuple[int, int], int] | None = None,
     light_m: int | None = None,
@@ -164,7 +164,7 @@ def sample_pack_climate_at(
         tile_m=tile_m,
         typical_elevation_z=zone.typical_elevation_z,
         coarse_surface_z=coarse_surface_z,
-        meter_z_overrides=meter_z_overrides,
+        fine_z_overrides=fine_z_overrides,
         parent_light=parent_light,
         l2_surface_z=l2_surface_z,
         light_m=light_m,

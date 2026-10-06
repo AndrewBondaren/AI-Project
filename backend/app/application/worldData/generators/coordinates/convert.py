@@ -38,6 +38,20 @@ def fine_to_grid_y(y: int, map_cell: int) -> GridY:
     return GridY(y // map_cell)
 
 
+def fine_to_grid_xy(x: int, y: int, map_cell: int) -> tuple[GridX, GridY]:
+    return fine_to_grid_x(x, map_cell), fine_to_grid_y(y, map_cell)
+
+
+def fine_segments_to_grid(
+    segments: list[tuple[tuple[int, int], tuple[int, int]]],
+    map_cell: int,
+) -> list[tuple[tuple[GridX, GridY], tuple[GridX, GridY]]]:
+    return [
+        (fine_to_grid_xy(*start, map_cell), fine_to_grid_xy(*end, map_cell))
+        for start, end in segments
+    ]
+
+
 def grid_tile_origin_x(gx: int, map_cell: int) -> FineX:
     return FineX(gx * map_cell)
 

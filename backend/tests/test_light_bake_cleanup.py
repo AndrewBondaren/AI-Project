@@ -100,8 +100,8 @@ class TestLightBakeCleanup(unittest.TestCase):
             coarse_hydro={
                 (0, 0): MapCellHydrology(role=HydrologyCellRole.COASTAL_SEA),
             },
-            sparse_meter_hydro={},
-            meter_z_overrides={},
+            sparse_fine_hydro={},
+            fine_z_overrides={},
             coarse_relief_z={(0, 0): 0},
             coarse_surface_z={(0, 0): 0},
         )

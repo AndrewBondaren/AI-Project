@@ -174,8 +174,8 @@ class TestUpsampleAndCorridor(unittest.TestCase):
             local_field=ClimateAnchorField(()),
             coarse_hm=MagicMock(),
             coarse_hydro={},
-            sparse_meter_hydro={},
-            meter_z_overrides={},
+            sparse_fine_hydro={},
+            fine_z_overrides={},
             coarse_relief_z={},
             coarse_surface_z={},
         )
@@ -273,8 +273,8 @@ class TestTerrainMaskCarry(unittest.TestCase):
             local_field=ClimateAnchorField(()),
             coarse_hm=MagicMock(),
             coarse_hydro={},
-            sparse_meter_hydro={},
-            meter_z_overrides={},
+            sparse_fine_hydro={},
+            fine_z_overrides={},
             coarse_relief_z={},
             coarse_surface_z={},
         )
