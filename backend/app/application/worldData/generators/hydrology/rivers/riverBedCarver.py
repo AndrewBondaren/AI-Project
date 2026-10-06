@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
+from app.application.worldData.generators.coordinates.space import CoordinateSpace
 from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments import (
     segments_from_declared,
 )
@@ -76,6 +77,7 @@ def generate_rivers(
             locations,
             occupied_cells,
             type_classify,
+            space=CoordinateSpace.WORLD_SURFACE_GRID,
         ):
             river_segments.append(segment)
 

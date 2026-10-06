@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from app.application.worldData.generators.coordinates.convert import (
+    fine_to_grid_xy,
     map_cell_fine_span,
 )
+from app.application.worldData.generators.coordinates.space import CoordinateSpace
 from app.application.worldData.generators.hydrology.rivers.classifyRiverSegments import (
     classify_autoresolve_polyline,
 )
@@ -45,11 +49,24 @@ def _nearest_water_cell(
     return None
 
 
-def _waypoint_meter(wp: HydrologyWaypoint) -> tuple[int, int]:
+Cell = tuple[int, int]
+FineToSpace = Callable[[Cell], Cell]
+
+
+def _fine_to_space(world: object, space: CoordinateSpace) -> FineToSpace:
+    if space == CoordinateSpace.WORLD_FINE_GRID:
+        return lambda pt: pt
+    if space == CoordinateSpace.WORLD_SURFACE_GRID:
+        map_cell = map_cell_fine_span(world)  # type: ignore[arg-type]
+        return lambda pt: fine_to_grid_xy(pt[0], pt[1], map_cell)
+    raise ValueError(f"unsupported river intent space: {space}")
+
+
+def _waypoint_fine(wp: HydrologyWaypoint) -> Cell:
     return int(wp.x), int(wp.y)
 
 
-def _location_anchor_meter(
+def _location_anchor_fine(
     location_uid: str,
     loc_map: dict[str, NamedLocation],
 ) -> tuple[int, int] | None:
@@ -59,34 +76,36 @@ def _location_anchor_meter(
     return int(loc.map_x), int(loc.map_y)
 
 
-def _resolve_mouth_meter(
+def _resolve_mouth(
     mouth: HydrologyMouth,
     loc_map: dict[str, NamedLocation],
     occupied: dict[tuple[int, int], MapCellHydrology],
-) -> tuple[int, int] | None:
+    to_space: FineToSpace,
+) -> Cell | None:
     if mouth.location_uid:
-        anchor = _location_anchor_meter(mouth.location_uid, loc_map)
+        anchor = _location_anchor_fine(mouth.location_uid, loc_map)
         if anchor is None:
             return None
-        return _nearest_water_cell(*anchor, occupied) or anchor
-    if mouth.x is not None and mouth.y is not None:
-        gx, gy = int(mouth.x), int(mouth.y)
-        return _nearest_water_cell(gx, gy, occupied) or (gx, gy)
-    return None
+        cell = to_space(anchor)
+    elif mouth.x is not None and mouth.y is not None:
+        cell = to_space((int(mouth.x), int(mouth.y)))
+    else:
+        return None
+    return _nearest_water_cell(*cell, occupied) or cell
 
 
 def _anchors_for_river(
     river: DeclaredRiver,
     loc_map: dict[str, NamedLocation],
-    cell_m: int,
+    to_space: FineToSpace,
     occupied: dict[tuple[int, int], MapCellHydrology],
-) -> list[tuple[int, int]]:
+) -> list[Cell]:
     mode = river.declare_mode
     if mode == RiverDeclareMode.ENDPOINTS:
         if river.source is None or river.mouth is None:
             return []
-        source = _waypoint_meter(river.source)
-        mouth = _resolve_mouth_meter(river.mouth, loc_map, occupied)
+        source = to_space(_waypoint_fine(river.source))
+        mouth = _resolve_mouth(river.mouth, loc_map, occupied, to_space)
         if mouth is None:
             return []
         return [source, mouth]
@@ -94,14 +113,14 @@ def _anchors_for_river(
     if mode == RiverDeclareMode.VIA_LOCATIONS:
         anchors: list[tuple[int, int]] = []
         for uid in river.route_location_uids:
-            pt = _location_anchor_meter(uid, loc_map)
+            pt = _location_anchor_fine(uid, loc_map)
             if pt is not None:
-                anchors.append(pt)
+                anchors.append(to_space(pt))
         if len(anchors) >= 2 and river.route_location_uids:
             last_uid = river.route_location_uids[-1]
-            last = _location_anchor_meter(last_uid, loc_map)
+            last = _location_anchor_fine(last_uid, loc_map)
             if last is not None:
-                water = _nearest_water_cell(*last, occupied)
+                water = _nearest_water_cell(*to_space(last), occupied)
                 if water is not None:
                     anchors[-1] = water
         return anchors
@@ -113,14 +132,14 @@ def _polyline_for_river(
     river: DeclaredRiver,
     heightmap: SurfaceHeightmap,
     loc_map: dict[str, NamedLocation],
-    cell_m: int,
+    to_space: FineToSpace,
     occupied: dict[tuple[int, int], MapCellHydrology],
-) -> list[tuple[int, int]]:
+) -> list[Cell]:
     from app.application.worldData.generators.hydrology.geom.polylineRasterize import (
         bresenham_line,
     )
 
-    anchors = _anchors_for_river(river, loc_map, cell_m, occupied)
+    anchors = _anchors_for_river(river, loc_map, to_space, occupied)
     if len(anchors) < 2:
         return []
 
@@ -143,14 +162,16 @@ def resolve_declared_river_intents(
     locations: list[NamedLocation],
     occupied: dict[tuple[int, int], MapCellHydrology],
     type_classify: RiverTypeClassify,
+    *,
+    space: CoordinateSpace,
 ) -> list[RiverSegment]:
-    """Modes endpoints / via_locations → classified segments (B2)."""
-    cell_m = map_cell_fine_span(world)  # type: ignore[arg-type]
+    """Modes endpoints / via_locations → classified segments (B2) in ``space`` of ``heightmap``."""
+    to_space = _fine_to_space(world, space)
     loc_map = {loc.location_uid: loc for loc in locations}
     segments: list[RiverSegment] = []
 
     for river in rivers:
-        polyline = _polyline_for_river(river, heightmap, loc_map, cell_m, occupied)
+        polyline = _polyline_for_river(river, heightmap, loc_map, to_space, occupied)
         if len(polyline) < 2:
             continue
         segments.append(

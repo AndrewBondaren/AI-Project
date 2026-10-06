@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.application.worldData.generators.climate.climatePoleField import GridBBox
+from app.application.worldData.generators.coordinates.space import CoordinateSpace
 from app.application.worldData.generators.coordinates.worldTile import (
     expand_coarse_hydro_to_tile,
     fine_bbox_for_tile,
@@ -75,6 +76,7 @@ def apply_declared_meter_river_carves(
             locations,
             merged_hydro,
             type_classify,
+            space=CoordinateSpace.WORLD_FINE_GRID,
         ):
             carved = carve_river_segment(hm, segment, depth_step=1)
             merged_hydro.update(carved)
