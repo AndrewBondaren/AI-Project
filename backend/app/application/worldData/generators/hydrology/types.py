@@ -54,9 +54,9 @@ class RiverTypeClassify:
 @dataclass(frozen=True)
 class ResolvedConnectionNode:
     node_uid:     str
-    x_m:          int
-    y_m:          int
-    z_m:          int
+    x_fine:       int
+    y_fine:       int
+    z:            int
     gx:           int
     gy:           int
     node_type:    str

@@ -22,7 +22,7 @@ def bootstrap_macro_tiles(
     world: World,
     locations: list[NamedLocation],
     coarse_hydro: dict[Tile, object],
-    sparse_meter_hydro: dict[Tile, object] | None,
+    sparse_fine_hydro: dict[Tile, object] | None,
     *,
     max_tiles: int | None = None,
     defaults: PackBakeDefaults | None = None,
@@ -45,7 +45,7 @@ def bootstrap_macro_tiles(
         add(tile, 1)
 
     cell_m = map_cell_fine_span(world)
-    for xm, ym in (sparse_meter_hydro or {}):
+    for xm, ym in (sparse_fine_hydro or {}):
         add(macro_tile_of(xm, ym, cell_m), 2)
 
     for gx, gy in coarse_hydro:

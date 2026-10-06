@@ -37,7 +37,7 @@ def _surface_ctx(*, y_max: int = 7) -> MagicMock:
     ctx.pole_field = ClimatePoleField(poles=(), bbox=bbox)
     ctx.local_field = ClimateAnchorField(())
     ctx.coarse_surface_z = {}
-    ctx.meter_z_overrides = {}
+    ctx.fine_z_overrides = {}
     return ctx
 
 

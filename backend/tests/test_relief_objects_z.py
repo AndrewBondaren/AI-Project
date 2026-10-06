@@ -183,7 +183,7 @@ class TestPrepareSurfaceOrder(unittest.TestCase):
             patch.object(mod, "run_surface_pass_coarse", return_value=coarse),
             patch.object(mod, "apply_relief_objects_z", side_effect=fake_relief),
             patch.object(mod, "is_hydrology_enabled", return_value=True),
-            patch.object(mod, "apply_declared_meter_river_carves", return_value=({}, {})),
+            patch.object(mod, "apply_declared_fine_river_carves", return_value=({}, {})),
             patch.object(mod, "build_local_field_from_coarse", return_value=MagicMock()),
         ):
             ctx = mod.prepare_surface_terrain_context(
@@ -231,8 +231,8 @@ class TestAntiDoubleRise(unittest.TestCase):
             local_field=ClimateAnchorField(()),
             coarse_hm=hm,
             coarse_hydro={},
-            sparse_meter_hydro={},
-            meter_z_overrides={},
+            sparse_fine_hydro={},
+            fine_z_overrides={},
             coarse_relief_z={(0, 0): 1},
             coarse_surface_z={(0, 0): 1 + rise},
         )

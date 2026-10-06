@@ -119,8 +119,8 @@ class TestLightGridCompose(unittest.TestCase):
             coarse_hydro={
                 (0, 0): MapCellHydrology(role=HydrologyCellRole.RIVER_BED),
             },
-            sparse_meter_hydro={},
-            meter_z_overrides={},
+            sparse_fine_hydro={},
+            fine_z_overrides={},
             coarse_relief_z={(0, 0): 1},
             coarse_surface_z={(0, 0): 1},
         )

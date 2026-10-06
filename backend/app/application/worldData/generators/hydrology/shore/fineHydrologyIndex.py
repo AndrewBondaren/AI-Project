@@ -31,7 +31,7 @@ from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
 
-def apply_declared_meter_river_carves(
+def apply_declared_fine_river_carves(
     world: World,
     locations: list[NamedLocation],
     base_surface_z: dict[tuple[int, int], int],
@@ -85,18 +85,18 @@ def apply_declared_meter_river_carves(
     return merged_hydro, surface_z
 
 
-def merge_meter_hydro_for_tile(
+def merge_fine_hydro_for_tile(
     tile_gx: int,
     tile_gy: int,
-    cell_m: int,
+    map_cell: int,
     coarse_hydro: dict[tuple[int, int], MapCellHydrology],
-    sparse_meter_hydro: dict[tuple[int, int], MapCellHydrology],
+    sparse_fine_hydro: dict[tuple[int, int], MapCellHydrology],
 ) -> dict[tuple[int, int], MapCellHydrology]:
     merged: dict[tuple[int, int], MapCellHydrology] = {}
-    merged.update(expand_coarse_hydro_to_tile(coarse_hydro, tile_gx, tile_gy, cell_m))
+    merged.update(expand_coarse_hydro_to_tile(coarse_hydro, tile_gx, tile_gy, map_cell))
 
-    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, cell_m)
-    for (xm, ym), entry in sparse_meter_hydro.items():
+    fine_bbox = fine_bbox_for_tile(tile_gx, tile_gy, map_cell)
+    for (xm, ym), entry in sparse_fine_hydro.items():
         if (
             fine_bbox.x_min <= xm <= fine_bbox.x_max
             and fine_bbox.y_min <= ym <= fine_bbox.y_max

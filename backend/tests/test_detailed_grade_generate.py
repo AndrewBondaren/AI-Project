@@ -78,8 +78,8 @@ class DetailedGradeGenerateTest(unittest.TestCase):
         w.closed_planet_grid = False
         w.magma_band_thickness = None
         ctx = MagicMock()
-        ctx.meter_z_overrides = {}
-        ctx.sparse_meter_hydro = {}
+        ctx.fine_z_overrides = {}
+        ctx.sparse_fine_hydro = {}
         state = terrain.build_tile_surface_state(
             w, [], ctx, 0, 0, parent_light=parent,
         )

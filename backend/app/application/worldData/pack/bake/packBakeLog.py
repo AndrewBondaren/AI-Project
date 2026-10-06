@@ -138,8 +138,8 @@ def log_pack_surface_context(
     started_at: float,
     coarse_surface_z_n: int | None = None,
     coarse_hydro_n: int | None = None,
-    sparse_meter_hydro_n: int | None = None,
-    meter_z_overrides_n: int | None = None,
+    sparse_fine_hydro_n: int | None = None,
+    fine_z_overrides_n: int | None = None,
     hydrology_enabled: bool | None = None,
     hydro_role_hist: dict[str, int] | None = None,
     surface_z_hist: dict[str, int] | None = None,
@@ -147,15 +147,15 @@ def log_pack_surface_context(
     elapsed_ms = (time.perf_counter() - started_at) * 1000.0
     _info(
         "pack surface context | world=%s ok=%s elapsed_ms=%.1f "
-        "coarse_z=%s coarse_hydro=%s sparse_meter_hydro=%s meter_z_overrides=%s "
+        "coarse_z=%s coarse_hydro=%s sparse_fine_hydro=%s fine_z_overrides=%s "
         "hydrology_enabled=%s hydro_roles=%s surface_z_hist=%s",
         world_uid,
         ok,
         elapsed_ms,
         coarse_surface_z_n if coarse_surface_z_n is not None else "-",
         coarse_hydro_n if coarse_hydro_n is not None else "-",
-        sparse_meter_hydro_n if sparse_meter_hydro_n is not None else "-",
-        meter_z_overrides_n if meter_z_overrides_n is not None else "-",
+        sparse_fine_hydro_n if sparse_fine_hydro_n is not None else "-",
+        fine_z_overrides_n if fine_z_overrides_n is not None else "-",
         hydrology_enabled if hydrology_enabled is not None else "-",
         hydro_role_hist if hydro_role_hist is not None else "-",
         surface_z_hist if surface_z_hist is not None else "-",
@@ -163,7 +163,7 @@ def log_pack_surface_context(
         world_uid=world_uid,
         coarse_surface_z_n=coarse_surface_z_n,
         coarse_hydro_n=coarse_hydro_n,
-        sparse_meter_hydro_n=sparse_meter_hydro_n,
+        sparse_fine_hydro_n=sparse_fine_hydro_n,
     )
     if ok and hydrology_enabled and (coarse_hydro_n or 0) == 0:
         logger.warning(
@@ -179,24 +179,24 @@ def log_pack_surface_context(
 def log_pack_world_map_sampling_note(
     world_uid: str,
     *,
-    sparse_meter_hydro_n: int,
-    meter_z_overrides_n: int,
+    sparse_fine_hydro_n: int,
+    fine_z_overrides_n: int,
 ) -> None:
     """Warn when meter-resolution hydro/z exists but light bake samples macro keys only."""
-    if sparse_meter_hydro_n <= 0 and meter_z_overrides_n <= 0:
+    if sparse_fine_hydro_n <= 0 and fine_z_overrides_n <= 0:
         return
     logger.warning(
         "pack world_map sampling | world=%s light cells use macro (gx,gy) for "
-        "surface_z/hydro; sparse_meter_hydro=%d meter_z_overrides=%d are NOT applied "
+        "surface_z/hydro; sparse_fine_hydro=%d fine_z_overrides=%d are NOT applied "
         "per (tx,ty) — expect flat tiles / missing rivers on light map",
         world_uid,
-        sparse_meter_hydro_n,
-        meter_z_overrides_n,
+        sparse_fine_hydro_n,
+        fine_z_overrides_n,
         extra=_diag_extra(
             activity="world_map_sampling_gap",
             world_uid=world_uid,
-            sparse_meter_hydro_n=sparse_meter_hydro_n,
-            meter_z_overrides_n=meter_z_overrides_n,
+            sparse_fine_hydro_n=sparse_fine_hydro_n,
+            fine_z_overrides_n=fine_z_overrides_n,
         ),
     )
 

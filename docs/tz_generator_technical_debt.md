@@ -205,7 +205,7 @@ Hub и settlement-слоты уже без метров: `WORLD_FINE_GRID`, `fin
 | Кластер | Примеры (не исчерпывающий grep) | Целевые имена (черновик) |
 |---|---|---|
 | Горы / relief masks | `MountainSpec.origin_x_m` / `radius_m` / `width_m`, `peak_spacing_m`, `hat_radius_m`, `half_width_m`, `band_m` | `*_fine` или без суффикса + тип `Fine*` на границе convert |
-| Гидрология | `CorridorForm.half_width_m`, `semi_minor_m`, `spine_m`, `apply_declared_meter_river_carves`, `sparse_meter_hydro`, `merge_meter_hydro_for_tile` | `*_fine`, `apply_declared_fine_river_carves`, `sparse_fine_hydro` |
+| ~~Гидрология~~ ✅ | `CorridorForm.half_width_m`, `semi_minor_m`, `spine_m`, `apply_declared_meter_river_carves`, `sparse_meter_hydro`, `merge_meter_hydro_for_tile`, `meter_z_overrides`, `ResolvedConnectionNode.x_m/y_m/z_m` | done: `*_fine`, `apply_declared_fine_river_carves`, `sparse_fine_hydro`, `merge_fine_hydro_for_tile`, `fine_z_overrides`, `x_fine/y_fine/z`; ТЗ `tz_terrain_hydrology` U20/U21/C1 → fine-клетки |
 | Pack / parent light | `ParentLightTile.tile_m`, `light_m`, `light_m_for`, `tile_size_m`, `background_expand_radius_m`, `corridor_half_width_m`, `max_radius_m` | `map_cell_span` / `fine_per_light_cell` / `*_fine` |
 | Locals | `cell_m`, `tile_m`, `xm`/`ym` как «meter x» в surface/pack | `map_cell`, `x_fine` — по касанию, не mass-rename ради grep |
 
@@ -2092,6 +2092,7 @@ reconcile  → cell_refs(g) := [xy | uid[xy] == g]  (стабильный пор
 
 | Дата | Изменение |
 |---|---|
+| 2026-10-06 | **NC-10** гидрология ✅: loader fine, coarse view в `build_hydrology_master_input`, `resolve_declared_river_intents(space=)`, rename `*_meter*` → `*_fine*`; `tz_terrain_hydrology` U20/U21/C1. Остались горы, pack, locals. |
 | 2026-09-07 | **NC-10** open: leftover `_m` / «метры» вне coordinate hub (горы, гидрология, pack `light_m`/`tile_m`, `sparse_meter_hydro`) после rename на fine grid. Не NC-1a/c/g, не NC-2 parcel. Слайс по кластеру. |
 | 2026-09-06 | **CITY-T-5** open: швы после C23 — [`tz_city_generation_technical_debt.md`](./tz_city_generation_technical_debt.md). **1a** resolved. Не reopen §8 / C22. |
 | 2026-09-05 | **CITY-T-4** **resolved** (`/impl-city-t-4` слои A–G): POJO rank/zone/conditions; один resolve; cache=`pick_layout_names`; Bind-only coerce; skip unknown assembler; `max_per` type+subtype. **2a** civic flood ✅; **2c** tokens `BUILDINGS` ✅; leftover **2b**. **MR-8** ✅. Не reopen §1.2 |

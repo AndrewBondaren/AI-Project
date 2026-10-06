@@ -16,7 +16,7 @@ from app.application.worldData.generators.hydrology.load.loadHydrologyFromWorld 
     is_hydrology_enabled,
 )
 from app.application.worldData.generators.hydrology.shore.fineHydrologyIndex import (
-    apply_declared_meter_river_carves,
+    apply_declared_fine_river_carves,
 )
 from app.application.worldData.generators.terrain.passes.surfacePass import run_surface_pass_coarse
 from app.application.worldData.generators.terrain.reliefObjects import apply_relief_objects_z
@@ -37,12 +37,12 @@ class SurfaceTerrainContext:
     local_field: ClimateAnchorField
     coarse_hm: SurfaceHeightmap
     coarse_hydro: dict[tuple[int, int], object]
-    sparse_meter_hydro: dict[tuple[int, int], MapCellHydrology]
-    meter_z_overrides: dict[tuple[int, int], int]
+    sparse_fine_hydro: dict[tuple[int, int], MapCellHydrology]
+    fine_z_overrides: dict[tuple[int, int], int]
     # Pre-1.4 macro z (relief only) — light ReliefContributor base. Not hydro SoT.
     coarse_relief_z: dict[tuple[int, int], int]
     # Post-1.4 (+ hydro carve) macro z — hydro / fine upsample SoT.
-    # Meter overrides live in meter_z_overrides.
+    # Fine-cell overrides live in fine_z_overrides.
     coarse_surface_z: dict[tuple[int, int], int]
 
 
@@ -98,7 +98,7 @@ def prepare_surface_terrain_context(
         )
         coarse_hydro = hydro_result.cell_index.by_cell
 
-    sparse_meter_hydro, meter_z_overrides = apply_declared_meter_river_carves(
+    sparse_fine_hydro, fine_z_overrides = apply_declared_fine_river_carves(
         world,
         locations,
         coarse_hm.surface_z,
@@ -110,8 +110,8 @@ def prepare_surface_terrain_context(
         local_field=local_field,
         coarse_hm=coarse_hm,
         coarse_hydro=coarse_hydro,
-        sparse_meter_hydro=sparse_meter_hydro,
-        meter_z_overrides=meter_z_overrides,
+        sparse_fine_hydro=sparse_fine_hydro,
+        fine_z_overrides=fine_z_overrides,
         coarse_relief_z=coarse_relief_z,
         coarse_surface_z=dict(coarse_hm.surface_z),
     )

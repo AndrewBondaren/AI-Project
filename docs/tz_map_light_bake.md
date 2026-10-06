@@ -45,7 +45,7 @@ metadata:
 | Слой | Роль |
 |---|---|
 | `SurfaceTerrainContext.coarse_hydro` | planning / L2; **не** SoT L0 mask |
-| `sparse_meter_hydro` / meter carve | fine / L2; **не** write-path L0 |
+| `sparse_fine_hydro` / fine carve | fine / L2; **не** write-path L0 |
 | Один sample на macro `(gx, gy)` на весь tile | **запрещённый** антипаттерн |
 
 ### Extensibility

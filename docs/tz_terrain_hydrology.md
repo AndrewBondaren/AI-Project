@@ -33,7 +33,7 @@ metadata:
 | U17 | **`river` vs `mountain_river`:** разные **`system_connection_type`**; горная — **подтип** (круче, **пороги**); autoresolve **классифицирует по terrain** heightmap, не только по тегу истока |
 | U18 | **River pipeline layers:** `classify_river_segments` → `list[RiverSegment]` (pure); **`riverConnectionEmit`** → `ConnectionEdge`; persist — **вне** generators (`MapCellService` / orchestration) |
 | U19 | **`liquid_candidate` persist (v1):** mask и роли hydrology — **metadata на `map_cells`** при `save_terrain_batch`; climate и downstream читают из БД; нужно для «где реки/озёра/море» без sidecar между HTTP-вызовами |
-| U20 | **Declare озеро:** `world.hydrology.declared_lakes[]` — `location_uid` + `shoreline[]` waypoints (метры, замкнутый контур) |
+| U20 | **Declare озеро:** `world.hydrology.declared_lakes[]` — `location_uid` + `shoreline[]` waypoints (fine-клетки, замкнутый контур) |
 | U21 | **Declare море/берег:** `world.hydrology.declared_coastlines[]` — `location_uid` + `path[]`; роль из `geographic` subtype |
 | U22 | **`type_classify` null:** runtime **fallback** на встроенные defaults схемы; **import validator (future):** проверить defaults, **записать явные значения** в bundle (normalize on import) — см. § Import validator |
 | U23 | **Smoke fixture:** [`fixtures/world_template.json`](../fixtures/world_template.json) — declare в `world.hydrology.declared_*` (hard cut от connection graph для hydrology) |
@@ -241,8 +241,8 @@ Height / ASCII height map показывает **дно**, не уровень �
 
 | Ось | Смысл | Где в модели |
 |---|---|---|
-| **Width** | поперечный размер footprint | `EllipseForm.semi_minor_m` / `CorridorForm.half_width_m` |
-| **Length** | продольный размер | `EllipseForm.semi_major_m` / длина `CorridorForm.spine_m` |
+| **Width** | поперечный размер footprint | `EllipseForm.semi_minor_fine` / `CorridorForm.half_width_fine` |
+| **Length** | продольный размер | `EllipseForm.semi_major_fine` / длина `CorridorForm.spine_fine` |
 | **Depth** | вертикаль (drop от `z_sea`) | `DepressionKind` → knobs + DepthFill profile |
 
 **Инвариант разделения:** Form **не** знает depth; Kind **не** знает polygon / spine math (зеркало Mountain Form vs KindElevation).
@@ -251,8 +251,8 @@ Height / ASCII height map показывает **дно**, не уровень �
 
 ```text
 DepressionForm =
-  | EllipseForm   { semi_major_m, semi_minor_m, yaw_rad }
-  | CorridorForm  { spine_m: list[(x,y)], half_width_m }
+  | EllipseForm   { semi_major_fine, semi_minor_fine, yaw_rad }
+  | CorridorForm  { spine_fine: list[(x,y)], half_width_fine }
   | …             # новый variant = PR: construct + raster (+ optional depth profile hook)
 
 DepressionKind   # builtin append-only table (как MountainKind)
@@ -264,7 +264,7 @@ DepressionKind   # builtin append-only table (как MountainKind)
 DepressionSpec
   form: DepressionForm
   kind: DepressionKind
-  # origin для Ellipse — центр эллипса в метрах (поле Spec или convention construct)
+  # origin для Ellipse — центр эллипса в fine-клетках (поле Spec или convention construct)
   # Corridor: spine уже в form
   # optional: declare uid, seed
 ```
@@ -276,21 +276,21 @@ DepressionSpec
 
 **EllipseForm** — котловина:
 
-- length = `2 · semi_major_m`, width = `2 · semi_minor_m`
+- length = `2 · semi_major_fine`, width = `2 · semi_minor_fine`
 - `yaw_rad` — поворот major axis
 - `depth_fraction`: 1 в центре, 0 на контуре (elliptical radius → smoothstep)
 
 **CorridorForm** — желоб:
 
-- length = длина polyline `spine_m`
-- width = `2 · half_width_m`
+- length = длина polyline `spine_fine`
+- width = `2 · half_width_fine`
 - `depth_fraction`: 1 на spine, 0 на боковых краях; optional taper на концах spine
 
 #### Engine interface (единственный способ роста)
 
 ```text
 construct_depression_form(form, …) → DepressionFormGeometry
-  # метры; без light grid — vertices / SDF / spine+offset по variant
+  # fine-клетки; без light grid — vertices / SDF / spine+offset по variant
 
 raster_depression_footprint(geometry, scale) → set[Cell]
   # Ellipse: inclusion; Corridor: stadium / capsule along spine
@@ -336,7 +336,7 @@ flowchart TD
 | `depression_autoresolve` | target | procedural DepressionSpec внутри open ocean |
 | `default_form` / `default_kind` | target | defaults для autoresolve / declare без явной form |
 | Kind table | target | `max_drop` **или** `drop_fraction` vs `(z_sea - z_min)` — DefaultOnWire; **заменяет** stub knob |
-| `declared_depressions[]` | target | hydrology declare рядом с `declared_coastlines` (метры); **не** `connection_edges` (U23) |
+| `declared_depressions[]` | target | hydrology declare рядом с `declared_coastlines` (fine-клетки); **не** `connection_edges` (U23) |
 
 **Autoresolve v1 (target, не блокер контракта):** seed field внутри open ocean → Ellipse и/или Corridor с random yaw / aspect; clamp размера к bbox воды.
 
@@ -611,7 +611,7 @@ generators/hydrology/
   shore/
     shoreProfile.py
     deepeningBandCarver.py
-    meterHydrologyIndex.py
+    fineHydrologyIndex.py
     heightmapSurfaceCells.py
   geom/
     polylineRasterize.py
@@ -667,7 +667,7 @@ class HydrologyGeneratorService:
 
 | Режим | Поведение |
 |---|---|
-| **Master (U21)** | Declare `declared_coastlines[].path[]` (waypoints в метрах) → rasterize → shore line + deepening bands **1–20** → `z_sea` open water |
+| **Master (U21)** | Declare `declared_coastlines[].path[]` (waypoints в fine-клетках) → `build_hydrology_master_input` переводит в coarse → rasterize → shore line + deepening bands **1–20** → `z_sea` open water |
 | **Procedural v1** | Flood from land boundary: shore cell на контакте, deepening внутрь до 20 cells, затем coastal sea |
 
 **Role tag:** все ячейки этого pass → `HydrologyCellRole.coastal_sea`.
@@ -706,7 +706,7 @@ class CoastalLandforms:
 ### `LakeBasinGenerator`
 
 **Вход:** `SurfaceHeightmap`, `list[LakeSpec]`.  
-**LakeSpec:** из `loadDeclaredHydrology` → **`declared_lake_specs`** (U20: `declared_lakes[].shoreline[]` waypoints в метрах) **или** auto-detect basins (`detect_terrain_features` kind=`basin`). Поля spec: `{ shoreline_segments, location_uid?, open_water_role? }`.
+**LakeSpec:** из `loadDeclaredHydrology` → **`declared_lake_specs`** (U20: `declared_lakes[].shoreline[]` waypoints в fine-клетках; в master input — coarse) **или** auto-detect basins (`detect_terrain_features` kind=`basin`). Поля spec: `{ shoreline_segments, location_uid?, open_water_role? }`.
 
 **Алгоритм v1 (U15):**
 
@@ -1025,11 +1025,11 @@ Validator **не заменяет** runtime fallback — оба слоя (как
 
 **Declare geometry (U20/U21/U27, U23):** имя — **`NamedLocation`**; **форма** — **`world.hydrology.declared_*`** в import bundle. Anchor-only location без `declared_*` entry — **invalid** для declare lake/sea/river (validator future); autoresolve без declare — OK.
 
-**Loader:** `loadDeclaredHydrology(world, locations)` → grid segments / `LakeSpec` / `DeclaredRiverEdge` / deferred `DeclaredRiver` intents; `build_hydrology_master_input` **не** читает hydrology declare из `connection_edges` (hard cut U23). Geographic locations — filter `system_location_type == "geographic"` для subtype routing (U25) и `via_locations` anchors.
+**Loader:** `loadDeclaredHydrology(world, locations)` → fine-cell segments / `LakeSpec` / `DeclaredRiverEdge` / deferred `DeclaredRiver` intents; `build_hydrology_master_input` **не** читает hydrology declare из `connection_edges` (hard cut U23). Geographic locations — filter `system_location_type == "geographic"` для subtype routing (U25) и `via_locations` anchors.
 
 #### Declare: озеро и море (U20/U21)
 
-Контур задаётся **waypoints в метрах** в `world.hydrology`, не radius и не один anchor:
+Контур задаётся **waypoints в fine-клетках** в `world.hydrology`, не radius и не один anchor:
 
 ```
 declared_lakes[].shoreline[]     → A → B → C → D → A   (озеро, замкнутый контур)
@@ -1239,7 +1239,7 @@ Climate pass (`generate-climate`) читает metadata из БД — **не** i
 2. Interim `liquidOverlayPass`: `z ≤ 0` AND `liquid_precipitation_mult > 0` → **`liquid_body`** без `hydrology.liquid_candidate`.
 3. У `water` в fixture нет `cool_temp`/`heat_temp` → mult **= 1.0** при любой температуре (в т.ч. −5 °C у dungeon).
 
-**Ложные ячейки (meter coords, вне surface grid — см. NC-1c в [`tz_terrain_generation.md`](./tz_terrain_generation.md)):**
+**Ложные ячейки (fine coords, вне surface grid — см. NC-1c в [`tz_terrain_generation.md`](./tz_terrain_generation.md)):**
 
 | x, y, z | `location_uid` | Почему не вода |
 |---|---|---|
@@ -1303,7 +1303,7 @@ Settlement outdoor persist — **после** regional terrain exists (как с
 
 | Пространство | Единицы | Где |
 |---|---|---|
-| `ConnectionNode.x/y`, `NamedLocation.map_x/y` | **метры** | import bundle, graph |
+| `ConnectionNode.x/y`, `NamedLocation.map_x/y`, `HydrologyWaypoint.x/y` | **fine cells** (`WORLD_FINE_GRID`) | import bundle, graph, `loadDeclaredHydrology` |
 | `SurfaceHeightmap` keys `(gx, gy)` | **grid cells** | carve, gap, column fill |
 | `surface_z`, `z_sea`, node `z` | **метры** (1 z = 1 m) | heightmap |
 
@@ -1311,10 +1311,12 @@ Settlement outdoor persist — **после** regional terrain exists (как с
 from app.application.worldData.generators.coordinates.convert import (
     map_cell_fine_span, fine_to_grid_x, fine_to_grid_y,
 )
-cell_m = map_cell_fine_span(world)
-gx = fine_to_grid_x(node.x, cell_m)
-gy = fine_to_grid_y(node.y, cell_m)
+map_cell = map_cell_fine_span(world)
+gx = fine_to_grid_x(node.x, map_cell)
+gy = fine_to_grid_y(node.y, map_cell)
 ```
+
+Declared hydrology: `loadDeclaredHydrology` отдаёт **fine** (pack / light grid / `fineHydrologyIndex`). Coarse pass получает coarse view из `build_hydrology_master_input` (`fine_segments_to_grid`). `resolve_declared_river_intents(..., space=)` — `WORLD_SURFACE_GRID` (coarse `riverBedCarver`) или `WORLD_FINE_GRID` (`apply_declared_fine_river_carves`).
 
 Polyline declare → rasterize (**Bresenham**) по grid в bbox heightmap.
 
@@ -1473,7 +1475,7 @@ Deps: `apply_hydrology` → `fill_terrain_columns` → `generate_climate`.
 | ~~Q9~~ | Melt flow storage | **U19/U24:** hydrology roles on `map_cells`; season `flow_level` — **v2** (climate events), не sidecar |
 | ~~Q10~~ | Declare vs autoresolve vs disable | **U10/U16:** global `enabled`; `default_<category>.enabled`; declare when bundle explicit |
 | ~~Q11~~ | River data model | **connections** like roads; `river` / `mountain_river` types |
-| ~~Q12~~ | Footprint format for sea/lake on map | **U20/U21 (U23):** declare = `world.hydrology.declared_lakes` / `declared_coastlines` waypoints (метры); **U15** bands inward from shoreline |
+| ~~Q12~~ | Footprint format for sea/lake on map | **U20/U21 (U23):** declare = `world.hydrology.declared_lakes` / `declared_coastlines` waypoints (fine-клетки); **U15** bands inward from shoreline |
 | Q15 | `type_classify` null → explicit values | **U22:** runtime fallback на schema defaults; **import validator (future)** — normalize + write explicit values в bundle |
 | Q13 | Surface ↔ cave water link; cave connection graph | **вне scope сейчас**; isolated cave hydrology U12; link + graph — Phase B / v2 |
 | ~~Q14~~ | Имена для materialize | **U13:** LLM-нода DAG из контекста; не name pool / seed |
