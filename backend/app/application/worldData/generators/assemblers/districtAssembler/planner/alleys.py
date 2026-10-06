@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable
+from typing import NamedTuple
 
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
@@ -51,26 +52,37 @@ def _cells_bbox(cells: list[Coord]) -> tuple[int, int, int, int]:
     return min(xs), min(ys), max(xs), max(ys)
 
 
+class AlleySegment(NamedTuple):
+    gap: int
+    start: Coord
+    end: Coord
+
+
 def _alley_segment(
-    a: AreaPlacement,
-    b: AreaPlacement,
-) -> tuple[int, Coord, Coord]:
+    plot_a: AreaPlacement,
+    plot_b: AreaPlacement,
+) -> AlleySegment:
     """Free gap between two plots and the alley centre line across it.
 
-    The line runs through the middle of the gap, perpendicular to the axis that
-    separates the plots, spanning both reservations so it reaches the frame.
+    Symmetric in ``plot_a`` / ``plot_b``. The line runs through the middle of the
+    gap, perpendicular to the axis that separates the plots, spanning both
+    reservations so it reaches the frame.
     """
-    ax0, ay0, ax1, ay1 = _cells_bbox(a.area_slot.cells or [(a.building_x, a.building_y)])
-    bx0, by0, bx1, by1 = _cells_bbox(b.area_slot.cells or [(b.building_x, b.building_y)])
+    ax0, ay0, ax1, ay1 = _cells_bbox(
+        plot_a.area_slot.cells or [(plot_a.building_x, plot_a.building_y)],
+    )
+    bx0, by0, bx1, by1 = _cells_bbox(
+        plot_b.area_slot.cells or [(plot_b.building_x, plot_b.building_y)],
+    )
     gap_x = max(bx0 - ax1, ax0 - bx1) - 1
     gap_y = max(by0 - ay1, ay0 - by1) - 1
-    ra = a.reservation.rect_xy if a.reservation is not None else (ax0, ay0, ax1, ay1)
-    rb = b.reservation.rect_xy if b.reservation is not None else (bx0, by0, bx1, by1)
+    ra = plot_a.reservation.rect_xy if plot_a.reservation is not None else (ax0, ay0, ax1, ay1)
+    rb = plot_b.reservation.rect_xy if plot_b.reservation is not None else (bx0, by0, bx1, by1)
     if gap_x >= gap_y:
         x = min(ax1, bx1) + 1 + gap_x // 2
-        return gap_x, (x, min(ra[1], rb[1])), (x, max(ra[3], rb[3]))
+        return AlleySegment(gap_x, (x, min(ra[1], rb[1])), (x, max(ra[3], rb[3])))
     y = min(ay1, by1) + 1 + gap_y // 2
-    return gap_y, (min(ra[0], rb[0]), y), (max(ra[2], rb[2]), y)
+    return AlleySegment(gap_y, (min(ra[0], rb[0]), y), (max(ra[2], rb[2]), y))
 
 
 def _emit_alley_for_group(
@@ -100,16 +112,17 @@ def _emit_alley_for_group(
             n_plots=len(group), alley="no", reason=PackingReason.SINGLE_PLOT,
         )
         return
-    gap, (fx, fy), (tx, ty) = _alley_segment(group[0], group[1])
-    if gap < width:
+    segment = _alley_segment(group[0], group[1])
+    if segment.gap < width:
         packing_info(
             PackingStep.ALLEY, district=district,
             n_plots=len(group), alley="no", reason=PackingReason.WIDTH,
             width_cells=width,
         )
         return
-    from_node = _node_at(nodes, fx, fy, z_of(fx, fy), world_uid)
-    to_node = _node_at(nodes, tx, ty, z_of(tx, ty), world_uid)
+    (sx, sy), (ex, ey) = segment.start, segment.end
+    from_node = _node_at(nodes, sx, sy, z_of(sx, sy), world_uid)
+    to_node = _node_at(nodes, ex, ey, z_of(ex, ey), world_uid)
     if from_node not in nodes:
         nodes.append(from_node)
     if to_node not in nodes:
