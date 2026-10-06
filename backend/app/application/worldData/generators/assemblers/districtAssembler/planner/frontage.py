@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 from collections import defaultdict
+from collections.abc import Callable
 
 from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
@@ -19,6 +20,9 @@ from app.application.worldData.generators.assemblers.settlementAssembler.packing
 )
 from app.application.worldData.generators.road.widthResolver import resolve_width
 from app.application.worldData.generators.road.connectionPolicy import sidewalk_of
+from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
+    district_connection_node_uid,
+)
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
     WorldConnectionTypeRegistry,
 )
@@ -239,6 +243,34 @@ def alley_from_template(slot: DistrictSlot) -> DistrictConnection | None:
     return street_classes_for(slot.district_template).alley
 
 
+def _cells_bbox(cells: list[Coord]) -> tuple[int, int, int, int]:
+    xs = [c[0] for c in cells]
+    ys = [c[1] for c in cells]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _alley_segment(
+    a: AreaPlacement,
+    b: AreaPlacement,
+) -> tuple[int, Coord, Coord]:
+    """Free gap between two plots and the alley centre line across it.
+
+    The line runs through the middle of the gap, perpendicular to the axis that
+    separates the plots, spanning both reservations so it reaches the frame.
+    """
+    ax0, ay0, ax1, ay1 = _cells_bbox(a.area_slot.cells or [(a.building_x, a.building_y)])
+    bx0, by0, bx1, by1 = _cells_bbox(b.area_slot.cells or [(b.building_x, b.building_y)])
+    gap_x = max(bx0 - ax1, ax0 - bx1) - 1
+    gap_y = max(by0 - ay1, ay0 - by1) - 1
+    ra = a.reservation.rect_xy if a.reservation is not None else (ax0, ay0, ax1, ay1)
+    rb = b.reservation.rect_xy if b.reservation is not None else (bx0, by0, bx1, by1)
+    if gap_x >= gap_y:
+        x = min(ax1, bx1) + 1 + gap_x // 2
+        return gap_x, (x, min(ra[1], rb[1])), (x, max(ra[3], rb[3]))
+    y = min(ay1, by1) + 1 + gap_y // 2
+    return gap_y, (min(ra[0], rb[0]), y), (max(ra[2], rb[2]), y)
+
+
 def _emit_alley_for_group(
     *,
     district: str,
@@ -250,6 +282,7 @@ def _emit_alley_for_group(
     nodes: list[ConnectionNode],
     edges: list[ConnectionEdge],
     world_uid: str,
+    z_of: Callable[[int, int], int],
     edge_roles: dict[str, DistrictStreetRole] | None,
     edge_key: str,
 ) -> None:
@@ -265,12 +298,7 @@ def _emit_alley_for_group(
             n_plots=len(group), alley="no", reason=PackingReason.SINGLE_PLOT,
         )
         return
-    a, b = group[0], group[1]
-    ax = a.building_x
-    ay = a.building_y
-    bx = b.building_x
-    by = b.building_y
-    gap = abs(bx - ax) if ay == by else abs(by - ay)
+    gap, (fx, fy), (tx, ty) = _alley_segment(group[0], group[1])
     if gap < width:
         packing_info(
             PackingStep.ALLEY, district=district,
@@ -278,13 +306,8 @@ def _emit_alley_for_group(
             width_cells=width,
         )
         return
-    from_node = _node_at(nodes, (ax + bx) // 2, ay if ay == by else (ay + by) // 2, world_uid)
-    to_node = _node_at(
-        nodes,
-        (ax + bx) // 2 if ay == by else ax,
-        (ay + by) // 2 if ay != by else ay,
-        world_uid,
-    )
+    from_node = _node_at(nodes, fx, fy, z_of(fx, fy), world_uid)
+    to_node = _node_at(nodes, tx, ty, z_of(tx, ty), world_uid)
     if from_node not in nodes:
         nodes.append(from_node)
     if to_node not in nodes:
@@ -316,9 +339,15 @@ def add_alleys(
     edges: list[ConnectionEdge],
     world_uid: str,
     edge_roles: dict[str, DistrictStreetRole] | None = None,
+    surface: dict[Coord, int] | None = None,
 ) -> None:
     """Alley thread from back_alley role or connection_type=alley when ≥2 plots fit."""
     district = slot.district_template.system_name
+    z_lookup = surface or {}
+
+    def z_of(x: int, y: int) -> int:
+        return int(z_lookup.get((x, y), slot.ground_z))
+
     alley = alley_from_template(slot)
     by_module: dict[tuple[int, int], list[AreaPlacement]] = defaultdict(list)
     by_cluster: dict[str, list[AreaPlacement]] = defaultdict(list)
@@ -351,6 +380,7 @@ def add_alleys(
             nodes=nodes,
             edges=edges,
             world_uid=world_uid,
+            z_of=z_of,
             edge_roles=edge_roles,
             edge_key=f"{col}_{row}",
         )
@@ -365,6 +395,7 @@ def add_alleys(
             nodes=nodes,
             edges=edges,
             world_uid=world_uid,
+            z_of=z_of,
             edge_roles=edge_roles,
             edge_key=f"cluster_{cluster_id.replace(':', '_')}",
         )
@@ -374,18 +405,23 @@ def _node_at(
     existing: list[ConnectionNode],
     x: int,
     y: int,
+    z: int,
     world_uid: str,
 ) -> ConnectionNode:
+    district_level = GraphLevel.DISTRICT.value
     for node in existing:
-        if node.x == x and node.y == y:
+        if (
+            node.x == x and node.y == y and node.z == z
+            and node.graph_level == district_level
+        ):
             return node
     return ConnectionNode(
-        node_uid=f"n_alley_{x}_{y}",
+        node_uid=district_connection_node_uid(world_uid, "alley", x, y, z),
         x=x,
         y=y,
-        z=0,
+        z=z,
         node_type=ConnectionNodeType.INTERSECTION.value,
-        graph_level=GraphLevel.DISTRICT.value,
+        graph_level=district_level,
         world_uid=world_uid,
     )
 

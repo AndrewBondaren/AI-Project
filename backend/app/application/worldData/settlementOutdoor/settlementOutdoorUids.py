@@ -29,6 +29,15 @@ def city_connection_node_uid(
     )
 
 
+def district_connection_node_uid(
+    world_uid: str, tag: str, x: int, y: int, z: int,
+) -> str:
+    return entity_uid(
+        world_uid, UidKind.CONN_NODE,
+        tag=tag, x=x, y=y, z=z,
+    )
+
+
 def area_uid(
     world_uid: str, district_uid: str, min_x: int, min_y: int, facing: Facing,
 ) -> str:
