@@ -460,5 +460,70 @@ class CenterClusterFrameAlleyTest(unittest.TestCase):
         self.assertEqual(roles[edges[0].edge_uid], DistrictStreetRole.BACK_ALLEY)
 
 
+class AlleyGeometryTest(unittest.TestCase):
+    def _run(
+        self,
+        second: tuple[int, int],
+        *,
+        surface: dict[tuple[int, int], int] | None = None,
+        ground_z: int = 0,
+        world_uid: str = "w",
+    ) -> tuple[list, list]:
+        slot = _slot(
+            DistrictConnection(connection_type="road", role="main_street"),
+            DistrictConnection(connection_type="alley", role="back_alley"),
+        )
+        slot.ground_z = ground_z
+        nodes: list = []
+        edges: list = []
+        add_alleys(
+            slot,
+            [
+                _placement(_token("town_hall#0"), col=1, row=1, x=80, y=80, cluster=True),
+                _placement(
+                    _token("cathedral#0", system_name="cathedral"),
+                    col=2, row=1, x=second[0], y=second[1], cluster=True,
+                ),
+            ],
+            nodes,
+            edges,
+            world_uid,
+            surface=surface,
+        )
+        return nodes, edges
+
+    def _endpoints(self, nodes: list, edges: list) -> tuple:
+        self.assertEqual(len(edges), 1)
+        by_uid = {n.node_uid: n for n in nodes}
+        return by_uid[edges[0].from_node_uid], by_uid[edges[0].to_node_uid]
+
+    def test_side_by_side_plots_get_vertical_alley_in_gap(self) -> None:
+        a, b = self._endpoints(*self._run((160, 80)))
+        self.assertNotEqual(a.node_uid, b.node_uid)
+        self.assertEqual((a.x, a.y), (120, 80))
+        self.assertEqual((b.x, b.y), (120, 160))
+
+    def test_stacked_plots_get_horizontal_alley_in_gap(self) -> None:
+        a, b = self._endpoints(*self._run((80, 160)))
+        self.assertNotEqual(a.node_uid, b.node_uid)
+        self.assertEqual((a.x, a.y), (80, 120))
+        self.assertEqual((b.x, b.y), (160, 120))
+
+    def test_alley_node_z_from_surface_else_ground_z(self) -> None:
+        a, b = self._endpoints(
+            *self._run((160, 80), surface={(120, 80): 7}, ground_z=3),
+        )
+        self.assertEqual(a.z, 7)
+        self.assertEqual(b.z, 3)
+
+    def test_alley_node_uid_deterministic_per_world(self) -> None:
+        first, _ = self._run((160, 80))
+        again, _ = self._run((160, 80))
+        other, _ = self._run((160, 80), world_uid="w2")
+        uids = sorted(n.node_uid for n in first)
+        self.assertEqual(uids, sorted(n.node_uid for n in again))
+        self.assertTrue(set(uids).isdisjoint(n.node_uid for n in other))
+
+
 if __name__ == "__main__":
     unittest.main()
