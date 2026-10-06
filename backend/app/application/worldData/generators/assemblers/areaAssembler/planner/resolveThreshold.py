@@ -56,6 +56,7 @@ def resolve_threshold(
     slot: AreaSlot,
     *,
     has_barrier: bool,
+    gate_cells: list[Coord] | None = None,
     entry_xy: Coord | None = None,
     house_cells: list[Coord] | None = None,
 ) -> AreaThreshold:
@@ -67,6 +68,8 @@ def resolve_threshold(
     3. Yard, no barrier → parcel_edge at that same facing-center cell.
     """
     edge = facing_edge_cells(slot.cells, slot.facing)
+    if has_barrier and gate_cells:
+        return AreaThreshold(kind=AreaThresholdKind.GATE, cells=gate_cells, z=0)
     if plot_equals_house(slot.cells, house_cells):
         if entry_xy is not None and entry_xy in set(slot.cells):
             return AreaThreshold(kind=AreaThresholdKind.DOOR, cells=[entry_xy], z=0)

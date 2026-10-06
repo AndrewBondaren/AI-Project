@@ -241,6 +241,7 @@ def extract_settlement(
         area_wires: list[AreaStructureWire] = []
 
         for area in district_layout.area_layouts:
+            transitions.extend(area.transitions)
             area_slot = area.slot
             slot_cells = list(area_slot.cells)
             if not slot_cells:

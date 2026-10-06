@@ -22,8 +22,34 @@ from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLa
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+from app.application.worldData.transitions.transitionIdentity import transition_uid
+from app.dataModel.locations.transitions.transition import Transition
+from app.dataModel.locations.transitions.transitionEndpoint import TransitionEndpoint
+from app.dataModel.locations.transitions.transitionParams import GateTransitionParams
+from app.dataModel.locations.transitions.transitionType import TransitionType
+from app.dataModel.spatial.facing import GRID_OUTWARD_DELTA
+from app.dataModel.terrain.worldTerrainRegistry import WorldTerrainRegistry
 
 logger = logging.getLogger(__name__)
+
+
+def area_gate_cells(barrier_cells: list[MapCell]) -> list[MapCell]:
+    gate_key = WorldTerrainRegistry.require_engine_terrain_key("gate")
+    return [cell for cell in barrier_cells if cell.system_terrain == gate_key]
+
+
+def area_gate_transitions(world: World, slot: AreaSlot, barrier_cells: list[MapCell]) -> list[Transition]:
+    """The actual opening joins adjacent surface cells; no area NL is required."""
+    delta = GRID_OUTWARD_DELTA[slot.facing]
+    result = []
+    for gate in area_gate_cells(barrier_cells):
+        source = TransitionEndpoint(x=gate.x + delta[0], y=gate.y + delta[1], z=gate.z)
+        destination = TransitionEndpoint(x=gate.x - delta[0], y=gate.y - delta[1], z=gate.z)
+        result.append(Transition(
+            transition_uid=transition_uid(world.world_uid, TransitionType.GATE, source, destination),
+            world_uid=world.world_uid, system_transition_type=TransitionType.GATE,
+            source=source, destination=destination, type_params=GateTransitionParams(width_cells=1)))
+    return result
 
 
 def should_build_area_barrier(

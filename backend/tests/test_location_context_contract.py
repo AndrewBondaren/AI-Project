@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import gc
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, create_model
 
 from app.dataModel.annotationPolicy import DefaultOnWire
 from app.dataModel.economy.economyTier.economyTierEntry import EconomyTierEntry
@@ -29,6 +29,7 @@ from app.dataModel.locations.settlement.enums.districtDensity import (
 from app.dataModel.cascade.cascadeGraph import (
     cascade_channels,
     check_link,
+    ordered_chain,
 )
 from app.dataModel.cascade.cascadeSpec import (
     Cascade,
@@ -56,6 +57,199 @@ def registry(values):
         EconomyTierEntry(system_tier=key, display_tier=key, base_value=value)
         for key, value in values
     ])
+
+
+class LinkedListAxis(ScopeAxis):
+    ROOT = "root"
+    TAIL = "tail"
+    HEAD = "head"
+    MIDDLE = "middle"
+
+
+class LinkedListContractTests(unittest.TestCase):
+    def _fixture(self, edges, *, fields=None, levels=None, field_types=None,
+                 above_edges=None):
+        """Arbitrary source fields, deliberately unlike location POJOs.
+
+        Field and enum declaration orders both differ from the links.
+        No production registry or source enumeration is changed.
+        """
+        fields = fields or {
+            "tail": LinkedListAxis.TAIL,
+            "middle": LinkedListAxis.MIDDLE,
+            "signal": LinkedListAxis.HEAD,
+        }
+        # Each fixture has its own parameter identity. A distinct axis
+        # also prevents typing.Annotated's equality cache from reusing
+        # metadata from an earlier fixture's structurally equal Cascade.
+        axis = ScopeAxis("SignalAxis", {
+            member.name: member.value for member in LinkedListAxis
+        })
+        def local_level(level):
+            return axis[level.name] if type(level) is LinkedListAxis else level
+
+        fields = {name: local_level(level) for name, level in fields.items()}
+        param = Cascade(
+            field="signal", default=DefaultPolicy.NONE_IS_ERROR,
+            axis=axis,
+            levels=(tuple(local_level(level) for level in levels)
+                    if levels else tuple(fields.values())),
+        )
+        declarations = {}
+        for name, level in fields.items():
+            target = edges.get(name)
+            upper = (above_edges or {}).get(name)
+            channel = CascadeChannel(
+                param, level,
+                above=(
+                    CascadeLink(None, upper, fields.get(upper, level))
+                    if upper else None
+                ),
+                below=(
+                    CascadeLink(None, target, fields.get(target, level))
+                    if target else None
+                ),
+            )
+            field_type = (field_types or {}).get(name, str)
+            declarations[name] = (Annotated[field_type | None, channel], None)
+        source = create_model("SignalSource", **declarations)
+        context = create_model(
+            "SignalContext", signal=(Annotated[str | None, param], None),
+        )
+        return param, source, context
+
+    def _assert_broken(self, edges, pattern, **kwargs):
+        param, source, context = self._fixture(edges, **kwargs)
+        with patch(
+            "app.dataModel.cascade.cascadeVerify._source_models",
+            return_value={source},
+        ), patch(
+            "app.dataModel.cascade.cascadeGraph._source_models",
+            return_value={source},
+        ):
+            with self.assertRaisesRegex(ValueError, pattern):
+                verify_cascade_contract(context)
+            with self.assertRaisesRegex(ValueError, pattern):
+                ordered_chain(param)
+
+    def test_declared_links_override_enum_and_field_order(self):
+        param, source, context = self._fixture(
+            {"signal": "middle", "middle": "tail"},
+        )
+        with patch(
+            "app.dataModel.cascade.cascadeVerify._source_models",
+            return_value={source},
+        ), patch(
+            "app.dataModel.cascade.cascadeGraph._source_models",
+            return_value={source},
+        ):
+            verify_cascade_contract(context)
+            chain = ordered_chain(param)
+        self.assertEqual([node.field for _, node, _ in chain],
+                         ["signal", "middle", "tail"])
+        self.assertEqual([node.level for _, node, _ in chain],
+                         [param.axis.HEAD, param.axis.MIDDLE, param.axis.TAIL])
+        self.assertTrue(all(owner is source for owner, _, _ in chain))
+
+    def test_links_across_arbitrary_source_models(self):
+        param = Cascade(
+            field="signal", default=DefaultPolicy.NONE_IS_ERROR,
+            axis=LinkedListAxis,
+            levels=(LinkedListAxis.TAIL, LinkedListAxis.MIDDLE),
+        )
+        tail = create_model("TemplateSignal", signal=(Annotated[
+            str | None, CascadeChannel(param, LinkedListAxis.TAIL),
+        ], None))
+        head = create_model("StampedSignal", signal=(Annotated[
+            str | None, CascadeChannel(
+                param, LinkedListAxis.MIDDLE,
+                below=CascadeLink(tail, "signal", LinkedListAxis.TAIL),
+            ),
+        ], None))
+        context = create_model("SignalContext", signal=(Annotated[
+            str | None, param,
+        ], None))
+        with patch(
+            "app.dataModel.cascade.cascadeVerify._source_models",
+            return_value={tail, head},
+        ), patch(
+            "app.dataModel.cascade.cascadeGraph._source_models",
+            return_value={tail, head},
+        ):
+            verify_cascade_contract(context)
+            self.assertEqual([owner for owner, _, _ in ordered_chain(param)],
+                             [head, tail])
+
+    def test_cycle_has_no_valid_ends(self):
+        self._assert_broken(
+            {"signal": "middle", "middle": "tail", "tail": "signal"},
+            "top.*bottom",
+        )
+
+    def test_chain_ending_in_cycle_is_rejected(self):
+        self._assert_broken(
+            {"signal": "middle", "middle": "tail", "tail": "middle"},
+            "two above neighbours",
+        )
+
+    def test_merging_branches_are_rejected(self):
+        self._assert_broken(
+            {"signal": "tail", "middle": "tail"},
+            "two above neighbours",
+        )
+
+    def test_splitting_branches_are_rejected(self):
+        self._assert_broken(
+            {"signal": "middle"}, "two below neighbours",
+            above_edges={"tail": "signal"},
+        )
+
+    def test_detached_cycle_is_not_a_chain(self):
+        self._assert_broken(
+            {"middle": "tail", "tail": "middle"},
+            "unreachable nodes",
+        )
+
+    def test_disconnected_node_is_rejected(self):
+        self._assert_broken({"signal": "middle"}, "top.*bottom")
+
+    def test_link_to_missing_field_is_rejected(self):
+        self._assert_broken({"signal": "missing"}, "no such field")
+
+    def test_incompatible_value_ends_are_rejected(self):
+        self._assert_broken(
+            {"signal": "middle", "middle": "tail"},
+            "different types", field_types={"tail": int},
+        )
+
+    def test_required_level_coverage_is_still_verified(self):
+        _, source, context = self._fixture(
+            {"signal": "middle"},
+            fields={"signal": LinkedListAxis.HEAD,
+                    "middle": LinkedListAxis.MIDDLE},
+            levels=(LinkedListAxis.HEAD, LinkedListAxis.MIDDLE,
+                    LinkedListAxis.TAIL),
+        )
+        with patch(
+            "app.dataModel.cascade.cascadeVerify._source_models",
+            return_value={source},
+        ):
+            with self.assertRaisesRegex(ValueError, "levels without channel"):
+                verify_cascade_contract(context)
+
+    def test_foreign_axis_is_still_rejected(self):
+        _, source, context = self._fixture(
+            {"signal": "middle", "middle": "tail"},
+            fields={"signal": LinkedListAxis.HEAD,
+                    "middle": LinkedListAxis.MIDDLE,
+                    "tail": ScopeLevel.ROOM},
+        )
+        with patch(
+            "app.dataModel.cascade.cascadeVerify._source_models",
+            return_value={source},
+        ):
+            with self.assertRaisesRegex(ValueError, "foreign axis"):
+                verify_cascade_contract(context)
 
 
 class LocationContextContractTests(unittest.TestCase):

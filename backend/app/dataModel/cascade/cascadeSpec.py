@@ -42,11 +42,10 @@ from pydantic import BaseModel
 class ScopeAxis(StrEnum):
     """An axis of scope tags for one domain (locations, factions…).
 
-    Members are semantic tags, not a fixed ordering — the legal nesting
-    shape is the per-axis containment DAG (``containment_parents``);
-    runtime order comes from the actual ancestor chain the caller walks
-    (tz_cascade_context §2 — целевая модель scope). Declaration order
-    still gives ``rank`` for axes that stay linear.
+    Members identify scopes; cascade channel order is declared by
+    field links, independently of enum declaration order or location
+    containment. ``rank`` remains for existing scope-boundary callers
+    until the runtime migration (tz_cascade_context §2, §4).
 
     Every domain enum inherits this mixin instead of a shared closed
     list.
@@ -55,49 +54,6 @@ class ScopeAxis(StrEnum):
     @property
     def rank(self) -> int:
         return tuple(type(self)).index(self)
-
-    @classmethod
-    def containment_parents(cls) -> dict["ScopeAxis", frozenset["ScopeAxis"]]:
-        """may-contain DAG: member → directly containing members.
-
-        Default = the linear axis (each member under the previous).
-        Domains with branched nesting (locations: wilderness and
-        settlement branches, dungeon under city or forest) override
-        with their DAG.
-        """
-        members = tuple(cls)
-        return {
-            member: frozenset({members[index - 1]}) if index else frozenset()
-            for index, member in enumerate(members)
-        }
-
-    def scope_descendant_of(self, ancestor: "ScopeAxis") -> bool:
-        """Strict descendant in the containment DAG — deeper in the
-        scope chain, possibly skipping tags (a tavern under a forest
-        skips district/area, which the enum order would have rejected).
-        """
-        parents = type(self).containment_parents()
-        seen: set[ScopeAxis] = set()
-        stack = list(parents.get(self, ()))
-        while stack:
-            current = stack.pop()
-            if current is ancestor:
-                return True
-            if current not in seen:
-                seen.add(current)
-                stack.extend(parents.get(current, ()))
-        return False
-
-    def scope_adjacent(self, other: "ScopeAxis") -> bool:
-        """Same tag or containment-adjacent in either direction —
-        the verifier's edge-legality rule (replaces rank-adjacency)."""
-        if self is other:
-            return True
-        parents = type(self).containment_parents()
-        return (
-            self in parents.get(other, ())
-            or other in parents.get(self, ())
-        )
 
 
 class DefaultPolicy(StrEnum):

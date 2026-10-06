@@ -1,8 +1,9 @@
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from app.core.settingsService import SettingsService
 from app.application.jsonValidation.worldRow import transition_types
 from app.application.worldData.transitions.transitionService import TransitionService
+from app.application.worldData.transitions.transitionReadService import BuildingTransitionPackBinding, TransitionReadService
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.namedLocation import NamedLocation
@@ -607,6 +608,16 @@ class Container:
         registry = transition_types(world)
         context = TransitionRepositoryContext(world.world_uid, registry, levels, locations, nodes)
         return TransitionService(SqliteTransitionRepository(self._db, context), registry)
+
+    def transition_read_service(
+        self, world: World, *, levels: Mapping[str, LocationLevel],
+        locations: Mapping[str, NamedLocation], nodes: Mapping[str, ConnectionNode],
+        bindings: Sequence[BuildingTransitionPackBinding],
+    ) -> TransitionReadService:
+        registry = transition_types(world)
+        context = TransitionRepositoryContext(world.world_uid, registry, levels, locations, nodes)
+        sql = TransitionService(SqliteTransitionRepository(self._db, context), registry)
+        return TransitionReadService(sql, self.world_pack_reader_for(world), context, bindings)
 
     def relief_template_library_service(self) -> ReliefTemplateLibraryService:
         if self._relief_template_library_service is None:

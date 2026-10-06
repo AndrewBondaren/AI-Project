@@ -213,13 +213,21 @@ def ordered_chain(
             chain_nodes.setdefault(link, channel)
             owners.setdefault(link, model)
     edges, errors = _declared_edges(chain_nodes, owners)
-    above_of = {lower: upper for upper, lower in edges}
-    below_of = {upper: lower for upper, lower in edges}
+    above_of: dict[CascadeLink, CascadeLink] = {}
+    below_of: dict[CascadeLink, CascadeLink] = {}
+    for upper, lower in edges:
+        if lower in above_of and above_of[lower] != upper:
+            errors.append(f"{_describe(lower)}: two above neighbours")
+        if upper in below_of and below_of[upper] != lower:
+            errors.append(f"{_describe(upper)}: two below neighbours")
+        above_of[lower] = upper
+        below_of[upper] = lower
     tops = [link for link in chain_nodes if link not in above_of]
-    if errors or len(tops) != 1:
+    bottoms = [link for link in chain_nodes if link not in below_of]
+    if errors or len(tops) != 1 or len(bottoms) != 1:
         raise ValueError(
             "cascade chain is broken: "
-            + "; ".join(errors or ["no unique top"])
+            + "; ".join(errors or ["no unique top and bottom"])
         )
     order: list[CascadeLink] = []
     cursor = tops[0]

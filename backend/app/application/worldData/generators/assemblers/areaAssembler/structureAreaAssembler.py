@@ -12,7 +12,8 @@ from app.application.worldData.generators.assemblers.areaAssembler.areaSlot impo
 from app.application.worldData.generators.assemblers.areaAssembler.areaThreshold import AreaThresholdKind
 from app.application.worldData.generators.assemblers.areaAssembler.planner.areaBarriers import (
     plan_area_barrier_cells,
-    should_build_area_barrier,
+    area_gate_cells,
+    area_gate_transitions,
 )
 from app.application.worldData.generators.assemblers.areaAssembler.planner.areaPaths import (
     build_area_paths,
@@ -241,7 +242,6 @@ class StructureAreaAssembler:
             x=bx, y=by,
             **({"district": district_uid} if district_uid is not None else {}),
         )
-        has_barrier = should_build_area_barrier(template, rng)
         fp = _runtime_footprint(template)
         fp_cells: list[Coord] = _footprint_cells(fp, bx, by) if fp is not None else []
 
@@ -311,16 +311,22 @@ class StructureAreaAssembler:
                 world, building, body, structure, context, terrain_cells,
             )
 
+        barrier_cells = self._build_barrier(
+            world, slot, template, building, city_skeleton, rng,
+        )
+        gates = area_gate_cells(barrier_cells)
         entry_xy = _entry_xy_world(building_layout)
         threshold = resolve_threshold(
             slot,
-            has_barrier=has_barrier,
+            has_barrier=bool(barrier_cells),
+            gate_cells=[(cell.x, cell.y) for cell in gates],
             entry_xy=entry_xy,
             house_cells=fp_cells if want_building else None,
         )
         threshold = replace(
             threshold,
-            z=median_surface_z(threshold.cells, surface, fallback_z),
+            z=gates[0].z if gates and threshold.kind == AreaThresholdKind.GATE
+                else median_surface_z(threshold.cells, surface, fallback_z),
         )
 
         origin = threshold.cells[0] if threshold.cells else (bx, by)
@@ -397,9 +403,12 @@ class StructureAreaAssembler:
             yard_approach=yard_approach,
         )
 
-        barrier_cells = self._build_barrier(
-            world, slot, template, building, city_skeleton, rng,
-        )
+        # The existing approach clamp can move a buildingless threshold in z.
+        # Keep the physical opening at the finalized graph threshold elevation.
+        if gates and threshold.kind == AreaThresholdKind.GATE:
+            gate_xy = set(threshold.cells)
+            barrier_cells = [replace(cell, z=threshold.z) if (cell.x, cell.y) in gate_xy else cell
+                             for cell in barrier_cells]
 
         levels = building_layout.levels if building_layout is not None else ()
         slot.height = height_from_levels(slot.ground_z, levels)
@@ -415,6 +424,7 @@ class StructureAreaAssembler:
             yard_cells=yard_cells,
             connection_nodes=connection_nodes,
             connection_edges=connection_edges,
+            transitions=area_gate_transitions(world, slot, barrier_cells),
         )
 
     def _place_building(

@@ -276,7 +276,7 @@ Subtype `dungeon` у `settlement` удаляется; `underground_city` ост�
 - Граничное поле `architectural_style` — сейчас settlement-authored; если
   станет generic для зданий — промоутится на NL отдельным решением.
 
-#### Scope = позиция в parent-цепочке (**NL-P1**, целевое)
+#### Иерархия NL и каскад полей (**NL-P1**, целевое)
 
 Вложенность локаций — **произвольное дерево** `parent_location_uid`, не
 фиксированная линейная ось: wilderness-ветки (`region → territory →
@@ -285,11 +285,12 @@ building → room`) — одно дерево; комплекс может ви�
 лесом. Допустимые формы вложенности — **данные мастера**: `parent_types`
 в `location_type_registry` (`forest → glade/cave`, …).
 
-Следствие для каскада (`tz_cascade_context.md` §2): порядок scope'ов при
-`extend()` задаётся **реальной цепочкой предков**, а не enum-порядком.
-`ScopeLevel` деградирует до семантических тегов узлов; проверка контракта
-использует scope-DAG «кто кого может содержать» (код-контракт, согласован
-с `parent_types`) вместо rank-adjacency. Generic stamped-каналы NL
+Каскад (`tz_cascade_context.md` §2) — отдельный **linked list полей POJO**.
+Его порядок и приоритет задаются `CascadeLink.above/below`, не
+`parent_location_uid`, `parent_types` или enum-порядком. Движок сам
+разворачивает объявленные связи в runtime-проход на параметр.
+`ScopeLevel` отмечает домен узла; отсутствующий runtime-объект не удаляет
+объявленные промежуточные звенья. Generic stamped-каналы NL
 `parent_wall_material` / `parent_floor_material` становятся level-agnostic:
 одна декларация с маркером «repeat on every tag», поскольку цепочка
 содержит только NL-узлы (отдельный шаг S2 со сменой контракта).

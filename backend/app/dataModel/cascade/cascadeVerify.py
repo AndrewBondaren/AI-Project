@@ -37,8 +37,8 @@ def verify_cascade_contract(context_model: type[BaseModel]) -> None:
     ``BAND``/``RANGE`` ends are materialize inputs (kind-aware end
     types, tz §2); edges form a single continuous doubly-linked chain —
     exactly one top and one bottom, no node with two neighbours on a
-    side, no orphans; an edge may connect only same-level or
-    rank-adjacent nodes; every non-world level is covered;
+    side, no orphans; channel order comes from the declared links,
+    not scope containment or enum rank; declared levels are covered;
     ``param.field`` exists on a source.
     """
     errors: list[str] = []
@@ -110,12 +110,6 @@ def verify_cascade_contract(context_model: type[BaseModel]) -> None:
                 )
             above_of[lower] = upper
             below_of[upper] = lower
-            if not upper.level.scope_adjacent(lower.level):
-                errors.append(
-                    f"edge {_describe(upper)} → {_describe(lower)} "
-                    "connects scopes that may not neighbour "
-                    "(scope-DAG, tz_cascade_context §2)"
-                )
         tops = [link for link in chain_nodes if link not in above_of]
         bottoms = [link for link in chain_nodes if link not in below_of]
         if len(tops) != 1 or len(bottoms) != 1:
