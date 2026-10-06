@@ -1,9 +1,10 @@
-﻿"""
+"""
 Entry-point passage builder (main entrance / service entrance).
 """
 import logging
 
 from app.dataModel.locations.structure.room.entryPoint import EntryPoint
+from app.dataModel.spatial.facing import CARDINAL_WALL_OUTWARD_DELTA
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.application.worldData.generators.structure.passages.doorHeight import resolve_door_height
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
@@ -11,9 +12,10 @@ from app.application.worldData.generators.structure.passages.doorPlacer import D
 from app.application.worldData.generators.structure.passages.shared import (
     _exterior_cells_on_wall,
 )
-from app.application.worldData.ids import UidKind, entity_uid
 from app.db.models.locationLevel import LocationLevel
-from app.db.models.locationPassage import LocationPassage
+from app.dataModel.locations.transitions.transition import Transition
+from app.dataModel.locations.transitions.transitionEndpoint import TransitionEndpoint
+from app.application.worldData.generators.structure.physicalTransition import physical_transition, level_endpoint
 from app.db.models.mapCell import MapCell
 
 logger = logging.getLogger(__name__)
@@ -41,7 +43,7 @@ def _build_entry_point(
     suffix: str = "",
     *,
     template: StructureTemplate | None = None,
-) -> LocationPassage | None:
+) -> Transition | None:
     height = _resolve_entry_height(room, ep, passage_height, template)
     facing = ep.wall
     ext_cells = _exterior_cells_on_wall(room, facing, all_union)
@@ -70,19 +72,7 @@ def _build_entry_point(
     door_cells = placed
 
     cx, cy = door_cells[len(door_cells) // 2]
-    passage_uid = entity_uid(
-        world_uid, UidKind.PASSAGE,
-        parent=building_uid, type=f"entry{suffix}", room=room.room_id,
-    )
-    return LocationPassage(
-        passage_uid=passage_uid,
-        world_uid=world_uid,
-        from_level_uid=None,
-        from_x=None,
-        from_y=None,
-        to_level_uid=level.level_uid,
-        to_x=cx,
-        to_y=cy,
-        system_passage_type=ep.passage_type,
-        is_bidirectional=False,
-    )
+    dx, dy = CARDINAL_WALL_OUTWARD_DELTA[facing]
+    source = TransitionEndpoint(x=cx + dx, y=cy + dy, z=level.z)
+    return physical_transition(world_uid, ep.passage_type, source,
+                               level_endpoint(level, cx, cy, building_uid), building_uid)

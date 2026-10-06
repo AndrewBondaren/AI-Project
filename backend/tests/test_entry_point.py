@@ -9,7 +9,7 @@ from pydantic import ValidationError
 from app.dataModel.spatial.facing import CARDINAL_FACINGS
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
 from app.dataModel.locations.structure.enums.entryAccessType import EntryAccessType
-from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.dataModel.locations.structure.room import EntryPoint
 from tests.structureWire import room_wire, level_wire
 
@@ -17,7 +17,7 @@ from tests.structureWire import room_wire, level_wire
 class EntryPointTests(unittest.TestCase):
     def test_cardinals_and_entrance_types(self):
         for wall in CARDINAL_FACINGS:
-            for kind in (PassageType.MAIN_ENTRANCE, PassageType.SERVICE_ENTRANCE):
+            for kind in (TransitionType.MAIN_ENTRANCE, TransitionType.SERVICE_ENTRANCE):
                 entry = EntryPoint.model_validate({"wall": wall.value, "passage_type": kind.value})
                 self.assertEqual(entry.wall, wall)
                 self.assertEqual(entry.passage_type, kind)

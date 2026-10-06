@@ -14,7 +14,7 @@ from app.dataModel.locations.structure.building.buildingBodyTemplate import Buil
 from app.dataModel.locations.structure.building.plotLayoutTemplate import PlotLayoutTemplate
 from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
@@ -53,8 +53,8 @@ class StructureAreaAssemblerTests(unittest.TestCase):
         )
 
     def entry(self, layout):
-        entries = [p for p in layout.passages if p.from_level_uid is None
-                   and p.system_passage_type == PassageType.MAIN_ENTRANCE]
+        entries = [p for p in layout.transitions if p.source.level_uid is None
+                   and p.system_transition_type == TransitionType.MAIN_ENTRANCE]
         self.assertEqual(len(entries), 1)
         return entries[0]
 
@@ -75,9 +75,9 @@ class StructureAreaAssemblerTests(unittest.TestCase):
         self.assertEqual(calls[0][2]["ctx"].economic_tier, "exceptional")
         entry = self.entry(area.building_layout)
         self.assertEqual(area.threshold.kind, AreaThresholdKind.DOOR)
-        self.assertEqual(area.threshold.cells, [(entry.to_x, entry.to_y)])
-        self.assertEqual(entry.to_y, 30)  # Author's SOUTH entry despite EAST slot.
-        self.assertTrue(20 <= entry.to_x < 25)
+        self.assertEqual(area.threshold.cells, [(entry.destination.x, entry.destination.y)])
+        self.assertEqual(entry.destination.y, 30)  # Author's SOUTH entry despite EAST slot.
+        self.assertTrue(20 <= entry.destination.x < 25)
         self.assertEqual(len(area.building_layout.rooms), 1)
         self.assertTrue(area.building_layout.cells)
         self.assertEqual(area.building_layout.rooms[0].parent_location_uid, area.building_location.location_uid)
@@ -86,7 +86,7 @@ class StructureAreaAssemblerTests(unittest.TestCase):
         first, second = self.assemble(), self.assemble(x=40)
         self.assertNotEqual(first.building_layout.rooms[0].location_uid, second.building_layout.rooms[0].location_uid)
         a, b = self.entry(first.building_layout), self.entry(second.building_layout)
-        self.assertEqual((b.to_x - a.to_x, b.to_y - a.to_y), (20, 0))
+        self.assertEqual((b.destination.x - a.destination.x, b.destination.y - a.destination.y), (20, 0))
 
     def test_public_plot_without_building_has_no_geometry(self):
         plot = self.plot.model_copy(update={"main_building": None, "plot_type": "public"})
@@ -107,7 +107,7 @@ class StructureAreaAssemblerTests(unittest.TestCase):
     def test_clamp_translates_generated_layout_only_in_z(self):
         baseline = self.assemble()
         entry = self.entry(baseline.building_layout)
-        street = (entry.to_x, entry.to_y - 1)
+        street = (entry.destination.x, entry.destination.y - 1)
         terrain = [MapCell(self.world.world_uid, x, y, 7) for x, y in baseline.slot.cells]
         terrain.append(MapCell(self.world.world_uid, *street, 0))
         clamped = self.assemble(terrain=terrain, street={street})
@@ -117,5 +117,8 @@ class StructureAreaAssemblerTests(unittest.TestCase):
         self.assertEqual([(c.x, c.y, c.z + dz) for c in before.cells], [(c.x, c.y, c.z) for c in after.cells])
         self.assertEqual([r.map_z + dz for r in before.rooms], [r.map_z for r in after.rooms])
         self.assertEqual([lv.z + dz for lv in before.levels], [lv.z for lv in after.levels])
-        self.assertEqual(before.passages, after.passages)
+        for old, new in zip(before.transitions, after.transitions, strict=True):
+            self.assertEqual((old.destination.x, old.destination.y, old.destination.z + dz), new.destination.geometry)
+            self.assertNotEqual(old.transition_uid, new.transition_uid)
+            self.assertEqual(old.destination_side, new.destination_side)
         self.assertEqual(before.occupied_footprint, after.occupied_footprint)

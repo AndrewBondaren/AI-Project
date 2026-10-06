@@ -12,6 +12,7 @@ from app.application.worldData.generators.structure.gridRenderer import render_a
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService, compute_occupied_footprint
 from app.application.worldData.generators.structure.structureOrientation import entry_orientation
 from app.dataModel.spatial.facing import Facing
+from app.dataModel.locations.transitions.transitionType import TransitionType
 
 
 class RotationProbe(StructureGeneratorService):
@@ -24,14 +25,14 @@ class RotationProbe(StructureGeneratorService):
 
 def compare_rotation(base, base_probe, actual, actual_probe, orientation, ground_z):
     cells = {(c.x, c.y, c.z): deepcopy(c) for c in base.cells}
-    passages = deepcopy(base.passages)
+    passages = deepcopy(base.transitions)
     rooms = deepcopy(base_probe.runtime_rooms)
     orientation.apply(cells, passages, rooms)
     origins = {base_probe.room_uids[r.uid_key]: (r.origin_x, r.origin_y) for r in rooms if r.placed and not r.is_shaft}
     expected_locations = [replace(r, map_x=origins[r.location_uid][0], map_y=origins[r.location_uid][1], created_at="") for r in base.rooms]
     checks = {
         "cells": cells == {(c.x, c.y, c.z): c for c in actual.cells},
-        "passages": passages == actual.passages,
+        "passages": passages == actual.transitions,
         "rooms": rooms == actual_probe.runtime_rooms and expected_locations == [replace(r, created_at="") for r in actual.rooms],
         "levels": base.levels == actual.levels,
         "occupied_footprint": compute_occupied_footprint(list(cells.values()), ground_z) == actual.occupied_footprint,
@@ -44,7 +45,7 @@ def rotation_payload(layout, probe):
     cells = {(c.x, c.y, c.z): c for c in layout.cells}
     markers = {}
     for passage in layout.passages:
-        if passage.system_passage_type == "staircase":
+        if passage.system_passage_type == TransitionType.STAIRCASE:
             z = levels.get(passage.to_level_uid)
             if z is not None:
                 markers[(passage.to_x, passage.to_y, z)] = "$"
@@ -53,7 +54,7 @@ def rotation_payload(layout, probe):
                 cell = cells.get((passage.from_x, passage.from_y, z))
                 if cell and cell.system_facing:
                     markers[(passage.from_x, passage.from_y, z)] = FACING_ARROW.get(Facing(cell.system_facing), "@")
-        elif passage.system_passage_type == "main_entrance":
+        elif passage.system_passage_type == TransitionType.MAIN_ENTRANCE:
             z = levels.get(passage.to_level_uid)
             if z is not None:
                 markers[(passage.to_x, passage.to_y, z)] = "E"
@@ -93,6 +94,6 @@ def generate_rotations(world, building, structure, plot, capture_factory):
         if base is None or layout is None:
             equivalence[facing.value] = {"matches": None, "status": "unavailable"}
             continue
-        orientation = entry_orientation(base_probe.runtime_rooms, base.passages, structure.system_name, facing)
+        orientation = entry_orientation(base_probe.runtime_rooms, base.transitions, structure.system_name, facing)
         equivalence[facing.value] = compare_rotation(base, base_probe, layout, probe, orientation, building.map_z or 0)
     return {"baseline": baseline, "rotations": variants, "equivalence": equivalence}

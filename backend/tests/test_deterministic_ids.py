@@ -231,7 +231,7 @@ class StaircaseReplayTests(unittest.TestCase):
         before, after = first[2], second[2]
         self.assertEqual(before.cells, after.cells)
         self.assertEqual(before.levels, after.levels)
-        self.assertEqual(before.passages, after.passages)
+        self.assertEqual(before.transitions, after.transitions)
         self.assertEqual(before.occupied_footprint, after.occupied_footprint)
         self.assertEqual(
             [replace(room, created_at="") for room in before.rooms],

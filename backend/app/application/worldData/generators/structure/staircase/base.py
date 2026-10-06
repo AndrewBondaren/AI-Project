@@ -1,4 +1,4 @@
-﻿"""
+"""
 Base staircase builder. Each type inherits and implements build().
 """
 import logging
@@ -65,7 +65,7 @@ class StaircaseBuilder(ABC):
         self.z_top           = max(fr_level.z, to_level.z)
         self.path_set: set[tuple[int, int, int]] = set()
         self._is_first_flight: bool = True
-        self.extra_passages: list = []
+        self.extra_transitions: list = []
         self.skip_edge_ladder: bool = False
 
     @abstractmethod

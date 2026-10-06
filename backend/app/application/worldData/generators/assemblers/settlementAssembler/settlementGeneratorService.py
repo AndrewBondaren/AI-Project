@@ -20,6 +20,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     plan_footprint_occupancy_cells,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.topologyPlan import (
+    SettlementTopologyPlan,
     plan_slots_and_city_graph as plan_slots_and_city_graph_fn,
 )
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
@@ -69,7 +70,7 @@ class SettlementGeneratorService:
         world: World,
         settlement: NamedLocation,
         terrain_cells: list[MapCell] | None = None,
-    ) -> tuple[list[DistrictSlot], list[ConnectionNode], list[ConnectionEdge]]:
+    ) -> SettlementTopologyPlan:
         ctx = settlement_context(world, settlement)
         skeleton = city_skeleton_from_settlement(
             settlement,

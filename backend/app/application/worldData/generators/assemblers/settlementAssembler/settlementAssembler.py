@@ -95,12 +95,12 @@ class SettlementAssembler:
             skeleton.system_location_mood,
         )
         if district_slots is None:
-            planned_slots, planned_nodes, planned_edges = plan_slots_and_city_graph(
+            topology = plan_slots_and_city_graph(
                 world, settlement, skeleton, terrain_cells, ctx,
             )
-            district_slots = planned_slots
+            district_slots = topology.slots
             if city_graph is None:
-                city_graph = (planned_nodes, planned_edges)
+                city_graph = (topology.nodes, topology.edges)
 
         t = time.perf_counter()
         layout_cache = build_layout_cache(

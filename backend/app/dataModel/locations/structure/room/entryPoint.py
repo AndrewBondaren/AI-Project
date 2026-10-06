@@ -7,14 +7,14 @@ from app.dataModel.annotationPolicy import (
 from app.dataModel.constrainedField import constrained_field
 from app.dataModel.spatial.facing import CARDINAL_FACINGS, Facing
 from app.dataModel.locations.structure.enums.entryAccessType import EntryAccessType
-from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.transitions.transitionType import TransitionType
 
 
 class EntryPoint(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     wall: StrictOnWire[Facing]
-    passage_type: StrictEnumOnWire[PassageType]
+    passage_type: StrictEnumOnWire[TransitionType]
     width: DefaultOnWire[int] = constrained_field(default=1, greater_equals=1)
     door_height: DefaultOnWire[int | None] = None
     frame_material: DefaultOnWire[str | None] = None
@@ -30,7 +30,7 @@ class EntryPoint(BaseModel):
 
     @field_validator("passage_type")
     @classmethod
-    def _entrance_type(cls, value: PassageType) -> PassageType:
-        if value not in (PassageType.MAIN_ENTRANCE, PassageType.SERVICE_ENTRANCE):
+    def _entrance_type(cls, value: TransitionType) -> TransitionType:
+        if value not in (TransitionType.MAIN_ENTRANCE, TransitionType.SERVICE_ENTRANCE):
             raise ValueError("entry passage_type must be main_entrance or service_entrance")
         return value

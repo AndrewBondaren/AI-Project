@@ -50,7 +50,7 @@ law/customs, magic/tech level. Порядок — 15–25 параметров, 
 
 ## 2. Каскадная цепочка и полиморфные звенья
 
-Каноническая цепочка (решение мастера 2026-10-03):
+Полная urban-ветка (решение мастера 2026-10-03; уточнение NL-P1):
 
 ```
 world → settlement → district → area → building → room
@@ -59,11 +59,16 @@ world → settlement → district → area → building → room
 Критерий уровня — **собственные потребители параметра** (городские стены
 и дороги, дороги/стены района, забор и двор участка, структура, материалы
 комнаты), а не наличие authored-поля. Иерархия зафиксирована enum'ом
-`ScopeLevel` (`dataModel`) — она в контракте, не в голове caller'а.
+`ScopeLevel` (`dataModel`) — семантические теги узлов. Допустимая
+вложенность задана scope-DAG, фактический порядок — parent-цепочкой.
+Ветка может быть короче: `settlement → building → room` и
+`settlement → district → building → room` допустимы без фиктивного area.
 
 `ScopeLevel` — **локационная ось**, не «ось вообще»: каждый домен со
 своей иерархией scope'ов (фракции, магия, эры) объявляет собственный
-enum на базе `ScopeAxis` (StrEnum-миксин с `rank`). Каскад — механизм
+enum на базе `ScopeAxis` (StrEnum-миксин с `containment_parents`).
+`rank` остаётся для линейных осей, но не определяет порядок локаций.
+Каскад — механизм
 поверх **любой** оси: параметр привязан к своей через `Cascade.axis`
 (`ECONOMIC_TIER.axis is ScopeLevel`), канал на чужой оси — ошибка
 контракта. Новый параметр на локационной оси (race_mix, культура) —
@@ -72,7 +77,7 @@ enum на базе `ScopeAxis` (StrEnum-миксин с `rank`). Каскад �
 **Уточнение мастера 2026-10-03: связь полей, а не реестр типов.**
 Строковый `ScopeLevel`, независимый `cascade_value(field: str)` и
 таблица «уровень → типы POJO» не обеспечивают связь объекта с контрактом:
-`ScopeLevel` — **чистая ось порядка** scope'ов и не знает, какие модели
+`ScopeLevel` — **теги scope и контракт вложенности**, он не знает, какие модели
 кормят уровень (источники различаются между параметрами: district может
 давать `economic_tier` из одного POJO, а `race_mix` — из другого).
 
@@ -101,7 +106,8 @@ enum на базе `ScopeAxis` (StrEnum-миксин с `rank`). Каскад �
 - проверка контракта проходит по рёбрам: имя поля резолвится в
   `model_fields` указанной модели, типы концов совместимы (kind-aware:
   `VALUE`↔`VALUE` один базовый тип; `BAND`/`RANGE` — входы materialize),
-  ребро соединяет только узлы одного уровня или соседних рангов,
+  ребро соединяет только узлы одного тега или соседние теги
+  scope-DAG (`scope_adjacent`, не соседство enum-rank),
   цепочка непрерывна от верха до world (один top, один bottom,
   без ветвлений и сирот).
 
@@ -137,7 +143,9 @@ caller, а не движка каскада.
 **Звено цепочки — `{level, obj}`** без собственной логики чтения:
 движок сам проходит каналы типа объекта по `CascadeChannel`-метаданным.
 `EmptyLink(level)` (`obj=None`) — явное пустое звено для caller'ов без
-объекта уровня (debug-роут) — уровень не пропускается молча.
+объекта уровня (debug-роут). Оно объявляет пустой scope, когда caller
+действительно моделирует этот scope; не требуется для отсутствующего
+area между district/settlement и building.
 
 Граница scope — точка, где появляется новое звено: world import/skeleton →
 settlement assemble → district → area/building → structure generate
@@ -145,22 +153,45 @@ settlement assemble → district → area/building → structure generate
 
 **Целевая модель scope (NL-P1, решение): порядок = parent-цепочка.**
 
-Линейная ось выше — settlement-only частный случай. Вложенность
+Линейная ветка выше — settlement-only частный случай. Вложенность
 локаций — произвольное дерево `parent_location_uid` (лес → поляна →
-пещера; данж под городом или под лесом — один тип, разный путь), схема
+пещера; комплекс под городом или под лесом — один тип, разный путь), схема
 допустимой вложенности — `parent_types` в `location_type_registry`
 (`tz_locations.md` §«Payload per type»). Целевое:
 
 - **порядок звеньев** — порядок предков в реальной цепочке при `extend()`,
   не enum-rank;
 - `ScopeLevel` — **семантические теги** узлов (`SETTLEMENT`, `DISTRICT`,
-  `DUNGEON`, `LEVEL`, `GEOGRAPHIC`…), расширяется без смены порядка;
+  `AREA`, `BUILDING`, `ROOM`), расширяется без смены порядка;
+  `GEOGRAPHIC` / `TERRITORY` и generic обход предков — отдельный план;
+- **одна scope-ось:** `location_complex` имеет тег `SETTLEMENT`, его
+  районы — `DISTRICT`, здания — `BUILDING`, помещения — `ROOM`.
+  Отдельной оси `DUNGEON→LEVEL→ROOM` нет; уровни комплекса —
+  `map_z` + `parent_location_uid`, а не новые scope-теги;
 - проверка контракта: rank-adjacency → **scope-DAG** «уровень A может
   содержать уровень B» (код-аналог `parent_types`); покрытие — по
   `param.levels` (уже поддержано), «все уровни оси» не требуется;
-- NL-каналы generic-параметров — **level-agnostic**: одна декларация
-  `CascadeChannel(param)` вместо повтора на каждый уровень; тег scope
-  NL берётся из `system_location_type`/`payload_kind` на рантайме.
+- `WALL_MATERIAL` / `FLOOR_MATERIAL` (цепочки только из NL-узлов) —
+  **level-agnostic**: одна декларация с маркером «repeat on every tag».
+  Новый маркер и обработка в verifier / `ordered_chain` / `_resolve` —
+  смена контракта, отдельный шаг S2; текущая декларация с `level`
+  не делает канал автоматически повторяемым;
+- `ECONOMIC_TIER` сохраняет явную цепочку каналов: между NL-узлами
+  стоят `DistrictTemplateEntry` / `PlotLayoutTemplate`. Один повторяемый
+  NL-канал не выражает этот двусвязный список с единственным top/bottom;
+- settlement-параметры (`CITY_SIZE`, `SETTLEMENT_DENSITY`,
+  `DOMINANT_MATERIAL`) получают authored-значения только из payload
+  на теге `SETTLEMENT`, затем fold/default. NL-узел этих параметров
+  удаляется. Для `location_complex` контракт тот же;
+- generic stamped-каналы (`ECONOMIC_TIER`, `WALL_MATERIAL`,
+  `FLOOR_MATERIAL`) остаются на NL. Type-stamped поля
+  (`system_city_size`, `district_topology`) хранятся в payload,
+  read-modify-write выполняет persist-сервис через payload-модель.
+
+**Статус реализации проверяется отдельно от целевого контракта.**
+S1 — декларация DAG и проверка рёбер; S1b — переход runtime `extend()`
+с rank-проверок на DAG; S2 — повторяемые NL-каналы материалов.
+Parent-обход и lazy NL над масками в эти шаги не входят.
 
 ---
 
@@ -217,9 +248,9 @@ class LocationContext(ContextModel):
 `param is X` в движке нет — декларация параметра самодостаточна, её
 покрытие привязками проверяет верификатор.
 
-`ScopeLevel` — enum (`world, settlement, district, area, building,
-room`), порядок значений = иерархия; `ctx.level` — уровень текущего
-контекста.
+`ScopeLevel` — enum тегов (`world, settlement, district, area, building,
+room`); порядок декларации значений не задаёт иерархию. `ctx.level` —
+тег текущего контекста, допустимые контейнеры — `containment_parents`.
 
 Новый каскадируемый параметр — объект `Cascade` в `cascadeParams`
 (поле, ось, дефолт и имена привязок) + **одна аннотированная строка в
@@ -256,10 +287,15 @@ room_ctx       = extend(building_ctx, room_link)   # rooms[].economic_tier и т
 
 `extend(ctx, *links, rng)`:
 
-0. **Валидация уровня:** все звенья одного `link.level`, строго ниже
-   `ctx.level`; пропуск уровня и повтор уровня — **ошибка** (повтор =
-   второй резолв на scope). Ось звена обязана совпадать с осью ctx.
-   Caller без объекта уровня передаёт `EmptyLink(level)` явно.
+0. **Валидация уровня (S1b):** все звенья одного `link.level`, на той же
+   оси, что и ctx; `link.level.scope_descendant_of(ctx.level)` должен
+   быть истинным. Повтор тега, подъём к предку и несвязанные ветки —
+   **ошибка**. Соседство определяется DAG, а не `rank+1`:
+   `settlement → building` / `district → building` допустимы без
+   `EmptyLink(AREA)`. Strict descendant допускает промежуточные теги,
+   когда они отсутствуют в фактической parent-цепочке; caller не вправе
+   потерять существующего semantic parent. Caller с явно пустым scope
+   передаёт `EmptyLink(level)`.
    `check_link` подтверждает, что тип объекта объявляет канал для этого
    уровня — таблицы типов нет.
 1. Проходит по полям `LocationContext`, читает `Cascade`-метаданные.

@@ -113,7 +113,7 @@ class EntryLayoutTests(unittest.TestCase):
         world, building = test_world_building()
         runs = [RotationProbe().generate_from_template(world, building, template) for _ in range(2)]
         self.assertEqual(runs[0].cells, runs[1].cells)
-        self.assertEqual(runs[0].passages, runs[1].passages)
+        self.assertEqual(runs[0].transitions, runs[1].transitions)
         self.assertEqual(template.model_dump(), before)
-        self.assertEqual({p.system_passage_type for p in runs[0].passages},
+        self.assertEqual({p.system_transition_type for p in runs[0].transitions},
                          {"main_entrance", "service_entrance", "doorway"})

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.topologyPlan import SettlementTopologyPlan
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementLayout import (
     SettlementLayout,
 )
@@ -22,9 +23,7 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorTypes import (
 )
 from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
     area_uid,
-    building_location_uid,
     district_location_uid,
-    entry_uid,
 )
 from app.dataModel.connections.enums.graphLevel import GraphLevel
 from app.dataModel.locations.enums.entryRole import EntryRole
@@ -48,6 +47,10 @@ from app.db.models.locationEntryPoint import LocationEntryPoint
 from app.db.models.locationLevel import LocationLevel
 from app.db.models.locationPassage import LocationPassage
 from app.db.models.namedLocation import NamedLocation
+from app.db.repositories.iTransitionRepository import TransitionRepositoryContext
+from app.dataModel.locations.transitions.worldTransitionTypeRegistry import WorldTransitionTypeRegistry
+from app.application.worldData.transitions.transitionStoragePolicy import BuildingTransitionScope
+from app.application.worldData.settlementOutdoor.settlementOutdoorTransitions import project_settlement_transitions
 
 
 class SettlementOutdoorExtractError(ValueError):
@@ -65,6 +68,7 @@ class ExtractedSettlement:
     wire: SettlementStructureWire
     sql_transitions: list[Transition] = field(default_factory=list)
     pack_by_building: dict[str, BuildingInteriorTransitionsWire] = field(default_factory=dict)
+    transition_context: TransitionRepositoryContext | None = None
 
 
 @dataclass
@@ -74,6 +78,7 @@ class ExtractedTopology:
     edges: list[ConnectionEdge]
     sql_transitions: list[Transition] = field(default_factory=list)
     pack_by_building: dict[str, BuildingInteriorTransitionsWire] = field(default_factory=dict)
+    transition_context: TransitionRepositoryContext | None = None
 
 
 def topology_slot_wire(slot: DistrictSlot, *, slot_index: int) -> DistrictTopologySlot:
@@ -156,17 +161,22 @@ def _city_topology_graph(
 
 def extract_topology(
     settlement: NamedLocation,
-    slots: list[DistrictSlot],
-    nodes: list[ConnectionNode],
-    edges: list[ConnectionEdge],
+    topology: SettlementTopologyPlan,
+    *, registry: WorldTransitionTypeRegistry | None = None,
 ) -> ExtractedTopology:
     districts: list[NamedLocation] = []
-    for slot in slots:
+    for slot in topology.slots:
         districts.append(
             _district_named_location(settlement, slot, slot_index=slot.slot_index),
         )
-    city_nodes, city_edges = _city_topology_graph(nodes, edges)
-    return ExtractedTopology(districts=districts, nodes=city_nodes, edges=city_edges)
+    city_nodes, city_edges = _city_topology_graph(topology.nodes, topology.edges)
+    context = TransitionRepositoryContext(settlement.world_uid, registry or WorldTransitionTypeRegistry.canonical_engine(),
+        {}, {row.location_uid: row for row in [settlement, *districts]}, {row.node_uid: row for row in city_nodes})
+    projection = project_settlement_transitions(settlement.world_uid, topology.transitions,
+        levels=context.levels, locations=context.locations, nodes=context.nodes,
+        building_scopes=[], registry=context.registry)
+    return ExtractedTopology(districts=districts, nodes=city_nodes, edges=city_edges,
+        sql_transitions=projection.sql_transitions, transition_context=context)
 
 
 def _role_for_passage(passage: LocationPassage) -> EntryRole | None:
@@ -206,6 +216,7 @@ def extract_settlement(
     layout: SettlementLayout,
     *,
     graph_levels: frozenset[GraphLevel] | None = None,
+    registry: WorldTransitionTypeRegistry | None = None,
 ) -> ExtractedSettlement:
     building_type = building_type_entry()
     building_is_outdoor = bool(building_type.is_outdoor)
@@ -216,6 +227,9 @@ def extract_settlement(
     levels_out: list[LocationLevel] = []
     entries: list[LocationEntryPoint] = []
     district_wires: list[DistrictStructureWire] = []
+    transitions: list[Transition] = []
+    scopes: list[BuildingTransitionScope] = []
+    registry = registry or WorldTransitionTypeRegistry.canonical_engine()
 
     for district_layout in layout.district_layouts:
         slot = district_layout.slot
@@ -256,12 +270,8 @@ def extract_settlement(
                 ))
                 continue
 
-            bx = int(probe.map_x or 0)
-            by = int(probe.map_y or 0)
-            template_name = probe.system_template_uid or "building"
-            b_uid = building_location_uid(
-                settlement.world_uid, a_uid, template_name, bx, by,
-            )
+            # The producer already minted the final building and transition UIDs.
+            b_uid = probe.location_uid
             building = replace(
                 probe,
                 location_uid=b_uid,
@@ -282,37 +292,10 @@ def extract_settlement(
             ]
             levels_out.extend(new_levels)
 
-            fronts = 0
-            passages = area.building_layout.passages if area.building_layout else []
-            for passage in passages:
-                role = _role_for_passage(passage)
-                if role is None:
-                    continue
-                target = _entry_level(new_levels, passage, building)
-                if target is None:
-                    continue
-                if role == EntryRole.FRONT:
-                    fronts += 1
-                entries.append(LocationEntryPoint(
-                    entry_uid=entry_uid(
-                        settlement.world_uid, b_uid, role, passage.passage_uid,
-                    ),
-                    location_uid=b_uid,
-                    x=passage.to_x,
-                    y=passage.to_y,
-                    z=target.z,
-                    display_name=passage.display_name or role.value,
-                    entry_role=role.value,
-                    leads_to_level_uid=target.level_uid,
-                    entry_difficulty_override=0,
-                    guard_level_override=0,
-                    is_discovered=True,
-                    is_accessible=True,
-                ))
-            if fronts < 1:
-                raise SettlementOutdoorExtractError(
-                    f"building {b_uid} has no front entry"
-                )
+            building_transitions = list(area.building_layout.transitions) if area.building_layout else []
+            transitions.extend(building_transitions)
+            scopes.append(BuildingTransitionScope(b_uid, frozenset(lv.level_uid for lv in new_levels),
+                                                  frozenset(item.transition_uid for item in building_transitions)))
 
             rebound_cells = [
                 replace(c, location_uid=b_uid)
@@ -355,6 +338,22 @@ def extract_settlement(
         barrier_cells=cells_to_shell_wires(layout.barrier_cells),
         districts=district_wires,
     )
+    context = TransitionRepositoryContext(settlement.world_uid, registry,
+        {level.level_uid: level for level in levels_out},
+        {row.location_uid: row for row in [settlement, *districts, *buildings]},
+        {node.node_uid: node for node in nodes})
+    try:
+        projection = project_settlement_transitions(settlement.world_uid, transitions,
+            levels=context.levels, locations=context.locations, nodes=context.nodes,
+            building_scopes=scopes, registry=registry)
+    except ValueError as exc:
+        raise SettlementOutdoorExtractError(str(exc)) from exc
+    payload = wire.model_dump(mode="json")
+    for district in payload["districts"]:
+        for area in district["areas"]:
+            for building in area["buildings"]:
+                building["interior_transitions"] = projection.pack_by_building[building["location_uid"]].model_dump(mode="json")
+    wire = SettlementStructureWire.model_validate(payload, context={"transition_type_registry": registry})
     return ExtractedSettlement(
         districts=districts,
         buildings=buildings,
@@ -363,4 +362,6 @@ def extract_settlement(
         nodes=nodes,
         edges=edges,
         wire=wire,
+        sql_transitions=projection.sql_transitions, pack_by_building=projection.pack_by_building,
+        transition_context=context,
     )

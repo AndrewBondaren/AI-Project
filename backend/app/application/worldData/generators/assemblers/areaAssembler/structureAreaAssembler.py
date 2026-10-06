@@ -69,7 +69,7 @@ from app.dataModel.locations.structure.building.plotLayoutTemplate import (
     PlotLayoutTemplate,
     plot_has_building,
 )
-from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -179,12 +179,11 @@ def _entry_xy_world(
 ) -> Coord | None:
     if layout is None:
         return None
-    for passage in layout.passages:
-        if passage.from_level_uid is not None:
+    for passage in layout.transitions:
+        if passage.source.level_uid is not None:
             continue
-        pt = PassageType.from_wire(passage.system_passage_type)
-        if pt == PassageType.MAIN_ENTRANCE:
-            return (passage.to_x, passage.to_y)
+        if passage.system_transition_type == TransitionType.MAIN_ENTRANCE:
+            return (passage.destination.x, passage.destination.y)
     return None
 
 

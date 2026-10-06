@@ -169,16 +169,17 @@ class EmbeddedShaftTests(unittest.TestCase):
                     first = StructureGeneratorService().generate_from_template(world, building, template)
                     second = StructureGeneratorService().generate_from_template(world, building, template)
                 self.assertEqual(template.model_dump(), original)
-                self.assertEqual((first.cells, first.passages), (second.cells, second.passages))
+                self.assertEqual((first.cells, first.transitions), (second.cells, second.transitions))
                 self.assertEqual(len(captured), 2)
                 conn, shaft, host, wall = captured[0]
                 self.assertEqual(host.room_id, "host" if distinct else "hall")
                 self.assertEqual(conn.to_room, host.room_id)
                 self.assertEqual(len(wall), 3)
                 self.assertTrue(len({x for x, y in wall}) == 1 or len({y for x, y in wall}) == 1)
-                uid = entity_uid(
-                    world.world_uid, UidKind.PASSAGE,
-                    parent=building.location_uid, type="arch",
-                    a=shaft.room_id, b=host.room_id,
-                )
-                self.assertTrue(any(p.passage_uid == uid for p in first.passages))
+                arches = [p for p in first.transitions if p.system_transition_type == "archway"
+                          and (p.destination.x, p.destination.y) in wall]
+                self.assertTrue(arches)
+                from app.application.worldData.transitions.transitionIdentity import transition_uid
+                for item in arches:
+                    self.assertEqual(item.transition_uid, transition_uid(
+                        world.world_uid, item.system_transition_type, item.source, item.destination))

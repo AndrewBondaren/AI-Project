@@ -88,7 +88,7 @@ class WallMaterialCellsTests(unittest.TestCase):
         iron_geo, iron_mats = _split(iron.cells)
         stone_geo, stone_mats = _split(stone.cells)
         self.assertEqual(iron_geo, stone_geo)   # geometry identical
-        self.assertEqual(iron.passages, stone.passages)
+        self.assertEqual(iron.transitions, stone.transitions)
 
         rooms = self._rooms(iron_probe)
         body = _partition_body(rooms["hall"], rooms["chamber"])
@@ -126,8 +126,8 @@ class WallMaterialCellsTests(unittest.TestCase):
         world, building = self._world_building()
         _, first = self._generate(world, building)
         _, second = self._generate(world, building)
-        self.assertEqual((first.cells, first.passages),
-                         (second.cells, second.passages))
+        self.assertEqual((first.cells, first.transitions),
+                         (second.cells, second.transitions))
 
     def test_writer_override_preserves_default_for_unlisted_cells(self):
         a = room("a", x=0, y=0, width=7, depth=5)

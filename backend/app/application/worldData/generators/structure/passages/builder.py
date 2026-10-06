@@ -1,7 +1,7 @@
-﻿"""
+"""
 Main passage orchestrator.
 
-Builds all passages for a structure:
+Builds all transitions for a structure:
   1. Doorway / archway (horizontal, same-level)
   2. Staircase segments (vertical, dispatched to staircase/_builder.py)
   3. Entry points (exterior doors)
@@ -21,7 +21,7 @@ from app.application.worldData.generators.structure.passages.entry import _build
 from app.dataModel.locations.structure.building.roomConnection import RoomConnection
 from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.dataModel.locations.structure.enums.staircaseType import StaircaseType
 from app.application.worldData.generators.structure.heightChecker import PassageHeightChecker
 from app.application.worldData.generators.structure.staircase.builder import build_staircase
@@ -29,7 +29,7 @@ from app.application.worldData.generators.structure.staircase.uShape.facingResol
 from app.application.worldData.generators.structure.staircase.embeddedUpperLayout import embedded_wall as shaft_entry_wall
 from app.dataModel.spatial.facing import Facing, NS_FACINGS, parse_facing_or_default, opposite
 from app.db.models.locationLevel import LocationLevel
-from app.db.models.locationPassage import LocationPassage
+from app.dataModel.locations.transitions.transition import Transition
 from app.db.models.mapCell import MapCell
 from app.db.models.world import World
 
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 _NEIGHBORS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 
 
-def build_passages(
+def build_transitions(
     cells: dict[tuple, MapCell],
     rooms: list[_RoomInstance],
     connections: list[RoomConnection],
@@ -52,10 +52,10 @@ def build_passages(
     staircases: list[StaircaseSpec] | None = None,
     building_tier: str | None = None,
     ground_z: int = 0,
-) -> list[LocationPassage]:
-    logger.info("=== PHASE: build_passages ===")
+) -> list[Transition]:
+    logger.info("=== PHASE: build_transitions ===")
     passage_height: int = world.default_passage_height if world is not None else World.default_passage_height
-    passages: list[LocationPassage] = []
+    transitions: list[Transition] = []
     deferred_arch: list[tuple[list, int, str]] = []
 
     placed_by_id: dict[str, list[_RoomInstance]] = {}
@@ -88,7 +88,7 @@ def build_passages(
         fr_level  = levels[fr_offset]
         to_level  = levels[to_offset]
 
-        if conn.passage_type is PassageType.ARCHWAY:
+        if conn.passage_type is TransitionType.ARCHWAY:
             same_level_rooms = [r for r in rooms if room_z_offsets.get(r.room_id) == fr_offset]
             for fr in fr_list:
                 for to in to_list:
@@ -98,7 +98,7 @@ def build_passages(
                                            passage_height=passage_height,
                                            other_rooms=same_level_rooms)
                         if p:
-                            passages.append(p)
+                            transitions.append(p)
         else:
             for fr in fr_list:
                 for to in to_list:
@@ -107,7 +107,7 @@ def build_passages(
                                            cells, world_uid, building_uid,
                                            passage_height=passage_height, template=template)
                         if p:
-                            passages.append(p)
+                            transitions.append(p)
 
     # --- Pass 2: staircases ---
 
@@ -197,7 +197,7 @@ def build_passages(
                                 embedded_wall = [(wall_x, wy) for wy in range(y + 1, y + shaft_fr.depth - 1)]
                     arch_conn_fr = RoomConnection(
                         from_room=shaft_fr.room_id, to_room=entry_host.room_id,
-                        passage_type=PassageType.ARCHWAY, width=_arch_width,
+                        passage_type=TransitionType.ARCHWAY, width=_arch_width,
                     )
                     same_level_rooms_fr = [r for r in rooms
                                            if room_z_offsets.get(r.room_id) == fr_offset]
@@ -207,7 +207,7 @@ def build_passages(
                                        other_rooms=same_level_rooms_fr,
                                        deferred=deferred_arch, shared_cells=embedded_wall)
                     if p:
-                        passages.append(p)
+                        transitions.append(p)
 
                 # Archway on to_z level: shaft_to ↔ to_room.
                 if sc.has_walls and shaft_to is not None and shaft_to.placed:
@@ -218,7 +218,7 @@ def build_passages(
                         upper_wall = shaft_entry_wall(shaft_to, side)
                     arch_conn = RoomConnection(
                         from_room=shaft_to.room_id, to_room=to_stop_id,
-                        passage_type=PassageType.ARCHWAY, width=_arch_width,
+                        passage_type=TransitionType.ARCHWAY, width=_arch_width,
                     )
                     same_level_rooms = [r for r in rooms
                                         if room_z_offsets.get(r.room_id) == to_offset]
@@ -228,7 +228,7 @@ def build_passages(
                                        other_rooms=same_level_rooms,
                                        deferred=deferred_arch, shared_cells=upper_wall)
                     if p:
-                        passages.append(p)
+                        transitions.append(p)
 
                 if shaft_fr is not None and not shaft_fr.placed:
                     logger.warning("staircase %r segment %d: shaft_fr not placed, skipping",
@@ -242,15 +242,15 @@ def build_passages(
                     passage_height=passage_height,
                 )
                 if p:
-                    passages.append(p)
+                    transitions.append(p)
                     if sc_builder:
-                        passages.extend(sc_builder.extra_passages)
+                        transitions.extend(sc_builder.extra_transitions)
                     if sc_type == StaircaseType.EXTERNAL_VERTICAL_LADDER or (sc_type == StaircaseType.VERTICAL_LADDER and sc.on_the_edge):
                         _upper_room  = to_room  if to_level.z > fr_level.z else fr_room
                         _upper_level = to_level if to_level.z > fr_level.z else fr_level
                         _lower_room  = fr_room  if to_level.z > fr_level.z else to_room
                         _lower_level = fr_level if to_level.z > fr_level.z else to_level
-                        anchor = (p.from_x, p.from_y)
+                        anchor = (p.source.x, p.source.y)
 
                         orchestrator = StaircaseTunnelOrchestrator(
                             cells, world_uid, building_uid, mat,
@@ -261,10 +261,10 @@ def build_passages(
                         )
                         ep = orchestrator.connect(anchor, _upper_room, _upper_level, sc_id=sc_id)
                         if ep:
-                            passages.append(ep)
+                            transitions.append(ep)
                         ep = orchestrator.connect(anchor, _lower_room, _lower_level, sc_id=sc_id)
                         if ep:
-                            passages.append(ep)
+                            transitions.append(ep)
 
     # --- Post-generation headroom check (catches cross-segment conflicts) ---
     PassageHeightChecker(cells, passage_height).check_all_stair_headrooms(clearance=passage_height)
@@ -289,7 +289,7 @@ def build_passages(
                                    same_level_union, cells, world_uid, building_uid,
                                    passage_height=passage_height, template=template)
             if p:
-                passages.append(p)
+                transitions.append(p)
 
         if room.back_entry_point:
             p = _build_entry_point(room, room.back_entry_point, level,
@@ -297,6 +297,6 @@ def build_passages(
                                    passage_height=passage_height,
                                    suffix="_back", template=template)
             if p:
-                passages.append(p)
+                transitions.append(p)
 
-    return passages
+    return transitions

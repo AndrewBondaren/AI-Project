@@ -31,6 +31,41 @@ def _wire(system_type: str = "door", **fields) -> dict:
 
 
 class TransitionContractTest(unittest.TestCase):
+    def test_direct_typed_construction_keeps_defaults_and_explicit_state(self) -> None:
+        source = TransitionEndpoint()
+        destination = TransitionEndpoint(space=TransitionSpace.LEVEL, level_uid="level-1", x=124, y=-45, z=28)
+        common = dict(transition_uid="typed", world_uid="world-1", source=source, destination=destination)
+        hidden_side = TransitionSide(owner_location_uid="house")
+        hidden = Transition(system_transition_type="hidden_entrance", destination_side=hidden_side, **common)
+        self.assertFalse(hidden.destination_side.is_discovered)
+        self.assertTrue(hidden_side.is_discovered)
+        explicit_side = TransitionSide(owner_location_uid="house", is_discovered=True)
+        discovered = Transition(system_transition_type="hidden_entrance", destination_side=explicit_side, **common)
+        self.assertTrue(discovered.destination_side.is_discovered)
+        fall = Transition(system_transition_type="fall", **common)
+        self.assertFalse(fall.is_bidirectional)
+        with self.assertRaises(ValidationError):
+            Transition(system_transition_type="fall", is_bidirectional=True, **common)
+        stairs = Transition(system_transition_type="staircase", **common)
+        self.assertIsInstance(stairs.type_params, StaircaseTransitionParams)
+        gate = Transition(system_transition_type="gate", type_params=GateTransitionParams(width_cells=3), **common)
+        self.assertEqual(gate.type_params.width_cells, 3)
+        with self.assertRaises(ValidationError):
+            Transition(system_transition_type="door", type_params=GateTransitionParams(width_cells=3), **common)
+        for item in (hidden, discovered, fall, stairs, gate):
+            with self.subTest(system_type=item.system_transition_type):
+                self.assertEqual(Transition.model_validate_json(item.model_dump_json()), item)
+
+    def test_hidden_typed_side_applies_default_and_preserves_explicit_discovery(self) -> None:
+        for explicit in (None, True, False):
+            with self.subTest(explicit=explicit):
+                side = (TransitionSide(owner_location_uid="house") if explicit is None
+                        else TransitionSide(owner_location_uid="house", is_discovered=explicit))
+                item = Transition.model_validate(_wire("hidden_entrance", destination_side=side))
+                self.assertEqual(item.destination_side.is_discovered, False if explicit is None else explicit)
+                self.assertEqual(item.destination_side.owner_location_uid, "house")
+                self.assertEqual(side.is_discovered, True if explicit is None else explicit)
+
     def test_surface_defaults_have_no_fake_geometry_or_location(self) -> None:
         endpoint = TransitionEndpoint()
         self.assertIs(endpoint.space, TransitionSpace.SURFACE)

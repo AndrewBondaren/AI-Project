@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, ClassVar, Self
+from typing import Annotated, ClassVar, Self
 
 from pydantic import (
     BaseModel, ConfigDict, Field, SerializeAsAny, ValidationInfo,
-    field_validator, model_validator,
+    model_validator,
 )
 
 from app.dataModel.annotationPolicy import (
@@ -16,7 +16,7 @@ from app.dataModel.locations.enums.accessMechanic import AccessMechanic
 from app.dataModel.locations.transitions.transitionEndpoint import TransitionEndpoint
 from app.dataModel.locations.transitions.transitionOrigin import TransitionOrigin
 from app.dataModel.locations.transitions.transitionParams import (
-    PhysicalTransitionParams, params_model_for,
+    GateTransitionParams, PhysicalTransitionParams, StaircaseTransitionParams, params_model_for,
 )
 from app.dataModel.locations.transitions.transitionSide import TransitionSide
 from app.dataModel.locations.transitions.transitionType import TransitionType
@@ -58,41 +58,33 @@ class Transition(BaseModel):
     is_bidirectional: DefaultOnWire[bool] = True
     is_active: DefaultOnWire[bool] = True
     access_mechanic: DefaultOnWire[list[AccessMechanic]] = Field(default_factory=list)
-    type_params: DefaultOnWire[SerializeAsAny[PhysicalTransitionParams]] = Field(
+    type_params: DefaultOnWire[SerializeAsAny[
+        PhysicalTransitionParams | GateTransitionParams | StaircaseTransitionParams
+    ]] = Field(
         default_factory=PhysicalTransitionParams,
     )
     display_name: DefaultOnWire[str | None] = None
     glossary_ref: DefaultOnWire[str | None] = None
     tag_refs: DefaultOnWire[list[str]] = Field(default_factory=list)
 
-    @model_validator(mode="before")
-    @classmethod
-    def _type_defaults(cls, value: Any, info: ValidationInfo) -> Any:
-        if not isinstance(value, dict) or not isinstance(value.get("system_transition_type"), str):
-            return value
-        builtin = _builtin(value["system_transition_type"], info)
-        data = dict(value)
-        if builtin == TransitionType.HIDDEN_ENTRANCE:
-            side = data.get("destination_side", {})
-            if isinstance(side, dict):
-                data["destination_side"] = {"is_discovered": False, **side}
-        if builtin == TransitionType.FALL:
-            data.setdefault("is_bidirectional", False)
-        return data
-
-    @field_validator("type_params", mode="before")
-    @classmethod
-    def _typed_params(cls, value: Any, info: ValidationInfo) -> PhysicalTransitionParams:
-        system_type = info.data.get("system_transition_type")
-        if system_type is None:
-            raise ValueError("type_params require a valid system_transition_type")
-        model = params_model_for(_builtin(system_type, info))
-        wire = value.model_dump() if isinstance(value, PhysicalTransitionParams) else value
-        return model.model_validate(wire)
-
     @model_validator(mode="after")
-    def _direction(self, info: ValidationInfo) -> Self:
+    def _type_contract(self, info: ValidationInfo) -> Self:
+        """Normalize during construction using validated fields only.
+
+        The aggregate stays frozen after construction; supplied side objects are
+        never mutated. fields_set distinguishes omitted defaults from explicit state.
+        """
         builtin = _builtin(self.system_transition_type, info)
+        params_model = params_model_for(builtin)
+        if type(self.type_params) is PhysicalTransitionParams and params_model is StaircaseTransitionParams:
+            object.__setattr__(self, "type_params", StaircaseTransitionParams())
+        elif type(self.type_params) is not params_model:
+            raise ValueError(f"{builtin.value} requires {params_model.__name__}")
+        if builtin == TransitionType.HIDDEN_ENTRANCE and "is_discovered" not in self.destination_side.model_fields_set:
+            object.__setattr__(self, "destination_side",
+                self.destination_side.model_copy(update={"is_discovered": False}))
+        if builtin == TransitionType.FALL and "is_bidirectional" not in self.model_fields_set:
+            object.__setattr__(self, "is_bidirectional", False)
         if not builtin.directional and not self.is_bidirectional:
             raise ValueError("non-directional types require is_bidirectional=true")
         if builtin == TransitionType.FALL and self.is_bidirectional:

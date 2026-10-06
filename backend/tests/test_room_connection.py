@@ -14,7 +14,7 @@ from app.dataModel.locations.structure.building.roomConnection import (
     RoomConnection,
 )
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.transitions.transitionType import TransitionType
 
 _VALID = {"from_room": "hall", "to_room": "kitchen", "passage_type": "doorway"}
 _UID = "00000000-0000-4000-8000-000000000007"
@@ -51,10 +51,10 @@ class RoomConnectionTests(unittest.TestCase):
 
     def test_non_horizontal_passage_type_falls_back_to_doorway(self):
         for raw in ("staircase", "main_entrance", "service_entrance",
-                    "bogus", None, PassageType.STAIRCASE):
+                    "bogus", None, TransitionType.STAIRCASE):
             with self.subTest(raw=raw):
                 conn = RoomConnection.model_validate({**_VALID, "passage_type": raw})
-            self.assertIs(conn.passage_type, PassageType.DOORWAY)
+            self.assertIs(conn.passage_type, TransitionType.DOORWAY)
             self.assertEqual(conn.width, DEFAULT_DOORWAY_WIDTH)
 
     def test_full_wire_roundtrip_and_immutability(self):
@@ -93,7 +93,7 @@ class RoomConnectionTests(unittest.TestCase):
             "structureGeneratorService", "ERROR",
         ) as capture:
             resolved = StructureGeneratorService._resolve_connections(template)
-        self.assertIs(resolved[0].passage_type, PassageType.DOORWAY)
+        self.assertIs(resolved[0].passage_type, TransitionType.DOORWAY)
         self.assertIn("staircase", capture.output[0])
         self.assertIn("connections[0]", capture.output[0])
 
@@ -113,7 +113,7 @@ class RoomConnectionTests(unittest.TestCase):
         template = StructureTemplate.model_validate(wire)
         resolved = StructureGeneratorService._resolve_connections(template)
         self.assertTrue(all(isinstance(c, RoomConnection) for c in resolved))
-        self.assertEqual(resolved[0].passage_type, PassageType.DOORWAY)
+        self.assertEqual(resolved[0].passage_type, TransitionType.DOORWAY)
         self.assertEqual(resolved[1].width, DEFAULT_ARCHWAY_WIDTH)
 
 

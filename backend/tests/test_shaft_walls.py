@@ -75,9 +75,9 @@ class ShaftWallTests(unittest.TestCase):
                 path = {(c.x, c.y, c.z, c.system_facing) for c in result.cells
                         if c.system_building_element == StructureElement.STAIRCASE}
                 runs.append((geometry, path))
-                landing = next(p for p in result.passages if p.system_passage_type == "staircase")
-                z = next(l.z for l in result.levels if l.level_uid == landing.to_level_uid)
-                cell = next(c for c in result.cells if (c.x, c.y, c.z) == (landing.to_x, landing.to_y, z))
+                landing = next(p for p in result.transitions if p.system_transition_type == "staircase")
+                z = next(l.z for l in result.levels if l.level_uid == landing.destination.level_uid)
+                cell = next(c for c in result.cells if (c.x, c.y, c.z) == (landing.destination.x, landing.destination.y, z))
                 self.assertEqual(cell.system_building_element, StructureElement.FLOOR)
             self.assertEqual(runs[0], runs[1], at)
 
@@ -92,10 +92,10 @@ class ShaftWallTests(unittest.TestCase):
             first = probe.generate_from_template(world, building, template)
         self.assertEqual(arches.call_count, 0)
         second = RotationProbe().generate_from_template(world, building, template)
-        self.assertEqual((first.cells, first.passages), (second.cells, second.passages))
-        landing = next(p for p in first.passages if p.system_passage_type == "staircase")
-        z = next(l.z for l in first.levels if l.level_uid == landing.to_level_uid)
-        cell = next(c for c in first.cells if (c.x, c.y, c.z) == (landing.to_x, landing.to_y, z))
+        self.assertEqual((first.cells, first.transitions), (second.cells, second.transitions))
+        landing = next(p for p in first.transitions if p.system_transition_type == "staircase")
+        z = next(l.z for l in first.levels if l.level_uid == landing.destination.level_uid)
+        cell = next(c for c in first.cells if (c.x, c.y, c.z) == (landing.destination.x, landing.destination.y, z))
         self.assertEqual(cell.system_building_element, StructureElement.FLOOR)
 
     def test_all_march_types_obey_wall_flag_at_cell_generation(self):

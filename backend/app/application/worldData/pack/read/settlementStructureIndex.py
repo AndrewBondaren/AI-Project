@@ -3,9 +3,30 @@
 from __future__ import annotations
 
 from app.dataModel.worldPack.settlementStructureWire import (
+    BuildingShellWire,
     SettlementStructureWire,
     ShellCellWire,
 )
+from app.application.worldData.pack.io.packBlobWire import InteriorTransitionsRebuildRequired
+from app.dataModel.locations.transitions.transition import Transition
+
+
+def building_with_interior_transitions(wire: SettlementStructureWire, building_uid: str) -> BuildingShellWire:
+    for district in wire.districts:
+        for area in district.areas:
+            for building in area.buildings:
+                if building.location_uid == building_uid:
+                    if building.interior_transitions is None:
+                        raise InteriorTransitionsRebuildRequired(f"building {building_uid!r} requires interior transition pack rebuild")
+                    return building
+    raise KeyError(building_uid)
+
+
+def transitions_for_level(building: BuildingShellWire, level_uid: str) -> list[Transition]:
+    if building.interior_transitions is None:
+        raise InteriorTransitionsRebuildRequired(f"building {building.location_uid!r} requires interior transition pack rebuild")
+    return [item for item in building.interior_transitions.transitions
+            if item.source.level_uid == level_uid or item.destination.level_uid == level_uid]
 
 
 def index_shell_cells(wire: SettlementStructureWire) -> dict[tuple[int, int, int], ShellCellWire]:

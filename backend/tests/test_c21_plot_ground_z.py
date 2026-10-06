@@ -186,7 +186,7 @@ class TranslateDzTests(unittest.TestCase):
         layout = StructureLayout(
             cells=[_cell(0, 0, 0)],
             levels=[LocationLevel(level_uid="l", location_uid="b", z=0, z_height=3, display_name="g")],
-            passages=[],
+            transitions=[],
             rooms=[NamedLocation(
                 location_uid="r", world_uid="w", display_name="R",
                 system_location_type="room", created_at="t", map_x=0, map_y=0, map_z=0,

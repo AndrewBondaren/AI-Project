@@ -77,14 +77,14 @@ class WallOpeningSpecTests(unittest.TestCase):
     def test_empty_spec_is_quiet_and_identical_to_auto(self):
         with self.assertNoLogs(level="ERROR"):
             before, after = self.generate([]), self.generate([{}])
-            self.assertEqual((before.cells, before.passages), (after.cells, after.passages))
+            self.assertEqual((before.cells, before.transitions), (after.cells, after.transitions))
 
     def test_multiple_specs_first_applies_and_extra_is_logged(self):
         first = dict(opening_type="vent", frame_material="frame", glass_material="mesh", window_z=0)
         expected = self.generate([first])
         with self.assertLogs(FACTORY_LOGGER, level="ERROR") as captured:
             actual = self.generate([first, dict(opening_type="porthole")])
-        self.assertEqual((actual.cells, actual.passages), (expected.cells, expected.passages))
+        self.assertEqual((actual.cells, actual.transitions), (expected.cells, expected.transitions))
         self.assertEqual(len(captured.records), 1)
         self.assertIn("ignored", captured.output[0])
 
@@ -156,7 +156,7 @@ class WallOpeningSpecTests(unittest.TestCase):
         specs = [dict(opening_type="arrow_slit", frame_material="frame", window_z=0)]
         first = self.generate(specs)
         second = self.generate(specs)
-        self.assertEqual((first.cells, first.passages), (second.cells, second.passages))
+        self.assertEqual((first.cells, first.transitions), (second.cells, second.transitions))
         openings = [c for c in first.cells if c.system_building_element == StructureElement.ARROW_SLIT]
         self.assertTrue(openings)
         self.assertTrue(all(c.system_material == "frame" and c.glass_material is None for c in openings))

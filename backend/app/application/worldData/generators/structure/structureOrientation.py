@@ -8,9 +8,11 @@ from app.dataModel.spatial.facing import (
     CARDINAL_FACINGS, COMPACT_LETTER, GRID_DELTA_TO_FACING, GRID_OUTWARD_DELTA,
     Facing, parse_facing,
 )
-from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.dataModel.locations.structure.enums.attachWall import AttachWall
-from app.db.models.locationPassage import LocationPassage
+from app.dataModel.locations.transitions.transition import Transition
+from app.dataModel.locations.transitions.transitionEndpoint import TransitionSpace
+from app.application.worldData.generators.structure.physicalTransition import transform_transition
 from app.db.models.mapCell import MapCell
 
 
@@ -43,7 +45,7 @@ class StructureOrientation:
         xs, ys = zip(*corners)
         return min(xs), min(ys), max(xs) - min(xs) + 1, max(ys) - min(ys) + 1
 
-    def apply(self, cells: dict[tuple, MapCell], passages: list[LocationPassage], rooms: list[_RoomInstance]) -> None:
+    def apply(self, cells: dict[tuple, MapCell], transitions: list[Transition], rooms: list[_RoomInstance]) -> None:
         if not self.quarter_turns:
             return
         rotated = {}
@@ -59,10 +61,7 @@ class StructureOrientation:
             rotated[(cell.x, cell.y, cell.z)] = cell
         cells.clear()
         cells.update(rotated)
-        for passage in passages:
-            passage.to_x, passage.to_y = self.point(passage.to_x, passage.to_y)
-            if passage.from_x is not None and passage.from_y is not None:
-                passage.from_x, passage.from_y = self.point(passage.from_x, passage.from_y)
+        transitions[:] = [transform_transition(item, self.point) for item in transitions]
         for room in rooms:
             if not room.placed:
                 continue
@@ -92,15 +91,15 @@ def validate_facing(facing: Facing | None, structure_uid: str) -> None:
         raise GenerationError(f"Structure '{structure_uid}': facing must be cardinal, got {facing!r}")
 
 
-def entry_orientation(rooms: list[_RoomInstance], passages: list[LocationPassage], structure_uid: str, facing: Facing) -> StructureOrientation:
+def entry_orientation(rooms: list[_RoomInstance], transitions: list[Transition], structure_uid: str, facing: Facing) -> StructureOrientation:
     """Resolve the author's entry wall and pivot from the placed entrance."""
     validate_facing(facing, structure_uid)
     candidates = [
         (room, entry) for room in rooms if room.placed
         for entry in (room.entry_point, room.back_entry_point)
-        if entry is not None and entry.passage_type == PassageType.MAIN_ENTRANCE
+        if entry is not None and entry.passage_type == TransitionType.MAIN_ENTRANCE
     ]
-    entrances = [p for p in passages if p.from_level_uid is None and p.system_passage_type == PassageType.MAIN_ENTRANCE]
+    entrances = [p for p in transitions if p.source.space == TransitionSpace.SURFACE and p.system_transition_type == TransitionType.MAIN_ENTRANCE]
     if len(candidates) != 1 or len(entrances) != 1:
         raise GenerationError(
             f"Structure '{structure_uid}': facing requires exactly one placed main_entrance; "

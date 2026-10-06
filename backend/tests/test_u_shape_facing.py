@@ -7,7 +7,7 @@ from unittest.mock import patch
 from app.application.worldData.generators.structure.staircase.uShape.facingResolver import resolve_u_shape_facing
 from app.application.worldData.generators.structure.staircase.uShape.uShape import UShapeBuilder
 from app.application.worldData.generators.structure.staircase.uShape.uShapeHelper import _compute_u_params
-from app.application.worldData.generators.structure.passages.builder import build_passages
+from app.application.worldData.generators.structure.passages.builder import build_transitions
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
 from app.dataModel.spatial.facing import CARDINAL_WALL_OUTWARD_DELTA, Facing, opposite
@@ -87,7 +87,7 @@ class UShapeFacingTests(unittest.TestCase):
         cells = self.floors(shaft.get_footprint(), Facing.EAST)
         with patch(BUILDER + "._build_archway", return_value=None) as arch, \
              patch(BUILDER + ".build_staircase", return_value=(None, None)) as stairs:
-            build_passages(cells, [fr, to, shaft, upper_shaft], [], levels,
+            build_transitions(cells, [fr, to, shaft, upper_shaft], [], levels,
                            {"hall": 0, "upper": 1, "shaft_lo": 0, "shaft_hi": 1},
                            "world", "building", Random(1), staircases=[sc])
         self.assertEqual(shaft.facing, Facing.WEST)
@@ -103,5 +103,5 @@ class UShapeFacingTests(unittest.TestCase):
         world, building = test_world_building()
         first = StructureGeneratorService().generate_from_template(world, building, template)
         second = StructureGeneratorService().generate_from_template(world, building, template)
-        self.assertEqual((first.cells, first.passages), (second.cells, second.passages))
+        self.assertEqual((first.cells, first.transitions), (second.cells, second.transitions))
         self.assertEqual(template.model_dump(), before)

@@ -787,7 +787,7 @@ class Container:
                 db=self._db,
                 location_repo=self.location_repository(),
                 level_repo=self.location_level_repository(),
-                entry_repo=self.location_entry_point_repository(),
+                transition_repo_for=lambda context: SqliteTransitionRepository(self._db, context),
                 connection_persist=self.connection_persist_service(),
             )
             self._settlement_outdoor_orchestrator = SettlementOutdoorOrchestrator(

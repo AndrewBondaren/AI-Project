@@ -19,6 +19,7 @@ from app.application.worldData.facingArrows import FACING_ARROW
 from app.application.worldData.generators.structure.gridRenderer import render_all_levels
 from app.dataModel.materials import DEFAULT_FLOOR_MATERIAL, DEFAULT_WALL_MATERIAL
 from app.dataModel.spatial.facing import Facing
+from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.application.worldData.structureTemplateLibraryService import (
     StructureTemplateLibraryService,
 )
@@ -177,7 +178,7 @@ async def debug_generate_structure(
     cells_by_xyz  = {(c.x, c.y, c.z): c for c in layout.cells}
     markers: dict[tuple[int, int, int], str] = {}
     for p in layout.passages:
-        if p.system_passage_type == "staircase":
+        if p.system_passage_type == TransitionType.STAIRCASE:
             tz = levels_by_uid.get(p.to_level_uid)
             if tz is not None:
                 markers[(p.to_x, p.to_y, tz)] = "$"

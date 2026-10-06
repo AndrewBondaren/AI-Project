@@ -114,7 +114,7 @@ class EntryPointRuntimeTests(unittest.TestCase):
                     placer.filter_passable_from_center.return_value = [(1, 2), (1, 3)]
                     placer.place.return_value = True
                     passage = _build_entry_point(instance, entry, level, set(), {}, "world", "building", 2)
-                self.assertEqual(passage.system_passage_type, entry.passage_type)
+                self.assertEqual(passage.system_transition_type, entry.passage_type)
                 self.assertEqual(placer.place.call_count, 2)
                 for call in placer.place.call_args_list:
                     self.assertEqual(call.kwargs["height"], expected)

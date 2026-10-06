@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 import unittest
+from pathlib import Path
 
 from app.application.worldData.generators.assemblers.citySkeleton import (
     city_skeleton_from_settlement,
@@ -16,6 +17,9 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.streets import (
     plan_city_street_grid,
+)
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.topologyPlan import (
+    SettlementTopologyPlan, settlement_gate_transitions,
 )
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
@@ -47,6 +51,14 @@ from app.dataModel.locations.settlement.enums.districtDensity import DistrictDen
 from app.db.models.connectionNode import ConnectionNode
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+from app.application.worldData.generators.assemblers.settlementAssembler.planner.buildingDefaults import assemble_building_catalog
+from app.application.worldData.structureTemplateFsImport import load_structure_stdlib
+from app.dataModel.locations.structure.building.structureCatalog import StructureCatalog
+
+
+def _catalog(world):
+    return assemble_building_catalog(world, structures=StructureCatalog(
+        load_structure_stdlib(Path(__file__).resolve().parents[2] / "structures_templates")))
 
 
 def _world(**kwargs) -> World:
@@ -125,7 +137,8 @@ class TopologyExtractTest(unittest.TestCase):
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         self.assertTrue(slots)
         nodes, edges = _plan_city(world, settlement, slots)
-        extracted = extract_topology(settlement, slots, nodes, edges)
+        extracted = extract_topology(settlement, SettlementTopologyPlan(
+            slots, nodes, edges, settlement_gate_transitions(settlement, nodes)))
         self.assertEqual(len(extracted.districts), len(slots))
         district_type = district_type_entry().system_type
         self.assertTrue(
@@ -185,7 +198,8 @@ class TopologyReuseTest(unittest.TestCase):
         skeleton = _skeleton(world, settlement)
         slots = plan_district_slots(world, settlement, skeleton, None)
         nodes, edges = _plan_city(world, settlement, slots)
-        extracted = extract_topology(settlement, slots, nodes, edges)
+        extracted = extract_topology(settlement, SettlementTopologyPlan(
+            slots, nodes, edges, settlement_gate_transitions(settlement, nodes)))
         loaded = load_topology_slots(
             world, settlement, skeleton, extracted.districts,
         )
@@ -206,7 +220,7 @@ class TopologyReuseTest(unittest.TestCase):
         )
         service = SettlementGeneratorService()
         packed = service.generate_layout(
-            world, settlement, catalog=None,
+            world, settlement, catalog=_catalog(world),
             district_slots=loaded,
             city_graph=(nodes, edges),
         )
@@ -224,10 +238,11 @@ class TopologyReuseTest(unittest.TestCase):
         world = _world()
         settlement = _settlement()
         service = SettlementGeneratorService()
-        slots, nodes, edges = service.plan_slots_and_city_graph(
+        topology = service.plan_slots_and_city_graph(
             world, settlement, None,
         )
-        layout = service.generate_layout(world, settlement, catalog=None)
+        slots, nodes, edges = topology.slots, topology.nodes, topology.edges
+        layout = service.generate_layout(world, settlement, catalog=_catalog(world))
         planned_keys = [
             (slot.cell_x, slot.cell_y, slot.district_template.system_name)
             for slot in slots

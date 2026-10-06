@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from app.dataModel.annotationPolicy import DefaultOnWire, StrictEnumOnWire, StrictOnWire
 from app.dataModel.constrainedField import constrained_field
-from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.transitions.transitionType import TransitionType
 
 DEFAULT_DOORWAY_WIDTH = 1
 DEFAULT_ARCHWAY_WIDTH = 2
@@ -16,7 +16,7 @@ class RoomConnection(BaseModel):
 
     from_room:        StrictOnWire[str]
     to_room:          StrictOnWire[str]
-    passage_type:     StrictEnumOnWire[PassageType]
+    passage_type:     StrictEnumOnWire[TransitionType]
     required:         DefaultOnWire[bool] = False
     width:            DefaultOnWire[int] = constrained_field(
         default=DEFAULT_DOORWAY_WIDTH, greater_equals=1,
@@ -31,13 +31,16 @@ class RoomConnection(BaseModel):
     @classmethod
     def _horizontal_type(cls, value: Any) -> Any:
         """Non-horizontal wire falls back to doorway (§3.7); boundary logs ERROR."""
-        parsed = PassageType.from_wire(value)
-        if parsed in (PassageType.DOORWAY, PassageType.ARCHWAY):
+        try:
+            parsed = TransitionType(value)
+        except (ValueError, TypeError):
+            parsed = None
+        if parsed in (TransitionType.DOORWAY, TransitionType.ARCHWAY):
             return parsed
-        return PassageType.DOORWAY
+        return TransitionType.DOORWAY
 
     @model_validator(mode="after")
     def _resolve_width_default(self) -> "RoomConnection":
-        if "width" not in self.model_fields_set and self.passage_type is PassageType.ARCHWAY:
+        if "width" not in self.model_fields_set and self.passage_type is TransitionType.ARCHWAY:
             object.__setattr__(self, "width", DEFAULT_ARCHWAY_WIDTH)
         return self

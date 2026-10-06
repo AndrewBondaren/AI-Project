@@ -35,6 +35,7 @@ from app.dataModel.worldPack.locationsIndexWire import LocationsIndexWire
 from app.dataModel.worldPack.parentLightTile import ParentLightTile
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
 from app.dataModel.worldPack.settlementStructureWire import SettlementStructureWire
+from app.dataModel.locations.transitions.worldTransitionTypeRegistry import WorldTransitionTypeRegistry
 from app.dataModel.worldPack.worldPackManifest import (
     ChunkRef,
     ChunkRefineRole,
@@ -245,11 +246,12 @@ class WorldPackWriter:
         self,
         location_uid: str,
         wire: SettlementStructureWire,
+        *, registry: WorldTransitionTypeRegistry | None = None,
     ) -> SettlementStructureTmpRef:
         published = self._paths.settlement_structure_path(location_uid)
         existing = published.read_bytes() if published.is_file() else None
         blob = write_settlement_structure_blob(
-            wire, existing=existing, codec=self._codec,
+            wire, existing=existing, codec=self._codec, registry=registry,
         )
         target = published
         tmp = target.with_suffix(target.suffix + ".tmp")
@@ -281,8 +283,15 @@ class WorldPackWriter:
     ) -> str:
         target = self._paths.settlement_structure_path(tmp.settlement_uid)
         if not tmp.tmp_path.is_file():
-            raise FileNotFoundError(f"settlement structure tmp missing: {tmp.tmp_path}")
-        os.replace(tmp.tmp_path, target)
+            # Retry after os.replace succeeded but manifest save was interrupted.
+            # Only the exact payload from the caller's committed receipt is eligible.
+            if not target.is_file():
+                raise FileNotFoundError(f"settlement structure tmp missing: {tmp.tmp_path}")
+            published = target.read_bytes()
+            if len(published) != tmp.nbytes or self._codec.content_hash(published) != tmp.content_hash:
+                raise ValueError("published settlement blob differs from committed tmp receipt")
+        else:
+            os.replace(tmp.tmp_path, target)
         rel = target.relative_to(self._paths.root).as_posix()
         prev = self._manifest.settlement_structure_entry(tmp.settlement_uid)
         packed = packed_district_uids

@@ -206,8 +206,8 @@ class WallMaterialBaselineTests(unittest.TestCase):
 
         second = RotationProbe().generate_from_template(
             world, building, self._two_room_template())
-        self.assertEqual((first.cells, first.passages),
-                         (second.cells, second.passages))
+        self.assertEqual((first.cells, first.transitions),
+                         (second.cells, second.transitions))
 
     def test_rotation_preserves_material_assignment(self):
         world, building = test_world_building()
@@ -223,7 +223,7 @@ class WallMaterialBaselineTests(unittest.TestCase):
                 actual = probe.generate_from_template(
                     world, building, self._two_room_template(), facing=facing)
                 orientation = entry_orientation(
-                    base_probe.runtime_rooms, base.passages,
+                    base_probe.runtime_rooms, base.transitions,
                     _BASELINE_TEMPLATE_ID, facing)
                 expected = {
                     (*rotate_point((x, y), orientation.pivot,
@@ -249,8 +249,8 @@ class WallMaterialBaselineTests(unittest.TestCase):
                         world, building, template)
                     second = RotationProbe().generate_from_template(
                         world, building, template)
-                    self.assertEqual((first.cells, first.passages),
-                                     (second.cells, second.passages))
+                    self.assertEqual((first.cells, first.transitions),
+                                     (second.cells, second.transitions))
                     walls = _walls(first.cells)
                     self.assertTrue(walls)
                     self.assertEqual(

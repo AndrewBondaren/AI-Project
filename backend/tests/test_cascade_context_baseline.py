@@ -149,12 +149,17 @@ def snapshot(*, band=None, building_tier=None):
         )
 
     geometry = sorted((c.x, c.y, c.z, c.system_building_element, c.system_facing) for c in layout.cells)
-    passages = sorted((p.system_passage_type, p.from_x, p.from_y, p.to_x, p.to_y)
-                      for p in layout.passages)
+    # Preserve the historical material/shape fingerprint; the newly explicit
+    # surface anchor is checked by structure transition tests.
+    passages = sorted((p.system_transition_type,
+                       p.source.x if p.source.level_uid is not None else None,
+                       p.source.y if p.source.level_uid is not None else None,
+                       p.destination.x, p.destination.y)
+                      for p in layout.transitions)
     return {
         "materials": material_trace, "rooms": room_trace,
         "named_location_tiers": [r.system_economic_tier for r in layout.rooms],
-        "cell_count": len(layout.cells), "passage_count": len(layout.passages),
+        "cell_count": len(layout.cells), "passage_count": len(layout.transitions),
         "geometry_sha256": hashlib.sha256(json.dumps([geometry, passages]).encode()).hexdigest(),
     }
 

@@ -10,7 +10,7 @@ from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
 from app.dataModel.cascade.cascadeSpec import CascadeChannel
 from app.dataModel.locations.structure.enums.attachWall import AttachWall
 from app.dataModel.locations.structure.enums.buildingPurpose import BuildingPurpose
-from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.dataModel.locations.structure.room.entryPoint import EntryPoint
 from app.dataModel.locations.structure.room.shapeParams import ShapeParams
 from app.dataModel.locations.structure.room.sizeSpec import PositiveRange, SizeSpec
@@ -48,7 +48,7 @@ class RoomDef(BaseModel):
     back_entry_point: DefaultOnWire[EntryPoint | None] = None
     purpose: DefaultOnWire[BuildingPurpose | None] = None
     # Wire contract only; consuming these is outside the POJO migration.
-    passage_type: DefaultOnWire[PassageType] = PassageType.DOORWAY
+    passage_type: DefaultOnWire[TransitionType] = TransitionType.DOORWAY
     max_overhang: DefaultOnWire[int] = Field(default=0, ge=0)
     has_column: DefaultOnWire[bool] = False
     wall_openings: DefaultOnWire[list[WallOpeningSpec]] = Field(default_factory=list)

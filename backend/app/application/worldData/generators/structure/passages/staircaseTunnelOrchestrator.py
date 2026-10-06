@@ -1,4 +1,4 @@
-﻿"""
+"""
 Оркестратор соединения якоря лестницы с целевой комнатой.
 
 Стратегия выбирается по контексту:
@@ -10,14 +10,15 @@ from __future__ import annotations
 
 import logging
 
-from app.dataModel.locations.structure.enums.passageType import PassageType
-from app.application.worldData.ids import UidKind, entity_uid
+from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.application.worldData.generators.structure.passages.wallBreachPlacer import WallBreachPlacer
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.staircase.surfaceCorridor import SurfaceCorridorBuilder
 from app.application.worldData.generators.structure.staircase.undergroundTunnel import UndergroundTunnelBuilder
 from app.db.models.locationLevel import LocationLevel
-from app.db.models.locationPassage import LocationPassage
+from app.dataModel.locations.transitions.transition import Transition
+from app.dataModel.locations.transitions.transitionEndpoint import TransitionEndpoint
+from app.application.worldData.generators.structure.physicalTransition import physical_transition, level_endpoint
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ class StaircaseTunnelOrchestrator:
         room:   _RoomInstance,
         level:  LocationLevel,
         sc_id:  str = "?",
-    ) -> LocationPassage | None:
+    ) -> Transition | None:
         room_fp = set(room.get_footprint())
 
         for dx, dy in _NEIGHBORS:
@@ -77,7 +78,7 @@ class StaircaseTunnelOrchestrator:
         room:      _RoomInstance,
         level:     LocationLevel,
         sc_id:     str,
-    ) -> LocationPassage:
+    ) -> Transition:
         wx, wy = wall_cell
         z_lo   = level.z
         z_hi   = level.z + level.z_height
@@ -88,23 +89,7 @@ class StaircaseTunnelOrchestrator:
             "tunnel_orchestrator %r: archway at (%d,%d) z=%d..%d (anchor=%s, room=%r)",
             sc_id, wx, wy, z_lo, z_hi - 1, anchor, room.room_id,
         )
-        passage_uid = entity_uid(
-            self.world_uid, UidKind.PASSAGE,
-            parent=self.building_uid, type=PassageType.ARCHWAY,
-            staircase=sc_id, room=room.room_id,
-        )
-        return LocationPassage(
-            passage_uid=passage_uid,
-            world_uid=self.world_uid,
-            from_level_uid=level.level_uid,
-            from_x=wx,
-            from_y=wy,
-            to_level_uid=level.level_uid,
-            to_x=anchor[0],
-            to_y=anchor[1],
-            system_passage_type=PassageType.ARCHWAY,
-            is_bidirectional=True,
-        )
+        return physical_transition(self.world_uid, TransitionType.ARCHWAY, level_endpoint(level, wx, wy, self.building_uid), level_endpoint(level, anchor[0], anchor[1], self.building_uid), self.building_uid)
 
     def _surface(
         self,
@@ -112,7 +97,7 @@ class StaircaseTunnelOrchestrator:
         room:   _RoomInstance,
         level:  LocationLevel,
         sc_id:  str,
-    ) -> LocationPassage | None:
+    ) -> Transition | None:
         return SurfaceCorridorBuilder(
             cells=self.cells,
             world_uid=self.world_uid,
@@ -129,7 +114,7 @@ class StaircaseTunnelOrchestrator:
         room:   _RoomInstance,
         level:  LocationLevel,
         sc_id:  str,
-    ) -> LocationPassage | None:
+    ) -> Transition | None:
         breach_xy = UndergroundTunnelBuilder(
             cells=self.cells,
             world_uid=self.world_uid,
@@ -145,20 +130,4 @@ class StaircaseTunnelOrchestrator:
             return None
 
         bx, by = breach_xy
-        passage_uid = entity_uid(
-            self.world_uid, UidKind.PASSAGE,
-            parent=self.building_uid, type="underground_tunnel",
-            staircase=sc_id, room=room.room_id,
-        )
-        return LocationPassage(
-            passage_uid=passage_uid,
-            world_uid=self.world_uid,
-            from_level_uid=level.level_uid,
-            from_x=bx,
-            from_y=by,
-            to_level_uid=level.level_uid,
-            to_x=anchor[0],
-            to_y=anchor[1],
-            system_passage_type=PassageType.DOORWAY,
-            is_bidirectional=True,
-        )
+        return physical_transition(self.world_uid, TransitionType.DOORWAY, level_endpoint(level, bx, by, self.building_uid), level_endpoint(level, anchor[0], anchor[1], self.building_uid), self.building_uid)

@@ -28,6 +28,9 @@ from app.dataModel.worldPack.fineTerrainChunkWire import FineTerrainChunkWire
 from app.dataModel.worldPack.worldMapCellWire import WorldMapCellWire
 from app.dataModel.worldPack.worldPackManifest import WorldPackManifest
 from app.dataModel.worldPack.settlementStructureWire import SettlementStructureWire
+from app.dataModel.worldPack.settlementStructureWire import BuildingShellWire
+from app.dataModel.locations.transitions.worldTransitionTypeRegistry import WorldTransitionTypeRegistry
+from app.application.worldData.pack.read.settlementStructureIndex import building_with_interior_transitions
 
 # Disk identity of manifest.json — cache hit only if stamp matches.
 ManifestStamp = tuple[int, int]  # (mtime_ns, size)
@@ -112,11 +115,20 @@ class WorldPackReader:
             lambda: self._load_location_terrain(location_uid),
         )
 
-    def read_settlement_structure(self, location_uid: str) -> SettlementStructureWire:
+    def read_settlement_structure(
+        self, location_uid: str, *, registry: WorldTransitionTypeRegistry | None = None,
+    ) -> SettlementStructureWire:
         path = self._paths.settlement_structure_path(location_uid)
         if not path.is_file():
             raise FileNotFoundError(f"pack blob not found: {path}")
-        return parse_settlement_structure_blob(path.read_bytes(), self._codec)
+        return parse_settlement_structure_blob(path.read_bytes(), self._codec, registry=registry)
+
+    def read_building_interior_transitions(
+        self, settlement_uid: str, building_uid: str, *, registry: WorldTransitionTypeRegistry,
+    ) -> BuildingShellWire:
+        return building_with_interior_transitions(
+            self.read_settlement_structure(settlement_uid, registry=registry), building_uid,
+        )
 
     def read_climate_coarse(self) -> ClimateFieldWire:
         path = self._paths.climate_coarse_path()

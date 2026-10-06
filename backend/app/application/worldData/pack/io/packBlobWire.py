@@ -203,11 +203,5 @@ def parse_building_interior_transitions_blob(
 ) -> BuildingShellWire:
     """Read the complete building from the settlement container, without a level index."""
     wire = parse_settlement_structure_blob(data, codec, registry=registry)
-    for district in wire.districts:
-        for area in district.areas:
-            for building in area.buildings:
-                if building.location_uid == building_uid:
-                    if building.interior_transitions is None:
-                        raise InteriorTransitionsRebuildRequired(f"building {building_uid!r} requires interior transition pack rebuild")
-                    return building
-    raise KeyError(building_uid)
+    from app.application.worldData.pack.read.settlementStructureIndex import building_with_interior_transitions
+    return building_with_interior_transitions(wire, building_uid)

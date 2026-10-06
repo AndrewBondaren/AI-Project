@@ -42,9 +42,11 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
 from app.dataModel.locations.enums.entryRole import EntryRole
 from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.spatial.facing import Facing
-from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.db.models.locationLevel import LocationLevel
-from app.db.models.locationPassage import LocationPassage
+from app.dataModel.locations.transitions.transition import Transition
+from app.dataModel.locations.transitions.transitionEndpoint import TransitionEndpoint
+from app.application.worldData.generators.structure.physicalTransition import physical_transition
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.connectionNode import ConnectionNode
@@ -192,7 +194,7 @@ class TestSettlementTransitionProjection(unittest.TestCase):
 
 def _layout(
     *,
-    passages: list[LocationPassage],
+    passages: list[Transition],
     cells: list[MapCell] | None = None,
 ) -> SettlementLayout:
     template = DistrictTemplateEntry(
@@ -233,7 +235,7 @@ def _layout(
     building_layout = StructureLayout(
         cells=list(cells or []),
         levels=[level],
-        passages=passages,
+        transitions=passages,
         rooms=[],
     )
     area = AreaLayout(
@@ -264,15 +266,7 @@ class TestSettlementOutdoorExtract(unittest.TestCase):
             extract_settlement(_settlement(), _layout(passages=[]))
 
     def test_front_entry_and_district_parent(self):
-        passage = LocationPassage(
-            passage_uid="p-front",
-            world_uid="w1",
-            to_level_uid="old-level",
-            to_x=1,
-            to_y=0,
-            system_passage_type=PassageType.MAIN_ENTRANCE,
-            from_level_uid=None,
-        )
+        passage = physical_transition("w1", TransitionType.MAIN_ENTRANCE, TransitionEndpoint(), TransitionEndpoint(space="level", level_uid="old-level", x=1, y=0, z=0), "probe-hut-0-0")
         extracted = extract_settlement(_settlement(), _layout(passages=[passage]))
         self.assertEqual(len(extracted.districts), 1)
         self.assertIsNone(extracted.districts[0].system_template_uid)
@@ -286,25 +280,17 @@ class TestSettlementOutdoorExtract(unittest.TestCase):
             extracted.buildings[0].parent_location_uid,
             extracted.districts[0].location_uid,
         )
-        self.assertEqual(len(extracted.entry_points), 1)
-        self.assertEqual(extracted.entry_points[0].entry_role, EntryRole.FRONT.value)
-        self.assertTrue(extracted.entry_points[0].is_discovered)
+        self.assertEqual(len(extracted.sql_transitions), 1)
+        self.assertEqual(extracted.sql_transitions[0].system_transition_type, TransitionType.MAIN_ENTRANCE)
+        self.assertTrue(extracted.sql_transitions[0].destination_side.is_discovered)
         self.assertEqual(extracted.wire.settlement_uid, "set-1")
         self.assertEqual(len(extracted.wire.districts), 1)
-        self.assertEqual(extracted.sql_transitions, [])
-        self.assertEqual(extracted.pack_by_building, {})
-        self.assertIsNone(extracted.wire.districts[0].areas[0].buildings[0].interior_transitions)
+        self.assertEqual(extracted.entry_points, [])
+        self.assertIn(extracted.buildings[0].location_uid, extracted.pack_by_building)
+        self.assertIsNotNone(extracted.wire.districts[0].areas[0].buildings[0].interior_transitions)
 
     def test_building_cells_persist_floor_and_stair(self):
-        passage = LocationPassage(
-            passage_uid="p-front",
-            world_uid="w1",
-            to_level_uid="old-level",
-            to_x=1,
-            to_y=0,
-            system_passage_type=PassageType.MAIN_ENTRANCE,
-            from_level_uid=None,
-        )
+        passage = physical_transition("w1", TransitionType.MAIN_ENTRANCE, TransitionEndpoint(), TransitionEndpoint(space="level", level_uid="old-level", x=1, y=0, z=0), "probe-hut-0-0")
         cells = [
             MapCell(
                 world_uid="w1", x=0, y=0, z=0,
@@ -329,7 +315,7 @@ class TestSettlementOutdoorExtract(unittest.TestCase):
         self.assertEqual(elements, {"wall", "floor", "staircase"})
         stair = next(c for c in shell if c.system_building_element == "staircase")
         self.assertEqual(stair.system_facing, "north")
-        self.assertEqual(len(extracted.entry_points), 1)
+        self.assertEqual(len(extracted.sql_transitions), 1)
 
     def test_plot_without_building_skips_c20(self):
         template = DistrictTemplateEntry(

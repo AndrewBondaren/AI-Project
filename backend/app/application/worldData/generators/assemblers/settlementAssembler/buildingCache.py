@@ -201,7 +201,7 @@ def _envelope_layout(
     return StructureLayout(
         cells=[],
         levels=[],
-        passages=[],
+        transitions=[],
         rooms=[],
         occupied_footprint=footprint,
     )

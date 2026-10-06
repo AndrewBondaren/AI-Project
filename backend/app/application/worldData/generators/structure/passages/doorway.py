@@ -1,4 +1,4 @@
-﻿"""
+"""
 Doorway passage builder.
 """
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
@@ -9,9 +9,10 @@ from app.application.worldData.generators.structure.passages.doorHeight import r
 from app.application.worldData.generators.structure.passages.shared import (
     _doorway_facing, _shared_segment,
 )
-from app.application.worldData.ids import UidKind, entity_uid
 from app.db.models.locationLevel import LocationLevel
-from app.db.models.locationPassage import LocationPassage
+from app.dataModel.locations.transitions.transition import Transition
+from app.dataModel.locations.transitions.transitionEndpoint import TransitionEndpoint
+from app.application.worldData.generators.structure.physicalTransition import physical_transition, level_endpoint
 from app.db.models.mapCell import MapCell
 
 
@@ -27,7 +28,7 @@ def _build_doorway(
     passage_height: int,
     *,
     template: StructureTemplate | None = None,
-) -> LocationPassage | None:
+) -> Transition | None:
     import logging
     logger = logging.getLogger(__name__)
 
@@ -62,19 +63,4 @@ def _build_doorway(
     door_cells = placed
 
     cx, cy = door_cells[len(door_cells) // 2]
-    passage_uid = entity_uid(
-        world_uid, UidKind.PASSAGE,
-        parent=building_uid, type="door", a=conn.from_room, b=conn.to_room,
-    )
-    return LocationPassage(
-        passage_uid=passage_uid,
-        world_uid=world_uid,
-        from_level_uid=fr_level.level_uid,
-        from_x=cx,
-        from_y=cy,
-        to_level_uid=to_level.level_uid,
-        to_x=cx,
-        to_y=cy,
-        system_passage_type=conn.passage_type,
-        is_bidirectional=True,
-    )
+    return physical_transition(world_uid, conn.passage_type, level_endpoint(fr_level, cx, cy, building_uid), level_endpoint(to_level, cx, cy, building_uid), building_uid)

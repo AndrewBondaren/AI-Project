@@ -90,7 +90,7 @@ class DoorHeightTests(unittest.TestCase):
                     second = StructureGeneratorService().generate_from_template(world, building, template)
             records = [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines()]
         self.assertEqual(template.model_dump(), before)
-        self.assertEqual((first.cells, first.passages), (second.cells, second.passages))
+        self.assertEqual((first.cells, first.transitions), (second.cells, second.transitions))
         self.assertEqual(resolve.call_count, 2)
         for call in resolve.call_args_list:
             self.assertEqual(call.args[0], 8)

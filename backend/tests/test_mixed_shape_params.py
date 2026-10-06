@@ -117,5 +117,5 @@ class MixedShapeParamsTests(unittest.TestCase):
             before = deepcopy(template.model_dump())
             first = StructureGeneratorService().generate_from_template(world, building, template)
             second = StructureGeneratorService().generate_from_template(world, building, template)
-            self.assertEqual((first.cells, first.passages), (second.cells, second.passages))
+            self.assertEqual((first.cells, first.transitions), (second.cells, second.transitions))
             self.assertEqual(template.model_dump(), before)

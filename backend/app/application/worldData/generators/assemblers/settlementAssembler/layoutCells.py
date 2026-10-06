@@ -15,6 +15,8 @@ from app.dataModel.locations.locationFootprintPolicy import named_location_uses_
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
+from app.application.worldData.transitions.transitionIdentity import transition_uid
+from app.dataModel.locations.transitions.transitionSide import TransitionSideId
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +34,30 @@ def rebind_layout_to_building(
         replace(c, location_uid=building.location_uid)
         for c in layout.cells
     ]
+    previous_owners = {level.location_uid for level in layout.levels}
+    transitions = []
+    for item in layout.transitions:
+        endpoints = {}
+        sides = {}
+        for side in TransitionSideId:
+            endpoint = getattr(item, side)
+            if endpoint.host_location_uid in previous_owners:
+                endpoint = endpoint.model_copy(update={"host_location_uid": building.location_uid})
+            endpoints[side] = endpoint
+            state = getattr(item, f"{side}_side")
+            if state.owner_location_uid in previous_owners:
+                state = state.model_copy(update={"owner_location_uid": building.location_uid})
+            sides[f"{side}_side"] = state
+        transitions.append(item.model_copy(update={
+            **endpoints, **sides,
+            "transition_uid": transition_uid(item.world_uid, item.system_transition_type,
+                                             endpoints["source"], endpoints["destination"]),
+        }))
     return StructureLayout(
         cells=cells,
-        levels=layout.levels,
-        passages=layout.passages,
-        rooms=layout.rooms,
+        levels=[replace(level, location_uid=building.location_uid) for level in layout.levels],
+        transitions=transitions,
+        rooms=[replace(room, parent_location_uid=building.location_uid) for room in layout.rooms],
         occupied_footprint=layout.occupied_footprint,
     )
 

@@ -839,7 +839,7 @@ class TokenPickTest(unittest.TestCase):
         layout = StructureLayout(
             cells=[],
             levels=[],
-            passages=[],
+            transitions=[],
             rooms=[],
             occupied_footprint=OccupiedFootprint(min_x=0, min_y=0, width=4, depth=4),
         )

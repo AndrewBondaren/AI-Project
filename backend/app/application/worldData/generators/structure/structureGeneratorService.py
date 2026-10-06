@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -13,7 +13,7 @@ from app.dataModel.locations.structure.building.roomConnection import RoomConnec
 from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
 from app.dataModel.locations.structure.building.levelDef import LevelDef
 from app.dataModel.locations.structure.building.structureTemplate import StructureTemplate
-from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.dataModel.spatial.facing import Facing
 from app.application.worldData.generators.structure.structureOrientation import entry_orientation, validate_facing
 from app.application.jsonValidation import materials
@@ -35,7 +35,7 @@ from app.application.worldData.generators.structure.wallRegions import (
 from app.application.worldData.generators.structure.errors import GenerationError, UnsupportedShapeError
 from app.application.worldData.generators.structure.layoutEngine import layout_level
 from app.application.worldData.generators.structure.staircase.embeddedUpperLayout import prepare_embedded_upper
-from app.application.worldData.generators.structure.passages import build_passages
+from app.application.worldData.generators.structure.passages import build_transitions
 from app.application.worldData.generators.structure.room.roomFactory import instantiate_level_rooms
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.staircase.shaftFactory import (
@@ -52,7 +52,7 @@ from app.application.worldData.generators.structure.passages.corridorTrimmer imp
 from app.application.worldData.generators.structure.passages.corridorConnector import connect_corridors
 from app.application.worldData.generators.structure.structurePostProcess import run as _post_process
 from app.db.models.locationLevel import LocationLevel
-from app.db.models.locationPassage import LocationPassage
+from app.dataModel.locations.transitions.transition import Transition
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
@@ -80,9 +80,15 @@ class OccupiedFootprint:
 class StructureLayout:
     cells:               list[MapCell]
     levels:              list[LocationLevel]
-    passages:            list[LocationPassage]
+    transitions:            list[Transition]
     rooms:               list[NamedLocation]
     occupied_footprint:  OccupiedFootprint | None = None
+
+    @property
+    def passages(self):
+        """Temporary outward snapshot for legacy extraction/debug; never mutable layout state."""
+        from app.application.worldData.generators.structure.legacyPassageProjection import legacy_passages
+        return legacy_passages(self.transitions)
 
 
 def compute_occupied_footprint(
@@ -300,7 +306,7 @@ class StructureGeneratorService:
             rng=rng, ctx=ctx,
         )
 
-        passages = self._run_passages(
+        transitions = self._run_passages(
             structure, building, levels, all_rooms, room_z_offsets, cells_dict, world, rng,
             connections, staircases, ground_z=ground_z, ctx=ctx,
         )
@@ -320,13 +326,13 @@ class StructureGeneratorService:
         _post_process(cells_dict)
 
         if facing is not None:
-            orientation = entry_orientation(all_rooms, passages, structure.system_name, facing)
-            orientation.apply(cells_dict, passages, all_rooms)
+            orientation = entry_orientation(all_rooms, transitions, structure.system_name, facing)
+            orientation.apply(cells_dict, transitions, all_rooms)
 
-        result = self._assemble_result(building, levels, all_rooms, room_uids, cells_dict, passages)
+        result = self._assemble_result(building, levels, all_rooms, room_uids, cells_dict, transitions)
         logger.info(
-            "generate_from_template | done building=%s rooms=%d cells=%d passages=%d",
-            building.location_uid, len(result.rooms), len(result.cells), len(result.passages),
+            "generate_from_template | done building=%s rooms=%d cells=%d transitions=%d",
+            building.location_uid, len(result.rooms), len(result.cells), len(result.transitions),
         )
         return result
 
@@ -440,8 +446,11 @@ class StructureGeneratorService:
         resolved: list[RoomConnection] = []
         for index, raw in enumerate(template.connections):
             if isinstance(raw, dict) and "passage_type" in raw:
-                parsed = PassageType.from_wire(raw["passage_type"])
-                if parsed not in (PassageType.DOORWAY, PassageType.ARCHWAY):
+                try:
+                    parsed = TransitionType(raw["passage_type"])
+                except (ValueError, TypeError):
+                    parsed = None
+                if parsed not in (TransitionType.DOORWAY, TransitionType.ARCHWAY):
                     logger.error(
                         "Structure '%s' connections[%d]: passage_type %r is not "
                         "doorway/archway — fallback to doorway "
@@ -587,7 +596,7 @@ class StructureGeneratorService:
                     synth.append(RoomConnection(
                         from_room=shaft_list[i].room_id,
                         to_room=stop_id,
-                        passage_type=PassageType.ARCHWAY,
+                        passage_type=TransitionType.ARCHWAY,
                     ))
         return synth
 
@@ -750,7 +759,7 @@ class StructureGeneratorService:
         return cells_dict, room_uids
 
     # ------------------------------------------------------------------
-    # Phase: passages
+    # Phase: transitions
 
     def _run_passages(
         self,
@@ -766,12 +775,12 @@ class StructureGeneratorService:
         staircases: list[StaircaseSpec],
         ground_z: int,
         ctx: LocationContext | None = None,
-    ) -> list[LocationPassage]:
-        """Steps 9-11: build passages (mutates cells_dict for door/staircase cells)."""
+    ) -> list[Transition]:
+        """Steps 9-11: build transitions (mutates cells_dict for door/staircase cells)."""
         for r in all_rooms:
             if r.staircase_type:
-                logger.info("pre-passages room staircase_type: %r  %r", r.room_id, r.staircase_type)
-        passages = build_passages(
+                logger.info("pre-transitions room staircase_type: %r  %r", r.room_id, r.staircase_type)
+        transitions = build_transitions(
             cells_dict, all_rooms, connections,
             levels, room_z_offsets,
             world.world_uid, building.location_uid, rng,
@@ -779,8 +788,8 @@ class StructureGeneratorService:
             building_tier=ctx.economic_tier if ctx is not None else None,
             ground_z=ground_z,
         )
-        logger.info("passages | count=%d  total_cells=%d", len(passages), len(cells_dict))
-        return passages
+        logger.info("transitions | count=%d  total_cells=%d", len(transitions), len(cells_dict))
+        return transitions
 
     # ------------------------------------------------------------------
     # Phase: wall openings
@@ -826,7 +835,7 @@ class StructureGeneratorService:
         all_rooms: list[_RoomInstance],
         room_uids: dict[str, str],
         cells_dict: dict[tuple, MapCell],
-        passages: list[LocationPassage],
+        transitions: list[Transition],
     ) -> StructureLayout:
         logger.info("=== PHASE: assemble result ===")
         named_locations = [
@@ -843,7 +852,7 @@ class StructureGeneratorService:
         return StructureLayout(
             cells=cell_list,
             levels=list(levels.values()),
-            passages=passages,
+            transitions=transitions,
             rooms=named_locations,
             occupied_footprint=compute_occupied_footprint(cell_list, ground_z),
         )

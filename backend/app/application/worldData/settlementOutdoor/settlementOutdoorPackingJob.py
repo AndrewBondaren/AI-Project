@@ -76,6 +76,7 @@ from app.db.models.world import World
 from app.db.repositories.iConnectionEdgeRepository import IConnectionEdgeRepository
 from app.db.repositories.iConnectionNodeRepository import IConnectionNodeRepository
 from app.db.repositories.iNamedLocationRepository import INamedLocationRepository
+from app.application.jsonValidation.worldRow import transition_types
 
 
 @dataclass
@@ -271,7 +272,7 @@ class SettlementOutdoorPackingJob:
         )
         generate_s = ctx.clock.lap()
         extracted = extract_settlement(
-            ctx.settlement, layout, graph_levels=PACKING_GRAPH_LEVELS,
+            ctx.settlement, layout, graph_levels=PACKING_GRAPH_LEVELS, registry=transition_types(ctx.world),
         )
         if (
             not extracted.districts
@@ -282,7 +283,7 @@ class SettlementOutdoorPackingJob:
             )
         extract_s = ctx.clock.lap()
         tmp_ref = ctx.writer.encode_settlement_structure_tmp(
-            location_uid, extracted.wire,
+            location_uid, extracted.wire, registry=extracted.transition_context.registry,
         )
         encode_s = ctx.clock.lap()
         await self._sql.persist(extracted)
@@ -308,7 +309,8 @@ class SettlementOutdoorPackingJob:
                 districts=1,
                 buildings=len(extracted.buildings),
                 levels=len(extracted.levels),
-                entry_points=len(extracted.entry_points),
+                entry_points=sum(extracted.transition_context.registry.entry_for(item.system_transition_type).entry
+                                 for item in extracted.sql_transitions),
                 dominant_material=layout.dominant_material,
             ),
             tmp_ref.nbytes,

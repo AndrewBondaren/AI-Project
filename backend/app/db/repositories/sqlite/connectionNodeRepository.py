@@ -1,4 +1,5 @@
 from app.db.database import Database, _in_transaction
+from app.db.bulkSql import upsert_rows
 from app.db.models.connectionNode import ConnectionNode
 from app.db.repositories.iConnectionNodeRepository import IConnectionNodeRepository
 from app.db.repositories.sqlite.base import BaseRepository
@@ -22,12 +23,10 @@ class SqliteConnectionNodeRepository(BaseRepository[ConnectionNode], IConnection
         if not nodes:
             return 0
         if _in_transaction.get():
-            for node in nodes:
-                await self.upsert(node)
+            await upsert_rows(self._db.conn, nodes)
             return len(nodes)
         async with self._db.transaction():
-            for node in nodes:
-                await self.upsert(node)
+            await upsert_rows(self._db.conn, nodes)
         return len(nodes)
 
     async def delete_by_world(self, world_uid: str) -> None:

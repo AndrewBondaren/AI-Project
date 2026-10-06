@@ -1,4 +1,4 @@
-﻿"""
+"""
 Surface corridor — соединяет внешний якорь лестницы с верхней комнатой на уровне z_top.
 Аналог UndergroundTunnelBuilder, но работает горизонтально на поверхности.
 ТЗ: docs/tz_staircase_generation.md §8.1
@@ -7,17 +7,18 @@ from __future__ import annotations
 
 import logging
 
-from app.application.worldData.ids import UidKind, entity_uid
 from app.dataModel.locations.structure.enums.buildingElement import StructureElement
 from app.application.worldData.generators.structure.cellBuilder import _interior, _wall_cell
 from app.application.worldData.generators.structure.cellFactory import _floor_cell, _open_cell
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
-from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.application.worldData.generators.structure.passages.wallBreachPlacer import WallBreachPlacer
 from app.application.worldData.generators.structure.passages.tunnelPathFinder import TunnelPathFinder
 from app.application.worldData.generators.structure.staircase.undergroundTunnel import _VEC_TO_FACING
 from app.db.models.locationLevel import LocationLevel
-from app.db.models.locationPassage import LocationPassage
+from app.dataModel.locations.transitions.transition import Transition
+from app.dataModel.locations.transitions.transitionEndpoint import TransitionEndpoint
+from app.application.worldData.generators.structure.physicalTransition import physical_transition, level_endpoint
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ class SurfaceCorridorBuilder:
         to_room:  _RoomInstance,
         to_level: LocationLevel,
         sc_id:    str = "?",
-    ) -> LocationPassage | None:
+    ) -> Transition | None:
         to_fp = set(to_room.get_footprint())
 
         if anchor in to_fp:
@@ -87,23 +88,7 @@ class SurfaceCorridorBuilder:
         wall_cell_xy = self._place_corridor(path, to_fp)
 
         wx, wy = wall_cell_xy if wall_cell_xy else path[-1]
-        passage_uid = entity_uid(
-            self.world_uid, UidKind.PASSAGE,
-            parent=self.building_uid, type="surface_corridor",
-            staircase=sc_id, room=to_room.room_id,
-        )
-        return LocationPassage(
-            passage_uid=passage_uid,
-            world_uid=self.world_uid,
-            from_level_uid=to_level.level_uid,
-            from_x=anchor[0],
-            from_y=anchor[1],
-            to_level_uid=to_level.level_uid,
-            to_x=wx,
-            to_y=wy,
-            system_passage_type=PassageType.ARCHWAY,
-            is_bidirectional=True,
-        )
+        return physical_transition(self.world_uid, TransitionType.ARCHWAY, level_endpoint(to_level, anchor[0], anchor[1], self.building_uid), level_endpoint(to_level, wx, wy, self.building_uid), self.building_uid)
 
     def _place_corridor(
         self,

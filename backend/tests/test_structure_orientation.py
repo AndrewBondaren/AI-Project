@@ -14,7 +14,9 @@ from app.dataModel.locations.structure.building.structureTemplate import Structu
 from app.dataModel.locations.structure.enums.attachWall import AttachWall
 from app.dataModel.locations.structure.room.entryPoint import EntryPoint
 from app.db.models.mapCell import MapCell
-from app.db.models.locationPassage import LocationPassage
+from app.dataModel.locations.transitions.transition import Transition
+from app.dataModel.locations.transitions.transitionEndpoint import TransitionEndpoint
+from app.application.worldData.generators.structure.physicalTransition import physical_transition
 from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 
@@ -61,10 +63,7 @@ class StructureOrientationTests(unittest.TestCase):
         r.embedded_entry = Facing.WEST
         r.attach_wall = AttachWall.NORTH
         cells = {(12,-2,7): MapCell("w",12,-2,7, system_facing="east", railing_sides=["N","E"])}
-        passages = [LocationPassage(
-            passage_uid="p", world_uid="w", to_level_uid="l2", to_x=12, to_y=-2,
-            system_passage_type="staircase", from_level_uid="l1", from_x=15, from_y=3,
-        )]
+        passages = [physical_transition("w", "staircase", TransitionEndpoint(space="level", level_uid="l1", x=15, y=3, z=1), TransitionEndpoint(space="level", level_uid="l2", x=12, y=-2, z=0), "building")]
         original = deepcopy((cells, passages, [r]))
         orientation.apply(cells, passages, [r])
         self.assertEqual(r.width, 5)
@@ -86,10 +85,7 @@ class StructureOrientationTests(unittest.TestCase):
         shaft.is_shaft = True
         shaft.facing = Facing.EAST.value
         shaft.embedded_entry = Facing.SOUTH
-        passages = [LocationPassage(
-            passage_uid="entrance", world_uid="w", to_level_uid="ground",
-            to_x=13, to_y=20, system_passage_type="main_entrance",
-        )]
+        passages = [physical_transition("w", "main_entrance", TransitionEndpoint(), TransitionEndpoint(space="level", level_uid="ground", x=13, y=20, z=0), "building")]
         orientation = entry_orientation([entrance, shaft], passages, "building", Facing.WEST)
         orientation.apply({}, passages, [entrance, shaft])
         self.assertEqual(entrance.entry_point.wall, Facing.WEST)
@@ -187,7 +183,7 @@ class StructureOrientationTests(unittest.TestCase):
             baseline = base_probe.generate_from_template(world, building, structure)
             for facing in sorted(CARDINAL_FACINGS):
                 with self.subTest(structure=structure.display_name, facing=facing):
-                    orientation = entry_orientation(base_probe.runtime_rooms, baseline.passages, structure.system_name, facing)
+                    orientation = entry_orientation(base_probe.runtime_rooms, baseline.transitions, structure.system_name, facing)
                     probe = RotationProbe()
                     actual = probe.generate_from_template(world, building, structure, facing=facing)
                     expected_xyz = {(*rotate_point((c.x,c.y), orientation.pivot, orientation.quarter_turns), c.z) for c in baseline.cells}
@@ -207,9 +203,9 @@ class StructureOrientationTests(unittest.TestCase):
                                 self.assertEqual(new.facing, orientation.facing(old.facing).value)
                             if old.embedded_entry is not None:
                                 self.assertEqual(new.embedded_entry, orientation.facing(old.embedded_entry))
-                    entrance = next(p for p in actual.passages if p.system_passage_type == "main_entrance")
-                    z = next(l.z for l in actual.levels if l.level_uid == entrance.to_level_uid)
-                    door = next(c for c in actual.cells if (c.x,c.y,c.z) == (entrance.to_x,entrance.to_y,z))
+                    entrance = next(p for p in actual.transitions if p.system_transition_type == "main_entrance")
+                    z = next(l.z for l in actual.levels if l.level_uid == entrance.destination.level_uid)
+                    door = next(c for c in actual.cells if (c.x,c.y,c.z) == (entrance.destination.x,entrance.destination.y,z))
                     self.assertEqual(door.system_facing, facing)
             self.assertEqual(structure.model_dump(), original)
 
@@ -219,6 +215,6 @@ class StructureOrientationTests(unittest.TestCase):
         bp, ap = RotationProbe(), RotationProbe()
         base = bp.generate_from_template(world, building, structure)
         actual = ap.generate_from_template(world, building, structure, facing=Facing.NORTH)
-        orientation = entry_orientation(bp.runtime_rooms, base.passages, structure.system_name, Facing.NORTH)
+        orientation = entry_orientation(bp.runtime_rooms, base.transitions, structure.system_name, Facing.NORTH)
         actual.cells[0].system_facing = "west"
         self.assertFalse(compare_rotation(base, bp, actual, ap, orientation, 7)["matches"])

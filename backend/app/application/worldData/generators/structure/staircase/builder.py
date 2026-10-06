@@ -1,12 +1,12 @@
-﻿"""
+from app.dataModel.locations.transitions.transitionParams import StaircaseTransitionParams
+"""
 Staircase builder — оркестратор.
 
 Читает staircase_type из room definition, диспатчит к нужному builder-классу,
-создаёт и возвращает LocationPassage.
+создаёт и возвращает Transition.
 """
 import logging
 
-from app.application.worldData.ids import UidKind, entity_uid
 from app.application.worldData.generators.structure.room.roomInstance import _RoomInstance
 from app.application.worldData.generators.structure.staircase.straight  import StraightBuilder
 from app.application.worldData.generators.structure.staircase.uShape    import UShapeBuilder
@@ -15,9 +15,11 @@ from app.application.worldData.generators.structure.staircase.verticalLadder  im
 from app.application.worldData.generators.structure.staircase.base      import StaircaseBuilder
 from app.dataModel.locations.structure.building.staircaseSpec import StaircaseSpec
 from app.dataModel.locations.structure.enums.staircaseType import StaircaseType
-from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.db.models.locationLevel import LocationLevel
-from app.db.models.locationPassage import LocationPassage
+from app.dataModel.locations.transitions.transition import Transition
+from app.dataModel.locations.transitions.transitionEndpoint import TransitionEndpoint
+from app.application.worldData.generators.structure.physicalTransition import physical_transition, level_endpoint
 from app.db.models.mapCell import MapCell
 
 logger = logging.getLogger(__name__)
@@ -44,7 +46,7 @@ def build_staircase(
     *,
     shaft: "_RoomInstance | None" = None,
     passage_height: int,
-) -> "tuple[LocationPassage | None, StaircaseBuilder | None]":
+) -> "tuple[Transition | None, StaircaseBuilder | None]":
     sc_id      = sc.staircase_id
     conn_label = f"{sc_id}  {fr.room_id}->{to.room_id}"
     stair_type = sc.staircase_type
@@ -72,21 +74,5 @@ def build_staircase(
 
     fx, fy = fr_anchor
     tx, ty = to_anchor
-    passage_uid = entity_uid(
-        world_uid, UidKind.PASSAGE,
-        parent=building_uid, type="stair", staircase=sc.staircase_id,
-        a=fr.room_id, b=to.room_id,
-    )
-    passage = LocationPassage(
-        passage_uid=passage_uid,
-        world_uid=world_uid,
-        from_level_uid=fr_level.level_uid,
-        from_x=fx,
-        from_y=fy,
-        to_level_uid=to_level.level_uid,
-        to_x=tx,
-        to_y=ty,
-        system_passage_type=PassageType.STAIRCASE,
-        is_bidirectional=True,
-    )
+    passage = physical_transition(world_uid, TransitionType.STAIRCASE, level_endpoint(fr_level, fx, fy, building_uid), level_endpoint(to_level, tx, ty, building_uid), building_uid, type_params=StaircaseTransitionParams(staircase_type=stair_type))
     return passage, builder

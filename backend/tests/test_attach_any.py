@@ -166,6 +166,6 @@ class AttachAnyTests(unittest.TestCase):
                 second = StructureGeneratorService().generate_from_template(world, building, template)
                 self.assertTrue(first.cells)
                 self.assertEqual(first.cells, second.cells)
-                self.assertEqual(first.passages, second.passages)
+                self.assertEqual(first.transitions, second.transitions)
                 self.assertEqual(first.levels, second.levels)
                 self.assertEqual(template.model_dump(), original)

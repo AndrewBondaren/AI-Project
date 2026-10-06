@@ -1,4 +1,4 @@
-﻿"""
+"""
 Archway passage builder.
 
 Rule: arch frame starts one z-level above the floor (z_base + 1).
@@ -15,13 +15,14 @@ from app.application.worldData.generators.structure.passages.archwayValidator im
     validate_archway_through,
 )
 from app.dataModel.locations.structure.building.roomConnection import RoomConnection
-from app.dataModel.locations.structure.enums.passageType import PassageType
+from app.dataModel.locations.transitions.transitionType import TransitionType
 from app.application.worldData.generators.structure.passages.shared import (
     _center_slice, _shared_segment,
 )
-from app.application.worldData.ids import UidKind, entity_uid
 from app.db.models.locationLevel import LocationLevel
-from app.db.models.locationPassage import LocationPassage
+from app.dataModel.locations.transitions.transition import Transition
+from app.dataModel.locations.transitions.transitionEndpoint import TransitionEndpoint
+from app.application.worldData.generators.structure.physicalTransition import physical_transition, level_endpoint
 from app.db.models.mapCell import MapCell
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ def _build_archway(
     other_rooms: list | None = None,
     deferred: list | None = None,
     shared_cells: list[tuple[int, int]] | None = None,
-) -> LocationPassage | None:
+) -> Transition | None:
     shared = _shared_segment(fr, to) if shared_cells is None else shared_cells
     if not shared:
         logger.warning("archway %r->%r: no shared wall found", conn.from_room, conn.to_room)
@@ -81,19 +82,4 @@ def _build_archway(
         validate_archway_through(cells, arch_cells, z_base, conn_label)
 
     cx, cy = arch_cells[len(arch_cells) // 2]
-    passage_uid = entity_uid(
-        world_uid, UidKind.PASSAGE,
-        parent=building_uid, type="arch", a=conn.from_room, b=conn.to_room,
-    )
-    return LocationPassage(
-        passage_uid=passage_uid,
-        world_uid=world_uid,
-        from_level_uid=fr_level.level_uid,
-        from_x=cx,
-        from_y=cy,
-        to_level_uid=to_level.level_uid,
-        to_x=cx,
-        to_y=cy,
-        system_passage_type=PassageType.ARCHWAY,
-        is_bidirectional=True,
-    )
+    return physical_transition(world_uid, TransitionType.ARCHWAY, level_endpoint(fr_level, cx, cy, building_uid), level_endpoint(to_level, cx, cy, building_uid), building_uid)

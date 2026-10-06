@@ -149,7 +149,10 @@ Geographic subtype **не** является SoT declare маски ([`tz_map_li
 
 **Реки:** declare — `world.hydrology.declared_rivers[]`; routing polyline — **`ConnectionEdge`** после carve/emit (U9/U18). **Имя optional** (`location_uid` на declare entry).
 
-**Уровень 2 — `named_locations`** — агрегат ячеек с именем:
+**Уровень 2 — `named_locations`** — агрегат ячеек с именем.
+Ниже — целевой контракт typed host (**NL-P1**); текущий DDL ещё
+хранит type-specific поля отдельными колонками, их перенос выполняется
+по плану `nl-typed-host-payload.md` (P2–P3).
 ```sql
 named_locations (
   location_uid, world_uid,
@@ -170,9 +173,8 @@ named_locations (
   owner_uid,                      -- nullable FK → character_sheet; персональный владелец
   system_climate_zone,            -- nullable ref → worlds.climate_zone_registry; null = наследует от parent
   state_uid,                      -- nullable; soft ref → states; orphan = ничейная, движок логирует
-  system_settlement_size,         -- nullable ref → worlds.settlement_size_registry (ранг small/medium/large).
-                                  -- Целевой ключ (**LOC-T-2**). Код/SQL до impl: `system_city_size`.
-                                  -- Только settlement-like. Абсолютный footprint — не это поле, а subtype × ранг.
+  location_payload,              -- nullable TEXT JSON; контракт по location_type_registry[].payload_kind.
+                                  -- Authored + type-stamped поля типа, включая system_city_size; не generic каналы.
   system_economic_tier,           -- nullable ref → worlds.economic_tier_registry; null = наследует от parent; если у всех предков null → медианный тир (index = floor(count/2) по base_value ASC) + лог WARNING
   is_public,                      -- bool default False; публичная локация — NPC-занятость не блокирует старт игрока
   is_forbidden,                   -- bool default False; restricted-зона — location_faction_access переходит в режим allowlist
@@ -185,10 +187,7 @@ named_locations (
                                   -- Писать `map_z` только для ненулевого пина (подземный/hive/плато). `0` на wire = то же, что omit.
   system_template_uid,            -- nullable FK → building_templates; из какого шаблона сгенерировано здание
   parent_wall_material,           -- nullable MaterialKey → material_registry; стены здания (из шаблона). Omit/null → None; "" → reject.
-  parent_floor_material,          -- nullable MaterialKey → material_registry; полы. Как dominant_material. Не заполнять wood/stone на import.
-  hills                           -- nullable JSON; IgnoreOnWire. Patch холмов: {plains?, forest?} тех же ключей POJO.
-                                  -- Нет ключа = мир. Перекрывает world.terrain_masks.default_plains|forests.
-                                  -- SoT: tz_world_pack_storage § L2 open-land hills. L2 only; schema 0001 при impl.
+  parent_floor_material           -- nullable MaterialKey → material_registry; полы. Как dominant_material. Не заполнять wood/stone на import.
 )
 -- __update_exclude__ = {"world_uid"} — world_uid неизменяем при update
 -- Инвариант: is_public=true AND is_forbidden=true — невалидная комбинация; движок логирует WARNING
@@ -217,7 +216,7 @@ settlement-семантику без смены имени типа. `subtype` �
 
 | Класс | Где | Поля |
 |---|---|---|
-| generic identity/content/access/geometry | NL-колонки | `location_uid`, `display_name`, `system_location_type/subtype`, `parent_location_uid`, descriptions, glossary/tag refs, discovery/access/state флаги, `owner_uid`, `system_climate_zone`, mood-пара, `map_x/y/z`, `is_outdoor/sheltered/transit`, `is_mobile`, `system_template_uid`, `hills`, `created_at` |
+| generic identity/content/access/geometry | NL-колонки | `location_uid`, `display_name`, `system_location_type/subtype`, `parent_location_uid`, descriptions, glossary/tag refs, discovery/access/state флаги, `owner_uid`, `system_climate_zone`, mood-пара, `map_x/y/z`, `is_outdoor/sheltered/transit`, `is_mobile`, `system_template_uid`, `created_at` |
 | generic stamped cascade-каналы | NL-колонки | `system_economic_tier`, `parent_wall_material`, `parent_floor_material` — stamped-узлы для локации **любого** типа на любом scope (room данжа тоже имеет tier) |
 | type-specific (authored + type-stamped) | `location_payload` JSON | по `payload_kind` — см. таблицу ниже |
 
@@ -225,10 +224,37 @@ settlement-семантику без смены имени типа. `subtype` �
 
 | `payload_kind` | Модель | Поля |
 |---|---|---|
-| `settlement` | `SettlementPayload` (ныне `SettlementSkeleton`) | `system_city_size`, `settlement_density`, `dominant_material`, `architectural_style`, `frontage_type_order`, `plot_counts`, `plot_priority`, `perimeter_barrier`, `typical_districts`, `system_settlement_specializations` |
+| `settlement` | `SettlementPayload` (ныне `SettlementSkeleton`) | `system_city_size`, `settlement_density`, `dominant_material`, `architectural_style`, `frontage_type_order`, `plot_counts`, `plot_priority`, `perimeter_barrier`, `typical_districts`, `system_settlement_specializations`, `is_inhabited: bool = True` |
 | `district` | `DistrictPayload` | `district_topology` (C23 stamped freeze) |
-| `dungeon` | `DungeonPayload` | будущее; данж — **свой `system_type`** (не subtype поселения), свои subtypes (`crypt`/`mine`/…), своя scope-ось `DUNGEON→LEVEL→ROOM` в каскаде |
-| `null` | — | geographic / climate_pole / declare-only типы |
+| `null` | — | building / room / region / territory / geographic / climate_pole / declare-only типы |
+
+**Тип локации и контракт payload — разные оси:**
+
+| `system_type` | `payload_kind` | Морфология / семантика |
+|---|---|---|
+| `settlement` | `settlement` | живое поселение; `city`, `village`, `underground_city` |
+| `location_complex` | `settlement` | комплекс; `crypt`, `mine`, `ruins`, `fortress`, `lair`; по умолчанию рецепт задаёт `is_inhabited=false` |
+| `district` | `district` | район поселения или комплекса |
+| building / room / region / territory / geographic / climate_pole | `null` | generic host без payload |
+
+`location_complex` — отдельный `system_type`, **не** subtype поселения.
+Он использует тот же pipeline footprint → district topology → plot packing
+и тот же `SettlementPayload`. Каждый subtype комплекса задаёт свой рецепт
+на `LocationTypeSubtypeEntry`: `typical_district_types`, `footprint_by_size`,
+`required_structure_types`. Отдельный `DungeonPayload` не нужен.
+Subtype `dungeon` у `settlement` удаляется; `underground_city` остаётся:
+это рецепт живого города. Поверхность / подземелье / воздух задаются
+`map_z`, а не типом. `underground_city` задаёт морфологию и описание,
+его рецепт не заменяется координатой z.
+
+`is_inhabited` — authored-флаг **payload конкретной локации**. Дефолт
+модели — `True`; рецепт комплекса задаёт `False`, явное значение мастера
+имеет приоритет (руины-город могут быть обитаемыми). Флаг гейтит
+`system_settlement_specializations`, settlement-planner и economy planner.
+Реакция импорта на specializations при `is_inhabited=false` — отдельное
+решение перед P6 (contract error или игнор). Lazy-settlement DAG-нода
+также должна учитывать живость; её wiring и economy planner — leftovers,
+не входят в эту имплементацию и остаются под gate DAG.
 
 **Правила:**
 
@@ -240,6 +266,13 @@ settlement-семантику без смены имени типа. `subtype` �
   появлении — `json_extract` или проекционная колонка точечно.
 - Wire-ключи `locations[]` не меняются: type-поля валидируются payload-моделью,
   выбранной по `payload_kind` типа строки.
+- Pipeline застройки (`is_settlement_map_site`, C23 topology, C24 packing)
+  выбирается по `payload_kind == "settlement"`, независимо от строки
+  type/subtype и живости. `system_` в имени поля не означает NL-колонку:
+  `system_city_size` — type-stamped поле payload.
+- Type-stamped запись — read-modify-write `location_payload` через
+  payload-модель (`model_copy(update=…)` → dump) в persist-сервисе,
+  одна запись на NL-строку. Генератор возвращает данные, payload не пишет.
 - Граничное поле `architectural_style` — сейчас settlement-authored; если
   станет generic для зданий — промоутится на NL отдельным решением.
 
@@ -248,7 +281,7 @@ settlement-семантику без смены имени типа. `subtype` �
 Вложенность локаций — **произвольное дерево** `parent_location_uid`, не
 фиксированная линейная ось: wilderness-ветки (`region → territory →
 forest → glade → cave`) и urban-ветки (`… → settlement → district →
-building → room`) — одно дерево; данж может висеть под городом или под
+building → room`) — одно дерево; комплекс может висеть под городом или под
 лесом. Допустимые формы вложенности — **данные мастера**: `parent_types`
 в `location_type_registry` (`forest → glade/cave`, …).
 
@@ -257,9 +290,20 @@ building → room`) — одно дерево; данж может висеть 
 `ScopeLevel` деградирует до семантических тегов узлов; проверка контракта
 использует scope-DAG «кто кого может содержать» (код-контракт, согласован
 с `parent_types`) вместо rank-adjacency. Generic stamped-каналы NL
-(`system_economic_tier`, `parent_*_material`) становятся level-agnostic —
-одна декларация, работает на любом scope-позиции; settlement-каналы
-остаются привязаны к тегу `SETTLEMENT` и переезжают на payload-класс.
+`parent_wall_material` / `parent_floor_material` становятся level-agnostic:
+одна декларация с маркером «repeat on every tag», поскольку цепочка
+содержит только NL-узлы (отдельный шаг S2 со сменой контракта).
+`ECONOMIC_TIER` сохраняет явную цепочку: между NL-узлами есть
+`DistrictTemplateEntry` / `PlotLayoutTemplate`, которые не укладываются
+в повтор одного NL-канала. Settlement-каналы остаются привязаны к тегу
+`SETTLEMENT` и переезжают на payload-класс.
+
+**Одна scope-ось.** `location_complex` имеет тег `SETTLEMENT`, его районы —
+`DISTRICT`, здания — `BUILDING`, помещения — `ROOM`. Отдельной оси
+`DUNGEON→LEVEL→ROOM` нет. Уровни комплекса задаются `map_z` и
+`parent_location_uid`, а не новым scope-тегом. Generic обход предков,
+теги `GEOGRAPHIC` / `TERRITORY` и lazy NL над масками — отдельный
+план parent-цепочки, не часть переноса payload.
 
 **Требования parent-цепочки:**
 
@@ -278,14 +322,16 @@ building → room`) — одно дерево; данж может висеть 
   либо создаёт его, когда объекту нужен semantic parent.
 - `parent_types` в реестре — схема легальных веток («building/POI может
   висеть под geographic» — объявляется мастером, не кодом).
-- **Глубина и смешение веток произвольны:** `forest → ruins → building →
-  dungeon → level → room` — одна цепочка. `system_type:"ruins"` может
-  нести `payload_kind:"settlement"` (мёртвый город с семантикой
-  поселения) — payload_kind отделяет контракт данных от имени типа.
+- **Глубина и смешение веток произвольны:** например,
+  `forest → location_complex(ruins) → district → building → room`.
+  Мастер может объявить другой type с `payload_kind:"settlement"` —
+  payload_kind отделяет контракт данных от имени типа.
 - **Semantic parent ≠ physical entry.** `parent_location_uid` задаёт
-  каскадную ветку; физический вход в подземелье — `location_entry_points`
-  (`leads_to_level_uid` + anchor на здании/клетке). Входов может быть
-  несколько (здание в руинах + расщелина в лесу), parent — один.
+  каскадную ветку; физические входы/переходы — отдельный домен
+  `Transition(hatch|tunnel)` ([tz_location_transitions.md](tz_location_transitions.md)).
+  Связь комплекса с физическим хостом через переход не создаёт parent-ребро.
+  Входов может быть несколько (здание в руинах + расщелина в лесу),
+  semantic parent — один.
 - **Lazy NL для procedural-масок (решено).** Генератор, ставящий объект
   внутрь маски без NL (`declared_*` без `location_uid`), **эмитит**
   synthetic NL маски — объект пишет persist-слой, генератор не пишет SQL
@@ -303,7 +349,7 @@ building → room`) — одно дерево; данж может висеть 
 
 | Ось | Wire | Что это | Канон |
 |---|---|---|---|
-| Морфология | `system_location_subtype` | вид места (рецепт районов, глиф L0) | `village`, `city`, `dungeon`, `underground_city` |
+| Морфология | `system_location_subtype` | вид места (рецепт районов, глиф L0) | settlement: `village`, `city`, `underground_city`; location_complex: `crypt`, `mine`, `ruins`, `fortress`, `lair` |
 | Ранг размера | `system_settlement_size` | **относительный** масштаб **в контексте** морфологии | `small`, `medium`, `large` (+ N+1) |
 
 | Wire | Вердикт |
@@ -313,7 +359,7 @@ building → room`) — одно дерево; данж может висеть 
 | `subtype: village` + `size: village` | ❌ один токен на двух осях |
 | `subtype: city` + `size: city` | ❌ то же |
 
-Ошибка — **дублирование значения** (одна и та же строка в subtype и size), не пара «морфология + ранг». Import: оба заданы и равны (trim, case-insensitive) → **422**. N+1 size registry не должен брать ключи морфологии (`village`, `city`, `dungeon`, …); канон рангов — `small` / `medium` / `large`. Код до impl ещё хранит `hamlet`…`megalopolis` в `city_size_registry` — это как раз сломанный словарь размера.
+Ошибка — **дублирование значения** (одна и та же строка в subtype и size), не пара «морфология + ранг». Import: оба заданы и равны (trim, case-insensitive) → **422**. N+1 size registry не должен брать ключи морфологии (`village`, `city`, `crypt`, …); канон рангов — `small` / `medium` / `large`. Код до impl ещё хранит `hamlet`…`megalopolis` в `city_size_registry` — это как раз сломанный словарь размера.
 
 Инвариант абсолютного footprint (метры): **малый город всегда больше большой деревни.**  
 `footprint(city, small) > footprint(village, large)` при любом N+1, пока мастер не сломает таблицы — тогда **422** на import реестра.
@@ -324,7 +370,7 @@ building → room`) — одно дерево; данж может висеть 
 
 - `village` + `small` — маленькая деревня (хутор)
 - `city` + `small` — маленький город (городок)
-- `dungeon` + `small` — маленький данж
+- `location_complex` / `crypt` + `small` — маленькая крипта
 
 Столица — не размер и не морфология (`states.capital_location_uid`). Geographic / лес: ранг поселения **не** задаёт pin; omit `system_settlement_size`. Лес — terrain, не size.
 
@@ -350,7 +396,11 @@ Omit ранга на settlement → канон **`medium`** (обычный дл
 
 `footprint_m = footprint_by_size[subtype][size] × fine_cells_per_map_cell`
 
-Таблица множителей — на **`location_type_registry`**, subtype поселения (`subtypes[].footprint_by_size`), не на ранге. Hex/square — число метров стороны квадрата v1, не форма.
+Таблица множителей — на **`location_type_registry`**, subtype типа с
+`payload_kind:"settlement"` (`subtypes[].footprint_by_size`), не на ранге.
+Ранг хранится в `SettlementPayload.system_city_size`; историческое целевое
+имя `system_settlement_size` в LOC-T-2 не меняет wire в этом плане.
+Hex/square — число метров стороны квадрата v1, не форма.
 
 Канон (полосы не пересекаются: max village < min city):
 
@@ -358,8 +408,12 @@ Omit ранга на settlement → канон **`medium`** (обычный дл
 |---|---|---|---|
 | `village` | 0.25 | 0.50 | 0.75 |
 | `city` | 1.00 | 2.00 | 4.00 |
-| `dungeon` | 0.25 | 0.50 | 1.00 |
 | `underground_city` | 1.00 | 2.00 | 4.00 |
+
+Комплексы используют тот же размерный контракт; конкретные множители
+`crypt` / `mine` / `ruins` / `fortress` / `lair` задаются их рецептами
+при P1. Старый рецепт settlement-subtype `dungeon` (0.25 / 0.50 / 1.00)
+не становится автоматически общим рецептом всех комплексов.
 
 При `fine_cells_per_map_cell=3000`: большая деревня 2250 м, малый город 3000 м. N+1 может сдвинуть числа, **не** инвариант village≺city. `huge` и др. — только N+1; если ключ есть в size registry, он должен быть в `footprint_by_size` этого subtype или import 422.
 
@@ -406,13 +460,19 @@ room         (depth 5) — indoor: комната внутри building; leaf и
       { "system_subtype": "mountain",     "border_category": null     },
       { "system_subtype": "underground",  "border_category": null     }
   ]},
-  { "system_type": "settlement", "display_type": "Поселение",  "parent_types": ["territory"],                "is_outdoor": true,  "subtypes": [
+  { "system_type": "settlement", "display_type": "Поселение", "payload_kind": "settlement", "parent_types": ["territory"], "is_outdoor": true, "subtypes": [
       { "system_subtype": "city",             "border_category": null },
       { "system_subtype": "village",          "border_category": null },
-      { "system_subtype": "dungeon",          "border_category": null },
       { "system_subtype": "underground_city", "border_category": null }
   ]},
-  { "system_type": "district",   "display_type": "Район",      "parent_types": ["settlement"],               "is_outdoor": true,  "subtypes": [
+  { "system_type": "location_complex", "display_type": "Комплекс", "payload_kind": "settlement", "parent_types": ["territory", "geographic", "settlement", null], "is_outdoor": true, "subtypes": [
+      { "system_subtype": "crypt",    "border_category": null },
+      { "system_subtype": "mine",     "border_category": null },
+      { "system_subtype": "ruins",    "border_category": null },
+      { "system_subtype": "fortress", "border_category": null },
+      { "system_subtype": "lair",     "border_category": null }
+  ]},
+  { "system_type": "district", "display_type": "Район", "payload_kind": "district", "parent_types": ["settlement", "location_complex"], "is_outdoor": true, "subtypes": [
       { "system_subtype": "extract",     "border_category": null },
       { "system_subtype": "process",     "border_category": null },
       { "system_subtype": "manufacture", "border_category": null },
@@ -420,7 +480,7 @@ room         (depth 5) — indoor: комната внутри building; leaf и
       { "system_subtype": "farm",        "border_category": null },
       { "system_subtype": "livestock",   "border_category": null }
   ]},
-  { "system_type": "building",   "display_type": "Строение",   "parent_types": ["settlement","district"],    "is_outdoor": false, "subtypes": [
+  { "system_type": "building",   "display_type": "Строение",   "parent_types": ["settlement","location_complex","district"], "is_outdoor": false, "subtypes": [
       { "system_subtype": "residential", "border_category": null },
       { "system_subtype": "commercial",  "border_category": null },
       { "system_subtype": "military",    "border_category": null },
@@ -447,7 +507,7 @@ room         (depth 5) — indoor: комната внутри building; leaf и
 ]
 ```
 
-L0 debug-карта: глиф footprint поселения — `subtypes[].l0_map_symbol` (optional; canonical: city=`u`, village=`n`, dungeon=`d`, underground_city=`g`). SoT identity = строка `named_locations`, не pack. Контракт overlay — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) § L0 identity. Специализация поселения (`extract` / `farm` / …) — **не** этот subtype и не глиф; SoT [`tz_city_generation.md`](./tz_city_generation.md) §1.2. NL района: `system_location_subtype` = `district_subtype` чертежа (`extract`, `culture`, …), не `civic`.
+L0 debug-карта: глиф footprint — `subtypes[].l0_map_symbol` (optional; city=`u`, village=`n`, underground_city=`g`; глифы subtypes комплекса задаются его рецептами). SoT identity = строка `named_locations`, не pack. Контракт overlay — [`tz_pack_ascii_render.md`](./tz_pack_ascii_render.md) § L0 identity. Специализация поселения (`extract` / `farm` / …) — **не** этот subtype и не глиф; SoT [`tz_city_generation.md`](./tz_city_generation.md) §1.2. NL района: `system_location_subtype` = `district_subtype` чертежа (`extract`, `culture`, …), не `civic`.
 
 `porch` и `entrance_steps` — субтипы `room` с `is_outdoor` override на уровне `NamedLocation` (поле `is_outdoor` на записи, не из реестра). `entrance_steps` дополнительно имеет `is_transit=true`.
 
@@ -576,7 +636,13 @@ Create/update одной строки против уже лежащих в ми
 
 **Resolve (locked):** POJO `canonical_defaults` → настройки мира (`terrain_masks.default_plains` / `default_forests`) → **настройки локации перекрывают мир**.
 
-`named_locations.hills` — `IgnoreOnWire` JSON. **Не** тот же объект, что `default_plains.hills`: на локации это карта `{plains?, forest?}`, внутри — те же ключи POJO (`min_spacing`, `radius`, `height`, `shapes`). Ключа нет → не автозаполняем. Частичный объект: только указанные поля. Цепочка parent, если у ребёнка ключа нет.
+Overlay холмов локации — отдельный целевой контракт, **не существующая
+колонка `named_locations`**: в `0001_initial.sql` и DB-модели `hills` нет.
+Этот план не добавляет хранение hills. Предполагаемый `IgnoreOnWire` JSON
+не тот же объект, что `default_plains.hills`: на локации это карта
+`{plains?, forest?}`, внутри — те же ключи POJO (`min_spacing`, `radius`,
+`height`, `shapes`). Ключа нет → не автозаполняем. Частичный объект:
+только указанные поля. Цепочка parent, если у ребёнка ключа нет.
 
 Пример (только то, что мастер хочет сменить):
 

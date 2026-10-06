@@ -127,7 +127,7 @@ class EmbeddedUpperLayoutTests(unittest.TestCase):
                  for name in ("hall", "upper", "top")]
         self.assertTrue(all(r.placed for r in stops))
         self.assertEqual(len({(r.origin_x, r.origin_y) for r in stops}), 1)
-        self.assertEqual(sum(p.system_passage_type == "staircase" for p in result.passages), 2)
+        self.assertEqual(sum(p.system_transition_type == "staircase" for p in result.transitions), 2)
 
     def test_cellar_to_ground_places_source_before_aligned_target(self):
         template = test_embedded_shaft.EmbeddedShaftTests().template("north_east")
@@ -140,7 +140,7 @@ class EmbeddedUpperLayoutTests(unittest.TestCase):
         target = next(r for r in probe.runtime_rooms if r.room_id == "upper")
         self.assertTrue(target.placed)
         self.assertEqual((target.origin_x, target.origin_y), (lower.origin_x, lower.origin_y))
-        self.assertTrue(any(p.system_passage_type == "staircase" for p in result.passages))
+        self.assertTrue(any(p.system_transition_type == "staircase" for p in result.transitions))
 
     def test_failed_middle_stop_prevents_later_stop_from_being_placed(self):
         lower, target, shafts, spec = self.scenario(5, 5)
@@ -168,17 +168,17 @@ class EmbeddedUpperLayoutTests(unittest.TestCase):
         for _ in range(2):
             probe = RotationProbe()
             result = probe.generate_from_template(world, building, template)
-            runs.append((result.cells, result.passages))
+            runs.append((result.cells, result.transitions))
             lower = next(r for r in probe.runtime_rooms if r.room_id == "hall")
             target = next(r for r in probe.runtime_rooms if r.room_id == "upper")
             shaft = next(r for r in probe.runtime_rooms if r.is_shaft and r.z_offset == 1)
             self.assertEqual((target.origin_x, target.origin_y), (lower.origin_x, lower.origin_y))
-            landing = next(p for p in result.passages if p.system_passage_type == "staircase")
-            upper_z = next(level.z for level in result.levels if level.level_uid == landing.to_level_uid)
-            cell = next(c for c in result.cells if (c.x, c.y, c.z) == (landing.to_x, landing.to_y, upper_z))
+            landing = next(p for p in result.transitions if p.system_transition_type == "staircase")
+            upper_z = next(level.z for level in result.levels if level.level_uid == landing.destination.level_uid)
+            cell = next(c for c in result.cells if (c.x, c.y, c.z) == (landing.destination.x, landing.destination.y, upper_z))
             self.assertEqual(cell.system_building_element, StructureElement.FLOOR)
-            self.assertIn((landing.to_x, landing.to_y), target.get_footprint())
-            self.assertNotIn((landing.to_x, landing.to_y), _interior(shaft.get_footprint()))
+            self.assertIn((landing.destination.x, landing.destination.y), target.get_footprint())
+            self.assertNotIn((landing.destination.x, landing.destination.y), _interior(shaft.get_footprint()))
         self.assertEqual(runs[0], runs[1])
         self.assertEqual(template.model_dump(), before)
 
@@ -195,7 +195,7 @@ class EmbeddedUpperLayoutTests(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertIn("target not created", errors[0]["msg"])
         self.assertFalse(next(r for r in probe.runtime_rooms if r.room_id == "upper").placed)
-        self.assertFalse(any(p.system_passage_type == "staircase" for p in result.passages))
+        self.assertFalse(any(p.system_transition_type == "staircase" for p in result.transitions))
         self.assertFalse(any(
             r.location_uid == entity_uid(
                 world.world_uid, UidKind.ROOM,

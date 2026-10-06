@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 
+from app.application.jsonValidation.worldRow import transition_types
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementGeneratorService import (
     SettlementGeneratorService,
 )
@@ -148,16 +149,16 @@ class SettlementOutdoorTopologyJob:
             location_uid=settlement.location_uid,
         )
         topo_terrain_s = clock.lap()
-        slots, city_nodes, city_edges = self._generator.plan_slots_and_city_graph(
+        topology = self._generator.plan_slots_and_city_graph(
             world, settlement, terrain_cells or None,
         )
         topo_slots_s = clock.lap()
-        extracted = extract_topology(settlement, slots, city_nodes, city_edges)
+        extracted = extract_topology(settlement, topology, registry=transition_types(world))
         topo_extract_s = clock.lap()
         await self._sql.persist_topology(extracted)
         topo_sql_s = clock.lap()
         gates = sum(
-            1 for node in city_nodes
+            1 for node in topology.nodes
             if node.node_type == ConnectionNodeType.SETTLEMENT_GATE.value
             and node.graph_level == GraphLevel.CITY.value
         )
