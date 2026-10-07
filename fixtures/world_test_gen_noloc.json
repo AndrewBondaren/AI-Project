@@ -1,10 +1,4 @@
 {
-  "_fixture_meta": {
-    "description": "Аналог world_test_gen.json без секции locations — скелет мира (states/races/perks + registries). L0 bake сейчас fail-closed: см. tz_map_light_bake § Edge case / MLB-11.",
-    "world_uid": "world-test-gen-noloc",
-    "based_on": "fixtures/world_test_gen.json",
-    "expected_bake": "422 surface terrain context unavailable until wilderness-without-anchors"
-  },
   "world": {
     "world_uid": "world-test-gen-noloc",
     "name": "Эйдора (генерация, без локаций)",
@@ -319,54 +313,52 @@
       "created_at": "2026-05-23T00:00:00"
     }
   ],
-  "races": [
+  "race_templates": [
     {
-      "race_uid": "race-human-002",
-      "world_uid": "world-test-gen-noloc",
-      "display_race": "Человек",
       "created_at": "2026-05-23T00:00:00",
       "race_traits": {
         "adaptive": true,
         "lifespan_years": 80
-      }
+      },
+      "template_uid": "race-human-002",
+      "display_name": "Человек",
+      "system_name": "race-human-002"
     },
     {
-      "race_uid": "race-elf-002",
-      "world_uid": "world-test-gen-noloc",
-      "display_race": "Эльф",
       "created_at": "2026-05-23T00:00:00",
       "race_traits": {
         "night_vision": true,
         "lifespan_years": 500
-      }
+      },
+      "template_uid": "race-elf-002",
+      "display_name": "Эльф",
+      "system_name": "race-elf-002"
     },
     {
-      "race_uid": "race-dwarf-002",
-      "world_uid": "world-test-gen-noloc",
-      "display_race": "Дворф",
       "created_at": "2026-05-23T00:00:00",
       "race_traits": {
         "stone_sense": true,
         "lifespan_years": 200
-      }
+      },
+      "template_uid": "race-dwarf-002",
+      "display_name": "Дворф",
+      "system_name": "race-dwarf-002"
     }
   ],
-  "perks": [
+  "perk_templates": [
     {
-      "perk_uid": "perk-iron-will-002",
-      "world_uid": "world-test-gen-noloc",
       "system_name": "iron_will",
       "display_name": "Железная воля",
       "system_description": "Resistance to fear and mind effects",
-      "display_description": "Устойчивость к страху и ментальным эффектам"
+      "display_description": "Устойчивость к страху и ментальным эффектам",
+      "template_uid": "perk-iron-will-002"
     },
     {
-      "perk_uid": "perk-tracker-002",
-      "world_uid": "world-test-gen-noloc",
       "system_name": "tracker",
       "display_name": "Следопыт",
       "system_description": "Enhanced tracking and navigation in wilderness",
-      "display_description": "Улучшенное отслеживание и навигация в дикой местности"
+      "display_description": "Улучшенное отслеживание и навигация в дикой местности",
+      "template_uid": "perk-tracker-002"
     }
   ]
 }

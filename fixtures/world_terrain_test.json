@@ -1,17 +1,4 @@
 {
-  "_fixture_meta": {
-    "version": "2026-07",
-    "description": "Terrain/hydrology/climate smoke — без поселений. Два полюса (binary autoresolve), 4 климатические зоны, объявленный океан, 12 рек, горные массивы.",
-    "world_uid": "world-terrain-test-001",
-    "requirements": {
-      "poles": "climate_pole_preset=binary → Северный (arctic) + Южный (tropical); якоря loc-terrain-pole-north/south",
-      "climate_zones": ["arctic", "temperate", "warm", "desert"],
-      "ocean": "loc-terrain-ocean-west + declared_coastlines",
-      "rivers": 12,
-      "mountains": ["loc-terrain-mountain-north", "loc-terrain-mountain-central", "loc-terrain-peak-frost", "loc-terrain-peak-granite"]
-    },
-    "smoke": "python backend/scripts/initialize_world.py --fixture fixtures/world_terrain_test.json; python backend/scripts/smoke_world_pack.py --skip-import"
-  },
   "world": {
     "world_uid": "world-terrain-test-001",
     "name": "Terrain Test (полюса, зоны, океан, реки, горы)",
@@ -239,7 +226,7 @@
       "continent": { "display_name": "Континент", "parent_types": [null] },
       "region": { "display_name": "Регион", "parent_types": [null, "continent"] },
       "territory": { "display_name": "Территория" },
-      "geographic": { "display_name": "География" },
+      "geographic": { "display_name": "География", "parent_types": [null, "region", "territory", "geographic"] },
       "climate_pole": { "display_name": "Климатический полюс" }
     },
     "connection_type_registry": [
@@ -312,10 +299,18 @@
       "display_description": "Тёплые и пустынные территории."
     }
   ],
-  "races": [
-    { "race_uid": "race-terrain-human", "display_race": "Человек", "race_traits": { "adaptive": true } }
+  "race_templates": [
+    {
+      "race_traits": {
+        "adaptive": true
+      },
+      "template_uid": "race-terrain-human",
+      "display_name": "Человек",
+      "created_at": "2026-07-09T00:00:00Z",
+      "system_name": "race-terrain-human"
+    }
   ],
-  "perks": [],
+  "perk_templates": [],
   "locations": [
     {
       "location_uid": "loc-terrain-continent",
@@ -660,6 +655,5 @@
       "state_uid": "state-terrain-north",
       "is_selectable": false
     }
-  ],
-  "map_cells": []
+  ]
 }

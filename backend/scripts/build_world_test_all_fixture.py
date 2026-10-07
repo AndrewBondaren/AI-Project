@@ -100,28 +100,21 @@ def build() -> dict:
         "system_size",
     )
 
+    # Demonstrate a world-defined size while inheriting the engine recipes.
+    w["city_size_registry"].append({"system_size": "huge", "display_size": "Огромный"})
+    w["location_type_registry"]["settlement"]["subtypes"] = [
+        {"system_subtype": subtype, "footprint_by_size": {"huge": footprint}}
+        for subtype, footprint in (("city", 8.0), ("underground_city", 8.0), ("village", 0.9))
+    ]
+
     bundle: dict = {
-        "_fixture_meta": {
-            "version": "2026-07",
-            "description": (
-                "Объединение fixtures/world_test.json (gameplay: Эйдора, Ironhold, races, perks) "
-                "и fixtures/world_template.json (climate, hydrology.declared_*, geographic declare). "
-                "map_cells пуст — после import: "
-                "python backend/scripts/initialize_world.py "
-                "(POST …/map/pack/bake). "
-                "character_test.json по-прежнему привязан к world-test-001; для этого мира — свой персонаж или remap."
-            ),
-            "sources": ["world_test.json", "world_template.json"],
-            "world_uid": WORLD_UID,
-        },
         "world": w,
         "states": _remap_section(test.get("states", []), WORLD_UID)
         + _remap_section(template.get("states", []), WORLD_UID),
-        "races": _remap_section(test.get("races", []), WORLD_UID),
-        "perks": _remap_section(test.get("perks", []), WORLD_UID),
+        "race_templates": deepcopy(test.get("race_templates", [])),
+        "perk_templates": deepcopy(test.get("perk_templates", [])),
         "locations": _remap_section(test.get("locations", []), WORLD_UID)
         + _remap_section(template.get("locations", []), WORLD_UID),
-        "map_cells": [],
     }
 
     return bundle

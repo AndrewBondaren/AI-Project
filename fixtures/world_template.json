@@ -1,8 +1,4 @@
 {
-  "_template_meta": {
-    "version": "2026-06",
-    "description": "Канонический шаблон мира — climate/terrain/hydrology/caves + geographic declare. Без поселений: города добавляет мастер отдельно."
-  },
   "world": {
     "name": "Шаблон мира (эталон)",
     "narrative_language": "ru",
@@ -296,7 +292,13 @@
         "display_name": "Помещение"
       },
       "geographic": {
-        "display_name": "География"
+        "display_name": "География",
+        "parent_types": [
+          null,
+          "region",
+          "territory",
+          "geographic"
+        ]
       },
       "climate_pole": {
         "display_name": "Климатический полюс"
@@ -707,16 +709,18 @@
       "display_description": "Портовые города и пустынные караванные пути."
     }
   ],
-  "races": [
+  "race_templates": [
     {
-      "race_uid": "race-template-human",
-      "display_race": "Человек",
       "race_traits": {
         "adaptive": true
-      }
+      },
+      "template_uid": "race-template-human",
+      "display_name": "Человек",
+      "created_at": "2026-10-07T00:00:00",
+      "system_name": "race-template-human"
     }
   ],
-  "perks": [],
+  "perk_templates": [],
   "locations": [
     {
       "location_uid": "loc-template-region",
@@ -934,6 +938,5 @@
       "state_uid": "state-template-south",
       "is_selectable": false
     }
-  ],
-  "map_cells": []
+  ]
 }

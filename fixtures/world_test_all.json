@@ -1,13 +1,4 @@
 {
-  "_fixture_meta": {
-    "version": "2026-07",
-    "description": "Объединение fixtures/world_test.json (gameplay: Эйдора, Ironhold, races, perks) и fixtures/world_template.json (climate, hydrology.declared_*, geographic declare). map_cells пуст — после import: python backend/scripts/initialize_world.py (POST …/map/pack/bake). character_test.json по-прежнему привязан к world-test-001; для этого мира — свой персонаж или remap.",
-    "sources": [
-      "world_test.json",
-      "world_template.json"
-    ],
-    "world_uid": "world-test-all-001"
-  },
   "world": {
     "world_uid": "world-test-all-001",
     "name": "Эйдора (полный эталон)",
@@ -94,7 +85,12 @@
       },
       "geographic": {
         "display_name": "География",
-        "parent_types": [null, "region", "territory", "geographic"]
+        "parent_types": [
+          null,
+          "region",
+          "territory",
+          "geographic"
+        ]
       },
       "climate_pole": {
         "display_name": "Климатический полюс"
@@ -130,7 +126,7 @@
       },
       "terrain_road": {
         "display_name": "Дорога",
-        "description": "Мощёная или грунтовая дорога. Ускоряет передвижение."
+        "description": "Дорога / тракт на world map light mask."
       },
       "terrain_crevice": {
         "display_name": "Расщелина",
@@ -171,6 +167,10 @@
       "terrain_mountain": {
         "display_name": "Горы",
         "description": "Высокий рельеф, крутые склоны."
+      },
+      "terrain_ravine": {
+        "display_name": "Овраг",
+        "description": "Локальное понижение рельефа на world map."
       },
       "terrain_shore": {
         "display_name": "Берег",
@@ -386,6 +386,16 @@
         "has_state": false,
         "default_state": null,
         "default_material": "stone"
+      },
+      {
+        "system_terrain": "ravine",
+        "glossary_ref": "terrain_ravine",
+        "terrain_category": "solid",
+        "travel_modifier": 2.5,
+        "danger_level": "medium",
+        "has_state": false,
+        "default_state": null,
+        "default_material": "earth"
       },
       {
         "system_terrain": "shore",
@@ -1155,54 +1165,52 @@
       "world_uid": "world-test-all-001"
     }
   ],
-  "races": [
+  "race_templates": [
     {
-      "race_uid": "race-human",
-      "world_uid": "world-test-all-001",
-      "display_race": "Человек",
       "created_at": "2026-05-23T00:00:00",
       "race_traits": {
         "adaptive": true,
         "lifespan_years": 80
-      }
+      },
+      "template_uid": "race-human",
+      "display_name": "Человек",
+      "system_name": "race-human"
     },
     {
-      "race_uid": "race-elf",
-      "world_uid": "world-test-all-001",
-      "display_race": "Эльф",
       "created_at": "2026-05-23T00:00:00",
       "race_traits": {
         "night_vision": true,
         "lifespan_years": 500
-      }
+      },
+      "template_uid": "race-elf",
+      "display_name": "Эльф",
+      "system_name": "race-elf"
     },
     {
-      "race_uid": "race-dwarf",
-      "world_uid": "world-test-all-001",
-      "display_race": "Дворф",
       "created_at": "2026-05-23T00:00:00",
       "race_traits": {
         "stone_sense": true,
         "lifespan_years": 200
-      }
+      },
+      "template_uid": "race-dwarf",
+      "display_name": "Дворф",
+      "system_name": "race-dwarf"
     }
   ],
-  "perks": [
+  "perk_templates": [
     {
-      "perk_uid": "perk-iron-will",
-      "world_uid": "world-test-all-001",
       "system_name": "iron_will",
       "display_name": "Железная воля",
       "system_description": "Resistance to fear and mind effects",
-      "display_description": "Устойчивость к страху и ментальным эффектам"
+      "display_description": "Устойчивость к страху и ментальным эффектам",
+      "template_uid": "perk-iron-will"
     },
     {
-      "perk_uid": "perk-tracker",
-      "world_uid": "world-test-all-001",
       "system_name": "tracker",
       "display_name": "Следопыт",
       "system_description": "Enhanced tracking and navigation in wilderness",
-      "display_description": "Улучшенное отслеживание и навигация в дикой местности"
+      "display_description": "Улучшенное отслеживание и навигация в дикой местности",
+      "template_uid": "perk-tracker"
     }
   ],
   "locations": [
@@ -1633,6 +1641,5 @@
       "is_selectable": false,
       "world_uid": "world-test-all-001"
     }
-  ],
-  "map_cells": []
+  ]
 }
