@@ -46,6 +46,19 @@ backend/logs/{domain}/{service}.log
 
 ## Два слоя
 
+**Целевое расширение библиотек шаблонов (2026-10-08):** события и поля fallback
+определяет [tz_template_library_packs.md §7](./tz_template_library_packs.md).
+Template resolve/default/unknown owner/dependency используют существующий
+policy-resolve эмиттер и sink `jsonValidation/resolve`; settlement и relief
+через свои существующие `packingLog`/`relief_warning` сообщают собственные
+доменные последствия, не дублируя уже эмитированное событие resolve.
+Нужные типизированные причины/поля добавляются в существующие контракты.
+Новые canonical/pack log-функции, handlers, форматтеры и собственные файлы
+не создаются. Диагностика содержит world/domain, исходный template UID,
+известный pack UID, path/reason и выбранный default; generation transcript
+получает штатную копию записи без второго вызова logger. Future master-mode
+использует те же причины для ошибок, текущий runtime — warning + default.
+
 | Слой | Путь | Зачем |
 |---|---|---|
 | **Поток консьюмера** | `backend/logs/{domain}/{service}.log` | стабильный файл сервиса |

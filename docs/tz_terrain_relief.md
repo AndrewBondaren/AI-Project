@@ -101,6 +101,21 @@ Debug HTTP `POST …/refine-chunk` — тот же application-метод, не 
 
 ### Библиотека и мир
 
+**Целевой контракт паков (2026-10-08):**
+[tz_template_library_packs.md](./tz_template_library_packs.md).
+Один шаблон — один пак-владелец, UID — только центральный `worldData/ids`
+с владельцем. Пользовательский пак доступен после явного подключения ко всему
+миру (bundle или позже); генератор выбирает из всех подключённых подходящих паков.
+Defaults перечисляет доверенный spec, а не FS-сканер; `smoke_003` не становится
+default по факту наличия на диске. Global autoattach добавляет только отсутствующие
+default UID/membership, не заменяет тела/`source_file` и не меняет pointers/policy
+мира. Effective candidates строятся по доступным пакам, не по всем SQL-строкам
+и не только по индивидуальным pointers. `fixed` UID проверяется на доступность.
+Неразрешимая template-ссылка или неподключённая зависимость → доменный default/
+существующий R21 soft fallback + `relief_warning`; исходный ref не переписывается.
+Будущий master-mode вместо warning/fallback выдаёт конкретную ошибку.
+Новые параллельные UID/log-хелперы не вводятся.
+
 Как здания: глобальная библиотека + per-world pointers (**R11**). Тела **не** внутри `world` JSON (**R35**).
 
 | Где | Что |
@@ -116,7 +131,11 @@ Debug HTTP `POST …/refine-chunk` — тот же application-метод, не 
 
 ### Pick: мир → локация / объект
 
-На **каждый** context — `fixed` \| `random` \| `round_robin` (**R19**). `fixed` требует `default_template_uid` в registry.
+На **каждый** context — `fixed` \| `random` \| `round_robin` (**R19**).
+В текущем pointer-пути `fixed` требует `default_template_uid` в registry.
+После pack-owned миграции UID должен быть в эффективном каталоге мира
+(defaults + явно подключённые паки); индивидуальный registry pointer не является
+обязательным для каждого члена пака. Недоступный fixed UID → R21 fallback + warning.
 
 | Уровень | Wire | Роль |
 |---|---|---|

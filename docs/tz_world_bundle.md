@@ -28,6 +28,27 @@ metadata:
 
 **Вне scope:** Pack zip/bake; PC/NPC/starter_characters; RELIEF-BAR-1 materialize cells; DAG; interior map blobs.
 
+### Целевое расширение: паки библиотек (2026-10-08, ещё не реализовано)
+
+Контракт — [tz_template_library_packs.md §4](./tz_template_library_packs.md).
+Добавляются `library_packs` (manifests/состав/зависимости), `structure_templates`
+(тела дочерней геометрии) и entity-секция `library_pack_bindings` (`{pack_uid}`,
+world UID определяется импортируемым миром). Manifest/body без binding не
+подключает пользовательский пак. Подключение — ко всему миру, не генератору
+или локации. Defaults доступны через отдельные доверенные spec, не назначаются
+флагом пользовательского manifest.
+
+Валидация всех manifests/UID/body предшествует persist. В одной существующей
+bundle-транзакции: world → manifests → bodies/membership → bindings → диагностика
+зависимостей. Body-секции не создают скрытые bindings. Неразрешимые template refs/
+зависимости дают default + warning в runtime-политике; невалидный wire или
+владение отвергаются resolver. Будущий master-mode — строгая диагностика refs.
+Remap мира не меняет глобальные pack/template UID. Self-contained export
+сохраняет состав подключённых пользовательских паков, тела и явные bindings;
+зависимость не означает автоматического подключения. Рефы в самих телах
+остаются только UID шаблонов. Текущие allowlists/order/handlers ниже требуют
+расширения отдельным этапом, до него новый формат не считается реализованным.
+
 ---
 
 ## Критерий: library vs entity

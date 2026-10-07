@@ -1278,6 +1278,15 @@ dataModel только сохраняет отметку подмены. Неи�
 
 ## 5. Хранение шаблонов
 
+**Целевое расширение (2026-10-08):** паки, единственный владелец шаблона,
+подключение ко всему миру и UID определяются
+[tz_template_library_packs.md](./tz_template_library_packs.md).
+Приведённая ниже историческая схема требует миграции: глобальная UNIQUE
+на `system_name` заменяется уникальностью локального ключа внутри пака/домена;
+UID вычисляет центральный `worldData/ids` с владельцем, не локальный uuid5.
+`building_templates` хранит родительские участки; `structure_templates` —
+дочернюю геометрию по ссылке `main_building.structure` (только UID, без pack-id).
+
 ### 5.1 Глобальная библиотека — `building_templates`
 
 ```sql
@@ -1292,7 +1301,10 @@ CREATE TABLE IF NOT EXISTS building_templates (
 );
 ```
 
-Глобальная библиотека шаблонов. Не привязана к миру. Генератор напрямую не читает отсюда — только через per-world реестр.
+Глобальная библиотека шаблонов не принадлежит одному миру. Целевой генератор
+получает каталог defaults + всех явно подключённых миру паков. Per-world
+registry хранит индивидуальные pointers/выборы, но не заменяет привязку пака
+и не ограничивает доступные члены подключённого пака только этими pointers.
 
 **Удаление шаблона — RESTRICT:**
 
@@ -1300,7 +1312,11 @@ CREATE TABLE IF NOT EXISTS building_templates (
 
 **Замена шаблона (update in-place):**
 
-Пользователь может загрузить новый JSON с тем же `system_name` — выполняется `UPDATE building_templates SET data=..., version=..., source_file=... WHERE template_uid=?` после валидации.
+Пользователь может явно загрузить новое тело того же шаблона своего пака —
+выполняется `UPDATE building_templates SET data=..., version=..., source_file=...
+WHERE template_uid=?` после валидации UID и неизменного владельца. Одинаковый
+`system_name` в другом паке не означает замену. Автоattach defaults не заменяет
+существующие строки.
 
 Если здания уже используют этот `system_template_uid`:
 ```
@@ -1326,7 +1342,10 @@ CREATE TABLE IF NOT EXISTS building_templates (
 ]
 ```
 
-Генератор читает `system_template_uid` отсюда, затем загружает полный JSON из `building_templates`.
+Явный `system_template_uid` разрешается через каталог членства и подключений:
+мир должен иметь доступ к паку-владельцу. При отсутствии явного выбора генератор
+может выбирать подходящий шаблон из любого подключённого миру пака.
+Дочерняя структура разрешается тем же механизмом по `main_building.structure`.
 
 ---
 
@@ -1336,17 +1355,25 @@ CREATE TABLE IF NOT EXISTS building_templates (
 
 - Пользователь загружает JSON-файл через UI (аналог импорта миров, см. tz_json_import.md)
 - Один файл = один шаблон
-- При загрузке: JSON валидируется через `validate_template()`; `template_uid = uuid5(system_name)` upsert по PK
+- При загрузке JSON валидируется доменным POJO; pack-owned `template_uid`
+  вычисляется только центральным `worldData/ids`, владение проверяется по manifest.
 - Шаблон хранится в `building_templates.data` как JSON blob
-- **Canonical-паки** (`structures_templates/base`) подключаются автоматически единым
-  движком canonical defaults — scope `global`, триггер `first_use`, идемпотентный
-  `sql_upsert` (см. [`tz_json_validation.md`](./tz_json_validation.md) § «Wire
+- **Canonical-паки** (для structures объявленный `structures_templates/base`)
+  подключаются автоматически единым движком canonical defaults — scope `global`,
+  перед публичным чтением, атомарный `global_fill_missing` без замены существующих
+  тел и `source_file` (см. [`tz_json_validation.md`](./tz_json_validation.md) § «Wire
   projection → WorldSlice», «Единый движок canonical defaults»). Явный импорт
   остаётся для пользовательских паков; canonical-паки их не перетирают.
 
 ### 6.2 Импорт шаблона в мир
 
-Явная операция пользователя: выбрать шаблон из глобальной библиотеки → импортировать в конкретный мир.
+Явная операция пользователя: подключить пак ко всему миру через bundle либо
+позднее. Импорт пака в global SQL без подключения не делает его доступным миру.
+Выбор отдельного шаблона хранится UID-ссылкой, без pack-id; принадлежность
+находит движок. Зависимые паки также подключаются явно; автоподключения нет.
+Неразрешимый template UID/неподключённая зависимость сейчас дают default + warning
+через штатный `packingLog`, не изменяя исходную ссылку. Будущий master-mode
+даёт конкретную ошибку вместо fallback. Проверки прочих REF-W не меняются.
 
 При импорте выполняется **валидация совместимости с миром**:
 
@@ -1361,8 +1388,11 @@ CREATE TABLE IF NOT EXISTS building_templates (
     иначе → ImportWarning (шаблон импортируется, но комната не будет сгенерирована в v1)
 ```
 
-При успехе: `system_template_uid` + `display_template_name` добавляются в `worlds.building_template_registry`.  
-Импортированный шаблон можно удалить из мира (убрать из реестра) — глобальная запись в `building_templates` не затрагивается.
+В целевом pack-owned пути подключение сохраняется в `world_library_packs`.
+Индивидуальный выбор может сохраняться в `building_template_registry`; это
+не отдельное разрешение доступа и не замена подключения всего пака.
+Удаление такого pointer не отключает остальных членов пака. Для отключения
+пользовательского пака удаляется явная world binding, глобальные тела сохраняются.
 
 ---
 

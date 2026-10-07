@@ -334,6 +334,8 @@ class WorldSlice:
 валидируются обычным resolver. Результат входит в нормализованный мир до REF-W
 и сохраняется обычным импортом bundle. Неизвестные ссылки остаются ошибками.
 При partial update отсутствующий реестр не записывается и не сбрасывает overrides.
+Переданный при partial update список нормализуется с каноном и заменяет
+сохранённый реестр целиком; неуказанные старые overrides не сохраняются.
 Runtime применяет то же дополнение к старым частичным реестрам. Этот режим не
 распространяется автоматически на instance-каталоги resource/crops/livestock
 или существующий T-29 overlay других реестров.
@@ -345,19 +347,37 @@ template-библиотеки, будущие домены. Движок не з
 
 | Поле spec | Содержание |
 |---|---|
-| `identity_field` | Ключ совпадения записей (`system_name`, `template_uid`, …) |
+| `identity_field` | Ключ совпадения world wire-строк; global identity адаптируется доменом к pack-owned UID |
 | `canonical_source` | Источник канона: `canonical_defaults()` POJO или FS domain root + список canonical-паков |
 | `scope` | `world` — реестр мира в bundle; `global` — SQL-библиотека вне мира |
-| `trigger` | `full_import` / `runtime_read` (world); `first_use` — первый `list_all`/resolve в контексте генерации (global) |
-| `persist` | `wire_merge` — merge до валидации, персист обычным импортом (world); `sql_upsert` — идемпотентный upsert пак-строк с `source_file`, как при ручном FS-импорте (global) |
+| `trigger` | `full_import` / `runtime_read` (world); перед каждым публичным global read, включая list/find/get вне генерации |
+| `persist` | `world_wire_overlay` — merge до валидации, персист обычным импортом; `global_fill_missing` — атомарно добавить отсутствующие UID и membership, без замены существующих строк |
+| `adapters` | Global source/validation/identity/persistence задаёт домен; ядро не импортирует доменные модели/репозитории |
 
-Merge-семантика едина для обоих scope: world/explicit строки первыми (индексы
+World wire-overlay: world/explicit строки первыми (индексы
 ошибок сохраняются), совпавший ключ наследует неуказанные поля канона, явные
 `false/0/[]` и допустимый `null` — значения, не отсутствие, canonical-only ключи
-добавляются. Attach идемпотентен: повторный вызов не плодит записи и не трогает
-world/user overrides. **Global scope:** библиотека глобальна — partial-update
-мира к ней неприменим; авто-импорт покрывает только canonical-паки из spec,
-пользовательские паки не перетираются. FS domain root резолвится через env
+добавляются. Global field-merge нормализованных SQL-тел не выполняется:
+исходная явность полей уже потеряна. Автоattach добавляет только отсутствующие
+UID, сохраняя существующие тела и `source_file`, включая пользовательские
+overrides canonical UID. Ручная замена — отдельная явная операция.
+Источник проверяется полностью до записи; запись атомарна, конкурентный conflict
+не заменяет строку, ошибка допускает rollback/retry без скрытого commit чужой
+транзакции. Полнота определяется всеми canonical UID и membership, а не
+непустотой таблицы. Подробный lifecycle — [паки §6](./tz_template_library_packs.md#6-canonical-attach-и-жизненный-цикл).
+
+**Global scope:** библиотека глобальна — partial-update мира к ней неприменим;
+авто-импорт покрывает только явно объявленные defaults из spec. Пак вне defaults
+автоматически импортировать запрещено. Пользовательские паки используются после
+явного подключения ко всему миру, через bundle или позже. Global list_all не
+является runtime-каталогом мира; движок разрешает template-only refs через
+единственного пак-владельца и bindings. Template ref отсутствует/неразрешим →
+доменный default, при неразрешимой явной ссылке — warning без переписывания ref.
+Будущий master-mode заменяет warning/fallback ошибкой. Остальные REF-W правила
+не меняются. UID — только `worldData/ids`, логи — существующая инфраструктура
+`tz_logging.md`. Полный контракт владения, storage и bundle —
+[tz_template_library_packs.md](./tz_template_library_packs.md).
+FS domain root резолвится через env
 (`STRUCTURES_TEMPLATES_ROOT`, `RELIEF_TEMPLATES_ROOT`, …) → repo-relative
 fallback; зависимость от `Path.cwd()` запрещена. Opt-out — отсутствие spec;
 instance-каталоги (resource/crops/livestock) spec не объявляют.

@@ -1320,6 +1320,25 @@ Uid сущности от `world_seed` или bake-rng от `world_uid` — ош
 снова recreate SQL (schema-policy) + пересборка pack (`l.{uid}.*.zst`, tiles)
 + реимпорт библиотек (`library_uid` сменил namespace URL → DNS).
 
+**Целевое расширение pack-owned библиотек (2026-10-08):**
+[tz_template_library_packs.md §2–4](./tz_template_library_packs.md).
+Единственная точка UID остаётся `app.application.worldData.ids`; существующий
+`library_uid` расширяется keyword `pack_uid`, без новых builtin/pack UID-функций
+и без локальных формул/конкатенаций в consumers. Pack UID получается тем же
+`library_uid` в типизированном namespace `LIBRARY_PACKS`. Template UID зависит
+от домена, UID единственного владельца и локального ключа, но не от мира/seed.
+Legacy-формула без владельца относится только к ещё не мигрированным доменам.
+Structures с UUID из JSON и прежние building/relief UID требуют отдельной карты
+миграции всех refs, manifests и fixtures; default-пакам не выделяется своя формула.
+
+Целевой SQL-каталог: `library_packs`, `library_pack_members`,
+`library_pack_dependencies`, `world_library_packs` по §3 указанного ТЗ.
+Глобальное владение и подключение ко всему миру различны; `source_file` —
+диагностика, не связь. Одно template UID — один владелец. Локальный
+`system_name` building/relief уникален внутри владельца/домена, не глобально.
+Смена схемы — правка `0001_initial.sql` + sync dataclass, без `0002_*`;
+recreate SQL/реимпорт/пересборка pack после миграции UID.
+
 Потребители-SoT: `tz_location_transitions.md` инв. 10, `tz_settlement_outdoor`
 extract uids, `tz_world_pack_storage` job-uid, `tz_cascade_context` §4 rng.
 
