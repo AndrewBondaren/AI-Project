@@ -13,6 +13,7 @@ from app.dataModel.terrain.terrainRegistryEntry import TerrainRegistryEntry
 
 class WorldTerrainRegistry(RootModel[list[TerrainRegistryEntry]]):
     SCHEMA_ID: ClassVar[str] = "SCH-WORLD-TERRAIN"
+    CANONICAL_OVERLAY_ID_FIELD: ClassVar[str] = "system_terrain"
     """Root POJO for `worlds.terrain_registry`. Wire shape: JSON array."""
 
     root: list[TerrainRegistryEntry]

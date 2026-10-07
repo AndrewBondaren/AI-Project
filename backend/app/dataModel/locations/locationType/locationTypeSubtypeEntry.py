@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 from pydantic import BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer
 
 from app.dataModel.annotationPolicy import DefaultOnWire, IgnoreOnWire, StrictOnWire
@@ -14,9 +14,8 @@ class LocationTypeSubtypeEntry(BaseModel):
     system_subtype: StrictOnWire[str]
     display_subtype: DefaultOnWire[str | None] = None
     border_category: DefaultOnWire[str | None] = None
-    l0_map_symbol: DefaultOnWire[str | None] = Field(
-        default=None, min_length=1, max_length=1,
-    )
+    # None inherits the engine symbol; length constraints apply only to strings.
+    l0_map_symbol: DefaultOnWire[Annotated[str, Field(min_length=1, max_length=1)] | None] = None
     # Settlement recipe only (CITY-T-2d). Geographic subtypes may carry the keys; generate ignores them.
     typical_district_types: DefaultOnWire[list[str]] = Field(default_factory=list)
     required_structure_types: DefaultOnWire[list[str]] = Field(default_factory=list)
@@ -29,8 +28,11 @@ class LocationTypeSubtypeEntry(BaseModel):
     @model_serializer(mode="wrap")
     def serialize_overrides(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
         data = handler(self)
-        if "is_inhabited" not in self.model_fields_set:
-            data.pop("is_inhabited", None)
+        # Omitted world overrides must remain omitted after persistence;
+        # explicit empty recipe lists still clear the engine recipe.
+        for name in ("is_inhabited", "typical_district_types", "required_structure_types"):
+            if name not in self.model_fields_set:
+                data.pop(name, None)
         return data
 
     def has_district_recipe(self) -> bool:

@@ -572,7 +572,7 @@ room         (depth 5) — indoor: комната внутри building; leaf и
       { "system_subtype": "mountain",     "border_category": null     },
       { "system_subtype": "underground",  "border_category": null     }
   ]},
-  { "system_type": "settlement", "display_type": "Поселение", "payload_kind": "settlement", "parent_types": ["territory"], "is_outdoor": true, "subtypes": [
+  { "system_type": "settlement", "display_type": "Поселение", "payload_kind": "settlement", "parent_types": [null, "territory", "region"], "is_outdoor": true, "subtypes": [
       { "system_subtype": "city",             "border_category": null },
       { "system_subtype": "village",          "border_category": null },
       { "system_subtype": "underground_city", "border_category": null }
@@ -627,8 +627,17 @@ L0 debug-карта: глиф footprint — `subtypes[].l0_map_symbol` (optional
 - `is_outdoor: true` — применяются weather, travel_ticks, danger_level, terrain-правила
 - `is_outdoor: false` — indoor: нет weather, навигация через `location_passages`, ячейки типа floor/wall/door
 - `border_category` — граничные ячейки локации должны быть этой terrain_category
+- `subtypes[].l0_map_symbol` — world-overlay: отсутствие поля или `null` наследуют
+  символ engine-subtype; строка из ровно одного символа переопределяет его.
+  `null` не отключает отображение. POJO допускает `None`; ограничение длины
+  применяется только к строке. Контракт сохраняется после normalize → JSON → read.
 - `is_public` / `is_forbidden` — живут на `building`; на `room` — переопределения для конкретных комнат
 - Пользователь добавляет кастомные типы на любом уровне
+- `settlement` может быть корнем (`parent_location_uid = null`) либо находиться
+  под `territory` или `region`. Непустой world-список `parent_types` заменяет
+  engine-список целиком; отсутствие или `[]` сохраняют engine-список согласно
+  действующему overlay. Разрешение родителя не создаёт связь автоматически,
+  не меняет linked list каскада и не добавляет наследование footprint от родителя.
 
 **Правила валидации:**
 - `named_locations.parent.location_type` обязан входить в `child.location_type_registry.parent_types`
@@ -819,6 +828,13 @@ else:
 
 ### `worlds.material_registry` (N+1)
 
+Библиотека defaults подключается автоматически: при полном импорте отсутствующий
+реестр или `[]` дают канонический реестр. Частичный список дополняется по
+`system_material`; явно указанные поля мира переопределяют канон, отсутствующие
+поля совпавшей записи наследуют канон. N+1 материалы добавляются к библиотеке.
+Полный результат сохраняется в мире; runtime использует ту же семантику.
+Подробный контракт import/partial update — `tz_json_validation.md`, раздел WorldSlice.
+
 **`material_category`** — фиксированный enum движка, **не расширяется пользователем**. Движок строит физику на этих трёх категориях:
 
 | `material_category` | Физика движка |
@@ -857,6 +873,11 @@ else:
 ```
 
 ### `worlds.terrain_registry` (N+1)
+
+Как у material_registry: автоматическое подключение канонической библиотеки и
+overlay явно указанных world-полей по `system_terrain`. Канонические shore_*
+доступны defaults гидрологии без повторения их определений в fixture.
+Явный `[]` подключает канон, а отсутствие ключа при partial update не меняет мир.
 
 Структурный тип ячейки. `cell_material` на `map_cells` указывает из чего сделан. `has_state: true` — ячейка имеет динамическое состояние.
 

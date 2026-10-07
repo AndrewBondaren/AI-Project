@@ -236,8 +236,8 @@
       }
     },
     "location_type_registry": {
-      "continent": { "display_name": "Континент" },
-      "region": { "display_name": "Регион" },
+      "continent": { "display_name": "Континент", "parent_types": [null] },
+      "region": { "display_name": "Регион", "parent_types": [null, "continent"] },
       "territory": { "display_name": "Территория" },
       "geographic": { "display_name": "География" },
       "climate_pole": { "display_name": "Климатический полюс" }
@@ -281,10 +281,9 @@
       { "system_terrain": "liquid_body", "glossary_ref": "terrain_liquid_body", "terrain_category": "liquid", "travel_modifier": null, "danger_level": "high", "has_state": false, "default_state": null, "default_material": "water" }
     ],
     "city_size_registry": [
-      { "system_size": "hamlet", "display_size": "Хутор", "radius": 0 },
-      { "system_size": "village", "display_size": "Деревня", "radius": 0 },
-      { "system_size": "town", "display_size": "Городок", "radius": 1 },
-      { "system_size": "city", "display_size": "Город", "radius": 1 }
+      { "system_size": "small", "display_size": "Малый" },
+      { "system_size": "medium", "display_size": "Средний" },
+      { "system_size": "large", "display_size": "Большой" }
     ],
     "economic_tier_registry": [
       { "system_tier": "poor", "display_tier": "Хлам", "base_value": 0, "road_tier_bonus": 1.2, "road_tier_durability": 0.6 },

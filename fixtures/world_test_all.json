@@ -51,13 +51,37 @@
     "wounds_enabled": false,
     "location_type_registry": {
       "region": {
-        "display_name": "Регион"
+        "display_name": "Регион",
+        "parent_types": [
+          null,
+          "continent"
+        ]
       },
       "territory": {
         "display_name": "Территория"
       },
       "settlement": {
-        "display_name": "Поселение"
+        "display_name": "Поселение",
+        "subtypes": [
+          {
+            "system_subtype": "city",
+            "footprint_by_size": {
+              "huge": 8.0
+            }
+          },
+          {
+            "system_subtype": "underground_city",
+            "footprint_by_size": {
+              "huge": 8.0
+            }
+          },
+          {
+            "system_subtype": "village",
+            "footprint_by_size": {
+              "huge": 0.9
+            }
+          }
+        ]
       },
       "district": {
         "display_name": "Район"
@@ -69,49 +93,17 @@
         "display_name": "Комната"
       },
       "geographic": {
-        "display_name": "География"
+        "display_name": "География",
+        "parent_types": [null, "region", "territory", "geographic"]
       },
       "climate_pole": {
         "display_name": "Климатический полюс"
       },
       "continent": {
-        "display_name": "Континент"
-      },
-      "kingdom": {
-        "display_name": "Королевство"
-      },
-      "empire": {
-        "display_name": "Империя"
-      },
-      "duchy": {
-        "display_name": "Герцогство"
-      },
-      "city": {
-        "display_name": "Город"
-      },
-      "town": {
-        "display_name": "Посёлок"
-      },
-      "village": {
-        "display_name": "Деревня"
-      },
-      "square": {
-        "display_name": "Площадь"
-      },
-      "street": {
-        "display_name": "Улица"
-      },
-      "gate": {
-        "display_name": "Ворота"
-      },
-      "dungeon": {
-        "display_name": "Подземелье"
-      },
-      "cave": {
-        "display_name": "Пещера"
-      },
-      "camp": {
-        "display_name": "Лагерь"
+        "display_name": "Континент",
+        "parent_types": [
+          null
+        ]
       }
     },
     "default_passage_height": 2,
@@ -448,34 +440,20 @@
     ],
     "city_size_registry": [
       {
-        "system_size": "hamlet",
-        "display_size": "Хутор",
-        "radius": 0
+        "system_size": "small",
+        "display_size": "Малый"
       },
       {
-        "system_size": "village",
-        "display_size": "Деревня",
-        "radius": 0
+        "system_size": "medium",
+        "display_size": "Средний"
       },
       {
-        "system_size": "town",
-        "display_size": "Городок",
-        "radius": 1
+        "system_size": "large",
+        "display_size": "Большой"
       },
       {
-        "system_size": "city",
-        "display_size": "Город",
-        "radius": 1
-      },
-      {
-        "system_size": "metropolis",
-        "display_size": "Метрополис",
-        "radius": 2
-      },
-      {
-        "system_size": "megalopolis",
-        "display_size": "Мегалополис",
-        "radius": 3
+        "system_size": "huge",
+        "display_size": "Огромный"
       }
     ],
     "economic_tier_registry": [
@@ -1254,7 +1232,8 @@
       "location_uid": "loc-city-ironhold",
       "world_uid": "world-test-all-001",
       "display_name": "Айронхолд",
-      "system_location_type": "city",
+      "system_location_type": "settlement",
+      "system_location_subtype": "city",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-region-northern",
       "display_description": "Укреплённый торговый город на севере",
@@ -1262,7 +1241,7 @@
       "is_accessible": true,
       "is_public": true,
       "guard_level": 3,
-      "system_city_size": "city",
+      "system_city_size": "medium",
       "state_uid": "state-iron-crown",
       "map_x": 2,
       "map_y": 2,
@@ -1284,7 +1263,7 @@
       "location_uid": "loc-market-ironhold",
       "world_uid": "world-test-all-001",
       "display_name": "Рыночная площадь",
-      "system_location_type": "square",
+      "system_location_type": "district",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-city-ironhold",
       "display_description": "Главная торговая площадь Айронхолда. По утрам заполняется лавками и торговцами со всего севера.",
@@ -1308,7 +1287,8 @@
       "location_uid": "loc-city-gate-ironhold",
       "world_uid": "world-test-all-001",
       "display_name": "Северные ворота",
-      "system_location_type": "gate",
+      "system_location_type": "building",
+      "system_location_subtype": "military",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-city-ironhold",
       "display_description": "Массивные каменные ворота с постоянной стражей. Главный въезд в Айронхолд с севера.",
@@ -1357,14 +1337,15 @@
       "location_uid": "loc-city-amberport",
       "world_uid": "world-test-all-001",
       "display_name": "Амберпорт",
-      "system_location_type": "city",
+      "system_location_type": "settlement",
+      "system_location_subtype": "city",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-region-southern",
       "display_description": "Оживлённый портовый город на южном побережье. Перекрёсток торговых путей со всего континента.",
       "is_discovered": true,
       "is_accessible": true,
       "is_public": true,
-      "system_city_size": "city",
+      "system_city_size": "medium",
       "state_uid": "state-amber-league",
       "map_x": 2,
       "map_y": 6,
@@ -1398,7 +1379,7 @@
       "location_uid": "loc-amberport-market",
       "world_uid": "world-test-all-001",
       "display_name": "Торговая набережная",
-      "system_location_type": "square",
+      "system_location_type": "district",
       "created_at": "2026-05-23T00:00:00",
       "parent_location_uid": "loc-city-amberport",
       "display_description": "Длинная набережная с рядами лавок. Торгуют специями, тканями и морскими товарами.",

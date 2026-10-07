@@ -50,58 +50,49 @@
     "wounds_enabled": false,
     "location_type_registry": {
       "continent": {
-        "display_name": "Континент"
+        "display_name": "Континент",
+        "parent_types": [
+          null
+        ]
       },
       "region": {
-        "display_name": "Регион"
-      },
-      "kingdom": {
-        "display_name": "Королевство"
-      },
-      "empire": {
-        "display_name": "Империя"
-      },
-      "duchy": {
-        "display_name": "Герцогство"
-      },
-      "city": {
-        "display_name": "Город"
-      },
-      "town": {
-        "display_name": "Посёлок"
-      },
-      "village": {
-        "display_name": "Деревня"
+        "display_name": "Регион",
+        "parent_types": [
+          null,
+          "continent"
+        ]
       },
       "settlement": {
-        "display_name": "Поселение"
+        "display_name": "Поселение",
+        "subtypes": [
+          {
+            "system_subtype": "city",
+            "footprint_by_size": {
+              "huge": 8.0
+            }
+          },
+          {
+            "system_subtype": "underground_city",
+            "footprint_by_size": {
+              "huge": 8.0
+            }
+          },
+          {
+            "system_subtype": "village",
+            "footprint_by_size": {
+              "huge": 0.9
+            }
+          }
+        ]
       },
       "district": {
         "display_name": "Район"
       },
-      "square": {
-        "display_name": "Площадь"
-      },
-      "street": {
-        "display_name": "Улица"
-      },
       "building": {
         "display_name": "Здание"
       },
-      "gate": {
-        "display_name": "Ворота"
-      },
       "room": {
         "display_name": "Комната"
-      },
-      "dungeon": {
-        "display_name": "Подземелье"
-      },
-      "cave": {
-        "display_name": "Пещера"
-      },
-      "camp": {
-        "display_name": "Лагерь"
       }
     },
     "default_passage_height": 2,
@@ -323,7 +314,8 @@
     "city_size_registry": [
       { "system_size": "small", "display_size": "Малый" },
       { "system_size": "medium", "display_size": "Средний" },
-      { "system_size": "large", "display_size": "Большой" }
+      { "system_size": "large", "display_size": "Большой" },
+      { "system_size": "huge", "display_size": "Огромный" }
     ]
   },
   "states": [

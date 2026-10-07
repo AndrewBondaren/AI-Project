@@ -48,7 +48,7 @@ _ENGINE_ENTRIES: tuple[LocationTypeEntry, ...] = (
         display_type="Поселение",
         is_inhabited=True,
         payload_kind=PayloadKind.SETTLEMENT,
-        parent_types=["territory"],
+        parent_types=[None, "territory", "region"],
         is_outdoor=True,
         subtypes=[
             LocationTypeSubtypeEntry(
@@ -285,8 +285,14 @@ def _overlay_subtype(
         l0_map_symbol=(
             world.l0_map_symbol if world.l0_map_symbol is not None else engine.l0_map_symbol
         ),
-        typical_district_types=list(world.typical_district_types),
-        required_structure_types=list(world.required_structure_types),
+        typical_district_types=list(
+            world.typical_district_types if "typical_district_types" in world.model_fields_set
+            else engine.typical_district_types
+        ),
+        required_structure_types=list(
+            world.required_structure_types if "required_structure_types" in world.model_fields_set
+            else engine.required_structure_types
+        ),
         footprint_by_size=merged_footprint,
         is_inhabited=(world.is_inhabited if "is_inhabited" in world.model_fields_set
                       else engine.is_inhabited),

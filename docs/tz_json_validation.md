@@ -323,6 +323,21 @@ class WorldSlice:
 
 `facade` merge → `worldSliceMerge.merge_facade_slices` (T-29). Runtime (`worldRow`) — thin DX поверх `resolve_multi_column_world` / `resolve_registry_list_world` / `resolve_registry_dict_world` / `resolve_json_blob_world` (тот же catalog; RELIEF-T-28). Registry с `RUNTIME_MERGE_ID_FIELD` на POJO → runtime canonical⊕world (district/barrier). **Исключение:** resource / crops / livestock — пусто→канон, непусто→только мир ([`tz_city_generation.md`](./tz_city_generation.md) §1.2.1). Не свои `_LIST_REGISTRY_KEYS`.
 
+**Библиотеки defaults material/terrain:** реестр POJO объявляет ключ идентичности
+`CANONICAL_OVERLAY_ID_FIELD`; `WorldSlice` использует эту декларацию для одного
+механизма дополнения при import и runtime. В существующем пути
+`normalize_world → merge_facade_slices → _merge_registry_list` перед policy-resolve
+записей выполняется канон ⊕ явно указанные поля мира. При полном импорте отсутствие
+реестра или `[]` подключает канон; частичный список дополняется отсутствующими
+каноническими записями. Совпавший ключ наследует неуказанные поля канонической
+записи; явно указанные false/0/[] и допустимый null сохраняются. N+1 записи
+валидируются обычным resolver. Результат входит в нормализованный мир до REF-W
+и сохраняется обычным импортом bundle. Неизвестные ссылки остаются ошибками.
+При partial update отсутствующий реестр не записывается и не сбрасывает overrides.
+Runtime применяет то же дополнение к старым частичным реестрам. Этот режим не
+распространяется автоматически на instance-каталоги resource/crops/livestock
+или существующий T-29 overlay других реестров.
+
 **Чеклист нового POJO на `worlds`:**
 
 1. POJO + field policies

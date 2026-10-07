@@ -566,29 +566,16 @@
     ],
     "city_size_registry": [
       {
-        "system_size": "hamlet",
-        "display_size": "Хутор",
-        "radius": 0
+        "system_size": "small",
+        "display_size": "Малый"
       },
       {
-        "system_size": "village",
-        "display_size": "Деревня",
-        "radius": 0
+        "system_size": "medium",
+        "display_size": "Средний"
       },
       {
-        "system_size": "town",
-        "display_size": "Городок",
-        "radius": 1
-      },
-      {
-        "system_size": "city",
-        "display_size": "Город",
-        "radius": 1
-      },
-      {
-        "system_size": "metropolis",
-        "display_size": "Метрополис",
-        "radius": 2
+        "system_size": "large",
+        "display_size": "Большой"
       }
     ],
     "economic_tier_registry": [

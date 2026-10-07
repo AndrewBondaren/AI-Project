@@ -15,6 +15,7 @@ from app.application.jsonValidation.resolve import (
 )
 from app.application.jsonValidation.worldSlices import (
     WorldSlice,
+    canonical_registry_wire,
     facade_world_slices,
 )
 
@@ -62,7 +63,7 @@ def _merge_registry_list(
     ctx: ResolveContext,
 ) -> None:
     key = world_slice.world_keys[0]
-    if key not in out:
+    if key not in out and (ctx.partial or not world_slice.canonical_overlay_id_field):
         return
 
     assert world_slice.empty_factory is not None
@@ -72,6 +73,7 @@ def _merge_registry_list(
         if raw is None:
             return
 
+    raw = canonical_registry_wire(world_slice, raw)
     resolved = resolve_root_list(
         world_slice.pojo_cls,
         raw,

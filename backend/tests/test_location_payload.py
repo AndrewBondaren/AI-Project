@@ -1,5 +1,6 @@
 """P1 typed payload contract — tz_locations §Payload per type."""
 
+import json
 import unittest
 from dataclasses import replace
 
@@ -175,6 +176,92 @@ class LocationPayloadTests(unittest.TestCase):
                 ])
                 self.assertEqual(world.merged_with_engine().entry_for("settlement").payload_kind,
                                  expected)
+
+    def test_recipe_overlay_survives_world_json_roundtrip(self):
+        engine = WorldLocationTypeRegistry.canonical_engine().subtype_for("settlement", "city")
+        for districts in (None, [], ["civic"]):
+            for structures in (None, [], ["custom_structure"]):
+                with self.subTest(districts=districts, structures=structures):
+                    subtype = {
+                        "system_subtype": "city", "l0_map_symbol": "u",
+                        "footprint_by_size": {"huge": 8.0},
+                    }
+                    if districts is not None:
+                        subtype["typical_district_types"] = districts
+                    if structures is not None:
+                        subtype["required_structure_types"] = structures
+                    normalized = normalize_world({"location_type_registry": [{
+                        "system_type": "settlement", "display_type": "Settlement",
+                        "payload_kind": "settlement", "subtypes": [subtype],
+                    }]}, partial=True)
+                    stored = json.loads(json.dumps(normalized))
+                    stored_subtype = stored["location_type_registry"][0]["subtypes"][0]
+                    self.assertEqual("typical_district_types" in stored_subtype, districts is not None)
+                    self.assertEqual("required_structure_types" in stored_subtype, structures is not None)
+                    world = World(world_uid="recipe-world", name="World",
+                                  created_at="2026-10-07", **stored)
+                    recipe = location_types(world).subtype_for("settlement", "city")
+                    self.assertEqual(recipe.typical_district_types,
+                                     engine.typical_district_types if districts is None else districts)
+                    self.assertEqual(recipe.required_structure_types,
+                                     engine.required_structure_types if structures is None else structures)
+                    self.assertEqual(recipe.footprint_by_size,
+                                     {**engine.footprint_by_size, "huge": 8.0})
+
+    def test_subtype_symbol_survives_world_json_roundtrip(self):
+        engine = WorldLocationTypeRegistry.canonical_engine().subtype_for("settlement", "city")
+        for override, expected in (({}, engine.l0_map_symbol),
+                                   ({"l0_map_symbol": None}, engine.l0_map_symbol),
+                                   ({"l0_map_symbol": "Ж"}, "Ж")):
+            with self.subTest(override=override):
+                normalized = normalize_world({"location_type_registry": [{
+                    "system_type": "settlement", "display_type": "Settlement",
+                    "payload_kind": "settlement", "subtypes": [{
+                        "system_subtype": "city", "footprint_by_size": {"huge": 8.0},
+                        **override,
+                    }],
+                }]}, partial=True)
+                world = World(world_uid="symbol-world", name="World",
+                              created_at="2026-10-07", **json.loads(json.dumps(normalized)))
+                recipe = location_types(world).subtype_for("settlement", "city")
+                self.assertEqual(recipe.l0_map_symbol, expected)
+                self.assertEqual(recipe.typical_district_types, engine.typical_district_types)
+                self.assertEqual(recipe.required_structure_types, engine.required_structure_types)
+                self.assertEqual(recipe.footprint_by_size, {**engine.footprint_by_size, "huge": 8.0})
+
+    def test_subtype_symbol_constraints_apply_only_to_strings(self):
+        self.assertIsNone(LocationTypeSubtypeEntry.model_validate({
+            "system_subtype": "custom", "l0_map_symbol": None,
+        }).l0_map_symbol)
+        for invalid in ("", "ab"):
+            with self.subTest(symbol=invalid), self.assertRaises(ValidationError):
+                LocationTypeSubtypeEntry.model_validate({
+                    "system_subtype": "custom", "l0_map_symbol": invalid,
+                })
+
+    def test_settlement_allows_root_territory_and_region(self):
+        for registry in (WorldLocationTypeRegistry.canonical_engine(),
+                         WorldLocationTypeRegistry.canonical_defaults().merged_with_engine()):
+            for parent in (None, "territory", "region"):
+                with self.subTest(parent=parent):
+                    self.assertTrue(registry.allows_parent("settlement", parent))
+            self.assertFalse(registry.allows_parent("settlement", "building"))
+
+    def test_settlement_parent_overlay_survives_world_json_roundtrip(self):
+        for override, expected in (({}, [None, "territory", "region"]),
+                                   ({"parent_types": []}, [None, "territory", "region"]),
+                                   ({"parent_types": ["region"]}, ["region"]),
+                                   ({"parent_types": [None]}, [None])):
+            with self.subTest(override=override):
+                normalized = normalize_world({"location_type_registry": [{
+                    "system_type": "settlement", "display_type": "Settlement", **override,
+                }]}, partial=True)
+                world = World(world_uid="parents-world", name="World",
+                              created_at="2026-10-07", **json.loads(json.dumps(normalized)))
+                registry = location_types(world)
+                self.assertEqual(registry.entry_for("settlement").parent_types, expected)
+                for parent in (None, "territory", "region", "building"):
+                    self.assertEqual(registry.allows_parent("settlement", parent), parent in expected)
 
     def test_complex_recipes_and_hierarchy(self):
         engine = WorldLocationTypeRegistry.canonical_engine()

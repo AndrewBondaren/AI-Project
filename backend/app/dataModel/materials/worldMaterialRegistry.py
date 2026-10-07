@@ -15,6 +15,7 @@ from app.dataModel.registryKey import RegistryKey
 
 class WorldMaterialRegistry(RootModel[list[MaterialRegistryEntry]]):
     SCHEMA_ID: ClassVar[str] = "SCH-WORLD-MATERIAL"
+    CANONICAL_OVERLAY_ID_FIELD: ClassVar[str] = "system_material"
     """Root POJO for `worlds.material_registry`. Wire shape: JSON array."""
 
     root: list[MaterialRegistryEntry]

@@ -35,7 +35,7 @@ class RepairWorldDefaultsTest(unittest.TestCase):
         world = _bare_world()
         self.assertTrue(world_climate_defaults_need_repair(world))
 
-    def test_solids_only_registry_needs_repair(self) -> None:
+    def test_partial_registry_reads_defaults_and_repair_materializes_them(self) -> None:
         world = _bare_world(
             material_registry=[{
                 "system_material": "stone",
@@ -45,6 +45,17 @@ class RepairWorldDefaultsTest(unittest.TestCase):
             precipitation_liquid="water",
         )
         self.assertTrue(world_climate_defaults_need_repair(world))
+        self.assertEqual(resolve_world_precipitation_liquid(world).system_material, "water")
+        self.assertTrue(apply_import_normalize_to_world(world))
+        self.assertFalse(world_climate_defaults_need_repair(world))
+        self.assertIn("water", {row["system_material"] for row in world.material_registry})
+        self.assertEqual(next(row for row in world.material_registry
+                              if row["system_material"] == "stone")["display_name"], "Stone")
+
+    def test_explicit_solid_water_override_does_not_inherit_liquid_category(self) -> None:
+        world = _bare_world(material_registry=[{
+            "system_material": "water", "material_category": "solid",
+        }], precipitation_liquid="water")
         with self.assertRaises(WorldClimateDefaultsError):
             resolve_world_precipitation_liquid(world)
 

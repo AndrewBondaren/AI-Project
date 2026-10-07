@@ -139,6 +139,8 @@ class WorldSlice:
     dump_by_alias: bool = False
     # Runtime: canonical_defaults ⊕ world rows keyed by entry attribute (T-29).
     runtime_merge_id_field: str | None = None
+    # Import + runtime: inherit canonical fields before validating world rows.
+    canonical_overlay_id_field: str | None = None
 
 
 def _registry_slice(
@@ -150,6 +152,7 @@ def _registry_slice(
     dump_by_alias: bool = False,
 ) -> WorldSlice:
     merge_id = getattr(pojo_cls, "RUNTIME_MERGE_ID_FIELD", None)
+    overlay_id = getattr(pojo_cls, "CANONICAL_OVERLAY_ID_FIELD", None)
     return WorldSlice(
         schema_id=pojo_cls.SCHEMA_ID,
         pojo_cls=pojo_cls,
@@ -160,7 +163,36 @@ def _registry_slice(
         facade=facade,
         dump_by_alias=dump_by_alias,
         runtime_merge_id_field=merge_id if isinstance(merge_id, str) else None,
+        canonical_overlay_id_field=overlay_id if isinstance(overlay_id, str) else None,
     )
+
+
+def canonical_registry_wire(world_slice: WorldSlice, raw: Any) -> Any:
+    """Complete declared libraries before policy resolve, on import and read.
+
+    Keep world rows first so validation errors retain their input row indices.
+    Invalid shapes/identities go through the ordinary resolver unchanged.
+    """
+    id_field = world_slice.canonical_overlay_id_field
+    if not id_field or world_slice.empty_factory is None:
+        return raw
+    if raw and not isinstance(raw, list):
+        return raw
+    canonical = {
+        getattr(entry, id_field): entry.model_dump(mode="json")
+        for entry in world_slice.empty_factory().root
+    }
+    rows: list[Any] = []
+    present: set[str] = set()
+    for row in raw or []:
+        key = row.get(id_field) if isinstance(row, dict) else None
+        if isinstance(key, str):
+            rows.append({**canonical.get(key, {}), **row})
+            present.add(key)
+        else:
+            rows.append(row)
+    rows.extend(row for key, row in canonical.items() if key not in present)
+    return rows
 
 
 def _registry_dict_slice(
@@ -447,6 +479,7 @@ def resolve_registry_list_world(
     raw: Any = getattr(world, key, None)
     if world_slice.wire_adapter is not None:
         raw = world_slice.wire_adapter(raw)
+    raw = canonical_registry_wire(world_slice, raw)
     if world_slice.wire_adapter is not None and raw is None:
         resolved = world_slice.empty_factory()
     else:
