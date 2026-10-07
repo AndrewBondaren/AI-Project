@@ -314,7 +314,7 @@ Overlay-таблиц имён и алиасов между NL и skeleton нет
 
 | `payload_kind` | Модель | Поля |
 |---|---|---|
-| `settlement` | `SettlementPayload` | `system_city_size`, `settlement_density`, `dominant_material`, `architectural_style`, `frontage_type_order`, `plot_counts`, `plot_priority`, `perimeter_barrier`, `typical_districts`, `system_settlement_specializations`, `is_inhabited: bool = True` |
+| `settlement` | `SettlementPayload` | `system_city_size`, `settlement_density`, `dominant_material`, `architectural_style`, `frontage_type_order`, `plot_counts`, `plot_priority`, `perimeter_barrier`, `typical_districts`, `system_settlement_specializations`, `is_inhabited: bool = False` |
 | `district` | `DistrictPayload` | `district_topology` (C23 stamped freeze) |
 | `null` | — | building / room / region / territory / geographic / climate_pole / declare-only типы |
 
@@ -323,7 +323,7 @@ Overlay-таблиц имён и алиасов между NL и skeleton нет
 | `system_type` | `payload_kind` | Морфология / семантика |
 |---|---|---|
 | `settlement` | `settlement` | живое поселение; `city`, `village`, `underground_city` |
-| `location_complex` | `settlement` | комплекс; `crypt`, `mine`, `ruins`, `fortress`, `lair`; по умолчанию рецепт задаёт `is_inhabited=false` |
+| `location_complex` | `settlement` | комплекс; `crypt`, `mine`, `ruins`, `fortress`, `lair`; настройка типа `is_inhabited=false` |
 | `district` | `district` | район поселения или комплекса |
 | building / room / region / territory / geographic / climate_pole | `null` | generic host без payload |
 
@@ -338,9 +338,14 @@ Subtype `dungeon` у `settlement` удаляется; `underground_city` ост�
 его рецепт не заменяется координатой z.
 
 `is_inhabited` — authored-флаг **payload конкретной локации**. Дефолт
-модели — `True`; рецепт комплекса задаёт `False`, явное значение мастера
-имеет приоритет (руины-город могут быть обитаемыми). Флаг гейтит
-`system_settlement_specializations`, settlement-planner и economy planner.
+модели — `False`. `LocationTypeEntry.is_inhabited: bool = False` задаёт
+настройку типа; builtin `settlement` явно задаёт `True`, включая экземпляры
+без subtype. Комплекс и пользовательские типы по умолчанию необитаемы.
+Приоритет: явное bool экземпляра → bool subtype → настройка типа → базовый
+False. Поле объявлено в SettlementPayloadFields и наследуется skeleton.
+Флаг гейтит специализации и settlement-planner; economic gate пока не
+подключён. Комментарий непосредственно у поля фиксирует это назначение
+и требует перепроверить подключение перед реализацией economic gate.
 При `is_inhabited=false` непустой `system_settlement_specializations` —
 ошибка контракта `SettlementPayload`: импорт и CRUD отвергают данные;
 `None` и пустой список допустимы. Runtime проверяет тот же POJO-контракт.
@@ -352,11 +357,15 @@ Lazy-settlement DAG-нода
 также должна учитывать живость; её wiring и economy planner — leftovers,
 не входят в эту имплементацию и остаются под gate DAG.
 
-На `LocationTypeSubtypeEntry` поле `is_inhabited: bool = True` хранит
-рецептурный default будущего экземпляра. Пять builtin-рецептов комплекса
-задают `False`; world-overlay сохраняет engine default при отсутствии
-поля и допускает явный `True`. Импорт применяет рецептурный default к
-payload экземпляра только при отсутствии явного значения `is_inhabited`.
+На `LocationTypeSubtypeEntry` поле `is_inhabited: bool | None = None` —
+optional override; None наследует тип. Builtin recipes наследуют тип.
+World-overlay сохраняет engine-настройку при отсутствии поля; explicit
+bool переопределяет её, explicit None на subtype возвращает наследование.
+Сериализация POJO сохраняет отсутствие override и при normalize_world roundtrip.
+Импорт разрешает default только при отсутствии поля экземпляра и сохраняет
+итоговый bool в payload. CRUD сохраняет уже записанный bool при частичном
+обновлении. Прямое чтение payload без поля использует базовый False;
+автоматической миграции прежних строк нет. Explicit None экземпляра запрещён.
 
 **Правила:**
 

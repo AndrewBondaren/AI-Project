@@ -21,6 +21,10 @@ from app.dataModel.locations.settlement.district.districtPayload import District
 from app.dataModel.locations.settlement.district.districtTopologySlot import DistrictTopologySlot
 from app.dataModel.locations.settlement.settlement.settlementPayload import SettlementPayload
 from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
+from app.dataModel.locations.namedLocation import BundleNamedLocation
+from app.dataModel.locations.locationType.locationTypeSubtypeEntry import LocationTypeSubtypeEntry
+from app.application.jsonValidation.facade import normalize_world
+from app.application.jsonValidation.worldRow import location_types
 
 
 class LocationPayloadTests(unittest.TestCase):
@@ -102,7 +106,7 @@ class LocationPayloadTests(unittest.TestCase):
 
     def test_empty_settlement_uses_pojo_defaults(self):
         payload = LocationPayload.validate("settlement", None)
-        self.assertTrue(payload.is_inhabited)
+        self.assertFalse(payload.is_inhabited)
         self.assertIsNone(payload.system_city_size)
         self.assertIsNone(payload.settlement_density)
         with self.assertRaises(ValidationError):
@@ -133,14 +137,16 @@ class LocationPayloadTests(unittest.TestCase):
                     "is_inhabited": False, "system_settlement_specializations": binds,
                 })
                 self.assertFalse(payload.is_inhabited)
-        inhabited = SettlementPayload.model_validate({"system_settlement_specializations": ["extract"]})
+        inhabited = SettlementPayload.model_validate({
+            "is_inhabited": True, "system_settlement_specializations": ["extract"],
+        })
         self.assertTrue(inhabited.is_inhabited)
 
     def test_payload_fields_do_not_duplicate_legacy_cascade_channels(self):
         self.assertEqual(len(cascade_channels(SettlementPayload)), 3)
         self.assertNotIn("economic_tier", SettlementPayload.model_fields)
         self.assertNotIn("system_location_mood", SettlementPayload.model_fields)
-        self.assertNotIn("is_inhabited", SettlementSkeleton.model_fields)
+        self.assertFalse(SettlementSkeleton().is_inhabited)
         skeleton = SettlementSkeleton.model_validate({"structure_counts": {"plot": 2}})
         self.assertEqual(skeleton.plot_counts, {"plot": 2})
         self.assertEqual(len(cascade_channels(SettlementSkeleton)), 1)
@@ -155,6 +161,9 @@ class LocationPayloadTests(unittest.TestCase):
             self.assertEqual(minimal.entry_for(key).payload_kind, kind)
             self.assertEqual(minimal.merged_with_engine().entry_for(key).payload_kind, kind)
         self.assertIsNone(engine.entry_for("geographic").payload_kind)
+        self.assertTrue(engine.entry_for("settlement").is_inhabited)
+        self.assertTrue(minimal.merged_with_engine().entry_for("settlement").is_inhabited)
+        self.assertFalse(engine.entry_for("location_complex").is_inhabited)
 
     def test_world_overlay_preserves_missing_and_respects_explicit_kind(self):
         for wire, expected in (({}, PayloadKind.SETTLEMENT),
@@ -173,7 +182,7 @@ class LocationPayloadTests(unittest.TestCase):
         self.assertEqual({s.system_subtype for s in complex_type.subtypes},
                          {"crypt", "mine", "ruins", "fortress", "lair"})
         for recipe in complex_type.subtypes:
-            self.assertFalse(recipe.is_inhabited)
+            self.assertIsNone(recipe.is_inhabited)
             self.assertTrue(recipe.typical_district_types)
             self.assertEqual(set(recipe.footprint_by_size), {"small", "medium", "large"})
             self.assertTrue(all(v > 0 for v in recipe.footprint_by_size.values()))
@@ -190,7 +199,85 @@ class LocationPayloadTests(unittest.TestCase):
             "system_type": "location_complex", "display_type": "Custom",
             "subtypes": [{"system_subtype": "ruins"}],
         }])
-        self.assertFalse(minimal.merged_with_engine().subtype_for("location_complex", "ruins").is_inhabited)
+        self.assertIsNone(minimal.merged_with_engine().subtype_for("location_complex", "ruins").is_inhabited)
+
+    def test_instance_defaults_come_from_type_even_without_subtype(self):
+        for kind, subtype, expected in (
+            ("settlement", None, True), ("settlement", "city", True),
+            ("settlement", "unknown", True), ("location_complex", None, False),
+            ("location_complex", "ruins", False),
+        ):
+            with self.subTest(kind=kind, subtype=subtype):
+                row = BundleNamedLocation.model_validate({
+                    "location_uid": "instance", "display_name": "Instance",
+                    "system_location_type": kind, "system_location_subtype": subtype,
+                })
+                self.assertIs(row.location_payload.is_inhabited, expected)
+
+    def test_type_subtype_instance_priority_preserves_explicit_false(self):
+        for type_flag in (False, True):
+            for subtype_flag in (None, False, True):
+                registry = WorldLocationTypeRegistry.model_validate([{
+                    "system_type": "custom_site", "display_type": "Site", "payload_kind": "settlement",
+                    "is_inhabited": type_flag,
+                    "subtypes": [{"system_subtype": "custom", "is_inhabited": subtype_flag}],
+                }])
+                for instance_flag in (None, False, True):
+                    with self.subTest(type=type_flag, subtype=subtype_flag, instance=instance_flag):
+                        wire = {"location_uid": "instance", "display_name": "Instance",
+                                "system_location_type": "custom_site", "system_location_subtype": "custom"}
+                        if instance_flag is not None:
+                            wire["location_payload"] = {"is_inhabited": instance_flag}
+                        row = BundleNamedLocation.model_validate(wire, context={"location_type_registry": registry})
+                        expected = (instance_flag if instance_flag is not None else
+                                    subtype_flag if subtype_flag is not None else type_flag)
+                        self.assertIs(row.location_payload.is_inhabited, expected)
+
+    def test_custom_type_defaults_false_and_null_instance_is_invalid(self):
+        registry = WorldLocationTypeRegistry.model_validate([{
+            "system_type": "custom_site", "display_type": "Site", "payload_kind": "settlement",
+        }])
+        wire = {"location_uid": "instance", "display_name": "Instance", "system_location_type": "custom_site"}
+        row = BundleNamedLocation.model_validate(wire, context={"location_type_registry": registry})
+        self.assertFalse(row.location_payload.is_inhabited)
+        for override in ({"is_inhabited": None}, {"location_payload": {"is_inhabited": None}}):
+            with self.subTest(override=override), self.assertRaises(ValidationError):
+                BundleNamedLocation.model_validate({**wire, **override}, context={"location_type_registry": registry})
+
+    def test_override_serialization_keeps_omission_false_and_null_distinct(self):
+        bare_type = LocationTypeEntry(system_type="settlement", display_type="Settlement")
+        bare_subtype = LocationTypeSubtypeEntry(system_subtype="city")
+        self.assertNotIn("is_inhabited", bare_type.model_dump(mode="json"))
+        self.assertNotIn("is_inhabited", bare_subtype.model_dump(mode="json"))
+        self.assertIs(LocationTypeEntry.model_validate({
+            **bare_type.model_dump(), "is_inhabited": False,
+        }).model_dump()["is_inhabited"], False)
+        self.assertIsNone(LocationTypeSubtypeEntry.model_validate({
+            "system_subtype": "city", "is_inhabited": None,
+        }).model_dump()["is_inhabited"])
+
+    def test_world_normalization_roundtrip_preserves_default_and_overrides(self):
+        for kind, type_override, subtype_override, expected in (
+            ("settlement", {}, {}, True),
+            ("settlement", {"is_inhabited": False}, {}, False),
+            ("settlement", {}, {"is_inhabited": False}, False),
+            ("settlement", {}, {"is_inhabited": None}, True),
+            ("location_complex", {"is_inhabited": True}, {}, True),
+            ("location_complex", {}, {"is_inhabited": True}, True),
+        ):
+            with self.subTest(kind=kind, type=type_override, subtype=subtype_override):
+                subtype = "city" if kind == "settlement" else "ruins"
+                normalized = normalize_world({"location_type_registry": [{
+                    "system_type": kind, "display_type": "Site", "payload_kind": "settlement",
+                    **type_override, "subtypes": [{"system_subtype": subtype, "l0_map_symbol": "u",
+                                                   **subtype_override}],
+                }]}, partial=True)
+                world = World(world_uid="w", name="World", created_at="2026-10-07", **normalized)
+                row = BundleNamedLocation.model_validate({
+                    "location_uid": "instance", "display_name": "Instance",
+                    "system_location_type": kind, "system_location_subtype": subtype,
+                }, context={"location_type_registry": location_types(world)})
+                self.assertIs(row.location_payload.is_inhabited, expected)
 
 
 if __name__ == "__main__":

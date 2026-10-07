@@ -221,6 +221,32 @@ class LocationPayloadSchemaTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(settlement_context(world, await self.repo.get_by_id("custom")).system_city_size,
                          "medium")
 
+    async def test_resolved_inhabited_flag_roundtrips_to_skeleton_and_survives_crud(self):
+        world = World(world_uid="world", name="World", created_at="2026-10-07",
+                      location_type_registry=[{
+                          "system_type": "custom_site", "display_type": "Site", "payload_kind": "settlement",
+                          "is_inhabited": True, "subtypes": [{"system_subtype": "abandoned", "is_inhabited": False}],
+                      }])
+        service = NamedLocationService(self.repo)
+        for uid, subtype, expected in (("type-default", None, True), ("subtype-default", "abandoned", False)):
+            with self.subTest(uid=uid):
+                row = service._from_wire({
+                    "location_uid": uid, "display_name": "Site", "system_location_type": "custom_site",
+                    "system_location_subtype": subtype,
+                }, world_uid="world", world=world)
+                await self.repo.upsert(row)
+                stored = await self.repo.get_by_id(uid)
+                self.assertIs(stored.location_payload["is_inhabited"], expected)
+                self.assertIs(settlement_skeleton_pojo(stored).is_inhabited, expected)
+                self.assertIs(resolved_settlement_skeleton(
+                    stored, economic_tier="standard", settlement_density="medium",
+                ).is_inhabited, expected)
+        await service.create("world", {
+            "location_uid": "partial", "display_name": "Site", "system_location_type": "settlement",
+        })
+        await service.update("world", "partial", {"display_name": "Renamed"})
+        self.assertTrue(settlement_payload(await self.repo.get_by_id("partial")).is_inhabited)
+
     async def test_runtime_binds_payload_for_settlement_and_complex(self):
         world = World(world_uid="world", name="World", created_at="2026-10-07")
         for kind in ("settlement", "location_complex"):
@@ -242,7 +268,7 @@ class LocationPayloadSchemaTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(settlement_skeleton_pojo(row).system_city_size, "large")
         row.location_payload = None
         self.assertIsNone(settlement_payload(row).system_city_size)
-        self.assertTrue(settlement_payload(row).is_inhabited)
+        self.assertFalse(settlement_payload(row).is_inhabited)
         row.location_payload = {"plot_counts": {"plot": "invalid"}}
         with self.assertRaises(ValueError):
             settlement_payload(row)

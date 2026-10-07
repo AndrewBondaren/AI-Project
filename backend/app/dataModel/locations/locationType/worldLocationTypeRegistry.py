@@ -46,6 +46,7 @@ _ENGINE_ENTRIES: tuple[LocationTypeEntry, ...] = (
     LocationTypeEntry(
         system_type="settlement",
         display_type="Поселение",
+        is_inhabited=True,
         payload_kind=PayloadKind.SETTLEMENT,
         parent_types=["territory"],
         is_outdoor=True,
@@ -81,27 +82,27 @@ _ENGINE_ENTRIES: tuple[LocationTypeEntry, ...] = (
         is_outdoor=True,
         subtypes=[
             LocationTypeSubtypeEntry(
-                system_subtype="crypt", l0_map_symbol="c", is_inhabited=False,
+                system_subtype="crypt", l0_map_symbol="c",
                 typical_district_types=["civic"],
                 footprint_by_size=dict(_FOOTPRINT_COMPLEX),
             ),
             LocationTypeSubtypeEntry(
-                system_subtype="mine", l0_map_symbol="m", is_inhabited=False,
+                system_subtype="mine", l0_map_symbol="m",
                 typical_district_types=["industrial"],
                 footprint_by_size=dict(_FOOTPRINT_COMPLEX),
             ),
             LocationTypeSubtypeEntry(
-                system_subtype="ruins", l0_map_symbol="r", is_inhabited=False,
+                system_subtype="ruins", l0_map_symbol="r",
                 typical_district_types=["civic", "residential"],
                 footprint_by_size=dict(_FOOTPRINT_CITY),
             ),
             LocationTypeSubtypeEntry(
-                system_subtype="fortress", l0_map_symbol="f", is_inhabited=False,
+                system_subtype="fortress", l0_map_symbol="f",
                 typical_district_types=["civic", "residential"],
                 footprint_by_size=dict(_FOOTPRINT_VILLAGE),
             ),
             LocationTypeSubtypeEntry(
-                system_subtype="lair", l0_map_symbol="l", is_inhabited=False,
+                system_subtype="lair", l0_map_symbol="l",
                 typical_district_types=["residential"],
                 footprint_by_size=dict(_FOOTPRINT_COMPLEX),
             ),
@@ -258,6 +259,8 @@ def _overlay_location_type(
         is_outdoor=is_outdoor,
         payload_kind=(world.payload_kind if "payload_kind" in world.model_fields_set
                       else engine.payload_kind),
+        is_inhabited=(world.is_inhabited if "is_inhabited" in world.model_fields_set
+                      else engine.is_inhabited),
         subtypes=subtypes,
     )
 

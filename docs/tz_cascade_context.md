@@ -260,6 +260,10 @@ S1 — целостность linked list и удаление проверки �
 S1b — generic разворачивание и вычисление runtime-цепочки;
 S1c — источники дефолтов в POJO; S2 — повторяемые NL-каналы материалов.
 Parent-обход и lazy NL над масками в эти шаги не входят.
+Необходимость восстановления контекста отдельно загруженной локации —
+вероятный техдолг [CASCADE-TD-1](tz_cascade_technical_debt.md).
+Уточнить при реализации patch/rollback и типизации DAG; обязательность
+parent-resolver пока не подтверждена.
 
 **P4 typed payload:** type-поля хранятся в `location_payload`, а каналы
 объявлены на `SettlementPayload`. `CITY_SIZE` и `DOMINANT_MATERIAL` —

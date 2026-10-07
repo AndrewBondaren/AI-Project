@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any
+from pydantic import BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer
 
-from app.dataModel.annotationPolicy import DefaultOnWire, StrictOnWire
+from app.dataModel.annotationPolicy import DefaultOnWire, IgnoreOnWire, StrictOnWire
 
 
 class LocationTypeSubtypeEntry(BaseModel):
@@ -22,7 +23,15 @@ class LocationTypeSubtypeEntry(BaseModel):
     # Settlement morphology × rank (LOC-T-2). Empty on geographic / district / building subtypes.
     footprint_by_size: DefaultOnWire[dict[str, float]] = Field(default_factory=dict)
     # Recipe default for an instance's SettlementPayload; no generation gate here.
-    is_inhabited: DefaultOnWire[bool] = True
+    # None inherits the type setting; False is an explicit override.
+    is_inhabited: IgnoreOnWire[bool | None] = None
+
+    @model_serializer(mode="wrap")
+    def serialize_overrides(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        data = handler(self)
+        if "is_inhabited" not in self.model_fields_set:
+            data.pop("is_inhabited", None)
+        return data
 
     def has_district_recipe(self) -> bool:
         """Non-empty typical district types → recipe path; empty → legacy district select."""

@@ -146,8 +146,11 @@ class BundleNamedLocation(BaseModel):
         if "is_inhabited" in model.model_fields and "is_inhabited" not in payload:
             subtype = values.get("system_location_subtype")
             recipe = registry.subtype_for(entry.system_type, subtype) if isinstance(subtype, str) else None
-            if recipe is not None:
-                payload["is_inhabited"] = recipe.is_inhabited
+            payload["is_inhabited"] = (
+                recipe.is_inhabited
+                if recipe is not None and recipe.is_inhabited is not None
+                else entry.is_inhabited
+            )
         values["location_payload"] = model.model_validate(payload)
         return values
 

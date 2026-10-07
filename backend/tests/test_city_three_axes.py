@@ -151,6 +151,8 @@ def _settlement(*, subtype: str | None, size: str = "medium", loc_type: str = "s
         location_payload={
             'system_city_size': size,
             'settlement_density': DistrictDensity.MEDIUM.wire_value,
+            # Runtime row fixture: import has already resolved the authored flag.
+            'is_inhabited': True,
         },
         system_economic_tier="standard",
         map_x=0,

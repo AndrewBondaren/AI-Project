@@ -36,6 +36,9 @@ class SettlementPayloadFields(BaseModel):
     perimeter_barrier: DefaultOnWire[PerimeterBarrier | None] = None
     typical_districts: DefaultOnWire[list[TypicalDistrictRef] | None] = None
     system_settlement_specializations: DefaultOnWire[list[SettlementSpecializationBind] | None] = None
+    # Economic gate flag. Economic filters are NOT wired to it yet;
+    # recheck current wiring before implementing that gate.
+    is_inhabited: DefaultOnWire[bool] = False
 
 
 # Selectors live outside Annotated so static checkers inspect attributes.
@@ -56,7 +59,6 @@ class SettlementPayload(SettlementPayloadFields):
         DefaultOnWire[MaterialKey | None],
         CascadeChannel(DOMINANT_MATERIAL, ScopeLevel.SETTLEMENT),
     ] = None
-    is_inhabited: DefaultOnWire[bool] = True
 
     @model_validator(mode="after")
     def validate_inhabited_specializations(self) -> Self:
