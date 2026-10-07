@@ -27,6 +27,7 @@ from app.dataModel.locations.settlement.enums.districtDensity import (
     DistrictDensity,
 )
 from app.dataModel.cascade.cascadeGraph import (
+    bind_field,
     cascade_channels,
     check_link,
     ordered_chain,
@@ -36,6 +37,7 @@ from app.dataModel.cascade.cascadeSpec import (
     CascadeChannel,
     CascadeDefault,
     CascadeLink,
+    FieldRef,
     ChannelKind,
     DefaultPolicy,
     ScopeAxis,
@@ -44,6 +46,7 @@ from app.dataModel.cascade.cascadeVerify import (
     verify_cascade_contract,
 )
 from app.dataModel.locations.context.locationContext import LocationContext
+from app.dataModel.locations.settlement.settlement.settlementPayload import SettlementPayload
 from app.dataModel.locations.namedLocation.bundleNamedLocation import BundleNamedLocation
 from app.dataModel.registryKey import RegistryKey
 from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
@@ -65,6 +68,93 @@ class LinkedListAxis(ScopeAxis):
     TAIL = "tail"
     HEAD = "head"
     MIDDLE = "middle"
+
+
+class FieldRefContractTests(unittest.TestCase):
+    def test_binding_is_independent_of_selector_identity(self):
+        class Source(BaseModel):
+            signal: str = "value"
+
+        first = FieldRef(lambda: Source, lambda pojo: pojo.signal)
+        second = FieldRef(lambda: Source, lambda pojo: pojo.signal)
+        self.assertEqual(bind_field(first), bind_field(second))
+        self.assertEqual(bind_field(first).field, "signal")
+
+    def test_self_supplier_is_not_evaluated_before_class_exists(self):
+        ref = FieldRef(lambda: Source, lambda pojo: pojo.signal)
+
+        class Source(BaseModel):
+            signal: str = "value"
+
+        self.assertIs(bind_field(ref).model, Source)
+
+    def test_selector_must_return_one_direct_attribute(self):
+        class Source(BaseModel):
+            signal: str = "value"
+
+        def two_fields(pojo):
+            pojo.signal
+            return pojo.signal
+
+        for selector in (
+            lambda pojo: pojo.signal.nested,
+            lambda pojo: pojo.signal + "suffix",
+            lambda pojo: pojo.signal or "fallback",
+            lambda pojo: "literal",
+            lambda pojo: pojo,
+            two_fields,
+        ):
+            with self.subTest(selector=selector):
+                with self.assertRaisesRegex(ValueError, "one direct attribute"):
+                    bind_field(FieldRef(lambda: Source, selector))
+
+    def test_computed_field_is_only_allowed_for_default_binding(self):
+        class Source(BaseModel):
+            @computed_field
+            @property
+            def signal(self) -> str:
+                raise AssertionError("binding must not execute computed fields")
+
+        ref = FieldRef(lambda: Source, lambda pojo: pojo.signal)
+        with self.assertRaisesRegex(ValueError, "no such field"):
+            bind_field(ref)
+        self.assertEqual(bind_field(ref, computed=True).field, "signal")
+
+    def test_non_pojo_attributes_are_rejected(self):
+        class Source(BaseModel):
+            signal: str = "value"
+
+            def helper(self):
+                return self.signal
+
+        for selector in (lambda pojo: pojo.helper, lambda pojo: pojo.model_fields):
+            with self.assertRaisesRegex(ValueError, "no such field"):
+                bind_field(FieldRef(lambda: Source, selector))
+
+    def test_legacy_constructor_signatures_are_removed(self):
+        with self.assertRaises(TypeError):
+            CascadeLink(BaseModel, "signal", LinkedListAxis.HEAD)
+        with self.assertRaises(TypeError):
+            CascadeDefault(BaseModel, "signal")
+
+    def test_source_selectors_are_not_hidden_in_annotated_metadata(self):
+        root = Path(__file__).resolve().parents[1] / "app" / "dataModel"
+        for path in root.rglob("*.py"):
+            text = path.read_text(encoding="utf-8")
+            if "FieldRef" not in text:
+                continue
+            tree = ast.parse(text)
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Subscript)
+                        and isinstance(node.value, ast.Name)
+                        and node.value.id == "Annotated"):
+                    with self.subTest(path=path.name, line=node.lineno):
+                        self.assertFalse(any(
+                            isinstance(child, ast.Call)
+                            and isinstance(child.func, ast.Name)
+                            and child.func.id == "FieldRef"
+                            for child in ast.walk(node)
+                        ))
 
 
 class LinkedListContractTests(unittest.TestCase):
@@ -96,6 +186,10 @@ class LinkedListContractTests(unittest.TestCase):
             levels=(tuple(local_level(level) for level in levels)
                     if levels else tuple(fields.values())),
         )
+        # Synthetic fields are generated from test data, unlike production selectors.
+        def ref(name):
+            return FieldRef(lambda: source, lambda pojo: getattr(pojo, name))
+
         declarations = {}
         for name, level in fields.items():
             target = edges.get(name)
@@ -103,11 +197,11 @@ class LinkedListContractTests(unittest.TestCase):
             channel = CascadeChannel(
                 param, level,
                 above=(
-                    CascadeLink(None, upper, fields.get(upper, level))
+                    CascadeLink(ref(upper), fields.get(upper, level))
                     if upper else None
                 ),
                 below=(
-                    CascadeLink(None, target, fields.get(target, level))
+                    CascadeLink(ref(target), fields.get(target, level))
                     if target else None
                 ),
             )
@@ -164,7 +258,7 @@ class LinkedListContractTests(unittest.TestCase):
         head = create_model("StampedSignal", signal=(Annotated[
             str | None, CascadeChannel(
                 param, LinkedListAxis.MIDDLE,
-                below=CascadeLink(tail, "signal", LinkedListAxis.TAIL),
+                below=CascadeLink(FieldRef(lambda: tail, lambda pojo: pojo.signal), LinkedListAxis.TAIL),
             ),
         ], None))
         context = create_model("SignalContext", signal=(Annotated[
@@ -180,6 +274,19 @@ class LinkedListContractTests(unittest.TestCase):
             verify_cascade_contract(context)
             self.assertEqual([owner for owner, _, _ in ordered_chain(param)],
                              [head, tail])
+
+    def test_reverse_declarations_resolve_to_the_same_nodes(self):
+        param, source, context = self._fixture(
+            {"signal": "middle", "middle": "tail"},
+            above_edges={"middle": "signal", "tail": "middle"},
+        )
+        with patch("app.dataModel.cascade.cascadeVerify._source_models",
+                   return_value={source}), patch(
+                       "app.dataModel.cascade.cascadeGraph._source_models",
+                       return_value={source}):
+            verify_cascade_contract(context)
+            self.assertEqual([node.field for _, node, _ in ordered_chain(param)],
+                             ["signal", "middle", "tail"])
 
     def test_cycle_has_no_valid_ends(self):
         self._assert_broken(
@@ -257,7 +364,7 @@ class DefaultSourceContractTests(unittest.TestCase):
     def _verify(self, defaults, field="signal", policy=DefaultPolicy.CANONICAL_DEFAULT):
         axis = ScopeAxis("DefaultAxis", {"SOURCE": "source"})
         param = Cascade("signal", policy, axis=axis,
-                        default_source=(CascadeDefault(defaults, field)
+                        default_source=(CascadeDefault(FieldRef(lambda: defaults, lambda pojo: getattr(pojo, field)))
                                         if defaults is not None else None))
         source = create_model("DefaultChannel", signal=(Annotated[
             str | None, CascadeChannel(param, axis.SOURCE),
@@ -288,7 +395,7 @@ class DefaultSourceContractTests(unittest.TestCase):
             self._verify(str)
 
     def test_missing_default_field_is_rejected(self):
-        with self.assertRaisesRegex(ValueError, "no field 'missing'"):
+        with self.assertRaisesRegex(ValueError, "no such field 'missing'"):
             self._verify(create_model("PlainDefaults", signal=(str, "plain")),
                          field="missing")
 
@@ -458,18 +565,17 @@ class LocationContextContractTests(unittest.TestCase):
         self.assertEqual(
             {
                 (model, field)
-                for model in (BundleNamedLocation, SettlementSkeleton)
+                for model in (BundleNamedLocation, SettlementSkeleton, SettlementPayload)
                 for field, _ in cascade_channels(model, CITY_SIZE)
             },
             {
-                (BundleNamedLocation, "system_city_size"),
-                (SettlementSkeleton, "system_city_size"),
+                (SettlementPayload, "system_city_size"),
             },
         )
         density = {
             level: {
                 (model, field)
-                for model in (BundleNamedLocation, SettlementSkeleton,
+                for model in (BundleNamedLocation, SettlementSkeleton, SettlementPayload,
                               DistrictTemplateEntry)
                 for field, _ in cascade_channels(
                     model, SETTLEMENT_DENSITY, level)
@@ -483,8 +589,7 @@ class LocationContextContractTests(unittest.TestCase):
         self.assertEqual(
             density[ScopeLevel.SETTLEMENT],
             {
-                (BundleNamedLocation, "settlement_density"),
-                (SettlementSkeleton, "settlement_density"),
+                (SettlementPayload, "settlement_density"),
             },
         )
         # M9: `parent_*_material` — the same NL field is the channel
@@ -509,22 +614,33 @@ class LocationContextContractTests(unittest.TestCase):
                     found[level], {(BundleNamedLocation, field)},
                     (param.field, level.value),
                 )
-        # M10: `dominant_material` — settlement-only authored pair
-        # (NL node beats the skeleton node); the fold is declared on
+        # P4: `dominant_material` — one authored payload node;
+        # the fold is declared on
         # the param, not as a channel.
         self.assertEqual(
             {
                 (model, field)
-                for model in (BundleNamedLocation, SettlementSkeleton)
+                for model in (BundleNamedLocation, SettlementSkeleton, SettlementPayload)
                 for field, _ in cascade_channels(model, DOMINANT_MATERIAL)
             },
             {
-                (BundleNamedLocation, "dominant_material"),
-                (SettlementSkeleton, "dominant_material"),
+                (SettlementPayload, "dominant_material"),
             },
         )
         self.assertEqual(DOMINANT_MATERIAL.fold, "dominant_material")
         self.assertEqual(DOMINANT_MATERIAL.levels, (ScopeLevel.SETTLEMENT,))
+
+    def test_payload_chains_have_no_nl_or_skeleton_duplicates(self):
+        for param, field in ((CITY_SIZE, "system_city_size"),
+                             (DOMINANT_MATERIAL, "dominant_material")):
+            with self.subTest(param=field):
+                self.assertEqual([(owner, node.field) for owner, node, _ in ordered_chain(param)],
+                                 [(SettlementPayload, field)])
+                self.assertNotIn(field, BundleNamedLocation.model_fields)
+                self.assertEqual(cascade_channels(SettlementSkeleton, param), ())
+        self.assertEqual([(owner, node.field) for owner, node, _ in ordered_chain(SETTLEMENT_DENSITY)],
+                         [(DistrictTemplateEntry, "density"), (SettlementPayload, "settlement_density")])
+        self.assertNotIn("settlement_density", BundleNamedLocation.model_fields)
 
     def test_channel_kinds_are_declared(self):
         kinds = {
@@ -624,7 +740,7 @@ class LocationContextContractTests(unittest.TestCase):
                 CascadeChannel(
                     ECONOMIC_TIER, ScopeLevel.SETTLEMENT,
                     above=CascadeLink(
-                        SettlementSkeleton, "economic_tier",
+                        FieldRef(lambda: SettlementSkeleton, lambda pojo: pojo.economic_tier),
                         ScopeLevel.SETTLEMENT),
                 ),
             ] = None

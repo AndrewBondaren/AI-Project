@@ -50,6 +50,58 @@ law/customs, magic/tech level. Порядок — 15–25 параметров, 
 
 ## 2. Каскадная цепочка и полиморфные звенья
 
+### 2.1. Типизированная ссылка на поле (S1d)
+
+Уточнение реализации 2026-10-07: Pyright не анализирует выражения metadata
+внутри `Annotated` (проверено отрицательным примером). Поэтому `FieldRef`
+объявляется отдельной константой вне `Annotated`, а metadata использует
+готовую ссылку. Это обязательно для статической проверки атрибутов;
+self-ссылки могут объявляться перед классом благодаря model supplier.
+Pyright 1.1.414 добавлен в корневые npm devDependencies по запросу мастера;
+Проверка: `npm run typecheck:cascade` из корня проекта после `npm install`.
+Она проверяет production-декларации и положительные fixtures, затем
+сверяет точные diagnostics отрицательных fixtures. Python-зависимости
+должны быть установлены в корневую `.venv`. Это целевой static gate
+ссылок каскада, не проверка типов всего backend.
+
+
+Уточнение мастера 2026-10-07: пара `model, field: str` недостаточна.
+S1d заменяет её для `CascadeLink` и `CascadeDefault` без legacy API.
+
+`FieldRef[M, T]` задаёт source-модель через `Callable[[], type[M]]`
+и непосредственный выбор поля через `Callable[[M], T]`:
+
+```python
+DENSITY_REF = FieldRef(lambda: DistrictTemplateEntry, lambda pojo: pojo.density)
+# В metadata Annotated:
+CascadeLink(DENSITY_REF, ScopeLevel.DISTRICT)
+```
+
+Supplier модели вычисляется при проверке контракта после создания классов.
+Поэтому self-ссылка использует тот же API с `lambda: OwnModel`, без
+`model=None` и строкового имени поля. Статический checker проверяет
+атрибут селектора и его сигнатуру; вывод типа `M` из supplier обязателен
+и проверяется положительными и отрицательными статическими fixtures.
+
+Generic binding через probe извлекает один непосредственный атрибут,
+проверяет его по метаданным модели и нормализует ссылку в ключ модели,
+имени поля и scope. Селектор должен вернуть единственный выбранный
+атрибут без преобразования; вложенные пути, чтение нескольких полей,
+арифметика и truthiness выбранного атрибута отвергаются probe.
+Для links допустимы только обычные поля с channel metadata;
+для `CascadeDefault(FieldRef(...))` допустимы также computed-поля.
+Проверка не разбирает AST/bytecode и не содержит списков доменных полей.
+Разные селекторы одного поля обозначают один узел; identity функций
+не определяет равенство узлов. Полученное introspection имя используется
+внутри движка и в provenance, без строковых source-ссылок в декларациях.
+
+Verifier сохраняет проверки типов с учётом kind, оси и целостности цепочки.
+Типизация ссылок не меняет порядок каскада, None-наследование, defaults,
+однократный materialize и RNG. `Cascade.field` как имя параметра и имена
+обработчиков fold/materialize в этот контракт source-ссылок не входят.
+
+### 2.2. Цепочка и связи полей
+
 Полная urban-ветка (решение мастера 2026-10-03; уточнение NL-P1):
 
 ```
@@ -90,7 +142,7 @@ enum на базе `ScopeAxis` (StrEnum-миксин).
 - `param` — **сам объект `Cascade`** (объявлен единожды в
   `cascadeParams`), связь по identity, не по строке; переименование
   константы ломает импорт, а не деградирует в наследование;
-- `above` / `below` — `CascadeLink(model, field, level)`: типизированные
+- `above` / `below` — `CascadeLink(ref, level)`: типизированные
   указатели на соседние узлы (`prev`/`next` связного списка); порядок
   внутри уровня и между уровнями задаётся рёбрами, а не скрытым
   порядком таблицы;
@@ -101,10 +153,10 @@ enum на базе `ScopeAxis` (StrEnum-миксин).
   графе у каждого узла известны оба соседа. Дублированная декларация
   одного ребра с двух сторон допустима только если согласована —
   рассогласование есть ошибка контракта;
-- `model=None` в `CascadeLink` — ссылка на собственную модель (класс
-  не может сослаться на себя внутри своего тела);
-- проверка контракта проходит по рёбрам: имя поля резолвится в
-  `model_fields` указанной модели, типы концов совместимы (kind-aware:
+- self-ссылка использует `FieldRef(lambda: OwnModel, lambda pojo: pojo.field)`
+  в отдельной константе; supplier вычисляется после создания класса;
+- проверка контракта проходит по рёбрам: `FieldRef` привязывается к
+  `model_fields` указанной модели через непосредственный селектор, типы концов совместимы (kind-aware:
   `VALUE`↔`VALUE` один базовый тип; `BAND`/`RANGE` — входы materialize),
   связи берутся только из объявлений `above/below`,
   цепочка непрерывна между объявленными концами (один top, один bottom,
@@ -176,7 +228,7 @@ settlement assemble → district → area/building → structure generate
 - значения шаблона и дефолты — в source-POJO; `None` продолжает
   наследование, ненулевое значение экземпляра участвует в каскаде.
   Доменный default не подставляется по имени поля в движке. Terminal
-  default объявлен через `CascadeDefault(model, field)`; caller передаёт
+  default объявлен через `CascadeDefault(ref)`; caller передаёт
   экземпляр этого POJO при создании корневого контекста;
 - `WALL_MATERIAL` / `FLOOR_MATERIAL` (цепочки только из NL-узлов) —
   **level-agnostic**: одна декларация с маркером «repeat on every tag».
@@ -201,11 +253,16 @@ S1b — generic разворачивание и вычисление runtime-ц�
 S1c — источники дефолтов в POJO; S2 — повторяемые NL-каналы материалов.
 Parent-обход и lazy NL над масками в эти шаги не входят.
 
-**Промежуточный этап P3 typed payload:** type-поля уже хранятся в
-`location_payload` и читаются typed-адаптерами. До P4 `source_wire`
-проецирует payload-значения в прежние NL source-поля только в памяти;
-metadata linked list и приоритет каналов сохраняются. Это мост к
-переносу каналов на payload, а не второй persist-источник значений.
+**P4 typed payload:** type-поля хранятся в `location_payload`, а каналы
+объявлены на `SettlementPayload`. `CITY_SIZE` и `DOMINANT_MATERIAL` —
+по одному узлу на settlement; `SETTLEMENT_DENSITY` — связанный список
+`DistrictTemplateEntry.density → SettlementPayload.settlement_density`.
+NL-узлы и соответствующие рёбра к skeleton удалены. Caller передаёт
+payload отдельным `Link(SETTLEMENT, payload)`; `source_wire` удалён.
+Generic NL stamp-каналы и economic-tier fallback skeleton не меняются.
+Provenance type-значений указывает `SettlementPayload.field`; fold/default
+и наследование через нижние границы сохраняются. Список source-моделей
+в resolver не добавляется: новые узлы находятся по metadata.
 
 ---
 
@@ -246,7 +303,7 @@ class LocationContext(ContextModel):
 |---|---|
 | `field` | Имя канонического authored/stamp-поля параметра (`system_economic_tier`, `parent_wall_material`, …) — объявлено один раз, проверяется верификатором против `model_fields` источников |
 | `default` | `DefaultPolicy` — метка семантики terminal default для provenance и логирования (`REGISTRY_MEDIAN`, `CANONICAL_DEFAULT`, `NONE_IS_ERROR`). Не выбирает обработчик значения в движке. WARNING о provisional default эмитит движок — §4 «Логирование» |
-| `default_source` | `CascadeDefault(model, field)` — типизированная ссылка на обычное или computed-поле POJO. Обязательна для политик дефолта, запрещена при `NONE_IS_ERROR`. Caller передаёт экземпляр POJO; verifier проверяет наличие поля и совместимость типа с полем контекста. Дефолтные значения и вычисления принадлежат самому POJO |
+| `default_source` | `CascadeDefault(ref)` — типизированная ссылка на обычное или computed-поле POJO. Обязательна для политик дефолта, запрещена при `NONE_IS_ERROR`. Caller передаёт экземпляр POJO; verifier проверяет наличие поля и совместимость типа с полем контекста. Дефолтные значения и вычисления принадлежат самому POJO |
 | `materialize` | **Имя** резолвера materialize-входов (`BAND`/`RANGE` → значение), обязательно при не-`VALUE` каналах параметра; binding `имя → callable` — таблица `_MATERIALIZE` в движке, callable живёт в доменном модуле (`economicTierBands.materialize_tier_input`) |
 | `fold` | Опциональный derived-resolver по **имени** — для параметров, которым first-non-null недостаточно (точечно, не режим движка); binding `имя → callable` — таблица `_FOLDS` в движке, callable в доменном модуле (`materialResolver.fold_dominant_material`) |
 | `levels` | Опционально (v1 не использует): ограничение подмножества уровней для будущих полей (climate anchor и пр.); покрытие уровней каналами проверяется непрерывностью цепочки рёбер |

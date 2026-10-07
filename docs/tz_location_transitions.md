@@ -2,7 +2,7 @@
 
 **Статус:** утверждено мастером; уточнения порталов и хранения сторон согласованы
 2026-10-05. Оставшиеся вопросы перечислены в §10. Код — только после согласования
-[плана имплементации](../.cursor/plans/location-transitions.md) и явной команды.
+[плана имплементации](../.cursor/plans/location-transitions-done.md) и явной команды.
 Домен **общий для движка**: не срез `tz_locations`, а
 расширение, на которое `tz_locations` § Точки входа / § `location_passages`,
 `tz_structure_connections` §4.1 (порталы) и `tz_settlement_outdoor` C17/C20/O3
@@ -528,7 +528,9 @@ Runtime-переход внутри здания (пролом в стене к�
 ## 11. Границы и порядок текущей имплементации
 
 Детальная последовательность и зависимости — в согласованном
-[плане location-transitions](../.cursor/plans/location-transitions.md).
+[плане location-transitions](../.cursor/plans/location-transitions-done.md).
+Generator/storage/read/CRUD scope принят и план закрыт 2026-10-07;
+отложенные темы перечислены в §7 плана, wallOpening — в §9.
 Текущая поставка: контракт физических переходов и реестр, SQL со сторонами,
 application CRUD, structural/outdoor producers, interior pack и чтение данных.
 Порядок: контракт → аддитивная схема/реестр → validation/repository/CRUD →

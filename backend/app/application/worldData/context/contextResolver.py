@@ -30,6 +30,7 @@ from app.application.worldData.generators.utils.materialResolver import (
     fold_dominant_material,
 )
 from app.dataModel.cascade.cascadeGraph import (
+    bind_field,
     check_link,
     ordered_scopes,
 )
@@ -210,13 +211,14 @@ def _resolve_default(param: Cascade, sources: tuple[BaseModel, ...]):
     pointer = param.default_source
     if pointer is None:
         raise ValueError(f"{param.field}: no value after the cascade")
-    matches = [obj for obj in sources if isinstance(obj, pointer.model)]
+    source = bind_field(pointer.ref, computed=True)
+    matches = [obj for obj in sources if isinstance(obj, source.model)]
     if len(matches) != 1:
         raise ValueError(
-            f"{param.field}: expected one default source {pointer.model.__name__}, "
+            f"{param.field}: expected one default source {source.model.__name__}, "
             f"got {len(matches)}"
         )
-    value = getattr(matches[0], pointer.field)
+    value = getattr(matches[0], source.field)
     if value is None:
         raise ValueError(f"{param.field}: terminal default source returned None")
     return value

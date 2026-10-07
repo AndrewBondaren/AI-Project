@@ -8,6 +8,7 @@ the import instead of silently degrading to inherit/default
 from app.dataModel.cascade.cascadeSpec import (
     Cascade,
     CascadeDefault,
+    FieldRef,
     ChannelKind,
     DefaultPolicy,
 )
@@ -22,7 +23,7 @@ ECONOMIC_TIER = Cascade(
     axis=ScopeLevel,
     input_types=((ChannelKind.RANGE, EconomicTierRange),),
     materialize="economic_tier",
-    default_source=CascadeDefault(LocationCascadeDefaults, "economic_tier"),
+    default_source=CascadeDefault(FieldRef(lambda: LocationCascadeDefaults, lambda pojo: pojo.economic_tier)),
 )
 
 CITY_SIZE = Cascade(
@@ -32,7 +33,7 @@ CITY_SIZE = Cascade(
     default=DefaultPolicy.CANONICAL_DEFAULT,
     axis=ScopeLevel,
     levels=(ScopeLevel.SETTLEMENT,),
-    default_source=CascadeDefault(LocationCascadeDefaults, "system_city_size"),
+    default_source=CascadeDefault(FieldRef(lambda: LocationCascadeDefaults, lambda pojo: pojo.system_city_size)),
 )
 
 SETTLEMENT_DENSITY = Cascade(
@@ -43,7 +44,7 @@ SETTLEMENT_DENSITY = Cascade(
     default=DefaultPolicy.CANONICAL_DEFAULT,
     axis=ScopeLevel,
     levels=(ScopeLevel.SETTLEMENT, ScopeLevel.DISTRICT),
-    default_source=CascadeDefault(LocationCascadeDefaults, "settlement_density"),
+    default_source=CascadeDefault(FieldRef(lambda: LocationCascadeDefaults, lambda pojo: pojo.settlement_density)),
 )
 
 WALL_MATERIAL = Cascade(
@@ -53,7 +54,7 @@ WALL_MATERIAL = Cascade(
     field="parent_wall_material",
     default=DefaultPolicy.CANONICAL_DEFAULT,
     axis=ScopeLevel,
-    default_source=CascadeDefault(LocationCascadeDefaults, "wall_material"),
+    default_source=CascadeDefault(FieldRef(lambda: LocationCascadeDefaults, lambda pojo: pojo.wall_material)),
 )
 
 FLOOR_MATERIAL = Cascade(
@@ -61,11 +62,11 @@ FLOOR_MATERIAL = Cascade(
     field="parent_floor_material",
     default=DefaultPolicy.CANONICAL_DEFAULT,
     axis=ScopeLevel,
-    default_source=CascadeDefault(LocationCascadeDefaults, "floor_material"),
+    default_source=CascadeDefault(FieldRef(lambda: LocationCascadeDefaults, lambda pojo: pojo.floor_material)),
 )
 
 DOMINANT_MATERIAL = Cascade(
-    # Settlement-only authored chain (NL node beats the skeleton node);
+    # Settlement-only authored payload channel;
     # deeper scopes inherit. First `Cascade.fold` consumer (M10): the
     # tier→material_registry pick sits between the authored chain and
     # the canonical default; layout-derived dominants stay outside the
@@ -76,5 +77,5 @@ DOMINANT_MATERIAL = Cascade(
     axis=ScopeLevel,
     levels=(ScopeLevel.SETTLEMENT,),
     fold="dominant_material",
-    default_source=CascadeDefault(LocationCascadeDefaults, "dominant_material"),
+    default_source=CascadeDefault(FieldRef(lambda: LocationCascadeDefaults, lambda pojo: pojo.dominant_material)),
 )

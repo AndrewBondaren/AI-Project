@@ -164,6 +164,23 @@ class LocationPayloadSchemaTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(settlement_context(world, await self.repo.get_by_id("custom")).system_city_size,
                          "medium")
 
+    async def test_runtime_binds_payload_for_settlement_and_complex(self):
+        world = World(world_uid="world", name="World", created_at="2026-10-07")
+        for kind in ("settlement", "location_complex"):
+            row = self.location(kind, {"system_city_size": "large", "settlement_density": "dense",
+                                       "dominant_material": "marble"})
+            row.system_location_type = kind
+            row.system_city_size = "small"
+            row.settlement_density = "sparse"
+            row.dominant_material = "granite"
+            row.system_economic_tier = "custom-tier"
+            ctx = settlement_context(world, row)
+            self.assertEqual((ctx.system_city_size, ctx.settlement_density, ctx.dominant_material),
+                             ("large", "dense", "marble"))
+            for name in ("system_city_size", "settlement_density", "dominant_material"):
+                self.assertEqual(ctx.provenance[name][1], f"SettlementPayload.{name}")
+            self.assertEqual(ctx.provenance["economic_tier"][1], "BundleNamedLocation.system_economic_tier")
+
     async def test_payload_wins_over_legacy_columns_and_invalid_payload_fails(self):
         row = self.location("priority", {"system_city_size": "large"})
         row.system_city_size = "small"

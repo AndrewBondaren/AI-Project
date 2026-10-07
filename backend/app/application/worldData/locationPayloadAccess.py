@@ -26,13 +26,3 @@ def district_payload(location: object) -> DistrictPayload:
 def payload_field_names() -> frozenset[str]:
     return frozenset(name for model in LocationPayload.models().values()
                      for name in model.model_fields)
-
-
-def source_wire(location: object, wire: dict) -> dict:
-    """P3 bridge: stored payload supplies the old NL cascade nodes until P4."""
-    raw = getattr(location, "location_payload", None)
-    if raw is not None:
-        for name in payload_field_names():
-            wire.pop(name, None)
-        wire.update(raw)
-    return wire

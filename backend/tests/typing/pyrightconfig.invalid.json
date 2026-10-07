@@ -1,0 +1,4 @@
+{
+  "extends": "../../../pyrightconfig.cascade.json",
+  "include": ["cascade_fields_invalid.py"]
+}

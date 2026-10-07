@@ -11,7 +11,8 @@ Whole-graph verification lives in ``cascadeVerify``
 """
 
 from types import UnionType
-from typing import Union, get_args, get_origin
+from dataclasses import dataclass
+from typing import Any, Union, get_args, get_origin, cast
 
 from pydantic import BaseModel
 
@@ -19,10 +20,63 @@ from app.dataModel.annotationPolicy import unwrap_wire_type
 from app.dataModel.cascade.cascadeSpec import (
     Cascade,
     CascadeChannel,
-    CascadeLink,
+    FieldRef,
     ChannelKind,
     ScopeAxis,
 )
+
+
+@dataclass(frozen=True)
+class BoundField:
+    """Introspected field identity, independent of selector identity."""
+
+    model: type[BaseModel]
+    field: str
+
+
+@dataclass(frozen=True)
+class CascadeNode(BoundField):
+    level: ScopeAxis
+
+
+class _SelectedField:
+    def __bool__(self):
+        raise ValueError("field selector must select one direct attribute")
+
+
+class _FieldProbe:
+    def __init__(self, selections):
+        object.__setattr__(self, "_selections", selections)
+
+    def __getattribute__(self, name):
+        selected = _SelectedField()
+        object.__getattribute__(self, "_selections").append((name, selected))
+        return selected
+
+
+def bind_field(ref: FieldRef[Any, Any], *, computed: bool = False) -> BoundField:
+    """Resolve a direct selector; no source object/default is evaluated."""
+    if not isinstance(ref, FieldRef):
+        raise ValueError("field reference must be FieldRef")
+    try:
+        model = ref.model()
+    except Exception as exc:
+        raise ValueError("cannot resolve FieldRef model supplier") from exc
+    if not isinstance(model, type) or not issubclass(model, BaseModel):
+        raise ValueError("field reference must refer to a POJO model")
+    selections = []
+    try:
+        result = ref.select(cast(Any, _FieldProbe(selections)))
+    except Exception as exc:
+        raise ValueError("field selector must select one direct attribute") from exc
+    if len(selections) != 1 or result is not selections[0][1]:
+        raise ValueError("field selector must select one direct attribute")
+    name = selections[0][0]
+    if name not in model.model_fields and not (
+        computed and name in model.model_computed_fields
+    ):
+        raise ValueError(f"{model.__name__}: no such field '{name}'")
+    return BoundField(model, name)
 
 
 def _channels_of(model: type[BaseModel]) -> list[tuple[str, CascadeChannel]]:
@@ -112,8 +166,8 @@ def _field_type_ok(
     return _mentions(annotation, expected)
 
 
-def _describe(link: CascadeLink) -> str:
-    name = link.model.__name__ if link.model else "?"
+def _describe(link: CascadeNode) -> str:
+    name = link.model.__name__
     return f"{name}.{link.field}@{link.level.value}"
 
 
@@ -141,33 +195,28 @@ def _type_names(types: frozenset) -> str:
 
 
 def _declared_edges(
-    chain_nodes: dict[CascadeLink, CascadeChannel],
-    owners: dict[CascadeLink, type[BaseModel]],
-) -> tuple[set[tuple[CascadeLink, CascadeLink]], list[str]]:
+    chain_nodes: dict[CascadeNode, CascadeChannel],
+) -> tuple[set[tuple[CascadeNode, CascadeNode]], list[str]]:
     """Normalize declared links into ``(upper, lower)`` edge pairs.
 
     The reverse direction of each declared edge is materialized here —
     the checked graph has both neighbours for every node.
     """
-    edges: set[tuple[CascadeLink, CascadeLink]] = set()
+    edges: set[tuple[CascadeNode, CascadeNode]] = set()
     errors: list[str] = []
     for link, channel in chain_nodes.items():
-        owner = owners[link]
         node = _describe(link)
         for side, edge in (
             ("above", channel.above), ("below", channel.below),
         ):
             if edge is None:
                 continue
-            target_model = edge.model or owner
-            if edge.field not in getattr(target_model, "model_fields", {}):
-                errors.append(
-                    f"{node}: {side} → "
-                    f"{_describe(CascadeLink(target_model, edge.field, edge.level))} "
-                    f"— no such field on {target_model.__name__}"
-                )
+            try:
+                target = bind_field(edge.ref)
+            except ValueError as exc:
+                errors.append(f"{node}: {side} → {exc}")
                 continue
-            target_key = CascadeLink(target_model, edge.field, edge.level)
+            target_key = CascadeNode(target.model, target.field, edge.level)
             if target_key not in chain_nodes:
                 errors.append(
                     f"{node}: {side} → {_describe(target_key)} "
@@ -186,8 +235,8 @@ def _declared_edges(
             chain_nodes[upper].kind is ChannelKind.VALUE
             and chain_nodes[lower].kind is ChannelKind.VALUE
         ):
-            upper_types = _base_types(owners[upper], upper.field)
-            lower_types = _base_types(owners[lower], lower.field)
+            upper_types = _base_types(upper.model, upper.field)
+            lower_types = _base_types(lower.model, lower.field)
             if upper_types != lower_types:
                 errors.append(
                     f"edge {_describe(upper)} → {_describe(lower)}: "
@@ -200,25 +249,23 @@ def _declared_edges(
 
 def ordered_chain(
     param: Cascade,
-) -> tuple[tuple[type[BaseModel], CascadeLink, CascadeChannel], ...]:
+) -> tuple[tuple[type[BaseModel], CascadeNode, CascadeChannel], ...]:
     """Chain nodes ordered top→bottom — the engine's roadmap.
 
     Returns ``(owner_model, node, channel)`` triples. Raises
     ``ValueError`` on a broken chain — the engine walks only a
     verified graph.
     """
-    chain_nodes: dict[CascadeLink, CascadeChannel] = {}
-    owners: dict[CascadeLink, type[BaseModel]] = {}
+    chain_nodes: dict[CascadeNode, CascadeChannel] = {}
     for model in _source_models():
         for field, channel in _channels_of(model):
             if channel.param is not param:
                 continue
-            link = CascadeLink(model, field, channel.level)
+            link = CascadeNode(model, field, channel.level)
             chain_nodes.setdefault(link, channel)
-            owners.setdefault(link, model)
-    edges, errors = _declared_edges(chain_nodes, owners)
-    above_of: dict[CascadeLink, CascadeLink] = {}
-    below_of: dict[CascadeLink, CascadeLink] = {}
+    edges, errors = _declared_edges(chain_nodes)
+    above_of: dict[CascadeNode, CascadeNode] = {}
+    below_of: dict[CascadeNode, CascadeNode] = {}
     for upper, lower in edges:
         if lower in above_of and above_of[lower] != upper:
             errors.append(f"{_describe(lower)}: two above neighbours")
@@ -233,7 +280,7 @@ def ordered_chain(
             "cascade chain is broken: "
             + "; ".join(errors or ["no unique top and bottom"])
         )
-    order: list[CascadeLink] = []
+    order: list[CascadeNode] = []
     cursor = tops[0]
     while cursor not in order:
         order.append(cursor)
@@ -249,7 +296,7 @@ def ordered_chain(
             )
         )
     return tuple(
-        (owners[link], link, chain_nodes[link]) for link in order
+        (link.model, link, chain_nodes[link]) for link in order
     )
 
 

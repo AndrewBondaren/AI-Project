@@ -17,8 +17,9 @@ from app.dataModel.economy.economyTier.worldEconomyTierRegistry import (
     WorldEconomyTierRegistry,
 )
 from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
+from app.dataModel.locations.settlement.settlement.settlementPayload import SettlementPayload
 from app.dataModel.cascade.cascadeSpec import (
-    Cascade, CascadeChannel, CascadeDefault, CascadeLink, DefaultPolicy, ScopeAxis,
+    Cascade, CascadeChannel, CascadeDefault, CascadeLink, FieldRef, DefaultPolicy, ScopeAxis,
 )
 from app.dataModel.cascade.cascadeGraph import ordered_scopes
 from app.dataModel.locations.context.locationContext import LocationContext
@@ -94,6 +95,11 @@ def _skeleton(tier=None, size=None, density=None, dominant=None):
         economic_tier=tier, system_city_size=size,
         settlement_density=density, dominant_material=dominant,
     )
+
+
+def _payload(size=None, density=None, dominant=None):
+    return SettlementPayload(system_city_size=size, settlement_density=density,
+                             dominant_material=dominant)
 
 
 def _dte(tier_range=None, density=None):
@@ -187,15 +193,15 @@ class RuntimeLinkedListTests(unittest.TestCase):
         defaults = create_model("SignalDefaults", signal=(str, "fallback"))
         param = Cascade(
             field="signal", default=DefaultPolicy.CANONICAL_DEFAULT,
-            axis=axis, default_source=CascadeDefault(defaults, "signal"),
+            axis=axis, default_source=CascadeDefault(FieldRef(lambda: defaults, lambda pojo: pojo.signal)),
             levels=(axis.FIRST, axis.MIDDLE, axis.LEAF),
         )
         source = create_model("SignalSource", signal=(Annotated[
             str | None,
             CascadeChannel(param, axis.LEAF,
-                           below=CascadeLink(None, "signal", axis.MIDDLE)),
+                           below=CascadeLink(FieldRef(lambda: source, lambda pojo: pojo.signal), axis.MIDDLE)),
             CascadeChannel(param, axis.MIDDLE,
-                           below=CascadeLink(None, "signal", axis.FIRST)),
+                           below=CascadeLink(FieldRef(lambda: source, lambda pojo: pojo.signal), axis.FIRST)),
             CascadeChannel(param, axis.FIRST),
         ], None))
         # Override inherited parameter fields with plain fields, then add
@@ -466,36 +472,36 @@ class ExtendResolutionTests(unittest.TestCase):
         )
         self.assertEqual(ctx2.economic_tier, "t5")
 
-    def test_city_size_nl_beats_skeleton_and_inherits_down(self):
-        # M7: CITY_SIZE resolves only at the settlement scope — the
-        # authored NL node sits above the skeleton node; deeper scopes
-        # inherit the value unchanged.
+    def test_city_size_payload_beats_legacy_skeleton_and_inherits_down(self):
+        # P4: only the payload declares this channel; legacy skeleton
+        # values cannot override it. Deeper scopes inherit unchanged.
         ctx = extend(
             root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl(uid="c", size="large")),
+            Link(ScopeLevel.SETTLEMENT, _payload(size="large")),
             Link(ScopeLevel.SETTLEMENT, _skeleton(size="small")),
         )
         self.assertEqual(ctx.system_city_size, "large")
         self.assertEqual(
             ctx.provenance["system_city_size"],
             (ScopeLevel.SETTLEMENT,
-             "BundleNamedLocation.system_city_size"),
+             "SettlementPayload.system_city_size"),
         )
         ctx = extend(ctx, EmptyLink(ScopeLevel.DISTRICT))
         ctx = extend(ctx, Link(ScopeLevel.AREA, _plot()))
         ctx = extend(ctx, Link(ScopeLevel.BUILDING, _nl()))
         self.assertEqual(ctx.system_city_size, "large")
 
-    def test_city_size_skeleton_feeds_and_default_is_canonical(self):
+    def test_city_size_payload_feeds_and_default_is_canonical(self):
         ctx = extend(
             root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),
-            Link(ScopeLevel.SETTLEMENT, _skeleton(size="small")),
+            Link(ScopeLevel.SETTLEMENT, _payload(size="small")),
         )
         self.assertEqual(ctx.system_city_size, "small")
         self.assertEqual(
             ctx.provenance["system_city_size"],
-            (ScopeLevel.SETTLEMENT, "SettlementSkeleton.system_city_size"),
+            (ScopeLevel.SETTLEMENT, "SettlementPayload.system_city_size"),
         )
         with self.assertLogs(level="WARNING") as captured:
             empty = extend(
@@ -513,20 +519,21 @@ class ExtendResolutionTests(unittest.TestCase):
             (ScopeLevel.WORLD, "default:canonical_default"),
         )
 
-    def test_density_nl_beats_skeleton_and_inherits_down(self):
-        # M8: NL authored density sits above the skeleton node at the
-        # settlement scope; deeper scopes inherit unchanged.
+    def test_density_payload_beats_legacy_skeleton_and_inherits_down(self):
+        # P4: payload density is the settlement source; legacy skeleton
+        # values are plain fields. Deeper scopes inherit unchanged.
         ctx = extend(
             root_context(_world()),
             Link(ScopeLevel.SETTLEMENT,
                  _nl(uid="c", density="dense")),
+            Link(ScopeLevel.SETTLEMENT, _payload(density="dense")),
             Link(ScopeLevel.SETTLEMENT, _skeleton(density="sparse")),
         )
         self.assertEqual(ctx.settlement_density, "dense")
         self.assertEqual(
             ctx.provenance["settlement_density"],
             (ScopeLevel.SETTLEMENT,
-             "BundleNamedLocation.settlement_density"),
+             "SettlementPayload.settlement_density"),
         )
         ctx = extend(ctx, EmptyLink(ScopeLevel.DISTRICT))
         ctx = extend(ctx, Link(ScopeLevel.AREA, _plot()))
@@ -540,7 +547,7 @@ class ExtendResolutionTests(unittest.TestCase):
             root_context(_world()),
             Link(ScopeLevel.SETTLEMENT,
                  _nl(uid="c", density="sparse")),
-            Link(ScopeLevel.SETTLEMENT, _skeleton(density="medium")),
+            Link(ScopeLevel.SETTLEMENT, _payload(density="sparse")),
         )
         self.assertEqual(ctx.settlement_density, "sparse")
         district = extend(
@@ -554,17 +561,17 @@ class ExtendResolutionTests(unittest.TestCase):
         plain = extend(ctx, Link(ScopeLevel.DISTRICT, _dte()))
         self.assertEqual(plain.settlement_density, "sparse")
 
-    def test_density_skeleton_feeds_and_default_is_canonical(self):
+    def test_density_payload_feeds_and_default_is_canonical(self):
         ctx = extend(
             root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),
-            Link(ScopeLevel.SETTLEMENT, _skeleton(density="sparse")),
+            Link(ScopeLevel.SETTLEMENT, _payload(density="sparse")),
         )
         self.assertEqual(ctx.settlement_density, "sparse")
         self.assertEqual(
             ctx.provenance["settlement_density"],
             (ScopeLevel.SETTLEMENT,
-             "SettlementSkeleton.settlement_density"),
+             "SettlementPayload.settlement_density"),
         )
         with self.assertLogs(level="WARNING") as captured:
             empty = extend(
@@ -673,37 +680,38 @@ class ExtendResolutionTests(unittest.TestCase):
         self.assertEqual(ctx.wall_material, "iron")
         self.assertEqual(ctx.floor_material, "wood")
 
-    def test_dominant_material_nl_beats_skeleton_and_inherits(self):
-        # M10: settlement-only authored chain — the NL node sits above
-        # the skeleton node; deeper scopes inherit unchanged.
+    def test_dominant_material_payload_beats_legacy_skeleton_and_inherits(self):
+        # P4: the payload is the only authored channel. Legacy skeleton
+        # values are plain fields; deeper scopes inherit unchanged.
         ctx = extend(
             root_context(_world()),
             Link(ScopeLevel.SETTLEMENT,
                  _nl(uid="c", dominant="marble")),
+            Link(ScopeLevel.SETTLEMENT, _payload(dominant="marble")),
             Link(ScopeLevel.SETTLEMENT, _skeleton(dominant="granite")),
         )
         self.assertEqual(ctx.dominant_material, "marble")
         self.assertEqual(
             ctx.provenance["dominant_material"],
             (ScopeLevel.SETTLEMENT,
-             "BundleNamedLocation.dominant_material"),
+             "SettlementPayload.dominant_material"),
         )
         ctx = extend(ctx, EmptyLink(ScopeLevel.DISTRICT))
         ctx = extend(ctx, EmptyLink(ScopeLevel.AREA))
         ctx = extend(ctx, Link(ScopeLevel.BUILDING, _nl()))
         self.assertEqual(ctx.dominant_material, "marble")
 
-    def test_dominant_material_skeleton_feeds_below_nl(self):
+    def test_dominant_material_payload_feeds(self):
         ctx = extend(
             root_context(_world()),
             Link(ScopeLevel.SETTLEMENT, _nl(uid="c")),
-            Link(ScopeLevel.SETTLEMENT, _skeleton(dominant="granite")),
+            Link(ScopeLevel.SETTLEMENT, _payload(dominant="granite")),
         )
         self.assertEqual(ctx.dominant_material, "granite")
         self.assertEqual(
             ctx.provenance["dominant_material"],
             (ScopeLevel.SETTLEMENT,
-             "SettlementSkeleton.dominant_material"),
+             "SettlementPayload.dominant_material"),
         )
 
     def test_dominant_material_fold_picks_by_resolved_tier(self):
@@ -734,12 +742,13 @@ class ExtendResolutionTests(unittest.TestCase):
             root_context(_world(with_materials=True)),
             Link(ScopeLevel.SETTLEMENT,
                  _nl("t4", "c", "settlement", dominant="marble")),
+            Link(ScopeLevel.SETTLEMENT, _payload(dominant="marble")),
         )
         self.assertEqual(ctx.dominant_material, "marble")
         self.assertEqual(
             ctx.provenance["dominant_material"],
             (ScopeLevel.SETTLEMENT,
-             "BundleNamedLocation.dominant_material"),
+             "SettlementPayload.dominant_material"),
         )
 
     def test_dominant_material_fold_falls_back_to_canonical(self):

@@ -8,8 +8,10 @@ the source POJO fields themselves in the same style as wire policies
   context fields and source channels reference it by **identity**;
 - ``CascadeChannel(param, level, above, below, kind)`` — ``Annotated``
   metadata on a source field: "this field feeds ``param`` at ``level``";
-- ``CascadeLink(model, field, level)`` — a typed pointer to a neighbour
-  node (like ``prev``/``next`` in a linked list).
+- ``FieldRef(model_supplier, selector)`` — typed source field selection,
+  declared outside ``Annotated`` so static checkers inspect the selector;
+- ``CascadeLink(ref, level)`` — a typed pointer to a neighbour node
+  (like ``prev``/``next`` in a linked list).
 
 Each edge is declared **exactly once**, on the side whose module may
 import the neighbour without a cycle — the ORM ``backref`` convention:
@@ -17,8 +19,8 @@ the verifier materializes the reverse direction, so in the checked
 graph every node has both neighbours. (Declaring both sides in literals
 would mean two independent facts that can silently disagree; SQLAlchemy
 ``back_populates`` gets away with it only via lazy string refs, which
-this contract deliberately avoids.) ``model=None`` in a link means the
-declaring model — a class cannot reference itself inside its own body.
+this contract deliberately avoids.) Model suppliers are evaluated after
+classes exist, so self-links use the same typed API as external links.
 
 Scope axes are per-domain enums on the ``ScopeAxis`` mixin
 (``ScopeLevel`` for the location hierarchy, a future ``FactionScope``
@@ -35,6 +37,8 @@ verification of the declared graph — ``cascade_channels``,
 
 from dataclasses import dataclass
 from enum import StrEnum
+from collections.abc import Callable
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
 
@@ -73,6 +77,18 @@ class ChannelKind(StrEnum):
     """Range input — materialize resolves nearest-to-anchor / rng inside it."""
 
 
+M = TypeVar("M", bound=BaseModel)
+T = TypeVar("T")
+
+
+@dataclass(frozen=True)
+class FieldRef(Generic[M, T]):
+    """Statically checked direct field selection, with deferred model lookup."""
+
+    model: Callable[[], type[M]]
+    select: Callable[[M], T]
+
+
 @dataclass(frozen=True)
 class CascadeDefault:
     """Terminal fallback field on a caller-supplied source POJO.
@@ -81,8 +97,7 @@ class CascadeDefault:
     only reads it, without a registry-name or value table.
     """
 
-    model: type[BaseModel]
-    field: str
+    ref: FieldRef[Any, Any]
 
 
 @dataclass(frozen=True)
@@ -115,13 +130,9 @@ class Cascade:
 
 @dataclass(frozen=True)
 class CascadeLink:
-    """One node pointer: a field of a model at a level.
+    """Typed declaration of a neighbouring field at a scope level."""
 
-    ``model=None`` — the declaring model itself (self-edge).
-    """
-
-    model: type[BaseModel] | None
-    field: str
+    ref: FieldRef[Any, Any]
     level: ScopeAxis
 
 

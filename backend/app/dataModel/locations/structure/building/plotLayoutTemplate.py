@@ -17,6 +17,7 @@ from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
 from app.dataModel.cascade.cascadeSpec import (
     CascadeChannel,
     CascadeLink,
+    FieldRef,
     ChannelKind,
 )
 from app.dataModel.flora.enums.cropKind import CropKind
@@ -42,6 +43,11 @@ _LEGACY_BODY_KEYS = (
 )
 
 
+# Selectors live outside Annotated so static checkers inspect attributes.
+_PLOT_LAYOUT_TEMPLATE_ECONOMIC_TIER_BAND = FieldRef(lambda: PlotLayoutTemplate, lambda pojo: pojo.economic_tier_band)
+_PLOT_LAYOUT_TEMPLATE_ECONOMIC_TIER_RANGE = FieldRef(lambda: PlotLayoutTemplate, lambda pojo: pojo.economic_tier_range)
+
+
 class PlotLayoutTemplate(BaseModel):
     """Plot drawing (packing) with optional building body. tz_building_generator.md (lock)."""
 
@@ -51,21 +57,21 @@ class PlotLayoutTemplate(BaseModel):
     display_name: StrictOnWire[str]
     plot_type: DefaultOnWire[BuildingPurposeFamily] = BuildingPurposeFamily.DWELLING
     # Area-level cascade channels for `economic_tier`, chained by edges
-    # tier → band → range; `model=None` — self-links (tz_cascade_context
-    # §2). Outer neighbours (building NL above, district NL below) are
+    # tier → band → range; deferred FieldRef suppliers bind self-links
+    # (tz_cascade_context §2). Outer neighbours (building NL above, district NL below) are
     # declared on the NL side — this module may not import NamedLocation.
     economic_tier: Annotated[
         DefaultOnWire[EconomyTierKey | None],
         CascadeChannel(
             ECONOMIC_TIER, ScopeLevel.AREA,
-            below=CascadeLink(None, "economic_tier_band", ScopeLevel.AREA),
+            below=CascadeLink(_PLOT_LAYOUT_TEMPLATE_ECONOMIC_TIER_BAND, ScopeLevel.AREA),
         ),
     ] = None
     economic_tier_band: Annotated[
         DefaultOnWire[str | None],
         CascadeChannel(
             ECONOMIC_TIER, ScopeLevel.AREA, kind=ChannelKind.BAND,
-            below=CascadeLink(None, "economic_tier_range", ScopeLevel.AREA),
+            below=CascadeLink(_PLOT_LAYOUT_TEMPLATE_ECONOMIC_TIER_RANGE, ScopeLevel.AREA),
         ),
     ] = None
     economic_tier_range: Annotated[

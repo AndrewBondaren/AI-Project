@@ -268,10 +268,16 @@ footprint/occupancy, locations index и topology читают payload через
 адаптеры. Новые district freezes создаются в `DistrictPayload`, persist
 выполняет read–validate–merge перед записью в своей транзакции.
 
-До P4 `source_wire` проецирует значения payload в прежние NL cascade-поля
-только в памяти; старые `CascadeChannel`-аннотации и приоритеты сохраняются.
-Type-колонки при новом импорте не дублируются. Удаление плоских source-полей
-и перенос cascade metadata — следующий шаг P4.
+**P4 — cascade channels:** размер, density и dominant material объявлены
+на `SettlementPayload` (SETTLEMENT). NL-узлы этих параметров и их рёбра
+к skeleton удалены; `source_wire` удалён. Settlement caller передаёт
+отдельные source-POJO: generic NL, typed payload и legacy skeleton для
+неизменённого generic economic-tier fallback. `CITY_SIZE` и
+`DOMINANT_MATERIAL` имеют по одному payload-узлу; density — цепочку
+`DistrictTemplateEntry.density → SettlementPayload.settlement_density`.
+Provenance authored type-значений теперь указывает `SettlementPayload.field`.
+Fold/default, наследование ниже settlement и generic stamp-приоритеты
+сохраняются. Legacy DB-колонки и read fallback удаляются отдельно в P2b.
 
 **Граница полей:**
 

@@ -5,15 +5,15 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from app.dataModel.cascade.cascadeGraph import ordered_chain
+from app.dataModel.cascade.cascadeGraph import CascadeNode, ordered_chain
 from app.dataModel.cascade.cascadeSpec import (
-    Cascade, CascadeChannel, CascadeLink, ScopeAxis,
+    Cascade, CascadeChannel, ScopeAxis,
 )
 
 
 @dataclass(frozen=True)
 class BoundChannel:
-    node: CascadeLink
+    node: CascadeNode
     channel: CascadeChannel
     obj: BaseModel | None
 

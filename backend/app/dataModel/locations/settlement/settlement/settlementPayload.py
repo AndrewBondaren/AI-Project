@@ -1,6 +1,11 @@
 """Authored and type-stamped settlement data — tz_locations §Payload per type."""
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from typing import Annotated
+from app.dataModel.cascade.cascadeSpec import CascadeChannel, CascadeLink, FieldRef
+from app.dataModel.locations.context.cascadeParams import CITY_SIZE, SETTLEMENT_DENSITY, DOMINANT_MATERIAL
+from app.dataModel.locations.context.scopeLevel import ScopeLevel
+from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 
 from app.dataModel.annotationPolicy import DefaultOnWire
 from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import ConnectionTypeKey
@@ -33,5 +38,22 @@ class SettlementPayloadFields(BaseModel):
     system_settlement_specializations: DefaultOnWire[list[SettlementSpecializationBind] | None] = None
 
 
+# Selectors live outside Annotated so static checkers inspect attributes.
+_DISTRICT_TEMPLATE_ENTRY_DENSITY = FieldRef(lambda: DistrictTemplateEntry, lambda pojo: pojo.density)
+
+
 class SettlementPayload(SettlementPayloadFields):
+    system_city_size: Annotated[
+        DefaultOnWire[SettlementSizeKey | None],
+        CascadeChannel(CITY_SIZE, ScopeLevel.SETTLEMENT),
+    ] = None
+    settlement_density: Annotated[
+        DefaultOnWire[DistrictDensity | None],
+        CascadeChannel(SETTLEMENT_DENSITY, ScopeLevel.SETTLEMENT,
+                       above=CascadeLink(_DISTRICT_TEMPLATE_ENTRY_DENSITY, ScopeLevel.DISTRICT)),
+    ] = None
+    dominant_material: Annotated[
+        DefaultOnWire[MaterialKey | None],
+        CascadeChannel(DOMINANT_MATERIAL, ScopeLevel.SETTLEMENT),
+    ] = None
     is_inhabited: DefaultOnWire[bool] = True

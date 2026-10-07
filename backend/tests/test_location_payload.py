@@ -123,13 +123,13 @@ class LocationPayloadTests(unittest.TestCase):
             LocationPayload.validate("district", {"district_topology": {"cell_x": 1}})
 
     def test_payload_fields_do_not_duplicate_legacy_cascade_channels(self):
-        self.assertEqual(cascade_channels(SettlementPayload), ())
+        self.assertEqual(len(cascade_channels(SettlementPayload)), 3)
         self.assertNotIn("economic_tier", SettlementPayload.model_fields)
         self.assertNotIn("system_location_mood", SettlementPayload.model_fields)
         self.assertNotIn("is_inhabited", SettlementSkeleton.model_fields)
         skeleton = SettlementSkeleton.model_validate({"structure_counts": {"plot": 2}})
         self.assertEqual(skeleton.plot_counts, {"plot": 2})
-        self.assertEqual(len(cascade_channels(SettlementSkeleton)), 4)
+        self.assertEqual(len(cascade_channels(SettlementSkeleton)), 1)
 
     def test_builtin_kinds_survive_minimal_fixture_and_merge(self):
         engine = WorldLocationTypeRegistry.canonical_engine()

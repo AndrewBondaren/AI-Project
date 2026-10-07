@@ -9,6 +9,8 @@ import validation) — the engine walks only a verified chain.
 from pydantic import BaseModel
 
 from app.dataModel.cascade.cascadeGraph import (
+    CascadeNode,
+    bind_field,
     _base_types,
     _channels_of,
     _declared_edges,
@@ -19,7 +21,6 @@ from app.dataModel.cascade.cascadeGraph import (
 from app.dataModel.cascade.cascadeSpec import (
     Cascade,
     CascadeChannel,
-    CascadeLink,
     ChannelKind,
     DefaultPolicy,
 )
@@ -46,12 +47,11 @@ def verify_cascade_contract(context_model: type[BaseModel]) -> None:
         for meta in info.metadata
         if isinstance(meta, Cascade)
     }
-    # (param, node) -> channel ; node = CascadeLink with resolved model
-    nodes: dict[tuple[Cascade, CascadeLink], CascadeChannel] = {}
-    owners: dict[tuple[Cascade, CascadeLink], type[BaseModel]] = {}
+    # (param, node) -> channel ; node = CascadeNode with resolved model
+    nodes: dict[tuple[Cascade, CascadeNode], CascadeChannel] = {}
     for model in _source_models():
         for field, channel in _channels_of(model):
-            key = (channel.param, CascadeLink(model, field, channel.level))
+            key = (channel.param, CascadeNode(model, field, channel.level))
             if key in nodes:
                 errors.append(
                     f"{model.__name__}.{field}: duplicate channel for "
@@ -59,7 +59,6 @@ def verify_cascade_contract(context_model: type[BaseModel]) -> None:
                 )
                 continue
             nodes[key] = channel
-            owners[key] = model
     for param, ctx_field in params.items():
         chain_nodes = {
             link: channel
@@ -74,10 +73,10 @@ def verify_cascade_contract(context_model: type[BaseModel]) -> None:
             )
             continue
         # Declared edges normalized as (upper, lower) node keys.
-        above_of: dict[CascadeLink, CascadeLink] = {}
-        below_of: dict[CascadeLink, CascadeLink] = {}
+        above_of: dict[CascadeNode, CascadeNode] = {}
+        below_of: dict[CascadeNode, CascadeNode] = {}
         for link, channel in chain_nodes.items():
-            owner = owners[(param, link)]
+            owner = link.model
             node = _describe(link)
             if type(link.level) is not param.axis:
                 errors.append(
@@ -90,10 +89,7 @@ def verify_cascade_contract(context_model: type[BaseModel]) -> None:
                     f"{node}: channel kind={channel.kind} incompatible "
                     "with field type"
                 )
-        local_owners = {
-            link: owners[(param, link)] for link in chain_nodes
-        }
-        edges, edge_errors = _declared_edges(chain_nodes, local_owners)
+        edges, edge_errors = _declared_edges(chain_nodes)
         errors.extend(edge_errors)
         for upper, lower in edges:
             if lower in above_of and above_of[lower] != upper:
@@ -117,7 +113,7 @@ def verify_cascade_contract(context_model: type[BaseModel]) -> None:
                 f"{len(tops)}/{len(bottoms)}"
             )
         else:
-            visited: set[CascadeLink] = set()
+            visited: set[CascadeNode] = set()
             cursor = tops[0]
             while cursor not in visited:
                 visited.add(cursor)
@@ -148,7 +144,7 @@ def verify_cascade_contract(context_model: type[BaseModel]) -> None:
                 f"{sorted(level.value for level in missing_levels)}"
             )
         if not any(
-            param.field in owners[(param, link)].model_fields
+            param.field in link.model.model_fields
             for link in chain_nodes
         ):
             errors.append(
@@ -163,7 +159,7 @@ def _binding_errors(
     param: Cascade,
     context_model: type[BaseModel],
     ctx_field: str,
-    chain_nodes: dict[CascadeLink, CascadeChannel],
+    chain_nodes: dict[CascadeNode, CascadeChannel],
 ) -> list[str]:
     """A param's declaration must be self-contained: the default is a
     typed field of a source POJO; materialize inputs carry a declared resolver
@@ -176,13 +172,14 @@ def _binding_errors(
             errors.append(f"{label}: NONE_IS_ERROR forbids default_source")
     elif source is None:
         errors.append(f"{label}: {param.default.value} requires default_source")
-    elif not isinstance(source.model, type) or not issubclass(source.model, BaseModel):
-        errors.append(f"{label}: default_source must refer to a POJO model")
-    elif (source.field not in source.model.model_fields
-          and source.field not in source.model.model_computed_fields):
-        errors.append(f"{label}: default_source has no field '{source.field}'")
-    elif _base_types(source.model, source.field) != _base_types(context_model, ctx_field):
-        errors.append(f"{label}: default_source field type incompatible with context")
+    else:
+        try:
+            bound = bind_field(source.ref, computed=True)
+        except ValueError as exc:
+            errors.append(f"{label}: default_source {exc}")
+        else:
+            if _base_types(bound.model, bound.field) != _base_types(context_model, ctx_field):
+                errors.append(f"{label}: default_source field type incompatible with context")
     has_materialize_inputs = any(
         channel.kind is not ChannelKind.VALUE
         for channel in chain_nodes.values()
