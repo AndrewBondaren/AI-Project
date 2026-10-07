@@ -13,7 +13,7 @@ from app.dataModel.locations.context.cascadeParams import (
     FLOOR_MATERIAL,
     WALL_MATERIAL,
 )
-from app.dataModel.cascade.cascadeSpec import CascadeChannel, CascadeLink, FieldRef
+from app.dataModel.cascade.cascadeSpec import CascadeChannel, CascadeLink, FieldRef, RepeatScope
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 from app.dataModel.materials.worldMaterialRegistry import MaterialKey
 from app.dataModel.locations.settlement.district.districtTemplateEntry import (
@@ -38,8 +38,6 @@ _PLOT_LAYOUT_TEMPLATE_ECONOMIC_TIER = FieldRef(lambda: PlotLayoutTemplate, lambd
 _PLOT_LAYOUT_TEMPLATE_ECONOMIC_TIER_RANGE = FieldRef(lambda: PlotLayoutTemplate, lambda pojo: pojo.economic_tier_range)
 _DISTRICT_TEMPLATE_ENTRY_ECONOMIC_TIER_RANGE = FieldRef(lambda: DistrictTemplateEntry, lambda pojo: pojo.economic_tier_range)
 _SETTLEMENT_SKELETON_ECONOMIC_TIER = FieldRef(lambda: SettlementSkeleton, lambda pojo: pojo.economic_tier)
-_BUNDLE_NAMED_LOCATION_PARENT_WALL_MATERIAL = FieldRef(lambda: BundleNamedLocation, lambda pojo: pojo.parent_wall_material)
-_BUNDLE_NAMED_LOCATION_PARENT_FLOOR_MATERIAL = FieldRef(lambda: BundleNamedLocation, lambda pojo: pojo.parent_floor_material)
 
 
 class BundleNamedLocation(BaseModel):
@@ -103,50 +101,14 @@ class BundleNamedLocation(BaseModel):
     map_z: DefaultOnWire[int | None] = None
     is_mobile: DefaultOnWire[bool] = False
     system_template_uid: DefaultOnWire[str | None] = None
-    # `wall_material` chain — stamped/authored NL node at every scope
-    # (room is the top, settlement the bottom); each self-edge is
-    # declared once on the deeper side, the `above` direction is
-    # materialized by the verifier (cascade-migration M9).
+    # Repeat one NL field on each tag of the declared context scope path.
     parent_wall_material: Annotated[
         DefaultOnWire[MaterialKey | None],
-        CascadeChannel(
-            WALL_MATERIAL, ScopeLevel.ROOM,
-            below=CascadeLink(_BUNDLE_NAMED_LOCATION_PARENT_WALL_MATERIAL, ScopeLevel.BUILDING),
-        ),
-        CascadeChannel(
-            WALL_MATERIAL, ScopeLevel.BUILDING,
-            below=CascadeLink(_BUNDLE_NAMED_LOCATION_PARENT_WALL_MATERIAL, ScopeLevel.AREA),
-        ),
-        CascadeChannel(
-            WALL_MATERIAL, ScopeLevel.AREA,
-            below=CascadeLink(_BUNDLE_NAMED_LOCATION_PARENT_WALL_MATERIAL, ScopeLevel.DISTRICT),
-        ),
-        CascadeChannel(
-            WALL_MATERIAL, ScopeLevel.DISTRICT,
-            below=CascadeLink(_BUNDLE_NAMED_LOCATION_PARENT_WALL_MATERIAL, ScopeLevel.SETTLEMENT),
-        ),
-        CascadeChannel(WALL_MATERIAL, ScopeLevel.SETTLEMENT),
+        CascadeChannel(WALL_MATERIAL, RepeatScope.EVERY_TAG),
     ] = None
-    # `floor_material` chain — same shape (M9).
     parent_floor_material: Annotated[
         DefaultOnWire[MaterialKey | None],
-        CascadeChannel(
-            FLOOR_MATERIAL, ScopeLevel.ROOM,
-            below=CascadeLink(_BUNDLE_NAMED_LOCATION_PARENT_FLOOR_MATERIAL, ScopeLevel.BUILDING),
-        ),
-        CascadeChannel(
-            FLOOR_MATERIAL, ScopeLevel.BUILDING,
-            below=CascadeLink(_BUNDLE_NAMED_LOCATION_PARENT_FLOOR_MATERIAL, ScopeLevel.AREA),
-        ),
-        CascadeChannel(
-            FLOOR_MATERIAL, ScopeLevel.AREA,
-            below=CascadeLink(_BUNDLE_NAMED_LOCATION_PARENT_FLOOR_MATERIAL, ScopeLevel.DISTRICT),
-        ),
-        CascadeChannel(
-            FLOOR_MATERIAL, ScopeLevel.DISTRICT,
-            below=CascadeLink(_BUNDLE_NAMED_LOCATION_PARENT_FLOOR_MATERIAL, ScopeLevel.SETTLEMENT),
-        ),
-        CascadeChannel(FLOOR_MATERIAL, ScopeLevel.SETTLEMENT),
+        CascadeChannel(FLOOR_MATERIAL, RepeatScope.EVERY_TAG),
     ] = None
     is_outdoor: DefaultOnWire[bool | None] = None
     is_sheltered: DefaultOnWire[bool] = False

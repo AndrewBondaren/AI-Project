@@ -7,6 +7,7 @@ from app.application.jsonValidation import (
     economic_tiers,
 )
 from app.application.jsonValidation.settlementSizeResolve import resolve_settlement_size_key
+from app.application.worldData.locationPayloadAccess import settlement_payload
 from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.economic import (
     check_district_economic_compat,
@@ -251,6 +252,7 @@ def select_district_template(
     unspecialized_only: bool = False,
 ) -> DistrictTemplateEntry | None:
     zone = _cell_zone(cell_x, cell_y, grid_n)
+    payload = settlement_payload(settlement)
     if typical_district_types:
         return _select_by_recipe(
             candidates, settlement, skeleton, world,
@@ -259,6 +261,9 @@ def select_district_template(
             cell_x, cell_y, grid_n, rng, zone, typical_district_types,
             unspecialized_only=unspecialized_only,
         )
+
+    if not payload.is_inhabited:
+        return None
 
     eligible = [
         t for t in candidates

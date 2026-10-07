@@ -117,7 +117,7 @@ def extend(
         inherited_source = ctx.provenance.get(name)
         value, source = _resolve(
             param, level, stored, node_results, getattr(ctx, name),
-            inherited_source, ctx._world, rng,
+            inherited_source, ctx._world, rng, path,
         )
         if source is None:
             if _is_default(inherited_source):
@@ -178,12 +178,12 @@ def _is_default(source) -> bool:
 
 
 def _resolve(param, level, sources, results, inherited, inherited_source,
-             world, rng):
+             world, rng, scope_path):
     """Walk one bound chain; reuse ancestor snapshots, evaluate new nodes."""
     # A provisional default is not an authored anchor — a deeper
     # materialize rolls instead of clamping to the median.
     anchor = None if _is_default(inherited_source) else inherited
-    for bound in bind_chain(param, sources):
+    for bound in bind_chain(param, sources, scope_path=scope_path):
         key = (param, bound.node)
         if bound.node.level is level and key not in results:
             raw = (

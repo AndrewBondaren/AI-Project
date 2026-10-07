@@ -50,7 +50,7 @@ SETTLEMENT_DENSITY = Cascade(
 WALL_MATERIAL = Cascade(
     # NL `parent_wall_material` chain — the same field is the channel
     # node at every scope; a deeper authored NL overrides a shallower
-    # one, ordering is by scope level (cascade-migration M9).
+    # one, following the context scope path derived from field links (S2).
     field="parent_wall_material",
     default=DefaultPolicy.CANONICAL_DEFAULT,
     axis=ScopeLevel,

@@ -19,7 +19,7 @@ from app.dataModel.economy.economyTier.worldEconomyTierRegistry import (
 from app.dataModel.locations.context.cascadeParams import ECONOMIC_TIER
 from app.dataModel.locations.settlement.settlement.settlementPayload import SettlementPayload
 from app.dataModel.cascade.cascadeSpec import (
-    Cascade, CascadeChannel, CascadeDefault, CascadeLink, FieldRef, DefaultPolicy, ScopeAxis,
+    Cascade, CascadeChannel, CascadeDefault, CascadeLink, FieldRef, DefaultPolicy, ScopeAxis, RepeatScope,
 )
 from app.dataModel.cascade.cascadeGraph import ordered_scopes
 from app.dataModel.locations.context.locationContext import LocationContext
@@ -233,6 +233,33 @@ class RuntimeLinkedListTests(unittest.TestCase):
         self.assertEqual(ctx.signal, "first")
         self.assertEqual(root._links, {})
         self.assertEqual(root._node_results, {})
+
+    def test_repeat_channel_uses_linked_path_snapshots_and_empty_nodes(self):
+        axis, _, source, base_root = self._fixture()
+        defaults = type(base_root._default_sources[0])
+        repeat = Cascade("echo", DefaultPolicy.CANONICAL_DEFAULT, axis,
+            default_source=CascadeDefault(FieldRef(lambda: defaults, lambda pojo: pojo.signal)))
+        echo = create_model("EchoSource", echo=(Annotated[
+            str | None, CascadeChannel(repeat, RepeatScope.EVERY_TAG)], None))
+        context = create_model("EchoContext", __base__=type(base_root),
+            echo=(Annotated[str | None, repeat], None))
+        root = context(level=axis.ROOT)
+        root._default_sources = base_root._default_sources
+        parent = echo(echo="first")
+        first = extend(root, Link(axis.FIRST, parent), Link(axis.FIRST, source(signal="route")))
+        parent.echo = "mutated"
+        middle = extend(first, EmptyLink(axis.MIDDLE))
+        leaf = extend(middle, Link(axis.LEAF, echo()))
+        self.assertEqual(leaf.echo, "first")
+        self.assertEqual(leaf.provenance["echo"], (axis.FIRST, "EchoSource.echo"))
+        override = extend(middle, Link(axis.LEAF, echo(echo="leaf")))
+        self.assertEqual((override.echo, first.echo, middle.echo), ("leaf", "first", "first"))
+        self.assertEqual(override.provenance["echo"], (axis.LEAF, "EchoSource.echo"))
+        chain = list(bind_chain(repeat, leaf._links, scope_path=leaf._scope_path))
+        self.assertEqual([bound.node.level for bound in chain], [axis.LEAF, axis.MIDDLE, axis.FIRST])
+        self.assertIsNone(chain[1].obj)
+        with self.assertRaisesRegex(ValueError, "ambiguous source objects"):
+            extend(middle, Link(axis.LEAF, echo(echo="a")), Link(axis.LEAF, echo(echo="b")))
 
     def test_terminal_default_reads_supplied_pojo_value(self):
         axis, _, _, root = self._fixture()

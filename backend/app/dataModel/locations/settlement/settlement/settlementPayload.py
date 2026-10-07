@@ -1,7 +1,7 @@
 """Authored and type-stamped settlement data — tz_locations §Payload per type."""
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
-from typing import Annotated
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
+from typing import Annotated, Self
 from app.dataModel.cascade.cascadeSpec import CascadeChannel, CascadeLink, FieldRef
 from app.dataModel.locations.context.cascadeParams import CITY_SIZE, SETTLEMENT_DENSITY, DOMINANT_MATERIAL
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
@@ -57,3 +57,9 @@ class SettlementPayload(SettlementPayloadFields):
         CascadeChannel(DOMINANT_MATERIAL, ScopeLevel.SETTLEMENT),
     ] = None
     is_inhabited: DefaultOnWire[bool] = True
+
+    @model_validator(mode="after")
+    def validate_inhabited_specializations(self) -> Self:
+        if not self.is_inhabited and self.system_settlement_specializations:
+            raise ValueError("system_settlement_specializations requires is_inhabited=true")
+        return self

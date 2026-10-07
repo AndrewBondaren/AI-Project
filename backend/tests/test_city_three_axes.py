@@ -40,6 +40,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.planner
     plan_district_slots,
     slot_allowed_for_template,
     SettlementSpecializationResolve,
+    resolve_settlement_specialization,
 )
 from app.application.worldData.generators.assemblers.districtAssembler.planner.frontage import is_plaza
 from app.application.worldData.generators.structure.errors import GenerationError
@@ -512,6 +513,57 @@ class DistrictSelectTest(unittest.TestCase):
         settlement = _settlement(subtype="not_a_real_subtype", size="medium")
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         self.assertTrue(slots)
+
+
+class InhabitedPlannerTest(unittest.TestCase):
+    def test_uninhabited_complex_keeps_recipe_geometry(self) -> None:
+        world = _world()
+        settlement = _settlement(subtype="crypt", loc_type="location_complex")
+        settlement.location_payload["is_inhabited"] = False
+        slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
+        self.assertTrue(slots)
+        self.assertEqual({slot.district_template.district_type for slot in slots}, {"civic"})
+
+    def test_uninhabited_without_recipe_keeps_only_authored_districts(self) -> None:
+        world = _world(location_type_registry=[{
+            "system_type": "custom_site", "display_type": "Site", "payload_kind": "settlement",
+        }])
+        for kind in ("settlement", "location_complex", "custom_site"):
+            with self.subTest(kind=kind):
+                settlement = _settlement(subtype=None, loc_type=kind)
+                settlement.location_payload["is_inhabited"] = False
+                self.assertEqual(plan_district_slots(world, settlement, _skeleton(world, settlement), None), [])
+                settlement.location_payload["typical_districts"] = [{"district_type": "civic"}]
+                slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
+                self.assertEqual(len(slots), 1)
+                self.assertEqual(slots[0].district_template.district_type, "civic")
+
+    def test_custom_recipe_uses_actual_type_and_preserves_required_structures(self) -> None:
+        world = _world(location_type_registry=[{
+            "system_type": "custom_site", "display_type": "Site", "payload_kind": "settlement",
+            "subtypes": [{"system_subtype": "city", "is_inhabited": False,
+                          "typical_district_types": ["industrial"], "required_structure_types": ["mine"]}],
+        }])
+        settlement = _settlement(subtype="city", loc_type="custom_site")
+        settlement.location_payload["is_inhabited"] = False
+        skeleton = _skeleton(world, settlement)
+        slots = plan_district_slots(world, settlement, skeleton, None)
+        self.assertTrue(slots)
+        self.assertEqual({slot.district_template.district_type for slot in slots}, {"industrial"})
+        resolved = resolve_settlement_specialization(world, settlement, skeleton)
+        self.assertEqual(resolved.required_types, ("mine",))
+        self.assertEqual(resolved.spec_refs, ())
+
+    def test_explicit_inhabited_complex_allows_specializations_and_fallback(self) -> None:
+        world = _world()
+        settlement = _settlement(subtype=None, loc_type="location_complex")
+        settlement.location_payload["is_inhabited"] = True
+        slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
+        self.assertTrue(slots)
+        settlement.system_location_subtype = "ruins"
+        settlement.location_payload["system_settlement_specializations"] = ["extract"]
+        slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
+        self.assertIn("mining_quarter", {slot.district_template.system_name for slot in slots})
 
 
 class SpecializationPassTest(unittest.TestCase):

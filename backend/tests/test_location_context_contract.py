@@ -41,6 +41,7 @@ from app.dataModel.cascade.cascadeSpec import (
     ChannelKind,
     DefaultPolicy,
     ScopeAxis,
+    RepeatScope,
 )
 from app.dataModel.cascade.cascadeVerify import (
     verify_cascade_contract,
@@ -155,6 +156,101 @@ class FieldRefContractTests(unittest.TestCase):
                             and child.func.id == "FieldRef"
                             for child in ast.walk(node)
                         ))
+
+
+class RepeatedChannelContractTests(unittest.TestCase):
+    def _fixture(self):
+        axis = ScopeAxis("RepeatAxis", {
+            "LEAF": "leaf", "FIRST": "first", "ROOT": "root", "MIDDLE": "middle",
+        })
+        levels = (axis.FIRST, axis.MIDDLE, axis.LEAF)
+        route = Cascade("route", DefaultPolicy.NONE_IS_ERROR, axis, levels=levels)
+        repeat = Cascade("signal", DefaultPolicy.NONE_IS_ERROR, axis)
+        ref = FieldRef(lambda: source, lambda pojo: pojo.route)
+        source = create_model("RepeatedSource",
+            signal=(Annotated[str | None, CascadeChannel(repeat, RepeatScope.EVERY_TAG)], None),
+            route=(Annotated[str | None,
+                CascadeChannel(route, axis.LEAF, below=CascadeLink(ref, axis.MIDDLE)),
+                CascadeChannel(route, axis.MIDDLE, below=CascadeLink(ref, axis.FIRST)),
+                CascadeChannel(route, axis.FIRST)], None))
+        context = create_model("RepeatedContext",
+            route=(Annotated[str | None, route], None),
+            signal=(Annotated[str | None, repeat], None))
+        return axis, route, repeat, source, context
+
+    def _verify(self, source, context):
+        with patch("app.dataModel.cascade.cascadeGraph._source_models", return_value={source}), \
+             patch("app.dataModel.cascade.cascadeVerify._source_models", return_value={source}):
+            verify_cascade_contract(context)
+
+    def test_repeat_uses_declared_path_on_reordered_axis(self):
+        axis, route, repeat, source, context = self._fixture()
+        self._verify(source, context)
+        with patch("app.dataModel.cascade.cascadeGraph._source_models", return_value={source}):
+            from app.dataModel.cascade.cascadeGraph import ordered_scopes
+            path = ordered_scopes((repeat, route), axis.ROOT)
+            chain = ordered_chain(repeat, scope_path=path)
+        self.assertEqual(path, (axis.ROOT, axis.FIRST, axis.MIDDLE, axis.LEAF))
+        self.assertEqual([node.level for _, node, _ in chain], [axis.LEAF, axis.MIDDLE, axis.FIRST])
+        self.assertEqual(len(cascade_channels(source, repeat)), 1)
+
+    def test_repeat_rejects_mixed_duplicate_and_linked_declarations(self):
+        from dataclasses import replace
+        for case in ("mixed", "duplicate", "linked"):
+            axis, _, repeat, source, context = self._fixture()
+            info = source.model_fields["signal"]
+            original = info.metadata[0]
+            if case == "mixed":
+                info.metadata.append(CascadeChannel(repeat, axis.FIRST))
+            elif case == "duplicate":
+                info.metadata.append(original)
+            else:
+                info.metadata[0] = replace(original,
+                    below=CascadeLink(FieldRef(lambda: source, lambda pojo: pojo.signal), axis.FIRST))
+            with self.subTest(case=case), self.assertRaisesRegex(ValueError, "only channel|forbids"):
+                self._verify(source, context)
+
+    def test_repeat_requires_path_and_all_declared_tags(self):
+        axis, _, repeat, source, context = self._fixture()
+        with patch("app.dataModel.cascade.cascadeGraph._source_models", return_value={source}):
+            with self.assertRaisesRegex(ValueError, "requires a declared scope path"):
+                ordered_chain(repeat)
+            for path in ((axis.ROOT, axis.FIRST), (axis.ROOT, axis.LEAF, axis.LEAF)):
+                with self.subTest(path=path), self.assertRaises(ValueError):
+                    ordered_chain(repeat, scope_path=path)
+        context.model_fields["route"].metadata.clear()
+        with self.assertRaisesRegex(ValueError, "unique declared root|missing from declared scope path"):
+            self._verify(source, context)
+
+    def test_repeat_checks_field_types_and_axis(self):
+        axis, _, repeat, source, context = self._fixture()
+        source.model_fields["signal"].annotation = int | None
+        with self.assertRaisesRegex(ValueError, "incompatible with field type"):
+            self._verify(source, context)
+        with patch("app.dataModel.cascade.cascadeGraph._source_models", return_value={source}):
+            with self.assertRaisesRegex(ValueError, "foreign or duplicate"):
+                ordered_chain(repeat, scope_path=(ScopeLevel.WORLD, axis.FIRST, axis.MIDDLE, axis.LEAF))
+        self.assertEqual(cascade_channels(source, repeat, ScopeLevel.ROOM), ())
+
+    def test_materials_have_one_declaration_each(self):
+        for param in (WALL_MATERIAL, FLOOR_MATERIAL):
+            [(field, channel)] = cascade_channels(BundleNamedLocation, param)
+            self.assertEqual(field, param.field)
+            self.assertIs(channel.level, RepeatScope.EVERY_TAG)
+            self.assertIsNone(channel.above)
+            self.assertIsNone(channel.below)
+
+    def test_repeat_respects_parameter_level_subset(self):
+        from dataclasses import replace
+        axis, route, repeat, source, context = self._fixture()
+        repeat = replace(repeat, levels=(axis.FIRST, axis.LEAF))
+        source.model_fields["signal"].metadata[:] = [CascadeChannel(repeat, RepeatScope.EVERY_TAG)]
+        context.model_fields["signal"].metadata[:] = [repeat]
+        self._verify(source, context)
+        with patch("app.dataModel.cascade.cascadeGraph._source_models", return_value={source}):
+            chain = ordered_chain(repeat, scope_path=(axis.ROOT, axis.FIRST, axis.MIDDLE, axis.LEAF))
+        self.assertEqual([node.level for _, node, _ in chain], [axis.LEAF, axis.FIRST])
+        self.assertEqual(cascade_channels(source, repeat, axis.MIDDLE), ())
 
 
 class LinkedListContractTests(unittest.TestCase):
@@ -677,7 +773,7 @@ class LocationContextContractTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             check_link(ScopeLevel.BUILDING, room)
         with self.assertRaises(TypeError):
-            check_link(ScopeLevel.WORLD, nl)
+            check_link(ScopeLevel.WORLD, room)
 
     def test_nullable_field_is_a_channel_not_absence(self):
         # A declared channel with a null value keeps cascading; a model

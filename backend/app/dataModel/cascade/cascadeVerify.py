@@ -17,12 +17,16 @@ from app.dataModel.cascade.cascadeGraph import (
     _describe,
     _field_type_ok,
     _source_models,
+    repeated_channel,
+    ordered_chain,
+    ordered_scopes,
 )
 from app.dataModel.cascade.cascadeSpec import (
     Cascade,
     CascadeChannel,
     ChannelKind,
     DefaultPolicy,
+    RepeatScope,
 )
 
 
@@ -51,6 +55,8 @@ def verify_cascade_contract(context_model: type[BaseModel]) -> None:
     nodes: dict[tuple[Cascade, CascadeNode], CascadeChannel] = {}
     for model in _source_models():
         for field, channel in _channels_of(model):
+            if channel.level is RepeatScope.EVERY_TAG:
+                continue
             key = (channel.param, CascadeNode(model, field, channel.level))
             if key in nodes:
                 errors.append(
@@ -60,6 +66,32 @@ def verify_cascade_contract(context_model: type[BaseModel]) -> None:
                 continue
             nodes[key] = channel
     for param, ctx_field in params.items():
+        try:
+            repeat = repeated_channel(param)
+        except ValueError as exc:
+            errors.append(f"param field='{param.field}': {exc}")
+            continue
+        if repeat is not None:
+            model, field, channel = repeat
+            try:
+                roots = set(param.axis) - {
+                    node.level for (p, node) in nodes
+                    if p in params and p.axis is param.axis
+                }
+                if len(roots) != 1:
+                    raise ValueError("repeat channel requires a unique declared root")
+                path = ordered_scopes(tuple(params), roots.pop())
+                repeated_nodes = {node: meta for _, node, meta
+                                  in ordered_chain(param, scope_path=path)}
+            except ValueError as exc:
+                errors.append(f"param field='{param.field}': {exc}")
+                continue
+            errors.extend(_binding_errors(param, context_model, ctx_field, repeated_nodes))
+            if not _field_type_ok(model, field, channel):
+                errors.append(f"{model.__name__}.{field}: channel kind incompatible with field type")
+            if param.field not in model.model_fields:
+                errors.append(f"param field='{param.field}': canonical field exists on no source model")
+            continue
         chain_nodes = {
             link: channel
             for (p, link), channel in nodes.items() if p is param

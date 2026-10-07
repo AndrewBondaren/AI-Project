@@ -25,9 +25,10 @@ class BoundChannel:
 def bind_chain(
     param: Cascade,
     sources: Mapping[ScopeAxis, tuple[BaseModel, ...]],
+    *, scope_path: tuple[ScopeAxis, ...] | None = None,
 ) -> Iterator[BoundChannel]:
     """One iterator in declared priority order, including empty nodes."""
-    for owner, node, channel in ordered_chain(param):
+    for owner, node, channel in ordered_chain(param, scope_path=scope_path):
         matches = [obj for obj in sources.get(node.level, ())
                    if isinstance(obj, owner)]
         if len(matches) > 1:

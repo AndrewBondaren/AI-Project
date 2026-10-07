@@ -232,9 +232,17 @@ settlement assemble → district → area/building → structure generate
   экземпляр этого POJO при создании корневого контекста;
 - `WALL_MATERIAL` / `FLOOR_MATERIAL` (цепочки только из NL-узлов) —
   **level-agnostic**: одна декларация с маркером «repeat on every tag».
-  Новый маркер и обработка в verifier / `ordered_chain` / `_resolve` —
-  смена контракта, отдельный шаг S2; текущая декларация с `level`
-  не делает канал автоматически повторяемым;
+  `CascadeChannel(param, RepeatScope.EVERY_TAG)` повторяет поле на каждом
+  некорневом теге оси параметра (или на `param.levels`, если они заданы).
+  Порядок берётся из однозначного scope-пути остальных linked-list
+  параметров контекста, не из enum-rank и не из parent/DAG. Повторяемый
+  канал сам не задаёт порядок scope. Для одного параметра допустимо
+  ровно одно такое поле; смешивание с обычными каналами и `above/below`
+  запрещено. Отсутствие однозначного пути или нужного тега — contract error.
+  `ordered_chain(param, scope_path=...)` разворачивает декларацию в узлы
+  top→bottom; runtime привязывает их к POJO своего scope, сохраняя
+  EmptyLink, None-наследование, snapshots и provenance каждого узла.
+  Обычная декларация с `level` автоматически повторяемой не становится;
 - `ECONOMIC_TIER` сохраняет явную цепочку каналов: между NL-узлами
   стоят `DistrictTemplateEntry` / `PlotLayoutTemplate`. Один повторяемый
   NL-канал не выражает этот двусвязный список с единственным top/bottom;

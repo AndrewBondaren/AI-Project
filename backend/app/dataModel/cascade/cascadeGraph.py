@@ -23,6 +23,7 @@ from app.dataModel.cascade.cascadeSpec import (
     FieldRef,
     ChannelKind,
     ScopeAxis,
+    RepeatScope,
 )
 
 
@@ -93,12 +94,20 @@ def cascade_channels(
     param: Cascade | None = None,
     level: ScopeAxis | None = None,
 ) -> tuple[tuple[str, CascadeChannel], ...]:
-    """Channels declared on ``model``, optionally filtered."""
+    """Channels declared on ``model``, optionally filtered.
+
+    Repeat declarations match allowed tags on their axis; expansion
+    against the calling context's scope path excludes its root.
+    """
     return tuple(
         (name, channel)
         for name, channel in _channels_of(model)
         if (param is None or channel.param is param)
-        and (level is None or channel.level is level)
+        and (level is None or channel.level is level or (
+            channel.level is RepeatScope.EVERY_TAG
+            and type(level) is channel.param.axis
+            and (channel.param.levels is None or level in channel.param.levels)
+        ))
     )
 
 
@@ -247,22 +256,59 @@ def _declared_edges(
     return edges, errors
 
 
+def _parameter_channels(param: Cascade) -> tuple[tuple[type[BaseModel], str, CascadeChannel], ...]:
+    return tuple((model, field, channel)
+                 for model in _source_models()
+                 for field, channel in _channels_of(model)
+                 if channel.param is param)
+
+
+def _repeat_declaration(channels):
+    """Validate the single repeat declaration; it supplies no scope order."""
+    repeated = [item for item in channels if item[2].level is RepeatScope.EVERY_TAG]
+    if not repeated:
+        return None
+    if len(channels) != 1:
+        raise ValueError("repeat channel must be the only channel for its param")
+    model, field, channel = repeated[0]
+    if channel.above is not None or channel.below is not None:
+        raise ValueError("repeat channel forbids above/below links")
+    return model, field, channel
+
+
+def repeated_channel(param: Cascade) -> tuple[type[BaseModel], str, CascadeChannel] | None:
+    return _repeat_declaration(_parameter_channels(param))
+
+
 def ordered_chain(
-    param: Cascade,
+    param: Cascade, *, scope_path: tuple[ScopeAxis, ...] | None = None,
 ) -> tuple[tuple[type[BaseModel], CascadeNode, CascadeChannel], ...]:
     """Chain nodes ordered top→bottom — the engine's roadmap.
 
     Returns ``(owner_model, node, channel)`` triples. Raises
     ``ValueError`` on a broken chain — the engine walks only a
-    verified graph.
+    verified graph. Repeat declarations require the context's declared
+    ``scope_path``; they do not derive order from axis enum positions.
     """
+    channels = _parameter_channels(param)
+    repeat = _repeat_declaration(channels)
+    if repeat is not None:
+        if not scope_path:
+            raise ValueError("repeat channel requires a declared scope path")
+        if (any(type(level) is not param.axis for level in scope_path)
+                or len(set(scope_path)) != len(scope_path)):
+            raise ValueError("repeat channel scope path has foreign or duplicate tags")
+        expected = (set(param.levels) if param.levels is not None
+                    else set(param.axis) - {scope_path[0]})
+        if not expected or not expected <= set(scope_path[1:]):
+            raise ValueError("repeat channel levels missing from declared scope path")
+        model, field, channel = repeat
+        return tuple((model, CascadeNode(model, field, level), channel)
+                     for level in reversed(scope_path[1:]) if level in expected)
     chain_nodes: dict[CascadeNode, CascadeChannel] = {}
-    for model in _source_models():
-        for field, channel in _channels_of(model):
-            if channel.param is not param:
-                continue
-            link = CascadeNode(model, field, channel.level)
-            chain_nodes.setdefault(link, channel)
+    for model, field, channel in channels:
+        link = CascadeNode(model, field, channel.level)
+        chain_nodes.setdefault(link, channel)
     edges, errors = _declared_edges(chain_nodes)
     above_of: dict[CascadeNode, CascadeNode] = {}
     below_of: dict[CascadeNode, CascadeNode] = {}
@@ -314,6 +360,8 @@ def ordered_scopes(
     for param in params:
         if param.axis is not type(root):
             raise ValueError("cascade parameter is on a foreign axis")
+        if repeated_channel(param) is not None:
+            continue
         previous = None
         for _, node, _ in reversed(ordered_chain(param)):
             scope = node.level
@@ -338,4 +386,8 @@ def ordered_scopes(
         del parents[scope]
         for dependencies in parents.values():
             dependencies.discard(scope)
-    return tuple(result)
+    path = tuple(result)
+    for param in params:
+        if repeated_channel(param) is not None:
+            ordered_chain(param, scope_path=path)
+    return path

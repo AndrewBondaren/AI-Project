@@ -411,7 +411,7 @@ Runtime-переход внутри здания (пролом в стене к�
   `blocked_behavior_override` для graph, см. §3.4; `gate`:
   `width_cells`; `staircase`: `staircase_type`). Валидируется pydantic-моделью
   **per builtin type** (тот же приём, что `location_payload` по `payload_kind`
-  в `nl-typed-host-payload`). Не колонки per type.
+  в `nl-typed-host-payload-done`). Не колонки per type.
 - Новый вид перехода = новый builtin в enum + модель `type_params` + запись
   в реестре. Таблиц не прибавляется.
 
@@ -457,7 +457,7 @@ Runtime-переход внутри здания (пролом в стене к�
 - DAG-ноды (scene context, навигация) — gate DAG, по общему правилу.
 - Магма-телепорт, climate/terrain переходы по terrain-категориям.
 - Генерация самого `location_complex` (отдельное ТЗ после
-  `nl-typed-host-payload`).
+  `nl-typed-host-payload-done`).
 - Персональное discovery персонажей — отдельная большая тема, не scope
   данного генератора (решение мастера 2026-10-05). Генератор не определяет
   общую/персональную видимость и не создаёт систему player-state.

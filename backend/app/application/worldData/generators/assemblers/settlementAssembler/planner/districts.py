@@ -7,6 +7,7 @@ from app.application.jsonValidation.worldRow import (
     settlement_specializations,
 )
 from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
+from app.application.worldData.locationPayloadAccess import settlement_payload
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
     district_templates,
@@ -45,9 +46,6 @@ from app.application.worldData.settlementOutdoor.settlementOutdoorUids import (
     district_location_uid,
 )
 from app.dataModel.locations.context.locationContext import LocationContext
-from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
-    WorldLocationTypeRegistry,
-)
 from app.dataModel.locations.settlement.district.districtTemplateEntry import DistrictTemplateEntry
 from app.dataModel.locations.settlement.district.requiredStructureResolve import (
     unhosted_settlement_types,
@@ -91,10 +89,11 @@ def plan_district_slots(
     n      = grid_dimension(side_m, cell_m)
     origin = settlement_origin_fine(settlement)
     templates = district_templates(world)
+    payload = settlement_payload(settlement)
     subtype = (settlement.system_location_subtype or "").strip()
     recipe = (
         location_types(world).subtype_for(
-            WorldLocationTypeRegistry.SYSTEM_TYPE_SETTLEMENT, subtype,
+            settlement.system_location_type, subtype,
         ) if subtype else None
     )
     typical: tuple[str, ...] | None = None
@@ -301,7 +300,7 @@ def plan_district_slots(
                 )
                 if _materialize(cell_x, cell_y, template):
                     continue
-            elif not city_refs and not spec_refs:
+            elif payload.is_inhabited and not city_refs and not spec_refs:
                 template = _select(cell_x, cell_y, allow_legacy=True)
                 if template is None:
                     logger.warning(
@@ -360,10 +359,11 @@ def resolve_settlement_specialization(
     settlement: NamedLocation,
     skeleton: SettlementSkeleton,
 ) -> SettlementSpecializationResolve:
+    payload = settlement_payload(settlement)
     subtype = (settlement.system_location_subtype or "").strip()
     recipe = (
         location_types(world).subtype_for(
-            WorldLocationTypeRegistry.SYSTEM_TYPE_SETTLEMENT, subtype,
+            settlement.system_location_type, subtype,
         ) if subtype else None
     )
     spec_reg = settlement_specializations(world)
@@ -384,7 +384,8 @@ def resolve_settlement_specialization(
             seen_req.add(type_name)
             required.append(type_name)
 
-    for bind in skeleton.system_settlement_specializations or ():
+    binds = (skeleton.system_settlement_specializations or ()) if payload.is_inhabited else ()
+    for bind in binds:
         entry = spec_reg.entry_for(bind.system_specialization)
         if entry is None:
             unknown.append(bind.system_specialization)

@@ -95,6 +95,13 @@ Subtype локации `building` в дереве NL (`residential` / `commercia
 
 Пересечения зоны нет — клетка **скип**, не подставлять чужой `district_type` «с пола». Несколько `system_settlement_specializations` = объединение районов и штампов `allowed_family` на своих слотах, не «одна специализация победила». C14: authored-дети города — скип generate, не этот рецепт.
 
+Живость задаёт `SettlementPayload.is_inhabited`, независимо от имени типа.
+При `false` непустые специализации отвергаются POJO-валидацией на импорте,
+CRUD и runtime-чтении. Явные районы и морфология комплекса продолжают
+генерироваться; required-структуры его рецепта сохраняются. Подбор районов
+без рецепта разрешён только при `true`. Рецепт ищется по фактической паре
+тип/subtype локации, включая пользовательские типы с settlement-payload.
+
 Список на городе — **типы** (и optional subtype), не каталог `tavern_1`. Optional `system_name` — pin **чертежа района** из `district_template_registry`, не здания. Нет pin — чертёж того же `district_type`+`district_subtype` из реестра мира (seed §9.6).
 
 На специализации — **subjects** (N+1): какие руды, культуры, скот, изделия, домены. Строка `"extract"` = специализация без subjects. `subjects` на инстансе — плоский список (`["iron_ore", "copper_ore"]`) **или** карта вид → токены (`{ "resource": ["iron_ore", "copper_ore"] }`). Для **extract** токены — ключи `worlds.resource_type_registry` (`system_resource`); вид добычи — ENUM-E `resource_kind` (`ore` / `stone` / `timber` / `liquid`). Для **farm** токены — ключи `worlds.crops_registry` (`system_crop`); вид культуры — ENUM-E `crop_kind` (`grain` / `vegetable` / `fruit` / `fiber` / `fodder`). Для **livestock** токены — ключи `worlds.livestock_registry` (`system_livestock`); предназначение — ENUM-E `livestock_kind` (`meat` / `dairy` / `fiber` / `draft` / `mount`). Яйца — yield вида, не kind. Постройка (птичник, хлев, конюшня) — лист `BuildingPurpose` / чертёж, не значение kind. Реестр задаёт `subject_kind` (каталог: `resource` / `crop` / `livestock` / `product` / `domain` / …) и **`allowed_family`**. Subjects режут чертёж, не набор purpose. Пустой пул листьев семьи в этом мире → leftover + warning, не `house`. Product / domain — каталоги ещё не wired.

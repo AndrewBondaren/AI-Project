@@ -152,7 +152,7 @@ Geographic subtype **не** является SoT declare маски ([`tz_map_li
 **Уровень 2 — `named_locations`** — агрегат ячеек с именем.
 Ниже — целевой контракт typed host (**NL-P1**); текущий DDL ещё
 хранит type-specific поля отдельными колонками, их перенос выполняется
-по плану `nl-typed-host-payload.md` (P2–P3).
+по плану `nl-typed-host-payload-done.md` (P2–P3).
 ```sql
 named_locations (
   location_uid, world_uid,
@@ -341,16 +341,22 @@ Subtype `dungeon` у `settlement` удаляется; `underground_city` ост�
 модели — `True`; рецепт комплекса задаёт `False`, явное значение мастера
 имеет приоритет (руины-город могут быть обитаемыми). Флаг гейтит
 `system_settlement_specializations`, settlement-planner и economy planner.
-Реакция импорта на specializations при `is_inhabited=false` — отдельное
-решение перед P6 (contract error или игнор). Lazy-settlement DAG-нода
+При `is_inhabited=false` непустой `system_settlement_specializations` —
+ошибка контракта `SettlementPayload`: импорт и CRUD отвергают данные;
+`None` и пустой список допустимы. Runtime проверяет тот же POJO-контракт.
+Settlement-planner сохраняет authored `typical_districts`, морфологическую
+добивку и required-структуры рецепта, но отключает специализации и
+автоматический подбор районов без рецепта. Рецепт выбирается по фактическим
+`system_location_type` и `system_location_subtype`, без списка имён типов.
+Lazy-settlement DAG-нода
 также должна учитывать живость; её wiring и economy planner — leftovers,
 не входят в эту имплементацию и остаются под gate DAG.
 
 На `LocationTypeSubtypeEntry` поле `is_inhabited: bool = True` хранит
 рецептурный default будущего экземпляра. Пять builtin-рецептов комплекса
 задают `False`; world-overlay сохраняет engine default при отсутствии
-поля и допускает явный `True`. Применение рецепта к payload экземпляра
-будет подключено при миграции импортера; P1 определяет и валидирует данные.
+поля и допускает явный `True`. Импорт применяет рецептурный default к
+payload экземпляра только при отсутствии явного значения `is_inhabited`.
 
 **Правила:**
 

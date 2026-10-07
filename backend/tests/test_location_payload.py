@@ -122,6 +122,20 @@ class LocationPayloadTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             LocationPayload.validate("district", {"district_topology": {"cell_x": 1}})
 
+    def test_uninhabited_payload_rejects_specializations(self):
+        with self.assertRaisesRegex(ValidationError, "requires is_inhabited=true"):
+            SettlementPayload.model_validate({
+                "is_inhabited": False, "system_settlement_specializations": ["extract"],
+            })
+        for binds in (None, []):
+            with self.subTest(binds=binds):
+                payload = SettlementPayload.model_validate({
+                    "is_inhabited": False, "system_settlement_specializations": binds,
+                })
+                self.assertFalse(payload.is_inhabited)
+        inhabited = SettlementPayload.model_validate({"system_settlement_specializations": ["extract"]})
+        self.assertTrue(inhabited.is_inhabited)
+
     def test_payload_fields_do_not_duplicate_legacy_cascade_channels(self):
         self.assertEqual(len(cascade_channels(SettlementPayload)), 3)
         self.assertNotIn("economic_tier", SettlementPayload.model_fields)

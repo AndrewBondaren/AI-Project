@@ -177,6 +177,37 @@ class LocationPayloadSchemaTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(settlement_payload(stored).plot_counts)
         self.assertTrue(settlement_payload(stored).is_inhabited)
 
+    async def test_import_rejects_recipe_default_false_with_specializations(self):
+        service = NamedLocationService(self.repo)
+        base = {"display_name": "Complex", "system_location_type": "location_complex",
+                "system_location_subtype": "ruins", "system_settlement_specializations": ["extract"]}
+        result = await service.import_from_json("world", [
+            {**base, "location_uid": "invalid"},
+            {**base, "location_uid": "inhabited", "is_inhabited": True},
+        ])
+        self.assertEqual((result.succeeded, result.failed), (1, 1))
+        self.assertIn("requires is_inhabited=true", result.errors[0].message)
+        self.assertIsNone(await self.repo.get_by_id("invalid"))
+        self.assertTrue(settlement_payload(await self.repo.get_by_id("inhabited")).is_inhabited)
+
+    async def test_crud_rejects_invalid_liveness_without_persisting(self):
+        service = NamedLocationService(self.repo)
+        await service.create("world", {
+            "location_uid": "live", "display_name": "Live", "system_location_type": "settlement",
+            "system_settlement_specializations": ["extract"],
+        })
+        with self.assertRaisesRegex(ValueError, "requires is_inhabited=true"):
+            await service.update("world", "live", {"is_inhabited": False})
+        self.assertTrue(settlement_payload(await self.repo.get_by_id("live")).is_inhabited)
+        await service.update("world", "live", {
+            "is_inhabited": False, "system_settlement_specializations": [],
+        })
+        stored = await self.repo.get_by_id("live")
+        self.assertFalse(settlement_payload(stored).is_inhabited)
+        stored.location_payload["system_settlement_specializations"] = ["extract"]
+        with self.assertRaisesRegex(ValueError, "requires is_inhabited=true"):
+            settlement_context(World(world_uid="world", name="World", created_at="2026-10-07"), stored)
+
     async def test_import_resolves_custom_world_payload_kind(self):
         world = World(world_uid="world", name="World", created_at="2026-10-06",
                       location_type_registry=[{

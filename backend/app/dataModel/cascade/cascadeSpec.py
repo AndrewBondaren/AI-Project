@@ -12,6 +12,8 @@ the source POJO fields themselves in the same style as wire policies
   declared outside ``Annotated`` so static checkers inspect the selector;
 - ``CascadeLink(ref, level)`` — a typed pointer to a neighbour node
   (like ``prev``/``next`` in a linked list).
+- ``RepeatScope.EVERY_TAG`` — one channel repeated along the calling
+  context's scope path, derived from its other linked-list parameters.
 
 Each edge is declared **exactly once**, on the side whose module may
 import the neighbour without a cycle — the ORM ``backref`` convention:
@@ -75,6 +77,12 @@ class ChannelKind(StrEnum):
     """Band input — materialize resolves it into a value (tier band → tier)."""
     RANGE = "range"
     """Range input — materialize resolves nearest-to-anchor / rng inside it."""
+
+
+class RepeatScope(StrEnum):
+    """Reuse one field along the context's declared scope path."""
+
+    EVERY_TAG = "every_tag"
 
 
 M = TypeVar("M", bound=BaseModel)
@@ -142,10 +150,13 @@ class CascadeChannel:
 
     ``above`` — the node that overrides this field (deeper scope);
     ``below`` — the node this field overrides (shallower scope).
+    ``RepeatScope.EVERY_TAG`` instead of a fixed level repeats a single
+    source field; explicit neighbours and other channels for that same
+    parameter are forbidden. Repetition never defines scope order.
     """
 
     param: Cascade
-    level: ScopeAxis
+    level: ScopeAxis | RepeatScope
     above: CascadeLink | None = None
     below: CascadeLink | None = None
     kind: ChannelKind = ChannelKind.VALUE
