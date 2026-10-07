@@ -1338,6 +1338,11 @@ CREATE TABLE IF NOT EXISTS building_templates (
 - Один файл = один шаблон
 - При загрузке: JSON валидируется через `validate_template()`; `template_uid = uuid5(system_name)` upsert по PK
 - Шаблон хранится в `building_templates.data` как JSON blob
+- **Canonical-паки** (`structures_templates/base`) подключаются автоматически единым
+  движком canonical defaults — scope `global`, триггер `first_use`, идемпотентный
+  `sql_upsert` (см. [`tz_json_validation.md`](./tz_json_validation.md) § «Wire
+  projection → WorldSlice», «Единый движок canonical defaults»). Явный импорт
+  остаётся для пользовательских паков; canonical-паки их не перетирают.
 
 ### 6.2 Импорт шаблона в мир
 

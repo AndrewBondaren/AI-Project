@@ -338,6 +338,30 @@ Runtime применяет то же дополнение к старым час
 распространяется автоматически на instance-каталоги resource/crops/livestock
 или существующий T-29 overlay других реестров.
 
+**Единый движок canonical defaults (world + global scope).** Один домен-агностический
+механизм подключения канона для любых библиотек: реестры мира, глобальные
+template-библиотеки, будущие домены. Движок не знает потребителей; домен объявляет
+`CanonicalLibrarySpec` — декларацию, не код слияния:
+
+| Поле spec | Содержание |
+|---|---|
+| `identity_field` | Ключ совпадения записей (`system_name`, `template_uid`, …) |
+| `canonical_source` | Источник канона: `canonical_defaults()` POJO или FS domain root + список canonical-паков |
+| `scope` | `world` — реестр мира в bundle; `global` — SQL-библиотека вне мира |
+| `trigger` | `full_import` / `runtime_read` (world); `first_use` — первый `list_all`/resolve в контексте генерации (global) |
+| `persist` | `wire_merge` — merge до валидации, персист обычным импортом (world); `sql_upsert` — идемпотентный upsert пак-строк с `source_file`, как при ручном FS-импорте (global) |
+
+Merge-семантика едина для обоих scope: world/explicit строки первыми (индексы
+ошибок сохраняются), совпавший ключ наследует неуказанные поля канона, явные
+`false/0/[]` и допустимый `null` — значения, не отсутствие, canonical-only ключи
+добавляются. Attach идемпотентен: повторный вызов не плодит записи и не трогает
+world/user overrides. **Global scope:** библиотека глобальна — partial-update
+мира к ней неприменим; авто-импорт покрывает только canonical-паки из spec,
+пользовательские паки не перетираются. FS domain root резолвится через env
+(`STRUCTURES_TEMPLATES_ROOT`, `RELIEF_TEMPLATES_ROOT`, …) → repo-relative
+fallback; зависимость от `Path.cwd()` запрещена. Opt-out — отсутствие spec;
+instance-каталоги (resource/crops/livestock) spec не объявляют.
+
 **Чеклист нового POJO на `worlds`:**
 
 1. POJO + field policies
