@@ -16,6 +16,7 @@ from app.dataModel.locations.locationType.worldLocationTypeRegistry import (
     WorldLocationTypeRegistry,
 )
 from app.dataModel.registryKey import RegistryKey, registry_key_target
+from app.dataModel.locations.settlement.settlement.settlementPayload import SettlementPayload
 from app.dataModel.locations.settlement.settlement.settlementSizeEntry import SettlementSizeEntry
 from app.dataModel.locations.settlement.settlement.worldSettlementSizeRegistry import (
     SettlementSizeKey,
@@ -222,16 +223,6 @@ class TestRegistryKey(unittest.TestCase):
         with self.assertRaises(Exception):
             SettlementSkeleton(settlement_density="huge")
 
-        overlay = set(SettlementSkeleton.NAMED_LOCATION_OVERLAY_FIELDS)
-        aliases = set(SettlementSkeleton.NAMED_LOCATION_FIELD_ALIASES)
-        fields = set(SettlementSkeleton.model_fields)
-        self.assertTrue(overlay <= fields)
-        self.assertTrue(aliases <= fields)
-        self.assertEqual(
-            SettlementSkeleton.NAMED_LOCATION_FIELD_ALIASES["economic_tier"],
-            "system_economic_tier",
-        )
-
     def test_nl_parent_materials_are_branded(self) -> None:
         from app.dataModel.locations.namedLocation.bundleNamedLocation import (
             BundleNamedLocation,
@@ -287,9 +278,7 @@ class TestRegistryKey(unittest.TestCase):
             )
 
     def test_city_skeleton_resolved_tier_overrides_nl_and_keeps_size_brand(self) -> None:
-        from app.application.worldData.generators.assemblers.citySkeleton import (
-            city_skeleton_from_settlement,
-        )
+        from app.application.worldData.settlementSkeletonAccess import resolved_settlement_skeleton
         from app.db.models.namedLocation import NamedLocation
 
         loc = NamedLocation(
@@ -298,12 +287,14 @@ class TestRegistryKey(unittest.TestCase):
             display_name="Hold",
             system_location_type="settlement",
             created_at="2026-01-01T00:00:00",
-            system_city_size="small",
+            location_payload={
+                'system_city_size': "small",
+                'dominant_material': "stone",
+            },
             system_economic_tier="poor",
-            dominant_material="stone",
             system_location_mood="prosperous",
         )
-        skeleton = city_skeleton_from_settlement(
+        skeleton = resolved_settlement_skeleton(
             loc, economic_tier="quality", settlement_density=None,
         )
         self.assertIsInstance(skeleton.economic_tier, RegistryKey)
@@ -313,7 +304,7 @@ class TestRegistryKey(unittest.TestCase):
         self.assertEqual(skeleton.system_city_size, "small")
         self.assertIsInstance(skeleton.system_location_mood, RegistryKey)
         self.assertEqual(skeleton.system_location_mood, "prosperous")
-        cleared = city_skeleton_from_settlement(
+        cleared = resolved_settlement_skeleton(
             loc, economic_tier=None, settlement_density=None,
         )
         self.assertIsNone(cleared.economic_tier)
@@ -477,7 +468,7 @@ class TestRegistryKey(unittest.TestCase):
         )
         self.assertIs(
             registry_key_target(
-                BundleNamedLocation.model_fields["frontage_type_order"].annotation,
+                SettlementPayload.model_fields["frontage_type_order"].annotation,
             ),
             WorldConnectionTypeRegistry,
         )
@@ -491,8 +482,8 @@ class TestRegistryKey(unittest.TestCase):
             system_location_type="settlement",
             frontage_type_order=["highway"],
         )
-        assert loc.frontage_type_order is not None
-        self.assertIsInstance(loc.frontage_type_order[0], RegistryKey)
+        self.assertIsInstance(loc.location_payload, SettlementPayload)
+        self.assertIsInstance(loc.location_payload.frontage_type_order[0], RegistryKey)
         district = DistrictTemplateEntry(
             system_name="inn_row",
             display_name="Inns",

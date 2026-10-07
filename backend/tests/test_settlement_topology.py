@@ -6,9 +6,7 @@ import random
 import unittest
 from pathlib import Path
 
-from app.application.worldData.generators.assemblers.citySkeleton import (
-    city_skeleton_from_settlement,
-)
+from app.application.worldData.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.districts import (
     plan_district_slots,
 )
@@ -83,13 +81,15 @@ def _settlement() -> NamedLocation:
         system_location_type=WorldLocationTypeRegistry.SYSTEM_TYPE_SETTLEMENT,
         created_at="2026-01-01T00:00:00",
         system_location_subtype="city",
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+            'settlement_density': DistrictDensity.MEDIUM.wire_value,
+            'architectural_style': "gothic",
+            'perimeter_barrier': PerimeterBarrier(
+                template="stone_fence", probability=1.0,
+            ).model_dump(mode="json"),
+        },
         system_economic_tier="standard",
-        settlement_density=DistrictDensity.MEDIUM.wire_value,
-        architectural_style="gothic",
-        perimeter_barrier=PerimeterBarrier(
-            template="stone_fence", probability=1.0,
-        ).model_dump(mode="json"),
         map_x=0,
         map_y=0,
         map_z=0,
@@ -98,7 +98,7 @@ def _settlement() -> NamedLocation:
 
 def _skeleton(world: World, settlement: NamedLocation):
     ctx = settlement_context(world, settlement)
-    return city_skeleton_from_settlement(
+    return resolved_settlement_skeleton(
         settlement,
         economic_tier=ctx.economic_tier,
         settlement_density=ctx.settlement_density,
@@ -118,7 +118,7 @@ def _plan_city(world: World, settlement: NamedLocation, slots):
     )
 
 
-class CitySkeletonImportTest(unittest.TestCase):
+class SettlementSkeletonImportTest(unittest.TestCase):
     def test_density_and_barrier_from_named_location_fields(self) -> None:
         world = _world()
         settlement = _settlement()
@@ -297,7 +297,9 @@ class TopologySkipTest(unittest.TestCase):
             display_name="Core",
             system_location_type=district_type,
             created_at="2026-01-01T00:00:00",
-            district_topology=freeze.model_dump(mode="json"),
+            location_payload={
+                'district_topology': freeze.model_dump(mode="json"),
+            },
         )
         incomplete = NamedLocation(
             location_uid="d-bad",
@@ -305,7 +307,9 @@ class TopologySkipTest(unittest.TestCase):
             display_name="Core",
             system_location_type=district_type,
             created_at="2026-01-01T00:00:00",
-            district_topology={"cell_x": 0},
+            location_payload={
+                'district_topology': {"cell_x": 0},
+            },
         )
         gate = ConnectionNode(
             node_uid="g1",

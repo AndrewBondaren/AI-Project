@@ -64,7 +64,7 @@ class SettlementGatesTest(unittest.IsolatedAsyncioTestCase):
                 item.system_transition_type, item.source, item.destination))
 
     async def test_no_settlement_gate_nodes_produces_no_transitions(self):
-        settlement = replace(self.settlement, perimeter_barrier=None)
+        settlement = replace(self.settlement, location_payload={**(self.settlement.location_payload or {}), 'perimeter_barrier': None})
         topology = self.generator.plan_slots_and_city_graph(self.world, settlement)
         self.assertFalse(any(node.node_type == ConnectionNodeType.SETTLEMENT_GATE.value for node in topology.nodes))
         self.assertEqual(topology.transitions, [])

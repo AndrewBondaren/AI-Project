@@ -8,9 +8,7 @@ Skeleton на NamedLocation — фаза 1 (world create).
 from app.application.worldData.locationPayloadAccess import settlement_payload
 import logging
 
-from app.application.worldData.generators.assemblers.citySkeleton import (
-    city_skeleton_from_settlement,
-)
+from app.application.worldData.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.settlementAssembler.layoutCells import (
     collect_geometry_fine_cells,
     collect_map_cells_from_layout,
@@ -73,7 +71,7 @@ class SettlementGeneratorService:
         terrain_cells: list[MapCell] | None = None,
     ) -> SettlementTopologyPlan:
         ctx = settlement_context(world, settlement)
-        skeleton = city_skeleton_from_settlement(
+        skeleton = resolved_settlement_skeleton(
             settlement,
             economic_tier=ctx.economic_tier,
             settlement_density=ctx.settlement_density,

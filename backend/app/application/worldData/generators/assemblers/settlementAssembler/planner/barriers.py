@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from random import Random
 
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.jsonValidation import economic_tiers
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.barrierDefaults import (
     lookup_barrier_template,
@@ -56,7 +56,7 @@ def should_have_settlement_wall(
 
 def pick_barrier_template_type(
     world:    World,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     rng:      Random,
     ctx:      LocationContext,
 ) -> str | None:
@@ -79,7 +79,7 @@ def pick_barrier_template_type(
 def _pick_template_material(
     world:    World,
     template: BarrierTemplateEntry,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     rng:      Random,
 ) -> str:
     return pick_barrier_material(
@@ -101,7 +101,7 @@ def _perimeter_ring(
 def plan_settlement_barriers(
     world:      World,
     settlement: NamedLocation,
-    skeleton:   CitySkeleton,
+    skeleton:   SettlementSkeleton,
     rng:        Random,
     ctx:        LocationContext,
 ) -> list[MapCell]:

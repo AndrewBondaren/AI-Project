@@ -1,7 +1,6 @@
 from fastapi import HTTPException
 from dataclasses import asdict
 from app.application.jsonValidation.worldRow import location_types
-from app.application.worldData.locationPayloadAccess import payload_field_names
 
 from app.application.importResult import ImportError, ImportResult
 from app.application.import_helpers import with_default_created_at
@@ -66,13 +65,7 @@ class NamedLocationService:
     async def update(self, world_uid: str, location_uid: str, data: dict) -> NamedLocation:
         loc = await self.get_by_id(world_uid, location_uid)
         world = await self._world(world_uid)
-        generic = {key: value for key, value in asdict(loc).items()
-                   if key not in payload_field_names()}
-        if loc.location_payload is None:
-            # Preserve existing legacy values while this row moves to payload.
-            generic["location_payload"] = self._from_wire(
-                asdict(loc), world_uid=world_uid, world=world,
-            ).location_payload
+        generic = asdict(loc)
         updates = {key: value for key, value in data.items()
                    if key not in self._IMMUTABLE and key != "created_at"}
         generic.update(updates)

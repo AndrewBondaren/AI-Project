@@ -92,7 +92,9 @@ def _district_row(
         system_location_type=district_type_entry().system_type,
         created_at="2026-01-01T00:00:00",
         parent_location_uid="set-1",
-        district_topology=freeze.model_dump(mode="json"),
+        location_payload={
+            'district_topology': freeze.model_dump(mode="json"),
+        },
     )
 
 
@@ -110,7 +112,9 @@ def _settlement() -> NamedLocation:
         display_name="Hold",
         system_location_type=WorldLocationTypeRegistry.SYSTEM_TYPE_SETTLEMENT,
         system_location_subtype="city",
-        system_city_size="medium",
+        location_payload={
+            'system_city_size': "medium",
+        },
         created_at="2026-01-01T00:00:00",
         map_x=2,
         map_y=2,

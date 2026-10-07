@@ -34,7 +34,7 @@ from app.application.worldData.generators.assemblers.areaAssembler.streetApproac
     ApproachForm,
     StreetApproach,
 )
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.buildingAssembler.buildingAssembler import (
     BuildingAssembler,
 )
@@ -83,7 +83,7 @@ Coord = tuple[int, int]
 def derive_structure_context(
     world:         World,
     template:      PlotLayoutTemplate,
-    city_skeleton: CitySkeleton,
+    city_skeleton: SettlementSkeleton,
     slot:          AreaSlot,
     terrain_cells: list[MapCell] | None,
     *,
@@ -206,7 +206,7 @@ class StructureAreaAssembler:
         world:          World,
         slot:           AreaSlot,
         template:       PlotLayoutTemplate,
-        city_skeleton:  CitySkeleton,
+        city_skeleton:  SettlementSkeleton,
         terrain_cells:  list[MapCell] | None = None,
         *,
         structure_catalog: StructureCatalog,
@@ -469,7 +469,7 @@ class StructureAreaAssembler:
         slot:          AreaSlot,
         template:      PlotLayoutTemplate,
         building:      NamedLocation | None,
-        city_skeleton: CitySkeleton,
+        city_skeleton: SettlementSkeleton,
         rng:           random.Random,
     ) -> list[MapCell]:
         return plan_area_barrier_cells(

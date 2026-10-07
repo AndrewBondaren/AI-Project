@@ -47,13 +47,15 @@ def _test_settlement(world_uid: str) -> NamedLocation:
         display_name="Smokehold",
         system_location_type="city",
         created_at="2026-06-26T00:00:00",
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    loc.settlement_density = "medium"
+    loc.location_payload = {**(loc.location_payload or {}), 'settlement_density': "medium"}
     return loc
 
 

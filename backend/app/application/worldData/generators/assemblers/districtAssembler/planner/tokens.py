@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
 )
@@ -60,7 +60,7 @@ from app.db.models.world import World
 
 def _tier_pool(
     layouts: tuple[PlotLayoutTemplate, ...] | list[PlotLayoutTemplate],
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     world: World,
 ) -> list[PlotLayoutTemplate]:
     return [
@@ -299,7 +299,7 @@ def _buildings_rng(
 def pick_layout_names(
     slot: DistrictSlot,
     world: World,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     catalog: BuildingCatalog,
     rng: random.Random | None = None,
     *,
@@ -318,7 +318,7 @@ def pick_layout_names(
 def candidate_template_names(
     slot: DistrictSlot,
     world: World,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     catalog: BuildingCatalog | None = None,
     rng: random.Random | None = None,
     *,
@@ -333,7 +333,7 @@ def candidate_template_names(
 def _pick_layout_picks(
     slot: DistrictSlot,
     world: World,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     catalog: BuildingCatalog,
     rng: random.Random,
     settlement_uid: str | None = None,
@@ -477,7 +477,7 @@ def build_tokens(
     slot: DistrictSlot,
     cache: BuildingLayoutCache,
     world: World,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     catalog: BuildingCatalog | None = None,
     rng: random.Random | None = None,
     *,

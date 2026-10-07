@@ -15,7 +15,7 @@ from app.dataModel.locations.transitions.transition import Transition
 from app.dataModel.locations.transitions.transitionEndpoint import TransitionEndpoint
 from app.dataModel.locations.transitions.transitionSide import TransitionSide
 from app.dataModel.locations.transitions.transitionType import TransitionType
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
 )
@@ -74,7 +74,7 @@ def settlement_gate_transitions(settlement: NamedLocation, nodes: list[Connectio
 def plan_city_graph_for_slots(
     world: World,
     settlement: NamedLocation,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     slots: list[DistrictSlot],
     terrain_cells: list[MapCell] | None,
 ) -> tuple[list[ConnectionNode], list[ConnectionEdge]]:
@@ -94,7 +94,7 @@ def plan_city_graph_for_slots(
 def plan_slots_and_city_graph(
     world: World,
     settlement: NamedLocation,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     terrain_cells: list[MapCell] | None,
     settlement_ctx: LocationContext | None = None,
 ) -> SettlementTopologyPlan:

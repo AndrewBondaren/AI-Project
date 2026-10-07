@@ -6,7 +6,7 @@ import random
 import unittest
 
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
 )
@@ -129,8 +129,8 @@ def _four_adjacent(left: Reservation, right: Reservation) -> bool:
     return False
 
 
-def _skeleton() -> CitySkeleton:
-    return CitySkeleton(
+def _skeleton() -> SettlementSkeleton:
+    return SettlementSkeleton(
         economic_tier=None,
         architectural_style=None,
         dominant_material=None,

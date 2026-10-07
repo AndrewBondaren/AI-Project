@@ -14,7 +14,7 @@ from app.application.worldData.generators.assemblers.areaAssembler.streetApproac
 from app.application.worldData.context.locationScope import (
     debug_building_context,
 )
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.buildingAssembler.structureContext import (
     StructureContext,
 )
@@ -34,7 +34,7 @@ def approach_material(
     kind: AreaThresholdKind,
     *,
     world: World,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     building: NamedLocation | None,
     context: StructureContext | None,
     rng: Random,

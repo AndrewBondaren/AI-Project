@@ -80,7 +80,7 @@ Subtype локации `building` в дереве NL (`residential` / `commercia
 | Ключ | Где | Что это | Канон |
 |---|---|---|---|
 | Морфология | `named_locations.system_location_subtype` → `location_type_registry` тип `settlement` | город / село / данж / подземный город: глиф L0, каркас `district_type` | `city`, `village`, `dungeon`, `underground_city` |
-| Специализация | шаблон **этого** поселения (`CitySkeleton` / import JSON), список | чем живёт место; несколько сразу («добыча + обработка + производство») | `extract`, `process`, `manufacture`, `culture`, `farm`, `livestock` (+ N+1) |
+| Специализация | шаблон **этого** поселения (`SettlementSkeleton` / import JSON), список | чем живёт место; несколько сразу («добыча + обработка + производство») | `extract`, `process`, `manufacture`, `culture`, `farm`, `livestock` (+ N+1) |
 | Районы на городе | тот же шаблон, список **типов** кварталов (§ ниже) | что мастер явно хочет в **этом** Ironhold | объекты `district_type` + optional `district_subtype` + optional pin `system_name` чертежа |
 
 Реестр специализаций — `worlds.settlement_specialization_registry` (§4.1): ключ → какие районы (`district_type` + `district_subtype`) и какую **семью** назначений (`allowed_family`) штамповать на слот. Листья = дети семьи ∩ live leaves включённых паков (`purpose_packs` + рецепты `purpose_pack_registry`). Geographic subtypes поля рецепта игнорируют.
@@ -181,10 +181,13 @@ LLM описывает → только из скелета (ограничен�
 
 ---
 
-## 3. Скелет города (CitySkeletonFields)
+## 3. Скелет города (SettlementSkeleton)
 
-Скелет собирается в `CitySkeleton` (`generators/assemblers/citySkeleton.py`) из полей `NamedLocation`.  
-**Runtime:** `SettlementAssembler._build_skeleton`; часть полей — optional JSON / `getattr` (NC-9 в tech debt).
+Скелет — `SettlementSkeleton` POJO (dataModel), общие type-поля объявлены в
+`SettlementPayloadFields`. `settlementSkeletonAccess` читает typed payload и
+generic tier/mood NL; resolved view получает tier/density от LocationContext.
+Зеркальный CitySkeleton dataclass и overlay/shim удалены в NL-P5.
+**Runtime:** `SettlementAssembler._build_skeleton`; далее POJO передаётся вниз.
 
 | Поле | Тип | Откуда | Описание | Impl |
 |---|---|---|---|---|
@@ -197,11 +200,11 @@ LLM описывает → только из скелета (ограничен�
 | `dominant_material` | `MaterialKey` | post-assemble | ref → `material_registry`; authored import — fallback-канал каскада (§3.1) | ✅ `resolve_dominant_material` |
 | `architectural_style` | string | JSON import | ref → `architectural_style_registry`; для LLM | ✅ read |
 | `settlement_density` | `DistrictDensity` | JSON import | ENUM-E `sparse` / `medium` / `dense` | ✅ read (NC-9) |
-| `frontage_type_order` | `list[ConnectionTypeKey] \| None` | JSON import, optional | Иерархия `connection_type` для парадного (C22). Элементы — ключи `connection_type_registry`. Как `settlement_density`: import → `CitySkeleton`; SQL — JSON на NL. `null`/`[]` = дефолт движка. Район может переопределить. Контракт — [tz_pojo_city_typing.md](./tz_pojo_city_typing.md) **POJO-C-5** | ⬜ connections §5.1.3 |
+| `frontage_type_order` | `list[ConnectionTypeKey] \| None` | JSON import, optional | Иерархия `connection_type` для парадного (C22). Элементы — ключи `connection_type_registry`. Как `settlement_density`: import → `SettlementPayload` → `SettlementSkeleton`; SQL — JSON внутри location_payload. `null`/`[]` = дефолт движка. Район может переопределить. Контракт — [tz_pojo_city_typing.md](./tz_pojo_city_typing.md) **POJO-C-5** | ⬜ connections §5.1.3 |
 | `plot_counts` | object | JSON import, optional | Городской дефолт копий участка: `{ "<drawing system_name>": int }`. Wire alias `structure_counts`. Резолв N — [connections](./tz_structure_connections.md) §5.1.3 «Число токенов» | ⬜ |
 | `plot_priority` | object | JSON import, optional | Городской дефолт очереди fill: `{ "<drawing system_name>": int }`. Wire alias `structure_priority`. Резолв — [connections](./tz_structure_connections.md) §5.1.3 «Приоритет посадки» | ⬜ |
-| `perimeter_barrier` | nullable `PerimeterBarrier` | optional | Инстанс барьера **поселения** (прямые footprint). Как `settlement_density`: import → `CitySkeleton`. Нет поля / `template` null/`""` — скип. `template` — `BarrierTemplateKey`. Не барьер района. **`SettlementAssembler`** до generate района вычитает эти прямые (`footprint ∩ DistrictSlot`) из площади района. [POJO-C-6](./tz_pojo_city_typing.md) | ⬜ |
-| `state_uid` | string | `NamedLocation` | Политический контекст LLM | ✅ location; ⬜ в `CitySkeleton` |
+| `perimeter_barrier` | nullable `PerimeterBarrier` | optional | Инстанс барьера **поселения** (прямые footprint). Как `settlement_density`: import → `SettlementPayload` → `SettlementSkeleton`. Нет поля / `template` null/`""` — скип. `template` — `BarrierTemplateKey`. Не барьер района. **`SettlementAssembler`** до generate района вычитает эти прямые (`footprint ∩ DistrictSlot`) из площади района. [POJO-C-6](./tz_pojo_city_typing.md) | ⬜ |
+| `state_uid` | string | `NamedLocation` | Политический контекст LLM | ✅ location; ⬜ в `SettlementSkeleton` |
 
 **Что LLM получает из скелета:**
 - `display_location_mood` → тон описания
@@ -706,7 +709,7 @@ Footprint и district slots — `generators/coordinates/` (WORLD_SURFACE_GRID vs
 | Regeneration — скелет изменился после generate | **deferred** — snapshot (§11.4) |
 | Механика дорог внутри района и между районами | **closed** — [tz_structure_connections.md](./tz_structure_connections.md) §5; `DistrictAssembler` + `connectionPolicy`. Рамка после брони — §6.3 |
 | **TODO** generate барьера **района** | **открыт** — `DistrictLayout.barrier_cells`. Зоны: не список поселения |
-| **TODO** поле барьера **поселения** на скелете (`CitySkeleton.perimeter_barrier`) | **открыт** — generate shrink есть; клетки стен всё ещё эвристика — **CITY-T-1c**; import поля нет — **CITY-T-1a** |
+| **TODO** поле барьера **поселения** на скелете (`SettlementSkeleton.perimeter_barrier`) | **открыт** — generate shrink есть; клетки стен всё ещё эвристика — **CITY-T-1c**; import поля нет — **CITY-T-1a** |
 | Зоны трёх инстансов `PerimeterBarrier` (нет общей xy) | **закрыт** — поселение вычитает `footprint ∩ слот` из площади района; packing района — только прямые района; [tz_locations.md](./tz_locations.md) |
 | **CONN-PACK-1** — рамка `radial` / `organic` вокруг брони; snap якорей вне `grid` | **открыт** — [connections](./tz_structure_connections.md) §8 |
 | **CONN-PACK-2** — два+ `required_structures` с `position: center` | **closed** — кластер вокруг home inner bbox; connections §5.1.3 / §8; поле — §9.4 |

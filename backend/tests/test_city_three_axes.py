@@ -18,9 +18,7 @@ from app.application.jsonValidation.worldRow import (
 )
 from app.application.worldData.buildingTemplateLibraryService import BuildingTemplateLibraryService
 from app.application.worldData.structureTemplateFsImport import load_structure_stdlib
-from app.application.worldData.generators.assemblers.citySkeleton import (
-    city_skeleton_from_settlement,
-)
+from app.application.worldData.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
 )
@@ -149,19 +147,21 @@ def _settlement(*, subtype: str | None, size: str = "medium", loc_type: str = "s
         system_location_type=loc_type,
         created_at="2026-01-01T00:00:00",
         system_location_subtype=subtype,
-        system_city_size=size,
+        location_payload={
+            'system_city_size': size,
+            'settlement_density': DistrictDensity.MEDIUM.wire_value,
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
-        settlement_density=DistrictDensity.MEDIUM.wire_value,
     )
     return loc
 
 
 def _skeleton(world: World, settlement: NamedLocation):
     ctx = settlement_context(world, settlement)
-    return city_skeleton_from_settlement(
+    return resolved_settlement_skeleton(
         settlement,
         economic_tier=ctx.economic_tier,
         settlement_density=ctx.settlement_density,
@@ -479,8 +479,10 @@ class LibraryHydrateTest(unittest.IsolatedAsyncioTestCase):
 
 
 class DistrictSelectTest(unittest.TestCase):
-    def test_legacy_without_subtype_keeps_civic_center(self) -> None:
-        world = _world()
+    def test_world_type_without_subtype_keeps_civic_center(self) -> None:
+        world = _world(location_type_registry=[{
+            "system_type": "city", "display_type": "City", "payload_kind": "settlement",
+        }])
         settlement = _settlement(subtype=None, loc_type="city")
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         civic = [slot for slot in slots if slot.district_template.system_name == "civic_center"]
@@ -516,7 +518,7 @@ class SpecializationPassTest(unittest.TestCase):
     def test_extract_places_mining_keeps_civic_center(self) -> None:
         world = _world()
         settlement = _settlement(subtype="city", size="medium")
-        settlement.system_settlement_specializations = ["extract"]
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': ["extract"]}
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         names = {slot.district_template.system_name for slot in slots}
         self.assertIn("mining_quarter", names)
@@ -547,7 +549,7 @@ class SpecializationPassTest(unittest.TestCase):
     def test_extract_slot_fill_is_extract_family(self) -> None:
         world = _world()
         settlement = _settlement(subtype="city", size="medium")
-        settlement.system_settlement_specializations = ["extract"]
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': ["extract"]}
         skeleton = _skeleton(world, settlement)
         slots = plan_district_slots(world, settlement, skeleton, None)
         mining = next(
@@ -574,8 +576,8 @@ class SpecializationPassTest(unittest.TestCase):
     def test_city_typical_districts_before_extract(self) -> None:
         world = _world()
         settlement = _settlement(subtype="city", size="medium")
-        settlement.typical_districts = [{"district_type": "civic"}]
-        settlement.system_settlement_specializations = ["extract"]
+        settlement.location_payload = {**(settlement.location_payload or {}), 'typical_districts': [{"district_type": "civic"}]}
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': ["extract"]}
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         civic = [slot for slot in slots if slot.district_template.district_type == "civic"]
         mining = [
@@ -592,9 +594,9 @@ class SpecializationPassTest(unittest.TestCase):
     def test_farm_village_places_farm_quarter(self) -> None:
         world = _world()
         settlement = _settlement(subtype="village", size="medium")
-        settlement.system_settlement_specializations = [
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': [
             {"system_specialization": "farm", "subjects": ["wheat"]},
-        ]
+        ]}
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         names = {slot.district_template.system_name for slot in slots}
         self.assertIn("farm_quarter", names)
@@ -602,9 +604,9 @@ class SpecializationPassTest(unittest.TestCase):
     def test_livestock_village_places_livestock_quarter(self) -> None:
         world = _world()
         settlement = _settlement(subtype="village", size="medium")
-        settlement.system_settlement_specializations = [
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': [
             {"system_specialization": "livestock", "subjects": ["cow"]},
-        ]
+        ]}
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         names = {slot.district_template.system_name for slot in slots}
         self.assertIn("livestock_quarter", names)
@@ -612,9 +614,9 @@ class SpecializationPassTest(unittest.TestCase):
     def test_culture_religion_tags_culture_leaves(self) -> None:
         world = _world()
         settlement = _settlement(subtype="city", size="medium")
-        settlement.system_settlement_specializations = [
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': [
             {"system_specialization": "culture", "subjects": ["religion"]},
-        ]
+        ]}
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         types = {
             row.structure_type or row.plot_template
@@ -659,9 +661,9 @@ class SpecializationPassTest(unittest.TestCase):
         )
         world = _world()
         settlement = _settlement(subtype="city")
-        settlement.system_settlement_specializations = [
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': [
             {"system_specialization": "extract", "subjects": ["iron_ore"]},
-        ]
+        ]}
         skeleton = _skeleton(world, settlement)
         rng = settlement_cell_rng("w1", "loc-1", 0, 0, SettlementCellRngRole.BUILDINGS)
         names = candidate_template_names(
@@ -695,7 +697,7 @@ class SpecializationPassTest(unittest.TestCase):
             "resource_kind": "ore",
         }])
         settlement = _settlement(subtype="city")
-        settlement.system_settlement_specializations = ["extract"]
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': ["extract"]}
         skeleton = _skeleton(world, settlement)
         rng = settlement_cell_rng("w1", "loc-1", 0, 0, SettlementCellRngRole.BUILDINGS)
         candidate_template_names(
@@ -1030,8 +1032,8 @@ class CityT4PlannerTest(unittest.TestCase):
     def test_culture_and_civic_center_both_place(self) -> None:
         world = _world()
         settlement = _settlement(subtype="city", size="medium")
-        settlement.typical_districts = [{"district_type": "civic"}]
-        settlement.system_settlement_specializations = ["culture"]
+        settlement.location_payload = {**(settlement.location_payload or {}), 'typical_districts': [{"district_type": "civic"}]}
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': ["culture"]}
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         names = {slot.district_template.system_name for slot in slots}
         self.assertIn("civic_center", names)
@@ -1040,9 +1042,9 @@ class CityT4PlannerTest(unittest.TestCase):
     def test_religion_tags_culture_family_leaves(self) -> None:
         world = _world()
         settlement = _settlement(subtype="city", size="medium")
-        settlement.system_settlement_specializations = [
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': [
             {"system_specialization": "culture", "subjects": ["religion"]},
-        ]
+        ]}
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         tags = slots[0].subject_tags
         self.assertIn("religion", tags.get("temple", ()))
@@ -1052,14 +1054,14 @@ class CityT4PlannerTest(unittest.TestCase):
     def test_extract_multiple_subject_kinds_tag_mine(self) -> None:
         world = _world()
         settlement = _settlement(subtype="city", size="medium")
-        settlement.system_settlement_specializations = [
+        settlement.location_payload = {**(settlement.location_payload or {}), 'system_settlement_specializations': [
             {
                 "system_specialization": "extract",
                 "subjects": {
                     "resource": ["iron_ore", "copper_ore"],
                 },
             },
-        ]
+        ]}
         slots = plan_district_slots(world, settlement, _skeleton(world, settlement), None)
         mining = next(
             slot for slot in slots

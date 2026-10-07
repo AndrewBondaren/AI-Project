@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 import unittest
 
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.connectionEntry import (
     ConnectionEntry,
 )
@@ -136,7 +136,7 @@ class TestGridSpineFillPaint(unittest.TestCase):
                 ),
             ],
         )
-        skeleton = CitySkeleton(
+        skeleton = SettlementSkeleton(
             economic_tier=None,
             architectural_style=None,
             dominant_material=None,

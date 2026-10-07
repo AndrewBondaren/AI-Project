@@ -5,9 +5,13 @@
     "backend/app/dataModel/locations/namedLocation/bundleNamedLocation.py",
     "backend/app/dataModel/locations/structure/building/plotLayoutTemplate.py",
     "backend/app/dataModel/locations/settlement/settlement/settlementPayload.py",
+    "backend/app/dataModel/locations/settlement/settlement/settlementSkeleton.py",
+    "backend/app/application/worldData/settlementSkeletonAccess.py",
     "backend/tests/typing/cascade_fields_valid.py"
   ],
-  "extraPaths": ["backend"],
+  "extraPaths": [
+    "backend"
+  ],
   "venvPath": ".",
   "venv": ".venv",
   "pythonVersion": "3.12",

@@ -4,7 +4,7 @@ SettlementAssembler — оркестратор генерации поселен
 План реализации по фазам: `.cursor/plans/settlement-assembler-done.md`
 
 Текущий статус (v1):
-  ✅ Фаза A — CitySkeleton, district slots, entry_nodes, city/district connection graph
+  ✅ Фаза A — SettlementSkeleton, district slots, entry_nodes, city/district connection graph
   ✅ Фаза B — semantic-first city edges (material, has_sidewalk, sidewalk_width log)
   ✅ Фаза C — placement (specialization, economic compat, ground_z, required_structures)
   ✅ Фаза E — building cache, area slots, cached layout in StructureAreaAssembler
@@ -19,10 +19,8 @@ import logging
 import time
 from dataclasses import replace
 
-from app.application.worldData.generators.assemblers.citySkeleton import (
-    CitySkeleton,
-    city_skeleton_from_settlement,
-)
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
+from app.application.worldData.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtAssembler import DistrictAssembler
 from app.application.worldData.generators.assemblers.districtAssembler.districtLayout import DistrictLayout
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
@@ -86,7 +84,7 @@ class SettlementAssembler:
             skeleton.economic_tier,
         )
         logger.info(
-            "CitySkeleton | economic_tier=%s architectural_style=%s dominant_material=%s"
+            "SettlementSkeleton | economic_tier=%s architectural_style=%s dominant_material=%s"
             " settlement_density=%s city_size=%s mood=%s",
             skeleton.economic_tier,
             skeleton.architectural_style,
@@ -179,9 +177,9 @@ class SettlementAssembler:
         world:      World,
         settlement: NamedLocation,
         ctx:        LocationContext | None = None,
-    ) -> CitySkeleton:
+    ) -> SettlementSkeleton:
         ctx = ctx if ctx is not None else settlement_context(world, settlement)
-        return city_skeleton_from_settlement(
+        return resolved_settlement_skeleton(
             settlement,
             economic_tier=ctx.economic_tier,
             settlement_density=ctx.settlement_density,
@@ -191,7 +189,7 @@ class SettlementAssembler:
         self,
         world:      World,
         settlement: NamedLocation,
-        skeleton:   CitySkeleton,
+        skeleton:   SettlementSkeleton,
         ctx:        LocationContext,
     ) -> list[MapCell]:
         rng = entity_rng(

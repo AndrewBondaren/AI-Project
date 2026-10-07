@@ -80,8 +80,8 @@ class BundleNamedLocationWireTests(unittest.TestCase):
             "structure_counts": {"inn_small": 2},
             "structure_priority": {"inn_small": 1},
         })
-        self.assertEqual(wire.plot_counts["inn_small"], 2)
-        self.assertEqual(wire.plot_priority["inn_small"], 1)
+        self.assertEqual(wire.location_payload.plot_counts["inn_small"], 2)
+        self.assertEqual(wire.location_payload.plot_priority["inn_small"], 1)
         fields = wire.to_db_fields()
         self.assertEqual(fields["location_payload"]["plot_counts"]["inn_small"], 2)
         self.assertNotIn("structure_counts", fields)

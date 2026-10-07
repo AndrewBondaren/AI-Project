@@ -10,7 +10,7 @@ Tests may inject layouts via ``from_south_map``.
 
 from __future__ import annotations
 
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.assemblers.settlementAssembler.packingLog import (
     PackingReason,
@@ -39,7 +39,7 @@ from app.db.models.world import World
 def collect_building_template_names(
     district_slots: list[DistrictSlot],
     world:          World,
-    skeleton:       CitySkeleton,
+    skeleton:       SettlementSkeleton,
     catalog:        BuildingCatalog | None = None,
     *,
     settlement_uid: str | None = None,
@@ -139,7 +139,7 @@ class BuildingLayoutCache:
 
 def build_layout_cache(
     world:          World,
-    skeleton:       CitySkeleton,
+    skeleton:       SettlementSkeleton,
     district_slots: list[DistrictSlot],
     terrain_cells:  list[MapCell] | None = None,
     catalog:        BuildingCatalog | None = None,

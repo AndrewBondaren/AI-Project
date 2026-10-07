@@ -6,7 +6,7 @@ import logging
 from random import Random
 
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.barrierDefaults import (
     lookup_barrier_template,
 )
@@ -71,7 +71,7 @@ def plan_area_barrier_cells(
     slot:              AreaSlot,
     building_template: PlotLayoutTemplate,
     building:          NamedLocation | None,
-    skeleton:          CitySkeleton,
+    skeleton:          SettlementSkeleton,
     rng:               Random,
 ) -> list[MapCell]:
     """

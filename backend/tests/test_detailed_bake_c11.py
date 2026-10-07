@@ -35,7 +35,7 @@ def _city(**kwargs) -> NamedLocation:
         "display_name": "Hold",
         "system_location_type": WorldLocationTypeRegistry.SYSTEM_TYPE_SETTLEMENT,
         "created_at": "2026-01-01T00:00:00",
-        "system_city_size": "town",
+        "location_payload": {"system_city_size": "town"},
     }
     payload.update(kwargs)
     return NamedLocation(**payload)

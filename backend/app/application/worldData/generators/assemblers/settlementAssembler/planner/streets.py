@@ -1,7 +1,7 @@
 import logging
 from random import Random
 
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.connectionEntry import ConnectionEntry
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
@@ -43,13 +43,13 @@ from app.db.models.world import World
 logger = logging.getLogger(__name__)
 
 
-def _city_has_sidewalk(skeleton: CitySkeleton) -> bool:
+def _city_has_sidewalk(skeleton: SettlementSkeleton) -> bool:
     """Perimeter/inter-district city roads: sidewalk unless settlement is sparse."""
     density = skeleton.settlement_density or DistrictDensity.default()
     return density is not DistrictDensity.SPARSE
 
 
-def _city_road_material(world: World, skeleton: CitySkeleton, rng: Random) -> str:
+def _city_road_material(world: World, skeleton: SettlementSkeleton, rng: Random) -> str:
     return resolve_material(
         world, "road", skeleton.economic_tier, rng, DEFAULT_ROAD_MATERIAL,
     )
@@ -101,7 +101,7 @@ def _connection_type(slot: DistrictSlot) -> str:
 
 def plan_settlement_entries(
     slots:     list[DistrictSlot],
-    skeleton:  CitySkeleton,
+    skeleton:  SettlementSkeleton,
     origin_x:  int,
     origin_y:  int,
     side_m:    int,
@@ -223,7 +223,7 @@ def plan_city_street_grid(
     world_uid:      str,
     world:          World,
     rng:            Random,
-    skeleton:       CitySkeleton,
+    skeleton:       SettlementSkeleton,
     surface:        dict[tuple[int, int], int] | None = None,
     *,
     settlement_uid: str,

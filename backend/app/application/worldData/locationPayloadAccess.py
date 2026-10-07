@@ -1,4 +1,4 @@
-"""Typed payload reads; legacy column fallback is removed in P2b."""
+"""Typed reads from the location's payload storage."""
 
 from pydantic import BaseModel
 
@@ -9,10 +9,7 @@ from app.dataModel.locations.settlement.district.districtPayload import District
 
 def _read(location: object, model: type[BaseModel]):
     raw = getattr(location, "location_payload", None)
-    if raw is None:
-        raw = {name: getattr(location, name) for name in model.model_fields
-               if getattr(location, name, None) is not None}
-    return model.model_validate(raw)
+    return model.model_validate({} if raw is None else raw)
 
 
 def settlement_payload(location: object) -> SettlementPayload:

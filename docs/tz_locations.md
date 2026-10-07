@@ -261,9 +261,8 @@ CRUD проходит тот же контракт, частичное обно�
 и новые поля, включая явную очистку поля до `None`.
 
 `settlement_payload` / `district_payload` валидируют сохранённый JSON при
-чтении. При `location_payload=None` они читают legacy-колонки; при наличии
-payload он имеет полный приоритет, включая отсутствующие nullable поля.
-Этот fallback удаляется вместе с legacy-колонками в P2b. Skeleton,
+чтении. До P2b при `location_payload=None` использовались legacy-колонки;
+этот временный fallback удалён в P2b. Skeleton,
 footprint/occupancy, locations index и topology читают payload через эти
 адаптеры. Новые district freezes создаются в `DistrictPayload`, persist
 выполняет read–validate–merge перед записью в своей транзакции.
@@ -271,13 +270,37 @@ footprint/occupancy, locations index и topology читают payload через
 **P4 — cascade channels:** размер, density и dominant material объявлены
 на `SettlementPayload` (SETTLEMENT). NL-узлы этих параметров и их рёбра
 к skeleton удалены; `source_wire` удалён. Settlement caller передаёт
-отдельные source-POJO: generic NL, typed payload и legacy skeleton для
+отдельные source-POJO: generic NL, typed payload и skeleton POJO для
 неизменённого generic economic-tier fallback. `CITY_SIZE` и
 `DOMINANT_MATERIAL` имеют по одному payload-узлу; density — цепочку
 `DistrictTemplateEntry.density → SettlementPayload.settlement_density`.
 Provenance authored type-значений теперь указывает `SettlementPayload.field`.
 Fold/default, наследование ниже settlement и generic stamp-приоритеты
-сохраняются. Legacy DB-колонки и read fallback удаляются отдельно в P2b.
+сохраняются. Legacy DB-колонки и read fallback удалены в P2b.
+
+**P2b — единое type-хранилище:** из `0001_initial.sql` и DB-модели
+`NamedLocation` удалены 11 прежних type-колонок (10 settlement-полей и
+`district_topology`); они хранятся только в `location_payload`.
+Generic tier, mood, parent materials и геометрия остаются на NL.
+Адаптеры чтения используют только payload; SQL NULL создаёт пустой POJO
+с его дефолтами, без поиска одноимённых атрибутов на runtime-объекте.
+CRUD больше не переносит старые колонки при частичном обновлении:
+он сливает текущий payload с wire-обновлением через прежний validator.
+Плоские wire-ключи и aliases импорта сохранены. Fixtures и debug-вызовы
+DB-модели переведены на payload. Синхронность SQL/model, отсутствие type
+колонок, NULL/empty/nested roundtrip и CRUD проверяются на новой временной
+БД из основной схемы; существующая dev-БД не пересоздаётся автоматически.
+
+**P5 — единый POJO скелета:** assembler-потребители используют
+`SettlementSkeleton` из dataModel без зеркального `CitySkeleton` dataclass.
+Application-адаптер `settlementSkeletonAccess` строит authored source-view
+из typed payload и generic tier/mood NL, а resolved view — с явно переданными
+результатами каскада (включая None). `dominant_material` в assembler-view
+остаётся None, как до зачистки: итоговый материал берётся из каскада/fold.
+Overlay-таблиц имён и алиасов между NL и skeleton нет. `BundleNamedLocation`
+содержит generic поля и typed payload; плоские type wire keys/aliases принимает
+его before-validator по payload-модели. Persist-сериализация не фильтрует
+удалённые flat-поля. Generic economic-tier source и приоритеты не меняются.
 
 **Граница полей:**
 
@@ -1320,7 +1343,7 @@ price = tier.base_value × location.economic_modifier × supply_demand_modifier 
 
 | Владелец инстанса | Периметр (чьи прямые) | Контракт инстанса | Клетки |
 |---|---|---|---|
-| поселение (`SettlementSkeleton` / `CitySkeleton.perimeter_barrier`) | грани **footprint** поселения, не bbox района | нет поля / `template` null → скип. Поле + `template` → всегда, без roll. Нет `sides` / `null` / `[]` → четыре прямые footprint | `SettlementLayout.barrier_cells`. Пишет **`SettlementAssembler`**. До generate района этот слой **вычитает** свои прямые (`footprint ∩ DistrictSlot`) из площади района, чтобы слот не заходил на клетки поселения. Чертёж может быть `city_wall` — это `template`, не другой класс |
+| поселение (`SettlementSkeleton.perimeter_barrier`) | грани **footprint** поселения, не bbox района | нет поля / `template` null → скип. Поле + `template` → всегда, без roll. Нет `sides` / `null` / `[]` → четыре прямые footprint | `SettlementLayout.barrier_cells`. Пишет **`SettlementAssembler`**. До generate района этот слой **вычитает** свои прямые (`footprint ∩ DistrictSlot`) из площади района, чтобы слот не заходил на клетки поселения. Чертёж может быть `city_wall` — это `template`, не другой класс |
 | `DistrictTemplateEntry.perimeter_barrier` | грани **уже урезанного** `DistrictSlot` | нет поля / `template` null → скип. Поле + `template` → всегда, без roll. `sides` — прямые **слота** | `DistrictLayout.barrier_cells`. Пишет **`DistrictAssembler`** (TODO generate). **v1 packing:** вычесть прямые района из слота. Не пишет список поселения; xy с поселением не делит (зоны) |
 | шаблон здания `perimeter_barrier` | грани **участка** | roll `probability` → `_build_barrier` | `AreaLayout.barrier_cells` |
 

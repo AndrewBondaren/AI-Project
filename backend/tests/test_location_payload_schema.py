@@ -1,4 +1,4 @@
-"""P2a: payload storage against the main SQL schema, without copied DDL."""
+"""Payload storage against the main SQL schema, without copied DDL."""
 
 import json
 import tempfile
@@ -11,9 +11,10 @@ from app.db.models.namedLocation import NamedLocation
 from app.db.models.world import World
 from app.db.repositories.sqlite.namedLocationRepository import SqliteNamedLocationRepository
 from app.application.worldData.namedLocationService import NamedLocationService
-from app.application.worldData.locationPayloadAccess import settlement_payload, district_payload
+from app.application.worldData.locationPayloadAccess import settlement_payload, district_payload, payload_field_names
 from app.application.worldData.context.locationScope import settlement_context
-from app.application.worldData.generators.assemblers.citySkeleton import settlement_skeleton_pojo
+from app.application.worldData.settlementSkeletonAccess import settlement_skeleton_pojo, resolved_settlement_skeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.dataModel.locations.namedLocation import BundleNamedLocation
 
 
@@ -46,6 +47,8 @@ class LocationPayloadSchemaTests(unittest.IsolatedAsyncioTestCase):
         async with self.db.conn.execute("PRAGMA table_info(named_locations)") as cursor:
             columns = {row["name"]: row for row in await cursor.fetchall()}
         self.assertEqual(set(columns), model_columns(NamedLocation))
+        self.assertTrue(set(columns).isdisjoint(payload_field_names()))
+        self.assertTrue(set(BundleNamedLocation.model_fields).isdisjoint(payload_field_names()))
         self.assertEqual(columns["location_payload"]["type"], "TEXT")
         self.assertEqual(columns["location_payload"]["notnull"], 0)
 
@@ -84,6 +87,32 @@ class LocationPayloadSchemaTests(unittest.IsolatedAsyncioTestCase):
         await self.repo.upsert(row)
         self.assertIsNone((await self.repo.get_by_id(row.location_uid)).location_payload)
 
+    async def test_source_and_resolved_skeletons_preserve_authored_storage(self):
+        row = self.location("skeleton", {
+            "plot_counts": {"plot": 2}, "dominant_material": "marble",
+            "settlement_density": "sparse",
+        })
+        row.system_economic_tier = "poor"
+        row.system_location_mood = "prosperous"
+        source = settlement_skeleton_pojo(row)
+        resolved = resolved_settlement_skeleton(
+            row, economic_tier="quality", settlement_density="dense",
+        )
+        cleared = resolved_settlement_skeleton(
+            row, economic_tier=None, settlement_density=None,
+        )
+        self.assertIsInstance(resolved, SettlementSkeleton)
+        self.assertEqual((source.economic_tier, source.settlement_density, source.dominant_material),
+                         ("poor", "sparse", "marble"))
+        self.assertEqual((resolved.economic_tier, resolved.settlement_density, resolved.system_location_mood),
+                         ("quality", "dense", "prosperous"))
+        self.assertIsNone(resolved.dominant_material)
+        self.assertIsNone(cleared.economic_tier)
+        self.assertIsNone(cleared.settlement_density)
+        resolved.plot_counts["plot"] = 3
+        self.assertEqual(source.plot_counts, {"plot": 2})
+        self.assertEqual(row.location_payload["plot_counts"], {"plot": 2})
+
     async def test_flat_import_moves_all_settlement_groups_to_payload(self):
         service = NamedLocationService(self.repo)
         wire = {
@@ -106,8 +135,8 @@ class LocationPayloadSchemaTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload.perimeter_barrier.template, "stone_fence")
         self.assertEqual(payload.typical_districts[0].district_type, "civic")
         self.assertEqual(payload.system_settlement_specializations[0].system_specialization, "extract")
-        self.assertIsNone(stored.system_city_size)
-        self.assertIsNone(stored.plot_counts)
+        self.assertNotIn("system_city_size", model_columns(NamedLocation))
+        self.assertNotIn("plot_counts", model_columns(NamedLocation))
         self.assertEqual(stored.system_economic_tier, "custom-tier")
         self.assertEqual(settlement_skeleton_pojo(stored).architectural_style, "gothic")
         world = World(world_uid="world", name="World", created_at="2026-10-06")
@@ -139,17 +168,14 @@ class LocationPayloadSchemaTests(unittest.IsolatedAsyncioTestCase):
         explicit = BundleNamedLocation.model_validate({**base, "is_inhabited": True})
         self.assertTrue(explicit.location_payload.is_inhabited)
 
-    async def test_partial_update_migrates_legacy_values_without_losing_them(self):
-        legacy = self.location("legacy", None)
-        legacy.system_city_size = "small"
-        legacy.plot_counts = {"plot": 2}
-        await self.repo.upsert(legacy)
-        await NamedLocationService(self.repo).update("world", "legacy", {"display_name": "Renamed"})
-        stored = await self.repo.get_by_id("legacy")
+    async def test_partial_generic_update_initializes_null_payload(self):
+        await self.repo.upsert(self.location("null-payload", None))
+        await NamedLocationService(self.repo).update("world", "null-payload", {"display_name": "Renamed"})
+        stored = await self.repo.get_by_id("null-payload")
         self.assertEqual(stored.display_name, "Renamed")
-        self.assertEqual(settlement_payload(stored).system_city_size, "small")
-        self.assertEqual(settlement_payload(stored).plot_counts, {"plot": 2})
-        self.assertIsNone(stored.plot_counts)
+        self.assertIsNone(settlement_payload(stored).system_city_size)
+        self.assertIsNone(settlement_payload(stored).plot_counts)
+        self.assertTrue(settlement_payload(stored).is_inhabited)
 
     async def test_import_resolves_custom_world_payload_kind(self):
         world = World(world_uid="world", name="World", created_at="2026-10-06",
@@ -170,9 +196,6 @@ class LocationPayloadSchemaTests(unittest.IsolatedAsyncioTestCase):
             row = self.location(kind, {"system_city_size": "large", "settlement_density": "dense",
                                        "dominant_material": "marble"})
             row.system_location_type = kind
-            row.system_city_size = "small"
-            row.settlement_density = "sparse"
-            row.dominant_material = "granite"
             row.system_economic_tier = "custom-tier"
             ctx = settlement_context(world, row)
             self.assertEqual((ctx.system_city_size, ctx.settlement_density, ctx.dominant_material),
@@ -181,12 +204,14 @@ class LocationPayloadSchemaTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(ctx.provenance[name][1], f"SettlementPayload.{name}")
             self.assertEqual(ctx.provenance["economic_tier"][1], "BundleNamedLocation.system_economic_tier")
 
-    async def test_payload_wins_over_legacy_columns_and_invalid_payload_fails(self):
+    async def test_payload_is_the_only_source_and_invalid_payload_fails(self):
         row = self.location("priority", {"system_city_size": "large"})
+        # A stray attribute on a runtime object must never restore the removed fallback.
         row.system_city_size = "small"
         self.assertEqual(settlement_skeleton_pojo(row).system_city_size, "large")
         row.location_payload = None
-        self.assertEqual(settlement_payload(row).system_city_size, "small")
+        self.assertIsNone(settlement_payload(row).system_city_size)
+        self.assertTrue(settlement_payload(row).is_inhabited)
         row.location_payload = {"plot_counts": {"plot": "invalid"}}
         with self.assertRaises(ValueError):
             settlement_payload(row)
@@ -199,7 +224,7 @@ class LocationPayloadSchemaTests(unittest.IsolatedAsyncioTestCase):
         await service.create("world", {"location_uid": "district", "display_name": "District",
                                        "system_location_type": "district", "district_topology": topology})
         stored = await self.repo.get_by_id("district")
-        self.assertIsNone(stored.district_topology)
+        self.assertNotIn("district_topology", model_columns(NamedLocation))
         self.assertEqual(district_payload(stored).district_topology.width_fine, 30)
 
 

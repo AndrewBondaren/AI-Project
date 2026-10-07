@@ -15,7 +15,7 @@ import logging
 import random
 from dataclasses import dataclass, field
 
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.road.layouts.culDeSacLayout import generate_cul_de_sac
 from app.application.worldData.generators.road.layouts.courtyardLayout import generate_courtyard
@@ -57,7 +57,7 @@ class DistrictRoadGenerator:
     def generate(
         self,
         slot:      DistrictSlot,
-        skeleton:  CitySkeleton,
+        skeleton:  SettlementSkeleton,
         world:     World,
         rng:       random.Random | None = None,
         surface:   dict[tuple[int, int], int] | None = None,

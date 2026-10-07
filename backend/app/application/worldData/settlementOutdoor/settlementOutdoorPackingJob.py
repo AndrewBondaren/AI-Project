@@ -14,9 +14,7 @@ from app.application.worldData.buildingTemplateLibraryService import (
 from app.application.worldData.structureTemplateLibraryService import (
     StructureTemplateLibraryService,
 )
-from app.application.worldData.generators.assemblers.citySkeleton import (
-    city_skeleton_from_settlement,
-)
+from app.application.worldData.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
 )
@@ -152,7 +150,7 @@ class SettlementOutdoorPackingJob:
         )
         catalog_s = clock.lap()
         settlement_ctx = settlement_context(world, settlement)
-        skeleton = city_skeleton_from_settlement(
+        skeleton = resolved_settlement_skeleton(
             settlement,
             economic_tier=settlement_ctx.economic_tier,
             settlement_density=settlement_ctx.settlement_density,

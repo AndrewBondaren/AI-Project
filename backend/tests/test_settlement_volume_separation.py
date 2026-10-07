@@ -45,7 +45,9 @@ def _city(uid: str, *, size: str = "medium", map_x: int = 0, map_y: int = 0, map
         display_name=uid,
         system_location_type="settlement",
         system_location_subtype="city",
-        system_city_size=size,
+        location_payload={
+            'system_city_size': size,
+        },
         created_at="2026-01-01T00:00:00",
         map_x=map_x,
         map_y=map_y,

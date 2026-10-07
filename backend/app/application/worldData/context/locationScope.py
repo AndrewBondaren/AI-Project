@@ -9,7 +9,7 @@ location domain's boundary wiring — one per scope level.
 """
 
 from dataclasses import asdict
-from app.application.worldData.locationPayloadAccess import settlement_payload, payload_field_names
+from app.application.worldData.locationPayloadAccess import settlement_payload
 from random import Random
 
 from app.application.jsonValidation import economic_tiers, location_types
@@ -17,9 +17,7 @@ from app.application.jsonValidation import economic_tiers, location_types
 from app.application.worldData.context.cascadeLink import EmptyLink, Link
 from app.application.worldData.context.contextResolver import extend, scope_sequence
 from app.application.worldData.ids import UidKind, entity_rng
-from app.application.worldData.generators.assemblers.citySkeleton import (
-    settlement_skeleton_pojo,
-)
+from app.application.worldData.settlementSkeletonAccess import settlement_skeleton_pojo
 from app.dataModel.locations.context.locationContext import LocationContext
 from app.dataModel.locations.context.locationCascadeDefaults import LocationCascadeDefaults
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
@@ -37,8 +35,7 @@ from app.db.models.world import World
 
 def named_location_pojo(location: NamedLocation, *, world: World | None = None) -> BundleNamedLocation:
     """Persist/runtime ``NamedLocation`` → its source POJO (§2)."""
-    return BundleNamedLocation.model_validate({key: value for key, value in asdict(location).items()
-        if key not in payload_field_names()},
+    return BundleNamedLocation.model_validate(asdict(location),
         context={"location_type_registry": location_types(world)} if world is not None else None)
 
 

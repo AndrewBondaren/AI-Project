@@ -46,7 +46,9 @@ def _city(uid: str, *, map_x: int = 2, map_y: int = 2) -> NamedLocation:
         display_name=uid,
         system_location_type=WorldLocationTypeRegistry.SYSTEM_TYPE_SETTLEMENT,
         system_location_subtype="city",
-        system_city_size="medium",
+        location_payload={
+            'system_city_size': "medium",
+        },
         created_at="2026-01-01T00:00:00",
         map_x=map_x,
         map_y=map_y,

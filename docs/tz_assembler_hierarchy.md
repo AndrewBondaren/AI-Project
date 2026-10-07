@@ -372,26 +372,16 @@ def generate_from_template(
 
 ### 7.1 Контракты и типы данных
 
-**`CitySkeleton`** — поля скелета города, передаются сверху вниз по всей иерархии:
+**`SettlementSkeleton`** — единый frozen POJO в dataModel, передаётся
+сверху вниз по иерархии. Type-поля наследует от `SettlementPayloadFields`,
+generic economic tier и mood объявляет сам. Application-адаптер
+`settlementSkeletonAccess` собирает authored source-view из payload и NL,
+а resolved assembler-view — с tier/density из LocationContext.
+Явный None сохраняется; dominant material остаётся результатом cascade/fold,
+а не копией authored значения в assembler-view. Зеркального dataclass,
+overlay-таблицы и citySkeleton shim после NL-P5 нет.
 
-```python
-@dataclass
-class CitySkeleton:
-    economic_tier:        EconomyTierKey | None
-    architectural_style:  str | None   # ref → worlds.architectural_style_registry (POJO нет)
-    dominant_material:    MaterialKey | None
-    settlement_density:   DistrictDensity | None
-    system_city_size:     SettlementSizeKey | None
-    system_location_mood: LocationMoodKey | None
-    frontage_type_order:  list[ConnectionTypeKey] | None  # C22; null = дефолт движка; POJO-C-5
-    plot_counts:          dict[DrawingKey, int] | None
-    plot_priority:        dict[DrawingKey, int] | None
-    perimeter_barrier:    PerimeterBarrier | None
-```
-
-Источник данных: поля `NamedLocation` поселения. Собирается `SettlementAssembler` и передаётся вниз без изменений.
-
-C22-поля: перечень и persist — [tz_city_generation.md](tz_city_generation.md) §3 (`⬜` в коде). Резолв N / очереди / фасада — [tz_structure_connections.md](tz_structure_connections.md) §5.1.3 (не дублировать таблицы здесь). Типы ключей фасада — [tz_pojo_city_typing.md](tz_pojo_city_typing.md) **POJO-C-5**. Район перекрывает город **по ключу** (`district_template`) для counts/priority/frontage. `perimeter_barrier` на скелете — барьер **поселения** (прямые footprint), не района. `display_location_mood` / `state_uid` — city §3; в этот dataclass не входят (`state_uid` ⬜ в скелете отдельно).
+C22-поля: перечень и persist — [tz_city_generation.md](tz_city_generation.md) §3 (`⬜` в коде). Резолв N / очереди / фасада — [tz_structure_connections.md](tz_structure_connections.md) §5.1.3 (не дублировать таблицы здесь). Типы ключей фасада — [tz_pojo_city_typing.md](tz_pojo_city_typing.md) **POJO-C-5**. Район перекрывает город **по ключу** (`district_template`) для counts/priority/frontage. `perimeter_barrier` на скелете — барьер **поселения** (прямые footprint), не района. `display_location_mood` / `state_uid` — city §3; в этот POJO не входят (`state_uid` ⬜ в скелете отдельно).
 
 ---
 
@@ -533,7 +523,7 @@ class StructureAreaAssembler:
         world:             World,
         slot:              AreaSlot,
         plot:              PlotLayoutTemplate,        # чертёж участка; здания объявлены здесь
-        city_skeleton:     CitySkeleton,
+        city_skeleton:     SettlementSkeleton,
         terrain_cells:     list[MapCell] | None = None,
         *,
         street_xy:         AbstractSet[tuple[int, int]],  # полотно после DistrictAssembler._plan_streets
@@ -588,7 +578,6 @@ Assembler **не** считает θ, median, шаг сетки. Формулы 
 ```
 generators/assemblers/
   __init__.py
-  citySkeleton.py                     # CitySkeleton dataclass (shared; течёт City→District→Area)
 
   settlementAssembler/                # реализовано (скелет + граф дорог)
     __init__.py
@@ -635,7 +624,8 @@ generators/structure/                 # домен structure — геометр�
 **Принцип именования:**
 - `*Slot` живёт у **получателя** — это его входной контракт
 - `*Layout` живёт там же — это его выходной контракт
-- `citySkeleton` — исключение; cross-cutting, на уровне `assemblers/`
+- Общий `SettlementSkeleton` POJO живёт в dataModel; сборка из payload/NL —
+  `application/worldData/settlementSkeletonAccess.py`, вне geometry generators.
 
 ---
 
@@ -667,7 +657,7 @@ map_cell_fine_span = World.fine_cells_per_map_cell   # через generators/coo
 
 ### 7.6 Порядок реализации (снизу вверх)
 
-1. `citySkeleton.py` — чистый dataclass, нет зависимостей
+1. `SettlementSkeleton` — общий POJO в dataModel; source/resolved сборка через application adapter.
 2. `areaSlot.py` — чистый dataclass, зависит только от `Facing`
 3. `areaLayout.py` — dataclass, зависит от `StructureLayout`, `MapCell`, `NamedLocation`
 4. `structureAreaAssembler.py` — оркестратор, зависит от всего выше + `ASSEMBLER_REGISTRY` + `StructureContext`

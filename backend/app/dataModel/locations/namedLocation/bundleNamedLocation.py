@@ -14,23 +14,14 @@ from app.dataModel.locations.context.cascadeParams import (
     WALL_MATERIAL,
 )
 from app.dataModel.cascade.cascadeSpec import CascadeChannel, CascadeLink, FieldRef
-from app.dataModel.connections.connectionType.worldConnectionTypeRegistry import (
-    ConnectionTypeKey,
-)
 from app.dataModel.economy.economyTier.worldEconomyTierRegistry import EconomyTierKey
 from app.dataModel.materials.worldMaterialRegistry import MaterialKey
-from app.dataModel.locations.settlement.area.perimeterBarrier import PerimeterBarrier
 from app.dataModel.locations.settlement.district.districtTemplateEntry import (
     DistrictTemplateEntry,
 )
 from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
-from app.dataModel.locations.settlement.settlement.settlementSpecializationBind import (
-    SettlementSpecializationBind,
-)
-from app.dataModel.locations.settlement.settlement.typicalDistrictRef import TypicalDistrictRef
 from app.dataModel.locations.settlement.settlement.worldLocationMoodRegistry import LocationMoodKey
 from app.dataModel.locations.structure.building.plotLayoutTemplate import (
-    DrawingKey,
     PlotLayoutTemplate,
 )
 from app.dataModel.locations.structure.room.roomDef import RoomDef
@@ -38,10 +29,6 @@ from app.dataModel.locations.locationPayload import LocationPayload
 from app.dataModel.locations.locationType.worldLocationTypeRegistry import WorldLocationTypeRegistry
 from app.dataModel.locations.settlement.settlement.settlementPayload import SettlementPayload
 from app.dataModel.locations.settlement.district.districtPayload import DistrictPayload
-
-
-def _skeleton_default(name: str):
-    return SettlementSkeleton.model_fields[name].default
 
 
 # Selectors live outside Annotated so static checkers inspect attributes.
@@ -107,12 +94,6 @@ class BundleNamedLocation(BaseModel):
             above=CascadeLink(_DISTRICT_TEMPLATE_ENTRY_ECONOMIC_TIER_RANGE, ScopeLevel.DISTRICT),
             below=CascadeLink(_SETTLEMENT_SKELETON_ECONOMIC_TIER, ScopeLevel.SETTLEMENT),
         ),
-    ] = _skeleton_default(
-        "economic_tier",
-    )
-    typical_districts: DefaultOnWire[list[TypicalDistrictRef] | None] = None
-    system_settlement_specializations: DefaultOnWire[
-        list[SettlementSpecializationBind] | None
     ] = None
     is_public: DefaultOnWire[bool] = False
     is_forbidden: DefaultOnWire[bool] = False
@@ -208,24 +189,6 @@ class BundleNamedLocation(BaseModel):
         values["location_payload"] = model.model_validate(payload)
         return values
 
-    architectural_style: DefaultOnWire[str | None] = _skeleton_default("architectural_style")
-    frontage_type_order: DefaultOnWire[list[ConnectionTypeKey] | None] = (
-        _skeleton_default("frontage_type_order")
-    )
-    plot_counts: DefaultOnWire[dict[DrawingKey, int] | None] = Field(
-        default=_skeleton_default("plot_counts"),
-        validation_alias=AliasChoices("plot_counts", "structure_counts"),
-    )
-    plot_priority: DefaultOnWire[dict[DrawingKey, int] | None] = Field(
-        default=_skeleton_default("plot_priority"),
-        validation_alias=AliasChoices("plot_priority", "structure_priority"),
-    )
-    perimeter_barrier: DefaultOnWire[PerimeterBarrier | None] = _skeleton_default(
-        "perimeter_barrier",
-    )
-
     def to_db_fields(self) -> dict[str, Any]:
         """Wire → ``NamedLocation`` kwargs."""
-        payload_fields = {name for model in LocationPayload.models().values()
-                          for name in model.model_fields}
-        return self.model_dump(mode="json", exclude_none=True, exclude=payload_fields)
+        return self.model_dump(mode="json", exclude_none=True)

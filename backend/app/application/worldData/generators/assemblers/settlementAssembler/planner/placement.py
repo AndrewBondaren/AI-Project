@@ -7,7 +7,7 @@ from app.application.jsonValidation import (
     economic_tiers,
 )
 from app.application.jsonValidation.settlementSizeResolve import resolve_settlement_size_key
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.economic import (
     check_district_economic_compat,
 )
@@ -84,7 +84,7 @@ def template_constraint_key(template: DistrictTemplateEntry) -> tuple[int, int, 
 def check_placement_conditions(
     template:      DistrictTemplateEntry,
     settlement:    NamedLocation,
-    skeleton:      CitySkeleton,
+    skeleton:      SettlementSkeleton,
     origin_x:      int,
     origin_y:      int,
     width_fine:       int,
@@ -186,7 +186,7 @@ def pick_template_for_ref(
     candidates: list[DistrictTemplateEntry],
     ref: TypicalDistrictRef,
     settlement: NamedLocation,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     world: World,
     origin_x: int,
     origin_y: int,
@@ -235,7 +235,7 @@ def pick_template_for_ref(
 def select_district_template(
     candidates:    list[DistrictTemplateEntry],
     settlement:    NamedLocation,
-    skeleton:      CitySkeleton,
+    skeleton:      SettlementSkeleton,
     world:         World,
     origin_x:      int,
     origin_y:      int,
@@ -336,7 +336,7 @@ def _pick_constrained(
 def _select_by_recipe(
     candidates: list[DistrictTemplateEntry],
     settlement: NamedLocation,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     world: World,
     origin_x: int,
     origin_y: int,

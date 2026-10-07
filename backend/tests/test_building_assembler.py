@@ -10,7 +10,7 @@ from app.application.worldData.generators.assemblers.areaAssembler.areaSlot impo
 from app.application.worldData.generators.assemblers.areaAssembler.structureAreaAssembler import derive_structure_context
 from app.application.worldData.generators.assemblers.buildingAssembler.assemblerRegistry import BUILDING_ASSEMBLER_REGISTRY
 from app.application.worldData.generators.assemblers.buildingAssembler.buildingAssembler import BuildingAssembler
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from app.application.worldData.generators.utils.materialResolver import resolve_room_materials
 from app.dataModel.locations.context.scopeLevel import ScopeLevel
@@ -66,7 +66,7 @@ class BuildingAssemblerTests(unittest.TestCase):
             system_name="band-plot", display_name="Plot", main_building=self.body,
             economic_tier_band=band,
         )
-        skeleton = CitySkeleton(None, None, None, None, None, None)
+        skeleton = SettlementSkeleton()
         return derive_structure_context(
             self.world, plot, skeleton, AreaSlot([(0, 0)], 7, Facing.SOUTH),
             None, ground_z=7,

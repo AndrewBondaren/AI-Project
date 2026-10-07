@@ -35,7 +35,7 @@ class TestLocationTerritoryVolumes(unittest.TestCase):
 
     def test_settlement_uses_footprint_side_from_assembler(self):
         world = _world()
-        loc = _location(system_location_type="settlement", system_city_size="hamlet")
+        loc = _location(system_location_type="settlement", location_payload={"system_city_size": "hamlet"})
         side = settlement_footprint_side_fine(world, loc)
         self.assertEqual(side, footprint_side_fine(world, "hamlet"))
         vol = territory_volume_for_location(world, loc)

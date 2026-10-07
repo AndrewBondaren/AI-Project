@@ -18,6 +18,7 @@ from app.application.worldData.generators.assemblers.settlementAssembler.settlem
 )
 from app.db.models.mapCell import MapCell
 from app.db.models.namedLocation import NamedLocation
+from app.application.worldData.locationPayloadAccess import settlement_payload
 from app.db.models.world import World
 
 
@@ -71,13 +72,15 @@ def test_phase_c_placement() -> None:
         display_name="Coasthold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="city",
+        location_payload={
+            'system_city_size': "city",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    settlement.settlement_density = "medium"
+    settlement.location_payload = {**(settlement.location_payload or {}), 'settlement_density': "medium"}
 
     assembler = SettlementAssembler()
     skeleton = assembler._build_skeleton(world, settlement)
@@ -127,13 +130,15 @@ def test_city_shared_nodes() -> None:
         display_name="Bighold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="city",
+        location_payload={
+            'system_city_size': "city",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    settlement.settlement_density = "medium"
+    settlement.location_payload = {**(settlement.location_payload or {}), 'settlement_density': "medium"}
 
     from app.application.worldData.generators.assemblers.settlementAssembler.planner.districts import (
         plan_district_slots,
@@ -185,13 +190,15 @@ def test_phase_e_building_cache() -> None:
         display_name="Cachehold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    settlement.settlement_density = "medium"
+    settlement.location_payload = {**(settlement.location_payload or {}), 'settlement_density': "medium"}
 
     civic = WorldDistrictTemplateRegistry.canonical_defaults().entry_for("civic_center")
     assert civic is not None
@@ -269,13 +276,15 @@ def test_phase_area_barriers() -> None:
         display_name="Fencehold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    settlement.settlement_density = "medium"
+    settlement.location_payload = {**(settlement.location_payload or {}), 'settlement_density': "medium"}
 
     town_hall = lookup_building_template(world, "town_hall")
     assert town_hall is not None
@@ -358,13 +367,15 @@ def test_phase_b_travel_and_sidewalk() -> None:
         display_name="Roadhold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    settlement.settlement_density = "medium"
+    settlement.location_payload = {**(settlement.location_payload or {}), 'settlement_density': "medium"}
     layout = SettlementAssembler().assemble(world, settlement)
     entry_edges = [e for e in layout.connection_edges if e.edge_uid.startswith("city_link_")]
     assert entry_edges, "town should have city entry link edges"
@@ -410,7 +421,9 @@ def test_phase_d_barriers() -> None:
         display_name="Hollow",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="hamlet",
+        location_payload={
+            'system_city_size': "hamlet",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
@@ -426,13 +439,15 @@ def test_phase_d_barriers() -> None:
         display_name="Wallhold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="city",
+        location_payload={
+            'system_city_size': "city",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    city.settlement_density = "medium"
+    city.location_payload = {**(city.location_payload or {}), 'settlement_density': "medium"}
     sk_c = assembler._build_skeleton(world, city)
     rng = Random(f"{world.world_uid}_{city.location_uid}_barriers")
     barriers = plan_settlement_barriers(world, city, sk_c, rng)
@@ -491,13 +506,15 @@ def test_phase_f_map_occupancy() -> None:
         display_name="Foothold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    town.settlement_density = "medium"
+    town.location_payload = {**(town.location_payload or {}), 'settlement_density': "medium"}
 
     gx0, gy0, gx1, gy1 = footprint_grid_rect(world, town)
     assert (gx0, gy0, gx1, gy1) == (0, 0, 1, 1)
@@ -521,13 +538,15 @@ def test_phase_f_map_occupancy() -> None:
         display_name="Gridhold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="city",
+        location_payload={
+            'system_city_size': "city",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    city.settlement_density = "medium"
+    city.location_payload = {**(city.location_payload or {}), 'settlement_density': "medium"}
     assert footprint_grid_rect(world, city) == (0, 0, 2, 2)
     assert len(plan_footprint_occupancy_cells(world, city)) == 4
 
@@ -575,13 +594,15 @@ def test_coordinate_spaces_anchor_3000() -> None:
         display_name="Easthold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+        },
         system_economic_tier="standard",
         map_x=3000,
         map_y=0,
         map_z=0,
     )
-    town.settlement_density = "medium"
+    town.location_payload = {**(town.location_payload or {}), 'settlement_density': "medium"}
 
     cell_m = map_cell_fine_span(world)
     assert cell_m == 3000
@@ -590,7 +611,7 @@ def test_coordinate_spaces_anchor_3000() -> None:
     assert (origin.x, origin.y, origin.z) == (3000, 0, 0)
     assert settlement_origin(town) == (3000, 0, 0)
 
-    side_m = footprint_side_fine(world, town.system_city_size)
+    side_m = footprint_side_fine(world, settlement_payload(town).system_city_size)
     assert side_m == 3000
 
     grid_rect = settlement_grid_rect(world, town)
@@ -633,13 +654,15 @@ def test_coordinate_spaces_anchor_3000() -> None:
         display_name="Eastgrid",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="city",
+        location_payload={
+            'system_city_size': "city",
+        },
         system_economic_tier="standard",
         map_x=3000,
         map_y=0,
         map_z=0,
     )
-    city.settlement_density = "medium"
+    city.location_payload = {**(city.location_payload or {}), 'settlement_density': "medium"}
     assert settlement_grid_rect(world, city).as_tuple() == (1, 0, 3, 2)
     assert settlement_fine_rect(world, city).as_tuple() == (3000, 0, 9000, 6000, 0)
 
@@ -701,7 +724,9 @@ def test_terrain_decoupled_from_settlements() -> None:
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
         parent_location_uid=region.location_uid,
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+        },
         map_x=3000,
         map_y=0,
         map_z=0,
@@ -726,7 +751,9 @@ def test_terrain_decoupled_from_settlements() -> None:
             system_location_type="city",
             created_at="2026-01-01T00:00:00",
             parent_location_uid=region.location_uid,
-            system_city_size="city",
+            location_payload={
+                'system_city_size': "city",
+            },
             map_x=9000,
             map_y=0,
             map_z=0,
@@ -1408,13 +1435,15 @@ def test_phase_4_collect_map_cells() -> None:
         display_name="Splithold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+        },
         system_economic_tier="standard",
         map_x=3000,
         map_y=0,
         map_z=0,
     )
-    settlement.settlement_density = "medium"
+    settlement.location_payload = {**(settlement.location_payload or {}), 'settlement_density': "medium"}
 
     layout = SettlementAssembler().assemble(world, settlement)
     grid_cells = collect_surface_grid_cells(layout)
@@ -1459,13 +1488,15 @@ def main() -> None:
         display_name="Ironhold",
         system_location_type="city",
         created_at="2026-01-01T00:00:00",
-        system_city_size="town",
+        location_payload={
+            'system_city_size': "town",
+        },
         system_economic_tier="standard",
         map_x=0,
         map_y=0,
         map_z=0,
     )
-    settlement.settlement_density = "medium"
+    settlement.location_payload = {**(settlement.location_payload or {}), 'settlement_density': "medium"}
 
     _run_case("town 1x1", world, settlement)
     test_phase_c_placement()

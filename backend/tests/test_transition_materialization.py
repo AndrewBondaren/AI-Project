@@ -13,7 +13,7 @@ from app.db.repositories.iTransitionRepository import TransitionRepositoryContex
 from app.db.repositories.sqlite.transitionRepository import SqliteTransitionRepository
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
 from app.application.worldData.generators.assemblers.areaAssembler.structureAreaAssembler import StructureAreaAssembler
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import extract_settlement
 from app.application.worldData.settlementOutdoor.settlementOutdoorSqlPersist import SettlementOutdoorSqlPersist
 from app.application.worldData.pack.io.worldPackPaths import WorldPackPaths
@@ -78,7 +78,7 @@ class TransitionMaterializationTest(unittest.IsolatedAsyncioTestCase):
     def generate(self):
         area = StructureAreaAssembler().assemble(self.world,
             AreaSlot([(x, y) for x in range(30, 70) for y in range(-50, -10)], 7, Facing.SOUTH),
-            self.plot, CitySkeleton(None, None, None, None, None, None),
+            self.plot, SettlementSkeleton(),
             structure_catalog=self.catalog, building_x=34, building_y=-46)
         layout = _layout(passages=[])
         layout.district_layouts[0].area_layouts = [area]

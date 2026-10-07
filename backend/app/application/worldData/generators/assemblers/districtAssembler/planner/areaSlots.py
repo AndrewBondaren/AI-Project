@@ -6,7 +6,7 @@ from app.application.worldData.generators.assemblers.areaAssembler.areaSlot impo
     AreaSlot,
     SURFACE_DECK,
 )
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.planner.types import (
     AreaPlacement,
     Reservation,
@@ -91,7 +91,7 @@ def placements_from_reservations(
     reservations: list[Reservation],
     cache: BuildingLayoutCache,
     world: World,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     fallback_z: int,
     catalog: BuildingCatalog | None = None,
     *,

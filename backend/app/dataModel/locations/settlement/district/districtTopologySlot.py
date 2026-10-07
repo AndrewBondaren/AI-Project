@@ -31,7 +31,7 @@ class DistrictTopologyEntry(BaseModel):
 
 
 class DistrictTopologySlot(BaseModel):
-    """Geometry + template key on generated district NL (`named_locations.district_topology`)."""
+    """Geometry + template key in generated district NL's DistrictPayload."""
 
     model_config = ConfigDict(extra="ignore", frozen=True, populate_by_name=True)
 

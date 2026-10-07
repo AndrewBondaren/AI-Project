@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 from collections import defaultdict
 
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import (
     DistrictSlot,
 )
@@ -122,7 +122,7 @@ def apply_frontage(
     edge_xy: dict[str, set[Coord]],
     street_xy: set[Coord],
     slot: DistrictSlot,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     known_types: frozenset[str],
     rng: random.Random,
     settlement_uid: str,

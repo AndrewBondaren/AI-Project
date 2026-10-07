@@ -9,7 +9,7 @@ import logging
 from pydantic import ValidationError
 
 from app.application.jsonValidation.worldRow import district_templates, enabled_building_purposes
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.connectionEntry import (
     ConnectionEntry,
 )
@@ -157,7 +157,7 @@ def should_skip_topology(
 def load_topology_slots(
     world: World,
     settlement: NamedLocation,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     districts: list[NamedLocation],
     settlement_ctx: LocationContext | None = None,
 ) -> list[DistrictSlot] | None:

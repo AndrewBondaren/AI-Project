@@ -19,7 +19,7 @@ from app.dataModel.materials.worldMaterialRegistry import MaterialKey
 
 
 class SettlementPayloadFields(BaseModel):
-    """Shared field definitions while the legacy skeleton is being migrated."""
+    """Shared authored field definitions for payload storage and assembler POJO."""
     model_config = ConfigDict(extra="ignore", frozen=True, populate_by_name=True)
 
     system_city_size: DefaultOnWire[SettlementSizeKey | None] = None

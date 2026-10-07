@@ -6,7 +6,7 @@ from __future__ import annotations
 import random
 
 from app.application.worldData.connectionUids import connection_node_uid
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.connectionEntry import (
     ConnectionEntry,
 )
@@ -34,7 +34,7 @@ from app.db.models.connectionNode import ConnectionNode
 
 def generate_grid(
     slot:     DistrictSlot,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
     world_uid: str,
     fill:     ConnectionPaint,
     spine:    ConnectionPaint,

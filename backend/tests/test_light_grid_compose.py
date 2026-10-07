@@ -96,7 +96,9 @@ class TestLightGridCompose(unittest.TestCase):
                 world_uid=world.world_uid,
                 display_name="Town",
                 system_location_type="settlement",
-                system_city_size="town",
+                location_payload={
+                    'system_city_size': "town",
+                },
                 map_x=500,
                 map_y=500,
                 created_at="2026-01-01T00:00:00Z",

@@ -27,7 +27,7 @@ from app.application.worldData.context.locationScope import (
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
 from app.application.worldData.generators.assemblers.areaAssembler.structureAreaAssembler import derive_structure_context
 from app.application.worldData.generators.assemblers.buildingAssembler.structureContext import StructureContext
-from app.application.worldData.generators.assemblers.citySkeleton import city_skeleton_from_settlement
+from app.application.worldData.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.settlementAssembler.settlementAssembler import SettlementAssembler
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.barriers import _pick_template_material
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.dominantMaterial import (
@@ -206,7 +206,7 @@ class CascadeContextBaselineTests(unittest.TestCase):
         # the template's range and band (tz_cascade_context §4).
         world, building, structure = fixture()
         settlement = replace(building, location_uid="city", system_location_type="settlement", system_economic_tier="t1")
-        skeleton = city_skeleton_from_settlement(
+        skeleton = resolved_settlement_skeleton(
             settlement, economic_tier="t1", settlement_density=None,
         )
         slot = AreaSlot(cells=[(20, 30)], ground_z=7, facing=Facing.SOUTH)
@@ -278,7 +278,7 @@ class CascadeContextBaselineTests(unittest.TestCase):
         # Authored settlement material beats the fold pick and is
         # itself beaten by a city-level layout mode.
         authored = settlement_context(
-            world, replace(settlement, dominant_material="marble"),
+            world, replace(settlement, location_payload={**(settlement.location_payload or {}), 'dominant_material': "marble"}),
         )
         self.assertEqual(authored.dominant_material, "marble")
         layout = SettlementLayout(

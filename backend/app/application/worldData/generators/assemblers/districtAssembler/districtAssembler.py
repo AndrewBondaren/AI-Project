@@ -7,7 +7,7 @@ from app.application.worldData.generators.assemblers.areaAssembler.areaSlot impo
 from app.application.worldData.generators.assemblers.areaAssembler.planner.plotCollision import (
     plot_z_collisions,
 )
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtLayout import DistrictLayout
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.assemblers.districtAssembler.planner.areaSlots import (
@@ -106,7 +106,7 @@ class DistrictAssembler:
         self,
         world:           World,
         slot:            DistrictSlot,
-        city_skeleton:   CitySkeleton,
+        city_skeleton:   SettlementSkeleton,
         terrain_cells:   list[MapCell] | None = None,
         layout_cache:    BuildingLayoutCache | dict[str, StructureLayout] | None = None,
         settlement_uid:  str | None = None,
@@ -293,7 +293,7 @@ class DistrictAssembler:
     def _plan_streets(
         self,
         slot:          DistrictSlot,
-        city_skeleton: CitySkeleton,
+        city_skeleton: SettlementSkeleton,
         world:         World,
         surface:       dict[tuple[int, int], int] | None = None,
         frame:         StreetFrameContext | None = None,

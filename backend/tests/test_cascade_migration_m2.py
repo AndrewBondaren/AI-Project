@@ -29,9 +29,7 @@ from app.application.worldData.generators.assemblers.areaAssembler.areaSlot impo
 from app.application.worldData.generators.assemblers.areaAssembler.structureAreaAssembler import (
     StructureAreaAssembler,
 )
-from app.application.worldData.generators.assemblers.citySkeleton import (
-    city_skeleton_from_settlement,
-)
+from app.application.worldData.settlementSkeletonAccess import resolved_settlement_skeleton
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
     district_templates,
 )
@@ -179,15 +177,15 @@ class DistrictScopeTest(unittest.TestCase):
             created_at="2026-01-01T00:00:00",
             system_economic_tier="premium",
         )
-        stamped.district_topology = {
+        stamped.location_payload = {**(stamped.location_payload or {}), 'district_topology': {
             "cell_x": 0, "cell_y": 0, "origin_x": 0, "origin_y": 0,
             "width_fine": 16, "depth_fine": 16, "ground_z": 7,
             "template_system_name": template.system_name, "slot_index": 0,
             "entries": [],
-        }
+        }}
         # The stamped value sits below the range — a fresh roll could
         # never produce it, so equality proves the stamp is the link.
-        skeleton = city_skeleton_from_settlement(
+        skeleton = resolved_settlement_skeleton(
             settlement, economic_tier="standard", settlement_density=None,
         )
         loaded = load_topology_slots(
@@ -201,7 +199,7 @@ class DistrictScopeTest(unittest.TestCase):
 class BuildingScopeTest(unittest.TestCase):
     def setUp(self):
         self.world = _world()
-        self.skeleton = city_skeleton_from_settlement(
+        self.skeleton = resolved_settlement_skeleton(
             _settlement(), economic_tier="standard", settlement_density=None,
         )
         self.structure = StructureTemplate(

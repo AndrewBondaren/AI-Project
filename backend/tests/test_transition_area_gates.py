@@ -8,7 +8,7 @@ from app.application.worldData.generators.assemblers.areaAssembler.areaSlot impo
 from app.application.worldData.generators.assemblers.areaAssembler.areaThreshold import AreaThresholdKind
 from app.application.worldData.generators.assemblers.areaAssembler.structureAreaAssembler import StructureAreaAssembler
 from app.application.worldData.generators.assemblers.areaAssembler.planner.areaBarriers import area_gate_cells, should_build_area_barrier
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.settlementOutdoor.settlementOutdoorExtract import extract_settlement
 from app.application.worldData.settlementOutdoor.settlementOutdoorSqlPersist import SettlementOutdoorSqlPersist
 from app.application.worldData.transitions.transitionIdentity import transition_uid
@@ -33,7 +33,7 @@ class AreaGatesTest(unittest.IsolatedAsyncioTestCase):
         self.world = World("w1", "Area", "2026-10-06")
         self.plot = PlotLayoutTemplate(system_name="yard", display_name="Yard",
             perimeter_barrier={"template": "stone_fence", "probability": 1.0})
-        self.skeleton = CitySkeleton(None, None, None, None, None, None)
+        self.skeleton = SettlementSkeleton()
         self.assembler = StructureAreaAssembler()
 
     def assemble(self, *, plot=None, facing=Facing.SOUTH, x=20, catalog=None, building_x=None, building_y=None):

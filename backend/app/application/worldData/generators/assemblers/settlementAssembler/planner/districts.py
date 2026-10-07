@@ -6,7 +6,7 @@ from app.application.jsonValidation.worldRow import (
     location_types,
     settlement_specializations,
 )
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.assemblers.districtAssembler.districtSlot import DistrictSlot
 from app.application.worldData.generators.assemblers.settlementAssembler.planner.footprint import (
     district_templates,
@@ -78,7 +78,7 @@ class SettlementSpecializationResolve:
 def plan_district_slots(
     world:          World,
     settlement:     NamedLocation,
-    skeleton:       CitySkeleton,
+    skeleton:       SettlementSkeleton,
     terrain_cells:  list[MapCell] | None,
     settlement_ctx: LocationContext | None = None,
 ) -> list[DistrictSlot]:
@@ -358,7 +358,7 @@ def slot_allowed_for_template(
 def resolve_settlement_specialization(
     world: World,
     settlement: NamedLocation,
-    skeleton: CitySkeleton,
+    skeleton: SettlementSkeleton,
 ) -> SettlementSpecializationResolve:
     subtype = (settlement.system_location_subtype or "").strip()
     recipe = (

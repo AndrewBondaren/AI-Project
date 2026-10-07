@@ -6,7 +6,7 @@ from unittest.mock import patch
 from app.application.worldData.generators.assemblers.areaAssembler.areaSlot import AreaSlot
 from app.application.worldData.generators.assemblers.areaAssembler.areaThreshold import AreaThresholdKind
 from app.application.worldData.generators.assemblers.areaAssembler.structureAreaAssembler import StructureAreaAssembler
-from app.application.worldData.generators.assemblers.citySkeleton import CitySkeleton
+from app.dataModel.locations.settlement.settlement.settlementSkeleton import SettlementSkeleton
 from app.application.worldData.generators.structure.errors import GenerationError
 from app.application.worldData.generators.structure.structureGeneratorService import StructureGeneratorService
 from app.dataModel.spatial.facing import Facing
@@ -22,7 +22,7 @@ from app.db.models.world import World
 class StructureAreaAssemblerTests(unittest.TestCase):
     def setUp(self):
         self.world = World(world_uid="area-world", name="Area", created_at="2026-09-29")
-        self.skeleton = CitySkeleton(None, None, None, None, None, None)
+        self.skeleton = SettlementSkeleton()
         self.structure = StructureTemplate(
             system_name="00000000-0000-4000-8000-000000000041",
             display_name="Room with entrance",

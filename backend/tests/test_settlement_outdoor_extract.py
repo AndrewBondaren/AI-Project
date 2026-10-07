@@ -61,7 +61,9 @@ def _settlement() -> NamedLocation:
         map_x=0,
         map_y=0,
         map_z=0,
-        system_city_size="hamlet",
+        location_payload={
+            'system_city_size': "hamlet",
+        },
     )
 
 
