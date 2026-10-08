@@ -1487,7 +1487,7 @@ depth = rng.randint(depth_range[0], depth_range[1])  # игнорируется 
     "corrodible":         true,
     "meltable":           false,
     "mineable":           true,
-    "transparent":        false,
+    "transparent":        0,
     "components":         null
   }
 ]
@@ -1510,7 +1510,7 @@ depth = rng.randint(depth_range[0], depth_range[1])  # игнорируется 
 | `corrodible` | bool | Поддаётся коррозии. Default: true |
 | `meltable` | bool | Плавится. Default: false |
 | `mineable` | bool | Добывается. Default: false |
-| `transparent` | bool | Прозрачен. Default: false |
+| `transparent` | number (0–100) | Процент прозрачности; дробные значения допустимы. Default: 0 |
 | `components` | string[]\|null | optional. Компоненты для `crafted`/`refined` материалов |
 | `temp_damage` | bool | только liquid/gas. Наносит температурный урон |
 | `vision_block` | bool | только liquid/gas. Блокирует видимость |

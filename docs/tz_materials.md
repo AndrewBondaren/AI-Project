@@ -11,6 +11,16 @@
 
 ## 2. Структура записи
 
+`transparent` — конечное число процентов в диапазоне `[0, 100]`, включая дробные
+значения. Missing → `0`; explicit null, bool, строки, NaN/Infinity и значения вне
+диапазона — unresolved по общей runtime/worldEdit политике, без clamp/default.
+Миграция прежнего bool-контракта: `false → 0`, `true → 100`; данные fixtures и
+canonical entries обновлены явно, runtime не выполняет скрытую конверсию bool.
+Для сетки автор задаёт процент конкретного исполнения. Из физического `density`
+он автоматически не выводится. Правила ослабления видимости через несколько
+объектов и связь с `vision_block` требуют отдельного контракта потребителя;
+в этом срезе расчёт FOV не добавляется.
+
 ```json
 {
   "system_material":    "water",
@@ -32,7 +42,7 @@
   "flammable":          false,
   "corrodible":         false,
   "mineable":           false,
-  "transparent":        false,
+  "transparent":        0,
   "temp_damage":        false,
   "vision_block":       false,
   "components":         null
@@ -60,7 +70,7 @@
 | `flammable` | bool | физика | Горит при контакте с огнём. Default: false |
 | `corrodible` | bool | физика | Поддаётся коррозии/кислоте. Default: true |
 | `mineable` | bool | физика | Добывается инструментом. Default: false |
-| `transparent` | bool | физика | Не блокирует видимость. Default: false |
+| `transparent` | number (0–100) | физика | Процент прозрачности: 0 — непрозрачен, 100 — полностью прозрачен; дробные значения допустимы. Default: 0 |
 | `breakable` | bool | физика | Разрушается от удара (хрупкие материалы). Переводит ячейку в состояние `broken`. Default: false |
 | `temp_damage` | bool | физика | только liquid/gas. Наносит температурный урон при контакте |
 | `vision_block` | bool | физика | только liquid/gas. Блокирует видимость |
@@ -77,7 +87,7 @@
 | `flammable` | `false` | только явно горючие материалы горят |
 | `corrodible` | `true` | большинство материалов поддаются коррозии |
 | `mineable` | `false` | только явно добываемые добываются |
-| `transparent` | `false` | материал непрозрачен по умолчанию |
+| `transparent` | `0` | материал непрозрачен по умолчанию |
 | `breakable` | `false` | только хрупкие разрушаются от удара |
 | `heat_conductivity` | `0.1` | воздух — базовый уровень конвекции |
 | `viscosity` | `null` | только liquid-материалы имеют вязкость |
@@ -98,7 +108,7 @@
 
 | `material_category` | Физика движка |
 |---|---|
-| `solid` | падает если `g > 0` и нет опоры снизу; всплывает если `density < liquid.density`; горит если `flammable`; переходит в другой материал если `cool_into` задан; разрушается кислотой если `corrodible`; переходит в другой материал если `heat_into` задан; добывается если `mineable`; блокирует обзор если `transparent: false` |
+| `solid` | падает если `g > 0` и нет опоры снизу; всплывает если `density < liquid.density`; горит если `flammable`; переходит в другой материал если `cool_into` задан; разрушается кислотой если `corrodible`; переходит в другой материал если `heat_into` задан; добывается если `mineable`; имеет прозрачность `transparent` процентов (0 — непрозрачен, 100 — полностью прозрачен) |
 | `liquid` | течёт вниз по z; слоение: более плотная жидкость опускается ниже; утопание; температурный урон если `temp_damage`; блокирует видимость если `vision_block` |
 | `gas` | движение по z определяется `density` относительно соседей: тяжелее → оседает вниз, легче → поднимается; блокирует видимость если `vision_block`; токсичность если `temp_damage` |
 
@@ -181,11 +191,11 @@ pressure(cell) = sum(density * height for fluid_cells above)
 
 ```json
 [
-  { "system_material": "stone",     "display_name": "Камень",        "glossary_ref": null, "material_category": "solid",  "tags": ["construction", "mineral"],  "use_type": ["wall", "floor", "column"],          "economic_tier": "standard", "hardness": 3,    "density": 250, "heat_conductivity": 0.4, "viscosity": null, "heat_into": null,        "heat_temp": null, "cool_into": null,  "cool_temp": null, "structural_strength": 0.8,  "flammable": false, "corrodible": true,  "mineable": true,  "transparent": false, "components": null },
-  { "system_material": "wood",      "display_name": "Дерево",        "glossary_ref": null, "material_category": "solid",  "tags": ["construction", "organic"],  "use_type": ["wall", "floor", "door", "railing"], "economic_tier": "basic",    "hardness": 2,    "density": 60,  "heat_conductivity": 0.2, "viscosity": null, "heat_into": "charcoal", "heat_temp": 150,  "cool_into": null,  "cool_temp": null, "structural_strength": 0.3,  "flammable": true,  "corrodible": true,  "mineable": false, "transparent": false, "components": null },
-  { "system_material": "iron",      "display_name": "Железо",        "glossary_ref": null, "material_category": "solid",  "tags": ["metal", "mineral"],         "use_type": ["wall", "door", "gate", "railing"],  "economic_tier": "standard", "hardness": 4,    "density": 800, "heat_conductivity": 0.9, "viscosity": null, "heat_into": "molten_iron", "heat_temp": 200,  "cool_into": null,  "cool_temp": null, "structural_strength": 0.9,  "flammable": false, "corrodible": true,  "mineable": false, "transparent": false, "components": null },
-  { "system_material": "earth",     "display_name": "Земля",         "glossary_ref": null, "material_category": "solid",  "tags": ["raw", "mineral"],           "use_type": ["floor"],                            "economic_tier": "poor",     "hardness": 1,    "density": 150, "heat_conductivity": 0.3, "viscosity": null, "heat_into": null,        "heat_temp": null, "cool_into": null,  "cool_temp": null, "structural_strength": 0.2,  "flammable": false, "corrodible": true,  "mineable": true,  "transparent": false, "components": null },
-  { "system_material": "crystal",   "display_name": "Кристалл",      "glossary_ref": null, "material_category": "solid",  "tags": ["mineral", "magic"],         "use_type": ["wall", "floor"],                    "economic_tier": "premium",  "hardness": 3,    "density": 260, "heat_conductivity": 0.2, "viscosity": null, "heat_into": null,        "heat_temp": null, "cool_into": null,  "cool_temp": null, "structural_strength": 0.4,  "flammable": false, "corrodible": false, "mineable": false, "transparent": true,  "components": null },
+  { "system_material": "stone",     "display_name": "Камень",        "glossary_ref": null, "material_category": "solid",  "tags": ["construction", "mineral"],  "use_type": ["wall", "floor", "column"],          "economic_tier": "standard", "hardness": 3,    "density": 250, "heat_conductivity": 0.4, "viscosity": null, "heat_into": null,        "heat_temp": null, "cool_into": null,  "cool_temp": null, "structural_strength": 0.8,  "flammable": false, "corrodible": true,  "mineable": true,  "transparent": 0, "components": null },
+  { "system_material": "wood",      "display_name": "Дерево",        "glossary_ref": null, "material_category": "solid",  "tags": ["construction", "organic"],  "use_type": ["wall", "floor", "door", "railing"], "economic_tier": "basic",    "hardness": 2,    "density": 60,  "heat_conductivity": 0.2, "viscosity": null, "heat_into": "charcoal", "heat_temp": 150,  "cool_into": null,  "cool_temp": null, "structural_strength": 0.3,  "flammable": true,  "corrodible": true,  "mineable": false, "transparent": 0, "components": null },
+  { "system_material": "iron",      "display_name": "Железо",        "glossary_ref": null, "material_category": "solid",  "tags": ["metal", "mineral"],         "use_type": ["wall", "door", "gate", "railing"],  "economic_tier": "standard", "hardness": 4,    "density": 800, "heat_conductivity": 0.9, "viscosity": null, "heat_into": "molten_iron", "heat_temp": 200,  "cool_into": null,  "cool_temp": null, "structural_strength": 0.9,  "flammable": false, "corrodible": true,  "mineable": false, "transparent": 0, "components": null },
+  { "system_material": "earth",     "display_name": "Земля",         "glossary_ref": null, "material_category": "solid",  "tags": ["raw", "mineral"],           "use_type": ["floor"],                            "economic_tier": "poor",     "hardness": 1,    "density": 150, "heat_conductivity": 0.3, "viscosity": null, "heat_into": null,        "heat_temp": null, "cool_into": null,  "cool_temp": null, "structural_strength": 0.2,  "flammable": false, "corrodible": true,  "mineable": true,  "transparent": 0, "components": null },
+  { "system_material": "crystal",   "display_name": "Кристалл",      "glossary_ref": null, "material_category": "solid",  "tags": ["mineral", "magic"],         "use_type": ["wall", "floor"],                    "economic_tier": "premium",  "hardness": 3,    "density": 260, "heat_conductivity": 0.2, "viscosity": null, "heat_into": null,        "heat_temp": null, "cool_into": null,  "cool_temp": null, "structural_strength": 0.4,  "flammable": false, "corrodible": false, "mineable": false, "transparent": 100,  "components": null },
   { "system_material": "water",     "display_name": "Вода",          "glossary_ref": null, "material_category": "liquid", "tags": [],                           "use_type": [],                                   "economic_tier": null,       "hardness": null, "density": 100, "heat_conductivity": 0.5, "viscosity": 0.1, "heat_into": "steam",       "heat_temp": 100,  "cool_into": "ice", "cool_temp": 0, "structural_strength": null, "flammable": false, "corrodible": false, "temp_damage": false, "vision_block": false, "components": null },
   { "system_material": "lava",      "display_name": "Лава",          "glossary_ref": null, "material_category": "liquid", "tags": [],                           "use_type": [],                                   "economic_tier": null,       "hardness": null, "density": 270, "heat_conductivity": 0.0, "viscosity": 0.9, "heat_into": null,        "heat_temp": null,  "cool_into": "stone", "cool_temp": 50, "structural_strength": null, "flammable": false, "corrodible": false, "temp_damage": true,  "vision_block": false, "components": null },
   { "system_material": "air",       "display_name": "Воздух",        "glossary_ref": null, "material_category": "gas",    "tags": [],                           "use_type": [],                                   "economic_tier": null,       "hardness": null, "density": 1,   "heat_conductivity": 0.1, "viscosity": null, "heat_into": null,        "heat_temp": null, "cool_into": null,  "cool_temp": null, "structural_strength": null, "flammable": false, "corrodible": false, "temp_damage": false, "vision_block": false, "components": null },

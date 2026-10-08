@@ -703,7 +703,7 @@
         "use_type": [
           "window_glass"
         ],
-        "transparent": true
+        "transparent": 100
       },
       {
         "system_material": "porthole_glass",
@@ -715,7 +715,7 @@
         "use_type": [
           "porthole_glass"
         ],
-        "transparent": true
+        "transparent": 100
       },
       {
         "system_material": "vent_mesh",

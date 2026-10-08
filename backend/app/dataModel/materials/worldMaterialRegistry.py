@@ -113,12 +113,12 @@ _CANONICAL_ENTRIES: tuple[MaterialRegistryEntry, ...] = (
     MaterialRegistryEntry(
         system_material="window_glass", display_name="Оконное стекло",
         material_category=MaterialCategory.SOLID, tags=["glass"],
-        use_type=["window_glass"], transparent=True,
+        use_type=["window_glass"], transparent=100.0,
     ),
     MaterialRegistryEntry(
         system_material="porthole_glass", display_name="Стекло иллюминатора",
         material_category=MaterialCategory.SOLID, tags=["glass"],
-        use_type=["porthole_glass"], transparent=True,
+        use_type=["porthole_glass"], transparent=100.0,
     ),
     MaterialRegistryEntry(
         system_material="vent_mesh", display_name="Вентиляционная сетка",
@@ -193,7 +193,7 @@ _ENGINE_DELTA: tuple[MaterialRegistryEntry, ...] = (
         density=260,
         structural_strength=0.4,
         corrodible=False,
-        transparent=True,
+        transparent=100.0,
     ),
     MaterialRegistryEntry(
         system_material="water",

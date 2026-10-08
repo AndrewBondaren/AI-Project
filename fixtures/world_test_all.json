@@ -534,7 +534,7 @@
         "corrodible": true,
         "meltable": false,
         "mineable": true,
-        "transparent": false,
+        "transparent": 0,
         "components": null
       },
       {
@@ -561,7 +561,7 @@
         "corrodible": true,
         "meltable": false,
         "mineable": false,
-        "transparent": false,
+        "transparent": 0,
         "components": null
       },
       {
@@ -588,7 +588,7 @@
         "corrodible": true,
         "meltable": true,
         "mineable": false,
-        "transparent": false,
+        "transparent": 0,
         "components": null
       },
       {
@@ -612,7 +612,7 @@
         "corrodible": true,
         "meltable": false,
         "mineable": true,
-        "transparent": false,
+        "transparent": 0,
         "components": null
       },
       {
@@ -637,7 +637,7 @@
         "corrodible": false,
         "meltable": false,
         "mineable": false,
-        "transparent": true,
+        "transparent": 100,
         "components": null
       },
       {
@@ -767,7 +767,7 @@
         "use_type": [
           "window_glass"
         ],
-        "transparent": true
+        "transparent": 100
       },
       {
         "system_material": "porthole_glass",
@@ -779,7 +779,7 @@
         "use_type": [
           "porthole_glass"
         ],
-        "transparent": true
+        "transparent": 100
       },
       {
         "system_material": "vent_mesh",

@@ -65,6 +65,28 @@ class ImportValidationPolicyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tuple(error.exception.errors), report.issues)
         self.assertEqual(self.db.conn.total_changes, before)
 
+    async def test_material_transparency_percent_import_and_invalid_no_write(self):
+        fixture = self.fixture()
+        fixture["world"]["material_registry"][0]["transparent"] = 37.5
+        report = await self.service.import_bundle(fixture, validate_only=True)
+        self.assertTrue(report.valid, report.issues)
+        before = self.db.conn.total_changes
+        for invalid in (True, None, -1, 101):
+            fixture["world"]["material_registry"][0]["transparent"] = invalid
+            report = await self.service.import_bundle(fixture, validate_only=True)
+            self.assertFalse(report.valid)
+            self.assertTrue(any(issue.path[-1] == "transparent" for issue in report.issues))
+            with self.assertRaises(ImportValidationError) as error:
+                await self.service.import_bundle(fixture)
+            self.assertEqual(tuple(error.exception.errors), report.issues)
+            self.assertEqual(self.db.conn.total_changes, before)
+        fixture["world"]["material_registry"][0]["transparent"] = 37.5
+        results, rolled_back = await self.service.import_bundle(fixture)
+        self.assertFalse(rolled_back)
+        self.assertEqual(results["world"].succeeded, 1)
+        world = (await self.worlds.get_all())[0]
+        self.assertEqual(world.material_registry[0]["transparent"], 37.5)
+
     async def test_library_membership_checked_against_incoming_world(self):
         fixture = self.fixture("world_defaults_test")
         fixture["relief_templates"] = [{"system_name": "bad-ref", "display_name": "Bad",

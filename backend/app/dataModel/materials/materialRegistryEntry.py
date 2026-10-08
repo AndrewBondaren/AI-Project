@@ -49,7 +49,10 @@ class MaterialRegistryEntry(BaseModel):
     corrodible: DefaultWhenMissing[bool] = True
     meltable: DefaultWhenMissing[bool] = False
     mineable: DefaultWhenMissing[bool] = False
-    transparent: DefaultWhenMissing[bool] = False
+    transparent: DefaultWhenMissing[float] = constrained_field(
+        default=0.0, greater_equals=0.0, lesser_equals=100.0,
+        strict=True, allow_inf_nan=False,
+    )
     breakable: DefaultWhenMissing[bool] = False
     temp_damage: DefaultWhenMissing[bool] = False
     vision_block: DefaultWhenMissing[bool] = False
